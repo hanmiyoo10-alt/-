@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "transitionId": "current-development-human-section-authority-drift-repair-20260905",
+  "expectedProductionCommit": "e2552d7f93456652c94d9df37b0c253f12f2d900",
+  "expected": {
+    "current_priority": "R2_11_PROFILE_DRIVEN_VALIDATION_INVENTORY_POST_CLOSE_PREFLIGHT"
+  },
+  "set": {
+    "current_priority": "R2_11_PROFILE_DRIVEN_VALIDATION_INVENTORY_IMPLEMENTATION"
+  },
+  "evidence": [
+    "docs/SIMCORE_CURRENT_DEVELOPMENT_HUMAN_SECTION_AUTHORITY_DRIFT_REPAIR_2026-09-05.md",
+    "docs/SIMCORE_RELEASE_SYSTEM_V2_11_POST_CLOSE_PREFLIGHT_AND_IMPLEMENTATION_AUTHORIZATION_2026-09-05.md",
+    "docs/SIMCORE_R2_11_POST_AUTHORIZATION_PRIORITY_SYNC_2026-09-05.md"
+  ],
+  "documentReplacements": [
+    {
+      "id": "current-authority-reading",
+      "path": "docs/CURRENT_DEVELOPMENT.md",
+      "from": "The machine-managed blocks above are authoritative for current production identity, validation status, terminal release state, and current priority. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override those blocks.",
+      "to": "The machine-managed blocks above are authoritative for current production identity, validation status, and terminal release state. For active work after a terminal handoff, `product-manifest.json` is the machine-readable current operational-priority authority; the terminal block's `Current priority` records the handoff selected by the terminal evidence transaction. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override machine authority."
+    },
+    {
+      "id": "current-operational-action",
+      "path": "docs/CURRENT_DEVELOPMENT.md",
+      "from": "The machine-managed production snapshot and terminal release-state block above are the sole current production identity authorities. The current live gate is durably closed as `LIVE_PASS` through accepted HUMAN_EVIDENCE terminal convergence, and the authorized 2.0M structural program is complete with the M2 architecture frozen at its terminal checkpoint. The immediate product action is the separately frozen S7 post-M2 simplification convergence implementation lane. The reserved cache-attribution release lane remains PARKED and must not be reused by S7. Provider cache remains `UNVERIFIED`, and `WATCH · REPEATED_OUT_STORAGE_LATENCY` remains a separate non-blocking investigation item.",
+      "to": "The v0.70.6 live gate is durably closed as `LIVE_PASS / REAL_RELEASE_LIVE_PASS` through accepted HUMAN_EVIDENCE terminal convergence. R2.11 Profile-Driven Validation Inventory post-close preflight is complete and implementation authorization is executable. The immediate product action is a dedicated non-runtime R2.11 implementation branch, bounded to the frozen inventory design; it must not mutate plugin/runtime behavior or `release-simcore`. Production remains v0.70.6. Provider cache remains `UNVERIFIED`, and `WATCH · REPEATED_OUT_STORAGE_LATENCY` remains a separate non-blocking investigation item. A v0.70.7 runtime design/release is not authorized by the R2.11 transaction."
+    },
+    {
+      "id": "quick-resume-action",
+      "path": "docs/CURRENT_DEVELOPMENT.md",
+      "from": "Start the dedicated S7 convergence work branch from exact live-complete v0.70.1 production bytes.\nReconstruct and verify the cumulative S1–S6 / P0→P12 simplification delta under the frozen S7 design, then prepare the v0.70.3 Post-M2 Simplification Convergence candidate through the normal release path.\nDo not reuse or cancel v0.70.2; preserve it as the parked Cache Observer Cold-Path Attribution lane.\nKeep Exposure/LightBoard research and unrelated WATCH/FIX items in separate lanes.",
+      "to": "Start a dedicated R2.11 Profile-Driven Validation Inventory implementation branch from fresh `main` after confirming production remains exact v0.70.6.\nImplement only the frozen profile-inventory scope: derive validation identities/regression matrices from exact profiles, reuse R2.9 builder discovery, preserve R2.10 coherent context, and remove the duplicate manual current-version census.\nDo not mutate plugin/runtime code or `release-simcore`, and do not design or publish v0.70.7 inside this non-runtime transaction.\nKeep `WATCH · REPEATED_OUT_STORAGE_LATENCY`, provider-cache work, and unrelated WATCH/FIX items in separate lanes."
+    },
+    {
+      "id": "quick-resume-success-condition",
+      "path": "docs/CURRENT_DEVELOPMENT.md",
+      "from": "v0.70.1 real long-chat evidence = LIVE_PASS\ndurable major checkpoint = M2-6\n2.0M / M2 architecture = COMPLETE / FROZEN\ncurrent product priority = S7_POST_M2_SIMPLIFICATION_PROGRAM_CONVERGENCE_IMPLEMENTATION\nnext proposed convergence version = v0.70.3 Post-M2 Simplification Convergence\nS7 design = FROZEN\nproduction remains v0.70.1 until a normal approved release transaction publishes the qualified S7 candidate\nlatest.js == install.js remains mandatory\n\nproduct runtime work\n→ dedicated S7 work branch from exact deployed v0.70.1 bytes\n→ reconstruct cumulative S1–S6 simplification candidate only\n→ differential/static/architecture proof and permanent CI before release transaction\n→ publish through the existing release authority only after qualification\n\nrelease-system work\n→ existing R2.8/R2.9 authority remains unchanged\n→ remain non-runtime and separately attributable\n→ preserve the single publisher and existing main-write authority\n\nparked performance work\n→ v0.70.2 Cache Observer Cold-Path Attribution remains reserved / PARKED\n→ do not reuse its version identity for S7\n\nobserved anomaly\n→ preserve evidence immediately\n→ classify WATCH / DEFER / FIX / BLOCKER\n→ unresolved FIX or BLOCKER stops advancement",
+      "to": "v0.70.6 real long-chat evidence = LIVE_PASS\nterminal lifecycle = REAL_RELEASE_LIVE_PASS\ndurable major checkpoint = M2-6\nproduction release-simcore = e2552d7f93456652c94d9df37b0c253f12f2d900\nproduction blob = 83714d78537906fc9f2060c06c9e4ce349568a19\nlatest.js == install.js = mandatory / verified\nR2.11 post-close preflight = PASS\nR2.11 implementation authorization = EXECUTABLE\nproduct-manifest current_priority = R2_11_PROFILE_DRIVEN_VALIDATION_INVENTORY_IMPLEMENTATION\nR2.11 design = FROZEN\nproduction remains v0.70.6 throughout R2.11\n\nR2.11 non-runtime work\n→ dedicated implementation branch from fresh main\n→ at most one pure profile-inventory owner\n→ exact validation profiles become declarative inventory\n→ remove duplicate KNOWN_RELEASE_IDENTITIES-style current-version census\n→ reuse R2.9 builder/fixture discovery and preserve R2.10 coherent context\n→ inventory-driven regression/no-wrapper proof and deterministic fail-closed tests\n→ static/permanent CI before main implementation evidence\n→ no release-simcore deployment\n\nruntime work\n→ v0.70.7 design/release not authorized by R2.11\n→ next genuine runtime release only after separate design/authority\n\nobserved anomaly\n→ preserve evidence immediately\n→ classify WATCH / DEFER / FIX / BLOCKER\n→ unresolved FIX or BLOCKER stops advancement"
+    }
+  ]
+}

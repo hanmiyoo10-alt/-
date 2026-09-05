@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "command": "DURABLE_MEMORY_SYNC",
+  "reason": "CURRENT_DEVELOPMENT identity-free human current-state and Quick Resume convergence after closure-integrity fail-closed repair",
+  "expectedProductionCommit": "e2552d7f93456652c94d9df37b0c253f12f2d900",
+  "registeredTransition": "products/simcore/state-sync/active-admin-transition.json",
+  "mergeThisCommandPayload": false
+}

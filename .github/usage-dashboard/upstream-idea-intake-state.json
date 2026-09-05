@@ -20,9 +20,9 @@
     "releaseAuthority": false
   },
   "lastDurableScan": {
-    "issue": 1494,
-    "scanDate": "2026-09-05",
-    "status": "historical-first-scan-evidence"
+    "scanDate": "2026-09-06",
+    "status": "source-evidence-recorded-catalog-reconciled",
+    "evidencePath": "docs/usage-dashboard-upstream-scans/2026-09-06.md"
   },
   "knownCandidateKeys": [
     {
@@ -43,11 +43,24 @@
     },
     {
       "id": "V-CACHE-POLICY-MODE",
-      "status": "captured-needs-source-authority"
+      "status": "source-proven-awaiting-design"
     },
     {
       "id": "V-DEVPASS-NO-TRAINING-STATUS",
       "status": "source-proven-design-5.101"
+    },
+    {
+      "id": "V-USAGE-PERIOD-COMPARISON",
+      "status": "captured-needs-source-authority"
+    },
+    {
+      "id": "V-ZDR-STATUS",
+      "status": "captured-needs-source-authority"
     }
-  ]
+  ],
+  "historicalFirstScan": {
+    "issue": 1494,
+    "scanDate": "2026-09-05",
+    "status": "historical-first-scan-evidence"
+  }
 }

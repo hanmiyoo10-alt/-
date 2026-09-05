@@ -22,7 +22,9 @@ assert.equal(state.sourcePolicy.ambiguousEvidence, 'needs-evidence');
 assert.equal(state.sourcePolicy.unknownPolicy, 'preserve');
 assert.equal(state.sourcePolicy.implementationAuthority, false);
 assert.equal(state.sourcePolicy.releaseAuthority, false);
-assert.equal(state.lastDurableScan.issue, 1494);
+assert.equal(state.historicalFirstScan.issue, 1494);
+assert.equal(state.lastDurableScan.scanDate, '2026-09-06');
+assert.equal(state.lastDurableScan.evidencePath, 'docs/usage-dashboard-upstream-scans/2026-09-06.md');
 
 const ids = state.knownCandidateKeys.map(row => row.id);
 assert.equal(new Set(ids).size, ids.length, 'candidate keys must stay unique');
@@ -33,8 +35,11 @@ for (const id of [
   'V-DYNAMIC-ROUTE-TRACE',
   'V-CACHE-POLICY-MODE',
   'V-DEVPASS-NO-TRAINING-STATUS',
+  'V-USAGE-PERIOD-COMPARISON',
+  'V-ZDR-STATUS',
 ]) assert.ok(ids.includes(id), `missing historical candidate ${id}`);
 assert.equal(state.knownCandidateKeys.find(row => row.id === 'V-MODEL-LIFECYCLE-STATUS').status, 'implemented-5.100');
+assert.equal(state.knownCandidateKeys.find(row => row.id === 'V-CACHE-POLICY-MODE').status, 'source-proven-awaiting-design');
 
 for (const marker of [
   'SOURCE / EVIDENCE RECORD',

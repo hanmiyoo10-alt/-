@@ -72,29 +72,29 @@
   "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
   "newRegression": "plugins/usage-dashboard/tests/p65-daily-server-request-count-breakdown.cjs",
   "highlights": [
-    "The existing observed-day card now adds exact current-KST-day server request totals plus independent DevPass and Credits request counts.",
-    "The same authoritative daily buckets add an exact current-day total token count without deriving missing values from rolling totals, request rows or token arithmetic.",
-    "Request and token truth select independently through existing 24h, 7d and 30d daily-series windows; UNKNOWN remains UNKNOWN and explicit zero remains zero.",
-    "Engine 1.6.34, managed CLI 1.10.0, Models 1.280.0 and contracts 1/1 remain unchanged; no new I/O, polling, persistence, schema or request-identity owner is added."
+    "Adds current-KST-day server request totals with separate DevPass and Credits counts to the existing observed-day card.",
+    "Adds exact current-day total tokens from server daily buckets; no rolling-total or row-based backfill.",
+    "Requests and tokens select independently across 24h, 7d and 30d daily windows; UNKNOWN and exact zero stay distinct.",
+    "Keeps Engine 1.6.34, CLI 1.10.0, Models 1.280.0 and contracts 1/1 unchanged with no new I/O or schema owner."
   ],
   "diagnosticHints": [
     "Verify Product 5.99 · Engine 1.6.34 · Manager 1.3.6 and READY/Health ok.",
-    "Overview must show today server requests, DevPass/Credits request children, and the exact today server token total when source evidence is complete.",
-    "Basic and Full Diagnostics must report the same daily server truth and selected per-scope source windows; incomplete evidence must stay — rather than become zero.",
-    "Recheck existing DevPass, Credits, Analytics, Billing, Premium, PAYG, Cycle, Cost Drivers, cache, tier, outcome, HTTP and Request Ledger behavior without artificial traffic."
+    "Check Overview request total, DevPass/Credits counts and exact server token total when source evidence is complete.",
+    "Check Basic/Full Diagnostics match the daily server truth; incomplete source must stay —, never zero.",
+    "Recheck existing dashboard surfaces and Request Ledger without artificial traffic."
   ],
   "releaseNotes": {
     "highlights": [
-      "The existing observed-day card now adds exact current-KST-day server request totals plus independent DevPass and Credits request counts.",
-      "The same authoritative daily buckets add an exact current-day total token count without deriving missing values from rolling totals, request rows or token arithmetic.",
-      "Request and token truth select independently through existing 24h, 7d and 30d daily-series windows; UNKNOWN remains UNKNOWN and explicit zero remains zero.",
-      "Engine 1.6.34, managed CLI 1.10.0, Models 1.280.0 and contracts 1/1 remain unchanged; no new I/O, polling, persistence, schema or request-identity owner is added."
+      "Adds current-KST-day server request totals with separate DevPass and Credits counts to the existing observed-day card.",
+      "Adds exact current-day total tokens from server daily buckets; no rolling-total or row-based backfill.",
+      "Requests and tokens select independently across 24h, 7d and 30d daily windows; UNKNOWN and exact zero stay distinct.",
+      "Keeps Engine 1.6.34, CLI 1.10.0, Models 1.280.0 and contracts 1/1 unchanged with no new I/O or schema owner."
     ],
     "diagnosticHints": [
       "Verify Product 5.99 · Engine 1.6.34 · Manager 1.3.6 and READY/Health ok.",
-      "Overview must show today server requests, DevPass/Credits request children, and the exact today server token total when source evidence is complete.",
-      "Basic and Full Diagnostics must report the same daily server truth and selected per-scope source windows; incomplete evidence must stay — rather than become zero.",
-      "Recheck existing DevPass, Credits, Analytics, Billing, Premium, PAYG, Cycle, Cost Drivers, cache, tier, outcome, HTTP and Request Ledger behavior without artificial traffic."
+      "Check Overview request total, DevPass/Credits counts and exact server token total when source evidence is complete.",
+      "Check Basic/Full Diagnostics match the daily server truth; incomplete source must stay —, never zero.",
+      "Recheck existing dashboard surfaces and Request Ledger without artificial traffic."
     ]
   }
 }

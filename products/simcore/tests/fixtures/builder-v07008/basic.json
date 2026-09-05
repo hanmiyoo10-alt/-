@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "v07008-builder-basic",
+  "suite": "builder-v07008",
+  "input": {},
+  "expected": {
+    "runtimeMutation": "REPEAT_SEND_REPRESENTATION_REWIND_GUARD_ONLY",
+    "releaseSystemMutation": "NONE"
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

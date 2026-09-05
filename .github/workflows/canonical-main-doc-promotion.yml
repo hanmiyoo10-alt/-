@@ -165,16 +165,38 @@ jobs:
           echo "CANONICAL_MAIN_DOC_PROMOTION:PR:#$PR:$HEAD_SHA"
       - name: Dispatch exact documentation candidate checks
         if: steps.publish.outputs.published == 'true'
+        id: dispatch
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           HEAD_SHA='${{ steps.publish.outputs.head_sha }}'
-          gh workflow run plugin-control-plane-ci.yml --ref "$DOC_BRANCH"
-          gh workflow run simcore-ci.yml --ref "$DOC_BRANCH" \
-            -f profile=MAIN_HEALTH
-          echo "CANONICAL_MAIN_DOC_PROMOTION:CHECKS_DISPATCHED:$HEAD_SHA"
+          API_VERSION='2026-03-10'
+
+          dispatch_workflow() {
+            local workflow="$1"
+            local payload="$2"
+            local response run_id
+            response="$(gh api --method POST \
+              -H 'Accept: application/vnd.github+json' \
+              -H "X-GitHub-Api-Version: $API_VERSION" \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/dispatches" \
+              --input - <<<"$payload")"
+            run_id="$(jq -er '.workflow_run_id | numbers | tostring' <<<"$response")"
+            [[ "$run_id" =~ ^[0-9]+$ ]] || { echo "Invalid workflow_run_id for $workflow" >&2; exit 1; }
+            printf '%s\n' "$run_id"
+          }
+
+          PLUGIN_PAYLOAD="$(jq -nc --arg ref "$DOC_BRANCH" '{ref:$ref}')"
+          PLUGIN_RUN_ID="$(dispatch_workflow plugin-control-plane-ci.yml "$PLUGIN_PAYLOAD")"
+
+          SIMCORE_PAYLOAD="$(jq -nc --arg ref "$DOC_BRANCH" '{ref:$ref,inputs:{profile:"MAIN_HEALTH"}}')"
+          SIMCORE_RUN_ID="$(dispatch_workflow simcore-ci.yml "$SIMCORE_PAYLOAD")"
+
+          echo "plugin_run_id=$PLUGIN_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "simcore_run_id=$SIMCORE_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "CANONICAL_MAIN_DOC_PROMOTION:CHECKS_DISPATCHED:$HEAD_SHA:$PLUGIN_RUN_ID:$SIMCORE_RUN_ID"
       - name: Wait for exact candidate checks
         if: steps.publish.outputs.published == 'true'
         env:
@@ -183,26 +205,31 @@ jobs:
         run: |
           set -euo pipefail
           HEAD_SHA='${{ steps.publish.outputs.head_sha }}'
-          find_run() {
-            local workflow="$1"
-            gh run list --workflow "$workflow" --branch "$DOC_BRANCH" --event workflow_dispatch --limit 30 \
-              --json databaseId,headSha,status,conclusion \
-              --jq ".[] | select(.headSha == \"$HEAD_SHA\") | .databaseId" | head -n 1
+          PLUGIN_RUN_ID='${{ steps.dispatch.outputs.plugin_run_id }}'
+          SIMCORE_RUN_ID='${{ steps.dispatch.outputs.simcore_run_id }}'
+          API_VERSION='2026-03-10'
+
+          verify_exact_run() {
+            local run_id="$1"
+            local label="$2"
+            local metadata event head_sha
+            [[ "$run_id" =~ ^[0-9]+$ ]] || { echo "Missing or invalid $label run id: $run_id" >&2; exit 1; }
+            metadata="$(gh api \
+              -H 'Accept: application/vnd.github+json' \
+              -H "X-GitHub-Api-Version: $API_VERSION" \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+            event="$(jq -er '.event' <<<"$metadata")"
+            head_sha="$(jq -er '.head_sha' <<<"$metadata")"
+            [[ "$event" == 'workflow_dispatch' ]] || { echo "$label run $run_id event mismatch: $event" >&2; exit 1; }
+            [[ "$head_sha" == "$HEAD_SHA" ]] || { echo "$label run $run_id head mismatch: $head_sha != $HEAD_SHA" >&2; exit 1; }
+            echo "CANONICAL_MAIN_DOC_PROMOTION:EXACT_RUN_VERIFIED:$label:$run_id:$head_sha"
           }
-          wait_for_run() {
-            local workflow="$1"
-            local run_id=''
-            for _ in $(seq 1 60); do
-              run_id="$(find_run "$workflow")"
-              [[ -n "$run_id" ]] && break
-              sleep 2
-            done
-            [[ -n "$run_id" ]] || { echo "Missing workflow_dispatch run for $workflow / $HEAD_SHA" >&2; exit 1; }
-            gh run watch "$run_id" --exit-status
-          }
-          wait_for_run plugin-control-plane-ci.yml
-          wait_for_run simcore-ci.yml
-          echo "CANONICAL_MAIN_DOC_PROMOTION:CHECKS_PASS:$HEAD_SHA"
+
+          verify_exact_run "$PLUGIN_RUN_ID" plugin-control-plane
+          verify_exact_run "$SIMCORE_RUN_ID" simcore
+          gh run watch "$PLUGIN_RUN_ID" --exit-status
+          gh run watch "$SIMCORE_RUN_ID" --exit-status
+          echo "CANONICAL_MAIN_DOC_PROMOTION:CHECKS_PASS:$HEAD_SHA:$PLUGIN_RUN_ID:$SIMCORE_RUN_ID"
       - name: Exact-base / exact-head merge
         if: steps.publish.outputs.published == 'true'
         env:

@@ -14,6 +14,21 @@ def one(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def one_in_method(text: str, method_start: str, method_end: str, old: str, new: str, label: str) -> str:
+    start = text.find(method_start)
+    if start < 0:
+        raise SystemExit(f'07007_BUILD_BLOCK {label}: method start missing')
+    end = text.find(method_end, start + len(method_start))
+    if end < 0:
+        raise SystemExit(f'07007_BUILD_BLOCK {label}: method end missing')
+    scoped = text[start:end]
+    count = scoped.count(old)
+    if count != 1:
+        raise SystemExit(f'07007_BUILD_BLOCK {label}: expected 1 scoped anchor, found {count}')
+    scoped = scoped.replace(old, new, 1)
+    return text[:start] + scoped + text[end:]
+
+
 def module_names(text: str):
     return re.findall(r'SimCore\.define\("([^"]+)"\s*,\s*function', text)
 
@@ -83,10 +98,12 @@ out = one(
     'operator release-card identity',
 )
 
-out = one(
+out = one_in_method(
     out,
-    "  const payload = JSON.stringify(state);\n  if (metric) metric.serializeMs = Math.max(0, storeNow() - t);\n  t = storeNow();\n  await this.b.set(this._k(phase, index), payload);",
-    "  const payload = JSON.stringify(state);\n  if (metric) {\n    metric.serializeMs = Math.max(0, storeNow() - t);\n    metric.payloadChars = payload.length;\n  }\n  t = storeNow();\n  await this.b.set(this._k(phase, index), payload);",
+    '  async save(phase, index, state, opts = {}) {',
+    '  async saveTurn(',
+    '    if (metric) metric.serializeMs = Math.max(0, storeNow() - t);',
+    "    if (metric) {\n      metric.serializeMs = Math.max(0, storeNow() - t);\n      metric.payloadChars = payload.length;\n    }",
     'ordinary snapshot payload metric',
 )
 

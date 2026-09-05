@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.70.8
+//@version 0.70.9
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -30,6 +30,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.70.9 Inline Planning Marker Hygiene Guard:
+// - Removes only the reserved standalone INLINE_INTERNAL_MEMO_V1 planning-control line outside Markdown fenced code before output envelope canonicalization
+// - Preserves prose, inline/quoted/fenced examples, malformed or wrong-key markers, empty payloads and payloads over 512 UTF-16 code units
+// - Emits bounded non-payload Output Compat provenance with marker count and removed-character count when cleanup occurs
+// - Adds no Host read, storage/network/timer work, persistent schema, raw-body retention, retry, polling, or release-system change
 //
 // v0.70.8 Repeat-Send Representation Rewind Guard:
 // - Recognizes one exact same-session repeat-send rewind geometry for a proven prior OUTPUT_MISMATCH whose current visible body is the recorded Fresh representation
@@ -759,7 +765,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.70.8';
+const SIMCORE_RUNTIME_VERSION = '0.70.9';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -4037,9 +4043,94 @@ function normalizeTailPlacement(content, pending) {
   return `${base}${base ? '\n\n' : ''}${tail.join('\n\n')}`.trim();
 }
 
+const INLINE_PLANNING_GRAMMAR = 'INLINE_INTERNAL_MEMO_V1';
+
+function parseMarkdownFenceLine(line) {
+  const text = String(line || '').replace(/^[ \t]+/, '');
+  const char = text[0];
+  if (char !== '`' && char !== '~') return null;
+  let length = 0;
+  while (text[length] === char) length += 1;
+  if (length < 3) return null;
+  return { char, length, rest: text.slice(length) };
+}
+
+function isInlinePlanningMarkerLine(line) {
+  const outer = String(line || '').replace(/^[ \t]+|[ \t]+$/g, '');
+  if (!outer.startsWith('┣') || !outer.endsWith('┫')) return false;
+  const inner = outer.slice(1, -1);
+  if (inner.includes('┫')) return false;
+  const match = /^[ \t]*internal_memo:[ \t]*(.*?)[ \t]*$/.exec(inner);
+  if (!match) return false;
+  const payload = String(match[1] || '').replace(/^[ \t]+|[ \t]+$/g, '');
+  return !!payload && payload.length <= 512 && !/[\r\n┫]/.test(payload);
+}
+
+function stripBoundedInlinePlanningMarkers(content) {
+  const raw = String(content || '');
+  const lines = raw.match(/[^\r\n]*(?:\r\n|\r|\n|$)/g) || [];
+  if (lines.length && lines[lines.length - 1] === '') lines.pop();
+  const kept = [];
+  let fence = null;
+  let markers = 0;
+  let removedChars = 0;
+
+  for (const physical of lines) {
+    const ending = /(?:\r\n|\r|\n)$/.exec(physical)?.[0] || '';
+    const line = ending ? physical.slice(0, -ending.length) : physical;
+    const token = parseMarkdownFenceLine(line);
+
+    if (fence) {
+      kept.push(physical);
+      if (token
+          && token.char === fence.char
+          && token.length >= fence.length
+          && /^[ \t]*$/.test(token.rest)) fence = null;
+      continue;
+    }
+
+    if (token) {
+      fence = { char: token.char, length: token.length };
+      kept.push(physical);
+      continue;
+    }
+
+    if (isInlinePlanningMarkerLine(line)) {
+      markers += 1;
+      removedChars += physical.length;
+      continue;
+    }
+    kept.push(physical);
+  }
+
+  return Object.freeze({
+    content: kept.join(''),
+    markers,
+    removedChars,
+    grammar: INLINE_PLANNING_GRAMMAR,
+  });
+}
+
+function inlinePlanningDiagnostic(provenance) {
+  return `Inline planning compat = STRIPPED · Grammar = ${provenance.grammar} · Markers = ${provenance.markers} · Removed chars = ${provenance.removedChars} · Raw payload = NOT RETAINED`;
+}
+
 function prepareOutput(content, pending) {
   let text = kernel.stripControlTags(content);
+  const inlinePlanning = stripBoundedInlinePlanningMarkers(text);
+  text = inlinePlanning.content;
   const envelope = canonicalizeResponseEnvelope(text, pending);
+  if (inlinePlanning.markers > 0) {
+    const diagnostics = Array.isArray(envelope.diagnostics) ? envelope.diagnostics : [];
+    envelope.diagnostics = diagnostics.concat(inlinePlanningDiagnostic(inlinePlanning));
+    envelope.inlinePlanningProvenance = Object.freeze({
+      status: 'STRIPPED',
+      grammar: inlinePlanning.grammar,
+      markers: inlinePlanning.markers,
+      removedChars: inlinePlanning.removedChars,
+      rawPayload: 'NOT_RETAINED',
+    });
+  }
   text = normalizeTailPlacement(envelope.content, pending);
   return { content: text, envelope };
 }
@@ -6547,7 +6638,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.70.8';
+const HOST_COMPAT_VERSION = '0.70.9';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -9421,8 +9512,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.70.8',
-    name: 'Repeat-Send Representation Rewind Guard',
+    version: '0.70.9',
+    name: 'Inline Planning Marker Hygiene Guard',
     scenario: '06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT',
     summary: Object.freeze([
       'Kernel의 portable-state 조립/정규화 composition을 State Reconcile Domain owner로 기계적으로 이동',

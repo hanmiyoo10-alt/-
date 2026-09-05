@@ -63,6 +63,8 @@ if "const HOST_COMPAT_VERSION = '0.70.6';" not in source:
 if "version: '0.70.6',\n    name: 'Manual Edit Redundant Prune Elision'," not in source:
     raise SystemExit('07007_BUILD_BLOCK predecessor release-card identity missing')
 
+ordinary_out_save = "await this.store.save('out', outIndex, result.state, detail ? { prune: false, metric: outMetric } : { prune: false });"
+
 before_modules = module_names(source)
 before_requires = {name: require_lines(source, name) for name in before_modules}
 before_markers = {
@@ -83,7 +85,7 @@ before_markers = {
         'const STATE_VERSION = 5;',
         'const CORE_STATE_VERSION = 10;',
         "['OUT_STORAGE', n(detail.outSetMs)]",
-        "await this.store.save('out', outIndex, result.state, { metric: outMetric, prune: false });",
+        ordinary_out_save,
     ]
 }
 
@@ -107,48 +109,90 @@ out = one_in_method(
     'ordinary snapshot payload metric',
 )
 
-ordinary_detail_anchor = "detail.outSerializeMs = 0;\ndetail.outSetMs = 0;\ndetail.outPruneMs = 0;\ndetail.stateLoadSource = 'NONE';\ndetail.diagnosticFormatMs = 0;\ndetail.hotspotPhase = 'NONE';\ndetail.retentionDisposition = 'INLINE_DISABLED';"
+ordinary_detail_anchor = """      detail.stateLoadSource = 'unknown';
+      detail.prepareMs = 0;
+      detail.validateMs = 0;
+      detail.finalizeMs = 0;
+      detail.outSerializeMs = 0;
+      detail.outSetMs = 0;
+      detail.outPruneMs = 0;
+      detail.pruneDeferred = false;"""
 out = one(
     out,
     ordinary_detail_anchor,
-    "detail.outSerializeMs = 0;\ndetail.outSetMs = 0;\ndetail.outPruneMs = 0;\ndetail.outPayloadChars = null;\ndetail.stateLoadSource = 'NONE';\ndetail.diagnosticFormatMs = 0;\ndetail.hotspotPhase = 'NONE';\ndetail.retentionDisposition = 'INLINE_DISABLED';",
+    """      detail.stateLoadSource = 'unknown';
+      detail.prepareMs = 0;
+      detail.validateMs = 0;
+      detail.finalizeMs = 0;
+      detail.outSerializeMs = 0;
+      detail.outSetMs = 0;
+      detail.outPruneMs = 0;
+      detail.outPayloadChars = null;
+      detail.pruneDeferred = false;""",
     'ordinary output detail payload field',
 )
 
+ordinary_metric_copy = """      detail.outSerializeMs = Number(outMetric.serializeMs || 0);
+      detail.outSetMs = Number(outMetric.setMs || 0);
+      detail.outPruneMs = 0;"""
 out = one(
     out,
-    "if (detail && outMetric) {\n  detail.outSerializeMs = outMetric.serializeMs;\n  detail.outSetMs = outMetric.setMs;\n  detail.outPruneMs = 0;\n}",
-    "if (detail && outMetric) {\n  detail.outSerializeMs = outMetric.serializeMs;\n  detail.outSetMs = outMetric.setMs;\n  detail.outPruneMs = 0;\n  detail.outPayloadChars =\n    Number.isInteger(outMetric.payloadChars) && outMetric.payloadChars > 0\n      ? outMetric.payloadChars\n      : null;\n}",
+    ordinary_metric_copy,
+    """      detail.outSerializeMs = Number(outMetric.serializeMs || 0);
+      detail.outSetMs = Number(outMetric.setMs || 0);
+      detail.outPruneMs = 0;
+      detail.outPayloadChars = Number.isInteger(outMetric.payloadChars) && outMetric.payloadChars > 0
+        ? outMetric.payloadChars
+        : null;""",
     'ordinary output payload propagation',
 )
 
-breakdown_anchor = "function buildOutputBreakdown(perf, outputTotalMs) {\n  const detail = perf.outputDetail || {};"
+breakdown_anchor = """  function diagnosticOutputBreakdown(perf) {
+    if (!perf) return null;"""
 out = one(
     out,
     breakdown_anchor,
-    "function diagnosticOutputSetCostPer1k(payloadChars, setMs) {\n  const chars = Number(payloadChars);\n  const ms = Number(setMs);\n  if (!Number.isFinite(chars) || chars <= 0 || !Number.isFinite(ms) || ms < 0) return null;\n  return ms / (chars / 1000);\n}\n\nfunction buildOutputBreakdown(perf, outputTotalMs) {\n  const detail = perf.outputDetail || {};",
+    """  function diagnosticOutputSetCostPer1k(payloadChars, setMs) {
+    const chars = Number(payloadChars);
+    const ms = Number(setMs);
+    if (!Number.isFinite(chars) || chars <= 0 || !Number.isFinite(ms) || ms < 0) return null;
+    return ms / (chars / 1000);
+  }
+
+  function diagnosticOutputBreakdown(perf) {
+    if (!perf) return null;""",
     'output set normalized-cost helper',
 )
 
+state_source_anchor = """    const stateSource = String(detail.stateLoadSource || 'unknown').toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+
+    const candidates = ["""
 out = one(
     out,
-    "  const stateSource = typeof detail.stateLoadSource === 'string' ? detail.stateLoadSource : 'NONE';\n\n  const candidates = [",
-    "  const stateSource = typeof detail.stateLoadSource === 'string' ? detail.stateLoadSource : 'NONE';\n  const rawOutPayloadChars = Number(detail.outPayloadChars);\n  const outPayloadChars = Number.isInteger(rawOutPayloadChars) && rawOutPayloadChars > 0\n    ? rawOutPayloadChars\n    : null;\n  const outSetMsPer1kChars = diagnosticOutputSetCostPer1k(outPayloadChars, detail.outSetMs);\n\n  const candidates = [",
+    state_source_anchor,
+    """    const stateSource = String(detail.stateLoadSource || 'unknown').toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+    const rawOutPayloadChars = Number(detail.outPayloadChars);
+    const outPayloadChars = Number.isInteger(rawOutPayloadChars) && rawOutPayloadChars > 0
+      ? rawOutPayloadChars
+      : null;
+    const outSetMsPer1kChars = diagnosticOutputSetCostPer1k(outPayloadChars, detail.outSetMs);
+
+    const candidates = [""",
     'output breakdown payload attribution',
 )
 
 out = one(
     out,
-    "    outSerializeMs: n(detail.outSerializeMs),\n    outSetMs: n(detail.outSetMs),\n    outPruneMs: n(detail.outPruneMs),",
-    "    outSerializeMs: n(detail.outSerializeMs),\n    outSetMs: n(detail.outSetMs),\n    outPruneMs: n(detail.outPruneMs),\n    outPayloadChars,\n    outSetMsPer1kChars,",
+    "      outSerializeMs: n(detail.outSerializeMs), outSetMs: n(detail.outSetMs), outPruneMs: n(detail.outPruneMs), pruneDeferred: !!detail.pruneDeferred,",
+    "      outSerializeMs: n(detail.outSerializeMs), outSetMs: n(detail.outSetMs), outPruneMs: n(detail.outPruneMs), outPayloadChars, outSetMsPer1kChars, pruneDeferred: !!detail.pruneDeferred,",
     'output breakdown return payload fields',
 )
 
-render_anchor = "lines.push(`Output process: ${diagnosticFormatMs(outputBreakdown.processTotalMs)} · handler ${diagnosticFormatMs(outputBreakdown.handlerTotalMs)} · residual ${diagnosticFormatMs(outputBreakdown.handlerResidualMs)} · sum ${diagnosticFormatMs(outputBreakdown.processPlusResidualMs)} (${outputBreakdown.consistency})`);\nlines.push(`Output state load: ${outputBreakdown.stateLoadSource} · load ${diagnosticFormatMs(outputBreakdown.stateLoadMs)} · rebuild ${diagnosticFormatMs(outputBreakdown.stateRebuildMs)}`);"
+output_process_line = "      `Output process: ${outputBreakdown ? `state ${outputBreakdown.stateSource} · load ${diagnosticFormatMs(outputBreakdown.stateLoadMs)} · recovery ${diagnosticFormatMs(outputBreakdown.prepareMs)} · validate ${diagnosticFormatMs(outputBreakdown.validateMs)} · finalize ${diagnosticFormatMs(outputBreakdown.finalizeMs)} · serialize ${diagnosticFormatMs(outputBreakdown.outSerializeMs)} · storage ${diagnosticFormatMs(outputBreakdown.outSetMs)} · other ${diagnosticFormatMs(outputBreakdown.processOther)} · total ${diagnosticFormatMs(outputBreakdown.processTotal)}` : 'n/a'}`,"
 out = one(
     out,
-    render_anchor,
-    "lines.push(`Output process: ${diagnosticFormatMs(outputBreakdown.processTotalMs)} · handler ${diagnosticFormatMs(outputBreakdown.handlerTotalMs)} · residual ${diagnosticFormatMs(outputBreakdown.handlerResidualMs)} · sum ${diagnosticFormatMs(outputBreakdown.processPlusResidualMs)} (${outputBreakdown.consistency})`);\nconst outputSetNormalized = outputBreakdown.outSetMsPer1kChars == null\n  ? 'n/a'\n  : `${outputBreakdown.outSetMsPer1kChars.toFixed(2)} ms/1K chars`;\nconst outputPayloadLabel = outputBreakdown.outPayloadChars == null\n  ? 'n/a'\n  : `${outputBreakdown.outPayloadChars} chars`;\nlines.push(`Output snapshot set: ${outputPayloadLabel} · serialize ${diagnosticFormatMs(outputBreakdown.outSerializeMs)} · set ${diagnosticFormatMs(outputBreakdown.outSetMs)} · ${outputSetNormalized} · API PLUGIN_STORAGE_SET_ITEM · prune INLINE_DISABLED · confidence EXACT`);\nlines.push(`Output state load: ${outputBreakdown.stateLoadSource} · load ${diagnosticFormatMs(outputBreakdown.stateLoadMs)} · rebuild ${diagnosticFormatMs(outputBreakdown.stateRebuildMs)}`);",
+    output_process_line,
+    output_process_line + "\n      `Output snapshot set: ${outputBreakdown ? `${outputBreakdown.outPayloadChars == null ? 'n/a' : `${Math.round(Number(outputBreakdown.outPayloadChars)).toLocaleString('en-US')} chars`} · serialize ${diagnosticFormatMs(outputBreakdown.outSerializeMs)} · set ${diagnosticFormatMs(outputBreakdown.outSetMs)} · ${outputBreakdown.outSetMsPer1kChars == null ? 'n/a' : `${Number(outputBreakdown.outSetMsPer1kChars).toFixed(2)} ms/1K chars`} · API PLUGIN_STORAGE_SET_ITEM · prune INLINE_DISABLED · confidence EXACT` : 'n/a'}`,",
     'output snapshot set diagnostic',
 )
 
@@ -171,7 +215,7 @@ if count(out, 'Output snapshot set:') != count(source, 'Output snapshot set:') +
     raise SystemExit('07007_BUILD_BLOCK diagnostic line cardinality unexpected')
 if "['OUT_STORAGE', n(detail.outSetMs)]" not in out:
     raise SystemExit('07007_BUILD_BLOCK OUT_STORAGE attribution moved')
-if "await this.store.save('out', outIndex, result.state, { metric: outMetric, prune: false });" not in out:
+if ordinary_out_save not in out:
     raise SystemExit('07007_BUILD_BLOCK ordinary out save contract moved')
 if 'API PLUGIN_STORAGE_SET_ITEM · prune INLINE_DISABLED · confidence EXACT' not in out:
     raise SystemExit('07007_BUILD_BLOCK diagnostic provenance tokens missing')

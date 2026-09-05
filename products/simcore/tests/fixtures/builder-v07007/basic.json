@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "v07007-builder-basic",
+  "suite": "builder-v07007",
+  "input": {},
+  "expected": {
+    "runtimeMutation": "OUTPUT_SNAPSHOT_SET_COST_ATTRIBUTION_ONLY",
+    "releaseSystemMutation": "NONE"
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

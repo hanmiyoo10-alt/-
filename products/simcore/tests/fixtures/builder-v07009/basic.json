@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "v07009-builder-basic",
+  "suite": "builder-v07009",
+  "input": {},
+  "expected": {
+    "runtimeMutation": "INLINE_PLANNING_MARKER_HYGIENE_GUARD_ONLY",
+    "releaseSystemMutation": "NONE"
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

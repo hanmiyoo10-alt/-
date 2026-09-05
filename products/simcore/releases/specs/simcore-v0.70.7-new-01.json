@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "simcore-v0.70.7-new-01",
+  "product": "SimCore",
+  "version": "0.70.7",
+  "releaseName": "Output Snapshot Set Cost Attribution",
+  "releaseMode": "NEW_VERSION",
+  "candidateCommit": "e1766da6ff6c48a439a43256ef96640e168ba4a6",
+  "expectedProductionCommit": "e2552d7f93456652c94d9df37b0c253f12f2d900",
+  "candidateReleaseBlob": "65337383e1d554fc398e6d231d30711b296aaf47",
+  "primaryGoalId": "07007_OUTPUT_SNAPSHOT_SET_COST_ATTRIBUTION",
+  "changeClass": "RUNTIME_FEATURE",
+  "evidenceRefs": [
+    "docs/SIMCORE_07007_OUTPUT_SNAPSHOT_SET_COST_ATTRIBUTION_DESIGN_2026-09-05.md",
+    "docs/SIMCORE_07007_IMPLEMENTATION_AUTHORIZATION_2026-09-05.md",
+    "docs/SIMCORE_07007_IMPLEMENTATION_EVIDENCE_2026-09-05.md",
+    "docs/SIMCORE_07007_IMPLEMENTATION_REGRESSION_FAILURE_01_STORE_METRIC_ANCHOR_2026-09-05.md",
+    "docs/SIMCORE_07007_IMPLEMENTATION_REGRESSION_FAILURE_02_OUTPUT_DETAIL_ANCHOR_2026-09-05.md",
+    "docs/SIMCORE_07007_IMPLEMENTATION_REGRESSION_FAILURE_03_R2_9_OPERATOR_CARD_PROJECTION_2026-09-05.md",
+    "docs/SIMCORE_LIVE_07006_RELEASE_CLOSE_2026-09-05.md"
+  ],
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07007_OUTPUT_SNAPSHOT_SET_COST_ATTRIBUTION_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  }
+}

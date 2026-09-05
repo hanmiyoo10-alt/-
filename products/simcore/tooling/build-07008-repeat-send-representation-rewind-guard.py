@@ -9,7 +9,7 @@ INSTALL = ROOT / 'plugins' / 'simcore' / 'install.js'
 RELEASE_NOTE = """// v0.70.8 Repeat-Send Representation Rewind Guard:
 // - Recognizes one exact same-session repeat-send rewind geometry for a proven prior OUTPUT_MISMATCH whose current visible body is the recorded Fresh representation
 // - Keeps the existing same-slot Fresh carryover authority unchanged and adds a separate conjunctive rewind authority using existing send/session/provenance indices only
-// - Routes the proven rewind through REPRESENTATION_FAST_RECONCILED with snapshot UNCHANGED and fresh-exact-repeat-send-rewind provenance
+// - Routes the proven rewind through REPRESENTATION_FAST_RECONCILED with snapshot UNCHANGED and a dedicated bounded repeat-send rewind provenance marker
 // - Adds no Host read, storage/network/timer work, persistent schema, raw-body retention, retry, polling, or release-system change
 //
 """

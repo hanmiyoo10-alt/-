@@ -1,3 +1,4 @@
+
   function requestAccountScopeStats(rows) {
     const list = Array.isArray(rows) ? rows : [];
     const stats = {rows:list.length,devpass:0,credits:0,unknown:0,conflict:0};

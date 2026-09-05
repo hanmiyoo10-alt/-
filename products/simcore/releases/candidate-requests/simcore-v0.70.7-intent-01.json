@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.70.7-intent-01",
+  "releaseId": "simcore-v0.70.7-new-01",
+  "product": "SimCore",
+  "targetVersion": "0.70.7",
+  "releaseName": "Output Snapshot Set Cost Attribution",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "e2552d7f93456652c94d9df37b0c253f12f2d900",
+  "builderPath": "products/simcore/tooling/build-07007-output-snapshot-set-cost-attribution.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_FEATURE",
+  "primaryGoalId": "07007_OUTPUT_SNAPSHOT_SET_COST_ATTRIBUTION",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07007_OUTPUT_SNAPSHOT_SET_COST_ATTRIBUTION_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_07007_OUTPUT_SNAPSHOT_SET_COST_ATTRIBUTION_DESIGN_2026-09-05.md",
+    "docs/SIMCORE_07007_IMPLEMENTATION_AUTHORIZATION_2026-09-05.md",
+    "docs/SIMCORE_07007_IMPLEMENTATION_EVIDENCE_2026-09-05.md",
+    "docs/SIMCORE_07007_IMPLEMENTATION_REGRESSION_FAILURE_01_STORE_METRIC_ANCHOR_2026-09-05.md",
+    "docs/SIMCORE_07007_IMPLEMENTATION_REGRESSION_FAILURE_02_OUTPUT_DETAIL_ANCHOR_2026-09-05.md",
+    "docs/SIMCORE_07007_IMPLEMENTATION_REGRESSION_FAILURE_03_R2_9_OPERATOR_CARD_PROJECTION_2026-09-05.md",
+    "docs/SIMCORE_LIVE_07006_RELEASE_CLOSE_2026-09-05.md"
+  ]
+}

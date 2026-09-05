@@ -20,8 +20,10 @@ assert.equal(spec.managedModelCatalogVersion, '1.280.0');
 assert.deepEqual(spec.contracts, {snapshot:1,recentRequest:1});
 assert.equal(spec.materializer, 'plugins/usage-dashboard/tools/release_daily_request_count_599.py');
 assert.equal(spec.newRegression, 'plugins/usage-dashboard/tests/p65-daily-server-request-count-breakdown.cjs');
+const evidenceView = release.evidenceView;
+assert.equal(evidenceView.mode, 'structured');
 for (const role of ['acceptedBaseline','latestInstalled']) {
-  const row = spec.releaseEvidence?.[role];
+  const row = evidenceView[role];
   assert.equal(row?.productVersion, '3.0.0-alpha.5.98');
   assert.equal(row?.releaseSha, '82c4f900cf548068d1eada957c982a5d78f1347b');
   assert.equal(row?.verdict, 'accepted');

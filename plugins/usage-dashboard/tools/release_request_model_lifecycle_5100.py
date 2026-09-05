@@ -82,10 +82,10 @@ def patch(v):
     rep(ECORE,"const VERSION = '1.6.34';","const VERSION = '1.6.35';",'Engine version')
 
     rep(LEDGER,
-      "      const cat=categoryPair(row);\n      const accountScope = requestAccountScopeValue(recentRequestValue(row, ['requestAccountScope','request_account_scope'], 'unknown'));",
-      "      const cat=categoryPair(row);\n      const lifecycle=lifecyclePair(row);\n      const accountScope = requestAccountScopeValue(recentRequestValue(row, ['requestAccountScope','request_account_scope'], 'unknown'));",'ledger pair')
-    rep(LEDGER,'        model,modelCategory:cat.modelCategory,modelCategorySource:cat.modelCategorySource,\n        cost: num(row.cost)',
-      '        model,modelCategory:cat.modelCategory,modelCategorySource:cat.modelCategorySource,\n        modelLifecycleStatus:lifecycle.modelLifecycleStatus,modelLifecycleSource:lifecycle.modelLifecycleSource,modelLifecycleDeprecatedAt:lifecycle.modelLifecycleDeprecatedAt,modelLifecycleDeactivatedAt:lifecycle.modelLifecycleDeactivatedAt,\n        cost: num(row.cost)','ledger normalize')
+      "      const cat=categoryPair(row);\n      const costRaw = recentRequestValue(row, ['cost','usage.cost','inferenceCost','inference_cost','totalCost','total_cost','usage.cost_details.total_cost','cost_details.total_cost'], null);",
+      "      const cat=categoryPair(row);\n      const lifecycle=lifecyclePair(row);\n      const costRaw = recentRequestValue(row, ['cost','usage.cost','inferenceCost','inference_cost','totalCost','total_cost','usage.cost_details.total_cost','cost_details.total_cost'], null);",'ledger pair')
+    rep(LEDGER,'        model,modelCategory:cat.modelCategory,modelCategorySource:cat.modelCategorySource,\n        cost:num(costRaw)?Number(costRaw):null,',
+      '        model,modelCategory:cat.modelCategory,modelCategorySource:cat.modelCategorySource,\n        modelLifecycleStatus:lifecycle.modelLifecycleStatus,modelLifecycleSource:lifecycle.modelLifecycleSource,modelLifecycleDeprecatedAt:lifecycle.modelLifecycleDeprecatedAt,modelLifecycleDeactivatedAt:lifecycle.modelLifecycleDeactivatedAt,\n        cost:num(costRaw)?Number(costRaw):null,','ledger normalize')
     rep(LEDGER,'        const modelCategoryTruth=mergeCategory(row,current);\n        byKey.set(key, {',
       '        const modelCategoryTruth=mergeCategory(row,current);\n        const modelLifecycleTruth=mergeLifecycle(row,current);\n        byKey.set(key, {','ledger merge')
     rep(LEDGER,'          modelCategory:modelCategoryTruth.modelCategory,\n          modelCategorySource:modelCategoryTruth.modelCategorySource,\n          timestampPrecision:',

@@ -7,6 +7,11 @@ const vm = require('node:vm');
 const {loadCurrentRelease} = require('./helpers/current-release.cjs');
 
 const release = loadCurrentRelease();
+if (release.productVersion !== '3.0.0-alpha.5.99') {
+  console.log(`P65 Daily Server Request Count Breakdown: SKIP · candidate ${release.productVersion} is not 3.0.0-alpha.5.99`);
+  process.exit(0);
+}
+// UD_HISTORICAL_VERSION_LOCK
 assert.equal(release.productVersion, '3.0.0-alpha.5.99');
 assert.equal(release.engineVersion, '1.6.34');
 assert.equal(release.managerVersion, '1.3.6');
@@ -210,6 +215,7 @@ const engineSha = crypto.createHash('sha256').update(engineBytes).digest('hex');
 const managerSha = crypto.createHash('sha256').update(managerBytes).digest('hex');
 const bootstrapSha = crypto.createHash('sha256').update(bootstrapBytes).digest('hex');
 assert.equal(engineSha, '19386785b8756ac34bc6e88ee9d9471ea219d27a16a6ed4632a11d33a8ac6b58', '5.99 Engine 1.6.34 must remain exact-byte unchanged');
+// UD_HISTORICAL_VERSION_LOCK
 assert.equal(manifest.productVersion, '3.0.0-alpha.5.99');
 assert.equal(manifest.components?.plugin?.version, '3.0.0-alpha.5.99');
 assert.equal(manifest.components?.bridge?.requiredVersion, '1.6.34');

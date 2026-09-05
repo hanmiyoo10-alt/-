@@ -22,9 +22,9 @@ for (const part of PARTS) {
 const splitGroups = pluginParts.filter((name) => /^(?:00|02|04|06|08|10|12|14|15|16|18|42|50|52|54|62|70|72|74|76)-/.test(name));
 for (const name of splitGroups) {
   const bytes = fs.statSync(path.join(src, name)).size;
-  // 5.83 adds bounded final-HTTP provenance + two compact request-row presentations to the ledger owner.
-  // Keep that owner under an explicit hard ceiling rather than forcing a new module for a 68-byte overage.
-  const maxBytes = name === '14-request-ledger.part.js' ? 37 * 1024 : 35 * 1024;
+  // 5.100 adds bounded source-backed model lifecycle metadata to the existing request-ledger owner.
+  // Keep that owner under an explicit 38 KiB hard ceiling; all other split owners remain capped at 35 KiB.
+  const maxBytes = name === '14-request-ledger.part.js' ? 38 * 1024 : 35 * 1024;
   assert.ok(bytes <= maxBytes, `${name} grew beyond ${maxBytes / 1024} KiB: ${bytes}`);
 }
 
@@ -32,7 +32,7 @@ assert.equal(engineManifest.schemaVersion, 1);
 assert.equal(engineManifest.mode, 'shared-lexical-concatenation');
 assert.ok(Array.isArray(engineManifest.parts) && engineManifest.parts.length > 0, 'Engine parts registry must not be empty');
 assert.equal(new Set(engineManifest.parts).size, engineManifest.parts.length, 'Engine parts registry must be unique');
-assert.deepEqual(engineManifest.parts, [...engineManifest.parts].sort(), 'Engine parts registry order must remain deterministic');
+assert.deepEqual(engineManifest.parts, [...engineManifest.parts].sort(), 'Engine registry order must remain deterministic');
 const actualEngine = fs.readdirSync(engineSrc).filter((name) => name.endsWith('.part.mjs')).sort();
 assert.deepEqual(actualEngine, [...engineManifest.parts].sort(), 'Engine registry/file parity drift');
 for (const file of engineManifest.parts) assert.match(file, /^[0-9]{2}-[a-z0-9-]+\.part\.mjs$/);

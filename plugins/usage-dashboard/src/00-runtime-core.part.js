@@ -1,26 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.99
+//@version 3.0.0-alpha.5.100
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.99';
+  const VERSION = '3.0.0-alpha.5.100';
   const RELEASE_NOTES = Object.freeze({
-    title: "Daily Server Usage Snapshot (Requests + Tokens)",
+    title: "Request Model Lifecycle Fidelity",
     highlights: Object.freeze([
-    "Adds current-KST-day server request totals with separate DevPass and Credits counts to the existing observed-day card.",
-    "Adds exact current-day total tokens from server daily buckets; no rolling-total or row-based backfill.",
-    "Requests and tokens select independently across 24h, 7d and 30d daily windows; UNKNOWN and exact zero stay distinct.",
-    "Keeps Engine 1.6.34, CLI 1.10.0, Models 1.280.0 and contracts 1/1 unchanged with no new I/O or schema owner.",
+    "Adds current pinned-catalog lifecycle status for the exact served model/provider mapping on recent requests.",
+    "Uses @llmgateway/models 1.280.0 semantics: ACTIVE, scheduled deactivation, DEPRECATED, DEACTIVATED, or UNKNOWN.",
+    "Lifecycle UNKNOWN fails closed on missing, invalid, or ambiguous mapping evidence and never enters request identity.",
+    "Bumps Engine to 1.6.35; Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.99 · Engine 1.6.34 · Manager 1.3.6 and READY/Health ok.",
-    "Check Overview request total, DevPass/Credits counts and exact server token total when source evidence is complete.",
-    "Check Basic/Full Diagnostics match the daily server truth; incomplete source must stay —, never zero.",
-    "Recheck existing dashboard surfaces and Request Ledger without artificial traffic.",
+    "Verify Product 5.100 · Engine 1.6.35 · Manager 1.3.6 and READY/Health ok.",
+    "Check recent request metadata for 모델 상태 and Full Diagnostics for Model lifecycle fidelity.",
+    "UNKNOWN must stay — when exact model/provider mapping is not source-proven; lifecycle changes must not duplicate rows.",
+    "No extra catalog CLI/network/package-fetch loop should appear.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -41,7 +41,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.34';
+  const REQUIRED_BRIDGE_VERSION = '1.6.35';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.6';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;

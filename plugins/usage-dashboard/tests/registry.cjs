@@ -39,6 +39,7 @@ const FOUNDATION_TESTS = Object.freeze([
   'e20-structured-release-evidence-contract.cjs',
   'e21-evidence-consumer-convergence-contract.cjs',
   'e22-durable-release-closure-convergence-contract.cjs',
+  'e23-accepted-baseline-handoff-contract.cjs',
   'pr-lifecycle-closure-contract.cjs',
 ]);
 const INFRASTRUCTURE_FILES = Object.freeze([

@@ -489,6 +489,7 @@ CANONICAL 4180:931843fc
 FRESH_CHAT 4100:ee834c48
 Δchars -80
 OUTPUT_MISMATCH
+setChat 0
 
 next C request:
 Prior representation OUTPUT_MISMATCH

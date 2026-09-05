@@ -1040,3 +1040,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/502)
 - Event ID: `ad4e8b586dd4b5ad3f799334879f630f0fd25d7b187370c096157e35862ee90b`
 <!-- canonical-main-doc-promoted:ad4e8b586dd4b5ad3f799334879f630f0fd25d7b187370c096157e35862ee90b -->
+
+### 2026-09-05 — Merge pull request #1499 from fix/repo-control-plane-writer-inventory-drift-20260905
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `51aa44cfd984f21a4b862950d336d730ab13808c`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/51aa44cfd984f21a4b862950d336d730ab13808c)
+- Event ID: `eca7382b14ee8d77b78cd761394c39c5914528071b266ed3cac668b89b920fe2`
+<!-- canonical-main-doc-promoted:eca7382b14ee8d77b78cd761394c39c5914528071b266ed3cac668b89b920fe2 -->

@@ -6,6 +6,14 @@ ROOT = Path.cwd()
 LATEST = ROOT / 'plugins' / 'simcore' / 'latest.js'
 INSTALL = ROOT / 'plugins' / 'simcore' / 'install.js'
 
+RELEASE_NOTE = """// v0.70.7 Output Snapshot Set Cost Attribution:
+// - Attributes the existing ordinary output snapshot backend-set latency alongside the already-created serialized payload length
+// - Reuses the same already-created serialized state payload and awaited backend set without adding I/O, storage reads/writes, timers, or network work
+// - Reports bounded ms/1K chars as diagnostic provenance only and does not claim that payload size causes latency
+// - Preserves prune:false ordinary output semantics, deferred retention authority, OUT_STORAGE ownership, and persistent schemas
+//
+"""
+
 
 def one(text: str, old: str, new: str, label: str) -> str:
     count = text.count(old)
@@ -62,6 +70,8 @@ if "const HOST_COMPAT_VERSION = '0.70.6';" not in source:
     raise SystemExit('07007_BUILD_BLOCK predecessor host identity missing')
 if "version: '0.70.6',\n    name: 'Manual Edit Redundant Prune Elision'," not in source:
     raise SystemExit('07007_BUILD_BLOCK predecessor release-card identity missing')
+if source.count('// v0.70.6 Manual Edit Redundant Prune Elision:') != 1:
+    raise SystemExit('07007_BUILD_BLOCK predecessor release-note identity missing')
 
 ordinary_out_save = "await this.store.save('out', outIndex, result.state, detail ? { prune: false, metric: outMetric } : { prune: false });"
 
@@ -93,6 +103,12 @@ out = source
 out = one(out, '//@version 0.70.6', '//@version 0.70.7', 'metadata version')
 out = one(out, "const SIMCORE_RUNTIME_VERSION = '0.70.6';", "const SIMCORE_RUNTIME_VERSION = '0.70.7';", 'runtime version')
 out = one(out, "const HOST_COMPAT_VERSION = '0.70.6';", "const HOST_COMPAT_VERSION = '0.70.7';", 'host compatibility version')
+out = one(
+    out,
+    '// v0.70.6 Manual Edit Redundant Prune Elision:\n',
+    RELEASE_NOTE + '// v0.70.6 Manual Edit Redundant Prune Elision:\n',
+    'release-note source identity',
+)
 out = one(
     out,
     "version: '0.70.6',\n    name: 'Manual Edit Redundant Prune Elision',",
@@ -207,6 +223,8 @@ for marker, expected in before_markers.items():
     if actual != expected:
         raise SystemExit(f'07007_BUILD_BLOCK marker count changed {marker}: {expected} -> {actual}')
 
+if count(out, '// v0.70.7 Output Snapshot Set Cost Attribution:') != 1:
+    raise SystemExit('07007_BUILD_BLOCK release-note source identity cardinality unexpected')
 if count(out, 'metric.payloadChars = payload.length;') != count(source, 'metric.payloadChars = payload.length;') + 1:
     raise SystemExit('07007_BUILD_BLOCK ordinary payloadChars metric not added exactly once')
 if count(out, 'diagnosticOutputSetCostPer1k(') != 2:

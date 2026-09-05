@@ -24,7 +24,8 @@ on:
     workflows:
       - SimCore CI
       - SimCore release state sync
-      - SimCore Permanent Release
+      - SimCore R2.7 Durable Status Projection
+      - SimCore R2.8 Human-Evidence Terminal Convergence
       - SimCore Generic Candidate Materialize
       - Usage Dashboard Project Memory
       - Canonical Main Protection Guard
@@ -40,7 +41,8 @@ on:
       - '.github/workflows/canonical-main-protection-guard.yml'
       - '.github/workflows/simcore-ci.yml'
       - '.github/workflows/simcore-release-state-sync.yml'
-      - '.github/workflows/simcore-release-permanent.yml'
+      - '.github/workflows/simcore-r2-7-status-projection.yml'
+      - '.github/workflows/product-simcore-terminal-convergence-r2-8.yml'
       - '.github/workflows/product-simcore-candidate-materialize.yml'
       - '.github/workflows/usage-dashboard-project-memory.yml'
       - 'docs/*_GUIDELINES.md'

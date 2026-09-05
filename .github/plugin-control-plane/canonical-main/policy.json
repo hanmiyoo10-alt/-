@@ -80,14 +80,16 @@
     "productionAuthority": {"simcore": {"manifest": "product-manifest.json"}},
     "writerWorkflows": [
       {"id": "simcore-release-state-sync", "workflow": "simcore-release-state-sync.yml", "scope": ["plugin:simcore"], "events": ["push", "workflow_run", "workflow_dispatch"]},
-      {"id": "simcore-permanent-release-state", "workflow": "simcore-release-permanent.yml", "scope": ["plugin:simcore"], "events": ["workflow_dispatch"]},
+      {"id": "simcore-r2-7-status-projection", "workflow": "simcore-r2-7-status-projection.yml", "scope": ["plugin:simcore"], "events": ["push"]},
+      {"id": "simcore-r2-8-terminal-convergence", "workflow": "product-simcore-terminal-convergence-r2-8.yml", "scope": ["plugin:simcore"], "events": ["push"]},
       {"id": "simcore-candidate-receipt", "workflow": "product-simcore-candidate-materialize.yml", "scope": ["plugin:simcore"], "events": ["push"]},
       {"id": "usage-dashboard-project-memory", "workflow": "usage-dashboard-project-memory.yml", "scope": ["plugin:usage-dashboard"], "events": ["push"]},
       {"id": "canonical-main-protection-guard", "workflow": "canonical-main-protection-guard.yml", "scope": ["scope:repo"], "events": ["push", "workflow_run", "workflow_dispatch"], "failureReason": "PROTECTION_GUARD_FAILED"}
     ],
     "writerInventory": [
       {"workflow": "simcore-release-state-sync.yml", "mode": "active"},
-      {"workflow": "simcore-release-permanent.yml", "mode": "active"},
+      {"workflow": "simcore-r2-7-status-projection.yml", "mode": "active"},
+      {"workflow": "product-simcore-terminal-convergence-r2-8.yml", "mode": "active"},
       {"workflow": "product-simcore-candidate-materialize.yml", "mode": "active"},
       {"workflow": "usage-dashboard-project-memory.yml", "mode": "active"},
       {"workflow": "simcore-release-command.yml", "mode": "legacy-dormant"},

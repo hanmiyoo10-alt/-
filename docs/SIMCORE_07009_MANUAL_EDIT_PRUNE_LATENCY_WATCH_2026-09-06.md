@@ -1,7 +1,7 @@
 # SimCore v0.70.9 Manual Edit Prune Latency Watch
 
 Date: 2026-09-06 KST
-Status: **WATCH · PERFORMANCE · CORRECTNESS INTACT**
+Status: **WATCH · PERFORMANCE · CROSS-VERSION GENUINE-EDIT SLOW-PATH RECURRENCE · CORRECTNESS INTACT**
 Tracking: `#1619`
 Generation: `mtorokbu-gq7rk8`
 Operator action: genuine hand edit on specimen 2
@@ -74,15 +74,56 @@ Edit origin = AMBIGUOUS_CHANGE
 
 Therefore the existing elision contract is not proven eligible here. This observation does not by itself authorize broadening that optimization.
 
-## 5. Classification
+## 5. Lens-2 historical recurrence context
+
+The v0.69.0 M2-6 real-long-chat evidence already recorded another operator-confirmed genuine visible edit with:
+
+```text
+Edit reconcile = MANUAL_EDIT_REBUILT · 18.476 s
+Request prepared = 19.708 s
+functional correctness = PASS
+```
+
+The current v0.70.9 specimen is:
+
+```text
+Edit reconcile = MANUAL_EDIT_REBUILT · 20.875 s
+Manual edit commit = 19.201 s
+prune = 18.834 s
+functional correctness = PASS
+```
+
+Therefore the **broad genuine-edit slow path** is now a cross-version recurring performance observation.
+
+Important evidence boundary:
+
+```text
+GENUINE_EDIT_SLOW_PATH_RECURRENCE = YES
+CURRENT_PRUNE_18_834S_ATTRIBUTION = EXACT
+PRUNE-SPECIFIC_HISTORICAL_RECURRENCE = NOT YET PROVEN
+```
+
+The earlier v0.69 diagnostic did not provide the same exact prune attribution, so it is not valid to claim that prune itself was the owner of the earlier 18.476 s span.
+
+## 6. Updated classification
 
 ```text
 MANUAL_EDIT_CORRECTNESS = PASS
-PRUNE_LATENCY_18_834S = WATCH
-RECURRENCE = NOT YET ESTABLISHED IN THIS ISSUE
-CAUSE = NOT CLAIMED
-OPTIMIZATION = NOT AUTHORIZED FROM ONE SPECIMEN
+GENUINE_EDIT_REBUILD_SLOW_PATH = WATCH / CROSS-VERSION RECURRENCE
+PRUNE_LATENCY_18_834S = WATCH / CURRENT-SPECIMEN EXACT OWNER
+PRUNE-SPECIFIC RECURRENCE = NOT YET ESTABLISHED
+CAUSE BEYOND CURRENT SPAN = NOT CLAIMED
+PROMOTION TO FIX = NOT AUTHORIZED
+OPTIMIZATION = NOT AUTHORIZED FROM CURRENT EVIDENCE
 V07009_INLINE_MARKER_RELEASE_VERDICT = NOT IMPACTED
 ```
 
-Review recurrence and any promotion to FIX in Lens 2 / Lens 3. Keep this topic separate from `#1589` inline planning-marker hygiene and `#1587` ordinary output snapshot-set variance.
+Keep this topic separate from `#1589` inline planning-marker hygiene, `#1587` ordinary output snapshot-set variance, `#1556` pre-snapshot read latency, and `#1626` Turn-storage variance.
+
+## 7. Production boundary
+
+```text
+runtime mutation = NONE
+release-simcore mutation = NONE
+release-state mutation = NONE
+```

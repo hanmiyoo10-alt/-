@@ -1,12 +1,13 @@
 # SimCore Host-Local Telemetry Checkpoint Latency Watch
 
 Date: 2026-09-06 KST
-Status: **WATCH · PERFORMANCE · EXACT OWNER OBSERVED ON ONE OUTPUT · CORRECTNESS INTACT**
-Classification: **SIMCORE · RUNTIME TELEMETRY / HOST-LOCAL TRANSPORT · SEPARATE FROM v0.70.8 CORRECTNESS REPAIR**
+Status: **WATCH · PERFORMANCE · INTERMITTENT · CORRECTNESS INTACT**
+Classification: **SIMCORE · RUNTIME TELEMETRY / HOST-LOCAL TRANSPORT · SEPARATE FROM RELEASE CORRECTNESS**
+Tracking: `#1588`
 
-## 1. Triggering live specimen
+## 1. Triggering v0.70.8 live specimen
 
-Production:
+Production at trigger:
 
 ```text
 v0.70.8 Repeat-Send Representation Rewind Guard
@@ -73,11 +74,11 @@ OUTPUT_COMMIT_CORRECTNESS = PASS
 LATENCY = WATCH
 ```
 
-This is not evidence that the v0.70.8 Repeat-Send Representation Rewind Guard is incorrect.
+This is not evidence that the v0.70.8 repeat-send repair was incorrect.
 
 ## 3. Scope boundary
 
-The currently deployed telemetry contract intentionally awaits the OUTPUT_COMMIT Host-local write so the copied diagnostic can report durable publication state. This record does not change that policy.
+The deployed telemetry contract intentionally awaits the OUTPUT_COMMIT Host-local write so copied diagnostics can report durable publication state. This record does not change that policy.
 
 Do not infer from one latency spike that the correct repair is to:
 
@@ -92,7 +93,7 @@ change release/runtime correctness semantics
 
 Any future optimization must first prove a bounded safe mechanism while preserving the established Host-local handoff contract or explicitly design a separate contract change.
 
-## 4. Related first-request observation
+## 4. Related v0.70.8 first-request observation
 
 The same generation's first accepted request reported:
 
@@ -102,18 +103,54 @@ prompt accounting = 8.970 s
 first-request = COLD_INIT
 ```
 
-Current source structure includes first-request telemetry adoption/Host-local work inside the broad prompt-accounting span. This sample therefore supports a cold-path performance observation, but the exact 8.970 s owner is not isolated by the copied fields strongly enough to assign all of it to Host-local telemetry.
+That specimen was operator-confirmed as the first real turn after page refresh. Current attribution is not strong enough to assign the entire 8.970 s span to Host-local telemetry.
 
 Disposition:
 
 ```text
-FIRST_REQUEST_POST_ONSEND_LATENCY = WATCH / EXISTING COLD-PATH FAMILY
+FIRST_REQUEST_POST_ONSEND_LATENCY = WATCH / COLD-FIRST-TURN FAMILY
 EXACT_CAUSE_OF_8_970S = UNRESOLVED
 ```
 
 Do not conflate this bounded first-request observation with the exact 6.337 s OUTPUT_COMMIT checkpoint ownership above.
 
-## 5. Advancement disposition
+## 5. v0.70.9 clean non-recurrence control
+
+The v0.70.9 Lens-2 coherent set, generation `mtorokbu-gq7rk8`, reports Host-local telemetry checkpoint totals of approximately:
+
+```text
+specimen 1 = 182 ms
+specimen 2 =  47 ms
+specimen 3 =  51 ms
+specimen 4 =  55 ms
+specimen 5 =  67 ms
+```
+
+All five report:
+
+```text
+Telemetry capsule = COMPACT_V2 / OK
+MEMORY WRITTEN
+HOST_LOCAL WRITTEN
+output COMMITTED
+Warnings = 0
+```
+
+Therefore the prior exact 6.337 s spike is not reproduced in the current generation.
+
+This does **not** invalidate the earlier exact specimen. It narrows the behavior to an intermittent latency spike rather than a consistently slow Host-local write.
+
+Updated disposition:
+
+```text
+V07008_6_337S_SPIKE = VALID EXACT HISTORICAL SAMPLE
+V07009_REPRODUCTION = NO
+CURRENT_PACKET_CHECKPOINT_CORRECTNESS = PASS
+CURRENT_PACKET_LATENCY = BOUNDED / MUCH LOWER
+INTERMITTENT_PERFORMANCE_WATCH = KEEP OPEN
+```
+
+## 6. Advancement disposition
 
 ```text
 classification = WATCH
@@ -126,12 +163,13 @@ This finding remains separate from:
 
 ```text
 #1556 repeat-send pre-snapshot READ HIT latency
-REPEATED_OUT_STORAGE_LATENCY / SIMILAR_SIZE_HIGH_VARIANCE
-v0.70.8 Representation/Edit-Reconcile correctness
+#1587 output snapshot-set variance
+#1619 genuine-edit prune latency
+#1626 Turn-storage variance
 provider cache = UNVERIFIED
 ```
 
-## 6. Production immutability
+## 7. Production immutability
 
 ```text
 runtime mutation = NONE

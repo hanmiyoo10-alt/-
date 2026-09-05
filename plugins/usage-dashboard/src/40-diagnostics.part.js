@@ -145,6 +145,12 @@
     return `Premium ${stats.premium} · Regular ${stats.regular} · Unknown ${stats.unknown} · source ${source}`;
   }
 
+  function modelLifecycleFidelityDiagnosticText(rows) {
+    const stats = requestModelLifecycleStats(rows);
+    const source = (stats.active + stats.scheduled + stats.deprecated + stats.deactivated) > 0 ? 'llmgateway-model-catalog' : 'unknown';
+    return `Active ${stats.active} · Scheduled ${stats.scheduled} · Deprecated ${stats.deprecated} · Deactivated ${stats.deactivated} · Unknown ${stats.unknown} · source ${source}`;
+  }
+
   function bridgeCreditsEarlyStartText(performance) {
     const early = performance?.creditsEarlyStart && typeof performance.creditsEarlyStart === 'object'
       ? performance.creditsEarlyStart
@@ -321,6 +327,7 @@
       `Bridge CLI runtime: ${bridgeCliRuntimeText(state.data?.bridge?.diagnostics)}`,
       `Model category catalog: ${modelCategoryCatalogDiagnosticText(state.data?.bridge?.diagnostics)}`,
       `Model category fidelity: ${modelCategoryFidelityDiagnosticText(requestLedgerRowsForScope('all'))}`,
+      `Model lifecycle fidelity: ${modelLifecycleFidelityDiagnosticText(requestLedgerRowsForScope('all'))}`,
       `Bridge CLI launcher: ${bridgeCliLauncherText(bridgeDiag.snapshotPerformance)}`,
       `Bridge Credits early-start: ${bridgeCreditsEarlyStartText(bridgeDiag.snapshotPerformance)}`,
       `Bridge CLI timing: ${bridgeSnapshotCliTimingText(bridgeDiag.snapshotPerformance)}`,

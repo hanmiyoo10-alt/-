@@ -1,0 +1,100 @@
+{
+  "product": "Local Usage Dashboard",
+  "productVersion": "3.0.0-alpha.5.100",
+  "releaseTitle": "Request Model Lifecycle Fidelity",
+  "engineVersion": "1.6.35",
+  "managerVersion": "1.3.6",
+  "managedCliVersion": "1.10.0",
+  "managedCliAuthority": {
+    "schemaVersion": 1,
+    "package": "@llmgateway/cli",
+    "version": "1.10.0",
+    "exact": true,
+    "upstreamRepository": "theopenco/llmgateway-templates",
+    "tagNamespace": "@llmgateway/cli@",
+    "tag": "@llmgateway/cli@1.10.0",
+    "tagCommit": "6b1cda1988f32010a9b090c00eb9b2fe672145fe",
+    "verifiedAt": "2026-08-31",
+    "verification": "GitHub refs/tags/@llmgateway/cli@1.10.0",
+    "parentProjectRepository": "theopenco/llmgateway",
+    "parentProjectReleaseIsPackageAuthority": false
+  },
+  "managedModelCatalogVersion": "1.280.0",
+  "managedModelCatalogAuthority": {
+    "package": "@llmgateway/models",
+    "version": "1.280.0",
+    "exact": true,
+    "root": "managed-cli-version-root",
+    "source": "installed-package-json-and-export",
+    "upstreamRepository": "theopenco/llmgateway",
+    "upstreamCommit": "fbb40efa41c379db5223dff708509b6dd82e05a9",
+    "verifiedAt": "2026-08-31"
+  },
+  "snapshotContract": 1,
+  "recentRequestContract": 1,
+  "contracts": {
+    "snapshot": 1,
+    "recentRequest": 1
+  },
+  "releaseEvidence": {
+    "schemaVersion": 1,
+    "acceptedBaseline": {
+      "productVersion": "3.0.0-alpha.5.99",
+      "releaseSha": "91c3d11d6aa7d5299b701ff94956a230a07d4be2",
+      "verdict": "accepted",
+      "issue": 1487,
+      "commentId": 5552058215,
+      "note": "5.99 completed PocketRisu physical acceptance before the 5.100 implementation transaction."
+    },
+    "latestInstalled": {
+      "productVersion": "3.0.0-alpha.5.99",
+      "releaseSha": "91c3d11d6aa7d5299b701ff94956a230a07d4be2",
+      "verdict": "accepted",
+      "issue": 1487,
+      "commentId": 5552058215,
+      "note": "5.99 is the latest installed accepted production release at the 5.100 source freeze."
+    }
+  },
+  "authority": {
+    "featureIssue": 1540,
+    "designPullRequest": 1542,
+    "physicalAcceptanceIssue": 1487,
+    "releaseGeneration": "E13",
+    "e18": "derived-impact smoke only; no authority change",
+    "e19": "shift-left validation reuse; no authority change",
+    "e20": "structured release evidence remains authoritative",
+    "e21": "canonical evidence-view compatibility retained"
+  },
+  "materializer": "plugins/usage-dashboard/tools/release_request_model_lifecycle_5100.py",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
+  "newRegression": "plugins/usage-dashboard/tests/p66-request-model-lifecycle-fidelity.cjs",
+  "highlights": [
+    "Adds current pinned-catalog lifecycle status for the exact served model/provider mapping on recent requests.",
+    "Uses @llmgateway/models 1.280.0 semantics: ACTIVE, scheduled deactivation, DEPRECATED, DEACTIVATED, or UNKNOWN.",
+    "Lifecycle UNKNOWN fails closed on missing, invalid, or ambiguous mapping evidence and never enters request identity.",
+    "Bumps Engine to 1.6.35; Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded."
+  ],
+  "diagnosticHints": [
+    "Verify Product 5.100 · Engine 1.6.35 · Manager 1.3.6 and READY/Health ok.",
+    "Check recent request metadata for 모델 상태 and Full Diagnostics for Model lifecycle fidelity.",
+    "UNKNOWN must stay — when exact model/provider mapping is not source-proven; lifecycle changes must not duplicate rows.",
+    "No extra catalog CLI/network/package-fetch loop should appear."
+  ],
+  "releaseNotes": {
+    "highlights": [
+      "Adds current pinned-catalog lifecycle status for the exact served model/provider mapping on recent requests.",
+      "Uses @llmgateway/models 1.280.0 semantics: ACTIVE, scheduled deactivation, DEPRECATED, DEACTIVATED, or UNKNOWN.",
+      "Lifecycle UNKNOWN fails closed on missing, invalid, or ambiguous mapping evidence and never enters request identity.",
+      "Bumps Engine to 1.6.35; Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded."
+    ],
+    "diagnosticHints": [
+      "Verify Product 5.100 · Engine 1.6.35 · Manager 1.3.6 and READY/Health ok.",
+      "Check recent request metadata for 모델 상태 and Full Diagnostics for Model lifecycle fidelity.",
+      "UNKNOWN must stay — when exact model/provider mapping is not source-proven; lifecycle changes must not duplicate rows.",
+      "No extra catalog CLI/network/package-fetch loop should appear."
+    ]
+  }
+}

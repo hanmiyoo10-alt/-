@@ -278,6 +278,16 @@ Examples include producer field ↔ consumer field, UI action ↔ handler, state
 
 Project-owned tests and contracts decide the concrete assertions. The common layer does not invent one universal schema.
 
+### RCR-D14 — Prefer compact agent execution surfaces
+
+**Class:** `DEFAULT`
+
+When automated repository work requires local command execution, prefer short commands that invoke existing repository-native scripts, tests, package CLIs, CI, or other durable harnesses. Avoid embedding large generated programs, multiple source/test files, or mini build systems inside one shell/tool invocation when the same validation can be materialized or delegated without weakening evidence.
+
+Small one-off inline snippets remain appropriate when they are bounded and easier to inspect than a durable file. Compactness must never remove required validation, bypass authority/gates, or hide meaningful failure evidence.
+
+The exact guardrail and routing procedure are owned by `.agents/skills/agent-execution-compactness/SKILL.md` and may evolve without changing project authority.
+
 ## 6. Conditional common rules
 
 ### RCR-C01 — Generated artifacts remain derived

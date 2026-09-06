@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const LABELS = Object.freeze(['CI_SELF','HARNESS','ARCH_CONTRACT','STATE_SYNC','LEGACY_VERIFICATION','SIMCORE_DOC_ONLY','SHARED_MAIN_COORDINATION']);
+export const LABELS = Object.freeze(['CI_SELF','HARNESS','MCP_TOOLING','ARCH_CONTRACT','STATE_SYNC','LEGACY_VERIFICATION','SIMCORE_DOC_ONLY','SHARED_MAIN_COORDINATION']);
 const permanentReleaseWorkflows=Object.freeze(['.github/workflows/simcore-release-permanent.yml','.github/workflows/simcore-release-required.yml','.github/workflows/simcore-release-pr-activation.yml']);
 const exact=Object.freeze({
   '.github/workflows/simcore-ci.yml':['CI_SELF'],
@@ -66,6 +66,7 @@ export function classifyPath(input){
   const p=String(input||'').replaceAll('\\','/').replace(/^\.\//,'');
   const out=new Set(exact[p]||[]);
   if(p==='.github/workflows/simcore-ci.yml'||p.startsWith('products/simcore/tooling/ci/')||p.startsWith('products/simcore/ci/'))out.add('CI_SELF');
+  if(p.startsWith('tools/simcore-mcp/'))out.add('MCP_TOOLING');
   if(/^products\/simcore\/tooling\/exposure-[^/]+\.(?:mjs|js)$/.test(p))add(out,['CI_SELF','HARNESS']);
   if(p.startsWith('products/simcore/tests/'))add(out,['CI_SELF','HARNESS']);
   if(p.startsWith('products/simcore/releases/'))add(out,['CI_SELF','HARNESS']);

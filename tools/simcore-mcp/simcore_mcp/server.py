@@ -10,6 +10,7 @@ from .docs_drift import check_docs_drift
 from .github_reader import GitHubReader
 from .postmerge_health import postmerge_health
 from .production_identity import verify_production_identity
+from .relationship_audit import RelationshipReader, relationship_audit
 from .release_preflight import release_preflight
 from .status import build_status
 
@@ -17,9 +18,9 @@ mcp = MCPServer(
     "SimCore MCP",
     instructions=(
         "Read-only SimCore operational status, production-identity, documentation-drift, release-preflight, "
-        "post-merge health, candidate-snapshot, and candidate-preflight tools. These tools never mutate GitHub, "
-        "main, release-simcore, product manifests, issues, pull requests, workflows, HUMAN_EVIDENCE, release state, "
-        "or production."
+        "post-merge health, candidate-snapshot, candidate-preflight, and branch/PR relationship-audit tools. "
+        "These tools never mutate GitHub, main, release-simcore, product manifests, issues, pull requests, "
+        "workflows, HUMAN_EVIDENCE, release state, or production."
     ),
 )
 
@@ -64,6 +65,35 @@ def simcore_candidate_snapshot(ref: str) -> dict[str, Any]:
 def simcore_candidate_preflight(ref: str) -> dict[str, Any]:
     """Compose candidate snapshot and version preflight under one frozen read-only authority."""
     return candidate_preflight(GitHubReader(), ref)
+
+
+@mcp.tool()
+def simcore_branch_pr_relationship_audit(
+    pr_number: int,
+    mode: str = "BR-01",
+    expected_base_ref: str | None = None,
+    expected_base_sha: str | None = None,
+    expected_head_ref: str | None = None,
+    expected_head_sha: str | None = None,
+    base_movement_policy: str | None = None,
+    head_movement_policy: str | None = None,
+    include_compare: bool = True,
+    require_head_descends_from_base: bool = False,
+) -> dict[str, Any]:
+    """Run one bounded read-only SYS-36 branch/PR relationship audit."""
+    return relationship_audit(
+        RelationshipReader(),
+        pr_number,
+        mode,
+        expected_base_ref,
+        expected_base_sha,
+        expected_head_ref,
+        expected_head_sha,
+        base_movement_policy,
+        head_movement_policy,
+        include_compare,
+        require_head_descends_from_base,
+    )
 
 
 def main() -> None:

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "v07011-builder-basic",
+  "suite": "builder-v07011",
+  "input": {
+    "releaseSpecLiveGateScenario": "07011_OPERATOR_RELEASE_CARD_METADATA_REPAIR_REAL_LONG_CHAT"
+  },
+  "expected": {
+    "runtimeMutation": "OPERATOR_RELEASE_CARD_METADATA_ONLY",
+    "releaseSystemMutation": "NONE",
+    "historicalScenario": "06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT",
+    "validation": "PENDING_REAL_LONG_CHAT"
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

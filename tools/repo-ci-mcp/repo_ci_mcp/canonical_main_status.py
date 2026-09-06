@@ -8,11 +8,20 @@ from .github_reader import GitHubReadError, GitHubReader
 
 OPS_ISSUE = 485
 CAPSULE_HEADING = "## Canonical Operator Capsule"
+ACTIVE_HEADING = "## Active P0/P1 incidents"
+ATTENTION_HEADING = "## Attention queue (P2)"
+PROJECTS_HEADING = "## Projects / products"
 FIELD_ORDER = ("STATE", "MAIN", "CHANGE", "WHY", "NEXT", "AUTHORITY", "UNKNOWN")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 MAIN_RE = re.compile(r"^`([0-9a-f]{40})` / Required (.+)$")
 STATE_RE = re.compile(r"^`(CLEAR|ATTENTION|INCIDENT|UNKNOWN)`$")
+INCIDENT_ROW_RE = re.compile(
+    r"^- \*\*(P[012])\*\* ([A-Z][A-Z0-9_]*) — #([1-9][0-9]*) `([A-Z0-9_:-]{1,128})` — .+$"
+)
 MAX_FIELD_CHARS = 4096
+MAX_TRIAGE_ROWS = 8
+MAX_TRIAGE_LINE_CHARS = 1024
+NONE_OBSERVED = "- none observed within current adapter coverage"
 
 
 class CanonicalMainReader(GitHubReader):
@@ -75,6 +84,90 @@ def parse_capsule(body: object) -> dict[str, Any]:
     }
 
 
+def _section(text: str, heading: str, next_heading: str) -> str | None:
+    start = text.find(heading)
+    if start < 0:
+        return None
+    body_start = start + len(heading)
+    end = text.find(next_heading, body_start)
+    if end < 0:
+        return None
+    return text[body_start:end]
+
+
+def _unknown_triage(reason_code: str) -> dict[str, Any]:
+    return {
+        "known": False,
+        "count": None,
+        "truncated": False,
+        "rows": [],
+        "reasonCode": reason_code,
+    }
+
+
+def _parse_incident_section(
+    text: str,
+    heading: str,
+    next_heading: str,
+    allowed_severities: set[str],
+) -> dict[str, Any]:
+    section = _section(text, heading, next_heading)
+    if section is None:
+        return _unknown_triage("STATUS_TRIAGE_SECTION_MISSING")
+
+    lines = [line.strip() for line in section.splitlines() if line.strip()]
+    if lines == [NONE_OBSERVED]:
+        return {"known": True, "count": 0, "truncated": False, "rows": []}
+    if not lines:
+        return _unknown_triage("STATUS_TRIAGE_SECTION_EMPTY")
+    if any("UNKNOWN" in line or "unavailable" in line.lower() for line in lines):
+        return _unknown_triage("STATUS_TRIAGE_SECTION_UNKNOWN")
+
+    rows: list[dict[str, Any]] = []
+    for line in lines:
+        if len(line) > MAX_TRIAGE_LINE_CHARS:
+            return _unknown_triage("STATUS_TRIAGE_ROW_OVERSIZE")
+        match = INCIDENT_ROW_RE.fullmatch(line)
+        if not match:
+            return _unknown_triage("STATUS_TRIAGE_ROW_INVALID")
+        severity, state, issue_number, reason_code = match.groups()
+        if severity not in allowed_severities:
+            return _unknown_triage("STATUS_TRIAGE_SEVERITY_INVALID")
+        rows.append(
+            {
+                "severity": severity,
+                "state": state,
+                "issue": int(issue_number),
+                "reasonCode": reason_code,
+            }
+        )
+
+    total = len(rows)
+    return {
+        "known": True,
+        "count": total,
+        "truncated": total > MAX_TRIAGE_ROWS,
+        "rows": rows[:MAX_TRIAGE_ROWS],
+    }
+
+
+def parse_triage(body: object) -> dict[str, Any]:
+    text = body if isinstance(body, str) else ""
+    active = _parse_incident_section(text, ACTIVE_HEADING, ATTENTION_HEADING, {"P0", "P1"})
+    attention = _parse_incident_section(text, ATTENTION_HEADING, PROJECTS_HEADING, {"P2"})
+    reasons = [
+        str(section.get("reasonCode"))
+        for section in (active, attention)
+        if not section.get("known") and section.get("reasonCode")
+    ]
+    return {
+        "known": bool(active.get("known") and attention.get("known")),
+        "activeP0P1": active,
+        "attentionP2": attention,
+        "reasonCodes": sorted(set(reasons)),
+    }
+
+
 def build_canonical_main_status(reader: Any) -> dict[str, Any]:
     try:
         first = reader.get_branch("main")
@@ -110,6 +203,7 @@ def build_canonical_main_status(reader: Any) -> dict[str, Any]:
         "operatorState": capsule["operatorState"],
         "requiredSummary": capsule["requiredSummary"],
         "fields": capsule["fields"],
+        "triage": parse_triage(issue.get("body")),
     }
     if capsule["mainSha"] != first_sha:
         return _result(

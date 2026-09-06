@@ -29,6 +29,7 @@ jobs:
           persist-credentials: false
 
       - name: Verify exact candidate identity
+        id: candidate_identity
         if: ${{ inputs.candidate_sha != '' }}
         shell: bash
         env:
@@ -41,11 +42,31 @@ jobs:
           echo "UD_VALIDATING_EXACT_SHA:$CANDIDATE_SHA"
 
       - name: Validate already-materialized Usage Dashboard candidate
+        id: authoritative_validation
         shell: bash
         env:
           PYTHONPYCACHEPREFIX: /tmp/usage-dashboard-pycache
         run: |
           set -euo pipefail
+          PHASE_RECEIPT='.ci-summary/usage-dashboard-phases.json'
+          ci_receipt() {
+            local code=0
+            python3 .github/tooling/ci-summary/phase_receipt.py --receipt "$PHASE_RECEIPT" "$@" || code=$?
+            if [[ "$code" -ne 0 ]]; then
+              echo "::warning::Usage Dashboard CI phase receipt write failed (code=$code); authoritative validation continues unchanged."
+            fi
+            return 0
+          }
+          ci_receipt init \
+            release_spec \
+            materialization \
+            reconciliation \
+            syntax_checks \
+            full_test_suite \
+            release_candidate_validation \
+            cleanliness_integrity
+
+          ci_receipt start release_spec
           RELEASE_SPEC='${{ inputs.release_spec }}'
           if [[ -z "$RELEASE_SPEC" ]]; then
             RELEASE_SPEC="$(node plugins/usage-dashboard/tools/resolve_release_spec.cjs --manifest plugins/usage-dashboard/runtime/product-manifest.json)"
@@ -77,6 +98,9 @@ jobs:
               if '\n' in value or '\r' in value: raise SystemExit(f'invalid newline in {key}')
               print(f'{key}={value}')
           PY
+          ci_receipt pass release_spec
+
+          ci_receipt start materialization
           python3 -m py_compile plugins/usage-dashboard/tools/check_release_monotonic.py plugins/usage-dashboard/tools/validate_release_candidate.py plugins/usage-dashboard/tools/reconcile_release_candidate.py "$UD_MATERIALIZER"
           assert_test_tree_clean() {
             local status; status="$(git status --porcelain --untracked-files=all -- plugins/usage-dashboard/tests)"
@@ -87,18 +111,39 @@ jobs:
             if [[ -n "$status" ]]; then printf '%s\n' "$status"; echo 'CANDIDATE_NOT_MATERIALIZED'; return 1; fi
           }
           python3 "$UD_MATERIALIZER"
+          ci_receipt pass materialization
+
+          ci_receipt start reconciliation
           python3 plugins/usage-dashboard/tools/reconcile_release_candidate.py --spec "$RELEASE_SPEC" --two-pass
           assert_candidate_materialized
           assert_test_tree_clean
+          ci_receipt pass reconciliation
+
+          ci_receipt start syntax_checks
           node --check plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
           bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
           bash -n scripts/bootstrap-usage-dashboard.sh
           python3 plugins/usage-dashboard/tools/sync_project_guidelines.py --check
+          ci_receipt pass syntax_checks
+
+          ci_receipt start full_test_suite
+          TEST_TOTAL=''
+          if TEST_TOTAL="$(node -e "const {discoverTests}=require('./plugins/usage-dashboard/tests/registry.cjs'); console.log(discoverTests().ordered.length)")" && [[ "$TEST_TOTAL" =~ ^[0-9]+$ ]]; then
+            ci_receipt set-int test_total "$TEST_TOTAL"
+          else
+            echo '::warning::Usage Dashboard test registry count unavailable to compact summary; authoritative test execution continues.'
+          fi
           node plugins/usage-dashboard/tests/run-all.cjs
           assert_test_tree_clean
+          ci_receipt pass full_test_suite
+
+          ci_receipt start release_candidate_validation
           python3 plugins/usage-dashboard/tools/validate_release_candidate.py --spec "$RELEASE_SPEC"
+          ci_receipt pass release_candidate_validation
+
+          ci_receipt start cleanliness_integrity
           git diff --check
           assert_candidate_materialized
           EXPECTED_PARTS="$(node -e "console.log(require('./plugins/usage-dashboard/src/parts.cjs').PARTS.length)")"
@@ -108,3 +153,66 @@ jobs:
           node plugins/usage-dashboard/tools/build_bridge_engine.cjs --check
           grep -Fq 'STALE_CANDIDATE_MAIN' plugins/usage-dashboard/tools/check_release_monotonic.py
           grep -Fq 'SAME_VERSION_ARTIFACT_DIVERGENCE' plugins/usage-dashboard/tools/check_release_monotonic.py
+          ci_receipt pass cleanliness_integrity
+
+      - name: Render compact CI summary
+        if: always()
+        shell: bash
+        env:
+          IDENTITY_REQUIRED: ${{ inputs.candidate_sha != '' }}
+          IDENTITY_OUTCOME: ${{ steps.candidate_identity.outcome }}
+          VALIDATION_OUTCOME: ${{ steps.authoritative_validation.outcome }}
+        run: |
+          set +e
+          mkdir -p .ci-summary
+          python3 .github/tooling/ci-summary/adapters/usage_dashboard.py \
+            --report .ci-summary/usage-dashboard-phases.json \
+            --output .ci-summary/adapter.json \
+            --workflow 'Reusable Usage Dashboard Validate' \
+            --identity-required "$IDENTITY_REQUIRED" \
+            --identity-outcome "$IDENTITY_OUTCOME" \
+            --validation-outcome "$VALIDATION_OUTCOME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --event "$GITHUB_EVENT_NAME" \
+            --sha "$GITHUB_SHA"
+          adapter_code=$?
+          python3 .github/tooling/ci-summary/render.py \
+            --input .ci-summary/adapter.json \
+            --json-out .ci-summary/summary.json \
+            --text-out .ci-summary/inline.txt \
+            --markdown-out .ci-summary/inline.md \
+            --workflow 'Reusable Usage Dashboard Validate' \
+            > /tmp/usage-dashboard-summary-render.log
+          render_code=$?
+
+          if [[ -f .ci-summary/inline.txt ]]; then
+            cat .ci-summary/inline.txt
+          elif [[ -s /tmp/usage-dashboard-summary-render.log ]]; then
+            cat /tmp/usage-dashboard-summary-render.log
+          else
+            printf '%s\n' \
+              'CI_SUMMARY_V1_BEGIN' \
+              'CI SUMMARY · Reusable Usage Dashboard Validate' \
+              'Result: INFRA_ERROR' \
+              'Reason codes:' \
+              '- CI_SUMMARY_RENDER_CATASTROPHIC' \
+              'Summary complete: false' \
+              'CI_SUMMARY_V1_END'
+          fi
+
+          if [[ -f .ci-summary/inline.md ]]; then
+            cat .ci-summary/inline.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo 'CI SUMMARY · Reusable Usage Dashboard Validate'
+              echo 'Result: INFRA_ERROR'
+              echo 'Reason codes: CI_SUMMARY_RENDER_CATASTROPHIC'
+              echo 'Summary complete: false'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [[ "$adapter_code" -ne 0 || "$render_code" -ne 0 ]]; then
+            echo "::warning::CI compact summary generation incomplete (adapter=$adapter_code renderer=$render_code); authoritative Usage Dashboard validation gate is unchanged."
+          fi
+          exit 0

@@ -112,6 +112,26 @@ class EvalContractTests(unittest.TestCase):
         self.assertTrue(case["facts"]["scratch_external_only"])
         self.assertEqual(reference_decision(case["facts"]), ("EXECUTE", "EXCEPTION"))
 
+    def test_fanout_eval_prefers_evidence_equivalent_existing_harness(self):
+        case = next(case for case in self.cases if case["id"] == "existing-repository-harness")
+        self.assertEqual(reference_decision(case["facts"]), ("EXECUTE", "HARNESS"))
+        self.assertIn("several manual repository calls", case["prompt"])
+        self.assertTrue(
+            any("visible fan-out" in assertion for assertion in case["assertions"]),
+            "safe consolidation eval must explicitly cover visible fan-out",
+        )
+
+    def test_fanout_eval_preserves_required_split_and_targeted_drilldown(self):
+        by_id = {case["id"]: case for case in self.cases}
+        split_case = by_id["multiple-independent-goals"]
+        self.assertEqual(reference_decision(split_case["facts"]), ("SPLIT", None))
+        self.assertTrue(any("visible fan-out" in assertion for assertion in split_case["assertions"]))
+
+        drilldown_case = by_id["ci-mcp-long-validation"]
+        self.assertEqual(reference_decision(drilldown_case["facts"]), ("EXECUTE", "HARNESS"))
+        self.assertIn("unless the summary is insufficient", drilldown_case["prompt"])
+        self.assertTrue(any("targeted drill-down" in assertion for assertion in drilldown_case["assertions"]))
+
 
 if __name__ == "__main__":
     unittest.main()

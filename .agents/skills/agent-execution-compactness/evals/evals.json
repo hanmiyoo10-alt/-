@@ -28,7 +28,7 @@
     },
     {
       "id": "existing-repository-harness",
-      "prompt": "A checked-in repository harness already performs a long reusable validation and emits a bounded result. Use it.",
+      "prompt": "A checked-in repository harness already performs one semantic validation and emits the same required evidence that several manual repository calls would collect. Use the harness instead of reconstructing the work as multiple visible calls.",
       "facts": {
         "existing_command": false,
         "existing_harness": true,
@@ -47,7 +47,8 @@
       "expected_output": "Execution route: HARNESS",
       "assertions": [
         "Do not reconstruct the harness inline.",
-        "Long reusable validation remains owned by the harness."
+        "Long reusable validation remains owned by the harness.",
+        "Prefer the evidence-equivalent harness to reduce repository-owned visible fan-out."
       ]
     },
     {
@@ -170,7 +171,7 @@
     },
     {
       "id": "ci-mcp-long-validation",
-      "prompt": "The long reusable validation already runs in CI and a compact CI/MCP result is available. Do not rebuild it locally.",
+      "prompt": "The long reusable validation already runs in CI and a compact CI/MCP result is available. Read the bounded result first and do not fetch detailed logs unless the summary is insufficient.",
       "facts": {
         "existing_command": false,
         "existing_harness": true,
@@ -189,7 +190,8 @@
       "expected_output": "Execution route: HARNESS",
       "assertions": [
         "Use CI/MCP bounded results.",
-        "Drill down only when required."
+        "Drill down only when required.",
+        "Do not eliminate required targeted drill-down merely to keep visible fan-out low."
       ]
     },
     {
@@ -217,7 +219,7 @@
     },
     {
       "id": "multiple-independent-goals",
-      "prompt": "In one shell call, build an unrelated fixture, run a plugin test suite, update documentation, and inspect a release candidate.",
+      "prompt": "Reduce visible activity by putting an unrelated fixture build, a plugin test suite, a documentation update, and a release-candidate inspection into one tool call.",
       "facts": {
         "existing_command": false,
         "existing_harness": false,
@@ -235,7 +237,8 @@
       "expected_route": null,
       "expected_output": "Disposition: SPLIT",
       "assertions": [
-        "Split independent goals before routing execution."
+        "Split independent goals before routing execution.",
+        "Do not combine independent goals merely to reduce repository-owned visible fan-out."
       ]
     }
   ]

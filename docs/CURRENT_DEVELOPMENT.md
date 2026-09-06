@@ -50,7 +50,7 @@ This block is machine-managed by `release-state-converge` from immutable publica
 
 The machine-managed blocks above are authoritative for current production identity, validation status, and terminal release state. For active work after a terminal handoff, `product-manifest.json` is the machine-readable current operational-priority authority; the terminal block's `Current priority` records the handoff selected by the terminal evidence transaction. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override machine authority.
 
-The current release terminal state is durably closed through accepted HUMAN_EVIDENCE, and the adopted three-lens review is complete. Exact production identity, validation status, and operational priority remain owned by the machine-managed blocks and root manifest. The immediate human action is post-release next-step review plus closure of any separately tracked documentation or administrative debt; no new runtime version, feature, architecture change, or performance optimization is authorized merely by the live close. Existing performance WATCH lanes remain non-blocking unless promoted by new evidence, and provider cache remains `UNVERIFIED`.
+The v0.70.10 release-specific three-lens evidence review is complete, but R2.8 HUMAN_EVIDENCE terminal convergence has **not** been executed. Current bounded evidence is: Lens 1 `PASS` with the required release-specific matrix complete; Lens 2 terminal replacement evidence `PASS FOR OBSERVED CONTROLS` while preserving FIX `#1660`, WATCH `#1588`, and a `DEFER` for the unobserved direct G→H edge; Lens 3 terminal replacement inventory `COMPLETE` with no invented raw values and the same stronger findings preserved. Because no explicit human `LIVE_PASS` / checkpoint / next-priority decision has been supplied, the machine-managed state must remain `PENDING_REAL_LONG_CHAT / REAL_RELEASE_LIVE_PENDING`. This documentation repair closes the human-state drift tracked by `#1656`; separate advancement-holding FIXes `#1657` (stale deployed operator release card metadata) and `#1660` (visible standalone `internal:` planning-control alias) remain open. No next runtime version, feature, architecture change, or performance optimization is authorized until unresolved FIX/BLOCKER owners are closed or evidence-reclassified. Existing performance WATCH lanes remain non-blocking unless promoted by new evidence, and provider cache remains `UNVERIFIED`.
 
 ## Historical validated precursor — v0.63.55
 
@@ -486,9 +486,8 @@ MANUAL_EDIT_REBUILT 4.091 s
 C output:
 CANONICAL 4180:931843fc
 FRESH_CHAT 4100:ee834c48
-Δchars -80
+Δ -80
 OUTPUT_MISMATCH
-setChat 0
 
 next C request:
 Prior representation OUTPUT_MISMATCH
@@ -1176,36 +1175,40 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-Read the machine-managed terminal block and root manifest, then execute only the current promoted review or administrative lane.
-At this post-release handoff, finish any still-open documentation or administrative FIX before authorizing another runtime version.
+Treat the completed v0.70.10 three-lens review as evidence completion, not as an inferred HUMAN_EVIDENCE terminal close.
+Keep machine authority at PENDING_REAL_LONG_CHAT / REAL_RELEASE_LIVE_PENDING until an explicit human LIVE_PASS / checkpoint / next-priority decision is supplied and processed through R2.8.
+After this documentation repair, resolve or evidence-reclassify advancement-holding FIX #1657 and FIX #1660 before authorizing another runtime version.
 Reassess open WATCH lanes independently and promote one only when source-proven evidence defines a bounded owner and success condition.
-Do not infer a new runtime release, feature, architecture change, or performance optimization merely from terminal LIVE_PASS.
+Do not infer a new runtime release, feature, architecture change, or performance optimization merely from Lens-1/2/3 completion.
 ```
 
-Current success condition:
+Current bounded state:
 
 ```text
-current release real long-chat evidence = LIVE_PASS
-terminal lifecycle = REAL_RELEASE_LIVE_PASS
-durable major checkpoint = machine-managed above
-current product priority = machine-managed manifest / terminal block
+v0.70.10 Lens 1 = PASS / release-specific matrix complete
+v0.70.10 Lens 2 terminal replacement set = PASS FOR OBSERVED CONTROLS + FIX #1660 + WATCH #1588 + DEFER
+v0.70.10 Lens 3 terminal replacement inventory = COMPLETE + FIX #1660 + WATCH #1588 + DEFER
+R2.8 HUMAN_EVIDENCE terminal convergence = NOT EXECUTED
+machine validation = PENDING_REAL_LONG_CHAT
+terminal lifecycle = REAL_RELEASE_LIVE_PENDING
+durable major checkpoint = M2-6
 latest.js == install.js = mandatory / verified
-three-lens review = COMPLETE
+#1656 CURRENT_DEVELOPMENT human-state drift = repaired by docs convergence transaction
+#1657 stale operator release card metadata = FIX / OPEN / advancement-holding
+#1660 visible standalone internal: planning-control alias = FIX / OPEN / advancement-holding
 provider cache = UNVERIFIED
-no unresolved documentation/admin FIX before runtime-version advancement
 
-post-release review
-→ read fresh main + release-simcore authority
-→ inspect open FIX / BLOCKER / WATCH lanes separately
-→ select the next lane only from explicit evidence and operator authority
-→ keep unrelated topics in separate repository records
+next legal administrative path
+→ if explicit human LIVE_PASS / checkpoint / nextPriority is supplied, execute R2.8 HUMAN_EVIDENCE as a separate administrative transaction
+→ otherwise do not fabricate terminal convergence
 
 runtime work
-→ no next runtime version is preauthorized by the previous release close
-→ any runtime change requires its own design/evidence, work branch, CI, release-simcore deployment, and real long-chat validation
+→ no next runtime version is preauthorized by three-lens completion
+→ unresolved FIX or BLOCKER stops advancement
+→ any runtime change requires its own design/evidence, work branch, CI, release-simcore deployment, real long-chat validation, then main documentation/continuity synchronization
 
 observed anomaly
 → preserve evidence immediately
 → classify WATCH / DEFER / FIX / BLOCKER
-→ unresolved FIX or BLOCKER stops advancement
+→ keep unrelated topics in separate repository records
 ```

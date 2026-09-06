@@ -17,6 +17,9 @@ MAX_BLOCKS = 16
 MAX_TOTAL_BYTES = 48_000
 REF_RE = re.compile(r"^[A-Za-z0-9_./-]+$")
 PATH_RE = re.compile(r"^[A-Za-z0-9_.@/+ -]+$")
+EMPTY_CONTEXT_CASES = frozenset({
+    ("agent-execution-compactness", "forty-line-temp-module"),
+})
 
 
 class ContextError(ValueError):
@@ -114,12 +117,26 @@ def build_context(repo_root: Path, profile_path: Path, skill: str, case_id: str)
     profiles = profile_doc.get("profiles")
     if not isinstance(profiles, dict):
         raise ContextError("context profiles object missing")
-    skill_profiles = profiles.get(skill)
-    if not isinstance(skill_profiles, dict):
-        raise ContextError(f"no context profile for skill: {skill}")
-    specs = skill_profiles.get(str(case_id))
-    if not isinstance(specs, list):
-        raise ContextError(f"no context profile for {skill}:{case_id}")
+
+    key = (str(skill), str(case_id))
+    if skill not in profiles:
+        if key in EMPTY_CONTEXT_CASES:
+            specs = []
+        else:
+            raise ContextError(f"no context profile for skill: {skill}")
+    else:
+        skill_profiles = profiles.get(skill)
+        if not isinstance(skill_profiles, dict):
+            raise ContextError(f"context profile for skill must be an object: {skill}")
+        if str(case_id) not in skill_profiles:
+            if key in EMPTY_CONTEXT_CASES:
+                specs = []
+            else:
+                raise ContextError(f"no context profile for {skill}:{case_id}")
+        else:
+            specs = skill_profiles.get(str(case_id))
+            if not isinstance(specs, list):
+                raise ContextError(f"context profile must be an array for {skill}:{case_id}")
     if len(specs) > MAX_BLOCKS:
         raise ContextError("context profile exceeds block limit")
 

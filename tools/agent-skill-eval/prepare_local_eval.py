@@ -15,6 +15,11 @@ LOCAL_MODEL_IDS = frozenset({
     DEFAULT_LOCAL_MODEL_ID,
     "qwen2.5-3b-instruct-q4_k_m-local",
 })
+LOCAL_SKILLS = frozenset({
+    "plugin-authority-scan",
+    "plugin-impact-scope",
+    "agent-execution-compactness",
+})
 
 
 def _load_base():
@@ -38,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     base = _load_base()
     try:
+        base.ALLOWED_SKILLS = LOCAL_SKILLS
         base.ALLOWED_MODELS = LOCAL_MODEL_IDS
         payload = base.build_matrix(
             Path(args.repo_root).resolve(),

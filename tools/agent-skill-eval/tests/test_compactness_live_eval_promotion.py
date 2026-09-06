@@ -68,11 +68,20 @@ class CompactnessLiveEvalPromotionTests(unittest.TestCase):
         self.assertNotIn("pull_request:", text)
         self.assertNotIn("push:", text)
 
-    def test_zero_credit_execution_allowlist_is_not_promoted(self):
+    def test_zero_credit_request_promotion_keeps_workflow_dispatch_unchanged(self):
         workflow = ZERO_CREDIT_WORKFLOW.read_text(encoding="utf-8")
-        resolver = ZERO_CREDIT_RESOLVER.read_text(encoding="utf-8")
+        resolver = load_module("compactness_zero_credit_resolver_migration", ZERO_CREDIT_RESOLVER)
         self.assertNotIn("agent-execution-compactness", workflow)
-        self.assertNotIn("agent-execution-compactness", resolver)
+        self.assertEqual(
+            resolver.ALLOWED_SKILLS,
+            frozenset(
+                {
+                    "plugin-authority-scan",
+                    "plugin-impact-scope",
+                    "agent-execution-compactness",
+                }
+            ),
+        )
 
 
 if __name__ == "__main__":

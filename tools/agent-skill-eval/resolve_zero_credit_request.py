@@ -18,7 +18,11 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA_VERSION = 1
-ALLOWED_SKILLS = frozenset({"plugin-authority-scan", "plugin-impact-scope"})
+ALLOWED_SKILLS = frozenset({
+    "plugin-authority-scan",
+    "plugin-impact-scope",
+    "agent-execution-compactness",
+})
 DEFAULT_MODEL_PROFILE = "qwen2.5-1.5b-instruct-q4_k_m"
 ALLOWED_MODEL_PROFILES = frozenset({
     DEFAULT_MODEL_PROFILE,

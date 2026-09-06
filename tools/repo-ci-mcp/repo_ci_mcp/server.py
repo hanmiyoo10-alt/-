@@ -4,15 +4,16 @@ from typing import Any
 
 from mcp.server import MCPServer
 
+from .canonical_main_status import canonical_main_status as build_canonical_main_status
 from .github_reader import GitHubReader
 from .summary import repo_ci_summary as build_repo_ci_summary
 
 mcp = MCPServer(
-    "Repository CI MCP",
+    "Repository Read MCP",
     instructions=(
-        "Read-only repository CI compact-summary retrieval. This server reads bounded GitHub Actions metadata, "
-        "jobs, and exact CI_SUMMARY_V1 log blocks only. It never mutates GitHub, workflows, products, runtime, "
-        "release branches, issues, pull requests, or production."
+        "Read-only bounded repository retrieval. This server exposes compact CI summaries and canonical-main "
+        "status composition from explicit GitHub authorities only. It never mutates GitHub, workflows, products, "
+        "runtime, release branches, issues, pull requests, refs, or production."
     ),
 )
 
@@ -25,6 +26,12 @@ def repo_ci_summary(
 ) -> dict[str, Any]:
     """Return one validated read-only CI_SUMMARY_V1 transport block for a supported workflow run."""
     return build_repo_ci_summary(GitHubReader(), workflow=workflow, ref=ref, run_id=run_id)
+
+
+@mcp.tool()
+def canonical_main_status() -> dict[str, Any]:
+    """Compose direct main and issue #485 into one bounded fail-closed status result."""
+    return build_canonical_main_status()
 
 
 def main() -> None:

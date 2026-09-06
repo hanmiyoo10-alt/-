@@ -1162,3 +1162,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/10add9dcacc749377e294132e3b7d8e214cd9bda)
 - Event ID: `c68f7673dcc6b06d1ddc5a9cedf14d57fad3583108801a7561a660c3d8e9b93e`
 <!-- canonical-main-doc-promoted:c68f7673dcc6b06d1ddc5a9cedf14d57fad3583108801a7561a660c3d8e9b93e -->
+
+### 2026-09-07 — Merge pull request #1814 from hanmiyoo10-alt/recovery/usage-dashboard-5102-prevalidation-order
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `25a17f64b18636000f2461bfb713540afe75921e`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/25a17f64b18636000f2461bfb713540afe75921e)
+- Event ID: `dd562c80f1057210a4d28e8c67a363a683c8b1c553cd3f09eed4a53c73cf5d7b`
+<!-- canonical-main-doc-promoted:dd562c80f1057210a4d28e8c67a363a683c8b1c553cd3f09eed4a53c73cf5d7b -->

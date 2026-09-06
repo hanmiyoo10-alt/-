@@ -180,11 +180,25 @@ ACQUIRE_CAUSE = NOT SUPPORTED
 RESIDUAL_CAUSE = NOT SUPPORTED
 ```
 
-### Specimen D · runtime-classified manual-edit path / supplemental
+### Specimen D · operator-confirmed hand edit / supplemental
 
 Captured `2026-09-06T03:06:42.959Z`.
 
-No additional operator label was supplied for this specimen. The runtime itself reports:
+The operator later supplied the explicit clarification:
+
+```text
+마지막도 손수정이야
+```
+
+Bind this clarification to specimen D only:
+
+```text
+PHYSICAL_OPERATOR_EDIT = YES
+RUNTIME = USER_EDIT_CANDIDATE / MANUAL_EDIT_REBUILT
+ROLE = SUPPLEMENTAL MANUAL-EDIT SAMPLE
+```
+
+Runtime corroboration:
 
 ```text
 MANUAL_EDIT_REBUILT
@@ -222,11 +236,11 @@ Telemetry host residual = 0.0 ms
 Disposition:
 
 ```text
-SUPPLEMENTAL_RUNTIME_MANUAL_EDIT_SAMPLE = PASS / HIGH-VALUE ATTRIBUTION
+SUPPLEMENTAL_MANUAL_EDIT_SAMPLE_D = PASS / HIGH-VALUE ATTRIBUTION
 SLOW_OWNER = HOST_LOCAL_SET_ITEM
 ```
 
-Because the operator did not separately label this specimen, the document does not add a stronger physical-edit claim beyond the runtime's own USER_EDIT_CANDIDATE / MANUAL_EDIT_REBUILT classification.
+This operator clarification removes only the earlier uncertainty about the physical edit action. It does not promote D into the required Stage-B natural ordinary matrix.
 
 ## 3. v0.70.10 causal result
 
@@ -286,8 +300,8 @@ Stage B ordinary warm control #1 = PRESENT / PASS
 Stage B ordinary warm control #2 = MISSING
 Stage B ordinary warm control #3 = MISSING
 Stage C independent fresh runtime = MISSING
-manual-edit supplemental C = PRESENT
-manual-edit supplemental D = PRESENT BY RUNTIME CLASSIFICATION
+manual-edit supplemental C = PRESENT / OPERATOR-CONFIRMED
+manual-edit supplemental D = PRESENT / OPERATOR-CONFIRMED
 ```
 
 Therefore:
@@ -352,7 +366,27 @@ No branch/main/runtime/release-simcore mutation resulted from the erroneous issu
 
 This administrative anomaly is separate from the v0.70.10 runtime evidence.
 
-## 8. Next legal step
+## 8. Operator clarification amendment
+
+After the initial Pass-1 record was merged, the operator explicitly clarified that specimen D was also hand-edited.
+
+This amendment changes only the evidence binding:
+
+```text
+SPECIMEN_D_PHYSICAL_OPERATOR_EDIT = YES
+SPECIMEN_D_ROLE = SUPPLEMENTAL_MANUAL_EDIT
+```
+
+It does not change:
+
+```text
+HOST_SET_DOMINANT_CANDIDATE = STRONGLY SUPPORTED
+REQUIRED_LIVE_MATRIX_COMPLETE = NO
+```
+
+The issue-level operator clarification is preserved on `#1645`.
+
+## 9. Next legal step
 
 Release-specific next step:
 

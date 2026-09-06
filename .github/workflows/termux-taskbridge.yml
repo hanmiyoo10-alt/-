@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'plugins/termux/taskbridge/**'
+      - '.github/tooling/ci-summary/**'
       - '.github/workflows/termux-taskbridge.yml'
   push:
     branches: [main]
     paths:
       - 'plugins/termux/taskbridge/**'
+      - '.github/tooling/ci-summary/**'
       - '.github/workflows/termux-taskbridge.yml'
 
 permissions:
@@ -22,8 +24,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Syntax check
+
+      - name: Initialize compact phase receipt
+        continue-on-error: true
+        shell: bash
         run: |
+          mkdir -p .ci-summary
+          python3 .github/tooling/ci-summary/phase_receipt.py \
+            --receipt .ci-summary/termux-taskbridge-phases.json init syntax_check unit_tests
+
+      - name: Syntax check
+        id: syntax_check
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/tooling/ci-summary/phase_receipt.py \
+            --receipt .ci-summary/termux-taskbridge-phases.json start syntax_check \
+            || echo '::warning::Termux TaskBridge compact phase receipt start failed; authoritative syntax gate is unchanged.'
           python -m py_compile \
             plugins/termux/taskbridge/taskbridge.py \
             plugins/termux/taskbridge/coordinator.py \
@@ -37,5 +54,79 @@ jobs:
             plugins/termux/taskbridge/adapters/shell.py \
             plugins/termux/taskbridge/adapters/chatgpt_notification.py \
             plugins/termux/taskbridge/adapters/foreground_ui_signal.py
+          python3 .github/tooling/ci-summary/phase_receipt.py \
+            --receipt .ci-summary/termux-taskbridge-phases.json pass syntax_check \
+            || echo '::warning::Termux TaskBridge compact phase receipt pass failed; authoritative syntax gate is unchanged.'
+
       - name: Unit tests
-        run: python -m unittest discover -s plugins/termux/taskbridge/tests -v
+        id: unit_tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/tooling/ci-summary/phase_receipt.py \
+            --receipt .ci-summary/termux-taskbridge-phases.json start unit_tests \
+            || echo '::warning::Termux TaskBridge compact phase receipt start failed; authoritative unit-test gate is unchanged.'
+          python -m unittest discover -s plugins/termux/taskbridge/tests -v
+          python3 .github/tooling/ci-summary/phase_receipt.py \
+            --receipt .ci-summary/termux-taskbridge-phases.json pass unit_tests \
+            || echo '::warning::Termux TaskBridge compact phase receipt pass failed; authoritative unit-test gate is unchanged.'
+
+      - name: Render compact CI summary
+        if: always()
+        shell: bash
+        env:
+          SYNTAX_CHECK_OUTCOME: ${{ steps.syntax_check.outcome }}
+          UNIT_TESTS_OUTCOME: ${{ steps.unit_tests.outcome }}
+        run: |
+          set +e
+          mkdir -p .ci-summary
+          python3 .github/tooling/ci-summary/adapters/termux_taskbridge.py \
+            --report .ci-summary/termux-taskbridge-phases.json \
+            --output .ci-summary/adapter.json \
+            --workflow 'Termux TaskBridge' \
+            --syntax-check-outcome "$SYNTAX_CHECK_OUTCOME" \
+            --unit-tests-outcome "$UNIT_TESTS_OUTCOME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --event "$GITHUB_EVENT_NAME" \
+            --sha "$GITHUB_SHA"
+          adapter_code=$?
+          python3 .github/tooling/ci-summary/render.py \
+            --input .ci-summary/adapter.json \
+            --json-out .ci-summary/summary.json \
+            --text-out .ci-summary/inline.txt \
+            --markdown-out .ci-summary/inline.md \
+            --workflow 'Termux TaskBridge' \
+            > /tmp/termux-taskbridge-ci-summary-render.log
+          render_code=$?
+
+          if [[ -f .ci-summary/inline.txt ]]; then
+            cat .ci-summary/inline.txt
+          elif [[ -s /tmp/termux-taskbridge-ci-summary-render.log ]]; then
+            cat /tmp/termux-taskbridge-ci-summary-render.log
+          else
+            printf '%s\n' \
+              'CI_SUMMARY_V1_BEGIN' \
+              'CI SUMMARY · Termux TaskBridge' \
+              'Result: INFRA_ERROR' \
+              'Reason codes:' \
+              '- CI_SUMMARY_RENDER_CATASTROPHIC' \
+              'Summary complete: false' \
+              'CI_SUMMARY_V1_END'
+          fi
+
+          if [[ -f .ci-summary/inline.md ]]; then
+            cat .ci-summary/inline.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo 'CI SUMMARY · Termux TaskBridge'
+              echo 'Result: INFRA_ERROR'
+              echo 'Reason codes: CI_SUMMARY_RENDER_CATASTROPHIC'
+              echo 'Summary complete: false'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [[ "$adapter_code" -ne 0 || "$render_code" -ne 0 ]]; then
+            echo "::warning::CI compact summary generation incomplete (adapter=$adapter_code renderer=$render_code); authoritative Termux TaskBridge gates are unchanged."
+          fi
+          exit 0

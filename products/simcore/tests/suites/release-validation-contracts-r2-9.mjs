@@ -95,6 +95,46 @@ async function runOperatorCurrentIdentityInherited(ctx, profile) {
   };
 }
 
+async function runOperatorChangedContract(ctx, profile) {
+  const contractId = 'operator-release-card';
+  const plan = resolveValidationContract(profile, contractId);
+  if (plan.mode !== VALIDATION_CONTRACT_MODES.CHANGED_CONTRACT) {
+    throw contractError('VALIDATION_CONTRACT_MODE_MISMATCH', `${contractId} requires CHANGED_CONTRACT`);
+  }
+  if (plan.authorityVersion !== plan.releaseVersion) {
+    throw contractError('VALIDATION_AUTHORITY_UNRESOLVED', `${contractId} changed contract must bind exact current authority ${plan.releaseVersion}`);
+  }
+
+  const source = ctx.source;
+  const metadata = source.match(/^\/\/@version\s+([^\s]+)\s*$/m)?.[1] || '';
+  equal(metadata, plan.releaseVersion, `${plan.releaseVersion} operator changed-contract source identity`);
+
+  const start = source.indexOf('  const OPERATOR_RELEASE_CARD = Object.freeze({');
+  const end = source.indexOf('  async function openPanel() {', start);
+  assert(start >= 0 && end > start, `${plan.releaseVersion} operator changed-contract card bounds missing`);
+  const card = source.slice(start, end);
+  assert(card.includes(`version: '${plan.releaseVersion}'`), `${plan.releaseVersion} changed-contract card version missing`);
+  assert(card.includes(`name: '${plan.releaseName}'`), `${plan.releaseVersion} changed-contract card name missing`);
+  equal(countOf(source, 'id="toggle-release-card"'), 1, `${plan.releaseVersion} changed-contract release card button count`);
+  equal(countOf(source, 'id="operator-release-card"'), 1, `${plan.releaseVersion} changed-contract release card section count`);
+  assert(source.includes('id="operator-release-card" class="card" style="display:none;'), `${plan.releaseVersion} changed-contract card must default collapsed`);
+  assert(source.includes('${buildOperatorReleaseCardHtml()}'), `${plan.releaseVersion} changed-contract card must remain mounted in the existing panel`);
+  for (const forbidden of ['fetch(', 'XMLHttpRequest', 'localStorage', 'IndexedDB', 'setInterval(', 'setTimeout(']) {
+    assert(!card.includes(forbidden), `${plan.releaseVersion} changed-contract release card side effect ${forbidden}`);
+  }
+
+  return {
+    coverage: 'EXECUTABLE',
+    status: 'PASS',
+    assertions: [
+      { id: 'r2-9-operator-changed-contract-exact-current-identity', status: 'PASS' },
+      { id: 'r2-9-operator-changed-contract-single-panel-surface', status: 'PASS' },
+      { id: 'r2-9-operator-changed-contract-default-collapsed', status: 'PASS' },
+      { id: 'r2-9-operator-changed-contract-static-pure-envelope', status: 'PASS' },
+    ],
+  };
+}
+
 function hostWith(raw) {
   return {
     async getLocalPluginStorage() {
@@ -179,7 +219,7 @@ async function runHostLocalExactCurrent(ctx, profile) {
 
 export const R2_9_AUTHORITY_CAPABILITIES = Object.freeze({
   'reload-cache-continuity': Object.freeze({ versions: Object.freeze(['0.69.2']), exactCurrent: false }),
-  'operator-release-card': Object.freeze({ versions: Object.freeze(['0.69.2']), exactCurrent: false }),
+  'operator-release-card': Object.freeze({ versions: Object.freeze(['0.69.2']), exactCurrent: true }),
   'host-local-telemetry': Object.freeze({ versions: Object.freeze([]), exactCurrent: true }),
   'bounded-telemetry-capsule': Object.freeze({ versions: Object.freeze(['0.69.2']), exactCurrent: false }),
 });
@@ -187,7 +227,12 @@ export const R2_9_AUTHORITY_CAPABILITIES = Object.freeze({
 export async function runProjectedValidationContract(contractId, ctx, profile) {
   assertProfileBindsSource(profile, ctx.source);
   if (contractId === 'reload-cache-continuity') return runInheritedBehavior(contractId, ctx, profile);
-  if (contractId === 'operator-release-card') return runOperatorCurrentIdentityInherited(ctx, profile);
+  if (contractId === 'operator-release-card') {
+    const plan = resolveValidationContract(profile, contractId);
+    if (plan.mode === VALIDATION_CONTRACT_MODES.CURRENT_IDENTITY_INHERIT_BEHAVIOR) return runOperatorCurrentIdentityInherited(ctx, profile);
+    if (plan.mode === VALIDATION_CONTRACT_MODES.CHANGED_CONTRACT) return runOperatorChangedContract(ctx, profile);
+    throw contractError('VALIDATION_CONTRACT_MODE_MISMATCH', `${contractId} requires CURRENT_IDENTITY_INHERIT_BEHAVIOR or CHANGED_CONTRACT`);
+  }
   if (contractId === 'host-local-telemetry') return runHostLocalExactCurrent(ctx, profile);
   if (contractId === 'bounded-telemetry-capsule') return runInheritedBehavior(contractId, ctx, profile);
   throw contractError('VALIDATION_CONTRACT_UNSUPPORTED', `unsupported projected contract: ${contractId}`);

@@ -37,7 +37,8 @@ The correct tracking issues were then created, and only afterward was the real L
 ## Production boundary
 
 ```text
-release-simcore unchanged\ latest.js unchanged
+release-simcore unchanged
+latest.js unchanged
 install.js unchanged
 ```
 

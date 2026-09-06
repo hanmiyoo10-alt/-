@@ -29,8 +29,8 @@ The same captured #485 body also contributes a bounded triage index for `Active 
 - canonical-main triage projection reuses the already-fetched #485 body and adds no repository read
 - canonical-main incident rows are bounded to 8 rendered rows per section while preserving total count and truncation state
 - missing/unknown/malformed triage sections remain explicit unknowns rather than empty-by-absence
-- CI summary supports nine explicit compact-summary workflow families only
-- CI overview requires an explicit 2–5 workflow list; no all-nine default scan
+- CI summary supports ten explicit compact-summary workflow families only
+- CI overview requires an explicit 2–5 workflow list; no all-ten default scan
 - CI overview omits bundled full summary text and preserves targeted `repo_ci_summary` drill-down
 - newest matching CI run only in latest mode; no stale-green fallback
 - exact CI run mode fails closed on workflow/ref mismatch
@@ -49,6 +49,7 @@ The same captured #485 body also contributes a bounded triage index for `Active 
 - `termux-background-gpt`
 - `termux-large-doc-prototype`
 - `termux-taskbridge`
+- `repository-read-mcp`
 
 Exact workflow path and exact workflow display name are also accepted.
 

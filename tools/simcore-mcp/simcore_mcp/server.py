@@ -4,6 +4,7 @@ from typing import Any
 
 from mcp.server import MCPServer
 
+from .candidate_preflight import candidate_preflight
 from .candidate_snapshot import candidate_snapshot
 from .docs_drift import check_docs_drift
 from .github_reader import GitHubReader
@@ -16,8 +17,9 @@ mcp = MCPServer(
     "SimCore MCP",
     instructions=(
         "Read-only SimCore operational status, production-identity, documentation-drift, release-preflight, "
-        "post-merge health, and candidate-snapshot tools. These tools never mutate GitHub, main, release-simcore, "
-        "product manifests, issues, pull requests, workflows, HUMAN_EVIDENCE, release state, or production."
+        "post-merge health, candidate-snapshot, and candidate-preflight tools. These tools never mutate GitHub, "
+        "main, release-simcore, product manifests, issues, pull requests, workflows, HUMAN_EVIDENCE, release state, "
+        "or production."
     ),
 )
 
@@ -56,6 +58,12 @@ def simcore_postmerge_health(commit_sha: str) -> dict[str, Any]:
 def simcore_candidate_snapshot(ref: str) -> dict[str, Any]:
     """Resolve a ref to an immutable commit and snapshot exact SimCore candidate identity."""
     return candidate_snapshot(GitHubReader(), ref)
+
+
+@mcp.tool()
+def simcore_candidate_preflight(ref: str) -> dict[str, Any]:
+    """Compose candidate snapshot and version preflight under one frozen read-only authority."""
+    return candidate_preflight(GitHubReader(), ref)
 
 
 def main() -> None:

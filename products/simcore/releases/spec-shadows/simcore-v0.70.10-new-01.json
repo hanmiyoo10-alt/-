@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "authority": "SHADOW_ONLY",
+  "intentId": "simcore-v0.70.10-intent-01",
+  "releaseId": "simcore-v0.70.10-new-01",
+  "candidateReceiptPath": "products/simcore/releases/candidate-receipts/simcore-v0.70.10-intent-01.json",
+  "derivedSpec": {
+    "schemaVersion": 1,
+    "releaseId": "simcore-v0.70.10-new-01",
+    "product": "SimCore",
+    "version": "0.70.10",
+    "releaseName": "Host-Local Telemetry Set Cost Attribution",
+    "releaseMode": "NEW_VERSION",
+    "candidateCommit": "ecc55f026315c6482c34d267aba2adb97527cdbc",
+    "expectedProductionCommit": "1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17",
+    "candidateReleaseBlob": "53f6959039c57f8673c355fcc1c22b573150e4a7",
+    "primaryGoalId": "07010_HOST_LOCAL_TELEMETRY_SET_COST_ATTRIBUTION",
+    "changeClass": "RUNTIME_FEATURE",
+    "evidenceRefs": [
+      "docs/SIMCORE_HOST_LOCAL_TELEMETRY_CHECKPOINT_LATENCY_WATCH_2026-09-06.md",
+      "docs/SIMCORE_07010_HOST_LOCAL_TELEMETRY_SET_COST_ATTRIBUTION_DESIGN_2026-09-06.md",
+      "docs/SIMCORE_07010_IMPLEMENTATION_AUTHORIZATION_2026-09-06.md",
+      "docs/SIMCORE_07010_PREMERGE_COARSE_CLOCK_ASSERTION_FIX_2026-09-06.md",
+      "docs/SIMCORE_07010_IMPLEMENTATION_EVIDENCE_2026-09-06.md",
+      "docs/SIMCORE_DIAGNOSTIC_REVIEW_THREE_LENS_PROTOCOL_2026-09-06.md"
+    ],
+    "liveGate": {
+      "required": true,
+      "scenarioId": "07010_HOST_LOCAL_TELEMETRY_SET_COST_ATTRIBUTION_REAL_LONG_CHAT",
+      "closeAuthority": "HUMAN_EVIDENCE"
+    }
+  }
+}

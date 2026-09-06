@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "intentId": "simcore-v0.70.10-intent-01",
+  "releaseId": "simcore-v0.70.10-new-01",
+  "candidateDisposition": "CREATED",
+  "expectedProductionCommit": "1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17",
+  "sourceCommit": "b4c142da89ffef1d438ea1c799ef520c7302ca38",
+  "candidateCommit": "ecc55f026315c6482c34d267aba2adb97527cdbc",
+  "candidateReleaseBlob": "53f6959039c57f8673c355fcc1c22b573150e4a7",
+  "candidateFetchRef": "candidate/simcore/simcore-v0.70.10-intent-01",
+  "builderPath": "products/simcore/tooling/build-07010-host-local-telemetry-set-cost-attribution.py",
+  "builderSha256": "63f246d8ebb7aaefa34f6ee284d251108c43546ad00e2fd2bae62f19b8980f1c",
+  "verifierCommit": "b4c142da89ffef1d438ea1c799ef520c7302ca38",
+  "verificationSuite": "batch-a",
+  "verificationReportSha256": "f3a8664e2d25493d02f627844133460ff7a970eeb81f2619673c8fe38649f366",
+  "result": "PASS",
+  "productionMutation": "NONE",
+  "releaseAuthority": "CANDIDATE_RECEIPT_ONLY"
+}

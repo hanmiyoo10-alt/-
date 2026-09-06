@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "skill": "agent-execution-compactness",
+  "case_id": "existing-repository-harness",
+  "target_repository_sha": "b37c6b73f0043f3e204c0829948be4ef263a8a0d",
+  "model_profile": "qwen2.5-1.5b-instruct-q4_k_m"
+}

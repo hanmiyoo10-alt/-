@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.10-new-01",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "057725f49eedc37924464b5f4ee2ccde892df2c8",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.70.10-new-01.json",
+  "releaseSpecSha256": "12cd3f38169480727f361974cff4930fac9c5fbe27cf2f2228948125074457ff",
+  "productionCommit": "ecc55f026315c6482c34d267aba2adb97527cdbc",
+  "previousProductionCommit": "1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17",
+  "productionBlob": "53f6959039c57f8673c355fcc1c22b573150e4a7",
+  "version": "0.70.10",
+  "releaseName": "Host-Local Telemetry Set Cost Attribution",
+  "verificationReportSha256": "6c0fd11b6fad90660380d1a3493cd11b594bade122b0fc8e74749cfa38dc0f51",
+  "verifierCommit": "52821ceb6ae22bc792f0ef1fb10b72c4850beff2",
+  "publisherRunId": "34005188161",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07010_HOST_LOCAL_TELEMETRY_SET_COST_ATTRIBUTION_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

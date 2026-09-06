@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.70.9",
-  "release_name": "Inline Planning Marker Hygiene Guard",
+  "production_version": "0.70.10",
+  "release_name": "Host-Local Telemetry Set Cost Attribution",
   "release_branch": "release-simcore",
-  "release_commit": "1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17",
-  "release_blob": "dc82006c468ebef76fa0126e0533dda245bd222d",
+  "release_commit": "ecc55f026315c6482c34d267aba2adb97527cdbc",
+  "release_blob": "53f6959039c57f8673c355fcc1c22b573150e4a7",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",
@@ -19,7 +19,7 @@
   "architecture_contract_machine": "config/simcore-architecture-v2.json",
   "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
   "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md",
-  "current_priority": "POST_07009_NEXT_STEP_REVIEW",
+  "current_priority": "07010_HOST_LOCAL_TELEMETRY_SET_COST_ATTRIBUTION_REAL_LONG_CHAT",
   "provider_cache_status": "UNVERIFIED",
   "source_of_truth": {
     "runtime_behavior": "release-simcore production code + real long-chat diagnostics",
@@ -32,7 +32,7 @@
     "major_update_live_evidence": "docs/SIMCORE_M2_LIVE_EVIDENCE.md",
     "anomaly_watch": "docs/SIMCORE_ANOMALY_WATCH.md"
   },
-  "validation_status": "LIVE_PASS",
+  "validation_status": "PENDING_REAL_LONG_CHAT",
   "major_update_milestone": "2.0M",
   "major_update_phase": "M2",
   "major_update_checkpoint": "M2-6",

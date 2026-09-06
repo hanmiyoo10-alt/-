@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.10-new-01",
+  "publisherRunId": "34005188161",
+  "productionCommit": "ecc55f026315c6482c34d267aba2adb97527cdbc",
+  "previousProductionCommit": "1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17",
+  "productionBlob": "53f6959039c57f8673c355fcc1c22b573150e4a7",
+  "liveScenarioId": "07010_HOST_LOCAL_TELEMETRY_SET_COST_ATTRIBUTION_REAL_LONG_CHAT",
+  "validationStatus": "PENDING_REAL_LONG_CHAT",
+  "lifecycleState": "REAL_RELEASE_LIVE_PENDING",
+  "releaseRecordPath": "products/simcore/releases/records/simcore-v0.70.10-new-01.json",
+  "productionMutation": "ALREADY_PUBLISHED_UPSTREAM",
+  "releaseAuthority": "RS2_4_PERMANENT",
+  "result": "PASS"
+}

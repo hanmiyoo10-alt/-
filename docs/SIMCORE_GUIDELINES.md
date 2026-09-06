@@ -891,8 +891,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.70.9 — Inline Planning Marker Hygiene Guard
-Release commit: 1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17
+SimCore v0.70.10 — Host-Local Telemetry Set Cost Attribution
+Release commit: ecc55f026315c6482c34d267aba2adb97527cdbc
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

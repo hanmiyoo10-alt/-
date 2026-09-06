@@ -17,12 +17,12 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.70.9`
-- Release: `Inline Planning Marker Hygiene Guard`
+- Version: `0.70.10`
+- Release: `Host-Local Telemetry Set Cost Attribution`
 - Release branch: `release-simcore`
-- Release commit: `1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17`
-- Release blob: `dc82006c468ebef76fa0126e0533dda245bd222d`
-- Declared validation status: `LIVE_PASS`
+- Release commit: `ecc55f026315c6482c34d267aba2adb97527cdbc`
+- Release blob: `53f6959039c57f8673c355fcc1c22b573150e4a7`
+- Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
 - Major update checkpoint: `M2-6`
@@ -30,18 +30,17 @@
 This block is machine-managed from verified declared release state. It does not determine the immediate next action.
 <!-- SIMCORE_SYNC:PRODUCTION_SNAPSHOT:END -->
 
-<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:BEGIN -->
-## Current Release Terminal State
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
+## Current Release Live Gate
 
-- Release transaction: `simcore-v0.70.9-new-01`
-- Production commit: `1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17`
-- Validation status: `LIVE_PASS`
-- Current priority: `POST_07009_NEXT_STEP_REVIEW`
-- Terminal disposition: `LIVE_PASS`
-- R lifecycle: `REAL_RELEASE_LIVE_PASS`
+- Release transaction: `simcore-v0.70.10-new-01`
+- Production commit: `ecc55f026315c6482c34d267aba2adb97527cdbc`
+- Validation status: `PENDING_REAL_LONG_CHAT`
+- Current priority / live gate: `07010_HOST_LOCAL_TELEMETRY_SET_COST_ATTRIBUTION_REAL_LONG_CHAT`
+- R lifecycle: `REAL_RELEASE_LIVE_PENDING`
 
-This block is the terminal administrative state backed by accepted real long-chat evidence and production reobservation.
-<!-- SIMCORE_RELEASE_STATE:LIVE_PASS:END -->
+This block is machine-managed by `release-state-converge` from immutable publication evidence.
+<!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:END -->
 
 ---
 

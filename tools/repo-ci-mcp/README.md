@@ -18,12 +18,17 @@ The overview uses the existing latest-per-workflow ref semantics. It is not an a
 
 `canonical_main_status` implements the canonical-main `STATUS_SESSION` read plan as one user-visible MCP call. Internally it reads direct `main`, reads issue #485, then re-reads direct `main` as a capture-coherence barrier. Direct `main` remains repository authority and #485 remains a derived operator projection. A mismatch returns `SETTLING_OR_STALE`; main movement, invalid/missing capsule data, or read failure returns `UNKNOWN` rather than green-by-absence.
 
+The same captured #485 body also contributes a bounded triage index for `Active P0/P1 incidents` and `Attention queue (P2)`. The index returns only severity, state, incident issue number, reason code, known/count/truncation metadata, and explicit triage parse reason codes when the section is missing, unknown, or malformed. It does not fetch incident bodies automatically. Detailed evidence remains a targeted incident-issue drill-down, so routine non-clear orientation does not require a second visible #485 read.
+
 ## Safety boundary
 
 - GitHub reads only
 - no issue, PR, release, workflow, product, runtime, ref, branch, or production mutation
 - canonical-main composition preserves explicit direct-main and issue-485 source locators
 - canonical-main capsule fields are bounded and parsed fail-closed
+- canonical-main triage projection reuses the already-fetched #485 body and adds no repository read
+- canonical-main incident rows are bounded to 8 rendered rows per section while preserving total count and truncation state
+- missing/unknown/malformed triage sections remain explicit unknowns rather than empty-by-absence
 - CI summary supports nine explicit compact-summary workflow families only
 - CI overview requires an explicit 2–5 workflow list; no all-nine default scan
 - CI overview omits bundled full summary text and preserves targeted `repo_ci_summary` drill-down

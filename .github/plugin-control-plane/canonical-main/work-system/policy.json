@@ -43,12 +43,28 @@
       "taxonomyMayRetroactivelyWeakenActivatedAcceptance": false
     }
   },
+  "executionCompactness": {
+    "version": 1,
+    "skillPath": ".agents/skills/agent-execution-compactness/SKILL.md",
+    "routes": ["EXISTING_COMMAND", "HARNESS", "INLINE_SMALL", "MATERIALIZE", "EXCEPTION"],
+    "inlineSmallGuardrails": {
+      "approxLogicalLinesMax": 20,
+      "approxSourceBytesMax": 2048,
+      "generatedSourceTestProgramFilesMax": 1
+    },
+    "crossingGuardrailDefaultRoute": "MATERIALIZE",
+    "exceptionRequiresReason": true,
+    "quotingDoesNotReclassifyLargePayload": true,
+    "preserveRequiredValidation": true,
+    "hostUiSuppressionClaim": false
+  },
   "packetRequiredFields": [
     "packetId",
     "primaryGoal",
     "source",
     "classification",
     "readFirst",
+    "executionCompactness",
     "writeScope",
     "dependencies",
     "expectedOutputs",

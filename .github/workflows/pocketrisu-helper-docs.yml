@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - "products/pocketrisu-helper-mod/**"
+      - ".github/tooling/ci-summary/**"
       - ".github/workflows/pocketrisu-helper-docs.yml"
   pull_request:
     paths:
       - "products/pocketrisu-helper-mod/**"
+      - ".github/tooling/ci-summary/**"
       - ".github/workflows/pocketrisu-helper-docs.yml"
   workflow_dispatch:
 
@@ -19,5 +21,82 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Initialize compact phase receipt
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p .ci-summary
+          python3 .github/tooling/ci-summary/phase_receipt.py \
+            --receipt .ci-summary/pocketrisu-helper-phases.json init docs_validation
+
       - name: Validate PocketRisu helper product memory
-        run: python3 products/pocketrisu-helper-mod/ci/validate_docs.py
+        id: docs_validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/tooling/ci-summary/phase_receipt.py \
+            --receipt .ci-summary/pocketrisu-helper-phases.json start docs_validation \
+            || echo '::warning::PocketRisu compact phase receipt start failed; authoritative docs validation gate is unchanged.'
+          python3 products/pocketrisu-helper-mod/ci/validate_docs.py
+          python3 .github/tooling/ci-summary/phase_receipt.py \
+            --receipt .ci-summary/pocketrisu-helper-phases.json pass docs_validation \
+            || echo '::warning::PocketRisu compact phase receipt pass failed; authoritative docs validation gate is unchanged.'
+
+      - name: Render compact CI summary
+        if: always()
+        shell: bash
+        env:
+          DOCS_VALIDATION_OUTCOME: ${{ steps.docs_validation.outcome }}
+        run: |
+          set +e
+          mkdir -p .ci-summary
+          python3 .github/tooling/ci-summary/adapters/pocketrisu_helper.py \
+            --report .ci-summary/pocketrisu-helper-phases.json \
+            --output .ci-summary/adapter.json \
+            --workflow 'PocketRisu helper docs' \
+            --docs-validation-outcome "$DOCS_VALIDATION_OUTCOME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --event "$GITHUB_EVENT_NAME" \
+            --sha "$GITHUB_SHA"
+          adapter_code=$?
+          python3 .github/tooling/ci-summary/render.py \
+            --input .ci-summary/adapter.json \
+            --json-out .ci-summary/summary.json \
+            --text-out .ci-summary/inline.txt \
+            --markdown-out .ci-summary/inline.md \
+            --workflow 'PocketRisu helper docs' \
+            > /tmp/pocketrisu-helper-ci-summary-render.log
+          render_code=$?
+
+          if [[ -f .ci-summary/inline.txt ]]; then
+            cat .ci-summary/inline.txt
+          elif [[ -s /tmp/pocketrisu-helper-ci-summary-render.log ]]; then
+            cat /tmp/pocketrisu-helper-ci-summary-render.log
+          else
+            printf '%s\n' \
+              'CI_SUMMARY_V1_BEGIN' \
+              'CI SUMMARY · PocketRisu helper docs' \
+              'Result: INFRA_ERROR' \
+              'Reason codes:' \
+              '- CI_SUMMARY_RENDER_CATASTROPHIC' \
+              'Summary complete: false' \
+              'CI_SUMMARY_V1_END'
+          fi
+
+          if [[ -f .ci-summary/inline.md ]]; then
+            cat .ci-summary/inline.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo 'CI SUMMARY · PocketRisu helper docs'
+              echo 'Result: INFRA_ERROR'
+              echo 'Reason codes: CI_SUMMARY_RENDER_CATASTROPHIC'
+              echo 'Summary complete: false'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [[ "$adapter_code" -ne 0 || "$render_code" -ne 0 ]]; then
+            echo "::warning::CI compact summary generation incomplete (adapter=$adapter_code renderer=$render_code); authoritative PocketRisu docs validation gate is unchanged."
+          fi
+          exit 0

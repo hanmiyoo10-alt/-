@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - 'plugins/termux/background-gpt/**'
+      - '.github/tooling/ci-summary/**'
       - 'docs/TERMUX_BACKGROUND_GPT.md'
       - '.github/workflows/termux-background-gpt.yml'
   push:
     branches: [main]
     paths:
       - 'plugins/termux/background-gpt/**'
+      - '.github/tooling/ci-summary/**'
       - 'docs/TERMUX_BACKGROUND_GPT.md'
       - '.github/workflows/termux-background-gpt.yml'
 
@@ -24,12 +26,101 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Syntax check
+
+      - name: Initialize compact phase receipt
+        continue-on-error: true
+        shell: bash
         run: |
+          mkdir -p .ci-summary
+          python3 .github/tooling/ci-summary/phase_receipt.py \
+            --receipt .ci-summary/termux-background-gpt-phases.json init syntax_check unit_tests
+
+      - name: Syntax check
+        id: syntax_check
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/tooling/ci-summary/phase_receipt.py \
+            --receipt .ci-summary/termux-background-gpt-phases.json start syntax_check \
+            || echo '::warning::Termux Background GPT compact phase receipt start failed; authoritative syntax gate is unchanged.'
           python -m py_compile \
             plugins/termux/background-gpt/background_gpt.py \
             plugins/termux/background-gpt/openai_backend.py \
             plugins/termux/background-gpt/state_store.py \
             plugins/termux/background-gpt/notifications.py
+          python3 .github/tooling/ci-summary/phase_receipt.py \
+            --receipt .ci-summary/termux-background-gpt-phases.json pass syntax_check \
+            || echo '::warning::Termux Background GPT compact phase receipt pass failed; authoritative syntax gate is unchanged.'
+
       - name: Unit tests
-        run: python -m unittest discover -s plugins/termux/background-gpt/tests -v
+        id: unit_tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/tooling/ci-summary/phase_receipt.py \
+            --receipt .ci-summary/termux-background-gpt-phases.json start unit_tests \
+            || echo '::warning::Termux Background GPT compact phase receipt start failed; authoritative unit-test gate is unchanged.'
+          python -m unittest discover -s plugins/termux/background-gpt/tests -v
+          python3 .github/tooling/ci-summary/phase_receipt.py \
+            --receipt .ci-summary/termux-background-gpt-phases.json pass unit_tests \
+            || echo '::warning::Termux Background GPT compact phase receipt pass failed; authoritative unit-test gate is unchanged.'
+
+      - name: Render compact CI summary
+        if: always()
+        shell: bash
+        env:
+          SYNTAX_CHECK_OUTCOME: ${{ steps.syntax_check.outcome }}
+          UNIT_TESTS_OUTCOME: ${{ steps.unit_tests.outcome }}
+        run: |
+          set +e
+          mkdir -p .ci-summary
+          python3 .github/tooling/ci-summary/adapters/termux_background_gpt.py \
+            --report .ci-summary/termux-background-gpt-phases.json \
+            --output .ci-summary/adapter.json \
+            --workflow 'Termux Background GPT' \
+            --syntax-check-outcome "$SYNTAX_CHECK_OUTCOME" \
+            --unit-tests-outcome "$UNIT_TESTS_OUTCOME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --event "$GITHUB_EVENT_NAME" \
+            --sha "$GITHUB_SHA"
+          adapter_code=$?
+          python3 .github/tooling/ci-summary/render.py \
+            --input .ci-summary/adapter.json \
+            --json-out .ci-summary/summary.json \
+            --text-out .ci-summary/inline.txt \
+            --markdown-out .ci-summary/inline.md \
+            --workflow 'Termux Background GPT' \
+            > /tmp/termux-background-gpt-ci-summary-render.log
+          render_code=$?
+
+          if [[ -f .ci-summary/inline.txt ]]; then
+            cat .ci-summary/inline.txt
+          elif [[ -s /tmp/termux-background-gpt-ci-summary-render.log ]]; then
+            cat /tmp/termux-background-gpt-ci-summary-render.log
+          else
+            printf '%s\n' \
+              'CI_SUMMARY_V1_BEGIN' \
+              'CI SUMMARY · Termux Background GPT' \
+              'Result: INFRA_ERROR' \
+              'Reason codes:' \
+              '- CI_SUMMARY_RENDER_CATASTROPHIC' \
+              'Summary complete: false' \
+              'CI_SUMMARY_V1_END'
+          fi
+
+          if [[ -f .ci-summary/inline.md ]]; then
+            cat .ci-summary/inline.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo 'CI SUMMARY · Termux Background GPT'
+              echo 'Result: INFRA_ERROR'
+              echo 'Reason codes: CI_SUMMARY_RENDER_CATASTROPHIC'
+              echo 'Summary complete: false'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [[ "$adapter_code" -ne 0 || "$render_code" -ne 0 ]]; then
+            echo "::warning::CI compact summary generation incomplete (adapter=$adapter_code renderer=$render_code); authoritative Termux Background GPT gates are unchanged."
+          fi
+          exit 0

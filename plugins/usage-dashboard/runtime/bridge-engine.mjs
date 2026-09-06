@@ -10,7 +10,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { pathToFileURL } from 'node:url';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.37';
+const VERSION = '1.6.36';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -808,7 +808,7 @@ if (output && !globalThis[marker]) {
       'devPlanResetPasses','devPlanIncludedResetPasses','devPlanIncludedResetPassesRemaining',
       'devPlanResetPassPrice','devPlanBillingCycleStart','devPlanCancelled','devPlanExpiresAt',
       'regularCredits','devPlanPaygEnabled','autoTopUpEnabled','autoTopUpThreshold','autoTopUpAmount',
-      'organizationId','projectId','devPlanServiceTier','defaultRoutingStrategy','blockApiTraining','providerCacheControlMode'
+      'organizationId','projectId','devPlanServiceTier','defaultRoutingStrategy','blockApiTraining'
     ];
     const safe = {};
     for (const key of allowed) {
@@ -1847,23 +1847,6 @@ function devPassNoAiTrainingTruth(raw) {
   return { state:'unknown', source:'unavailable' };
 }
 
-
-function devPassProviderCachePolicyTruth(raw) {
-  if (!raw || typeof raw !== 'object' || !Object.prototype.hasOwnProperty.call(raw, 'providerCacheControlMode')) {
-    return { state:'unknown', mode:'unknown', source:'unavailable' };
-  }
-  if (raw.providerCacheControlMode === 'auto') {
-    return { state:'automatic', mode:'auto', source:'/dev-plans/status.providerCacheControlMode' };
-  }
-  if (raw.providerCacheControlMode === 'passthrough') {
-    return { state:'client-managed', mode:'passthrough', source:'/dev-plans/status.providerCacheControlMode' };
-  }
-  if (raw.providerCacheControlMode === 'off') {
-    return { state:'disabled', mode:'off', source:'/dev-plans/status.providerCacheControlMode' };
-  }
-  return { state:'unknown', mode:'unknown', source:'unavailable' };
-}
-
 function normalizeIndependentDevPassStatus(payload) {
   const raw = payload?.data ?? payload?.status ?? payload;
   if (!raw || typeof raw !== 'object') return null;
@@ -1879,7 +1862,6 @@ function normalizeIndependentDevPassStatus(payload) {
     'current_period_end', 'renewsAt', 'renewAt', 'expiresAt'
   ], null);
   const noAiTraining = devPassNoAiTrainingTruth(raw);
-  const providerCachePolicy = devPassProviderCachePolicyTruth(raw);
 
   // Important: never copy apiKey/session/cookie/auth fields from the status
   // response. organizationId/projectId are non-secret identifiers; projectId
@@ -1902,9 +1884,6 @@ function normalizeIndependentDevPassStatus(payload) {
     routingStrategy: String(pick(raw, ['defaultRoutingStrategy', 'default_routing_strategy'], 'auto') || 'auto'),
     noAiTrainingState: noAiTraining.state,
     noAiTrainingSource: noAiTraining.source,
-    providerCachePolicyState: providerCachePolicy.state,
-    providerCachePolicyMode: providerCachePolicy.mode,
-    providerCachePolicySource: providerCachePolicy.source,
     fetchedAt: Date.now(),
     source: 'LLMGateway CLI session · /dev-plans/status',
   };
@@ -1929,7 +1908,7 @@ function normalizeIndependentDevPassStatus(payload) {
   }
 
   const useful = (out.plan && out.plan !== 'none') || out.organizationId || out.billingCycleStart || out.expiresAt ||
-    out.noAiTrainingState !== 'unknown' || out.providerCachePolicyState !== 'unknown' || Object.keys(numberFields).some((key) => out[key] !== undefined);
+    out.noAiTrainingState !== 'unknown' || Object.keys(numberFields).some((key) => out[key] !== undefined);
   return useful ? out : null;
 }
 
@@ -1965,9 +1944,6 @@ async function loadDevPassStatus() {
         autoTopUpAmount: finite(devOrg.devPlanAutoTopUpAmount),
         noAiTrainingState: 'unknown',
         noAiTrainingSource: 'unavailable',
-        providerCachePolicyState: 'unknown',
-        providerCachePolicyMode: 'unknown',
-        providerCachePolicySource: 'unavailable',
         fetchedAt: Date.now(),
         source: 'LLMGateway CLI session · full /orgs fallback',
       };

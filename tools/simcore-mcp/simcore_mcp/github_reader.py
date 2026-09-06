@@ -45,7 +45,7 @@ class GitHubConfig:
 
 
 class GitHubReader:
-    """Small read-only GitHub REST adapter used by MCP-01."""
+    """Small read-only GitHub REST adapter used by SimCore MCP tools."""
 
     def __init__(self, config: GitHubConfig | None = None) -> None:
         self.config = config or GitHubConfig.from_env()
@@ -134,6 +134,57 @@ class GitHubReader:
         if not isinstance(parsed, dict):
             raise GitHubReadError(f"json:{ref}:{path}", "JSON root is not an object")
         return parsed, blob_sha
+
+    def get_commit(self, sha: str) -> dict[str, Any]:
+        quoted = urllib.parse.quote(sha, safe="")
+        data, _ = self._request_json(self._url(f"/commits/{quoted}"), f"commit:{sha}")
+        if not isinstance(data, dict):
+            raise GitHubReadError(f"commit:{sha}", "response is not an object")
+        resolved = data.get("sha")
+        if not isinstance(resolved, str) or not resolved:
+            raise GitHubReadError(f"commit:{sha}", "missing commit sha")
+        return data
+
+    def compare_commits(self, base: str, head: str) -> dict[str, Any]:
+        quoted_base = urllib.parse.quote(base, safe="")
+        quoted_head = urllib.parse.quote(head, safe="")
+        source = f"compare:{base}...{head}"
+        data, _ = self._request_json(self._url(f"/compare/{quoted_base}...{quoted_head}"), source)
+        if not isinstance(data, dict):
+            raise GitHubReadError(source, "response is not an object")
+        return data
+
+    def list_workflow_runs(
+        self,
+        workflow_path: str,
+        branch: str,
+        *,
+        event: str = "push",
+        max_pages: int = 3,
+    ) -> list[dict[str, Any]]:
+        workflow_id = workflow_path.rsplit("/", 1)[-1]
+        quoted_workflow = urllib.parse.quote(workflow_id, safe="")
+        query_branch = urllib.parse.quote(branch, safe="")
+        query_event = urllib.parse.quote(event, safe="")
+        runs: list[dict[str, Any]] = []
+        for page in range(1, max_pages + 1):
+            source = f"workflow:{workflow_path}:page:{page}"
+            data, _ = self._request_json(
+                self._url(
+                    f"/actions/workflows/{quoted_workflow}/runs"
+                    f"?branch={query_branch}&event={query_event}&per_page=100&page={page}"
+                ),
+                source,
+            )
+            if not isinstance(data, dict):
+                raise GitHubReadError(source, "response is not an object")
+            page_runs = data.get("workflow_runs")
+            if not isinstance(page_runs, list):
+                raise GitHubReadError(source, "workflow_runs is not a list")
+            runs.extend(item for item in page_runs if isinstance(item, dict))
+            if len(page_runs) < 100:
+                break
+        return runs
 
     def list_open_issues(self, max_pages: int = 10) -> list[dict[str, Any]]:
         issues: list[dict[str, Any]] = []

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "v07010-builder-basic",
+  "suite": "builder-v07010",
+  "input": {
+    "maxSerializedChars": 16384
+  },
+  "expected": {
+    "runtimeMutation": "HOST_LOCAL_TELEMETRY_SET_COST_ATTRIBUTION_ONLY",
+    "releaseSystemMutation": "NONE",
+    "extraHostIo": 0
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

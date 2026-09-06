@@ -153,14 +153,17 @@ def build_status(github_reader: Any, local_reader: Any, *, now_ms: int | None = 
             _add_error(errors, exc.source, exc.message)
 
     module_summary = _module_summary(snapshot)
+    active_errors = _snapshot_error_count(snapshot)
+    health_ok = health.get("ok") if isinstance(health, dict) and isinstance(health.get("ok"), bool) else None
+    snapshot_ok = snapshot.get("ok") if isinstance(snapshot, dict) and isinstance(snapshot.get("ok"), bool) else None
     local_runtime = {
         "available": local_available,
         "health": health.get("status") if isinstance(health, dict) and isinstance(health.get("status"), str) else None,
-        "healthOk": health.get("ok") if isinstance(health, dict) and isinstance(health.get("ok"), bool) else None,
+        "healthOk": health_ok,
         "readiness": snapshot.get("readiness") if isinstance(snapshot, dict) and isinstance(snapshot.get("readiness"), str) else None,
         "snapshotAuthenticated": authenticated_snapshot,
-        "snapshotOk": snapshot.get("ok") if isinstance(snapshot, dict) and isinstance(snapshot.get("ok"), bool) else None,
-        "activeErrors": _snapshot_error_count(snapshot),
+        "snapshotOk": snapshot_ok,
+        "activeErrors": active_errors,
         "failures": snapshot.get("failures") if isinstance(snapshot, dict) and isinstance(snapshot.get("failures"), int) and not isinstance(snapshot.get("failures"), bool) else None,
         "staleModules": module_summary.get("stale") if module_summary is not None else None,
         "moduleSummary": module_summary,
@@ -174,17 +177,25 @@ def build_status(github_reader: Any, local_reader: Any, *, now_ms: int | None = 
 
     github_error_count = sum(1 for item in errors if item["source"].startswith(("branch:", "file:", "json:")))
     github_state = "ok" if github_error_count == 0 else "partial" if any((main_head, release_head, main_manifest, release_manifest)) else "unavailable"
-    local_state = "ok" if local_available and (authenticated_snapshot is True or authenticated_snapshot is False) else "unavailable"
+    local_state = "unavailable" if not local_available else "ok" if authenticated_snapshot is True else "partial"
+    parity_state = _parity(main_manifest_blob, release_manifest_blob, main_latest_blob, release_latest_blob)
+    overall_ok = (
+        not errors
+        and parity_state != "drift"
+        and health_ok is not False
+        and snapshot_ok is not False
+        and (active_errors is None or active_errors == 0)
+    )
 
     return {
-        "ok": not errors,
+        "ok": overall_ok,
         "product": product,
         "github": {
             "repository": repository,
             "mainHead": main_head,
             "releaseHead": release_head,
             "releaseVersion": product["version"],
-            "parityState": _parity(main_manifest_blob, release_manifest_blob, main_latest_blob, release_latest_blob),
+            "parityState": parity_state,
             "mainManifestBlob": main_manifest_blob,
             "releaseManifestBlob": release_manifest_blob,
             "mainLatestBlob": main_latest_blob,

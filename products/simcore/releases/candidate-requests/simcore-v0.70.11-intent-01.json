@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "intentId": "simcore-v0.70.11-intent-01",
+  "releaseId": "simcore-v0.70.11-new-01",
+  "product": "SimCore",
+  "targetVersion": "0.70.11",
+  "releaseName": "Operator Release Card Metadata Repair",
+  "releaseMode": "NEW_VERSION",
+  "expectedProductionCommit": "ecc55f026315c6482c34d267aba2adb97527cdbc",
+  "builderPath": "products/simcore/tooling/build-07011-operator-release-card-metadata-repair.py",
+  "verificationSuite": "batch-a",
+  "allowedRuntimePaths": [
+    "plugins/simcore/latest.js",
+    "plugins/simcore/install.js"
+  ],
+  "changeClass": "RUNTIME_CORRECTION",
+  "primaryGoalId": "07011_OPERATOR_RELEASE_CARD_METADATA_REPAIR",
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07011_OPERATOR_RELEASE_CARD_METADATA_REPAIR_REAL_LONG_CHAT",
+    "closeAuthority": "HUMAN_EVIDENCE"
+  },
+  "evidenceRefs": [
+    "docs/SIMCORE_07011_OPERATOR_RELEASE_CARD_METADATA_REPAIR_DESIGN_2026-09-06.md",
+    "docs/SIMCORE_07011_IMPLEMENTATION_AUTHORIZATION_2026-09-06.md",
+    "docs/SIMCORE_R2_9_OPERATOR_CHANGED_CONTRACT_PROJECTION_GAP_2026-09-06.md",
+    "docs/SIMCORE_PR_IDENTITY_CONCURRENCY_COLLISION_2026-09-06.md",
+    "docs/SIMCORE_07011_IMPLEMENTATION_EVIDENCE_2026-09-06.md",
+    "docs/SIMCORE_DIAGNOSTIC_REVIEW_THREE_LENS_PROTOCOL_2026-09-06.md"
+  ]
+}

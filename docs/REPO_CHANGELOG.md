@@ -1130,3 +1130,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/5a27168e5dc7e521f32afcdc887fd6b008cda7a2)
 - Event ID: `ba35637907ee6aab5e0a336785cd6b53d2af637401f46cd6831dd4a5cfb27f0e`
 <!-- canonical-main-doc-promoted:ba35637907ee6aab5e0a336785cd6b53d2af637401f46cd6831dd4a5cfb27f0e -->
+
+### 2026-09-06 — Merge pull request #1724 from hanmiyoo10-alt/feat/repo-ci-summary-canonical-main-proof-20260906
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `b3eaba0dad011163b344a1713aa90292da19bfad`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/b3eaba0dad011163b344a1713aa90292da19bfad)
+- Event ID: `3bd23ef1bb9c31aa68d9ba298769ffac98c6fa369a71090665818eea8a93b1da`
+<!-- canonical-main-doc-promoted:3bd23ef1bb9c31aa68d9ba298769ffac98c6fa369a71090665818eea8a93b1da -->

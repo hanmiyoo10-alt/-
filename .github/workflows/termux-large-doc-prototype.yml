@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'plugins/termux/large-doc-editor/**'
+      - '.github/tooling/ci-summary/**'
       - 'docs/TERMUX_LARGE_DOC_PROTOTYPE.md'
       - '.github/workflows/termux-large-doc-prototype.yml'
   push:
@@ -11,6 +12,7 @@ on:
       - main
     paths:
       - 'plugins/termux/large-doc-editor/**'
+      - '.github/tooling/ci-summary/**'
       - 'docs/TERMUX_LARGE_DOC_PROTOTYPE.md'
       - '.github/workflows/termux-large-doc-prototype.yml'
 
@@ -28,7 +30,99 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Initialize compact phase receipt
+        continue-on-error: true
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          mkdir -p .ci-summary
+          python3 .github/tooling/ci-summary/phase_receipt.py \
+            --receipt .ci-summary/termux-large-doc-prototype-phases.json init syntax_check unit_tests
+
       - name: Syntax check
-        run: python -m py_compile chunk_store.py server.py tools/generate_fixture.py
+        id: syntax_check
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ../../../.github/tooling/ci-summary/phase_receipt.py \
+            --receipt ../../../.ci-summary/termux-large-doc-prototype-phases.json start syntax_check \
+            || echo '::warning::Termux Large Doc Prototype compact phase receipt start failed; authoritative syntax gate is unchanged.'
+          python -m py_compile chunk_store.py server.py tools/generate_fixture.py
+          python3 ../../../.github/tooling/ci-summary/phase_receipt.py \
+            --receipt ../../../.ci-summary/termux-large-doc-prototype-phases.json pass syntax_check \
+            || echo '::warning::Termux Large Doc Prototype compact phase receipt pass failed; authoritative syntax gate is unchanged.'
+
       - name: Unit tests
-        run: python -m unittest discover -s tests -v
+        id: unit_tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ../../../.github/tooling/ci-summary/phase_receipt.py \
+            --receipt ../../../.ci-summary/termux-large-doc-prototype-phases.json start unit_tests \
+            || echo '::warning::Termux Large Doc Prototype compact phase receipt start failed; authoritative unit-test gate is unchanged.'
+          python -m unittest discover -s tests -v
+          python3 ../../../.github/tooling/ci-summary/phase_receipt.py \
+            --receipt ../../../.ci-summary/termux-large-doc-prototype-phases.json pass unit_tests \
+            || echo '::warning::Termux Large Doc Prototype compact phase receipt pass failed; authoritative unit-test gate is unchanged.'
+
+      - name: Render compact CI summary
+        if: always()
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        env:
+          SYNTAX_CHECK_OUTCOME: ${{ steps.syntax_check.outcome }}
+          UNIT_TESTS_OUTCOME: ${{ steps.unit_tests.outcome }}
+        run: |
+          set +e
+          mkdir -p .ci-summary
+          python3 .github/tooling/ci-summary/adapters/termux_large_doc_prototype.py \
+            --report .ci-summary/termux-large-doc-prototype-phases.json \
+            --output .ci-summary/adapter.json \
+            --workflow 'Termux Large Doc Prototype' \
+            --syntax-check-outcome "$SYNTAX_CHECK_OUTCOME" \
+            --unit-tests-outcome "$UNIT_TESTS_OUTCOME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --event "$GITHUB_EVENT_NAME" \
+            --sha "$GITHUB_SHA"
+          adapter_code=$?
+          python3 .github/tooling/ci-summary/render.py \
+            --input .ci-summary/adapter.json \
+            --json-out .ci-summary/summary.json \
+            --text-out .ci-summary/inline.txt \
+            --markdown-out .ci-summary/inline.md \
+            --workflow 'Termux Large Doc Prototype' \
+            > /tmp/termux-large-doc-prototype-ci-summary-render.log
+          render_code=$?
+
+          if [[ -f .ci-summary/inline.txt ]]; then
+            cat .ci-summary/inline.txt
+          elif [[ -s /tmp/termux-large-doc-prototype-ci-summary-render.log ]]; then
+            cat /tmp/termux-large-doc-prototype-ci-summary-render.log
+          else
+            printf '%s\n' \
+              'CI_SUMMARY_V1_BEGIN' \
+              'CI SUMMARY · Termux Large Doc Prototype' \
+              'Result: INFRA_ERROR' \
+              'Reason codes:' \
+              '- CI_SUMMARY_RENDER_CATASTROPHIC' \
+              'Summary complete: false' \
+              'CI_SUMMARY_V1_END'
+          fi
+
+          if [[ -f .ci-summary/inline.md ]]; then
+            cat .ci-summary/inline.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo 'CI SUMMARY · Termux Large Doc Prototype'
+              echo 'Result: INFRA_ERROR'
+              echo 'Reason codes: CI_SUMMARY_RENDER_CATASTROPHIC'
+              echo 'Summary complete: false'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [[ "$adapter_code" -ne 0 || "$render_code" -ne 0 ]]; then
+            echo "::warning::CI compact summary generation incomplete (adapter=$adapter_code renderer=$render_code); authoritative Termux Large Doc Prototype gates are unchanged."
+          fi
+          exit 0

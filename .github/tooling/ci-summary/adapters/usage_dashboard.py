@@ -9,9 +9,9 @@ from typing import Any
 
 EXPECTED_PHASES = [
     "release_spec",
-    "syntax_checks",
     "materialization",
     "reconciliation",
+    "syntax_checks",
     "full_test_suite",
     "release_candidate_validation",
     "cleanliness_integrity",

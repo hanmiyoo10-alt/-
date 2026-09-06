@@ -25,6 +25,20 @@
 2. <AUTHORITY_INPUT_1>
 3. <AUTHORITY_INPUT_2>
 
+## Execution compactness
+
+Choose the route before constructing non-trivial local execution payloads. Reuse the existing repository compactness contract in `.agents/skills/agent-execution-compactness/SKILL.md`.
+
+- Route: `<EXISTING_COMMAND|HARNESS|INLINE_SMALL|MATERIALIZE|EXCEPTION>`
+- Command/file surface: <SHORT_COMMAND_OR_FILE_HARNESS_OWNER>
+- Validation preserved: <REQUIRED_TESTS_CHECKS_EVIDENCE>
+- Guardrail accounting: logical lines `<N_OR_NA>`; source/program bytes `<N_OR_NA>`; generated source/test/program files `<N_OR_NA>`
+- Exception reason: <NONE_OR_EXPLICIT_BOUNDED_REASON>
+
+`INLINE_SMALL` is not a quoting category. If the directly supplied execution/program payload crosses the existing compactness defaults of approximately 20 logical lines, 2 KiB, or one generated source/test/program file, use `MATERIALIZE` or an evidence-equivalent `HARNESS` unless a bounded `EXCEPTION` is explicitly justified. Quoting, escaping, or heredoc wrapping does not reclassify a large payload as small.
+
+`EXCEPTION` always requires a concrete reason. Compactness never removes required validation, authority checks, uncertainty, failure evidence, or project-owned gates.
+
 ## Bounded write scope
 
 - <PATH_OR_ISSUE>

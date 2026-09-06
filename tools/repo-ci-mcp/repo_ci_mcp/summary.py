@@ -40,6 +40,7 @@ WORKFLOWS = (
     WorkflowSpec("termux-background-gpt", ".github/workflows/termux-background-gpt.yml", "Termux Background GPT"),
     WorkflowSpec("termux-large-doc-prototype", ".github/workflows/termux-large-doc-prototype.yml", "Termux Large Doc Prototype"),
     WorkflowSpec("termux-taskbridge", ".github/workflows/termux-taskbridge.yml", "Termux TaskBridge"),
+    WorkflowSpec("repository-read-mcp", ".github/workflows/repository-read-mcp-ci.yml", "Repository Read MCP CI"),
 )
 
 

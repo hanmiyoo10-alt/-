@@ -1138,3 +1138,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/b3eaba0dad011163b344a1713aa90292da19bfad)
 - Event ID: `3bd23ef1bb9c31aa68d9ba298769ffac98c6fa369a71090665818eea8a93b1da`
 <!-- canonical-main-doc-promoted:3bd23ef1bb9c31aa68d9ba298769ffac98c6fa369a71090665818eea8a93b1da -->
+
+### 2026-09-07 — feat(repo-mcp): add one-call canonical-main status composition
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `9b82b76812699bab7db46583318c00367181b920`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/9b82b76812699bab7db46583318c00367181b920)
+- Event ID: `2d1daa2ac4a585a5de39791f55224614999ecef2f2305aab62cbfc0dbf028965`
+<!-- canonical-main-doc-promoted:2d1daa2ac4a585a5de39791f55224614999ecef2f2305aab62cbfc0dbf028965 -->

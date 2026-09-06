@@ -282,6 +282,61 @@ jobs:
           echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
           cat .simcore-ci/simcore-ci-report.json
 
+      - name: Render compact CI summary
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p .ci-summary
+          python3 .github/tooling/ci-summary/adapters/simcore.py \
+            --report .simcore-ci/simcore-ci-report.json \
+            --output .ci-summary/adapter.json \
+            --workflow 'SimCore CI' \
+            --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --event "$GITHUB_EVENT_NAME" \
+            --sha "$GITHUB_SHA"
+          adapter_code=$?
+          python3 .github/tooling/ci-summary/render.py \
+            --input .ci-summary/adapter.json \
+            --json-out .ci-summary/summary.json \
+            --text-out .ci-summary/inline.txt \
+            --markdown-out .ci-summary/inline.md \
+            --workflow 'SimCore CI' \
+            > /tmp/simcore-ci-summary-render.log
+          render_code=$?
+
+          if [[ -f .ci-summary/inline.txt ]]; then
+            cat .ci-summary/inline.txt
+          elif [[ -s /tmp/simcore-ci-summary-render.log ]]; then
+            cat /tmp/simcore-ci-summary-render.log
+          else
+            printf '%s\n' \
+              'CI_SUMMARY_V1_BEGIN' \
+              'CI SUMMARY · SimCore CI' \
+              'Result: INFRA_ERROR' \
+              'Reason codes:' \
+              '- CI_SUMMARY_RENDER_CATASTROPHIC' \
+              'Summary complete: false' \
+              'CI_SUMMARY_V1_END'
+          fi
+
+          if [[ -f .ci-summary/inline.md ]]; then
+            cat .ci-summary/inline.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo 'CI SUMMARY · SimCore CI'
+              echo 'Result: INFRA_ERROR'
+              echo 'Reason codes: CI_SUMMARY_RENDER_CATASTROPHIC'
+              echo 'Summary complete: false'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [[ "$adapter_code" -ne 0 || "$render_code" -ne 0 ]]; then
+            echo "::warning::CI compact summary generation incomplete (adapter=$adapter_code renderer=$render_code); authoritative SimCore gate is unchanged."
+          fi
+          exit 0
+
       - name: Upload bounded CI report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

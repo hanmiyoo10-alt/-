@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "r2-9-operator-changed-contract",
+  "suite": "release-system-r2-9-operator-changed-contract",
+  "input": {
+    "cases": [
+      "operator-exact-current-capability",
+      "changed-contract-topology-pass",
+      "changed-contract-executable-pass"
+    ]
+  },
+  "expected": {
+    "changedAssertions": [
+      "r2-9-operator-changed-contract-exact-current-identity",
+      "r2-9-operator-changed-contract-single-panel-surface",
+      "r2-9-operator-changed-contract-default-collapsed",
+      "r2-9-operator-changed-contract-static-pure-envelope"
+    ]
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

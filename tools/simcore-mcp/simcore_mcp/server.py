@@ -6,6 +6,7 @@ from mcp.server import MCPServer
 
 from .docs_drift import check_docs_drift
 from .github_reader import GitHubReader
+from .postmerge_health import postmerge_health
 from .production_identity import verify_production_identity
 from .release_preflight import release_preflight
 from .status import build_status
@@ -13,8 +14,8 @@ from .status import build_status
 mcp = MCPServer(
     "SimCore MCP",
     instructions=(
-        "Read-only SimCore operational status, production-identity, documentation-drift, and release-preflight tools. "
-        "These tools never mutate GitHub, main, release-simcore, product manifests, "
+        "Read-only SimCore operational status, production-identity, documentation-drift, release-preflight, "
+        "and post-merge health tools. These tools never mutate GitHub, main, release-simcore, product manifests, "
         "issues, pull requests, workflows, HUMAN_EVIDENCE, release state, or production."
     ),
 )
@@ -42,6 +43,12 @@ def simcore_check_docs_drift() -> dict[str, Any]:
 def simcore_release_preflight(version: str) -> dict[str, Any]:
     """Run a read-only SimCore release preflight for an exact target version."""
     return release_preflight(GitHubReader(), version)
+
+
+@mcp.tool()
+def simcore_postmerge_health(commit_sha: str) -> dict[str, Any]:
+    """Observe read-only post-merge health for an exact target commit."""
+    return postmerge_health(GitHubReader(), commit_sha)
 
 
 def main() -> None:

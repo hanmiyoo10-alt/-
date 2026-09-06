@@ -53,7 +53,10 @@ assert.deepEqual(simBundle.deliveryKeys.sort(), ['sim-open', 'sim-p0', 'sim-reco
 assert.deepEqual(simBundle.items.map((item) => item.deliveryKey), ['sim-p0', 'sim-open', 'sim-recovered'], 'same-system alerts must be ordered by severity and keep OPEN before RECOVERED for one correlation');
 assert.equal(new Set(simBundle.items.map((item) => item.deliveryKey)).size, simBundle.items.length, 'individual delivery keys must remain distinct inside a bundle');
 
-const workflow = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-ci.yml'), 'utf8');
-assert.match(workflow, /notification-bundling-contract\.cjs/);
+const ciManifest = JSON.parse(fs.readFileSync(path.join(root, '.github/tooling/ci-summary/manifests/plugin-control-plane.json'), 'utf8'));
+assert.ok(
+  ciManifest.checks.some((check) => Array.isArray(check.command) && check.command.includes('.github/plugin-control-plane/canonical-main/tests/notification-bundling-contract.cjs')),
+  'notification bundling contract must remain in the Plugin Control Plane CI execution manifest'
+);
 
 console.log('canonical-main notification bundling contract: OK');

@@ -1122,3 +1122,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/502)
 - Event ID: `a152d6f624f27399f7da4ee5e808b192c81a5936d927646b9b65e6c4b3612935`
 <!-- canonical-main-doc-promoted:a152d6f624f27399f7da4ee5e808b192c81a5936d927646b9b65e6c4b3612935 -->
+
+### 2026-09-06 — Merge pull request #1721 from hanmiyoo10-alt/feat/repo-ci-summary-control-plane-pilot-20260906
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `5a27168e5dc7e521f32afcdc887fd6b008cda7a2`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/5a27168e5dc7e521f32afcdc887fd6b008cda7a2)
+- Event ID: `ba35637907ee6aab5e0a336785cd6b53d2af637401f46cd6831dd4a5cfb27f0e`
+<!-- canonical-main-doc-promoted:ba35637907ee6aab5e0a336785cd6b53d2af637401f46cd6831dd4a5cfb27f0e -->

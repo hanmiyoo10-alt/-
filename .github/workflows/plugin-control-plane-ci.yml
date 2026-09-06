@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/plugin-control-plane/**'
+      - '.github/tooling/ci-summary/**'
       - '.github/workflows/plugin-control-plane-*.yml'
       - '.github/workflows/repository-work-harness-*.yml'
       - '.github/workflows/canonical-main-ops.yml'
@@ -32,46 +33,64 @@ jobs:
         with:
           node-version: 22
       - name: Run Plugin Control Plane contracts
+        shell: bash
         run: |
-          bash -n .github/plugin-control-plane/canonical-main/protection-activate.sh
-          bash -n .github/plugin-control-plane/canonical-main/required-guard.sh
-          node .github/plugin-control-plane/tests/control-plane-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/canonical-main-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/bootstrap-rollout-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/rehearsal-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/notification-bot-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/delivery-receipt-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/notification-bundling-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/protected-main-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/module-architecture-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/stability-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/stability-window-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/operator-capsule-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/why-blocked-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/session-start-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/proof-bundle-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/closure-bookkeeping-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/documentation-stream-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/work-system-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/idea-classification-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/idea-classification-signal-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/main-delta-brief-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/main-delta-presentation-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/main-delta-anchor-command-contract.cjs
-          node .github/plugin-control-plane/canonical-main/tests/main-delta-anchor-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/preflight-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/active-work-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/report-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/workflow-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/dispatch-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/handoff-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/invoke-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/mutation-boundary-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-shadow-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/mutation-gate-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/canonical-main-canary-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync-workflow-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/authoritative-handoff-contract.cjs
-          node .github/plugin-control-plane/canonical-main/work-harness/tests/mutation-enforcement-coverage-contract.cjs
+          set -euo pipefail
+          python3 .github/tooling/ci-summary/receipt_runner.py \
+            --manifest .github/tooling/ci-summary/manifests/plugin-control-plane.json \
+            --report .ci-summary/plugin-control-plane-receipt.json
+
+      - name: Render compact CI summary
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p .ci-summary
+          python3 .github/tooling/ci-summary/adapters/plugin_control_plane.py \
+            --report .ci-summary/plugin-control-plane-receipt.json \
+            --output .ci-summary/adapter.json \
+            --workflow 'Plugin Control Plane CI' \
+            --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --event "$GITHUB_EVENT_NAME" \
+            --sha "$GITHUB_SHA"
+          adapter_code=$?
+          python3 .github/tooling/ci-summary/render.py \
+            --input .ci-summary/adapter.json \
+            --json-out .ci-summary/summary.json \
+            --text-out .ci-summary/inline.txt \
+            --markdown-out .ci-summary/inline.md \
+            --workflow 'Plugin Control Plane CI' \
+            > /tmp/plugin-control-plane-summary-render.log
+          render_code=$?
+
+          if [[ -f .ci-summary/inline.txt ]]; then
+            cat .ci-summary/inline.txt
+          elif [[ -s /tmp/plugin-control-plane-summary-render.log ]]; then
+            cat /tmp/plugin-control-plane-summary-render.log
+          else
+            printf '%s\n' \
+              'CI_SUMMARY_V1_BEGIN' \
+              'CI SUMMARY · Plugin Control Plane CI' \
+              'Result: INFRA_ERROR' \
+              'Reason codes:' \
+              '- CI_SUMMARY_RENDER_CATASTROPHIC' \
+              'Summary complete: false' \
+              'CI_SUMMARY_V1_END'
+          fi
+
+          if [[ -f .ci-summary/inline.md ]]; then
+            cat .ci-summary/inline.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo 'CI SUMMARY · Plugin Control Plane CI'
+              echo 'Result: INFRA_ERROR'
+              echo 'Reason codes: CI_SUMMARY_RENDER_CATASTROPHIC'
+              echo 'Summary complete: false'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [[ "$adapter_code" -ne 0 || "$render_code" -ne 0 ]]; then
+            echo "::warning::CI compact summary generation incomplete (adapter=$adapter_code renderer=$render_code); authoritative Plugin Control Plane contract gate is unchanged."
+          fi
+          exit 0

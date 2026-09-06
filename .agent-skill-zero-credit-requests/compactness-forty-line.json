@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "skill": "agent-execution-compactness",
+  "case_id": "forty-line-temp-module",
+  "target_repository_sha": "4b3d7eb48506f4cd57de50261bb5bbb211e57198",
+  "model_profile": "qwen2.5-1.5b-instruct-q4_k_m"
+}

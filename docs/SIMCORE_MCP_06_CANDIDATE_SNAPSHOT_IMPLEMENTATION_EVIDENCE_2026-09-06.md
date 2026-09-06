@@ -1,7 +1,8 @@
 # SimCore MCP-06 Candidate Snapshot Implementation Evidence — 2026-09-06
 
 Date: 2026-09-06 KST
-Status: IMPLEMENTATION QUALIFIED · TERMUX PROTOCOL SMOKE PENDING
+Protocol smoke closeout: 2026-09-07 KST
+Status: PROTOCOL SMOKE PASS · CLOSEOUT MERGED-MAIN VERIFICATION PENDING
 Tracking: #1740
 Tool: `simcore_candidate_snapshot(ref)`
 
@@ -76,9 +77,7 @@ tools/simcore-mcp/simcore_mcp/server.py
 tools/simcore-mcp/tests/test_candidate_snapshot.py
 ```
 
-No runtime/plugin file changed.
-
-`GitHubReader` did not need modification; MCP-06 reuses existing GET-only primitives.
+No runtime/plugin file changed. `GitHubReader` did not need modification; MCP-06 reuses existing GET-only primitives.
 
 ## 4. Implementation contract
 
@@ -106,9 +105,7 @@ ok
 canonical_candidate_shape.pass
 ```
 
-A readable work/release commit may therefore have `ok=true` while `canonical_candidate_shape.pass=false`.
-
-Neither value authorizes publication.
+A readable work/release commit may therefore have `ok=true` while `canonical_candidate_shape.pass=false`. Neither value authorizes publication.
 
 ## 5. Deterministic check surface
 
@@ -153,9 +150,7 @@ HOST_COMPAT_VERSION
 // v<current-version> <releaseName>:
 ```
 
-The tool requires bounded current-version header cardinality and reports internal identity convergence as well as latest/install cross-file identity equality.
-
-Candidate code is never executed.
+The tool requires bounded current-version header cardinality and reports internal identity convergence as well as latest/install cross-file identity equality. Candidate code is never executed.
 
 ## 7. Structural candidate observation
 
@@ -203,9 +198,7 @@ releaseVersion
 releaseName
 ```
 
-A missing/mismatched profile remains explicit context and does not cause the tool to invent a healthy profile.
-
-Profile semantic readiness remains MCP-04 responsibility.
+A missing/mismatched profile remains explicit context and does not cause the tool to invent a healthy profile. Profile semantic readiness remains MCP-04 responsibility.
 
 ## 9. Local deterministic validation
 
@@ -218,35 +211,11 @@ compile = PASS
 candidate snapshot tests = PASS 23/23
 ```
 
-Covered cases include:
-
-```text
-healthy canonical candidate
-moving ref -> immutable SHA
-40-hex input
-invalid/unresolvable ref
-latest missing
-install missing
-blob parity mismatch
-runtime divergence
-Host divergence
-release-name missing/ambiguous
-latest/install identity mismatch
-zero parent
-multiple parents
-production-parent mismatch
-out-of-scope changed path
-profile context present
-profile context missing
-profile version mismatch
-compare failure
-main context failure
-release context failure
-```
+Covered cases include healthy canonical candidate, moving ref to immutable SHA, 40-hex input, invalid/unresolvable ref, missing latest/install, parity mismatch, runtime/Host divergence, release-name missing/ambiguous, latest/install identity mismatch, zero/multiple parents, production-parent mismatch, out-of-scope changed path, profile present/missing/version mismatch, compare failure, main context failure, and release context failure.
 
 ## 10. Remote source readback
 
-After upload, the exact implementation branch source/test/server files were read back from GitHub.
+After upload, exact implementation branch source/test/server files were read back from GitHub.
 
 Observed blobs:
 
@@ -301,9 +270,37 @@ c008125e9d024daf51e6766096a7bc29278945fc
 
 No auto-revert was observed.
 
-## 12. Production immutability proof
+## 12. Implementation evidence merge qualification
 
-Immediately after MCP-06 implementation merge:
+Evidence PR:
+
+```text
+PR = #1743
+head = 7523463e4e8af643f7f5dc8c534cb7533b5fb1ab
+merge = 867770903c8b2da6fed92d7b1fe29d5ec7ca81b6
+changed files = 1
+```
+
+Evidence PR-head SimCore CI:
+
+```text
+run number = 8261
+Verify = SUCCESS
+Required = SUCCESS
+```
+
+Evidence merged-main health:
+
+```text
+SimCore CI #8262 = SUCCESS
+Canonical Main Documentation Stream #10077 = SUCCESS
+```
+
+Production remained unchanged after the evidence merge.
+
+## 13. Production immutability proof
+
+Immediately after MCP-06 implementation/evidence qualification:
 
 ```text
 release-simcore HEAD = ecc55f026315c6482c34d267aba2adb97527cdbc
@@ -311,11 +308,138 @@ latest.js blob = 53f6959039c57f8673c355fcc1c22b573150e4a7
 install.js blob = 53f6959039c57f8673c355fcc1c22b573150e4a7
 latest.js == install.js = YES
 userscript version = 0.70.10
+release name = Host-Local Telemetry Set Cost Attribution
 ```
 
-Therefore MCP-06 implementation did not mutate production.
+Therefore MCP-06 implementation and documentation transactions did not mutate production.
 
-## 13. Pre-implementation tooling incident recovery
+## 14. Real-device Termux MCP protocol smoke — PASS
+
+On 2026-09-07 KST, the existing validated Termux MCP environment fast-forwarded its local clone to current `main` and imported the merged MCP-06 code successfully:
+
+```text
+MCP-06 CODE PASS
+```
+
+The real MCP protocol call used:
+
+```text
+tool = simcore_candidate_snapshot
+ref = release-simcore
+```
+
+Transport result:
+
+```text
+IS_ERROR = False
+structured output present = YES
+ok = True
+errors = []
+```
+
+The ref resolved to immutable production authority:
+
+```text
+requested_ref = release-simcore
+resolved SHA = ecc55f026315c6482c34d267aba2adb97527cdbc
+immutable = True
+subject = SimCore v0.70.10 Host-Local Telemetry Set Cost Attribution
+parent = 1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17
+parent_count = 1
+```
+
+Candidate file snapshot:
+
+```text
+latest path = plugins/simcore/latest.js
+latest available = True
+latest blob = 53f6959039c57f8673c355fcc1c22b573150e4a7
+install path = plugins/simcore/install.js
+install available = True
+install blob = 53f6959039c57f8673c355fcc1c22b573150e4a7
+latest/install parity = True
+```
+
+Parsed identity on both files:
+
+```text
+userscript_version = 0.70.10
+runtime_version = 0.70.10
+host_version = 0.70.10
+release_name = Host-Local Telemetry Set Cost Attribution
+all parser counts = 1
+converged = True
+latest/install parsed identity match = True
+```
+
+First-parent diff snapshot:
+
+```text
+base_parent = 1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17
+changed_paths = [plugins/simcore/install.js, plugins/simcore/latest.js]
+allowlist = [plugins/simcore/install.js, plugins/simcore/latest.js]
+changed paths bounded = True
+```
+
+Frozen live context reported by MCP-06:
+
+```text
+main_sha = 79e7fc66fe9449271552a20a22d57b9e56abd842
+release_branch = release-simcore
+release_head = ecc55f026315c6482c34d267aba2adb97527cdbc
+candidate_parent = 1f3a96b6a5c5aea83ffca7ad6fe242951fb79d17
+parent_matches_release_head = False
+```
+
+Frozen validation profile context:
+
+```text
+main_sha = 79e7fc66fe9449271552a20a22d57b9e56abd842
+path = products/simcore/releases/validation-profiles/0.70.10.json
+available = True
+blob = 6f0f60d5806d116b6e0224bc7a20732bfae4033b
+schemaVersion = 1
+releaseVersion = 0.70.10
+releaseName = Host-Local Telemetry Set Cost Attribution
+error = None
+```
+
+Check result:
+
+```text
+checks total = 23
+checks PASS = 22
+checks FAIL = 1
+violations = [CANDIDATE_PARENT_MATCHES_CURRENT_PRODUCTION]
+errors = []
+```
+
+The sole failed structural observation is the expected negative control for this smoke target. `release-simcore` points at the already-deployed production commit, so that commit's parent is the prior production commit and cannot equal its own current branch HEAD.
+
+Therefore the expected result is:
+
+```text
+canonical_candidate_shape.pass = False
+canonical_candidate_shape.reasons = [CANDIDATE_PARENT_MATCHES_CURRENT_PRODUCTION]
+```
+
+This does not represent a protocol or snapshot failure. It demonstrates that MCP-06 distinguishes successful immutable snapshotting from canonical new-candidate shape instead of conflating them.
+
+Protocol-smoke verdict:
+
+```text
+MCP transport = PASS
+immutable ref resolution = PASS
+file availability/parity = PASS
+identity parsing/convergence = PASS
+bounded changed-path observation = PASS
+frozen main/profile context = PASS
+expected structural-negative control = PASS
+release authorization = NOT PERFORMED
+production mutation = NONE
+```
+
+## 15. Write-routing anomaly record
 
 Before the safe design/implementation lane was established, an incorrect repository write action created one stray file on `main`:
 
@@ -338,27 +462,34 @@ release-simcore impact = NONE
 
 Additional writes to nonexistent branches returned 404 and produced no mutation.
 
-Classification remains:
+During the 2026-09-07 closeout, one further incorrect `create_file` action targeted branch `nonexistent` and path `docs/SHOULD_NOT_CREATE`. GitHub rejected it with 404 `Branch nonexistent not found`; no repository mutation occurred. Fresh `main` and `release-simcore` were re-read before continuing with the correct branch-creation action.
+
+Classification:
 
 ```text
-TOOLING · FIX · WRITE_ROUTING_ANOMALY · RECOVERED · NO_RUNTIME_IMPACT
+TOOLING · FIX · WRITE_ROUTING_ANOMALY · RECOVERED/REJECTED · NO_RUNTIME_IMPACT
 ```
 
-## 14. Acceptance state
+## 16. Acceptance state before closeout merge
 
 ```text
-DESIGN                     = PASS
-DESIGN PR CI               = PASS
-DESIGN MERGED-MAIN         = PASS
-IMPLEMENTATION             = PASS
-LOCAL TESTS                = PASS 23/23
-REMOTE SOURCE READBACK     = PASS
-IMPLEMENTATION PR CI       = PASS
-IMPLEMENTATION MERGED-MAIN = PASS
-CANONICAL DOCS             = PASS
-PRODUCTION IMMUTABLE       = PASS
-TERMUX MCP PROTOCOL        = PENDING
-OVERALL                     = IMPLEMENTATION QUALIFIED / MCP-06 NOT YET COMPLETE
+DESIGN                         = PASS
+DESIGN PR CI                   = PASS
+DESIGN MERGED-MAIN             = PASS
+IMPLEMENTATION                 = PASS
+LOCAL TESTS                    = PASS 23/23
+REMOTE SOURCE READBACK         = PASS
+IMPLEMENTATION PR CI           = PASS
+IMPLEMENTATION MERGED-MAIN     = PASS
+EVIDENCE PR CI                 = PASS
+EVIDENCE MERGED-MAIN           = PASS
+CANONICAL DOCS                 = PASS
+PRODUCTION IMMUTABLE           = PASS
+TERMUX MCP PROTOCOL            = PASS
+LIVE SNAPSHOT RESULT           = PASS
+EXPECTED NEGATIVE SHAPE CHECK  = PASS
+CLOSEOUT PR / MERGED-MAIN      = PENDING
+OVERALL                         = MCP-06 FUNCTIONALLY COMPLETE · REPOSITORY CLOSEOUT PENDING
 ```
 
-#1740 must remain open until a real MCP protocol call is exercised from the validated Termux environment and the resulting snapshot evidence is preserved.
+#1740 remains open only until this protocol evidence is merged, closeout merged-main CI/canonical documentation health are verified, fresh main shows no auto-revert, and production immutability is rechecked.

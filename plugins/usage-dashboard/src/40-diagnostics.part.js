@@ -139,19 +139,6 @@
     return `DevPass no-AI-training: ${state} · source ${source}`;
   }
 
-
-  function devPassProviderCachePolicyDiagnosticText(account) {
-    const state = ['automatic','client-managed','disabled'].includes(String(account?.providerCachePolicyState || ''))
-      ? String(account.providerCachePolicyState)
-      : 'unknown';
-    const expectedMode = state === 'automatic' ? 'auto' : state === 'client-managed' ? 'passthrough' : state === 'disabled' ? 'off' : 'unknown';
-    const mode = state !== 'unknown' && account?.providerCachePolicyMode === expectedMode ? expectedMode : 'unknown';
-    const source = mode !== 'unknown' && account?.providerCachePolicySource === '/dev-plans/status.providerCacheControlMode'
-      ? '/dev-plans/status.providerCacheControlMode'
-      : 'unavailable';
-    return `DevPass provider cache policy: ${mode} · source ${source}`;
-  }
-
   function modelCategoryCatalogDiagnosticText(diagnostics) {
     const truth = managedRuntimeIdentityTruth(diagnostics);
     if (truth.models.state === 'mismatch') {
@@ -384,7 +371,6 @@
       `Scope authority: DevPass project exact · Credits organization + usedMode credits · model inference 0`,
       `DevPass account tier: service ${diagAccount?.serviceTier || '—'} · routing ${diagAccount?.routingStrategy || '—'} · pending ${diagAccount?.pendingTier || '—'} · personal org ${diagAccount?.hasPersonalOrg === null || diagAccount?.hasPersonalOrg === undefined ? '—' : diagAccount.hasPersonalOrg ? 'yes' : 'no'}`,
       devPassNoAiTrainingDiagnosticText(diagAccount),
-      devPassProviderCachePolicyDiagnosticText(diagAccount),
       `DevPass billing period: plan ${diagAccount && String(diagAccount.plan || '').trim() && String(diagAccount.plan).toLowerCase() !== 'none' ? String(diagAccount.plan) : '—'} · cycle ${typeof diagAccount?.cycle === 'string' && diagAccount.cycle.trim() ? diagAccount.cycle.trim() : '—'} · start ${dashboardDateText(diagAccount?.billingCycleStart, true)} · end ${dashboardDateText(diagAccount?.expiresAt, true)} · cancelled ${typeof diagAccount?.cancelled === 'boolean' ? (diagAccount.cancelled ? 'yes' : 'no') : 'unknown'}`,
       premiumAllowanceDiagnosticText(d.weekly),
       paygAccountDiagnosticText(diagAccount),

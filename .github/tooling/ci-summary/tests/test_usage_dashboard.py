@@ -4,7 +4,6 @@ import importlib.util
 import json
 import tempfile
 import unittest
-from argparse import Namespace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,17 +61,17 @@ class UsageDashboardAdapterTests(unittest.TestCase):
         self.assertEqual(summary["scope"]["profile"], "EXACT_SHA_VALIDATION")
 
     def test_phase_failure_uses_running_phase(self):
-        raw = receipt(["PASS", "PASS", "PASS", "RUNNING", "NOT_RUN", "NOT_RUN", "NOT_RUN"])
+        raw = receipt(["PASS", "PASS", "RUNNING", "NOT_RUN", "NOT_RUN", "NOT_RUN", "NOT_RUN"])
         summary = adapt(raw, validation_outcome="failure")
         self.assertEqual(summary["result"], "FAIL")
-        self.assertEqual(summary["counts"]["passed"], 3)
+        self.assertEqual(summary["counts"]["passed"], 2)
         self.assertEqual(summary["firstFailure"]["phase"], "reconciliation")
         self.assertEqual(summary["reasonCodes"], ["USAGE_DASHBOARD_RECONCILIATION_FAILED"])
         self.assertIn({"name": "reconciliation", "result": "FAIL"}, summary["checks"])
         self.assertIn({"name": "full_test_suite", "result": "SKIPPED"}, summary["checks"])
 
     def test_phase_cancellation_is_distinct(self):
-        raw = receipt(["PASS", "RUNNING", "NOT_RUN", "NOT_RUN", "NOT_RUN", "NOT_RUN", "NOT_RUN"])
+        raw = receipt(["PASS", "PASS", "PASS", "RUNNING", "NOT_RUN", "NOT_RUN", "NOT_RUN"])
         summary = adapt(raw, validation_outcome="cancelled")
         self.assertEqual(summary["result"], "CANCELLED")
         self.assertEqual(summary["firstFailure"]["phase"], "syntax_checks")

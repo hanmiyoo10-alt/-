@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "releaseVersion": "0.70.11",
+  "releaseName": "Operator Release Card Metadata Repair",
+  "contracts": {
+    "reload-cache-continuity": {
+      "mode": "INHERIT_BEHAVIOR",
+      "authorityVersion": "0.69.2"
+    },
+    "operator-release-card": {
+      "mode": "CHANGED_CONTRACT",
+      "authorityVersion": "0.70.11"
+    },
+    "host-local-telemetry": {
+      "mode": "EXACT_CURRENT_IDENTITY",
+      "authorityVersion": "0.70.11",
+      "rejectVersions": [
+        "0.70.10"
+      ]
+    },
+    "bounded-telemetry-capsule": {
+      "mode": "INHERIT_BEHAVIOR",
+      "authorityVersion": "0.69.2"
+    }
+  }
+}

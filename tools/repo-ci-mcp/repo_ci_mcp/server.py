@@ -9,7 +9,7 @@ from .github_reader import GitHubReader
 from .summary import repo_ci_summary as build_repo_ci_summary
 
 mcp = MCPServer(
-    "Repository Read MCP",
+    "Repository CI MCP",
     instructions=(
         "Read-only bounded repository retrieval. This server exposes compact CI summaries and canonical-main "
         "status composition from explicit GitHub authorities only. It never mutates GitHub, workflows, products, "

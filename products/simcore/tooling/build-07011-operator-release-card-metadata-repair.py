@@ -33,7 +33,7 @@ CARD = r'''  const OPERATOR_RELEASE_CARD = Object.freeze({
     ]),
     checks: Object.freeze([
       '업데이트 카드에서 Version 0.70.11 · Operator Release Card Metadata Repair · 현재 scenario/validation을 확인',
-      '카드에 v0.69 State Reconcile / Kernel Inversion 검증 지시가 남아 있지 않은지 확인',
+      '카드에 과거 v0.69 릴리스 검증 지시가 남아 있지 않은지 확인',
       '기존 장기챗에서 자연 ordinary turn 1회를 수행하고 Last Turn Diagnostic의 request/output/binding/mirror/hook 안정성을 확인',
       '새 storage/network/timer/schema 동작이 없고 별도 visible internal: output-hygiene FIX를 이번 릴리스가 해결했다고 주장하지 않는지 확인',
       '이상 징후가 있으면 다음 acceptance로 진행하지 말고 현재 증거를 보존한 뒤 WATCH / DEFER / FIX / BLOCKER로 분류',

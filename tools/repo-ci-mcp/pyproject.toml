@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "repo-ci-mcp"
+version = "0.1.0"
+description = "Read-only MCP server for repository CI compact summaries"
+requires-python = ">=3.10"
+dependencies = [
+  "mcp>=2,<3",
+]
+
+[project.scripts]
+repo-ci-mcp = "repo_ci_mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["repo_ci_mcp*"]

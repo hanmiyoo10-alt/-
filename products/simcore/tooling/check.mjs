@@ -51,7 +51,7 @@ function hasCandidateRequest(scope) {
 }
 
 function plannedGates(profile, scope) {
-  const ids = ['GATE_CI_SELF','GATE_PR1_DRY','GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_STATE','GATE_COORDINATION','GATE_LEGACY_COMPAT'];
+  const ids = ['GATE_CI_SELF','GATE_MCP_TOOLING','GATE_PR1_DRY','GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_STATE','GATE_COORDINATION','GATE_LEGACY_COMPAT'];
   const plan = Object.fromEntries(ids.map((id) => [id, false]));
   if (['MAIN_HEALTH','CANDIDATE_SHADOW','CANDIDATE_REQUIRED'].includes(profile)) {
     for (const id of ['GATE_STATIC','GATE_ARCH','GATE_REGRESSION','GATE_STATE','GATE_COORDINATION','GATE_LEGACY_COMPAT']) plan[id] = true;
@@ -61,6 +61,7 @@ function plannedGates(profile, scope) {
   const labels = new Set(scope.labels || []);
   if (labels.has('CI_SELF')) for (const id of ['GATE_CI_SELF','GATE_STATIC','GATE_ARCH','GATE_REGRESSION']) plan[id] = true;
   if (labels.has('HARNESS')) for (const id of ['GATE_CI_SELF','GATE_STATIC','GATE_ARCH','GATE_REGRESSION']) plan[id] = true;
+  if (labels.has('MCP_TOOLING')) plan.GATE_MCP_TOOLING = true;
   if (labels.has('ARCH_CONTRACT')) for (const id of ['GATE_STATIC','GATE_ARCH','GATE_REGRESSION']) plan[id] = true;
   if (labels.has('STATE_SYNC')) for (const id of ['GATE_STATIC','GATE_STATE']) plan[id] = true;
   if (labels.has('SHARED_MAIN_COORDINATION')) for (const id of ['GATE_STATIC','GATE_COORDINATION']) plan[id] = true;
@@ -100,6 +101,27 @@ function pr1DryCheck(args, productionCommit) {
   ], 360000);
 }
 
+function phaseResult(phase, result, statusOverride = undefined) {
+  const detail = [result.stderr, result.stdout].filter(Boolean).join('\n');
+  return {
+    ...result,
+    status: statusOverride === undefined ? result.status : statusOverride,
+    stderr: bounded(`phase=${phase}${detail ? `\n${detail}` : ''}`),
+  };
+}
+
+function mcpToolingCheck() {
+  const install = run('python3', ['-m','pip','install','--disable-pip-version-check','-e','tools/simcore-mcp'], 240000);
+  if (install.status !== 0 || install.error || install.signal) {
+    const status = !install.error && !install.signal && install.status === 1 ? 2 : install.status;
+    return phaseResult('install', install, status);
+  }
+  const compile = run('python3', ['-m','compileall','-q','tools/simcore-mcp/simcore_mcp','tools/simcore-mcp/tests'], 120000);
+  if (compile.status !== 0 || compile.error || compile.signal) return phaseResult('compile', compile);
+  const tests = run('python3', ['-m','unittest','discover','-s','tools/simcore-mcp/tests','-p','test_*.py','-v'], 240000);
+  return phaseResult('unit_tests', tests);
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.profile === 'CANDIDATE_REQUIRED' && !CANDIDATE_REQUIRED_AUTHORITIES.has(args['candidate-required-authority'])) {
@@ -125,8 +147,17 @@ function main() {
   };
 
   if (plan.GATE_CI_SELF) {
-    const r = run(process.execPath, ['products/simcore/tooling/ci/self-test.mjs'], 120000);
-    setGate('GATE_CI_SELF', resultClass(r, 'CI_SELF_TEST_FAIL', 'CI_SELF_TEST_ERROR'), r);
+    const primary = run(process.execPath, ['products/simcore/tooling/ci/self-test.mjs'], 120000);
+    if (primary.status !== 0 || primary.error || primary.signal) {
+      setGate('GATE_CI_SELF', resultClass(primary, 'CI_SELF_TEST_FAIL', 'CI_SELF_TEST_ERROR'), primary);
+    } else {
+      const mcpCoverage = run(process.execPath, ['products/simcore/tooling/ci/mcp-tooling-self-test.mjs'], 60000);
+      setGate('GATE_CI_SELF', resultClass(mcpCoverage, 'CI_SELF_TEST_FAIL', 'CI_SELF_TEST_ERROR'), mcpCoverage);
+    }
+  }
+  if (plan.GATE_MCP_TOOLING) {
+    const r = mcpToolingCheck();
+    setGate('GATE_MCP_TOOLING', resultClass(r, 'MCP_TOOLING_TEST_FAIL', 'MCP_TOOLING_GATE_ERROR'), r);
   }
   if (plan.GATE_PR1_DRY) {
     const r = pr1DryCheck(args, identity.resolvedCommit);

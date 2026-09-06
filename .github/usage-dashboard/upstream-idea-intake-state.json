@@ -43,11 +43,11 @@
     },
     {
       "id": "V-CACHE-POLICY-MODE",
-      "status": "captured-needs-source-authority"
+      "status": "source-proven-design-5.102"
     },
     {
       "id": "V-DEVPASS-NO-TRAINING-STATUS",
-      "status": "source-proven-design-5.101"
+      "status": "implemented-5.101"
     }
   ]
 }

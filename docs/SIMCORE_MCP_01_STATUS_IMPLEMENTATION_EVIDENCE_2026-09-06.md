@@ -103,7 +103,12 @@ Merged main `be45188260cee1bf9033a80ede9dca22c56fb832`:
 
 - SimCore CI run #8160: PASS.
 
-This satisfies repository-health validation for the installed tooling files.
+Implementation-evidence merge `b045229b69664a34a898b52ccc00b315f5c42759`:
+
+- SimCore CI run #8164: PASS.
+- main remained on the evidence merge after post-merge health; no automatic revert was observed.
+
+This satisfies repository-health validation for the installed tooling files and the evidence lane.
 
 ## 6. Production non-mutation proof
 
@@ -118,23 +123,107 @@ latest == install    = YES
 
 The deployed SimCore runtime remains v0.70.10. MCP-01 did not touch production.
 
-## 7. Remaining validation
+## 7. Termux live protocol smoke
 
-`MCP SDK in-memory / real-host invocation = NOT_EXERCISED`
+A real Termux aarch64 Android environment was used for the MCP SDK and protocol-layer closeout.
 
-Reason:
+Observed environment:
 
-The execution environment used for this implementation does not have the MCP Python SDK installed, and external package installation from that environment is unavailable. Therefore it would be incorrect to claim a successful protocol-layer invocation.
+```text
+Python 3.14.6
+pip 26.2.1
+rustc 1.98.1
+cargo 1.98.1
+clang 21.1.8
+mcp 2.1.1
+pydantic-core 2.46.5
+```
 
-This is not a code or repository CI failure. The pure status layer is validated and installed; the protocol-layer smoke remains an explicit pending gate.
+### 7.1 Termux dependency compatibility
 
-Required closeout:
+Plain `python -m pip install -e .` initially fell back to source builds for Rust-backed dependencies because Android wheels were unavailable for the active CPython / ABI target.
 
-1. install `mcp>=2,<3` in an environment with package access;
-2. run an in-memory `Client(mcp)` call or connect through an MCP host;
-3. call `simcore_status`;
-4. confirm structured content and expected live authority values;
-5. record evidence on #1680 and close MCP-01 only then.
+Observed first failures:
+
+- `rpds-py` source build attempted a temporary rustup bootstrap and failed for `aarch64-unknown-linux-android`;
+- after using Termux-native `python-rpds-py`, the next source-build gate was `pydantic-core`.
+
+The validated Termux path was:
+
+```bash
+pkg install python-pip python-rpds-py python-cryptography rust clang make pkg-config -y
+python -m pip install maturin
+python -m pip install -e .
+```
+
+Termux-native Rust then built Android wheels successfully for:
+
+- `maturin 1.15.0`;
+- `pydantic-core 2.46.5`.
+
+Import checks passed:
+
+```text
+PYDANTIC CORE PASS: 2.46.5
+MCP-01 IMPORT PASS: MCPServer
+```
+
+Tracking for this compatibility finding: #1687.
+
+### 7.2 In-memory MCP protocol invocation
+
+The official SDK in-memory client path was exercised against the installed MCP server:
+
+```python
+import anyio
+from mcp import Client
+from simcore_mcp.server import mcp
+
+async def main():
+    async with Client(mcp, raise_exceptions=True) as client:
+        result = await client.call_tool("simcore_status", {})
+        print(result.is_error)
+        print(result.structured_content)
+
+anyio.run(main)
+```
+
+Observed result:
+
+```text
+IS_ERROR: False
+```
+
+`structured_content` returned all intended top-level groups:
+
+- `ok`
+- `repository`
+- `main`
+- `release`
+- `production`
+- `parity`
+- `validation`
+- `tracking`
+- `drift`
+- `errors`
+
+The live snapshot reported:
+
+```text
+ok                 = True
+repository         = hanmiyoo10-alt/-
+main               = b045229b69664a34a898b52ccc00b315f5c42759
+release-simcore    = ecc55f026315c6482c34d267aba2adb97527cdbc
+production         = 0.70.10 · Host-Local Telemetry Set Cost Attribution
+latest blob        = 53f6959039c57f8673c355fcc1c22b573150e4a7
+install blob       = 53f6959039c57f8673c355fcc1c22b573150e4a7
+parity identical   = True
+validation         = PENDING_REAL_LONG_CHAT
+drift              = []
+errors             = []
+```
+
+This proves the MCP protocol layer, registered tool dispatch, GitHub read path, structured response contract, production identity read, parity calculation, tracking aggregation, and healthy no-drift result on a real package-installed host.
 
 ## 8. Current verdict
 
@@ -145,6 +234,9 @@ LOCAL STATUS TESTS    = PASS (8/8)
 PR CI                 = PASS
 MERGED MAIN HEALTH    = PASS
 PRODUCTION IMMUTABLE  = PASS
-MCP PROTOCOL SMOKE    = NOT_EXERCISED
-OVERALL                = IMPLEMENTED / LIVE MCP VALIDATION PENDING
+TERMUX SDK INSTALL    = PASS
+MCP SERVER IMPORT     = PASS
+MCP PROTOCOL SMOKE    = PASS
+LIVE STATUS RESULT    = PASS (ok=True, drift=[], errors=[])
+OVERALL                = MCP-01 ACCEPTANCE COMPLETE
 ```

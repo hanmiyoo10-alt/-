@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.70.9
+//@version 0.70.10
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -30,6 +30,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.70.10 Host-Local Telemetry Set Cost Attribution:
+// - Splits the already-awaited Host-local telemetry checkpoint total into Host-store acquire/reuse-resolution and actual setItem timing without adding Host I/O
+// - Preserves hostElapsedMs as the enclosing total and reuses the existing serialized capsule character count for pure set ms/1K attribution
+// - Adds one bounded Telemetry host cost diagnostic line with residual/confidence accounting and exact RISUAI_LOCAL_PLUGIN_STORAGE_SET_ITEM ownership
+// - Keeps OUTPUT_COMMIT awaited, MEMORY -> SESSION -> HOST_LOCAL ordering, mailbox semantics, persistent schemas, retry/polling/timer/network behavior and provider-cache policy unchanged
 //
 // v0.70.9 Inline Planning Marker Hygiene Guard:
 // - Removes only the reserved standalone INLINE_INTERNAL_MEMO_V1 planning-control line outside Markdown fenced code before output envelope canonicalization
@@ -765,7 +771,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.70.9';
+const SIMCORE_RUNTIME_VERSION = '0.70.10';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -6638,7 +6644,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.70.9';
+const HOST_COMPAT_VERSION = '0.70.10';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -6774,7 +6780,7 @@ function publish(root, windowLike, capsule) {
   if (!capsule) return false;
   const prepared = capsule?.__simcorePreparedSerialized || serializeCapsule(capsule);
   const base = publishPrepared(root, windowLike, capsule, prepared);
-  lastWriteProbe = Object.freeze({ ...base, hostLocal: 'UNOBSERVED', hostElapsedMs: 0, retainedBodies: false });
+  lastWriteProbe = Object.freeze({ ...base, hostLocal: 'UNOBSERVED', hostElapsedMs: 0, hostAcquireMs: 0, hostSetMs: 0, retainedBodies: false });
   return base.memory === 'WRITTEN' || base.session === 'WRITTEN';
 }
 
@@ -6816,18 +6822,24 @@ async function publishWithHostLocal(root, windowLike, hostApi, capsule) {
   const base = publishPrepared(root, windowLike, capsule, prepared);
   let hostLocal = 'UNAVAILABLE';
   let hostElapsedMs = 0;
+  let hostAcquireMs = 0;
+  let hostSetMs = 0;
   if (base.session === 'WRITTEN') {
     hostLocal = 'NOT_NEEDED';
   } else if (prepared.status === 'OVERSIZE') {
     hostLocal = 'OVERSIZE';
   } else if (prepared.status === 'OK') {
     const startedAt = Date.now();
+    const acquireStartedAt = Date.now();
     const acquired = await getHostLocalTelemetryStoreOnce(hostApi);
+    hostAcquireMs = Math.max(0, Date.now() - acquireStartedAt);
     if (acquired.status === 'USABLE') {
+      const setStartedAt = Date.now();
       try {
         await acquired.store.setItem(HOST_LOCAL_KEY, prepared.encoded);
         hostLocal = 'WRITTEN';
       } catch (_) { hostLocal = 'FAILED'; }
+      finally { hostSetMs = Math.max(0, Date.now() - setStartedAt); }
     } else {
       hostLocal = 'UNAVAILABLE';
     }
@@ -6837,6 +6849,8 @@ async function publishWithHostLocal(root, windowLike, hostApi, capsule) {
     ...base,
     hostLocal,
     hostElapsedMs,
+    hostAcquireMs,
+    hostSetMs,
     host: lastHostProbe,
     retainedBodies: false,
   });
@@ -8030,6 +8044,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
         surface: write?.surface || runtimeTelemetryRules.diagnostics().surface || null,
         hostLocal: write?.hostLocal || 'UNAVAILABLE',
         hostElapsedMs: Number(write?.hostElapsedMs || 0),
+        hostAcquireMs: Number(write?.hostAcquireMs || 0),
+        hostSetMs: Number(write?.hostSetMs || 0),
         host: runtimeTelemetryRules.diagnostics().host || null,
         serialization: write?.serialization || 'UNKNOWN',
         serializedChars: Number(write?.serializedChars || 0),
@@ -9016,6 +9032,30 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
     return ms >= 1000 ? `${(ms / 1000).toFixed(3)} s` : `${ms.toFixed(1)} ms`;
   }
 
+  function diagnosticTelemetryHostCost(probe) {
+    if (!probe) return 'n/a';
+    const chars = Number(probe.serializedChars);
+    const acquireMs = Number(probe.hostAcquireMs);
+    const setMs = Number(probe.hostSetMs);
+    const totalMs = Number(probe.hostElapsedMs);
+    const validAcquire = Number.isFinite(acquireMs) && acquireMs >= 0;
+    const validSet = Number.isFinite(setMs) && setMs >= 0;
+    const validTotal = Number.isFinite(totalMs) && totalMs >= 0;
+    const sumMs = validAcquire && validSet ? acquireMs + setMs : null;
+    const residualMs = validTotal && sumMs != null ? Math.max(0, totalMs - sumMs) : null;
+    const confidence = validTotal && sumMs != null && totalMs >= sumMs ? 'EXACT' : 'BOUNDED';
+    const realSetAttempt = probe.hostLocal === 'WRITTEN' || probe.hostLocal === 'FAILED';
+    const setMsPer1kChars = realSetAttempt
+      && Number.isFinite(chars) && chars > 0
+      && validSet
+      ? setMs / (chars / 1000)
+      : null;
+    const charsLabel = Number.isInteger(chars) && chars > 0
+      ? `${chars.toLocaleString('en-US')} chars`
+      : 'n/a';
+    return `${charsLabel} · acquire ${validAcquire ? diagnosticFormatMs(acquireMs) : 'n/a'} · set ${validSet ? diagnosticFormatMs(setMs) : 'n/a'} · total ${validTotal ? diagnosticFormatMs(totalMs) : 'n/a'} · residual ${residualMs == null ? 'n/a' : diagnosticFormatMs(residualMs)} · ${setMsPer1kChars == null ? 'n/a' : `${setMsPer1kChars.toFixed(2)} ms/1K chars`} · API RISUAI_LOCAL_PLUGIN_STORAGE_SET_ITEM · confidence ${confidence}`;
+  }
+
   function diagnosticRequestBreakdown(probe, perf) {
     if (!probe || !perf) return null;
     const n = (v) => Math.max(0, Number(v) || 0);
@@ -9296,6 +9336,7 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
       `Session surface: ${lastTelemetryCheckpointProbe?.surface ? `WINDOW ${lastTelemetryCheckpointProbe.surface.window || 'UNOBSERVED'} · GLOBAL_THIS ${lastTelemetryCheckpointProbe.surface.globalThis || 'UNOBSERVED'} · relation ${lastTelemetryCheckpointProbe.surface.relation || 'NONE'}` : 'n/a'}`,
       `Host-local transport: ${lastTelemetryCheckpointProbe?.host ? `API ${lastTelemetryCheckpointProbe.host.api || 'UNOBSERVED'} · store ${lastTelemetryCheckpointProbe.host.store || 'UNOBSERVED'} · clear ${lastTelemetryCheckpointProbe.host.clear || 'UNKNOWN'} · boot ${lastTelemetryCheckpointProbe.host.boot || 'UNOBSERVED'}` : 'n/a'}`,
       `Telemetry checkpoint: ${lastTelemetryCheckpointProbe ? `MEMORY ${lastTelemetryCheckpointProbe.memory || 'UNAVAILABLE'} · SESSION ${lastTelemetryCheckpointProbe.session || 'UNAVAILABLE'}${lastTelemetryCheckpointProbe.session === 'WRITTEN' ? ` via ${lastTelemetryCheckpointProbe.sessionRoot || 'NONE'}` : (lastTelemetryCheckpointProbe.sessionRoot && lastTelemetryCheckpointProbe.sessionRoot !== 'NONE' ? ` · root ${lastTelemetryCheckpointProbe.sessionRoot}` : '')}${lastTelemetryCheckpointProbe.fallbackFrom ? ` · fallback ${lastTelemetryCheckpointProbe.fallbackFrom}` : ''}${lastTelemetryCheckpointProbe.attempted && lastTelemetryCheckpointProbe.session === 'FAILED' ? ` · attempted ${lastTelemetryCheckpointProbe.attempted}` : ''} · HOST_LOCAL ${lastTelemetryCheckpointProbe.hostLocal || 'UNAVAILABLE'}${lastTelemetryCheckpointProbe.serialization && lastTelemetryCheckpointProbe.serialization !== 'OK' ? ` · serialization ${lastTelemetryCheckpointProbe.serialization}` : ''} · ${Number(lastTelemetryCheckpointProbe.serializedChars || 0)} chars${lastTelemetryCheckpointProbe.hostElapsedMs > 0 ? ` · host ${diagnosticFormatMs(lastTelemetryCheckpointProbe.hostElapsedMs)}` : ''} · ${diagnosticFormatMs(lastTelemetryCheckpointProbe.elapsedMs)} total · trigger ${lastTelemetryCheckpointProbe.trigger || 'UNKNOWN'}` : 'n/a'}`,
+      `Telemetry host cost: ${diagnosticTelemetryHostCost(lastTelemetryCheckpointProbe)}`,
       `Post-onSend attribution: ${requestBreakdown ? `named ${requestBreakdown.postOnSendNamedMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.postOnSendNamedMs)} · history ${requestBreakdown.postOnSendHistoryStabilizationMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.postOnSendHistoryStabilizationMs)} · prompt ${requestBreakdown.postOnSendPromptAccountingMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.postOnSendPromptAccountingMs)} · topology ${diagnosticFormatMs(requestBreakdown.cacheTopologyMs)} · candidate ${requestBreakdown.postOnSendCacheCandidateMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.postOnSendCacheCandidateMs)} · unattributed ${requestBreakdown.postOnSendUnattributedMs == null ? 'n/a' : diagnosticFormatMs(requestBreakdown.postOnSendUnattributedMs)} · first-request ${requestBreakdown.sessionPath || 'n/a'} · confidence ${requestBreakdown.postOnSendAttributionConfidence || 'UNRESOLVED'}${requestBreakdown.postOnSendAttributionCheckpointFailure ? ' · checkpoint FAIL_CLOSED' : ''}` : 'n/a'}`,
       `Cache topology cost: ${requestBreakdown ? diagnosticFormatMs(requestBreakdown.cacheTopologyMs) : 'n/a'} · candidate ${lastCacheCandidateCostMs == null ? 'n/a' : diagnosticFormatMs(lastCacheCandidateCostMs)} · provider cache UNVERIFIED`,
       `Runtime prompt: ${probeFresh && budget ? `${Number(budget.chars || 0)} chars / ${Number(budget.lines || 0)} lines` : 'n/a'}`,
@@ -9512,8 +9553,8 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.70.9',
-    name: 'Inline Planning Marker Hygiene Guard',
+    version: '0.70.10',
+    name: 'Host-Local Telemetry Set Cost Attribution',
     scenario: '06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT',
     summary: Object.freeze([
       'Kernel의 portable-state 조립/정규화 composition을 State Reconcile Domain owner로 기계적으로 이동',

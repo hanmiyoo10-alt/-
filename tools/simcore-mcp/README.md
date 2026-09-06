@@ -7,8 +7,9 @@ Available tools:
 - MCP-01: `simcore_status`
 - MCP-02: `simcore_verify_production_identity`
 - MCP-03: `simcore_check_docs_drift`
+- MCP-04: `simcore_release_preflight`
 
-`simcore_status` provides the broad operational snapshot. `simcore_verify_production_identity` is a focused hard-invariant verifier for manifest, release-head, deployed-blob, parity, and userscript-version identity. `simcore_check_docs_drift` verifies that current documentation authority remains synchronized with manifest-owned machine state without judging historical prose.
+`simcore_status` provides the broad operational snapshot. `simcore_verify_production_identity` is a focused hard-invariant verifier for manifest, release-head, deployed-blob, parity, and userscript-version identity. `simcore_check_docs_drift` verifies that current documentation authority remains synchronized with manifest-owned machine state without judging historical prose. `simcore_release_preflight` composes MCP-02 and MCP-03 with exact target validation-profile checks to provide a conservative read-only advisory preflight.
 
 ## What it reads
 
@@ -16,6 +17,7 @@ Available tools:
 - the manifest-declared development-memory document
 - the manifest-declared release branch head
 - deployed production files declared by the manifest
+- exact target validation profiles under `products/simcore/releases/validation-profiles/` (`simcore_release_preflight` only)
 - open GitHub issues for explicit FIX / WATCH / BLOCKER / DEFER tracking (`simcore_status` only)
 
 It does not contain GitHub write methods.
@@ -50,6 +52,26 @@ It verifies:
 - the active human section contains no explicit `v0.x.y` runtime version, 40-hex identity, or exact manifest current-priority literal
 
 Historical ledgers are intentionally outside the active-human identity check, so preserved old version/SHA evidence does not trigger drift. MCP-03 does not auto-repair documentation or infer arbitrary semantic prose freshness.
+
+## MCP-04 release preflight
+
+`simcore_release_preflight(version)` accepts an exact numeric `X.Y.Z` target version and returns deterministic `ready`, ordered `checks`, hard `violations`, bounded `errors`, and component reports.
+
+It composes the existing MCP-02 and MCP-03 verifier functions and additionally verifies:
+
+- the target version is exact and strictly newer than the currently declared production version
+- an exact validation profile exists at `products/simcore/releases/validation-profiles/<version>.json`
+- profile schema/version/name/contracts are structurally valid
+- all R2.10 required contracts are present
+- each contract uses an explicit supported validation mode
+- inherited authorities name predecessor versions rather than self-reference
+- exact-current/changed-contract authorities bind to the target version
+- `CURRENT_IDENTITY_INHERIT_BEHAVIOR` declares `authorityIdentity.releaseName`
+- optional `rejectVersions` entries are exact, unique, and never reject the target itself
+
+The Python validation-profile projection mirrors the bounded rules currently enforced by SimCore's canonical JavaScript release tooling; it does not replace that release authority.
+
+`ready: true` means only that the read-only authorities inspected by MCP-04 are coherent. It does **not** authorize, stage, materialize, approve, or deploy a release, and it does not decide HUMAN_EVIDENCE.
 
 ## Requirements
 
@@ -122,6 +144,17 @@ For MCP-03:
 result = await client.call_tool("simcore_check_docs_drift", {})
 ```
 
+For MCP-04:
+
+```python
+result = await client.call_tool(
+    "simcore_release_preflight",
+    {"version": "0.70.11"},
+)
+```
+
+Judge the target version against fresh repository authority at execution time. A structurally successful MCP call may correctly return `ready: false` when the supplied target is no longer newer than production or another preflight invariant fails.
+
 Termux should use `$TMPDIR` or a writable home path for temporary smoke scripts rather than assuming `/tmp` is writable.
 
 ## Run over stdio
@@ -151,7 +184,7 @@ python -m simcore_mcp.server
 
 `GITHUB_TOKEN` is accepted as a fallback token. Tokens are never returned by MCP tools.
 
-MCP-02 uses the release branch declared by `product-manifest.json` as the identity authority it verifies; it does not silently replace an invalid manifest branch with a configured fallback. MCP-03 reads the development-memory path declared by the same manifest and never substitutes a guessed documentation path when that field is invalid.
+MCP-02 uses the release branch declared by `product-manifest.json` as the identity authority it verifies; it does not silently replace an invalid manifest branch with a configured fallback. MCP-03 reads the development-memory path declared by the same manifest and never substitutes a guessed documentation path when that field is invalid. MCP-04 derives its validation-profile path only from a validated exact target version and does not fuzzy-match candidate profiles.
 
 ## Tests
 
@@ -160,8 +193,8 @@ cd tools/simcore-mcp
 python -m unittest discover -s tests -v
 ```
 
-The status, production-identity, and documentation-drift verifier logic is intentionally independent from the MCP SDK, so authority and fail-close behavior can be tested without starting an MCP transport.
+The status, production-identity, documentation-drift, and release-preflight verifier logic is intentionally independent from the MCP SDK, so authority and fail-close behavior can be tested without starting an MCP transport.
 
 ## Safety boundary
 
-All current SimCore MCP tools are read-only. They cannot deploy, edit branches, update manifests or documentation, create or close issues, merge PRs, execute workflows, or execute HUMAN_EVIDENCE decisions.
+All current SimCore MCP tools are read-only. They cannot deploy, edit branches, update manifests or documentation, create or close issues, merge PRs, execute workflows, materialize release candidates, or execute HUMAN_EVIDENCE decisions.

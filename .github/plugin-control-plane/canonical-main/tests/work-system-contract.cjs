@@ -60,6 +60,27 @@ assert.ok(policy.packetStates.includes('DONE'));
 assert.equal(policy.closureTaxonomy.roles.closure.includes('DONE'), true);
 assert.equal(policy.closureTaxonomy.roles.proof.includes('DONE'), false);
 
+assert.equal(policy.executionCompactness.version, 1);
+assert.equal(policy.executionCompactness.skillPath, '.agents/skills/agent-execution-compactness/SKILL.md');
+assert.deepEqual(policy.executionCompactness.routes, [
+  'EXISTING_COMMAND',
+  'HARNESS',
+  'INLINE_SMALL',
+  'MATERIALIZE',
+  'EXCEPTION',
+]);
+assert.deepEqual(policy.executionCompactness.inlineSmallGuardrails, {
+  approxLogicalLinesMax: 20,
+  approxSourceBytesMax: 2048,
+  generatedSourceTestProgramFilesMax: 1,
+});
+assert.equal(policy.executionCompactness.crossingGuardrailDefaultRoute, 'MATERIALIZE');
+assert.equal(policy.executionCompactness.exceptionRequiresReason, true);
+assert.equal(policy.executionCompactness.quotingDoesNotReclassifyLargePayload, true);
+assert.equal(policy.executionCompactness.preserveRequiredValidation, true);
+assert.equal(policy.executionCompactness.hostUiSuppressionClaim, false);
+assert.ok(policy.packetRequiredFields.includes('executionCompactness'));
+
 assert.deepEqual(policy.queueProjection.liveHealthAuthorities, ['direct-main', 'issue-485']);
 assert.equal(policy.queueProjection.liveHealthMode, 'pointer-only');
 assert.equal(policy.queueProjection.duplicateLiveMainSha, false);
@@ -110,7 +131,7 @@ for (const marker of Object.values(policy.markers)) {
 for (const issue of Object.values(policy.surfaces)) {
   assert.ok(readme.includes(`#${issue}`));
 }
-for (const field of ['Primary goal', 'Source', 'Classification', 'Read first', 'Bounded write scope', 'Dependencies / blockers', 'Expected outputs', 'Acceptance', 'Proof / closure', 'Stop condition', 'Handoff']) {
+for (const field of ['Primary goal', 'Source', 'Classification', 'Read first', 'Execution compactness', 'Bounded write scope', 'Dependencies / blockers', 'Expected outputs', 'Acceptance', 'Proof / closure', 'Stop condition', 'Handoff']) {
   assert.ok(template.includes(field));
 }
 assert.ok(readme.includes('one active implementation owner'));
@@ -122,6 +143,28 @@ assert.match(readme, /`LIVE HEALTH: direct main \+ #485` is the only current-hea
 assert.match(readme, /MUST NOT duplicate a current `main` SHA, Required state\/run, production identity state, or native-protection state as live truth/);
 assert.match(readme, /explicitly historical synchronization\/packet evidence/);
 assert.match(readme, /read direct current `main` and #485 rather than refreshing #465 merely to copy time-sensitive evidence/);
+assert.match(readme, /## Execution compactness contract/);
+assert.match(readme, /\.agents\/skills\/agent-execution-compactness\/SKILL\.md/);
+for (const route of policy.executionCompactness.routes) {
+  assert.ok(readme.includes(`\`${route}\``));
+  assert.ok(template.includes(route));
+}
+assert.match(readme, /at most 20 logical execution\/program lines/);
+assert.match(readme, /at most 2 KiB of directly supplied source\/program text/);
+assert.match(readme, /at most one generated source\/test\/program file/);
+assert.match(readme, /Crossing any normal guardrail routes to `MATERIALIZE`/);
+assert.match(readme, /Quoting, escaping, shell indirection, or heredoc wrapping does not turn a large directly supplied program into `INLINE_SMALL`/);
+assert.match(readme, /`EXCEPTION` without an explicit reason is invalid/);
+assert.match(readme, /does not claim it can hide, merge, or suppress ChatGPT host UI\/activity cards/);
+assert.match(readme, /before non-trivial shell, heredoc, inline Python, temporary source\/test, or similar local execution, read\/apply `\.agents\/skills\/agent-execution-compactness\/SKILL\.md`/);
+assert.match(template, /## Execution compactness/);
+assert.match(template, /Route: `<EXISTING_COMMAND\|HARNESS\|INLINE_SMALL\|MATERIALIZE\|EXCEPTION>`/);
+assert.match(template, /Command\/file surface:/);
+assert.match(template, /Validation preserved:/);
+assert.match(template, /Guardrail accounting:/);
+assert.match(template, /Exception reason:/);
+assert.match(template, /Quoting, escaping, or heredoc wrapping does not reclassify a large payload as small/);
+assert.match(template, /`EXCEPTION` always requires a concrete reason/);
 assert.match(readme, /## Proof \/ closure taxonomy/);
 for (const term of policy.closureTaxonomy.terms) {
   assert.ok(readme.includes(`\`${term}\``));

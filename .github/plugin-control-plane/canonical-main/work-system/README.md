@@ -79,18 +79,45 @@ A work packet is the smallest independently executable canonical-main work unit.
 3. source idea or decision;
 4. classification;
 5. exact authority inputs to read first;
-6. bounded write scope;
-7. dependencies and blockers;
-8. expected outputs;
-9. validation and acceptance criteria;
-10. stop condition;
-11. handoff summary and evidence.
+6. execution compactness plan;
+7. bounded write scope;
+8. dependencies and blockers;
+9. expected outputs;
+10. validation and acceptance criteria;
+11. stop condition;
+12. handoff summary and evidence.
 
 Packet lifecycle:
 
 `READY → CLAIMED → IN_PROGRESS → REVIEW → DONE`
 
 Alternate states: `BLOCKED / CANCELLED / SUPERSEDED`.
+
+## Execution compactness contract
+
+Canonical-main packets make the existing repository-wide compact execution policy explicit at the packet boundary. This does not create a new compactness owner. `RCR-D14` remains the repository default and `.agents/skills/agent-execution-compactness/SKILL.md` owns the routing procedure and guardrail semantics.
+
+Before constructing a non-trivial shell, heredoc, inline Python, temporary source/test, or similar local execution payload, the packet must select one existing route:
+
+- `EXISTING_COMMAND`
+- `HARNESS`
+- `INLINE_SMALL`
+- `MATERIALIZE`
+- `EXCEPTION`
+
+Prefer an existing repository-native command, harness, MCP surface, or CI lane when it preserves the required evidence. Otherwise, materialize larger source/test content through an appropriate file-edit surface and invoke it with a short command.
+
+The existing `INLINE_SMALL` routing defaults remain approximately:
+
+- at most 20 logical execution/program lines;
+- at most 2 KiB of directly supplied source/program text;
+- at most one generated source/test/program file.
+
+Crossing any normal guardrail routes to `MATERIALIZE` unless an evidence-equivalent `HARNESS` is available or a bounded `EXCEPTION` has a concrete reason. Quoting, escaping, shell indirection, or heredoc wrapping does not turn a large directly supplied program into `INLINE_SMALL`. When size or file-count accounting is materially uncertain, prefer the safer larger-content route rather than guessing small.
+
+The packet records its selected route, command/file surface, required validation preserved, guardrail accounting, and any exception reason before non-trivial execution. `EXCEPTION` without an explicit reason is invalid.
+
+Compactness never removes required tests, authority reads, freshness barriers, uncertainty, failure provenance, or project-owned Git/CI/release/security/production gates. The repository can reduce repository-owned execution payloads and fan-out, but it does not claim it can hide, merge, or suppress ChatGPT host UI/activity cards.
 
 ## Proof / closure taxonomy
 
@@ -177,8 +204,11 @@ Before acting on a packet, a worker or chat must:
 3. read `.github/plugin-control-plane/canonical-main/shared-interaction-contract.md` as the repository-wide reporting and work-pacing contract;
 4. read the packet issue;
 5. read every authority input named by the packet, including the owning project/domain contract;
-6. confirm the packet is not already actively owned by another implementation flow;
-7. confirm write scope and dependencies are still valid.
+6. before non-trivial shell, heredoc, inline Python, temporary source/test, or similar local execution, read/apply `.agents/skills/agent-execution-compactness/SKILL.md` and confirm the packet's declared execution route still fits the actual payload;
+7. confirm the packet is not already actively owned by another implementation flow;
+8. confirm write scope and dependencies are still valid.
+
+If actual execution grows beyond the packet's declared compactness route, re-route before constructing the larger payload. In particular, do not continue with `INLINE_SMALL` after the existing guardrails have been crossed merely because the command can be hidden behind quoting or a heredoc.
 
 The common-rules document supplies shared policy, and the shared interaction contract supplies repo-wide interaction/reporting/pacing behavior; neither owns mutable project truth. Owning repository/project authority still decides current production, release, runtime, deployment, and validation facts. Project/domain contracts may explicitly specialize repository `DEFAULT` and applicable `CONDITIONAL` behavior, but must not silently weaken a repository `HARD_INVARIANT`.
 

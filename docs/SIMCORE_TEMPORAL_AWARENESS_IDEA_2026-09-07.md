@@ -3,7 +3,7 @@
 Date: 2026-09-07
 Status: `CAPTURED / DESIGN DISCOVERY ONLY · CHAT-INTERNAL TIME ONLY · NO IMPLEMENTATION AUTHORITY`
 Tracking: #1763
-Umbrella: #1768 / PR #1767
+Umbrella: #1768 / PR #1770
 
 ## 1. Scope correction
 

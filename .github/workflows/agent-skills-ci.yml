@@ -6,6 +6,7 @@ on:
       - '.agents/skills/**'
       - 'tools/agent-skill-eval/**'
       - 'tools/agent-skill-orchestrator/**'
+      - '.github/tooling/ci-summary/**'
       - '.github/workflows/agent-skill-live-eval.yml'
       - '.github/workflows/agent-skill-zero-credit-eval.yml'
       - '.github/workflows/agent-skill-orchestrator-scout-pilot.yml'
@@ -24,6 +25,7 @@ on:
       - '.agents/skills/**'
       - 'tools/agent-skill-eval/**'
       - 'tools/agent-skill-orchestrator/**'
+      - '.github/tooling/ci-summary/**'
       - '.github/workflows/agent-skill-live-eval.yml'
       - '.github/workflows/agent-skill-zero-credit-eval.yml'
       - '.github/workflows/agent-skill-orchestrator-scout-pilot.yml'
@@ -52,22 +54,39 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Initialize compact phase receipt
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p .ci-summary
+          python3 .github/tooling/ci-summary/phase_receipt.py \
+            --receipt .ci-summary/agent-skills-phases.json init \
+            python_compile skill_unit_tests live_eval_harness orchestrator_contracts
+
       - name: Compile Python skill scripts and tests
+        id: python_compile
         shell: bash
         run: |
           set -euo pipefail
+          python3 .github/tooling/ci-summary/phase_receipt.py --receipt .ci-summary/agent-skills-phases.json start python_compile \
+            || echo '::warning::Agent Skills compact phase receipt start failed; authoritative compile gate is unchanged.'
           mapfile -d '' files < <(find .agents/skills tools/agent-skill-eval tools/agent-skill-orchestrator -type f -name '*.py' -print0 | sort -z)
           if (( ${#files[@]} == 0 )); then
             echo 'AGENT_SKILLS_PYTHON_FILES:none'
-            exit 0
+          else
+            python -m py_compile "${files[@]}"
+            echo "AGENT_SKILLS_PYTHON_COMPILE_PASS:${#files[@]}"
           fi
-          python -m py_compile "${files[@]}"
-          echo "AGENT_SKILLS_PYTHON_COMPILE_PASS:${#files[@]}"
+          python3 .github/tooling/ci-summary/phase_receipt.py --receipt .ci-summary/agent-skills-phases.json pass python_compile \
+            || echo '::warning::Agent Skills compact phase receipt pass failed; authoritative compile gate is unchanged.'
 
       - name: Run skill unit tests
+        id: skill_unit_tests
         shell: bash
         run: |
           set -euo pipefail
+          python3 .github/tooling/ci-summary/phase_receipt.py --receipt .ci-summary/agent-skills-phases.json start skill_unit_tests \
+            || echo '::warning::Agent Skills compact phase receipt start failed; authoritative unit-test gate is unchanged.'
           count=0
           while IFS= read -r -d '' test_dir; do
             count=$((count + 1))
@@ -79,15 +98,91 @@ jobs:
             exit 1
           fi
           echo "AGENT_SKILLS_TEST_PASS:${count}"
+          python3 .github/tooling/ci-summary/phase_receipt.py --receipt .ci-summary/agent-skills-phases.json pass skill_unit_tests \
+            || echo '::warning::Agent Skills compact phase receipt pass failed; authoritative unit-test gate is unchanged.'
 
       - name: Run live-eval harness contract tests
+        id: live_eval_harness
         shell: bash
         run: |
           set -euo pipefail
+          python3 .github/tooling/ci-summary/phase_receipt.py --receipt .ci-summary/agent-skills-phases.json start live_eval_harness \
+            || echo '::warning::Agent Skills compact phase receipt start failed; authoritative live-eval gate is unchanged.'
           python -m unittest discover -s tools/agent-skill-eval/tests -p 'test_*.py' -v
+          python3 .github/tooling/ci-summary/phase_receipt.py --receipt .ci-summary/agent-skills-phases.json pass live_eval_harness \
+            || echo '::warning::Agent Skills compact phase receipt pass failed; authoritative live-eval gate is unchanged.'
 
       - name: Run orchestrator contract tests
+        id: orchestrator_contracts
         shell: bash
         run: |
           set -euo pipefail
+          python3 .github/tooling/ci-summary/phase_receipt.py --receipt .ci-summary/agent-skills-phases.json start orchestrator_contracts \
+            || echo '::warning::Agent Skills compact phase receipt start failed; authoritative orchestrator gate is unchanged.'
           python -m unittest discover -s tools/agent-skill-orchestrator/tests -p 'test_*.py' -v
+          python3 .github/tooling/ci-summary/phase_receipt.py --receipt .ci-summary/agent-skills-phases.json pass orchestrator_contracts \
+            || echo '::warning::Agent Skills compact phase receipt pass failed; authoritative orchestrator gate is unchanged.'
+
+      - name: Render compact CI summary
+        if: always()
+        shell: bash
+        env:
+          PYTHON_COMPILE_OUTCOME: ${{ steps.python_compile.outcome }}
+          SKILL_UNIT_TESTS_OUTCOME: ${{ steps.skill_unit_tests.outcome }}
+          LIVE_EVAL_HARNESS_OUTCOME: ${{ steps.live_eval_harness.outcome }}
+          ORCHESTRATOR_CONTRACTS_OUTCOME: ${{ steps.orchestrator_contracts.outcome }}
+        run: |
+          set +e
+          mkdir -p .ci-summary
+          python3 .github/tooling/ci-summary/adapters/agent_skills.py \
+            --report .ci-summary/agent-skills-phases.json \
+            --output .ci-summary/adapter.json \
+            --workflow 'Agent Skills CI' \
+            --python-compile-outcome "$PYTHON_COMPILE_OUTCOME" \
+            --skill-unit-tests-outcome "$SKILL_UNIT_TESTS_OUTCOME" \
+            --live-eval-harness-outcome "$LIVE_EVAL_HARNESS_OUTCOME" \
+            --orchestrator-contracts-outcome "$ORCHESTRATOR_CONTRACTS_OUTCOME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --event "$GITHUB_EVENT_NAME" \
+            --sha "$GITHUB_SHA"
+          adapter_code=$?
+          python3 .github/tooling/ci-summary/render.py \
+            --input .ci-summary/adapter.json \
+            --json-out .ci-summary/summary.json \
+            --text-out .ci-summary/inline.txt \
+            --markdown-out .ci-summary/inline.md \
+            --workflow 'Agent Skills CI' \
+            > /tmp/agent-skills-ci-summary-render.log
+          render_code=$?
+
+          if [[ -f .ci-summary/inline.txt ]]; then
+            cat .ci-summary/inline.txt
+          elif [[ -s /tmp/agent-skills-ci-summary-render.log ]]; then
+            cat /tmp/agent-skills-ci-summary-render.log
+          else
+            printf '%s\n' \
+              'CI_SUMMARY_V1_BEGIN' \
+              'CI SUMMARY · Agent Skills CI' \
+              'Result: INFRA_ERROR' \
+              'Reason codes:' \
+              '- CI_SUMMARY_RENDER_CATASTROPHIC' \
+              'Summary complete: false' \
+              'CI_SUMMARY_V1_END'
+          fi
+
+          if [[ -f .ci-summary/inline.md ]]; then
+            cat .ci-summary/inline.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo 'CI SUMMARY · Agent Skills CI'
+              echo 'Result: INFRA_ERROR'
+              echo 'Reason codes: CI_SUMMARY_RENDER_CATASTROPHIC'
+              echo 'Summary complete: false'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [[ "$adapter_code" -ne 0 || "$render_code" -ne 0 ]]; then
+            echo "::warning::CI compact summary generation incomplete (adapter=$adapter_code renderer=$render_code); authoritative Agent Skills CI gates are unchanged."
+          fi
+          exit 0

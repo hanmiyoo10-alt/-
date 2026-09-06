@@ -1071,6 +1071,20 @@
 - Event ID: `0906b9884dade818233749704a4b99b49da563de4a5b6b38131ecccfe8e74e28`
 <!-- canonical-main-doc-promoted:0906b9884dade818233749704a4b99b49da563de4a5b6b38131ecccfe8e74e28 -->
 
+### 2026-09-06 — [repo-incident:P0] RELEASE_AUTHORITY_IDENTITY_MISMATCH — plugin:simcore
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/637)
+- Event ID: `76734e01be17b486e890d3974282143bda2727bab3a2d93d52c83d4f91b3ca5d`
+<!-- canonical-main-doc-promoted:76734e01be17b486e890d3974282143bda2727bab3a2d93d52c83d4f91b3ca5d -->
+
+### 2026-09-06 — [repo-incident:P0] RELEASE_AUTHORITY_IDENTITY_MISMATCH — plugin:simcore
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/637)
+- Event ID: `a0cfd1ede48904d49a18831eab0ac447ede504cc4eba9860e3d322dde6c2f689`
+<!-- canonical-main-doc-promoted:a0cfd1ede48904d49a18831eab0ac447ede504cc4eba9860e3d322dde6c2f689 -->
+
 ### 2026-09-06 — fix(simcore): implement R2.12 release-channel-aware routing
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`

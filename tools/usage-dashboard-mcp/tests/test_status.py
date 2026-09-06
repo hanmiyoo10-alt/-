@@ -50,10 +50,11 @@ class FakeGitHub:
 
 
 class FakeLocal:
-    def __init__(self, *, token=True, health_fail=False, snapshot_fail=False):
+    def __init__(self, *, token=True, health_fail=False, snapshot_fail=False, snapshot_errors=False):
         self.token = token
         self.health_fail = health_fail
         self.snapshot_fail = snapshot_fail
+        self.snapshot_errors = snapshot_errors
 
     def get_health(self):
         if self.health_fail:
@@ -70,7 +71,7 @@ class FakeLocal:
             "bridgeVersion": "1.6.36",
             "fetchedAt": 1_000,
             "creditsOrganizationId": "SECRET-ORG-ID",
-            "errors": {},
+            "errors": {"usage": "sanitized upstream error"} if self.snapshot_errors else {},
             "modules": {
                 "organizations": {"status": "ok"},
                 "usage": {"status": "stale"},
@@ -84,6 +85,7 @@ class StatusTests(unittest.TestCase):
         result = build_status(FakeGitHub(), FakeLocal(), now_ms=1_250)
         self.assertTrue(result["ok"])
         self.assertEqual(result["github"]["parityState"], "exact")
+        self.assertEqual(result["source"]["localBridge"], "ok")
         self.assertEqual(result["product"]["version"], "3.0.0-alpha.5.101")
         self.assertEqual(result["localRuntime"]["staleModules"], 1)
         self.assertEqual(result["localRuntime"]["activeErrors"], 0)
@@ -91,12 +93,13 @@ class StatusTests(unittest.TestCase):
         serialized = json.dumps(result, sort_keys=True)
         self.assertNotIn("SECRET-ORG-ID", serialized)
 
-    def test_missing_token_preserves_unknown(self):
+    def test_missing_token_preserves_unknown_and_marks_local_partial(self):
         result = build_status(FakeGitHub(), FakeLocal(token=False))
         self.assertTrue(result["ok"])
         self.assertFalse(result["localRuntime"]["snapshotAuthenticated"])
         self.assertIsNone(result["localRuntime"]["activeErrors"])
         self.assertIsNone(result["localRuntime"]["staleModules"])
+        self.assertEqual(result["source"]["localBridge"], "partial")
         self.assertEqual(len(result["warnings"]), 1)
 
     def test_local_failure_does_not_fabricate_github_failure(self):
@@ -114,17 +117,24 @@ class StatusTests(unittest.TestCase):
         self.assertTrue(result["localRuntime"]["snapshotOk"])
         self.assertEqual(result["github"]["parityState"], "unknown")
 
-    def test_parity_drift_is_observed_not_mutated(self):
+    def test_parity_drift_fails_top_level_ok_without_mutation(self):
         result = build_status(FakeGitHub(drift=True), FakeLocal())
         self.assertEqual(result["github"]["parityState"], "drift")
-        self.assertTrue(result["ok"])
+        self.assertFalse(result["ok"])
 
-    def test_snapshot_auth_failure_is_reported(self):
+    def test_snapshot_auth_failure_is_reported_as_partial(self):
         result = build_status(FakeGitHub(), FakeLocal(snapshot_fail=True))
         self.assertFalse(result["ok"])
         self.assertFalse(result["localRuntime"]["snapshotAuthenticated"])
         self.assertEqual(result["source"]["github"], "ok")
+        self.assertEqual(result["source"]["localBridge"], "partial")
         self.assertIsNone(result["localRuntime"]["activeErrors"])
+
+    def test_snapshot_error_count_fails_top_level_without_returning_error_detail(self):
+        result = build_status(FakeGitHub(), FakeLocal(snapshot_errors=True))
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["localRuntime"]["activeErrors"], 1)
+        self.assertNotIn("sanitized upstream error", json.dumps(result, sort_keys=True))
 
 
 if __name__ == "__main__":

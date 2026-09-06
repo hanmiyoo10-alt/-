@@ -160,7 +160,7 @@ assert(blockedText.includes('`WAIT_FOR_CURRENT_EVIDENCE`'));
 
 const githubRoot = path.resolve(__dirname, '..', '..', '..');
 const workflow = fs.readFileSync(path.join(githubRoot, 'workflows', 'canonical-main-ops.yml'), 'utf8');
-const pluginCi = fs.readFileSync(path.join(githubRoot, 'workflows', 'plugin-control-plane-ci.yml'), 'utf8');
+const pluginManifest = JSON.parse(fs.readFileSync(path.join(githubRoot, 'tooling', 'ci-summary', 'manifests', 'plugin-control-plane.json'), 'utf8'));
 const writer = fs.readFileSync(path.join(__dirname, '..', 'orchestrator', 'closure-bookkeeping.cjs'), 'utf8');
 
 assert(/- Canonical Main Proof Bundle/.test(workflow), 'existing ops writer must observe completed A1 proof workflow');
@@ -172,7 +172,10 @@ assert(/node \.github\/plugin-control-plane\/canonical-main\/orchestrator\/closu
 assert(/issues:\s*write/.test(workflow), 'existing issue-write permission remains the mutation authority');
 assert(!/contents:\s*write/.test(workflow), 'A2 must not add contents write authority');
 assert(!/pull-requests:\s*write/.test(workflow), 'A2 must not add PR write authority');
-assert(/closure-bookkeeping-contract\.cjs/.test(pluginCi), 'focused contract must be permanent Plugin CI');
+assert(
+  pluginManifest.checks.some((check) => check.name === 'closure-bookkeeping-contract' && check.command.includes('.github/plugin-control-plane/canonical-main/tests/closure-bookkeeping-contract.cjs')),
+  'focused contract must be permanent Plugin CI',
+);
 
 assert(!/git\s+push|force-push|branches\/main\/protection|repos\/\$\{repo\}\/releases/i.test(writer), 'closure writer must not contain main/release/protection mutation paths');
 assert(!/--method['",\s]+(?:PUT|DELETE)/i.test(writer), 'closure writer may not add PUT/DELETE mutation methods');

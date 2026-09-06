@@ -1146,3 +1146,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/9b82b76812699bab7db46583318c00367181b920)
 - Event ID: `2d1daa2ac4a585a5de39791f55224614999ecef2f2305aab62cbfc0dbf028965`
 <!-- canonical-main-doc-promoted:2d1daa2ac4a585a5de39791f55224614999ecef2f2305aab62cbfc0dbf028965 -->
+
+### 2026-09-07 — chore(canonical-main): require compact execution route in work packets (#1793)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `ee2b12d192d5fc76bf0de750a4e1ef61bd3c48db`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ee2b12d192d5fc76bf0de750a4e1ef61bd3c48db)
+- Event ID: `ab263b6e74dce6598ca4c98436331f4b4916516c3bc10a5ef63c075b8ec14504`
+<!-- canonical-main-doc-promoted:ab263b6e74dce6598ca4c98436331f4b4916516c3bc10a5ef63c075b8ec14504 -->

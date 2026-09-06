@@ -2,17 +2,35 @@
 
 Dedicated read-only MCP tooling for SimCore.
 
-MCP-01 exposes one tool: `simcore_status`.
+Available tools:
+
+- MCP-01: `simcore_status`
+- MCP-02: `simcore_verify_production_identity`
+
+`simcore_status` provides the broad operational snapshot. `simcore_verify_production_identity` is a focused hard-invariant verifier for manifest, release-head, deployed-blob, parity, and userscript-version identity.
 
 ## What it reads
 
-- `main` head
-- `release-simcore` head
-- `product-manifest.json`
-- deployed `plugins/simcore/latest.js` and `install.js` blobs
-- open GitHub issues for explicit FIX / WATCH / BLOCKER / DEFER tracking
+- `main` head / `product-manifest.json`
+- the manifest-declared release branch head
+- deployed production files declared by the manifest
+- open GitHub issues for explicit FIX / WATCH / BLOCKER / DEFER tracking (`simcore_status` only)
 
 It does not contain GitHub write methods.
+
+## MCP-02 production identity checks
+
+`simcore_verify_production_identity` returns a deterministic `pass` plus ordered `checks`, hard `violations`, and bounded `errors`.
+
+It verifies:
+
+- manifest availability and required identity fields
+- manifest release commit vs actual release head
+- manifest release blob vs actual latest-file blob
+- latest/install blob parity when identical files are required
+- exact `//@version` metadata in latest/install vs manifest production version
+
+Missing, ambiguous, or unreadable authority fails closed. MCP-02 does not inspect runtime behavior, decide HUMAN_EVIDENCE, or deploy anything.
 
 ## Requirements
 
@@ -49,10 +67,10 @@ Useful verification commands:
 
 ```bash
 python -c "import pydantic_core; print('PYDANTIC CORE PASS:', pydantic_core.__version__)"
-python -c "from mcp.server import MCPServer; from simcore_mcp.server import mcp; print('MCP-01 IMPORT PASS:', type(mcp).__name__)"
+python -c "from mcp.server import MCPServer; from simcore_mcp.server import mcp; print('MCP SERVER IMPORT PASS:', type(mcp).__name__)"
 ```
 
-For an in-memory protocol smoke:
+For an in-memory protocol smoke of MCP-01:
 
 ```bash
 cat > "$TMPDIR/simcore_mcp_smoke.py" <<'PY'
@@ -73,6 +91,12 @@ PY
 python "$TMPDIR/simcore_mcp_smoke.py"
 ```
 
+For MCP-02, use the same client pattern with:
+
+```python
+result = await client.call_tool("simcore_verify_production_identity", {})
+```
+
 Termux should use `$TMPDIR` or a writable home path for temporary smoke scripts rather than assuming `/tmp` is writable.
 
 ## Run over stdio
@@ -87,7 +111,7 @@ or:
 python -m simcore_mcp.server
 ```
 
-`MCPServer.run()` uses stdio by default, which is the intended MCP-01 transport.
+`MCPServer.run()` uses stdio by default.
 
 ## Configuration
 
@@ -95,22 +119,24 @@ python -m simcore_mcp.server
 | --- | --- | --- |
 | `SIMCORE_GITHUB_REPO` | `hanmiyoo10-alt/-` | repository |
 | `SIMCORE_MAIN_BRANCH` | `main` | design/admin authority |
-| `SIMCORE_RELEASE_BRANCH` | `release-simcore` | deployed-code authority |
+| `SIMCORE_RELEASE_BRANCH` | `release-simcore` | configured release fallback/status authority |
 | `SIMCORE_GITHUB_API` | `https://api.github.com` | GitHub REST base |
 | `SIMCORE_GITHUB_TOKEN` | unset | optional authentication |
 | `SIMCORE_GITHUB_TIMEOUT_SECONDS` | `8` | bounded request timeout |
 
-`GITHUB_TOKEN` is accepted as a fallback token. Tokens are never returned by the MCP tool.
+`GITHUB_TOKEN` is accepted as a fallback token. Tokens are never returned by MCP tools.
 
-## Test status logic
+MCP-02 uses the release branch declared by `product-manifest.json` as the identity authority it verifies; it does not silently replace an invalid manifest branch with a configured fallback.
+
+## Tests
 
 ```bash
 cd tools/simcore-mcp
 python -m unittest discover -s tests -v
 ```
 
-The status aggregator is intentionally independent from the MCP SDK, so authority and drift behavior can be tested without starting an MCP transport.
+The status and identity verifier logic is intentionally independent from the MCP SDK, so authority and fail-close behavior can be tested without starting an MCP transport.
 
 ## Safety boundary
 
-MCP-01 is read-only. It cannot deploy, edit branches, update manifests, create or close issues, merge PRs, or execute HUMAN_EVIDENCE decisions.
+All current SimCore MCP tools are read-only. They cannot deploy, edit branches, update manifests, create or close issues, merge PRs, execute workflows, or execute HUMAN_EVIDENCE decisions.

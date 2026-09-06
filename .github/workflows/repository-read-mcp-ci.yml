@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'tools/repo-ci-mcp/**'
+      - '.github/tooling/ci-summary/adapters/repository_read_mcp.py'
       - '.github/workflows/repository-read-mcp-ci.yml'
   push:
     branches: [main]
     paths:
       - 'tools/repo-ci-mcp/**'
+      - '.github/tooling/ci-summary/adapters/repository_read_mcp.py'
       - '.github/workflows/repository-read-mcp-ci.yml'
   workflow_dispatch:
 
@@ -30,19 +32,83 @@ jobs:
           python-version: '3.12'
 
       - name: Install Repository Read MCP
+        id: install
         shell: bash
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check -e tools/repo-ci-mcp
 
       - name: Compile Repository Read MCP Python
+        id: compile
         shell: bash
         run: |
           set -euo pipefail
           python -m compileall -q tools/repo-ci-mcp/repo_ci_mcp tools/repo-ci-mcp/tests
 
       - name: Run Repository Read MCP unit tests
+        id: unit_tests
         shell: bash
         run: |
           set -euo pipefail
           python -m unittest discover -s tools/repo-ci-mcp/tests -p 'test_*.py' -v
+
+      - name: Render compact CI summary
+        if: always()
+        shell: bash
+        env:
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          COMPILE_OUTCOME: ${{ steps.compile.outcome }}
+          UNIT_TESTS_OUTCOME: ${{ steps.unit_tests.outcome }}
+        run: |
+          set +e
+          mkdir -p .ci-summary
+          python3 .github/tooling/ci-summary/adapters/repository_read_mcp.py \
+            --output .ci-summary/adapter.json \
+            --workflow 'Repository Read MCP CI' \
+            --install-outcome "$INSTALL_OUTCOME" \
+            --compile-outcome "$COMPILE_OUTCOME" \
+            --unit-tests-outcome "$UNIT_TESTS_OUTCOME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --event "$GITHUB_EVENT_NAME" \
+            --sha "$GITHUB_SHA"
+          adapter_code=$?
+          python3 .github/tooling/ci-summary/render.py \
+            --input .ci-summary/adapter.json \
+            --json-out .ci-summary/summary.json \
+            --text-out .ci-summary/inline.txt \
+            --markdown-out .ci-summary/inline.md \
+            --workflow 'Repository Read MCP CI' \
+            > /tmp/repository-read-mcp-ci-summary-render.log
+          render_code=$?
+
+          if [[ -f .ci-summary/inline.txt ]]; then
+            cat .ci-summary/inline.txt
+          else
+            printf '%s\n' \
+              'CI_SUMMARY_V1_BEGIN' \
+              'CI SUMMARY · Repository Read MCP CI' \
+              'Result: INFRA_ERROR' \
+              'Reason codes:' \
+              '- CI_SUMMARY_RENDER_CATASTROPHIC' \
+              "Run: $GITHUB_RUN_ID · attempt $GITHUB_RUN_ATTEMPT" \
+              "Commit: ${GITHUB_SHA:0:12}" \
+              'Summary complete: false' \
+              'CI_SUMMARY_V1_END'
+          fi
+
+          if [[ -f .ci-summary/inline.md ]]; then
+            cat .ci-summary/inline.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo 'CI SUMMARY · Repository Read MCP CI'
+              echo 'Result: INFRA_ERROR'
+              echo 'Reason codes: CI_SUMMARY_RENDER_CATASTROPHIC'
+              echo 'Summary complete: false'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [[ "$adapter_code" -ne 0 || "$render_code" -ne 0 ]]; then
+            echo "::warning::CI compact summary generation incomplete (adapter=$adapter_code renderer=$render_code); authoritative Repository Read MCP CI gates are unchanged."
+          fi
+          exit 0

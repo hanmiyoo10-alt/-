@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "r2-9-operator-changed-contract",
+  "suite": "release-system-r2-9-operator-changed-contract",
   "input": {
     "cases": [
       "operator-exact-current-capability",
@@ -15,5 +16,9 @@
       "r2-9-operator-changed-contract-default-collapsed",
       "r2-9-operator-changed-contract-static-pure-envelope"
     ]
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
   }
 }

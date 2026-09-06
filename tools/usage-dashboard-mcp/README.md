@@ -20,6 +20,8 @@ Optional same-device runtime authority:
 
 The MCP output is sanitized. Bridge credentials, GitHub tokens, raw Credits organization IDs, and raw snapshot payloads are never returned.
 
+For full local-runtime validation, run MCP-UD-01 on the same Termux device that hosts the Usage Dashboard bridge. A different device can still read GitHub/release authority, but it cannot reach the other phone's `127.0.0.1:39117`.
+
 ## Safety boundary
 
 MCP-UD-01 is read-only. It cannot:
@@ -40,12 +42,26 @@ Missing data remains unknown/null. It is never inferred as zero or false.
 
 ## Install
 
+Desktop/Linux environments with compatible wheels can use:
+
 ```bash
 cd tools/usage-dashboard-mcp
 python -m pip install -e .
 ```
 
-The already-validated SimCore MCP Termux dependency path applies here as well when Android needs native wheels.
+### Termux / Android
+
+CPython 3.14 on aarch64 Android may not have PyPI wheels for Rust-backed dependencies such as `rpds-py` and `pydantic-core`. A plain `pip install` can therefore fall back to an unsupported temporary rustup target (`aarch64-unknown-linux-android`).
+
+Reuse the validated SimCore MCP Termux dependency path:
+
+```bash
+pkg install python-pip python-rpds-py python-cryptography rust clang make pkg-config -y
+python -m pip install maturin
+python -m pip install -e .
+```
+
+For installation directly from the repository commit, install the native Termux prerequisites first, then run the Git URL install. The initial failing `pip install` does not mean the MCP package itself is invalid; dependency installation stops before `mcp`/`anyio` are committed to the environment.
 
 ## Run over stdio
 

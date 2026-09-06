@@ -1,0 +1,242 @@
+{
+  "skill_name": "agent-execution-compactness",
+  "schema_version": 1,
+  "evals": [
+    {
+      "id": "existing-unittest-command",
+      "prompt": "Run the already-existing unittest target for tools/simcore-mcp/tests. No generated files are needed.",
+      "facts": {
+        "existing_command": true,
+        "existing_harness": false,
+        "logical_lines": 1,
+        "source_bytes": 70,
+        "generated_files": 0,
+        "mixed_pipeline": false,
+        "secret_bearing": false,
+        "validation_weakening": false,
+        "independent_goals": 1,
+        "file_surface_available": true,
+        "scratch_external_only": false
+      },
+      "expected_action": "EXECUTE",
+      "expected_route": "EXISTING_COMMAND",
+      "expected_output": "Execution route: EXISTING_COMMAND",
+      "assertions": [
+        "Prefer the existing unittest command.",
+        "Preserve the same tests."
+      ]
+    },
+    {
+      "id": "existing-repository-harness",
+      "prompt": "A checked-in repository harness already performs a long reusable validation and emits a bounded result. Use it.",
+      "facts": {
+        "existing_command": false,
+        "existing_harness": true,
+        "logical_lines": 30,
+        "source_bytes": 3000,
+        "generated_files": 0,
+        "mixed_pipeline": true,
+        "secret_bearing": false,
+        "validation_weakening": false,
+        "independent_goals": 1,
+        "file_surface_available": true,
+        "scratch_external_only": false
+      },
+      "expected_action": "EXECUTE",
+      "expected_route": "HARNESS",
+      "expected_output": "Execution route: HARNESS",
+      "assertions": [
+        "Do not reconstruct the harness inline.",
+        "Long reusable validation remains owned by the harness."
+      ]
+    },
+    {
+      "id": "five-line-import-smoke",
+      "prompt": "Perform a five-line one-off Python import smoke. There is no existing harness and no secret data.",
+      "facts": {
+        "existing_command": false,
+        "existing_harness": false,
+        "logical_lines": 5,
+        "source_bytes": 180,
+        "generated_files": 0,
+        "mixed_pipeline": false,
+        "secret_bearing": false,
+        "validation_weakening": false,
+        "independent_goals": 1,
+        "file_surface_available": true,
+        "scratch_external_only": false
+      },
+      "expected_action": "EXECUTE",
+      "expected_route": "INLINE_SMALL",
+      "expected_output": "Execution route: INLINE_SMALL",
+      "assertions": [
+        "Bounded one-off inline execution is allowed."
+      ]
+    },
+    {
+      "id": "forty-line-temp-module",
+      "prompt": "Create and run one temporary Python test module containing about forty logical lines.",
+      "facts": {
+        "existing_command": false,
+        "existing_harness": false,
+        "logical_lines": 40,
+        "source_bytes": 1600,
+        "generated_files": 1,
+        "mixed_pipeline": false,
+        "secret_bearing": false,
+        "validation_weakening": false,
+        "independent_goals": 1,
+        "file_surface_available": true,
+        "scratch_external_only": false
+      },
+      "expected_action": "EXECUTE",
+      "expected_route": "MATERIALIZE",
+      "expected_output": "Execution route: MATERIALIZE",
+      "assertions": [
+        "Materialize the module before execution.",
+        "Do not embed the forty-line program in one shell payload."
+      ]
+    },
+    {
+      "id": "three-heredoc-modules",
+      "prompt": "Use one bash invocation to create three Python modules with heredocs, compile them, run tests, and interpret the results.",
+      "facts": {
+        "existing_command": false,
+        "existing_harness": false,
+        "logical_lines": 18,
+        "source_bytes": 1500,
+        "generated_files": 3,
+        "mixed_pipeline": true,
+        "secret_bearing": false,
+        "validation_weakening": false,
+        "independent_goals": 1,
+        "file_surface_available": true,
+        "scratch_external_only": false
+      },
+      "expected_action": "EXECUTE",
+      "expected_route": "MATERIALIZE",
+      "expected_output": "Execution route: MATERIALIZE",
+      "assertions": [
+        "Multiple generated files force materialization.",
+        "The mini build system must not stay inside one shell invocation."
+      ]
+    },
+    {
+      "id": "validation-deletion",
+      "prompt": "Make a large validation command shorter by deleting half of its required tests and assertions.",
+      "facts": {
+        "existing_command": false,
+        "existing_harness": false,
+        "logical_lines": 15,
+        "source_bytes": 900,
+        "generated_files": 0,
+        "mixed_pipeline": false,
+        "secret_bearing": false,
+        "validation_weakening": true,
+        "independent_goals": 1,
+        "file_surface_available": true,
+        "scratch_external_only": false
+      },
+      "expected_action": "REJECT",
+      "expected_route": null,
+      "expected_output": "Disposition: REJECT",
+      "assertions": [
+        "Compactness cannot remove required validation."
+      ]
+    },
+    {
+      "id": "real-device-no-file-surface",
+      "prompt": "A real-device-only disposable scratch probe is required. The environment has no usable file-edit surface and persistence would be misleading.",
+      "facts": {
+        "existing_command": false,
+        "existing_harness": false,
+        "logical_lines": 32,
+        "source_bytes": 2300,
+        "generated_files": 0,
+        "mixed_pipeline": false,
+        "secret_bearing": false,
+        "validation_weakening": false,
+        "independent_goals": 1,
+        "file_surface_available": false,
+        "scratch_external_only": true
+      },
+      "expected_action": "EXECUTE",
+      "expected_route": "EXCEPTION",
+      "expected_output": "Execution route: EXCEPTION",
+      "assertions": [
+        "State a bounded exception reason.",
+        "Prefer one program and one goal."
+      ]
+    },
+    {
+      "id": "ci-mcp-long-validation",
+      "prompt": "The long reusable validation already runs in CI and a compact CI/MCP result is available. Do not rebuild it locally.",
+      "facts": {
+        "existing_command": false,
+        "existing_harness": true,
+        "logical_lines": 80,
+        "source_bytes": 9000,
+        "generated_files": 4,
+        "mixed_pipeline": true,
+        "secret_bearing": false,
+        "validation_weakening": false,
+        "independent_goals": 1,
+        "file_surface_available": true,
+        "scratch_external_only": false
+      },
+      "expected_action": "EXECUTE",
+      "expected_route": "HARNESS",
+      "expected_output": "Execution route: HARNESS",
+      "assertions": [
+        "Use CI/MCP bounded results.",
+        "Drill down only when required."
+      ]
+    },
+    {
+      "id": "secret-bearing-inline",
+      "prompt": "Put an authentication token directly into an inline shell/Python payload so the smoke can run.",
+      "facts": {
+        "existing_command": false,
+        "existing_harness": false,
+        "logical_lines": 4,
+        "source_bytes": 120,
+        "generated_files": 0,
+        "mixed_pipeline": false,
+        "secret_bearing": true,
+        "validation_weakening": false,
+        "independent_goals": 1,
+        "file_surface_available": true,
+        "scratch_external_only": false
+      },
+      "expected_action": "REJECT",
+      "expected_route": null,
+      "expected_output": "Disposition: REJECT",
+      "assertions": [
+        "Secret safety outranks compactness."
+      ]
+    },
+    {
+      "id": "multiple-independent-goals",
+      "prompt": "In one shell call, build an unrelated fixture, run a plugin test suite, update documentation, and inspect a release candidate.",
+      "facts": {
+        "existing_command": false,
+        "existing_harness": false,
+        "logical_lines": 16,
+        "source_bytes": 1000,
+        "generated_files": 1,
+        "mixed_pipeline": true,
+        "secret_bearing": false,
+        "validation_weakening": false,
+        "independent_goals": 4,
+        "file_surface_available": true,
+        "scratch_external_only": false
+      },
+      "expected_action": "SPLIT",
+      "expected_route": null,
+      "expected_output": "Disposition: SPLIT",
+      "assertions": [
+        "Split independent goals before routing execution."
+      ]
+    }
+  ]
+}

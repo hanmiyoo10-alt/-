@@ -10,6 +10,7 @@ on:
         options:
           - plugin-authority-scan
           - plugin-impact-scope
+          - agent-execution-compactness
       eval_kind:
         description: Evaluation fixture kind
         required: true
@@ -81,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$EVAL_ROOT"
-          python tools/agent-skill-eval/prepare_eval.py matrix \
+          python tools/agent-skill-eval/prepare_live_eval.py matrix \
             --repo-root . \
             --skill '${{ inputs.skill }}' \
             --eval-kind '${{ inputs.eval_kind }}' \
@@ -107,12 +108,12 @@ jobs:
              "$baseline_root/.eval-quarantine/${{ inputs.skill }}"
 
           mkdir -p "$EVAL_ROOT/with_skill" "$EVAL_ROOT/baseline_without_target_skill"
-          python tools/agent-skill-eval/prepare_eval.py prove \
+          python tools/agent-skill-eval/prepare_live_eval.py prove \
             --workspace-root "$with_root" \
             --skill '${{ inputs.skill }}' \
             --mode with_skill \
             --output "$EVAL_ROOT/with_skill/proof.json"
-          python tools/agent-skill-eval/prepare_eval.py prove \
+          python tools/agent-skill-eval/prepare_live_eval.py prove \
             --workspace-root "$baseline_root" \
             --skill '${{ inputs.skill }}' \
             --mode baseline_without_target_skill \

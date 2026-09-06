@@ -7,7 +7,8 @@ const dir = path.join(root, '.github/plugin-control-plane/canonical-main/work-sy
 const policy = JSON.parse(fs.readFileSync(path.join(dir, 'policy.json'), 'utf8'));
 const readme = fs.readFileSync(path.join(dir, 'README.md'), 'utf8');
 const template = fs.readFileSync(path.join(dir, 'work-packet-template.md'), 'utf8');
-const workflow = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-ci.yml'), 'utf8');
+const pluginManifest = JSON.parse(fs.readFileSync(path.join(root, '.github/tooling/ci-summary/manifests/plugin-control-plane.json'), 'utf8'));
+const permanentCommands = pluginManifest.checks.map((check) => check.command.join(' ')).join('\n');
 
 assert.equal(policy.version, 1);
 assert.deepEqual(policy.surfaces, {
@@ -167,6 +168,6 @@ assert.match(readme, /routing disposition is `SETTLING_OR_STALE`/);
 assert.match(readme, /A read plan never grants write, merge, release, production, or protection authority/);
 assert.match(readme, /unchanged evidence is a read-only no-op/);
 assert.match(readme, /do not rewrite #465 or durable surfaces merely to refresh timestamps/);
-assert.ok(workflow.includes('work-system-contract.cjs'));
+assert.ok(permanentCommands.includes('work-system-contract.cjs'));
 
 console.log('work-system-contract: ok');

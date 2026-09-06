@@ -7,6 +7,8 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '../../../../..');
 const workflow = fs.readFileSync(path.join(root, '.github/workflows/repository-work-harness-shadow.yml'), 'utf8');
 const ci = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-ci.yml'), 'utf8');
+const pluginManifest = JSON.parse(fs.readFileSync(path.join(root, '.github/tooling/ci-summary/manifests/plugin-control-plane.json'), 'utf8'));
+const permanentCommands = pluginManifest.checks.map((check) => check.command.join(' ')).join('\n');
 
 for (const required of [
   'types: [opened, edited, reopened, closed]',
@@ -25,12 +27,12 @@ for (const forbidden of ['issues: write', 'contents: write', 'pull-requests: wri
   assert.ok(!workflow.includes(forbidden), `workflow must remain read-only: ${forbidden}`);
 }
 
+assert.ok(ci.includes("'.github/workflows/repository-work-harness-*.yml'"), "CI missing repository work-harness path trigger");
 for (const required of [
-  "'.github/workflows/repository-work-harness-*.yml'",
   'work-harness/tests/preflight-contract.cjs',
   'work-harness/tests/active-work-contract.cjs',
   'work-harness/tests/report-contract.cjs',
   'work-harness/tests/workflow-contract.cjs',
-]) assert.ok(ci.includes(required), `CI missing: ${required}`);
+]) assert.ok(permanentCommands.includes(required), `CI manifest missing: ${required}`);
 
 console.log('work-harness workflow-contract: ok');

@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.103",
+  "version": "3.0.0-alpha.5.104",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "0870a70cb94077a06113f31d6a94cb9d796ee9d563ac66602744b11765b462d8",
+  "artifactSha256": "ddae1c2fc1f60e6318e813e885f5df56ce10739cc631a4f6e50e22c0f40c713c",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
-      "bytes": 15110,
-      "sha256": "720394ed53cd236b581a3590c85975c9bbb48e25a5a0062e296b2255907918ab"
+      "bytes": 14899,
+      "sha256": "d675bc2971b95cba2cee6254dc16f823b75e4ad5900c07133a069ac25e55434a"
     },
     {
       "file": "02-runtime-state.part.js",
@@ -106,8 +106,8 @@
     {
       "file": "50-dashboard-context.part.js",
       "label": "dashboard/context",
-      "bytes": 16600,
-      "sha256": "0951b0a7a65f9cdcaed1199d3b32fd9a5d457f26a00746fc64429a3f916aeac2"
+      "bytes": 17829,
+      "sha256": "80ad7db3350754d88fdd04a05703de61b8212df0942c9dbce30d3371b3ff6989"
     },
     {
       "file": "52-analytics-context.part.js",

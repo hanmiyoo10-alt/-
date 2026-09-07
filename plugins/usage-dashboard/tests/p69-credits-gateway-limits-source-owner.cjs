@@ -17,6 +17,8 @@ const blobSha = crypto.createHash('sha1').update(header).update(fixture).digest(
 assert.equal(blobSha, '2aae183a3f47ded8ff4217b1878dc867d27ae1d3');
 assert.ok(adapter.includes("'54-dashboard-markup.part.js'"));
 assert.ok(adapter.includes("label == 'Gateway Limits Credits section placement'"));
+assert.ok(adapter.includes("label != 'Gateway Limits Credits UI helper'"));
+assert.ok(adapter.includes('50-dashboard-context to start with'));
 assert.ok(adapter.includes('immutable materializer implementation blob mismatch'));
 
 const release = loadCurrentRelease();
@@ -27,10 +29,12 @@ if (release.productVersion !== '3.0.0-alpha.5.103') {
 
 const context = fs.readFileSync(contextPath, 'utf8');
 const markup = fs.readFileSync(markupPath, 'utf8');
+assert.ok(context.startsWith('\n  function settingsHtml() {'));
 assert.ok(context.includes('function gatewayLimitsSectionHtml(truth)'));
+assert.ok(context.indexOf('function gatewayLimitsSectionHtml(truth)') > context.indexOf('function settingsHtml()'));
 assert.ok(context.includes("gatewayLimitsRuntime.orgId === selectedCreditsOrgId ? gatewayLimitsRuntime.value : null"));
 assert.ok(markup.includes("${dashboardView === 'credits' ? gatewayLimitsSectionHtml(gatewayLimitsTruth) : ''}"));
 assert.ok(markup.includes('aria-label="24h Usage scope"'));
 assert.equal(context.includes("${dashboardView === 'credits' ? gatewayLimitsSectionHtml(gatewayLimitsTruth) : ''}"), false);
 
-console.log('P69 source owner: OK · context owns truth/helper · dashboard markup owns Credits placement · settings owns lazy triggers');
+console.log('P69 source owner: OK · 50 boundary preserved · helper nested in settingsHtml · 54 markup owns Credits placement · 60 settings owns lazy triggers');

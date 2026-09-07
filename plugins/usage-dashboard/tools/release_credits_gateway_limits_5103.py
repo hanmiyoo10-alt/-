@@ -51,13 +51,30 @@ def load_impl() -> dict:
     }
     exec(compile(text, str(Path(__file__).resolve()), 'exec'), namespace)
     legacy_rep = namespace['rep']
+    legacy_insert_before = namespace['insert_before']
 
     def owner_aware_rep(path: Path, old: str, new: str, label: str) -> None:
         if label == 'Gateway Limits Credits section placement':
             path = MARKUP
         legacy_rep(path, old, new, label)
 
+    def owner_aware_insert_before(path: Path, anchor: str, block: str, label: str) -> None:
+        if label != 'Gateway Limits Credits UI helper':
+            legacy_insert_before(path, anchor, block, label)
+            return
+        text_value = path.read_text()
+        if block.strip() in text_value:
+            return
+        boundary = "\n  function settingsHtml() {\n"
+        count = text_value.count(boundary)
+        if count != 1:
+            raise SystemExit(f'5.103 {label} boundary mismatch:{count}')
+        # Current modular source requires 50-dashboard-context to start with
+        # settingsHtml(). Keep that exact boundary and nest the helper inside it.
+        path.write_text(text_value.replace(boundary, boundary + block, 1))
+
     namespace['rep'] = owner_aware_rep
+    namespace['insert_before'] = owner_aware_insert_before
     return namespace
 
 

@@ -296,7 +296,7 @@ For substantial interactive repository work, keep the full repository and projec
 
 `AUTHORITY_SCOPE` → `IMPLEMENTATION_PR` → `VALIDATION_MERGE` → `POSTMERGE_CONVERGENCE` → `EXPERIMENT_CLOSE`
 
-One ordinary continuation should advance at most one substantial stage, then stop at the stage checkpoint and report the completed stage, current evidence, and exact next stage. Staging is an interaction/workflow default, not a new repository, production, release, runtime, or project truth owner.
+one ordinary continuation should advance at most one substantial stage, then stop at the stage checkpoint and report the completed stage, current evidence, and exact next stage. Staging is an interaction/workflow default, not a new repository, production, release, runtime, or project truth owner.
 
 The stages mean:
 

@@ -92,7 +92,7 @@ jobs:
           cp "$apk_path" apk-output/fortune-golf-startup-probe.apk
           cp LICENSE apk-output/WIE-LICENSE.txt
           echo 'WIE source: https://github.com/dlunch/wie/commit/1ed8710956e727629e67db762ddc1e6bd6151a1f' > apk-output/BUILD.txt
-          echo 'Record probe v0.1.2: experimental MC_DB create/open/read/write/close; gameplay unverified. No game ROMs included.' >> apk-output/BUILD.txt
+          echo 'Record probe v0.1.3: experimental MC_DB create/open/read/write/close/list; gameplay unverified. No game ROMs included.' >> apk-output/BUILD.txt
           sha256sum apk-output/fortune-golf-startup-probe.apk >> apk-output/BUILD.txt
 
       - name: Upload APK

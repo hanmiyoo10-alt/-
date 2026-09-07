@@ -15,6 +15,103 @@
   }
 
 
+
+  function normalizeGatewayLimitsLocal(raw) {
+    if (!raw || typeof raw !== 'object') return { state:'source-unavailable', source:'org-limits', fetchedAt:Date.now() };
+    const stateName = ['ok','permission-unavailable','source-unavailable'].includes(String(raw.state)) ? String(raw.state) : 'source-unavailable';
+    if (stateName !== 'ok') return { state:stateName, source:'org-limits', fetchedAt:num(raw.fetchedAt) ? Number(raw.fetchedAt) : Date.now() };
+    const metric = (value) => {
+      const metricState = ['value','not-applicable','unknown'].includes(String(value?.state)) ? String(value.state) : 'unknown';
+      return {
+        state:metricState,
+        used:num(value?.used) ? Number(value.used) : null,
+        cap:num(value?.cap) ? Number(value.cap) : null,
+        remaining:num(value?.remaining) ? Number(value.remaining) : null,
+      };
+    };
+    const topUpState = ['value','not-applicable','unknown'].includes(String(raw?.topUp?.state)) ? String(raw.topUp.state) : 'unknown';
+    return {
+      state:'ok',
+      source:'org-limits',
+      enterprise:raw.enterprise === true ? true : raw.enterprise === false ? false : null,
+      planClass:typeof raw.planClass === 'string' && raw.planClass.trim() ? raw.planClass.trim() : null,
+      rateLimitsApply:raw.rateLimitsApply === true ? true : raw.rateLimitsApply === false ? false : null,
+      tierOverridden:raw.tierOverridden === true ? true : raw.tierOverridden === false ? false : null,
+      capsApply:raw.capsApply === true ? true : raw.capsApply === false ? false : null,
+      trustTierState:['value','not-applicable','unknown'].includes(String(raw.trustTierState)) ? String(raw.trustTierState) : 'unknown',
+      trustTier:Number.isInteger(raw.trustTier) && raw.trustTier >= 0 ? raw.trustTier : null,
+      rateState:['value','not-applicable','unknown'].includes(String(raw.rateState)) ? String(raw.rateState) : 'unknown',
+      rateMultiplier:num(raw.rateMultiplier) ? Number(raw.rateMultiplier) : null,
+      daily:metric(raw.daily),
+      monthly:metric(raw.monthly),
+      topUp:{
+        state:topUpState,
+        cap:num(raw?.topUp?.cap) ? Number(raw.topUp.cap) : null,
+        windowHours:num(raw?.topUp?.windowHours) ? Number(raw.topUp.windowHours) : null,
+        used:num(raw?.topUp?.used) ? Number(raw.topUp.used) : null,
+        remaining:num(raw?.topUp?.remaining) ? Number(raw.topUp.remaining) : null,
+      },
+      fetchedAt:num(raw.fetchedAt) ? Number(raw.fetchedAt) : Date.now(),
+    };
+  }
+
+  async function fetchGatewayLimitsForOrg(creditsOrgId) {
+    const exactOrgId = String(creditsOrgId || '').trim();
+    if (!token || !exactOrgId) return { state:'source-unavailable', source:'org-limits', fetchedAt:Date.now() };
+    const base = normalizeBridgeBase(state.bridgeBase);
+    const res = await Risuai.nativeFetch(`${base}/gateway-limits?creditsOrgId=${encodeURIComponent(exactOrgId)}`, {
+      method:'GET',
+      headers:{Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'}
+    });
+    const text = await res.text();
+    if (!res.ok) return { state:'source-unavailable', source:'org-limits', fetchedAt:Date.now() };
+    try { return normalizeGatewayLimitsLocal(JSON.parse(text)); }
+    catch { return { state:'source-unavailable', source:'org-limits', fetchedAt:Date.now() }; }
+  }
+
+  async function refreshGatewayLimitsForOrg(creditsOrgId, force = false) {
+    const exactOrgId = String(creditsOrgId || '').trim();
+    if (!exactOrgId) {
+      gatewayLimitsRequestSeq += 1;
+      gatewayLimitsRuntime = {orgId:'',value:null,fetchedAt:0};
+      return null;
+    }
+    const now = Date.now();
+    if (!force && gatewayLimitsRuntime.orgId === exactOrgId && gatewayLimitsRuntime.value
+        && now - Number(gatewayLimitsRuntime.fetchedAt || 0) < GATEWAY_LIMITS_UI_TTL_MS) {
+      return gatewayLimitsRuntime.value;
+    }
+    if (gatewayLimitsInFlight?.orgId === exactOrgId) return gatewayLimitsInFlight.promise;
+
+    const requestSeq = ++gatewayLimitsRequestSeq;
+    if (gatewayLimitsRuntime.orgId !== exactOrgId) gatewayLimitsRuntime = {orgId:exactOrgId,value:null,fetchedAt:0};
+    const promise = (async () => {
+      const value = await fetchGatewayLimitsForOrg(exactOrgId);
+      if (requestSeq !== gatewayLimitsRequestSeq) return null;
+      const selectedStateOrg = String(state.selectedCreditsOrgId || '').trim();
+      const selectedDataOrg = String(state.data?.creditsOrganizationId || '').trim();
+      if ((selectedStateOrg && selectedStateOrg !== exactOrgId) && selectedDataOrg !== exactOrgId) return null;
+      gatewayLimitsRuntime = {
+        orgId:exactOrgId,
+        value,
+        fetchedAt:num(value?.fetchedAt) ? Number(value.fetchedAt) : Date.now(),
+      };
+      schedulePanelRender(false);
+      return value;
+    })().catch(() => {
+      if (requestSeq !== gatewayLimitsRequestSeq) return null;
+      const value = {state:'source-unavailable',source:'org-limits',fetchedAt:Date.now()};
+      gatewayLimitsRuntime = {orgId:exactOrgId,value,fetchedAt:value.fetchedAt};
+      schedulePanelRender(false);
+      return value;
+    }).finally(() => {
+      if (gatewayLimitsInFlight?.promise === promise) gatewayLimitsInFlight = null;
+    });
+    gatewayLimitsInFlight = {orgId:exactOrgId,promise};
+    return promise;
+  }
+
+
   function bridgeManagerAuthHeaders() {
     return {Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'};
   }

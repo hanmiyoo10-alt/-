@@ -1,5 +1,45 @@
 
   function settingsHtml() {
+
+  function gatewayLimitsMetricText(metric) {
+    if (metric?.state === 'not-applicable') return '미적용';
+    if (metric?.state !== 'value' || !num(metric.used) || !num(metric.cap) || !num(metric.remaining)) return '—';
+    return `${money(metric.used)} / ${money(metric.cap)} · 남음 ${money(metric.remaining)}`;
+  }
+
+  function gatewayLimitsSectionHtml(truth) {
+    const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(truth?.state)) ? String(truth.state) : 'source-unavailable';
+    if (truth?.enterprise === true && sourceState === 'ok') {
+      return `<div class="usage-detail-box gateway-limits-card"><div class="recent-head"><h3>Gateway Limits · Credits</h3><span>source org-limits · ok</span></div><p>Enterprise · 조직 단위 Gateway rate/spend cap 없음</p></div>`;
+    }
+    const tierText = truth?.trustTierState === 'not-applicable'
+      ? '미적용'
+      : truth?.trustTierState === 'value' && Number.isInteger(truth?.trustTier)
+        ? `Tier ${Number(truth.trustTier)}`
+        : '—';
+    const rateText = truth?.rateState === 'not-applicable'
+      ? '미적용'
+      : truth?.rateState === 'value' && num(truth?.rateMultiplier)
+        ? `${Number(truth.rateMultiplier)}×`
+        : '—';
+    const topUpText = truth?.topUp?.state === 'not-applicable'
+      ? '미적용'
+      : truth?.topUp?.state === 'value' && num(truth?.topUp?.remaining) && num(truth?.topUp?.cap)
+        ? `${money(truth.topUp.remaining)} / ${money(truth.topUp.cap)}`
+        : '—';
+    const topUpLabel = truth?.topUp?.state === 'value' && num(truth?.topUp?.windowHours)
+      ? `${Number(truth.topUp.windowHours)}h 충전 여유`
+      : 'Rolling 충전 여유';
+    return `<div class="usage-detail-box gateway-limits-card"><div class="recent-head"><h3>Gateway Limits · Credits</h3><span>source org-limits · ${esc(sourceState)}</span></div><div class="minis">
+      <div class="mini cyan"><span>Trust tier</span><b>${esc(tierText)}</b></div>
+      <div class="mini cyan"><span>Rate multiplier</span><b>${esc(rateText)}</b></div>
+      <div class="mini"><span>일간 spend · UTC</span><b>${esc(gatewayLimitsMetricText(truth?.daily))}</b></div>
+      <div class="mini"><span>월간 spend</span><b>${esc(gatewayLimitsMetricText(truth?.monthly))}</b></div>
+      <div class="mini"><span>${esc(topUpLabel)}</span><b>${esc(topUpText)}</b></div>
+    </div></div>`;
+  }
+
+
     function releaseNotesPanelHtml() {
       const highlights = RELEASE_NOTES.highlights.map(item => `<li>${esc(item)}</li>`).join('');
       const hints = RELEASE_NOTES.diagnosticHints.map(item => `<li>${esc(item)}</li>`).join('');
@@ -43,6 +83,7 @@
     const selectedCreditsOrgId = String(d.creditsOrganizationId || state.selectedCreditsOrgId || '');
     const selectedCreditsOrg = creditsOrganizations.find(org => String(org?.id || '') === selectedCreditsOrgId) || creditsOrganizations[0] || null;
     const creditsOrgLabel = String(selectedCreditsOrg?.name || selectedCreditsOrgId || 'Default organization');
+    const gatewayLimitsTruth = gatewayLimitsRuntime.orgId === selectedCreditsOrgId ? gatewayLimitsRuntime.value : null;
     const creditsOrgSelector = creditsOrganizations.length ? `<label class="credits-org-picker"><span>Credits Organization</span><select id="credits-org-id">${creditsOrganizations.map(org => `<option value="${esc(org.id)}" ${String(org.id)===selectedCreditsOrgId?'selected':''}>${esc(org.name || org.id)}${num(org.credits)?` · ${money(org.credits)}`:''}</option>`).join('')}</select></label>${d.creditsOrganizationFallback ? `<p class="warn credits-org-fallback">선택한 organization을 찾지 못해 ${esc(creditsOrgLabel)}로 자동 복구했어.</p>` : ''}` : '';
     const creditsMeta = [
       num(c?.todayUsed) ? `오늘 ${money(c.todayUsed,4)}` : '',

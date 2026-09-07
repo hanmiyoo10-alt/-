@@ -131,10 +131,12 @@ const output = process.env.DEVPASS_BRIDGE_CAPTURE_FILE;
 const requestedActivityRange = ['24h','7d','30d'].includes(String(process.env.DEVPASS_BRIDGE_ACTIVITY_RANGE || ''))
   ? String(process.env.DEVPASS_BRIDGE_ACTIVITY_RANGE)
   : '';
+const requestedLimitsOrgId = String(process.env.DEVPASS_BRIDGE_LIMITS_ORG_ID || '').trim();
+// capture.v11 intentionally not activated; request provenance owns tap generation.
 const marker = Symbol.for('llmgateway.devpass.bridge.capture.v10');
 if (output && !globalThis[marker]) {
   globalThis[marker] = true;
-  const state = { orgs: null, devPlanStatus: null, devpassActivity: null, devpassLogs: null, captureMode: null };
+  const state = { orgs: null, devPlanStatus: null, devpassActivity: null, devpassLogs: null, gatewayLimits: null, captureMode: null };
   let extrasInFlight = false;
   let extrasDone = false;
   const rawHttpRequest = http.request;
@@ -173,6 +175,49 @@ if (output && !globalThis[marker]) {
       if (Object.prototype.hasOwnProperty.call(raw, key)) safe[key] = raw[key];
     }
     return safe;
+  };
+
+
+  const sanitizeGatewayLimits = (value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const raw = value.data && typeof value.data === 'object' && !Array.isArray(value.data) ? value.data : value;
+    const safe = {};
+    const nonNegative = (candidate) => typeof candidate === 'number' && Number.isFinite(candidate) && candidate >= 0 ? candidate : null;
+    if (raw.enterprise === true || raw.enterprise === false) safe.enterprise = raw.enterprise;
+    if (typeof raw.planClass === 'string' && raw.planClass.trim()) safe.planClass = raw.planClass.trim().slice(0, 64);
+    if (raw.rateLimitsApply === true || raw.rateLimitsApply === false) safe.rateLimitsApply = raw.rateLimitsApply;
+    if (raw.tierOverridden === true || raw.tierOverridden === false) safe.tierOverridden = raw.tierOverridden;
+    if (raw.capsApply === true || raw.capsApply === false) safe.capsApply = raw.capsApply;
+    if (raw.tier && typeof raw.tier === 'object' && !Array.isArray(raw.tier)) {
+      const tier = {};
+      if (Number.isInteger(raw.tier.tier) && raw.tier.tier >= 0) tier.tier = raw.tier.tier;
+      for (const key of ['rpmMultiplier','dailyCapUsd','monthlyCapUsd']) {
+        const candidate = nonNegative(raw.tier[key]);
+        if (candidate !== null) tier[key] = candidate;
+      }
+      if (Object.keys(tier).length) safe.tier = tier;
+    }
+    if (raw.usage && typeof raw.usage === 'object' && !Array.isArray(raw.usage)) {
+      const usage = {};
+      for (const key of ['dailySpentUsd','monthlySpentUsd']) {
+        const candidate = nonNegative(raw.usage[key]);
+        if (candidate !== null) usage[key] = candidate;
+      }
+      if (Object.keys(usage).length) safe.usage = usage;
+    }
+    if (Object.prototype.hasOwnProperty.call(raw, 'topUp')) {
+      if (raw.topUp === null) {
+        safe.topUp = null;
+      } else if (raw.topUp && typeof raw.topUp === 'object' && !Array.isArray(raw.topUp)) {
+        const topUp = {};
+        for (const key of ['capUsd','windowHours','usedUsd','remainingUsd']) {
+          const candidate = nonNegative(raw.topUp[key]);
+          if (candidate !== null) topUp[key] = candidate;
+        }
+        safe.topUp = topUp;
+      }
+    }
+    return Object.keys(safe).length ? safe : null;
   };
 
   const sanitizeModel = (row) => {
@@ -417,6 +462,19 @@ if (output && !globalThis[marker]) {
     return safe;
   };
 
+
+  const storeGatewayLimits = (result, mode) => {
+    const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(result?.state))
+      ? String(result.state)
+      : 'source-unavailable';
+    const payload = sourceState === 'ok' ? sanitizeGatewayLimits(result?.payload) : null;
+    const stateName = sourceState === 'ok' && payload ? 'ok' : sourceState === 'permission-unavailable' ? 'permission-unavailable' : 'source-unavailable';
+    state.gatewayLimits = { state: stateName, payload, mode: String(mode || '') };
+    state.captureMode = String(mode || '');
+    writeState();
+    return state.gatewayLimits;
+  };
+
   const storeActivity = (value, range, mode) => {
     const safe = sanitizeActivity(value);
     if (!safe) return false;
@@ -486,6 +544,20 @@ if (output && !globalThis[marker]) {
     return [...new Map(out.map((u) => [u.toString(), u])).values()];
   };
 
+
+  const limitsTarget = (orgUrl, orgId) => {
+    const exactOrgId = String(orgId || '').trim();
+    if (!exactOrgId) return null;
+    try {
+      const target = new URL(orgUrl.origin);
+      const prefix = pathPrefix(orgUrl.pathname, '/orgs');
+      target.pathname = (prefix + '/orgs/' + encodeURIComponent(exactOrgId) + '/limits').replace(/\/{2,}/g, '/');
+      return target;
+    } catch {
+      return null;
+    }
+  };
+
   const activityCandidates = (orgUrl, statusUrl, projectId, range) => {
     const prefixes = [...new Set([
       pathPrefix(statusUrl && statusUrl.pathname, '/dev-plans/status'),
@@ -549,12 +621,38 @@ if (output && !globalThis[marker]) {
     }
   };
 
+
+  const requestGatewayLimitsWithFetch = async (target, headers, baseInit) => {
+    if (!target || typeof originalFetch !== 'function') return { state:'source-unavailable', payload:null };
+    try {
+      const nextInit = baseInit && typeof baseInit === 'object' ? { ...baseInit } : {};
+      nextInit.method = 'GET';
+      nextInit.headers = headers;
+      delete nextInit.body;
+      delete nextInit.signal;
+      const response = await originalFetch(target.toString(), nextInit);
+      if (!response) return { state:'source-unavailable', payload:null };
+      if (response.status === 403) return { state:'permission-unavailable', payload:null };
+      if (response.status === 404) return { state:'source-unavailable', payload:null };
+      if (!response.ok) return { state:'source-unavailable', payload:null };
+      return { state:'ok', payload:parseJsonText(await response.clone().text()) };
+    } catch {
+      return { state:'source-unavailable', payload:null };
+    }
+  };
+
   const requestExtrasWithFetch = async (input, init, orgUrl) => {
     if (extrasDone || extrasInFlight || typeof originalFetch !== 'function') return;
     extrasInFlight = true;
     try {
       const inputHeaders = typeof Request === 'function' && input instanceof Request ? input.headers : (init && init.headers);
       const headers = safeHeaders(inputHeaders);
+      if (requestedLimitsOrgId) {
+        const result = await requestGatewayLimitsWithFetch(limitsTarget(orgUrl, requestedLimitsOrgId), headers, init);
+        storeGatewayLimits(result, 'fetch-limits');
+        extrasDone = true;
+        return;
+      }
       for (const target of statusCandidates(orgUrl)) {
         const parsed = await requestJsonFetch(target, headers, init);
         const safeStatus = parsed ? storeStatus(parsed, 'fetch') : null;
@@ -653,10 +751,50 @@ if (output && !globalThis[marker]) {
     }
   });
 
+
+  const requestGatewayLimitsNode = (target, headers) => new Promise((resolve) => {
+    if (!target) return resolve({ state:'source-unavailable', payload:null });
+    const rawRequest = target.protocol === 'http:' ? rawHttpRequest : rawHttpsRequest;
+    const requestModule = target.protocol === 'http:' ? http : https;
+    const opts = {
+      protocol: target.protocol,
+      hostname: target.hostname,
+      port: target.port || undefined,
+      method: 'GET',
+      path: target.pathname + target.search,
+      headers,
+    };
+    let req;
+    try {
+      req = rawRequest.call(requestModule, opts, (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => { if (body.length < 1024 * 1024) body += chunk; });
+        res.on('end', () => {
+          if (res.statusCode === 403) return resolve({ state:'permission-unavailable', payload:null });
+          if (res.statusCode === 404) return resolve({ state:'source-unavailable', payload:null });
+          if (res.statusCode >= 200 && res.statusCode < 300) return resolve({ state:'ok', payload:parseJsonText(body) });
+          return resolve({ state:'source-unavailable', payload:null });
+        });
+      });
+      req.on('error', () => resolve({ state:'source-unavailable', payload:null }));
+      req.setTimeout(10000, () => { try { req.destroy(); } catch {} resolve({ state:'source-unavailable', payload:null }); });
+      req.end();
+    } catch {
+      resolve({ state:'source-unavailable', payload:null });
+    }
+  });
+
   const requestExtrasWithNode = async (orgUrl, headers) => {
     if (extrasDone || extrasInFlight) return;
     extrasInFlight = true;
     try {
+      if (requestedLimitsOrgId) {
+        const result = await requestGatewayLimitsNode(limitsTarget(orgUrl, requestedLimitsOrgId), headers);
+        storeGatewayLimits(result, 'node-request-limits');
+        extrasDone = true;
+        return;
+      }
       for (const target of statusCandidates(orgUrl)) {
         const parsed = await requestJsonNode(target, headers);
         const safeStatus = parsed ? storeStatus(parsed, 'node-request') : null;
@@ -703,7 +841,8 @@ if (output && !globalThis[marker]) {
   };
 
   // Authentication headers stay in memory only long enough to perform official,
-  // read-only /dev-plans/status plus optional project-scoped /activity and /logs requests.
+  // read-only /dev-plans/status plus optional project-scoped /activity and /logs requests,
+  // or one exact selected-organization /orgs/{id}/limits request in limits-only mode.
   // They are never written to the capture file or returned by the bridge.
   patchNodeRequest(http, 'http:');
   patchNodeRequest(https, 'https:');

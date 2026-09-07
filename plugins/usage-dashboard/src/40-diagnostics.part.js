@@ -152,6 +152,29 @@
     return `DevPass provider cache policy: ${mode} · source ${source}`;
   }
 
+
+  function gatewayLimitsDiagnosticText(value) {
+    const stateName = ['ok','permission-unavailable','source-unavailable'].includes(String(value?.state)) ? String(value.state) : 'source-unavailable';
+    if (stateName !== 'ok') return `Gateway limits: scope credits · source org-limits · state ${stateName}`;
+    if (value?.enterprise === true) return 'Gateway limits: scope credits · enterprise yes · rate n/a · caps n/a · source org-limits · state ok';
+    const plan = typeof value?.planClass === 'string' && value.planClass ? value.planClass : 'unknown';
+    const tier = value?.trustTierState === 'not-applicable' ? 'n/a' : value?.trustTierState === 'value' && Number.isInteger(value?.trustTier) ? String(value.trustTier) : 'unknown';
+    const rate = value?.rateLimitsApply === true ? 'on' : value?.rateLimitsApply === false ? 'off' : 'unknown';
+    const caps = value?.capsApply === true ? 'on' : value?.capsApply === false ? 'off' : 'unknown';
+    const metric = (row) => row?.state === 'not-applicable'
+      ? 'n/a'
+      : row?.state === 'value' && num(row?.used) && num(row?.cap)
+        ? `${Number(row.used)}/${Number(row.cap)}`
+        : 'unknown';
+    const topUp = value?.topUp?.state === 'not-applicable'
+      ? 'n/a'
+      : value?.topUp?.state === 'value' && num(value?.topUp?.remaining) && num(value?.topUp?.cap)
+        ? `${Number(value.topUp.remaining)}/${Number(value.topUp.cap)} remaining`
+        : 'unknown';
+    return `Gateway limits: scope credits · plan ${plan} · tier ${tier} · rate ${rate} · caps ${caps} · daily ${metric(value?.daily)} · monthly ${metric(value?.monthly)} · topup ${topUp} · source org-limits · state ok`;
+  }
+
+
   function modelCategoryCatalogDiagnosticText(diagnostics) {
     const truth = managedRuntimeIdentityTruth(diagnostics);
     if (truth.models.state === 'mismatch') {
@@ -385,6 +408,7 @@
       `DevPass account tier: service ${diagAccount?.serviceTier || '—'} · routing ${diagAccount?.routingStrategy || '—'} · pending ${diagAccount?.pendingTier || '—'} · personal org ${diagAccount?.hasPersonalOrg === null || diagAccount?.hasPersonalOrg === undefined ? '—' : diagAccount.hasPersonalOrg ? 'yes' : 'no'}`,
       devPassNoAiTrainingDiagnosticText(diagAccount),
       devPassProviderCachePolicyDiagnosticText(diagAccount),
+      gatewayLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       `DevPass billing period: plan ${diagAccount && String(diagAccount.plan || '').trim() && String(diagAccount.plan).toLowerCase() !== 'none' ? String(diagAccount.plan) : '—'} · cycle ${typeof diagAccount?.cycle === 'string' && diagAccount.cycle.trim() ? diagAccount.cycle.trim() : '—'} · start ${dashboardDateText(diagAccount?.billingCycleStart, true)} · end ${dashboardDateText(diagAccount?.expiresAt, true)} · cancelled ${typeof diagAccount?.cancelled === 'boolean' ? (diagAccount.cancelled ? 'yes' : 'no') : 'unknown'}`,
       premiumAllowanceDiagnosticText(d.weekly),
       paygAccountDiagnosticText(diagAccount),

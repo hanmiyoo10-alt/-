@@ -1,26 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.102
+//@version 3.0.0-alpha.5.103
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.102';
+  const VERSION = '3.0.0-alpha.5.103';
   const RELEASE_NOTES = Object.freeze({
-    title: "DevPass Provider Cache Policy Status",
+    title: "Credits Gateway Limits & Headroom",
     highlights: Object.freeze([
-    "Adds a read-only DevPass provider cache policy status from the existing /dev-plans/status.providerCacheControlMode field.",
-    "Preserves exact enum truth: auto, passthrough, off, or UNKNOWN; missing data never becomes synthetic auto.",
-    "Reuses the existing account capture with no new endpoint, CLI operation, timer, poller, cache owner, or persistence owner.",
-    "Bumps Engine to 1.6.37 while Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded.",
+    "Adds read-only Gateway Limits & Headroom for the currently selected Credits organization from official /orgs/{id}/limits truth.",
+    "Keeps the new upstream family off the recurring snapshot critical path with an organization-keyed 5-minute cache and lazy Credits-surface loading.",
+    "Fail-closed: enterprise/exempt is not applicable, unavailable source stays UNKNOWN, and limits never cross organizations.",
+    "Bumps Engine to 1.6.38 while Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.102 · Engine 1.6.37 · Manager 1.3.6 and READY/Health ok.",
-    "Check DevPass account for Provider 캐시 정책 and Full Diagnostics for DevPass provider cache policy.",
-    "자동, 클라이언트 관리, 꺼짐, or — is valid only when UI and Diagnostics agree with the current status source.",
-    "No new CLI or network family should appear; 5.101 No-AI-Training and earlier truth surfaces must remain healthy.",
+    "Verify Product 5.103 · Engine 1.6.38 · Manager 1.3.6 and READY/Health ok.",
+    "Open Credits and check Gateway Limits · Credits for exact values, 미적용, or —; daily spend is explicitly UTC.",
+    "Full Diagnostics should contain one ID-free Gateway limits line whose state agrees with the Credits card.",
+    "Switching Credits organizations must never show another organization's cached limits; existing 5.102/5.101/5.100/5.99 surfaces remain healthy.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -41,7 +41,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.37';
+  const REQUIRED_BRIDGE_VERSION = '1.6.38';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.6';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
@@ -50,6 +50,7 @@
   const RUNTIME_MANIFEST_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/runtime/product-manifest.json';
   const BRIDGE_MANAGER_BASE = 'http://127.0.0.1:39119';
   const BRIDGE_MANAGER_PROBE_INTERVAL_MS = 60000;
+  const GATEWAY_LIMITS_UI_TTL_MS = 5 * 60_000;
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true, performanceGuard: true, adaptiveRefresh: true, schedulerEnabled: true,
@@ -81,6 +82,7 @@
   };
 
   let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
+  let gatewayLimitsRuntime = {orgId:'',value:null,fetchedAt:0}, gatewayLimitsInFlight = null, gatewayLimitsRequestSeq = 0;
   let tokenForgetArmedUntil = 0;
   let widgetRenderTail = Promise.resolve(), widgetRenderRequestId = 0;
   let runtimeDisposed = false, runtimeEpoch = 1, staleAsyncDrops = 0;

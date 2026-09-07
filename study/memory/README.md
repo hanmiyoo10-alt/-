@@ -32,6 +32,8 @@
 | 비교적 안정적인 학습 특성은 어디에 있는가? | `PROFILE.md` |
 | 현재/과거 공부 전략과 변경 이유는 어디에 있는가? | `STRATEGIES.md` |
 | 지금 당장 알아야 할 현재 상태는 어디서 보는가? | `CURRENT.md` |
+| 개별 문제/오답의 실제 증거는 어디에 있는가? | `../problems/LEDGER.md` |
+| 반복 오류 패턴의 문제 단위 근거는 어디에 있는가? | `../problems/PATTERNS.md` |
 
 `CURRENT.md`는 편의를 위한 current-only projection입니다. 원본 권위를 대체하지 않습니다.
 
@@ -49,6 +51,8 @@
 
 학습 결과, 반복 실수, 공부법 실험 결과 등 시간축을 가진 관찰을 append-only로 보존합니다.
 
+문제 단위 세부 증거는 `study/problems/LEDGER.md`가 소유합니다. 장기기억 ledger는 필요한 경우 그 문제 ID나 패턴 ID를 근거로 참조합니다.
+
 기존 기록이 나중에 틀린 것으로 밝혀져도 삭제하지 않고 `DISMISSED` 또는 후속 기록으로 해소합니다.
 
 ### 3. Durable memory
@@ -57,17 +61,48 @@
 
 여러 번 확인되었거나 사용자가 명시적으로 현재 사실이라고 확정한, 비교적 안정적인 학습 특성을 보존합니다.
 
+문제 패턴이 생겼다는 이유만으로 자동 승격하지 않습니다. 서로 다른 문제에서 충분히 반복되고 학습 의사결정에 재사용할 가치가 있을 때만 승격합니다.
+
 ### 4. Strategy memory
 
 `STRATEGIES.md`
 
 공부법과 의사결정을 보존합니다. 전략이 바뀌면 과거 전략을 지우지 않고 `SUPERSEDED` 관계를 남깁니다.
 
+문제 패턴에서 나온 교정 cue가 반복적으로 효과를 보이면 전략의 근거로 사용할 수 있습니다.
+
 ### 5. Current projection
 
 `CURRENT.md`
 
 새 세션이 빠르게 재개할 수 있도록 현재 목표, 활성 과목, 최근 핵심 패턴, 바로 다음 행동만 짧게 보여줍니다.
+
+## Problem-memory integration
+
+```text
+study/problems/LEDGER.md
+= 문제 단위 실제 기록
+
+study/problems/PATTERNS.md
+= 반복 오류/성공 구조
+
+study/memory/LEDGER.md
+= 학습 전반의 관찰 근거
+
+study/memory/PROFILE.md / STRATEGIES.md
+= 충분히 검증된 장기 해석
+```
+
+승격 흐름은 다음을 기본으로 합니다.
+
+```text
+문제 1회 기록
+→ problems/LEDGER
+→ 반복되면 problems/PATTERNS
+→ 재검증/전이 확인
+→ 필요하면 memory/LEDGER
+→ 충분한 근거가 있을 때만 PROFILE / STRATEGIES
+```
 
 ## Promotion rule
 

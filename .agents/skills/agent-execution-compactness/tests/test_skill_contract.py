@@ -56,6 +56,26 @@ class SkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, text)
 
+    def test_output_contract_makes_disposition_and_route_mutually_exclusive(self):
+        text = SKILL.read_text(encoding="utf-8")
+        output = text[text.index("## Output shape"):text.index("## Representative decisions")]
+        disposition_index = output.index("### Disposition branch")
+        route_index = output.index("### Execution-route branch")
+        self.assertLess(disposition_index, route_index)
+        for required in (
+            "Select exactly one output branch after classification. The branches are mutually exclusive.",
+            "Disposition: REJECT | SPLIT",
+            "End the answer for the combined request after this branch.",
+            "Do not emit `Execution route:` or `Command surface:`",
+            "Use this branch only when neither `REJECT` nor `SPLIT` applies:",
+            "Never emit both `Disposition:` and `Execution route:` for the same unsplit request.",
+        ):
+            self.assertIn(required, output)
+        self.assertIn(
+            "Execution route: EXISTING_COMMAND | HARNESS | INLINE_SMALL | MATERIALIZE | EXCEPTION",
+            output[route_index:],
+        )
+
     def test_guardrails_are_present_and_advisory(self):
         text = SKILL.read_text(encoding="utf-8")
         for required in (

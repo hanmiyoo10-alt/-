@@ -1,26 +1,26 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.101
+//@version 3.0.0-alpha.5.102
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.101';
+  const VERSION = '3.0.0-alpha.5.102';
   const RELEASE_NOTES = Object.freeze({
-    title: "DevPass No-AI-Training Status",
+    title: "DevPass Provider Cache Policy Status",
     highlights: Object.freeze([
-    "Adds a read-only DevPass AI training block status sourced only from the existing authenticated /dev-plans/status.blockApiTraining boolean.",
-    "Preserves exact tri-state truth: true is enabled, false is disabled, and missing or invalid evidence stays UNKNOWN rather than becoming false.",
-    "Reuses the existing account capture with zero new healthy-path endpoint, CLI, timer, poller, cache family, or persistence owner.",
-    "Bumps Engine to 1.6.36; Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded.",
+    "Adds a read-only DevPass provider cache policy status from the existing /dev-plans/status.providerCacheControlMode field.",
+    "Preserves exact enum truth: auto, passthrough, off, or UNKNOWN; missing data never becomes synthetic auto.",
+    "Reuses the existing account capture with no new endpoint, CLI operation, timer, poller, cache owner, or persistence owner.",
+    "Bumps Engine to 1.6.37 while Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.101 · Engine 1.6.36 · Manager 1.3.6 and READY/Health ok.",
-    "Check the existing DevPass account box for AI 학습 차단 and Full Diagnostics for DevPass no-AI-training.",
-    "A natural 사용, 꺼짐, or — result is valid only when UI and Diagnostics agree with the current status source; do not toggle the setting for testing.",
-    "No new CLI operation or network family should appear, and 5.100 lifecycle/category plus 5.99 daily-server truth must remain healthy.",
+    "Verify Product 5.102 · Engine 1.6.37 · Manager 1.3.6 and READY/Health ok.",
+    "Check DevPass account for Provider 캐시 정책 and Full Diagnostics for DevPass provider cache policy.",
+    "자동, 클라이언트 관리, 꺼짐, or — is valid only when UI and Diagnostics agree with the current status source.",
+    "No new CLI or network family should appear; 5.101 No-AI-Training and earlier truth surfaces must remain healthy.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -41,7 +41,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.36';
+  const REQUIRED_BRIDGE_VERSION = '1.6.37';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.6';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;

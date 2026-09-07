@@ -87,6 +87,7 @@
         : `${Number(devpassAccount.includedResetPassesRemaining)}장`)
       : '—';
     const devpassNoAiTrainingText = devpassAccount?.noAiTrainingState === 'enabled' ? '사용' : devpassAccount?.noAiTrainingState === 'disabled' ? '꺼짐' : '—';
+    const devpassProviderCachePolicyText = devpassAccount?.providerCachePolicyState === 'automatic' ? '자동' : devpassAccount?.providerCachePolicyState === 'client-managed' ? '클라이언트 관리' : devpassAccount?.providerCachePolicyState === 'disabled' ? '꺼짐' : '—';
     const devpassAccountDetailHtml = devpassAccount
       ? `<div class="usage-detail-grid devpass-account-parity">
           <div class="usage-detail-box"><div class="recent-head"><h3>DevPass account</h3><span>${esc(devpassAccountStatus)}</span></div><div class="minis">
@@ -96,6 +97,7 @@
             <div class="mini"><span>Service tier</span><b>${esc(String(devpassAccount.serviceTier || '—').toUpperCase())}</b></div>
             <div class="mini"><span>Routing</span><b>${esc(String(devpassAccount.routingStrategy || '—'))}</b></div>
             <div class="mini"><span>AI 학습 차단</span><b>${esc(devpassNoAiTrainingText)}</b></div>
+            <div class="mini"><span>Provider 캐시 정책</span><b>${esc(devpassProviderCachePolicyText)}</b></div>
             <div class="mini"><span>Pending tier</span><b>${esc(String(devpassAccount.pendingTier || '—'))}</b></div>
             <div class="mini"><span>Personal org</span><b>${devpassAccount.hasPersonalOrg === null ? '—' : devpassAccount.hasPersonalOrg ? '있음' : '없음'}</b></div>
             <div class="mini"><span>Billing history</span><b>${devpassAccount.hasBillingHistory === null ? '—' : devpassAccount.hasBillingHistory ? '있음' : '없음'}</b></div>

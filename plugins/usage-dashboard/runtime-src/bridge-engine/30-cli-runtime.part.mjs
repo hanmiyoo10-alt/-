@@ -166,7 +166,7 @@ if (output && !globalThis[marker]) {
       'devPlanResetPasses','devPlanIncludedResetPasses','devPlanIncludedResetPassesRemaining',
       'devPlanResetPassPrice','devPlanBillingCycleStart','devPlanCancelled','devPlanExpiresAt',
       'regularCredits','devPlanPaygEnabled','autoTopUpEnabled','autoTopUpThreshold','autoTopUpAmount',
-      'organizationId','projectId','devPlanServiceTier','defaultRoutingStrategy','blockApiTraining'
+      'organizationId','projectId','devPlanServiceTier','defaultRoutingStrategy','blockApiTraining','providerCacheControlMode'
     ];
     const safe = {};
     for (const key of allowed) {

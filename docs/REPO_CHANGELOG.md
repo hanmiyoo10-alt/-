@@ -1202,3 +1202,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/25c8eba73f7aab9f917a8bf89728f17e7d7d64cd)
 - Event ID: `4a1afca6fa525d1381913a70daf196fd895b2de341aa38205d8c10ed11eae439`
 <!-- canonical-main-doc-promoted:4a1afca6fa525d1381913a70daf196fd895b2de341aa38205d8c10ed11eae439 -->
+
+### 2026-09-07 — feat(usage-dashboard): release 5.104 Gateway Limits utilization
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `e0e012a8af53773d4b38c2dca0d6bad6e6a46b57`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/e0e012a8af53773d4b38c2dca0d6bad6e6a46b57)
+- Event ID: `386b022e935ccd3dd8b54ee9f15ab5199f3b77e1cd3935b45854e4be4d47e89f`
+<!-- canonical-main-doc-promoted:386b022e935ccd3dd8b54ee9f15ab5199f3b77e1cd3935b45854e4be4d47e89f -->

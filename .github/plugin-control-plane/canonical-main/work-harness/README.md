@@ -178,6 +178,27 @@ When all conditions pass, the receipt-sync workflow calls `canonical-main-ops.ym
 
 B8 therefore automates **handoff**, not mutation authority. It does not set `mutationAuthorized` or `executionAuthorized`, add a generic dispatcher, or permit any other adapter/workflow route.
 
+## Canonical-main stage checkpoint composition
+
+`stage-checkpoint.cjs` is a bounded issue-only composition harness for the RCR-D15 interaction checkpoint boundary. It does not replace either durable destination. The packet issue remains packet handoff evidence and #293 remains the raw append-only main-management audit log.
+
+Use one short repository-native invocation for one semantic checkpoint:
+
+```sh
+node .github/plugin-control-plane/canonical-main/work-harness/stage-checkpoint.cjs \
+  --packet <canonical-main-packet-issue> \
+  --stage <AUTHORITY_SCOPE|IMPLEMENTATION_PR|VALIDATION_MERGE|POSTMERGE_CONVERGENCE|EXPERIMENT_CLOSE> \
+  --body-file <bounded-checkpoint-markdown>
+```
+
+The body file is bounded to 8 KiB. The harness verifies the target is one open canonical-main work packet, derives one SHA-256 checkpoint identity from packet number + stage + normalized body, then uses surface-specific provenance markers to record the same checkpoint payload on the packet and #293.
+
+Retries are idempotent within the bounded comment scan. Existing matching packet/audit comments are reused; if a prior attempt wrote only one side, the next attempt writes only the missing side. Duplicate checkpoint markers fail closed rather than adding another record. Comment discovery is bounded to 20 pages per destination, matching the repository's existing bounded issue-bookkeeping pattern.
+
+The machine result is compact JSON with `COMPLETE`, `PARTIAL`, `UNKNOWN`, or `FAILED`, the checkpoint identity, and both destination issue/comment identities. One side failing never becomes green by absence. `PARTIAL`/`UNKNOWN` use a nonzero exit so an agent cannot silently treat incomplete audit synchronization as complete.
+
+This surface uses only the existing GitHub issue API through the canonical-main GitHub client. It adds no workflow-wide `issue_comment` listener, no contents/ref/PR/release/production authority, no new mutable truth owner, no mutation capability to `tools/repo-ci-mcp/**`, and no claim that repository code can suppress host UI activity cards. Its compactness benefit is narrower: when this harness is available, one visible repository command can preserve the two required durable issue comments internally.
+
 ## Current non-goals
 
 The current Harness still does **not** add:
@@ -212,4 +233,5 @@ node .github/plugin-control-plane/canonical-main/work-harness/tests/canonical-ma
 node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync-workflow-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/authoritative-handoff-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/stage-checkpoint-contract.cjs
 ```

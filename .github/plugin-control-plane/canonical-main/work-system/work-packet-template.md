@@ -39,6 +39,21 @@ Choose the route before constructing non-trivial local execution payloads. Reuse
 
 `EXCEPTION` always requires a concrete reason. Compactness never removes required validation, authority checks, uncertainty, failure evidence, or project-owned gates.
 
+## Interaction stage
+
+Use the repository-wide staged-interaction default for substantial interactive work.
+
+Ordered stages:
+`AUTHORITY_SCOPE → IMPLEMENTATION_PR → VALIDATION_MERGE → POSTMERGE_CONVERGENCE → EXPERIMENT_CLOSE`.
+
+- Current stage: `<AUTHORITY_SCOPE|IMPLEMENTATION_PR|VALIDATION_MERGE|POSTMERGE_CONVERGENCE|EXPERIMENT_CLOSE>`
+- Completed stage(s): <NONE_OR_ORDERED_COMPLETED_STAGES>
+- Next stage: <NEXT_STAGE_OR_NONE>
+- Ordinary continuation budget: `1 substantial stage`
+- Stage-collapse / recovery exception: <NONE_OR_EXPLICIT_BOUNDED_REASON>
+
+An ordinary continuation advances at most one substantial stage. A tiny read-only task may collapse stages only when it genuinely completes in at most two bounded reads. A safety-critical recovery may continue only to the nearest safe stop when delaying would create material risk, and that exception must be recorded. Explicit user instruction may authorize a broader run. Staging never removes required Git, CI, release, production, authority, validation, uncertainty, or evidence checks.
+
 ## Bounded write scope
 
 - <PATH_OR_ISSUE>
@@ -74,6 +89,7 @@ Use only evidence-backed terms from the Work System taxonomy:
 
 At session end record:
 - state reached
+- current interaction stage, completed stages, and exact next stage
 - proof/closure taxonomy terms reached and exact evidence scope
 - verified evidence
 - files/issues/PRs changed

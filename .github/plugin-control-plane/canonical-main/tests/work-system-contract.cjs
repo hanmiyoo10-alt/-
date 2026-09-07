@@ -7,6 +7,7 @@ const dir = path.join(root, '.github/plugin-control-plane/canonical-main/work-sy
 const policy = JSON.parse(fs.readFileSync(path.join(dir, 'policy.json'), 'utf8'));
 const readme = fs.readFileSync(path.join(dir, 'README.md'), 'utf8');
 const template = fs.readFileSync(path.join(dir, 'work-packet-template.md'), 'utf8');
+const commonRules = fs.readFileSync(path.join(root, 'docs/REPOSITORY_COMMON_RULES.md'), 'utf8');
 const pluginManifest = JSON.parse(fs.readFileSync(path.join(root, '.github/tooling/ci-summary/manifests/plugin-control-plane.json'), 'utf8'));
 const permanentCommands = pluginManifest.checks.map((check) => check.command.join(' ')).join('\n');
 
@@ -81,6 +82,29 @@ assert.equal(policy.executionCompactness.preserveRequiredValidation, true);
 assert.equal(policy.executionCompactness.hostUiSuppressionClaim, false);
 assert.ok(policy.packetRequiredFields.includes('executionCompactness'));
 
+assert.equal(policy.stagedInteraction.version, 1);
+assert.deepEqual(policy.stagedInteraction.stages, [
+  'AUTHORITY_SCOPE',
+  'IMPLEMENTATION_PR',
+  'VALIDATION_MERGE',
+  'POSTMERGE_CONVERGENCE',
+  'EXPERIMENT_CLOSE',
+]);
+assert.equal(policy.stagedInteraction.ordinaryContinuationMaxSubstantialStages, 1);
+assert.deepEqual(policy.stagedInteraction.tinyReadOnlyCollapse, {
+  allowed: true,
+  maxBoundedReads: 2,
+});
+assert.deepEqual(policy.stagedInteraction.safetyCriticalRecovery, {
+  mayContinueToNearestSafeStop: true,
+  exceptionMustBeRecorded: true,
+});
+assert.equal(policy.stagedInteraction.explicitUserBroaderRunAllowed, true);
+assert.equal(policy.stagedInteraction.preserveRequiredGates, true);
+assert.equal(policy.stagedInteraction.productionTruthOwner, false);
+assert.equal(policy.stagedInteraction.hostUiPerformanceGuarantee, false);
+assert.ok(policy.packetRequiredFields.includes('interactionStage'));
+
 assert.deepEqual(policy.queueProjection.liveHealthAuthorities, ['direct-main', 'issue-485']);
 assert.equal(policy.queueProjection.liveHealthMode, 'pointer-only');
 assert.equal(policy.queueProjection.duplicateLiveMainSha, false);
@@ -131,7 +155,7 @@ for (const marker of Object.values(policy.markers)) {
 for (const issue of Object.values(policy.surfaces)) {
   assert.ok(readme.includes(`#${issue}`));
 }
-for (const field of ['Primary goal', 'Source', 'Classification', 'Read first', 'Execution compactness', 'Bounded write scope', 'Dependencies / blockers', 'Expected outputs', 'Acceptance', 'Proof / closure', 'Stop condition', 'Handoff']) {
+for (const field of ['Primary goal', 'Source', 'Classification', 'Read first', 'Execution compactness', 'Interaction stage', 'Bounded write scope', 'Dependencies / blockers', 'Expected outputs', 'Acceptance', 'Proof / closure', 'Stop condition', 'Handoff']) {
   assert.ok(template.includes(field));
 }
 assert.ok(readme.includes('one active implementation owner'));
@@ -165,6 +189,22 @@ assert.match(template, /Guardrail accounting:/);
 assert.match(template, /Exception reason:/);
 assert.match(template, /Quoting, escaping, or heredoc wrapping does not reclassify a large payload as small/);
 assert.match(template, /`EXCEPTION` always requires a concrete reason/);
+assert.match(template, /## Interaction stage/);
+assert.match(template, /AUTHORITY_SCOPE → IMPLEMENTATION_PR → VALIDATION_MERGE → POSTMERGE_CONVERGENCE → EXPERIMENT_CLOSE/);
+assert.match(template, /Ordinary continuation budget: `1 substantial stage`/);
+assert.match(template, /tiny read-only task may collapse stages only when it genuinely completes in at most two bounded reads/);
+assert.match(template, /safety-critical recovery may continue only to the nearest safe stop/);
+assert.match(template, /Explicit user instruction may authorize a broader run/);
+assert.match(template, /Staging never removes required Git, CI, release, production, authority, validation, uncertainty, or evidence checks/);
+assert.match(template, /current interaction stage, completed stages, and exact next stage/);
+assert.match(commonRules, /### RCR-D15 — Stage substantial interactive repository work at bounded checkpoints/);
+assert.match(commonRules, /\*\*Class:\*\* `DEFAULT`/);
+assert.match(commonRules, /`AUTHORITY_SCOPE` → `IMPLEMENTATION_PR` → `VALIDATION_MERGE` → `POSTMERGE_CONVERGENCE` → `EXPERIMENT_CLOSE`/);
+assert.match(commonRules, /one ordinary continuation should advance at most one substantial stage/);
+assert.match(commonRules, /at most two bounded reads/);
+assert.match(commonRules, /nearest safe stop/);
+assert.match(commonRules, /Explicit user instruction may authorize a broader run/);
+assert.match(commonRules, /does not remove or weaken required Git, CI, release, production, authority, validation, uncertainty, or evidence checks/);
 assert.match(readme, /## Proof \/ closure taxonomy/);
 for (const term of policy.closureTaxonomy.terms) {
   assert.ok(readme.includes(`\`${term}\``));

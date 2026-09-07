@@ -174,6 +174,10 @@
           item.setAttribute('aria-selected', active ? 'true' : 'false');
         });
         await persist();
+        if (next === 'credits') {
+          const limitsOrgId = String(state.data?.creditsOrganizationId || state.selectedCreditsOrgId || '').trim();
+          void refreshGatewayLimitsForOrg(limitsOrgId);
+        }
         if ((next === 'devpass' || next === 'credits') && previousUsageScope !== state.usageScopeView) renderSettings();
       };
     });
@@ -285,6 +289,7 @@
       state.selectedCreditsOrgId = next;
       state.selectedHourKey = '';
       await persist();
+      void refreshGatewayLimitsForOrg(next);
       await enqueueRefresh('manual');
       renderSettings();
     };
@@ -411,6 +416,10 @@
     widgetMobileToggleBlockedUntil=Date.now()+800;
     document.body.dataset.panelOpen='1';
     renderSettings();
+    if (String(state.dashboardView || '') === 'credits') {
+      const limitsOrgId = String(state.data?.creditsOrganizationId || state.selectedCreditsOrgId || '').trim();
+      void refreshGatewayLimitsForOrg(limitsOrgId);
+    }
     await renderWidget('panel-open');
     await Risuai.showContainer('fullscreen');
     widgetMobileExpanded=false;

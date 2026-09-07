@@ -27,6 +27,137 @@ async function loadAccountCapture() {
   return cached('accountCapture', async () => captureAccountDetailsViaCliSession('24h'));
 }
 
+
+function gatewayLimitsNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function gatewayLimitsUnknown(state = 'source-unavailable', now = Date.now()) {
+  return {
+    state: ['permission-unavailable','source-unavailable'].includes(String(state)) ? String(state) : 'source-unavailable',
+    source: 'org-limits',
+    enterprise: null,
+    planClass: null,
+    rateLimitsApply: null,
+    tierOverridden: null,
+    capsApply: null,
+    trustTierState: 'unknown',
+    trustTier: null,
+    rateState: 'unknown',
+    rateMultiplier: null,
+    daily: { state:'unknown', used:null, cap:null, remaining:null },
+    monthly: { state:'unknown', used:null, cap:null, remaining:null },
+    topUp: { state:'unknown', cap:null, windowHours:null, used:null, remaining:null },
+    fetchedAt: Number(now),
+  };
+}
+
+function normalizeGatewayLimitsCapture(capture, now = Date.now()) {
+  const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(capture?.state))
+    ? String(capture.state)
+    : 'source-unavailable';
+  if (sourceState !== 'ok') return gatewayLimitsUnknown(sourceState, now);
+  const raw = capture?.payload;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return gatewayLimitsUnknown('source-unavailable', now);
+
+  const enterprise = raw.enterprise === true ? true : raw.enterprise === false ? false : null;
+  const planClass = typeof raw.planClass === 'string' && raw.planClass.trim() ? raw.planClass.trim() : null;
+  const rateLimitsApply = raw.rateLimitsApply === true ? true : raw.rateLimitsApply === false ? false : null;
+  const tierOverridden = raw.tierOverridden === true ? true : raw.tierOverridden === false ? false : null;
+  const capsApply = raw.capsApply === true ? true : raw.capsApply === false ? false : null;
+  const trustTier = Number.isInteger(raw?.tier?.tier) && raw.tier.tier >= 0 ? raw.tier.tier : null;
+  const rateMultiplier = gatewayLimitsNumber(raw?.tier?.rpmMultiplier);
+  const dailyUsed = gatewayLimitsNumber(raw?.usage?.dailySpentUsd);
+  const dailyCap = gatewayLimitsNumber(raw?.tier?.dailyCapUsd);
+  const monthlyUsed = gatewayLimitsNumber(raw?.usage?.monthlySpentUsd);
+  const monthlyCap = gatewayLimitsNumber(raw?.tier?.monthlyCapUsd);
+
+  const trustTierState = enterprise === true || (planClass && planClass !== 'regular')
+    ? 'not-applicable'
+    : planClass === 'regular' && trustTier !== null
+      ? 'value'
+      : 'unknown';
+  const rateState = enterprise === true || rateLimitsApply === false
+    ? 'not-applicable'
+    : rateLimitsApply === true && rateMultiplier !== null
+      ? 'value'
+      : 'unknown';
+
+  const spendMetric = (used, cap) => {
+    if (enterprise === true || capsApply === false) return { state:'not-applicable', used:null, cap:null, remaining:null };
+    if (capsApply === true && used !== null && cap !== null) {
+      return { state:'value', used, cap, remaining:Math.max(0, cap - used) };
+    }
+    return { state:'unknown', used:null, cap:null, remaining:null };
+  };
+
+  let topUp = { state:'unknown', cap:null, windowHours:null, used:null, remaining:null };
+  if (enterprise === true) {
+    topUp = { state:'not-applicable', cap:null, windowHours:null, used:null, remaining:null };
+  } else if (Object.prototype.hasOwnProperty.call(raw, 'topUp') && raw.topUp === null) {
+    topUp = { state:'not-applicable', cap:null, windowHours:null, used:null, remaining:null };
+  } else if (raw.topUp && typeof raw.topUp === 'object' && !Array.isArray(raw.topUp)) {
+    const cap = gatewayLimitsNumber(raw.topUp.capUsd);
+    const windowHours = gatewayLimitsNumber(raw.topUp.windowHours);
+    const used = gatewayLimitsNumber(raw.topUp.usedUsd);
+    const remaining = gatewayLimitsNumber(raw.topUp.remainingUsd);
+    if (cap !== null && windowHours !== null && used !== null && remaining !== null) {
+      topUp = { state:'value', cap, windowHours, used, remaining };
+    }
+  }
+
+  return {
+    state: 'ok',
+    source: 'org-limits',
+    enterprise,
+    planClass,
+    rateLimitsApply,
+    tierOverridden,
+    capsApply,
+    trustTierState,
+    trustTier: trustTierState === 'value' ? trustTier : null,
+    rateState,
+    rateMultiplier: rateState === 'value' ? rateMultiplier : null,
+    daily: spendMetric(dailyUsed, dailyCap),
+    monthly: spendMetric(monthlyUsed, monthlyCap),
+    topUp,
+    fetchedAt: Number(now),
+  };
+}
+
+async function captureGatewayLimitsViaCliSession(creditsOrgId) {
+  const exactOrgId = String(creditsOrgId || '').trim();
+  if (!exactOrgId) return gatewayLimitsUnknown('source-unavailable');
+  await ensureCaptureTap();
+  const captureFile = path.join(
+    CONFIG_DIR,
+    `limits-${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.json`,
+  );
+  const existingNodeOptions = String(process.env.NODE_OPTIONS || '').trim();
+  const captureRequire = `--require=${CAPTURE_TAP_FILE}`;
+  const nodeOptions = existingNodeOptions ? `${existingNodeOptions} ${captureRequire}` : captureRequire;
+  try {
+    await runCliProcess(['orgs', 'list', '--json'], {
+      NODE_OPTIONS: nodeOptions,
+      DEVPASS_BRIDGE_CAPTURE_FILE: captureFile,
+      DEVPASS_BRIDGE_LIMITS_ORG_ID: exactOrgId,
+    });
+    const text = await fs.readFile(captureFile, 'utf8');
+    const captured = JSON.parse(text);
+    return normalizeGatewayLimitsCapture(captured?.gatewayLimits);
+  } catch {
+    return gatewayLimitsUnknown('source-unavailable');
+  } finally {
+    try { await fs.unlink(captureFile); } catch {}
+  }
+}
+
+async function loadGatewayLimits(creditsOrgId) {
+  const exactOrgId = String(creditsOrgId || '').trim();
+  if (!exactOrgId) return gatewayLimitsUnknown('source-unavailable');
+  return cached(`gatewayLimits:${exactOrgId}`, async () => captureGatewayLimitsViaCliSession(exactOrgId));
+}
+
 async function loadCreditsBootstrap() {
   return cached('creditsBootstrap', async () => runCli(['credits', '--json']));
 }
@@ -117,6 +248,7 @@ async function cached(name, loader, options = {}) {
     ?? (name.startsWith('analytics:') ? 60_000 : null)
     ?? ((name === 'usageScopes' || name.startsWith('usageScopes:')) ? 60_000 : null)
     ?? ((name === 'analyticsScopes' || name.startsWith('analyticsScopes:')) ? 60_000 : null)
+    ?? (name.startsWith('gatewayLimits:') ? 300_000 : null)
     ?? (name.startsWith('runway:') ? 300_000 : 30_000);
   const now = Date.now();
   const current = cache.get(name);
@@ -164,7 +296,7 @@ async function cached(name, loader, options = {}) {
   gate ||= circuitBeforeLoad(name);
   if (!gate.allowed) {
     const ageMs = current ? now - current.at : Infinity;
-    if (current && name !== 'accountCapture' && name !== 'creditsBootstrap' && ageMs <= CACHE_STALE_MAX_MS) {
+    if (current && name !== 'accountCapture' && name !== 'creditsBootstrap' && !name.startsWith('gatewayLimits:') && ageMs <= CACHE_STALE_MAX_MS) {
       noteSnapshotCacheDecision(name, 'stale', current, ttl, now, 'circuit-open');
       cacheStats.staleFallbacks += 1;
       noteSnapshotCounter('cache', 'staleFallbacks');
@@ -200,7 +332,7 @@ async function cached(name, loader, options = {}) {
       noteSnapshotCounter('cache', 'errors');
       const circuit = circuitFailure(name, error);
       const ageMs = current ? Date.now() - current.at : Infinity;
-      const allowStale = name !== 'accountCapture' && name !== 'creditsBootstrap';
+      const allowStale = name !== 'accountCapture' && name !== 'creditsBootstrap' && !name.startsWith('gatewayLimits:');
       if (allowStale && current && ageMs <= CACHE_STALE_MAX_MS) {
         noteSnapshotCacheDecision(name, 'stale', current, ttl, Date.now(), 'refresh-error');
         cacheStats.staleFallbacks += 1;

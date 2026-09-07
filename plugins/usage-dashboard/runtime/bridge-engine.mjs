@@ -10,7 +10,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { pathToFileURL } from 'node:url';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.37';
+const VERSION = '1.6.38';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -773,10 +773,12 @@ const output = process.env.DEVPASS_BRIDGE_CAPTURE_FILE;
 const requestedActivityRange = ['24h','7d','30d'].includes(String(process.env.DEVPASS_BRIDGE_ACTIVITY_RANGE || ''))
   ? String(process.env.DEVPASS_BRIDGE_ACTIVITY_RANGE)
   : '';
+const requestedLimitsOrgId = String(process.env.DEVPASS_BRIDGE_LIMITS_ORG_ID || '').trim();
+// capture.v11 intentionally not activated; request provenance owns tap generation.
 const marker = Symbol.for('llmgateway.devpass.bridge.capture.v10');
 if (output && !globalThis[marker]) {
   globalThis[marker] = true;
-  const state = { orgs: null, devPlanStatus: null, devpassActivity: null, devpassLogs: null, captureMode: null };
+  const state = { orgs: null, devPlanStatus: null, devpassActivity: null, devpassLogs: null, gatewayLimits: null, captureMode: null };
   let extrasInFlight = false;
   let extrasDone = false;
   const rawHttpRequest = http.request;
@@ -815,6 +817,49 @@ if (output && !globalThis[marker]) {
       if (Object.prototype.hasOwnProperty.call(raw, key)) safe[key] = raw[key];
     }
     return safe;
+  };
+
+
+  const sanitizeGatewayLimits = (value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const raw = value.data && typeof value.data === 'object' && !Array.isArray(value.data) ? value.data : value;
+    const safe = {};
+    const nonNegative = (candidate) => typeof candidate === 'number' && Number.isFinite(candidate) && candidate >= 0 ? candidate : null;
+    if (raw.enterprise === true || raw.enterprise === false) safe.enterprise = raw.enterprise;
+    if (typeof raw.planClass === 'string' && raw.planClass.trim()) safe.planClass = raw.planClass.trim().slice(0, 64);
+    if (raw.rateLimitsApply === true || raw.rateLimitsApply === false) safe.rateLimitsApply = raw.rateLimitsApply;
+    if (raw.tierOverridden === true || raw.tierOverridden === false) safe.tierOverridden = raw.tierOverridden;
+    if (raw.capsApply === true || raw.capsApply === false) safe.capsApply = raw.capsApply;
+    if (raw.tier && typeof raw.tier === 'object' && !Array.isArray(raw.tier)) {
+      const tier = {};
+      if (Number.isInteger(raw.tier.tier) && raw.tier.tier >= 0) tier.tier = raw.tier.tier;
+      for (const key of ['rpmMultiplier','dailyCapUsd','monthlyCapUsd']) {
+        const candidate = nonNegative(raw.tier[key]);
+        if (candidate !== null) tier[key] = candidate;
+      }
+      if (Object.keys(tier).length) safe.tier = tier;
+    }
+    if (raw.usage && typeof raw.usage === 'object' && !Array.isArray(raw.usage)) {
+      const usage = {};
+      for (const key of ['dailySpentUsd','monthlySpentUsd']) {
+        const candidate = nonNegative(raw.usage[key]);
+        if (candidate !== null) usage[key] = candidate;
+      }
+      if (Object.keys(usage).length) safe.usage = usage;
+    }
+    if (Object.prototype.hasOwnProperty.call(raw, 'topUp')) {
+      if (raw.topUp === null) {
+        safe.topUp = null;
+      } else if (raw.topUp && typeof raw.topUp === 'object' && !Array.isArray(raw.topUp)) {
+        const topUp = {};
+        for (const key of ['capUsd','windowHours','usedUsd','remainingUsd']) {
+          const candidate = nonNegative(raw.topUp[key]);
+          if (candidate !== null) topUp[key] = candidate;
+        }
+        safe.topUp = topUp;
+      }
+    }
+    return Object.keys(safe).length ? safe : null;
   };
 
   const sanitizeModel = (row) => {
@@ -1059,6 +1104,19 @@ if (output && !globalThis[marker]) {
     return safe;
   };
 
+
+  const storeGatewayLimits = (result, mode) => {
+    const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(result?.state))
+      ? String(result.state)
+      : 'source-unavailable';
+    const payload = sourceState === 'ok' ? sanitizeGatewayLimits(result?.payload) : null;
+    const stateName = sourceState === 'ok' && payload ? 'ok' : sourceState === 'permission-unavailable' ? 'permission-unavailable' : 'source-unavailable';
+    state.gatewayLimits = { state: stateName, payload, mode: String(mode || '') };
+    state.captureMode = String(mode || '');
+    writeState();
+    return state.gatewayLimits;
+  };
+
   const storeActivity = (value, range, mode) => {
     const safe = sanitizeActivity(value);
     if (!safe) return false;
@@ -1128,6 +1186,20 @@ if (output && !globalThis[marker]) {
     return [...new Map(out.map((u) => [u.toString(), u])).values()];
   };
 
+
+  const limitsTarget = (orgUrl, orgId) => {
+    const exactOrgId = String(orgId || '').trim();
+    if (!exactOrgId) return null;
+    try {
+      const target = new URL(orgUrl.origin);
+      const prefix = pathPrefix(orgUrl.pathname, '/orgs');
+      target.pathname = (prefix + '/orgs/' + encodeURIComponent(exactOrgId) + '/limits').replace(/\/{2,}/g, '/');
+      return target;
+    } catch {
+      return null;
+    }
+  };
+
   const activityCandidates = (orgUrl, statusUrl, projectId, range) => {
     const prefixes = [...new Set([
       pathPrefix(statusUrl && statusUrl.pathname, '/dev-plans/status'),
@@ -1191,12 +1263,38 @@ if (output && !globalThis[marker]) {
     }
   };
 
+
+  const requestGatewayLimitsWithFetch = async (target, headers, baseInit) => {
+    if (!target || typeof originalFetch !== 'function') return { state:'source-unavailable', payload:null };
+    try {
+      const nextInit = baseInit && typeof baseInit === 'object' ? { ...baseInit } : {};
+      nextInit.method = 'GET';
+      nextInit.headers = headers;
+      delete nextInit.body;
+      delete nextInit.signal;
+      const response = await originalFetch(target.toString(), nextInit);
+      if (!response) return { state:'source-unavailable', payload:null };
+      if (response.status === 403) return { state:'permission-unavailable', payload:null };
+      if (response.status === 404) return { state:'source-unavailable', payload:null };
+      if (!response.ok) return { state:'source-unavailable', payload:null };
+      return { state:'ok', payload:parseJsonText(await response.clone().text()) };
+    } catch {
+      return { state:'source-unavailable', payload:null };
+    }
+  };
+
   const requestExtrasWithFetch = async (input, init, orgUrl) => {
     if (extrasDone || extrasInFlight || typeof originalFetch !== 'function') return;
     extrasInFlight = true;
     try {
       const inputHeaders = typeof Request === 'function' && input instanceof Request ? input.headers : (init && init.headers);
       const headers = safeHeaders(inputHeaders);
+      if (requestedLimitsOrgId) {
+        const result = await requestGatewayLimitsWithFetch(limitsTarget(orgUrl, requestedLimitsOrgId), headers, init);
+        storeGatewayLimits(result, 'fetch-limits');
+        extrasDone = true;
+        return;
+      }
       for (const target of statusCandidates(orgUrl)) {
         const parsed = await requestJsonFetch(target, headers, init);
         const safeStatus = parsed ? storeStatus(parsed, 'fetch') : null;
@@ -1295,10 +1393,50 @@ if (output && !globalThis[marker]) {
     }
   });
 
+
+  const requestGatewayLimitsNode = (target, headers) => new Promise((resolve) => {
+    if (!target) return resolve({ state:'source-unavailable', payload:null });
+    const rawRequest = target.protocol === 'http:' ? rawHttpRequest : rawHttpsRequest;
+    const requestModule = target.protocol === 'http:' ? http : https;
+    const opts = {
+      protocol: target.protocol,
+      hostname: target.hostname,
+      port: target.port || undefined,
+      method: 'GET',
+      path: target.pathname + target.search,
+      headers,
+    };
+    let req;
+    try {
+      req = rawRequest.call(requestModule, opts, (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => { if (body.length < 1024 * 1024) body += chunk; });
+        res.on('end', () => {
+          if (res.statusCode === 403) return resolve({ state:'permission-unavailable', payload:null });
+          if (res.statusCode === 404) return resolve({ state:'source-unavailable', payload:null });
+          if (res.statusCode >= 200 && res.statusCode < 300) return resolve({ state:'ok', payload:parseJsonText(body) });
+          return resolve({ state:'source-unavailable', payload:null });
+        });
+      });
+      req.on('error', () => resolve({ state:'source-unavailable', payload:null }));
+      req.setTimeout(10000, () => { try { req.destroy(); } catch {} resolve({ state:'source-unavailable', payload:null }); });
+      req.end();
+    } catch {
+      resolve({ state:'source-unavailable', payload:null });
+    }
+  });
+
   const requestExtrasWithNode = async (orgUrl, headers) => {
     if (extrasDone || extrasInFlight) return;
     extrasInFlight = true;
     try {
+      if (requestedLimitsOrgId) {
+        const result = await requestGatewayLimitsNode(limitsTarget(orgUrl, requestedLimitsOrgId), headers);
+        storeGatewayLimits(result, 'node-request-limits');
+        extrasDone = true;
+        return;
+      }
       for (const target of statusCandidates(orgUrl)) {
         const parsed = await requestJsonNode(target, headers);
         const safeStatus = parsed ? storeStatus(parsed, 'node-request') : null;
@@ -1345,7 +1483,8 @@ if (output && !globalThis[marker]) {
   };
 
   // Authentication headers stay in memory only long enough to perform official,
-  // read-only /dev-plans/status plus optional project-scoped /activity and /logs requests.
+  // read-only /dev-plans/status plus optional project-scoped /activity and /logs requests,
+  // or one exact selected-organization /orgs/{id}/limits request in limits-only mode.
   // They are never written to the capture file or returned by the bridge.
   patchNodeRequest(http, 'http:');
   patchNodeRequest(https, 'https:');
@@ -1461,6 +1600,137 @@ async function loadAccountCapture() {
   return cached('accountCapture', async () => captureAccountDetailsViaCliSession('24h'));
 }
 
+
+function gatewayLimitsNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function gatewayLimitsUnknown(state = 'source-unavailable', now = Date.now()) {
+  return {
+    state: ['permission-unavailable','source-unavailable'].includes(String(state)) ? String(state) : 'source-unavailable',
+    source: 'org-limits',
+    enterprise: null,
+    planClass: null,
+    rateLimitsApply: null,
+    tierOverridden: null,
+    capsApply: null,
+    trustTierState: 'unknown',
+    trustTier: null,
+    rateState: 'unknown',
+    rateMultiplier: null,
+    daily: { state:'unknown', used:null, cap:null, remaining:null },
+    monthly: { state:'unknown', used:null, cap:null, remaining:null },
+    topUp: { state:'unknown', cap:null, windowHours:null, used:null, remaining:null },
+    fetchedAt: Number(now),
+  };
+}
+
+function normalizeGatewayLimitsCapture(capture, now = Date.now()) {
+  const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(capture?.state))
+    ? String(capture.state)
+    : 'source-unavailable';
+  if (sourceState !== 'ok') return gatewayLimitsUnknown(sourceState, now);
+  const raw = capture?.payload;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return gatewayLimitsUnknown('source-unavailable', now);
+
+  const enterprise = raw.enterprise === true ? true : raw.enterprise === false ? false : null;
+  const planClass = typeof raw.planClass === 'string' && raw.planClass.trim() ? raw.planClass.trim() : null;
+  const rateLimitsApply = raw.rateLimitsApply === true ? true : raw.rateLimitsApply === false ? false : null;
+  const tierOverridden = raw.tierOverridden === true ? true : raw.tierOverridden === false ? false : null;
+  const capsApply = raw.capsApply === true ? true : raw.capsApply === false ? false : null;
+  const trustTier = Number.isInteger(raw?.tier?.tier) && raw.tier.tier >= 0 ? raw.tier.tier : null;
+  const rateMultiplier = gatewayLimitsNumber(raw?.tier?.rpmMultiplier);
+  const dailyUsed = gatewayLimitsNumber(raw?.usage?.dailySpentUsd);
+  const dailyCap = gatewayLimitsNumber(raw?.tier?.dailyCapUsd);
+  const monthlyUsed = gatewayLimitsNumber(raw?.usage?.monthlySpentUsd);
+  const monthlyCap = gatewayLimitsNumber(raw?.tier?.monthlyCapUsd);
+
+  const trustTierState = enterprise === true || (planClass && planClass !== 'regular')
+    ? 'not-applicable'
+    : planClass === 'regular' && trustTier !== null
+      ? 'value'
+      : 'unknown';
+  const rateState = enterprise === true || rateLimitsApply === false
+    ? 'not-applicable'
+    : rateLimitsApply === true && rateMultiplier !== null
+      ? 'value'
+      : 'unknown';
+
+  const spendMetric = (used, cap) => {
+    if (enterprise === true || capsApply === false) return { state:'not-applicable', used:null, cap:null, remaining:null };
+    if (capsApply === true && used !== null && cap !== null) {
+      return { state:'value', used, cap, remaining:Math.max(0, cap - used) };
+    }
+    return { state:'unknown', used:null, cap:null, remaining:null };
+  };
+
+  let topUp = { state:'unknown', cap:null, windowHours:null, used:null, remaining:null };
+  if (enterprise === true) {
+    topUp = { state:'not-applicable', cap:null, windowHours:null, used:null, remaining:null };
+  } else if (Object.prototype.hasOwnProperty.call(raw, 'topUp') && raw.topUp === null) {
+    topUp = { state:'not-applicable', cap:null, windowHours:null, used:null, remaining:null };
+  } else if (raw.topUp && typeof raw.topUp === 'object' && !Array.isArray(raw.topUp)) {
+    const cap = gatewayLimitsNumber(raw.topUp.capUsd);
+    const windowHours = gatewayLimitsNumber(raw.topUp.windowHours);
+    const used = gatewayLimitsNumber(raw.topUp.usedUsd);
+    const remaining = gatewayLimitsNumber(raw.topUp.remainingUsd);
+    if (cap !== null && windowHours !== null && used !== null && remaining !== null) {
+      topUp = { state:'value', cap, windowHours, used, remaining };
+    }
+  }
+
+  return {
+    state: 'ok',
+    source: 'org-limits',
+    enterprise,
+    planClass,
+    rateLimitsApply,
+    tierOverridden,
+    capsApply,
+    trustTierState,
+    trustTier: trustTierState === 'value' ? trustTier : null,
+    rateState,
+    rateMultiplier: rateState === 'value' ? rateMultiplier : null,
+    daily: spendMetric(dailyUsed, dailyCap),
+    monthly: spendMetric(monthlyUsed, monthlyCap),
+    topUp,
+    fetchedAt: Number(now),
+  };
+}
+
+async function captureGatewayLimitsViaCliSession(creditsOrgId) {
+  const exactOrgId = String(creditsOrgId || '').trim();
+  if (!exactOrgId) return gatewayLimitsUnknown('source-unavailable');
+  await ensureCaptureTap();
+  const captureFile = path.join(
+    CONFIG_DIR,
+    `limits-${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.json`,
+  );
+  const existingNodeOptions = String(process.env.NODE_OPTIONS || '').trim();
+  const captureRequire = `--require=${CAPTURE_TAP_FILE}`;
+  const nodeOptions = existingNodeOptions ? `${existingNodeOptions} ${captureRequire}` : captureRequire;
+  try {
+    await runCliProcess(['orgs', 'list', '--json'], {
+      NODE_OPTIONS: nodeOptions,
+      DEVPASS_BRIDGE_CAPTURE_FILE: captureFile,
+      DEVPASS_BRIDGE_LIMITS_ORG_ID: exactOrgId,
+    });
+    const text = await fs.readFile(captureFile, 'utf8');
+    const captured = JSON.parse(text);
+    return normalizeGatewayLimitsCapture(captured?.gatewayLimits);
+  } catch {
+    return gatewayLimitsUnknown('source-unavailable');
+  } finally {
+    try { await fs.unlink(captureFile); } catch {}
+  }
+}
+
+async function loadGatewayLimits(creditsOrgId) {
+  const exactOrgId = String(creditsOrgId || '').trim();
+  if (!exactOrgId) return gatewayLimitsUnknown('source-unavailable');
+  return cached(`gatewayLimits:${exactOrgId}`, async () => captureGatewayLimitsViaCliSession(exactOrgId));
+}
+
 async function loadCreditsBootstrap() {
   return cached('creditsBootstrap', async () => runCli(['credits', '--json']));
 }
@@ -1551,6 +1821,7 @@ async function cached(name, loader, options = {}) {
     ?? (name.startsWith('analytics:') ? 60_000 : null)
     ?? ((name === 'usageScopes' || name.startsWith('usageScopes:')) ? 60_000 : null)
     ?? ((name === 'analyticsScopes' || name.startsWith('analyticsScopes:')) ? 60_000 : null)
+    ?? (name.startsWith('gatewayLimits:') ? 300_000 : null)
     ?? (name.startsWith('runway:') ? 300_000 : 30_000);
   const now = Date.now();
   const current = cache.get(name);
@@ -1598,7 +1869,7 @@ async function cached(name, loader, options = {}) {
   gate ||= circuitBeforeLoad(name);
   if (!gate.allowed) {
     const ageMs = current ? now - current.at : Infinity;
-    if (current && name !== 'accountCapture' && name !== 'creditsBootstrap' && ageMs <= CACHE_STALE_MAX_MS) {
+    if (current && name !== 'accountCapture' && name !== 'creditsBootstrap' && !name.startsWith('gatewayLimits:') && ageMs <= CACHE_STALE_MAX_MS) {
       noteSnapshotCacheDecision(name, 'stale', current, ttl, now, 'circuit-open');
       cacheStats.staleFallbacks += 1;
       noteSnapshotCounter('cache', 'staleFallbacks');
@@ -1634,7 +1905,7 @@ async function cached(name, loader, options = {}) {
       noteSnapshotCounter('cache', 'errors');
       const circuit = circuitFailure(name, error);
       const ageMs = current ? Date.now() - current.at : Infinity;
-      const allowStale = name !== 'accountCapture' && name !== 'creditsBootstrap';
+      const allowStale = name !== 'accountCapture' && name !== 'creditsBootstrap' && !name.startsWith('gatewayLimits:');
       if (allowStale && current && ageMs <= CACHE_STALE_MAX_MS) {
         noteSnapshotCacheDecision(name, 'stale', current, ttl, Date.now(), 'refresh-error');
         cacheStats.staleFallbacks += 1;
@@ -3427,6 +3698,10 @@ async function handle(req, res) {
     if (url.pathname === '/snapshot') {
       const profile = url.searchParams.get('profile') === 'light' ? 'light' : 'full';
       return json(res, 200, await snapshot(profile, creditsOrgId));
+    }
+    if (url.pathname === '/gateway-limits') {
+      if (!creditsOrgId) return json(res, 400, { state:'source-unavailable', source:'org-limits', error:'creditsOrgId required' });
+      return json(res, 200, await loadGatewayLimits(creditsOrgId));
     }
     if (url.pathname === '/orgs') return json(res, 200, await loadOrgs());
     if (url.pathname === '/devpass-status') return json(res, 200, await loadDevPassStatus());

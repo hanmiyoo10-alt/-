@@ -34,7 +34,7 @@ fn storage_name(name: &[u8]) -> String {
 
 fn load(context: &mut dyn WIPICContext, id: i32) -> Result<Option<Handle>> {
     if id <= 0 { return Ok(None); }
-    let Ok(h) = read_generic::<Handle>(context, id as u32) else { return Ok(None); };
+    let Ok(h) = read_generic::<Handle, _>(context, id as u32) else { return Ok(None); };
     Ok((h.magic == MAGIC && h.name_len > 0 && h.name_len <= 96 && h.record_size > 0 && h.record_size <= MAX_RECORD as u32).then_some(h))
 }
 

@@ -20,6 +20,7 @@ PATH_RE = re.compile(r"^[A-Za-z0-9_.@/+ -]+$")
 EMPTY_CONTEXT_CASES = frozenset({
     ("agent-execution-compactness", "forty-line-temp-module"),
     ("agent-execution-compactness", "existing-repository-harness"),
+    ("agent-execution-compactness", "multiple-independent-goals"),
 })
 
 

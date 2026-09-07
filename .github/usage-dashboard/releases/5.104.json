@@ -1,0 +1,99 @@
+{
+  "product": "Local Usage Dashboard",
+  "productVersion": "3.0.0-alpha.5.104",
+  "releaseTitle": "Gateway Limits Utilization Visualization",
+  "engineVersion": "1.6.38",
+  "managerVersion": "1.3.6",
+  "managedCliVersion": "1.10.0",
+  "managedCliAuthority": {
+    "schemaVersion": 1,
+    "package": "@llmgateway/cli",
+    "version": "1.10.0",
+    "exact": true,
+    "upstreamRepository": "theopenco/llmgateway-templates",
+    "tagNamespace": "@llmgateway/cli@",
+    "tag": "@llmgateway/cli@1.10.0",
+    "tagCommit": "6b1cda1988f32010a9b090c00eb9b2fe672145fe",
+    "verifiedAt": "2026-08-31",
+    "verification": "GitHub refs/tags/@llmgateway/cli@1.10.0",
+    "parentProjectRepository": "theopenco/llmgateway",
+    "parentProjectReleaseIsPackageAuthority": false
+  },
+  "managedModelCatalogVersion": "1.280.0",
+  "managedModelCatalogAuthority": {
+    "package": "@llmgateway/models",
+    "version": "1.280.0",
+    "exact": true,
+    "root": "managed-cli-version-root",
+    "source": "installed-package-json-and-export",
+    "upstreamRepository": "theopenco/llmgateway",
+    "upstreamCommit": "fbb40efa41c379db5223dff708509b6dd82e05a9",
+    "verifiedAt": "2026-08-31"
+  },
+  "snapshotContract": 1,
+  "recentRequestContract": 1,
+  "contracts": {
+    "snapshot": 1,
+    "recentRequest": 1
+  },
+  "releaseEvidence": {
+    "schemaVersion": 1,
+    "acceptedBaseline": {
+      "productVersion": "3.0.0-alpha.5.103",
+      "releaseSha": "7fc4e31ab28d726cc355915a57f0be566dab2b25",
+      "verdict": "accepted",
+      "issue": 1829,
+      "commentId": 5570738555,
+      "note": "5.103 completed exact PocketRisu physical acceptance before 5.104 implementation."
+    },
+    "latestInstalled": {
+      "productVersion": "3.0.0-alpha.5.103",
+      "releaseSha": "7fc4e31ab28d726cc355915a57f0be566dab2b25",
+      "verdict": "accepted",
+      "issue": 1829,
+      "commentId": 5570738555,
+      "note": "5.103 is the latest exact installed accepted production baseline at 5.104 source freeze."
+    }
+  },
+  "authority": {
+    "featureIssue": 1859,
+    "designPullRequest": 1860,
+    "physicalAcceptanceIssue": 1829,
+    "releaseGeneration": "E13",
+    "e20": "structured release evidence remains authoritative",
+    "e21": "canonical evidence-view compatibility retained",
+    "e22": "latest physically accepted baseline remains distinct from latest deployment",
+    "e23": "accepted-baseline handoff boundary remains sealed",
+    "e24": "integration-closure design is byte-neutral and does not change 5.104 Product authority"
+  },
+  "materializer": "plugins/usage-dashboard/tools/release_gateway_limits_utilization_5104.py",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
+  "newRegression": "plugins/usage-dashboard/tests/p70-gateway-limits-utilization-visualization.cjs",
+  "highlights": [
+    "Adds source-faithful utilization bars to the existing Credits Gateway Limits daily, monthly, and top-up amounts.",
+    "Daily/monthly bars use explicit used/cap; top-up uses explicit remaining/cap, with no inferred thresholds.",
+    "Unknown, not-applicable, invalid, or non-positive caps render no synthetic 0% visualization.",
+    "Keeps Engine 1.6.38, Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded."
+  ],
+  "diagnosticHints": [
+    "Verify Product 5.104 · Engine 1.6.38 · Manager 1.3.6 and READY/Health ok.",
+    "Open Credits and confirm exact Gateway Limits amounts remain visible with daily/monthly used bars and top-up remaining bar.",
+    "UNKNOWN or 미적용 rows must not appear as misleading empty 0% bars; existing Credits and DevPass surfaces should stay healthy."
+  ],
+  "releaseNotes": {
+    "highlights": [
+      "Adds source-faithful utilization bars to the existing Credits Gateway Limits daily, monthly, and top-up amounts.",
+      "Daily/monthly bars use explicit used/cap; top-up uses explicit remaining/cap, with no inferred thresholds.",
+      "Unknown, not-applicable, invalid, or non-positive caps render no synthetic 0% visualization.",
+      "Keeps Engine 1.6.38, Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded."
+    ],
+    "diagnosticHints": [
+      "Verify Product 5.104 · Engine 1.6.38 · Manager 1.3.6 and READY/Health ok.",
+      "Open Credits and confirm exact Gateway Limits amounts remain visible with daily/monthly used bars and top-up remaining bar.",
+      "UNKNOWN or 미적용 rows must not appear as misleading empty 0% bars; existing Credits and DevPass surfaces should stay healthy."
+    ]
+  }
+}

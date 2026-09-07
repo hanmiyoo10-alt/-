@@ -34,6 +34,15 @@ It is development policy, not a source of mutable product, runtime, release, or 
 - Do not claim this repository can hide or suppress ChatGPT tool-activity UI. Reduce repository-owned payload and fan-out instead.
 - If the work contains multiple independent goals, split it into bounded work units before choosing an execution route.
 
+## Pre-routing disposition gate
+
+Apply safety dispositions before selecting any of the five execution routes.
+
+- If one request bundles two or more independent semantic goals, emit `Disposition: SPLIT`.
+- After `SPLIT`, stop route selection for the combined request. Do not choose `EXISTING_COMMAND`, `HARNESS`, `INLINE_SMALL`, `MATERIALIZE`, or `EXCEPTION` until the goals have been separated into bounded work units.
+- Route, size, file-count, and representative examples below apply only after this gate passes for one semantic work unit. They must not override a prior `SPLIT` or `REJECT` disposition.
+- Route each resulting bounded work unit independently after the split.
+
 ## Visible fan-out companion contract
 
 Visible fan-out is a companion metric. It does not add a sixth execution route.

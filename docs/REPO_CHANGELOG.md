@@ -1194,3 +1194,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/461ee231d033dd88d452b40c9617af3b6120a8d6)
 - Event ID: `af223fd743d957a6a0be81048c159f39ebe82e725255d4fe2a14a5ca908f0931`
 <!-- canonical-main-doc-promoted:af223fd743d957a6a0be81048c159f39ebe82e725255d4fe2a14a5ca908f0931 -->
+
+### 2026-09-07 — feat(usage-dashboard): release 5.103 Credits Gateway Limits & Headroom (#1852)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `25c8eba73f7aab9f917a8bf89728f17e7d7d64cd`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/25c8eba73f7aab9f917a8bf89728f17e7d7d64cd)
+- Event ID: `4a1afca6fa525d1381913a70daf196fd895b2de341aa38205d8c10ed11eae439`
+<!-- canonical-main-doc-promoted:4a1afca6fa525d1381913a70daf196fd895b2de341aa38205d8c10ed11eae439 -->

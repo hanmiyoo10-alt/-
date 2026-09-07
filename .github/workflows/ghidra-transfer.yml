@@ -18,19 +18,50 @@ jobs:
           path: environment
       - name: Split verified archive
         run: |
-          split -b 300M -d environment/ghidra-linux-x64.tar.gz environment/ghidra.part
+          split -b 64M -d environment/ghidra-linux-x64.tar.gz environment/ghidra.part
           sha256sum environment/ghidra-linux-x64.tar.gz environment/ghidra.part* > environment/checksums.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: ghidra-part00
+          name: ghidra-chunk00
           path: environment/ghidra.part00
           compression-level: 0
       - uses: actions/upload-artifact@v4
         with:
-          name: ghidra-part01
+          name: ghidra-chunk01
           path: environment/ghidra.part01
           compression-level: 0
       - uses: actions/upload-artifact@v4
         with:
-          name: ghidra-checksums
-          path: environment/checksums.txt
+          name: ghidra-chunk02
+          path: environment/ghidra.part02
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ghidra-chunk03
+          path: environment/ghidra.part03
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ghidra-chunk04
+          path: environment/ghidra.part04
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ghidra-chunk05
+          path: environment/ghidra.part05
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ghidra-chunk06
+          path: environment/ghidra.part06
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ghidra-chunk07
+          path: environment/ghidra.part07
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ghidra-chunk08
+          path: environment/ghidra.part08
+          compression-level: 0

@@ -14,8 +14,8 @@ assert.match(engine, /'activity:24h': 60_000/);
 assert.match(engine, /'activity:7d': 300_000/);
 assert.match(engine, /'activity:30d': 600_000/);
 assert.ok(!engine.includes("if (key === 'creditsBootstrap') return 'organizations';"));
-assert.ok(engine.includes("name !== 'accountCapture' && name !== 'creditsBootstrap' && ageMs <= CACHE_STALE_MAX_MS"));
-assert.ok(engine.includes("const allowStale = name !== 'accountCapture' && name !== 'creditsBootstrap';"));
+assert.ok(engine.includes("name !== 'accountCapture' && name !== 'creditsBootstrap' && !name.startsWith('gatewayLimits:') && ageMs <= CACHE_STALE_MAX_MS"));
+assert.ok(engine.includes("const allowStale = name !== 'accountCapture' && name !== 'creditsBootstrap' && !name.startsWith('gatewayLimits:');"));
 
 assert.match(engine, /async function loadCreditsBootstrap\(\) \{\s*return cached\('creditsBootstrap', async \(\) => runCli\(\['credits', '--json'\]\)\);\s*\}/s);
 const loadOrgsAt = engine.indexOf('async function loadOrgs() {');

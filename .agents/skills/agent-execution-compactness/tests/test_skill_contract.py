@@ -202,7 +202,7 @@ class SkillContractTests(unittest.TestCase):
         text = SKILL.read_text(encoding="utf-8")
         section = text[
             text.index("## Read/result payload companion contract"):
-            text.index("## Routing order")
+            text.index("## Connector-response selection companion contract")
         ]
         for required in (
             "Unknown location:",
@@ -220,7 +220,7 @@ class SkillContractTests(unittest.TestCase):
         text = SKILL.read_text(encoding="utf-8")
         section = text[
             text.index("## Read/result payload companion contract"):
-            text.index("## Routing order")
+            text.index("## Connector-response selection companion contract")
         ]
         for required in (
             "whole-file/full-body reads remain valid",
@@ -272,6 +272,90 @@ class SkillContractTests(unittest.TestCase):
         )
         self.assertFalse(
             cases["known-large-source-local-question"]["facts"]["completeness_required"]
+        )
+
+    def test_connector_response_companion_contract_is_distinct_and_bounded(self):
+        text = SKILL.read_text(encoding="utf-8")
+        for required in (
+            "## Connector-response selection companion contract",
+            "Connector-response selection is a companion compactness axis distinct from execution-program size, call fan-out, and source-range/read selection.",
+            "repository_owned_connector_response_surface",
+            "narrowest evidence-equivalent result surface before a potentially large connector response is materialized",
+            "It does not add a sixth execution route.",
+        ):
+            self.assertIn(required, text)
+
+    def test_connector_response_selection_prefers_action_filter_target_and_reuse(self):
+        text = SKILL.read_text(encoding="utf-8")
+        section = text[
+            text.index("## Connector-response selection companion contract"):
+            text.index("## Routing order")
+        ]
+        for required in (
+            "Existing bounded repository projection/harness:",
+            "Action-specific connector tool:",
+            "Filtered/query-scoped endpoint:",
+            "Targeted source read:",
+            "Broad fetch fallback:",
+            "Reuse captured evidence:",
+            "exact SHA/ref, check/job name, status context, file path, issue/PR number",
+            "do not repeat the same broad response inside one unchanged currentness window",
+        ):
+            self.assertIn(required, section)
+
+    def test_connector_response_preserves_broad_fetch_authority_exceptions(self):
+        text = SKILL.read_text(encoding="utf-8")
+        section = text[
+            text.index("## Connector-response selection companion contract"):
+            text.index("## Routing order")
+        ]
+        for required in (
+            "broad generic fetch/full JSON remains valid when completeness is part of the question",
+            "no available narrower connector surface preserves the required authority/evidence",
+            "exact repository/ref/SHA or owning source identity required by the claim",
+            "a required currentness/freshness barrier or post-mutation verification",
+            "`UNKNOWN`, `CONFLICT`, partial, cancelled, skipped, or failure state",
+            "security, permission, branch-protection, or trust context",
+            "Direct canonical authority reads that lack an evidence-equivalent compact connector surface remain allowed.",
+            "does not modify the ChatGPT/GitHub connector response schema",
+        ):
+            self.assertIn(required, section)
+
+    def test_connector_response_eval_fixtures_cover_selection_taxonomy(self):
+        payload = json.loads(EVALS.read_text(encoding="utf-8"))
+        cases = {case["id"]: case for case in payload["connector_response_evals"]}
+        self.assertEqual(
+            set(cases),
+            {
+                "action-specific-pr-metadata",
+                "filtered-exact-check-run",
+                "connector-to-targeted-source-read",
+                "reuse-captured-authority-evidence",
+                "direct-authority-no-compact-equivalent",
+            },
+        )
+        expected = {
+            "action-specific-pr-metadata": "ACTION_SPECIFIC",
+            "filtered-exact-check-run": "FILTERED_ENDPOINT",
+            "connector-to-targeted-source-read": "TARGETED_READ",
+            "reuse-captured-authority-evidence": "REUSE_CAPTURED",
+            "direct-authority-no-compact-equivalent": "BROAD_FETCH_ALLOWED",
+        }
+        self.assertEqual(
+            {case_id: cases[case_id]["expected_selection"] for case_id in cases},
+            expected,
+        )
+        self.assertTrue(
+            cases["reuse-captured-authority-evidence"]["facts"]["captured_evidence_sufficient"]
+        )
+        self.assertFalse(
+            cases["reuse-captured-authority-evidence"]["facts"]["currentness_barrier_changed"]
+        )
+        self.assertFalse(
+            cases["direct-authority-no-compact-equivalent"]["facts"]["compact_equivalent_available"]
+        )
+        self.assertTrue(
+            cases["direct-authority-no-compact-equivalent"]["facts"]["currentness_barrier_changed"]
         )
 
     def test_skill_creates_no_execution_authority(self):

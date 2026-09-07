@@ -1,6 +1,103 @@
 {
   "skill_name": "agent-execution-compactness",
   "schema_version": 1,
+  "connector_response_evals": [
+    {
+      "id": "action-specific-pr-metadata",
+      "prompt": "A PR metadata question needs only state, base/head SHA, draft/mergeability, and changed-file count. A dedicated PR metadata action exists while a broad generic PR/full-object fetch would return much more data.",
+      "facts": {
+        "bounded_projection_available": false,
+        "action_specific_available": true,
+        "server_filter_available": false,
+        "source_text_required": false,
+        "captured_evidence_sufficient": false,
+        "completeness_required": false,
+        "compact_equivalent_available": true,
+        "currentness_barrier_changed": false
+      },
+      "expected_selection": "ACTION_SPECIFIC",
+      "assertions": [
+        "Prefer the action-specific PR metadata result over broad generic full-object retrieval.",
+        "Preserve exact base/head identity and merge state needed for the claim."
+      ]
+    },
+    {
+      "id": "filtered-exact-check-run",
+      "prompt": "An exact commit has many check runs, but the question needs only one named check/job. The connector can filter by exact SHA and check/job name before returning the result.",
+      "facts": {
+        "bounded_projection_available": false,
+        "action_specific_available": false,
+        "server_filter_available": true,
+        "source_text_required": false,
+        "captured_evidence_sufficient": false,
+        "completeness_required": false,
+        "compact_equivalent_available": true,
+        "currentness_barrier_changed": false
+      },
+      "expected_selection": "FILTERED_ENDPOINT",
+      "assertions": [
+        "Apply the exact SHA/check/job filter before retrieving the broad collection.",
+        "Do not hide failure or skipped/cancelled state for the selected check."
+      ]
+    },
+    {
+      "id": "connector-to-targeted-source-read",
+      "prompt": "No action-specific metadata result answers the question because the local source text itself is required. The owning file and relevant range are known.",
+      "facts": {
+        "bounded_projection_available": false,
+        "action_specific_available": false,
+        "server_filter_available": false,
+        "source_text_required": true,
+        "captured_evidence_sufficient": false,
+        "completeness_required": false,
+        "compact_equivalent_available": true,
+        "currentness_barrier_changed": false
+      },
+      "expected_selection": "TARGETED_READ",
+      "assertions": [
+        "Route to the targeted read/result payload contract when source text is actually required.",
+        "Preserve the owning source locator and required context."
+      ]
+    },
+    {
+      "id": "reuse-captured-authority-evidence",
+      "prompt": "A broad direct authority read already established the exact SHA and required state inside the current unchanged currentness barrier. The next statement needs the same fact and no mutation or freshness boundary has occurred.",
+      "facts": {
+        "bounded_projection_available": false,
+        "action_specific_available": false,
+        "server_filter_available": false,
+        "source_text_required": false,
+        "captured_evidence_sufficient": true,
+        "completeness_required": false,
+        "compact_equivalent_available": false,
+        "currentness_barrier_changed": false
+      },
+      "expected_selection": "REUSE_CAPTURED",
+      "assertions": [
+        "Reuse the captured authority evidence instead of repeating the same broad response.",
+        "Require a fresh read when the currentness barrier changes."
+      ]
+    },
+    {
+      "id": "direct-authority-no-compact-equivalent",
+      "prompt": "A required direct canonical authority/currentness read has no evidence-equivalent bounded projection, action-specific result, or filter, and the exact authoritative object is needed.",
+      "facts": {
+        "bounded_projection_available": false,
+        "action_specific_available": false,
+        "server_filter_available": false,
+        "source_text_required": false,
+        "captured_evidence_sufficient": false,
+        "completeness_required": false,
+        "compact_equivalent_available": false,
+        "currentness_barrier_changed": true
+      },
+      "expected_selection": "BROAD_FETCH_ALLOWED",
+      "assertions": [
+        "Broad retrieval is valid because no evidence-equivalent compact surface exists for the required authority read.",
+        "Capture exact ref/SHA/currentness evidence and reuse it only within the resulting barrier."
+      ]
+    }
+  ],
   "read_payload_evals": [
     {
       "id": "known-large-source-local-question",

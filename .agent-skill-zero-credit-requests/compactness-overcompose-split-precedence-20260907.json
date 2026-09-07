@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "skill": "agent-execution-compactness",
+  "case_id": "multiple-independent-goals",
+  "target_repository_sha": "ac4891aa586a5d5bbc965ff0dbc398fa9a95d246",
+  "model_profile": "qwen2.5-1.5b-instruct-q4_k_m"
+}

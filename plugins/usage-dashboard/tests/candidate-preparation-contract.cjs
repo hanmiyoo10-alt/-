@@ -64,7 +64,8 @@ assert.match(e7Workflow,/E7_CANDIDATE_CAS_FAILED/);
 assert.match(e7Workflow,/git push origin "\$PAYLOAD_SHA:refs\/heads\/\$CANDIDATE_BRANCH"/);
 assert.doesNotMatch(e7Workflow,/--force|--force-with-lease/);
 assert.equal((e7Workflow.match(/contents: write/g) || []).length, 1, 'E7 must have exactly one repository-content writer');
-assert.doesNotMatch(e7Workflow,/pull-requests: write|\/pulls/,'candidate stage must not own PR orchestration');
+assert.doesNotMatch(e7Workflow,/pull-requests: write/,'candidate stage must not own PR write authority');
+assert.equal((e7Workflow.match(/pull-requests: read/g) || []).length, 1, 'E24 may add exactly one read-only PR evidence permission without gaining orchestration authority');
 assert.match(validatorWorkflow,/^  workflow_dispatch:$/m,'ordinary validator remains available as defense in depth');
 
 const writerAt = e7Workflow.indexOf('\n  write_candidate:');

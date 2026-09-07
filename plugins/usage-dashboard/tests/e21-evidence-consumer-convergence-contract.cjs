@@ -104,14 +104,19 @@ const directEvidenceOwners = new Set([
   'p70-gateway-limits-utilization-visualization.cjs', // frozen 5.104 spec proof; current release consumer uses evidenceView
 ]);
 const historicalOwners = [
-  ['p63-credits-spend-composition-source-fidelity.cjs', '3.0.0-alpha.5.97'],
-  ['p69-credits-gateway-limits-headroom.cjs', '3.0.0-alpha.5.103'],
-  ['p70-gateway-limits-utilization-visualization.cjs', '3.0.0-alpha.5.104'],
+  {name:'p63-credits-spend-composition-source-fidelity.cjs', product:'3.0.0-alpha.5.97', targetConst:false, usesView:false},
+  {name:'p69-credits-gateway-limits-headroom.cjs', product:'3.0.0-alpha.5.103', targetConst:true, usesView:true},
+  {name:'p70-gateway-limits-utilization-visualization.cjs', product:'3.0.0-alpha.5.104', targetConst:true, usesView:true},
 ];
-for (const [name,product] of historicalOwners) {
+for (const {name,product,targetConst,usesView} of historicalOwners) {
   const source = fs.readFileSync(path.join(testsRoot,name),'utf8');
-  assert.ok(source.includes(`release.productVersion !== '${product}'`), `${name} allowlist must remain exact ${product} release-locked proof`);
-  assert.ok(source.includes('release.evidenceView?.[role]') || name === 'p63-credits-spend-composition-source-fidelity.cjs', `${name} current release consumer must use evidenceView`);
+  if (targetConst) {
+    assert.ok(source.includes(`const TARGET = '${product}';`), `${name} allowlist TARGET must remain exact ${product}`);
+    assert.ok(source.includes('release.productVersion !== TARGET'), `${name} allowlist must remain TARGET release-locked proof`);
+  } else {
+    assert.ok(source.includes(`release.productVersion !== '${product}'`), `${name} allowlist must remain exact ${product} release-locked proof`);
+  }
+  if (usesView) assert.ok(source.includes('release.evidenceView?.[role]'), `${name} current release consumer must use evidenceView`);
   for (const marker of directEvidenceNames) {
     if (name === 'p63-credits-spend-composition-source-fidelity.cjs') assert.ok(source.includes(marker), `P63 bounded evidence owner marker missing: ${marker}`);
   }

@@ -100,10 +100,22 @@ const directEvidenceNames = ['verifiedBaseline','latestInstalledEvidence','relea
 const directEvidenceOwners = new Set([
   'e21-evidence-consumer-convergence-contract.cjs', // contract owner: malformed/dual-owner fixtures + static canary
   'p63-credits-spend-composition-source-fidelity.cjs', // frozen 5.97 live E20 release proof
+  'p69-credits-gateway-limits-headroom.cjs', // frozen 5.103 spec proof; current release consumer uses evidenceView
+  'p70-gateway-limits-utilization-visualization.cjs', // frozen 5.104 spec proof; current release consumer uses evidenceView
 ]);
-const p63Source = fs.readFileSync(path.join(testsRoot,'p63-credits-spend-composition-source-fidelity.cjs'),'utf8');
-assert.ok(p63Source.includes("assert.equal(release.productVersion, '3.0.0-alpha.5.97')"), 'P63 allowlist must remain exact 5.97 release-specific proof');
-for (const marker of directEvidenceNames) assert.ok(p63Source.includes(marker), `P63 bounded evidence owner marker missing: ${marker}`);
+const historicalOwners = [
+  ['p63-credits-spend-composition-source-fidelity.cjs', '3.0.0-alpha.5.97'],
+  ['p69-credits-gateway-limits-headroom.cjs', '3.0.0-alpha.5.103'],
+  ['p70-gateway-limits-utilization-visualization.cjs', '3.0.0-alpha.5.104'],
+];
+for (const [name,product] of historicalOwners) {
+  const source = fs.readFileSync(path.join(testsRoot,name),'utf8');
+  assert.ok(source.includes(`release.productVersion !== '${product}'`), `${name} allowlist must remain exact ${product} release-locked proof`);
+  assert.ok(source.includes('release.evidenceView?.[role]') || name === 'p63-credits-spend-composition-source-fidelity.cjs', `${name} current release consumer must use evidenceView`);
+  for (const marker of directEvidenceNames) {
+    if (name === 'p63-credits-spend-composition-source-fidelity.cjs') assert.ok(source.includes(marker), `P63 bounded evidence owner marker missing: ${marker}`);
+  }
+}
 
 const offenders = [];
 for (const name of fs.readdirSync(testsRoot).filter((entry)=>entry.endsWith('.cjs'))) {
@@ -119,6 +131,8 @@ assert.deepEqual(offenders, [], `generic current-release consumers must use evid
 assert.deepEqual([...directEvidenceOwners].sort(), [
   'e21-evidence-consumer-convergence-contract.cjs',
   'p63-credits-spend-composition-source-fidelity.cjs',
+  'p69-credits-gateway-limits-headroom.cjs',
+  'p70-gateway-limits-utilization-visualization.cjs',
 ], 'direct evidence owners must remain explicitly bounded');
 
 const e20Source = fs.readFileSync('plugins/usage-dashboard/tools/release_evidence_contract_e20.cjs','utf8');

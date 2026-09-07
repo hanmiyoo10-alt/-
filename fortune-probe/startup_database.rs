@@ -108,7 +108,7 @@ pub async fn select(context: &mut dyn WIPICContext, id: i32, record: i32, ptr: u
     let Some(bytes) = db.get(record as u32).await else { return Ok(BAD_RECORD); };
     if bytes.len() != h.record_size as usize { return Err(WieError::FatalError("MC_DB: stored record has unexpected length".into())); }
     context.write_bytes(ptr, &bytes[..len as usize])?;
-    Ok(len)
+    Ok(0)
 }
 
 pub async fn update(context: &mut dyn WIPICContext, id: i32, record: i32, ptr: u32, len: i32) -> Result<i32> {
@@ -118,7 +118,7 @@ pub async fn update(context: &mut dyn WIPICContext, id: i32, record: i32, ptr: u
     let Some(mut db) = database(context, &h).await else { return Ok(BAD_HANDLE); };
     if db.get(record as u32).await.is_none() { return Ok(BAD_RECORD); }
     if !db.set(record as u32, &bytes).await { return Err(WieError::FatalError("MC_DB: record write failed".into())); }
-    Ok(len)
+    Ok(0)
 }
 
 pub async fn delete_record(context: &mut dyn WIPICContext, id: i32, record: i32) -> Result<i32> {
@@ -126,6 +126,23 @@ pub async fn delete_record(context: &mut dyn WIPICContext, id: i32, record: i32)
     if record <= 0 { return Ok(BAD_RECORD); }
     let Some(mut db) = database(context, &h).await else { return Ok(BAD_HANDLE); };
     Ok(if db.delete(record as u32).await { 0 } else { BAD_RECORD })
+}
+
+/// `len` is the output capacity in bytes; return the number of IDs written.
+/// Adapter metadata is never visible through this game-facing list.
+pub async fn list_records(context: &mut dyn WIPICContext, id: i32, ptr: u32, len: i32) -> Result<i32> {
+    let Some(h) = load(context, id)? else { return Ok(BAD_HANDLE); };
+    if len < 0 || ptr.checked_add(len as u32).is_none() { return Ok(BAD_RECORD); }
+    let Some(db) = database(context, &h).await else { return Ok(BAD_HANDLE); };
+    let mut ids = db.get_record_ids().await;
+    ids.retain(|&record| record != 0);
+    ids.sort_unstable();
+    let count = ids.len().min(len as usize / size_of::<u32>());
+    for (i, record) in ids.iter().take(count).enumerate() {
+        write_generic(context, ptr + (i as u32) * 4, *record)?;
+    }
+    tracing::info!("MC_DB.list: handle={id:#x}, capacity_bytes={len}, written={count}");
+    Ok(count as i32)
 }
 
 pub async fn count(context: &mut dyn WIPICContext, id: i32) -> Result<i32> {
@@ -174,7 +191,7 @@ mod tests {
         assert_eq!(close(&mut ctx, id).await.unwrap(), 0);
         assert_eq!(count(&mut ctx, id).await.unwrap(), BAD_HANDLE);
         let reopened = open(&mut ctx, 0x1000, 128, 0, 1).await.unwrap();
-        assert_eq!(select(&mut ctx, reopened, record, 0x3000, 128).await.unwrap(), 128);
+        assert_eq!(select(&mut ctx, reopened, record, 0x3000, 128).await.unwrap(), 0);
         let mut result = [0; 128];
         ctx.read_bytes(0x3000, &mut result).unwrap();
         assert_eq!(result, [7; 128]);
@@ -189,12 +206,12 @@ mod tests {
         let first = insert(&mut ctx, id, 0x2000, 128).await.unwrap();
         let second = insert(&mut ctx, id, 0x2000, 128).await.unwrap();
         ctx.write_bytes(0x2000, &[9; 128]).unwrap();
-        assert_eq!(update(&mut ctx, id, first, 0x2000, 128).await.unwrap(), 128);
-        assert_eq!(select(&mut ctx, id, first, 0x3000, 128).await.unwrap(), 128);
+        assert_eq!(update(&mut ctx, id, first, 0x2000, 128).await.unwrap(), 0);
+        assert_eq!(select(&mut ctx, id, first, 0x3000, 128).await.unwrap(), 0);
         let mut bytes = [0; 128];
         ctx.read_bytes(0x3000, &mut bytes).unwrap();
         assert_eq!(bytes, [9; 128]);
-        assert_eq!(select(&mut ctx, id, second, 0x3000, 128).await.unwrap(), 128);
+        assert_eq!(select(&mut ctx, id, second, 0x3000, 128).await.unwrap(), 0);
         ctx.read_bytes(0x3000, &mut bytes).unwrap();
         assert_eq!(bytes, [7; 128]);
         assert_eq!(delete_record(&mut ctx, id, 0).await.unwrap(), BAD_RECORD);
@@ -212,7 +229,7 @@ mod tests {
         assert_eq!(select(&mut ctx, id, 0, 0x3000, 128).await.unwrap(), BAD_RECORD);
         assert!(open(&mut ctx, 0x1000, 64, 1, 1).await.is_err());
         assert_eq!(count(&mut ctx, id).await.unwrap(), 1);
-        assert_eq!(select(&mut ctx, id, 1, 0x3000, 128).await.unwrap(), 128);
+        assert_eq!(select(&mut ctx, id, 1, 0x3000, 128).await.unwrap(), 0);
         let mut bytes = [0; 128];
         ctx.read_bytes(0x3000, &mut bytes).unwrap();
         assert_eq!(bytes, [7; 128]);
@@ -231,4 +248,48 @@ mod tests {
         assert_eq!(&bytes[2..128], &[0; 126]);
         assert_eq!(bytes[128], 99);
     }
+    #[futures_test::test]
+    async fn empty_record_list_does_not_expose_metadata_or_write_buffer() {
+        let mut ctx = context();
+        let id = open(&mut ctx, 0x1000, 128, 1, 1).await.unwrap();
+        ctx.write_bytes(0x3000, &[99; 16]).unwrap();
+        assert_eq!(list_records(&mut ctx, id, 0x3000, 12).await.unwrap(), 0);
+        let mut result = [0; 16];
+        ctx.read_bytes(0x3000, &mut result).unwrap();
+        assert_eq!(result, [99; 16]);
+    }
+
+    #[futures_test::test]
+    async fn record_list_uses_byte_capacity_and_sorted_visible_ids() {
+        let mut ctx = context();
+        let id = open(&mut ctx, 0x1000, 128, 1, 1).await.unwrap();
+        for _ in 0..5 { insert(&mut ctx, id, 0x2000, 128).await.unwrap(); }
+        delete_record(&mut ctx, id, 2).await.unwrap();
+        ctx.write_bytes(0x3000, &[99; 20]).unwrap();
+        // Device screenshot supplies len=12: room for three u32 IDs.
+        assert_eq!(list_records(&mut ctx, id, 0x3000, 12).await.unwrap(), 3);
+        let mut result = [0; 20];
+        ctx.read_bytes(0x3000, &mut result).unwrap();
+        assert_eq!(&result[..12], &[1,0,0,0, 3,0,0,0, 4,0,0,0]);
+        assert_eq!(&result[12..], &[99; 8]);
+        assert_eq!(count(&mut ctx, id).await.unwrap(), 4);
+    }
+
+    #[futures_test::test]
+    async fn record_list_rejects_bad_ranges_and_preserves_partial_word_space() {
+        let mut ctx = context();
+        let id = open(&mut ctx, 0x1000, 128, 1, 1).await.unwrap();
+        insert(&mut ctx, id, 0x2000, 128).await.unwrap();
+        ctx.write_bytes(0x3000, &[99; 8]).unwrap();
+        assert_eq!(list_records(&mut ctx, id, 0x3000, 3).await.unwrap(), 0);
+        assert_eq!(list_records(&mut ctx, id, 0x3000, -1).await.unwrap(), BAD_RECORD);
+        assert_eq!(list_records(&mut ctx, id, u32::MAX - 1, 12).await.unwrap(), BAD_RECORD);
+        assert_eq!(list_records(&mut ctx, id, 0, 0).await.unwrap(), 0);
+        let mut result = [0; 8];
+        ctx.read_bytes(0x3000, &mut result).unwrap();
+        assert_eq!(result, [99; 8]);
+        close(&mut ctx, id).await.unwrap();
+        assert_eq!(list_records(&mut ctx, id, 0x3000, 8).await.unwrap(), BAD_HANDLE);
+    }
+
 }

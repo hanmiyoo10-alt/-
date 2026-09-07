@@ -42,9 +42,8 @@ async fn database(context: &mut dyn WIPICContext, h: &Handle) -> Option<Box<dyn 
     let key = storage_name(&h.name[..h.name_len as usize]);
     let system = context.system();
     let pid = system.pid().to_owned();
-    let repo = system.platform().database_repository();
-    if !repo.exists(&key, &pid).await { return None; }
-    Some(repo.open(&key, &pid).await)
+    if !system.platform().database_repository().exists(&key, &pid).await { return None; }
+    Some(system.platform().database_repository().open(&key, &pid).await)
 }
 
 pub async fn open(context: &mut dyn WIPICContext, name_ptr: u32, record_size: i32, create: u32, mode: i32) -> Result<i32> {
@@ -55,10 +54,9 @@ pub async fn open(context: &mut dyn WIPICContext, name_ptr: u32, record_size: i3
     let key = storage_name(&name);
     let system = context.system();
     let pid = system.pid().to_owned();
-    let repo = system.platform().database_repository();
-    let exists = repo.exists(&key, &pid).await;
+    let exists = system.platform().database_repository().exists(&key, &pid).await;
     if !exists && create == 0 { return Ok(NOENT); }
-    let mut db = repo.open(&key, &pid).await;
+    let mut db = system.platform().database_repository().open(&key, &pid).await;
     // Record 0 is private adapter metadata; game-visible IDs start at 1.
     let mut metadata = [0u8; 12];
     metadata[..4].copy_from_slice(&MAGIC.to_le_bytes());

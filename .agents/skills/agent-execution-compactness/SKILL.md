@@ -38,6 +38,13 @@ It is development policy, not a source of mutable product, runtime, release, or 
 
 Apply safety dispositions before selecting any of the five execution routes.
 
+Classify request-observable structure before repository-source grounding:
+
+- Facts explicitly stated by the USER TASK about the requested execution shape are input facts, not mutable repository facts.
+- If the USER TASK explicitly bundles two or more clearly independent semantic goals into one shell/tool call, `SPLIT` is determinate from the request itself even when repository SOURCE EVIDENCE is empty.
+- Do not replace a determinate request-observable `REJECT` or `SPLIT` with generic `UNKNOWN` merely because repository evidence is absent.
+- Preserve `UNKNOWN` when the disposition actually depends on missing mutable repository facts or when independence is ambiguous rather than explicit.
+
 - If one request bundles two or more independent semantic goals, emit `Disposition: SPLIT`.
 - After `SPLIT`, stop route selection for the combined request. Do not choose `EXISTING_COMMAND`, `HARNESS`, `INLINE_SMALL`, `MATERIALIZE`, or `EXCEPTION` until the goals have been separated into bounded work units.
 - Route, size, file-count, and representative examples below apply only after this gate passes for one semantic work unit. They must not override a prior `SPLIT` or `REJECT` disposition.

@@ -150,7 +150,7 @@ assert.deepEqual(e23.inspectReleaseEvidenceHandoff(noteOnly,currentResolution,{t
 
 // Note is still governed by E20 bounds; prose freedom is not schema freedom.
 const invalidNote=JSON.parse(JSON.stringify(currentHandoff.releaseEvidence));
-invalidNote.acceptedBaseline.note='x'.repeat(481);
+invalidNote.acceptedBaseline.note='x'.repeat(e20.NOTE_LIMIT+1);
 assert.ok(e20.inspectReleaseEvidence(invalidNote,{targetProductVersion:'3.0.0-alpha.5.900'}).length>0);
 assert.ok(e23.inspectReleaseEvidenceHandoff(invalidNote,currentResolution,{targetProductVersion:'3.0.0-alpha.5.900'}).some((row)=>row.code==='E23_RELEASE_EVIDENCE_MISMATCH'));
 assert.deepEqual(e23.inspectReleaseEvidenceHandoff(currentHandoff.releaseEvidence,currentResolution,{targetProductVersion:'3.0.0-alpha.5.900'}),[]);

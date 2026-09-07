@@ -43,6 +43,7 @@
     {"name": "work-harness-receipt-sync-contract", "command": ["node", ".github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync-contract.cjs"]},
     {"name": "work-harness-receipt-sync-workflow-contract", "command": ["node", ".github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync-workflow-contract.cjs"]},
     {"name": "work-harness-authoritative-handoff-contract", "command": ["node", ".github/plugin-control-plane/canonical-main/work-harness/tests/authoritative-handoff-contract.cjs"]},
+    {"name": "work-harness-stage-checkpoint-contract", "command": ["node", ".github/plugin-control-plane/canonical-main/work-harness/tests/stage-checkpoint-contract.cjs"]},
     {"name": "work-harness-mutation-enforcement-coverage-contract", "command": ["node", ".github/plugin-control-plane/canonical-main/work-harness/tests/mutation-enforcement-coverage-contract.cjs"]}
   ]
 }

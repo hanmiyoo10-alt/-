@@ -45,6 +45,22 @@ function normalizeAcceptedIdentity(identity) {
   });
 }
 
+function authorityBearingReleaseEvidence(evidence) {
+  if (!isObject(evidence) || !isObject(evidence.acceptedBaseline) || !isObject(evidence.latestInstalled)) return null;
+  const role = (value) => ({
+    productVersion:value.productVersion,
+    releaseSha:value.releaseSha,
+    verdict:value.verdict,
+    issue:value.issue,
+    commentId:value.commentId,
+  });
+  return freeze({
+    schemaVersion:evidence.schemaVersion,
+    acceptedBaseline:role(evidence.acceptedBaseline),
+    latestInstalled:role(evidence.latestInstalled),
+  });
+}
+
 function resolveAcceptedBaselineHandoff(e22Resolution, options = {}) {
   const findings = [];
   if (!isObject(e22Resolution)) {
@@ -98,17 +114,26 @@ function resolveAcceptedBaselineHandoff(e22Resolution, options = {}) {
 }
 
 function inspectReleaseEvidenceHandoff(actualEvidence, e22Resolution, options = {}) {
+  const targetProductVersion = String(options.targetProductVersion || '');
+  const contractFindings = evidenceContract.inspectReleaseEvidence(actualEvidence, targetProductVersion ? {targetProductVersion} : {});
+  if (contractFindings.length) {
+    return freeze(contractFindings.map((row) => finding('E23_RELEASE_EVIDENCE_MISMATCH',`${row.code}@${row.field}`)));
+  }
+
   const derived = resolveAcceptedBaselineHandoff(e22Resolution, options);
   if (!derived.ok) return derived.findings;
-  const actual = JSON.stringify(actualEvidence);
-  const expected = JSON.stringify(derived.releaseEvidence);
-  if (actual !== expected) return freeze([finding('E23_RELEASE_EVIDENCE_MISMATCH','derived-handoff')]);
+  const actualIdentity = authorityBearingReleaseEvidence(actualEvidence);
+  const expectedIdentity = authorityBearingReleaseEvidence(derived.releaseEvidence);
+  if (!actualIdentity || !expectedIdentity || JSON.stringify(actualIdentity) !== JSON.stringify(expectedIdentity)) {
+    return freeze([finding('E23_RELEASE_EVIDENCE_MISMATCH','derived-handoff')]);
+  }
   return freeze([]);
 }
 
 module.exports = {
   SHA_RE,
   inspectAcceptedIdentity,
+  authorityBearingReleaseEvidence,
   resolveAcceptedBaselineHandoff,
   inspectReleaseEvidenceHandoff,
 };

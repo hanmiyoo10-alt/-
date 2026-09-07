@@ -35,9 +35,10 @@ const design = fs.readFileSync('docs/USAGE_DASHBOARD_5103_GATEWAY_LIMITS_HEADROO
 const matrix = fs.readFileSync('docs/USAGE_DASHBOARD_5103_SOURCE_TRUTH_MATRIX_ADDENDUM.md', 'utf8');
 for (const marker of [
   'GET /orgs/{selectedCreditsOrgId}/limits',
-  'TTL target: at least 5 minutes',
-  'never silently fall back to a different organization',
-  'daily spend is explicitly a **UTC-day** source boundary',
+  'exactly one selected-org request per cache fill',
+  'TTL target is **at least 5 minutes**',
+  'no fallback to the first/default/other Credits org when the selected org cannot be queried',
+  'daily cap resets at UTC midnight',
 ]) assert.ok(design.includes(marker), `P69 design marker missing: ${marker}`);
 for (const marker of [
   'V-GATEWAY-LIMITS-HEADROOM',

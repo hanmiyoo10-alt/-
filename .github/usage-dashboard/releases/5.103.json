@@ -76,7 +76,7 @@
   "highlights": [
     "Adds read-only Gateway Limits & Headroom for the currently selected Credits organization from official /orgs/{id}/limits truth.",
     "Keeps the new upstream family off the recurring snapshot critical path with an organization-keyed 5-minute cache and lazy Credits-surface loading.",
-    "Preserves fail-closed semantics: enterprise/exempt states show not applicable, unavailable or invalid source stays UNKNOWN, and limits never fall back across organizations.",
+    "Fail-closed: enterprise/exempt is not applicable, unavailable source stays UNKNOWN, and limits never cross organizations.",
     "Bumps Engine to 1.6.38 while Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded."
   ],
   "diagnosticHints": [
@@ -89,7 +89,7 @@
     "highlights": [
       "Adds read-only Gateway Limits & Headroom for the currently selected Credits organization from official /orgs/{id}/limits truth.",
       "Keeps the new upstream family off the recurring snapshot critical path with an organization-keyed 5-minute cache and lazy Credits-surface loading.",
-      "Preserves fail-closed semantics: enterprise/exempt states show not applicable, unavailable or invalid source stays UNKNOWN, and limits never fall back across organizations.",
+      "Fail-closed: enterprise/exempt is not applicable, unavailable source stays UNKNOWN, and limits never cross organizations.",
       "Bumps Engine to 1.6.38 while Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded."
     ],
     "diagnosticHints": [

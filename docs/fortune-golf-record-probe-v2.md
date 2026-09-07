@@ -13,3 +13,11 @@ Evidence: the [libwipi 1.2.1 ABI catalog](https://github.com/mirusu400/libwipi/b
 Tests cover missing/open/create behavior, close and reopen, record isolation, invalid lengths, metadata protection, size mismatch preservation, and bounded zero-padded reads. These tests validate the adapter's data integrity; they do not prove the original game's ABI expectations or persistence across a real Android process restart.
 
 Android app: Fortune Golf Probe 2, `io.hanmiyoo.fortunegolf.probe2`, version 0.1.2. A distinct package avoids conflicting with earlier ephemeral debug signatures. Import the user's ZIP in the new app. Actual game launch, rendering, audio, touch redesign, and end-to-end saving remain unverified.
+
+## Probe 3 follow-up
+
+The next device screenshot reports vector 4 slot 7 (`IP=0x50007`) with a database handle, an output buffer pointer, and byte capacity 12. Added MC_dbListRecords: exclude metadata record 0, order visible IDs, write only complete u32 IDs fitting the supplied byte capacity, and return the count written. Negative lengths and address wraparound are rejected before writes. Added three boundary tests.
+
+The [SDK CRUD example](https://github.com/mirusu400/libwipi/blob/a6633ddb9f5a4510b237b7b8059ea0dafa1e4585/examples/database-crud/main.c) supplies sizeof(listed) and expects select/update to return M_SUCCESS. Probe 3 changes those two returns to 0, superseding Probe 2's experimental byte-count returns. The example's synthetic LGT contract is supporting evidence, not proof of all KTF edge cases.
+
+Probe 3 uses version 0.1.3 and package io.hanmiyoo.fortunegolf.probe3. Actual gameplay remains unverified. Pending slots are database deletion (2), sorting (8), access mode (9), and database listing (12).

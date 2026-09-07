@@ -16,6 +16,8 @@ replacement = """WIPICTableId::Interface4 => {
                 Some(wie_wipi_c::api::startup_database::open.into_body())
             } else if function_id == 1 {
                 Some(wie_wipi_c::api::startup_database::close.into_body())
+            } else if function_id == 2 {
+                Some(wie_wipi_c::api::startup_database::delete_database.into_body())
             } else if function_id == 3 {
                 Some(wie_wipi_c::api::startup_database::insert.into_body())
             } else if function_id == 4 {
@@ -35,7 +37,7 @@ assert s.count(needle) == 1, 'Pinned engine layout changed'
 p.write_text(s.replace(needle, replacement))
 config = root / 'wie-app/tauri.conf.json'
 data = json.loads(config.read_text())
-data['productName'] = 'Fortune Golf Probe 3'
-data['identifier'] = 'io.hanmiyoo.fortunegolf.probe3'
-data['version'] = '0.1.3'
+data['productName'] = 'Fortune Golf Probe 4'
+data['identifier'] = 'io.hanmiyoo.fortunegolf.probe4'
+data['version'] = '0.1.4'
 config.write_text(json.dumps(data, indent=2) + '\n')

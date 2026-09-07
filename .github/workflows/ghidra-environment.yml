@@ -58,7 +58,7 @@ jobs:
           cp "$RUNNER_TEMP/cli/bin/ghidra" "$RUNNER_TEMP/bundle/bin/"
           cp LICENSE "$RUNNER_TEMP/bundle/ghidra-cli-LICENSE"
           cp -a "$GHIDRA_INSTALL_DIR" "$RUNNER_TEMP/bundle/ghidra"
-          cp -a "$JAVA_HOME" "$RUNNER_TEMP/bundle/jdk"
+          cp -aL "$JAVA_HOME" "$RUNNER_TEMP/bundle/jdk"
           cp -a "$RUNNER_TEMP/reports" "$RUNNER_TEMP/bundle/reports"
           cat > "$RUNNER_TEMP/bundle/run-ghidra" <<'SH'
           #!/bin/sh

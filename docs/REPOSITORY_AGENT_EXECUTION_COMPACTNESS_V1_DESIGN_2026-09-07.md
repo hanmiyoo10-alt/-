@@ -454,3 +454,75 @@ Agent Skills CI should mechanically verify the guidance and fixture contract. Si
 ### 18.5 Host UI boundary
 
 This extension only reduces repository-owned source/result text selected by the agent or repository tool when evidence-equivalent narrowing exists. It does not control whether ChatGPT or another client collapses, expands, groups, or otherwise renders a tool card.
+
+## 19. Connector-response selection companion extension (#1851)
+
+Repository-visible compactness has a fourth agent-controlled concern beyond execution-program size, repository-owned call fan-out, and source-range/read selection:
+
+```text
+repository_owned_connector_response_surface
+= connector action, projection, filtered endpoint, query, or broad fetch
+  selected before retrieval for one semantic repository question
+```
+
+The motivating case is a single GitHub connector call that returns a very large nested JSON/full-object payload even though only a few fields are needed. The user supplied mobile screenshots from real canonical-main work showing this behavior, and generic `fetch` calls during #1851 authority inspection reproduced the same broad metadata/structured-content shape.
+
+This extension targets **selection before retrieval**. It does not change the ChatGPT/GitHub connector implementation or response schema.
+
+### 19.1 Selection order
+
+When authority and evidence remain equivalent, prefer:
+
+1. an existing bounded repository projection or harness that already owns the semantic result;
+2. an action-specific connector operation that returns the needed object class, such as PR metadata, changed filenames, workflow job summaries, issue metadata, or commit status;
+3. a server-side filtered/query-scoped endpoint using exact SHA/ref, check/job name, status context, file path, issue/PR number, or an equivalent selector;
+4. the targeted source-read contract when source text itself is actually required;
+5. broad generic fetch/full JSON only when completeness is required or no narrower available surface preserves the required authority/evidence;
+6. reuse of already captured sufficient evidence inside one unchanged currentness barrier instead of repeating the same broad response.
+
+This is a routing preference among connector/result surfaces, not a universal byte limit. A narrow result that omits required authority is worse than a broad correct result.
+
+### 19.2 Required evidence that narrowing may not remove
+
+Connector-result compactness must preserve when applicable:
+
+- repository/ref/SHA and owning source identity;
+- required freshness/currentness or post-mutation barriers;
+- disagreement between authoritative sources;
+- `UNKNOWN`, `CONFLICT`, partial, cancelled, skipped, or failure state;
+- failure provenance;
+- security, permission, branch-protection, and trust context;
+- completeness, ordering, absence, or cross-object relationships required by the question.
+
+Action-specific and filtered connector accesses remain derived read surfaces. They do not become mutable truth owners.
+
+### 19.3 Broad-fetch exceptions and currentness reuse
+
+Broad/full-object retrieval is explicitly valid when:
+
+- the semantic question itself is completeness-sensitive;
+- no available action-specific/filter/projection preserves the required authority;
+- a direct canonical authority read has no compact equivalent;
+- or the full object is required to retain failure/security/provenance context.
+
+When a broad direct authority read is necessary, perform it only as often as the currentness contract requires. Capture the exact authority fact and reuse it within that barrier. A mutation, settling boundary, stale evidence, or explicit fresh-read requirement invalidates reuse and requires a new authority read.
+
+### 19.4 Evaluation extension
+
+The compactness fixture gains a separate `connector_response_evals` family. It does not change the existing ten execution-route eval identities or the `read_payload_evals` family.
+
+Required companion selections are:
+
+- action-specific metadata available -> `ACTION_SPECIFIC`;
+- exact server-side filter available -> `FILTERED_ENDPOINT`;
+- source text required -> `TARGETED_READ`;
+- sufficient evidence already captured in the same currentness barrier -> `REUSE_CAPTURED`;
+- required direct authority read with no compact equivalent -> `BROAD_FETCH_ALLOWED`.
+
+These labels are companion selection outcomes only. They are not sixth execution routes and cannot appear as values of `Execution route:`.
+
+### 19.5 Measurement and host boundary
+
+Success for this extension means repository-side selection avoids broad connector responses when an evidence-equivalent narrower surface is available. Exact ChatGPT tool-card height, grouping, hidden reasoning display, cached/input/output token accounting, or Work credit reduction are outside repository control and require separate measurement if claimed.
+
+No connector schema/implementation, Repository Read MCP, workflow permission, product/runtime/release/production authority, native protection, or host UI behavior changes are introduced by #1851.

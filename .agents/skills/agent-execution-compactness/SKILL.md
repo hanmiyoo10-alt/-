@@ -13,11 +13,12 @@ description: >-
 
 Repository-wide execution-routing procedure for development and validation work.
 
-This skill answers three related questions:
+This skill answers four related questions:
 
 1. **What is the narrowest execution surface that preserves the required validation while keeping the directly visible execution payload bounded?**
 2. **When several repository/tool calls prove one semantic result, can an existing composition or harness preserve the same evidence with lower repository-owned visible fan-out?**
 3. **When repository evidence must be read, what is the smallest authoritative excerpt or bounded projection that answers the question without hiding required context?**
+4. **Before retrieval, what is the narrowest evidence-equivalent connector/result surface that avoids unnecessary full-object or broad collection payloads?**
 
 It operationalizes `docs/REPOSITORY_COMMON_RULES.md`,
 `docs/REPOSITORY_AGENT_EXECUTION_COMPACTNESS_V1_DESIGN_2026-09-07.md`, and
@@ -30,9 +31,10 @@ It is development policy, not a source of mutable product, runtime, release, or 
 - Never shorten an execution payload by deleting meaningful tests, assertions, authority checks, or required evidence.
 - Never reduce visible fan-out by deleting required reads, freshness checks, mutation barriers, or failure verification.
 - Never shrink a repository read/result by omitting authority markers, source identity, disagreement, `UNKNOWN`, failure provenance, security context, or required freshness evidence.
+- Never choose a smaller connector/result surface when it would omit exact ref/SHA identity, currentness, authority, disagreement, partial/failure state, permission context, or required completeness.
 - Never place secrets, credentials, tokens, private sensitive payloads, or authentication material into inline execution text.
 - Do not bypass Git, CI, main-write, release, security, production, or project-specific gates.
-- Do not invent a new writer, executor, privileged hook, interception framework, or opaque mega-call merely to make commands or activity counts smaller.
+- Do not invent a new writer, executor, privileged hook, interception framework, proxy truth owner, or opaque mega-call merely to make commands or activity counts smaller.
 - Do not claim this repository can hide or suppress ChatGPT tool-activity UI. Reduce repository-owned payload and fan-out instead.
 - If the work contains multiple independent goals, split it into bounded work units before choosing an execution route.
 
@@ -142,6 +144,58 @@ Do not narrow a read when doing so would hide or weaken any of these:
 
 The repository can optimize selected source/result payloads, but it cannot guarantee how ChatGPT or another host renders tool cards or their height.
 
+## Connector-response selection companion contract
+
+Connector-response selection is a companion compactness axis distinct from execution-program size, call fan-out, and source-range/read selection. It does not add a sixth execution route.
+
+Define:
+
+```text
+repository_owned_connector_response_surface
+= connector action, projection, filtered endpoint, query, or broad fetch
+  selected before retrieval for one semantic repository question
+```
+
+The goal is to choose the narrowest evidence-equivalent result surface before a potentially large connector response is materialized.
+
+Preferred shape:
+
+```text
+existing bounded repository projection/harness
+→ action-specific connector tool
+→ server-side filtered/query-scoped endpoint
+→ targeted source read when source text is needed
+→ broad generic fetch/full JSON only as an evidence-required fallback
+→ reuse captured sufficient evidence within the same currentness barrier
+```
+
+### Connector-response selection order
+
+1. **Existing bounded repository projection/harness:** prefer it when it already owns the semantic result and exposes the required authority/source identities/uncertainty.
+2. **Action-specific connector tool:** prefer an operation such as PR metadata, issue metadata, changed filenames, workflow-job summaries, commit status, or another narrow object class over a broad generic REST/full-object fetch when both answer the same question.
+3. **Filtered/query-scoped endpoint:** when a collection or object can be narrowed server-side by exact SHA/ref, check/job name, status context, file path, issue/PR number, or equivalent selector, apply that filter before retrieving the broad result.
+4. **Targeted source read:** when source text itself is required, use the read/result payload contract to select the smallest authoritative excerpt or range.
+5. **Broad fetch fallback:** broad generic fetch/full JSON remains valid when completeness is part of the question or no available narrower connector surface preserves the required authority/evidence.
+6. **Reuse captured evidence:** do not repeat the same broad response inside one unchanged currentness window merely to recover a fact already captured with sufficient provenance.
+
+A smaller connector response is better only when the semantic authority and evidence contract remain equivalent. Action-specific or filtered surfaces are derived access paths, not new truth owners.
+
+### Preserve connector authority and fallback exceptions
+
+Do not narrow connector selection when doing so would hide or weaken any of these:
+
+- exact repository/ref/SHA or owning source identity required by the claim;
+- a required currentness/freshness barrier or post-mutation verification;
+- disagreement between authoritative sources;
+- `UNKNOWN`, `CONFLICT`, partial, cancelled, skipped, or failure state;
+- failure provenance needed for diagnosis or verification;
+- security, permission, branch-protection, or trust context;
+- global completeness, ordering, absence, or cross-object relationships required by the actual question.
+
+Direct canonical authority reads that lack an evidence-equivalent compact connector surface remain allowed. Perform them only as often as the currentness contract requires, then reuse the captured authority evidence within that barrier.
+
+This repository controls agent/repository-side connector selection only. It does not modify the ChatGPT/GitHub connector response schema and cannot guarantee host tool-card height, grouping, or token savings.
+
 ## Routing order
 
 Apply the following order before constructing a non-trivial execution payload.
@@ -162,6 +216,8 @@ required work
 If a proposed compact route weakens the required work, reject that route.
 
 Before manual fan-out, also ask whether one existing composition or harness proves the same semantic result with fewer repository-owned visible calls. Prefer it only when the evidence contract remains equivalent.
+
+Before a broad connector read, ask whether an existing bounded projection, action-specific connector tool, server-side filter, targeted read, or already captured result answers the same semantic question with equivalent authority. Prefer the narrower result surface when it does.
 
 ### 1. `EXISTING_COMMAND`
 
@@ -281,6 +337,8 @@ program behind quoting tricks.
 
 Visible fan-out has no universal numeric ceiling because required calls depend on authority, freshness, mutation, and failure boundaries. Optimize relative to an evidence-equivalent candidate, not toward an arbitrary count.
 
+Connector-response compactness has no universal byte ceiling either. Prefer an evidence-equivalent narrower result surface, not arbitrary truncation.
+
 ## Required safety dispositions
 
 Some inputs must be handled before the five execution routes.
@@ -310,6 +368,10 @@ Do not treat `SPLIT` as a compactness failure. Required semantic separation outr
 | Existing unittest target already covers the work | `EXISTING_COMMAND` |
 | Checked-in script/CI/MCP already owns long validation | `HARNESS` |
 | Existing read-only composition preserves the same sources as several manual reads | prefer the composition; lower visible fan-out |
+| Action-specific connector metadata answers the question | use the action-specific result instead of broad generic full-object fetch |
+| Exact SHA/check/job filter isolates the required CI result | filter server-side before retrieving the broad collection |
+| Sufficient broad authority evidence is already captured inside the same currentness barrier | reuse it instead of repeating the broad fetch |
+| No compact equivalent exists for a required direct canonical authority read | broad fetch is valid; preserve exact authority and reuse within the barrier |
 | Known large file, local source question, ranged read available | read the targeted authoritative range first |
 | Unknown source location | search/index/snippet discovery before avoidable whole-file retrieval |
 | Whole-document ordering or cross-section consistency is the question | full-source read is valid; completeness outranks compactness |
@@ -330,14 +392,18 @@ The routing decision is complete only when:
 - existing command/harness surfaces were preferred when sufficient;
 - an evidence-equivalent existing composition/harness was preferred over avoidable manual visible fan-out;
 - repository reads used the smallest evidence-equivalent authoritative excerpt/projection when the question was local;
+- connector reads preferred an evidence-equivalent bounded projection, action-specific tool, or server-side filter before avoidable broad generic responses;
+- captured sufficient connector evidence was reused within the same unchanged currentness barrier;
+- broad connector/full-object reads remained available when completeness or lack of an evidence-equivalent compact surface required them;
 - full-source reads remained available when completeness, ordering, cross-section consistency, or a genuinely small source required them;
 - required separate calls remain separate across mutation, authority, freshness, failure, trust, or semantic-goal boundaries;
 - inline work stays within the v1 guardrail unless a bounded exception is justified;
 - multi-file or mini-build-system payloads route to materialized/repository-native surfaces;
 - secret-bearing or validation-weakening forms are rejected;
 - independent goals are split;
-- no new execution authority was invented;
+- no new execution authority or connector truth owner was invented;
 - no claim is made that repository-side fan-out equals exact host UI card count.
+- no claim is made that connector selection equals exact host UI card count or token savings.
 
 Then perform the work through the selected owner and use its normal validation/evidence path.
 

@@ -130,12 +130,15 @@ assert.equal(percent(1,0), null);
 assert.equal(percent(1,-1), null);
 assert.equal(percent(1,Infinity), null);
 
+const tinyPercent = percent(0.02,5000);
+assert.ok(tinyPercent > 0 && tinyPercent < 0.001, 'P70 tiny non-zero ratio must remain tiny and non-zero');
+const tinyPercentText = String(tinyPercent);
 const tiny = bar({state:'value',used:0.02,cap:5000,remaining:4999.98}, 'used', 'daily used');
 assert.ok(tiny.includes('role="progressbar"'));
 assert.ok(tiny.includes('aria-valuemin="0"'));
 assert.ok(tiny.includes('aria-valuemax="100"'));
-assert.ok(tiny.includes('aria-valuenow="0.0004"'));
-assert.ok(tiny.includes('style="width:0.0004%"'), 'P70 tiny non-zero ratio must not be inflated to a minimum width');
+assert.ok(tiny.includes(`aria-valuenow="${tinyPercentText}"`));
+assert.ok(tiny.includes(`style="width:${tinyPercentText}%"`), 'P70 tiny non-zero ratio must use the exact helper geometry without a fabricated minimum width');
 const monthly = bar({state:'value',used:11.49,cap:50000,remaining:49988.51}, 'used', 'monthly used');
 assert.ok(monthly.includes(`aria-valuenow="${String((11.49/50000)*100)}"`));
 const topUp = bar({state:'value',used:25,cap:100,remaining:75}, 'remaining', 'top-up remaining');

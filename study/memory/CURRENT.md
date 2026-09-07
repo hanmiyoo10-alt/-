@@ -24,12 +24,16 @@ PROFILE_SOURCE = study/memory/PROFILE.md
 STRATEGY_SOURCE = study/memory/STRATEGIES.md
 EVIDENCE_SOURCE = study/memory/LEDGER.md
 CANDIDATE_SOURCE = study/memory/INBOX.md
+PROBLEM_EVIDENCE_SOURCE = study/problems/LEDGER.md
+PROBLEM_PATTERN_SOURCE = study/problems/PATTERNS.md
+REVIEW_QUEUE_SOURCE = study/problems/REVIEW_QUEUE.md
 ```
 
 ## Active goals
 
 - PSAT에 맞는 문제풀이 체계를 만들고, 문제를 단순 반복하기보다 유형·판단 구조·오답 패턴을 축적한다.
 - 실제 교재/문제풀이가 시작되면 본인 해석을 먼저 만든 뒤 O/X 검증을 통해 해석 오류의 종류를 잡는다.
+- 개별 문제의 실수와 반복되는 약점을 분리해서 기록하고, 다른 문제로 교정이 전이되는지 확인한다.
 
 ## Active subjects
 
@@ -72,11 +76,31 @@ PSAT = ACTIVE
 
 별도 강의를 기본 전제로 두지 않는다. 독학으로 특정 영역이 반복적으로 막힐 때만 보조 설명 수단을 재검토한다.
 
+## Problem-memory operating rule
+
+```text
+개별 문제 1회
+→ study/problems/LEDGER.md
+
+같은 오류 구조 반복
+→ study/problems/PATTERNS.md
+
+재풀이/전이 확인 필요
+→ study/problems/REVIEW_QUEUE.md
+
+학습자 특성이나 전략으로 일반화할 만큼 충분한 근거
+→ study/memory/LEDGER.md
+→ PROFILE.md 또는 STRATEGIES.md 검토
+```
+
+한 문제를 틀렸다는 이유만으로 `PROFILE.md`에 약점으로 기록하지 않는다.
+
 ## Current watch items
 
 - 실제 PSAT 오답에서 `재진술 / 동의표현 / 범위 변화 / 의미 동치` 문제가 반복되는지 확인한다.
 - 패턴 분류가 지나치게 세분화되어 문제풀이 속도를 잡아먹지 않는지 확인한다.
 - PSAT에서의 독학 선호를 전반적인 학습 성향으로 성급하게 일반화하지 않는다.
+- 같은 문제를 외워서 맞힌 것을 교정 성공으로 오판하지 않고, 다른 문제로 전이되는지 확인한다.
 
 ## Immediate next memory action
 
@@ -85,9 +109,11 @@ PSAT = ACTIVE
 ```text
 1. 사용자가 먼저 문제/선지를 해석한다.
 2. 해석을 O/X로 검증한다.
-3. 틀린 경우 원인을 한 줄 패턴으로 분류한다.
-4. 반복되면 LEDGER에 독립 관찰로 추가한다.
-5. 충분히 반복되면 PROFILE 또는 STRATEGIES를 갱신한다.
+3. 틀렸거나 근거가 불안정하면 문제 단위 기록을 problems/LEDGER에 남긴다.
+4. 오류 원인을 READING_RESTATE / SCOPE_SHIFT / LOGIC_RELATION 등 가장 좁은 범주로 분류한다.
+5. 같은 구조가 다른 문제에서 반복되면 problems/PATTERNS로 승격한다.
+6. 필요하면 REVIEW_QUEUE에 RETRY 또는 TRANSFER_CHECK를 등록한다.
+7. 충분한 문제 증거가 누적된 경우에만 PROFILE 또는 STRATEGIES를 갱신한다.
 ```
 
 ## Snapshot states

@@ -54,6 +54,17 @@ def load_impl() -> dict:
     legacy_insert_before = namespace['insert_before']
 
     def owner_aware_rep(path: Path, old: str, new: str, label: str) -> None:
+        if label == 'limits capture env + tap generation':
+            if "capture.v11" not in new:
+                raise SystemExit('5.103 capture marker compatibility anchor missing')
+            # Request provenance still owns the capture generation transition from
+            # v10 to v13. Gateway Limits may add its env binding, but must not
+            # advance the shared base tap first or provenance patching fails closed.
+            new = new.replace(
+                "const marker = Symbol.for('llmgateway.devpass.bridge.capture.v11');",
+                "// capture.v11 intentionally not activated; request provenance owns tap generation.\nconst marker = Symbol.for('llmgateway.devpass.bridge.capture.v10');",
+                1,
+            )
         if label == 'Gateway Limits Credits section placement':
             path = MARKUP
         legacy_rep(path, old, new, label)

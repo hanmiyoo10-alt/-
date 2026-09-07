@@ -1,26 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.103
+//@version 3.0.0-alpha.5.104
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.103';
+  const VERSION = '3.0.0-alpha.5.104';
   const RELEASE_NOTES = Object.freeze({
-    title: "Credits Gateway Limits & Headroom",
+    title: "Gateway Limits Utilization Visualization",
     highlights: Object.freeze([
-    "Adds read-only Gateway Limits & Headroom for the currently selected Credits organization from official /orgs/{id}/limits truth.",
-    "Keeps the new upstream family off the recurring snapshot critical path with an organization-keyed 5-minute cache and lazy Credits-surface loading.",
-    "Fail-closed: enterprise/exempt is not applicable, unavailable source stays UNKNOWN, and limits never cross organizations.",
-    "Bumps Engine to 1.6.38 while Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded.",
+    "Adds source-faithful utilization bars to the existing Credits Gateway Limits daily, monthly, and top-up amounts.",
+    "Daily/monthly bars use explicit used/cap; top-up uses explicit remaining/cap, with no inferred thresholds.",
+    "Unknown, not-applicable, invalid, or non-positive caps render no synthetic 0% visualization.",
+    "Keeps Engine 1.6.38, Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.103 · Engine 1.6.38 · Manager 1.3.6 and READY/Health ok.",
-    "Open Credits and check Gateway Limits · Credits for exact values, 미적용, or —; daily spend is explicitly UTC.",
-    "Full Diagnostics should contain one ID-free Gateway limits line whose state agrees with the Credits card.",
-    "Switching Credits organizations must never show another organization's cached limits; existing 5.102/5.101/5.100/5.99 surfaces remain healthy.",
+    "Verify Product 5.104 · Engine 1.6.38 · Manager 1.3.6 and READY/Health ok.",
+    "Open Credits and confirm exact Gateway Limits amounts remain visible with daily/monthly used bars and top-up remaining bar.",
+    "UNKNOWN or 미적용 rows must not appear as misleading empty 0% bars; existing Credits and DevPass surfaces should stay healthy.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -3884,6 +3883,22 @@ function todayOverviewMetrics(d) {
     return `${money(metric.used)} / ${money(metric.cap)} · 남음 ${money(metric.remaining)}`;
   }
 
+  function gatewayLimitsUtilizationPercent(value, cap) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
+    if (typeof cap !== 'number' || !Number.isFinite(cap) || cap <= 0) return null;
+    return Math.min(100, Math.max(0, (value / cap) * 100));
+  }
+
+  function gatewayLimitsUtilizationBarHtml(metric, mode, label) {
+    if (metric?.state !== 'value') return '';
+    const numerator = mode === 'remaining' ? metric?.remaining : metric?.used;
+    const percent = gatewayLimitsUtilizationPercent(numerator, metric?.cap);
+    if (percent === null) return '';
+    const percentText = String(percent);
+    const ariaText = `${String(label)} ${percentText}%`;
+    return `<div class="bar gateway-limits-utilization" role="progressbar" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${esc(percentText)}" aria-valuetext="${esc(ariaText)}"><i style="width:${esc(percentText)}%"></i></div>`;
+  }
+
   function gatewayLimitsSectionHtml(truth) {
     const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(truth?.state)) ? String(truth.state) : 'source-unavailable';
     if (truth?.enterprise === true && sourceState === 'ok') {
@@ -3910,9 +3925,9 @@ function todayOverviewMetrics(d) {
     return `<div class="usage-detail-box gateway-limits-card"><div class="recent-head"><h3>Gateway Limits · Credits</h3><span>source org-limits · ${esc(sourceState)}</span></div><div class="minis">
       <div class="mini cyan"><span>Trust tier</span><b>${esc(tierText)}</b></div>
       <div class="mini cyan"><span>Rate multiplier</span><b>${esc(rateText)}</b></div>
-      <div class="mini"><span>일간 spend · UTC</span><b>${esc(gatewayLimitsMetricText(truth?.daily))}</b></div>
-      <div class="mini"><span>월간 spend</span><b>${esc(gatewayLimitsMetricText(truth?.monthly))}</b></div>
-      <div class="mini"><span>${esc(topUpLabel)}</span><b>${esc(topUpText)}</b></div>
+      <div class="mini"><span>일간 spend · UTC</span><b>${esc(gatewayLimitsMetricText(truth?.daily))}</b>${gatewayLimitsUtilizationBarHtml(truth?.daily,'used','일간 spend 사용률 · UTC')}</div>
+      <div class="mini"><span>월간 spend</span><b>${esc(gatewayLimitsMetricText(truth?.monthly))}</b>${gatewayLimitsUtilizationBarHtml(truth?.monthly,'used','월간 spend 사용률')}</div>
+      <div class="mini"><span>${esc(topUpLabel)}</span><b>${esc(topUpText)}</b>${gatewayLimitsUtilizationBarHtml(truth?.topUp,'remaining','Rolling top-up 남은 여유 비율')}</div>
     </div></div>`;
   }
 

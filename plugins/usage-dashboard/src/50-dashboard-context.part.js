@@ -7,6 +7,22 @@
     return `${money(metric.used)} / ${money(metric.cap)} · 남음 ${money(metric.remaining)}`;
   }
 
+  function gatewayLimitsUtilizationPercent(value, cap) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
+    if (typeof cap !== 'number' || !Number.isFinite(cap) || cap <= 0) return null;
+    return Math.min(100, Math.max(0, (value / cap) * 100));
+  }
+
+  function gatewayLimitsUtilizationBarHtml(metric, mode, label) {
+    if (metric?.state !== 'value') return '';
+    const numerator = mode === 'remaining' ? metric?.remaining : metric?.used;
+    const percent = gatewayLimitsUtilizationPercent(numerator, metric?.cap);
+    if (percent === null) return '';
+    const percentText = String(percent);
+    const ariaText = `${String(label)} ${percentText}%`;
+    return `<div class="bar gateway-limits-utilization" role="progressbar" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${esc(percentText)}" aria-valuetext="${esc(ariaText)}"><i style="width:${esc(percentText)}%"></i></div>`;
+  }
+
   function gatewayLimitsSectionHtml(truth) {
     const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(truth?.state)) ? String(truth.state) : 'source-unavailable';
     if (truth?.enterprise === true && sourceState === 'ok') {
@@ -33,9 +49,9 @@
     return `<div class="usage-detail-box gateway-limits-card"><div class="recent-head"><h3>Gateway Limits · Credits</h3><span>source org-limits · ${esc(sourceState)}</span></div><div class="minis">
       <div class="mini cyan"><span>Trust tier</span><b>${esc(tierText)}</b></div>
       <div class="mini cyan"><span>Rate multiplier</span><b>${esc(rateText)}</b></div>
-      <div class="mini"><span>일간 spend · UTC</span><b>${esc(gatewayLimitsMetricText(truth?.daily))}</b></div>
-      <div class="mini"><span>월간 spend</span><b>${esc(gatewayLimitsMetricText(truth?.monthly))}</b></div>
-      <div class="mini"><span>${esc(topUpLabel)}</span><b>${esc(topUpText)}</b></div>
+      <div class="mini"><span>일간 spend · UTC</span><b>${esc(gatewayLimitsMetricText(truth?.daily))}</b>${gatewayLimitsUtilizationBarHtml(truth?.daily,'used','일간 spend 사용률 · UTC')}</div>
+      <div class="mini"><span>월간 spend</span><b>${esc(gatewayLimitsMetricText(truth?.monthly))}</b>${gatewayLimitsUtilizationBarHtml(truth?.monthly,'used','월간 spend 사용률')}</div>
+      <div class="mini"><span>${esc(topUpLabel)}</span><b>${esc(topUpText)}</b>${gatewayLimitsUtilizationBarHtml(truth?.topUp,'remaining','Rolling top-up 남은 여유 비율')}</div>
     </div></div>`;
   }
 

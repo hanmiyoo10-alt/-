@@ -1,26 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.103
+//@version 3.0.0-alpha.5.104
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.103';
+  const VERSION = '3.0.0-alpha.5.104';
   const RELEASE_NOTES = Object.freeze({
-    title: "Credits Gateway Limits & Headroom",
+    title: "Gateway Limits Utilization Visualization",
     highlights: Object.freeze([
-    "Adds read-only Gateway Limits & Headroom for the currently selected Credits organization from official /orgs/{id}/limits truth.",
-    "Keeps the new upstream family off the recurring snapshot critical path with an organization-keyed 5-minute cache and lazy Credits-surface loading.",
-    "Fail-closed: enterprise/exempt is not applicable, unavailable source stays UNKNOWN, and limits never cross organizations.",
-    "Bumps Engine to 1.6.38 while Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 remain bounded.",
+    "Adds source-faithful utilization bars to the existing Credits Gateway Limits daily, monthly, and top-up amounts.",
+    "Daily/monthly bars use explicit used/cap; top-up uses explicit remaining/cap, with no inferred thresholds.",
+    "Unknown, not-applicable, invalid, or non-positive caps render no synthetic 0% visualization.",
+    "Keeps Engine 1.6.38, Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.103 · Engine 1.6.38 · Manager 1.3.6 and READY/Health ok.",
-    "Open Credits and check Gateway Limits · Credits for exact values, 미적용, or —; daily spend is explicitly UTC.",
-    "Full Diagnostics should contain one ID-free Gateway limits line whose state agrees with the Credits card.",
-    "Switching Credits organizations must never show another organization's cached limits; existing 5.102/5.101/5.100/5.99 surfaces remain healthy.",
+    "Verify Product 5.104 · Engine 1.6.38 · Manager 1.3.6 and READY/Health ok.",
+    "Open Credits and confirm exact Gateway Limits amounts remain visible with daily/monthly used bars and top-up remaining bar.",
+    "UNKNOWN or 미적용 rows must not appear as misleading empty 0% bars; existing Credits and DevPass surfaces should stay healthy.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';

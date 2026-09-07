@@ -149,6 +149,8 @@ jobs:
     if: ${{ needs.resolve_stage.result == 'success' }}
     permissions:
       contents: read
+      issues: read
+      pull-requests: read
     runs-on: ubuntu-latest
     outputs:
       candidate_sha: ${{ steps.materialize.outputs.candidate_sha }}
@@ -161,6 +163,95 @@ jobs:
           ref: ${{ needs.resolve_stage.outputs.trusted_base_sha }}
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Collect transaction-local E24 raw release evidence
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TRUSTED_BASE_SHA: ${{ needs.resolve_stage.outputs.trusted_base_sha }}
+        run: |
+          set -euo pipefail
+          RELEASE_EVIDENCE_CONTEXT="$RUNNER_TEMP/usage-dashboard-e24-evidence.json"
+          node - "$RELEASE_EVIDENCE_CONTEXT" <<'NODE'
+          const fs=require('node:fs');
+          const rr=require('./plugins/usage-dashboard/tools/release_request_e9.cjs');
+          const out=process.argv[2];
+          const apiBase=String(process.env.GITHUB_API_URL||'https://api.github.com');
+          const repository=String(process.env.GITHUB_REPOSITORY||'');
+          const token=String(process.env.GITHUB_TOKEN||'');
+          const trustedBaseSha=String(process.env.TRUSTED_BASE_SHA||'');
+          if(!repository || !token || !/^[0-9a-f]{40}$/.test(trustedBaseSha)) throw new Error('E24_CAPTURE_ENV_INCOMPLETE');
+          const headers={
+            Accept:'application/vnd.github+json',
+            Authorization:`Bearer ${token}`,
+            'X-GitHub-Api-Version':'2022-11-28',
+          };
+          async function api(path,{allow404=false}={}){
+            const response=await fetch(`${apiBase}/repos/${repository}${path}`,{headers});
+            if(allow404 && response.status===404) return null;
+            if(!response.ok) throw new Error(`E24_CAPTURE_API_FAILED:${response.status}:${path}`);
+            return response.json();
+          }
+          async function paginate(path){
+            const rows=[];
+            for(let page=1;;page+=1){
+              const join=path.includes('?')?'&':'?';
+              const batch=await api(`${path}${join}per_page=100&page=${page}`);
+              if(!Array.isArray(batch)) throw new Error(`E24_CAPTURE_PAGE_SHAPE:${path}:${page}`);
+              rows.push(...batch);
+              if(batch.length<100) break;
+            }
+            return rows;
+          }
+          async function contentJson(path,ref,{required=false}={}){
+            const encodedPath=path.split('/').map(encodeURIComponent).join('/');
+            const data=await api(`/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`,{allow404:!required});
+            if(data===null) return null;
+            if(data.type!=='file' || data.encoding!=='base64' || typeof data.content!=='string') throw new Error(`E24_CAPTURE_CONTENT_SHAPE:${path}:${ref}`);
+            try{return JSON.parse(Buffer.from(data.content.replace(/\n/g,''),'base64').toString('utf8'));}
+            catch{throw new Error(`E24_CAPTURE_JSON_INVALID:${path}:${ref}`);}
+          }
+          (async()=>{
+            const allIssues=await paginate('/issues?state=all');
+            const durable=allIssues.filter((issue)=>!issue.pull_request && rr.TITLE_RE.test(String(issue.title||'').trim()) && /^Plugin:\s*usage-dashboard\s*$/mi.test(String(issue.body||'')));
+            const releases=[];
+            for(const issue of durable){
+              const parsed=rr.parseIssue(issue.title,issue.body);
+              const issueComments=await paginate(`/issues/${issue.number}/comments?sort=created&direction=asc`);
+              let pr=null;
+              let prComments=[];
+              if(parsed.prNumber!==null){
+                pr=await api(`/pulls/${parsed.prNumber}`);
+                if(Number(pr.number)!==parsed.prNumber) throw new Error(`E24_CAPTURE_PR_IDENTITY:${issue.number}`);
+                prComments=await paginate(`/issues/${parsed.prNumber}/comments?sort=created&direction=asc`);
+              }
+              const combinedComments=[...issueComments,...prComments];
+              const deployment=rr.latestDeployment(combinedComments,parsed.releaseVersion);
+              let productionSha='';
+              let productionManifest=null;
+              if(deployment){
+                productionSha=deployment.productionSha;
+                productionManifest=await contentJson('plugins/usage-dashboard/runtime/product-manifest.json',productionSha,{required:true});
+              }
+              const releaseSpecIdentity=await contentJson(parsed.releaseSpec,trustedBaseSha,{required:false});
+              releases.push({
+                issue:{number:Number(issue.number),title:String(issue.title||''),body:String(issue.body||'')},
+                comments:combinedComments.map((row)=>({id:Number(row.id),body:String(row.body||'')})),
+                pr,
+                productionSha,
+                productionManifest,
+                releaseSpecIdentity,
+              });
+            }
+            const context={
+              enumeration:{complete:true,repository,durableRequestCount:releases.length},
+              releases,
+            };
+            fs.writeFileSync(out,JSON.stringify(context,null,2)+'\n');
+            console.log(`E24_CAPTURE_COMPLETE:${releases.length}:${out}`);
+          })().catch((error)=>{console.error(error?.stack||String(error));process.exitCode=1;});
+          NODE
+          test -s "$RELEASE_EVIDENCE_CONTEXT"
 
       - name: Reconstruct and validate materialized candidate without write credentials
         id: materialize
@@ -178,6 +269,7 @@ jobs:
           ENGINE_CHANGED: ${{ needs.resolve_stage.outputs.engine_changed }}
           PLUGIN_CHANGED: ${{ needs.resolve_stage.outputs.plugin_changed }}
           SOURCE_FILES_JSON: ${{ needs.resolve_stage.outputs.source_files_json }}
+          RELEASE_EVIDENCE_CONTEXT: ${{ runner.temp }}/usage-dashboard-e24-evidence.json
         run: |
           set -euo pipefail
           FAILURE_REASON='E7_MATERIALIZE_OR_SMOKE_FAILED'
@@ -204,7 +296,8 @@ jobs:
           git diff --cached --quiet && { echo 'E7_SOURCE_INTENT_EMPTY'; exit 1; }
           git commit -m "stage: apply Usage Dashboard source intent $SOURCE_SHA"
           test -f "$RELEASE_SPEC"
-          if ! node plugins/usage-dashboard/tools/release_generic_preflight.cjs --spec "$RELEASE_SPEC"; then
+          test -s "$RELEASE_EVIDENCE_CONTEXT"
+          if ! node plugins/usage-dashboard/tools/release_generic_preflight.cjs --spec "$RELEASE_SPEC" --release-evidence-context "$RELEASE_EVIDENCE_CONTEXT"; then
             FAILURE_REASON='RELEASE_PREFLIGHT_REJECTED'
             exit 1
           fi

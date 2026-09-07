@@ -1,0 +1,36 @@
+name: Transfer verified Ghidra environment
+on:
+  push:
+    branches: [fortune-golf-apk]
+    paths: ['.github/workflows/ghidra-transfer.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ghidra-linux-x64-environment
+          run-id: 34139251875
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: environment
+      - name: Split verified archive
+        run: |
+          split -b 300M -d environment/ghidra-linux-x64.tar.gz environment/ghidra.part
+          sha256sum environment/ghidra-linux-x64.tar.gz environment/ghidra.part* > environment/checksums.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ghidra-part00
+          path: environment/ghidra.part00
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ghidra-part01
+          path: environment/ghidra.part01
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ghidra-checksums
+          path: environment/checksums.txt

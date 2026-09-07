@@ -58,6 +58,29 @@
     "preserveRequiredValidation": true,
     "hostUiSuppressionClaim": false
   },
+  "stagedInteraction": {
+    "version": 1,
+    "stages": [
+      "AUTHORITY_SCOPE",
+      "IMPLEMENTATION_PR",
+      "VALIDATION_MERGE",
+      "POSTMERGE_CONVERGENCE",
+      "EXPERIMENT_CLOSE"
+    ],
+    "ordinaryContinuationMaxSubstantialStages": 1,
+    "tinyReadOnlyCollapse": {
+      "allowed": true,
+      "maxBoundedReads": 2
+    },
+    "safetyCriticalRecovery": {
+      "mayContinueToNearestSafeStop": true,
+      "exceptionMustBeRecorded": true
+    },
+    "explicitUserBroaderRunAllowed": true,
+    "preserveRequiredGates": true,
+    "productionTruthOwner": false,
+    "hostUiPerformanceGuarantee": false
+  },
   "packetRequiredFields": [
     "packetId",
     "primaryGoal",
@@ -65,6 +88,7 @@
     "classification",
     "readFirst",
     "executionCompactness",
+    "interactionStage",
     "writeScope",
     "dependencies",
     "expectedOutputs",

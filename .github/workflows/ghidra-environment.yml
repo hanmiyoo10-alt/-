@@ -1,0 +1,86 @@
+name: Ghidra CLI environment
+on:
+  push:
+    branches: [fortune-golf-apk]
+    paths: ['.github/workflows/ghidra-environment.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: akiselev/ghidra-cli
+          ref: 10019ba1f3b54c9edcca8ec644a30e16fb7b7c79
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Ghidra and CLI
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/ghidra.zip" https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.3_build/ghidra_12.1.3_PUBLIC_20260817.zip
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra-dist"
+          echo "GHIDRA_INSTALL_DIR=$RUNNER_TEMP/ghidra-dist/ghidra_12.1.3_PUBLIC" >> "$GITHUB_ENV"
+          cargo install --locked --path . --root "$RUNNER_TEMP/cli"
+          echo "$RUNNER_TEMP/cli/bin" >> "$GITHUB_PATH"
+      - name: Verify doctor and real decompilation
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/reports" "$RUNNER_TEMP/projects"
+          ghidra doctor 2>&1 | tee "$RUNNER_TEMP/reports/doctor.txt"
+          cat > "$RUNNER_TEMP/smoke.c" <<'C'
+          int fortune_probe(int value) { return value * 3 + 17; }
+          int main(void) { return fortune_probe(7); }
+          C
+          gcc -O0 -g -o "$RUNNER_TEMP/smoke" "$RUNNER_TEMP/smoke.c"
+          ghidra --projects-dir "$RUNNER_TEMP/projects" --project smoke --program smoke import "$RUNNER_TEMP/smoke" 2>&1 | tee "$RUNNER_TEMP/reports/import.txt"
+          ghidra --projects-dir "$RUNNER_TEMP/projects" --project smoke --program smoke function list > "$RUNNER_TEMP/reports/functions.json"
+          ghidra --projects-dir "$RUNNER_TEMP/projects" --project smoke --program smoke decompile fortune_probe > "$RUNNER_TEMP/reports/decompile.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path(os.environ["RUNNER_TEMP"]) / "reports"
+          for name in ("functions.json", "decompile.json"):
+              data = json.loads((p / name).read_text())
+              assert "fortune_probe" in json.dumps(data), name
+          print("PASS: CLI doctor, import, function discovery, decompilation")
+          PY
+      - name: Package portable Linux environment
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/bundle/bin"
+          cp "$RUNNER_TEMP/cli/bin/ghidra" "$RUNNER_TEMP/bundle/bin/"
+          cp LICENSE "$RUNNER_TEMP/bundle/ghidra-cli-LICENSE"
+          cp -a "$GHIDRA_INSTALL_DIR" "$RUNNER_TEMP/bundle/ghidra"
+          cp -a "$JAVA_HOME" "$RUNNER_TEMP/bundle/jdk"
+          cp -a "$RUNNER_TEMP/reports" "$RUNNER_TEMP/bundle/reports"
+          cat > "$RUNNER_TEMP/bundle/run-ghidra" <<'SH'
+          #!/bin/sh
+          set -eu
+          bundle_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+          export GHIDRA_INSTALL_DIR="$bundle_root/ghidra"
+          export GHIDRA_CLI_JAVA_HOME="$bundle_root/jdk"
+          export JAVA_HOME="$bundle_root/jdk"
+          exec "$bundle_root/bin/ghidra" "$@"
+          SH
+          chmod +x "$RUNNER_TEMP/bundle/run-ghidra"
+          tar -czf "$RUNNER_TEMP/ghidra-linux-x64.tar.gz" -C "$RUNNER_TEMP/bundle" .
+          sha256sum "$RUNNER_TEMP/ghidra-linux-x64.tar.gz" > "$RUNNER_TEMP/reports/bundle-sha256.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ghidra-verification
+          path: ${{ runner.temp }}/reports/
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ghidra-linux-x64-environment
+          path: ${{ runner.temp }}/ghidra-linux-x64.tar.gz
+          compression-level: 0
+          if-no-files-found: error

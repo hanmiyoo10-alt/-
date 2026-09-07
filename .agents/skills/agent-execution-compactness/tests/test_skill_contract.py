@@ -43,6 +43,19 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("### `REJECT`", text)
         self.assertIn("### `SPLIT`", text)
 
+    def test_split_precedes_route_selection_and_blocks_cross_case_override(self):
+        text = SKILL.read_text(encoding="utf-8")
+        gate_index = text.index("## Pre-routing disposition gate")
+        routing_index = text.index("## Routing order")
+        self.assertLess(gate_index, routing_index)
+        for required in (
+            "If one request bundles two or more independent semantic goals, emit `Disposition: SPLIT`.",
+            "After `SPLIT`, stop route selection for the combined request.",
+            "They must not override a prior `SPLIT` or `REJECT` disposition.",
+            "Route each resulting bounded work unit independently after the split.",
+        ):
+            self.assertIn(required, text)
+
     def test_guardrails_are_present_and_advisory(self):
         text = SKILL.read_text(encoding="utf-8")
         for required in (

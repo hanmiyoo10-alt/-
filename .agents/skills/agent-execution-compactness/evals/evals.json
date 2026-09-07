@@ -1,6 +1,76 @@
 {
   "skill_name": "agent-execution-compactness",
   "schema_version": 1,
+  "read_payload_evals": [
+    {
+      "id": "known-large-source-local-question",
+      "prompt": "The owning file is known and large, but the question concerns one local policy section. A ranged read is available.",
+      "facts": {
+        "location_known": true,
+        "source_large": true,
+        "local_question": true,
+        "range_read_supported": true,
+        "bounded_projection_available": false,
+        "completeness_required": false
+      },
+      "expected_selection": "TARGETED_RANGE",
+      "assertions": [
+        "Prefer the smallest authoritative range that answers the local question.",
+        "Preserve the source locator and required UNKNOWN/conflict context."
+      ]
+    },
+    {
+      "id": "unknown-location-discovery-first",
+      "prompt": "The repository location of the relevant symbol is unknown. Search/snippet discovery is available before opening source files.",
+      "facts": {
+        "location_known": false,
+        "source_large": true,
+        "local_question": true,
+        "range_read_supported": true,
+        "bounded_projection_available": false,
+        "completeness_required": false
+      },
+      "expected_selection": "SEARCH_SNIPPET",
+      "assertions": [
+        "Use search/index/snippet discovery before avoidable whole-file retrieval.",
+        "Expand only after the owning source location is identified."
+      ]
+    },
+    {
+      "id": "bounded-status-projection-first",
+      "prompt": "A routine CI/status question has an existing bounded projection with source identities and explicit attention state; raw logs remain available for drill-down.",
+      "facts": {
+        "location_known": true,
+        "source_large": true,
+        "local_question": true,
+        "range_read_supported": false,
+        "bounded_projection_available": true,
+        "completeness_required": false
+      },
+      "expected_selection": "BOUNDED_PROJECTION",
+      "assertions": [
+        "Use the established bounded projection for first pass.",
+        "Retain targeted raw-source drill-down for failure, attention, ambiguity, or insufficient evidence."
+      ]
+    },
+    {
+      "id": "whole-document-completeness",
+      "prompt": "The question asks whether ordering and cross-section statements are globally consistent across the entire owning document.",
+      "facts": {
+        "location_known": true,
+        "source_large": true,
+        "local_question": false,
+        "range_read_supported": true,
+        "bounded_projection_available": false,
+        "completeness_required": true
+      },
+      "expected_selection": "FULL_SOURCE_ALLOWED",
+      "assertions": [
+        "Whole-source retrieval is valid because completeness is part of the question.",
+        "Do not sacrifice cross-section consistency evidence merely to reduce payload height."
+      ]
+    }
+  ],
   "evals": [
     {
       "id": "existing-unittest-command",

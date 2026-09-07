@@ -31,7 +31,7 @@
     },
     {
       "id": "V-GATEWAY-LIMITS-HEADROOM",
-      "status": "captured-needs-source-authority"
+      "status": "source-proven-design-5.103"
     },
     {
       "id": "V-MODEL-LIFECYCLE-STATUS",
@@ -43,7 +43,7 @@
     },
     {
       "id": "V-CACHE-POLICY-MODE",
-      "status": "source-proven-design-5.102"
+      "status": "implemented-5.102"
     },
     {
       "id": "V-DEVPASS-NO-TRAINING-STATUS",

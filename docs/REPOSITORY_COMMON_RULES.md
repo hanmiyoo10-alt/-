@@ -288,6 +288,30 @@ Small one-off inline snippets remain appropriate when they are bounded and easie
 
 The exact guardrail and routing procedure are owned by `.agents/skills/agent-execution-compactness/SKILL.md` and may evolve without changing project authority.
 
+### RCR-D15 — Stage substantial interactive repository work at bounded checkpoints
+
+**Class:** `DEFAULT`
+
+For substantial interactive repository work, keep the full repository and project validation depth but advance the work through bounded checkpoints by default. The normal ordered stage sequence is:
+
+`AUTHORITY_SCOPE` → `IMPLEMENTATION_PR` → `VALIDATION_MERGE` → `POSTMERGE_CONVERGENCE` → `EXPERIMENT_CLOSE`
+
+One ordinary continuation should advance at most one substantial stage, then stop at the stage checkpoint and report the completed stage, current evidence, and exact next stage. Staging is an interaction/workflow default, not a new repository, production, release, runtime, or project truth owner.
+
+The stages mean:
+
+1. `AUTHORITY_SCOPE` — read current authority, resolve ownership/overlap, and lock a bounded scope; do not mutate yet.
+2. `IMPLEMENTATION_PR` — create the branch/materialized change, confirm exact diff, and open the PR; do not merge yet.
+3. `VALIDATION_MERGE` — evaluate required PR validation, establish the merge barrier, and merge only when authorized; do not roll directly into postmerge proof.
+4. `POSTMERGE_CONVERGENCE` — verify merged-main checks and owning health/authority convergence.
+5. `EXPERIMENT_CLOSE` — only when applicable, run the already-authorized bounded experiment, record evidence, and close/synchronize coordination surfaces.
+
+This default deliberately preserves required depth. It does not remove or weaken required Git, CI, release, production, authority, validation, uncertainty, or evidence checks, and it does not claim to control or guarantee host UI performance.
+
+A tiny read-only task may collapse stages when it genuinely completes in at most two bounded reads and does not cross a mutation, merge, release, production, or safety boundary. An active incident or safety-critical recovery may continue to the nearest safe stop when delaying would create material risk; record the exception and the safe-stop reason. Explicit user instruction may authorize a broader run than the ordinary one-stage continuation default.
+
+Projects or domain contracts may specialize this `DEFAULT` where their own workflow needs a different checkpoint shape, but they must preserve repository-wide hard invariants and their existing owning gates.
+
 ## 6. Conditional common rules
 
 ### RCR-C01 — Generated artifacts remain derived

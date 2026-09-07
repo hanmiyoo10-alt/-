@@ -77,6 +77,31 @@ pub async fn open(context: &mut dyn WIPICContext, name_ptr: u32, record_size: i3
     Ok(id as i32)
 }
 
+/// Delete only the named adapter database owned by the current application.
+pub async fn delete_database(context: &mut dyn WIPICContext, name_ptr: u32, mode: i32) -> Result<i32> {
+    let name = read_null_terminated_string_bytes(context, name_ptr)?;
+    if name.is_empty() || name.len() > 96 || mode != 1 {
+        return Err(WieError::Unimplemented(format!("MC_DB.delete unsupported parameters: name_len={}, mode={mode}", name.len())));
+    }
+    let key = storage_name(&name);
+    let system = context.system();
+    let pid = system.pid().to_owned();
+    if !system.platform().database_repository().exists(&key, &pid).await { return Ok(NOENT); }
+    let db = system.platform().database_repository().open(&key, &pid).await;
+    let Some(metadata) = db.get(0).await else {
+        return Err(WieError::Unimplemented("MC_DB.delete: missing adapter metadata; data preserved".into()));
+    };
+    if metadata.len() != 12 || metadata[..4] != MAGIC.to_le_bytes() || metadata[8..12] != mode.to_le_bytes() {
+        return Err(WieError::Unimplemented("MC_DB.delete: metadata mismatch; data preserved".into()));
+    }
+    drop(db);
+    if !system.platform().database_repository().delete(&key, &pid).await {
+        return Err(WieError::FatalError("MC_DB.delete: storage deletion failed".into()));
+    }
+    tracing::info!("MC_DB.delete: removed named record database for current application");
+    Ok(0)
+}
+
 pub async fn close(context: &mut dyn WIPICContext, id: i32) -> Result<i32> {
     let Some(mut h) = load(context, id)? else { return Ok(BAD_HANDLE); };
     h.magic = 0;
@@ -290,6 +315,46 @@ mod tests {
         assert_eq!(result, [99; 8]);
         close(&mut ctx, id).await.unwrap();
         assert_eq!(list_records(&mut ctx, id, 0x3000, 8).await.unwrap(), BAD_HANDLE);
+    }
+
+    #[futures_test::test]
+    async fn delete_database_removes_only_named_database_and_allows_recreate() {
+        let mut ctx = context();
+        let id = open(&mut ctx, 0x1000, 128, 1, 1).await.unwrap();
+        insert(&mut ctx, id, 0x2000, 128).await.unwrap();
+        ctx.write_bytes(0x1100, b"other-save\0").unwrap();
+        let other = open(&mut ctx, 0x1100, 128, 1, 1).await.unwrap();
+        insert(&mut ctx, other, 0x2000, 128).await.unwrap();
+        let key = storage_name(b"save");
+        let mut other_app = ctx.system().platform().database_repository().open(&key, "another-pid").await;
+        other_app.set(1, b"preserve-other-app").await;
+        assert_eq!(delete_database(&mut ctx, 0x1000, 1).await.unwrap(), 0);
+        assert_eq!(count(&mut ctx, id).await.unwrap(), BAD_HANDLE);
+        assert_eq!(open(&mut ctx, 0x1000, 128, 0, 1).await.unwrap(), NOENT);
+        assert_eq!(count(&mut ctx, other).await.unwrap(), 1);
+        assert_eq!(other_app.get(1).await.unwrap(), b"preserve-other-app");
+        let fresh = open(&mut ctx, 0x1000, 128, 1, 1).await.unwrap();
+        assert_eq!(count(&mut ctx, fresh).await.unwrap(), 0);
+    }
+
+    #[futures_test::test]
+    async fn delete_missing_database_does_not_create_it() {
+        let mut ctx = context();
+        assert_eq!(delete_database(&mut ctx, 0x1000, 1).await.unwrap(), NOENT);
+        assert!(!ctx.system().platform().database_repository().exists(&storage_name(b"save"), "probe-pid").await);
+    }
+
+    #[futures_test::test]
+    async fn delete_rejects_unsupported_mode_and_foreign_metadata() {
+        let mut ctx = context();
+        let id = open(&mut ctx, 0x1000, 128, 1, 1).await.unwrap();
+        insert(&mut ctx, id, 0x2000, 128).await.unwrap();
+        assert!(delete_database(&mut ctx, 0x1000, 0).await.is_err());
+        assert_eq!(count(&mut ctx, id).await.unwrap(), 1);
+        let mut db = ctx.system().platform().database_repository().open(&storage_name(b"save"), "probe-pid").await;
+        db.set(0, b"foreign").await;
+        assert!(delete_database(&mut ctx, 0x1000, 1).await.is_err());
+        assert_eq!(db.get(1).await.unwrap(), vec![7;128]);
     }
 
 }

@@ -378,3 +378,79 @@ One bounded PR after design merge:
 5. use existing Agent Skills CI as the validation lane.
 
 A helper script should be added only if the skill/eval implementation proves it is necessary. Do not pre-emptively build an execution framework.
+
+## 18. Read/result payload companion extension (#1849)
+
+Repository-visible compactness has a third axis beyond inline execution-program size and repository-owned call fan-out:
+
+```text
+repository_owned_visible_read_payload
+= repository source/result text selected for one semantic read question
+```
+
+The motivating case is a single repository/tool read that returns a very large source or result body even though only one local section is needed. Reducing call count alone does not solve that display-height problem.
+
+The companion rule is:
+
+```text
+locate narrowly
+→ read the smallest authoritative excerpt/projection that can answer the question
+→ preserve source identity + UNKNOWN/conflict/failure context
+→ expand only when completeness actually requires it
+```
+
+### 18.1 Selection order
+
+For repository source/result reads, use this order when the available tool supports it:
+
+1. if the owning location is unknown, use search/index/symbol/snippet discovery before avoidable whole-file retrieval;
+2. if the file/path is known and the question is local, use a bounded line/range read or equivalent targeted excerpt;
+3. if an established bounded CI/status projection already preserves source identities and uncertainty, use it for first pass and reserve raw logs/full bodies for targeted drill-down;
+4. reuse an already captured bounded result/resource when sufficient instead of re-fetching or re-echoing the full source;
+5. expand to a whole-file/full-body read when completeness, document structure, ordering, cross-section consistency, or another global property is genuinely part of the question.
+
+This is a selection preference, not a universal byte/line ceiling. A short read that omits required evidence is worse than a longer correct read.
+
+### 18.2 Required context that compactness may not remove
+
+A bounded read must retain every fact needed for the claim, including when applicable:
+
+- authoritative source locator/identity;
+- currentness or freshness barriers;
+- disagreement between authoritative sources;
+- `UNKNOWN`, `CONFLICT`, partial, or failure state;
+- failure provenance;
+- security, permission, or trust context;
+- cross-section relationships that the question actually requires.
+
+A bounded excerpt or projection remains derived evidence. It does not become a new mutable truth owner.
+
+### 18.3 Full-read exceptions are first-class
+
+Whole-source retrieval is explicitly valid when the semantic question requires:
+
+- global completeness;
+- ordering across the document;
+- cross-section consistency;
+- whole-file schema/structure;
+- proof of absence that cannot be established from a bounded index;
+- or a source small enough that narrowing would add complexity without material compactness benefit.
+
+The policy must not pressure agents into false confidence from a short excerpt.
+
+### 18.4 Evaluation extension
+
+The compactness fixture gains a separate `read_payload_evals` family so existing execution-route eval identities remain stable while the new companion behavior is machine-checked.
+
+Required cases cover:
+
+- known large source + local question -> `TARGETED_RANGE`;
+- unknown location -> `SEARCH_SNIPPET`;
+- existing bounded CI/status projection -> `BOUNDED_PROJECTION`;
+- whole-document ordering/cross-section question -> `FULL_SOURCE_ALLOWED`.
+
+Agent Skills CI should mechanically verify the guidance and fixture contract. SimCore CI remains repository cross-impact evidence. No new workflow, MCP authority, connector capability, writer, product/runtime/release surface, or host-UI guarantee is introduced.
+
+### 18.5 Host UI boundary
+
+This extension only reduces repository-owned source/result text selected by the agent or repository tool when evidence-equivalent narrowing exists. It does not control whether ChatGPT or another client collapses, expands, groups, or otherwise renders a tool card.

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import re
 import unittest
 from pathlib import Path
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 SKILL = SKILL_ROOT / "SKILL.md"
+EVALS = SKILL_ROOT / "evals" / "evals.json"
 
 
 class SkillContractTests(unittest.TestCase):
@@ -182,6 +184,95 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("repository-side proxy", text)
         self.assertIn("not a claim about exact ChatGPT host-card rendering", text)
         self.assertIn("no claim is made that repository-side fan-out equals exact host UI card count", text)
+
+    def test_read_payload_companion_contract_is_distinct_and_bounded(self):
+        text = SKILL.read_text(encoding="utf-8")
+        for required in (
+            "## Read/result payload companion contract",
+            "Read/result payload height is a companion compactness axis distinct from execution-program size and call fan-out.",
+            "repository_owned_visible_read_payload",
+            "locate narrowly",
+            "read the smallest authoritative excerpt/projection that can answer the question",
+            "expand only when completeness actually requires it",
+        ):
+            self.assertIn(required, text)
+        self.assertIn("It does not add a sixth execution route.", text)
+
+    def test_read_payload_selection_prefers_discovery_range_projection_and_reuse(self):
+        text = SKILL.read_text(encoding="utf-8")
+        section = text[
+            text.index("## Read/result payload companion contract"):
+            text.index("## Routing order")
+        ]
+        for required in (
+            "Unknown location:",
+            "repository search, index, symbol lookup, or bounded snippet discovery",
+            "Known file + local question:",
+            "bounded line/range read or equivalent targeted excerpt",
+            "Existing bounded projection:",
+            "established CI/status/summary projections for first-pass questions",
+            "Reuse captured evidence:",
+            "do not re-fetch or re-echo a full source",
+        ):
+            self.assertIn(required, section)
+
+    def test_read_payload_preserves_full_read_exceptions_and_required_context(self):
+        text = SKILL.read_text(encoding="utf-8")
+        section = text[
+            text.index("## Read/result payload companion contract"):
+            text.index("## Routing order")
+        ]
+        for required in (
+            "whole-file/full-body reads remain valid",
+            "global completeness",
+            "document structure",
+            "ordering",
+            "cross-section consistency",
+            "authoritative source locator or owning identity",
+            "required currentness/freshness barrier",
+            "`UNKNOWN`, `CONFLICT`, partial, or failure state",
+            "security, permission, or trust context",
+        ):
+            self.assertIn(required, section)
+        self.assertIn(
+            "cannot guarantee how ChatGPT or another host renders tool cards or their height",
+            section,
+        )
+
+    def test_read_payload_eval_fixtures_cover_compact_and_completeness_paths(self):
+        payload = json.loads(EVALS.read_text(encoding="utf-8"))
+        cases = {case["id"]: case for case in payload["read_payload_evals"]}
+        self.assertEqual(
+            set(cases),
+            {
+                "known-large-source-local-question",
+                "unknown-location-discovery-first",
+                "bounded-status-projection-first",
+                "whole-document-completeness",
+            },
+        )
+        self.assertEqual(
+            cases["known-large-source-local-question"]["expected_selection"],
+            "TARGETED_RANGE",
+        )
+        self.assertEqual(
+            cases["unknown-location-discovery-first"]["expected_selection"],
+            "SEARCH_SNIPPET",
+        )
+        self.assertEqual(
+            cases["bounded-status-projection-first"]["expected_selection"],
+            "BOUNDED_PROJECTION",
+        )
+        self.assertEqual(
+            cases["whole-document-completeness"]["expected_selection"],
+            "FULL_SOURCE_ALLOWED",
+        )
+        self.assertTrue(
+            cases["whole-document-completeness"]["facts"]["completeness_required"]
+        )
+        self.assertFalse(
+            cases["known-large-source-local-question"]["facts"]["completeness_required"]
+        )
 
     def test_skill_creates_no_execution_authority(self):
         text = SKILL.read_text(encoding="utf-8")

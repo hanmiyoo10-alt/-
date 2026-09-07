@@ -5,18 +5,19 @@ description: >-
   required validation and authority. Use before constructing non-trivial shell,
   heredoc, inline Python, temporary source/test, or local validation payloads. Prefer
   existing commands and harnesses, materialize larger programs before execution, keep
-  repository-owned visible fan-out low when evidence is preserved, and keep safety,
-  evidence, CI, release, and project-owned gates authoritative.
+  repository-owned visible fan-out and avoidable read/result payload height low when
+  evidence is preserved, and keep safety, evidence, CI, release, and project-owned gates authoritative.
 ---
 
 # Agent Execution Compactness
 
 Repository-wide execution-routing procedure for development and validation work.
 
-This skill answers two related questions:
+This skill answers three related questions:
 
 1. **What is the narrowest execution surface that preserves the required validation while keeping the directly visible execution payload bounded?**
 2. **When several repository/tool calls prove one semantic result, can an existing composition or harness preserve the same evidence with lower repository-owned visible fan-out?**
+3. **When repository evidence must be read, what is the smallest authoritative excerpt or bounded projection that answers the question without hiding required context?**
 
 It operationalizes `docs/REPOSITORY_COMMON_RULES.md`,
 `docs/REPOSITORY_AGENT_EXECUTION_COMPACTNESS_V1_DESIGN_2026-09-07.md`, and
@@ -28,6 +29,7 @@ It is development policy, not a source of mutable product, runtime, release, or 
 - Correctness, safety, authority, evidence fidelity, and required validation outrank compactness.
 - Never shorten an execution payload by deleting meaningful tests, assertions, authority checks, or required evidence.
 - Never reduce visible fan-out by deleting required reads, freshness checks, mutation barriers, or failure verification.
+- Never shrink a repository read/result by omitting authority markers, source identity, disagreement, `UNKNOWN`, failure provenance, security context, or required freshness evidence.
 - Never place secrets, credentials, tokens, private sensitive payloads, or authentication material into inline execution text.
 - Do not bypass Git, CI, main-write, release, security, production, or project-specific gates.
 - Do not invent a new writer, executor, privileged hook, interception framework, or opaque mega-call merely to make commands or activity counts smaller.
@@ -93,6 +95,52 @@ Do not consolidate merely to improve the metric when separate calls are required
 - any path where consolidation would hide `UNKNOWN`, `CONFLICT`, failure provenance, or source identity.
 
 A lower fan-out route is better only when the same required evidence survives. The metric is a repository-side proxy and is not a claim about exact ChatGPT host-card rendering.
+
+## Read/result payload companion contract
+
+Read/result payload height is a companion compactness axis distinct from execution-program size and call fan-out. It does not add a sixth execution route.
+
+Define:
+
+```text
+repository_owned_visible_read_payload
+= repository source/result text selected for one semantic read question
+```
+
+For repository reads, prefer the smallest evidence-equivalent source surface that can answer the question.
+
+Preferred shape:
+
+```text
+locate narrowly
+→ read the smallest authoritative excerpt/projection that can answer the question
+→ preserve source identity + UNKNOWN/conflict/failure context
+→ expand only when completeness actually requires it
+```
+
+### Source-read selection order
+
+1. **Unknown location:** prefer repository search, index, symbol lookup, or bounded snippet discovery before avoidable whole-file retrieval when discovery quality is equivalent.
+2. **Known file + local question:** prefer a bounded line/range read or equivalent targeted excerpt when the available tool supports it.
+3. **Existing bounded projection:** prefer established CI/status/summary projections for first-pass questions instead of raw logs or full bodies, then drill down only for attention, failure, ambiguity, or insufficient evidence.
+4. **Reuse captured evidence:** do not re-fetch or re-echo a full source when an already captured bounded result/resource is sufficient for the current claim.
+5. **Expand only for completeness:** whole-file/full-body reads remain valid when the question genuinely depends on global completeness, document structure, ordering, cross-section consistency, or when the source is already small enough that narrowing provides no material benefit.
+
+A shorter read is better only when it preserves the same authority and evidence needed for the claim. A bounded excerpt does not become a new truth owner merely because it is easier to display.
+
+### Preserve required read context
+
+Do not narrow a read when doing so would hide or weaken any of these:
+
+- the authoritative source locator or owning identity;
+- a required currentness/freshness barrier;
+- disagreement between authoritative sources;
+- `UNKNOWN`, `CONFLICT`, partial, or failure state;
+- failure provenance needed to diagnose or verify a result;
+- security, permission, or trust context;
+- cross-section relationships required by the actual question.
+
+The repository can optimize selected source/result payloads, but it cannot guarantee how ChatGPT or another host renders tool cards or their height.
 
 ## Routing order
 
@@ -262,6 +310,9 @@ Do not treat `SPLIT` as a compactness failure. Required semantic separation outr
 | Existing unittest target already covers the work | `EXISTING_COMMAND` |
 | Checked-in script/CI/MCP already owns long validation | `HARNESS` |
 | Existing read-only composition preserves the same sources as several manual reads | prefer the composition; lower visible fan-out |
+| Known large file, local source question, ranged read available | read the targeted authoritative range first |
+| Unknown source location | search/index/snippet discovery before avoidable whole-file retrieval |
+| Whole-document ordering or cross-section consistency is the question | full-source read is valid; completeness outranks compactness |
 | Write requires precondition, mutation, and fresh post-write verification | preserve required separate calls |
 | Five-line import smoke, no secrets, one goal | `INLINE_SMALL` |
 | One 40-line temporary Python module | `MATERIALIZE` |
@@ -278,6 +329,8 @@ The routing decision is complete only when:
 - required validation and authority constraints are identified and preserved;
 - existing command/harness surfaces were preferred when sufficient;
 - an evidence-equivalent existing composition/harness was preferred over avoidable manual visible fan-out;
+- repository reads used the smallest evidence-equivalent authoritative excerpt/projection when the question was local;
+- full-source reads remained available when completeness, ordering, cross-section consistency, or a genuinely small source required them;
 - required separate calls remain separate across mutation, authority, freshness, failure, trust, or semantic-goal boundaries;
 - inline work stays within the v1 guardrail unless a bounded exception is justified;
 - multi-file or mini-build-system payloads route to materialized/repository-native surfaces;

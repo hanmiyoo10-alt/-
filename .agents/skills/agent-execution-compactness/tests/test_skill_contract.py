@@ -56,6 +56,20 @@ class SkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, text)
 
+    def test_task_observable_disposition_precedes_repository_unknown(self):
+        text = SKILL.read_text(encoding="utf-8")
+        gate = text[text.index("## Pre-routing disposition gate"):text.index("## Visible fan-out companion contract")]
+        priority_index = gate.index("Classify request-observable structure before repository-source grounding:")
+        split_rule_index = gate.index("If one request bundles two or more independent semantic goals")
+        self.assertLess(priority_index, split_rule_index)
+        for required in (
+            "Facts explicitly stated by the USER TASK about the requested execution shape are input facts, not mutable repository facts.",
+            "even when repository SOURCE EVIDENCE is empty.",
+            "Do not replace a determinate request-observable `REJECT` or `SPLIT` with generic `UNKNOWN`",
+            "Preserve `UNKNOWN` when the disposition actually depends on missing mutable repository facts or when independence is ambiguous rather than explicit.",
+        ):
+            self.assertIn(required, gate)
+
     def test_output_contract_makes_disposition_and_route_mutually_exclusive(self):
         text = SKILL.read_text(encoding="utf-8")
         output = text[text.index("## Output shape"):text.index("## Representative decisions")]

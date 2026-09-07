@@ -24,8 +24,9 @@ assert.match(stage,/github\.actor == github\.repository_owner/);
 assert.match(stage,/startsWith\(github\.event\.comment\.body, '\/usage-dashboard stage '\)/);
 assert.match(stage,/candidate_stage_e6\.cjs --inspect/,'E7 inherits proven E6 source-derived authority helper');
 assert.match(stage,/E7_STAGE_SOURCE_FROZEN/);
-assert.doesNotMatch(stage,/pull-requests: write/,'stage must not own PR bootstrap');
-assert.doesNotMatch(stage,/\/pulls|usage-dashboard-e9-validate\.yml\/dispatches/,'stage must not own PR bootstrap or validation activation');
+assert.doesNotMatch(stage,/pull-requests: write/,'stage must not own PR bootstrap or mutation');
+assert.equal((stage.match(/pull-requests: read/g)||[]).length,1,'E24 may add exactly one read-only PR evidence permission');
+assert.doesNotMatch(stage,/usage-dashboard-e9-validate\.yml\/dispatches/,'stage must not own validation activation');
 assert.equal((stage.match(/contents: write/g)||[]).length,1,'E7 stage owns exactly one constrained contents writer');
 
 const resolveAt=stage.indexOf('\n  resolve_stage:');
@@ -113,4 +114,4 @@ const fallbackIf=fallback.match(/^    if:.*$/m)?.[0]||'';
 assert.match(fallbackIf,/\/usage-dashboard prepare /);
 assert.doesNotMatch(fallbackIf,/\/usage-dashboard stage /,'fallback preparation must not own the normal E7 stage command');
 
-console.log('usage-dashboard E7/E14 stage transaction contract: OK · candidate-ready boundary, derived-impact smoke selection, conditional ancestry convergence, config-free PR authority split, exact-SHA full validation, preflight, exact-byte promotion preserved');
+console.log('usage-dashboard E7/E14 stage transaction contract: OK · candidate-ready boundary, derived-impact smoke selection, conditional ancestry convergence, read-only PR evidence with no PR mutation authority, exact-SHA full validation, preflight, exact-byte promotion preserved');

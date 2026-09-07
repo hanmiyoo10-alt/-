@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/fortune-golf-apk.yml'
       - 'fortune-golf-android/**'
+      - 'fortune-probe/**'
   workflow_dispatch:
 
 permissions:
@@ -27,6 +28,16 @@ jobs:
           ref: 1ed8710956e727629e67db762ddc1e6bd6151a1f
           persist-credentials: false
           submodules: recursive
+
+      - name: Checkout probe overlay
+        uses: actions/checkout@v4
+        with:
+          path: .probe
+          sparse-checkout: fortune-probe
+          persist-credentials: false
+
+      - name: Apply startup probe
+        run: python .probe/fortune-probe/apply.py .
 
       - uses: actions/setup-node@v4
         with:
@@ -52,6 +63,12 @@ jobs:
           echo "ANDROID_NDK_HOME=$ndk_path" >> "$GITHUB_ENV"
           echo "NDK_HOME=$ndk_path" >> "$GITHUB_ENV"
 
+      - name: Test startup database behavior
+        run: |
+          cargo fmt --all
+          cargo test -p wie-wipi-c startup_database -- --nocapture
+          cargo clippy -p wie-ktf --lib -- -D warnings
+
       - name: Build bundled emulator frontend
         run: |
           npm ci
@@ -72,15 +89,15 @@ jobs:
           mkdir -p apk-output
           apk_path=$(find wie-app/gen/android/app/build/outputs/apk -name '*-debug.apk' -type f -print -quit)
           test -n "$apk_path"
-          cp "$apk_path" apk-output/fortune-golf-emulator-debug.apk
+          cp "$apk_path" apk-output/fortune-golf-startup-probe.apk
           cp LICENSE apk-output/WIE-LICENSE.txt
           echo 'WIE source: https://github.com/dlunch/wie/commit/1ed8710956e727629e67db762ddc1e6bd6151a1f' > apk-output/BUILD.txt
-          echo 'No game ROMs included. Fortune Golf compatibility is unverified.' >> apk-output/BUILD.txt
-          sha256sum apk-output/fortune-golf-emulator-debug.apk >> apk-output/BUILD.txt
+          echo 'Startup-only probe: missing DB check implemented; create/read/write not implemented. No game ROMs included.' >> apk-output/BUILD.txt
+          sha256sum apk-output/fortune-golf-startup-probe.apk >> apk-output/BUILD.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: fortune-golf-emulator-apk
+          name: fortune-golf-startup-probe
           path: apk-output/
           if-no-files-found: error

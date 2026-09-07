@@ -36,7 +36,7 @@ const accepted101Projection = Object.freeze({
   acceptedIdentity:Object.freeze({productVersion:'3.0.0-alpha.5.101',releaseSha:SHA_5101,issue:1604,commentId:6002,verdict:'ACCEPTED'}),
 });
 
-// Real current repository shape: deployed 5.101 remains PENDING while accepted baseline stays 5.100.
+// Historical regression fixture: deployed 5.101 stays PENDING while accepted baseline remains 5.100.
 const currentResolution = e22.resolveLatestAccepted([accepted100Projection,pending101Projection]);
 assert.equal(currentResolution.latestDeployedIdentity.productVersion,'3.0.0-alpha.5.101');
 assert.equal(currentResolution.latestAcceptedIdentity.productVersion,'3.0.0-alpha.5.100');
@@ -114,17 +114,45 @@ const identityConflict=e23.resolveAcceptedBaselineHandoff({
 assert.equal(identityConflict.ok,false);
 assert.ok(identityConflict.findings.some((row)=>row.code==='E23_ACCEPTED_IDENTITY_CONFLICT'));
 
-// Target order and manual releaseEvidence mismatch can be checked shift-left by callers.
+// Target order and authority-bearing mismatches can be checked shift-left by callers.
 const invalidTarget=e23.resolveAcceptedBaselineHandoff(currentResolution,{targetProductVersion:'not-a-release'});
 assert.equal(invalidTarget.ok,false);
 assert.ok(invalidTarget.findings.some((row)=>row.code==='E23_RELEASE_EVIDENCE_MISMATCH'));
 const sameTarget=e23.resolveAcceptedBaselineHandoff(currentResolution,{targetProductVersion:'3.0.0-alpha.5.100'});
 assert.equal(sameTarget.ok,false);
 assert.ok(sameTarget.findings.some((row)=>row.code==='E23_RELEASE_EVIDENCE_MISMATCH'));
-const manualMismatch=JSON.parse(JSON.stringify(currentHandoff.releaseEvidence));
-manualMismatch.acceptedBaseline.commentId=1;
-const mismatch=e23.inspectReleaseEvidenceHandoff(manualMismatch,currentResolution,{targetProductVersion:'3.0.0-alpha.5.900'});
-assert.ok(mismatch.some((row)=>row.code==='E23_RELEASE_EVIDENCE_MISMATCH'));
+
+const authorityMutations=[
+  ['acceptedBaseline','productVersion','3.0.0-alpha.5.99'],
+  ['acceptedBaseline','releaseSha','1'.repeat(40)],
+  ['acceptedBaseline','issue',1],
+  ['acceptedBaseline','commentId',1],
+  ['acceptedBaseline','verdict','rejected'],
+  ['latestInstalled','productVersion','3.0.0-alpha.5.99'],
+  ['latestInstalled','releaseSha','2'.repeat(40)],
+  ['latestInstalled','issue',2],
+  ['latestInstalled','commentId',2],
+  ['latestInstalled','verdict','unverified'],
+];
+for(const [role,field,value] of authorityMutations){
+  const actual=JSON.parse(JSON.stringify(currentHandoff.releaseEvidence));
+  actual[role][field]=value;
+  const findings=e23.inspectReleaseEvidenceHandoff(actual,currentResolution,{targetProductVersion:'3.0.0-alpha.5.900'});
+  assert.ok(findings.some((row)=>row.code==='E23_RELEASE_EVIDENCE_MISMATCH'),`${role}.${field}`);
+}
+
+// Valid note prose is presentation only; note-only differences must not become identity conflicts.
+const noteOnly=JSON.parse(JSON.stringify(currentHandoff.releaseEvidence));
+noteOnly.acceptedBaseline.note='A different bounded human note about the same exact accepted receipt.';
+noteOnly.latestInstalled.note='Another valid note; authority-bearing identity remains unchanged.';
+assert.deepEqual(e20.inspectReleaseEvidence(noteOnly,{targetProductVersion:'3.0.0-alpha.5.900'}),[]);
+assert.deepEqual(e23.inspectReleaseEvidenceHandoff(noteOnly,currentResolution,{targetProductVersion:'3.0.0-alpha.5.900'}),[]);
+
+// Note is still governed by E20 bounds; prose freedom is not schema freedom.
+const invalidNote=JSON.parse(JSON.stringify(currentHandoff.releaseEvidence));
+invalidNote.acceptedBaseline.note='x'.repeat(481);
+assert.ok(e20.inspectReleaseEvidence(invalidNote,{targetProductVersion:'3.0.0-alpha.5.900'}).length>0);
+assert.ok(e23.inspectReleaseEvidenceHandoff(invalidNote,currentResolution,{targetProductVersion:'3.0.0-alpha.5.900'}).some((row)=>row.code==='E23_RELEASE_EVIDENCE_MISMATCH'));
 assert.deepEqual(e23.inspectReleaseEvidenceHandoff(currentHandoff.releaseEvidence,currentResolution,{targetProductVersion:'3.0.0-alpha.5.900'}),[]);
 
 // Idempotent pure derivation: no new filesystem/network/process authority.
@@ -136,5 +164,6 @@ for (const forbidden of ["require('node:fs')","require('node:http')","require('n
 }
 assert.ok(source.includes("require('./release_evidence_contract_e20.cjs')"),'E23 must emit/validate the existing E20 shape');
 assert.ok(!source.includes('release_closure_e22.cjs'),'E23 consumes E22 projection objects and must not recreate E22 parsing');
+assert.ok(source.includes('authorityBearingReleaseEvidence'),'E23 must compare semantic authority fields rather than note prose');
 
-console.log('usage-dashboard E23 accepted baseline handoff: OK · E22 projection only · E20 shape reused · E21 compatible · pending/rejected/conflict hold prior accepted baseline · automatic acceptance advance');
+console.log('usage-dashboard E23 accepted baseline handoff: OK · E22 projection only · E20 shape reused · semantic authority comparison · note-only differences allowed · pending/rejected/conflict hold prior accepted baseline · automatic acceptance advance');

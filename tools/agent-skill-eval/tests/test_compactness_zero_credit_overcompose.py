@@ -11,6 +11,7 @@ HERE = Path(__file__).resolve()
 TOOL_DIR = HERE.parents[1]
 REPO_ROOT = HERE.parents[3]
 PROFILE = TOOL_DIR / "local-context-profiles.json"
+FIXTURE = REPO_ROOT / ".agents/skills/agent-execution-compactness/evals/evals.json"
 
 
 def load_module(name: str, filename: str):
@@ -27,6 +28,11 @@ context_builder = load_module("compactness_overcompose_context", "build_local_co
 
 class CompactnessZeroCreditOvercomposeTests(unittest.TestCase):
     def test_multiple_independent_goals_prepares_split_pair(self):
+        fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        raw_case = next(case for case in fixture["evals"] if case["id"] == "multiple-independent-goals")
+        self.assertEqual(raw_case["expected_action"], "SPLIT")
+        self.assertIsNone(raw_case["expected_route"])
+
         with tempfile.TemporaryDirectory() as td:
             output = Path(td) / "matrix.json"
             code = prepare_local.main(
@@ -47,8 +53,6 @@ class CompactnessZeroCreditOvercomposeTests(unittest.TestCase):
             )
             self.assertEqual(code, 0)
             matrix = json.loads(output.read_text(encoding="utf-8"))
-        self.assertEqual(matrix["expected_action"], "SPLIT")
-        self.assertIsNone(matrix["expected_route"])
         self.assertEqual(matrix["expected_output"], "Disposition: SPLIT")
         self.assertEqual(matrix["modes"], ["with_skill", "baseline_without_target_skill"])
 

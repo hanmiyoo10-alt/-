@@ -46,7 +46,7 @@ const design = fs.readFileSync('docs/USAGE_DASHBOARD_5104_GATEWAY_LIMITS_UTILIZA
 for (const marker of [
   'clamp(used / cap, 0, 1)',
   'clamp(remaining / cap, 0, 1)',
-  'no synthetic percentage/bar',
+  'missing/invalid/cap<=0 never becomes synthetic 0%',
   'server UTC-day spend cap utilization',
   'zero** new upstream endpoints',
   'Engine `1.6.38` **exact-byte unchanged**',

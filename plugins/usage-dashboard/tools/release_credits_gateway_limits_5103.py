@@ -690,7 +690,7 @@ def patch_dashboard() -> None:
         'Gateway Limits selected-org UI binding',
     )
     rep(
-        SETTINGS,
+        DASH,
         """        ${dashboardView === 'credits' ? creditsOrgSelector : ''}
         <div class="scope-tabs" role="tablist" aria-label="24h Usage scope">""",
         """        ${dashboardView === 'credits' ? creditsOrgSelector : ''}

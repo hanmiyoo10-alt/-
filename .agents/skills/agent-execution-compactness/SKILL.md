@@ -261,18 +261,22 @@ Select exactly one output branch after classification. The branches are mutually
 
 ### Disposition branch
 
-Use this branch whenever `REJECT` or `SPLIT` applies:
+The disposition branch is terminal, not a preface to execution-route selection.
+
+Use this branch whenever `REJECT` or `SPLIT` applies. Emit exactly these two semantic lines and nothing else for the combined request:
 
 ```text
 Disposition: REJECT | SPLIT
 Reason: <one sentence>
 ```
 
-End the answer for the combined request after this branch. Do not emit `Execution route:` or `Command surface:` and do not select `EXISTING_COMMAND`, `HARNESS`, `INLINE_SMALL`, `MATERIALIZE`, or `EXCEPTION` for the rejected or unsplit request.
+After the `Reason:` line, stop generating the answer for the combined request. Do not add a third line, additional routing prose, sub-route list, or per-goal route selection.
+
+Do not emit `Execution route:`, `Command surface:`, `Validation preserved:`, `Visible fan-out:`, or `Evidence preserved:` after a disposition. `REJECT` and `SPLIT` are dispositions only. They are never valid values of `Execution route:`.
 
 ### Execution-route branch
 
-Use this branch only when neither `REJECT` nor `SPLIT` applies:
+Use this branch only when neither `REJECT` nor `SPLIT` applies. The execution-route value must be exactly one of the five registered routes below:
 
 ```text
 Execution route: EXISTING_COMMAND | HARNESS | INLINE_SMALL | MATERIALIZE | EXCEPTION

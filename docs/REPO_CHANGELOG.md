@@ -1178,3 +1178,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/0c9040290ff8636a82a1bae980b8c1e1fdecfb76)
 - Event ID: `c00998e85dcf540ce3de2938eb47e47f6d97df9443376d58d804196052560267`
 <!-- canonical-main-doc-promoted:c00998e85dcf540ce3de2938eb47e47f6d97df9443376d58d804196052560267 -->
+
+### 2026-09-07 — docs(repo): add repository-wide staged work default
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `a46dad2cb55ce87304eaa1e2dd47abf8dac0abb1`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a46dad2cb55ce87304eaa1e2dd47abf8dac0abb1)
+- Event ID: `a5dc8fcd0737df3976efc1a7e72af739190597277fcb39b530df35ee5db53940`
+<!-- canonical-main-doc-promoted:a5dc8fcd0737df3976efc1a7e72af739190597277fcb39b530df35ee5db53940 -->

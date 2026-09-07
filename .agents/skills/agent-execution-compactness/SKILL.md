@@ -250,7 +250,22 @@ Do not treat `SPLIT` as a compactness failure. Required semantic separation outr
 
 ## Output shape
 
-Before complex execution, use a compact routing note when useful:
+Select exactly one output branch after classification. The branches are mutually exclusive.
+
+### Disposition branch
+
+Use this branch whenever `REJECT` or `SPLIT` applies:
+
+```text
+Disposition: REJECT | SPLIT
+Reason: <one sentence>
+```
+
+End the answer for the combined request after this branch. Do not emit `Execution route:` or `Command surface:` and do not select `EXISTING_COMMAND`, `HARNESS`, `INLINE_SMALL`, `MATERIALIZE`, or `EXCEPTION` for the rejected or unsplit request.
+
+### Execution-route branch
+
+Use this branch only when neither `REJECT` nor `SPLIT` applies:
 
 ```text
 Execution route: EXISTING_COMMAND | HARNESS | INLINE_SMALL | MATERIALIZE | EXCEPTION
@@ -268,7 +283,7 @@ Evidence preserved: <authority/tests/source identities>
 
 Do not emit a fan-out note when the note itself would create more noise than the routing decision.
 
-For `REJECT` or `SPLIT`, state that disposition instead of pretending an execution route was selected.
+Never emit both `Disposition:` and `Execution route:` for the same unsplit request.
 
 This routing note is advisory development policy. It does not become source authority.
 

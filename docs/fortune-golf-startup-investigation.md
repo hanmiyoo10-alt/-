@@ -25,3 +25,17 @@ Interface4 슬롯 0의 API 이름, 인자 구조, 반환값, 버퍼 소유권 �
 모든 미구현 호출을 성공으로 바꾸거나 임의 포인터를 반환하는 방식은 사용하지 않는다.
 원본 ZIP은 공개 저장소에 올리지 않는다.
 이번 조사만으로 해결된 APK가 생긴 것은 아니다.
+
+## 추가 조사 및 첫 패치
+공개 ABI 프로필은 master vector 4를 MC_DB, 슬롯 0을 MC_dbOpenDataBase(name, recordSize, create, mode)로 매핑한다.
+이 매핑과 4개 인자 형태가 관찰된 호출과 일치한다.
+근거:
+- https://github.com/mirusu400/libwipi/blob/a6633ddb9f5a4510b237b7b8059ea0dafa1e4585/spec/profiles/ktf-samsung.json
+- https://github.com/mirusu400/libwipi/blob/a6633ddb9f5a4510b237b7b8059ea0dafa1e4585/spec/wipi-1.2.1/api.csv
+
+fortune-probe의 자체 작성 코드는 저장소에서 존재 여부를 실제 확인하고 create=0이며 데이터가 없을 때만 -12(M_E_NOENT)를 반환한다.
+생성 또는 기존 데이터 열기는 아직 미구현 오류를 반환한다. 가짜 핸들이나 성공값은 반환하지 않는다.
+기존 표 6의 스트림 API를 표 4로 그대로 복사하지 않는다.
+데이터베이스 부재, 생성 미지원, 기존 데이터 보존을 검사하는 테스트 3개를 추가했다.
+이번 결과는 시작 경로 진단용이며 완성된 저장 기능 또는 플레이 성공으로 표시하지 않는다.
+별도 앱 식별자 io.hanmiyoo.fortunegolf.probe로 기존 wie와 함께 설치하도록 설정했다.

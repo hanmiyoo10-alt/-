@@ -255,49 +255,6 @@ separate bounded work units. Route each resulting unit independently.
 
 Do not treat `SPLIT` as a compactness failure. Required semantic separation outranks a lower activity count.
 
-## Output shape
-
-Select exactly one output branch after classification. The branches are mutually exclusive.
-
-### Disposition branch
-
-The disposition branch is terminal, not a preface to execution-route selection.
-
-Use this branch whenever `REJECT` or `SPLIT` applies. Emit exactly these two semantic lines and nothing else for the combined request:
-
-```text
-Disposition: REJECT | SPLIT
-Reason: <one sentence>
-```
-
-After the `Reason:` line, stop generating the answer for the combined request. Do not add a third line, additional routing prose, sub-route list, or per-goal route selection.
-
-Do not emit `Execution route:`, `Command surface:`, `Validation preserved:`, `Visible fan-out:`, or `Evidence preserved:` after a disposition. `REJECT` and `SPLIT` are dispositions only. They are never valid values of `Execution route:`.
-
-### Execution-route branch
-
-Use this branch only when neither `REJECT` nor `SPLIT` applies. The execution-route value must be exactly one of the five registered routes below:
-
-```text
-Execution route: EXISTING_COMMAND | HARNESS | INLINE_SMALL | MATERIALIZE | EXCEPTION
-Reason: <one sentence>
-Command surface: <short command or file/harness owner>
-Validation preserved: <tests/checks retained>
-```
-
-When fan-out selection is materially relevant, optionally add:
-
-```text
-Visible fan-out: <baseline> → <selected>
-Evidence preserved: <authority/tests/source identities>
-```
-
-Do not emit a fan-out note when the note itself would create more noise than the routing decision.
-
-Never emit both `Disposition:` and `Execution route:` for the same unsplit request.
-
-This routing note is advisory development policy. It does not become source authority.
-
 ## Representative decisions
 
 | Situation | Decision |
@@ -330,3 +287,46 @@ The routing decision is complete only when:
 - no claim is made that repository-side fan-out equals exact host UI card count.
 
 Then perform the work through the selected owner and use its normal validation/evidence path.
+
+## Output shape
+
+Select exactly one output branch after classification. The branches are mutually exclusive.
+
+### Execution-route branch
+
+Use this branch only when neither `REJECT` nor `SPLIT` applies. The execution-route value must be exactly one of the five registered routes below:
+
+```text
+Execution route: EXISTING_COMMAND | HARNESS | INLINE_SMALL | MATERIALIZE | EXCEPTION
+Reason: <one sentence>
+Command surface: <short command or file/harness owner>
+Validation preserved: <tests/checks retained>
+```
+
+When fan-out selection is materially relevant, optionally add:
+
+```text
+Visible fan-out: <baseline> → <selected>
+Evidence preserved: <authority/tests/source identities>
+```
+
+Do not emit a fan-out note when the note itself would create more noise than the routing decision.
+
+Never emit both `Disposition:` and `Execution route:` for the same unsplit request.
+
+This routing note is advisory development policy. It does not become source authority.
+
+### Disposition branch
+
+The disposition branch is terminal, not a preface to execution-route selection.
+
+Use this branch whenever `REJECT` or `SPLIT` applies. Emit exactly these two semantic lines and nothing else for the combined request:
+
+```text
+Disposition: REJECT | SPLIT
+Reason: <one sentence>
+```
+
+Do not emit `Execution route:`, `Command surface:`, `Validation preserved:`, `Visible fan-out:`, or `Evidence preserved:` after a disposition. `REJECT` and `SPLIT` are dispositions only. They are never valid values of `Execution route:`.
+
+After the `Reason:` line, stop generating the answer for the combined request. Do not add a third line, additional routing prose, sub-route list, or per-goal route selection.

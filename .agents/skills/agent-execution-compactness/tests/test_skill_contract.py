@@ -70,12 +70,16 @@ class SkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, gate)
 
-    def test_output_contract_makes_disposition_and_route_mutually_exclusive(self):
+    def test_output_contract_makes_terminal_disposition_last(self):
         text = SKILL.read_text(encoding="utf-8")
-        output = text[text.index("## Output shape"):text.index("## Representative decisions")]
-        disposition_index = output.index("### Disposition branch")
+        output_index = text.index("## Output shape")
+        completion_index = text.index("## Completion criterion")
+        self.assertGreater(output_index, completion_index)
+
+        output = text[output_index:]
         route_index = output.index("### Execution-route branch")
-        self.assertLess(disposition_index, route_index)
+        disposition_index = output.index("### Disposition branch")
+        self.assertLess(route_index, disposition_index)
         for required in (
             "Select exactly one output branch after classification. The branches are mutually exclusive.",
             "The disposition branch is terminal, not a preface to execution-route selection.",
@@ -92,21 +96,27 @@ class SkillContractTests(unittest.TestCase):
             self.assertIn(required, output)
         self.assertIn(
             "Execution route: EXISTING_COMMAND | HARNESS | INLINE_SMALL | MATERIALIZE | EXCEPTION",
-            output[route_index:],
+            output[route_index:disposition_index],
         )
 
-    def test_disposition_template_is_exactly_two_lines_and_terminal(self):
+    def test_disposition_template_is_exactly_two_lines_and_file_terminal(self):
         text = SKILL.read_text(encoding="utf-8")
-        output = text[text.index("## Output shape"):text.index("## Representative decisions")]
-        disposition = output[output.index("### Disposition branch"):output.index("### Execution-route branch")]
+        disposition = text[text.index("### Disposition branch"):]
         template = disposition.split("```text\n", 1)[1].split("\n```", 1)[0].splitlines()
         self.assertEqual(template, ["Disposition: REJECT | SPLIT", "Reason: <one sentence>"])
         self.assertIn("stop generating the answer", disposition)
         self.assertIn("Do not add a third line", disposition)
+        self.assertNotIn("### Execution-route branch", disposition)
+        self.assertTrue(
+            text.rstrip().endswith(
+                "After the `Reason:` line, stop generating the answer for the combined request. "
+                "Do not add a third line, additional routing prose, sub-route list, or per-goal route selection."
+            )
+        )
 
     def test_execution_route_domain_excludes_dispositions(self):
         text = SKILL.read_text(encoding="utf-8")
-        output = text[text.index("## Output shape"):text.index("## Representative decisions")]
+        output = text[text.index("## Output shape"):]
         route = re.search(r"^Execution route: ([A-Z_ |]+)$", output, re.MULTILINE)
         self.assertIsNotNone(route)
         values = {value.strip() for value in route.group(1).split("|")}

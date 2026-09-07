@@ -1,6 +1,6 @@
 # Current Study Memory Snapshot
 
-Status: `EMPTY_BOOTSTRAP`
+Status: `SNAPSHOT_READY`
 As of: `2026-09-07`
 
 이 문서는 새 대화/세션이 공부 맥락을 빠르게 재구성하기 위한 **current-only projection**입니다.
@@ -19,7 +19,7 @@ CURRENT.md
 ## Snapshot health
 
 ```text
-SNAPSHOT_STATE = EMPTY_BOOTSTRAP
+SNAPSHOT_STATE = SNAPSHOT_READY
 PROFILE_SOURCE = study/memory/PROFILE.md
 STRATEGY_SOURCE = study/memory/STRATEGIES.md
 EVIDENCE_SOURCE = study/memory/LEDGER.md
@@ -28,27 +28,67 @@ CANDIDATE_SOURCE = study/memory/INBOX.md
 
 ## Active goals
 
-아직 장기기억 시스템에 등록된 활성 목표가 없습니다.
+- PSAT에 맞는 문제풀이 체계를 만들고, 문제를 단순 반복하기보다 유형·판단 구조·오답 패턴을 축적한다.
+- 실제 교재/문제풀이가 시작되면 본인 해석을 먼저 만든 뒤 O/X 검증을 통해 해석 오류의 종류를 잡는다.
 
 ## Active subjects
 
-아직 등록된 활성 과목이 없습니다.
+```text
+PSAT = ACTIVE
+```
+
+현재 스냅샷은 다른 과목을 비활성이라고 단정하지 않는다. 장기기억 시스템에 현재 활성으로 확인된 범위만 투영한다.
 
 ## High-value learner patterns
 
-아직 `PROFILE.md`에서 투영할 확정 패턴이 없습니다.
+### P-001
+문제나 출제 구조를 **패턴으로 분류하고 규칙을 찾는 접근**이 여러 과목에서 반복적으로 효과적이었던 경험이 있다.
+
+### P-002
+언어 기반 문제에서는 **같은 의미가 다른 표현으로 바뀌는 과정**을 명시적으로 확인해 주는 것이 유용할 수 있다. 현재는 MEDIUM confidence이며 실제 PSAT 오답으로 계속 검증한다.
 
 ## Active strategies
 
-아직 `STRATEGIES.md`에서 투영할 활성 전략이 없습니다.
+### S-PSAT-001 — 패턴 분류 우선
+
+```text
+문제 풀이
+→ 문제 구조 / 요구 판단 확인
+→ 함정·선지 패턴 분류
+→ 오답 원인을 패턴 단위로 기록
+→ 다음 문제에서 재사용
+```
+
+### S-PSAT-002 — 사용자 해석 먼저, O/X 검증
+
+```text
+지문/선지 직접 해석
+→ O/X 판정
+→ 틀렸다면 바뀐 표현 / 범위 / 논리관계 확인
+→ 같은 오류가 반복되는지 추적
+```
+
+### S-PSAT-003 — 현재 기본 경로는 교재 중심 독학
+
+별도 강의를 기본 전제로 두지 않는다. 독학으로 특정 영역이 반복적으로 막힐 때만 보조 설명 수단을 재검토한다.
 
 ## Current watch items
 
-아직 등록된 항목이 없습니다.
+- 실제 PSAT 오답에서 `재진술 / 동의표현 / 범위 변화 / 의미 동치` 문제가 반복되는지 확인한다.
+- 패턴 분류가 지나치게 세분화되어 문제풀이 속도를 잡아먹지 않는지 확인한다.
+- PSAT에서의 독학 선호를 전반적인 학습 성향으로 성급하게 일반화하지 않는다.
 
 ## Immediate next memory action
 
-실제 공부 대화나 문제풀이에서 재사용 가치가 있는 관찰이 생기면 먼저 `INBOX.md` 또는 `LEDGER.md`에 기록하고, 근거가 충분할 때만 `PROFILE.md` / `STRATEGIES.md`로 승격합니다.
+실제 PSAT 교재나 문제를 다루기 시작하면 다음 순서를 사용한다.
+
+```text
+1. 사용자가 먼저 문제/선지를 해석한다.
+2. 해석을 O/X로 검증한다.
+3. 틀린 경우 원인을 한 줄 패턴으로 분류한다.
+4. 반복되면 LEDGER에 독립 관찰로 추가한다.
+5. 충분히 반복되면 PROFILE 또는 STRATEGIES를 갱신한다.
+```
 
 ## Snapshot states
 

@@ -21,3 +21,9 @@ The next device screenshot reports vector 4 slot 7 (`IP=0x50007`) with a databas
 The [SDK CRUD example](https://github.com/mirusu400/libwipi/blob/a6633ddb9f5a4510b237b7b8059ea0dafa1e4585/examples/database-crud/main.c) supplies sizeof(listed) and expects select/update to return M_SUCCESS. Probe 3 changes those two returns to 0, superseding Probe 2's experimental byte-count returns. The example's synthetic LGT contract is supporting evidence, not proof of all KTF edge cases.
 
 Probe 3 uses version 0.1.3 and package io.hanmiyoo.fortunegolf.probe3. Actual gameplay remains unverified. Pending slots are database deletion (2), sorting (8), access mode (9), and database listing (12).
+
+## Probe 4 follow-up
+
+Next screenshot: IP=0x50002, R0=name pointer, R1=1; vector 4 slot 2 is MC_dbDeleteDataBase(name, mode). Add deletion restricted to the current PID and the adapter's encoded database namespace. Missing databases return NOENT without creation; metadata or unsupported-mode mismatches stop without deleting. Tests cover named/app isolation, deletion followed by recreation, and rejected requests preserving records.
+
+App identity is Fortune Golf Probe 4, io.hanmiyoo.fortunegolf.probe4, version 0.1.4. Game-directed startup cleanup is implemented; the screenshot alone does not establish why the game chose that path or verify gameplay. Slots 8, 9, and 12 remain unsupported.

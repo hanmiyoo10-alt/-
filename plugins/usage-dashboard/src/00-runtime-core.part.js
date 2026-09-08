@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.105
+//@version 3.0.0-alpha.5.107
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.105';
+  const VERSION = '3.0.0-alpha.5.107';
   const RELEASE_NOTES = Object.freeze({
-    title: "Credits Next-Tier Progression",
+    title: "Credits Next-tier Unlock Limits",
     highlights: Object.freeze([
-    "Adds a source-faithful next-tier progression block to the existing Credits Gateway Limits card.",
-    "Uses only official server-computed remaining age, remaining spend, and spend-path age-floor values from the selected organization limits source.",
-    "Pinned, max-tier, enterprise, non-regular, invalid, and unavailable states stay explicit without reconstructing the public tier ladder.",
-    "Moves Engine to 1.6.39 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
+    "Adds a compact read-only next-tier limits block under the existing Credits next-tier progression surface.",
+    "Shows only current server-provided next-tier daily/monthly spend caps, rolling 24h top-up allowance, and rate multiplier.",
+    "Any missing, invalid, negative, or non-finite required unlock field fails the entire unlock block closed instead of mixing partial values.",
+    "Moves Engine to 1.6.41 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.105 · Engine 1.6.39 · Manager 1.3.6 and READY/Health ok.",
-    "Open Credits and confirm Gateway Limits amounts/bars remain healthy with the new 다음 Tier block below them.",
-    "Diagnostics should include one ID-free Gateway next tier line matching the UI state; no artificial spend or traffic is required.",
+    "Verify Product 5.107 · Engine 1.6.41 · Manager 1.3.6 and READY/Health ok.",
+    "Open Credits and confirm 다음 Tier 한도 · 현재 기준 appears beneath the existing next-tier progression block.",
+    "Diagnostics should include one ID-free Gateway next-tier limits line; no artificial spend, top-up, or traffic is required.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -40,7 +40,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.39';
+  const REQUIRED_BRIDGE_VERSION = '1.6.41';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.6';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;

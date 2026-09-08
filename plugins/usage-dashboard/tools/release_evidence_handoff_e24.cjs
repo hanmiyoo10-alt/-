@@ -1,11 +1,20 @@
 'use strict';
 
 const requestE9 = require('./release_request_e9.cjs');
+const e20 = require('./release_evidence_contract_e20.cjs');
 const e22 = require('./release_closure_e22.cjs');
 const e23 = require('./release_baseline_handoff_e23.cjs');
 
 function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function copy(value) {
+  if (Array.isArray(value)) return value.map(copy);
+  if (!isObject(value)) return value;
+  const out = {};
+  for (const [key,item] of Object.entries(value)) out[key] = copy(item);
+  return out;
 }
 
 function freeze(value) {
@@ -148,9 +157,47 @@ function inspectReleaseEvidenceHandoff(actualEvidence, input = {}) {
   return e23.inspectReleaseEvidenceHandoff(actualEvidence,composed.resolution,{targetProductVersion:String(input.targetProductVersion || '')});
 }
 
+function authorReleaseSpec(draftSpec, input = {}) {
+  if (!isObject(draftSpec)) {
+    return freeze({ok:false, spec:null, releaseEvidence:null, acceptedIdentity:null, findings:[finding('E24_HANDOFF_COMPOSITION_FAILED','authoring-spec')]});
+  }
+  const targetProductVersion = String(draftSpec.productVersion || '');
+  if (!targetProductVersion) {
+    return freeze({ok:false, spec:null, releaseEvidence:null, acceptedIdentity:null, findings:[finding('E24_HANDOFF_COMPOSITION_FAILED','target-product-version')]});
+  }
+
+  const composed = resolveReleaseEvidenceHandoff({...input,targetProductVersion});
+  if (!composed.ok) {
+    return freeze({ok:false, spec:null, releaseEvidence:null, acceptedIdentity:null, findings:composed.findings});
+  }
+
+  const releaseEvidence = copy(composed.releaseEvidence);
+  const draftEvidence = isObject(draftSpec.releaseEvidence) ? draftSpec.releaseEvidence : null;
+  for (const role of ['acceptedBaseline','latestInstalled']) {
+    const draftRole = draftEvidence && isObject(draftEvidence[role]) ? draftEvidence[role] : null;
+    if (draftRole && Object.hasOwn(draftRole,'note')) releaseEvidence[role].note = draftRole.note;
+  }
+
+  const contractFindings = e20.inspectReleaseEvidence(releaseEvidence,{required:true,targetProductVersion});
+  if (contractFindings.length) {
+    return freeze({ok:false, spec:null, releaseEvidence:null, acceptedIdentity:composed.acceptedIdentity, findings:contractFindings});
+  }
+
+  const spec = copy(draftSpec);
+  spec.releaseEvidence = releaseEvidence;
+  return freeze({
+    ok:true,
+    spec,
+    releaseEvidence,
+    acceptedIdentity:composed.acceptedIdentity,
+    findings:[],
+  });
+}
+
 module.exports = {
   normalizeRequestBundle,
   inspectEnumeration,
   resolveReleaseEvidenceHandoff,
   inspectReleaseEvidenceHandoff,
+  authorReleaseSpec,
 };

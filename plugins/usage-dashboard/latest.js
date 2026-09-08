@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.105
+//@version 3.0.0-alpha.5.107
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.105';
+  const VERSION = '3.0.0-alpha.5.107';
   const RELEASE_NOTES = Object.freeze({
-    title: "Credits Next-Tier Progression",
+    title: "Credits Next-tier Unlock Limits",
     highlights: Object.freeze([
-    "Adds a source-faithful next-tier progression block to the existing Credits Gateway Limits card.",
-    "Uses only official server-computed remaining age, remaining spend, and spend-path age-floor values from the selected organization limits source.",
-    "Pinned, max-tier, enterprise, non-regular, invalid, and unavailable states stay explicit without reconstructing the public tier ladder.",
-    "Moves Engine to 1.6.39 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
+    "Adds a compact read-only next-tier limits block under the existing Credits next-tier progression surface.",
+    "Shows only current server-provided next-tier daily/monthly spend caps, rolling 24h top-up allowance, and rate multiplier.",
+    "Any missing, invalid, negative, or non-finite required unlock field fails the entire unlock block closed instead of mixing partial values.",
+    "Moves Engine to 1.6.41 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.105 · Engine 1.6.39 · Manager 1.3.6 and READY/Health ok.",
-    "Open Credits and confirm Gateway Limits amounts/bars remain healthy with the new 다음 Tier block below them.",
-    "Diagnostics should include one ID-free Gateway next tier line matching the UI state; no artificial spend or traffic is required.",
+    "Verify Product 5.107 · Engine 1.6.41 · Manager 1.3.6 and READY/Health ok.",
+    "Open Credits and confirm 다음 Tier 한도 · 현재 기준 appears beneath the existing next-tier progression block.",
+    "Diagnostics should include one ID-free Gateway next-tier limits line; no artificial spend, top-up, or traffic is required.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -40,7 +40,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.39';
+  const REQUIRED_BRIDGE_VERSION = '1.6.41';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.6';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
@@ -2923,6 +2923,26 @@ async function importLegacyTodayBaselines() {
       : 'unknown';
     const progressionNumber = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Number(value) : null;
     const progressionDay = (value) => Number.isInteger(value) && value >= 0 ? Number(value) : null;
+    const unlockState = ['value','max-tier','tier-overridden','not-applicable','source-unavailable','permission-unavailable','invalid-next-tier-limits'].includes(String(raw?.nextTier?.limits?.state))
+      ? String(raw.nextTier.limits.state)
+      : 'source-unavailable';
+    const unlockNumber = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Number(value) : null;
+    const unlockLimits = {
+      state:unlockState,
+      rpmMultiplier:unlockNumber(raw?.nextTier?.limits?.rpmMultiplier),
+      dailyCapUsd:unlockNumber(raw?.nextTier?.limits?.dailyCapUsd),
+      monthlyCapUsd:unlockNumber(raw?.nextTier?.limits?.monthlyCapUsd),
+      topUpDailyCapUsd:unlockNumber(raw?.nextTier?.limits?.topUpDailyCapUsd),
+    };
+    if (unlockState === 'value' && (
+        unlockLimits.rpmMultiplier === null || unlockLimits.dailyCapUsd === null
+        || unlockLimits.monthlyCapUsd === null || unlockLimits.topUpDailyCapUsd === null)) {
+      unlockLimits.state = 'invalid-next-tier-limits';
+      unlockLimits.rpmMultiplier = null;
+      unlockLimits.dailyCapUsd = null;
+      unlockLimits.monthlyCapUsd = null;
+      unlockLimits.topUpDailyCapUsd = null;
+    }
     const nextTier = {
       state:progressionState,
       currentTier:Number.isInteger(raw?.nextTier?.currentTier) && raw.nextTier.currentTier >= 0 ? raw.nextTier.currentTier : null,
@@ -2930,6 +2950,7 @@ async function importLegacyTodayBaselines() {
       daysUntilQualify:progressionDay(raw?.nextTier?.daysUntilQualify),
       spendUsdUntilQualify:progressionNumber(raw?.nextTier?.spendUsdUntilQualify),
       daysUntilSpendPathUnlocks:progressionDay(raw?.nextTier?.daysUntilSpendPathUnlocks),
+      limits:unlockLimits,
     };
     if (progressionState === 'value' && (
         nextTier.currentTier === null || nextTier.tier === null || nextTier.daysUntilQualify === null
@@ -2940,6 +2961,30 @@ async function importLegacyTodayBaselines() {
       nextTier.daysUntilQualify = null;
       nextTier.spendUsdUntilQualify = null;
       nextTier.daysUntilSpendPathUnlocks = null;
+      nextTier.limits = {state:'source-unavailable',rpmMultiplier:null,dailyCapUsd:null,monthlyCapUsd:null,topUpDailyCapUsd:null};
+    }
+    const endpointState = ['value','not-applicable','source-unavailable','permission-unavailable','invalid-endpoints'].includes(String(raw?.endpointRates?.state))
+      ? String(raw.endpointRates.state)
+      : 'source-unavailable';
+    let endpointRates = {state:endpointState,rows:[]};
+    if (endpointState === 'value') {
+      const sourceRows = Array.isArray(raw?.endpointRates?.rows) ? raw.endpointRates.rows : null;
+      const rows = [];
+      const seen = new Set();
+      let valid = Boolean(sourceRows) && sourceRows.length <= 64;
+      if (valid) {
+        for (const row of sourceRows) {
+          const key = row && typeof row === 'object' && !Array.isArray(row) && typeof row.key === 'string' ? row.key : '';
+          const rpm = row && typeof row === 'object' && !Array.isArray(row) && typeof row.rpm === 'number' && Number.isFinite(row.rpm) && row.rpm >= 0 ? Number(row.rpm) : null;
+          if (!key.trim() || key.length > 96 || rpm === null || seen.has(key)) {
+            valid = false;
+            break;
+          }
+          seen.add(key);
+          rows.push({key,rpm});
+        }
+      }
+      endpointRates = valid ? {state:'value',rows} : {state:'invalid-endpoints',rows:[]};
     }
     return {
       state:'ok',
@@ -2963,6 +3008,7 @@ async function importLegacyTodayBaselines() {
         remaining:num(raw?.topUp?.remaining) ? Number(raw.topUp.remaining) : null,
       },
       nextTier,
+      endpointRates,
       fetchedAt:num(raw.fetchedAt) ? Number(raw.fetchedAt) : Date.now(),
     };
   }
@@ -3562,6 +3608,55 @@ async function importLegacyTodayBaselines() {
   }
 
 
+  function gatewayNextTierLimitsDiagnosticText(value) {
+    const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(value?.state)) ? String(value.state) : 'source-unavailable';
+    if (sourceState !== 'ok') return `Gateway next-tier limits: scope credits · source org-limits · state ${sourceState}`;
+    const nextTier = value?.nextTier;
+    const progressionState = ['value','max-tier','tier-overridden','not-applicable','unknown'].includes(String(nextTier?.state))
+      ? String(nextTier.state)
+      : 'unknown';
+    if (progressionState !== 'value') {
+      const stateName = ['max-tier','tier-overridden','not-applicable'].includes(progressionState) ? progressionState : 'source-unavailable';
+      return `Gateway next-tier limits: scope credits · source org-limits · state ${stateName}`;
+    }
+    const limits = nextTier?.limits;
+    const stateName = ['value','max-tier','tier-overridden','not-applicable','source-unavailable','permission-unavailable','invalid-next-tier-limits'].includes(String(limits?.state))
+      ? String(limits.state)
+      : 'source-unavailable';
+    if (stateName !== 'value') return `Gateway next-tier limits: scope credits · source org-limits · state ${stateName}`;
+    const number = (candidate) => typeof candidate === 'number' && Number.isFinite(candidate) && candidate >= 0 ? Number(candidate) : null;
+    const next = Number.isInteger(nextTier?.tier) && nextTier.tier >= 0 ? Number(nextTier.tier) : null;
+    const daily = number(limits?.dailyCapUsd);
+    const monthly = number(limits?.monthlyCapUsd);
+    const topup24h = number(limits?.topUpDailyCapUsd);
+    const multiplier = number(limits?.rpmMultiplier);
+    if (next === null || daily === null || monthly === null || topup24h === null || multiplier === null) {
+      return 'Gateway next-tier limits: scope credits · source org-limits · state invalid-next-tier-limits';
+    }
+    return `Gateway next-tier limits: scope credits · next ${next} · daily ${daily} · monthly ${monthly} · topup24h ${topup24h} · multiplier ${multiplier} · source org-limits · state ok`;
+  }
+
+  function gatewayEndpointRpmDiagnosticText(value) {
+    const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(value?.state)) ? String(value.state) : 'source-unavailable';
+    if (sourceState !== 'ok') return `Gateway endpoint RPM: scope credits · source org-limits · state ${sourceState}`;
+    const endpointRates = value?.endpointRates;
+    const stateName = ['value','not-applicable','source-unavailable','permission-unavailable','invalid-endpoints'].includes(String(endpointRates?.state))
+      ? String(endpointRates.state)
+      : 'source-unavailable';
+    if (stateName !== 'value') return `Gateway endpoint RPM: scope credits · source org-limits · state ${stateName}`;
+    const rows = Array.isArray(endpointRates?.rows) ? endpointRates.rows : [];
+    let unlimited = 0;
+    const seen = new Set();
+    for (const row of rows) {
+      const key = row && typeof row === 'object' && !Array.isArray(row) && typeof row.key === 'string' ? row.key : '';
+      const rpm = row && typeof row === 'object' && !Array.isArray(row) && typeof row.rpm === 'number' && Number.isFinite(row.rpm) && row.rpm >= 0 ? Number(row.rpm) : null;
+      if (!key.trim() || key.length > 96 || rpm === null || seen.has(key)) return 'Gateway endpoint RPM: scope credits · source org-limits · state invalid-endpoints';
+      seen.add(key);
+      if (rpm === 0) unlimited += 1;
+    }
+    return `Gateway endpoint RPM: scope credits · rows ${rows.length} · unlimited ${unlimited} · source org-limits · state ok`;
+  }
+
   function modelCategoryCatalogDiagnosticText(diagnostics) {
     const truth = managedRuntimeIdentityTruth(diagnostics);
     if (truth.models.state === 'mismatch') {
@@ -3797,6 +3892,8 @@ async function importLegacyTodayBaselines() {
       devPassProviderCachePolicyDiagnosticText(diagAccount),
       gatewayLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       gatewayNextTierDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
+      gatewayNextTierLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
+      gatewayEndpointRpmDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       `DevPass billing period: plan ${diagAccount && String(diagAccount.plan || '').trim() && String(diagAccount.plan).toLowerCase() !== 'none' ? String(diagAccount.plan) : '—'} · cycle ${typeof diagAccount?.cycle === 'string' && diagAccount.cycle.trim() ? diagAccount.cycle.trim() : '—'} · start ${dashboardDateText(diagAccount?.billingCycleStart, true)} · end ${dashboardDateText(diagAccount?.expiresAt, true)} · cancelled ${typeof diagAccount?.cancelled === 'boolean' ? (diagAccount.cancelled ? 'yes' : 'no') : 'unknown'}`,
       premiumAllowanceDiagnosticText(d.weekly),
       paygAccountDiagnosticText(diagAccount),
@@ -3948,14 +4045,39 @@ function todayOverviewMetrics(d) {
     return `<div class="bar gateway-limits-utilization" role="progressbar" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${esc(percentText)}" aria-valuetext="${esc(ariaText)}"><i style="width:${esc(percentText)}%"></i></div>`;
   }
 
+  function gatewayNextTierUnlockLimitsHtml(nextTier) {
+    const limits = nextTier?.limits;
+    const stateName = ['value','max-tier','tier-overridden','not-applicable','source-unavailable','permission-unavailable','invalid-next-tier-limits'].includes(String(limits?.state))
+      ? String(limits.state)
+      : 'source-unavailable';
+    if (['max-tier','tier-overridden','not-applicable'].includes(stateName)) {
+      return '<div class="gateway-next-tier-limits"><p><b>다음 Tier 한도 · 현재 기준</b> · 미적용</p></div>';
+    }
+    if (stateName !== 'value') return '<div class="gateway-next-tier-limits"><p><b>다음 Tier 한도 · 현재 기준</b> · —</p></div>';
+    const number = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Number(value) : null;
+    const daily = number(limits?.dailyCapUsd);
+    const monthly = number(limits?.monthlyCapUsd);
+    const topup = number(limits?.topUpDailyCapUsd);
+    const multiplier = number(limits?.rpmMultiplier);
+    if (daily === null || monthly === null || topup === null || multiplier === null) {
+      return '<div class="gateway-next-tier-limits"><p><b>다음 Tier 한도 · 현재 기준</b> · —</p></div>';
+    }
+    return `<div class="gateway-next-tier-limits"><p><b>다음 Tier 한도 · 현재 기준</b></p><div class="minis">
+      <div class="mini"><span>일간 spend</span><b>${esc(money(daily))}/일</b></div>
+      <div class="mini"><span>월간 spend</span><b>${esc(money(monthly))}/월</b></div>
+      <div class="mini"><span>24h 충전</span><b>${esc(money(topup))}/24h</b></div>
+      <div class="mini cyan"><span>Rate multiplier</span><b>${esc(multiplier)}×</b></div>
+    </div></div>`;
+  }
+
   function gatewayNextTierProgressionHtml(nextTier) {
     const stateName = ['value','max-tier','tier-overridden','not-applicable','unknown'].includes(String(nextTier?.state))
       ? String(nextTier.state)
       : 'unknown';
-    if (stateName === 'max-tier') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · 최고 Tier</p></div>';
-    if (stateName === 'tier-overridden') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · 고정 Tier · 자동 승급 미적용</p></div>';
-    if (stateName === 'not-applicable') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · 미적용</p></div>';
-    if (stateName !== 'value') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · —</p></div>';
+    if (stateName === 'max-tier') return `<div class="gateway-next-tier"><p><b>다음 Tier</b> · 최고 Tier</p>${gatewayNextTierUnlockLimitsHtml(nextTier)}</div>`;
+    if (stateName === 'tier-overridden') return `<div class="gateway-next-tier"><p><b>다음 Tier</b> · 고정 Tier · 자동 승급 미적용</p>${gatewayNextTierUnlockLimitsHtml(nextTier)}</div>`;
+    if (stateName === 'not-applicable') return `<div class="gateway-next-tier"><p><b>다음 Tier</b> · 미적용</p>${gatewayNextTierUnlockLimitsHtml(nextTier)}</div>`;
+    if (stateName !== 'value') return `<div class="gateway-next-tier"><p><b>다음 Tier</b> · —</p>${gatewayNextTierUnlockLimitsHtml(nextTier)}</div>`;
     const tier = Number.isInteger(nextTier?.tier) && nextTier.tier >= 0 ? Number(nextTier.tier) : null;
     const days = Number.isInteger(nextTier?.daysUntilQualify) && nextTier.daysUntilQualify >= 0 ? Number(nextTier.daysUntilQualify) : null;
     const spend = typeof nextTier?.spendUsdUntilQualify === 'number' && Number.isFinite(nextTier.spendUsdUntilQualify) && nextTier.spendUsdUntilQualify >= 0
@@ -3972,13 +4094,31 @@ function todayOverviewMetrics(d) {
       <div class="mini"><span>나이 경로</span><b>${esc(ageText)}</b></div>
       <div class="mini"><span>사용 경로</span><b>${esc(spendText)}</b></div>
       <div class="mini"><span>사용 경로 연령</span><b>${esc(spendAgeText)}</b></div>
-    </div></div>`;
+    </div>${gatewayNextTierUnlockLimitsHtml(nextTier)}</div>`;
+  }
+
+  function gatewayEndpointRpmLimitsHtml(endpointRates) {
+    const stateName = ['value','not-applicable','source-unavailable','permission-unavailable','invalid-endpoints'].includes(String(endpointRates?.state))
+      ? String(endpointRates.state)
+      : 'source-unavailable';
+    if (stateName === 'not-applicable') return '<div class="gateway-endpoint-rpm"><p><b>Endpoint RPM · 조직 한도</b> · 미적용</p></div>';
+    if (stateName !== 'value') return '<div class="gateway-endpoint-rpm"><p><b>Endpoint RPM · 조직 한도</b> · —</p></div>';
+    const rows = Array.isArray(endpointRates?.rows) ? endpointRates.rows : [];
+    const rowHtml = rows.map((row) => {
+      const key = typeof row?.key === 'string' ? row.key : '';
+      const rpm = typeof row?.rpm === 'number' && Number.isFinite(row.rpm) && row.rpm >= 0 ? Number(row.rpm) : null;
+      if (!key.trim() || key.length > 96 || rpm === null) return '';
+      const rpmText = rpm === 0 ? 'Unlimited' : `${rpm.toLocaleString('en-US')} /분`;
+      return `<div class="mini"><span>${esc(key)}</span><b>${esc(rpmText)}</b></div>`;
+    }).filter(Boolean).join('');
+    if (rowHtml === '' && rows.length > 0) return '<div class="gateway-endpoint-rpm"><p><b>Endpoint RPM · 조직 한도</b> · —</p></div>';
+    return `<details class="gateway-endpoint-rpm"><summary><b>Endpoint RPM · 조직 한도</b> · ${esc(rows.length)}개</summary><p>설정된 조직 한도 · 실시간 사용량/남은 RPM 아님</p><div class="minis">${rowHtml}</div></details>`;
   }
 
   function gatewayLimitsSectionHtml(truth) {
     const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(truth?.state)) ? String(truth.state) : 'source-unavailable';
     if (truth?.enterprise === true && sourceState === 'ok') {
-      return `<div class="usage-detail-box gateway-limits-card"><div class="recent-head"><h3>Gateway Limits · Credits</h3><span>source org-limits · ok</span></div><p>Enterprise · 조직 단위 Gateway rate/spend cap 없음</p>${gatewayNextTierProgressionHtml(truth?.nextTier)}</div>`;
+      return `<div class="usage-detail-box gateway-limits-card"><div class="recent-head"><h3>Gateway Limits · Credits</h3><span>source org-limits · ok</span></div><p>Enterprise · 조직 단위 Gateway rate/spend cap 없음</p>${gatewayNextTierProgressionHtml(truth?.nextTier)}${gatewayEndpointRpmLimitsHtml(truth?.endpointRates)}</div>`;
     }
     const tierText = truth?.trustTierState === 'not-applicable'
       ? '미적용'
@@ -4004,7 +4144,7 @@ function todayOverviewMetrics(d) {
       <div class="mini"><span>일간 spend · UTC</span><b>${esc(gatewayLimitsMetricText(truth?.daily))}</b>${gatewayLimitsUtilizationBarHtml(truth?.daily,'used','일간 spend 사용률 · UTC')}</div>
       <div class="mini"><span>월간 spend</span><b>${esc(gatewayLimitsMetricText(truth?.monthly))}</b>${gatewayLimitsUtilizationBarHtml(truth?.monthly,'used','월간 spend 사용률')}</div>
       <div class="mini"><span>${esc(topUpLabel)}</span><b>${esc(topUpText)}</b>${gatewayLimitsUtilizationBarHtml(truth?.topUp,'remaining','Rolling top-up 남은 여유 비율')}</div>
-    </div>${gatewayNextTierProgressionHtml(truth?.nextTier)}</div>`;
+    </div>${gatewayNextTierProgressionHtml(truth?.nextTier)}${gatewayEndpointRpmLimitsHtml(truth?.endpointRates)}</div>`;
   }
 
 

@@ -15,6 +15,10 @@ on:
         description: Durable E9 release request issue number
         required: true
         type: string
+      validation_attempt:
+        description: E26 append-only validation attempt index (1 or 2)
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -35,6 +39,7 @@ jobs:
       request_issue: ${{ steps.resolve.outputs.request_issue }}
       candidate_sha: ${{ steps.resolve.outputs.candidate_sha }}
       candidate_branch: ${{ steps.resolve.outputs.candidate_branch }}
+      validation_attempt: ${{ steps.resolve.outputs.validation_attempt }}
     steps:
       - name: Checkout trusted main validation controller
         uses: actions/checkout@v4
@@ -51,12 +56,14 @@ jobs:
           RAW_PR_NUMBER: ${{ inputs.pr_number }}
           RAW_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
           RAW_REQUEST_ISSUE: ${{ inputs.request_issue }}
+          RAW_VALIDATION_ATTEMPT: ${{ inputs.validation_attempt }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == 'refs/heads/main' ]] || { echo 'E9_VALIDATION_UNTRUSTED_REF'; exit 1; }
           [[ "$RAW_PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo 'E9_VALIDATION_PR_NUMBER_INVALID'; exit 1; }
           [[ "$RAW_REQUEST_ISSUE" =~ ^[1-9][0-9]*$ ]] || { echo 'E9_VALIDATION_REQUEST_NUMBER_INVALID'; exit 1; }
+          [[ "$RAW_VALIDATION_ATTEMPT" == '1' || "$RAW_VALIDATION_ATTEMPT" == '2' ]] || { echo 'E26_VALIDATION_ATTEMPT_INVALID'; exit 1; }
           CANDIDATE_SHA="$(printf '%s' "$RAW_CANDIDATE_SHA" | tr 'A-F' 'a-f')"
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'E9_VALIDATION_SHA_INVALID'; exit 1; }
 
@@ -99,8 +106,9 @@ jobs:
             echo "request_issue=$RAW_REQUEST_ISSUE"
             echo "candidate_sha=$CANDIDATE_SHA"
             echo "candidate_branch=$CANDIDATE_BRANCH"
+            echo "validation_attempt=$RAW_VALIDATION_ATTEMPT"
           } >> "$GITHUB_OUTPUT"
-          echo "E9_VALIDATION_IDENTITY_BOUND:$RAW_REQUEST_ISSUE:$RAW_PR_NUMBER:$CANDIDATE_BRANCH:$CANDIDATE_SHA"
+          echo "E9_VALIDATION_IDENTITY_BOUND:$RAW_REQUEST_ISSUE:$RAW_PR_NUMBER:$CANDIDATE_BRANCH:$CANDIDATE_SHA:attempt=$RAW_VALIDATION_ATTEMPT"
 
   validate_exact:
     needs: resolve_validation
@@ -133,15 +141,27 @@ jobs:
           REQUEST_ISSUE: ${{ needs.resolve_validation.outputs.request_issue }}
           PR_NUMBER: ${{ needs.resolve_validation.outputs.pr_number }}
           CANDIDATE_SHA: ${{ needs.resolve_validation.outputs.candidate_sha }}
+          VALIDATION_ATTEMPT: ${{ needs.resolve_validation.outputs.validation_attempt }}
           VALIDATION_RESULT: ${{ needs.validate_exact.result }}
         run: |
           set -euo pipefail
-          if [[ "$VALIDATION_RESULT" == 'success' ]]; then STATUS='GREEN'; NEXT='expected-head merge after current PR identity/mergeability re-read';
-          else STATUS='RED'; NEXT='repair source, update source_sha on the same durable release request, and let E9 reconcile again'; fi
+          RESULT_JSON="$(node plugins/usage-dashboard/tools/release_validation_convergence_e26.cjs --classify-workflow-outcome "$VALIDATION_RESULT")"
+          STATUS="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.status)' "$RESULT_JSON")"
+          RESULT_CLASS="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.resultClass)' "$RESULT_JSON")"
+          RESULT_REASON="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.reason)' "$RESULT_JSON")"
+          case "$RESULT_CLASS" in
+            GREEN) NEXT='expected-head merge after current PR identity/mergeability re-read' ;;
+            RED_LOGICAL) NEXT='repair source or release contract, produce a new candidate, and let E9 reconcile again' ;;
+            RED_RETRYABLE) NEXT='durable reducer may dispatch one bounded same-candidate retry if attempt budget remains' ;;
+            *) NEXT='diagnose bounded validation outcome; automatic retry is not authorized' ;;
+          esac
           BODY="$(cat <<EOF
           UD_VALIDATION_RESULT
           validated_sha: $CANDIDATE_SHA
           status: $STATUS
+          result_class: $RESULT_CLASS
+          attempt: $VALIDATION_ATTEMPT
+          reason: $RESULT_REASON
           request: #$REQUEST_ISSUE
           pr: #$PR_NUMBER
           transaction: $GITHUB_RUN_ID
@@ -158,7 +178,7 @@ jobs:
               "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$ISSUE/comments" \
               --data-binary @"$RUNNER_TEMP/result.json" >/dev/null
           done
-          echo "E9_VALIDATION_RESULT:$STATUS:$REQUEST_ISSUE:$PR_NUMBER:$CANDIDATE_SHA"
+          echo "E9_VALIDATION_RESULT:$RESULT_CLASS:$REQUEST_ISSUE:$PR_NUMBER:$CANDIDATE_SHA:attempt=$VALIDATION_ATTEMPT"
 
           bash plugins/usage-dashboard/tools/reducer_wake_e13.sh validation
 

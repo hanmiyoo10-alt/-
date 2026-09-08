@@ -11,6 +11,7 @@ const validator = fs.readFileSync('.github/workflows/usage-dashboard-validate.ym
 const reusable = fs.readFileSync('.github/workflows/reusable-usage-dashboard-validate.yml','utf8');
 const fallback = fs.readFileSync('.github/workflows/usage-dashboard-prepare-candidate.yml','utf8');
 const promoter = fs.readFileSync('.github/workflows/usage-dashboard-promote.yml','utf8');
+const failureProjection = fs.readFileSync('plugins/usage-dashboard/tools/stage_failure_projection_e25.cjs','utf8');
 
 const sourceBranch='release/usage-dashboard-5.74-fixture';
 assert.deepEqual(control.parseStageCommand(`/usage-dashboard stage ${sourceBranch}`),{candidateBranch:sourceBranch});
@@ -75,7 +76,8 @@ assert.match(ready,/UD_CANDIDATE_READY/);
 assert.match(ready,/base_sha: \$BASE_SHA/);
 assert.match(ready,/next: ensure deterministic PR \+ exact-SHA validation/);
 assert.match(stage,/UD_STAGE_ACCEPTED/);
-assert.match(stage,/UD_STAGE_REJECTED/);
+assert.match(stage,/stage_failure_projection_e25\.cjs --format/,'E25 stage rejection receipt must be delegated to bounded trusted projection');
+assert.match(failureProjection,/['"]UD_STAGE_REJECTED['"]/,'E25 bounded projection owns the canonical stage rejection marker');
 assert.doesNotMatch(ready,/validation: DISPATCHED|pr: #/,'candidate-ready receipt must not claim PR/validation completion');
 
 assert.match(exact,/^name: Usage Dashboard E7 Exact-SHA Validation$/m);

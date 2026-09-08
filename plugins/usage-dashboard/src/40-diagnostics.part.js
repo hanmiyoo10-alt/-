@@ -199,6 +199,55 @@
   }
 
 
+  function gatewayNextTierLimitsDiagnosticText(value) {
+    const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(value?.state)) ? String(value.state) : 'source-unavailable';
+    if (sourceState !== 'ok') return `Gateway next-tier limits: scope credits · source org-limits · state ${sourceState}`;
+    const nextTier = value?.nextTier;
+    const progressionState = ['value','max-tier','tier-overridden','not-applicable','unknown'].includes(String(nextTier?.state))
+      ? String(nextTier.state)
+      : 'unknown';
+    if (progressionState !== 'value') {
+      const stateName = ['max-tier','tier-overridden','not-applicable'].includes(progressionState) ? progressionState : 'source-unavailable';
+      return `Gateway next-tier limits: scope credits · source org-limits · state ${stateName}`;
+    }
+    const limits = nextTier?.limits;
+    const stateName = ['value','max-tier','tier-overridden','not-applicable','source-unavailable','permission-unavailable','invalid-next-tier-limits'].includes(String(limits?.state))
+      ? String(limits.state)
+      : 'source-unavailable';
+    if (stateName !== 'value') return `Gateway next-tier limits: scope credits · source org-limits · state ${stateName}`;
+    const number = (candidate) => typeof candidate === 'number' && Number.isFinite(candidate) && candidate >= 0 ? Number(candidate) : null;
+    const next = Number.isInteger(nextTier?.tier) && nextTier.tier >= 0 ? Number(nextTier.tier) : null;
+    const daily = number(limits?.dailyCapUsd);
+    const monthly = number(limits?.monthlyCapUsd);
+    const topup24h = number(limits?.topUpDailyCapUsd);
+    const multiplier = number(limits?.rpmMultiplier);
+    if (next === null || daily === null || monthly === null || topup24h === null || multiplier === null) {
+      return 'Gateway next-tier limits: scope credits · source org-limits · state invalid-next-tier-limits';
+    }
+    return `Gateway next-tier limits: scope credits · next ${next} · daily ${daily} · monthly ${monthly} · topup24h ${topup24h} · multiplier ${multiplier} · source org-limits · state ok`;
+  }
+
+  function gatewayEndpointRpmDiagnosticText(value) {
+    const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(value?.state)) ? String(value.state) : 'source-unavailable';
+    if (sourceState !== 'ok') return `Gateway endpoint RPM: scope credits · source org-limits · state ${sourceState}`;
+    const endpointRates = value?.endpointRates;
+    const stateName = ['value','not-applicable','source-unavailable','permission-unavailable','invalid-endpoints'].includes(String(endpointRates?.state))
+      ? String(endpointRates.state)
+      : 'source-unavailable';
+    if (stateName !== 'value') return `Gateway endpoint RPM: scope credits · source org-limits · state ${stateName}`;
+    const rows = Array.isArray(endpointRates?.rows) ? endpointRates.rows : [];
+    let unlimited = 0;
+    const seen = new Set();
+    for (const row of rows) {
+      const key = row && typeof row === 'object' && !Array.isArray(row) && typeof row.key === 'string' ? row.key : '';
+      const rpm = row && typeof row === 'object' && !Array.isArray(row) && typeof row.rpm === 'number' && Number.isFinite(row.rpm) && row.rpm >= 0 ? Number(row.rpm) : null;
+      if (!key.trim() || key.length > 96 || rpm === null || seen.has(key)) return 'Gateway endpoint RPM: scope credits · source org-limits · state invalid-endpoints';
+      seen.add(key);
+      if (rpm === 0) unlimited += 1;
+    }
+    return `Gateway endpoint RPM: scope credits · rows ${rows.length} · unlimited ${unlimited} · source org-limits · state ok`;
+  }
+
   function modelCategoryCatalogDiagnosticText(diagnostics) {
     const truth = managedRuntimeIdentityTruth(diagnostics);
     if (truth.models.state === 'mismatch') {
@@ -434,6 +483,8 @@
       devPassProviderCachePolicyDiagnosticText(diagAccount),
       gatewayLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       gatewayNextTierDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
+      gatewayNextTierLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
+      gatewayEndpointRpmDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       `DevPass billing period: plan ${diagAccount && String(diagAccount.plan || '').trim() && String(diagAccount.plan).toLowerCase() !== 'none' ? String(diagAccount.plan) : '—'} · cycle ${typeof diagAccount?.cycle === 'string' && diagAccount.cycle.trim() ? diagAccount.cycle.trim() : '—'} · start ${dashboardDateText(diagAccount?.billingCycleStart, true)} · end ${dashboardDateText(diagAccount?.expiresAt, true)} · cancelled ${typeof diagAccount?.cancelled === 'boolean' ? (diagAccount.cancelled ? 'yes' : 'no') : 'unknown'}`,
       premiumAllowanceDiagnosticText(d.weekly),
       paygAccountDiagnosticText(diagAccount),

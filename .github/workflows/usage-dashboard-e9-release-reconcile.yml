@@ -5,9 +5,9 @@ on:
     types: [opened, edited, reopened]
   pull_request:
     branches: [main]
-    types: [closed]
+    types: [opened, edited, synchronize, reopened, closed]
   workflow_run:
-    workflows: ["Usage Dashboard Exact-Byte Promotion"]
+    workflows: ["Usage Dashboard Exact-Byte Promotion", "Usage Dashboard E9 Exact-SHA Validation"]
     types: [completed]
   push:
     branches: [main]
@@ -16,6 +16,8 @@ on:
       - '.github/workflows/usage-dashboard-e9-validate.yml'
       - '.github/workflows/usage-dashboard-stage-e7.yml'
       - 'plugins/usage-dashboard/tools/release_request_e9.cjs'
+      - 'plugins/usage-dashboard/tools/release_pr_handoff_e25.cjs'
+      - 'plugins/usage-dashboard/tools/release_validation_convergence_e26.cjs'
       - 'plugins/usage-dashboard/tools/source_readiness_e9.cjs'
       - 'plugins/usage-dashboard/tools/source_change_semantics.cjs'
       - 'plugins/usage-dashboard/tools/merge_guard_e11.cjs'
@@ -35,7 +37,7 @@ concurrency:
 
 jobs:
   reconcile:
-    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.name == 'Usage Dashboard Exact-Byte Promotion' && github.event.workflow_run.conclusion == 'success') }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.name == 'Usage Dashboard E9 Exact-SHA Validation' || (github.event.workflow_run.name == 'Usage Dashboard Exact-Byte Promotion' && github.event.workflow_run.conclusion == 'success') }}
     permissions:
       contents: read
       issues: write
@@ -70,6 +72,14 @@ jobs:
               -H "Authorization: Bearer $GITHUB_TOKEN" \
               -H 'X-GitHub-Api-Version: 2022-11-28' \
               "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/$path" > "$out"
+          }
+          api_get_search() {
+            local query="$1" out="$2"
+            curl --fail-with-body --silent --show-error \
+              -H 'Accept: application/vnd.github+json' \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "$GITHUB_API_URL/search/issues?q=$query&per_page=100" > "$out"
           }
           post_comment() {
             local issue="$1" body="$2"
@@ -195,12 +205,78 @@ jobs:
           fi
 
           if [[ -z "$PR_NUMBER" ]]; then
-            PR_MARKER="UD_E9_PR_REQUIRED:$CANDIDATE_SHA"
-            if ! has_line "$PR_MARKER"; then
-              post_comment "$REQUEST_NUMBER" "$(printf '%s\nstate: CANDIDATE_READY\nnext: assistant ensures exactly one deterministic PR and updates pr_number on this request' "$PR_MARKER")"
+            HEAD_QUERY="$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$REPOSITORY_OWNER:$CANDIDATE_BRANCH")"
+            api_get "pulls?state=all&head=$HEAD_QUERY&per_page=100" "$RUNNER_TEMP/pr-head-candidates.json"
+            PR_REQUEST_MARKER="Usage-Dashboard-Release-Request: #$REQUEST_NUMBER"
+            MARKER_QUERY="$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "repo:$GITHUB_REPOSITORY is:pr \"$PR_REQUEST_MARKER\"")"
+            api_get_search "$MARKER_QUERY" "$RUNNER_TEMP/pr-marker-search.json"
+            cp "$RUNNER_TEMP/pr-head-candidates.json" "$RUNNER_TEMP/pr-candidates.json"
+            while read -r MARKER_PR_NUMBER; do
+              [[ "$MARKER_PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || continue
+              if jq -e --argjson number "$MARKER_PR_NUMBER" '.[] | select(.number == $number)' "$RUNNER_TEMP/pr-candidates.json" >/dev/null; then
+                continue
+              fi
+              api_get "pulls/$MARKER_PR_NUMBER" "$RUNNER_TEMP/pr-marker-$MARKER_PR_NUMBER.json"
+              jq --slurpfile pr "$RUNNER_TEMP/pr-marker-$MARKER_PR_NUMBER.json" '. + $pr | unique_by(.number)' "$RUNNER_TEMP/pr-candidates.json" > "$RUNNER_TEMP/pr-candidates-next.json"
+              mv "$RUNNER_TEMP/pr-candidates-next.json" "$RUNNER_TEMP/pr-candidates.json"
+            done < <(jq -r '.items[]?.number' "$RUNNER_TEMP/pr-marker-search.json")
+            PR_HANDOFF_JSON="$(node plugins/usage-dashboard/tools/release_pr_handoff_e25.cjs --classify-file "$REQUEST_NUMBER" "$RELEASE_VERSION" "$CANDIDATE_BRANCH" "$CANDIDATE_SHA" "$GITHUB_REPOSITORY" "$RUNNER_TEMP/pr-candidates.json" false)"
+            PR_HANDOFF_DECISION="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.decision)' "$PR_HANDOFF_JSON")"
+            PR_HANDOFF_REASON="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.reason)' "$PR_HANDOFF_JSON")"
+            SELECTED_PR="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.prNumber?String(j.prNumber):"")' "$PR_HANDOFF_JSON")"
+
+            if [[ "$PR_HANDOFF_DECISION" == 'REUSE_EXISTING' ]]; then
+              api_get "issues/$REQUEST_NUMBER" "$RUNNER_TEMP/request-bind.json"
+              EXPECTED_BIND_JSON="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(JSON.stringify({releaseVersion:j.releaseVersion,releaseSpec:j.releaseSpec,sourceBranch:j.sourceBranch,sourceSha:j.sourceSha,attemptId:j.attemptId}))' "$REQUEST_JSON")"
+              BOUND_BODY="$(node plugins/usage-dashboard/tools/release_pr_handoff_e25.cjs --bind-file "$RUNNER_TEMP/request-bind.json" "$EXPECTED_BIND_JSON" "$SELECTED_PR")"
+              jq -n --arg body "$BOUND_BODY" '{body:$body}' > "$RUNNER_TEMP/request-bind-patch.json"
+              curl --fail-with-body --silent --show-error -X PATCH \
+                -H 'Accept: application/vnd.github+json' \
+                -H "Authorization: Bearer $GITHUB_TOKEN" \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$REQUEST_NUMBER" \
+                --data-binary @"$RUNNER_TEMP/request-bind-patch.json" >/dev/null
+              api_get "issues/$REQUEST_NUMBER" "$RUNNER_TEMP/request-bound.json"
+              REQUEST_JSON="$(node - "$RUNNER_TEMP/request-bound.json" <<'NODE'
+          const fs=require('node:fs');
+          const rr=require('./plugins/usage-dashboard/tools/release_request_e9.cjs');
+          const issue=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          process.stdout.write(JSON.stringify(rr.parseIssue(issue.title,issue.body)));
+          NODE
+              )"
+              node - "$REQUEST_JSON" "$EXPECTED_BIND_JSON" "$SELECTED_PR" <<'NODE'
+          const [actualText,expectedText,prText]=process.argv.slice(2);
+          const actual=JSON.parse(actualText), expected=JSON.parse(expectedText);
+          for(const key of ['releaseVersion','releaseSpec','sourceBranch','sourceSha','attemptId']) {
+            if(String(actual[key])!==String(expected[key])) throw new Error(`E25_PR_BIND_POSTVERIFY_FAILED:${key}`);
+          }
+          if(actual.prNumber!==Number(prText)) throw new Error(`E25_PR_BIND_POSTVERIFY_FAILED:prNumber:${actual.prNumber}:expected=${prText}`);
+          NODE
+              PR_NUMBER="$SELECTED_PR"
+              BIND_MARKER="UD_E25_PR_BOUND:$PR_NUMBER:$CANDIDATE_SHA"
+              if ! has_line "$BIND_MARKER"; then
+                post_comment "$REQUEST_NUMBER" "$(printf '%s\nstate: CANDIDATE_READY\nautomation: deterministic PR discovered + durable pr_number CAS bound\nnext: ordinary PR identity re-verification + authoritative exact-SHA validation' "$BIND_MARKER")"
+                api_get "issues/$REQUEST_NUMBER/comments?per_page=100" "$RUNNER_TEMP/comments.json"
+              fi
+              echo "E25_PR_BOUND:$REQUEST_NUMBER:$PR_NUMBER:$CANDIDATE_SHA"
+            elif [[ "$PR_HANDOFF_DECISION" == 'ASSISTANT_CREATE_REQUIRED' ]]; then
+              PR_MARKER="UD_E9_PR_REQUIRED:$CANDIDATE_SHA"
+              if ! has_line "$PR_MARKER"; then
+                post_comment "$REQUEST_NUMBER" "$(printf '%s\nstate: CANDIDATE_READY\nreason: E25_TRUSTED_CREATE_NOT_PROVEN\nnext: assistant ensures exactly one deterministic PR; reducer will discover and bind pr_number automatically' "$PR_MARKER")"
+              fi
+              echo "E9_PR_REQUIRED:$REQUEST_NUMBER:$CANDIDATE_SHA"
+              exit 0
+            elif [[ "$PR_HANDOFF_DECISION" == 'CREATE_ALLOWED' ]]; then
+              echo 'E25_PR_CREATE_NOT_ACTIVATED_WITHOUT_LIVE_CAPABILITY_PROOF'
+              exit 1
+            else
+              BLOCK_MARKER="UD_E25_PR_HANDOFF_BLOCKED:$CANDIDATE_SHA:$PR_HANDOFF_REASON"
+              if ! has_line "$BLOCK_MARKER"; then
+                post_comment "$REQUEST_NUMBER" "$(printf '%s\nstate: BLOCKED\nnext: repair ambiguous/stale/invalid deterministic PR identity; do not create a parallel PR' "$BLOCK_MARKER")"
+              fi
+              echo "E25_PR_HANDOFF_BLOCKED:$REQUEST_NUMBER:$PR_HANDOFF_DECISION:$PR_HANDOFF_REASON"
+              exit 0
             fi
-            echo "E9_PR_REQUIRED:$REQUEST_NUMBER:$CANDIDATE_SHA"
-            exit 0
           fi
 
           api_get "pulls/$PR_NUMBER" "$RUNNER_TEMP/pr.json"
@@ -216,33 +292,76 @@ jobs:
           if(!String(pr.body||'').includes(marker)) throw new Error(`E9_PR_REQUEST_MARKER_MISSING:${marker}`);
           NODE
 
-          VALIDATION_JSON="$(node - "$RUNNER_TEMP/comments.json" "$CANDIDATE_SHA" <<'NODE'
-          const fs=require('node:fs');
-          const rr=require('./plugins/usage-dashboard/tools/release_request_e9.cjs');
-          const comments=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
-          process.stdout.write(JSON.stringify(rr.latestValidation(comments,process.argv[3])));
-          NODE
-          )"
-          VALIDATION_STATUS="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j?.status||"")' "$VALIDATION_JSON")"
-          if [[ "$VALIDATION_STATUS" == 'RED' ]]; then
-            echo "E9_VALIDATION_BLOCKED_RED:$CANDIDATE_SHA"
+          HANDOFF_JSON="$(node plugins/usage-dashboard/tools/release_validation_convergence_e26.cjs --handoff-file "$RUNNER_TEMP/pr.json" "$REQUEST_NUMBER")"
+          HANDOFF_OK="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(String(j.ok))' "$HANDOFF_JSON")"
+          HANDOFF_REASON="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.reason)' "$HANDOFF_JSON")"
+          if [[ "$HANDOFF_OK" != 'true' ]]; then
+            HANDOFF_MARKER="UD_E26_HANDOFF_BLOCKED:$CANDIDATE_SHA:$HANDOFF_REASON"
+            if ! has_line "$HANDOFF_MARKER"; then
+              post_comment "$REQUEST_NUMBER" "$(printf '%s\npr: #%s\nstate: HANDOFF_BLOCKED\nreason: %s\nnext: repair the stable PR body; pull_request edited will wake this reducer automatically' "$HANDOFF_MARKER" "$PR_NUMBER" "$HANDOFF_REASON")"
+            fi
+            echo "E26_HANDOFF_BLOCKED:$REQUEST_NUMBER:$PR_NUMBER:$CANDIDATE_SHA:$HANDOFF_REASON"
             exit 0
           fi
-          if [[ "$VALIDATION_STATUS" != 'GREEN' ]]; then
-            VALIDATE_MARKER="UD_E9_VALIDATION_DISPATCHED:$CANDIDATE_SHA"
-            if ! has_line "$VALIDATE_MARKER"; then
-              jq -n --arg pr "$PR_NUMBER" --arg sha "$CANDIDATE_SHA" --arg request "$REQUEST_NUMBER" '{ref:"main",inputs:{pr_number:$pr,candidate_sha:$sha,request_issue:$request}}' > "$RUNNER_TEMP/validate-dispatch.json"
+
+          CONVERGENCE_JSON="$(node plugins/usage-dashboard/tools/release_validation_convergence_e26.cjs --classify-file "$RUNNER_TEMP/comments.json" "$CANDIDATE_SHA" "$PR_NUMBER" true "$HANDOFF_REASON")"
+          CONVERGENCE_ACTION="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.action)' "$CONVERGENCE_JSON")"
+          CONVERGENCE_REASON="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.reason)' "$CONVERGENCE_JSON")"
+          NEXT_ATTEMPT="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.nextAttempt?String(j.nextAttempt):"")' "$CONVERGENCE_JSON")"
+          VALIDATION_JSON="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.validation?JSON.stringify(j.validation):"null")' "$CONVERGENCE_JSON")"
+
+          case "$CONVERGENCE_ACTION" in
+            DISPATCH_FIRST|RETRY_ONCE)
+              if [[ "$CONVERGENCE_ACTION" == 'DISPATCH_FIRST' ]]; then
+                ATTEMPT_REASON='first-validation'
+                RETRY_OF=''
+              else
+                ATTEMPT_REASON='retryable-validation-failure'
+                RETRY_OF='1'
+              fi
+              jq -n --arg pr "$PR_NUMBER" --arg sha "$CANDIDATE_SHA" --arg request "$REQUEST_NUMBER" --arg attempt "$NEXT_ATTEMPT" '{ref:"main",inputs:{pr_number:$pr,candidate_sha:$sha,request_issue:$request,validation_attempt:$attempt}}' > "$RUNNER_TEMP/validate-dispatch.json"
               curl --fail-with-body --silent --show-error -X POST \
                 -H 'Accept: application/vnd.github+json' \
                 -H "Authorization: Bearer $GITHUB_TOKEN" \
                 -H 'X-GitHub-Api-Version: 2022-11-28' \
                 "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/usage-dashboard-e9-validate.yml/dispatches" \
                 --data-binary @"$RUNNER_TEMP/validate-dispatch.json"
-              post_comment "$REQUEST_NUMBER" "$(printf '%s\npr: #%s\nstate: CANDIDATE_READY\nnext: authoritative exact-SHA full registry' "$VALIDATE_MARKER" "$PR_NUMBER")"
-            fi
-            echo "E9_VALIDATION_PENDING:$PR_NUMBER:$CANDIDATE_SHA"
-            exit 0
-          fi
+              ATTEMPT_BODY="$(node plugins/usage-dashboard/tools/release_validation_convergence_e26.cjs --format-attempt "$CANDIDATE_SHA" "$PR_NUMBER" "$NEXT_ATTEMPT" "$ATTEMPT_REASON" "$RETRY_OF")"
+              post_comment "$REQUEST_NUMBER" "$ATTEMPT_BODY"
+              echo "E26_VALIDATION_DISPATCHED:$REQUEST_NUMBER:$PR_NUMBER:$CANDIDATE_SHA:attempt=$NEXT_ATTEMPT:$ATTEMPT_REASON"
+              exit 0
+              ;;
+            WAIT_IN_FLIGHT)
+              echo "E26_VALIDATION_WAIT_IN_FLIGHT:$REQUEST_NUMBER:$PR_NUMBER:$CANDIDATE_SHA:$CONVERGENCE_REASON"
+              exit 0
+              ;;
+            BLOCK_LOGICAL_RED)
+              echo "E26_VALIDATION_BLOCK_LOGICAL_RED:$REQUEST_NUMBER:$PR_NUMBER:$CANDIDATE_SHA"
+              exit 0
+              ;;
+            BLOCK_RETRY_EXHAUSTED)
+              BLOCK_MARKER="UD_E26_VALIDATION_RETRY_EXHAUSTED:$CANDIDATE_SHA"
+              if ! has_line "$BLOCK_MARKER"; then
+                post_comment "$REQUEST_NUMBER" "$(printf '%s\npr: #%s\nstate: BLOCKED\nreason: E26_VALIDATION_RETRY_EXHAUSTED\nnext: diagnose; unchanged candidate is not eligible for another automatic validation attempt' "$BLOCK_MARKER" "$PR_NUMBER")"
+              fi
+              echo "E26_VALIDATION_RETRY_EXHAUSTED:$REQUEST_NUMBER:$PR_NUMBER:$CANDIDATE_SHA"
+              exit 0
+              ;;
+            BLOCK_AMBIGUOUS|BLOCK_HANDOFF)
+              BLOCK_MARKER="UD_E26_VALIDATION_BLOCKED:$CANDIDATE_SHA:$CONVERGENCE_REASON"
+              if ! has_line "$BLOCK_MARKER"; then
+                post_comment "$REQUEST_NUMBER" "$(printf '%s\npr: #%s\nstate: BLOCKED\nreason: %s\nnext: diagnose bounded validation ledger/handoff state; no automatic retry is authorized' "$BLOCK_MARKER" "$PR_NUMBER" "$CONVERGENCE_REASON")"
+              fi
+              echo "E26_VALIDATION_BLOCKED:$REQUEST_NUMBER:$PR_NUMBER:$CANDIDATE_SHA:$CONVERGENCE_REASON"
+              exit 0
+              ;;
+            CONTINUE_GREEN)
+              ;;
+            *)
+              echo "E26_VALIDATION_ACTION_UNKNOWN:$CONVERGENCE_ACTION"
+              exit 1
+              ;;
+          esac
 
           PR_STATE="$(jq -r '.state' "$RUNNER_TEMP/pr.json")"
           MERGED="$(jq -r '.merged' "$RUNNER_TEMP/pr.json")"

@@ -29,12 +29,14 @@ const validator = fs.readFileSync('.github/workflows/usage-dashboard-e9-validate
 const stage = fs.readFileSync('.github/workflows/usage-dashboard-stage-e7.yml','utf8');
 const wake = fs.readFileSync('plugins/usage-dashboard/tools/reducer_wake_e13.sh','utf8');
 
-assert.ok(reconciler.includes('workflows: ["Usage Dashboard Exact-Byte Promotion"]'),'E13 reducer must keep only the proven promotion workflow_run edge');
-assert.ok(!reconciler.includes('Usage Dashboard E9 Exact-SHA Validation'),'E13 must remove the disproven validation workflow_run edge');
+assert.ok(reconciler.includes('workflows: ["Usage Dashboard Exact-Byte Promotion", "Usage Dashboard E9 Exact-SHA Validation"]'),'E26 reducer must retain promotion wake and add bounded validation-completion wake');
+assert.ok(reconciler.includes("github.event.workflow_run.name == 'Usage Dashboard E9 Exact-SHA Validation'"),'E26 validation workflow_run edge must remain wake-only and re-read durable evidence');
 assert.ok(reconciler.includes("E13_GENERATION_ISSUE: '390'"),'E13 generation issue wiring missing');
 assert.ok(reconciler.includes("GENERATION_PROOF_MARKER='E13_REAL_RELEASE_PROOF'"),'E13 one-shot proof wiring missing');
 assert.ok(reconciler.includes("cron: '*/5 * * * *'"),'E13 must retain the anti-loss schedule');
 assert.ok(reconciler.includes('git ls-remote origin "refs/heads/$CANDIDATE_BRANCH"'),'reducer must continue to discover candidate identity from GitHub state');
+assert.ok(!reconciler.includes('github.event.workflow_run.head_sha'),'workflow_run payload must not become candidate authority');
+assert.ok(!reconciler.includes('github.event.workflow_run.head_branch'),'workflow_run payload must not become branch authority');
 assert.ok(!reconciler.includes('git push'),'reducer must remain ref read-only');
 
 assert.equal((stage.match(/reducer_wake_e13\.sh stage/g)||[]).length,1,'successful stage path must use exactly one canonical wake');
@@ -72,6 +74,7 @@ for (const forbidden of [
 
 assert.ok(stage.includes('git push origin "$PAYLOAD_SHA:refs/heads/$CANDIDATE_BRANCH"'),'trusted stage writer ownership must remain where it already exists');
 assert.ok(validator.includes('UD_VALIDATION_RESULT'),'exact validator remains validation authority publisher');
+assert.ok(reconciler.includes('release_validation_convergence_e26.cjs --classify-file'),'E26 deterministic helper must own validation convergence classification');
 assert.ok(reconciler.includes('merge_guard_receipt_e12.cjs --format'),'self-describing frozen-main merge receipt remains intact');
 
-console.log(`usage-dashboard E13 stage handoff wake contract: OK · ${release.productVersion} · canonical stage/validation reducer wake + dead validation workflow_run removed + authority boundaries unchanged`);
+console.log(`usage-dashboard E13 stage handoff wake contract: OK · ${release.productVersion} · canonical stage/validation wake + E26 bounded completion wake + authority boundaries unchanged`);

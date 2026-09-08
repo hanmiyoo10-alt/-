@@ -23,14 +23,39 @@
     return `<div class="bar gateway-limits-utilization" role="progressbar" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${esc(percentText)}" aria-valuetext="${esc(ariaText)}"><i style="width:${esc(percentText)}%"></i></div>`;
   }
 
+  function gatewayNextTierUnlockLimitsHtml(nextTier) {
+    const limits = nextTier?.limits;
+    const stateName = ['value','max-tier','tier-overridden','not-applicable','source-unavailable','permission-unavailable','invalid-next-tier-limits'].includes(String(limits?.state))
+      ? String(limits.state)
+      : 'source-unavailable';
+    if (['max-tier','tier-overridden','not-applicable'].includes(stateName)) {
+      return '<div class="gateway-next-tier-limits"><p><b>다음 Tier 한도 · 현재 기준</b> · 미적용</p></div>';
+    }
+    if (stateName !== 'value') return '<div class="gateway-next-tier-limits"><p><b>다음 Tier 한도 · 현재 기준</b> · —</p></div>';
+    const number = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Number(value) : null;
+    const daily = number(limits?.dailyCapUsd);
+    const monthly = number(limits?.monthlyCapUsd);
+    const topup = number(limits?.topUpDailyCapUsd);
+    const multiplier = number(limits?.rpmMultiplier);
+    if (daily === null || monthly === null || topup === null || multiplier === null) {
+      return '<div class="gateway-next-tier-limits"><p><b>다음 Tier 한도 · 현재 기준</b> · —</p></div>';
+    }
+    return `<div class="gateway-next-tier-limits"><p><b>다음 Tier 한도 · 현재 기준</b></p><div class="minis">
+      <div class="mini"><span>일간 spend</span><b>${esc(money(daily))}/일</b></div>
+      <div class="mini"><span>월간 spend</span><b>${esc(money(monthly))}/월</b></div>
+      <div class="mini"><span>24h 충전</span><b>${esc(money(topup))}/24h</b></div>
+      <div class="mini cyan"><span>Rate multiplier</span><b>${esc(multiplier)}×</b></div>
+    </div></div>`;
+  }
+
   function gatewayNextTierProgressionHtml(nextTier) {
     const stateName = ['value','max-tier','tier-overridden','not-applicable','unknown'].includes(String(nextTier?.state))
       ? String(nextTier.state)
       : 'unknown';
-    if (stateName === 'max-tier') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · 최고 Tier</p></div>';
-    if (stateName === 'tier-overridden') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · 고정 Tier · 자동 승급 미적용</p></div>';
-    if (stateName === 'not-applicable') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · 미적용</p></div>';
-    if (stateName !== 'value') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · —</p></div>';
+    if (stateName === 'max-tier') return `<div class="gateway-next-tier"><p><b>다음 Tier</b> · 최고 Tier</p>${gatewayNextTierUnlockLimitsHtml(nextTier)}</div>`;
+    if (stateName === 'tier-overridden') return `<div class="gateway-next-tier"><p><b>다음 Tier</b> · 고정 Tier · 자동 승급 미적용</p>${gatewayNextTierUnlockLimitsHtml(nextTier)}</div>`;
+    if (stateName === 'not-applicable') return `<div class="gateway-next-tier"><p><b>다음 Tier</b> · 미적용</p>${gatewayNextTierUnlockLimitsHtml(nextTier)}</div>`;
+    if (stateName !== 'value') return `<div class="gateway-next-tier"><p><b>다음 Tier</b> · —</p>${gatewayNextTierUnlockLimitsHtml(nextTier)}</div>`;
     const tier = Number.isInteger(nextTier?.tier) && nextTier.tier >= 0 ? Number(nextTier.tier) : null;
     const days = Number.isInteger(nextTier?.daysUntilQualify) && nextTier.daysUntilQualify >= 0 ? Number(nextTier.daysUntilQualify) : null;
     const spend = typeof nextTier?.spendUsdUntilQualify === 'number' && Number.isFinite(nextTier.spendUsdUntilQualify) && nextTier.spendUsdUntilQualify >= 0
@@ -47,13 +72,31 @@
       <div class="mini"><span>나이 경로</span><b>${esc(ageText)}</b></div>
       <div class="mini"><span>사용 경로</span><b>${esc(spendText)}</b></div>
       <div class="mini"><span>사용 경로 연령</span><b>${esc(spendAgeText)}</b></div>
-    </div></div>`;
+    </div>${gatewayNextTierUnlockLimitsHtml(nextTier)}</div>`;
+  }
+
+  function gatewayEndpointRpmLimitsHtml(endpointRates) {
+    const stateName = ['value','not-applicable','source-unavailable','permission-unavailable','invalid-endpoints'].includes(String(endpointRates?.state))
+      ? String(endpointRates.state)
+      : 'source-unavailable';
+    if (stateName === 'not-applicable') return '<div class="gateway-endpoint-rpm"><p><b>Endpoint RPM · 조직 한도</b> · 미적용</p></div>';
+    if (stateName !== 'value') return '<div class="gateway-endpoint-rpm"><p><b>Endpoint RPM · 조직 한도</b> · —</p></div>';
+    const rows = Array.isArray(endpointRates?.rows) ? endpointRates.rows : [];
+    const rowHtml = rows.map((row) => {
+      const key = typeof row?.key === 'string' ? row.key : '';
+      const rpm = typeof row?.rpm === 'number' && Number.isFinite(row.rpm) && row.rpm >= 0 ? Number(row.rpm) : null;
+      if (!key.trim() || key.length > 96 || rpm === null) return '';
+      const rpmText = rpm === 0 ? 'Unlimited' : `${rpm.toLocaleString('en-US')} /분`;
+      return `<div class="mini"><span>${esc(key)}</span><b>${esc(rpmText)}</b></div>`;
+    }).filter(Boolean).join('');
+    if (rowHtml === '' && rows.length > 0) return '<div class="gateway-endpoint-rpm"><p><b>Endpoint RPM · 조직 한도</b> · —</p></div>';
+    return `<details class="gateway-endpoint-rpm"><summary><b>Endpoint RPM · 조직 한도</b> · ${esc(rows.length)}개</summary><p>설정된 조직 한도 · 실시간 사용량/남은 RPM 아님</p><div class="minis">${rowHtml}</div></details>`;
   }
 
   function gatewayLimitsSectionHtml(truth) {
     const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(truth?.state)) ? String(truth.state) : 'source-unavailable';
     if (truth?.enterprise === true && sourceState === 'ok') {
-      return `<div class="usage-detail-box gateway-limits-card"><div class="recent-head"><h3>Gateway Limits · Credits</h3><span>source org-limits · ok</span></div><p>Enterprise · 조직 단위 Gateway rate/spend cap 없음</p>${gatewayNextTierProgressionHtml(truth?.nextTier)}</div>`;
+      return `<div class="usage-detail-box gateway-limits-card"><div class="recent-head"><h3>Gateway Limits · Credits</h3><span>source org-limits · ok</span></div><p>Enterprise · 조직 단위 Gateway rate/spend cap 없음</p>${gatewayNextTierProgressionHtml(truth?.nextTier)}${gatewayEndpointRpmLimitsHtml(truth?.endpointRates)}</div>`;
     }
     const tierText = truth?.trustTierState === 'not-applicable'
       ? '미적용'
@@ -79,7 +122,7 @@
       <div class="mini"><span>일간 spend · UTC</span><b>${esc(gatewayLimitsMetricText(truth?.daily))}</b>${gatewayLimitsUtilizationBarHtml(truth?.daily,'used','일간 spend 사용률 · UTC')}</div>
       <div class="mini"><span>월간 spend</span><b>${esc(gatewayLimitsMetricText(truth?.monthly))}</b>${gatewayLimitsUtilizationBarHtml(truth?.monthly,'used','월간 spend 사용률')}</div>
       <div class="mini"><span>${esc(topUpLabel)}</span><b>${esc(topUpText)}</b>${gatewayLimitsUtilizationBarHtml(truth?.topUp,'remaining','Rolling top-up 남은 여유 비율')}</div>
-    </div>${gatewayNextTierProgressionHtml(truth?.nextTier)}</div>`;
+    </div>${gatewayNextTierProgressionHtml(truth?.nextTier)}${gatewayEndpointRpmLimitsHtml(truth?.endpointRates)}</div>`;
   }
 
 

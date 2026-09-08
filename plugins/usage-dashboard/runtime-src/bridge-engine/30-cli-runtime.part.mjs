@@ -223,11 +223,31 @@ if (output && !globalThis[marker]) {
       } else if (raw.nextTier && typeof raw.nextTier === 'object' && !Array.isArray(raw.nextTier)) {
         const nextTier = {};
         if (Number.isInteger(raw.nextTier.tier) && raw.nextTier.tier >= 0) nextTier.tier = raw.nextTier.tier;
-        for (const key of ['daysUntilQualify','spendUsdUntilQualify','daysUntilSpendPathUnlocks']) {
+        for (const key of ['daysUntilQualify','spendUsdUntilQualify','daysUntilSpendPathUnlocks','rpmMultiplier','dailyCapUsd','monthlyCapUsd','topUpDailyCapUsd']) {
           const candidate = nonNegative(raw.nextTier[key]);
           if (candidate !== null) nextTier[key] = candidate;
         }
         safe.nextTier = nextTier;
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(raw, 'endpoints')) {
+      if (!Array.isArray(raw.endpoints) || raw.endpoints.length > 64) {
+        safe.endpoints = null;
+      } else {
+        const rows = [];
+        const seen = new Set();
+        let valid = true;
+        for (const row of raw.endpoints) {
+          const key = row && typeof row === 'object' && !Array.isArray(row) && typeof row.key === 'string' ? row.key : '';
+          const rpm = row && typeof row === 'object' && !Array.isArray(row) ? nonNegative(row.rpm) : null;
+          if (!key.trim() || key.length > 96 || rpm === null || seen.has(key)) {
+            valid = false;
+            break;
+          }
+          seen.add(key);
+          rows.push({key,rpm});
+        }
+        safe.endpoints = valid ? rows : null;
       }
     }
     return Object.keys(safe).length ? safe : null;

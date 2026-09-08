@@ -48,7 +48,7 @@ function gatewayLimitsUnknown(state = 'source-unavailable', now = Date.now()) {
     daily: { state:'unknown', used:null, cap:null, remaining:null },
     monthly: { state:'unknown', used:null, cap:null, remaining:null },
     topUp: { state:'unknown', cap:null, windowHours:null, used:null, remaining:null },
-    nextTier: { state:'unknown', currentTier:null, tier:null, daysUntilQualify:null, spendUsdUntilQualify:null, daysUntilSpendPathUnlocks:null },
+    nextTier: { state:'unknown', currentTier:null, tier:null, daysUntilQualify:null, spendUsdUntilQualify:null, daysUntilSpendPathUnlocks:null, limits:{state:String(state) === 'permission-unavailable' ? 'permission-unavailable' : 'source-unavailable',rpmMultiplier:null,dailyCapUsd:null,monthlyCapUsd:null,topUpDailyCapUsd:null} },
     endpointRates: { state:String(state) === 'permission-unavailable' ? 'permission-unavailable' : 'source-unavailable', rows:[] },
     fetchedAt: Number(now),
   };
@@ -112,17 +112,31 @@ function normalizeGatewayLimitsCapture(capture, now = Date.now()) {
   }
 
 
+  const nextTierLimitsUnknown = (state = 'source-unavailable') => ({
+    state, rpmMultiplier:null, dailyCapUsd:null, monthlyCapUsd:null, topUpDailyCapUsd:null,
+  });
+  const nextTierLimitsFromRaw = (value) => {
+    const rpmMultiplier = gatewayLimitsNumber(value?.rpmMultiplier);
+    const dailyCapUsd = gatewayLimitsNumber(value?.dailyCapUsd);
+    const monthlyCapUsd = gatewayLimitsNumber(value?.monthlyCapUsd);
+    const topUpDailyCapUsd = gatewayLimitsNumber(value?.topUpDailyCapUsd);
+    if (rpmMultiplier === null || dailyCapUsd === null || monthlyCapUsd === null || topUpDailyCapUsd === null) {
+      return nextTierLimitsUnknown('invalid-next-tier-limits');
+    }
+    return {state:'value',rpmMultiplier,dailyCapUsd,monthlyCapUsd,topUpDailyCapUsd};
+  };
   const unknownNextTier = () => ({
     state:'unknown', currentTier:null, tier:null,
     daysUntilQualify:null, spendUsdUntilQualify:null, daysUntilSpendPathUnlocks:null,
+    limits:nextTierLimitsUnknown(),
   });
   let nextTier = unknownNextTier();
   if (enterprise === true || (planClass && planClass !== 'regular')) {
-    nextTier = { ...unknownNextTier(), state:'not-applicable' };
+    nextTier = { ...unknownNextTier(), state:'not-applicable', limits:nextTierLimitsUnknown('not-applicable') };
   } else if (enterprise === false && planClass === 'regular' && tierOverridden === true && nextTierRaw === null) {
-    nextTier = { ...unknownNextTier(), state:'tier-overridden' };
+    nextTier = { ...unknownNextTier(), state:'tier-overridden', limits:nextTierLimitsUnknown('tier-overridden') };
   } else if (enterprise === false && planClass === 'regular' && tierOverridden === false && nextTierRaw === null) {
-    nextTier = { ...unknownNextTier(), state:'max-tier' };
+    nextTier = { ...unknownNextTier(), state:'max-tier', limits:nextTierLimitsUnknown('max-tier') };
   } else if (enterprise === false && planClass === 'regular' && tierOverridden === false
       && nextTierRaw && typeof nextTierRaw === 'object' && !Array.isArray(nextTierRaw)) {
     const tier = Number.isInteger(nextTierRaw.tier) && nextTierRaw.tier >= 0 ? nextTierRaw.tier : null;
@@ -135,6 +149,7 @@ function normalizeGatewayLimitsCapture(capture, now = Date.now()) {
       nextTier = {
         state:'value', currentTier:trustTier, tier,
         daysUntilQualify, spendUsdUntilQualify, daysUntilSpendPathUnlocks,
+        limits:nextTierLimitsFromRaw(nextTierRaw),
       };
     }
   }

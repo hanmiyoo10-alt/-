@@ -223,7 +223,7 @@ if (output && !globalThis[marker]) {
       } else if (raw.nextTier && typeof raw.nextTier === 'object' && !Array.isArray(raw.nextTier)) {
         const nextTier = {};
         if (Number.isInteger(raw.nextTier.tier) && raw.nextTier.tier >= 0) nextTier.tier = raw.nextTier.tier;
-        for (const key of ['daysUntilQualify','spendUsdUntilQualify','daysUntilSpendPathUnlocks']) {
+        for (const key of ['daysUntilQualify','spendUsdUntilQualify','daysUntilSpendPathUnlocks','rpmMultiplier','dailyCapUsd','monthlyCapUsd','topUpDailyCapUsd']) {
           const candidate = nonNegative(raw.nextTier[key]);
           if (candidate !== null) nextTier[key] = candidate;
         }

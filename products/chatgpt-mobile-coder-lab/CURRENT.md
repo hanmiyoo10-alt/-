@@ -69,7 +69,7 @@ Codex CLI는 실제 shell/files/test 기능 폭이 넓지만 **Codex 전용/agen
 
 즉 "모바일에서 Codex CLI를 편하게 쓰기"보다 "일반 ChatGPT 채팅 자체에 Codex 같은 손발을 붙이기"가 우선이다.
 
-## Remote Desktop Commander 실험 — DEVICE ONLINE / TOOL CALL NOT YET VERIFIED
+## Remote Desktop Commander 실험 — READ-ONLY TOOL CALL VERIFIED
 
 서버폰에서 `@wonderwhy-er/desktop-commander@0.2.48`의 `remote` 모드를 직접 실행했다.
 
@@ -97,19 +97,38 @@ Device marked as online
 Presence tracked
 ```
 
+이후 Android ChatGPT에서 Remote Desktop Commander를 실제 호출해 서버폰에 read-only 명령이 도달하는 것을 확인했다.
+
+검증 결과:
+
+```text
+pwd
+→ /root/.npm/_npx/.../@wonderwhy-er/desktop-commander/dist
+
+git -C /root/nyang-repo branch --show-current
+→ server/work
+
+git -C /root/nyang-repo status -sb
+→ ## server/work...origin/server/work
+```
+
+또한 `/root/nyang-repo` 최상위 목록에서 `.agents`, `.git`, `.github`, `README.md`, `config`, `docs`, `local`, `plugins`, `products`, `scripts`, `study`, `tools` 등 repository 실제 항목을 읽는 데 성공했다.
+
 현재 의미:
 
-- 서버폰 device agent 실행 성공.
-- Remote Desktop Commander 계정 인증 성공.
-- remote realtime channel이 일시 실패 후 자동 복구됨.
-- remote service에서 서버폰 device가 online/presence 상태까지 진입함.
-- 아직 ChatGPT 쪽 실제 tool invocation으로 `pwd`, file read, shell command가 서버폰에서 실행되는지는 검증하지 않음.
+- 일반 ChatGPT 모바일 채팅에서 Remote Desktop Commander plugin/app 호출 성공.
+- remote service를 통해 서버폰 device에 실제 shell/filesystem 요청 전달 성공.
+- Ubuntu PRoot 내부 `/root/nyang-repo` read-only 접근 성공.
+- `server/work` branch와 tracking 상태를 정확히 읽음.
+- 따라서 `ChatGPT → Remote Desktop Commander → 서버폰 Ubuntu PRoot → repository` 경로는 최소 read-only 수준에서 실제로 성립함.
 
 중요한 환경 관찰:
 
+- `pwd`는 `/root/nyang-repo`가 아니라 npx로 설치된 Desktop Commander package의 `dist` directory를 반환했다.
+- 따라서 Remote Desktop Commander process의 기본 current working directory를 repository root로 가정하면 안 된다.
+- repository 작업은 명시적인 absolute path 또는 `git -C /root/nyang-repo ...` 같은 형태를 우선 사용해야 한다.
 - Ubuntu PRoot 내부에서 실행해도 Node 실행 파일 자체는 Termux의 `/data/data/com.termux/files/usr/bin/node`를 사용한다.
-- 하지만 프로세스의 HOME/workdir은 Ubuntu 쪽 `/root` 및 `/root/nyang-repo` 문맥으로 실행되는 상태가 확인됐다.
-- 이 조합이 실제 filesystem/shell tool 호출에서 정상적으로 Ubuntu 경로를 다루는지는 다음 단계에서 확인해야 한다.
+- 이 경계에도 불구하고 `/root/nyang-repo` 파일시스템과 Git 상태를 정상적으로 접근했다.
 
 민감정보인 device code, device ID, 계정 주소는 repository 기록에 저장하지 않는다.
 
@@ -136,16 +155,16 @@ Custom MCP 계열은 목표 적합도가 높지만 현재 모바일 ChatGPT surf
 
 ## 현재 1순위 다음 단계
 
-**Remote Desktop Commander가 Android ChatGPT 앱에서 실제로 서버폰의 read-only tool call을 수행하는지 검증한다.**
+**Remote Desktop Commander를 통해 `/root/nyang-repo` 내부 파일 read/search와 harmless command 실행을 추가 검증한다.**
 
 검증 순서:
 
 1. 현재 서버폰 Ubuntu PRoot의 Remote Desktop Commander 프로세스를 online 상태로 유지.
-2. ChatGPT 모바일에서 해당 플러그인/App 연결 상태 확인.
-3. 최초 호출은 repository를 수정하지 않는 `pwd`, `git branch --show-current`, `git status -sb`, top-level listing 수준으로 제한.
-4. 실제 실행 workdir이 `/root/nyang-repo`이고 branch가 `server/work`인지 확인.
-5. 성공 후 read-only file read/search.
-6. 그 뒤에만 별도 feature worktree에서 쓰기/patch/test 실험.
+2. repository의 작은 text file을 absolute path로 read.
+3. bounded search/grep 수준의 read-only command를 실행.
+4. repository에서 실제 test command를 실행하기 전 project-owned validation command를 확인.
+5. read-only 루프가 안정적이면 별도 disposable feature worktree에서 작은 write/patch test를 수행.
+6. write 검증 전에는 현재 `server/work` working tree를 직접 수정하지 않는다.
 
 PocketRisu 서비스와 기존 부팅 stack은 이 검증 때문에 변경하지 않는다.
 

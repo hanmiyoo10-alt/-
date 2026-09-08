@@ -14,6 +14,16 @@ Decode normally, then convert only opaque files with BMP magic BM to RGB565. Pre
 
 ## Validation
 
-Added regression cases for a 3x2 image: exact little-endian RGB565 bytes, odd-width stride, row ordering and magenta preservation; a second case checks non-BMP and alpha preservation. GitHub Actions runs these plus existing DB tests and clippy before Android packaging. Run 34186721433, job 101937738700: the combined database/image tests and clippy step completed successfully. Frontend/Android build still in progress; device results pending.
+Added regression cases for a 3x2 image: exact little-endian RGB565 bytes, odd-width stride, row ordering and magenta preservation; a second case checks non-BMP and alpha preservation. GitHub Actions runs these plus existing DB tests and clippy before Android packaging. Run 34186721433, job 101937738700: the combined database/image tests and clippy step completed successfully. Frontend and Android APK build completed successfully. Device results pending.
 
 Compare Probe 5 with Probe 4 on title logo, menu text, character page and first launch. Use the same original archive. The separate app package means prior probe save data is not automatically shared. A startup error or remaining magenta backgrounds must be recorded separately; this experiment does not repair callback blending or first-run timer crashes.
+
+## APK delivery
+
+Successful run: https://github.com/hanmiyoo10-alt/-/actions/runs/34186721433
+
+Artifact ID: 10041188427. ZIP CRC and APK SHA-256 verified after download.
+
+APK SHA-256: `c075909cdeac49da67d54c49734296ccd932e2d07938dfdd505875eedb17ce8c`.
+
+Install Fortune Golf Probe 5, import the original game ZIP, and compare title/menu screenshots. Keep Probe 4 installed for comparison; save data is separate.

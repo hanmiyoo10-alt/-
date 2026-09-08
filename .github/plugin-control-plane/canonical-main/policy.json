@@ -98,6 +98,7 @@
     "bootstrap": {"descriptorDir": ".github/plugin-control-plane/canonical-main/descriptors"}
   },
   "operations": {
+    "issueNumber": 485,
     "issueTitle": "[repo-ops:main]",
     "recentRecoveryLimit": 10,
     "incidentHistoryLimit": 6,

@@ -165,12 +165,14 @@ def patch_core(value: dict) -> None:
 
 
 def patch_engine_capture() -> None:
-    old = """    return Object.keys(safe).length ? safe : null;
+    rep(
+        CAPTURE,
+        """    return Object.keys(safe).length ? safe : null;
   };
 
   const sanitizeModel = (row) => {
-"""
-    new = """    if (Object.prototype.hasOwnProperty.call(raw, 'nextTier')) {
+""",
+        """    if (Object.prototype.hasOwnProperty.call(raw, 'nextTier')) {
       if (raw.nextTier === null) {
         safe.nextTier = null;
       } else if (raw.nextTier && typeof raw.nextTier === 'object' && !Array.isArray(raw.nextTier)) {
@@ -187,8 +189,9 @@ def patch_engine_capture() -> None:
   };
 
   const sanitizeModel = (row) => {
-"""
-    rep(CAPTURE, old, new, 'bounded nextTier sanitizer')
+""",
+        'bounded nextTier sanitizer',
+    )
 
 
 def patch_engine_sources() -> None:
@@ -403,8 +406,12 @@ def patch_diagnostics() -> None:
 """
     insert_before(DIAG, '  function modelCategoryCatalogDiagnosticText(diagnostics) {\n', helper, 'next-tier diagnostics helper')
     old_line = "      gatewayLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),\n"
-    new_line = old_line + "      gatewayNextTierDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),\n"
-    rep(DIAG, old_line, new_line, 'next-tier diagnostics line')
+    rep(
+        DIAG,
+        old_line,
+        old_line + "      gatewayNextTierDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),\n",
+        'next-tier diagnostics line',
+    )
 
 
 def patch(value: dict) -> None:
@@ -441,7 +448,7 @@ def target() -> None:
     for marker in ('nextTier', 'daysUntilQualify', 'spendUsdUntilQualify', 'daysUntilSpendPathUnlocks'):
         if marker not in sanitizer:
             raise SystemExit(f'5.105 sanitizer progression field missing:{marker}')
-    for forbidden in ('accountAgeDays', 'lifetimeSpendUsd', 'ageDaysRequired', 'spendUsdRequired', 'minAgeDaysRequired', 'rpmMultiplier\'\,\'dailyCapUsd', 'topUpDailyCapUsd', 'endpoints'):
+    for forbidden in ('accountAgeDays', 'lifetimeSpendUsd', 'ageDaysRequired', 'spendUsdRequired', 'minAgeDaysRequired', 'topUpDailyCapUsd', 'endpoints'):
         if forbidden in sanitizer:
             raise SystemExit(f'5.105 sanitizer minimization violation:{forbidden}')
     for marker in (
@@ -457,9 +464,9 @@ def target() -> None:
         raise SystemExit('5.105 existing gateway-limits route missing')
     if '/gateway-next-tier' in HTTP.read_text() + sources + product:
         raise SystemExit('5.105 unauthorized next-tier endpoint')
+    normalized_slice = sources[sources.find('function gatewayLimitsUnknown'):sources.find('async function captureGatewayLimitsViaCliSession')]
     for forbidden in ('accountAgeDays', 'lifetimeSpendUsd'):
-        next_slice = sources[sources.find('function gatewayLimitsUnknown'):sources.find('async function captureGatewayLimitsViaCliSession')]
-        if forbidden in next_slice:
+        if forbidden in normalized_slice:
             raise SystemExit(f'5.105 normalized privacy field leaked:{forbidden}')
 
     latest = LATEST.read_text()

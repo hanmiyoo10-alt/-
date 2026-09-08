@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.107
+//@version 3.0.0-alpha.5.108
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.107';
+  const VERSION = '3.0.0-alpha.5.108';
   const RELEASE_NOTES = Object.freeze({
-    title: "Credits Next-tier Unlock Limits",
+    title: "DevPass API Key Organization Limit",
     highlights: Object.freeze([
-    "Adds a compact read-only next-tier limits block under the existing Credits next-tier progression surface.",
-    "Shows only current server-provided next-tier daily/monthly spend caps, rolling 24h top-up allowance, and rate multiplier.",
-    "Any missing, invalid, negative, or non-finite required unlock field fails the entire unlock block closed instead of mixing partial values.",
-    "Moves Engine to 1.6.41 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
+    "Adds a compact read-only DevPass API Keys organization-limit block using exact server-provided plan-limit values.",
+    "Shows organization-wide active developer API keys, the server-resolved maximum, and deterministic non-negative creation headroom.",
+    "Keeps API-key rows, IDs, masked tokens, creator/IAM metadata, plan strings, project IDs, and authentication material behind the Engine capture boundary.",
+    "Moves Engine to 1.6.42 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.107 · Engine 1.6.41 · Manager 1.3.6 and READY/Health ok.",
-    "Open Credits and confirm 다음 Tier 한도 · 현재 기준 appears beneath the existing next-tier progression block.",
-    "Diagnostics should include one ID-free Gateway next-tier limits line; no artificial spend, top-up, or traffic is required.",
+    "Verify Product 5.108 · Engine 1.6.42 · Manager 1.3.6 and READY/Health ok.",
+    "Open DevPass and confirm API Keys · 조직 한도 appears with exact N / M and creation headroom when source authority is available.",
+    "Diagnostics should include one bounded API key org limit line; no API-key mutation or artificial traffic is required.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -40,7 +40,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.41';
+  const REQUIRED_BRIDGE_VERSION = '1.6.42';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.6';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
@@ -50,6 +50,7 @@
   const BRIDGE_MANAGER_BASE = 'http://127.0.0.1:39119';
   const BRIDGE_MANAGER_PROBE_INTERVAL_MS = 60000;
   const GATEWAY_LIMITS_UI_TTL_MS = 5 * 60_000;
+  const API_KEY_PLAN_LIMITS_UI_TTL_MS = 5 * 60_000;
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true, performanceGuard: true, adaptiveRefresh: true, schedulerEnabled: true,
@@ -82,6 +83,7 @@
 
   let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
   let gatewayLimitsRuntime = {orgId:'',value:null,fetchedAt:0}, gatewayLimitsInFlight = null, gatewayLimitsRequestSeq = 0;
+  let apiKeyPlanLimitsRuntime = {value:null,fetchedAt:0}, apiKeyPlanLimitsInFlight = null, apiKeyPlanLimitsRequestSeq = 0;
   let tokenForgetArmedUntil = 0;
   let widgetRenderTail = Promise.resolve(), widgetRenderRequestId = 0;
   let runtimeDisposed = false, runtimeEpoch = 1, staleAsyncDrops = 0;
@@ -3070,6 +3072,63 @@ async function importLegacyTodayBaselines() {
   }
 
 
+
+  function normalizeApiKeyPlanLimitsLocal(raw) {
+    const stateName = ['ok','project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(raw?.state))
+      ? String(raw.state)
+      : 'source-unavailable';
+    const fetchedAt = typeof raw?.fetchedAt === 'number' && Number.isFinite(raw.fetchedAt) && raw.fetchedAt >= 0 ? Number(raw.fetchedAt) : Date.now();
+    if (stateName !== 'ok') return {state:stateName,source:'keys-api-plan-limits',currentCount:null,maxKeys:null,headroom:null,fetchedAt};
+    const currentCount = Number.isInteger(raw?.currentCount) && raw.currentCount >= 0 ? Number(raw.currentCount) : null;
+    const maxKeys = Number.isInteger(raw?.maxKeys) && raw.maxKeys >= 0 ? Number(raw.maxKeys) : null;
+    if (currentCount === null || maxKeys === null) {
+      return {state:'invalid-plan-limits',source:'keys-api-plan-limits',currentCount:null,maxKeys:null,headroom:null,fetchedAt};
+    }
+    return {state:'ok',source:'keys-api-plan-limits',currentCount,maxKeys,headroom:Math.max(0,maxKeys-currentCount),fetchedAt};
+  }
+
+  async function fetchApiKeyPlanLimits() {
+    if (!token) return {state:'source-unavailable',source:'keys-api-plan-limits',currentCount:null,maxKeys:null,headroom:null,fetchedAt:Date.now()};
+    const base = normalizeBridgeBase(state.bridgeBase);
+    const res = await Risuai.nativeFetch(`${base}/api-key-plan-limits`, {
+      method:'GET',
+      headers:{Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'}
+    });
+    const text = await res.text();
+    if (!res.ok) return {state:'source-unavailable',source:'keys-api-plan-limits',currentCount:null,maxKeys:null,headroom:null,fetchedAt:Date.now()};
+    try { return normalizeApiKeyPlanLimitsLocal(JSON.parse(text)); }
+    catch { return {state:'source-unavailable',source:'keys-api-plan-limits',currentCount:null,maxKeys:null,headroom:null,fetchedAt:Date.now()}; }
+  }
+
+  async function refreshApiKeyPlanLimits(force = false) {
+    const now = Date.now();
+    if (!force && apiKeyPlanLimitsRuntime.value && now - Number(apiKeyPlanLimitsRuntime.fetchedAt || 0) < API_KEY_PLAN_LIMITS_UI_TTL_MS) {
+      return apiKeyPlanLimitsRuntime.value;
+    }
+    if (apiKeyPlanLimitsInFlight) return apiKeyPlanLimitsInFlight;
+    const requestSeq = ++apiKeyPlanLimitsRequestSeq;
+    const promise = (async () => {
+      const value = await fetchApiKeyPlanLimits();
+      if (requestSeq !== apiKeyPlanLimitsRequestSeq) return null;
+      apiKeyPlanLimitsRuntime = {
+        value,
+        fetchedAt:typeof value?.fetchedAt === 'number' && Number.isFinite(value.fetchedAt) ? Number(value.fetchedAt) : Date.now(),
+      };
+      schedulePanelRender(false);
+      return value;
+    })().catch(() => {
+      if (requestSeq !== apiKeyPlanLimitsRequestSeq) return null;
+      const value = {state:'source-unavailable',source:'keys-api-plan-limits',currentCount:null,maxKeys:null,headroom:null,fetchedAt:Date.now()};
+      apiKeyPlanLimitsRuntime = {value,fetchedAt:value.fetchedAt};
+      schedulePanelRender(false);
+      return value;
+    }).finally(() => {
+      if (apiKeyPlanLimitsInFlight === promise) apiKeyPlanLimitsInFlight = null;
+    });
+    apiKeyPlanLimitsInFlight = promise;
+    return promise;
+  }
+
   function bridgeManagerAuthHeaders() {
     return {Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'};
   }
@@ -3562,6 +3621,19 @@ async function importLegacyTodayBaselines() {
   }
 
 
+
+  function apiKeyOrgLimitDiagnosticText(value) {
+    const stateName = ['ok','project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(value?.state))
+      ? String(value.state)
+      : 'source-unavailable';
+    const currentCount = stateName === 'ok' && Number.isInteger(value?.currentCount) && value.currentCount >= 0 ? Number(value.currentCount) : null;
+    const maxKeys = stateName === 'ok' && Number.isInteger(value?.maxKeys) && value.maxKeys >= 0 ? Number(value.maxKeys) : null;
+    if (currentCount === null || maxKeys === null) {
+      return `API key org limit: active — / — · headroom — · source keys-api-plan-limits · state ${stateName}`;
+    }
+    return `API key org limit: active ${currentCount} / ${maxKeys} · headroom ${Math.max(0,maxKeys-currentCount)} · source keys-api-plan-limits · state ok`;
+  }
+
   function gatewayLimitsDiagnosticText(value) {
     const stateName = ['ok','permission-unavailable','source-unavailable'].includes(String(value?.state)) ? String(value.state) : 'source-unavailable';
     if (stateName !== 'ok') return `Gateway limits: scope credits · source org-limits · state ${stateName}`;
@@ -3890,6 +3962,7 @@ async function importLegacyTodayBaselines() {
       `DevPass account tier: service ${diagAccount?.serviceTier || '—'} · routing ${diagAccount?.routingStrategy || '—'} · pending ${diagAccount?.pendingTier || '—'} · personal org ${diagAccount?.hasPersonalOrg === null || diagAccount?.hasPersonalOrg === undefined ? '—' : diagAccount.hasPersonalOrg ? 'yes' : 'no'}`,
       devPassNoAiTrainingDiagnosticText(diagAccount),
       devPassProviderCachePolicyDiagnosticText(diagAccount),
+      apiKeyOrgLimitDiagnosticText(apiKeyPlanLimitsRuntime.value),
       gatewayLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       gatewayNextTierDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       gatewayNextTierLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
@@ -4022,6 +4095,20 @@ function todayOverviewMetrics(d) {
 }
 
   function settingsHtml() {
+
+
+  function apiKeyOrgLimitSectionHtml(truth) {
+    const stateName = ['ok','project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(truth?.state))
+      ? String(truth.state)
+      : 'source-unavailable';
+    const currentCount = stateName === 'ok' && Number.isInteger(truth?.currentCount) && truth.currentCount >= 0 ? Number(truth.currentCount) : null;
+    const maxKeys = stateName === 'ok' && Number.isInteger(truth?.maxKeys) && truth.maxKeys >= 0 ? Number(truth.maxKeys) : null;
+    if (currentCount === null || maxKeys === null) {
+      return `<div class="usage-detail-box api-key-org-limit-card"><div class="recent-head"><h3>API Keys · 조직 한도</h3><span>source keys-api-plan-limits · ${esc(stateName)}</span></div><div class="minis"><div class="mini"><span>활성 API 키 · 조직 전체</span><b>—</b></div><div class="mini"><span>생성 여유</span><b>—</b></div></div></div>`;
+    }
+    const headroom = Math.max(0, maxKeys - currentCount);
+    return `<div class="usage-detail-box api-key-org-limit-card"><div class="recent-head"><h3>API Keys · 조직 한도</h3><span>source keys-api-plan-limits · ok</span></div><div class="minis"><div class="mini"><span>활성 API 키 · 조직 전체</span><b>${esc(currentCount)} / ${esc(maxKeys)}</b></div><div class="mini cyan"><span>생성 여유</span><b>${esc(headroom)}개</b></div></div></div>`;
+  }
 
   function gatewayLimitsMetricText(metric) {
     if (metric?.state === 'not-applicable') return '미적용';
@@ -4192,6 +4279,7 @@ function todayOverviewMetrics(d) {
     const selectedCreditsOrg = creditsOrganizations.find(org => String(org?.id || '') === selectedCreditsOrgId) || creditsOrganizations[0] || null;
     const creditsOrgLabel = String(selectedCreditsOrg?.name || selectedCreditsOrgId || 'Default organization');
     const gatewayLimitsTruth = gatewayLimitsRuntime.orgId === selectedCreditsOrgId ? gatewayLimitsRuntime.value : null;
+    const apiKeyOrgLimitTruth = apiKeyPlanLimitsRuntime.value;
     const creditsOrgSelector = creditsOrganizations.length ? `<label class="credits-org-picker"><span>Credits Organization</span><select id="credits-org-id">${creditsOrganizations.map(org => `<option value="${esc(org.id)}" ${String(org.id)===selectedCreditsOrgId?'selected':''}>${esc(org.name || org.id)}${num(org.credits)?` · ${money(org.credits)}`:''}</option>`).join('')}</select></label>${d.creditsOrganizationFallback ? `<p class="warn credits-org-fallback">선택한 organization을 찾지 못해 ${esc(creditsOrgLabel)}로 자동 복구했어.</p>` : ''}` : '';
     const creditsMeta = [
       num(c?.todayUsed) ? `오늘 ${money(c.todayUsed,4)}` : '',
@@ -4373,7 +4461,7 @@ function todayOverviewMetrics(d) {
           <div class="mini cost-driver"><span>24h 비용 주도 · Top Provider</span><b>${esc(scopeTopProvider)}</b></div>
           <div class="mini cost-driver"><span>24h 비용 주도 · Top Model</span><b>${esc(scopeTopModel)}</b></div>
           ${scopeExtra}
-        </div>${dashboardView === 'devpass' ? devpassAccountDetailHtml : ''}${scopeUsageDetailsHtml(scopeActivity)}` : `<p>Bridge snapshot에 ${esc(scopeNames[scopeKey][0])} 범위 데이터가 아직 없어.</p>`}
+        </div>${dashboardView === 'devpass' ? devpassAccountDetailHtml : ''}${dashboardView === 'devpass' ? apiKeyOrgLimitSectionHtml(apiKeyOrgLimitTruth) : ''}${scopeUsageDetailsHtml(scopeActivity)}` : `<p>Bridge snapshot에 ${esc(scopeNames[scopeKey][0])} 범위 데이터가 아직 없어.</p>`}
         ${d.usageScopes?.errors?.[scopeKey] ? `<p class="warn">Usage Scope · ${esc(errorSummaryText(d.usageScopes.errors[scopeKey]))}</p>` : ''}
       </section>
       <section class="panel wide analytics-panel">
@@ -4640,6 +4728,7 @@ function todayOverviewMetrics(d) {
           item.setAttribute('aria-selected', active ? 'true' : 'false');
         });
         await persist();
+        if (next === 'devpass') void refreshApiKeyPlanLimits();
         if (next === 'credits') {
           const limitsOrgId = String(state.data?.creditsOrganizationId || state.selectedCreditsOrgId || '').trim();
           void refreshGatewayLimitsForOrg(limitsOrgId);

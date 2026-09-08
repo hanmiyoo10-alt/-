@@ -174,6 +174,7 @@
           item.setAttribute('aria-selected', active ? 'true' : 'false');
         });
         await persist();
+        if (next === 'devpass') void refreshApiKeyPlanLimits();
         if (next === 'credits') {
           const limitsOrgId = String(state.data?.creditsOrganizationId || state.selectedCreditsOrgId || '').trim();
           void refreshGatewayLimitsForOrg(limitsOrgId);

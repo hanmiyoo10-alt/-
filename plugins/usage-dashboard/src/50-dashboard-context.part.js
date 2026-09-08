@@ -1,6 +1,20 @@
 
   function settingsHtml() {
 
+
+  function apiKeyOrgLimitSectionHtml(truth) {
+    const stateName = ['ok','project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(truth?.state))
+      ? String(truth.state)
+      : 'source-unavailable';
+    const currentCount = stateName === 'ok' && Number.isInteger(truth?.currentCount) && truth.currentCount >= 0 ? Number(truth.currentCount) : null;
+    const maxKeys = stateName === 'ok' && Number.isInteger(truth?.maxKeys) && truth.maxKeys >= 0 ? Number(truth.maxKeys) : null;
+    if (currentCount === null || maxKeys === null) {
+      return `<div class="usage-detail-box api-key-org-limit-card"><div class="recent-head"><h3>API Keys · 조직 한도</h3><span>source keys-api-plan-limits · ${esc(stateName)}</span></div><div class="minis"><div class="mini"><span>활성 API 키 · 조직 전체</span><b>—</b></div><div class="mini"><span>생성 여유</span><b>—</b></div></div></div>`;
+    }
+    const headroom = Math.max(0, maxKeys - currentCount);
+    return `<div class="usage-detail-box api-key-org-limit-card"><div class="recent-head"><h3>API Keys · 조직 한도</h3><span>source keys-api-plan-limits · ok</span></div><div class="minis"><div class="mini"><span>활성 API 키 · 조직 전체</span><b>${esc(currentCount)} / ${esc(maxKeys)}</b></div><div class="mini cyan"><span>생성 여유</span><b>${esc(headroom)}개</b></div></div></div>`;
+  }
+
   function gatewayLimitsMetricText(metric) {
     if (metric?.state === 'not-applicable') return '미적용';
     if (metric?.state !== 'value' || !num(metric.used) || !num(metric.cap) || !num(metric.remaining)) return '—';
@@ -170,6 +184,7 @@
     const selectedCreditsOrg = creditsOrganizations.find(org => String(org?.id || '') === selectedCreditsOrgId) || creditsOrganizations[0] || null;
     const creditsOrgLabel = String(selectedCreditsOrg?.name || selectedCreditsOrgId || 'Default organization');
     const gatewayLimitsTruth = gatewayLimitsRuntime.orgId === selectedCreditsOrgId ? gatewayLimitsRuntime.value : null;
+    const apiKeyOrgLimitTruth = apiKeyPlanLimitsRuntime.value;
     const creditsOrgSelector = creditsOrganizations.length ? `<label class="credits-org-picker"><span>Credits Organization</span><select id="credits-org-id">${creditsOrganizations.map(org => `<option value="${esc(org.id)}" ${String(org.id)===selectedCreditsOrgId?'selected':''}>${esc(org.name || org.id)}${num(org.credits)?` · ${money(org.credits)}`:''}</option>`).join('')}</select></label>${d.creditsOrganizationFallback ? `<p class="warn credits-org-fallback">선택한 organization을 찾지 못해 ${esc(creditsOrgLabel)}로 자동 복구했어.</p>` : ''}` : '';
     const creditsMeta = [
       num(c?.todayUsed) ? `오늘 ${money(c.todayUsed,4)}` : '',

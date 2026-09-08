@@ -28,6 +28,64 @@ async function loadAccountCapture() {
 }
 
 
+
+function apiKeyPlanLimitsUnknown(state = 'source-unavailable', now = Date.now()) {
+  const stateName = ['project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(state))
+    ? String(state)
+    : 'source-unavailable';
+  return {state:stateName,source:'keys-api-plan-limits',currentCount:null,maxKeys:null,headroom:null,fetchedAt:Number(now)};
+}
+
+function normalizeApiKeyPlanLimitsCapture(capture, now = Date.now()) {
+  const stateName = ['ok','project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(capture?.state))
+    ? String(capture.state)
+    : 'source-unavailable';
+  if (stateName !== 'ok') return apiKeyPlanLimitsUnknown(stateName, now);
+  const currentCount = Number.isInteger(capture?.currentCount) && capture.currentCount >= 0 ? Number(capture.currentCount) : null;
+  const maxKeys = Number.isInteger(capture?.maxKeys) && capture.maxKeys >= 0 ? Number(capture.maxKeys) : null;
+  if (currentCount === null || maxKeys === null) return apiKeyPlanLimitsUnknown('invalid-plan-limits', now);
+  return {
+    state:'ok',source:'keys-api-plan-limits',currentCount,maxKeys,
+    headroom:Math.max(0, maxKeys - currentCount),fetchedAt:Number(now),
+  };
+}
+
+async function captureApiKeyPlanLimitsViaCliSession(projectId) {
+  const exactProjectId = String(projectId || '').trim();
+  if (!exactProjectId) return apiKeyPlanLimitsUnknown('project-unavailable');
+  await ensureCaptureTap();
+  const captureFile = path.join(
+    CONFIG_DIR,
+    `api-key-limits-${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.json`,
+  );
+  const existingNodeOptions = String(process.env.NODE_OPTIONS || '').trim();
+  const captureRequire = `--require=${CAPTURE_TAP_FILE}`;
+  const nodeOptions = existingNodeOptions ? `${existingNodeOptions} ${captureRequire}` : captureRequire;
+  try {
+    await runCliProcess(['orgs', 'list', '--json'], {
+      NODE_OPTIONS: nodeOptions,
+      DEVPASS_BRIDGE_CAPTURE_FILE: captureFile,
+      DEVPASS_BRIDGE_API_KEY_PROJECT_ID: exactProjectId,
+    });
+    const text = await fs.readFile(captureFile, 'utf8');
+    const captured = JSON.parse(text);
+    return normalizeApiKeyPlanLimitsCapture(captured?.apiKeyPlanLimits);
+  } catch {
+    return apiKeyPlanLimitsUnknown('source-unavailable');
+  } finally {
+    try { await fs.unlink(captureFile); } catch {}
+  }
+}
+
+async function loadApiKeyPlanLimits() {
+  let status;
+  try { status = await loadDevPassStatus(); }
+  catch { return apiKeyPlanLimitsUnknown('source-unavailable'); }
+  const exactProjectId = String(status?.projectId || '').trim();
+  if (!exactProjectId) return apiKeyPlanLimitsUnknown('project-unavailable');
+  return cached(`apiKeyPlanLimits:${exactProjectId}`, async () => captureApiKeyPlanLimitsViaCliSession(exactProjectId));
+}
+
 function gatewayLimitsNumber(value) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 }
@@ -327,6 +385,7 @@ async function cached(name, loader, options = {}) {
     ?? ((name === 'usageScopes' || name.startsWith('usageScopes:')) ? 60_000 : null)
     ?? ((name === 'analyticsScopes' || name.startsWith('analyticsScopes:')) ? 60_000 : null)
     ?? (name.startsWith('gatewayLimits:') ? 300_000 : null)
+    ?? (name.startsWith('apiKeyPlanLimits:') ? 300_000 : null)
     ?? (name.startsWith('runway:') ? 300_000 : 30_000);
   const now = Date.now();
   const current = cache.get(name);

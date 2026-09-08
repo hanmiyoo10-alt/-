@@ -38,9 +38,9 @@ p.write_text(s.replace(needle, replacement))
 shutil.copyfile(source / 'image.rs', root / 'wie-wipi-c/src/api/graphics/image.rs')
 config = root / 'wie-app/tauri.conf.json'
 data = json.loads(config.read_text())
-data['productName'] = 'Fortune Golf Probe 6'
-data['identifier'] = 'io.hanmiyoo.fortunegolf.probe6'
-data['version'] = '0.1.6'
+data['productName'] = 'Fortune Golf Probe 7'
+data['identifier'] = 'io.hanmiyoo.fortunegolf.probe7'
+data['version'] = '0.1.7'
 config.write_text(json.dumps(data, indent=2) + '\n')
 
 # Preserve native call context in the visible error after ARM state unwinds.
@@ -49,7 +49,7 @@ s = p.read_text()
 needle = '        self.core.run_function(address, args).await'
 replacement = """        self.core.run_function(address, args).await.map_err(|error| {
             WieError::FatalError(alloc::format!(
-                "Probe 6 native call: target={address:#010x}, args={args:#x?}; {error}"
+                "Probe 7 native call: target={address:#010x}, args={args:#x?}; {error}"
             ))
         })"""
 assert s.count(needle) == 1, 'Pinned native call layout changed'
@@ -60,9 +60,51 @@ s = p.read_text()
 needle = '            context.call_function(self.fn_callback, &[self.ptr_timer, self.param]).await?;'
 replacement = """            context.call_function(self.fn_callback, &[self.ptr_timer, self.param]).await.map_err(|error| {
                 WieError::FatalError(alloc::format!(
-                    "Probe 6 timer: timer={:#010x}, callback={:#010x}, param={:#010x}; {error}",
+                    "Probe 7 timer: timer={:#010x}, callback={:#010x}, param={:#010x}; {error}",
                     self.ptr_timer, self.fn_callback, self.param
                 ))
             })?;"""
 assert s.count(needle) == 1, 'Pinned timer callback layout changed'
+p.write_text(s.replace(needle, replacement))
+
+# First-run cleanup can destroy an offscreen buffer before it was created.
+p = root / 'wie-wipi-c/src/api/graphics.rs'
+s = p.read_text()
+needle = '    context.free(framebuffer)?;'
+assert s.count(needle) == 1, 'Pinned framebuffer cleanup changed'
+s = s.replace(needle, """    if framebuffer.0 == 0 {
+        return Ok(());
+    }
+    context.free(framebuffer)?;""")
+s += """
+#[cfg(test)]
+mod fortune_image_tests_null_cleanup {
+    use super::destroy_offscreen_framebuffer;
+    use crate::{WIPICContext, context::test::TestContext};
+    use wipi_types::wipic::WIPICIndirectPtr;
+
+    #[futures_test::test]
+    async fn uncreated_buffer_cleanup_does_not_free_null() {
+        let mut context = TestContext::new();
+        assert!(context.free(WIPICIndirectPtr(0)).is_err());
+        destroy_offscreen_framebuffer(&mut context, WIPICIndirectPtr(0)).await.unwrap();
+        let buffer = context.alloc(32).unwrap();
+        destroy_offscreen_framebuffer(&mut context, buffer).await.unwrap();
+    }
+}
+"""
+p.write_text(s)
+# The test context must expose the invalid null free, as the KTF allocator does.
+p = root / 'wie-wipi-c/src/context.rs'
+s = p.read_text()
+needle = """        fn free(&mut self, _memory: WIPICIndirectPtr) -> Result<()> {
+            Ok(())
+        }"""
+replacement = """        fn free(&mut self, memory: WIPICIndirectPtr) -> Result<()> {
+            if memory.0 == 0 {
+                return Err(WieError::FatalError(String::from("test: null free")));
+            }
+            Ok(())
+        }"""
+assert s.count(needle) == 1, 'Pinned test context changed'
 p.write_text(s.replace(needle, replacement))

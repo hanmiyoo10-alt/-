@@ -2,6 +2,17 @@
 
 플러그인 자동 업데이트와 개발·검증·릴리즈 운영을 함께 관리하는 저장소입니다.
 
+## Codex CLI
+
+이 저장소는 Codex CLI를 repo-local 개발 의존성으로 고정합니다.
+
+```bash
+npm install
+npm run codex
+```
+
+버전 확인은 `npm run codex:version`으로 할 수 있습니다. 인증은 Codex가 제공하는 ChatGPT 로그인 또는 API 키 방식을 사용하며, 자격 증명은 저장소에 커밋하지 않습니다.
+
 ## Plugin operational hub
 
 이 저장소는 **하나의 canonical `main`**을 유지하면서 Plugin Control Plane이 각 프로젝트를 별도 운영 뷰로 분류합니다. 중앙 뷰는 버전이나 배포 상태를 복제하지 않고 각 프로젝트의 기존 authority를 읽습니다.

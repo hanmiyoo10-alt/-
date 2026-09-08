@@ -42,16 +42,16 @@
       "productVersion": "3.0.0-alpha.5.104",
       "releaseSha": "e1d1455592449bcad943e3dec6e1eb205136bd92",
       "verdict": "accepted",
-      "issue": 1859,
-      "commentId": 5576975527,
+      "issue": 1861,
+      "commentId": 5577292772,
       "note": "5.104 completed exact PocketRisu physical acceptance before 5.105 implementation."
     },
     "latestInstalled": {
       "productVersion": "3.0.0-alpha.5.104",
       "releaseSha": "e1d1455592449bcad943e3dec6e1eb205136bd92",
       "verdict": "accepted",
-      "issue": 1859,
-      "commentId": 5576975527,
+      "issue": 1861,
+      "commentId": 5577292772,
       "note": "5.104 is the latest exact installed accepted production baseline at 5.105 source freeze."
     }
   },

@@ -232,7 +232,7 @@ assert.ok(render({state:'source-unavailable',rows:[]}).includes('—'));
 assert.ok(render({state:'invalid-endpoints',rows:[]}).includes('—'));
 for (const prior of [
   'function gatewayNextTierProgressionHtml(nextTier)',
-  '다음 Tier · 최고 Tier',
+  '최고 Tier',
   'function gatewayLimitsUtilizationPercent(value, cap)',
   "gatewayLimitsUtilizationBarHtml(truth?.daily,'used','일간 spend 사용률 · UTC')",
   "gatewayLimitsUtilizationBarHtml(truth?.monthly,'used','월간 spend 사용률')",

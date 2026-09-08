@@ -128,19 +128,22 @@ const sandbox = {};
 vm.createContext(sandbox);
 vm.runInContext(`${helperSource}\nthis.normalize=normalizeGatewayLimitsCapture;`, sandbox);
 const normalize = (captureValue, now=123456) => JSON.parse(JSON.stringify(sandbox.normalize(captureValue, now)));
-const regularPayload = (endpoints, extra = {}) => ({
-  enterprise:false,
-  planClass:'regular',
-  rateLimitsApply:true,
-  tierOverridden:false,
-  capsApply:true,
-  tier:{tier:3,rpmMultiplier:3,dailyCapUsd:100,monthlyCapUsd:1000},
-  usage:{dailySpentUsd:2,monthlySpentUsd:20},
-  topUp:{capUsd:100,windowHours:24,usedUsd:25,remainingUsd:75},
-  nextTier:{tier:4,daysUntilQualify:24,spendUsdUntilQualify:4987.2,daysUntilSpendPathUnlocks:0},
-  endpoints,
-  ...extra,
-});
+const regularPayload = (endpoints, extra = {}) => {
+  const payload = {
+    enterprise:false,
+    planClass:'regular',
+    rateLimitsApply:true,
+    tierOverridden:false,
+    capsApply:true,
+    tier:{tier:3,rpmMultiplier:3,dailyCapUsd:100,monthlyCapUsd:1000},
+    usage:{dailySpentUsd:2,monthlySpentUsd:20},
+    topUp:{capUsd:100,windowHours:24,usedUsd:25,remainingUsd:75},
+    nextTier:{tier:4,daysUntilQualify:24,spendUsdUntilQualify:4987.2,daysUntilSpendPathUnlocks:0},
+    ...extra,
+  };
+  if (endpoints !== undefined) payload.endpoints = endpoints;
+  return payload;
+};
 
 const rows = [
   {key:'chat.completions',rpm:5000},

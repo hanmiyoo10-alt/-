@@ -526,3 +526,15 @@ These labels are companion selection outcomes only. They are not sixth execution
 Success for this extension means repository-side selection avoids broad connector responses when an evidence-equivalent narrower surface is available. Exact ChatGPT tool-card height, grouping, hidden reasoning display, cached/input/output token accounting, or Work credit reduction are outside repository control and require separate measurement if claimed.
 
 No connector schema/implementation, Repository Read MCP, workflow permission, product/runtime/release/production authority, native protection, or host UI behavior changes are introduced by #1851.
+
+## 20. Repository-wide promotion and inheritance (#1868)
+
+The compactness policy is a repository-wide `DEFAULT`, not a canonical-main-only workflow behavior. `docs/REPOSITORY_COMMON_RULES.md` is the shared policy entrypoint and `.agents/skills/agent-execution-compactness/SKILL.md` remains the detailed routing/selection owner across repository/project work.
+
+Current registered project guidelines inherit the common rules by reference rather than copying compactness prose into every project document. The canonical project guideline template carries the same inheritance so future registered projects receive the repository default through the same path. Canonical-main work packets may restate or mechanically require compactness at their boundary, but that wiring is an adapter/specialization and does not define the policy's scope.
+
+Repository-wide applicability now covers the four established compactness axes together: execution/program payload size, repository-owned visible call fan-out, source/read-result selection, and connector/result selection before retrieval. Project-specific contracts may specialize this `DEFAULT` where their own architecture or evidence requires it, while repository hard invariants, current authority, required validation, security, uncertainty, and failure provenance continue to outrank compactness.
+
+Mechanical Agent Skills coverage should fail if the repository-wide scope language disappears or if any currently registered project guideline or the future guideline template loses the common-rules inheritance path. The project guideline bodies themselves should remain unchanged unless a project-owned reason independently requires an edit.
+
+This promotion still makes no claim that repository-side compactness controls exact ChatGPT host tool-card height, grouping, token accounting, or Work credits. Those remain host/product-side outcomes that require separate measurement if claimed.

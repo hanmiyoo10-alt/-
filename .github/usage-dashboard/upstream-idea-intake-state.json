@@ -26,6 +26,10 @@
   },
   "knownCandidateKeys": [
     {
+      "id": "V-DEVPASS-BILLING-HISTORY",
+      "status": "source-proven-design-5.109"
+    },
+    {
       "id": "V-KEY-LIMIT-HEADROOM",
       "status": "implemented-5.108"
     },

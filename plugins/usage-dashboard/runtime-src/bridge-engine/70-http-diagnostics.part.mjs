@@ -32,6 +32,9 @@ async function handle(req, res) {
       const profile = url.searchParams.get('profile') === 'light' ? 'light' : 'full';
       return json(res, 200, await snapshot(profile, creditsOrgId));
     }
+    if (url.pathname === '/api-key-plan-limits') {
+      return json(res, 200, await loadApiKeyPlanLimits());
+    }
     if (url.pathname === '/gateway-limits') {
       if (!creditsOrgId) return json(res, 400, { state:'source-unavailable', source:'org-limits', error:'creditsOrgId required' });
       return json(res, 200, await loadGatewayLimits(creditsOrgId));

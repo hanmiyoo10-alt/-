@@ -182,6 +182,63 @@
   }
 
 
+
+  function normalizeApiKeyPlanLimitsLocal(raw) {
+    const stateName = ['ok','project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(raw?.state))
+      ? String(raw.state)
+      : 'source-unavailable';
+    const fetchedAt = typeof raw?.fetchedAt === 'number' && Number.isFinite(raw.fetchedAt) && raw.fetchedAt >= 0 ? Number(raw.fetchedAt) : Date.now();
+    if (stateName !== 'ok') return {state:stateName,source:'keys-api-plan-limits',currentCount:null,maxKeys:null,headroom:null,fetchedAt};
+    const currentCount = Number.isInteger(raw?.currentCount) && raw.currentCount >= 0 ? Number(raw.currentCount) : null;
+    const maxKeys = Number.isInteger(raw?.maxKeys) && raw.maxKeys >= 0 ? Number(raw.maxKeys) : null;
+    if (currentCount === null || maxKeys === null) {
+      return {state:'invalid-plan-limits',source:'keys-api-plan-limits',currentCount:null,maxKeys:null,headroom:null,fetchedAt};
+    }
+    return {state:'ok',source:'keys-api-plan-limits',currentCount,maxKeys,headroom:Math.max(0,maxKeys-currentCount),fetchedAt};
+  }
+
+  async function fetchApiKeyPlanLimits() {
+    if (!token) return {state:'source-unavailable',source:'keys-api-plan-limits',currentCount:null,maxKeys:null,headroom:null,fetchedAt:Date.now()};
+    const base = normalizeBridgeBase(state.bridgeBase);
+    const res = await Risuai.nativeFetch(`${base}/api-key-plan-limits`, {
+      method:'GET',
+      headers:{Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'}
+    });
+    const text = await res.text();
+    if (!res.ok) return {state:'source-unavailable',source:'keys-api-plan-limits',currentCount:null,maxKeys:null,headroom:null,fetchedAt:Date.now()};
+    try { return normalizeApiKeyPlanLimitsLocal(JSON.parse(text)); }
+    catch { return {state:'source-unavailable',source:'keys-api-plan-limits',currentCount:null,maxKeys:null,headroom:null,fetchedAt:Date.now()}; }
+  }
+
+  async function refreshApiKeyPlanLimits(force = false) {
+    const now = Date.now();
+    if (!force && apiKeyPlanLimitsRuntime.value && now - Number(apiKeyPlanLimitsRuntime.fetchedAt || 0) < API_KEY_PLAN_LIMITS_UI_TTL_MS) {
+      return apiKeyPlanLimitsRuntime.value;
+    }
+    if (apiKeyPlanLimitsInFlight) return apiKeyPlanLimitsInFlight;
+    const requestSeq = ++apiKeyPlanLimitsRequestSeq;
+    const promise = (async () => {
+      const value = await fetchApiKeyPlanLimits();
+      if (requestSeq !== apiKeyPlanLimitsRequestSeq) return null;
+      apiKeyPlanLimitsRuntime = {
+        value,
+        fetchedAt:typeof value?.fetchedAt === 'number' && Number.isFinite(value.fetchedAt) ? Number(value.fetchedAt) : Date.now(),
+      };
+      schedulePanelRender(false);
+      return value;
+    })().catch(() => {
+      if (requestSeq !== apiKeyPlanLimitsRequestSeq) return null;
+      const value = {state:'source-unavailable',source:'keys-api-plan-limits',currentCount:null,maxKeys:null,headroom:null,fetchedAt:Date.now()};
+      apiKeyPlanLimitsRuntime = {value,fetchedAt:value.fetchedAt};
+      schedulePanelRender(false);
+      return value;
+    }).finally(() => {
+      if (apiKeyPlanLimitsInFlight === promise) apiKeyPlanLimitsInFlight = null;
+    });
+    apiKeyPlanLimitsInFlight = promise;
+    return promise;
+  }
+
   function bridgeManagerAuthHeaders() {
     return {Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'};
   }

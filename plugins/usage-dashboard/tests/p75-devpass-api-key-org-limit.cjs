@@ -121,7 +121,7 @@ for (const marker of [
   'function normalizeApiKeyPlanLimitsCapture(capture, now = Date.now())',
   'async function captureApiKeyPlanLimitsViaCliSession(projectId)',
   "DEVPASS_BRIDGE_API_KEY_PROJECT_ID: exactProjectId",
-  "const status = await loadDevPassStatus();",
+  "status = await loadDevPassStatus();",
   "const exactProjectId = String(status?.projectId || '').trim();",
   "cached(`apiKeyPlanLimits:${exactProjectId}`",
   "name.startsWith('apiKeyPlanLimits:') ? 300_000",

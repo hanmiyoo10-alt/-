@@ -45,3 +45,10 @@ Do not mix later session/write-lock, notification, DB/save, plugin reload, or Te
 - official upstream PR #60: **MERGED**
 - rebuild plan: **NO LONGER NEEDED**
 - historical source branch/commit remains evidence only.
+
+
+## Upstream follow-up — restore is now opt-in (2026-08-25)
+
+Upstream commit `ab4670d91857db1d32bf67ed41f406df02a91efa` changed the merged behavior: restore now runs only when `nodeOnlyRestoreLastChat` is enabled, and the new setting defaults to `false`. The mechanism from PR #60 remains upstream; this is a product-behavior refinement, not a rejection or rollback. Our strategy is to use the upstream setting when restore-on-start is desired rather than carrying an unconditional fork patch.
+
+Evidence: https://github.com/PocketRisu/PocketRisu/commit/ab4670d91857db1d32bf67ed41f406df02a91efa

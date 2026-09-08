@@ -1,6 +1,6 @@
 # Local Usage Dashboard E26 Implementation Checkpoint
 
-Status: **IMPLEMENTED ON BRANCH / FULL REGRESSION PENDING**
+Status: **IMPLEMENTED ON BRANCH / FULL REGRESSION GREEN / MERGE PENDING**
 
 Date: 2026-09-08 KST
 Canonical issue: #1895
@@ -30,6 +30,8 @@ Changed control-plane files:
 2. `.github/workflows/usage-dashboard-e9-validate.yml`
 3. `plugins/usage-dashboard/tools/release_validation_convergence_e26.cjs`
 4. `plugins/usage-dashboard/tests/p74-e26-autonomous-validation-convergence.cjs`
+5. `plugins/usage-dashboard/tests/e12-event-convergence-simplification-contract.cjs`
+6. `plugins/usage-dashboard/tests/e13-stage-handoff-wake-simplification-contract.cjs`
 
 This checkpoint document is the only additional documentation file.
 
@@ -49,6 +51,31 @@ No Product, Engine, Manager, CLI, Models, runtime artifact, plugin UI/data sourc
 - legacy `UD_E9_VALIDATION_DISPATCHED:<sha>` and legacy `UD_VALIDATION_RESULT` receipts remain readable;
 - E11, E16, assistant fresh reread, expected-head merge, monotonic exact-byte promotion, and actual-device physical acceptance remain unchanged.
 
+## Regression evidence
+
+The first Candidate Validation run exposed stale E12/E13 assertions that permanently prohibited the E9 validation-completion `workflow_run` edge. Those assertions reflected the pre-E26 wake topology rather than an E26 product/runtime defect.
+
+The repair changed tests only and preserved the original safety boundaries:
+
+- workflow-run payload is not candidate or branch authority;
+- canonical platform-safe reducer wake remains;
+- five-minute anti-loss schedule remains;
+- reducer remains ref read-only;
+- no new credential or release authority is introduced.
+
+Final pre-merge Usage Dashboard Candidate Validation:
+
+- run: `34203948719`
+- `validate / validate`: **SUCCESS**
+- full discovered Usage Dashboard registry: **GREEN**
+- non-authoritative deterministic release-PR lane: **SKIPPED as intended for this PR context**
+
+Repository-wide companion checks on the same head:
+
+- Plugin Control Plane PR observe: **SUCCESS**
+- SimCore CI: **SUCCESS**
+- Usage Dashboard Durable Release Reconciler: **SUCCESS**
+
 ## Safety boundaries
 
 E26 adds no new:
@@ -61,4 +88,4 @@ E26 adds no new:
 - physical-acceptance authority;
 - `release_generation: E26` value.
 
-Implementation acceptance remains false until the full discovered Usage Dashboard regression registry is GREEN and the implementation PR is merged with fresh identity protection.
+Implementation acceptance remains false until PR #1897 is merged with fresh identity protection and post-merge canary/read-back confirms byte-neutral main integration.

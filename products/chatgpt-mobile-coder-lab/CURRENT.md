@@ -69,7 +69,7 @@ Codex CLI는 실제 shell/files/test 기능 폭이 넓지만 **Codex 전용/agen
 
 즉 "모바일에서 Codex CLI를 편하게 쓰기"보다 "일반 ChatGPT 채팅 자체에 Codex 같은 손발을 붙이기"가 우선이다.
 
-## Remote Desktop Commander 실험 — READ-ONLY TOOL CALL VERIFIED
+## Remote Desktop Commander 실험 — READ/WRITE TOOL LOOP VERIFIED
 
 서버폰에서 `@wonderwhy-er/desktop-commander@0.2.48`의 `remote` 모드를 직접 실행했다.
 
@@ -114,21 +114,69 @@ git -C /root/nyang-repo status -sb
 
 또한 `/root/nyang-repo` 최상위 목록에서 `.agents`, `.git`, `.github`, `README.md`, `config`, `docs`, `local`, `plugins`, `products`, `scripts`, `study`, `tools` 등 repository 실제 항목을 읽는 데 성공했다.
 
+추가 read/search 검증:
+
+- `/root/nyang-repo/README.md`의 처음 40줄을 실제로 읽고 repository 목적을 요약하는 데 성공.
+- `/root/nyang-repo` 전체에서 문자열 검색 명령 수행 성공.
+- 당시 `chatgpt-mobile-coder-lab` 문자열이 발견되지 않은 이유는 remote tool 실패가 아니라 `server/work`가 `origin/main`보다 50 commits 뒤에 있었기 때문으로 확인됨.
+- `server/work...origin/main`은 `0 50`으로 확인되어 `server/work`에 독자 커밋은 없고 `origin/main`이 fast-forward 방향으로 50 commits 앞선 상태였음.
+
+### 첫 disposable write smoke test — PASS
+
+기존 `/root/nyang-repo`와 `server/work`를 수정하지 않고, 최신 `origin/main`에서 별도 detached worktree를 생성했다.
+
+```text
+/root/nyang-worktrees/remote-write-smoke
+```
+
+확인된 결과:
+
+```text
+initial worktree status
+→ ## HEAD (no branch)
+
+HEAD
+→ bba7e5f2
+```
+
+새 worktree 안에서만 `REMOTE_DESKTOP_COMMANDER_SMOKE.txt`를 생성하고 정확한 파일 내용을 다시 읽는 데 성공했다.
+
+```text
+remote desktop commander write smoke test
+```
+
+파일 생성 후 Git 상태:
+
+```text
+?? REMOTE_DESKTOP_COMMANDER_SMOKE.txt
+```
+
+테스트 파일 삭제 후:
+
+```text
+status --short
+→ no output
+```
+
 현재 의미:
 
 - 일반 ChatGPT 모바일 채팅에서 Remote Desktop Commander plugin/app 호출 성공.
 - remote service를 통해 서버폰 device에 실제 shell/filesystem 요청 전달 성공.
-- Ubuntu PRoot 내부 `/root/nyang-repo` read-only 접근 성공.
-- `server/work` branch와 tracking 상태를 정확히 읽음.
-- 따라서 `ChatGPT → Remote Desktop Commander → 서버폰 Ubuntu PRoot → repository` 경로는 최소 read-only 수준에서 실제로 성립함.
+- Ubuntu PRoot 내부 `/root/nyang-repo` read/search 성공.
+- Git branch/status/fetch/rev-list/worktree 명령 실행 성공.
+- 별도 detached worktree 생성 성공.
+- 별도 worktree 안에서 파일 create/read/delete 성공.
+- Git이 untracked 상태를 정확히 감지했고 삭제 후 clean으로 복귀함.
+- 기존 `server/work` working tree를 직접 수정하지 않고 write-capable loop를 검증함.
+- 따라서 `ChatGPT → Remote Desktop Commander → 서버폰 Ubuntu PRoot → isolated Git worktree → filesystem write` 경로가 실제로 성립함.
 
 중요한 환경 관찰:
 
-- `pwd`는 `/root/nyang-repo`가 아니라 npx로 설치된 Desktop Commander package의 `dist` directory를 반환했다.
+- `pwd`는 `/root/nyang-repo`가 아니라 npx로 설치된 Desktop Commander package의 `dist` directory를 반환한다.
 - 따라서 Remote Desktop Commander process의 기본 current working directory를 repository root로 가정하면 안 된다.
-- repository 작업은 명시적인 absolute path 또는 `git -C /root/nyang-repo ...` 같은 형태를 우선 사용해야 한다.
+- repository 작업은 명시적인 absolute path 또는 `git -C <absolute-path> ...` 같은 형태를 우선 사용해야 한다.
 - Ubuntu PRoot 내부에서 실행해도 Node 실행 파일 자체는 Termux의 `/data/data/com.termux/files/usr/bin/node`를 사용한다.
-- 이 경계에도 불구하고 `/root/nyang-repo` 파일시스템과 Git 상태를 정상적으로 접근했다.
+- 이 경계에도 불구하고 `/root` 내부의 repository와 별도 worktree를 정상적으로 읽고 수정했다.
 
 민감정보인 device code, device ID, 계정 주소는 repository 기록에 저장하지 않는다.
 
@@ -151,20 +199,22 @@ git -C /root/nyang-repo status -sb
    - SentinelX
    - TRIGGERcmd
 
-Custom MCP 계열은 목표 적합도가 높지만 현재 모바일 ChatGPT surface 지원 제약이 핵심 장애물이다. 공개 Plugin/App형은 모바일 ChatGPT에서 실제 호출 가능한지 직접 검증할 가치가 가장 높다.
+현재 서버폰 실험 기준으로 Remote Desktop Commander는 read-only 후보 수준을 넘어 실제 isolated write-capable development bridge로 동작함이 확인됐다.
 
 ## 현재 1순위 다음 단계
 
-**Remote Desktop Commander를 통해 `/root/nyang-repo` 내부 파일 read/search와 harmless command 실행을 추가 검증한다.**
+**disposable worktree에서 기존 tracked file을 실제로 수정하고 diff/검증/원상복구까지 수행해 patch-level coding loop를 검증한다.**
 
 검증 순서:
 
-1. 현재 서버폰 Ubuntu PRoot의 Remote Desktop Commander 프로세스를 online 상태로 유지.
-2. repository의 작은 text file을 absolute path로 read.
-3. bounded search/grep 수준의 read-only command를 실행.
-4. repository에서 실제 test command를 실행하기 전 project-owned validation command를 확인.
-5. read-only 루프가 안정적이면 별도 disposable feature worktree에서 작은 write/patch test를 수행.
-6. write 검증 전에는 현재 `server/work` working tree를 직접 수정하지 않는다.
+1. `/root/nyang-worktrees/remote-write-smoke`를 계속 disposable scope로 사용.
+2. 작은 tracked text file 하나를 선택하고 원본 hash/content를 먼저 확인.
+3. 의도적인 한 줄 변경만 수행.
+4. `git diff --check`와 `git diff -- <path>`로 변경 범위를 검증.
+5. 파일을 정확히 원상복구.
+6. `git status --short`가 다시 empty인지 확인.
+7. 그 뒤에만 별도 named feature branch/worktree에서 실제 구현 테스트를 진행.
+8. commit/push/PR은 별도의 명시적 단계로 검증한다.
 
 PocketRisu 서비스와 기존 부팅 stack은 이 검증 때문에 변경하지 않는다.
 
@@ -174,4 +224,6 @@ PocketRisu 서비스와 기존 부팅 stack은 이 검증 때문에 변경하지
 - 같은 working tree를 두 ChatGPT 계정이 동시에 수정하지 않는다.
 - 자동 sync는 dirty tree를 건드리지 않는다.
 - 실험 bridge에 전체 디스크/무제한 shell을 바로 열지 않는다.
+- 기본 cwd를 신뢰하지 않고 repository/worktree absolute path를 사용한다.
+- 초기 write 실험은 permanent device branch가 아니라 disposable worktree에서만 수행한다.
 - 토큰, 인증 코드, session id, device ID, API key, SSH key, private log 원본은 Git에 기록하지 않는다.

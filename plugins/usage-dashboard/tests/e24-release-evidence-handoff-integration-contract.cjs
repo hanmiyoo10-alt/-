@@ -67,7 +67,7 @@ function bundle104(extra=[]){return {
 };}
 function context(releases=[bundle103(),bundle104()]){return {enumeration:{complete:true,repository:'hanmiyoo10-alt/-',durableRequestCount:releases.length},releases,targetProductVersion:TARGET};}
 
-// Current-shaped live boundary: 5.103 is physically accepted; newer 5.104 is deployed but still pending physical.
+// Historical E24 implementation fixture: 5.103 accepted while 5.104 was deployed/pending.
 const composed=e24.resolveReleaseEvidenceHandoff(context());
 assert.equal(composed.ok,true);
 assert.equal(composed.resolution.latestDeployedIdentity.productVersion,'3.0.0-alpha.5.104');
@@ -88,7 +88,43 @@ noteOnly.latestInstalled.note='The same exact accepted baseline remains latestIn
 assert.deepEqual(e24.inspectReleaseEvidenceHandoff(noteOnly,context()),[]);
 assert.deepEqual(preflight.inspectReleaseEvidenceContext({productVersion:TARGET,releaseEvidence:noteOnly},{...context(),targetProductVersion:undefined}),[]);
 
-// Every authority-bearing mutation is rejected.
+// Source authoring owns construction, not authority: caller literals are discarded and only bounded notes survive.
+const draftSpec={
+  productVersion:TARGET,
+  releaseTitle:'Synthetic E24 authoring fixture',
+  releaseEvidence:{
+    acceptedBaseline:{productVersion:'3.0.0-alpha.5.001',releaseSha:'a'.repeat(40),verdict:'rejected',issue:1,commentId:2,note:'Release-specific accepted note.'},
+    latestInstalled:{productVersion:'3.0.0-alpha.5.002',releaseSha:'b'.repeat(40),verdict:'unverified',issue:3,commentId:4,note:'Release-specific installed note.'},
+  },
+};
+const draftBefore=JSON.stringify(draftSpec);
+const authored=e24.authorReleaseSpec(draftSpec,{...context(),targetProductVersion:'3.0.0-alpha.5.999'});
+assert.equal(authored.ok,true);
+assert.equal(authored.spec.productVersion,TARGET);
+assert.equal(authored.releaseEvidence.acceptedBaseline.productVersion,'3.0.0-alpha.5.103');
+assert.equal(authored.releaseEvidence.acceptedBaseline.releaseSha,PROD_5103);
+assert.equal(authored.releaseEvidence.acceptedBaseline.issue,1836);
+assert.equal(authored.releaseEvidence.acceptedBaseline.commentId,5571109680);
+assert.equal(authored.releaseEvidence.acceptedBaseline.verdict,'accepted');
+assert.equal(authored.releaseEvidence.latestInstalled.productVersion,'3.0.0-alpha.5.103');
+assert.equal(authored.releaseEvidence.latestInstalled.releaseSha,PROD_5103);
+assert.equal(authored.releaseEvidence.latestInstalled.issue,1836);
+assert.equal(authored.releaseEvidence.latestInstalled.commentId,5571109680);
+assert.equal(authored.releaseEvidence.latestInstalled.verdict,'accepted');
+assert.equal(authored.releaseEvidence.acceptedBaseline.note,'Release-specific accepted note.');
+assert.equal(authored.releaseEvidence.latestInstalled.note,'Release-specific installed note.');
+assert.equal(JSON.stringify(draftSpec),draftBefore,'authoring must not mutate the draft spec');
+assert.deepEqual(e20.inspectReleaseEvidence(authored.releaseEvidence,{required:true,targetProductVersion:TARGET}),[]);
+assert.deepEqual(preflight.inspectReleaseEvidenceContext(authored.spec,{...context(),targetProductVersion:undefined}),[]);
+
+const bareAuthored=e24.authorReleaseSpec({productVersion:TARGET,releaseTitle:'Bare authoring fixture'},context());
+assert.equal(bareAuthored.ok,true);
+assert.deepEqual(e20.inspectReleaseEvidence(bareAuthored.releaseEvidence,{required:true,targetProductVersion:TARGET}),[]);
+const invalidNote=e24.authorReleaseSpec({productVersion:TARGET,releaseEvidence:{acceptedBaseline:{note:'x'.repeat(e20.NOTE_LIMIT+1)}}},context());
+assert.equal(invalidNote.ok,false);
+assert.ok(invalidNote.findings.some((row)=>row.code==='release-evidence-note'));
+
+// Every authority-bearing mutation is rejected by the independent preflight seam.
 for(const [role,field,value] of [
   ['acceptedBaseline','productVersion','3.0.0-alpha.5.102'],
   ['acceptedBaseline','releaseSha','a'.repeat(40)],
@@ -111,17 +147,29 @@ const rejected104=bundle104([physical('3.0.0-alpha.5.104',PROD_5104,5572000001,'
 const rejected=e24.resolveReleaseEvidenceHandoff(context([bundle103(),rejected104]));
 assert.equal(rejected.ok,true);
 assert.equal(rejected.acceptedIdentity.productVersion,'3.0.0-alpha.5.103');
+const authoredRejected=e24.authorReleaseSpec({productVersion:TARGET},context([bundle103(),rejected104]));
+assert.equal(authoredRejected.ok,true);
+assert.equal(authoredRejected.releaseEvidence.acceptedBaseline.productVersion,'3.0.0-alpha.5.103');
 const conflict104=bundle104([physical('3.0.0-alpha.5.104','c'.repeat(40),5572000002,'ACCEPTED')]);
 const conflict=e24.resolveReleaseEvidenceHandoff(context([bundle103(),conflict104]));
 assert.equal(conflict.ok,false);
 assert.ok(conflict.findings.some((row)=>row.code==='E22_PHYSICAL_RELEASE_SHA_MISMATCH'));
+const authoredConflict=e24.authorReleaseSpec({productVersion:TARGET},context([bundle103(),conflict104]));
+assert.equal(authoredConflict.ok,false);
+assert.ok(authoredConflict.findings.some((row)=>row.code==='E22_PHYSICAL_RELEASE_SHA_MISMATCH'));
 
-// Exact newer physical ACCEPTED automatically advances with no second selector.
-const accepted104=e24.resolveReleaseEvidenceHandoff(context([bundle103(),bundle104([physical('3.0.0-alpha.5.104',PROD_5104,5572000003,'ACCEPTED')])]));
+// Exact newer physical ACCEPTED automatically advances both validation and source authoring with no second selector.
+const accepted104Context=context([bundle103(),bundle104([physical('3.0.0-alpha.5.104',PROD_5104,5572000003,'ACCEPTED')])]);
+const accepted104=e24.resolveReleaseEvidenceHandoff(accepted104Context);
 assert.equal(accepted104.ok,true);
 assert.equal(accepted104.acceptedIdentity.productVersion,'3.0.0-alpha.5.104');
 assert.equal(accepted104.releaseEvidence.acceptedBaseline.releaseSha,PROD_5104);
 assert.equal(accepted104.releaseEvidence.acceptedBaseline.commentId,5572000003);
+const authored104=e24.authorReleaseSpec({productVersion:TARGET},accepted104Context);
+assert.equal(authored104.ok,true);
+assert.equal(authored104.releaseEvidence.acceptedBaseline.productVersion,'3.0.0-alpha.5.104');
+assert.equal(authored104.releaseEvidence.acceptedBaseline.releaseSha,PROD_5104);
+assert.equal(authored104.releaseEvidence.acceptedBaseline.commentId,5572000003);
 
 // Enumeration and durable request identity fail closed instead of guessing.
 for(const bad of [
@@ -132,26 +180,29 @@ for(const bad of [
   const result=e24.resolveReleaseEvidenceHandoff(bad);
   assert.equal(result.ok,false);
   assert.ok(result.findings.some((row)=>row.code==='E24_EVIDENCE_ENUMERATION_INCOMPLETE'||row.code==='E24_DURABLE_REQUEST_INVALID'));
+  assert.equal(e24.authorReleaseSpec({productVersion:TARGET},bad).ok,false,'authoring must fail with the same incomplete evidence');
 }
 const missingPr=bundle103(); delete missingPr.pr;
 assert.ok(e24.resolveReleaseEvidenceHandoff(context([missingPr,bundle104()])).findings.some((row)=>row.code==='E24_EVIDENCE_BUNDLE_INCOMPLETE'));
 const wrongPr=bundle103(); wrongPr.pr={...wrongPr.pr,number:9999};
 assert.ok(e24.resolveReleaseEvidenceHandoff(context([wrongPr,bundle104()])).findings.some((row)=>row.code==='E24_DURABLE_REQUEST_INVALID'));
 
-// Historical 5.104 releaseEvidence remains an immutable source-freeze snapshot. E24 applies forward, not retroactively.
+// Historical 5.104 releaseEvidence remains an immutable source-freeze snapshot. E24 authoring applies forward, not retroactively.
 const historical5104=JSON.parse(fs.readFileSync('.github/usage-dashboard/releases/5.104.json','utf8'));
 assert.equal(historical5104.releaseEvidence.acceptedBaseline.issue,1829);
 assert.equal(historical5104.releaseEvidence.acceptedBaseline.commentId,5570738555);
 assert.ok(e24.inspectReleaseEvidenceHandoff(historical5104.releaseEvidence,context()).length>0,'new E24 durable receipt authority must not silently reinterpret old 5.104 spec');
 
-// Pure composition / no persistent state / no new generation or network parser.
+// Pure composition / authoring: no persistent state, network parser, process spawning, or new generation.
 const source=fs.readFileSync('plugins/usage-dashboard/tools/release_evidence_handoff_e24.cjs','utf8');
 for(const forbidden of ["require('node:fs')","require('node:http')","require('node:https')","require('node:child_process')",'latest-accepted.json','accepted-baseline.json','baseline-cache.json','release-evidence-state.json','release_generation: E24']){
   assert.equal(source.includes(forbidden),false,forbidden);
 }
 assert.ok(source.includes("require('./release_request_e9.cjs')"));
+assert.ok(source.includes("require('./release_evidence_contract_e20.cjs')"));
 assert.ok(source.includes("require('./release_closure_e22.cjs')"));
 assert.ok(source.includes("require('./release_baseline_handoff_e23.cjs')"));
+assert.ok(source.includes('function authorReleaseSpec(draftSpec, input = {})'));
 const preflightSource=fs.readFileSync('plugins/usage-dashboard/tools/release_generic_preflight.cjs','utf8');
 for(const forbidden of ['api.github.com','GITHUB_TOKEN','node:http','node:https']) assert.equal(preflightSource.includes(forbidden),false,`preflight must not fetch/parse GitHub evidence: ${forbidden}`);
 assert.ok(preflightSource.includes('--release-evidence-context'));
@@ -168,8 +219,10 @@ assert.ok(workflow.includes('latestDeployment'));
 assert.ok(workflow.includes('combinedComments'));
 assert.equal(workflow.includes('release_generation: E24'),false);
 
-// Deterministic repeated derivation is byte-for-byte JSON identical.
+// Deterministic repeated derivation and authoring are byte-for-byte JSON identical.
 const again=e24.resolveReleaseEvidenceHandoff(context());
 assert.equal(JSON.stringify(again),JSON.stringify(composed));
+const authoredAgain=e24.authorReleaseSpec(draftSpec,context());
+assert.equal(JSON.stringify(authoredAgain),JSON.stringify(authored));
 
-console.log('usage-dashboard E24 release evidence handoff integration: OK · 5.103 accepted survives 5.104 pending · exact E22/E23 authority · note-semantic compare · forward-only historical boundary · incomplete evidence fail-closed · no persistent state');
+console.log('usage-dashboard E24 release evidence handoff integration: OK · validation + forward source authoring closed · caller authority overrides discarded · note-only prose preserved · incomplete evidence fail-closed · historical release source untouched · no persistent state');

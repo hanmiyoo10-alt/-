@@ -35,6 +35,26 @@
       : 'unknown';
     const progressionNumber = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Number(value) : null;
     const progressionDay = (value) => Number.isInteger(value) && value >= 0 ? Number(value) : null;
+    const unlockState = ['value','max-tier','tier-overridden','not-applicable','source-unavailable','permission-unavailable','invalid-next-tier-limits'].includes(String(raw?.nextTier?.limits?.state))
+      ? String(raw.nextTier.limits.state)
+      : 'source-unavailable';
+    const unlockNumber = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Number(value) : null;
+    const unlockLimits = {
+      state:unlockState,
+      rpmMultiplier:unlockNumber(raw?.nextTier?.limits?.rpmMultiplier),
+      dailyCapUsd:unlockNumber(raw?.nextTier?.limits?.dailyCapUsd),
+      monthlyCapUsd:unlockNumber(raw?.nextTier?.limits?.monthlyCapUsd),
+      topUpDailyCapUsd:unlockNumber(raw?.nextTier?.limits?.topUpDailyCapUsd),
+    };
+    if (unlockState === 'value' && (
+        unlockLimits.rpmMultiplier === null || unlockLimits.dailyCapUsd === null
+        || unlockLimits.monthlyCapUsd === null || unlockLimits.topUpDailyCapUsd === null)) {
+      unlockLimits.state = 'invalid-next-tier-limits';
+      unlockLimits.rpmMultiplier = null;
+      unlockLimits.dailyCapUsd = null;
+      unlockLimits.monthlyCapUsd = null;
+      unlockLimits.topUpDailyCapUsd = null;
+    }
     const nextTier = {
       state:progressionState,
       currentTier:Number.isInteger(raw?.nextTier?.currentTier) && raw.nextTier.currentTier >= 0 ? raw.nextTier.currentTier : null,
@@ -42,6 +62,7 @@
       daysUntilQualify:progressionDay(raw?.nextTier?.daysUntilQualify),
       spendUsdUntilQualify:progressionNumber(raw?.nextTier?.spendUsdUntilQualify),
       daysUntilSpendPathUnlocks:progressionDay(raw?.nextTier?.daysUntilSpendPathUnlocks),
+      limits:unlockLimits,
     };
     if (progressionState === 'value' && (
         nextTier.currentTier === null || nextTier.tier === null || nextTier.daysUntilQualify === null
@@ -52,6 +73,7 @@
       nextTier.daysUntilQualify = null;
       nextTier.spendUsdUntilQualify = null;
       nextTier.daysUntilSpendPathUnlocks = null;
+      nextTier.limits = {state:'source-unavailable',rpmMultiplier:null,dailyCapUsd:null,monthlyCapUsd:null,topUpDailyCapUsd:null};
     }
     const endpointState = ['value','not-applicable','source-unavailable','permission-unavailable','invalid-endpoints'].includes(String(raw?.endpointRates?.state))
       ? String(raw.endpointRates.state)

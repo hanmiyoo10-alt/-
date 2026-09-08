@@ -1289,3 +1289,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/63fe309017dd6ed334d8c69b6014aa5b3710860e)
 - Event ID: `f02f1f67af92eff53f040730be31c59b1fd34b300e374804e11d00567fa27729`
 <!-- canonical-main-doc-promoted:f02f1f67af92eff53f040730be31c59b1fd34b300e374804e11d00567fa27729 -->
+
+### 2026-09-09 — docs(common): reapply Termux common policy dedup (#1934)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `c367f68c4c2fcf065151a86cec461bdf4a4fa8db`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c367f68c4c2fcf065151a86cec461bdf4a4fa8db)
+- Event ID: `b45e92db96947e32dbcf2c34cecb8d9f2bfe3be832315325488430ed21f316b3`
+<!-- canonical-main-doc-promoted:b45e92db96947e32dbcf2c34cecb8d9f2bfe3be832315325488430ed21f316b3 -->

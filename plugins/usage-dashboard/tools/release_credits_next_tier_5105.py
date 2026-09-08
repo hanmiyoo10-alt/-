@@ -156,6 +156,7 @@ def baseline() -> None:
 def patch_core(value: dict) -> None:
     rep(CORE, '//@version 3.0.0-alpha.5.104', '//@version 3.0.0-alpha.5.105', 'Plugin header')
     rep(CORE, "const VERSION = '3.0.0-alpha.5.104';", "const VERSION = '3.0.0-alpha.5.105';", 'Plugin version')
+    rep(CORE, "const REQUIRED_BRIDGE_VERSION = '1.6.38';", "const REQUIRED_BRIDGE_VERSION = '1.6.39';", 'Product required Bridge version')
     text = CORE.read_text()
     start = text.find('  const RELEASE_NOTES = Object.freeze({')
     end = text.find('  const UPDATE_URL =', start)
@@ -470,7 +471,7 @@ def target() -> None:
             raise SystemExit(f'5.105 normalized privacy field leaked:{forbidden}')
 
     latest = LATEST.read_text()
-    for marker in ('//@version 3.0.0-alpha.5.105', '다음 Tier · Tier', 'Gateway next tier: scope credits'):
+    for marker in ('//@version 3.0.0-alpha.5.105', "const REQUIRED_BRIDGE_VERSION = '1.6.39';", '다음 Tier · Tier', 'Gateway next tier: scope credits'):
         if marker not in latest:
             raise SystemExit(f'5.105 latest.js marker missing:{marker}')
     run('node', 'plugins/usage-dashboard/tools/build_bridge_engine.cjs', '--check')

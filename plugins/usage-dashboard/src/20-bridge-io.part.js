@@ -183,6 +183,97 @@
 
 
 
+
+  function normalizeDevPassBillingHistoryLocal(raw) {
+    const allowedTypes = new Set([
+      'dev_plan_start','dev_plan_renewal','dev_plan_upgrade','dev_plan_downgrade','dev_plan_cancel','dev_plan_resume','dev_plan_end',
+      'dev_plan_reset_pass','dev_plan_reset_pass_reward','dev_plan_reset_pass_gift',
+      'credit_topup','credit_refund','credit_gift','credit_manual_payment'
+    ]);
+    const allowedStatuses = new Set(['pending','completed','failed']);
+    const stateName = ['ok','empty','source-unavailable','permission-unavailable','invalid-history','partial'].includes(String(raw?.state))
+      ? String(raw.state)
+      : 'source-unavailable';
+    const fetchedAt = typeof raw?.fetchedAt === 'number' && Number.isFinite(raw.fetchedAt) && raw.fetchedAt >= 0 ? Number(raw.fetchedAt) : Date.now();
+    if (stateName === 'source-unavailable' || stateName === 'permission-unavailable') {
+      return {state:stateName,source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt};
+    }
+    const receivedCount = Number.isInteger(raw?.receivedCount) && raw.receivedCount >= 0 ? Number(raw.receivedCount) : null;
+    const validCount = Number.isInteger(raw?.validCount) && raw.validCount >= 0 ? Number(raw.validCount) : null;
+    const inputRows = Array.isArray(raw?.rows) && raw.rows.length <= 5 ? raw.rows : null;
+    if (stateName === 'empty' && receivedCount === 0 && validCount === 0 && inputRows && inputRows.length === 0) {
+      return {state:'empty',source:'devpass-invoices',rows:[],validCount:0,receivedCount:0,newest:null,fetchedAt};
+    }
+    if (stateName === 'invalid-history') {
+      return {state:'invalid-history',source:'devpass-invoices',rows:[],validCount:validCount === 0 ? 0 : null,receivedCount,newest:null,fetchedAt};
+    }
+    if (!inputRows || receivedCount === null || validCount === null || validCount <= 0 || receivedCount < validCount || inputRows.length !== Math.min(validCount,5)) {
+      return {state:'invalid-history',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt};
+    }
+    if ((stateName === 'ok' && validCount !== receivedCount) || (stateName === 'partial' && validCount >= receivedCount)) {
+      return {state:'invalid-history',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt};
+    }
+    const rows = [];
+    for (const row of inputRows) {
+      const type = typeof row?.type === 'string' ? row.type : '';
+      const date = typeof row?.date === 'string' ? row.date : '';
+      const currency = typeof row?.currency === 'string' ? row.currency.trim() : '';
+      const status = typeof row?.status === 'string' ? row.status : '';
+      if (!allowedTypes.has(type) || !date || !Number.isFinite(Date.parse(date)) || !currency || currency.length > 12 || !allowedStatuses.has(status)) {
+        return {state:'invalid-history',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt};
+      }
+      let amount = null;
+      if (row.amount !== null) {
+        if (typeof row.amount !== 'number' || !Number.isFinite(row.amount)) return {state:'invalid-history',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt};
+        amount = Number(row.amount);
+      }
+      rows.push({type,date,amount,currency,status});
+    }
+    return {state:stateName,source:'devpass-invoices',rows,validCount,receivedCount,newest:rows[0]?.date || null,fetchedAt};
+  }
+
+  async function fetchDevPassBillingHistory() {
+    if (!token) return {state:'source-unavailable',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt:Date.now()};
+    const base = normalizeBridgeBase(state.bridgeBase);
+    const res = await Risuai.nativeFetch(`${base}/devpass-billing-history`, {
+      method:'GET',
+      headers:{Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'}
+    });
+    const text = await res.text();
+    if (!res.ok) return {state:'source-unavailable',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt:Date.now()};
+    try { return normalizeDevPassBillingHistoryLocal(JSON.parse(text)); }
+    catch { return {state:'source-unavailable',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt:Date.now()}; }
+  }
+
+  async function refreshDevPassBillingHistory(force = false) {
+    const now = Date.now();
+    if (!force && devpassBillingHistoryRuntime.value && now - Number(devpassBillingHistoryRuntime.fetchedAt || 0) < DEVPASS_BILLING_HISTORY_UI_TTL_MS) {
+      return devpassBillingHistoryRuntime.value;
+    }
+    if (devpassBillingHistoryInFlight) return devpassBillingHistoryInFlight;
+    const requestSeq = ++devpassBillingHistoryRequestSeq;
+    const promise = (async () => {
+      const value = await fetchDevPassBillingHistory();
+      if (requestSeq !== devpassBillingHistoryRequestSeq) return null;
+      devpassBillingHistoryRuntime = {
+        value,
+        fetchedAt:typeof value?.fetchedAt === 'number' && Number.isFinite(value.fetchedAt) ? Number(value.fetchedAt) : Date.now(),
+      };
+      schedulePanelRender(false);
+      return value;
+    })().catch(() => {
+      if (requestSeq !== devpassBillingHistoryRequestSeq) return null;
+      const value = {state:'source-unavailable',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt:Date.now()};
+      devpassBillingHistoryRuntime = {value,fetchedAt:value.fetchedAt};
+      schedulePanelRender(false);
+      return value;
+    }).finally(() => {
+      if (devpassBillingHistoryInFlight === promise) devpassBillingHistoryInFlight = null;
+    });
+    devpassBillingHistoryInFlight = promise;
+    return promise;
+  }
+
   function normalizeApiKeyPlanLimitsLocal(raw) {
     const stateName = ['ok','project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(raw?.state))
       ? String(raw.state)

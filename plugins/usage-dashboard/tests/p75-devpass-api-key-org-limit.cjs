@@ -34,8 +34,8 @@ function sliceBetween(text, start, end) {
   return text.slice(a, b);
 }
 
-assert.equal(release.productVersion, '3.0.0-alpha.5.108');
-assert.equal(release.specPath, SPEC);
+assert.equal(release.productVersion, '3.0.0-alpha.5.109');
+assert.equal(release.specPath, '.github/usage-dashboard/releases/5.109.json');
 const spec = JSON.parse(read(SPEC));
 assert.equal(spec.engineVersion, '1.6.42');
 assert.equal(spec.managerVersion, '1.3.6');
@@ -46,10 +46,10 @@ assert.equal(spec.materializer, MATERIALIZER);
 assert.equal(spec.newRegression, 'plugins/usage-dashboard/tests/p75-devpass-api-key-org-limit.cjs');
 assert.equal(spec.authority?.featureIssue, 1899);
 assert.equal(spec.authority?.designPullRequest, 1902);
-assert.equal(release.evidenceView?.acceptedBaseline?.productVersion, '3.0.0-alpha.5.107');
-assert.equal(release.evidenceView?.acceptedBaseline?.releaseSha, 'b5ff566fdf164580b0edfa6e2db1d07cc88992bf');
-assert.equal(release.evidenceView?.acceptedBaseline?.issue, 1892);
-assert.equal(release.evidenceView?.acceptedBaseline?.commentId, 5581888722);
+assert.equal(release.evidenceView?.acceptedBaseline?.productVersion, '3.0.0-alpha.5.108');
+assert.equal(release.evidenceView?.acceptedBaseline?.releaseSha, '05862999df0521c73b6890fbc561c01be3f9f36e');
+assert.equal(release.evidenceView?.acceptedBaseline?.issue, 1905);
+assert.equal(release.evidenceView?.acceptedBaseline?.commentId, 5585420039);
 assert.equal(release.evidenceView?.acceptedBaseline?.verdict, 'accepted');
 
 const design = read(DESIGN);
@@ -151,9 +151,9 @@ const apiRoute = sliceBetween(http, "if (url.pathname === '/api-key-plan-limits'
 assert.ok(!apiRoute.includes('projectId'));
 assert.ok(!apiRoute.includes('creditsOrgId'));
 
-assert.ok(core.includes('//@version 3.0.0-alpha.5.108'));
-assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.108';"));
-assert.ok(core.includes("const REQUIRED_BRIDGE_VERSION = '1.6.42';"));
+assert.ok(core.includes('//@version 3.0.0-alpha.5.109'));
+assert.ok(core.includes("const VERSION = '3.0.0-alpha.5.109';"));
+assert.ok(core.includes("const REQUIRED_BRIDGE_VERSION = '1.6.43';"));
 assert.ok(core.includes('const API_KEY_PLAN_LIMITS_UI_TTL_MS = 5 * 60_000;'));
 assert.ok(core.includes('apiKeyPlanLimitsRuntime = {value:null,fetchedAt:0}'));
 
@@ -196,17 +196,17 @@ for (const prior of [
 assert.equal(read(LEDGER).includes('api-key-plan-limits'), false, 'P75 must not add Request Ledger ownership');
 assert.equal(read(PROV).includes('api-key-plan-limits'), false, 'P75 must not add request-provenance ownership');
 
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.108');
-assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.108');
-assert.equal(manifest.components.bridge.requiredVersion, '1.6.42');
+assert.equal(manifest.productVersion, '3.0.0-alpha.5.109');
+assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.109');
+assert.equal(manifest.components.bridge.requiredVersion, '1.6.43');
 assert.equal(manifest.components.bridgeManager.version, '1.3.6');
-assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.108');
+assert.equal(manifest.components.bridgeManager.productVersion, '3.0.0-alpha.5.109');
 assert.equal(manifest.components.bridgeManager.managedCliVersion, '1.10.0');
 assert.equal(manifest.components.bridgeManager.managedModelCatalogVersion, '1.280.0');
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
-assert.ok(engine.includes("const VERSION = '1.6.42';"));
-assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.108';"));
-assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.42';"));
+assert.ok(engine.includes("const VERSION = '1.6.43';"));
+assert.ok(manager.includes("const PRODUCT_VERSION = '3.0.0-alpha.5.109';"));
+assert.ok(manager.includes("const BUNDLED_ENGINE_VERSION = '1.6.43';"));
 assert.ok(latest.includes('API Keys · 조직 한도'));
 assert.ok(latest.includes('API key org limit:'));
 

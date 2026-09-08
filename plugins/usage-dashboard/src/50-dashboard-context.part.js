@@ -2,6 +2,48 @@
   function settingsHtml() {
 
 
+
+  function devPassBillingHistoryTypeLabel(type) {
+    const labels = {
+      dev_plan_start:'DevPass 시작',dev_plan_renewal:'DevPass 갱신',dev_plan_upgrade:'DevPass 업그레이드',dev_plan_downgrade:'DevPass 다운그레이드',
+      dev_plan_cancel:'DevPass 취소',dev_plan_resume:'DevPass 재개',dev_plan_end:'DevPass 종료',dev_plan_reset_pass:'Reset Pass',
+      dev_plan_reset_pass_reward:'Reset Pass 보상',dev_plan_reset_pass_gift:'Reset Pass 지급',credit_topup:'PAYG 충전',credit_refund:'환불',
+      credit_gift:'크레딧 지급',credit_manual_payment:'크레딧 추가'
+    };
+    return Object.prototype.hasOwnProperty.call(labels, String(type || '')) ? labels[String(type)] : '기타';
+  }
+
+  function devPassBillingHistoryStatusLabel(status) {
+    return status === 'completed' ? '완료' : status === 'pending' ? '대기' : status === 'failed' ? '실패' : '—';
+  }
+
+  function devPassBillingHistoryDateText(date) {
+    const ms = Date.parse(String(date || ''));
+    if (!Number.isFinite(ms)) return '—';
+    try {
+      return new Intl.DateTimeFormat('ko-KR',{timeZone:KST_TIME_ZONE,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(ms));
+    } catch { return '—'; }
+  }
+
+  function devPassBillingHistoryAmountText(row) {
+    if (row?.amount === null || typeof row?.amount !== 'number' || !Number.isFinite(row.amount)) return '—';
+    const currency = typeof row?.currency === 'string' ? row.currency.trim() : '';
+    if (!currency) return '—';
+    const value = Number(row.amount).toFixed(2);
+    return currency.toUpperCase() === 'USD' ? `$${value}` : `${value} ${currency}`;
+  }
+
+  function devPassBillingHistorySectionHtml(truth) {
+    const stateName = ['ok','empty','source-unavailable','permission-unavailable','invalid-history','partial'].includes(String(truth?.state))
+      ? String(truth.state)
+      : 'source-unavailable';
+    const rows = ['ok','partial'].includes(stateName) && Array.isArray(truth?.rows) ? truth.rows.slice(0,5) : [];
+    const summary = stateName === 'empty' ? '결제 내역 · 없음' : ['ok','partial'].includes(stateName) ? `결제 내역 · 최근 5건 · ${rows.length}개` : '결제 내역 · —';
+    const rowHtml = rows.map((row) => `<div class="mini"><span>${esc(devPassBillingHistoryDateText(row?.date))} · ${esc(devPassBillingHistoryTypeLabel(row?.type))}</span><b>${esc(devPassBillingHistoryAmountText(row))} · ${esc(devPassBillingHistoryStatusLabel(row?.status))}</b></div>`).join('');
+    const body = rows.length ? `<div class="minis">${rowHtml}</div>` : stateName === 'empty' ? '<p>최근 결제 내역 없음</p>' : '<p>소스 확인 불가 · —</p>';
+    return `<details class="usage-detail-box devpass-billing-history-card"><summary><b>결제 내역 · DevPass</b> · ${esc(summary.replace('결제 내역 · ',''))}</summary>${body}</details>`;
+  }
+
   function apiKeyOrgLimitSectionHtml(truth) {
     const stateName = ['ok','project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(truth?.state))
       ? String(truth.state)
@@ -185,6 +227,7 @@
     const creditsOrgLabel = String(selectedCreditsOrg?.name || selectedCreditsOrgId || 'Default organization');
     const gatewayLimitsTruth = gatewayLimitsRuntime.orgId === selectedCreditsOrgId ? gatewayLimitsRuntime.value : null;
     const apiKeyOrgLimitTruth = apiKeyPlanLimitsRuntime.value;
+    const devPassBillingHistoryTruth = devpassBillingHistoryRuntime.value;
     const creditsOrgSelector = creditsOrganizations.length ? `<label class="credits-org-picker"><span>Credits Organization</span><select id="credits-org-id">${creditsOrganizations.map(org => `<option value="${esc(org.id)}" ${String(org.id)===selectedCreditsOrgId?'selected':''}>${esc(org.name || org.id)}${num(org.credits)?` · ${money(org.credits)}`:''}</option>`).join('')}</select></label>${d.creditsOrganizationFallback ? `<p class="warn credits-org-fallback">선택한 organization을 찾지 못해 ${esc(creditsOrgLabel)}로 자동 복구했어.</p>` : ''}` : '';
     const creditsMeta = [
       num(c?.todayUsed) ? `오늘 ${money(c.todayUsed,4)}` : '',

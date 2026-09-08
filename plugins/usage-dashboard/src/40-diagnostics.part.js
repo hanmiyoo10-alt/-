@@ -154,6 +154,17 @@
 
 
 
+
+  function devPassBillingHistoryDiagnosticText(value) {
+    const stateName = ['ok','empty','source-unavailable','permission-unavailable','invalid-history','partial'].includes(String(value?.state))
+      ? String(value.state)
+      : 'source-unavailable';
+    const validCount = Number.isInteger(value?.validCount) && value.validCount >= 0 ? Number(value.validCount) : null;
+    const receivedCount = Number.isInteger(value?.receivedCount) && value.receivedCount >= 0 ? Number(value.receivedCount) : null;
+    const newest = typeof value?.newest === 'string' && Number.isFinite(Date.parse(value.newest)) ? value.newest : '—';
+    return `DevPass billing history: rows ${validCount === null ? '—' : validCount}/${receivedCount === null ? '—' : receivedCount} · newest ${newest} · source devpass-invoices · state ${stateName}`;
+  }
+
   function apiKeyOrgLimitDiagnosticText(value) {
     const stateName = ['ok','project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(value?.state))
       ? String(value.state)
@@ -494,6 +505,7 @@
       `DevPass account tier: service ${diagAccount?.serviceTier || '—'} · routing ${diagAccount?.routingStrategy || '—'} · pending ${diagAccount?.pendingTier || '—'} · personal org ${diagAccount?.hasPersonalOrg === null || diagAccount?.hasPersonalOrg === undefined ? '—' : diagAccount.hasPersonalOrg ? 'yes' : 'no'}`,
       devPassNoAiTrainingDiagnosticText(diagAccount),
       devPassProviderCachePolicyDiagnosticText(diagAccount),
+      devPassBillingHistoryDiagnosticText(devpassBillingHistoryRuntime.value),
       apiKeyOrgLimitDiagnosticText(apiKeyPlanLimitsRuntime.value),
       gatewayLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       gatewayNextTierDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),

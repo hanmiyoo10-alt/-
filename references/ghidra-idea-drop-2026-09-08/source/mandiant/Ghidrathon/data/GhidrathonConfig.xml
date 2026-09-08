@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GHIDRATHON_CONFIG>
+    <ARRAY NAME="JAVA_EXCLUDE_LIBS" TYPE="string">
+        <A VALUE="pdb" />
+    </ARRAY>
+</GHIDRATHON_CONFIG>
+

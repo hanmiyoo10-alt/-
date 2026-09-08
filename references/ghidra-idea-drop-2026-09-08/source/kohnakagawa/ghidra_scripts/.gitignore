@@ -1,0 +1,5 @@
+*.class
+.idea
+.venv/
+venv
+.DS_Store

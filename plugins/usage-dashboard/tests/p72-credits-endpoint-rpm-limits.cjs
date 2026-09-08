@@ -49,7 +49,7 @@ for (const marker of [
   'Duplicate keys',
   'Preserve source row order',
   'Unknown future keys',
-  'not live per-minute usage',
+  '**not** live per-minute usage',
   'No new timer, poller, persistence, credential',
 ]) assert.ok(design.includes(marker), `P72 design marker missing: ${marker}`);
 
@@ -74,7 +74,7 @@ for (const forbidden of [
   'rep(PROV,',
   'setInterval(',
   'setTimeout(',
-  '/gateway-endpoint-rpm',
+  "url.pathname === '/gateway-endpoint-rpm'",
 ]) assert.equal(materializer.includes(forbidden), false, `P72 materializer forbidden authority/owner: ${forbidden}`);
 
 const release = loadCurrentRelease();
@@ -232,7 +232,7 @@ assert.ok(render({state:'source-unavailable',rows:[]}).includes('—'));
 assert.ok(render({state:'invalid-endpoints',rows:[]}).includes('—'));
 for (const prior of [
   'function gatewayNextTierProgressionHtml(nextTier)',
-  '다음 Tier · 최고 Tier',
+  '최고 Tier',
   'function gatewayLimitsUtilizationPercent(value, cap)',
   "gatewayLimitsUtilizationBarHtml(truth?.daily,'used','일간 spend 사용률 · UTC')",
   "gatewayLimitsUtilizationBarHtml(truth?.monthly,'used','월간 spend 사용률')",

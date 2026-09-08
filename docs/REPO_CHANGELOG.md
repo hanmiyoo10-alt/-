@@ -1218,3 +1218,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/16c2b3d7e189ad6cb17a6231f7ba5ce78b2c517c)
 - Event ID: `7c8953f2c6f495f8ff01fcc755831c639598d02fcd21728cdb4acbf68ca73a22`
 <!-- canonical-main-doc-promoted:7c8953f2c6f495f8ff01fcc755831c639598d02fcd21728cdb4acbf68ca73a22 -->
+
+### 2026-09-08 — feat(usage-dashboard): release 5.106 Credits endpoint RPM limits
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `c5d39f88227c2920638b99a95329c8669ed8e2cb`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c5d39f88227c2920638b99a95329c8669ed8e2cb)
+- Event ID: `2ff36287ff34afe4add90eed85b908f3e42227d2860418264463f07ad3fa0b5f`
+<!-- canonical-main-doc-promoted:2ff36287ff34afe4add90eed85b908f3e42227d2860418264463f07ad3fa0b5f -->

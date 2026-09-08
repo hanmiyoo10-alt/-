@@ -1,14 +1,17 @@
 # Product Roots
 
-This repository hosts multiple independently released products on one `main` branch.
+This repository hosts multiple independently released products on one `main` branch, plus isolated product-adjacent operational/research roots that explicitly declare when they do not own a release authority.
 
 Product ownership is separated under:
 
 - `products/simcore/`
 - `products/usage-dashboard/`
 - `products/pocketrisu-helper-mod/`
+- `products/chatgpt-mobile-coder-lab/`
 
 The product roots define ownership and release boundaries. Existing runtime/install paths remain unchanged for compatibility.
+
+`products/chatgpt-mobile-coder-lab/` is an **experiment/research root only**. It records the Android two-phone / two-ChatGPT-account local-coding-agent investigation and does not create a production, deployment, or release authority.
 
 Isolation phase 1 keeps all compatibility paths stable while product ownership and main-write serialization are established.
 
@@ -27,5 +30,6 @@ Release channels remain independent:
 - SimCore → `release-simcore`
 - Local Usage Dashboard → `release-usage-dashboard`
 - PocketRisu Helper Mod → documentation/operations product root; no automatic release-channel writes
+- ChatGPT Mobile Coder Lab → experiment/research documentation only; no release channel and no runtime authority
 
 Do not move or merge release-channel ownership across product roots.

@@ -27,7 +27,7 @@
   "knownCandidateKeys": [
     {
       "id": "V-KEY-LIMIT-HEADROOM",
-      "status": "captured-needs-source-authority"
+      "status": "source-proven-design-5.108"
     },
     {
       "id": "V-GATEWAY-LIMITS-HEADROOM",
@@ -43,7 +43,7 @@
     },
     {
       "id": "V-GATEWAY-NEXT-TIER-UNLOCK-LIMITS",
-      "status": "source-proven-design-5.107"
+      "status": "implemented-5.107"
     },
     {
       "id": "V-MODEL-LIFECYCLE-STATUS",

@@ -102,7 +102,7 @@ assert.ok(capture.includes("target.pathname = (prefix + '/dev-plans/invoices').r
 assert.ok(capture.includes("storeDevPassBillingHistory(result, 'fetch-devpass-billing-history')"));
 assert.ok(capture.includes("storeDevPassBillingHistory(result, 'node-request-devpass-billing-history')"));
 
-const sanitizerText = sliceBetween(capture, '  const sanitizeDevPassBillingHistory = (value) => {', '\n\n  const sanitizeApiKeyPlanLimits = (value) => {');
+const sanitizerText = sliceBetween(capture, '  const sanitizeDevPassBillingHistory = (value) => {', '  const sanitizeApiKeyPlanLimits = (value) => {');
 const sanitizerFactory = new Function(`${sanitizerText}\nreturn sanitizeDevPassBillingHistory;`);
 const sanitize = sanitizerFactory();
 const row = (n, overrides={}) => ({

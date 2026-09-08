@@ -8,8 +8,7 @@ Canonical plugin path: `<PLUGIN_PATH>/`
 
 Production release branch: `<RELEASE_BRANCH>`
 
-Never infer the current production version from conversation memory.
-Read the actual repository and production release branch first.
+Read current repository and project authority before making production/release/runtime claims.
 
 
 ## Repository common-rules inheritance
@@ -29,7 +28,7 @@ The common-rules layer does not own this project's mutable production, release, 
 - Source: `<MANIFEST_PATH>`
 <!-- PLUGIN_RELEASE_STATE_END -->
 
-Prefer keeping this block machine-maintained from the production manifest.
+Prefer keeping this block machine-maintained from the production manifest when the project contract supports that workflow.
 
 
 ## Current development memory
@@ -50,21 +49,12 @@ Do not use this section as a chat transcript.
 
 This roadmap is strategic memory, not a fixed release schedule.
 
-**Evidence outranks roadmap order.**
-
-The next release must be chosen from:
-- actual production source
-- latest production artifacts
-- latest real-device diagnostics
-- regression evidence
-
-Do not make evidence-free changes merely to advance the roadmap.
-Do not rework behavior that is already healthy.
+Record project-specific long-term goals, dependency order, and evidence-backed exit conditions here. Repository-wide evidence/authority behavior is inherited from `docs/REPOSITORY_COMMON_RULES.md` and should not be restated.
 
 
 ## 0. Source of truth
 
-Use this priority order:
+Define this project's exact authority order here. Example shape:
 
 1. Production release artifacts and manifest.
 2. `main` source under the canonical plugin path.
@@ -73,8 +63,7 @@ Use this priority order:
 5. This document and prior release notes.
 6. Hypotheses.
 
-If documentation and production disagree, inspect production first
-and update the documentation.
+Replace or specialize this order when the project's owning contract requires a different authority chain.
 
 
 ## 1. Project scope
@@ -83,104 +72,47 @@ The default development target is:
 
 `<PLUGIN_PATH>/`
 
-Do not modify unrelated host/application code unless evidence shows that
-the problem cannot be solved inside the plugin.
-
-Do not mix unrelated product work into the plugin release.
+Record project-specific host/application boundaries, shared dependencies, and any evidence-backed exceptions here.
 
 
 ## 2. Stable first
 
-Default cycle:
+Apply repository default `RCR-D01` by reference.
 
-`Stable production
-→ real-device diagnostic
-→ isolate one problem
-→ minimal design
-→ patch
-→ regression
-→ version/release
-→ real-device validation`
-
-Keep already-working behavior unchanged unless the release goal requires touching it.
-
-Prefer small, explainable diffs over broad rewrites.
+Record only project-specific preserved surfaces, rollback boundaries, known-good baselines, or exceptions that materially specialize that default.
 
 
 ## 3. One release, one primary goal
 
-Each release should normally have one primary target.
+Apply repository default `RCR-D02` by reference.
 
-Do not casually combine unrelated work such as:
-
-- performance
-- updater
-- UI
-- cache
-- runtime recovery
-- data fidelity
-
-When another important issue appears, record it as a later candidate
-instead of expanding the current release without evidence.
-
-A large release is acceptable when it has one coherent architectural goal.
+Record only project-specific bundling constraints or coherent multi-component release cases that need stronger specialization.
 
 
 ## 4. Evidence before repair
 
-Use:
+Apply repository default `RCR-D03` by reference.
 
-`Observe → Attribute → Verify → Design → Repair → Measure`
-
-If the cause is not sufficiently isolated, improve diagnostics before
-changing behavior.
-
-Do not repair a subsystem merely because it is a plausible suspect.
+Record only project-specific observation sources, attribution boundaries, or diagnostics required before mutation.
 
 
 ## 5. Evidence language
 
-Use these meanings consistently:
+Apply repository uncertainty/evidence rules, including `RCR-H03` and scoped-status rule `RCR-H04`, by reference.
 
-**VERIFIED**
-Directly supported by repository state, tests, production artifacts,
-or real-device diagnostics.
-
-**SUPPORTED HYPOTHESIS**
-Multiple observations support it, but causality is not fully proven.
-
-**UNKNOWN**
-Current telemetry cannot determine it.
-
-Never present UNKNOWN as VERIFIED.
+Define only additional project-specific evidence labels or stronger meanings needed by this project.
 
 
 ## 6. Data fidelity
 
-Display only values actually provided by a real source.
+Apply repository evidence-fidelity and anti-fabrication rules by reference.
 
-Do not:
-
-- convert unknown values into zero
-- invent missing metadata
-- derive unsupported values from price
-- infer fields from model/provider identity
-- silently substitute estimates for source data
-- relabel aggregate data as exact per-request data
-
-Known zero and unknown are different states and must remain distinguishable.
-
-When adding a derived value, clearly document:
-- source fields
-- derivation
-- fidelity level
+Record only project-specific source fields, derivations, fidelity classes, UNKNOWN/known-zero distinctions, or prohibited transformations that are not already repository-wide policy.
 
 
 ## 7. Provenance
 
-Every important displayed value should have an identifiable source.
-
-Prefer normalized metadata such as:
+Record the project-specific provenance contract for important values, for example:
 
 - source
 - fidelity
@@ -188,39 +120,14 @@ Prefer normalized metadata such as:
 - timestamp precision
 - capture mode
 
-Never guess a scope or provenance from a model name when the source
-can provide stronger evidence.
-
-If provenance cannot be proven, preserve UNKNOWN.
+Keep any additional project-specific provenance rules here without restating generic repository uncertainty policy.
 
 
 ## 8. Diagnostic turn and design turn are separate
 
-When the user shares a real-device diagnostic log,
-that turn is analysis only.
+When this project's workflow requires device or production diagnostics to be analyzed before the next design/implementation turn, define that interaction boundary here.
 
-In the diagnostic turn:
-
-- judge healthy/abnormal state
-- compare with the previous baseline
-- identify regressions
-- summarize VERIFIED information
-- separate hypotheses from UNKNOWN
-- identify useful next observation points
-
-Do NOT:
-
-- begin the next release
-- modify code
-- create a release
-- deploy
-
-End the turn after analysis.
-
-Only after the user asks in a later turn for the next update/design
-should next-release design begin.
-
-Required interaction cycle:
+Example cycle:
 
 `Diagnostic
 → Analysis
@@ -229,30 +136,21 @@ Required interaction cycle:
 → Design
 → Development`
 
+Specify exactly which diagnostic inputs trigger this pause and which later instruction authorizes the next design stage.
+
 
 ## 9. Runtime errors and recovery
 
-Historical error records and current runtime health are different concepts.
+Define this project's runtime/recovery semantics here.
 
-Do not erase historical errors merely to make the product appear healthy.
-
-Prefer explicit states such as:
-
-- cumulative errors
-- active errors
-- recovered errors
-- last error
-- last recovery
-
-Current readiness should describe current actionable health while
-retaining useful incident history.
+Where applicable, distinguish current actionable health from historical/recovered incidents and define the exact project-owned fields that represent those states.
 
 
 ## 10. Performance
 
-Measure before optimizing.
+Apply repository default `RCR-D04` by reference.
 
-Start from phase attribution such as:
+Record this project's measurable phase breakdown and project-specific performance guardrails, for example:
 
 `Refresh
 → source/network
@@ -260,40 +158,19 @@ Start from phase attribution such as:
 → persist
 → render`
 
-If one phase dominates, instrument its internal sub-phases before
-changing unrelated code.
-
-Diagnostics must not introduce:
-
-- expensive full scans
-- unbounded history
-- large raw payload persistence
-- unnecessary network calls
-- high-frequency polling
+Keep only phase names, instrumentation limits, and safety constraints that are specific to this project's runtime.
 
 
 ## 11. Protected stability
 
-Do not touch unrelated stable paths without evidence.
+Apply repository baseline-preservation behavior by reference.
 
-Preserve healthy behavior such as:
-
-- updater
-- automatic update flow
-- runtime lifecycle
-- state persistence
-- request identity
-- source fidelity
-- navigation
-- mobile layout
-- recovery behavior
-
-Every new feature must coexist with existing stable contracts.
+List only the project-specific healthy paths or contracts that must normally remain untouched unless evidence requires change, for example updater, runtime lifecycle, state persistence, request identity, source fidelity, navigation, or recovery behavior.
 
 
 ## 12. Release engineering
 
-Normal release sequence:
+Define this project's normal release sequence here. Example shape:
 
 `check production
 → inspect evidence
@@ -311,15 +188,14 @@ Normal release sequence:
 → re-read production artifacts
 → real-device validation`
 
-Never deploy a failing candidate.
+Keep the exact project-owned branch, artifact, manifest, deployment, rollback, and validation mechanics here.
 
-Production must move monotonically forward.
-A stale workflow must never downgrade the production release.
+Existing Git/CI/release gates remain authoritative under repository rule `RCR-H07`.
 
 
 ## 13. Versioning
 
-Before any release, read the actual repository for:
+Before any release, define which current project artifacts must be read, such as:
 
 - product/plugin version
 - runtime/engine version
@@ -328,98 +204,42 @@ Before any release, read the actual repository for:
 - generated artifact
 - production branch
 
-Do not infer these from conversation memory.
-
-Do not bump a component version when that component's behavior does not change.
-
-Generated artifacts are not the primary development source.
-Modify canonical source and regenerate deterministically.
+Record project-specific component-bump rules and version coupling here.
 
 
 ## 14. User interaction and execution
 
-When repository tooling can perform the work,
-ChatGPT should perform:
+Apply repository default `RCR-D05` by reference for repository-tooling work.
 
-- source analysis
-- design
-- code modification
-- tests
-- version updates
-- PR creation
-- CI inspection
-- merge
-- deployment
-
-Do not make the user manually run development commands when the work can
-be performed through repository tooling.
-
-Ask the user only when real-device validation genuinely requires the device.
-
-When device testing is needed, state exactly:
-
-- what to update
-- what to press
-- what behavior to check
-- what diagnostic/result to send back
+Record only project-specific user/device handoff requirements that cannot be completed through repository tooling. When device testing is required, define exactly what must be updated, exercised, observed, and returned as evidence.
 
 
 ## 15. Update safety
 
-Routine production releases must use the product's normal automatic update path.
+Define the project's normal supported update path here.
 
-Do not make normal updates depend on:
+Record project-specific prohibitions on manual shell edits, file replacement, token copying, temporary bootstrap commands, debug-only installation procedures, or other non-normal update routes when they matter to this product.
 
-- manual shell edits
-- file replacement
-- token copying
-- temporary bootstrap commands
-- debug-only installation procedures
-
-Temporary diagnostics are allowed only when necessary and must not become
-the normal release process.
+Temporary diagnostics may be documented separately when necessary, but must not silently become the normal release path.
 
 
 ## 16. Regression contract
 
-Every production incident or newly introduced contract should gain
-a regression test when practical.
+Apply repository default `RCR-D06` by reference.
 
-Tests should prefer:
-
-- production-like process behavior
-- public/runtime interfaces
-- deterministic fixtures
-
-Avoid brittle source slicing, VM execution of copied function bodies,
-or tests that merely duplicate implementation details.
-
-Static tests are appropriate for:
-
-- security boundaries
-- generated-artifact parity
-- forbidden behavior
-- version/manifest consistency
-- source ownership rules
+Record only project-specific regression suites, public/runtime boundaries, deterministic fixtures, static security checks, artifact-parity checks, or other validators that establish durable project behavior.
 
 
 ## 17. Generated artifacts
 
-Where a plugin uses generated distributables:
+When this project uses generated distributables, apply repository conditional `RCR-C01` by reference.
 
-`canonical source
-→ deterministic build
-→ generated artifact
-→ production`
-
-Do not hand-edit the generated artifact as the primary implementation.
-
-CI should detect when the generated artifact does not match its canonical source.
+Record only the project-specific canonical source, deterministic build/materialization command, generated artifact path, parity validator, and promotion/release owner.
 
 
 ## 18. Durable project cycle
 
-Maintain this loop:
+Define the project's real operating loop here. Example shape:
 
 `Production
 → Real-device diagnostic
@@ -433,19 +253,11 @@ Maintain this loop:
 → Production deployment
 → Real-device diagnostic`
 
+Specialize this sequence when the project's lifecycle or validation model requires a different durable loop.
 
-## Non-negotiable rules
 
-- Do not break working behavior without evidence.
-- Do not fabricate unknown data.
-- Do not repair before isolating the cause.
-- Do not bundle unrelated changes without a coherent release goal.
-- Do not deploy failing tests.
-- Do not guess the production version from memory.
-- Do not confuse diagnostic labels with underlying semantics.
-- Do not confuse recovered historical errors with an active outage.
-- Do not sacrifice correctness for performance.
-- Do not infer provenance from model/provider identity when actual source evidence exists.
-- Keep generated artifacts derived from canonical source.
-- When the user shares a diagnostic, analyze only.
-- Wait for a later user turn before designing or implementing the next release.
+## Project-specific non-negotiable rules
+
+List only non-negotiable rules that are genuinely project-specific or stricter specializations of repository policy.
+
+Do not duplicate repository-wide common rules here merely for emphasis. If no additional project-specific non-negotiable rule exists, keep this section empty or remove it in the generated project guideline.

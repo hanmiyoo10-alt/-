@@ -32,6 +32,9 @@ async function handle(req, res) {
       const profile = url.searchParams.get('profile') === 'light' ? 'light' : 'full';
       return json(res, 200, await snapshot(profile, creditsOrgId));
     }
+    if (url.pathname === '/devpass-billing-history') {
+      return json(res, 200, await loadDevPassBillingHistory());
+    }
     if (url.pathname === '/api-key-plan-limits') {
       return json(res, 200, await loadApiKeyPlanLimits());
     }

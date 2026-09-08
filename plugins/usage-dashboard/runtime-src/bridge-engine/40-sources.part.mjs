@@ -29,6 +29,90 @@ async function loadAccountCapture() {
 
 
 
+
+function devPassBillingHistoryUnknown(state = 'source-unavailable', now = Date.now()) {
+  const stateName = ['source-unavailable','permission-unavailable','invalid-history'].includes(String(state))
+    ? String(state)
+    : 'source-unavailable';
+  return {state:stateName,source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt:Number(now)};
+}
+
+function normalizeDevPassBillingHistoryCapture(capture, now = Date.now()) {
+  const allowedTypes = new Set([
+    'dev_plan_start','dev_plan_renewal','dev_plan_upgrade','dev_plan_downgrade','dev_plan_cancel','dev_plan_resume','dev_plan_end',
+    'dev_plan_reset_pass','dev_plan_reset_pass_reward','dev_plan_reset_pass_gift',
+    'credit_topup','credit_refund','credit_gift','credit_manual_payment'
+  ]);
+  const allowedStatuses = new Set(['pending','completed','failed']);
+  const stateName = ['ok','empty','source-unavailable','permission-unavailable','invalid-history','partial'].includes(String(capture?.state))
+    ? String(capture.state)
+    : 'source-unavailable';
+  if (stateName === 'source-unavailable' || stateName === 'permission-unavailable') return devPassBillingHistoryUnknown(stateName, now);
+  const receivedCount = Number.isInteger(capture?.receivedCount) && capture.receivedCount >= 0 ? Number(capture.receivedCount) : null;
+  const validCount = Number.isInteger(capture?.validCount) && capture.validCount >= 0 ? Number(capture.validCount) : null;
+  if (stateName === 'empty') {
+    if (receivedCount !== 0 || validCount !== 0 || !Array.isArray(capture?.rows) || capture.rows.length !== 0) return devPassBillingHistoryUnknown('invalid-history', now);
+    return {state:'empty',source:'devpass-invoices',rows:[],validCount:0,receivedCount:0,newest:null,fetchedAt:Number(now)};
+  }
+  if (stateName === 'invalid-history') {
+    if (receivedCount === null || receivedCount <= 0 || validCount !== 0) return devPassBillingHistoryUnknown('invalid-history', now);
+    return {state:'invalid-history',source:'devpass-invoices',rows:[],validCount:0,receivedCount,newest:null,fetchedAt:Number(now)};
+  }
+  if (!Array.isArray(capture?.rows) || capture.rows.length > 5 || receivedCount === null || validCount === null || validCount <= 0 || receivedCount < validCount) {
+    return devPassBillingHistoryUnknown('invalid-history', now);
+  }
+  if ((stateName === 'ok' && validCount !== receivedCount) || (stateName === 'partial' && validCount >= receivedCount) || capture.rows.length !== Math.min(validCount, 5)) {
+    return devPassBillingHistoryUnknown('invalid-history', now);
+  }
+  const rows = [];
+  for (const row of capture.rows) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return devPassBillingHistoryUnknown('invalid-history', now);
+    const type = typeof row.type === 'string' ? row.type : '';
+    const date = typeof row.date === 'string' ? row.date : '';
+    const currency = typeof row.currency === 'string' ? row.currency.trim() : '';
+    const status = typeof row.status === 'string' ? row.status : '';
+    if (!allowedTypes.has(type) || !date || !Number.isFinite(Date.parse(date)) || !currency || currency.length > 12 || !allowedStatuses.has(status)) {
+      return devPassBillingHistoryUnknown('invalid-history', now);
+    }
+    let amount = null;
+    if (row.amount !== null) {
+      if (typeof row.amount !== 'number' || !Number.isFinite(row.amount)) return devPassBillingHistoryUnknown('invalid-history', now);
+      amount = Number(row.amount);
+    }
+    rows.push({type,date,amount,currency,status});
+  }
+  return {state:stateName,source:'devpass-invoices',rows,validCount,receivedCount,newest:rows[0]?.date || null,fetchedAt:Number(now)};
+}
+
+async function captureDevPassBillingHistoryViaCliSession() {
+  await ensureCaptureTap();
+  const captureFile = path.join(
+    CONFIG_DIR,
+    `devpass-billing-history-${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.json`,
+  );
+  const existingNodeOptions = String(process.env.NODE_OPTIONS || '').trim();
+  const captureRequire = `--require=${CAPTURE_TAP_FILE}`;
+  const nodeOptions = existingNodeOptions ? `${existingNodeOptions} ${captureRequire}` : captureRequire;
+  try {
+    await runCliProcess(['orgs', 'list', '--json'], {
+      NODE_OPTIONS: nodeOptions,
+      DEVPASS_BRIDGE_CAPTURE_FILE: captureFile,
+      DEVPASS_BRIDGE_BILLING_HISTORY: '1',
+    });
+    const text = await fs.readFile(captureFile, 'utf8');
+    const captured = JSON.parse(text);
+    return normalizeDevPassBillingHistoryCapture(captured?.devpassBillingHistory);
+  } catch {
+    return devPassBillingHistoryUnknown('source-unavailable');
+  } finally {
+    try { await fs.unlink(captureFile); } catch {}
+  }
+}
+
+async function loadDevPassBillingHistory() {
+  return cached('devpassBillingHistory', async () => captureDevPassBillingHistoryViaCliSession());
+}
+
 function apiKeyPlanLimitsUnknown(state = 'source-unavailable', now = Date.now()) {
   const stateName = ['project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(state))
     ? String(state)
@@ -385,6 +469,7 @@ async function cached(name, loader, options = {}) {
     ?? ((name === 'usageScopes' || name.startsWith('usageScopes:')) ? 60_000 : null)
     ?? ((name === 'analyticsScopes' || name.startsWith('analyticsScopes:')) ? 60_000 : null)
     ?? (name.startsWith('gatewayLimits:') ? 300_000 : null)
+    ?? (name === 'devpassBillingHistory' ? 300_000 : null)
     ?? (name.startsWith('apiKeyPlanLimits:') ? 300_000 : null)
     ?? (name.startsWith('runway:') ? 300_000 : 30_000);
   const now = Date.now();

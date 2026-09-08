@@ -133,11 +133,12 @@ const requestedActivityRange = ['24h','7d','30d'].includes(String(process.env.DE
   : '';
 const requestedLimitsOrgId = String(process.env.DEVPASS_BRIDGE_LIMITS_ORG_ID || '').trim();
 const requestedApiKeyProjectId = String(process.env.DEVPASS_BRIDGE_API_KEY_PROJECT_ID || '').trim();
+const requestedBillingHistory = String(process.env.DEVPASS_BRIDGE_BILLING_HISTORY || '') === '1';
 // capture.v11 intentionally not activated; request provenance owns tap generation.
 const marker = Symbol.for('llmgateway.devpass.bridge.capture.v10');
 if (output && !globalThis[marker]) {
   globalThis[marker] = true;
-  const state = { orgs: null, devPlanStatus: null, devpassActivity: null, devpassLogs: null, apiKeyPlanLimits: null, gatewayLimits: null, captureMode: null };
+  const state = { orgs: null, devPlanStatus: null, devpassActivity: null, devpassLogs: null, devpassBillingHistory: null, apiKeyPlanLimits: null, gatewayLimits: null, captureMode: null };
   let extrasInFlight = false;
   let extrasDone = false;
   const rawHttpRequest = http.request;
@@ -179,6 +180,41 @@ if (output && !globalThis[marker]) {
   };
 
 
+
+
+  const sanitizeDevPassBillingHistory = (value) => {
+    const allowedTypes = new Set([
+      'dev_plan_start','dev_plan_renewal','dev_plan_upgrade','dev_plan_downgrade','dev_plan_cancel','dev_plan_resume','dev_plan_end',
+      'dev_plan_reset_pass','dev_plan_reset_pass_reward','dev_plan_reset_pass_gift',
+      'credit_topup','credit_refund','credit_gift','credit_manual_payment'
+    ]);
+    const allowedStatuses = new Set(['pending','completed','failed']);
+    const raw = value?.data && typeof value.data === 'object' && !Array.isArray(value.data) ? value.data : value;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !Array.isArray(raw.invoices)) {
+      return {state:'invalid-history',rows:[],validCount:0,receivedCount:null};
+    }
+    const receivedCount = raw.invoices.length;
+    if (receivedCount === 0) return {state:'empty',rows:[],validCount:0,receivedCount:0};
+    const rows = [];
+    let validCount = 0;
+    for (const row of raw.invoices) {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+      const type = typeof row.type === 'string' ? row.type : '';
+      const date = typeof row.date === 'string' ? row.date : '';
+      const currency = typeof row.currency === 'string' ? row.currency.trim() : '';
+      const status = typeof row.status === 'string' ? row.status : '';
+      if (!allowedTypes.has(type) || !date || !Number.isFinite(Date.parse(date)) || !currency || currency.length > 12 || !allowedStatuses.has(status)) continue;
+      let amount = null;
+      if (row.amount !== null) {
+        if (typeof row.amount !== 'number' || !Number.isFinite(row.amount)) continue;
+        amount = Number(row.amount);
+      }
+      validCount += 1;
+      if (rows.length < 5) rows.push({type,date,amount,currency,status});
+    }
+    if (validCount === 0) return {state:'invalid-history',rows:[],validCount:0,receivedCount};
+    return {state:validCount === receivedCount ? 'ok' : 'partial',rows,validCount,receivedCount};
+  };
 
   const sanitizeApiKeyPlanLimits = (value) => {
     const raw = value?.data && typeof value.data === 'object' && !Array.isArray(value.data) ? value.data : value;
@@ -519,6 +555,20 @@ if (output && !globalThis[marker]) {
 
 
 
+
+  const storeDevPassBillingHistory = (result, mode) => {
+    const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(result?.state))
+      ? String(result.state)
+      : 'source-unavailable';
+    const bounded = sourceState === 'ok'
+      ? sanitizeDevPassBillingHistory(result?.payload)
+      : {state:sourceState,rows:[],validCount:null,receivedCount:null};
+    state.devpassBillingHistory = bounded;
+    state.captureMode = String(mode || '');
+    writeState();
+    return bounded;
+  };
+
   const storeApiKeyPlanLimits = (result, mode) => {
     const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(result?.state))
       ? String(result.state)
@@ -614,6 +664,18 @@ if (output && !globalThis[marker]) {
   };
 
 
+
+
+  const billingHistoryTarget = (orgUrl) => {
+    try {
+      const target = new URL(orgUrl.origin);
+      const prefix = pathPrefix(orgUrl.pathname, '/orgs');
+      target.pathname = (prefix + '/dev-plans/invoices').replace(/\/{2,}/g, '/');
+      return target;
+    } catch {
+      return null;
+    }
+  };
 
   const apiKeyPlanLimitsTarget = (orgUrl, projectId) => {
     const exactProjectId = String(projectId || '').trim();
@@ -732,6 +794,12 @@ if (output && !globalThis[marker]) {
     try {
       const inputHeaders = typeof Request === 'function' && input instanceof Request ? input.headers : (init && init.headers);
       const headers = safeHeaders(inputHeaders);
+      if (requestedBillingHistory) {
+        const result = await requestGatewayLimitsWithFetch(billingHistoryTarget(orgUrl), headers, init);
+        storeDevPassBillingHistory(result, 'fetch-devpass-billing-history');
+        extrasDone = true;
+        return;
+      }
       if (requestedApiKeyProjectId) {
         const result = await requestGatewayLimitsWithFetch(apiKeyPlanLimitsTarget(orgUrl, requestedApiKeyProjectId), headers, init);
         storeApiKeyPlanLimits(result, 'fetch-api-key-plan-limits');
@@ -880,6 +948,12 @@ if (output && !globalThis[marker]) {
     if (extrasDone || extrasInFlight) return;
     extrasInFlight = true;
     try {
+      if (requestedBillingHistory) {
+        const result = await requestGatewayLimitsNode(billingHistoryTarget(orgUrl), headers);
+        storeDevPassBillingHistory(result, 'node-request-devpass-billing-history');
+        extrasDone = true;
+        return;
+      }
       if (requestedApiKeyProjectId) {
         const result = await requestGatewayLimitsNode(apiKeyPlanLimitsTarget(orgUrl, requestedApiKeyProjectId), headers);
         storeApiKeyPlanLimits(result, 'node-request-api-key-plan-limits');

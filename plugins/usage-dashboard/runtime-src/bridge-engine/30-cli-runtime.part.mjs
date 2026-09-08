@@ -230,6 +230,26 @@ if (output && !globalThis[marker]) {
         safe.nextTier = nextTier;
       }
     }
+    if (Object.prototype.hasOwnProperty.call(raw, 'endpoints')) {
+      if (!Array.isArray(raw.endpoints) || raw.endpoints.length > 64) {
+        safe.endpoints = null;
+      } else {
+        const rows = [];
+        const seen = new Set();
+        let valid = true;
+        for (const row of raw.endpoints) {
+          const key = row && typeof row === 'object' && !Array.isArray(row) && typeof row.key === 'string' ? row.key : '';
+          const rpm = row && typeof row === 'object' && !Array.isArray(row) ? nonNegative(row.rpm) : null;
+          if (!key.trim() || key.length > 96 || rpm === null || seen.has(key)) {
+            valid = false;
+            break;
+          }
+          seen.add(key);
+          rows.push({key,rpm});
+        }
+        safe.endpoints = valid ? rows : null;
+      }
+    }
     return Object.keys(safe).length ? safe : null;
   };
 

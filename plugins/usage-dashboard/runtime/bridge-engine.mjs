@@ -10,7 +10,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { pathToFileURL } from 'node:url';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.39';
+const VERSION = '1.6.40';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -872,6 +872,26 @@ if (output && !globalThis[marker]) {
         safe.nextTier = nextTier;
       }
     }
+    if (Object.prototype.hasOwnProperty.call(raw, 'endpoints')) {
+      if (!Array.isArray(raw.endpoints) || raw.endpoints.length > 64) {
+        safe.endpoints = null;
+      } else {
+        const rows = [];
+        const seen = new Set();
+        let valid = true;
+        for (const row of raw.endpoints) {
+          const key = row && typeof row === 'object' && !Array.isArray(row) && typeof row.key === 'string' ? row.key : '';
+          const rpm = row && typeof row === 'object' && !Array.isArray(row) ? nonNegative(row.rpm) : null;
+          if (!key.trim() || key.length > 96 || rpm === null || seen.has(key)) {
+            valid = false;
+            break;
+          }
+          seen.add(key);
+          rows.push({key,rpm});
+        }
+        safe.endpoints = valid ? rows : null;
+      }
+    }
     return Object.keys(safe).length ? safe : null;
   };
 
@@ -1635,6 +1655,7 @@ function gatewayLimitsUnknown(state = 'source-unavailable', now = Date.now()) {
     monthly: { state:'unknown', used:null, cap:null, remaining:null },
     topUp: { state:'unknown', cap:null, windowHours:null, used:null, remaining:null },
     nextTier: { state:'unknown', currentTier:null, tier:null, daysUntilQualify:null, spendUsdUntilQualify:null, daysUntilSpendPathUnlocks:null },
+    endpointRates: { state:String(state) === 'permission-unavailable' ? 'permission-unavailable' : 'source-unavailable', rows:[] },
     fetchedAt: Number(now),
   };
 }
@@ -1659,6 +1680,8 @@ function normalizeGatewayLimitsCapture(capture, now = Date.now()) {
   const monthlyUsed = gatewayLimitsNumber(raw?.usage?.monthlySpentUsd);
   const monthlyCap = gatewayLimitsNumber(raw?.tier?.monthlyCapUsd);
   const nextTierRaw = Object.prototype.hasOwnProperty.call(raw, 'nextTier') ? raw.nextTier : undefined;
+  const endpointsPresent = Object.prototype.hasOwnProperty.call(raw, 'endpoints');
+  const endpointsRaw = endpointsPresent ? raw.endpoints : undefined;
 
   const trustTierState = enterprise === true || (planClass && planClass !== 'regular')
     ? 'not-applicable'
@@ -1722,6 +1745,34 @@ function normalizeGatewayLimitsCapture(capture, now = Date.now()) {
     }
   }
 
+
+  const endpointUnknown = (state = 'source-unavailable') => ({state,rows:[]});
+  let endpointRates = endpointUnknown();
+  if (enterprise === true || rateLimitsApply === false) {
+    endpointRates = endpointUnknown('not-applicable');
+  } else if (rateLimitsApply === true && !endpointsPresent) {
+    endpointRates = endpointUnknown('source-unavailable');
+  } else if (rateLimitsApply === true && !Array.isArray(endpointsRaw)) {
+    endpointRates = endpointUnknown('invalid-endpoints');
+  } else if (rateLimitsApply === true) {
+    const rows = [];
+    const seen = new Set();
+    let valid = endpointsRaw.length <= 64;
+    if (valid) {
+      for (const row of endpointsRaw) {
+        const key = row && typeof row === 'object' && !Array.isArray(row) && typeof row.key === 'string' ? row.key : '';
+        const rpm = row && typeof row === 'object' && !Array.isArray(row) ? gatewayLimitsNumber(row.rpm) : null;
+        if (!key.trim() || key.length > 96 || rpm === null || seen.has(key)) {
+          valid = false;
+          break;
+        }
+        seen.add(key);
+        rows.push({key,rpm});
+      }
+    }
+    endpointRates = valid ? {state:'value',rows} : endpointUnknown('invalid-endpoints');
+  }
+
   return {
     state: 'ok',
     source: 'org-limits',
@@ -1738,6 +1789,7 @@ function normalizeGatewayLimitsCapture(capture, now = Date.now()) {
     monthly: spendMetric(monthlyUsed, monthlyCap),
     topUp,
     nextTier,
+    endpointRates,
     fetchedAt: Number(now),
   };
 }

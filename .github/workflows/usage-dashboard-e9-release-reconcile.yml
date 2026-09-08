@@ -72,6 +72,14 @@ jobs:
               -H 'X-GitHub-Api-Version: 2022-11-28' \
               "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/$path" > "$out"
           }
+          api_get_search() {
+            local query="$1" out="$2"
+            curl --fail-with-body --silent --show-error \
+              -H 'Accept: application/vnd.github+json' \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "$GITHUB_API_URL/search/issues?q=$query&per_page=100" > "$out"
+          }
           post_comment() {
             local issue="$1" body="$2"
             jq -n --arg body "$body" '{body:$body}' > "$RUNNER_TEMP/comment.json"
@@ -197,7 +205,20 @@ jobs:
 
           if [[ -z "$PR_NUMBER" ]]; then
             HEAD_QUERY="$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$REPOSITORY_OWNER:$CANDIDATE_BRANCH")"
-            api_get "pulls?state=all&head=$HEAD_QUERY&base=main&per_page=100" "$RUNNER_TEMP/pr-candidates.json"
+            api_get "pulls?state=all&head=$HEAD_QUERY&per_page=100" "$RUNNER_TEMP/pr-head-candidates.json"
+            PR_REQUEST_MARKER="Usage-Dashboard-Release-Request: #$REQUEST_NUMBER"
+            MARKER_QUERY="$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "repo:$GITHUB_REPOSITORY is:pr \"$PR_REQUEST_MARKER\"")"
+            api_get_search "$MARKER_QUERY" "$RUNNER_TEMP/pr-marker-search.json"
+            cp "$RUNNER_TEMP/pr-head-candidates.json" "$RUNNER_TEMP/pr-candidates.json"
+            while read -r MARKER_PR_NUMBER; do
+              [[ "$MARKER_PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || continue
+              if jq -e --argjson number "$MARKER_PR_NUMBER" '.[] | select(.number == $number)' "$RUNNER_TEMP/pr-candidates.json" >/dev/null; then
+                continue
+              fi
+              api_get "pulls/$MARKER_PR_NUMBER" "$RUNNER_TEMP/pr-marker-$MARKER_PR_NUMBER.json"
+              jq --slurpfile pr "$RUNNER_TEMP/pr-marker-$MARKER_PR_NUMBER.json" '. + $pr | unique_by(.number)' "$RUNNER_TEMP/pr-candidates.json" > "$RUNNER_TEMP/pr-candidates-next.json"
+              mv "$RUNNER_TEMP/pr-candidates-next.json" "$RUNNER_TEMP/pr-candidates.json"
+            done < <(jq -r '.items[]?.number' "$RUNNER_TEMP/pr-marker-search.json")
             PR_HANDOFF_JSON="$(node plugins/usage-dashboard/tools/release_pr_handoff_e25.cjs --classify-file "$REQUEST_NUMBER" "$RELEASE_VERSION" "$CANDIDATE_BRANCH" "$CANDIDATE_SHA" "$GITHUB_REPOSITORY" "$RUNNER_TEMP/pr-candidates.json" false)"
             PR_HANDOFF_DECISION="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.decision)' "$PR_HANDOFF_JSON")"
             PR_HANDOFF_REASON="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.reason)' "$PR_HANDOFF_JSON")"
@@ -215,15 +236,21 @@ jobs:
                 "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$REQUEST_NUMBER" \
                 --data-binary @"$RUNNER_TEMP/request-bind-patch.json" >/dev/null
               api_get "issues/$REQUEST_NUMBER" "$RUNNER_TEMP/request-bound.json"
-              BOUND_PR_NUMBER="$(node - "$RUNNER_TEMP/request-bound.json" <<'NODE'
+              REQUEST_JSON="$(node - "$RUNNER_TEMP/request-bound.json" <<'NODE'
           const fs=require('node:fs');
           const rr=require('./plugins/usage-dashboard/tools/release_request_e9.cjs');
           const issue=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
-          const parsed=rr.parseIssue(issue.title,issue.body);
-          process.stdout.write(parsed.prNumber===null?'':String(parsed.prNumber));
+          process.stdout.write(JSON.stringify(rr.parseIssue(issue.title,issue.body)));
           NODE
               )"
-              [[ "$BOUND_PR_NUMBER" == "$SELECTED_PR" ]] || { echo "E25_PR_BIND_POSTVERIFY_FAILED:$BOUND_PR_NUMBER:expected=$SELECTED_PR"; exit 1; }
+              node - "$REQUEST_JSON" "$EXPECTED_BIND_JSON" "$SELECTED_PR" <<'NODE'
+          const [actualText,expectedText,prText]=process.argv.slice(2);
+          const actual=JSON.parse(actualText), expected=JSON.parse(expectedText);
+          for(const key of ['releaseVersion','releaseSpec','sourceBranch','sourceSha','attemptId']) {
+            if(String(actual[key])!==String(expected[key])) throw new Error(`E25_PR_BIND_POSTVERIFY_FAILED:${key}`);
+          }
+          if(actual.prNumber!==Number(prText)) throw new Error(`E25_PR_BIND_POSTVERIFY_FAILED:prNumber:${actual.prNumber}:expected=${prText}`);
+          NODE
               PR_NUMBER="$SELECTED_PR"
               BIND_MARKER="UD_E25_PR_BOUND:$PR_NUMBER:$CANDIDATE_SHA"
               if ! has_line "$BIND_MARKER"; then

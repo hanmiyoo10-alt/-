@@ -1304,3 +1304,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c367f68c4c2fcf065151a86cec461bdf4a4fa8db)
 - Event ID: `b45e92db96947e32dbcf2c34cecb8d9f2bfe3be832315325488430ed21f316b3`
 <!-- canonical-main-doc-promoted:b45e92db96947e32dbcf2c34cecb8d9f2bfe3be832315325488430ed21f316b3 -->
+
+### 2026-09-09 — docs(common): dedup SimCore core principles (#1936)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `7ac5205c44391ee7b821bc5a97102e6a28de4ac3`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/7ac5205c44391ee7b821bc5a97102e6a28de4ac3)
+- Event ID: `185b4b2667e3377824f8fd5c04a4ff41310cf808db96dec770265bec0d379bbf`
+<!-- canonical-main-doc-promoted:185b4b2667e3377824f8fd5c04a4ff41310cf808db96dec770265bec0d379bbf -->

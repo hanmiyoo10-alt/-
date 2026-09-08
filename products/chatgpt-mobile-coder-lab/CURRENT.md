@@ -69,7 +69,7 @@ Codex CLI는 실제 shell/files/test 기능 폭이 넓지만 **Codex 전용/agen
 
 즉 "모바일에서 Codex CLI를 편하게 쓰기"보다 "일반 ChatGPT 채팅 자체에 Codex 같은 손발을 붙이기"가 우선이다.
 
-## Remote Desktop Commander 실험 — PATCH-LEVEL CODING LOOP VERIFIED
+## Remote Desktop Commander 실험 — LOCAL COMMIT LOOP VERIFIED
 
 서버폰에서 `@wonderwhy-er/desktop-commander@0.2.48`의 `remote` 모드를 직접 실행했다.
 
@@ -206,6 +206,74 @@ git diff --check
 → no output
 ```
 
+### named branch + local commit smoke test — PASS
+
+기존 `/root/nyang-repo`, `server/work`, 기존 detached smoke worktree를 수정하지 않고 최신 `origin/main`에서 별도 named branch/worktree를 생성했다.
+
+```text
+branch: server/remote-commit-smoke-20260909
+worktree: /root/nyang-worktrees/remote-commit-smoke-20260909
+base: origin/main@61de5ca6
+```
+
+새 worktree에 정확히 한 파일만 생성했다.
+
+```text
+products/chatgpt-mobile-coder-lab/docs/checkpoints/2026-09-09-remote-local-commit-smoke.md
+```
+
+commit 전 검증:
+
+```text
+git diff --check
+→ no output
+
+git status --short
+→ ?? products/chatgpt-mobile-coder-lab/docs/checkpoints/2026-09-09-remote-local-commit-smoke.md
+
+git diff --cached --check
+→ no output
+
+git diff --cached --stat
+→ 1 file changed, 9 insertions(+)
+
+git diff --cached --name-only
+→ products/chatgpt-mobile-coder-lab/docs/checkpoints/2026-09-09-remote-local-commit-smoke.md
+```
+
+영구 Git identity 설정은 바꾸지 않고 commit 명령에만 임시 identity를 주입했다.
+
+local commit 생성 성공:
+
+```text
+90add16f test(chatgpt-mobile-coder): verify remote local commit
+```
+
+commit 후 상태:
+
+```text
+## server/remote-commit-smoke-20260909...origin/main [ahead 1]
+```
+
+commit diff 검증:
+
+```text
+git diff HEAD^ HEAD --check
+→ no output
+
+git diff --name-only HEAD^ HEAD
+→ products/chatgpt-mobile-coder-lab/docs/checkpoints/2026-09-09-remote-local-commit-smoke.md
+```
+
+마지막 원래 repository 확인:
+
+```text
+branch: server/work
+status: clean
+```
+
+`90add16f`는 아직 push되지 않은 서버폰 local-only commit이다.
+
 현재 의미:
 
 - 일반 ChatGPT 모바일 채팅에서 Remote Desktop Commander plugin/app 호출 성공.
@@ -216,10 +284,11 @@ git diff --check
 - 별도 worktree 안에서 파일 create/read/delete 성공.
 - existing tracked file edit와 Git diff 검토 성공.
 - `git diff --check` 기반 기본 patch 검증 성공.
-- Git dirty state를 정확히 확인하고 tracked file을 HEAD 기준으로 복구 성공.
-- SHA-256이 원본과 같아 byte-exact restoration까지 검증됨.
-- 기존 `server/work` working tree를 직접 수정하지 않고 patch-capable coding loop를 검증함.
-- 따라서 `ChatGPT → Remote Desktop Commander → 서버폰 Ubuntu PRoot → isolated Git worktree → tracked patch → diff/verify/restore` 경로가 실제로 성립함.
+- SHA-256 기반 byte-exact restore 검증 성공.
+- 별도 named branch/worktree 생성 성공.
+- 정확히 한 파일만 stage하고 staged diff를 검증한 뒤 local commit 생성 성공.
+- permanent `server/work` working tree는 모든 단계에서 clean 상태로 보존됨.
+- 따라서 `ChatGPT → Remote Desktop Commander → Android 서버폰 → Ubuntu PRoot → isolated named Git worktree → bounded change → staged validation → local commit` 경로가 실제로 성립함.
 
 중요한 환경 관찰:
 
@@ -250,23 +319,22 @@ git diff --check
    - SentinelX
    - TRIGGERcmd
 
-현재 서버폰 실험 기준으로 Remote Desktop Commander는 단순 read/write 후보 수준을 넘어 isolated tracked-patch development bridge로 동작함이 확인됐다.
+현재 서버폰 실험 기준으로 Remote Desktop Commander는 단순 read/write 후보 수준을 넘어 isolated local-commit development bridge로 동작함이 확인됐다.
 
 ## 현재 1순위 다음 단계
 
-**실험용 named feature branch/worktree를 만들어 실제 코드 변경 → project-owned test → commit까지 수행하는 최소 개발 루프를 검증한다.**
+**현재 local-only smoke branch를 명시적으로 push하고 GitHub에서 exact commit/branch를 확인한 뒤 PR 생성까지 publication boundary를 검증한다.**
 
 검증 순서:
 
-1. 현재 disposable detached worktree는 smoke test evidence로 유지하거나 정리한다.
-2. 최신 `origin/main` 기준 별도 named test branch를 만든다.
-3. 새 branch 전용 worktree를 `/root/nyang-worktrees/<feature-id>` 형태로 생성한다.
-4. repository guideline/authority를 먼저 읽고 작은 무해한 실제 변경을 선택한다.
-5. tracked source/docs file을 수정한다.
-6. `git diff --check`, targeted validation/test, `git status`로 검증한다.
-7. diff를 다시 읽고 의도 범위만 바뀌었는지 확인한다.
-8. 그 다음에만 local commit을 생성한다.
-9. push와 PR 생성은 별도의 명시적 검증 단계로 분리한다.
+1. `/root/nyang-worktrees/remote-commit-smoke-20260909`가 clean이고 HEAD가 `90add16f`인지 다시 확인한다.
+2. `origin/main`이 local commit의 parent/base와 예상 관계인지 확인하고 unexpected divergence면 중단한다.
+3. 해당 branch 하나만 `origin`에 push한다.
+4. GitHub remote branch가 local commit과 exact SHA로 일치하는지 확인한다.
+5. PR 생성 전 changed files가 정확히 한 파일인지 다시 검증한다.
+6. smoke 목적의 PR을 `main` 대상으로 생성한다.
+7. merge는 하지 않는다.
+8. PR/remote branch 정리는 별도 명시적 단계로 수행한다.
 
 PocketRisu 서비스와 기존 부팅 stack은 이 검증 때문에 변경하지 않는다.
 
@@ -279,4 +347,7 @@ PocketRisu 서비스와 기존 부팅 stack은 이 검증 때문에 변경하지
 - 기본 cwd를 신뢰하지 않고 repository/worktree absolute path를 사용한다.
 - 초기 write 실험은 permanent device branch가 아니라 disposable worktree에서만 수행한다.
 - tracked patch 전에는 원본 hash/content를 먼저 확인하고, 검증 후 clean 복귀를 확인한다.
+- commit 전에는 staged file set과 staged diff를 명시적으로 검증한다.
+- commit identity가 필요하면 smoke test에서는 per-command temporary identity를 사용하고 global/local Git config를 바꾸지 않는다.
+- push/PR/merge는 각각 별도 검증 경계로 취급한다.
 - 토큰, 인증 코드, session id, device ID, API key, SSH key, private log 원본은 Git에 기록하지 않는다.

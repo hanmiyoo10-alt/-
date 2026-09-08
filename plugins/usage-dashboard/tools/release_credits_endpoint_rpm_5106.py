@@ -418,7 +418,7 @@ def target() -> None:
 
     sources = SOURCES.read_text()
     helper = sources[sources.find('function gatewayLimitsNumber(value) {'):sources.find('async function captureGatewayLimitsViaCliSession')]
-    for marker in ("state:'invalid-endpoints'", "state:'not-applicable'", "endpointRates", "rows.push({key,rpm})"):
+    for marker in ("endpointUnknown('invalid-endpoints')", "endpointUnknown('not-applicable')", "endpointRates", "rows.push({key,rpm})"):
         if marker not in helper:
             raise SystemExit(f'5.106 endpoint normalizer marker missing:{marker}')
     for marker in ("cached(`gatewayLimits:${exactOrgId}`", "name.startsWith('gatewayLimits:') ? 300_000"):

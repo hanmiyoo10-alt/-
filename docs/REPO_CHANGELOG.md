@@ -1234,3 +1234,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ac10459a245105a174d874df3220350d7bb1b30d)
 - Event ID: `65673d4c90fa033ba1285d00c1f3dd8772fc2cf0e2bab4249cf1a1372a15627c`
 <!-- canonical-main-doc-promoted:65673d4c90fa033ba1285d00c1f3dd8772fc2cf0e2bab4249cf1a1372a15627c -->
+
+### 2026-09-08 — Merge pull request #1906 from hanmiyoo10-alt/stage/usage-dashboard-3.0.0-alpha.5.108
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `f3ac4e504b055997a6f3a24e9a0a4056313f9442`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f3ac4e504b055997a6f3a24e9a0a4056313f9442)
+- Event ID: `3b0f47ce31158d5b62e699342539c21564ba0d4a7ca41c71cc8e4ec0c7a1d5e1`
+<!-- canonical-main-doc-promoted:3b0f47ce31158d5b62e699342539c21564ba0d4a7ca41c71cc8e4ec0c7a1d5e1 -->

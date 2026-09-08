@@ -177,7 +177,7 @@ assert.ok(markup.includes(devpassAccountPlacement), 'P75 must preserve existing 
 assert.ok(markup.includes(`${devpassAccountPlacement}${apiKeyOrgLimitPlacement}`), 'P75 API-key org limit must render immediately after existing DevPass account placement');
 assert.ok(settings.includes("if (next === 'devpass') void refreshApiKeyPlanLimits();"));
 assert.ok(!refresh.includes('refreshApiKeyPlanLimits'), 'P75 API-key source must stay off recurring snapshot refresh runtime');
-assert.ok(!refresh.includes('api-key-plan-limits'), 'P75 local API-key source must stay off recurring snapshot path');
+assert.ok(!refresh.includes('api-key-plan-limits'), 'P75 local API-key route must stay off recurring snapshot path');
 
 assert.ok(diag.includes('function apiKeyOrgLimitDiagnosticText(value)'));
 assert.ok(diag.includes('API key org limit:'));

@@ -42,6 +42,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: npm
 
       - uses: actions/setup-java@v4
         with:
@@ -51,6 +52,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown,aarch64-linux-android
+
+      - name: Cache Rust dependencies and build outputs
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: fortune-golf-android
+          workspaces: |
+            . -> target
+            wie-app -> target
 
       - uses: taiki-e/install-action@v2
         with:
@@ -93,7 +103,7 @@ jobs:
           cp "$apk_path" apk-output/fortune-golf-startup-probe.apk
           cp LICENSE apk-output/WIE-LICENSE.txt
           echo 'WIE source: https://github.com/dlunch/wie/commit/1ed8710956e727629e67db762ddc1e6bd6151a1f' > apk-output/BUILD.txt
-          echo 'Probe v0.1.7: skip null offscreen framebuffer cleanup on first-run shutdown; retains native/timer diagnostics, RGB565 and MC_DB support. Device behavior unverified. No game ROMs included.' >> apk-output/BUILD.txt
+          echo 'Probe v0.1.8: ARM engine/SVC failure context; skip null offscreen framebuffer cleanup on first-run shutdown; retains native/timer diagnostics, RGB565 and MC_DB support. Device behavior unverified. No game ROMs included.' >> apk-output/BUILD.txt
           sha256sum apk-output/fortune-golf-startup-probe.apk >> apk-output/BUILD.txt
 
       - name: Upload APK

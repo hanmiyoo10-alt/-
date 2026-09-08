@@ -38,9 +38,9 @@ p.write_text(s.replace(needle, replacement))
 shutil.copyfile(source / 'image.rs', root / 'wie-wipi-c/src/api/graphics/image.rs')
 config = root / 'wie-app/tauri.conf.json'
 data = json.loads(config.read_text())
-data['productName'] = 'Fortune Golf Probe 7'
-data['identifier'] = 'io.hanmiyoo.fortunegolf.probe7'
-data['version'] = '0.1.7'
+data['productName'] = 'Fortune Golf Probe 8'
+data['identifier'] = 'io.hanmiyoo.fortunegolf.probe8'
+data['version'] = '0.1.8'
 config.write_text(json.dumps(data, indent=2) + '\n')
 
 # Preserve native call context in the visible error after ARM state unwinds.
@@ -49,7 +49,7 @@ s = p.read_text()
 needle = '        self.core.run_function(address, args).await'
 replacement = """        self.core.run_function(address, args).await.map_err(|error| {
             WieError::FatalError(alloc::format!(
-                "Probe 7 native call: target={address:#010x}, args={args:#x?}; {error}"
+                "Probe 8 native call: target={address:#010x}, args={args:#x?}; {error}"
             ))
         })"""
 assert s.count(needle) == 1, 'Pinned native call layout changed'
@@ -60,7 +60,7 @@ s = p.read_text()
 needle = '            context.call_function(self.fn_callback, &[self.ptr_timer, self.param]).await?;'
 replacement = """            context.call_function(self.fn_callback, &[self.ptr_timer, self.param]).await.map_err(|error| {
                 WieError::FatalError(alloc::format!(
-                    "Probe 7 timer: timer={:#010x}, callback={:#010x}, param={:#010x}; {error}",
+                    "Probe 8 timer: timer={:#010x}, callback={:#010x}, param={:#010x}; {error}",
                     self.ptr_timer, self.fn_callback, self.param
                 ))
             })?;"""
@@ -108,3 +108,16 @@ replacement = """        fn free(&mut self, memory: WIPICIndirectPtr) -> Result<
         }"""
 assert s.count(needle) == 1, 'Pinned test context changed'
 p.write_text(s.replace(needle, replacement))
+
+# Capture engine/SVC context at the error boundary, before later task changes.
+p = root / 'wie-core-arm/src/core.rs'
+s = p.read_text()
+needle = "                inner.engine.run(RUN_FUNCTION_LR, 10_000)?"
+replacement = "                inner.engine.run(RUN_FUNCTION_LR, 10_000).map_err(|error| {\n                    let pc = inner.engine.reg_read(ArmRegister::PC);\n                    let lr = inner.engine.reg_read(ArmRegister::LR);\n                    WieError::FatalError(format!(\n                        \"ARM engine failure: entry={address:#010x}, pc={pc:#010x}, lr={lr:#010x}; {error}\"\n                    ))\n                })?"
+assert s.count(needle) == 1, 'Pinned ARM failure boundary changed'
+s = s.replace(needle, replacement)
+needle = "                    function.call(&mut self1).await?;"
+replacement = "                    function.call(&mut self1).await.map_err(|error| {\n                        WieError::FatalError(format!(\n                            \"ARM SVC failure: entry={address:#010x}, category={category}, resume={lr:#010x}; {error}; {}\",\n                            self1.dump_regs()\n                        ))\n                    })?;"
+assert s.count(needle) == 1, 'Pinned ARM failure boundary changed'
+s = s.replace(needle, replacement)
+p.write_text(s)

@@ -1258,3 +1258,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f986e59d290afa5ff2fd0a75478aa183660cba2f)
 - Event ID: `02a1857c64bec4e381c46742a75db240dd0cd2848557e1f7b2f8171a2b777ff6`
 <!-- canonical-main-doc-promoted:02a1857c64bec4e381c46742a75db240dd0cd2848557e1f7b2f8171a2b777ff6 -->
+
+### 2026-09-09 — fix(canonical-main): pin operations projection to issue 485
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `fefeeffd5235e1619427fd7603d3c0b798c355f1`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/fefeeffd5235e1619427fd7603d3c0b798c355f1)
+- Event ID: `94c2e3ad2564dc9f05de3c18302c028e20fb021696f130df6cb25ad8ea9cedde`
+<!-- canonical-main-doc-promoted:94c2e3ad2564dc9f05de3c18302c028e20fb021696f130df6cb25ad8ea9cedde -->

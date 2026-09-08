@@ -45,11 +45,11 @@ assert.equal(spec.materializer, MATERIALIZER);
 assert.equal(spec.newRegression, 'plugins/usage-dashboard/tests/p75-devpass-api-key-org-limit.cjs');
 assert.equal(spec.authority?.featureIssue, 1899);
 assert.equal(spec.authority?.designPullRequest, 1902);
-assert.equal(spec.releaseEvidence?.acceptedBaseline?.productVersion, '3.0.0-alpha.5.107');
-assert.equal(spec.releaseEvidence?.acceptedBaseline?.releaseSha, 'b5ff566fdf164580b0edfa6e2db1d07cc88992bf');
-assert.equal(spec.releaseEvidence?.acceptedBaseline?.issue, 1892);
-assert.equal(spec.releaseEvidence?.acceptedBaseline?.commentId, 5581888722);
-assert.equal(spec.releaseEvidence?.acceptedBaseline?.verdict, 'accepted');
+assert.equal(release.evidenceView?.acceptedBaseline?.productVersion, '3.0.0-alpha.5.107');
+assert.equal(release.evidenceView?.acceptedBaseline?.releaseSha, 'b5ff566fdf164580b0edfa6e2db1d07cc88992bf');
+assert.equal(release.evidenceView?.acceptedBaseline?.issue, 1892);
+assert.equal(release.evidenceView?.acceptedBaseline?.commentId, 5581888722);
+assert.equal(release.evidenceView?.acceptedBaseline?.verdict, 'accepted');
 
 const design = read(DESIGN);
 const amendment = read(AMENDMENT);

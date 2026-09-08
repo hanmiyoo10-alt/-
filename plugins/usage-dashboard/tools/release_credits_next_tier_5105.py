@@ -86,7 +86,7 @@ def load_spec() -> dict:
     for role in ('acceptedBaseline', 'latestInstalled'):
         row = (value.get('releaseEvidence') or {}).get(role) or {}
         actual = (row.get('productVersion'), row.get('releaseSha'), row.get('issue'), row.get('commentId'), row.get('verdict'))
-        expected_row = (BASE_PRODUCT, BASE_RELEASE_SHA, 1859, 5576975527, 'accepted')
+        expected_row = (BASE_PRODUCT, BASE_RELEASE_SHA, 1861, 5577292772, 'accepted')
         if actual != expected_row:
             raise SystemExit(f'5.105 evidence mismatch:{role}:{actual}')
     authority = value.get('authority') or {}

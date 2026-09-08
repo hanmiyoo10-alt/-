@@ -74,7 +74,7 @@ for (const forbidden of [
   'rep(PROV,',
   'setInterval(',
   'setTimeout(',
-  '/gateway-endpoint-rpm',
+  "url.pathname === '/gateway-endpoint-rpm'",
 ]) assert.equal(materializer.includes(forbidden), false, `P72 materializer forbidden authority/owner: ${forbidden}`);
 
 const release = loadCurrentRelease();

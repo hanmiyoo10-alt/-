@@ -39,7 +39,11 @@
     },
     {
       "id": "V-GATEWAY-ENDPOINT-RPM-LIMITS",
-      "status": "source-proven-design-5.106"
+      "status": "implemented-5.106"
+    },
+    {
+      "id": "V-GATEWAY-NEXT-TIER-UNLOCK-LIMITS",
+      "status": "source-proven-design-5.107"
     },
     {
       "id": "V-MODEL-LIFECYCLE-STATUS",

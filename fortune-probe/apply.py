@@ -35,9 +35,10 @@ replacement = """WIPICTableId::Interface4 => {
             } else if function_id < 64 {"""
 assert s.count(needle) == 1, 'Pinned engine layout changed'
 p.write_text(s.replace(needle, replacement))
+shutil.copyfile(source / 'image.rs', root / 'wie-wipi-c/src/api/graphics/image.rs')
 config = root / 'wie-app/tauri.conf.json'
 data = json.loads(config.read_text())
-data['productName'] = 'Fortune Golf Probe 4'
-data['identifier'] = 'io.hanmiyoo.fortunegolf.probe4'
-data['version'] = '0.1.4'
+data['productName'] = 'Fortune Golf Probe 5'
+data['identifier'] = 'io.hanmiyoo.fortunegolf.probe5'
+data['version'] = '0.1.5'
 config.write_text(json.dumps(data, indent=2) + '\n')

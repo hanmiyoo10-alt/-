@@ -76,7 +76,7 @@
   "highlights": [
     "Adds a compact collapsed-by-default DevPass recent billing-history block backed only by the authenticated /dev-plans/invoices source.",
     "Retains at most five server-ordered sanitized rows and exposes only type, date, amount, currency, and status for each row.",
-    "Keeps invoice IDs, descriptions, creditAmount, refund metadata, billing/payment PII, raw responses, and write/download actions behind the Engine privacy boundary.",
+    "Excludes invoice IDs, descriptions, creditAmount, refund metadata, billing PII, raw responses, and write/download actions.",
     "Moves Engine to 1.6.43 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded."
   ],
   "diagnosticHints": [
@@ -88,7 +88,7 @@
     "highlights": [
       "Adds a compact collapsed-by-default DevPass recent billing-history block backed only by the authenticated /dev-plans/invoices source.",
       "Retains at most five server-ordered sanitized rows and exposes only type, date, amount, currency, and status for each row.",
-      "Keeps invoice IDs, descriptions, creditAmount, refund metadata, billing/payment PII, raw responses, and write/download actions behind the Engine privacy boundary.",
+      "Excludes invoice IDs, descriptions, creditAmount, refund metadata, billing PII, raw responses, and write/download actions.",
       "Moves Engine to 1.6.43 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded."
     ],
     "diagnosticHints": [

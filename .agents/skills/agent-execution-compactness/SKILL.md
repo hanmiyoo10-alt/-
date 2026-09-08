@@ -13,6 +13,8 @@ description: >-
 
 Repository-wide execution-routing procedure for development and validation work.
 
+This contract applies across repository/project scopes that inherit `docs/REPOSITORY_COMMON_RULES.md`, including work outside canonical-main coordination. Canonical-main packet wiring is one enforcement adapter that makes the repository default explicit at that boundary; it is not the scope owner and does not limit this skill to canonical-main work. Project-specific contracts may specialize this repository `DEFAULT` inside their valid scope, but they must preserve repository hard invariants and required authority/evidence.
+
 This skill answers four related questions:
 
 1. **What is the narrowest execution surface that preserves the required validation while keeping the directly visible execution payload bounded?**

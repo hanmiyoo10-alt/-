@@ -1242,3 +1242,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f3ac4e504b055997a6f3a24e9a0a4056313f9442)
 - Event ID: `3b0f47ce31158d5b62e699342539c21564ba0d4a7ca41c71cc8e4ec0c7a1d5e1`
 <!-- canonical-main-doc-promoted:3b0f47ce31158d5b62e699342539c21564ba0d4a7ca41c71cc8e4ec0c7a1d5e1 -->
+
+### 2026-09-09 — docs(common): dedup common policy from guideline template
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `44b7264f3b0d497161036d706c1c042414b7d9d1`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/44b7264f3b0d497161036d706c1c042414b7d9d1)
+- Event ID: `fa77048bbf761db66a755dbcecbab4b7e0398240629c9056c5784b49407ff73f`
+<!-- canonical-main-doc-promoted:fa77048bbf761db66a755dbcecbab4b7e0398240629c9056c5784b49407ff73f -->

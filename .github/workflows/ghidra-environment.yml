@@ -5,7 +5,7 @@ on:
     paths: ['.github/workflows/ghidra-environment.yml']
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -84,3 +84,35 @@ jobs:
           path: ${{ runner.temp }}/ghidra-linux-x64.tar.gz
           compression-level: 0
           if-no-files-found: error
+
+      - name: Publish durable toolchain release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/release"
+          cp "$RUNNER_TEMP/ghidra-linux-x64.tar.gz" "$RUNNER_TEMP/release/"
+          cd "$RUNNER_TEMP/release"
+          sha256sum ghidra-linux-x64.tar.gz > SHA256SUMS
+          split -b 64M -d -a 3 ghidra-linux-x64.tar.gz ghidra-linux-x64.tar.gz.part
+          sha256sum ghidra-linux-x64.tar.gz.part* > PARTS-SHA256SUMS
+          cat > RESTORE.txt <<'TXT'
+          Linux x86_64 toolchain: Ghidra 12.1.3, Temurin JDK 21, ghidra-cli 0.2.2.
+          Verify the full archive: sha256sum -c SHA256SUMS
+          Or download all .partNNN files and PARTS-SHA256SUMS, then:
+            sha256sum -c PARTS-SHA256SUMS
+            cat ghidra-linux-x64.tar.gz.part* > ghidra-linux-x64.tar.gz
+            sha256sum -c SHA256SUMS
+          Extract: mkdir -p ghidra-runtime
+          tar -xzf ghidra-linux-x64.tar.gz -C ghidra-runtime
+          Run: ./ghidra-runtime/run-ghidra doctor
+          Use --projects-dir with a separate directory for analysis projects.
+          Component licenses are retained in the archive.
+          No original game binaries or game analysis project are included.
+          TXT
+          tag="ghidra-toolchain-${GITHUB_RUN_ID}"
+          gh release create "$tag" --target "$GITHUB_SHA" --title "Ghidra portable toolchain ${GITHUB_RUN_ID}" --notes-file RESTORE.txt --latest=false
+          gh release upload "$tag" ghidra-linux-x64.tar.gz SHA256SUMS PARTS-SHA256SUMS RESTORE.txt ghidra-linux-x64.tar.gz.part*
+          gh release view "$tag" --json assets --jq '.assets[].name'

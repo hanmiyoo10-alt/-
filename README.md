@@ -39,6 +39,8 @@ plugins/
 
 ## 공통 원칙
 
+저장소 전반의 행동·거버넌스 공통 규칙은 [`docs/REPOSITORY_COMMON_RULES.md`](docs/REPOSITORY_COMMON_RULES.md)가 canonical 진입점입니다. 이 문서는 각 프로젝트의 production, release, runtime, deployment, device, validation truth를 대체하지 않으며, 해당 truth는 각 프로젝트의 기존 authority에 남습니다.
+
 - One integration truth, multiple operational views
 - Stable update paths where applicable
 - No secrets or credentials

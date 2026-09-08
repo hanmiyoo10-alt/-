@@ -18,6 +18,7 @@ CORE = SRC / '00-runtime-core.part.js'
 BRIDGE_IO = SRC / '20-bridge-io.part.js'
 DIAG = SRC / '40-diagnostics.part.js'
 DASH = SRC / '50-dashboard-context.part.js'
+MARKUP = SRC / '54-dashboard-markup.part.js'
 SETTINGS = SRC / '60-settings-runtime.part.js'
 ECORE = ES / '00-core.part.mjs'
 CAPTURE = ES / '30-cli-runtime.part.mjs'
@@ -131,7 +132,7 @@ def baseline() -> None:
         raise SystemExit('5.108 baseline Manager mismatch')
     if sha(BOOT) != BOOT_SHA:
         raise SystemExit('5.108 bootstrap mismatch')
-    combined = CAPTURE.read_text() + SOURCES.read_text() + HTTP.read_text() + BRIDGE_IO.read_text() + DASH.read_text() + DIAG.read_text()
+    combined = CAPTURE.read_text() + SOURCES.read_text() + HTTP.read_text() + BRIDGE_IO.read_text() + DASH.read_text() + MARKUP.read_text() + DIAG.read_text()
     for marker in (
         'gatewayNextTierUnlockLimitsHtml',
         'Gateway next-tier limits:',
@@ -445,7 +446,7 @@ def patch_dashboard() -> None:
         'API-key UI truth binding',
     )
     rep(
-        DASH,
+        MARKUP,
         "${dashboardView === 'devpass' ? devpassAccountDetailHtml : ''}${scopeUsageDetailsHtml(scopeActivity)}",
         "${dashboardView === 'devpass' ? devpassAccountDetailHtml : ''}${dashboardView === 'devpass' ? apiKeyOrgLimitSectionHtml(apiKeyOrgLimitTruth) : ''}${scopeUsageDetailsHtml(scopeActivity)}",
         'API-key DevPass placement',
@@ -527,7 +528,7 @@ def target() -> None:
     capture = CAPTURE.read_text()
     sources = SOURCES.read_text()
     http = HTTP.read_text()
-    product = CORE.read_text() + BRIDGE_IO.read_text() + DASH.read_text() + SETTINGS.read_text() + DIAG.read_text()
+    product = CORE.read_text() + BRIDGE_IO.read_text() + DASH.read_text() + MARKUP.read_text() + SETTINGS.read_text() + DIAG.read_text()
     for marker in (
         'DEVPASS_BRIDGE_API_KEY_PROJECT_ID',
         "target.pathname = (prefix + '/keys/api').replace",

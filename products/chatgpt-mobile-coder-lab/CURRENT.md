@@ -69,7 +69,7 @@ Codex CLI는 실제 shell/files/test 기능 폭이 넓지만 **Codex 전용/agen
 
 즉 "모바일에서 Codex CLI를 편하게 쓰기"보다 "일반 ChatGPT 채팅 자체에 Codex 같은 손발을 붙이기"가 우선이다.
 
-## Remote Desktop Commander 실험 — READ/WRITE TOOL LOOP VERIFIED
+## Remote Desktop Commander 실험 — PATCH-LEVEL CODING LOOP VERIFIED
 
 서버폰에서 `@wonderwhy-er/desktop-commander@0.2.48`의 `remote` 모드를 직접 실행했다.
 
@@ -158,6 +158,54 @@ status --short
 → no output
 ```
 
+### tracked-file patch smoke test — PASS
+
+같은 disposable worktree에서 기존 tracked file인 `README.md`를 대상으로 patch-level smoke test를 수행했다.
+
+원본 SHA-256:
+
+```text
+37e90fae2932a1bc3d7bf6b732d02231c071d1659450ddca12eb3210f2a67514
+```
+
+README 끝에 정확히 한 줄을 추가했다.
+
+```text
+remote desktop commander tracked patch smoke test
+```
+
+변경 중 검증 결과:
+
+```text
+git diff --check
+→ no output
+
+git status --short
+→ M README.md
+```
+
+`git diff -- README.md`는 의도한 한 줄 추가만 표시했다.
+
+이후 `git restore --source=HEAD -- README.md`로 원상복구했다.
+
+복구 후 SHA-256:
+
+```text
+37e90fae2932a1bc3d7bf6b732d02231c071d1659450ddca12eb3210f2a67514
+```
+
+원본 SHA-256과 완전히 동일했다.
+
+최종 검증:
+
+```text
+git status --short
+→ no output
+
+git diff --check
+→ no output
+```
+
 현재 의미:
 
 - 일반 ChatGPT 모바일 채팅에서 Remote Desktop Commander plugin/app 호출 성공.
@@ -166,9 +214,12 @@ status --short
 - Git branch/status/fetch/rev-list/worktree 명령 실행 성공.
 - 별도 detached worktree 생성 성공.
 - 별도 worktree 안에서 파일 create/read/delete 성공.
-- Git이 untracked 상태를 정확히 감지했고 삭제 후 clean으로 복귀함.
-- 기존 `server/work` working tree를 직접 수정하지 않고 write-capable loop를 검증함.
-- 따라서 `ChatGPT → Remote Desktop Commander → 서버폰 Ubuntu PRoot → isolated Git worktree → filesystem write` 경로가 실제로 성립함.
+- existing tracked file edit와 Git diff 검토 성공.
+- `git diff --check` 기반 기본 patch 검증 성공.
+- Git dirty state를 정확히 확인하고 tracked file을 HEAD 기준으로 복구 성공.
+- SHA-256이 원본과 같아 byte-exact restoration까지 검증됨.
+- 기존 `server/work` working tree를 직접 수정하지 않고 patch-capable coding loop를 검증함.
+- 따라서 `ChatGPT → Remote Desktop Commander → 서버폰 Ubuntu PRoot → isolated Git worktree → tracked patch → diff/verify/restore` 경로가 실제로 성립함.
 
 중요한 환경 관찰:
 
@@ -199,22 +250,23 @@ status --short
    - SentinelX
    - TRIGGERcmd
 
-현재 서버폰 실험 기준으로 Remote Desktop Commander는 read-only 후보 수준을 넘어 실제 isolated write-capable development bridge로 동작함이 확인됐다.
+현재 서버폰 실험 기준으로 Remote Desktop Commander는 단순 read/write 후보 수준을 넘어 isolated tracked-patch development bridge로 동작함이 확인됐다.
 
 ## 현재 1순위 다음 단계
 
-**disposable worktree에서 기존 tracked file을 실제로 수정하고 diff/검증/원상복구까지 수행해 patch-level coding loop를 검증한다.**
+**실험용 named feature branch/worktree를 만들어 실제 코드 변경 → project-owned test → commit까지 수행하는 최소 개발 루프를 검증한다.**
 
 검증 순서:
 
-1. `/root/nyang-worktrees/remote-write-smoke`를 계속 disposable scope로 사용.
-2. 작은 tracked text file 하나를 선택하고 원본 hash/content를 먼저 확인.
-3. 의도적인 한 줄 변경만 수행.
-4. `git diff --check`와 `git diff -- <path>`로 변경 범위를 검증.
-5. 파일을 정확히 원상복구.
-6. `git status --short`가 다시 empty인지 확인.
-7. 그 뒤에만 별도 named feature branch/worktree에서 실제 구현 테스트를 진행.
-8. commit/push/PR은 별도의 명시적 단계로 검증한다.
+1. 현재 disposable detached worktree는 smoke test evidence로 유지하거나 정리한다.
+2. 최신 `origin/main` 기준 별도 named test branch를 만든다.
+3. 새 branch 전용 worktree를 `/root/nyang-worktrees/<feature-id>` 형태로 생성한다.
+4. repository guideline/authority를 먼저 읽고 작은 무해한 실제 변경을 선택한다.
+5. tracked source/docs file을 수정한다.
+6. `git diff --check`, targeted validation/test, `git status`로 검증한다.
+7. diff를 다시 읽고 의도 범위만 바뀌었는지 확인한다.
+8. 그 다음에만 local commit을 생성한다.
+9. push와 PR 생성은 별도의 명시적 검증 단계로 분리한다.
 
 PocketRisu 서비스와 기존 부팅 stack은 이 검증 때문에 변경하지 않는다.
 
@@ -226,4 +278,5 @@ PocketRisu 서비스와 기존 부팅 stack은 이 검증 때문에 변경하지
 - 실험 bridge에 전체 디스크/무제한 shell을 바로 열지 않는다.
 - 기본 cwd를 신뢰하지 않고 repository/worktree absolute path를 사용한다.
 - 초기 write 실험은 permanent device branch가 아니라 disposable worktree에서만 수행한다.
+- tracked patch 전에는 원본 hash/content를 먼저 확인하고, 검증 후 clean 복귀를 확인한다.
 - 토큰, 인증 코드, session id, device ID, API key, SSH key, private log 원본은 Git에 기록하지 않는다.

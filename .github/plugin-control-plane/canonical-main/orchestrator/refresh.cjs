@@ -16,6 +16,7 @@ const {renderIncidentBody} = require('../surfaces/incidents.cjs');
 const {normalizeIncidentBodyState} = require('../surfaces/incident-history.cjs');
 const {renderOpsView} = require('../surfaces/ops-view.cjs');
 
+const OPS_VIEW_MARKER = '<!-- canonical-main-ops-view -->';
 const LABEL_DEFS = [['control-plane:operations','5319e7','Canonical main repository operations surface'],['control-plane:incident','b60205','Canonical main normalized incident record'],['incident:open','d73a4a','Incident is currently open'],['incident:recovered','0e8a16','Incident is proven recovered'],['severity:P0','b60205','Repository or authority integrity incident'],['severity:P1','d93f0b','Actionable workflow failure'],['severity:P2','fbca04','Operational follow-up'],['severity:P3','c5def5','Informational repository churn']];
 
 function loadRegistry(root) { return JSON.parse(fs.readFileSync(path.join(root, '.github/plugin-control-plane/registry.json'), 'utf8')); }
@@ -50,6 +51,30 @@ async function repairIncidentConsistency(issueStore, allIssues) {
     repaired.push(issue.number);
   }
   return repaired;
+}
+function configuredOpsIssueNumber(policy) {
+  const issueNumber = policy.operations.issueNumber;
+  if (!Number.isInteger(issueNumber) || issueNumber <= 0) throw new Error('configured operations issue number is invalid');
+  return issueNumber;
+}
+function validateOpsIssue(issue, policy = loadPolicy()) {
+  const issueNumber = configuredOpsIssueNumber(policy);
+  if (!issue) throw new Error(`configured operations issue missing: #${issueNumber}`);
+  if (issue.number !== issueNumber) throw new Error(`configured operations issue identity mismatch: expected #${issueNumber}, got #${issue.number}`);
+  if (issue.pull_request) throw new Error(`configured operations issue is a pull request: #${issueNumber}`);
+  if (issue.title !== policy.operations.issueTitle) throw new Error(`configured operations issue title mismatch: #${issueNumber}`);
+  if (!(issue.body || '').includes(OPS_VIEW_MARKER)) throw new Error(`configured operations issue marker missing: #${issueNumber}`);
+  return issue;
+}
+async function resolveOpsIssue(issueStore, policy = loadPolicy()) {
+  const issueNumber = configuredOpsIssueNumber(policy);
+  return validateOpsIssue(await issueStore.getIssue(issueNumber), policy);
+}
+async function writeOpsSurface(issueStore, policy, body) {
+  let opsIssue = await resolveOpsIssue(issueStore, policy);
+  opsIssue = await issueStore.updateIssue(opsIssue.number, {body, state: 'open'});
+  await issueStore.replaceLabels(opsIssue.number, ['scope:repo','control-plane:operations']);
+  return opsIssue;
 }
 
 async function refresh(options = {}) {
@@ -92,15 +117,8 @@ async function refresh(options = {}) {
   const bootstrapCoverage = deriveCoverage(registry, observations.bootstrap);
   const snapshot = Object.freeze({schemaVersion: 1, repository: client.repo || process.env.GITHUB_REPOSITORY, observedMainSha: branch.commit.sha, observedAt: new Date().toISOString(), policy, observations, convergence, bootstrapCoverage, incidents: {all: incidentRows, active, activeP2, attention, recentRecoveries}, freshness: {configuredCoverageComplete, observationCoverageValid: observationCoverage, projectStatusFresh, valid: freshnessValid}, operatorState});
   const body = renderOpsView(snapshot);
-  let opsIssue = allIssues.find((row) => row.title === policy.operations.issueTitle);
-  if (opsIssue) {
-    opsIssue = await issueStore.updateIssue(opsIssue.number, {body, state: 'open'});
-    await issueStore.replaceLabels(opsIssue.number, ['scope:repo','control-plane:operations']);
-    console.log(`CANONICAL_MAIN_OPS_UPDATED:#${opsIssue.number}:${operatorState}`);
-  } else {
-    opsIssue = await issueStore.createIssue({title: policy.operations.issueTitle, body, labels: ['scope:repo','control-plane:operations']});
-    console.log(`CANONICAL_MAIN_OPS_CREATED:#${opsIssue.number}:${operatorState}`);
-  }
+  const opsIssue = await writeOpsSurface(issueStore, policy, body);
+  console.log(`CANONICAL_MAIN_OPS_UPDATED:#${opsIssue.number}:${operatorState}`);
   console.log(`CANONICAL_MAIN_CONVERGENCE:${convergence.state}:${convergence.stale ? 'STALE' : 'CURRENT'}:${convergence.waitingFor.join(',') || 'none'}`);
   console.log(`CANONICAL_MAIN_PROTECTION_SURFACE:#${opsIssue.number}:${observations.protection.data?.state || 'UNKNOWN'}`);
   console.log(`CANONICAL_MAIN_BOOTSTRAP_SURFACE:#${opsIssue.number}:${bootstrapCoverage.complete ? 'COMPLETE' : 'INCOMPLETE'}:${bootstrapCoverage.readyCount}/${bootstrapCoverage.expectedCount}`);
@@ -113,4 +131,4 @@ async function refresh(options = {}) {
 }
 async function main() { if (process.argv[2] !== 'refresh') throw new Error('usage: orchestrator/refresh.cjs refresh'); await refresh(); }
 if (require.main === module) main().catch((error) => { console.error(error.stack || String(error)); process.exitCode = 1; });
-module.exports = {LABEL_DEFS, loadRegistry, applyIncidentPlan, collectObservations, collectBaseObservations, adapterEvents, observationCoverageValid, repairIncidentConsistency, refresh};
+module.exports = {OPS_VIEW_MARKER, LABEL_DEFS, loadRegistry, applyIncidentPlan, collectObservations, collectBaseObservations, adapterEvents, observationCoverageValid, repairIncidentConsistency, configuredOpsIssueNumber, validateOpsIssue, resolveOpsIssue, writeOpsSurface, refresh};

@@ -10,6 +10,7 @@ function createIssueStore(client) {
     }
     throw new Error('issue pagination exceeded safety bound');
   }
+  const getIssue = (issueNumber) => client.api(`/issues/${issueNumber}`, {allow404: true});
   async function listIssueComments(issueNumber, maxPages = 2) {
     const result = [];
     for (let page = 1; page <= maxPages; page += 1) {
@@ -28,7 +29,7 @@ function createIssueStore(client) {
   const createIssue = (body) => client.api('/issues', {method: 'POST', body});
   const updateIssue = (issueNumber, body) => client.api(`/issues/${issueNumber}`, {method: 'PATCH', body});
   const replaceLabels = (issueNumber, labels) => client.api(`/issues/${issueNumber}/labels`, {method: 'PUT', body: {labels}});
-  return {listIssues, listIssueComments, ensureLabels, createIssue, updateIssue, replaceLabels};
+  return {listIssues, getIssue, listIssueComments, ensureLabels, createIssue, updateIssue, replaceLabels};
 }
 
 module.exports = {createIssueStore};

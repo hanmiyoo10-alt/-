@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.105
+//@version 3.0.0-alpha.5.106
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.105';
+  const VERSION = '3.0.0-alpha.5.106';
   const RELEASE_NOTES = Object.freeze({
-    title: "Credits Next-Tier Progression",
+    title: "Credits Endpoint RPM Limits",
     highlights: Object.freeze([
-    "Adds a source-faithful next-tier progression block to the existing Credits Gateway Limits card.",
-    "Uses only official server-computed remaining age, remaining spend, and spend-path age-floor values from the selected organization limits source.",
-    "Pinned, max-tier, enterprise, non-regular, invalid, and unavailable states stay explicit without reconstructing the public tier ladder.",
-    "Moves Engine to 1.6.39 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
+    "Adds a compact read-only endpoint RPM limits table to the existing Credits Gateway Limits card.",
+    "Uses only exact selected-organization limits rows with bounded endpoint key and explicit RPM; explicit zero is Unlimited.",
+    "Enterprise, rate-limits-disabled, malformed, duplicate, missing, and unavailable states remain explicit without partial or synthetic limits.",
+    "Moves Engine to 1.6.40 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.105 · Engine 1.6.39 · Manager 1.3.6 and READY/Health ok.",
-    "Open Credits and confirm Gateway Limits amounts/bars remain healthy with the new 다음 Tier block below them.",
-    "Diagnostics should include one ID-free Gateway next tier line matching the UI state; no artificial spend or traffic is required.",
+    "Verify Product 5.106 · Engine 1.6.40 · Manager 1.3.6 and READY/Health ok.",
+    "Open Credits and confirm Gateway Limits plus the collapsed Endpoint RPM organization-limit surface are healthy.",
+    "Diagnostics should include one ID-free Gateway endpoint RPM line; no artificial traffic, 429, or load test is required.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -40,7 +40,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.39';
+  const REQUIRED_BRIDGE_VERSION = '1.6.40';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.6';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
@@ -2941,6 +2941,29 @@ async function importLegacyTodayBaselines() {
       nextTier.spendUsdUntilQualify = null;
       nextTier.daysUntilSpendPathUnlocks = null;
     }
+    const endpointState = ['value','not-applicable','source-unavailable','permission-unavailable','invalid-endpoints'].includes(String(raw?.endpointRates?.state))
+      ? String(raw.endpointRates.state)
+      : 'source-unavailable';
+    let endpointRates = {state:endpointState,rows:[]};
+    if (endpointState === 'value') {
+      const sourceRows = Array.isArray(raw?.endpointRates?.rows) ? raw.endpointRates.rows : null;
+      const rows = [];
+      const seen = new Set();
+      let valid = Boolean(sourceRows) && sourceRows.length <= 64;
+      if (valid) {
+        for (const row of sourceRows) {
+          const key = row && typeof row === 'object' && !Array.isArray(row) && typeof row.key === 'string' ? row.key : '';
+          const rpm = row && typeof row === 'object' && !Array.isArray(row) && typeof row.rpm === 'number' && Number.isFinite(row.rpm) && row.rpm >= 0 ? Number(row.rpm) : null;
+          if (!key.trim() || key.length > 96 || rpm === null || seen.has(key)) {
+            valid = false;
+            break;
+          }
+          seen.add(key);
+          rows.push({key,rpm});
+        }
+      }
+      endpointRates = valid ? {state:'value',rows} : {state:'invalid-endpoints',rows:[]};
+    }
     return {
       state:'ok',
       source:'org-limits',
@@ -2963,6 +2986,7 @@ async function importLegacyTodayBaselines() {
         remaining:num(raw?.topUp?.remaining) ? Number(raw.topUp.remaining) : null,
       },
       nextTier,
+      endpointRates,
       fetchedAt:num(raw.fetchedAt) ? Number(raw.fetchedAt) : Date.now(),
     };
   }
@@ -3562,6 +3586,27 @@ async function importLegacyTodayBaselines() {
   }
 
 
+  function gatewayEndpointRpmDiagnosticText(value) {
+    const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(value?.state)) ? String(value.state) : 'source-unavailable';
+    if (sourceState !== 'ok') return `Gateway endpoint RPM: scope credits · source org-limits · state ${sourceState}`;
+    const endpointRates = value?.endpointRates;
+    const stateName = ['value','not-applicable','source-unavailable','permission-unavailable','invalid-endpoints'].includes(String(endpointRates?.state))
+      ? String(endpointRates.state)
+      : 'source-unavailable';
+    if (stateName !== 'value') return `Gateway endpoint RPM: scope credits · source org-limits · state ${stateName}`;
+    const rows = Array.isArray(endpointRates?.rows) ? endpointRates.rows : [];
+    let unlimited = 0;
+    const seen = new Set();
+    for (const row of rows) {
+      const key = row && typeof row === 'object' && !Array.isArray(row) && typeof row.key === 'string' ? row.key : '';
+      const rpm = row && typeof row === 'object' && !Array.isArray(row) && typeof row.rpm === 'number' && Number.isFinite(row.rpm) && row.rpm >= 0 ? Number(row.rpm) : null;
+      if (!key.trim() || key.length > 96 || rpm === null || seen.has(key)) return 'Gateway endpoint RPM: scope credits · source org-limits · state invalid-endpoints';
+      seen.add(key);
+      if (rpm === 0) unlimited += 1;
+    }
+    return `Gateway endpoint RPM: scope credits · rows ${rows.length} · unlimited ${unlimited} · source org-limits · state ok`;
+  }
+
   function modelCategoryCatalogDiagnosticText(diagnostics) {
     const truth = managedRuntimeIdentityTruth(diagnostics);
     if (truth.models.state === 'mismatch') {
@@ -3797,6 +3842,7 @@ async function importLegacyTodayBaselines() {
       devPassProviderCachePolicyDiagnosticText(diagAccount),
       gatewayLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       gatewayNextTierDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
+      gatewayEndpointRpmDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       `DevPass billing period: plan ${diagAccount && String(diagAccount.plan || '').trim() && String(diagAccount.plan).toLowerCase() !== 'none' ? String(diagAccount.plan) : '—'} · cycle ${typeof diagAccount?.cycle === 'string' && diagAccount.cycle.trim() ? diagAccount.cycle.trim() : '—'} · start ${dashboardDateText(diagAccount?.billingCycleStart, true)} · end ${dashboardDateText(diagAccount?.expiresAt, true)} · cancelled ${typeof diagAccount?.cancelled === 'boolean' ? (diagAccount.cancelled ? 'yes' : 'no') : 'unknown'}`,
       premiumAllowanceDiagnosticText(d.weekly),
       paygAccountDiagnosticText(diagAccount),
@@ -3975,10 +4021,28 @@ function todayOverviewMetrics(d) {
     </div></div>`;
   }
 
+  function gatewayEndpointRpmLimitsHtml(endpointRates) {
+    const stateName = ['value','not-applicable','source-unavailable','permission-unavailable','invalid-endpoints'].includes(String(endpointRates?.state))
+      ? String(endpointRates.state)
+      : 'source-unavailable';
+    if (stateName === 'not-applicable') return '<div class="gateway-endpoint-rpm"><p><b>Endpoint RPM · 조직 한도</b> · 미적용</p></div>';
+    if (stateName !== 'value') return '<div class="gateway-endpoint-rpm"><p><b>Endpoint RPM · 조직 한도</b> · —</p></div>';
+    const rows = Array.isArray(endpointRates?.rows) ? endpointRates.rows : [];
+    const rowHtml = rows.map((row) => {
+      const key = typeof row?.key === 'string' ? row.key : '';
+      const rpm = typeof row?.rpm === 'number' && Number.isFinite(row.rpm) && row.rpm >= 0 ? Number(row.rpm) : null;
+      if (!key.trim() || key.length > 96 || rpm === null) return '';
+      const rpmText = rpm === 0 ? 'Unlimited' : `${rpm.toLocaleString('en-US')} /분`;
+      return `<div class="mini"><span>${esc(key)}</span><b>${esc(rpmText)}</b></div>`;
+    }).filter(Boolean).join('');
+    if (rowHtml === '' && rows.length > 0) return '<div class="gateway-endpoint-rpm"><p><b>Endpoint RPM · 조직 한도</b> · —</p></div>';
+    return `<details class="gateway-endpoint-rpm"><summary><b>Endpoint RPM · 조직 한도</b> · ${esc(rows.length)}개</summary><p>설정된 조직 한도 · 실시간 사용량/남은 RPM 아님</p><div class="minis">${rowHtml}</div></details>`;
+  }
+
   function gatewayLimitsSectionHtml(truth) {
     const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(truth?.state)) ? String(truth.state) : 'source-unavailable';
     if (truth?.enterprise === true && sourceState === 'ok') {
-      return `<div class="usage-detail-box gateway-limits-card"><div class="recent-head"><h3>Gateway Limits · Credits</h3><span>source org-limits · ok</span></div><p>Enterprise · 조직 단위 Gateway rate/spend cap 없음</p>${gatewayNextTierProgressionHtml(truth?.nextTier)}</div>`;
+      return `<div class="usage-detail-box gateway-limits-card"><div class="recent-head"><h3>Gateway Limits · Credits</h3><span>source org-limits · ok</span></div><p>Enterprise · 조직 단위 Gateway rate/spend cap 없음</p>${gatewayNextTierProgressionHtml(truth?.nextTier)}${gatewayEndpointRpmLimitsHtml(truth?.endpointRates)}</div>`;
     }
     const tierText = truth?.trustTierState === 'not-applicable'
       ? '미적용'
@@ -4004,7 +4068,7 @@ function todayOverviewMetrics(d) {
       <div class="mini"><span>일간 spend · UTC</span><b>${esc(gatewayLimitsMetricText(truth?.daily))}</b>${gatewayLimitsUtilizationBarHtml(truth?.daily,'used','일간 spend 사용률 · UTC')}</div>
       <div class="mini"><span>월간 spend</span><b>${esc(gatewayLimitsMetricText(truth?.monthly))}</b>${gatewayLimitsUtilizationBarHtml(truth?.monthly,'used','월간 spend 사용률')}</div>
       <div class="mini"><span>${esc(topUpLabel)}</span><b>${esc(topUpText)}</b>${gatewayLimitsUtilizationBarHtml(truth?.topUp,'remaining','Rolling top-up 남은 여유 비율')}</div>
-    </div>${gatewayNextTierProgressionHtml(truth?.nextTier)}</div>`;
+    </div>${gatewayNextTierProgressionHtml(truth?.nextTier)}${gatewayEndpointRpmLimitsHtml(truth?.endpointRates)}</div>`;
   }
 
 

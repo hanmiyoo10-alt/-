@@ -199,6 +199,27 @@
   }
 
 
+  function gatewayEndpointRpmDiagnosticText(value) {
+    const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(value?.state)) ? String(value.state) : 'source-unavailable';
+    if (sourceState !== 'ok') return `Gateway endpoint RPM: scope credits · source org-limits · state ${sourceState}`;
+    const endpointRates = value?.endpointRates;
+    const stateName = ['value','not-applicable','source-unavailable','permission-unavailable','invalid-endpoints'].includes(String(endpointRates?.state))
+      ? String(endpointRates.state)
+      : 'source-unavailable';
+    if (stateName !== 'value') return `Gateway endpoint RPM: scope credits · source org-limits · state ${stateName}`;
+    const rows = Array.isArray(endpointRates?.rows) ? endpointRates.rows : [];
+    let unlimited = 0;
+    const seen = new Set();
+    for (const row of rows) {
+      const key = row && typeof row === 'object' && !Array.isArray(row) && typeof row.key === 'string' ? row.key : '';
+      const rpm = row && typeof row === 'object' && !Array.isArray(row) && typeof row.rpm === 'number' && Number.isFinite(row.rpm) && row.rpm >= 0 ? Number(row.rpm) : null;
+      if (!key.trim() || key.length > 96 || rpm === null || seen.has(key)) return 'Gateway endpoint RPM: scope credits · source org-limits · state invalid-endpoints';
+      seen.add(key);
+      if (rpm === 0) unlimited += 1;
+    }
+    return `Gateway endpoint RPM: scope credits · rows ${rows.length} · unlimited ${unlimited} · source org-limits · state ok`;
+  }
+
   function modelCategoryCatalogDiagnosticText(diagnostics) {
     const truth = managedRuntimeIdentityTruth(diagnostics);
     if (truth.models.state === 'mismatch') {
@@ -434,6 +455,7 @@
       devPassProviderCachePolicyDiagnosticText(diagAccount),
       gatewayLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       gatewayNextTierDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
+      gatewayEndpointRpmDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       `DevPass billing period: plan ${diagAccount && String(diagAccount.plan || '').trim() && String(diagAccount.plan).toLowerCase() !== 'none' ? String(diagAccount.plan) : '—'} · cycle ${typeof diagAccount?.cycle === 'string' && diagAccount.cycle.trim() ? diagAccount.cycle.trim() : '—'} · start ${dashboardDateText(diagAccount?.billingCycleStart, true)} · end ${dashboardDateText(diagAccount?.expiresAt, true)} · cancelled ${typeof diagAccount?.cancelled === 'boolean' ? (diagAccount.cancelled ? 'yes' : 'no') : 'unknown'}`,
       premiumAllowanceDiagnosticText(d.weekly),
       paygAccountDiagnosticText(diagAccount),

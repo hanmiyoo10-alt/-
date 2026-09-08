@@ -53,6 +53,29 @@
       nextTier.spendUsdUntilQualify = null;
       nextTier.daysUntilSpendPathUnlocks = null;
     }
+    const endpointState = ['value','not-applicable','source-unavailable','permission-unavailable','invalid-endpoints'].includes(String(raw?.endpointRates?.state))
+      ? String(raw.endpointRates.state)
+      : 'source-unavailable';
+    let endpointRates = {state:endpointState,rows:[]};
+    if (endpointState === 'value') {
+      const sourceRows = Array.isArray(raw?.endpointRates?.rows) ? raw.endpointRates.rows : null;
+      const rows = [];
+      const seen = new Set();
+      let valid = Boolean(sourceRows) && sourceRows.length <= 64;
+      if (valid) {
+        for (const row of sourceRows) {
+          const key = row && typeof row === 'object' && !Array.isArray(row) && typeof row.key === 'string' ? row.key : '';
+          const rpm = row && typeof row === 'object' && !Array.isArray(row) && typeof row.rpm === 'number' && Number.isFinite(row.rpm) && row.rpm >= 0 ? Number(row.rpm) : null;
+          if (!key.trim() || key.length > 96 || rpm === null || seen.has(key)) {
+            valid = false;
+            break;
+          }
+          seen.add(key);
+          rows.push({key,rpm});
+        }
+      }
+      endpointRates = valid ? {state:'value',rows} : {state:'invalid-endpoints',rows:[]};
+    }
     return {
       state:'ok',
       source:'org-limits',
@@ -75,6 +98,7 @@
         remaining:num(raw?.topUp?.remaining) ? Number(raw.topUp.remaining) : null,
       },
       nextTier,
+      endpointRates,
       fetchedAt:num(raw.fetchedAt) ? Number(raw.fetchedAt) : Date.now(),
     };
   }

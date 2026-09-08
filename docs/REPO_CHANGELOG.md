@@ -1226,3 +1226,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c5d39f88227c2920638b99a95329c8669ed8e2cb)
 - Event ID: `2ff36287ff34afe4add90eed85b908f3e42227d2860418264463f07ad3fa0b5f`
 <!-- canonical-main-doc-promoted:2ff36287ff34afe4add90eed85b908f3e42227d2860418264463f07ad3fa0b5f -->
+
+### 2026-09-08 — feat(usage-dashboard): release 5.107 Credits next-tier unlock limits
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `ac10459a245105a174d874df3220350d7bb1b30d`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ac10459a245105a174d874df3220350d7bb1b30d)
+- Event ID: `65673d4c90fa033ba1285d00c1f3dd8772fc2cf0e2bab4249cf1a1372a15627c`
+<!-- canonical-main-doc-promoted:65673d4c90fa033ba1285d00c1f3dd8772fc2cf0e2bab4249cf1a1372a15627c -->

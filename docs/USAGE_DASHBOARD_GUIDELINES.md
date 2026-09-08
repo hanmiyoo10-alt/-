@@ -151,27 +151,25 @@ Do not mix unrelated PocketRisu work or PRs into Local Usage Dashboard releases.
 
 ## 2. Stable first
 
-Default cycle:
+Repository baseline-preservation behavior is inherited from `RCR-D01`.
+
+Keep already-working behavior unchanged unless the release goal requires touching it.
+
+Usage Dashboard specialization keeps this device/release loop explicit:
 
 `Stable production → device diagnostic → isolate one problem → minimal design → patch → regression → version/release → device validation`
 
-Keep already-working behavior unchanged unless the release goal requires touching it. Prefer small, explainable diffs over broad rewrites.
-
 ## 3. One release, one primary goal
 
-A mini release should normally have one primary target. Do not casually combine cache, updater, UI, runtime recovery and performance work in the same release.
+Generic bounded-work bundling policy is inherited from `RCR-D02`.
 
-When another important issue appears, record it as a later candidate rather than expanding the current patch without evidence.
+For Usage Dashboard releases, cache, updater, UI, runtime recovery, and performance are separate release concerns unless current evidence shows they are one coherent target. Record other issues as later candidates rather than silently widening the current release.
 
 ## 4. Evidence before repair
 
-Use:
+The repository-wide evidence-first repair cycle is inherited from `RCR-D03`.
 
-`Observe → Attribute → Verify → Design → Repair → Measure`
-
-If the cause is not sufficiently isolated, improve diagnostics before changing behavior.
-
-Do not repair a subsystem merely because it is a plausible suspect.
+For Usage Dashboard, if the cause is not sufficiently isolated, improve diagnostics before changing behavior, and do not repair a subsystem merely because it is a plausible suspect.
 
 ## 5. Evidence language
 
@@ -179,7 +177,7 @@ Do not repair a subsystem merely because it is a plausible suspect.
 - **SUPPORTED HYPOTHESIS** — multiple observations support it, but causality is not fully proven.
 - **UNKNOWN** — current telemetry cannot determine it.
 
-Never present UNKNOWN as VERIFIED.
+Never present UNKNOWN as VERIFIED. Repository-wide uncertainty fidelity is additionally governed by `RCR-H03`.
 
 ## 6. Data fidelity
 
@@ -246,9 +244,9 @@ Stable Readiness should describe current actionable health while retaining recov
 
 ## 10. Performance
 
-Measure before optimizing.
+Repository-wide optimization discipline is inherited from `RCR-D04`.
 
-Start from phase attribution such as:
+Usage Dashboard performance work starts from phase attribution such as:
 
 `Refresh → snapshot / manager probe / normalize / persist / render`
 
@@ -276,7 +274,7 @@ Normal release sequence:
 
 `check production → inspect evidence → choose one target → branch → minimal patch → relevant regression → full regression → diff review → version update → materialize latest.js → validate manifest/hash consistency → main → release-usage-dashboard → re-read release artifacts → device validation`
 
-Never deploy a failing candidate.
+Existing Git/CI/release gates remain authoritative under `RCR-H07`; a failing Usage Dashboard candidate cannot proceed to deployment.
 
 Each version update must also refresh this document's Current production snapshot. Repository automation keeps the machine-maintained version/component block synchronized with the production manifest; release-specific development memory should be updated when the release materially changes the project state.
 
@@ -295,7 +293,7 @@ Do not bump Bridge Engine when bridge behavior does not change. Do not bump Brid
 
 ## 14. User interaction and execution
 
-When repository tooling can do the work, ChatGPT should perform source analysis, design, modification, testing, versioning, PR/merge and deployment without making the user manually run development commands.
+Generic preference for safe repository automation is inherited from `RCR-D05`.
 
 Ask the user only when a real Android/PocketRisu validation step genuinely requires the device. When device testing is needed, state exactly what to check and what diagnostic/result to send back.
 
@@ -313,13 +311,10 @@ Maintain this loop:
 
 ## Non-negotiable rules
 
-- Do not break working behavior without evidence.
+Repository-wide baseline, bounded-goal, evidence-first, optimization, and gate behavior is inherited from `RCR-D01`, `RCR-D02`, `RCR-D03`, `RCR-D04`, and `RCR-H07` rather than repeated here.
+
 - Do not fabricate unknown data.
-- Do not repair before isolating the cause.
-- Do not bundle unrelated changes into one mini release.
-- Do not deploy failing tests.
 - Do not guess the current production version from memory.
 - Do not confuse diagnostic labels with underlying semantics.
 - Do not confuse recovered historical errors with an active outage.
-- Do not sacrifice correctness for performance.
 - When the user shares a diagnostic, analyze only; wait for a later user turn before designing or implementing the next release.

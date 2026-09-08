@@ -52,7 +52,7 @@
           <div class="mini cost-driver"><span>24h 비용 주도 · Top Provider</span><b>${esc(scopeTopProvider)}</b></div>
           <div class="mini cost-driver"><span>24h 비용 주도 · Top Model</span><b>${esc(scopeTopModel)}</b></div>
           ${scopeExtra}
-        </div>${dashboardView === 'devpass' ? devpassAccountDetailHtml : ''}${scopeUsageDetailsHtml(scopeActivity)}` : `<p>Bridge snapshot에 ${esc(scopeNames[scopeKey][0])} 범위 데이터가 아직 없어.</p>`}
+        </div>${dashboardView === 'devpass' ? devpassAccountDetailHtml : ''}${dashboardView === 'devpass' ? apiKeyOrgLimitSectionHtml(apiKeyOrgLimitTruth) : ''}${scopeUsageDetailsHtml(scopeActivity)}` : `<p>Bridge snapshot에 ${esc(scopeNames[scopeKey][0])} 범위 데이터가 아직 없어.</p>`}
         ${d.usageScopes?.errors?.[scopeKey] ? `<p class="warn">Usage Scope · ${esc(errorSummaryText(d.usageScopes.errors[scopeKey]))}</p>` : ''}
       </section>
       <section class="panel wide analytics-panel">

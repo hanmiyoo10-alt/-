@@ -153,6 +153,19 @@
   }
 
 
+
+  function apiKeyOrgLimitDiagnosticText(value) {
+    const stateName = ['ok','project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(value?.state))
+      ? String(value.state)
+      : 'source-unavailable';
+    const currentCount = stateName === 'ok' && Number.isInteger(value?.currentCount) && value.currentCount >= 0 ? Number(value.currentCount) : null;
+    const maxKeys = stateName === 'ok' && Number.isInteger(value?.maxKeys) && value.maxKeys >= 0 ? Number(value.maxKeys) : null;
+    if (currentCount === null || maxKeys === null) {
+      return `API key org limit: active — / — · headroom — · source keys-api-plan-limits · state ${stateName}`;
+    }
+    return `API key org limit: active ${currentCount} / ${maxKeys} · headroom ${Math.max(0,maxKeys-currentCount)} · source keys-api-plan-limits · state ok`;
+  }
+
   function gatewayLimitsDiagnosticText(value) {
     const stateName = ['ok','permission-unavailable','source-unavailable'].includes(String(value?.state)) ? String(value.state) : 'source-unavailable';
     if (stateName !== 'ok') return `Gateway limits: scope credits · source org-limits · state ${stateName}`;
@@ -481,6 +494,7 @@
       `DevPass account tier: service ${diagAccount?.serviceTier || '—'} · routing ${diagAccount?.routingStrategy || '—'} · pending ${diagAccount?.pendingTier || '—'} · personal org ${diagAccount?.hasPersonalOrg === null || diagAccount?.hasPersonalOrg === undefined ? '—' : diagAccount.hasPersonalOrg ? 'yes' : 'no'}`,
       devPassNoAiTrainingDiagnosticText(diagAccount),
       devPassProviderCachePolicyDiagnosticText(diagAccount),
+      apiKeyOrgLimitDiagnosticText(apiKeyPlanLimitsRuntime.value),
       gatewayLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       gatewayNextTierDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       gatewayNextTierLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),

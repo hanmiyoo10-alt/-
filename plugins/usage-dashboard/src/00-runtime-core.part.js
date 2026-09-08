@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.107
+//@version 3.0.0-alpha.5.108
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.107';
+  const VERSION = '3.0.0-alpha.5.108';
   const RELEASE_NOTES = Object.freeze({
-    title: "Credits Next-tier Unlock Limits",
+    title: "DevPass API Key Organization Limit",
     highlights: Object.freeze([
-    "Adds a compact read-only next-tier limits block under the existing Credits next-tier progression surface.",
-    "Shows only current server-provided next-tier daily/monthly spend caps, rolling 24h top-up allowance, and rate multiplier.",
-    "Any missing, invalid, negative, or non-finite required unlock field fails the entire unlock block closed instead of mixing partial values.",
-    "Moves Engine to 1.6.41 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
+    "Adds a compact read-only DevPass API Keys organization-limit block using exact server-provided plan-limit values.",
+    "Shows organization-wide active developer API keys, the server-resolved maximum, and deterministic non-negative creation headroom.",
+    "Keeps API-key rows, IDs, masked tokens, creator/IAM metadata, plan strings, project IDs, and authentication material behind the Engine capture boundary.",
+    "Moves Engine to 1.6.42 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.107 · Engine 1.6.41 · Manager 1.3.6 and READY/Health ok.",
-    "Open Credits and confirm 다음 Tier 한도 · 현재 기준 appears beneath the existing next-tier progression block.",
-    "Diagnostics should include one ID-free Gateway next-tier limits line; no artificial spend, top-up, or traffic is required.",
+    "Verify Product 5.108 · Engine 1.6.42 · Manager 1.3.6 and READY/Health ok.",
+    "Open DevPass and confirm API Keys · 조직 한도 appears with exact N / M and creation headroom when source authority is available.",
+    "Diagnostics should include one bounded API key org limit line; no API-key mutation or artificial traffic is required.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -40,7 +40,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.41';
+  const REQUIRED_BRIDGE_VERSION = '1.6.42';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.6';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
@@ -50,6 +50,7 @@
   const BRIDGE_MANAGER_BASE = 'http://127.0.0.1:39119';
   const BRIDGE_MANAGER_PROBE_INTERVAL_MS = 60000;
   const GATEWAY_LIMITS_UI_TTL_MS = 5 * 60_000;
+  const API_KEY_PLAN_LIMITS_UI_TTL_MS = 5 * 60_000;
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true, performanceGuard: true, adaptiveRefresh: true, schedulerEnabled: true,
@@ -82,6 +83,7 @@
 
   let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
   let gatewayLimitsRuntime = {orgId:'',value:null,fetchedAt:0}, gatewayLimitsInFlight = null, gatewayLimitsRequestSeq = 0;
+  let apiKeyPlanLimitsRuntime = {value:null,fetchedAt:0}, apiKeyPlanLimitsInFlight = null, apiKeyPlanLimitsRequestSeq = 0;
   let tokenForgetArmedUntil = 0;
   let widgetRenderTail = Promise.resolve(), widgetRenderRequestId = 0;
   let runtimeDisposed = false, runtimeEpoch = 1, staleAsyncDrops = 0;

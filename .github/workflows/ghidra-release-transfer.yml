@@ -1,0 +1,32 @@
+name: Transfer saved Ghidra release
+on:
+  push:
+    branches: [fortune-golf-apk]
+    paths: ['.github/workflows/ghidra-release-transfer.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      max-parallel: 4
+      matrix:
+        part: ['000', '001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011']
+    steps:
+      - name: Download verified release part
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PART: ${{ matrix.part }}
+        run: |
+          mkdir payload
+          gh release download ghidra-toolchain-34213335872 --repo hanmiyoo10-alt/- --dir payload --pattern "ghidra-linux-x64.tar.gz.part$PART" --pattern SHA256SUMS --pattern PARTS-SHA256SUMS
+          cd payload
+          grep "ghidra-linux-x64.tar.gz.part$PART$" PARTS-SHA256SUMS | sha256sum -c -
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ghidra-release-part-${{ matrix.part }}
+          path: payload/
+          compression-level: 0
+          if-no-files-found: error

@@ -108,94 +108,160 @@ const latest = fs.readFileSync(LATEST, 'utf8');
 assert.ok(latest.includes("const REQUIRED_BRIDGE_VERSION = '1.6.40';"));
 
 const capture = fs.readFileSync(CAPTURE, 'utf8');
+const sanitizerStart = capture.indexOf('  const sanitizeGatewayLimits = (value) => {');
+const sanitizerEnd = capture.indexOf('  const sanitizeModel = (row) => {', sanitizerStart);
+assert.ok(sanitizerStart >= 0 && sanitizerEnd > sanitizerStart, 'P72 Gateway Limits sanitizer boundary missing');
+const sanitizer = capture.slice(sanitizerStart, sanitizerEnd);
+for (const marker of ['endpoints','key','rpm','safe.endpoints = null','safe.endpoints = valid ? rows : null','seen.has(key)','rows.push({key,rpm})']) {
+  assert.ok(sanitizer.includes(marker), `P72 endpoint sanitizer marker missing: ${marker}`);
+}
+for (const forbidden of ['row.path','endpoint.path','accountAgeDays','lifetimeSpendUsd','requestCount','429']) {
+  assert.equal(sanitizer.includes(forbidden), false, `P72 endpoint sanitizer minimization violation: ${forbidden}`);
+}
+
 const sources = fs.readFileSync(SOURCES, 'utf8');
+const helperStart = sources.indexOf('function gatewayLimitsNumber(value) {');
+const helperEnd = sources.indexOf('async function captureGatewayLimitsViaCliSession', helperStart);
+assert.ok(helperStart >= 0 && helperEnd > helperStart, 'P72 Gateway Limits helper boundary missing');
+const helperSource = sources.slice(helperStart, helperEnd);
+const sandbox = {};
+vm.createContext(sandbox);
+vm.runInContext(`${helperSource}\nthis.normalize=normalizeGatewayLimitsCapture;`, sandbox);
+const normalize = (captureValue, now=123456) => JSON.parse(JSON.stringify(sandbox.normalize(captureValue, now)));
+const regularPayload = (endpoints, extra = {}) => {
+  const payload = {
+    enterprise:false,
+    planClass:'regular',
+    rateLimitsApply:true,
+    tierOverridden:false,
+    capsApply:true,
+    tier:{tier:3,rpmMultiplier:3,dailyCapUsd:100,monthlyCapUsd:1000},
+    usage:{dailySpentUsd:2,monthlySpentUsd:20},
+    topUp:{capUsd:100,windowHours:24,usedUsd:25,remainingUsd:75},
+    nextTier:{tier:4,daysUntilQualify:24,spendUsdUntilQualify:4987.2,daysUntilSpendPathUnlocks:0},
+    ...extra,
+  };
+  if (endpoints !== undefined) payload.endpoints = endpoints;
+  return payload;
+};
+
+const rows = [
+  {key:'chat.completions',rpm:5000},
+  {key:'models',rpm:0},
+  {key:'future.endpoint',rpm:7},
+];
+const value = normalize({state:'ok',payload:regularPayload(rows)});
+assert.equal(value.endpointRates.state, 'value');
+assert.deepEqual(value.endpointRates.rows, rows);
+assert.equal(value.endpointRates.rows[1].rpm, 0);
+assert.equal(value.nextTier.state, 'value');
+assert.equal(value.daily.state, 'value');
+assert.equal(value.monthly.state, 'value');
+assert.equal(value.topUp.state, 'value');
+
+const noRate = normalize({state:'ok',payload:regularPayload(undefined,{rateLimitsApply:false})});
+assert.deepEqual(noRate.endpointRates, {state:'not-applicable',rows:[]});
+const enterprise = normalize({state:'ok',payload:{enterprise:true,planClass:'enterprise',rateLimitsApply:false,capsApply:false,topUp:null,nextTier:null,endpoints:null}});
+assert.deepEqual(enterprise.endpointRates, {state:'not-applicable',rows:[]});
+const missing = normalize({state:'ok',payload:regularPayload(undefined)});
+assert.equal(missing.endpointRates.state, 'source-unavailable');
+for (const bad of [
+  null,
+  [{key:'ok',rpm:-1}],
+  [{key:'ok',rpm:Infinity}],
+  [{key:'',rpm:1}],
+  [{key:'dup',rpm:1},{key:'dup',rpm:2}],
+  [{key:'x'.repeat(97),rpm:1}],
+]) {
+  const result = normalize({state:'ok',payload:regularPayload(bad)});
+  assert.equal(result.endpointRates.state, 'invalid-endpoints');
+  assert.deepEqual(result.endpointRates.rows, []);
+}
+assert.equal(normalize({state:'permission-unavailable'}).endpointRates.state, 'permission-unavailable');
+assert.equal(normalize({state:'source-unavailable'}).endpointRates.state, 'source-unavailable');
+
+for (const marker of [
+  "cached(`gatewayLimits:${exactOrgId}`",
+  "name.startsWith('gatewayLimits:') ? 300_000",
+  'DEVPASS_BRIDGE_LIMITS_ORG_ID: exactOrgId',
+]) assert.ok(sources.includes(marker), `P72 selected-org/cache marker missing: ${marker}`);
+for (const forbidden of ['requestHistory','requestsPerMinuteUsed','rpmRemaining','rateHeadroom']) {
+  assert.equal(helperSource.includes(forbidden), false, `P72 must not infer live RPM usage: ${forbidden}`);
+}
+
 const http = fs.readFileSync(HTTP, 'utf8');
-const engine = fs.readFileSync(ENGINE, 'utf8');
+assert.ok(http.includes("url.pathname === '/gateway-limits'"));
+assert.ok(http.includes('loadGatewayLimits(creditsOrgId)'));
+assert.equal(http.includes('/gateway-endpoint-rpm'), false, 'P72 must reuse the existing local limits route');
+
 const bridgeIo = fs.readFileSync(BRIDGE_IO, 'utf8');
-const dash = fs.readFileSync(DASH, 'utf8');
-const diag = fs.readFileSync(DIAG, 'utf8');
-
 for (const marker of [
-  "const GATEWAY_LIMITS_TTL_MS = 5 * 60 * 1000;",
-  "path: `/orgs/${encodeURIComponent(orgId)}/limits`",
-  'function sanitizeGatewayLimitEndpoints(value)',
-  'safe.endpoints = valid ? rows : null',
-  "return { state:'invalid-endpoints'",
-]) assert.ok(engine.includes(marker), `P72 Engine marker missing: ${marker}`);
-assert.ok(capture.includes('function sanitizeGatewayLimitEndpoints(value)'));
-assert.ok(capture.includes("safe.endpoints = valid ? rows : null"));
-assert.ok(sources.includes("state:'invalid-endpoints'"));
-assert.ok(http.includes('Gateway endpoint RPM:'));
-for (const forbidden of [
-  'endpoint.path',
-  'row.path',
-  'topUpDailyCapUsd',
-  'accountAgeDays',
-]) assert.equal(capture.includes(forbidden), false, `P72 capture forbidden field retained: ${forbidden}`);
+  'function normalizeGatewayLimitsLocal(raw)',
+  "['value','not-applicable','source-unavailable','permission-unavailable','invalid-endpoints']",
+  'endpointRates',
+  'rows.push({key,rpm})',
+  '/gateway-limits?creditsOrgId=${encodeURIComponent(exactOrgId)}',
+]) assert.ok(bridgeIo.includes(marker), `P72 Product transport marker missing: ${marker}`);
+assert.equal(bridgeIo.includes('/gateway-endpoint-rpm'), false);
 
-for (const marker of [
-  'function normalizeGatewayEndpointRpmLimits(value)',
-  "state:'not-applicable'",
-  "state:'invalid-endpoints'",
-  "return {state:'ok',rows,outcome:envelope.outcome};",
-  'function gatewayEndpointRpmLimitsHtml(endpointRates)',
-  'Endpoint RPM · 조직 한도',
-  "title:'조직 한도 상세'",
-  'function gatewayEndpointRpmDiagnosticText(value)',
-  'Gateway endpoint RPM:',
-]) assert.ok(dash.includes(marker) || diag.includes(marker), `P72 Product marker missing: ${marker}`);
-assert.ok(bridgeIo.includes('endpointRates: raw.gatewayLimits ? normalizeGatewayEndpointRpmLimits(raw.gatewayLimits) : {state:\'not-requested\',rows:[]}'));
-assert.ok(dash.includes("if(rpm===0) return 'Unlimited';"));
-assert.ok(dash.includes('escapeHtml(endpointRpmDisplayLabel(row.key))'));
-assert.equal(dash.includes('row.path'), false);
-assert.equal(diag.includes('row.path'), false);
-assert.equal(diag.includes('selectedCreditsOrgId'), false);
-assert.equal(diag.includes('JSON.stringify(endpointRates'), false);
+const bridgeStart = bridgeIo.indexOf('  function normalizeGatewayLimitsLocal(raw) {');
+const bridgeEnd = bridgeIo.indexOf('  async function fetchGatewayLimitsForOrg', bridgeStart);
+assert.ok(bridgeStart >= 0 && bridgeEnd > bridgeStart);
+const bridgeSandbox = {num:(value)=>typeof value === 'number' && Number.isFinite(value)};
+vm.createContext(bridgeSandbox);
+vm.runInContext(`${bridgeIo.slice(bridgeStart, bridgeEnd)}\nthis.normalizeLocal=normalizeGatewayLimitsLocal;`, bridgeSandbox);
+const local = (raw) => JSON.parse(JSON.stringify(bridgeSandbox.normalizeLocal(raw)));
+assert.deepEqual(local({state:'ok',endpointRates:{state:'value',rows}}).endpointRates.rows, rows);
+assert.equal(local({state:'ok',endpointRates:{state:'value',rows:[{key:'dup',rpm:1},{key:'dup',rpm:2}]}}).endpointRates.state, 'invalid-endpoints');
 
-const sanitizerSource = capture.slice(capture.indexOf('function sanitizeGatewayLimitEndpoints(value)'), capture.indexOf('function sanitizeGatewayLimits(payload)'));
-const sanitizerContext = {};
-vm.createContext(sanitizerContext);
-vm.runInContext(`${sanitizerSource};this.sanitizeGatewayLimitEndpoints=sanitizeGatewayLimitEndpoints;`, sanitizerContext);
-const sanitize = sanitizerContext.sanitizeGatewayLimitEndpoints;
-assert.deepEqual(JSON.parse(JSON.stringify(sanitize([{key:'chat-completions',path:'/v1/chat/completions',rpm:5000},{key:'models',path:'/v1/models',rpm:0}]))),[{key:'chat-completions',rpm:5000},{key:'models',rpm:0}]);
-assert.equal(sanitize([{key:'dup',rpm:1},{key:'dup',rpm:2}]),null);
-assert.equal(sanitize([{key:'bad',rpm:-1}]),null);
-assert.equal(sanitize([{key:'bad',rpm:Infinity}]),null);
-assert.equal(sanitize([{key:'',rpm:1}]),null);
-assert.equal(sanitize(null),null);
+const dashboard = fs.readFileSync(DASH, 'utf8');
+const uiStart = dashboard.indexOf('  function gatewayEndpointRpmLimitsHtml(endpointRates) {');
+const uiEnd = dashboard.indexOf('  function gatewayLimitsSectionHtml(truth)', uiStart);
+assert.ok(uiStart >= 0 && uiEnd > uiStart, 'P72 endpoint RPM UI helper boundary missing');
+const uiSandbox = {esc:(value)=>String(value)};
+vm.createContext(uiSandbox);
+vm.runInContext(`${dashboard.slice(uiStart, uiEnd)}\nthis.render=gatewayEndpointRpmLimitsHtml;`, uiSandbox);
+const render = uiSandbox.render;
+const html = render({state:'value',rows});
+for (const marker of ['<details','Endpoint RPM · 조직 한도','chat.completions','5,000 /분','models','Unlimited','future.endpoint','실시간 사용량/남은 RPM 아님']) {
+  assert.ok(html.includes(marker), `P72 endpoint RPM UI marker missing: ${marker}`);
+}
+assert.equal(/<details[^>]*\sopen(?:\s|>|=)/.test(html), false, 'P72 endpoint table must be collapsed by default');
+assert.ok(render({state:'not-applicable',rows:[]}).includes('미적용'));
+assert.ok(render({state:'source-unavailable',rows:[]}).includes('—'));
+assert.ok(render({state:'invalid-endpoints',rows:[]}).includes('—'));
+for (const prior of [
+  'function gatewayNextTierProgressionHtml(nextTier)',
+  '다음 Tier · 최고 Tier',
+  'function gatewayLimitsUtilizationPercent(value, cap)',
+  "gatewayLimitsUtilizationBarHtml(truth?.daily,'used','일간 spend 사용률 · UTC')",
+  "gatewayLimitsUtilizationBarHtml(truth?.monthly,'used','월간 spend 사용률')",
+  "gatewayLimitsUtilizationBarHtml(truth?.topUp,'remaining','Rolling top-up 남은 여유 비율')",
+]) assert.ok(dashboard.includes(prior), `P72 must preserve prior Gateway Limits UI: ${prior}`);
 
-const normalizeStart = sources.indexOf('function normalizeGatewayEndpointRpmLimits(payload){');
-const normalizeEnd = sources.indexOf('\nfunction buildGatewayLimitsFallback', normalizeStart);
-assert.ok(normalizeStart >= 0 && normalizeEnd > normalizeStart, 'P72 Engine endpoint normalizer owner missing');
-const normalizeSource = sources.slice(normalizeStart, normalizeEnd);
-const normalizeContext = {};
-vm.createContext(normalizeContext);
-vm.runInContext(`${normalizeSource};this.normalizeGatewayEndpointRpmLimits=normalizeGatewayEndpointRpmLimits;`, normalizeContext);
-const normalize = normalizeContext.normalizeGatewayEndpointRpmLimits;
-assert.deepEqual(JSON.parse(JSON.stringify(normalize({kind:'regular',rateLimitsApply:true,endpoints:[{key:'chat-completions',rpm:5000},{key:'models',rpm:0}]}))),{state:'ok',rows:[{key:'chat-completions',rpm:5000},{key:'models',rpm:0}]});
-assert.deepEqual(JSON.parse(JSON.stringify(normalize({kind:'regular',rateLimitsApply:false,endpoints:null}))),{state:'not-applicable',rows:[]});
-assert.deepEqual(JSON.parse(JSON.stringify(normalize({kind:'enterprise',rateLimitsApply:null,endpoints:null}))),{state:'not-applicable',rows:[]});
-assert.deepEqual(JSON.parse(JSON.stringify(normalize({kind:'regular',rateLimitsApply:true,endpoints:null}))),{state:'invalid-endpoints',rows:[]});
+const diagnostics = fs.readFileSync(DIAG, 'utf8');
+const diagStart = diagnostics.indexOf('  function gatewayEndpointRpmDiagnosticText(value) {');
+const diagEnd = diagnostics.indexOf('  function modelCategoryCatalogDiagnosticText', diagStart);
+assert.ok(diagStart >= 0 && diagEnd > diagStart, 'P72 endpoint RPM diagnostics boundary missing');
+const diagHelper = diagnostics.slice(diagStart, diagEnd);
+for (const forbidden of ['orgId','organizationId','endpoint.path','rawPath']) assert.equal(diagHelper.includes(forbidden), false);
+const diagSandbox = {};
+vm.createContext(diagSandbox);
+vm.runInContext(`${diagHelper}\nthis.diag=gatewayEndpointRpmDiagnosticText;`, diagSandbox);
+assert.equal(
+  diagSandbox.diag({state:'ok',endpointRates:{state:'value',rows}}),
+  'Gateway endpoint RPM: scope credits · rows 3 · unlimited 1 · source org-limits · state ok'
+);
+assert.ok(diagSandbox.diag({state:'ok',endpointRates:{state:'not-applicable',rows:[]}}).includes('state not-applicable'));
+assert.ok(diagSandbox.diag({state:'ok',endpointRates:{state:'invalid-endpoints',rows:[]}}).includes('state invalid-endpoints'));
+assert.ok(diagSandbox.diag({state:'permission-unavailable'}).includes('state permission-unavailable'));
+assert.ok(diagnostics.includes('gatewayNextTierDiagnosticText('), 'P72 must preserve 5.105 next-tier diagnostics');
 
-const productNormalizeStart = bridgeIo.indexOf('function normalizeGatewayEndpointRpmLimits(value){');
-const productNormalizeEnd = bridgeIo.indexOf('\nfunction readCaptureHint', productNormalizeStart);
-assert.ok(productNormalizeStart >= 0 && productNormalizeEnd > productNormalizeStart, 'P72 Product endpoint normalizer owner missing');
-const productNormalizeSource = bridgeIo.slice(productNormalizeStart, productNormalizeEnd);
-const productNormalizeContext = {};
-vm.createContext(productNormalizeContext);
-vm.runInContext(`${productNormalizeSource};this.normalizeGatewayEndpointRpmLimits=normalizeGatewayEndpointRpmLimits;`, productNormalizeContext);
-const productNormalize = productNormalizeContext.normalizeGatewayEndpointRpmLimits;
-assert.deepEqual(JSON.parse(JSON.stringify(productNormalize({state:'ok',rows:[{key:'chat-completions',rpm:5000},{key:'future-endpoint',rpm:123},{key:'models',rpm:0}]}))),{state:'ok',rows:[{key:'chat-completions',rpm:5000},{key:'future-endpoint',rpm:123},{key:'models',rpm:0}]});
-assert.deepEqual(JSON.parse(JSON.stringify(productNormalize({state:'not-applicable',rows:[]}))),{state:'not-applicable',rows:[]});
-assert.deepEqual(JSON.parse(JSON.stringify(productNormalize({state:'invalid-endpoints',rows:[]}))),{state:'invalid-endpoints',rows:[]});
-assert.deepEqual(JSON.parse(JSON.stringify(productNormalize({state:'ok',rows:[{key:'bad',rpm:-1}]}))),{state:'invalid-endpoints',rows:[]});
+for (const path of ['plugins/usage-dashboard/src/14-request-ledger.part.js','plugins/usage-dashboard/src/15-request-provenance.part.js']) {
+  const text = fs.readFileSync(path, 'utf8');
+  for (const forbidden of ['Gateway endpoint RPM','/gateway-endpoint-rpm','endpointRates']) {
+    assert.equal(text.includes(forbidden), false, `P72 Request Ledger/provenance identity must stay unchanged: ${path}:${forbidden}`);
+  }
+}
 
-assert.equal(engine.includes('/gateway-endpoint-rpm'), false);
-assert.equal(engine.includes('setInterval('), false);
-assert.equal(engine.includes('setTimeout('), false);
-assert.equal(capture.includes('lifetimeSpendUsd'), false);
-assert.equal(capture.includes('accountAgeDays'), false);
-assert.equal(diag.includes('endpoint path'), false);
-assert.equal(diag.includes('org id'), false);
-
-console.log('P72 Credits endpoint RPM limits: OK · selected-org limits reuse · exact key/rpm · zero Unlimited · malformed/duplicate fail-closed · no new endpoint/timer/persistence/credential owner');
+console.log('P72 Credits endpoint RPM limits: OK · selected-org source fidelity · zero=Unlimited · malformed/duplicate fail-closed · bounded collapsed UI · no live headroom inference · prior Gateway Limits preserved');

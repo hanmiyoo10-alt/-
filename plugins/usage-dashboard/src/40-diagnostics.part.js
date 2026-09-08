@@ -175,6 +175,30 @@
   }
 
 
+  function gatewayNextTierDiagnosticText(value) {
+    const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(value?.state)) ? String(value.state) : 'source-unavailable';
+    if (sourceState !== 'ok') return `Gateway next tier: scope credits · state ${sourceState} · source org-limits`;
+    const nextTier = value?.nextTier;
+    const stateName = ['value','max-tier','tier-overridden','not-applicable','unknown'].includes(String(nextTier?.state))
+      ? String(nextTier.state)
+      : 'unknown';
+    if (stateName !== 'value') return `Gateway next tier: scope credits · state ${stateName} · source org-limits`;
+    const currentTier = Number.isInteger(nextTier?.currentTier) && nextTier.currentTier >= 0 ? Number(nextTier.currentTier) : null;
+    const tier = Number.isInteger(nextTier?.tier) && nextTier.tier >= 0 ? Number(nextTier.tier) : null;
+    const ageLeft = Number.isInteger(nextTier?.daysUntilQualify) && nextTier.daysUntilQualify >= 0 ? Number(nextTier.daysUntilQualify) : null;
+    const spendLeft = typeof nextTier?.spendUsdUntilQualify === 'number' && Number.isFinite(nextTier.spendUsdUntilQualify) && nextTier.spendUsdUntilQualify >= 0
+      ? Number(nextTier.spendUsdUntilQualify)
+      : null;
+    const spendAgeLeft = Number.isInteger(nextTier?.daysUntilSpendPathUnlocks) && nextTier.daysUntilSpendPathUnlocks >= 0
+      ? Number(nextTier.daysUntilSpendPathUnlocks)
+      : null;
+    if (currentTier === null || tier === null || ageLeft === null || spendLeft === null || spendAgeLeft === null) {
+      return 'Gateway next tier: scope credits · state unknown · source org-limits';
+    }
+    return `Gateway next tier: scope credits · current ${currentTier} · next ${tier} · age-left ${ageLeft}d · spend-left ${spendLeft} · spend-age-left ${spendAgeLeft}d · source org-limits · state ok`;
+  }
+
+
   function modelCategoryCatalogDiagnosticText(diagnostics) {
     const truth = managedRuntimeIdentityTruth(diagnostics);
     if (truth.models.state === 'mismatch') {
@@ -409,6 +433,7 @@
       devPassNoAiTrainingDiagnosticText(diagAccount),
       devPassProviderCachePolicyDiagnosticText(diagAccount),
       gatewayLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
+      gatewayNextTierDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       `DevPass billing period: plan ${diagAccount && String(diagAccount.plan || '').trim() && String(diagAccount.plan).toLowerCase() !== 'none' ? String(diagAccount.plan) : '—'} · cycle ${typeof diagAccount?.cycle === 'string' && diagAccount.cycle.trim() ? diagAccount.cycle.trim() : '—'} · start ${dashboardDateText(diagAccount?.billingCycleStart, true)} · end ${dashboardDateText(diagAccount?.expiresAt, true)} · cancelled ${typeof diagAccount?.cancelled === 'boolean' ? (diagAccount.cancelled ? 'yes' : 'no') : 'unknown'}`,
       premiumAllowanceDiagnosticText(d.weekly),
       paygAccountDiagnosticText(diagAccount),

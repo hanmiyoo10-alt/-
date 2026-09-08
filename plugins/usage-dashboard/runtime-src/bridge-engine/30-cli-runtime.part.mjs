@@ -217,6 +217,19 @@ if (output && !globalThis[marker]) {
         safe.topUp = topUp;
       }
     }
+    if (Object.prototype.hasOwnProperty.call(raw, 'nextTier')) {
+      if (raw.nextTier === null) {
+        safe.nextTier = null;
+      } else if (raw.nextTier && typeof raw.nextTier === 'object' && !Array.isArray(raw.nextTier)) {
+        const nextTier = {};
+        if (Number.isInteger(raw.nextTier.tier) && raw.nextTier.tier >= 0) nextTier.tier = raw.nextTier.tier;
+        for (const key of ['daysUntilQualify','spendUsdUntilQualify','daysUntilSpendPathUnlocks']) {
+          const candidate = nonNegative(raw.nextTier[key]);
+          if (candidate !== null) nextTier[key] = candidate;
+        }
+        safe.nextTier = nextTier;
+      }
+    }
     return Object.keys(safe).length ? safe : null;
   };
 

@@ -10,7 +10,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { pathToFileURL } from 'node:url';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.38';
+const VERSION = '1.6.39';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -859,6 +859,19 @@ if (output && !globalThis[marker]) {
         safe.topUp = topUp;
       }
     }
+    if (Object.prototype.hasOwnProperty.call(raw, 'nextTier')) {
+      if (raw.nextTier === null) {
+        safe.nextTier = null;
+      } else if (raw.nextTier && typeof raw.nextTier === 'object' && !Array.isArray(raw.nextTier)) {
+        const nextTier = {};
+        if (Number.isInteger(raw.nextTier.tier) && raw.nextTier.tier >= 0) nextTier.tier = raw.nextTier.tier;
+        for (const key of ['daysUntilQualify','spendUsdUntilQualify','daysUntilSpendPathUnlocks']) {
+          const candidate = nonNegative(raw.nextTier[key]);
+          if (candidate !== null) nextTier[key] = candidate;
+        }
+        safe.nextTier = nextTier;
+      }
+    }
     return Object.keys(safe).length ? safe : null;
   };
 
@@ -1621,6 +1634,7 @@ function gatewayLimitsUnknown(state = 'source-unavailable', now = Date.now()) {
     daily: { state:'unknown', used:null, cap:null, remaining:null },
     monthly: { state:'unknown', used:null, cap:null, remaining:null },
     topUp: { state:'unknown', cap:null, windowHours:null, used:null, remaining:null },
+    nextTier: { state:'unknown', currentTier:null, tier:null, daysUntilQualify:null, spendUsdUntilQualify:null, daysUntilSpendPathUnlocks:null },
     fetchedAt: Number(now),
   };
 }
@@ -1644,6 +1658,7 @@ function normalizeGatewayLimitsCapture(capture, now = Date.now()) {
   const dailyCap = gatewayLimitsNumber(raw?.tier?.dailyCapUsd);
   const monthlyUsed = gatewayLimitsNumber(raw?.usage?.monthlySpentUsd);
   const monthlyCap = gatewayLimitsNumber(raw?.tier?.monthlyCapUsd);
+  const nextTierRaw = Object.prototype.hasOwnProperty.call(raw, 'nextTier') ? raw.nextTier : undefined;
 
   const trustTierState = enterprise === true || (planClass && planClass !== 'regular')
     ? 'not-applicable'
@@ -1679,6 +1694,34 @@ function normalizeGatewayLimitsCapture(capture, now = Date.now()) {
     }
   }
 
+
+  const unknownNextTier = () => ({
+    state:'unknown', currentTier:null, tier:null,
+    daysUntilQualify:null, spendUsdUntilQualify:null, daysUntilSpendPathUnlocks:null,
+  });
+  let nextTier = unknownNextTier();
+  if (enterprise === true || (planClass && planClass !== 'regular')) {
+    nextTier = { ...unknownNextTier(), state:'not-applicable' };
+  } else if (enterprise === false && planClass === 'regular' && tierOverridden === true && nextTierRaw === null) {
+    nextTier = { ...unknownNextTier(), state:'tier-overridden' };
+  } else if (enterprise === false && planClass === 'regular' && tierOverridden === false && nextTierRaw === null) {
+    nextTier = { ...unknownNextTier(), state:'max-tier' };
+  } else if (enterprise === false && planClass === 'regular' && tierOverridden === false
+      && nextTierRaw && typeof nextTierRaw === 'object' && !Array.isArray(nextTierRaw)) {
+    const tier = Number.isInteger(nextTierRaw.tier) && nextTierRaw.tier >= 0 ? nextTierRaw.tier : null;
+    const daysUntilQualify = Number.isInteger(nextTierRaw.daysUntilQualify) && nextTierRaw.daysUntilQualify >= 0 ? nextTierRaw.daysUntilQualify : null;
+    const spendUsdUntilQualify = gatewayLimitsNumber(nextTierRaw.spendUsdUntilQualify);
+    const daysUntilSpendPathUnlocks = Number.isInteger(nextTierRaw.daysUntilSpendPathUnlocks) && nextTierRaw.daysUntilSpendPathUnlocks >= 0
+      ? nextTierRaw.daysUntilSpendPathUnlocks
+      : null;
+    if (trustTier !== null && tier !== null && daysUntilQualify !== null && spendUsdUntilQualify !== null && daysUntilSpendPathUnlocks !== null) {
+      nextTier = {
+        state:'value', currentTier:trustTier, tier,
+        daysUntilQualify, spendUsdUntilQualify, daysUntilSpendPathUnlocks,
+      };
+    }
+  }
+
   return {
     state: 'ok',
     source: 'org-limits',
@@ -1694,6 +1737,7 @@ function normalizeGatewayLimitsCapture(capture, now = Date.now()) {
     daily: spendMetric(dailyUsed, dailyCap),
     monthly: spendMetric(monthlyUsed, monthlyCap),
     topUp,
+    nextTier,
     fetchedAt: Number(now),
   };
 }

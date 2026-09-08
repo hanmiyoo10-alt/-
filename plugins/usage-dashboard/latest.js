@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.104
+//@version 3.0.0-alpha.5.105
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.104';
+  const VERSION = '3.0.0-alpha.5.105';
   const RELEASE_NOTES = Object.freeze({
-    title: "Gateway Limits Utilization Visualization",
+    title: "Credits Next-Tier Progression",
     highlights: Object.freeze([
-    "Adds source-faithful utilization bars to the existing Credits Gateway Limits daily, monthly, and top-up amounts.",
-    "Daily/monthly bars use explicit used/cap; top-up uses explicit remaining/cap, with no inferred thresholds.",
-    "Unknown, not-applicable, invalid, or non-positive caps render no synthetic 0% visualization.",
-    "Keeps Engine 1.6.38, Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
+    "Adds a source-faithful next-tier progression block to the existing Credits Gateway Limits card.",
+    "Uses only official server-computed remaining age, remaining spend, and spend-path age-floor values from the selected organization limits source.",
+    "Pinned, max-tier, enterprise, non-regular, invalid, and unavailable states stay explicit without reconstructing the public tier ladder.",
+    "Moves Engine to 1.6.39 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.104 · Engine 1.6.38 · Manager 1.3.6 and READY/Health ok.",
-    "Open Credits and confirm exact Gateway Limits amounts remain visible with daily/monthly used bars and top-up remaining bar.",
-    "UNKNOWN or 미적용 rows must not appear as misleading empty 0% bars; existing Credits and DevPass surfaces should stay healthy.",
+    "Verify Product 5.105 · Engine 1.6.39 · Manager 1.3.6 and READY/Health ok.",
+    "Open Credits and confirm Gateway Limits amounts/bars remain healthy with the new 다음 Tier block below them.",
+    "Diagnostics should include one ID-free Gateway next tier line matching the UI state; no artificial spend or traffic is required.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -40,7 +40,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.38';
+  const REQUIRED_BRIDGE_VERSION = '1.6.39';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.6';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
@@ -2918,6 +2918,29 @@ async function importLegacyTodayBaselines() {
       };
     };
     const topUpState = ['value','not-applicable','unknown'].includes(String(raw?.topUp?.state)) ? String(raw.topUp.state) : 'unknown';
+    const progressionState = ['value','max-tier','tier-overridden','not-applicable','unknown'].includes(String(raw?.nextTier?.state))
+      ? String(raw.nextTier.state)
+      : 'unknown';
+    const progressionNumber = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Number(value) : null;
+    const progressionDay = (value) => Number.isInteger(value) && value >= 0 ? Number(value) : null;
+    const nextTier = {
+      state:progressionState,
+      currentTier:Number.isInteger(raw?.nextTier?.currentTier) && raw.nextTier.currentTier >= 0 ? raw.nextTier.currentTier : null,
+      tier:Number.isInteger(raw?.nextTier?.tier) && raw.nextTier.tier >= 0 ? raw.nextTier.tier : null,
+      daysUntilQualify:progressionDay(raw?.nextTier?.daysUntilQualify),
+      spendUsdUntilQualify:progressionNumber(raw?.nextTier?.spendUsdUntilQualify),
+      daysUntilSpendPathUnlocks:progressionDay(raw?.nextTier?.daysUntilSpendPathUnlocks),
+    };
+    if (progressionState === 'value' && (
+        nextTier.currentTier === null || nextTier.tier === null || nextTier.daysUntilQualify === null
+        || nextTier.spendUsdUntilQualify === null || nextTier.daysUntilSpendPathUnlocks === null)) {
+      nextTier.state = 'unknown';
+      nextTier.currentTier = null;
+      nextTier.tier = null;
+      nextTier.daysUntilQualify = null;
+      nextTier.spendUsdUntilQualify = null;
+      nextTier.daysUntilSpendPathUnlocks = null;
+    }
     return {
       state:'ok',
       source:'org-limits',
@@ -2939,6 +2962,7 @@ async function importLegacyTodayBaselines() {
         used:num(raw?.topUp?.used) ? Number(raw.topUp.used) : null,
         remaining:num(raw?.topUp?.remaining) ? Number(raw.topUp.remaining) : null,
       },
+      nextTier,
       fetchedAt:num(raw.fetchedAt) ? Number(raw.fetchedAt) : Date.now(),
     };
   }
@@ -3514,6 +3538,30 @@ async function importLegacyTodayBaselines() {
   }
 
 
+  function gatewayNextTierDiagnosticText(value) {
+    const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(value?.state)) ? String(value.state) : 'source-unavailable';
+    if (sourceState !== 'ok') return `Gateway next tier: scope credits · state ${sourceState} · source org-limits`;
+    const nextTier = value?.nextTier;
+    const stateName = ['value','max-tier','tier-overridden','not-applicable','unknown'].includes(String(nextTier?.state))
+      ? String(nextTier.state)
+      : 'unknown';
+    if (stateName !== 'value') return `Gateway next tier: scope credits · state ${stateName} · source org-limits`;
+    const currentTier = Number.isInteger(nextTier?.currentTier) && nextTier.currentTier >= 0 ? Number(nextTier.currentTier) : null;
+    const tier = Number.isInteger(nextTier?.tier) && nextTier.tier >= 0 ? Number(nextTier.tier) : null;
+    const ageLeft = Number.isInteger(nextTier?.daysUntilQualify) && nextTier.daysUntilQualify >= 0 ? Number(nextTier.daysUntilQualify) : null;
+    const spendLeft = typeof nextTier?.spendUsdUntilQualify === 'number' && Number.isFinite(nextTier.spendUsdUntilQualify) && nextTier.spendUsdUntilQualify >= 0
+      ? Number(nextTier.spendUsdUntilQualify)
+      : null;
+    const spendAgeLeft = Number.isInteger(nextTier?.daysUntilSpendPathUnlocks) && nextTier.daysUntilSpendPathUnlocks >= 0
+      ? Number(nextTier.daysUntilSpendPathUnlocks)
+      : null;
+    if (currentTier === null || tier === null || ageLeft === null || spendLeft === null || spendAgeLeft === null) {
+      return 'Gateway next tier: scope credits · state unknown · source org-limits';
+    }
+    return `Gateway next tier: scope credits · current ${currentTier} · next ${tier} · age-left ${ageLeft}d · spend-left ${spendLeft} · spend-age-left ${spendAgeLeft}d · source org-limits · state ok`;
+  }
+
+
   function modelCategoryCatalogDiagnosticText(diagnostics) {
     const truth = managedRuntimeIdentityTruth(diagnostics);
     if (truth.models.state === 'mismatch') {
@@ -3748,6 +3796,7 @@ async function importLegacyTodayBaselines() {
       devPassNoAiTrainingDiagnosticText(diagAccount),
       devPassProviderCachePolicyDiagnosticText(diagAccount),
       gatewayLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
+      gatewayNextTierDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       `DevPass billing period: plan ${diagAccount && String(diagAccount.plan || '').trim() && String(diagAccount.plan).toLowerCase() !== 'none' ? String(diagAccount.plan) : '—'} · cycle ${typeof diagAccount?.cycle === 'string' && diagAccount.cycle.trim() ? diagAccount.cycle.trim() : '—'} · start ${dashboardDateText(diagAccount?.billingCycleStart, true)} · end ${dashboardDateText(diagAccount?.expiresAt, true)} · cancelled ${typeof diagAccount?.cancelled === 'boolean' ? (diagAccount.cancelled ? 'yes' : 'no') : 'unknown'}`,
       premiumAllowanceDiagnosticText(d.weekly),
       paygAccountDiagnosticText(diagAccount),
@@ -3899,10 +3948,37 @@ function todayOverviewMetrics(d) {
     return `<div class="bar gateway-limits-utilization" role="progressbar" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${esc(percentText)}" aria-valuetext="${esc(ariaText)}"><i style="width:${esc(percentText)}%"></i></div>`;
   }
 
+  function gatewayNextTierProgressionHtml(nextTier) {
+    const stateName = ['value','max-tier','tier-overridden','not-applicable','unknown'].includes(String(nextTier?.state))
+      ? String(nextTier.state)
+      : 'unknown';
+    if (stateName === 'max-tier') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · 최고 Tier</p></div>';
+    if (stateName === 'tier-overridden') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · 고정 Tier · 자동 승급 미적용</p></div>';
+    if (stateName === 'not-applicable') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · 미적용</p></div>';
+    if (stateName !== 'value') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · —</p></div>';
+    const tier = Number.isInteger(nextTier?.tier) && nextTier.tier >= 0 ? Number(nextTier.tier) : null;
+    const days = Number.isInteger(nextTier?.daysUntilQualify) && nextTier.daysUntilQualify >= 0 ? Number(nextTier.daysUntilQualify) : null;
+    const spend = typeof nextTier?.spendUsdUntilQualify === 'number' && Number.isFinite(nextTier.spendUsdUntilQualify) && nextTier.spendUsdUntilQualify >= 0
+      ? Number(nextTier.spendUsdUntilQualify)
+      : null;
+    const spendAge = Number.isInteger(nextTier?.daysUntilSpendPathUnlocks) && nextTier.daysUntilSpendPathUnlocks >= 0
+      ? Number(nextTier.daysUntilSpendPathUnlocks)
+      : null;
+    if (tier === null || days === null || spend === null || spendAge === null) return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · —</p></div>';
+    const ageText = days === 0 ? '충족' : `${days}일 남음`;
+    const spendText = spend === 0 ? '금액 충족' : `${money(spend)} 더`;
+    const spendAgeText = spendAge === 0 ? '충족' : `${spendAge}일 남음`;
+    return `<div class="gateway-next-tier"><p><b>다음 Tier · Tier ${esc(tier)}</b></p><div class="minis">
+      <div class="mini"><span>나이 경로</span><b>${esc(ageText)}</b></div>
+      <div class="mini"><span>사용 경로</span><b>${esc(spendText)}</b></div>
+      <div class="mini"><span>사용 경로 연령</span><b>${esc(spendAgeText)}</b></div>
+    </div></div>`;
+  }
+
   function gatewayLimitsSectionHtml(truth) {
     const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(truth?.state)) ? String(truth.state) : 'source-unavailable';
     if (truth?.enterprise === true && sourceState === 'ok') {
-      return `<div class="usage-detail-box gateway-limits-card"><div class="recent-head"><h3>Gateway Limits · Credits</h3><span>source org-limits · ok</span></div><p>Enterprise · 조직 단위 Gateway rate/spend cap 없음</p></div>`;
+      return `<div class="usage-detail-box gateway-limits-card"><div class="recent-head"><h3>Gateway Limits · Credits</h3><span>source org-limits · ok</span></div><p>Enterprise · 조직 단위 Gateway rate/spend cap 없음</p>${gatewayNextTierProgressionHtml(truth?.nextTier)}</div>`;
     }
     const tierText = truth?.trustTierState === 'not-applicable'
       ? '미적용'
@@ -3928,7 +4004,7 @@ function todayOverviewMetrics(d) {
       <div class="mini"><span>일간 spend · UTC</span><b>${esc(gatewayLimitsMetricText(truth?.daily))}</b>${gatewayLimitsUtilizationBarHtml(truth?.daily,'used','일간 spend 사용률 · UTC')}</div>
       <div class="mini"><span>월간 spend</span><b>${esc(gatewayLimitsMetricText(truth?.monthly))}</b>${gatewayLimitsUtilizationBarHtml(truth?.monthly,'used','월간 spend 사용률')}</div>
       <div class="mini"><span>${esc(topUpLabel)}</span><b>${esc(topUpText)}</b>${gatewayLimitsUtilizationBarHtml(truth?.topUp,'remaining','Rolling top-up 남은 여유 비율')}</div>
-    </div></div>`;
+    </div>${gatewayNextTierProgressionHtml(truth?.nextTier)}</div>`;
   }
 
 

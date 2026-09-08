@@ -48,6 +48,7 @@ function gatewayLimitsUnknown(state = 'source-unavailable', now = Date.now()) {
     daily: { state:'unknown', used:null, cap:null, remaining:null },
     monthly: { state:'unknown', used:null, cap:null, remaining:null },
     topUp: { state:'unknown', cap:null, windowHours:null, used:null, remaining:null },
+    nextTier: { state:'unknown', currentTier:null, tier:null, daysUntilQualify:null, spendUsdUntilQualify:null, daysUntilSpendPathUnlocks:null },
     fetchedAt: Number(now),
   };
 }
@@ -71,6 +72,7 @@ function normalizeGatewayLimitsCapture(capture, now = Date.now()) {
   const dailyCap = gatewayLimitsNumber(raw?.tier?.dailyCapUsd);
   const monthlyUsed = gatewayLimitsNumber(raw?.usage?.monthlySpentUsd);
   const monthlyCap = gatewayLimitsNumber(raw?.tier?.monthlyCapUsd);
+  const nextTierRaw = Object.prototype.hasOwnProperty.call(raw, 'nextTier') ? raw.nextTier : undefined;
 
   const trustTierState = enterprise === true || (planClass && planClass !== 'regular')
     ? 'not-applicable'
@@ -106,6 +108,34 @@ function normalizeGatewayLimitsCapture(capture, now = Date.now()) {
     }
   }
 
+
+  const unknownNextTier = () => ({
+    state:'unknown', currentTier:null, tier:null,
+    daysUntilQualify:null, spendUsdUntilQualify:null, daysUntilSpendPathUnlocks:null,
+  });
+  let nextTier = unknownNextTier();
+  if (enterprise === true || (planClass && planClass !== 'regular')) {
+    nextTier = { ...unknownNextTier(), state:'not-applicable' };
+  } else if (enterprise === false && planClass === 'regular' && tierOverridden === true && nextTierRaw === null) {
+    nextTier = { ...unknownNextTier(), state:'tier-overridden' };
+  } else if (enterprise === false && planClass === 'regular' && tierOverridden === false && nextTierRaw === null) {
+    nextTier = { ...unknownNextTier(), state:'max-tier' };
+  } else if (enterprise === false && planClass === 'regular' && tierOverridden === false
+      && nextTierRaw && typeof nextTierRaw === 'object' && !Array.isArray(nextTierRaw)) {
+    const tier = Number.isInteger(nextTierRaw.tier) && nextTierRaw.tier >= 0 ? nextTierRaw.tier : null;
+    const daysUntilQualify = Number.isInteger(nextTierRaw.daysUntilQualify) && nextTierRaw.daysUntilQualify >= 0 ? nextTierRaw.daysUntilQualify : null;
+    const spendUsdUntilQualify = gatewayLimitsNumber(nextTierRaw.spendUsdUntilQualify);
+    const daysUntilSpendPathUnlocks = Number.isInteger(nextTierRaw.daysUntilSpendPathUnlocks) && nextTierRaw.daysUntilSpendPathUnlocks >= 0
+      ? nextTierRaw.daysUntilSpendPathUnlocks
+      : null;
+    if (trustTier !== null && tier !== null && daysUntilQualify !== null && spendUsdUntilQualify !== null && daysUntilSpendPathUnlocks !== null) {
+      nextTier = {
+        state:'value', currentTier:trustTier, tier,
+        daysUntilQualify, spendUsdUntilQualify, daysUntilSpendPathUnlocks,
+      };
+    }
+  }
+
   return {
     state: 'ok',
     source: 'org-limits',
@@ -121,6 +151,7 @@ function normalizeGatewayLimitsCapture(capture, now = Date.now()) {
     daily: spendMetric(dailyUsed, dailyCap),
     monthly: spendMetric(monthlyUsed, monthlyCap),
     topUp,
+    nextTier,
     fetchedAt: Number(now),
   };
 }

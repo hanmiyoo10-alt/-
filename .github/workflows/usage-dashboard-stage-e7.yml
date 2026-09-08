@@ -155,7 +155,9 @@ jobs:
     outputs:
       candidate_sha: ${{ steps.materialize.outputs.candidate_sha }}
       bundle_sha256: ${{ steps.materialize.outputs.bundle_sha256 }}
+      failure_phase: ${{ steps.materialize.outputs.failure_phase }}
       failure_reason: ${{ steps.materialize.outputs.failure_reason }}
+      failure_diagnostic_code: ${{ steps.materialize.outputs.failure_diagnostic_code }}
     steps:
       - name: Checkout frozen trusted main base
         uses: actions/checkout@v4
@@ -272,8 +274,20 @@ jobs:
           RELEASE_EVIDENCE_CONTEXT: ${{ runner.temp }}/usage-dashboard-e24-evidence.json
         run: |
           set -euo pipefail
+          FAILURE_PHASE='unknown'
           FAILURE_REASON='E7_MATERIALIZE_OR_SMOKE_FAILED'
-          trap 'rc=$?; if [[ $rc -ne 0 ]]; then echo "failure_reason=$FAILURE_REASON" >> "$GITHUB_OUTPUT"; fi' EXIT
+          FAILURE_DIAGNOSTIC_CODE=''
+          emit_failure_outputs() {
+            {
+              echo "failure_phase=$FAILURE_PHASE"
+              echo "failure_reason=$FAILURE_REASON"
+              echo "failure_diagnostic_code=$FAILURE_DIAGNOSTIC_CODE"
+            } >> "$GITHUB_OUTPUT"
+          }
+          trap 'rc=$?; if [[ $rc -ne 0 ]]; then emit_failure_outputs; fi' EXIT
+
+          FAILURE_PHASE='source-intent'
+          FAILURE_REASON='E7_SOURCE_INTENT_APPLY_FAILED'
           node plugins/usage-dashboard/tools/candidate_stage_e6.cjs --check-derived-branch "$CANDIDATE_BRANCH" >/dev/null
           git fetch --no-tags origin "refs/heads/$SOURCE_BRANCH:refs/remotes/origin/e7-source"
           [[ "$(git rev-parse refs/remotes/origin/e7-source)" == "$SOURCE_SHA" ]] || { echo 'E7_SOURCE_BRANCH_MOVED'; exit 1; }
@@ -297,10 +311,15 @@ jobs:
           git commit -m "stage: apply Usage Dashboard source intent $SOURCE_SHA"
           test -f "$RELEASE_SPEC"
           test -s "$RELEASE_EVIDENCE_CONTEXT"
+
+          FAILURE_PHASE='preflight'
+          FAILURE_REASON='E7_RELEASE_PREFLIGHT_REJECTED'
           if ! node plugins/usage-dashboard/tools/release_generic_preflight.cjs --spec "$RELEASE_SPEC" --release-evidence-context "$RELEASE_EVIDENCE_CONTEXT"; then
-            FAILURE_REASON='RELEASE_PREFLIGHT_REJECTED'
             exit 1
           fi
+
+          FAILURE_PHASE='compile'
+          FAILURE_REASON='E7_MATERIALIZER_COMPILE_FAILED'
           UD_MATERIALIZER="$(node - "$RELEASE_SPEC" <<'NODE'
           const fs=require('node:fs');
           const spec=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
@@ -310,14 +329,29 @@ jobs:
           NODE
           )"
           python3 -m py_compile "$UD_MATERIALIZER" plugins/usage-dashboard/tools/reconcile_release_candidate.py plugins/usage-dashboard/tools/validate_release_candidate.py
+
+          FAILURE_PHASE='materializer'
+          FAILURE_REASON='E7_MATERIALIZER_EXEC_FAILED'
           python3 "$UD_MATERIALIZER"
+
+          FAILURE_PHASE='reconcile'
+          FAILURE_REASON='E7_RECONCILE_FAILED'
           python3 plugins/usage-dashboard/tools/reconcile_release_candidate.py --spec "$RELEASE_SPEC" --two-pass
+
+          FAILURE_PHASE='syntax'
+          FAILURE_REASON='E7_SYNTAX_CHECK_FAILED'
           node --check plugins/usage-dashboard/latest.js
           node --check plugins/usage-dashboard/runtime/bridge-manager.cjs
           node --check plugins/usage-dashboard/runtime/bridge-engine.mjs
           bash -n plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh
+
+          FAILURE_PHASE='guidelines'
+          FAILURE_REASON='E7_GUIDELINE_SYNC_FAILED'
           python3 plugins/usage-dashboard/tools/sync_project_guidelines.py --check
           git diff --check
+
+          FAILURE_PHASE='impact'
+          FAILURE_REASON='E18_RUNTIME_IMPACT_REJECTED'
           E18_PLAN="$(node plugins/usage-dashboard/tools/derived_impact_e18.cjs --smoke-plan "$TRUSTED_BASE_SHA")"
           E18_DIAGNOSTIC="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.diagnostic)' "$E18_PLAN")"
           E18_SMOKE_MODE="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.smoke.mode)' "$E18_PLAN")"
@@ -325,17 +359,40 @@ jobs:
           E18_SMOKE_REASON="$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.smoke.reason)' "$E18_PLAN")"
           echo "UD_DERIVED_IMPACT:$E18_DIAGNOSTIC"
           if [[ "$E18_SMOKE_MODE" == 'block' ]]; then
-            FAILURE_REASON='E18_UNKNOWN_RUNTIME_IMPACT'
+            FAILURE_DIAGNOSTIC_CODE='E18_UNKNOWN_RUNTIME_IMPACT'
             echo "E18_UNKNOWN_RUNTIME_IMPACT:$E18_SMOKE_REASON"
             exit 1
           elif [[ "$E18_SMOKE_MODE" == 'run' ]]; then
-            [[ "$E18_SMOKE_REPEAT" =~ ^[1-9][0-9]*$ ]] || { echo 'E18_SMOKE_REPEAT_INVALID'; exit 1; }
+            FAILURE_PHASE='smoke'
+            FAILURE_REASON='E7_BEHAVIOR_SMOKE_FAILED'
+            if [[ ! "$E18_SMOKE_REPEAT" =~ ^[1-9][0-9]*$ ]]; then
+              FAILURE_DIAGNOSTIC_CODE='E18_SMOKE_REPEAT_INVALID'
+              echo 'E18_SMOKE_REPEAT_INVALID'
+              exit 1
+            fi
             node plugins/usage-dashboard/tools/run_behavior_smoke.cjs --repeat "$E18_SMOKE_REPEAT"
           else
-            [[ "$E18_SMOKE_MODE" == 'skip' ]] || { echo "E18_SMOKE_MODE_INVALID:$E18_SMOKE_MODE"; exit 1; }
+            if [[ "$E18_SMOKE_MODE" != 'skip' ]]; then
+              FAILURE_DIAGNOSTIC_CODE='E18_SMOKE_MODE_INVALID'
+              echo "E18_SMOKE_MODE_INVALID:$E18_SMOKE_MODE"
+              exit 1
+            fi
             echo "BEHAVIOR_SMOKE_SKIPPED:$E18_SMOKE_REASON"
           fi
-          [[ -z "$(git status --porcelain --untracked-files=all -- plugins/usage-dashboard/tests)" ]] || { git status --short plugins/usage-dashboard/tests; echo 'TEST_TREE_MUTATED'; exit 1; }
+
+          FAILURE_PHASE='test-tree'
+          FAILURE_REASON='E7_TEST_TREE_MUTATED'
+          FAILURE_DIAGNOSTIC_CODE=''
+          if [[ -n "$(git status --porcelain --untracked-files=all -- plugins/usage-dashboard/tests)" ]]; then
+            FAILURE_DIAGNOSTIC_CODE='TEST_TREE_MUTATED'
+            git status --short plugins/usage-dashboard/tests
+            echo 'TEST_TREE_MUTATED'
+            exit 1
+          fi
+
+          FAILURE_PHASE='derived-verify'
+          FAILURE_REASON='E7_DERIVED_VERIFY_FAILED'
+          FAILURE_DIAGNOSTIC_CODE=''
           git add -A
           TREE_SHA="$(git write-tree)"
           NEEDS_FROZEN_MAIN_PARENT=false
@@ -350,6 +407,9 @@ jobs:
           PAYLOAD_SHA="$(printf 'materialize: Usage Dashboard %s from source %s\n\nUsage-Dashboard-Frozen-Main: %s\n' "$PRODUCT_VERSION" "$SOURCE_SHA" "$TRUSTED_BASE_SHA" | git commit-tree "$TREE_SHA" "${PARENT_ARGS[@]}")"
           node plugins/usage-dashboard/tools/candidate_stage_e6.cjs --verify-derived "$TRUSTED_BASE_SHA" "$CANDIDATE_PARENT_SHA" "$PAYLOAD_SHA" "$SOURCE_FILES_JSON"
           git branch -f candidate-payload "$PAYLOAD_SHA"
+
+          FAILURE_PHASE='bundle'
+          FAILURE_REASON='E7_BUNDLE_BUILD_FAILED'
           BUNDLE="$RUNNER_TEMP/usage-dashboard-e7-candidate.bundle"
           META="$RUNNER_TEMP/usage-dashboard-e7-candidate.json"
           BUNDLE_EXCLUDES=("^$CANDIDATE_PARENT_SHA")
@@ -364,7 +424,9 @@ jobs:
           NODE
           echo "candidate_sha=$PAYLOAD_SHA" >> "$GITHUB_OUTPUT"
           echo "bundle_sha256=$BUNDLE_SHA256" >> "$GITHUB_OUTPUT"
+          echo 'failure_phase=' >> "$GITHUB_OUTPUT"
           echo 'failure_reason=' >> "$GITHUB_OUTPUT"
+          echo 'failure_diagnostic_code=' >> "$GITHUB_OUTPUT"
           trap - EXIT
           echo "E7_CANDIDATE_BUNDLE_READY:$CANDIDATE_BRANCH:$CANDIDATE_PARENT_SHA:$PAYLOAD_SHA"
 
@@ -523,9 +585,17 @@ jobs:
     needs: [resolve_stage, materialize_stage, write_candidate]
     if: ${{ always() && (needs.resolve_stage.result == 'failure' || needs.materialize_stage.result == 'failure' || needs.write_candidate.result == 'failure') }}
     permissions:
+      contents: read
       issues: write
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout trusted E25 failure projection
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Post actionable stage failure receipt
         shell: bash
         env:
@@ -533,22 +603,28 @@ jobs:
           RESOLVE_RESULT: ${{ needs.resolve_stage.result }}
           MATERIALIZE_RESULT: ${{ needs.materialize_stage.result }}
           WRITE_RESULT: ${{ needs.write_candidate.result }}
-          RESOLVE_REASON: ${{ needs.resolve_stage.outputs.failure_reason }}
+          MATERIALIZE_PHASE: ${{ needs.materialize_stage.outputs.failure_phase }}
           MATERIALIZE_REASON: ${{ needs.materialize_stage.outputs.failure_reason }}
-          WRITE_REASON: ${{ needs.write_candidate.outputs.failure_reason }}
+          MATERIALIZE_DIAGNOSTIC_CODE: ${{ needs.materialize_stage.outputs.failure_diagnostic_code }}
         run: |
           set -euo pipefail
-          if [[ "$RESOLVE_RESULT" == 'failure' ]]; then REASON="${RESOLVE_REASON:-SOURCE_POLICY_REJECTED}"; NEXT='fix the source-policy rejection and run the same stage command again';
-          elif [[ "$MATERIALIZE_RESULT" == 'failure' ]]; then REASON="${MATERIALIZE_REASON:-E7_MATERIALIZE_FAILED}"; NEXT='fix source/tests/materializer or preflight rejection and run the same stage command again';
-          else REASON="${WRITE_REASON:-E7_WRITER_FAILED}"; NEXT='rerun the same stage command; stale/CAS conflicts fail closed'; fi
-          BODY="$(cat <<EOF
-          UD_STAGE_REJECTED
-          reason: $REASON
-          transaction: $GITHUB_RUN_ID
-          run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
-          next: $NEXT
-          EOF
-          )"
+          if [[ "$RESOLVE_RESULT" == 'failure' ]]; then
+            PHASE='resolve'
+            REASON='E7_SOURCE_POLICY_REJECTED'
+            DIAGNOSTIC=''
+            NEXT='fix the source-policy rejection and run the same stage command again'
+          elif [[ "$MATERIALIZE_RESULT" == 'failure' ]]; then
+            PHASE="${MATERIALIZE_PHASE:-unknown}"
+            REASON="${MATERIALIZE_REASON:-E7_MATERIALIZE_OR_SMOKE_FAILED}"
+            DIAGNOSTIC="${MATERIALIZE_DIAGNOSTIC_CODE:-}"
+            NEXT='fix the bounded failed phase and run the same stage command again'
+          else
+            PHASE='writer'
+            REASON='E7_WRITER_FAILED'
+            DIAGNOSTIC=''
+            NEXT='rerun the same stage command; stale/CAS conflicts fail closed'
+          fi
+          BODY="$(node plugins/usage-dashboard/tools/stage_failure_projection_e25.cjs --format "$PHASE" "$REASON" "$DIAGNOSTIC" "$GITHUB_RUN_ID" "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" "$NEXT")"
           jq -n --arg body "$BODY" '{body:$body}' > "$RUNNER_TEMP/receipt.json"
           curl --fail-with-body --silent --show-error -X POST \
             -H 'Accept: application/vnd.github+json' \

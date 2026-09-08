@@ -27,7 +27,7 @@
   "knownCandidateKeys": [
     {
       "id": "V-KEY-LIMIT-HEADROOM",
-      "status": "source-proven-design-5.108"
+      "status": "implemented-5.108"
     },
     {
       "id": "V-GATEWAY-LIMITS-HEADROOM",

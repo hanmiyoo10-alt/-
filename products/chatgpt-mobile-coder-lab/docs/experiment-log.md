@@ -371,10 +371,85 @@ tools
 - 따라서 tool process의 current working directory를 repository root라고 가정하면 안 된다.
 - repository 작업에는 absolute path 또는 `git -C /root/nyang-repo ...` 방식을 우선한다.
 
+## 2026-09-09 — remote file read/search 및 branch lag 진단
+
+Remote Desktop Commander를 통해 `/root/nyang-repo/README.md` 처음 40줄을 읽고 ChatGPT가 그 내용만으로 repository 목적을 요약하는 데 성공했다.
+
+또한 repository 전체 문자열 검색도 실행됐다.
+
+`chatgpt-mobile-coder-lab` 문자열은 당시 서버폰 checkout에서 발견되지 않았지만, GitHub 비교 결과 원인은 remote 검색 실패가 아니라 branch freshness 차이였다.
+
+확인 결과:
+
+```text
+git rev-list --left-right --count server/work...origin/main
+→ 0 50
+```
+
+즉 `server/work`의 독자 커밋은 0이고 `origin/main`이 50 commits 앞선 fast-forward 관계였다.
+
+## 2026-09-09 — 첫 disposable remote write smoke test 성공
+
+`server/work`와 기존 `/root/nyang-repo`를 직접 수정하지 않고 별도 disposable worktree를 사용했다.
+
+대상 경로:
+
+```text
+/root/nyang-worktrees/remote-write-smoke
+```
+
+사전 확인에서 경로는 존재하지 않았다.
+
+최신 `origin/main` 기준으로 detached worktree 생성 성공:
+
+```text
+initial status
+→ ## HEAD (no branch)
+
+HEAD
+→ bba7e5f2
+```
+
+새 worktree 안에서만 다음 파일을 생성했다.
+
+```text
+REMOTE_DESKTOP_COMMANDER_SMOKE.txt
+```
+
+파일 내용:
+
+```text
+remote desktop commander write smoke test
+```
+
+생성 직후 Git 상태:
+
+```text
+?? REMOTE_DESKTOP_COMMANDER_SMOKE.txt
+```
+
+그 파일을 다시 읽어 정확한 내용이 유지되는 것을 확인했다.
+
+이후 테스트 파일을 삭제했고 최종 `git status --short`는 아무 출력도 반환하지 않았다.
+
+판정:
+
+- ChatGPT 모바일이 remote filesystem write를 실제 수행함.
+- 새 Git worktree 생성 명령도 remote shell에서 정상 실행됨.
+- 파일 create → read → Git dirty 감지 → delete → clean 복귀의 전체 루프가 성공함.
+- permanent `server/work` working tree를 수정하지 않고 isolated disposable worktree에서 쓰기 기능을 검증함.
+- 따라서 다음 경로가 read-only를 넘어 실제 쓰기 수준에서도 성립함.
+
+```text
+일반 ChatGPT 모바일
+→ Remote Desktop Commander
+→ 서버폰 Ubuntu PRoot
+→ isolated Git worktree
+→ local filesystem write/read/delete
+```
+
 ## 현재 실험 checkpoint
 
-다음 단계는 **작은 파일 read/search와 harmless read-only command를 몇 차례 반복해 remote channel 안정성을 확인하는 것**이다.
+다음 단계는 **동일 disposable worktree에서 tracked text file 하나를 한 줄 수정하고 `git diff --check`/`git diff`로 검증한 뒤 정확히 원상복구하는 patch-level smoke test**다.
 
-그 다음에만 별도 disposable feature worktree를 만들어 작은 write/patch/test를 검증한다.
-
-현재 `server/work` working tree에는 이 write 실험을 직접 하지 않는다.
+그 뒤에만 named feature branch/worktree를 만들어 실제 개발 작업, 테스트, commit/push/PR 단계를 각각 분리해 검증한다.

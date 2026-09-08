@@ -38,7 +38,31 @@ p.write_text(s.replace(needle, replacement))
 shutil.copyfile(source / 'image.rs', root / 'wie-wipi-c/src/api/graphics/image.rs')
 config = root / 'wie-app/tauri.conf.json'
 data = json.loads(config.read_text())
-data['productName'] = 'Fortune Golf Probe 5'
-data['identifier'] = 'io.hanmiyoo.fortunegolf.probe5'
-data['version'] = '0.1.5'
+data['productName'] = 'Fortune Golf Probe 6'
+data['identifier'] = 'io.hanmiyoo.fortunegolf.probe6'
+data['version'] = '0.1.6'
 config.write_text(json.dumps(data, indent=2) + '\n')
+
+# Preserve native call context in the visible error after ARM state unwinds.
+p = root / 'wie-ktf/src/runtime/wipi_c/context.rs'
+s = p.read_text()
+needle = '        self.core.run_function(address, args).await'
+replacement = """        self.core.run_function(address, args).await.map_err(|error| {
+            WieError::FatalError(alloc::format!(
+                "Probe 6 native call: target={address:#010x}, args={args:#x?}; {error}"
+            ))
+        })"""
+assert s.count(needle) == 1, 'Pinned native call layout changed'
+p.write_text(s.replace(needle, replacement))
+
+p = root / 'wie-wipi-c/src/api/kernel.rs'
+s = p.read_text()
+needle = '            context.call_function(self.fn_callback, &[self.ptr_timer, self.param]).await?;'
+replacement = """            context.call_function(self.fn_callback, &[self.ptr_timer, self.param]).await.map_err(|error| {
+                WieError::FatalError(alloc::format!(
+                    "Probe 6 timer: timer={:#010x}, callback={:#010x}, param={:#010x}; {error}",
+                    self.ptr_timer, self.fn_callback, self.param
+                ))
+            })?;"""
+assert s.count(needle) == 1, 'Pinned timer callback layout changed'
+p.write_text(s.replace(needle, replacement))

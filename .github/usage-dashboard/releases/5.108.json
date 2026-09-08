@@ -1,0 +1,100 @@
+{
+  "product": "Local Usage Dashboard",
+  "productVersion": "3.0.0-alpha.5.108",
+  "releaseTitle": "DevPass API Key Organization Limit",
+  "engineVersion": "1.6.42",
+  "managerVersion": "1.3.6",
+  "managedCliVersion": "1.10.0",
+  "managedCliAuthority": {
+    "schemaVersion": 1,
+    "package": "@llmgateway/cli",
+    "version": "1.10.0",
+    "exact": true,
+    "upstreamRepository": "theopenco/llmgateway-templates",
+    "tagNamespace": "@llmgateway/cli@",
+    "tag": "@llmgateway/cli@1.10.0",
+    "tagCommit": "6b1cda1988f32010a9b090c00eb9b2fe672145fe",
+    "verifiedAt": "2026-08-31",
+    "verification": "GitHub refs/tags/@llmgateway/cli@1.10.0",
+    "parentProjectRepository": "theopenco/llmgateway",
+    "parentProjectReleaseIsPackageAuthority": false
+  },
+  "managedModelCatalogVersion": "1.280.0",
+  "managedModelCatalogAuthority": {
+    "package": "@llmgateway/models",
+    "version": "1.280.0",
+    "exact": true,
+    "root": "managed-cli-version-root",
+    "source": "installed-package-json-and-export",
+    "upstreamRepository": "theopenco/llmgateway",
+    "upstreamCommit": "fbb40efa41c379db5223dff708509b6dd82e05a9",
+    "verifiedAt": "2026-08-31"
+  },
+  "snapshotContract": 1,
+  "recentRequestContract": 1,
+  "contracts": {
+    "snapshot": 1,
+    "recentRequest": 1
+  },
+  "releaseEvidence": {
+    "schemaVersion": 1,
+    "acceptedBaseline": {
+      "productVersion": "3.0.0-alpha.5.107",
+      "releaseSha": "b5ff566fdf164580b0edfa6e2db1d07cc88992bf",
+      "verdict": "accepted",
+      "issue": 1892,
+      "commentId": 5581888722,
+      "note": "5.107 completed exact PocketRisu physical acceptance before 5.108 implementation."
+    },
+    "latestInstalled": {
+      "productVersion": "3.0.0-alpha.5.107",
+      "releaseSha": "b5ff566fdf164580b0edfa6e2db1d07cc88992bf",
+      "verdict": "accepted",
+      "issue": 1892,
+      "commentId": 5581888722,
+      "note": "5.107 is the latest exact installed accepted production baseline at 5.108 source freeze."
+    }
+  },
+  "authority": {
+    "featureIssue": 1899,
+    "designPullRequest": 1902,
+    "physicalAcceptanceIssue": 1888,
+    "releaseGeneration": "E13",
+    "e20": "structured release evidence remains authoritative",
+    "e21": "canonical evidence-view compatibility retained",
+    "e22": "latest physically accepted baseline remains distinct from latest deployment",
+    "e23": "accepted-baseline handoff boundary remains sealed",
+    "e24": "source authoring and ordinary readiness consume the same derived accepted-baseline authority",
+    "e25": "trusted PR handoff and bounded stage-failure projection remain active without changing product truth authority"
+  },
+  "materializer": "plugins/usage-dashboard/tools/release_devpass_api_key_org_limit_5108.py",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
+  "newRegression": "plugins/usage-dashboard/tests/p75-devpass-api-key-org-limit.cjs",
+  "highlights": [
+    "Adds a compact read-only DevPass API Keys organization-limit block using exact server-provided plan-limit values.",
+    "Shows organization-wide active developer API keys, the server-resolved maximum, and deterministic non-negative creation headroom.",
+    "Keeps API-key rows, IDs, masked tokens, creator/IAM metadata, plan strings, project IDs, and authentication material behind the Engine capture boundary.",
+    "Moves Engine to 1.6.42 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded."
+  ],
+  "diagnosticHints": [
+    "Verify Product 5.108 · Engine 1.6.42 · Manager 1.3.6 and READY/Health ok.",
+    "Open DevPass and confirm API Keys · 조직 한도 appears with exact N / M and creation headroom when source authority is available.",
+    "Diagnostics should include one bounded API key org limit line; no API-key mutation or artificial traffic is required."
+  ],
+  "releaseNotes": {
+    "highlights": [
+      "Adds a compact read-only DevPass API Keys organization-limit block using exact server-provided plan-limit values.",
+      "Shows organization-wide active developer API keys, the server-resolved maximum, and deterministic non-negative creation headroom.",
+      "Keeps API-key rows, IDs, masked tokens, creator/IAM metadata, plan strings, project IDs, and authentication material behind the Engine capture boundary.",
+      "Moves Engine to 1.6.42 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded."
+    ],
+    "diagnosticHints": [
+      "Verify Product 5.108 · Engine 1.6.42 · Manager 1.3.6 and READY/Health ok.",
+      "Open DevPass and confirm API Keys · 조직 한도 appears with exact N / M and creation headroom when source authority is available.",
+      "Diagnostics should include one bounded API key org limit line; no API-key mutation or artificial traffic is required."
+    ]
+  }
+}

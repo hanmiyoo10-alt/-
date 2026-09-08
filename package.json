@@ -1,0 +1,14 @@
+{
+  "name": "nyangnyang-update-channel",
+  "private": true,
+  "scripts": {
+    "codex": "codex",
+    "codex:version": "codex --version"
+  },
+  "devDependencies": {
+    "@openai/codex": "0.153.4"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}

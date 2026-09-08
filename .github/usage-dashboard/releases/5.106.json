@@ -1,0 +1,99 @@
+{
+  "product": "Local Usage Dashboard",
+  "productVersion": "3.0.0-alpha.5.106",
+  "releaseTitle": "Credits Endpoint RPM Limits",
+  "engineVersion": "1.6.40",
+  "managerVersion": "1.3.6",
+  "managedCliVersion": "1.10.0",
+  "managedCliAuthority": {
+    "schemaVersion": 1,
+    "package": "@llmgateway/cli",
+    "version": "1.10.0",
+    "exact": true,
+    "upstreamRepository": "theopenco/llmgateway-templates",
+    "tagNamespace": "@llmgateway/cli@",
+    "tag": "@llmgateway/cli@1.10.0",
+    "tagCommit": "6b1cda1988f32010a9b090c00eb9b2fe672145fe",
+    "verifiedAt": "2026-08-31",
+    "verification": "GitHub refs/tags/@llmgateway/cli@1.10.0",
+    "parentProjectRepository": "theopenco/llmgateway",
+    "parentProjectReleaseIsPackageAuthority": false
+  },
+  "managedModelCatalogVersion": "1.280.0",
+  "managedModelCatalogAuthority": {
+    "package": "@llmgateway/models",
+    "version": "1.280.0",
+    "exact": true,
+    "root": "managed-cli-version-root",
+    "source": "installed-package-json-and-export",
+    "upstreamRepository": "theopenco/llmgateway",
+    "upstreamCommit": "fbb40efa41c379db5223dff708509b6dd82e05a9",
+    "verifiedAt": "2026-08-31"
+  },
+  "snapshotContract": 1,
+  "recentRequestContract": 1,
+  "contracts": {
+    "snapshot": 1,
+    "recentRequest": 1
+  },
+  "releaseEvidence": {
+    "schemaVersion": 1,
+    "acceptedBaseline": {
+      "productVersion": "3.0.0-alpha.5.105",
+      "releaseSha": "0e6eea0232fce4ffa1ceb51dca03d0f88d1ea13c",
+      "verdict": "accepted",
+      "issue": 1869,
+      "commentId": 5578155765,
+      "note": "5.105 completed exact PocketRisu physical acceptance before 5.106 implementation."
+    },
+    "latestInstalled": {
+      "productVersion": "3.0.0-alpha.5.105",
+      "releaseSha": "0e6eea0232fce4ffa1ceb51dca03d0f88d1ea13c",
+      "verdict": "accepted",
+      "issue": 1869,
+      "commentId": 5578155765,
+      "note": "5.105 is the latest exact installed accepted production baseline at 5.106 source freeze."
+    }
+  },
+  "authority": {
+    "featureIssue": 1874,
+    "designPullRequest": 1875,
+    "physicalAcceptanceIssue": 1864,
+    "releaseGeneration": "E13",
+    "e20": "structured release evidence remains authoritative",
+    "e21": "canonical evidence-view compatibility retained",
+    "e22": "latest physically accepted baseline remains distinct from latest deployment",
+    "e23": "accepted-baseline handoff boundary remains sealed",
+    "e24": "source authoring and ordinary readiness consume the same derived accepted-baseline authority"
+  },
+  "materializer": "plugins/usage-dashboard/tools/release_credits_endpoint_rpm_5106.py",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
+  "newRegression": "plugins/usage-dashboard/tests/p72-credits-endpoint-rpm-limits.cjs",
+  "highlights": [
+    "Adds a compact read-only endpoint RPM limits table to the existing Credits Gateway Limits card.",
+    "Uses only exact selected-organization limits rows with bounded endpoint key and explicit RPM; explicit zero is Unlimited.",
+    "Enterprise, rate-limits-disabled, malformed, duplicate, missing, and unavailable states remain explicit without partial or synthetic limits.",
+    "Moves Engine to 1.6.40 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded."
+  ],
+  "diagnosticHints": [
+    "Verify Product 5.106 · Engine 1.6.40 · Manager 1.3.6 and READY/Health ok.",
+    "Open Credits and confirm Gateway Limits plus the collapsed Endpoint RPM organization-limit surface are healthy.",
+    "Diagnostics should include one ID-free Gateway endpoint RPM line; no artificial traffic, 429, or load test is required."
+  ],
+  "releaseNotes": {
+    "highlights": [
+      "Adds a compact read-only endpoint RPM limits table to the existing Credits Gateway Limits card.",
+      "Uses only exact selected-organization limits rows with bounded endpoint key and explicit RPM; explicit zero is Unlimited.",
+      "Enterprise, rate-limits-disabled, malformed, duplicate, missing, and unavailable states remain explicit without partial or synthetic limits.",
+      "Moves Engine to 1.6.40 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded."
+    ],
+    "diagnosticHints": [
+      "Verify Product 5.106 · Engine 1.6.40 · Manager 1.3.6 and READY/Health ok.",
+      "Open Credits and confirm Gateway Limits plus the collapsed Endpoint RPM organization-limit surface are healthy.",
+      "Diagnostics should include one ID-free Gateway endpoint RPM line; no artificial traffic, 429, or load test is required."
+    ]
+  }
+}

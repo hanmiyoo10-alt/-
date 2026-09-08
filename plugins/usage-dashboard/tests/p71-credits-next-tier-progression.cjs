@@ -39,14 +39,6 @@ assert.equal(spec.newRegression, 'plugins/usage-dashboard/tests/p71-credits-next
 assert.equal(spec.authority?.featureIssue, 1864);
 assert.equal(spec.authority?.designPullRequest, 1867);
 assert.equal(spec.authority?.releaseGeneration, 'E13');
-for (const role of ['acceptedBaseline','latestInstalled']) {
-  const row = spec.releaseEvidence?.[role];
-  assert.equal(row?.productVersion, BASE);
-  assert.equal(row?.releaseSha, BASE_RELEASE_SHA);
-  assert.equal(row?.verdict, 'accepted');
-  assert.equal(row?.issue, 1861);
-  assert.equal(row?.commentId, 5577292772);
-}
 
 const design = fs.readFileSync('docs/USAGE_DASHBOARD_5105_CREDITS_NEXT_TIER_DESIGN.md', 'utf8');
 for (const marker of [

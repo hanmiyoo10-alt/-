@@ -115,9 +115,7 @@ Avoid moving renderer work into SimCore unless there is a strong, measured reaso
 
 ## 4. Stable First
 
-Every update starts from the currently verified production version.
-
-Preferred workflow:
+Repository-wide baseline preservation follows `RCR-D01`. SimCore release work retains this project-specific workflow:
 
 ```text
 Stable production
@@ -135,11 +133,9 @@ Version bump
 Production deployment
 ```
 
-Prefer a small, explainable diff over a broad rewrite.
-
 ## 5. One Release, One Primary Goal
 
-A mini update should have one primary purpose.
+Repository-wide bounded-goal policy follows `RCR-D02`. For SimCore mini releases, keep one primary purpose and keep unrelated cache, Broadcast, Mirror, UI, storage, and Continuity changes in separate releases unless one coherent architectural goal explicitly requires them.
 
 Good:
 
@@ -149,13 +145,9 @@ Good:
 0.63.46 — Prompt Prefix Stabilization
 ```
 
-Avoid combining unrelated work such as cache changes, Broadcast changes, Mirror changes, UI changes, storage changes, and Continuity changes in one mini release.
-
 ## 6. Evidence Before Repair
 
-Do not repair an uncertain cause.
-
-Preferred sequence:
+Repository-wide evidence-first repair policy follows `RCR-D03`. SimCore retains this diagnostic sequence:
 
 ```text
 Observe

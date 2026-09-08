@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "captured_date": "2026-09-08",
+  "canonical_inventory": "https://github.com/hanmiyoo10-alt/-/issues/464",
+  "status": "REFERENCE_ARCHIVED_NOT_INSTALLED",
+  "scope": "Full selected skill subtrees; selected original CLI documentation/licenses/reference source only. Not CLI distributions or full repository mirrors.",
+  "repositories": [
+    {
+      "repository": "rhysd/actionlint",
+      "url": "https://github.com/rhysd/actionlint",
+      "commit": "011a6d15e749bb3f2d771eed9c7aa0e7e3e10ee7",
+      "license": "MIT",
+      "prefix": "source/rhysd/actionlint",
+      "coverage": "Only explicitly listed files; all unlisted upstream files excluded",
+      "files": [
+        {
+          "path": "LICENSE.txt",
+          "mode": "100644",
+          "bytes": 1067,
+          "git_blob_sha1": "69292aedc9113498e83d72e48d38894f9a2a2eb6"
+        },
+        {
+          "path": "README.md",
+          "mode": "100644",
+          "bytes": 8243,
+          "git_blob_sha1": "05c8718a5ad816741cfad65c493db7de34c7aedc"
+        },
+        {
+          "path": "docs/checks.md",
+          "mode": "100644",
+          "bytes": 129782,
+          "git_blob_sha1": "4f189453b15496359a8e28995e494efecb8aebc7"
+        },
+        {
+          "path": "docs/usage.md",
+          "mode": "100644",
+          "bytes": 19841,
+          "git_blob_sha1": "fcc71bc4fb0df35132d92ac2c7a94fd1e4d2c007"
+        },
+        {
+          "path": "scripts/download-actionlint.bash",
+          "mode": "100755",
+          "bytes": 4059,
+          "git_blob_sha1": "fbe1843d3e086501b6171b4a38f25e2446d0aace"
+        }
+      ]
+    },
+    {
+      "repository": "koalaman/shellcheck",
+      "url": "https://github.com/koalaman/shellcheck",
+      "commit": "9af7ee28ce587baadd950b85dd6826a16b9c068d",
+      "license": "GPL-3.0 (see LICENSE and source notices)",
+      "prefix": "source/koalaman/shellcheck",
+      "coverage": "Only explicitly listed files; all unlisted upstream files excluded",
+      "files": [
+        {
+          "path": "LICENSE",
+          "mode": "100644",
+          "bytes": 35149,
+          "git_blob_sha1": "f288702d2fa16d3cdf0035b15a9fcbc552cd88e7"
+        },
+        {
+          "path": "README.md",
+          "mode": "100644",
+          "bytes": 21160,
+          "git_blob_sha1": "a384fcae68c04776defb31f9fb3343cb4c9c179f"
+        },
+        {
+          "path": "shellcheck.1.md",
+          "mode": "100644",
+          "bytes": 14124,
+          "git_blob_sha1": "2fdc5f4d8ad141d50c1048949229b767abad4db4"
+        },
+        {
+          "path": "shellcheck.hs",
+          "mode": "100644",
+          "bytes": 23179,
+          "git_blob_sha1": "9378b78f03c254e8846c513c93fbf3bc0cca7a39"
+        }
+      ]
+    },
+    {
+      "repository": "jdx/mise",
+      "url": "https://github.com/jdx/mise",
+      "commit": "59ec32fc0be163baf952109c18c986e48c1c901f",
+      "license": "MIT",
+      "prefix": "source/jdx/mise",
+      "coverage": "Only explicitly listed files; all unlisted upstream files excluded",
+      "files": [
+        {
+          "path": "LICENSE",
+          "mode": "100644",
+          "bytes": 1068,
+          "git_blob_sha1": "5333824e7fed856d37c22a975e3b323b8bbdf1f7"
+        },
+        {
+          "path": "README.md",
+          "mode": "100644",
+          "bytes": 8439,
+          "git_blob_sha1": "fdfdb2c3e87d6687fe770e0aed7f2a382eba3da5"
+        },
+        {
+          "path": "docs/configuration.md",
+          "mode": "100644",
+          "bytes": 41462,
+          "git_blob_sha1": "250b5bfd0ef375af7c4ac09e352a6b79288820de"
+        },
+        {
+          "path": "docs/tasks/index.md",
+          "mode": "100644",
+          "bytes": 4676,
+          "git_blob_sha1": "7e0ea0e3d0454c559c37d847d5ed831cc6a51fd1"
+        }
+      ]
+    },
+    {
+      "repository": "sharkdp/hyperfine",
+      "url": "https://github.com/sharkdp/hyperfine",
+      "commit": "f12f3d9f86f3643b3b7deace5e160b1f0f44d2b7",
+      "license": "MIT OR Apache-2.0",
+      "prefix": "source/sharkdp/hyperfine",
+      "coverage": "Only explicitly listed files; all unlisted upstream files excluded",
+      "files": [
+        {
+          "path": "LICENSE-APACHE",
+          "mode": "100644",
+          "bytes": 11357,
+          "git_blob_sha1": "261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64"
+        },
+        {
+          "path": "LICENSE-MIT",
+          "mode": "100644",
+          "bytes": 1105,
+          "git_blob_sha1": "ad784ac3e1a933e8dd8094d434bcb25ea7557e29"
+        },
+        {
+          "path": "README.md",
+          "mode": "100644",
+          "bytes": 11036,
+          "git_blob_sha1": "ff6020064b280f32a3d0545a112ea2734278d5a6"
+        }
+      ]
+    },
+    {
+      "repository": "ast-grep/ast-grep",
+      "url": "https://github.com/ast-grep/ast-grep",
+      "commit": "fc2b1530db74de49131b725221de98036a552a9f",
+      "license": "MIT",
+      "prefix": "source/ast-grep/ast-grep",
+      "coverage": "Only explicitly listed files; all unlisted upstream files excluded",
+      "files": [
+        {
+          "path": "LICENSE",
+          "mode": "100644",
+          "bytes": 1077,
+          "git_blob_sha1": "f15282f90a7158c2d9f1fedef55438bf9f5c37b0"
+        },
+        {
+          "path": "README.md",
+          "mode": "100644",
+          "bytes": 5689,
+          "git_blob_sha1": "504d24e820e460b23fc36084f33b270737c1053d"
+        }
+      ]
+    },
+    {
+      "repository": "anthropics/skills",
+      "url": "https://github.com/anthropics/skills",
+      "commit": "41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f",
+      "license": "Apache-2.0 for the two selected skill folders; see their LICENSE.txt",
+      "prefix": "source/anthropics/skills",
+      "coverage": "Complete skills/webapp-testing and skills/mcp-builder subtrees at pinned commit",
+      "files": [
+        {
+          "path": "skills/mcp-builder/LICENSE.txt",
+          "mode": "100644",
+          "bytes": 11345,
+          "git_blob_sha1": "4f881c52d1f72f4cfb720e339e2d35c3058d01a9"
+        },
+        {
+          "path": "skills/mcp-builder/SKILL.md",
+          "mode": "100644",
+          "bytes": 9092,
+          "git_blob_sha1": "8a1a77a47d141967b246adb4da4f91037578ff7d"
+        },
+        {
+          "path": "skills/mcp-builder/reference/evaluation.md",
+          "mode": "100644",
+          "bytes": 21663,
+          "git_blob_sha1": "87e9bb78840fac113d93b4a27ab5b229a18cf226"
+        },
+        {
+          "path": "skills/mcp-builder/reference/mcp_best_practices.md",
+          "mode": "100644",
+          "bytes": 7330,
+          "git_blob_sha1": "b9d343cc3ae89b1fc139dae96bdb2b7e29ba3648"
+        },
+        {
+          "path": "skills/mcp-builder/reference/node_mcp_server.md",
+          "mode": "100644",
+          "bytes": 28550,
+          "git_blob_sha1": "f6e5df982adc0848bf261c47ab8d65a1e0469391"
+        },
+        {
+          "path": "skills/mcp-builder/reference/python_mcp_server.md",
+          "mode": "100644",
+          "bytes": 25099,
+          "git_blob_sha1": "cf7ec996d2e6e3655bc75ff6902738d03a37334e"
+        },
+        {
+          "path": "skills/mcp-builder/scripts/connections.py",
+          "mode": "100644",
+          "bytes": 4875,
+          "git_blob_sha1": "ffcd0da3fbe1539320d022017ae83b61a9587a5c"
+        },
+        {
+          "path": "skills/mcp-builder/scripts/evaluation.py",
+          "mode": "100644",
+          "bytes": 12579,
+          "git_blob_sha1": "41778569c45a458e0eea839b8917692ad65be2d5"
+        },
+        {
+          "path": "skills/mcp-builder/scripts/example_evaluation.xml",
+          "mode": "100644",
+          "bytes": 1194,
+          "git_blob_sha1": "41e4459b5af861e61f1ca87d2f8f5ab5543dc054"
+        },
+        {
+          "path": "skills/mcp-builder/scripts/requirements.txt",
+          "mode": "100644",
+          "bytes": 29,
+          "git_blob_sha1": "e73e5d1e356edafadb9dc9243e6f300f2c5529b3"
+        },
+        {
+          "path": "skills/webapp-testing/LICENSE.txt",
+          "mode": "100644",
+          "bytes": 11345,
+          "git_blob_sha1": "4f881c52d1f72f4cfb720e339e2d35c3058d01a9"
+        },
+        {
+          "path": "skills/webapp-testing/SKILL.md",
+          "mode": "100644",
+          "bytes": 3913,
+          "git_blob_sha1": "4726215301db64a0cc4d41fc3219c61f37a30f4a"
+        },
+        {
+          "path": "skills/webapp-testing/examples/console_logging.py",
+          "mode": "100644",
+          "bytes": 1027,
+          "git_blob_sha1": "9329b5e232ed53d944bfe95e750070117d31b9ab"
+        },
+        {
+          "path": "skills/webapp-testing/examples/element_discovery.py",
+          "mode": "100644",
+          "bytes": 1463,
+          "git_blob_sha1": "917ba72f52421a1b324f93ae8e38af72010a87b9"
+        },
+        {
+          "path": "skills/webapp-testing/examples/static_html_automation.py",
+          "mode": "100644",
+          "bytes": 953,
+          "git_blob_sha1": "90bbedcc08cdb345c74fb938ebad02c0baf56603"
+        },
+        {
+          "path": "skills/webapp-testing/scripts/with_server.py",
+          "mode": "100755",
+          "bytes": 3693,
+          "git_blob_sha1": "431f2eba16b268b7f3e2ae4daae9db41c0289b6d"
+        }
+      ]
+    }
+  ]
+}

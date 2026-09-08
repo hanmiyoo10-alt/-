@@ -282,11 +282,13 @@ Project-owned tests and contracts decide the concrete assertions. The common lay
 
 **Class:** `DEFAULT`
 
-When automated repository work requires local command execution, prefer short commands that invoke existing repository-native scripts, tests, package CLIs, CI, or other durable harnesses. Avoid embedding large generated programs, multiple source/test files, or mini build systems inside one shell/tool invocation when the same validation can be materialized or delegated without weakening evidence.
+For automated repository/project work across this repository, prefer the narrowest evidence-equivalent agent surface that preserves required authority, currentness, uncertainty, security, project-specific gates, and validation. This default covers four companion compactness axes: directly supplied execution/program payload size, repository-owned visible call fan-out, repository source/read-result selection, and connector/result selection before retrieval.
 
-Small one-off inline snippets remain appropriate when they are bounded and easier to inspect than a durable file. Compactness must never remove required validation, bypass authority/gates, or hide meaningful failure evidence.
+Prefer repository-native commands or harnesses over large inline generated programs, existing evidence-equivalent compositions over avoidable manual fan-out, the smallest authoritative excerpt or bounded projection that answers a local read question, and the narrowest evidence-equivalent connector/action/filter before a broad generic response. Reuse captured sufficient evidence inside an unchanged currentness barrier. Broad calls, full-source reads, and full-object connector responses remain valid when completeness, currentness, disagreement, failure provenance, security context, or the absence of an equivalent narrower surface requires them.
 
-The exact guardrail and routing procedure are owned by `.agents/skills/agent-execution-compactness/SKILL.md` and may evolve without changing project authority.
+Small one-off inline snippets remain appropriate when they are bounded and easier to inspect than a durable file. Compactness must never remove required validation, bypass authority/gates, hide meaningful failure evidence, or manufacture a new truth owner.
+
+The exact guardrail and routing/selection procedure are owned by `.agents/skills/agent-execution-compactness/SKILL.md` and may evolve without changing project authority. Canonical-main packet wiring may make this default explicit at packet boundaries, but that wiring is an adapter/specialization and is not the scope boundary of this repository-wide rule.
 
 ### RCR-D15 — Stage substantial interactive repository work at bounded checkpoints
 

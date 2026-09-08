@@ -251,16 +251,85 @@ ChatGPT가 로컬 OpenCode/agent 세션을 조작하는 방향. 기능은 강력
 
 특히 Remote Desktop Commander는 연결된 컴퓨터의 filesystem/terminal에 접근해 command, process, file edit, development workflow를 처리하는 목적을 명시하고 있어 현재 목표와 매우 가깝다.
 
+## 2026-09-09 — Remote Desktop Commander 첫 서버폰 실행
+
+Termux 바깥 셸에서:
+
+```text
+npx @wonderwhy-er/desktop-commander@latest remote
+```
+
+를 실행했다.
+
+확인된 단계:
+
+```text
+Connected to Desktop Commander MCP
+Connected to Remote MCP
+Device code received
+Authorization successful
+Device ready
+```
+
+그 뒤 remote realtime channel이 `transport failure`와 반복적인 `Recreating channel` 상태에 들어갔다.
+
+이 실행은 Termux 바깥 문맥이므로 `/root/nyang-repo`는 직접 존재하지 않았다. `/root/nyang-repo`는 Ubuntu PRoot 내부 경로다.
+
+## 2026-09-09 — Remote Desktop Commander Ubuntu PRoot 재시도
+
+Ubuntu PRoot 내부 `/root/nyang-repo`에서 동일한 remote command를 실행했다.
+
+Node binary 자체는 여전히 Termux 경로를 사용했다.
+
+```text
+/data/data/com.termux/files/usr/bin/node
+```
+
+하지만 npm 임시 package 위치와 현재 HOME/workdir은 Ubuntu PRoot 쪽 문맥을 따랐다.
+
+중요 결과:
+
+```text
+Connected to Desktop Commander MCP
+Connected to Remote MCP
+Authorization successful
+Device ready
+Channel error: transport failure
+Recreating channel... (attempt 1)
+Channel subscribed (recovered after 1 attempt)
+Device marked as online
+Presence tracked
+```
+
+판정:
+
+- device-side agent 실행 성공.
+- remote 계정 인증 성공.
+- initial realtime transport failure는 있었으나 자동 복구됨.
+- remote service에서 device가 online/presence 상태까지 진입함.
+- 아직 ChatGPT 쪽에서 실제 command/file tool 호출을 실행해 서버폰에 도달하는지는 미검증.
+
+보안상 device code, device ID, account address는 기록하지 않는다.
+
 ## 현재 실험 checkpoint
 
-다음 실험은 **Remote Desktop Commander 모바일 ChatGPT 실사용 가능성 확인**이다.
+다음 실험은 **Remote Desktop Commander 모바일 ChatGPT에서 실제 read-only tool invocation 확인**이다.
 
-성공하면 Codex CLI와 별개로:
+첫 호출은 다음 범위로 제한한다.
+
+```text
+pwd
+git branch --show-current
+git status -sb
+top-level directory listing
+```
+
+성공하면 다음 경로가 실제로 성립하는지 확인할 수 있다.
 
 ```text
 일반 ChatGPT
 → 공개 ChatGPT Plugin/App
-→ 서버폰 local environment
+→ Remote Desktop Commander
+→ 서버폰 Ubuntu PRoot
+→ /root/nyang-repo
 ```
-
-경로가 성립할 수 있다.

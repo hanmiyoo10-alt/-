@@ -153,6 +153,8 @@ Do not mix unrelated PocketRisu work or PRs into Local Usage Dashboard releases.
 
 Repository baseline-preservation behavior is inherited from `RCR-D01`.
 
+Keep already-working behavior unchanged unless the release goal requires touching it.
+
 Usage Dashboard specialization keeps this device/release loop explicit:
 
 `Stable production → device diagnostic → isolate one problem → minimal design → patch → regression → version/release → device validation`

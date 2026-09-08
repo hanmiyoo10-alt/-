@@ -1210,3 +1210,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/e0e012a8af53773d4b38c2dca0d6bad6e6a46b57)
 - Event ID: `386b022e935ccd3dd8b54ee9f15ab5199f3b77e1cd3935b45854e4be4d47e89f`
 <!-- canonical-main-doc-promoted:386b022e935ccd3dd8b54ee9f15ab5199f3b77e1cd3935b45854e4be4d47e89f -->
+
+### 2026-09-08 — feat(usage-dashboard): release 5.105 Credits next-tier progression (#1870)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `16c2b3d7e189ad6cb17a6231f7ba5ce78b2c517c`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/16c2b3d7e189ad6cb17a6231f7ba5ce78b2c517c)
+- Event ID: `7c8953f2c6f495f8ff01fcc755831c639598d02fcd21728cdb4acbf68ca73a22`
+<!-- canonical-main-doc-promoted:7c8953f2c6f495f8ff01fcc755831c639598d02fcd21728cdb4acbf68ca73a22 -->

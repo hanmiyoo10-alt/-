@@ -38,9 +38,9 @@ p.write_text(s.replace(needle, replacement))
 shutil.copyfile(source / 'image.rs', root / 'wie-wipi-c/src/api/graphics/image.rs')
 config = root / 'wie-app/tauri.conf.json'
 data = json.loads(config.read_text())
-data['productName'] = 'Fortune Golf Probe 9'
-data['identifier'] = 'io.hanmiyoo.fortunegolf.probe9'
-data['version'] = '0.1.9'
+data['productName'] = 'Fortune Golf Probe 10'
+data['identifier'] = 'io.hanmiyoo.fortunegolf.probe10'
+data['version'] = '0.1.10'
 config.write_text(json.dumps(data, indent=2) + '\n')
 
 # Preserve native call context in the visible error after ARM state unwinds.
@@ -49,7 +49,7 @@ s = p.read_text()
 needle = '        self.core.run_function(address, args).await'
 replacement = """        self.core.run_function(address, args).await.map_err(|error| {
             WieError::FatalError(alloc::format!(
-                "Probe 9 native call: target={address:#010x}, args={args:#x?}; {error}"
+                "Probe 10 native call: target={address:#010x}, args={args:#x?}; {error}"
             ))
         })"""
 assert s.count(needle) == 1, 'Pinned native call layout changed'
@@ -60,7 +60,7 @@ s = p.read_text()
 needle = '            context.call_function(self.fn_callback, &[self.ptr_timer, self.param]).await?;'
 replacement = """            context.call_function(self.fn_callback, &[self.ptr_timer, self.param]).await.map_err(|error| {
                 WieError::FatalError(alloc::format!(
-                    "Probe 9 timer: timer={:#010x}, callback={:#010x}, param={:#010x}; {error}",
+                    "Probe 10 timer: timer={:#010x}, callback={:#010x}, param={:#010x}; {error}",
                     self.ptr_timer, self.fn_callback, self.param
                 ))
             })?;"""
@@ -136,13 +136,65 @@ assert s.count(needle) == 1, 'Diagnostic boundary changed'
 p.write_text(s.replace(needle, replacement))
 p = root / "wie-ktf/src/runtime/wipi_c/context.rs"
 s = p.read_text()
-needle = "map_err(|error| {\n            WieError::FatalError(alloc::format!(\n                \"Probe 9 native call:"
-replacement = "map_err(|error| {\n            if matches!(&error, WieError::JavaException(_) | WieError::JavaExceptionUnwind { .. }) {\n                return error;\n            }\n            WieError::FatalError(alloc::format!(\n                \"Probe 9 native call:"
+needle = "map_err(|error| {\n            WieError::FatalError(alloc::format!(\n                \"Probe 10 native call:"
+replacement = "map_err(|error| {\n            if matches!(&error, WieError::JavaException(_) | WieError::JavaExceptionUnwind { .. }) {\n                return error;\n            }\n            WieError::FatalError(alloc::format!(\n                \"Probe 10 native call:"
 assert s.count(needle) == 1, 'Diagnostic boundary changed'
 p.write_text(s.replace(needle, replacement))
 p = root / "wie-wipi-c/src/api/kernel.rs"
 s = p.read_text()
-needle = "map_err(|error| {\n                WieError::FatalError(alloc::format!(\n                    \"Probe 9 timer:"
-replacement = "map_err(|error| {\n            if matches!(&error, WieError::JavaException(_) | WieError::JavaExceptionUnwind { .. }) {\n                return error;\n            }\n                WieError::FatalError(alloc::format!(\n                    \"Probe 9 timer:"
+needle = "map_err(|error| {\n                WieError::FatalError(alloc::format!(\n                    \"Probe 10 timer:"
+replacement = "map_err(|error| {\n            if matches!(&error, WieError::JavaException(_) | WieError::JavaExceptionUnwind { .. }) {\n                return error;\n            }\n                WieError::FatalError(alloc::format!(\n                    \"Probe 10 timer:"
 assert s.count(needle) == 1, 'Diagnostic boundary changed'
 p.write_text(s.replace(needle, replacement))
+
+p = root / "wie-core-arm/src/core.rs"
+s = p.read_text()
+needle = "    profile: Option<ProfileState>,"
+replacement = "    profile: Option<ProfileState>,\n    resource_trace: Vec<String>,"
+assert s.count(needle) == 1, 'Resource trace layout changed'
+p.write_text(s.replace(needle, replacement))
+
+p = root / "wie-core-arm/src/core.rs"
+s = p.read_text()
+needle = "            next_stub_address: FUNCTIONS_BASE,"
+replacement = "            next_stub_address: FUNCTIONS_BASE,\n            resource_trace: Vec::new(),"
+assert s.count(needle) == 1, 'Resource trace layout changed'
+p.write_text(s.replace(needle, replacement))
+
+p = root / "wie-core-arm/src/core.rs"
+s = p.read_text()
+needle = "impl ArmCore {"
+replacement = "impl ArmCore {\n    pub fn record_resource_trace(&self, message: String) {\n        let mut inner = self.inner.lock();\n        if inner.resource_trace.len() == 8 {\n            inner.resource_trace.remove(0);\n        }\n        inner.resource_trace.push(message.chars().take(320).collect());\n    }\n\n    pub fn resource_trace(&self) -> Vec<String> {\n        self.inner.lock().resource_trace.clone()\n    }\n"
+assert s.count(needle) == 1, 'Resource trace layout changed'
+p.write_text(s.replace(needle, replacement))
+
+p = root / "wie-core-arm/src/core.rs"
+s = p.read_text()
+needle = "\"ARM engine failure: entry={address:#010x}, pc={pc:#010x}, lr={lr:#010x}; {error}\""
+replacement = "\"ARM engine failure: entry={address:#010x}, pc={pc:#010x}, lr={lr:#010x}; resources={:?}; {error}\", inner.resource_trace"
+assert s.count(needle) == 1, 'Resource trace layout changed'
+p.write_text(s.replace(needle, replacement))
+
+p = root / "wie-ktf/src/runtime/wipi_c/context.rs"
+s = p.read_text()
+needle = "    async fn get_resource_size(&self, name: &str) -> Result<Option<usize>> {"
+replacement = "    async fn get_resource_size(&self, name: &str) -> Result<Option<usize>> {\n        self.core.record_resource_trace(alloc::format!(\"query {name:?}\"));"
+assert s.count(needle) == 1, 'Resource trace layout changed'
+p.write_text(s.replace(needle, replacement))
+
+p = root / "wie-ktf/src/runtime/wipi_c/context.rs"
+s = p.read_text()
+needle = "        Ok(result)\n    }\n\n    async fn read_resource"
+replacement = "        self.core.record_resource_trace(alloc::format!(\"size {name:?} => {result:?}\"));\n        Ok(result)\n    }\n\n    async fn read_resource"
+assert s.count(needle) == 1, 'Resource trace layout changed'
+p.write_text(s.replace(needle, replacement))
+
+p = root / "wie-ktf/src/runtime/wipi_c/context.rs"
+s = p.read_text()
+needle = "    async fn read_resource(&self, name: &str) -> Result<Vec<u8>> {"
+replacement = "    async fn read_resource(&self, name: &str) -> Result<Vec<u8>> {\n        self.core.record_resource_trace(alloc::format!(\"read {name:?}\"));"
+assert s.count(needle) == 1, 'Resource trace layout changed'
+p.write_text(s.replace(needle, replacement))
+
+p = root / 'wie-core-arm/src/core.rs'
+p.write_text(p.read_text() + "\n#[cfg(test)]\nmod fortune_resource_trace_tests {\n    use super::ArmCore;\n    #[test]\n    fn shared_bounded_and_isolated() {\n        let core = ArmCore::new(false, None).unwrap();\n        let clone = core.clone();\n        for i in 0..10 { clone.record_resource_trace(alloc::format!(\"resource-{i}\")); }\n        let trace = core.resource_trace();\n        assert_eq!(trace.len(), 8);\n        assert_eq!(trace[0], \"resource-2\");\n        assert_eq!(trace[7], \"resource-9\");\n        assert!(ArmCore::new(false, None).unwrap().resource_trace().is_empty());\n        clone.record_resource_trace(\"한\".repeat(500));\n        assert_eq!(core.resource_trace().last().unwrap().chars().count(), 320);\n    }\n}\n")

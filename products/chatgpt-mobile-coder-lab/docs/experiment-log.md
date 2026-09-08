@@ -307,29 +307,74 @@ Presence tracked
 - remote 계정 인증 성공.
 - initial realtime transport failure는 있었으나 자동 복구됨.
 - remote service에서 device가 online/presence 상태까지 진입함.
-- 아직 ChatGPT 쪽에서 실제 command/file tool 호출을 실행해 서버폰에 도달하는지는 미검증.
 
 보안상 device code, device ID, account address는 기록하지 않는다.
 
-## 현재 실험 checkpoint
+## 2026-09-09 — Android ChatGPT에서 첫 실제 remote repository read 성공
 
-다음 실험은 **Remote Desktop Commander 모바일 ChatGPT에서 실제 read-only tool invocation 확인**이다.
+Android ChatGPT에서 Remote Desktop Commander를 호출해 서버폰에 read-only 명령이 실제로 전달되는지 검증했다.
 
-첫 호출은 다음 범위로 제한한다.
+결과:
 
 ```text
 pwd
-git branch --show-current
-git status -sb
-top-level directory listing
+→ /root/.npm/_npx/.../@wonderwhy-er/desktop-commander/dist
+
+git -C /root/nyang-repo branch --show-current
+→ server/work
+
+git -C /root/nyang-repo status -sb
+→ ## server/work...origin/server/work
 ```
 
-성공하면 다음 경로가 실제로 성립하는지 확인할 수 있다.
+`/root/nyang-repo` 최상위 목록도 정상 반환됐다.
+
+대표 항목:
 
 ```text
-일반 ChatGPT
-→ 공개 ChatGPT Plugin/App
+.agents
+.git
+.github
+README.md
+config
+docs
+fixtures
+local
+plugins
+product-manifest.json
+products
+references
+scripts
+study
+tools
+```
+
+판정:
+
+- 일반 ChatGPT 모바일 채팅이 Remote Desktop Commander plugin/app를 실제로 호출함.
+- remote 요청이 서버폰에 도달함.
+- Ubuntu PRoot 내부 `/root/nyang-repo`의 Git 상태와 filesystem을 읽는 데 성공함.
+- `server/work` branch와 `origin/server/work` tracking 상태도 정확히 확인됨.
+- 따라서 최소 read-only 기준에서 다음 경로가 실제로 성립함.
+
+```text
+일반 ChatGPT 모바일
 → Remote Desktop Commander
+→ remote service
 → 서버폰 Ubuntu PRoot
 → /root/nyang-repo
 ```
+
+주의할 점:
+
+- plain `pwd`는 repository root가 아니라 npx package의 `dist` directory를 반환했다.
+- 따라서 tool process의 current working directory를 repository root라고 가정하면 안 된다.
+- repository 작업에는 absolute path 또는 `git -C /root/nyang-repo ...` 방식을 우선한다.
+
+## 현재 실험 checkpoint
+
+다음 단계는 **작은 파일 read/search와 harmless read-only command를 몇 차례 반복해 remote channel 안정성을 확인하는 것**이다.
+
+그 다음에만 별도 disposable feature worktree를 만들어 작은 write/patch/test를 검증한다.
+
+현재 `server/work` working tree에는 이 write 실험을 직접 하지 않는다.

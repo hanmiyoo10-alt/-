@@ -10,7 +10,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { pathToFileURL } from 'node:url';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.42';
+const VERSION = '1.6.43';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -775,11 +775,12 @@ const requestedActivityRange = ['24h','7d','30d'].includes(String(process.env.DE
   : '';
 const requestedLimitsOrgId = String(process.env.DEVPASS_BRIDGE_LIMITS_ORG_ID || '').trim();
 const requestedApiKeyProjectId = String(process.env.DEVPASS_BRIDGE_API_KEY_PROJECT_ID || '').trim();
+const requestedBillingHistory = String(process.env.DEVPASS_BRIDGE_BILLING_HISTORY || '') === '1';
 // capture.v11 intentionally not activated; request provenance owns tap generation.
 const marker = Symbol.for('llmgateway.devpass.bridge.capture.v10');
 if (output && !globalThis[marker]) {
   globalThis[marker] = true;
-  const state = { orgs: null, devPlanStatus: null, devpassActivity: null, devpassLogs: null, apiKeyPlanLimits: null, gatewayLimits: null, captureMode: null };
+  const state = { orgs: null, devPlanStatus: null, devpassActivity: null, devpassLogs: null, devpassBillingHistory: null, apiKeyPlanLimits: null, gatewayLimits: null, captureMode: null };
   let extrasInFlight = false;
   let extrasDone = false;
   const rawHttpRequest = http.request;
@@ -821,6 +822,41 @@ if (output && !globalThis[marker]) {
   };
 
 
+
+
+  const sanitizeDevPassBillingHistory = (value) => {
+    const allowedTypes = new Set([
+      'dev_plan_start','dev_plan_renewal','dev_plan_upgrade','dev_plan_downgrade','dev_plan_cancel','dev_plan_resume','dev_plan_end',
+      'dev_plan_reset_pass','dev_plan_reset_pass_reward','dev_plan_reset_pass_gift',
+      'credit_topup','credit_refund','credit_gift','credit_manual_payment'
+    ]);
+    const allowedStatuses = new Set(['pending','completed','failed']);
+    const raw = value?.data && typeof value.data === 'object' && !Array.isArray(value.data) ? value.data : value;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !Array.isArray(raw.invoices)) {
+      return {state:'invalid-history',rows:[],validCount:0,receivedCount:null};
+    }
+    const receivedCount = raw.invoices.length;
+    if (receivedCount === 0) return {state:'empty',rows:[],validCount:0,receivedCount:0};
+    const rows = [];
+    let validCount = 0;
+    for (const row of raw.invoices) {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+      const type = typeof row.type === 'string' ? row.type : '';
+      const date = typeof row.date === 'string' ? row.date : '';
+      const currency = typeof row.currency === 'string' ? row.currency.trim() : '';
+      const status = typeof row.status === 'string' ? row.status : '';
+      if (!allowedTypes.has(type) || !date || !Number.isFinite(Date.parse(date)) || !currency || currency.length > 12 || !allowedStatuses.has(status)) continue;
+      let amount = null;
+      if (row.amount !== null) {
+        if (typeof row.amount !== 'number' || !Number.isFinite(row.amount)) continue;
+        amount = Number(row.amount);
+      }
+      validCount += 1;
+      if (rows.length < 5) rows.push({type,date,amount,currency,status});
+    }
+    if (validCount === 0) return {state:'invalid-history',rows:[],validCount:0,receivedCount};
+    return {state:validCount === receivedCount ? 'ok' : 'partial',rows,validCount,receivedCount};
+  };
 
   const sanitizeApiKeyPlanLimits = (value) => {
     const raw = value?.data && typeof value.data === 'object' && !Array.isArray(value.data) ? value.data : value;
@@ -1161,6 +1197,20 @@ if (output && !globalThis[marker]) {
 
 
 
+
+  const storeDevPassBillingHistory = (result, mode) => {
+    const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(result?.state))
+      ? String(result.state)
+      : 'source-unavailable';
+    const bounded = sourceState === 'ok'
+      ? sanitizeDevPassBillingHistory(result?.payload)
+      : {state:sourceState,rows:[],validCount:null,receivedCount:null};
+    state.devpassBillingHistory = bounded;
+    state.captureMode = String(mode || '');
+    writeState();
+    return bounded;
+  };
+
   const storeApiKeyPlanLimits = (result, mode) => {
     const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(result?.state))
       ? String(result.state)
@@ -1256,6 +1306,18 @@ if (output && !globalThis[marker]) {
   };
 
 
+
+
+  const billingHistoryTarget = (orgUrl) => {
+    try {
+      const target = new URL(orgUrl.origin);
+      const prefix = pathPrefix(orgUrl.pathname, '/orgs');
+      target.pathname = (prefix + '/dev-plans/invoices').replace(/\/{2,}/g, '/');
+      return target;
+    } catch {
+      return null;
+    }
+  };
 
   const apiKeyPlanLimitsTarget = (orgUrl, projectId) => {
     const exactProjectId = String(projectId || '').trim();
@@ -1374,6 +1436,12 @@ if (output && !globalThis[marker]) {
     try {
       const inputHeaders = typeof Request === 'function' && input instanceof Request ? input.headers : (init && init.headers);
       const headers = safeHeaders(inputHeaders);
+      if (requestedBillingHistory) {
+        const result = await requestGatewayLimitsWithFetch(billingHistoryTarget(orgUrl), headers, init);
+        storeDevPassBillingHistory(result, 'fetch-devpass-billing-history');
+        extrasDone = true;
+        return;
+      }
       if (requestedApiKeyProjectId) {
         const result = await requestGatewayLimitsWithFetch(apiKeyPlanLimitsTarget(orgUrl, requestedApiKeyProjectId), headers, init);
         storeApiKeyPlanLimits(result, 'fetch-api-key-plan-limits');
@@ -1522,6 +1590,12 @@ if (output && !globalThis[marker]) {
     if (extrasDone || extrasInFlight) return;
     extrasInFlight = true;
     try {
+      if (requestedBillingHistory) {
+        const result = await requestGatewayLimitsNode(billingHistoryTarget(orgUrl), headers);
+        storeDevPassBillingHistory(result, 'node-request-devpass-billing-history');
+        extrasDone = true;
+        return;
+      }
       if (requestedApiKeyProjectId) {
         const result = await requestGatewayLimitsNode(apiKeyPlanLimitsTarget(orgUrl, requestedApiKeyProjectId), headers);
         storeApiKeyPlanLimits(result, 'node-request-api-key-plan-limits');
@@ -1698,6 +1772,90 @@ async function loadAccountCapture() {
 }
 
 
+
+
+function devPassBillingHistoryUnknown(state = 'source-unavailable', now = Date.now()) {
+  const stateName = ['source-unavailable','permission-unavailable','invalid-history'].includes(String(state))
+    ? String(state)
+    : 'source-unavailable';
+  return {state:stateName,source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt:Number(now)};
+}
+
+function normalizeDevPassBillingHistoryCapture(capture, now = Date.now()) {
+  const allowedTypes = new Set([
+    'dev_plan_start','dev_plan_renewal','dev_plan_upgrade','dev_plan_downgrade','dev_plan_cancel','dev_plan_resume','dev_plan_end',
+    'dev_plan_reset_pass','dev_plan_reset_pass_reward','dev_plan_reset_pass_gift',
+    'credit_topup','credit_refund','credit_gift','credit_manual_payment'
+  ]);
+  const allowedStatuses = new Set(['pending','completed','failed']);
+  const stateName = ['ok','empty','source-unavailable','permission-unavailable','invalid-history','partial'].includes(String(capture?.state))
+    ? String(capture.state)
+    : 'source-unavailable';
+  if (stateName === 'source-unavailable' || stateName === 'permission-unavailable') return devPassBillingHistoryUnknown(stateName, now);
+  const receivedCount = Number.isInteger(capture?.receivedCount) && capture.receivedCount >= 0 ? Number(capture.receivedCount) : null;
+  const validCount = Number.isInteger(capture?.validCount) && capture.validCount >= 0 ? Number(capture.validCount) : null;
+  if (stateName === 'empty') {
+    if (receivedCount !== 0 || validCount !== 0 || !Array.isArray(capture?.rows) || capture.rows.length !== 0) return devPassBillingHistoryUnknown('invalid-history', now);
+    return {state:'empty',source:'devpass-invoices',rows:[],validCount:0,receivedCount:0,newest:null,fetchedAt:Number(now)};
+  }
+  if (stateName === 'invalid-history') {
+    if (receivedCount === null || receivedCount <= 0 || validCount !== 0) return devPassBillingHistoryUnknown('invalid-history', now);
+    return {state:'invalid-history',source:'devpass-invoices',rows:[],validCount:0,receivedCount,newest:null,fetchedAt:Number(now)};
+  }
+  if (!Array.isArray(capture?.rows) || capture.rows.length > 5 || receivedCount === null || validCount === null || validCount <= 0 || receivedCount < validCount) {
+    return devPassBillingHistoryUnknown('invalid-history', now);
+  }
+  if ((stateName === 'ok' && validCount !== receivedCount) || (stateName === 'partial' && validCount >= receivedCount) || capture.rows.length !== Math.min(validCount, 5)) {
+    return devPassBillingHistoryUnknown('invalid-history', now);
+  }
+  const rows = [];
+  for (const row of capture.rows) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return devPassBillingHistoryUnknown('invalid-history', now);
+    const type = typeof row.type === 'string' ? row.type : '';
+    const date = typeof row.date === 'string' ? row.date : '';
+    const currency = typeof row.currency === 'string' ? row.currency.trim() : '';
+    const status = typeof row.status === 'string' ? row.status : '';
+    if (!allowedTypes.has(type) || !date || !Number.isFinite(Date.parse(date)) || !currency || currency.length > 12 || !allowedStatuses.has(status)) {
+      return devPassBillingHistoryUnknown('invalid-history', now);
+    }
+    let amount = null;
+    if (row.amount !== null) {
+      if (typeof row.amount !== 'number' || !Number.isFinite(row.amount)) return devPassBillingHistoryUnknown('invalid-history', now);
+      amount = Number(row.amount);
+    }
+    rows.push({type,date,amount,currency,status});
+  }
+  return {state:stateName,source:'devpass-invoices',rows,validCount,receivedCount,newest:rows[0]?.date || null,fetchedAt:Number(now)};
+}
+
+async function captureDevPassBillingHistoryViaCliSession() {
+  await ensureCaptureTap();
+  const captureFile = path.join(
+    CONFIG_DIR,
+    `devpass-billing-history-${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.json`,
+  );
+  const existingNodeOptions = String(process.env.NODE_OPTIONS || '').trim();
+  const captureRequire = `--require=${CAPTURE_TAP_FILE}`;
+  const nodeOptions = existingNodeOptions ? `${existingNodeOptions} ${captureRequire}` : captureRequire;
+  try {
+    await runCliProcess(['orgs', 'list', '--json'], {
+      NODE_OPTIONS: nodeOptions,
+      DEVPASS_BRIDGE_CAPTURE_FILE: captureFile,
+      DEVPASS_BRIDGE_BILLING_HISTORY: '1',
+    });
+    const text = await fs.readFile(captureFile, 'utf8');
+    const captured = JSON.parse(text);
+    return normalizeDevPassBillingHistoryCapture(captured?.devpassBillingHistory);
+  } catch {
+    return devPassBillingHistoryUnknown('source-unavailable');
+  } finally {
+    try { await fs.unlink(captureFile); } catch {}
+  }
+}
+
+async function loadDevPassBillingHistory() {
+  return cached('devpassBillingHistory', async () => captureDevPassBillingHistoryViaCliSession());
+}
 
 function apiKeyPlanLimitsUnknown(state = 'source-unavailable', now = Date.now()) {
   const stateName = ['project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(state))
@@ -2055,6 +2213,7 @@ async function cached(name, loader, options = {}) {
     ?? ((name === 'usageScopes' || name.startsWith('usageScopes:')) ? 60_000 : null)
     ?? ((name === 'analyticsScopes' || name.startsWith('analyticsScopes:')) ? 60_000 : null)
     ?? (name.startsWith('gatewayLimits:') ? 300_000 : null)
+    ?? (name === 'devpassBillingHistory' ? 300_000 : null)
     ?? (name.startsWith('apiKeyPlanLimits:') ? 300_000 : null)
     ?? (name.startsWith('runway:') ? 300_000 : 30_000);
   const now = Date.now();
@@ -3932,6 +4091,9 @@ async function handle(req, res) {
     if (url.pathname === '/snapshot') {
       const profile = url.searchParams.get('profile') === 'light' ? 'light' : 'full';
       return json(res, 200, await snapshot(profile, creditsOrgId));
+    }
+    if (url.pathname === '/devpass-billing-history') {
+      return json(res, 200, await loadDevPassBillingHistory());
     }
     if (url.pathname === '/api-key-plan-limits') {
       return json(res, 200, await loadApiKeyPlanLimits());

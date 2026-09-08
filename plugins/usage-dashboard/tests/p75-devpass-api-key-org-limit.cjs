@@ -34,7 +34,7 @@ function sliceBetween(text, start, end) {
   return text.slice(a, b);
 }
 
-assert.equal(release.productVersion, '3.0.0-alpha.5.108');
+assert.equal(release.productVersion, '3.0.0-alpha.5.109');
 assert.equal(release.specPath, SPEC);
 const spec = JSON.parse(read(SPEC));
 assert.equal(spec.engineVersion, '1.6.42');
@@ -196,7 +196,7 @@ for (const prior of [
 assert.equal(read(LEDGER).includes('api-key-plan-limits'), false, 'P75 must not add Request Ledger ownership');
 assert.equal(read(PROV).includes('api-key-plan-limits'), false, 'P75 must not add request-provenance ownership');
 
-assert.equal(manifest.productVersion, '3.0.0-alpha.5.108');
+assert.equal(manifest.productVersion, '3.0.0-alpha.5.109');
 assert.equal(manifest.components.plugin.version, '3.0.0-alpha.5.108');
 assert.equal(manifest.components.bridge.requiredVersion, '1.6.42');
 assert.equal(manifest.components.bridgeManager.version, '1.3.6');

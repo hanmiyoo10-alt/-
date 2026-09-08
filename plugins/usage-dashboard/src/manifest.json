@@ -1,17 +1,17 @@
 {
   "format": 1,
   "plugin": "Local Usage Dashboard",
-  "version": "3.0.0-alpha.5.108",
+  "version": "3.0.0-alpha.5.109",
   "source": "plugins/usage-dashboard/latest.js",
   "sourceOfTruth": "modules",
   "layout": "plugins/usage-dashboard/src/parts.cjs",
-  "artifactSha256": "2057487b0cd4f5846887ac01d7454128b1cb3c4f81b041ec2c339d8d3d61800d",
+  "artifactSha256": "1dadcf783c3349c7bc1c77adca84d5b86b54f03ff15953a35a0b2368ad3772fc",
   "parts": [
     {
       "file": "00-runtime-core.part.js",
       "label": "runtime/core",
-      "bytes": 15166,
-      "sha256": "8cac250e93cd2742e03f75ce3fab80bb1cfbdee2bc1b412cc7b175b3df04fc92"
+      "bytes": 15347,
+      "sha256": "de00c86e6f08a6bfde3c763472da23807f8e92d95d2848935c73c4331c9a8fb6"
     },
     {
       "file": "02-runtime-state.part.js",
@@ -88,8 +88,8 @@
     {
       "file": "20-bridge-io.part.js",
       "label": "bridge I/O",
-      "bytes": 25092,
-      "sha256": "a871b2d0d69beec25bbf0b4f8fd4bb31264c1cbcb3db864853e779d40e14a8f2"
+      "bytes": 30899,
+      "sha256": "395d01f2b8b386e6a265b97933ca7353b117d984db58074dc122b846948e22bd"
     },
     {
       "file": "30-refresh-runtime.part.js",
@@ -100,14 +100,14 @@
     {
       "file": "40-diagnostics.part.js",
       "label": "diagnostics + release hardening",
-      "bytes": 61204,
-      "sha256": "60dd5d7639114c78a75852b5f1653ef746418d2108e6c46a2075a111fc67680b"
+      "bytes": 62124,
+      "sha256": "a9d30cab921cc842afdce114cd729e4b7314a954f362020c637753ddb861f1ba"
     },
     {
       "file": "50-dashboard-context.part.js",
       "label": "dashboard/context",
-      "bytes": 25159,
-      "sha256": "a161c25dd02ea7d24bdf7f94a52af24233bcd2e8ab4f70b8df8258ddd03ee074"
+      "bytes": 28131,
+      "sha256": "d6df07725e543b239403f37bc0b9754b1085df0d20482567140a425f9143aca8"
     },
     {
       "file": "52-analytics-context.part.js",
@@ -118,14 +118,14 @@
     {
       "file": "54-dashboard-markup.part.js",
       "label": "dashboard/markup",
-      "bytes": 26616,
-      "sha256": "d8c8403d2adacd861289f10ddd31504a8f7b8cc116f8ce898e9e3035ccfff22e"
+      "bytes": 26714,
+      "sha256": "1560128bc40016fdbce443115720a352c071784d0fb2734561018718035f2b9f"
     },
     {
       "file": "60-settings-runtime.part.js",
       "label": "settings runtime",
-      "bytes": 20193,
-      "sha256": "e6465d6366619dacacbd5d5d9193247a49799aaa6fe358834bed899cb9992045"
+      "bytes": 20262,
+      "sha256": "61b53be38a0081022c4a6e527eafd01a579c7aff1538beab1f29dd6b29b20bd0"
     },
     {
       "file": "62-diagnostics-workspace.part.js",

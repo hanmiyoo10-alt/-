@@ -1,25 +1,25 @@
 //@name local_usage_dashboard_modular
 //@display-name Local Usage Dashboard
-//@version 3.0.0-alpha.5.108
+//@version 3.0.0-alpha.5.109
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js
 
 (async () => {
   'use strict';
 
-  const VERSION = '3.0.0-alpha.5.108';
+  const VERSION = '3.0.0-alpha.5.109';
   const RELEASE_NOTES = Object.freeze({
-    title: "DevPass API Key Organization Limit",
+    title: "DevPass Recent Billing History",
     highlights: Object.freeze([
-    "Adds a compact read-only DevPass API Keys organization-limit block using exact server-provided plan-limit values.",
-    "Shows organization-wide active developer API keys, the server-resolved maximum, and deterministic non-negative creation headroom.",
-    "Keeps API-key rows, IDs, masked tokens, creator/IAM metadata, plan strings, project IDs, and authentication material behind the Engine capture boundary.",
-    "Moves Engine to 1.6.42 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
+    "Adds a compact collapsed-by-default DevPass recent billing-history block backed only by the authenticated /dev-plans/invoices source.",
+    "Retains at most five server-ordered sanitized rows and exposes only type, date, amount, currency, and status for each row.",
+    "Excludes invoice IDs, descriptions, creditAmount, refund metadata, billing PII, raw responses, and write/download actions.",
+    "Moves Engine to 1.6.43 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded.",
     ]),
     diagnosticHints: Object.freeze([
-    "Verify Product 5.108 · Engine 1.6.42 · Manager 1.3.6 and READY/Health ok.",
-    "Open DevPass and confirm API Keys · 조직 한도 appears with exact N / M and creation headroom when source authority is available.",
-    "Diagnostics should include one bounded API key org limit line; no API-key mutation or artificial traffic is required.",
+    "Verify Product 5.109 · Engine 1.6.43 · Manager 1.3.6 and READY/Health ok.",
+    "Open DevPass and expand 결제 내역 · DevPass; natural existing history or an exact empty state is valid source truth.",
+    "Diagnostics should include one bounded DevPass billing history line; no purchase, refund, card action, or artificial traffic is required.",
     ]),
   });
   const UPDATE_URL = 'https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-usage-dashboard/plugins/usage-dashboard/latest.js';
@@ -40,7 +40,7 @@
   const RESUME_DIAGNOSTIC_WINDOW_MS = 10000;
   const RESUME_MAIN_THREAD_PROBE_MS = 80;
   const DEFAULT_BRIDGE = 'http://127.0.0.1:39117';
-  const REQUIRED_BRIDGE_VERSION = '1.6.42';
+  const REQUIRED_BRIDGE_VERSION = '1.6.43';
   const REQUIRED_BRIDGE_MANAGER_VERSION = '1.3.6';
   const SNAPSHOT_SCHEMA_VERSION = 1;
   const RECENT_REQUEST_SCHEMA_VERSION = 1;
@@ -51,6 +51,7 @@
   const BRIDGE_MANAGER_PROBE_INTERVAL_MS = 60000;
   const GATEWAY_LIMITS_UI_TTL_MS = 5 * 60_000;
   const API_KEY_PLAN_LIMITS_UI_TTL_MS = 5 * 60_000;
+  const DEVPASS_BILLING_HISTORY_UI_TTL_MS = 5 * 60_000;
   const DEFAULTS = {
     bridgeBase: DEFAULT_BRIDGE, bridgeEnabled: false, bridgeStatus: 'off', bridgeError: '',
     refreshMs: 15000, backgroundPause: true, syncOnFocus: true, performanceGuard: true, adaptiveRefresh: true, schedulerEnabled: true,
@@ -84,6 +85,7 @@
   let store, state, token = '', refreshTimer = null, resetSyncTimer = null, refreshInFlight = null;
   let gatewayLimitsRuntime = {orgId:'',value:null,fetchedAt:0}, gatewayLimitsInFlight = null, gatewayLimitsRequestSeq = 0;
   let apiKeyPlanLimitsRuntime = {value:null,fetchedAt:0}, apiKeyPlanLimitsInFlight = null, apiKeyPlanLimitsRequestSeq = 0;
+  let devpassBillingHistoryRuntime = {value:null,fetchedAt:0}, devpassBillingHistoryInFlight = null, devpassBillingHistoryRequestSeq = 0;
   let tokenForgetArmedUntil = 0;
   let widgetRenderTail = Promise.resolve(), widgetRenderRequestId = 0;
   let runtimeDisposed = false, runtimeEpoch = 1, staleAsyncDrops = 0;
@@ -3073,6 +3075,97 @@ async function importLegacyTodayBaselines() {
 
 
 
+
+  function normalizeDevPassBillingHistoryLocal(raw) {
+    const allowedTypes = new Set([
+      'dev_plan_start','dev_plan_renewal','dev_plan_upgrade','dev_plan_downgrade','dev_plan_cancel','dev_plan_resume','dev_plan_end',
+      'dev_plan_reset_pass','dev_plan_reset_pass_reward','dev_plan_reset_pass_gift',
+      'credit_topup','credit_refund','credit_gift','credit_manual_payment'
+    ]);
+    const allowedStatuses = new Set(['pending','completed','failed']);
+    const stateName = ['ok','empty','source-unavailable','permission-unavailable','invalid-history','partial'].includes(String(raw?.state))
+      ? String(raw.state)
+      : 'source-unavailable';
+    const fetchedAt = typeof raw?.fetchedAt === 'number' && Number.isFinite(raw.fetchedAt) && raw.fetchedAt >= 0 ? Number(raw.fetchedAt) : Date.now();
+    if (stateName === 'source-unavailable' || stateName === 'permission-unavailable') {
+      return {state:stateName,source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt};
+    }
+    const receivedCount = Number.isInteger(raw?.receivedCount) && raw.receivedCount >= 0 ? Number(raw.receivedCount) : null;
+    const validCount = Number.isInteger(raw?.validCount) && raw.validCount >= 0 ? Number(raw.validCount) : null;
+    const inputRows = Array.isArray(raw?.rows) && raw.rows.length <= 5 ? raw.rows : null;
+    if (stateName === 'empty' && receivedCount === 0 && validCount === 0 && inputRows && inputRows.length === 0) {
+      return {state:'empty',source:'devpass-invoices',rows:[],validCount:0,receivedCount:0,newest:null,fetchedAt};
+    }
+    if (stateName === 'invalid-history') {
+      return {state:'invalid-history',source:'devpass-invoices',rows:[],validCount:validCount === 0 ? 0 : null,receivedCount,newest:null,fetchedAt};
+    }
+    if (!inputRows || receivedCount === null || validCount === null || validCount <= 0 || receivedCount < validCount || inputRows.length !== Math.min(validCount,5)) {
+      return {state:'invalid-history',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt};
+    }
+    if ((stateName === 'ok' && validCount !== receivedCount) || (stateName === 'partial' && validCount >= receivedCount)) {
+      return {state:'invalid-history',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt};
+    }
+    const rows = [];
+    for (const row of inputRows) {
+      const type = typeof row?.type === 'string' ? row.type : '';
+      const date = typeof row?.date === 'string' ? row.date : '';
+      const currency = typeof row?.currency === 'string' ? row.currency.trim() : '';
+      const status = typeof row?.status === 'string' ? row.status : '';
+      if (!allowedTypes.has(type) || !date || !Number.isFinite(Date.parse(date)) || !currency || currency.length > 12 || !allowedStatuses.has(status)) {
+        return {state:'invalid-history',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt};
+      }
+      let amount = null;
+      if (row.amount !== null) {
+        if (typeof row.amount !== 'number' || !Number.isFinite(row.amount)) return {state:'invalid-history',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt};
+        amount = Number(row.amount);
+      }
+      rows.push({type,date,amount,currency,status});
+    }
+    return {state:stateName,source:'devpass-invoices',rows,validCount,receivedCount,newest:rows[0]?.date || null,fetchedAt};
+  }
+
+  async function fetchDevPassBillingHistory() {
+    if (!token) return {state:'source-unavailable',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt:Date.now()};
+    const base = normalizeBridgeBase(state.bridgeBase);
+    const res = await Risuai.nativeFetch(`${base}/devpass-billing-history`, {
+      method:'GET',
+      headers:{Accept:'application/json','X-Local-Bridge-Key':token,'X-DevPass-Bridge-Key':token,'Cache-Control':'no-cache'}
+    });
+    const text = await res.text();
+    if (!res.ok) return {state:'source-unavailable',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt:Date.now()};
+    try { return normalizeDevPassBillingHistoryLocal(JSON.parse(text)); }
+    catch { return {state:'source-unavailable',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt:Date.now()}; }
+  }
+
+  async function refreshDevPassBillingHistory(force = false) {
+    const now = Date.now();
+    if (!force && devpassBillingHistoryRuntime.value && now - Number(devpassBillingHistoryRuntime.fetchedAt || 0) < DEVPASS_BILLING_HISTORY_UI_TTL_MS) {
+      return devpassBillingHistoryRuntime.value;
+    }
+    if (devpassBillingHistoryInFlight) return devpassBillingHistoryInFlight;
+    const requestSeq = ++devpassBillingHistoryRequestSeq;
+    const promise = (async () => {
+      const value = await fetchDevPassBillingHistory();
+      if (requestSeq !== devpassBillingHistoryRequestSeq) return null;
+      devpassBillingHistoryRuntime = {
+        value,
+        fetchedAt:typeof value?.fetchedAt === 'number' && Number.isFinite(value.fetchedAt) ? Number(value.fetchedAt) : Date.now(),
+      };
+      schedulePanelRender(false);
+      return value;
+    })().catch(() => {
+      if (requestSeq !== devpassBillingHistoryRequestSeq) return null;
+      const value = {state:'source-unavailable',source:'devpass-invoices',rows:[],validCount:null,receivedCount:null,newest:null,fetchedAt:Date.now()};
+      devpassBillingHistoryRuntime = {value,fetchedAt:value.fetchedAt};
+      schedulePanelRender(false);
+      return value;
+    }).finally(() => {
+      if (devpassBillingHistoryInFlight === promise) devpassBillingHistoryInFlight = null;
+    });
+    devpassBillingHistoryInFlight = promise;
+    return promise;
+  }
+
   function normalizeApiKeyPlanLimitsLocal(raw) {
     const stateName = ['ok','project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(raw?.state))
       ? String(raw.state)
@@ -3622,6 +3715,17 @@ async function importLegacyTodayBaselines() {
 
 
 
+
+  function devPassBillingHistoryDiagnosticText(value) {
+    const stateName = ['ok','empty','source-unavailable','permission-unavailable','invalid-history','partial'].includes(String(value?.state))
+      ? String(value.state)
+      : 'source-unavailable';
+    const validCount = Number.isInteger(value?.validCount) && value.validCount >= 0 ? Number(value.validCount) : null;
+    const receivedCount = Number.isInteger(value?.receivedCount) && value.receivedCount >= 0 ? Number(value.receivedCount) : null;
+    const newest = typeof value?.newest === 'string' && Number.isFinite(Date.parse(value.newest)) ? value.newest : '—';
+    return `DevPass billing history: rows ${validCount === null ? '—' : validCount}/${receivedCount === null ? '—' : receivedCount} · newest ${newest} · source devpass-invoices · state ${stateName}`;
+  }
+
   function apiKeyOrgLimitDiagnosticText(value) {
     const stateName = ['ok','project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(value?.state))
       ? String(value.state)
@@ -3962,6 +4066,7 @@ async function importLegacyTodayBaselines() {
       `DevPass account tier: service ${diagAccount?.serviceTier || '—'} · routing ${diagAccount?.routingStrategy || '—'} · pending ${diagAccount?.pendingTier || '—'} · personal org ${diagAccount?.hasPersonalOrg === null || diagAccount?.hasPersonalOrg === undefined ? '—' : diagAccount.hasPersonalOrg ? 'yes' : 'no'}`,
       devPassNoAiTrainingDiagnosticText(diagAccount),
       devPassProviderCachePolicyDiagnosticText(diagAccount),
+      devPassBillingHistoryDiagnosticText(devpassBillingHistoryRuntime.value),
       apiKeyOrgLimitDiagnosticText(apiKeyPlanLimitsRuntime.value),
       gatewayLimitsDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
       gatewayNextTierDiagnosticText(gatewayLimitsRuntime.orgId === String(d.creditsOrganizationId || state.selectedCreditsOrgId || '') ? gatewayLimitsRuntime.value : null),
@@ -4096,6 +4201,48 @@ function todayOverviewMetrics(d) {
 
   function settingsHtml() {
 
+
+
+  function devPassBillingHistoryTypeLabel(type) {
+    const labels = {
+      dev_plan_start:'DevPass 시작',dev_plan_renewal:'DevPass 갱신',dev_plan_upgrade:'DevPass 업그레이드',dev_plan_downgrade:'DevPass 다운그레이드',
+      dev_plan_cancel:'DevPass 취소',dev_plan_resume:'DevPass 재개',dev_plan_end:'DevPass 종료',dev_plan_reset_pass:'Reset Pass',
+      dev_plan_reset_pass_reward:'Reset Pass 보상',dev_plan_reset_pass_gift:'Reset Pass 지급',credit_topup:'PAYG 충전',credit_refund:'환불',
+      credit_gift:'크레딧 지급',credit_manual_payment:'크레딧 추가'
+    };
+    return Object.prototype.hasOwnProperty.call(labels, String(type || '')) ? labels[String(type)] : '기타';
+  }
+
+  function devPassBillingHistoryStatusLabel(status) {
+    return status === 'completed' ? '완료' : status === 'pending' ? '대기' : status === 'failed' ? '실패' : '—';
+  }
+
+  function devPassBillingHistoryDateText(date) {
+    const ms = Date.parse(String(date || ''));
+    if (!Number.isFinite(ms)) return '—';
+    try {
+      return new Intl.DateTimeFormat('ko-KR',{timeZone:KST_TIME_ZONE,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(ms));
+    } catch { return '—'; }
+  }
+
+  function devPassBillingHistoryAmountText(row) {
+    if (row?.amount === null || typeof row?.amount !== 'number' || !Number.isFinite(row.amount)) return '—';
+    const currency = typeof row?.currency === 'string' ? row.currency.trim() : '';
+    if (!currency) return '—';
+    const value = Number(row.amount).toFixed(2);
+    return currency.toUpperCase() === 'USD' ? `$${value}` : `${value} ${currency}`;
+  }
+
+  function devPassBillingHistorySectionHtml(truth) {
+    const stateName = ['ok','empty','source-unavailable','permission-unavailable','invalid-history','partial'].includes(String(truth?.state))
+      ? String(truth.state)
+      : 'source-unavailable';
+    const rows = ['ok','partial'].includes(stateName) && Array.isArray(truth?.rows) ? truth.rows.slice(0,5) : [];
+    const summary = stateName === 'empty' ? '결제 내역 · 없음' : ['ok','partial'].includes(stateName) ? `결제 내역 · 최근 5건 · ${rows.length}개` : '결제 내역 · —';
+    const rowHtml = rows.map((row) => `<div class="mini"><span>${esc(devPassBillingHistoryDateText(row?.date))} · ${esc(devPassBillingHistoryTypeLabel(row?.type))}</span><b>${esc(devPassBillingHistoryAmountText(row))} · ${esc(devPassBillingHistoryStatusLabel(row?.status))}</b></div>`).join('');
+    const body = rows.length ? `<div class="minis">${rowHtml}</div>` : stateName === 'empty' ? '<p>최근 결제 내역 없음</p>' : '<p>소스 확인 불가 · —</p>';
+    return `<details class="usage-detail-box devpass-billing-history-card"><summary><b>결제 내역 · DevPass</b> · ${esc(summary.replace('결제 내역 · ',''))}</summary>${body}</details>`;
+  }
 
   function apiKeyOrgLimitSectionHtml(truth) {
     const stateName = ['ok','project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(truth?.state))
@@ -4280,6 +4427,7 @@ function todayOverviewMetrics(d) {
     const creditsOrgLabel = String(selectedCreditsOrg?.name || selectedCreditsOrgId || 'Default organization');
     const gatewayLimitsTruth = gatewayLimitsRuntime.orgId === selectedCreditsOrgId ? gatewayLimitsRuntime.value : null;
     const apiKeyOrgLimitTruth = apiKeyPlanLimitsRuntime.value;
+    const devPassBillingHistoryTruth = devpassBillingHistoryRuntime.value;
     const creditsOrgSelector = creditsOrganizations.length ? `<label class="credits-org-picker"><span>Credits Organization</span><select id="credits-org-id">${creditsOrganizations.map(org => `<option value="${esc(org.id)}" ${String(org.id)===selectedCreditsOrgId?'selected':''}>${esc(org.name || org.id)}${num(org.credits)?` · ${money(org.credits)}`:''}</option>`).join('')}</select></label>${d.creditsOrganizationFallback ? `<p class="warn credits-org-fallback">선택한 organization을 찾지 못해 ${esc(creditsOrgLabel)}로 자동 복구했어.</p>` : ''}` : '';
     const creditsMeta = [
       num(c?.todayUsed) ? `오늘 ${money(c.todayUsed,4)}` : '',
@@ -4461,7 +4609,7 @@ function todayOverviewMetrics(d) {
           <div class="mini cost-driver"><span>24h 비용 주도 · Top Provider</span><b>${esc(scopeTopProvider)}</b></div>
           <div class="mini cost-driver"><span>24h 비용 주도 · Top Model</span><b>${esc(scopeTopModel)}</b></div>
           ${scopeExtra}
-        </div>${dashboardView === 'devpass' ? devpassAccountDetailHtml : ''}${dashboardView === 'devpass' ? apiKeyOrgLimitSectionHtml(apiKeyOrgLimitTruth) : ''}${scopeUsageDetailsHtml(scopeActivity)}` : `<p>Bridge snapshot에 ${esc(scopeNames[scopeKey][0])} 범위 데이터가 아직 없어.</p>`}
+        </div>${dashboardView === 'devpass' ? devpassAccountDetailHtml : ''}${dashboardView === 'devpass' ? apiKeyOrgLimitSectionHtml(apiKeyOrgLimitTruth) : ''}${dashboardView === 'devpass' ? devPassBillingHistorySectionHtml(devPassBillingHistoryTruth) : ''}${scopeUsageDetailsHtml(scopeActivity)}` : `<p>Bridge snapshot에 ${esc(scopeNames[scopeKey][0])} 범위 데이터가 아직 없어.</p>`}
         ${d.usageScopes?.errors?.[scopeKey] ? `<p class="warn">Usage Scope · ${esc(errorSummaryText(d.usageScopes.errors[scopeKey]))}</p>` : ''}
       </section>
       <section class="panel wide analytics-panel">
@@ -4728,6 +4876,7 @@ function todayOverviewMetrics(d) {
           item.setAttribute('aria-selected', active ? 'true' : 'false');
         });
         await persist();
+        if (next === 'devpass') void refreshDevPassBillingHistory();
         if (next === 'devpass') void refreshApiKeyPlanLimits();
         if (next === 'credits') {
           const limitsOrgId = String(state.data?.creditsOrganizationId || state.selectedCreditsOrgId || '').trim();

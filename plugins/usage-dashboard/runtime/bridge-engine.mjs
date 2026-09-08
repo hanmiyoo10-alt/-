@@ -10,7 +10,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { pathToFileURL } from 'node:url';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '1.6.41';
+const VERSION = '1.6.42';
 const PROTOCOL_VERSION = 2;
 const MIN_PLUGIN_VERSION = '2.5.4';
 const RECOMMENDED_PLUGIN_VERSION = '2.7.3';
@@ -774,11 +774,12 @@ const requestedActivityRange = ['24h','7d','30d'].includes(String(process.env.DE
   ? String(process.env.DEVPASS_BRIDGE_ACTIVITY_RANGE)
   : '';
 const requestedLimitsOrgId = String(process.env.DEVPASS_BRIDGE_LIMITS_ORG_ID || '').trim();
+const requestedApiKeyProjectId = String(process.env.DEVPASS_BRIDGE_API_KEY_PROJECT_ID || '').trim();
 // capture.v11 intentionally not activated; request provenance owns tap generation.
 const marker = Symbol.for('llmgateway.devpass.bridge.capture.v10');
 if (output && !globalThis[marker]) {
   globalThis[marker] = true;
-  const state = { orgs: null, devPlanStatus: null, devpassActivity: null, devpassLogs: null, gatewayLimits: null, captureMode: null };
+  const state = { orgs: null, devPlanStatus: null, devpassActivity: null, devpassLogs: null, apiKeyPlanLimits: null, gatewayLimits: null, captureMode: null };
   let extrasInFlight = false;
   let extrasDone = false;
   const rawHttpRequest = http.request;
@@ -819,6 +820,27 @@ if (output && !globalThis[marker]) {
     return safe;
   };
 
+
+
+  const sanitizeApiKeyPlanLimits = (value) => {
+    const raw = value?.data && typeof value.data === 'object' && !Array.isArray(value.data) ? value.data : value;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return {state:'plan-limits-unavailable',currentCount:null,maxKeys:null};
+    }
+    if (!Object.prototype.hasOwnProperty.call(raw, 'planLimits')) {
+      return {state:'plan-limits-unavailable',currentCount:null,maxKeys:null};
+    }
+    const limits = raw.planLimits;
+    if (!limits || typeof limits !== 'object' || Array.isArray(limits)) {
+      return {state:'invalid-plan-limits',currentCount:null,maxKeys:null};
+    }
+    const currentCount = Number.isInteger(limits.currentCount) && limits.currentCount >= 0 ? Number(limits.currentCount) : null;
+    const maxKeys = Number.isInteger(limits.maxKeys) && limits.maxKeys >= 0 ? Number(limits.maxKeys) : null;
+    if (currentCount === null || maxKeys === null) {
+      return {state:'invalid-plan-limits',currentCount:null,maxKeys:null};
+    }
+    return {state:'ok',currentCount,maxKeys};
+  };
 
   const sanitizeGatewayLimits = (value) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -1138,6 +1160,20 @@ if (output && !globalThis[marker]) {
   };
 
 
+
+  const storeApiKeyPlanLimits = (result, mode) => {
+    const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(result?.state))
+      ? String(result.state)
+      : 'source-unavailable';
+    let bounded;
+    if (sourceState === 'ok') bounded = sanitizeApiKeyPlanLimits(result?.payload);
+    else bounded = {state:sourceState,currentCount:null,maxKeys:null};
+    state.apiKeyPlanLimits = bounded;
+    state.captureMode = String(mode || '');
+    writeState();
+    return bounded;
+  };
+
   const storeGatewayLimits = (result, mode) => {
     const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(result?.state))
       ? String(result.state)
@@ -1219,6 +1255,22 @@ if (output && !globalThis[marker]) {
     return [...new Map(out.map((u) => [u.toString(), u])).values()];
   };
 
+
+
+  const apiKeyPlanLimitsTarget = (orgUrl, projectId) => {
+    const exactProjectId = String(projectId || '').trim();
+    if (!exactProjectId) return null;
+    try {
+      const target = new URL(orgUrl.origin);
+      const prefix = pathPrefix(orgUrl.pathname, '/orgs');
+      target.pathname = (prefix + '/keys/api').replace(/\/{2,}/g, '/');
+      target.searchParams.set('projectId', exactProjectId);
+      target.searchParams.set('filter', 'mine');
+      return target;
+    } catch {
+      return null;
+    }
+  };
 
   const limitsTarget = (orgUrl, orgId) => {
     const exactOrgId = String(orgId || '').trim();
@@ -1322,6 +1374,12 @@ if (output && !globalThis[marker]) {
     try {
       const inputHeaders = typeof Request === 'function' && input instanceof Request ? input.headers : (init && init.headers);
       const headers = safeHeaders(inputHeaders);
+      if (requestedApiKeyProjectId) {
+        const result = await requestGatewayLimitsWithFetch(apiKeyPlanLimitsTarget(orgUrl, requestedApiKeyProjectId), headers, init);
+        storeApiKeyPlanLimits(result, 'fetch-api-key-plan-limits');
+        extrasDone = true;
+        return;
+      }
       if (requestedLimitsOrgId) {
         const result = await requestGatewayLimitsWithFetch(limitsTarget(orgUrl, requestedLimitsOrgId), headers, init);
         storeGatewayLimits(result, 'fetch-limits');
@@ -1464,6 +1522,12 @@ if (output && !globalThis[marker]) {
     if (extrasDone || extrasInFlight) return;
     extrasInFlight = true;
     try {
+      if (requestedApiKeyProjectId) {
+        const result = await requestGatewayLimitsNode(apiKeyPlanLimitsTarget(orgUrl, requestedApiKeyProjectId), headers);
+        storeApiKeyPlanLimits(result, 'node-request-api-key-plan-limits');
+        extrasDone = true;
+        return;
+      }
       if (requestedLimitsOrgId) {
         const result = await requestGatewayLimitsNode(limitsTarget(orgUrl, requestedLimitsOrgId), headers);
         storeGatewayLimits(result, 'node-request-limits');
@@ -1633,6 +1697,64 @@ async function loadAccountCapture() {
   return cached('accountCapture', async () => captureAccountDetailsViaCliSession('24h'));
 }
 
+
+
+function apiKeyPlanLimitsUnknown(state = 'source-unavailable', now = Date.now()) {
+  const stateName = ['project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(state))
+    ? String(state)
+    : 'source-unavailable';
+  return {state:stateName,source:'keys-api-plan-limits',currentCount:null,maxKeys:null,headroom:null,fetchedAt:Number(now)};
+}
+
+function normalizeApiKeyPlanLimitsCapture(capture, now = Date.now()) {
+  const stateName = ['ok','project-unavailable','permission-unavailable','source-unavailable','plan-limits-unavailable','invalid-plan-limits'].includes(String(capture?.state))
+    ? String(capture.state)
+    : 'source-unavailable';
+  if (stateName !== 'ok') return apiKeyPlanLimitsUnknown(stateName, now);
+  const currentCount = Number.isInteger(capture?.currentCount) && capture.currentCount >= 0 ? Number(capture.currentCount) : null;
+  const maxKeys = Number.isInteger(capture?.maxKeys) && capture.maxKeys >= 0 ? Number(capture.maxKeys) : null;
+  if (currentCount === null || maxKeys === null) return apiKeyPlanLimitsUnknown('invalid-plan-limits', now);
+  return {
+    state:'ok',source:'keys-api-plan-limits',currentCount,maxKeys,
+    headroom:Math.max(0, maxKeys - currentCount),fetchedAt:Number(now),
+  };
+}
+
+async function captureApiKeyPlanLimitsViaCliSession(projectId) {
+  const exactProjectId = String(projectId || '').trim();
+  if (!exactProjectId) return apiKeyPlanLimitsUnknown('project-unavailable');
+  await ensureCaptureTap();
+  const captureFile = path.join(
+    CONFIG_DIR,
+    `api-key-limits-${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.json`,
+  );
+  const existingNodeOptions = String(process.env.NODE_OPTIONS || '').trim();
+  const captureRequire = `--require=${CAPTURE_TAP_FILE}`;
+  const nodeOptions = existingNodeOptions ? `${existingNodeOptions} ${captureRequire}` : captureRequire;
+  try {
+    await runCliProcess(['orgs', 'list', '--json'], {
+      NODE_OPTIONS: nodeOptions,
+      DEVPASS_BRIDGE_CAPTURE_FILE: captureFile,
+      DEVPASS_BRIDGE_API_KEY_PROJECT_ID: exactProjectId,
+    });
+    const text = await fs.readFile(captureFile, 'utf8');
+    const captured = JSON.parse(text);
+    return normalizeApiKeyPlanLimitsCapture(captured?.apiKeyPlanLimits);
+  } catch {
+    return apiKeyPlanLimitsUnknown('source-unavailable');
+  } finally {
+    try { await fs.unlink(captureFile); } catch {}
+  }
+}
+
+async function loadApiKeyPlanLimits() {
+  let status;
+  try { status = await loadDevPassStatus(); }
+  catch { return apiKeyPlanLimitsUnknown('source-unavailable'); }
+  const exactProjectId = String(status?.projectId || '').trim();
+  if (!exactProjectId) return apiKeyPlanLimitsUnknown('project-unavailable');
+  return cached(`apiKeyPlanLimits:${exactProjectId}`, async () => captureApiKeyPlanLimitsViaCliSession(exactProjectId));
+}
 
 function gatewayLimitsNumber(value) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
@@ -1933,6 +2055,7 @@ async function cached(name, loader, options = {}) {
     ?? ((name === 'usageScopes' || name.startsWith('usageScopes:')) ? 60_000 : null)
     ?? ((name === 'analyticsScopes' || name.startsWith('analyticsScopes:')) ? 60_000 : null)
     ?? (name.startsWith('gatewayLimits:') ? 300_000 : null)
+    ?? (name.startsWith('apiKeyPlanLimits:') ? 300_000 : null)
     ?? (name.startsWith('runway:') ? 300_000 : 30_000);
   const now = Date.now();
   const current = cache.get(name);
@@ -3809,6 +3932,9 @@ async function handle(req, res) {
     if (url.pathname === '/snapshot') {
       const profile = url.searchParams.get('profile') === 'light' ? 'light' : 'full';
       return json(res, 200, await snapshot(profile, creditsOrgId));
+    }
+    if (url.pathname === '/api-key-plan-limits') {
+      return json(res, 200, await loadApiKeyPlanLimits());
     }
     if (url.pathname === '/gateway-limits') {
       if (!creditsOrgId) return json(res, 400, { state:'source-unavailable', source:'org-limits', error:'creditsOrgId required' });

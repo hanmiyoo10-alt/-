@@ -1,0 +1,113 @@
+name: Repository Patch Write
+
+on:
+  pull_request:
+    paths:
+      - 'tools/repo-write/**'
+      - '.github/workflows/repo-patch-write.yml'
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-patch-write-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile writer
+        run: |
+          set -euo pipefail
+          python -m py_compile tools/repo-write/patch_branch.py tools/repo-write/request_bridge.py
+
+      - name: Run offline writer contract tests
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tools/repo-write/tests -p 'test_*.py' -v
+
+  apply-owner-request:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.number == 1876 &&
+      github.event.issue.pull_request == null &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - name: Checkout trusted writer from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Configure Git identity
+        run: |
+          git config user.name 'repo-patch-write[bot]'
+          git config user.email 'repo-patch-write@users.noreply.github.com'
+
+      - name: Parse and apply bounded request
+        id: apply
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/repo-patch-write"
+          REQUEST="$RUNNER_TEMP/repo-patch-write/request.json"
+          PATCH="$RUNNER_TEMP/repo-patch-write/request.patch"
+          PARSE_RESULT="$RUNNER_TEMP/repo-patch-write/parse-result.json"
+          WRITE_RESULT="$RUNNER_TEMP/repo-patch-write/write-result.json"
+          RECEIPT="$RUNNER_TEMP/repo-patch-write/receipt.md"
+
+          python tools/repo-write/request_bridge.py parse-event \
+            --queue-issue 1876 \
+            --request-out "$REQUEST" \
+            --patch-out "$PATCH" \
+            --result-out "$PARSE_RESULT"
+          parse_rc=$?
+
+          write_rc=0
+          if [ "$parse_rc" -eq 0 ]; then
+            python tools/repo-write/patch_branch.py \
+              --repo . \
+              --remote origin \
+              --request-file "$REQUEST" \
+              --patch-file "$PATCH" \
+              --result-out "$WRITE_RESULT"
+            write_rc=$?
+          fi
+
+          python tools/repo-write/request_bridge.py render-receipt \
+            --parse-result "$PARSE_RESULT" \
+            --write-result "$WRITE_RESULT" \
+            --receipt-out "$RECEIPT"
+          receipt_render_rc=$?
+
+          gh issue comment 1876 --body-file "$RECEIPT"
+          receipt_post_rc=$?
+
+          if [ "$parse_rc" -ne 0 ] || [ "$write_rc" -ne 0 ] || [ "$receipt_render_rc" -ne 0 ] || [ "$receipt_post_rc" -ne 0 ]; then
+            exit 1
+          fi

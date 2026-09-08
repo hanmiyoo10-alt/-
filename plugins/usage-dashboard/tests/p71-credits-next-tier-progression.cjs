@@ -17,6 +17,7 @@ const SOURCES = 'plugins/usage-dashboard/runtime-src/bridge-engine/40-sources.pa
 const HTTP = 'plugins/usage-dashboard/runtime-src/bridge-engine/70-http-diagnostics.part.mjs';
 const ENGINE = 'plugins/usage-dashboard/runtime/bridge-engine.mjs';
 const MANIFEST = 'plugins/usage-dashboard/runtime/product-manifest.json';
+const LATEST = 'plugins/usage-dashboard/latest.js';
 const BRIDGE_IO = 'plugins/usage-dashboard/src/20-bridge-io.part.js';
 const DASH = 'plugins/usage-dashboard/src/50-dashboard-context.part.js';
 const DIAG = 'plugins/usage-dashboard/src/40-diagnostics.part.js';
@@ -43,8 +44,8 @@ for (const role of ['acceptedBaseline','latestInstalled']) {
   assert.equal(row?.productVersion, BASE);
   assert.equal(row?.releaseSha, BASE_RELEASE_SHA);
   assert.equal(row?.verdict, 'accepted');
-  assert.equal(row?.issue, 1859);
-  assert.equal(row?.commentId, 5576975527);
+  assert.equal(row?.issue, 1861);
+  assert.equal(row?.commentId, 5577292772);
 }
 
 const design = fs.readFileSync('docs/USAGE_DASHBOARD_5105_CREDITS_NEXT_TIER_DESIGN.md', 'utf8');
@@ -68,6 +69,7 @@ for (const marker of [
   "TARGET_ENGINE = '1.6.39'",
   `BASE_RELEASE_SHA = '${BASE_RELEASE_SHA}'`,
   `BASE_ENGINE_SHA = '${BASE_ENGINE_SHA}'`,
+  "const REQUIRED_BRIDGE_VERSION = '1.6.39';",
   "safe.nextTier = null",
   "safe.nextTier = nextTier",
   "'daysUntilQualify','spendUsdUntilQualify','daysUntilSpendPathUnlocks'",
@@ -97,8 +99,8 @@ for (const role of ['acceptedBaseline','latestInstalled']) {
   assert.equal(row?.productVersion, BASE);
   assert.equal(row?.releaseSha, BASE_RELEASE_SHA);
   assert.equal(row?.verdict, 'accepted');
-  assert.equal(row?.issue, 1859);
-  assert.equal(row?.commentId, 5576975527);
+  assert.equal(row?.issue, 1861);
+  assert.equal(row?.commentId, 5577292772);
 }
 
 const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
@@ -109,6 +111,8 @@ assert.notEqual(sha256(ENGINE), BASE_ENGINE_SHA, 'P71 Engine bytes must change f
 assert.equal(manifest.components?.bridgeManager?.version, '1.3.6');
 assert.equal(manifest.components?.bridgeManager?.productVersion, TARGET);
 assert.deepEqual(manifest.contracts, {snapshot:1,recentRequest:1});
+const latest = fs.readFileSync(LATEST, 'utf8');
+assert.ok(latest.includes("const REQUIRED_BRIDGE_VERSION = '1.6.39';"), 'P71 Product required bridge version must match Engine 1.6.39');
 
 const capture = fs.readFileSync(CAPTURE, 'utf8');
 const sanitizerStart = capture.indexOf('  const sanitizeGatewayLimits = (value) => {');

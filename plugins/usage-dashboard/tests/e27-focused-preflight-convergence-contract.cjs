@@ -12,6 +12,7 @@ const helperSource = fs.readFileSync('plugins/usage-dashboard/tools/release_focu
 const registrySource = fs.readFileSync('plugins/usage-dashboard/tests/registry.cjs', 'utf8');
 const reconciler = fs.readFileSync('.github/workflows/usage-dashboard-e9-release-reconcile.yml', 'utf8');
 const validator = fs.readFileSync('.github/workflows/usage-dashboard-e9-validate.yml', 'utf8');
+const reusableValidator = fs.readFileSync('.github/workflows/reusable-usage-dashboard-validate.yml', 'utf8');
 const e26Source = fs.readFileSync('plugins/usage-dashboard/tools/release_validation_convergence_e26.cjs', 'utf8');
 const e11Source = fs.readFileSync('plugins/usage-dashboard/tools/merge_guard_e11.cjs', 'utf8');
 const e16Source = fs.readFileSync('plugins/usage-dashboard/tools/release_merge_capsule_e16.cjs', 'utf8');
@@ -115,6 +116,7 @@ assert.ok(e26Source.includes('evaluateHandoff'), 'E26 must still evaluate E15 ha
 assert.ok(e11Source.includes('MERGE_READY_NO_DRIFT'), 'E11 no-drift authority remains present');
 assert.ok(e16Source.includes("require('./release_handoff_e15.cjs')"), 'E16 remains derived from the existing handoff authority chain');
 assert.ok(e16Source.includes('MERGE_READY_NO_DRIFT'), 'E16 still requires a fresh ready E11 verdict');
-assert.ok(validator.includes('tests/run-all.cjs'), 'E9 must still run the full discovered registry');
+assert.ok(validator.includes('uses: ./.github/workflows/reusable-usage-dashboard-validate.yml'), 'E9 must still delegate exact-SHA validation to the canonical reusable validator');
+assert.ok(reusableValidator.includes('node plugins/usage-dashboard/tests/run-all.cjs'), 'canonical reusable validation must still run the full discovered registry');
 
 console.log('E27 Focused Preflight Convergence: OK · E7 shift-left · declared Pxx · E21 reuse · semantic owner · E9 authority preserved');

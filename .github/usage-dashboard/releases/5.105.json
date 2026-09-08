@@ -1,0 +1,99 @@
+{
+  "product": "Local Usage Dashboard",
+  "productVersion": "3.0.0-alpha.5.105",
+  "releaseTitle": "Credits Next-Tier Progression",
+  "engineVersion": "1.6.39",
+  "managerVersion": "1.3.6",
+  "managedCliVersion": "1.10.0",
+  "managedCliAuthority": {
+    "schemaVersion": 1,
+    "package": "@llmgateway/cli",
+    "version": "1.10.0",
+    "exact": true,
+    "upstreamRepository": "theopenco/llmgateway-templates",
+    "tagNamespace": "@llmgateway/cli@",
+    "tag": "@llmgateway/cli@1.10.0",
+    "tagCommit": "6b1cda1988f32010a9b090c00eb9b2fe672145fe",
+    "verifiedAt": "2026-08-31",
+    "verification": "GitHub refs/tags/@llmgateway/cli@1.10.0",
+    "parentProjectRepository": "theopenco/llmgateway",
+    "parentProjectReleaseIsPackageAuthority": false
+  },
+  "managedModelCatalogVersion": "1.280.0",
+  "managedModelCatalogAuthority": {
+    "package": "@llmgateway/models",
+    "version": "1.280.0",
+    "exact": true,
+    "root": "managed-cli-version-root",
+    "source": "installed-package-json-and-export",
+    "upstreamRepository": "theopenco/llmgateway",
+    "upstreamCommit": "fbb40efa41c379db5223dff708509b6dd82e05a9",
+    "verifiedAt": "2026-08-31"
+  },
+  "snapshotContract": 1,
+  "recentRequestContract": 1,
+  "contracts": {
+    "snapshot": 1,
+    "recentRequest": 1
+  },
+  "releaseEvidence": {
+    "schemaVersion": 1,
+    "acceptedBaseline": {
+      "productVersion": "3.0.0-alpha.5.104",
+      "releaseSha": "e1d1455592449bcad943e3dec6e1eb205136bd92",
+      "verdict": "accepted",
+      "issue": 1859,
+      "commentId": 5576975527,
+      "note": "5.104 completed exact PocketRisu physical acceptance before 5.105 implementation."
+    },
+    "latestInstalled": {
+      "productVersion": "3.0.0-alpha.5.104",
+      "releaseSha": "e1d1455592449bcad943e3dec6e1eb205136bd92",
+      "verdict": "accepted",
+      "issue": 1859,
+      "commentId": 5576975527,
+      "note": "5.104 is the latest exact installed accepted production baseline at 5.105 source freeze."
+    }
+  },
+  "authority": {
+    "featureIssue": 1864,
+    "designPullRequest": 1867,
+    "physicalAcceptanceIssue": 1859,
+    "releaseGeneration": "E13",
+    "e20": "structured release evidence remains authoritative",
+    "e21": "canonical evidence-view compatibility retained",
+    "e22": "latest physically accepted baseline remains distinct from latest deployment",
+    "e23": "accepted-baseline handoff boundary remains sealed",
+    "e24": "ordinary release readiness validates accepted-baseline authority before materialization"
+  },
+  "materializer": "plugins/usage-dashboard/tools/release_credits_next_tier_5105.py",
+  "callerWorkflow": ".github/workflows/usage-dashboard-validate.yml",
+  "sharedWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "validatorWorkflow": ".github/workflows/reusable-usage-dashboard-validate.yml",
+  "publisherWorkflow": ".github/workflows/reusable-usage-dashboard-promote.yml",
+  "newRegression": "plugins/usage-dashboard/tests/p71-credits-next-tier-progression.cjs",
+  "highlights": [
+    "Adds a source-faithful next-tier progression block to the existing Credits Gateway Limits card.",
+    "Uses only official server-computed remaining age, remaining spend, and spend-path age-floor values from the selected organization limits source.",
+    "Pinned, max-tier, enterprise, non-regular, invalid, and unavailable states stay explicit without reconstructing the public tier ladder.",
+    "Moves Engine to 1.6.39 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded."
+  ],
+  "diagnosticHints": [
+    "Verify Product 5.105 · Engine 1.6.39 · Manager 1.3.6 and READY/Health ok.",
+    "Open Credits and confirm Gateway Limits amounts/bars remain healthy with the new 다음 Tier block below them.",
+    "Diagnostics should include one ID-free Gateway next tier line matching the UI state; no artificial spend or traffic is required."
+  ],
+  "releaseNotes": {
+    "highlights": [
+      "Adds a source-faithful next-tier progression block to the existing Credits Gateway Limits card.",
+      "Uses only official server-computed remaining age, remaining spend, and spend-path age-floor values from the selected organization limits source.",
+      "Pinned, max-tier, enterprise, non-regular, invalid, and unavailable states stay explicit without reconstructing the public tier ladder.",
+      "Moves Engine to 1.6.39 while keeping Manager 1.3.6, CLI 1.10.0, Models 1.280.0, and contracts 1/1 bounded."
+    ],
+    "diagnosticHints": [
+      "Verify Product 5.105 · Engine 1.6.39 · Manager 1.3.6 and READY/Health ok.",
+      "Open Credits and confirm Gateway Limits amounts/bars remain healthy with the new 다음 Tier block below them.",
+      "Diagnostics should include one ID-free Gateway next tier line matching the UI state; no artificial spend or traffic is required."
+    ]
+  }
+}

@@ -84,7 +84,9 @@ Do not mix unrelated product work into the plugin release.
 
 ## 2. Stable first
 
-Default cycle:
+Repository baseline-preservation behavior is inherited from `RCR-D01`.
+
+Termux keeps this real-device/release loop explicit:
 
 `Stable production
 → real-device diagnostic
@@ -97,94 +99,41 @@ Default cycle:
 
 Keep already-working behavior unchanged unless the release goal requires touching it.
 
-Prefer small, explainable diffs over broad rewrites.
-
 ## 3. One release, one primary goal
 
-Each release should normally have one primary target.
+Generic bounded-work bundling policy is inherited from `RCR-D02`.
 
-Do not casually combine unrelated work such as:
-
-- performance
-- updater
-- UI
-- cache
-- runtime recovery
-- data fidelity
-
-When another important issue appears, record it as a later candidate
-instead of expanding the current release without evidence.
-
-A large release is acceptable when it has one coherent architectural goal.
+For Termux releases, performance, updater, UI, cache, runtime recovery, and data fidelity remain separate release concerns unless current evidence shows they are one coherent target. Record other issues as later candidates rather than silently widening the current release.
 
 ## 4. Evidence before repair
 
-Use:
+The repository-wide evidence-first repair cycle is inherited from `RCR-D03`.
 
-`Observe → Attribute → Verify → Design → Repair → Measure`
-
-If the cause is not sufficiently isolated, improve diagnostics before
-changing behavior.
-
-Do not repair a subsystem merely because it is a plausible suspect.
+For Termux, if the cause is not sufficiently isolated, improve diagnostics before changing behavior, and do not repair a subsystem merely because it is a plausible suspect.
 
 ## 5. Evidence language
 
-Use these meanings consistently:
+- **VERIFIED** — directly supported by repository state, tests, production artifacts, or real-device diagnostics.
+- **SUPPORTED HYPOTHESIS** — multiple observations support it, but causality is not fully proven.
+- **UNKNOWN** — current telemetry cannot determine it.
 
-**VERIFIED**
-Directly supported by repository state, tests, production artifacts,
-or real-device diagnostics.
-
-**SUPPORTED HYPOTHESIS**
-Multiple observations support it, but causality is not fully proven.
-
-**UNKNOWN**
-Current telemetry cannot determine it.
-
-Never present UNKNOWN as VERIFIED.
+Never present UNKNOWN as VERIFIED. Repository-wide uncertainty fidelity is additionally governed by `RCR-H03`.
 
 ## 6. Data fidelity
 
-Display only values actually provided by a real source.
+Termux-displayed or diagnostic values must come from a real source. Known zero and unknown are different states and must remain distinguishable.
 
-Do not:
-
-- convert unknown values into zero
-- invent missing metadata
-- derive unsupported values from price
-- infer fields from model/provider identity
-- silently substitute estimates for source data
-- relabel aggregate data as exact per-request data
-
-Known zero and unknown are different states and must remain distinguishable.
-
-When adding a derived value, clearly document:
-- source fields
-- derivation
-- fidelity level
+When adding a derived value, document its source fields, derivation, and fidelity level. Do not infer missing metadata or provenance from model/provider identity when stronger source evidence is available.
 
 ## 7. Provenance
 
-Every important displayed value should have an identifiable source.
+Important displayed or diagnostic values should retain identifiable provenance such as source, fidelity, scope, timestamp precision, and capture mode when available.
 
-Prefer normalized metadata such as:
-
-- source
-- fidelity
-- scope
-- timestamp precision
-- capture mode
-
-Never guess a scope or provenance from a model name when the source
-can provide stronger evidence.
-
-If provenance cannot be proven, preserve UNKNOWN.
+If provenance cannot be proven, preserve UNKNOWN rather than inventing it.
 
 ## 8. Diagnostic turn and design turn are separate
 
-When the user shares a real-device diagnostic log,
-that turn is analysis only.
+When the user shares a real-device diagnostic log, that turn is analysis only.
 
 In the diagnostic turn:
 
@@ -204,8 +153,7 @@ Do NOT:
 
 End the turn after analysis.
 
-Only after the user asks in a later turn for the next update/design
-should next-release design begin.
+Only after the user asks in a later turn for the next update/design should next-release design begin.
 
 Required interaction cycle:
 
@@ -218,26 +166,15 @@ Required interaction cycle:
 
 ## 9. Runtime errors and recovery
 
-Historical error records and current runtime health are different concepts.
+Repository-wide current-health versus historical-incident behavior is inherited from `RCR-C05`.
 
-Do not erase historical errors merely to make the product appear healthy.
-
-Prefer explicit states such as:
-
-- cumulative errors
-- active errors
-- recovered errors
-- last error
-- last recovery
-
-Current readiness should describe current actionable health while
-retaining useful incident history.
+For Termux, keep useful incident history and distinguish states such as cumulative errors, active errors, recovered errors, last error, and last recovery. Current readiness should describe current actionable health without erasing recovered history.
 
 ## 10. Performance
 
-Measure before optimizing.
+Repository-wide optimization discipline is inherited from `RCR-D04`.
 
-Start from phase attribution such as:
+Termux performance work starts from phase attribution such as:
 
 `Refresh
 → source/network
@@ -245,20 +182,13 @@ Start from phase attribution such as:
 → persist
 → render`
 
-If one phase dominates, instrument its internal sub-phases before
-changing unrelated code.
+If one phase dominates, instrument its internal sub-phases before changing unrelated code.
 
-Diagnostics must not introduce:
-
-- expensive full scans
-- unbounded history
-- large raw payload persistence
-- unnecessary network calls
-- high-frequency polling
+Under `RCR-C03`, diagnostics must remain bounded and must not introduce expensive full scans, unbounded history, large raw payload persistence, unnecessary network calls, or high-frequency polling.
 
 ## 11. Protected stability
 
-Do not touch unrelated stable paths without evidence.
+Repository baseline-preservation behavior from `RCR-D01` also applies to stable project paths.
 
 Preserve healthy behavior such as:
 
@@ -272,7 +202,7 @@ Preserve healthy behavior such as:
 - mobile layout
 - recovery behavior
 
-Every new feature must coexist with existing stable contracts.
+Every new feature must coexist with these existing stable contracts unless current evidence justifies changing one of them.
 
 ## 12. Release engineering
 
@@ -294,10 +224,11 @@ Normal release sequence:
 → re-read production artifacts
 → real-device validation`
 
-Never deploy a failing candidate.
+Existing Git/CI/release gates remain authoritative under `RCR-H07`; a failing Termux candidate cannot proceed to deployment.
 
-Production must move monotonically forward.
-A stale workflow must never downgrade the production release.
+Production must move monotonically forward. A stale workflow must never downgrade the production release.
+
+This release sequence does not manufacture a production branch or manifest while those authorities remain UNKNOWN.
 
 ## 13. Versioning
 
@@ -310,32 +241,15 @@ Before any release, read the actual repository for:
 - generated artifact
 - production branch
 
-Do not infer these from conversation memory.
+Do not infer these from conversation memory, and do not bump a component version when that component's behavior does not change.
 
-Do not bump a component version when that component's behavior does not change.
-
-Generated artifacts are not the primary development source.
-Modify canonical source and regenerate deterministically.
+When generated distributables exist, `RCR-C01` governs their derived status: modify canonical source and regenerate deterministically rather than treating the generated artifact as the primary development source.
 
 ## 14. User interaction and execution
 
-When repository tooling can perform the work,
-ChatGPT should perform:
+Generic preference for safe repository automation is inherited from `RCR-D05`.
 
-- source analysis
-- design
-- code modification
-- tests
-- version updates
-- PR creation
-- CI inspection
-- merge
-- deployment
-
-Do not make the user manually run development commands when the work can
-be performed through repository tooling.
-
-Ask the user only when real-device validation genuinely requires the device.
+Ask the user only when real-device validation genuinely requires the device, consistent with `RCR-C06`.
 
 When device testing is needed, state exactly:
 
@@ -346,53 +260,28 @@ When device testing is needed, state exactly:
 
 ## 15. Update safety
 
-Routine production releases must use the product's normal automatic update path.
+`RCR-C04` governs routine release updates when this project has an authoritative normal automatic update path. This guideline does not establish such a path while production/release authority remains UNKNOWN.
 
-Do not make normal updates depend on:
-
-- manual shell edits
-- file replacement
-- token copying
-- temporary bootstrap commands
-- debug-only installation procedures
-
-Temporary diagnostics are allowed only when necessary and must not become
-the normal release process.
+Temporary diagnostics must not become the normal release mechanism. Once a normal update path is authoritatively established, routine updates must not depend on manual shell edits, file replacement, token copying, temporary bootstrap commands, or debug-only installation procedures.
 
 ## 16. Regression contract
 
-Every production incident or newly introduced contract should gain
-a regression test when practical.
+Repository-wide regression behavior is inherited from `RCR-D06`.
 
-Tests should prefer:
-
-- production-like process behavior
-- public/runtime interfaces
-- deterministic fixtures
-
-Avoid brittle source slicing, VM execution of copied function bodies,
-or tests that merely duplicate implementation details.
-
-Static tests are appropriate for:
-
-- security boundaries
-- generated-artifact parity
-- forbidden behavior
-- version/manifest consistency
-- source ownership rules
+Termux regression checks should prefer production-like process behavior, public/runtime interfaces, and deterministic fixtures. Static checks remain appropriate for security boundaries, generated-artifact parity, forbidden behavior, version/manifest consistency, and source ownership rules when those contracts exist.
 
 ## 17. Generated artifacts
 
-Where a plugin uses generated distributables:
+Generated-artifact policy is inherited from `RCR-C01`.
+
+Where Termux uses generated distributables, keep this project flow explicit:
 
 `canonical source
 → deterministic build
 → generated artifact
 → production`
 
-Do not hand-edit the generated artifact as the primary implementation.
-
-CI should detect when the generated artifact does not match its canonical source.
+Keep generated artifacts derived from canonical source. This guideline does not create a generated artifact, manifest, release branch, or production authority where none is currently established.
 
 ## 18. Durable project cycle
 
@@ -412,16 +301,13 @@ Maintain this loop:
 
 ## Non-negotiable rules
 
-- Do not break working behavior without evidence.
+Repository-wide baseline, bounded-goal, evidence-first, uncertainty, optimization, gate, regression, generated-artifact, diagnostic-boundedness, update-path, and health/history behavior is inherited from `RCR-D01`, `RCR-D02`, `RCR-D03`, `RCR-D04`, `RCR-D06`, `RCR-H03`, `RCR-H07`, `RCR-C01`, `RCR-C03`, `RCR-C04`, and `RCR-C05` rather than repeated here.
+
 - Do not fabricate unknown data.
-- Do not repair before isolating the cause.
-- Do not bundle unrelated changes without a coherent release goal.
-- Do not deploy failing tests.
 - Do not guess the production version from memory.
+- Do not infer provenance from model/provider identity when actual source evidence exists.
 - Do not confuse diagnostic labels with underlying semantics.
 - Do not confuse recovered historical errors with an active outage.
-- Do not sacrifice correctness for performance.
-- Do not infer provenance from model/provider identity when actual source evidence exists.
-- Keep generated artifacts derived from canonical source.
 - When the user shares a diagnostic, analyze only.
 - Wait for a later user turn before designing or implementing the next release.
+- Keep current production/release authority UNKNOWN until current owning evidence establishes it.

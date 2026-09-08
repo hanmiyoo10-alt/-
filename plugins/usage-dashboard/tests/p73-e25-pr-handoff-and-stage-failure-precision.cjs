@@ -42,6 +42,9 @@ assert.equal(result.decision,pr.DECISIONS.BLOCK_INVALID);
 assert.equal(result.reason,'E25_PR_BASE_DENIED');
 result=pr.classifyPrHandoff({requestNumber:REQUEST,releaseVersion:RELEASE,candidateBranch:BRANCH,candidateSha:SHA,repository:REPOSITORY,prs:[fixture({head:{ref:BRANCH,sha:SHA,repo:{full_name:'other/repo'}}})]});
 assert.equal(result.reason,'E25_PR_REPOSITORY_DENIED');
+result=pr.classifyPrHandoff({requestNumber:REQUEST,releaseVersion:RELEASE,candidateBranch:BRANCH,candidateSha:SHA,repository:REPOSITORY,prs:[fixture({head:{ref:'stage/usage-dashboard-3.0.0-alpha.5.998',sha:SHA,repo:{full_name:REPOSITORY}}})]});
+assert.equal(result.decision,pr.DECISIONS.BLOCK_INVALID);
+assert.equal(result.reason,'E25_PR_HEAD_BRANCH_MISMATCH');
 result=pr.classifyPrHandoff({requestNumber:REQUEST,releaseVersion:RELEASE,candidateBranch:BRANCH,candidateSha:SHA,repository:REPOSITORY,prs:[fixture({body:'wrong marker'})]});
 assert.equal(result.reason,'E25_PR_REQUEST_MARKER_MISSING');
 result=pr.classifyPrHandoff({requestNumber:REQUEST,releaseVersion:RELEASE,candidateBranch:BRANCH,candidateSha:SHA,repository:REPOSITORY,prs:[fixture({head:{ref:BRANCH,sha:'b'.repeat(40),repo:{full_name:REPOSITORY}}})]});
@@ -103,6 +106,7 @@ assert.deepEqual(failure.normalizeProjection({phase:'not-real',reason:'LEAK_ME',
 assert.equal(failure.normalizeProjection({phase:'impact',diagnosticCode:'E18_UNKNOWN_RUNTIME_IMPACT'}).diagnosticCode,'E18_UNKNOWN_RUNTIME_IMPACT');
 assert.equal(failure.normalizeProjection({phase:'materializer',diagnosticCode:'token=ghp_secret org=123'}).diagnosticCode,'');
 const receipt=failure.formatReceipt({phase:'materializer',reason:'arbitrary',diagnosticCode:'token=ghp_secret',transaction:'12345',runUrl:'https://github.com/hanmiyoo10-alt/-/actions/runs/12345',next:'repair source'});
+assert.match(receipt,/^UD_STAGE_REJECTED$/m);
 assert.match(receipt,/phase: materializer/);
 assert.match(receipt,/reason: E7_MATERIALIZER_EXEC_FAILED/);
 assert.doesNotMatch(receipt,/ghp_secret|diagnostic:/);
@@ -152,12 +156,23 @@ for(const marker of [
   'UD_E9_PR_REQUIRED:',
   'E25_TRUSTED_CREATE_NOT_PROVEN',
   'pull-requests: read',
+  'api_get_search()',
+  '$GITHUB_API_URL/search/issues?q=$query&per_page=100',
+  'pr-head-candidates.json',
+  'pr-marker-search.json',
+  'unique_by(.number)',
+  'request-bound.json',
 ]) assert.ok(reducer.includes(marker),marker);
 assert.equal(reducer.includes('pull-requests: write'),false,'E25 must not broaden reducer PR write authority without live create proof');
 assert.equal(reducer.includes('/pulls" --data'),false,'E25 must not activate Actions initial PR creation without live capability proof');
 assert.equal(reducer.includes('gh pr create'),false);
 assert.ok(reducer.includes('issues: write'),'durable pr_number CAS remains issue-body metadata authority');
 assert.ok(reducer.includes('E9_PR_HEAD_SHA_MISMATCH'),'ordinary post-bind identity verification remains in place');
+const boundReadAt=reducer.indexOf('api_get "issues/$REQUEST_NUMBER" "$RUNNER_TEMP/request-bound.json"');
+const requestRefreshAt=reducer.indexOf('REQUEST_JSON="$(node - "$RUNNER_TEMP/request-bound.json"');
+const e16At=reducer.indexOf('E16_CAPSULE_JSON=');
+assert.ok(boundReadAt>0 && requestRefreshAt>boundReadAt && e16At>requestRefreshAt,'post-bind durable request must be re-read before any E16 capsule consumes REQUEST_JSON');
+assert.equal(reducer.includes('pulls?state=all&head=$HEAD_QUERY&base=main'),false,'PR discovery must not pre-filter wrong-base candidates before fail-closed identity classification');
 
 const helperSource=fs.readFileSync('plugins/usage-dashboard/tools/release_pr_handoff_e25.cjs','utf8');
 for(const forbidden of ["require('node:http')","require('node:https')",'GITHUB_TOKEN','api.github.com','merge_pull_request']) assert.equal(helperSource.includes(forbidden),false,forbidden);

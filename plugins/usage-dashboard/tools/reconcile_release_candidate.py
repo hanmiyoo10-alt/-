@@ -31,6 +31,7 @@ E19_STRUCTURAL_TESTS = [
     'plugins/usage-dashboard/tests/p5-module-layout.cjs',
     'plugins/usage-dashboard/tests/p49-release-notes-diagnostic-guidance.cjs',
 ]
+E27_FOCUSED_PREFLIGHT = TOOLS / 'release_focused_preflight_e27.cjs'
 
 
 def fail(code: str, detail: str = '') -> None:
@@ -215,10 +216,23 @@ def run_shift_left_structural_gates(spec_path: Path) -> None:
     print(f"E19_STRUCTURAL_GATES_GREEN:{','.join(passed)}")
 
 
+def run_e27_focused_preflight(spec_path: Path) -> None:
+    if not E27_FOCUSED_PREFLIGHT.is_file():
+        fail('E27_FOCUSED_PREFLIGHT_MISSING')
+    result = subprocess.run(
+        ['node', str(E27_FOCUSED_PREFLIGHT), '--spec', spec_path.as_posix()],
+        env=os.environ.copy(),
+        check=False,
+    )
+    if result.returncode != 0:
+        fail('E27_FOCUSED_PREFLIGHT_REJECTED', spec_path.as_posix())
+    print(f'E27_FOCUSED_PREFLIGHT_GREEN:{spec_path.as_posix()}')
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description='Reconcile generated Local Usage Dashboard release candidate state.')
     parser.add_argument('--spec', required=True, help='release spec path under .github/usage-dashboard/releases')
-    parser.add_argument('--two-pass', action='store_true', help='prove declared materializer + reconciliation are idempotent and run E19 structural gates')
+    parser.add_argument('--two-pass', action='store_true', help='prove declared materializer + reconciliation are idempotent and run E19/E27 shift-left gates')
     args = parser.parse_args()
 
     spec_path = Path(args.spec)
@@ -261,8 +275,10 @@ def main() -> None:
         fail('MATERIALIZER_CRITICAL_HASH_DRIFT')
     print(f"MATERIALIZER_IDEMPOTENT:{spec['productVersion']}")
 
-    # These existing deterministic contracts now fail before E18 repeat behavior smoke.
+    # These deterministic contracts now fail before E18 repeat behavior smoke and before
+    # E7 can construct/publish the candidate tree. E27 reuses the exact declared Pxx and E21.
     run_shift_left_structural_gates(spec_path)
+    run_e27_focused_preflight(spec_path)
 
 
 if __name__ == '__main__':

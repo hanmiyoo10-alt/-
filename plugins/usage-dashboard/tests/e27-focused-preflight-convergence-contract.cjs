@@ -12,6 +12,7 @@ const helperSource = fs.readFileSync('plugins/usage-dashboard/tools/release_focu
 const registrySource = fs.readFileSync('plugins/usage-dashboard/tests/registry.cjs', 'utf8');
 const reconciler = fs.readFileSync('.github/workflows/usage-dashboard-e9-release-reconcile.yml', 'utf8');
 const validator = fs.readFileSync('.github/workflows/usage-dashboard-e9-validate.yml', 'utf8');
+const e26Source = fs.readFileSync('plugins/usage-dashboard/tools/release_validation_convergence_e26.cjs', 'utf8');
 
 // E27 remains maintenance inside existing E7, not a new workflow or release-generation authority.
 const e27Workflows = fs.readdirSync('.github/workflows').filter((name)=>/e27/i.test(name));
@@ -107,7 +108,8 @@ assert.equal(reconcileSource.includes('release_generation: E27'), false);
 
 // E26/E15/E9/E11/E16 boundaries remain independently visible after candidate publication.
 assert.ok(reconciler.includes('release_validation_convergence_e26.cjs'));
-assert.ok(reconciler.includes('release_handoff_e15.cjs') || reconciler.includes('E15'));
+assert.ok(e26Source.includes("require('./release_handoff_e15.cjs')"), 'E15 remains owned by the E26 convergence helper');
+assert.ok(e26Source.includes('evaluateHandoff'), 'E26 must still evaluate E15 handoff before validation convergence');
 assert.ok(reconciler.includes('merge_guard_e11.cjs') || reconciler.includes('E11'));
 assert.ok(reconciler.includes('merge_authority_e16.cjs') || reconciler.includes('E16'));
 assert.ok(validator.includes('tests/run-all.cjs'), 'E9 must still run the full discovered registry');

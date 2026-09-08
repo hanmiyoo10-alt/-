@@ -65,7 +65,8 @@ for (const marker of [
   'No new periodic timer, poller or background refresh',
 ]) assert.ok(design.includes(marker), `P76 frozen design marker missing: ${marker}`);
 assert.ok(addendum.includes('V-DEVPASS-BILLING-HISTORY'));
-assert.ok(addendum.includes('source-proven-design-5.109'));
+const intakeState = JSON.parse(read('.github/usage-dashboard/upstream-idea-intake-state.json'));
+assert.equal(intakeState.knownCandidateKeys.find(item => item.id === 'V-DEVPASS-BILLING-HISTORY')?.status, 'source-proven-design-5.109');
 
 const materializer = read(MATERIALIZER);
 for (const marker of [
@@ -117,7 +118,6 @@ const row = (n, overrides={}) => ({
   billingEmail:'secret@example.com',
   ...overrides,
 });
-
 const six = sanitize({invoices:[row(6),row(5),row(4),row(3),row(2),row(1)]});
 assert.equal(six.state, 'ok');
 assert.equal(six.receivedCount, 6);

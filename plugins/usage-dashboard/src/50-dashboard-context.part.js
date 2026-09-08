@@ -23,10 +23,37 @@
     return `<div class="bar gateway-limits-utilization" role="progressbar" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${esc(percentText)}" aria-valuetext="${esc(ariaText)}"><i style="width:${esc(percentText)}%"></i></div>`;
   }
 
+  function gatewayNextTierProgressionHtml(nextTier) {
+    const stateName = ['value','max-tier','tier-overridden','not-applicable','unknown'].includes(String(nextTier?.state))
+      ? String(nextTier.state)
+      : 'unknown';
+    if (stateName === 'max-tier') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · 최고 Tier</p></div>';
+    if (stateName === 'tier-overridden') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · 고정 Tier · 자동 승급 미적용</p></div>';
+    if (stateName === 'not-applicable') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · 미적용</p></div>';
+    if (stateName !== 'value') return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · —</p></div>';
+    const tier = Number.isInteger(nextTier?.tier) && nextTier.tier >= 0 ? Number(nextTier.tier) : null;
+    const days = Number.isInteger(nextTier?.daysUntilQualify) && nextTier.daysUntilQualify >= 0 ? Number(nextTier.daysUntilQualify) : null;
+    const spend = typeof nextTier?.spendUsdUntilQualify === 'number' && Number.isFinite(nextTier.spendUsdUntilQualify) && nextTier.spendUsdUntilQualify >= 0
+      ? Number(nextTier.spendUsdUntilQualify)
+      : null;
+    const spendAge = Number.isInteger(nextTier?.daysUntilSpendPathUnlocks) && nextTier.daysUntilSpendPathUnlocks >= 0
+      ? Number(nextTier.daysUntilSpendPathUnlocks)
+      : null;
+    if (tier === null || days === null || spend === null || spendAge === null) return '<div class="gateway-next-tier"><p><b>다음 Tier</b> · —</p></div>';
+    const ageText = days === 0 ? '충족' : `${days}일 남음`;
+    const spendText = spend === 0 ? '금액 충족' : `${money(spend)} 더`;
+    const spendAgeText = spendAge === 0 ? '충족' : `${spendAge}일 남음`;
+    return `<div class="gateway-next-tier"><p><b>다음 Tier · Tier ${esc(tier)}</b></p><div class="minis">
+      <div class="mini"><span>나이 경로</span><b>${esc(ageText)}</b></div>
+      <div class="mini"><span>사용 경로</span><b>${esc(spendText)}</b></div>
+      <div class="mini"><span>사용 경로 연령</span><b>${esc(spendAgeText)}</b></div>
+    </div></div>`;
+  }
+
   function gatewayLimitsSectionHtml(truth) {
     const sourceState = ['ok','permission-unavailable','source-unavailable'].includes(String(truth?.state)) ? String(truth.state) : 'source-unavailable';
     if (truth?.enterprise === true && sourceState === 'ok') {
-      return `<div class="usage-detail-box gateway-limits-card"><div class="recent-head"><h3>Gateway Limits · Credits</h3><span>source org-limits · ok</span></div><p>Enterprise · 조직 단위 Gateway rate/spend cap 없음</p></div>`;
+      return `<div class="usage-detail-box gateway-limits-card"><div class="recent-head"><h3>Gateway Limits · Credits</h3><span>source org-limits · ok</span></div><p>Enterprise · 조직 단위 Gateway rate/spend cap 없음</p>${gatewayNextTierProgressionHtml(truth?.nextTier)}</div>`;
     }
     const tierText = truth?.trustTierState === 'not-applicable'
       ? '미적용'
@@ -52,7 +79,7 @@
       <div class="mini"><span>일간 spend · UTC</span><b>${esc(gatewayLimitsMetricText(truth?.daily))}</b>${gatewayLimitsUtilizationBarHtml(truth?.daily,'used','일간 spend 사용률 · UTC')}</div>
       <div class="mini"><span>월간 spend</span><b>${esc(gatewayLimitsMetricText(truth?.monthly))}</b>${gatewayLimitsUtilizationBarHtml(truth?.monthly,'used','월간 spend 사용률')}</div>
       <div class="mini"><span>${esc(topUpLabel)}</span><b>${esc(topUpText)}</b>${gatewayLimitsUtilizationBarHtml(truth?.topUp,'remaining','Rolling top-up 남은 여유 비율')}</div>
-    </div></div>`;
+    </div>${gatewayNextTierProgressionHtml(truth?.nextTier)}</div>`;
   }
 
 

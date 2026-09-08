@@ -30,6 +30,29 @@
       };
     };
     const topUpState = ['value','not-applicable','unknown'].includes(String(raw?.topUp?.state)) ? String(raw.topUp.state) : 'unknown';
+    const progressionState = ['value','max-tier','tier-overridden','not-applicable','unknown'].includes(String(raw?.nextTier?.state))
+      ? String(raw.nextTier.state)
+      : 'unknown';
+    const progressionNumber = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Number(value) : null;
+    const progressionDay = (value) => Number.isInteger(value) && value >= 0 ? Number(value) : null;
+    const nextTier = {
+      state:progressionState,
+      currentTier:Number.isInteger(raw?.nextTier?.currentTier) && raw.nextTier.currentTier >= 0 ? raw.nextTier.currentTier : null,
+      tier:Number.isInteger(raw?.nextTier?.tier) && raw.nextTier.tier >= 0 ? raw.nextTier.tier : null,
+      daysUntilQualify:progressionDay(raw?.nextTier?.daysUntilQualify),
+      spendUsdUntilQualify:progressionNumber(raw?.nextTier?.spendUsdUntilQualify),
+      daysUntilSpendPathUnlocks:progressionDay(raw?.nextTier?.daysUntilSpendPathUnlocks),
+    };
+    if (progressionState === 'value' && (
+        nextTier.currentTier === null || nextTier.tier === null || nextTier.daysUntilQualify === null
+        || nextTier.spendUsdUntilQualify === null || nextTier.daysUntilSpendPathUnlocks === null)) {
+      nextTier.state = 'unknown';
+      nextTier.currentTier = null;
+      nextTier.tier = null;
+      nextTier.daysUntilQualify = null;
+      nextTier.spendUsdUntilQualify = null;
+      nextTier.daysUntilSpendPathUnlocks = null;
+    }
     return {
       state:'ok',
       source:'org-limits',
@@ -51,6 +74,7 @@
         used:num(raw?.topUp?.used) ? Number(raw.topUp.used) : null,
         remaining:num(raw?.topUp?.remaining) ? Number(raw.topUp.remaining) : null,
       },
+      nextTier,
       fetchedAt:num(raw.fetchedAt) ? Number(raw.fetchedAt) : Date.now(),
     };
   }

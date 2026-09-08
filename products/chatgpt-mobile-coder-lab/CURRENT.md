@@ -69,6 +69,50 @@ Codex CLI는 실제 shell/files/test 기능 폭이 넓지만 **Codex 전용/agen
 
 즉 "모바일에서 Codex CLI를 편하게 쓰기"보다 "일반 ChatGPT 채팅 자체에 Codex 같은 손발을 붙이기"가 우선이다.
 
+## Remote Desktop Commander 실험 — DEVICE ONLINE / TOOL CALL NOT YET VERIFIED
+
+서버폰에서 `@wonderwhy-er/desktop-commander@0.2.48`의 `remote` 모드를 직접 실행했다.
+
+첫 Termux 바깥 실행에서는:
+
+- local Desktop Commander MCP 연결 성공.
+- remote MCP 연결 성공.
+- device authorization 성공.
+- device 등록 성공.
+- 이후 realtime channel이 transport failure와 reconnect loop에 들어감.
+
+다음 시도는 Ubuntu PRoot 내부 `/root/nyang-repo`에서 실행했다.
+
+확인된 결과:
+
+```text
+Connected to Desktop Commander MCP
+Connected to Remote MCP
+Authorization successful
+Device ready
+Channel error: transport failure
+Recreating channel...
+Channel subscribed (recovered after 1 attempt)
+Device marked as online
+Presence tracked
+```
+
+현재 의미:
+
+- 서버폰 device agent 실행 성공.
+- Remote Desktop Commander 계정 인증 성공.
+- remote realtime channel이 일시 실패 후 자동 복구됨.
+- remote service에서 서버폰 device가 online/presence 상태까지 진입함.
+- 아직 ChatGPT 쪽 실제 tool invocation으로 `pwd`, file read, shell command가 서버폰에서 실행되는지는 검증하지 않음.
+
+중요한 환경 관찰:
+
+- Ubuntu PRoot 내부에서 실행해도 Node 실행 파일 자체는 Termux의 `/data/data/com.termux/files/usr/bin/node`를 사용한다.
+- 하지만 프로세스의 HOME/workdir은 Ubuntu 쪽 `/root` 및 `/root/nyang-repo` 문맥으로 실행되는 상태가 확인됐다.
+- 이 조합이 실제 filesystem/shell tool 호출에서 정상적으로 Ubuntu 경로를 다루는지는 다음 단계에서 확인해야 한다.
+
+민감정보인 device code, device ID, 계정 주소는 repository 기록에 저장하지 않는다.
+
 ## 후보 조사 — ACTIVE
 
 현재 조사된 계열:
@@ -92,15 +136,16 @@ Custom MCP 계열은 목표 적합도가 높지만 현재 모바일 ChatGPT surf
 
 ## 현재 1순위 다음 단계
 
-**Remote Desktop Commander가 Android ChatGPT 앱에서 실제로 설치/연결/호출 가능한지 최소 검증한다.**
+**Remote Desktop Commander가 Android ChatGPT 앱에서 실제로 서버폰의 read-only tool call을 수행하는지 검증한다.**
 
 검증 순서:
 
-1. ChatGPT 모바일에서 플러그인 사용 가능 여부 확인.
-2. 가능하면 서버폰에 device-side agent만 설치.
-3. repository 밖의 임시 디렉터리에서 `pwd`, `ls`, read-only file read 수준만 시험.
-4. 성공 후 `/root/nyang-repo` read-only 접근.
-5. 그 뒤에만 별도 feature worktree에서 쓰기/patch/test 실험.
+1. 현재 서버폰 Ubuntu PRoot의 Remote Desktop Commander 프로세스를 online 상태로 유지.
+2. ChatGPT 모바일에서 해당 플러그인/App 연결 상태 확인.
+3. 최초 호출은 repository를 수정하지 않는 `pwd`, `git branch --show-current`, `git status -sb`, top-level listing 수준으로 제한.
+4. 실제 실행 workdir이 `/root/nyang-repo`이고 branch가 `server/work`인지 확인.
+5. 성공 후 read-only file read/search.
+6. 그 뒤에만 별도 feature worktree에서 쓰기/patch/test 실험.
 
 PocketRisu 서비스와 기존 부팅 stack은 이 검증 때문에 변경하지 않는다.
 
@@ -110,4 +155,4 @@ PocketRisu 서비스와 기존 부팅 stack은 이 검증 때문에 변경하지
 - 같은 working tree를 두 ChatGPT 계정이 동시에 수정하지 않는다.
 - 자동 sync는 dirty tree를 건드리지 않는다.
 - 실험 bridge에 전체 디스크/무제한 shell을 바로 열지 않는다.
-- 토큰, 인증 코드, session id, API key, SSH key, private log 원본은 Git에 기록하지 않는다.
+- 토큰, 인증 코드, session id, device ID, API key, SSH key, private log 원본은 Git에 기록하지 않는다.

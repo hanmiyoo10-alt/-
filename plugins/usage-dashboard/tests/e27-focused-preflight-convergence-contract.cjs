@@ -6,35 +6,38 @@ const path = require('node:path');
 const os = require('node:os');
 const e27 = require('../tools/release_focused_preflight_e27.cjs');
 
-const workflowPath = '.github/workflows/usage-dashboard-stage-e7.yml';
-const workflow = fs.readFileSync(workflowPath, 'utf8');
+const workflow = fs.readFileSync('.github/workflows/usage-dashboard-stage-e7.yml', 'utf8');
+const reconcileSource = fs.readFileSync('plugins/usage-dashboard/tools/reconcile_release_candidate.py', 'utf8');
 const helperSource = fs.readFileSync('plugins/usage-dashboard/tools/release_focused_preflight_e27.cjs', 'utf8');
 const registrySource = fs.readFileSync('plugins/usage-dashboard/tests/registry.cjs', 'utf8');
 const reconciler = fs.readFileSync('.github/workflows/usage-dashboard-e9-release-reconcile.yml', 'utf8');
 const validator = fs.readFileSync('.github/workflows/usage-dashboard-e9-validate.yml', 'utf8');
 
-// E27 remains maintenance inside E7, not a new workflow or release-generation authority.
+// E27 remains maintenance inside existing E7, not a new workflow or release-generation authority.
 const e27Workflows = fs.readdirSync('.github/workflows').filter((name)=>/e27/i.test(name));
 assert.deepEqual(e27Workflows, [], 'E27 must not add a standalone workflow');
 assert.equal(reconciler.includes('release_generation: E27'), false);
 assert.equal(validator.includes('release_generation: E27'), false);
 assert.ok(registrySource.includes("'e27-focused-preflight-convergence-contract.cjs'"), 'E27 maintenance regression must join canonical registry');
 
-// Placement: exact source/main freeze already exists, two-pass materialization precedes E27,
-// and E27 must finish before the candidate tree/bundle can reach the writer.
+// Placement: E7 freezes source/main, invokes the two-pass reconciler, and only a successful
+// materialize_stage may reach the trusted writer. The reconciler runs E27 only after its
+// idempotence proof and existing E19 structural gates.
 const frozenAt = workflow.indexOf('E7_STAGE_SOURCE_FROZEN:');
 const twoPassAt = workflow.indexOf('reconcile_release_candidate.py --spec "$RELEASE_SPEC" --two-pass');
-const focusedAt = workflow.indexOf('release_focused_preflight_e27.cjs --spec "$RELEASE_SPEC"');
-const writeTreeAt = workflow.indexOf('TREE_SHA="$(git write-tree)"');
 const writerAt = workflow.indexOf('write_candidate:');
-assert.ok(frozenAt >= 0 && twoPassAt > frozenAt, 'source/main identity must freeze before materialization');
-assert.ok(focusedAt > twoPassAt, 'focused preflight must run only after two-pass materialization');
-assert.ok(writeTreeAt > focusedAt, 'focused preflight must run before derived candidate tree publication');
-assert.ok(writerAt > writeTreeAt, 'trusted candidate writer remains downstream of materialize job');
-assert.ok(workflow.includes("FAILURE_PHASE='focused-preflight'"));
-assert.ok(workflow.includes("FAILURE_REASON='E7_FOCUSED_PREFLIGHT_REJECTED'"));
-assert.ok(workflow.includes('UD_E27_FOCUSED_PREFLIGHT:GREEN:'));
-assert.ok(workflow.includes('focused_preflight: GREEN'));
+assert.ok(frozenAt >= 0 && twoPassAt > frozenAt, 'source/main identity must freeze before two-pass materialization');
+assert.ok(writerAt > twoPassAt, 'trusted candidate writer remains downstream of materialize job');
+assert.ok(workflow.includes("needs.materialize_stage.result == 'success'"), 'candidate writer must require materialize success');
+
+const idempotentAt = reconcileSource.indexOf('MATERIALIZER_IDEMPOTENT:');
+const structuralCallAt = reconcileSource.lastIndexOf('run_shift_left_structural_gates(spec_path)');
+const focusedCallAt = reconcileSource.lastIndexOf('run_e27_focused_preflight(spec_path)');
+assert.ok(idempotentAt >= 0 && structuralCallAt > idempotentAt, 'E19 structural gates remain after idempotence');
+assert.ok(focusedCallAt > structuralCallAt, 'E27 focused preflight must run after deterministic two-pass/idempotence');
+assert.ok(reconcileSource.includes("E27_FOCUSED_PREFLIGHT = TOOLS / 'release_focused_preflight_e27.cjs'"));
+assert.ok(reconcileSource.includes("fail('E27_FOCUSED_PREFLIGHT_REJECTED'"));
+assert.ok(reconcileSource.includes('E27_FOCUSED_PREFLIGHT_GREEN:'));
 
 // The exact focused regression comes from the frozen release spec and must be registry-discoverable.
 const resolved = e27.resolveFocusedRegression('.github/usage-dashboard/releases/5.108.json');
@@ -96,10 +99,11 @@ for (const forbidden of [
   assert.equal(helperSource.includes(forbidden), false, `E27 helper must remain local/read-only: ${forbidden}`);
 }
 
-// RED in materialize_stage cannot reach candidate write, PR binding, or E9 attempt creation.
-assert.ok(workflow.includes("needs.materialize_stage.result == 'success'"), 'candidate writer must require materialize success');
+// A focused RED exits the two-pass reconcile command, so materialize_stage fails before tree/bundle writer.
 assert.ok(workflow.indexOf('write_candidate:') < workflow.indexOf('receipt_ready:'), 'candidate-ready receipt remains after writer');
 assert.equal(workflow.includes('UD_E9_VALIDATION_ATTEMPT_V2'), false, 'E7 must not create E9 attempt receipts');
+assert.equal(reconcileSource.includes('GITHUB_TOKEN'), false, 'E27 reconciliation seam must not gain credential authority');
+assert.equal(reconcileSource.includes('release_generation: E27'), false);
 
 // E26/E15/E9/E11/E16 boundaries remain independently visible after candidate publication.
 assert.ok(reconciler.includes('release_validation_convergence_e26.cjs'));

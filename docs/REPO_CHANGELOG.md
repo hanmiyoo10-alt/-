@@ -1266,3 +1266,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/fefeeffd5235e1619427fd7603d3c0b798c355f1)
 - Event ID: `94c2e3ad2564dc9f05de3c18302c028e20fb021696f130df6cb25ad8ea9cedde`
 <!-- canonical-main-doc-promoted:94c2e3ad2564dc9f05de3c18302c028e20fb021696f130df6cb25ad8ea9cedde -->
+
+### 2026-09-09 — docs(common): dedup Usage Dashboard common policy
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `5d7ee1736f9e7783eb939ae0726f40e9992220f3`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/5d7ee1736f9e7783eb939ae0726f40e9992220f3)
+- Event ID: `b81892c9c01574d76a95ccc36bc0ff9749dcc83dc52cd862675193fc38d5a3e6`
+<!-- canonical-main-doc-promoted:b81892c9c01574d76a95ccc36bc0ff9749dcc83dc52cd862675193fc38d5a3e6 -->

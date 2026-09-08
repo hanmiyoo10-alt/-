@@ -6,8 +6,19 @@ import unittest
 from pathlib import Path
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = SKILL_ROOT.parents[2]
 SKILL = SKILL_ROOT / "SKILL.md"
 EVALS = SKILL_ROOT / "evals" / "evals.json"
+COMMON_RULES = REPO_ROOT / "docs" / "REPOSITORY_COMMON_RULES.md"
+PROJECT_GUIDELINES = (
+    REPO_ROOT / "docs" / "USAGE_DASHBOARD_GUIDELINES.md",
+    REPO_ROOT / "docs" / "SIMCORE_GUIDELINES.md",
+    REPO_ROOT / "docs" / "DEVPASS_GUIDELINES.md",
+    REPO_ROOT / "docs" / "TERMUX_DEVELOPMENT_GUIDELINES.md",
+    REPO_ROOT / "docs" / "VOYAGE_TOKEN_CHECK_GUIDELINES.md",
+    REPO_ROOT / "docs" / "POCKETRISU_HELPER_MOD_GUIDELINES.md",
+)
+GUIDELINE_TEMPLATE = REPO_ROOT / ".github" / "plugin-control-plane" / "canonical-main" / "guidelines-template.md"
 
 
 class SkillContractTests(unittest.TestCase):
@@ -62,7 +73,7 @@ class SkillContractTests(unittest.TestCase):
         text = SKILL.read_text(encoding="utf-8")
         gate = text[text.index("## Pre-routing disposition gate"):text.index("## Visible fan-out companion contract")]
         priority_index = gate.index("Classify request-observable structure before repository-source grounding:")
-        split_rule_index = gate.index("If one request bundles two or more independent semantic goals")
+        split_rule_index = gate.index("If the USER TASK explicitly bundles two or more clearly independent semantic goals")
         self.assertLess(priority_index, split_rule_index)
         for required in (
             "Facts explicitly stated by the USER TASK about the requested execution shape are input facts, not mutable repository facts.",
@@ -357,6 +368,27 @@ class SkillContractTests(unittest.TestCase):
         self.assertTrue(
             cases["direct-authority-no-compact-equivalent"]["facts"]["currentness_barrier_changed"]
         )
+
+    def test_repository_wide_scope_and_project_inheritance_are_explicit(self):
+        skill_text = SKILL.read_text(encoding="utf-8")
+        common_text = COMMON_RULES.read_text(encoding="utf-8")
+        for required in (
+            "applies across repository/project scopes",
+            "Canonical-main packet wiring is one enforcement adapter",
+            "Project-specific contracts may specialize this repository `DEFAULT`",
+        ):
+            self.assertIn(required, skill_text)
+        for required in (
+            "For automated repository/project work across this repository",
+            "four companion compactness axes",
+            "Canonical-main packet wiring may make this default explicit at packet boundaries",
+        ):
+            self.assertIn(required, common_text)
+
+        for guideline in (*PROJECT_GUIDELINES, GUIDELINE_TEMPLATE):
+            text = guideline.read_text(encoding="utf-8")
+            self.assertIn("## Repository common-rules inheritance", text, guideline.as_posix())
+            self.assertIn("docs/REPOSITORY_COMMON_RULES.md", text, guideline.as_posix())
 
     def test_skill_creates_no_execution_authority(self):
         text = SKILL.read_text(encoding="utf-8")

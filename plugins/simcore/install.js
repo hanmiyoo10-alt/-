@@ -1,6 +1,6 @@
 //@name simcore
 //@api 3.0
-//@version 0.70.10
+//@version 0.70.11
 //@display-name SimCore
 //@update-url https://raw.githubusercontent.com/hanmiyoo10-alt/-/release-simcore/plugins/simcore/latest.js
 //@link https://github.com/hanmiyoo10-alt/-/tree/main/plugins/simcore SimCore Update Channel
@@ -30,6 +30,12 @@
 // - Prompt: cache-aware runtime prompt compilation/serialization only; does not own semantic state
 // - Session: thin orchestrator; delegates prompt serialization to Prompt
 // - OPS: performance helpers/diagnostic formatting only
+//
+// v0.70.11 Operator Release Card Metadata Repair:
+// - Replaces the stale historical operator release-card scenario, summary and live checks with one release-local metadata unit
+// - Makes version, name, scenario, validation, summary and checks converge on the v0.70.11 repair release and adds permanent regression coverage against body carryover
+// - Preserves request/output hooks, Session/Mirror/Representation/Edit Reconcile, Host-local attribution, persistent schemas, mailbox semantics and all storage/network/timer behavior
+// - Keeps the separate visible internal: alias FIX, Host-local performance work, provider-cache work and release-system refactors outside this release
 //
 // v0.70.10 Host-Local Telemetry Set Cost Attribution:
 // - Splits the already-awaited Host-local telemetry checkpoint total into Host-store acquire/reuse-resolution and actual setItem timing without adding Host I/O
@@ -771,7 +777,7 @@
 // - Per-platform-family reaction history remains shared across B/C
 // - <Knowledge> remains the final output block after all COMMUNITY blocks
 
-const SIMCORE_RUNTIME_VERSION = '0.70.10';
+const SIMCORE_RUNTIME_VERSION = '0.70.11';
 const SIMCORE_LOG_PREFIX = `[simcore/v${SIMCORE_RUNTIME_VERSION}]`;
 
 const SimCore = (() => {
@@ -6644,7 +6650,7 @@ SimCore.define("runtime-telemetry", function (require, module, exports) {
 const KEY = '__SIMCORE_TELEMETRY_HANDOFF_V1__';
 const SESSION_KEY = '__SIMCORE_TELEMETRY_HANDOFF_SESSION_V1__';
 const HOST_LOCAL_KEY = '__SIMCORE_TELEMETRY_HANDOFF_HOST_LOCAL_V1__';
-const HOST_COMPAT_VERSION = '0.70.10';
+const HOST_COMPAT_VERSION = '0.70.11';
 const MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_SESSION_CHARS = 16384;
 const MAX_SERIALIZED_CHARS = 16384;
@@ -9553,41 +9559,49 @@ module.exports = { cachePosture, cadence, topology, cacheIntegrity, breakInfo, c
   }
 
   const OPERATOR_RELEASE_CARD = Object.freeze({
-    version: '0.70.10',
-    name: 'Host-Local Telemetry Set Cost Attribution',
-    scenario: '06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT',
+    version: '0.70.11',
+    name: 'Operator Release Card Metadata Repair',
+    scenario: '07011_OPERATOR_RELEASE_CARD_METADATA_REPAIR_REAL_LONG_CHAT',
+    validation: 'PENDING_REAL_LONG_CHAT',
     summary: Object.freeze([
-      'Kernel의 portable-state 조립/정규화 composition을 State Reconcile Domain owner로 기계적으로 이동',
-      'Kernel → Community/Recurrence/Lineage/Handoff upward dependency 4개와 transition exception 4개를 제거',
-      'STATE_VERSION/CORE_STATE_VERSION과 persistent schema는 그대로 두고 v0.68 state 결과와 deep-equivalent 유지',
-      '이상 징후는 현재 진단을 먼저 보존하고 WATCH / DEFER / FIX / BLOCKER로 분류',
+      '과거 릴리스에서 이월된 operator release-card scenario/summary/checks를 현재 v0.70.11 release-local metadata로 교체',
+      'version/name/scenario/validation/summary/checks가 한 릴리스 family로 함께 움직이도록 영구 회귀 검증 추가',
+      'request/output/storage/network/timer/persistent-schema와 기존 Host-local telemetry 동작은 변경하지 않음',
+      '별도 visible internal: output-hygiene FIX와 성능/provider-cache 작업은 이번 릴리스에 포함하지 않음',
+    ]),
+    checks: Object.freeze([
+      '업데이트 카드에서 Version 0.70.11 · Operator Release Card Metadata Repair · 현재 scenario/validation을 확인',
+      '카드에 과거 v0.69 릴리스 검증 지시가 남아 있지 않은지 확인',
+      '기존 장기챗에서 자연 ordinary turn 1회를 수행하고 Last Turn Diagnostic의 request/output/binding/mirror/hook 안정성을 확인',
+      '새 storage/network/timer/schema 동작이 없고 별도 visible internal: output-hygiene FIX를 이번 릴리스가 해결했다고 주장하지 않는지 확인',
+      '이상 징후가 있으면 다음 acceptance로 진행하지 말고 현재 증거를 보존한 뒤 WATCH / DEFER / FIX / BLOCKER로 분류',
     ]),
     recent: Object.freeze([
-      Object.freeze({ version: '0.69.0', name: 'M2-6 State Reconcile / Kernel Inversion', bullets: Object.freeze(['state assembly/reconcile ownership extraction', 'Kernel foundation upward edges retired']) }),
-      Object.freeze({ version: '0.68.0', name: 'Community Parent-Local Alias Repair', bullets: Object.freeze(['descriptor-aware bounded parent/local alias classification', 'classifier v3 bounded reaction-max backfill']) }),
-      Object.freeze({ version: '0.67.0', name: 'M2-5 Recovery Debt Retirement', bullets: Object.freeze(['zero-caller Recovery facade physical retirement', 'direct owner topology retained']) }),
+      Object.freeze({ version: '0.70.11', name: 'Operator Release Card Metadata Repair', bullets: Object.freeze(['release-local operator-card body convergence', 'version/name/scenario/summary/checks drift regression']) }),
+      Object.freeze({ version: '0.70.10', name: 'Host-Local Telemetry Set Cost Attribution', bullets: Object.freeze(['Host acquire/set cost decomposition', 'bounded Host set ms/1K diagnostic attribution']) }),
+      Object.freeze({ version: '0.70.9', name: 'Inline Planning Marker Hygiene Guard', bullets: Object.freeze(['bounded reserved internal_memo cleanup', 'non-payload Output Compat provenance']) }),
     ]),
   });
 
   function buildOperatorReleaseCardHtml() {
     const card = OPERATOR_RELEASE_CARD;
     const bullets = card.summary.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+    const checks = card.checks.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
     const recent = card.recent.map((item) => `<li><b>v${escapeHtml(item.version)} · ${escapeHtml(item.name)}</b><br>${item.bullets.map((bullet) => `• ${escapeHtml(bullet)}`).join('<br>')}</li>`).join('');
     return `<section id="operator-release-card" class="card" style="display:none;margin-bottom:10px;padding:13px">
 <div style="font-weight:800;margin-bottom:6px">📦 업데이트 내역 · v${escapeHtml(card.version)}</div>
 <div style="color:#9fb3d7;margin-bottom:8px">${escapeHtml(card.name)}</div>
 <ul style="margin:0 0 12px 18px;padding:0">${bullets}</ul>
 <div style="font-weight:700;margin:8px 0 5px">실전 확인</div>
-<ol style="margin:7px 0 10px 18px;padding:0"><li>자연 A/C 요청에서 Version 0.69.0 · CURRENT TURN · request hook SEEN · core handshake FOUND · binding BOUND · output COMMITTED 확인</li><li>새로고침/재진입 후 mirror-fast 또는 snapshot 등 non-fresh state source가 실제로 재사용되고 다음 ordinary turn이 정상 commit되는지 확인</li><li>Mode C에서 classifier v3, reaction/platform maxima와 Structure/Frame continuity가 기존과 동일하게 유지되는지 확인</li><li>STATE_VERSION/CORE_STATE_VERSION 또는 persistent schema migration이 새로 나타나면 즉시 중지하고 증거 보존</li><li>기존 WATCH 재현은 State Reconcile causal evidence가 없으면 별도 lane으로 유지</li></ol>
+<ol style="margin:7px 0 10px 18px;padding:0">${checks}</ol>
 <div style="font-weight:700;margin:8px 0 5px">중지 조건</div>
-<div>state field/ordering 변화, unexpected bootstrap/migration, Kernel upward dependency 재등장, mirror/snapshot 재수화 손상, Structure/Community 의미 변화 또는 latest/install 불일치가 보이면 <b>다음 acceptance로 진행하지 말고 현재 진단을 먼저 보존</b></div>
-<div style="font-weight:700;margin:10px 0 5px">이번 버전 실험</div><div><code>${escapeHtml(card.scenario)}</code></div>
+<div>카드 identity/body 불일치, ordinary-turn runtime regression, 예상 밖 storage/network/timer/schema 변화 또는 latest/install 불일치가 보이면 <b>다음 acceptance로 진행하지 말고 현재 진단을 먼저 보존</b></div>
+<div style="font-weight:700;margin:10px 0 5px">이번 버전 실험</div><div><code>${escapeHtml(card.scenario)}</code> · <code>${escapeHtml(card.validation)}</code></div>
 <div style="font-weight:700;margin:10px 0 5px">최근 업데이트</div>
 <ul style="margin:0 0 0 18px;padding:0">${recent}</ul>
 <div style="margin-top:10px;color:#9fb3d7">이 카드는 운영 가이드이며 release PASS/FAIL authority가 아닙니다.</div>
 </section>`;
   }
-
 
   async function openPanel() {
     try {

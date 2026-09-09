@@ -1319,3 +1319,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/7ac5205c44391ee7b821bc5a97102e6a28de4ac3)
 - Event ID: `185b4b2667e3377824f8fd5c04a4ff41310cf808db96dec770265bec0d379bbf`
 <!-- canonical-main-doc-promoted:185b4b2667e3377824f8fd5c04a4ff41310cf808db96dec770265bec0d379bbf -->
+
+### 2026-09-09 — Merge pull request #1952 from hanmiyoo10-alt/fix/repo-native-protected-main-writer-recovery-20260909
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `645f32e8591fd5b898b182ce5f82de4f7317bed3`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/645f32e8591fd5b898b182ce5f82de4f7317bed3)
+- Event ID: `34af347236414052061f216eab43ad0b3562f2e4ed3a0bc2529d706daaf74eb0`
+<!-- canonical-main-doc-promoted:34af347236414052061f216eab43ad0b3562f2e4ed3a0bc2529d706daaf74eb0 -->

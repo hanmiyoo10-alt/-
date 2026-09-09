@@ -1257,6 +1257,13 @@
 - Event ID: `3b0f47ce31158d5b62e699342539c21564ba0d4a7ca41c71cc8e4ec0c7a1d5e1`
 <!-- canonical-main-doc-promoted:3b0f47ce31158d5b62e699342539c21564ba0d4a7ca41c71cc8e4ec0c7a1d5e1 -->
 
+### 2026-09-09 — GitHub branch protection rule created.
+- Class: `AUTHORITY`
+- Transition: `CREATED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/settings/branches)
+- Event ID: `fad92dad291265c8dc48e20e3f386baf009a87e7e7312614e7c27d753ae11095`
+<!-- canonical-main-doc-promoted:fad92dad291265c8dc48e20e3f386baf009a87e7e7312614e7c27d753ae11095 -->
+
 ### 2026-09-09 — docs(common): dedup common policy from guideline template
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`

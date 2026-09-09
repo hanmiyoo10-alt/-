@@ -5,8 +5,8 @@
 ## Canonical integration
 
 - Branch: `main`
-- Native branch protection: `NOT_ENFORCED`
-- Required status-check enforcement: `off`
+- Native branch protection: `ENFORCED/PROTECTED`
+- Required status-check enforcement: `everyone`
 - Required target: `simcore-ci.yml / Required`
 - Shared main writer: `scripts/repo-main-write.py`
 

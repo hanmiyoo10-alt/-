@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "releaseId": "simcore-v0.70.11-new-03",
+  "releaseMode": "NEW_VERSION",
+  "authorizationCommit": "fa6b5af299a5c2f280437a2442f9871a55a3ffff",
+  "releaseSpecPath": "products/simcore/releases/specs/simcore-v0.70.11-new-03.json",
+  "releaseSpecSha256": "3586eaad9318e627af8310efee3c7c3cab1d648fc2057f9fcd5f3794d7e55eb7",
+  "productionCommit": "01769eb6db7244e3682bb8ba6001d89aea4e0ed8",
+  "previousProductionCommit": "ecc55f026315c6482c34d267aba2adb97527cdbc",
+  "productionBlob": "a1721dcdd9a34f3398c0c5899e8981ba1143ead4",
+  "version": "0.70.11",
+  "releaseName": "Operator Release Card Metadata Repair",
+  "verificationReportSha256": "2e180c1c9c71dd8d92c174817f43e5e6a85ce10fb9263eae7c50cf8251c60e74",
+  "verifierCommit": "c35310955513ec227020f47ec312c452bc9d0a4a",
+  "publisherRunId": "34318469138",
+  "releaseState": "LIVE_PENDING",
+  "productionTruth": "PUBLISHED_IDENTITY_VERIFIED",
+  "stateSyncStatus": "PASS",
+  "stateMainCommit": null,
+  "liveGate": {
+    "required": true,
+    "scenarioId": "07011_OPERATOR_RELEASE_CARD_METADATA_REPAIR_REAL_LONG_CHAT",
+    "result": "PENDING"
+  },
+  "openAnomalyIds": []
+}

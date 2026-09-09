@@ -1,7 +1,7 @@
 # SimCore #1959 Checked-PR Caller Consumption Implementation Evidence
 
 Date: 2026-09-09
-Status: **IMPLEMENTED ON WORK BRANCH · PRE-PR VERIFIED · NON-RUNTIME**
+Status: **IMPLEMENTED · POST-MERGE VERIFIED · NON-RUNTIME · CLOSED**
 Tracking: #1959
 Design authority: `docs/SIMCORE_1959_CHECKED_PR_CALLER_CONSUMPTION_DESIGN_2026-09-09.md`
 Design merge: `949906d3d3ad09eb8ef46a2a9af989148c77a1aa`
@@ -130,3 +130,66 @@ No runtime candidate was regenerated. No production republish, rollback, HUMAN_E
 ## 8. Required completion gate
 
 This work is not considered closed until the implementation PR passes fresh SimCore CI including trusted predecessor/proposed verifier/Required, merges by expected head, merged-main SimCore CI succeeds, production is re-read unchanged, and #1959 receives terminal evidence.
+
+## 9. Terminal implementation closure
+
+Implementation commit:
+
+```text
+7428f9003ddd52b0b21e6e0c7aa8d24782bda964
+```
+
+Implementation PR:
+
+```text
+#1970
+base = 949906d3d3ad09eb8ef46a2a9af989148c77a1aa
+head = 7428f9003ddd52b0b21e6e0c7aa8d24782bda964
+changed files = 9
+SimCore CI run = 34345320818 / #8635
+trusted predecessor = SUCCESS
+proposed verifier = SUCCESS
+Verify = SUCCESS
+Required = SUCCESS
+expected-head merge = PASS
+main merge = df2857cb3e57e8b06d9f8705a6380873733fd5d5
+```
+
+Merged-main health:
+
+```text
+SimCore CI run = 34345495271 / #8636
+Verify = SUCCESS
+Required = SUCCESS
+```
+
+Post-merge production readback:
+
+```text
+main = df2857cb3e57e8b06d9f8705a6380873733fd5d5
+release-simcore = 01769eb6db7244e3682bb8ba6001d89aea4e0ed8
+version = 0.70.11
+latest.js blob = a1721dcdd9a34f3398c0c5899e8981ba1143ead4
+install.js blob = a1721dcdd9a34f3398c0c5899e8981ba1143ead4
+latest == install = YES
+runtime/release mutation from #1959 = NONE
+```
+
+The earlier local YAML parser limitation is superseded for implementation qualification by successful GitHub parsing and execution of the modified workflows in PR CI and merged-main CI.
+
+## 10. Final disposition
+
+```text
+#1959 = FIX RESOLVED
+checked-PR caller consumption = IMPLEMENTED
+native protected-main semantics = PRESERVED
+ordinary checked-PR transport = AUTOMATICALLY CONSUMED
+shared writer authority = repo-main-write.py PRESERVED
+production publisher authority = UNCHANGED
+runtime candidate = UNCHANGED
+release-simcore = UNCHANGED
+real long-chat = NOT APPLICABLE TO NON-RUNTIME REPO-SYSTEM FIX
+next runtime authorization = NOT IMPLIED
+```
+
+Future live releases should naturally exercise the real network path when native protection returns `MAIN_WRITE_CHECKED_PR_REQUIRED`. Any new anomaly from that live exercise must be recorded as a new WATCH/FIX/BLOCKER rather than reopening historical assumptions.

@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "product": "SimCore",
-  "production_version": "0.70.10",
-  "release_name": "Host-Local Telemetry Set Cost Attribution",
+  "production_version": "0.70.11",
+  "release_name": "Operator Release Card Metadata Repair",
   "release_branch": "release-simcore",
-  "release_commit": "ecc55f026315c6482c34d267aba2adb97527cdbc",
-  "release_blob": "53f6959039c57f8673c355fcc1c22b573150e4a7",
+  "release_commit": "01769eb6db7244e3682bb8ba6001d89aea4e0ed8",
+  "release_blob": "a1721dcdd9a34f3398c0c5899e8981ba1143ead4",
   "production_files": {
     "latest": "plugins/simcore/latest.js",
     "install": "plugins/simcore/install.js",

@@ -17,11 +17,11 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.70.10`
-- Release: `Host-Local Telemetry Set Cost Attribution`
+- Version: `0.70.11`
+- Release: `Operator Release Card Metadata Repair`
 - Release branch: `release-simcore`
-- Release commit: `ecc55f026315c6482c34d267aba2adb97527cdbc`
-- Release blob: `53f6959039c57f8673c355fcc1c22b573150e4a7`
+- Release commit: `01769eb6db7244e3682bb8ba6001d89aea4e0ed8`
+- Release blob: `a1721dcdd9a34f3398c0c5899e8981ba1143ead4`
 - Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`

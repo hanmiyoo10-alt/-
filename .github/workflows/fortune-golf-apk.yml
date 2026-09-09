@@ -79,6 +79,7 @@ jobs:
           cargo test -p wie-wipi-c startup_database -- --nocapture
           cargo test -p wie-wipi-c fortune_image_tests -- --nocapture
           cargo test -p wie-core-arm fortune_resource_trace -- --nocapture
+          cargo test -p wie-core-arm fortune_selection -- --nocapture
           cargo test -p wie-ktf --lib -- --nocapture
           cargo clippy -p wie-ktf --lib -- -D warnings
 
@@ -105,7 +106,7 @@ jobs:
           cp "$apk_path" apk-output/fortune-golf-startup-probe.apk
           cp LICENSE apk-output/WIE-LICENSE.txt
           echo 'WIE source: https://github.com/dlunch/wie/commit/1ed8710956e727629e67db762ddc1e6bd6151a1f' > apk-output/BUILD.txt
-          echo 'Probe v0.1.10: bounded resource lookup history; preserve Java exception/unwind variants in diagnostic boundaries; skip null offscreen framebuffer cleanup on first-run shutdown; retains native/timer diagnostics, RGB565 and MC_DB support. Device behavior unverified. No game ROMs included.' >> apk-output/BUILD.txt
+          echo 'Probe v0.1.11: bounded selection snapshot at resource null fault; bounded resource lookup history; preserve Java exception/unwind variants in diagnostic boundaries; skip null offscreen framebuffer cleanup on first-run shutdown; retains native/timer diagnostics, RGB565 and MC_DB support. Device behavior unverified. No game ROMs included.' >> apk-output/BUILD.txt
           sha256sum apk-output/fortune-golf-startup-probe.apk >> apk-output/BUILD.txt
 
       - name: Upload APK

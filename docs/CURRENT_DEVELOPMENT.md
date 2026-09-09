@@ -50,7 +50,7 @@ This block is machine-managed by `release-state-converge` from immutable publica
 
 The machine-managed blocks above are authoritative for current production identity, validation status, and terminal release state. For active work after a terminal handoff, `product-manifest.json` is the machine-readable current operational-priority authority; the terminal block's `Current priority` records the handoff selected by the terminal evidence transaction. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override machine authority.
 
-The current release-specific three-lens evidence review is complete, but R2.8 HUMAN_EVIDENCE terminal convergence has not been executed. Lens 1 passed its required release-specific matrix; Lens 2 passed for observed controls while preserving FIX `#1660`, WATCH `#1588`, and a DEFER for the unobserved direct G→H edge; Lens 3 completed its terminal replacement inventory without inventing unpreserved raw values and retained the same stronger findings. Because no explicit human terminal decision, checkpoint selection, or next-priority selection has been supplied, the machine-managed pending state above remains authoritative. Documentation drift `#1656` is repaired by the current convergence transaction only after exact merged-main validation succeeds; separate advancement-holding FIXes `#1657` and `#1660` remain open. No next runtime version, feature, architecture change, or performance optimization is authorized until unresolved FIX/BLOCKER owners are closed or evidence-reclassified. Existing performance WATCH lanes remain non-blocking unless promoted by new evidence, and provider cache remains `UNVERIFIED`.
+Current production is v0.70.11 `Operator Release Card Metadata Repair`, and the machine-managed live gate remains `PENDING_REAL_LONG_CHAT`. Fresh same-generation real-long-chat packet `#1972` (`mttz5h6b-pkiclo`) exercises ordinary Mode C, reroll/repeat-send, C→A→C mode/source transitions, and a genuine one-character manual edit. Request/output/binding/mirror/hook behavior, reroll identity handling, genuine-edit classification/rebuild, Evidence/Lineage/Handoff/Frame controls, and observed scope controls pass in the supplied packet. The release-specific operator-card identity check is still `NOT_EXERCISED`, so #1657 remains open and v0.70.11 is not terminally validated by this packet. Separately, visible standalone `internal:` planning-control alias contamination recurs in RAW assistant `@3213`, strengthening advancement-holding FIX `#1660`; no blind global strip is authorized. Performance variance strengthens WATCH `#1588` and WATCH `#1626` without a new correctness failure. Provider cache remains `UNVERIFIED`. No LIVE_PASS, HUMAN_EVIDENCE terminal convergence, next runtime version, feature, architecture change, or performance optimization is authorized by this packet.
 
 ## Historical validated precursor — v0.63.55
 
@@ -1176,35 +1176,41 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-Treat the completed three-lens review as evidence completion, not as an inferred HUMAN_EVIDENCE terminal close.
-Keep the machine-managed release state above unchanged until an explicit human terminal decision, checkpoint selection, and next-priority selection are supplied and processed through R2.8.
-After this documentation repair is proven on exact merged main, resolve or evidence-reclassify advancement-holding FIX #1657 and FIX #1660 before authorizing another runtime version.
-Reassess open WATCH lanes independently and promote one only when source-proven evidence defines a bounded owner and success condition.
-Do not infer a new runtime release, feature, architecture change, or performance optimization merely from three-lens completion.
+Complete the v0.70.11 release-specific operator-card identity check exactly as defined by the release design.
+Do not infer v0.70.11 LIVE_PASS from mixed-path packet #1972; that packet leaves the operator-card UI check NOT_EXERCISED.
+Keep #1660 as a separate advancement-holding runtime FIX; the v0.70.11 packet confirms a fresh visible `internal:` recurrence at assistant @3213.
+Keep #1588 and #1626 as independent performance WATCH lanes; do not promote an optimization without source-proven ownership.
+Do not fabricate HUMAN_EVIDENCE terminal convergence or a next runtime version.
 ```
 
 Current bounded state:
 
 ```text
-Lens 1 = PASS / required release-specific matrix complete
-Lens 2 terminal replacement set = PASS FOR OBSERVED CONTROLS + FIX #1660 + WATCH #1588 + DEFER
-Lens 3 terminal replacement inventory = COMPLETE + FIX #1660 + WATCH #1588 + DEFER
-R2.8 HUMAN_EVIDENCE terminal convergence = NOT EXECUTED
-machine validation / terminal lifecycle = read authoritative machine-managed blocks above
-durable major checkpoint = read authoritative production snapshot above
-latest.js == install.js = mandatory / verified
-#1656 CURRENT_DEVELOPMENT human-state drift = repaired only after exact merged-main validation succeeds
-#1657 stale operator release card metadata = FIX / OPEN / advancement-holding
-#1660 visible standalone internal: planning-control alias = FIX / OPEN / advancement-holding
+production = v0.70.11 Operator Release Card Metadata Repair
+release commit = 01769eb6db7244e3682bb8ba6001d89aea4e0ed8
+release live gate = 07011_OPERATOR_RELEASE_CARD_METADATA_REPAIR_REAL_LONG_CHAT
+machine validation = PENDING_REAL_LONG_CHAT
+lifecycle = REAL_RELEASE_LIVE_PENDING
+mixed-path packet #1972 = PASS FOR OBSERVED RUNTIME CONTROLS
+operator-card identity live check = NOT_EXERCISED
+#1657 operator release card repair = FIX / OPEN until release-specific card identity is proven
+#1660 visible standalone internal: planning-control alias = FIX / OPEN / v0.70.11 RECURRENCE CONFIRMED / advancement-holding
+#1588 host-local telemetry OUTPUT_COMMIT latency = WATCH
+#1626 request Turn-storage latency variance = WATCH
+cache/history PRE_SIMCORE mutation causality = DEFER
 provider cache = UNVERIFIED
+latest.js == install.js = mandatory / verified
+LIVE_PASS = NOT CLAIMED
+HUMAN_EVIDENCE terminal convergence = NOT EXECUTED
 
 next legal administrative path
-→ if an explicit human terminal decision, checkpoint, and next priority are supplied, execute R2.8 HUMAN_EVIDENCE as a separate administrative transaction
-→ otherwise do not fabricate terminal convergence
+→ exercise and preserve the explicit v0.70.11 operator-card identity check
+→ then evaluate the release-specific terminal gate without absorbing #1660 into the v0.70.11 repair scope
+→ execute R2.8 HUMAN_EVIDENCE only when explicit human terminal decision, checkpoint, and next-priority values are supplied
 
 runtime work
-→ no next runtime version is preauthorized by three-lens completion
-→ unresolved FIX or BLOCKER stops advancement
+→ #1660 must be resolved or evidence-reclassified before any further runtime advancement
+→ do not mix #1660 repair with performance optimization or release-system work
 → any runtime change requires its own design/evidence, work branch, CI, release-simcore deployment, real long-chat validation, then main documentation/continuity synchronization
 
 observed anomaly

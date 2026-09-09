@@ -1320,6 +1320,13 @@
 - Event ID: `185b4b2667e3377824f8fd5c04a4ff41310cf808db96dec770265bec0d379bbf`
 <!-- canonical-main-doc-promoted:185b4b2667e3377824f8fd5c04a4ff41310cf808db96dec770265bec0d379bbf -->
 
+### 2026-09-09 — [repo-incident:P0] RELEASE_AUTHORITY_IDENTITY_MISMATCH — plugin:simcore
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/637)
+- Event ID: `1b53031aecccf2d187e53b2fe03970bd0f17bfb3ab4cea02e2ffefac7c6f2bb6`
+<!-- canonical-main-doc-promoted:1b53031aecccf2d187e53b2fe03970bd0f17bfb3ab4cea02e2ffefac7c6f2bb6 -->
+
 ### 2026-09-09 — Merge pull request #1952 from hanmiyoo10-alt/fix/repo-native-protected-main-writer-recovery-20260909
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`

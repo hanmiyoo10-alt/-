@@ -144,7 +144,18 @@ function writerContractErrors(root, policy, contract = loadProtectedMainContract
     errors.push('PROTECTED_MAIN_HELPER_MISSING');
   } else {
     const helper = fs.readFileSync(helperPath, 'utf8');
-    for (const token of ['--required-workflow', '--required-profile', '--required-job', '--verify-gate-only', 'MAIN_WRITE_REQUIRED_GATE_PASS', 'MAIN_WRITE_BASE_MOVED_AFTER_GATE']) {
+    for (const token of [
+      '--required-workflow',
+      '--required-profile',
+      '--required-job',
+      '--verify-gate-only',
+      'MAIN_WRITE_REQUIRED_GATE_PASS',
+      'MAIN_WRITE_BASE_MOVED_AFTER_GATE',
+      'read_native_protection',
+      'MAIN_WRITE_PROTECTION_READBACK_FAILED',
+      'MAIN_WRITE_NATIVE_PROTECTION_ACTIVE',
+      'MAIN_WRITE_CHECKED_PR_REQUIRED',
+    ]) {
       if (!helper.includes(token)) errors.push(`PROTECTED_MAIN_HELPER_CONTRACT_MISSING:${token}`);
     }
     if (helper.includes('force-with-lease') || helper.includes('"--force"') || helper.includes("'--force'")) errors.push('PROTECTED_MAIN_HELPER_FORCE_FORBIDDEN');

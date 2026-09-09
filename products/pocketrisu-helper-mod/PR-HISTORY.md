@@ -39,7 +39,18 @@
 - 이 결과는 Stage D/E를 **코드 결함이 아닌 아키텍처 supersede**로 확정하는 근거다. 반면 #66 종료 코멘트에는 #67에서 보류된 opaque revision ETag를 통합 채택했다는 명시가 없으므로, Stage A의 opaque-token 절반은 여전히 별도 재제출 금지 상태로 둔다.
 - Evidence: https://github.com/PocketRisu/PocketRisu/issues/66#issuecomment-5411444292 , https://github.com/PocketRisu/PocketRisu/pull/73#issuecomment-5411392720
 
-## Current totals (snapshot: 2026-08-28)
+## Post-PR upstream follow-up / reimplementation
+
+- PR #60 follow-up `ab4670d9` changed last-chat restoration to an Accessibility-controlled opt-in setting (`nodeOnlyRestoreLastChat`), default OFF. This is a product-behavior refinement, not a rollback.
+- DB-save follow-up `b95d0fa7` closed stale-full-write ETag gaps after restart/cache invalidation and manifest edits. This strengthens the content/client-view ETag model and is not adoption of #67's opaque revision-token proposal.
+- `08d89655` (2026-09-05) added root-key / character-level diagnostics for patch hash-mismatch 409 responses.
+- `7dc9557a` (2026-09-05) changed foreign-revision recovery toward rebasing local changes on the latest server DB instead of stale full-write overwrite.
+- `c51aceb0` (2026-09-06) hardened that rebase path with baseline-aware multi-device handling, deterministic rejection, generation-time DB replacement protection, and server DB-cache warming after full writes.
+- Strategy: treat this as upstream self-reimplementation/hardening. Do not revive Stage A opaque ETag or Stage D/E; future DB-save work starts from the post-`c51aceb0` architecture.
+
+Evidence: `PocketRisu/PocketRisu@ab4670d9`, `@b95d0fa7`, `@08d89655`, `@7dc9557a`, `@c51aceb0`.
+
+## Current totals (snapshot: 2026-09-09)
 
 - Official upstream PRs found: **7**
   - merged directly: **4** (#60, #61, #68, #69)
@@ -49,6 +60,6 @@
 - Personal fork PRs found: **8**
   - merged local: **3** (#1, #2, #3)
   - historical/superseded open artifacts: **5** (#4, #5, #6, #7, #8)
-- 2026-08-28 check: 두 저장소에서 `hanmiyoo10-alt` 작성 신규 PR 없음. #4-#8의 open/draft 상태와 #60/#61/#62/#67/#68/#69/#73의 결과도 의미 있는 변화 없음.
+- 2026-09-09 check: 두 저장소의 `hanmiyoo10-alt` 작성 PR 수는 upstream 7 / fork 8로 그대로이며 신규 PR 없음. #4-#8의 open/draft historical 상태와 official #60/#61/#62/#67/#68/#69/#73 결과도 그대로다.
 
 이 snapshot 이후의 결과는 자동 watcher가 의미 있는 상태 변화가 있을 때 갱신한다.

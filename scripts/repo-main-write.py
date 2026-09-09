@@ -35,6 +35,19 @@ def git(*args: str, check: bool = True, capture: bool = True) -> subprocess.Comp
     return run_command(["git", *args], check=check, capture=capture)
 
 
+def git_checked_quiet(*args: str) -> subprocess.CompletedProcess[str]:
+    """Keep routine successful Git output private while preserving failure diagnostics."""
+    cp = git(*args, check=False, capture=True)
+    if cp.returncode == 0:
+        return cp
+    print(f"MAIN_WRITE_GIT_COMMAND_FAILED: git {' '.join(args)}", file=sys.stderr)
+    if cp.stdout:
+        print(cp.stdout.strip(), file=sys.stderr)
+    if cp.stderr:
+        print(cp.stderr.strip(), file=sys.stderr)
+    raise subprocess.CalledProcessError(cp.returncode, cp.args, output=cp.stdout, stderr=cp.stderr)
+
+
 def gh(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return run_command(["gh", *args], check=check, capture=True)
 
@@ -295,15 +308,15 @@ def main() -> int:
     remote_ref = f"{args.remote}/{args.branch}"
 
     for attempt in range(1, args.attempts + 1):
-        git("fetch", "--no-tags", args.remote, args.branch, capture=False)
+        git_checked_quiet("fetch", "--no-tags", args.remote, args.branch)
         base = out("rev-parse", remote_ref)
-        git("checkout", "--detach", base, capture=False)
-        git("reset", "--hard", base, capture=False)
+        git_checked_quiet("checkout", "--detach", base)
+        git_checked_quiet("reset", "--hard", base)
 
         cp = git("cherry-pick", "--no-commit", payload, check=False)
         if cp.returncode != 0:
             conflicts = out("diff", "--name-only", "--diff-filter=U")
-            git("reset", "--hard", base, capture=False)
+            git_checked_quiet("reset", "--hard", base)
             if conflicts:
                 print("MAIN_WRITE_CONTENT_CONFLICT: " + conflicts.replace("\n", ", "), file=sys.stderr)
                 return 3
@@ -321,11 +334,11 @@ def main() -> int:
         replayed = integrated_paths(base)
         denied_replayed = [path for path in replayed if not allowed_path(path, args.allow)]
         if denied_replayed:
-            git("reset", "--hard", base, capture=False)
+            git_checked_quiet("reset", "--hard", base)
             print("MAIN_WRITE_PATH_DENIED_AFTER_INTEGRATION: " + ", ".join(denied_replayed), file=sys.stderr)
             return 2
 
-        git("commit", "-C", payload, capture=False)
+        git_checked_quiet("commit", "-C", payload)
         candidate = out("rev-parse", "HEAD")
 
         stage = ""
@@ -342,7 +355,7 @@ def main() -> int:
                 cleanup_staging(args.remote, stage)
                 return 8
 
-            git("fetch", "--no-tags", args.remote, args.branch, capture=False)
+            git_checked_quiet("fetch", "--no-tags", args.remote, args.branch)
             moved = out("rev-parse", remote_ref)
             if moved != base:
                 print(f"MAIN_WRITE_BASE_MOVED_AFTER_GATE: attempt={attempt} old_base={base} new_base={moved}")
@@ -386,7 +399,7 @@ def main() -> int:
             print(f"MAIN_WRITE_LANDED: attempt={attempt} base={base} commit={candidate}")
             return 0
 
-        git("fetch", "--no-tags", args.remote, args.branch, capture=False)
+        git_checked_quiet("fetch", "--no-tags", args.remote, args.branch)
         moved = out("rev-parse", remote_ref)
         if stage:
             cleanup_staging(args.remote, stage)

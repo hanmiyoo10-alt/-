@@ -883,8 +883,8 @@ Current production family at the time this document was created:
 
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:BEGIN -->
 ```text
-SimCore v0.70.10 — Host-Local Telemetry Set Cost Attribution
-Release commit: ecc55f026315c6482c34d267aba2adb97527cdbc
+SimCore v0.70.11 — Operator Release Card Metadata Repair
+Release commit: 01769eb6db7244e3682bb8ba6001d89aea4e0ed8
 ```
 <!-- SIMCORE_SYNC:PRODUCTION_BASELINE:END -->
 

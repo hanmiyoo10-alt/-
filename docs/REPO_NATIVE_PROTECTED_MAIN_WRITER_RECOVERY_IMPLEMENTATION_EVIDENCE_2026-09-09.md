@@ -1,7 +1,7 @@
 # Repository Native Protected-Main Writer Recovery — Implementation Evidence
 
 Date: 2026-09-09
-Status: **IMPLEMENTATION IN REVIEW · NON-RUNTIME**
+Status: **PRE-MERGE VERIFIED · NON-RUNTIME**
 Design authority: `docs/REPO_NATIVE_PROTECTED_MAIN_WRITER_RECOVERY_DESIGN_2026-09-09.md`
 Tracking: #1950
 Trigger specimen: #1949
@@ -81,24 +81,50 @@ Canonical main writer contracts now require the helper to retain the native-prot
 
 ## Pre-PR static scope read-back
 
-Branch diff from design-merged main `826a1ac98383dcc1940daf9807e74bc8160cf761` is limited to three files:
+Branch diff from design-merged main `826a1ac98383dcc1940daf9807e74bc8160cf761` is limited to three implementation files plus this evidence record:
 
 ```text
 .github/plugin-control-plane/canonical-main/protected-main.cjs
 scripts/repo-main-write.py
 scripts/test-repo-main-write.py
+docs/REPO_NATIVE_PROTECTED_MAIN_WRITER_RECOVERY_IMPLEMENTATION_EVIDENCE_2026-09-09.md
 ```
 
 Production remains v0.70.10. The immutable v0.70.11 candidate remains `01769eb6db7244e3682bb8ba6001d89aea4e0ed8`; no new candidate is authorized by this repository-infrastructure repair.
 
-## Pending evidence
+## First implementation-head CI evidence
 
-The following must be appended or referenced before #1950 is closed:
+PR: `#1952`
+
+Head before this evidence-only refresh:
 
 ```text
-Plugin Control Plane CI = PASS
-SimCore CI / Verify = PASS
-SimCore CI / Required = PASS
+a0babca01c306c1e0d4960d309b6aa5d797a1175
+```
+
+Observed checks:
+
+```text
+Plugin Control Plane CI run 34316326536
+  contract job 102353204751 = SUCCESS
+
+SimCore CI run 34316326592
+  Verify   job 102353204820 = SUCCESS
+  Required job 102353253856 = SUCCESS
+```
+
+This proves the implementation and regression pack passed both repository control-plane contracts and the stable SimCore required gate before the evidence-only refresh.
+
+Because this document update changes the PR head, the final merge head must receive a fresh successful CI pass. The earlier green run is preserved as implementation evidence but is not reused as final-head merge authority.
+
+## Post-merge evidence still required
+
+Before #1950 is closed:
+
+```text
+final PR head Plugin Control Plane CI = PASS
+final PR head SimCore CI / Verify = PASS
+final PR head SimCore CI / Required = PASS
 merged main SHA = exact
 post-merge main native protection read-back = still enforced
 release-simcore = unchanged

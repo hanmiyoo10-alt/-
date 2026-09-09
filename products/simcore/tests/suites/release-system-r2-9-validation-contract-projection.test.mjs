@@ -85,6 +85,24 @@ function projectProfileIdentity(source, targetVersion, profileInventory) {
   return out;
 }
 
+function identityProjectableContracts(sourceProfile, targetProfile) {
+  assert(sourceProfile?.releaseVersion, 'projection source profile identity missing');
+  assert(targetProfile?.releaseVersion, 'projection target profile identity missing');
+  if (sourceProfile.releaseVersion === targetProfile.releaseVersion) return [...REQUIRED_CONTRACTS];
+
+  return REQUIRED_CONTRACTS.filter((contractId) => {
+    const sourceContract = sourceProfile.contracts?.[contractId];
+    const targetContract = targetProfile.contracts?.[contractId];
+    assert(sourceContract, `projection source contract missing: ${contractId}`);
+    assert(targetContract, `projection target contract missing: ${contractId}`);
+    if (sourceContract.mode !== VALIDATION_CONTRACT_MODES.CHANGED_CONTRACT) return true;
+    return (
+      targetContract.mode === VALIDATION_CONTRACT_MODES.CHANGED_CONTRACT
+      && targetContract.authorityVersion === sourceContract.authorityVersion
+    );
+  });
+}
+
 function suitesDirectory() {
   return path.dirname(fileURLToPath(import.meta.url));
 }
@@ -107,10 +125,10 @@ function filesystemInventory() {
   };
 }
 
-async function assertActiveContracts(source, ctx, label) {
+async function assertActiveContracts(source, ctx, label, contractIds = REQUIRED_CONTRACTS) {
   const profile = loadActiveValidationProfile(source);
   equal(profile.releaseVersion, extractSourceReleaseVersion(source), `${label} exact profile binding`);
-  for (const contractId of REQUIRED_CONTRACTS) {
+  for (const contractId of contractIds) {
     const ambientCtx = { ...ctx, source };
     const coherent = buildActiveValidationContext(contractId, ambientCtx);
     equal(coherent.source, source, `${label} coherent source ${contractId}`);
@@ -188,6 +206,8 @@ export async function runSuite(ctx) {
   }
 
   const sourceVersion = extractSourceReleaseVersion(ctx.source);
+  const sourceProfile = profileInventory.profilesByVersion[sourceVersion];
+  assert(sourceProfile, `active source exact profile missing from inventory: ${sourceVersion || '<missing>'}`);
   const loadedCurrent = await assertActiveContracts(ctx.source, ctx, `active source ${sourceVersion}`);
   equal(loadedCurrent.releaseVersion, sourceVersion, 'active loader must bind source to its exact profile');
   equal(
@@ -198,8 +218,39 @@ export async function runSuite(ctx) {
 
   for (const version of profileInventory.versions) {
     const projected = projectProfileIdentity(ctx.source, version, profileInventory);
-    await assertActiveContracts(projected, ctx, `inventory-projected ${version}`);
+    const targetProfile = profileInventory.profilesByVersion[version];
+    const projectedContracts = identityProjectableContracts(sourceProfile, targetProfile);
+    await assertActiveContracts(projected, ctx, `inventory-projected ${version}`, projectedContracts);
+
+    if (
+      sourceVersion !== version
+      && sourceProfile.contracts?.['operator-release-card']?.mode === VALIDATION_CONTRACT_MODES.CHANGED_CONTRACT
+    ) {
+      assert(!projectedContracts.includes('operator-release-card'), `${sourceVersion} changed operator contract must not masquerade as ${version}`);
+      for (const contractId of REQUIRED_CONTRACTS.filter((id) => id !== 'operator-release-card')) {
+        assert(projectedContracts.includes(contractId), `${sourceVersion} must continue projectable contract ${contractId} toward ${version}`);
+      }
+    }
   }
+
+  const syntheticChangedSource = JSON.parse(JSON.stringify(validatedV07001));
+  syntheticChangedSource.releaseVersion = '9.99.98';
+  syntheticChangedSource.contracts['operator-release-card'].mode = VALIDATION_CONTRACT_MODES.CHANGED_CONTRACT;
+  syntheticChangedSource.contracts['operator-release-card'].authorityVersion = '9.99.98';
+  const changedBoundaryContracts = identityProjectableContracts(syntheticChangedSource, validatedSeed);
+  assert(!changedBoundaryContracts.includes('operator-release-card'), 'changed-contract current source must not reconstruct historical operator card by identity-only projection');
+  for (const contractId of REQUIRED_CONTRACTS.filter((id) => id !== 'operator-release-card')) {
+    assert(changedBoundaryContracts.includes(contractId), `changed-contract boundary must preserve projectable contract ${contractId}`);
+  }
+  equal(
+    JSON.stringify(identityProjectableContracts(syntheticChangedSource, syntheticChangedSource)),
+    JSON.stringify(REQUIRED_CONTRACTS),
+    'exact changed-contract identity must continue validating all current contracts',
+  );
+  assert(
+    R2_9_AUTHORITY_CAPABILITIES['operator-release-card']?.versions?.includes('0.69.2'),
+    'historical operator behavior authority must remain registered',
+  );
 
   const fileInventory = filesystemInventory();
   const builderClosure = discoverBuilderClosure({
@@ -239,8 +290,7 @@ export async function runSuite(ctx) {
     }
   }
 
-  const currentProfile = profileInventory.profilesByVersion[sourceVersion];
-  assert(currentProfile, `active source exact profile missing from inventory: ${sourceVersion || '<missing>'}`);
+  const currentProfile = sourceProfile;
   const futureVersion = '9.99.99';
   const futureProfile = futureProfileFromCurrent(currentProfile, sourceVersion, futureVersion);
   const syntheticInventory = buildValidationProfileInventoryFromEntries([
@@ -338,6 +388,10 @@ export async function runSuite(ctx) {
       { id: 'r2-11-active-source-no-manual-version-census-gate', status: 'PASS' },
       { id: 'r2-11-profile-derived-identity-projection', status: 'PASS' },
       { id: 'r2-11-all-inventory-projected-contracts-pass', status: 'PASS' },
+      { id: 'r2-11-changed-contract-boundary-not-back-projected', status: 'PASS' },
+      { id: 'r2-11-changed-contract-boundary-preserves-projectable-contracts', status: 'PASS' },
+      { id: 'r2-11-exact-changed-contract-validates-current-contracts', status: 'PASS' },
+      { id: 'r2-11-historical-operator-authority-retained', status: 'PASS' },
       { id: 'r2-11-builder-fixture-closure-discovery-driven', status: 'PASS' },
       { id: 'r2-11-no-wrapper-proof-inventory-driven', status: 'PASS' },
       { id: 'r2-11-synthetic-future-profile-needs-no-census-row', status: 'PASS' },

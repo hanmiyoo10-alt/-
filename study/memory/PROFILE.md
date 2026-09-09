@@ -87,3 +87,20 @@ Freshness trigger: 실제 오답 분석에서 이 유형이 거의 나타나지 
 Superseded by: NONE
 Notes: 능력에 대한 고정 평가가 아니라 현재 관찰된 학습 병목 후보로만 취급한다.
 ```
+
+### P-003 — 키워드 단서 기반 연상 회상의 강점
+
+```text
+Memory ID: P-003
+Scope: 암기형 이론 과목, 특히 역사·정보처리기사 이론
+Statement: 핵심 키워드를 단서로 주변 개념·관련 항목·대조 개념을 묶어 회상하는 방식이 잘 맞는다. 문제의 정답어에서 가지를 뻗고, 모르는 항목을 물음표로 남겨 채워 가는 방식이 실제 필기 노트에서도 확인되며 사용자가 역사와 키워드 중심 학습에 강하다고 직접 확인함.
+State: CURRENT
+Confidence: HIGH
+First observed: 2026-09-09
+Last confirmed: 2026-09-09
+Evidence refs: 2026-09-09 handwritten theory notes, direct user confirmation
+Useful for: 역사, 정보처리기사 이론, 용어 암기, 유사 개념 구분, 빈칸 회상, 문제 기반 개념 확장
+Freshness trigger: 키워드 중심 회상이 실제 문제에서 자주 오답을 유발하거나 문맥·적용 문제로의 전이가 약한 경우 보완 전략을 추가한다.
+Superseded by: NONE
+Notes: 긴 설명을 그대로 암기시키기보다 `키워드 → 관련 개념 → 혼동 개념 → 판별 신호` 구조로 지원한다. 키워드가 바뀌어 제시되는 재진술 문제에는 P-002의 의미 동치 훈련을 함께 적용한다.
+```

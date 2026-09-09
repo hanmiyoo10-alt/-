@@ -17,11 +17,11 @@
 ## Current Production Snapshot
 
 - Product: SimCore
-- Version: `0.70.10`
-- Release: `Host-Local Telemetry Set Cost Attribution`
+- Version: `0.70.11`
+- Release: `Operator Release Card Metadata Repair`
 - Release branch: `release-simcore`
-- Release commit: `ecc55f026315c6482c34d267aba2adb97527cdbc`
-- Release blob: `53f6959039c57f8673c355fcc1c22b573150e4a7`
+- Release commit: `01769eb6db7244e3682bb8ba6001d89aea4e0ed8`
+- Release blob: `a1721dcdd9a34f3398c0c5899e8981ba1143ead4`
 - Declared validation status: `PENDING_REAL_LONG_CHAT`
 - Major update milestone: `2.0M`
 - Major update phase: `M2`
@@ -33,10 +33,10 @@ This block is machine-managed from verified declared release state. It does not 
 <!-- SIMCORE_RELEASE_STATE:LIVE_PENDING:BEGIN -->
 ## Current Release Live Gate
 
-- Release transaction: `simcore-v0.70.10-new-01`
-- Production commit: `ecc55f026315c6482c34d267aba2adb97527cdbc`
+- Release transaction: `simcore-v0.70.11-new-03`
+- Production commit: `01769eb6db7244e3682bb8ba6001d89aea4e0ed8`
 - Validation status: `PENDING_REAL_LONG_CHAT`
-- Current priority / live gate: `07010_HOST_LOCAL_TELEMETRY_SET_COST_ATTRIBUTION_REAL_LONG_CHAT`
+- Current priority / live gate: `07011_OPERATOR_RELEASE_CARD_METADATA_REPAIR_REAL_LONG_CHAT`
 - R lifecycle: `REAL_RELEASE_LIVE_PENDING`
 
 This block is machine-managed by `release-state-converge` from immutable publication evidence.

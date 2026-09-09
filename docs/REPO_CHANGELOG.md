@@ -1412,3 +1412,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f74b2734b800dd00df6a75ab30410f529665f081)
 - Event ID: `2a49b2a7a7e1c47a29de53cc0f16d8b3d20115d2b36e95ffb41a4cc5e6c54e8e`
 <!-- canonical-main-doc-promoted:2a49b2a7a7e1c47a29de53cc0f16d8b3d20115d2b36e95ffb41a4cc5e6c54e8e -->
+
+### 2026-09-10 — fix(repo): keep protected-main checked-PR handoff stderr clean
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `f6f5fb70debfcc2de082b052efa6c4faf047a597`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f6f5fb70debfcc2de082b052efa6c4faf047a597)
+- Event ID: `16a568f527b85e187127c7add7effa5dc808a4232bfa64d407850905c5a37fe2`
+<!-- canonical-main-doc-promoted:16a568f527b85e187127c7add7effa5dc808a4232bfa64d407850905c5a37fe2 -->

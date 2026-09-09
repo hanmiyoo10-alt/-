@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import os
 import re
@@ -257,6 +258,7 @@ def test_native_protection_preserves_checked_pr_recovery(root: Path) -> None:
         env=protected_env(bindir, enabled=True),
     )
     assert got.returncode == 9, (got.stdout, got.stderr)
+    assert got.stderr == "", got.stderr
     assert "MAIN_WRITE_REQUIRED_GATE_PASS" in got.stdout
     assert "MAIN_WRITE_NATIVE_PROTECTION_ACTIVE" in got.stdout
     match = re.search(r"MAIN_WRITE_CHECKED_PR_REQUIRED: base=([0-9a-f]{40}) commit=([0-9a-f]{40}) ref=([^\s]+)", got.stdout)
@@ -287,6 +289,7 @@ def test_native_protection_off_keeps_direct_landing(root: Path) -> None:
         env=protected_env(bindir, enabled=False),
     )
     assert got.returncode == 0, (got.stdout, got.stderr)
+    assert got.stderr == "", got.stderr
     assert "MAIN_WRITE_REQUIRED_GATE_PASS" in got.stdout
     assert "MAIN_WRITE_LANDED" in got.stdout
     assert "MAIN_WRITE_CHECKED_PR_REQUIRED" not in got.stdout
@@ -318,6 +321,28 @@ def gate_args(**overrides):
 
 def cp(code: int, stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(["gh"], code, stdout=stdout, stderr=stderr)
+
+
+def test_git_checked_quiet_surfaces_failure() -> None:
+    mod = load_helper_module()
+    failed = subprocess.CompletedProcess(
+        ["git", "fetch", "origin", "main"],
+        128,
+        stdout="fetch stdout detail\n",
+        stderr="fetch stderr detail\n",
+    )
+    err = io.StringIO()
+    with patch.object(mod, "git", return_value=failed), patch.object(sys, "stderr", err):
+        try:
+            mod.git_checked_quiet("fetch", "origin", "main")
+        except subprocess.CalledProcessError as exc:
+            assert exc.returncode == 128
+        else:
+            raise AssertionError("git_checked_quiet must fail closed")
+    text = err.getvalue()
+    assert "MAIN_WRITE_GIT_COMMAND_FAILED: git fetch origin main" in text
+    assert "fetch stdout detail" in text
+    assert "fetch stderr detail" in text
 
 
 def test_gate_exact_candidate_and_required_job() -> None:
@@ -408,6 +433,7 @@ def main() -> int:
         test_denied_path(root)
         test_native_protection_preserves_checked_pr_recovery(root)
         test_native_protection_off_keeps_direct_landing(root)
+    test_git_checked_quiet_surfaces_failure()
     test_gate_exact_candidate_and_required_job()
     test_gate_wrong_candidate_not_accepted()
     test_gate_missing_required_job_fails()

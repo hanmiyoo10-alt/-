@@ -1398,6 +1398,13 @@
 - Event ID: `34af347236414052061f216eab43ad0b3562f2e4ed3a0bc2529d706daaf74eb0`
 <!-- canonical-main-doc-promoted:34af347236414052061f216eab43ad0b3562f2e4ed3a0bc2529d706daaf74eb0 -->
 
+### 2026-09-09 — [repo-incident:P1] MEMORY_SYNC_FAILED — plugin:simcore
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/1980)
+- Event ID: `4341e05af5821ebda111a691979c4505121432baf5754350dc20f4a03a2cb780`
+<!-- canonical-main-doc-promoted:4341e05af5821ebda111a691979c4505121432baf5754350dc20f4a03a2cb780 -->
+
 ### 2026-09-09 — Merge pull request #1964 from hanmiyoo10-alt/recovery/simcore-v07011-admin-identity-bootstrap
 - Class: `PROJECT`
 - Transition: `MERGED_TO_MAIN`

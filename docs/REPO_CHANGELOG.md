@@ -1369,6 +1369,13 @@
 - Event ID: `d538e7037919d620d3a4420695366c1281a3b5b7369b5834f9308ffd233549ad`
 <!-- canonical-main-doc-promoted:d538e7037919d620d3a4420695366c1281a3b5b7369b5834f9308ffd233549ad -->
 
+### 2026-09-09 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `32b22b4a978c626767cecf5930baebc884f22a64af6ffc9b0d26cb4c2577eb7f`
+<!-- canonical-main-doc-promoted:32b22b4a978c626767cecf5930baebc884f22a64af6ffc9b0d26cb4c2577eb7f -->
+
 ### 2026-09-09 — Merge pull request #1952 from hanmiyoo10-alt/fix/repo-native-protected-main-writer-recovery-20260909
 - Class: `CHANGE`
 - Transition: `MERGED_TO_MAIN`

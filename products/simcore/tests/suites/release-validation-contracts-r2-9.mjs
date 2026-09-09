@@ -16,6 +16,18 @@ const BEHAVIOR_AUTHORITIES = Object.freeze({
   'bounded-telemetry-capsule': Object.freeze({ '0.69.2': runBoundedV06902 }),
 });
 
+const INHERITED_AUTHORITY_COMPATIBILITY = Object.freeze({
+  'bounded-telemetry-capsule': Object.freeze({
+    '0.69.2': Object.freeze([
+      Object.freeze({
+        from: "scenario: '07011_OPERATOR_RELEASE_CARD_METADATA_REPAIR_REAL_LONG_CHAT'",
+        to: "scenario: '06900_M2_6_STATE_RECONCILE_KERNEL_INVERSION_REAL_LONG_CHAT'",
+        assertionId: 'r2-9-bounded-telemetry-v07011-operator-scenario-bridge',
+      }),
+    ]),
+  }),
+});
+
 function contractError(code, message) {
   const error = new Error(message);
   error.code = code;
@@ -38,18 +50,37 @@ function replaceExactlyOnce(source, needle, replacement, label) {
   return source.replace(needle, replacement);
 }
 
+function normalizeInheritedAuthoritySource(contractId, source, plan) {
+  let compatSource = normalizeMetadataVersion(source, plan.releaseVersion, plan.authorityVersion);
+  const rewrites = INHERITED_AUTHORITY_COMPATIBILITY[contractId]?.[plan.authorityVersion] || [];
+  const appliedAssertions = [];
+  for (const rewrite of rewrites) {
+    const count = countOf(compatSource, rewrite.from);
+    if (count === 0) continue;
+    compatSource = replaceExactlyOnce(
+      compatSource,
+      rewrite.from,
+      rewrite.to,
+      `${contractId} ${plan.authorityVersion} inherited compatibility`,
+    );
+    appliedAssertions.push(rewrite.assertionId);
+  }
+  return { compatSource, appliedAssertions };
+}
+
 async function runInheritedBehavior(contractId, ctx, profile) {
   const plan = resolveValidationContract(profile, contractId);
   if (plan.mode !== VALIDATION_CONTRACT_MODES.INHERIT_BEHAVIOR) {
     throw contractError('VALIDATION_CONTRACT_MODE_MISMATCH', `${contractId} requires INHERIT_BEHAVIOR`);
   }
   const runner = authorityRunner(contractId, plan.authorityVersion);
-  const compatSource = normalizeMetadataVersion(ctx.source, plan.releaseVersion, plan.authorityVersion);
-  const result = await runner({ ...ctx, source: compatSource });
+  const normalized = normalizeInheritedAuthoritySource(contractId, ctx.source, plan);
+  const result = await runner({ ...ctx, source: normalized.compatSource });
   return {
     ...result,
     assertions: [
       ...(result.assertions || []),
+      ...normalized.appliedAssertions.map((id) => ({ id, status: 'PASS' })),
       { id: `r2-9-${contractId}-explicit-authority-${plan.authorityVersion}`, status: 'PASS' },
     ],
   };

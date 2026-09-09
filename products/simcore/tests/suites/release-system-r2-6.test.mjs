@@ -1,4 +1,6 @@
 import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { parseCheckedPrHandoff } from '../../tooling/release-state-main-gate.mjs';
 import { assert, equal } from '../../tooling/assertions.mjs';
 
 function count(text, token) { return text.split(token).length - 1; }
@@ -35,6 +37,23 @@ export async function runSuite() {
   for(const token of ['release-publish.mjs','force-with-lease','+refs/heads/release-simcore']) assert(!gate.includes(token),`main gate gained publication authority: ${token}`);
   pass('R2.6-C-shared-main-gate-adapter');
 
+  const parsed=parseCheckedPrHandoff(9,`MAIN_WRITE_NATIVE_PROTECTION_ACTIVE: branch=main required=Required\nMAIN_WRITE_CHECKED_PR_REQUIRED: base=${'a'.repeat(40)} commit=${'b'.repeat(40)} ref=simcore-rs2-6/test-ref\n`,'');
+  equal(parsed.base,'a'.repeat(40),'checked PR base parse');
+  equal(parsed.commit,'b'.repeat(40),'checked PR commit parse');
+  equal(parsed.ref,'simcore-rs2-6/test-ref','checked PR ref parse');
+  let malformedBlocked=false;
+  try { parseCheckedPrHandoff(9,`MAIN_WRITE_CHECKED_PR_REQUIRED: base=${'a'.repeat(40)} commit=${'b'.repeat(40)} ref=bad\n`,''); } catch { malformedBlocked=true; }
+  assert(malformedBlocked,'checked PR handoff without native protection was accepted');
+  pass('R2.6-C2-checked-pr-handoff-structured');
+
+  const checked=fs.readFileSync('products/simcore/tooling/release-state-checked-pr.mjs','utf8');
+  for(const token of ['PR_RECOVERY','CHECKED_PR_MERGED','R2_6_CHECKED_PR_MAIN_MOVED','merge_method=merge','RS2_6_POST_PUBLISH_DURABLE_MAIN_PASS']) assert(checked.includes(token),`checked PR consumer token missing: ${token}`);
+  for(const token of ['HEAD:main','force-with-lease','+refs/heads/main','update-ref main']) assert(!checked.includes(token),`checked PR consumer gained forbidden main bypass: ${token}`);
+  const integration=spawnSync(process.execPath,['products/simcore/tests/release-state-checked-pr.integration.test.mjs'],{encoding:'utf8',maxBuffer:8*1024*1024});
+  assert(integration.status===0,`checked PR integration failed: ${integration.stdout} ${integration.stderr}`);
+  assert(integration.stdout.includes('R2_6_CHECKED_PR_INTEGRATION_PASS'),'checked PR integration proof token missing');
+  pass('R2.6-C3-checked-pr-consumer-integration');
+
   const reobserve=fs.readFileSync('products/simcore/tooling/release-state-reobserve.mjs','utf8');
   for(const token of ['verifyPayloadHashes','verifyCurrentDevelopment','verifyDurableObjects','RS2_6_POST_PUBLISH_DURABLE_MAIN_PASS']) assert(reobserve.includes(token),`reobserver token missing: ${token}`);
   for(const token of ['repo-main-write.py','release-publish.mjs','spawnSync','git push','fetch(','api.github.com']) assert(!reobserve.includes(token),`reobserver gained write/network authority: ${token}`);
@@ -54,8 +73,11 @@ export async function runSuite() {
   const publishIndex=permanent.indexOf('Publish through permanent controller');
   assert(preplayIndex>=0&&publishIndex>preplayIndex,'preplay is not before publication');
   equal(count(permanent,'release-publish.mjs'),1,'single permanent publisher call');
-  for(const token of ['release-state-main-gate.mjs','release-state-reobserve.mjs','--mode PERMANENT']) assert(permanent.includes(token),`permanent workflow shared boundary missing: ${token}`);
-  for(const token of ['release-state-main-gate.mjs','release-state-reobserve.mjs','--mode RECOVERY']) assert(recovery.includes(token),`recovery workflow shared boundary missing: ${token}`);
+  for(const token of ['release-state-main-gate.mjs','release-state-reobserve.mjs','release-state-checked-pr.mjs','--mode PERMANENT']) assert(permanent.includes(token),`permanent workflow shared boundary missing: ${token}`);
+  for(const token of ['release-state-main-gate.mjs','release-state-reobserve.mjs','release-state-checked-pr.mjs','--mode RECOVERY']) assert(recovery.includes(token),`recovery workflow shared boundary missing: ${token}`);
+  const ci=fs.readFileSync('.github/workflows/simcore-ci.yml','utf8');
+  for(const token of ['PR_RECOVERY','pr_base_commit','pr_head_commit','VERIFIER_PROFILE=PR_MAIN',"steps.profile.outputs.profile == 'PR_RECOVERY'"]) assert(ci.includes(token),`PR_RECOVERY CI contract missing: ${token}`);
+  for(const workflow of [permanent,recovery]) for(const token of ['checked_pr_required','--mode consume','--mode cleanup','pull-requests: write']) assert(workflow.includes(token),`checked PR caller parity missing: ${token}`);
   const permanentPost=between(permanent,'\n  post-publish-state:','\n  required:');
   const recoveryPost=between(recovery,'\n  permanent-recovery:');
   for(const workflow of [permanentPost,recoveryPost]) {

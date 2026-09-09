@@ -13,7 +13,7 @@ on:
         required: true
         default: MAIN_HEALTH
         type: choice
-        options: [MAIN_HEALTH, CANDIDATE_SHADOW]
+        options: [MAIN_HEALTH, CANDIDATE_SHADOW, PR_RECOVERY]
       candidate_commit:
         description: Immutable 40-hex candidate commit for CANDIDATE_SHADOW
         required: false
@@ -24,6 +24,14 @@ on:
         type: string
       expected_production_commit:
         description: Optional expected deployed production commit
+        required: false
+        type: string
+      pr_base_commit:
+        description: Exact PR base commit for PR_RECOVERY
+        required: false
+        type: string
+      pr_head_commit:
+        description: Exact PR head commit for PR_RECOVERY
         required: false
         type: string
   workflow_call:
@@ -38,6 +46,12 @@ on:
         required: false
         type: string
       expected_production_commit:
+        required: false
+        type: string
+      pr_base_commit:
+        required: false
+        type: string
+      pr_head_commit:
         required: false
         type: string
 
@@ -83,6 +97,10 @@ jobs:
           INPUT_CANDIDATE: ${{ inputs.candidate_commit }}
           INPUT_FETCH_REF: ${{ inputs.candidate_fetch_ref }}
           INPUT_EXPECTED_PRODUCTION: ${{ inputs.expected_production_commit }}
+          INPUT_PR_BASE: ${{ inputs.pr_base_commit }}
+          INPUT_PR_HEAD: ${{ inputs.pr_head_commit }}
+          EVENT_PR_BASE: ${{ github.event.pull_request.base.sha }}
+          EVENT_PR_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           case "${GITHUB_EVENT_NAME}" in
@@ -93,11 +111,15 @@ jobs:
             *) echo 'CI_PROFILE_INVALID: event' >&2; exit 2 ;;
           esac
           case "$PROFILE" in
-            PR_MAIN|MAIN_HEALTH|CANDIDATE_SHADOW|CANDIDATE_REQUIRED) ;;
+            PR_MAIN|PR_RECOVERY|MAIN_HEALTH|CANDIDATE_SHADOW|CANDIDATE_REQUIRED) ;;
             *) echo 'CI_PROFILE_INVALID: profile' >&2; exit 2 ;;
           esac
           if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch && "$PROFILE" == CANDIDATE_REQUIRED ]]; then
             echo 'CI_PROFILE_INVALID: manual CANDIDATE_REQUIRED forbidden' >&2
+            exit 2
+          fi
+          if [[ "$PROFILE" == PR_RECOVERY && "$GITHUB_EVENT_NAME" != workflow_dispatch ]]; then
+            echo 'CI_PROFILE_INVALID: PR_RECOVERY dispatch-only' >&2
             exit 2
           fi
           AUTHORITY=''
@@ -109,7 +131,27 @@ jobs:
           if [[ "$PROFILE" == CANDIDATE_* ]]; then
             [[ "$CANDIDATE" =~ ^[0-9a-f]{40}$ ]] || { echo 'CANDIDATE_IDENTITY_INVALID' >&2; exit 2; }
           fi
+          PR_BASE=''
+          PR_HEAD=''
+          VERIFIER_PROFILE="$PROFILE"
+          if [[ "$PROFILE" == PR_MAIN ]]; then
+            PR_BASE="${EVENT_PR_BASE:-}"
+            PR_HEAD="${EVENT_PR_HEAD:-}"
+          elif [[ "$PROFILE" == PR_RECOVERY ]]; then
+            PR_BASE="${INPUT_PR_BASE:-}"
+            PR_HEAD="${INPUT_PR_HEAD:-}"
+            [[ "$PR_BASE" =~ ^[0-9a-f]{40}$ ]] || { echo 'PR_RECOVERY_BASE_INVALID' >&2; exit 2; }
+            [[ "$PR_HEAD" =~ ^[0-9a-f]{40}$ ]] || { echo 'PR_RECOVERY_HEAD_INVALID' >&2; exit 2; }
+            test "$PR_HEAD" = "$GITHUB_SHA" || { echo 'PR_RECOVERY_HEAD_NOT_CHECKOUT' >&2; exit 2; }
+            git cat-file -e "$PR_BASE^{commit}" || { echo 'PR_RECOVERY_BASE_MISSING' >&2; exit 2; }
+            git cat-file -e "$PR_HEAD^{commit}" || { echo 'PR_RECOVERY_HEAD_MISSING' >&2; exit 2; }
+            git merge-base --is-ancestor "$PR_BASE" "$PR_HEAD" || { echo 'PR_RECOVERY_BASE_NOT_ANCESTOR' >&2; exit 2; }
+            VERIFIER_PROFILE=PR_MAIN
+          fi
           echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
+          echo "verifier_profile=$VERIFIER_PROFILE" >> "$GITHUB_OUTPUT"
+          echo "pr_base_commit=$PR_BASE" >> "$GITHUB_OUTPUT"
+          echo "pr_head_commit=$PR_HEAD" >> "$GITHUB_OUTPUT"
           echo "candidate_commit=$CANDIDATE" >> "$GITHUB_OUTPUT"
           echo "candidate_fetch_ref=${INPUT_FETCH_REF:-}" >> "$GITHUB_OUTPUT"
           echo "expected_production_commit=${INPUT_EXPECTED_PRODUCTION:-}" >> "$GITHUB_OUTPUT"
@@ -117,11 +159,11 @@ jobs:
 
       - name: Classify pull request paths
         id: classify
-        if: steps.profile.outputs.profile == 'PR_MAIN'
+        if: steps.profile.outputs.profile == 'PR_MAIN' || steps.profile.outputs.profile == 'PR_RECOVERY'
         shell: bash
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ steps.profile.outputs.pr_base_commit }}
+          HEAD_SHA: ${{ steps.profile.outputs.pr_head_commit }}
         run: |
           set -euo pipefail
           git diff --name-only "$BASE_SHA...$HEAD_SHA" > /tmp/simcore-ci-paths.txt
@@ -137,7 +179,7 @@ jobs:
           cat /tmp/scope-line.json
 
       - name: Create full-baseline scope record
-        if: steps.profile.outputs.profile != 'PR_MAIN'
+        if: steps.profile.outputs.profile != 'PR_MAIN' && steps.profile.outputs.profile != 'PR_RECOVERY'
         shell: bash
         run: |
           set -euo pipefail
@@ -189,7 +231,7 @@ jobs:
         id: source
         shell: bash
         env:
-          PROFILE: ${{ steps.profile.outputs.profile }}
+          PROFILE: ${{ steps.profile.outputs.verifier_profile }}
         run: |
           set -euo pipefail
           case "$PROFILE" in
@@ -204,10 +246,10 @@ jobs:
           esac
 
       - name: Current trusted lane for CI self-change
-        if: steps.profile.outputs.profile == 'PR_MAIN' && contains(steps.classify.outputs.labels, 'CI_SELF')
+        if: (steps.profile.outputs.profile == 'PR_MAIN' || steps.profile.outputs.profile == 'PR_RECOVERY') && contains(steps.classify.outputs.labels, 'CI_SELF')
         shell: bash
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ steps.profile.outputs.pr_base_commit }}
           PRODUCTION_COMMIT: ${{ steps.production.outputs.production_commit }}
           PRODUCTION_BLOB: ${{ steps.production.outputs.production_blob }}
         run: |
@@ -238,8 +280,8 @@ jobs:
           CANDIDATE: ${{ steps.profile.outputs.candidate_commit }}
           EXPECTED_PRODUCTION: ${{ steps.profile.outputs.expected_production_commit }}
           CANDIDATE_REQUIRED_AUTHORITY: ${{ steps.profile.outputs.candidate_required_authority }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ steps.profile.outputs.pr_base_commit }}
+          HEAD_SHA: ${{ steps.profile.outputs.pr_head_commit }}
         run: |
           set -euo pipefail
           set +e

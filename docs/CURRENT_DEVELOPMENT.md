@@ -50,7 +50,7 @@ This block is machine-managed by `release-state-converge` from immutable publica
 
 The machine-managed blocks above are authoritative for current production identity, validation status, and terminal release state. For active work after a terminal handoff, `product-manifest.json` is the machine-readable current operational-priority authority; the terminal block's `Current priority` records the handoff selected by the terminal evidence transaction. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override machine authority.
 
-Current production is v0.70.11 `Operator Release Card Metadata Repair`, and the machine-managed live gate remains `PENDING_REAL_LONG_CHAT`. Fresh same-generation real-long-chat packet `#1972` (`mttz5h6b-pkiclo`) exercises ordinary Mode C, reroll/repeat-send, C→A→C mode/source transitions, and a genuine one-character manual edit. Request/output/binding/mirror/hook behavior, reroll identity handling, genuine-edit classification/rebuild, Evidence/Lineage/Handoff/Frame controls, and observed scope controls pass in the supplied packet. The release-specific operator-card identity check is still `NOT_EXERCISED`, so #1657 remains open and v0.70.11 is not terminally validated by this packet. Separately, visible standalone `internal:` planning-control alias contamination recurs in RAW assistant `@3213`, strengthening advancement-holding FIX `#1660`; no blind global strip is authorized. Performance variance strengthens WATCH `#1588` and WATCH `#1626` without a new correctness failure. Provider cache remains `UNVERIFIED`. No LIVE_PASS, HUMAN_EVIDENCE terminal convergence, next runtime version, feature, architecture change, or performance optimization is authorized by this packet.
+The machine-managed production snapshot identifies the current release as `Operator Release Card Metadata Repair`, and the machine-managed live gate remains `PENDING_REAL_LONG_CHAT`. Fresh same-generation real-long-chat packet `#1972` (`mttz5h6b-pkiclo`) exercises ordinary Mode C, reroll/repeat-send, C→A→C mode/source transitions, and a genuine one-character manual edit. Request/output/binding/mirror/hook behavior, reroll identity handling, genuine-edit classification/rebuild, Evidence/Lineage/Handoff/Frame controls, and observed scope controls pass in the supplied packet. The release-specific operator-card identity check is still `NOT_EXERCISED`, so #1657 remains open and the current release is not terminally validated by this packet. Separately, visible standalone `internal:` planning-control alias contamination recurs in RAW assistant `@3213`, strengthening advancement-holding FIX `#1660`; no blind global strip is authorized. Performance variance strengthens WATCH `#1588` and WATCH `#1626` without a new correctness failure. Provider cache remains `UNVERIFIED`. No LIVE_PASS, HUMAN_EVIDENCE terminal convergence, next runtime version, feature, architecture change, or performance optimization is authorized by this packet.
 
 ## Historical validated precursor — v0.63.55
 
@@ -1176,9 +1176,9 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-Complete the v0.70.11 release-specific operator-card identity check exactly as defined by the release design.
-Do not infer v0.70.11 LIVE_PASS from mixed-path packet #1972; that packet leaves the operator-card UI check NOT_EXERCISED.
-Keep #1660 as a separate advancement-holding runtime FIX; the v0.70.11 packet confirms a fresh visible `internal:` recurrence at assistant @3213.
+Complete the current release-specific operator-card identity check exactly as defined by the release design.
+Do not infer LIVE_PASS from mixed-path packet #1972; that packet leaves the operator-card UI check NOT_EXERCISED.
+Keep #1660 as a separate advancement-holding runtime FIX; the current mixed-path packet confirms a fresh visible `internal:` recurrence at assistant @3213.
 Keep #1588 and #1626 as independent performance WATCH lanes; do not promote an optimization without source-proven ownership.
 Do not fabricate HUMAN_EVIDENCE terminal convergence or a next runtime version.
 ```
@@ -1186,11 +1186,9 @@ Do not fabricate HUMAN_EVIDENCE terminal convergence or a next runtime version.
 Current bounded state:
 
 ```text
-production = v0.70.11 Operator Release Card Metadata Repair
-release commit = 01769eb6db7244e3682bb8ba6001d89aea4e0ed8
-release live gate = 07011_OPERATOR_RELEASE_CARD_METADATA_REPAIR_REAL_LONG_CHAT
-machine validation = PENDING_REAL_LONG_CHAT
-lifecycle = REAL_RELEASE_LIVE_PENDING
+production identity = read authoritative machine-managed snapshot above
+release live gate = read authoritative machine-managed live-gate block above
+machine validation / lifecycle = read authoritative machine-managed blocks above
 mixed-path packet #1972 = PASS FOR OBSERVED RUNTIME CONTROLS
 operator-card identity live check = NOT_EXERCISED
 #1657 operator release card repair = FIX / OPEN until release-specific card identity is proven
@@ -1204,7 +1202,7 @@ LIVE_PASS = NOT CLAIMED
 HUMAN_EVIDENCE terminal convergence = NOT EXECUTED
 
 next legal administrative path
-→ exercise and preserve the explicit v0.70.11 operator-card identity check
+→ exercise and preserve the explicit current-release operator-card identity check
 → then evaluate the release-specific terminal gate without absorbing #1660 into the v0.70.11 repair scope
 → execute R2.8 HUMAN_EVIDENCE only when explicit human terminal decision, checkpoint, and next-priority values are supplied
 

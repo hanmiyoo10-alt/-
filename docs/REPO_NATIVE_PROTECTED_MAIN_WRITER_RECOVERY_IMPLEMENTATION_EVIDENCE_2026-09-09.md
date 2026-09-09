@@ -1,7 +1,7 @@
 # Repository Native Protected-Main Writer Recovery — Implementation Evidence
 
 Date: 2026-09-09
-Status: **PRE-MERGE VERIFIED · NON-RUNTIME**
+Status: **IMPLEMENTED · POST-MERGE VERIFIED · NON-RUNTIME**
 Design authority: `docs/REPO_NATIVE_PROTECTED_MAIN_WRITER_RECOVERY_DESIGN_2026-09-09.md`
 Tracking: #1950
 Trigger specimen: #1949
@@ -16,11 +16,11 @@ scripts/test-repo-main-write.py
 .github/plugin-control-plane/canonical-main/protected-main.cjs
 ```
 
-No SimCore runtime, product release branch, publisher, candidate bytes, manifest release identity, or production files are changed by this implementation branch.
+No SimCore runtime, product release branch, publisher, candidate bytes, manifest release identity, or production files were changed by this repair.
 
-The helper now performs a read-only branch metadata observation after exact staging Required success and an unchanged-main identity check.
+The helper performs read-only branch metadata observation after exact staging Required success and an unchanged-main identity check.
 
-Observed-state handling is frozen as:
+Observed-state handling:
 
 ```text
 native Required enforcement OFF
@@ -43,11 +43,11 @@ protection metadata read failure/invalid payload
 → fail closed
 ```
 
-## Regression coverage added
+## Regression coverage
 
-`scripts/test-repo-main-write.py` now includes a fake GitHub CLI plus real temporary bare repositories to verify both sides of the new boundary.
+`scripts/test-repo-main-write.py` includes a fake GitHub CLI plus real temporary bare repositories.
 
-Native-enforced specimen asserts:
+Native-enforced specimen proves:
 
 ```text
 exact Required gate PASS
@@ -59,17 +59,17 @@ recovery ref resolves to exact candidate commit
 MAIN_WRITE_CHECKED_PR_REQUIRED coordinates parse exactly
 ```
 
-Native-off specimen asserts:
+Native-off specimen proves:
 
 ```text
 exact Required gate PASS
-existing direct landing still succeeds
+existing direct landing succeeds
 main content advances
 staging ref is cleaned
 no checked-PR recovery output is emitted
 ```
 
-Unit read-back parsing also asserts the live GitHub branch shape used by the real contradiction:
+The parser regression covers the live GitHub branch shape:
 
 ```text
 protected = true
@@ -77,57 +77,97 @@ enforcement = everyone
 checks = [{ context: Required, app_id: 15368 }]
 ```
 
-Canonical main writer contracts now require the helper to retain the native-protection read-back and recovery vocabulary, preventing a later helper regression from silently restoring direct protected-main assumptions.
+Canonical main writer contracts require the native-protection read-back and recovery vocabulary, preventing later silent restoration of the disproven direct protected-main assumption.
 
-## Pre-PR static scope read-back
-
-Branch diff from design-merged main `826a1ac98383dcc1940daf9807e74bc8160cf761` is limited to three implementation files plus this evidence record:
-
-```text
-.github/plugin-control-plane/canonical-main/protected-main.cjs
-scripts/repo-main-write.py
-scripts/test-repo-main-write.py
-docs/REPO_NATIVE_PROTECTED_MAIN_WRITER_RECOVERY_IMPLEMENTATION_EVIDENCE_2026-09-09.md
-```
-
-Production remains v0.70.10. The immutable v0.70.11 candidate remains `01769eb6db7244e3682bb8ba6001d89aea4e0ed8`; no new candidate is authorized by this repository-infrastructure repair.
-
-## First implementation-head CI evidence
+## Implementation PR evidence
 
 PR: `#1952`
 
-Head before this evidence-only refresh:
+First implementation head:
 
 ```text
 a0babca01c306c1e0d4960d309b6aa5d797a1175
-```
-
-Observed checks:
-
-```text
 Plugin Control Plane CI run 34316326536
   contract job 102353204751 = SUCCESS
-
 SimCore CI run 34316326592
   Verify   job 102353204820 = SUCCESS
   Required job 102353253856 = SUCCESS
 ```
 
-This proves the implementation and regression pack passed both repository control-plane contracts and the stable SimCore required gate before the evidence-only refresh.
-
-Because this document update changes the PR head, the final merge head must receive a fresh successful CI pass. The earlier green run is preserved as implementation evidence but is not reused as final-head merge authority.
-
-## Post-merge evidence still required
-
-Before #1950 is closed:
+Final PR head after evidence refresh:
 
 ```text
-final PR head Plugin Control Plane CI = PASS
-final PR head SimCore CI / Verify = PASS
-final PR head SimCore CI / Required = PASS
-merged main SHA = exact
-post-merge main native protection read-back = still enforced
-release-simcore = unchanged
+0dcc516b5119efcdcb7eeb306110d7fca95f9ddc
+Plugin Control Plane CI run 34316392978
+  contract job 102353394422 = SUCCESS
+SimCore CI run 34316392870
+  Verify   job 102353393720 = SUCCESS
+  Required job 102353464146 = SUCCESS
 ```
 
-After #1950 lands, #1949 recovery must use the exact preserved/generated receipt payload through a normal checked PR. No manual receipt reconstruction is authorized.
+Exact-head merge:
+
+```text
+main merge SHA = 645f32e8591fd5b898b182ce5f82de4f7317bed3
+```
+
+## Post-merge live verification
+
+Exact merged-main SimCore CI:
+
+```text
+run 34316443573 = SUCCESS
+Verify   job 102353556221 = SUCCESS
+Required job 102353665112 = SUCCESS
+```
+
+Direct branch read-back on the same merged main:
+
+```text
+main protected = true
+required status enforcement = everyone
+required context = Required
+required app = GitHub Actions / 15368
+```
+
+Production authority remained unchanged:
+
+```text
+release-simcore = ecc55f026315c6482c34d267aba2adb97527cdbc
+production version = 0.70.10
+runtime mutation = NONE
+release mutation = NONE
+```
+
+The immutable v0.70.11 candidate remains valid and untouched:
+
+```text
+candidate commit = 01769eb6db7244e3682bb8ba6001d89aea4e0ed8
+release blob = a1721dcdd9a34f3398c0c5899e8981ba1143ead4
+```
+
+## Tooling anomalies retained
+
+Two bounded tool-order mistakes occurred during this repair and were recorded on #1950. Both produced zero repository mutation:
+
+```text
+TOOLING_DUPLICATE_WRITE              FIX / CLOSED / NONRUNTIME
+TOOLING_PR_BEFORE_BRANCH             FIX / CLOSED / NONRUNTIME
+TOOLING_WRITE_BEFORE_BRANCH          FIX / CLOSED / NONRUNTIME
+```
+
+They do not alter the repair verdict.
+
+## Final verdict
+
+```text
+NATIVE_PROTECTED_MAIN_DIRECT_GATED_PUSH_ASSUMPTION = RETIRED
+NATIVE_ENFORCEMENT_READBACK                         = REQUIRED
+CHECKED_PR_RECOVERY_REF                             = IMPLEMENTED
+LEGACY_NATIVE_OFF_DIRECT_LANDING                    = PRESERVED
+FORCE_PUSH / BYPASS / PAT / DEPLOY KEY              = NONE
+RUNTIME / RELEASE MUTATION                          = NONE
+#1950                                                   = ELIGIBLE TO CLOSE
+```
+
+#1949 remains a separate SimCore release-administration BLOCKER. Its receipt/spec-shadow recovery must use the exact generated payload bytes from commit `df4b3bcfa02b2dfceabce11621243555ef8004a1` through a normal checked PR. No manual receipt reconstruction is authorized.

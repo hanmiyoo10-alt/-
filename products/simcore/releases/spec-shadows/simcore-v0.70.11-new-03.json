@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "product": "SimCore",
+  "authority": "SHADOW_ONLY",
+  "intentId": "simcore-v0.70.11-intent-03",
+  "releaseId": "simcore-v0.70.11-new-03",
+  "candidateReceiptPath": "products/simcore/releases/candidate-receipts/simcore-v0.70.11-intent-03.json",
+  "derivedSpec": {
+    "schemaVersion": 1,
+    "releaseId": "simcore-v0.70.11-new-03",
+    "product": "SimCore",
+    "version": "0.70.11",
+    "releaseName": "Operator Release Card Metadata Repair",
+    "releaseMode": "NEW_VERSION",
+    "candidateCommit": "01769eb6db7244e3682bb8ba6001d89aea4e0ed8",
+    "expectedProductionCommit": "ecc55f026315c6482c34d267aba2adb97527cdbc",
+    "candidateReleaseBlob": "a1721dcdd9a34f3398c0c5899e8981ba1143ead4",
+    "primaryGoalId": "07011_OPERATOR_RELEASE_CARD_METADATA_REPAIR",
+    "changeClass": "RUNTIME_CORRECTION",
+    "evidenceRefs": [
+      "docs/SIMCORE_07011_OPERATOR_RELEASE_CARD_METADATA_REPAIR_DESIGN_2026-09-06.md",
+      "docs/SIMCORE_07011_IMPLEMENTATION_AUTHORIZATION_2026-09-06.md",
+      "docs/SIMCORE_R2_9_OPERATOR_CHANGED_CONTRACT_PROJECTION_GAP_2026-09-06.md",
+      "docs/SIMCORE_PR_IDENTITY_CONCURRENCY_COLLISION_2026-09-06.md",
+      "docs/SIMCORE_07011_IMPLEMENTATION_EVIDENCE_2026-09-06.md",
+      "docs/SIMCORE_07011_CANDIDATE_FAILURE_BOUNDED_TELEMETRY_SCENARIO_BRIDGE_2026-09-09.md",
+      "docs/SIMCORE_07011_CANDIDATE_R29_CHANGED_CONTRACT_PROJECTION_BOUNDARY_2026-09-09.md",
+      "docs/SIMCORE_DIAGNOSTIC_REVIEW_THREE_LENS_PROTOCOL_2026-09-06.md"
+    ],
+    "liveGate": {
+      "required": true,
+      "scenarioId": "07011_OPERATOR_RELEASE_CARD_METADATA_REPAIR_REAL_LONG_CHAT",
+      "closeAuthority": "HUMAN_EVIDENCE"
+    }
+  }
+}

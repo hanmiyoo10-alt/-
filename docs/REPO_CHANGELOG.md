@@ -1348,3 +1348,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/645f32e8591fd5b898b182ce5f82de4f7317bed3)
 - Event ID: `34af347236414052061f216eab43ad0b3562f2e4ed3a0bc2529d706daaf74eb0`
 <!-- canonical-main-doc-promoted:34af347236414052061f216eab43ad0b3562f2e4ed3a0bc2529d706daaf74eb0 -->
+
+### 2026-09-09 — Merge pull request #1964 from hanmiyoo10-alt/recovery/simcore-v07011-admin-identity-bootstrap
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `f74b2734b800dd00df6a75ab30410f529665f081`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f74b2734b800dd00df6a75ab30410f529665f081)
+- Event ID: `2a49b2a7a7e1c47a29de53cc0f16d8b3d20115d2b36e95ffb41a4cc5e6c54e8e`
+<!-- canonical-main-doc-promoted:2a49b2a7a7e1c47a29de53cc0f16d8b3d20115d2b36e95ffb41a4cc5e6c54e8e -->

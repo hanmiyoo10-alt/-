@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "v07011-bounded-inherited-bridge",
+  "suite": "validation-v07011-bounded-inherited-bridge",
+  "input": {
+    "sourceRelease": "0.70.10",
+    "targetRelease": "0.70.11",
+    "contract": "bounded-telemetry-capsule"
+  },
+  "expected": {
+    "authorityVersion": "0.69.2",
+    "currentScenario": "07011_OPERATOR_RELEASE_CARD_METADATA_REPAIR_REAL_LONG_CHAT",
+    "bridgeAssertion": "r2-9-bounded-telemetry-v07011-operator-scenario-bridge"
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

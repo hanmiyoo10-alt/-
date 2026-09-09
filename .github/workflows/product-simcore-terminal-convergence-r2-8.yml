@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write
   actions: write
+  pull-requests: write
 
 concurrency:
   group: simcore-main-state-sync
@@ -153,6 +154,7 @@ jobs:
           RELEASE_ID: ${{ steps.evidence.outputs.release_id }}
           EVIDENCE: ${{ steps.evidence.outputs.evidence }}
           EVIDENCE_BLOB: ${{ steps.evidence.outputs.evidence_blob }}
+          PRODUCTION_COMMIT: ${{ steps.production.outputs.production_commit }}
         run: |
           set -euo pipefail
 
@@ -200,15 +202,33 @@ jobs:
           git commit -m "state(simcore): converge terminal evidence ${RELEASE_ID}"
           PAYLOAD_COMMIT="$(git rev-parse HEAD)"
 
-          python3 scripts/repo-main-write.py \
-            --commit "$PAYLOAD_COMMIT" \
-            --allow product-manifest.json \
-            --allow docs/CURRENT_DEVELOPMENT.md \
-            --allow docs/SIMCORE_GUIDELINES.md \
-            --required-workflow simcore-ci.yml \
-            --required-profile MAIN_HEALTH \
-            --required-job Required \
-            --staging-prefix simcore-r2-8-terminal-convergence
+          set +e
+          node products/simcore/tooling/release-terminal-main-write.mjs \
+            --root . \
+            --release-id "$RELEASE_ID" \
+            --production-commit "$PRODUCTION_COMMIT" \
+            --payload-commit "$PAYLOAD_COMMIT" \
+            --staging-prefix simcore-r2-8-terminal-convergence \
+            --report .simcore-r2-8-terminal/main-write-report.json
+          MAIN_WRITE_CODE=$?
+          set -e
+          case "$MAIN_WRITE_CODE" in
+            0)
+              test "$(node -e "const r=require('./.simcore-r2-8-terminal/main-write-report.json');process.stdout.write(String(r.result||''))")" = 'MAIN_GATE_PASS'
+              ;;
+            9)
+              test "$(node -e "const r=require('./.simcore-r2-8-terminal/main-write-report.json');process.stdout.write(String(r.result||''))")" = 'CHECKED_PR_REQUIRED'
+              node products/simcore/tooling/release-state-checked-pr.mjs \
+                --root . \
+                --mode consume-terminal \
+                --terminal-write-report .simcore-r2-8-terminal/main-write-report.json \
+                --report .simcore-r2-8-terminal/checked-pr-consume-report.json
+              ;;
+            *)
+              echo "R2_8_TERMINAL_MAIN_WRITE_FAIL:$MAIN_WRITE_CODE" >&2
+              exit "$MAIN_WRITE_CODE"
+              ;;
+          esac
 
           git fetch --no-tags origin main
           test "$(git rev-parse "origin/main:$EVIDENCE")" = "$EVIDENCE_BLOB"
@@ -227,6 +247,15 @@ jobs:
             --transition-out .simcore-r2-8-terminal/durable-transition.json \
             --report .simcore-r2-8-terminal/durable-report.json
           test "$(node -e "const r=require('./.simcore-r2-8-terminal/durable-report.json');process.stdout.write(String(r.disposition||''))")" = 'ALREADY_DURABLE'
+          MAIN_WRITE_RESULT="$(node -e "const r=require('./.simcore-r2-8-terminal/main-write-report.json');process.stdout.write(String(r.result||''))")"
+          if [ "$MAIN_WRITE_RESULT" = 'CHECKED_PR_REQUIRED' ]; then
+            node products/simcore/tooling/release-state-checked-pr.mjs \
+              --root . \
+              --mode cleanup-terminal \
+              --consume-report .simcore-r2-8-terminal/checked-pr-consume-report.json \
+              --durable-report .simcore-r2-8-terminal/durable-report.json \
+              --report .simcore-r2-8-terminal/checked-pr-cleanup-report.json
+          fi
           echo "SIMCORE_R2_8_TERMINAL_CONVERGENCE_PASS release=$RELEASE_ID payload=$PAYLOAD_COMMIT durable=$(git rev-parse origin/main)"
 
       - name: Confirm clean terminal no-op

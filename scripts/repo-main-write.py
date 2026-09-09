@@ -4,8 +4,9 @@
 Default mode preserves the existing ordinary fast-forward-only writer.
 Protected mode first publishes the exact candidate commit to a temporary staging
 ref, dispatches a required GitHub Actions workflow on that exact commit, waits
-for the required job to pass, confirms main did not move, and only then
-fast-forwards the checked commit to main.
+for the required job to pass, confirms main did not move, and then either lands
+on an unprotected main or preserves the exact checked ref for a normal PR when
+native protection is active.
 """
 
 from __future__ import annotations
@@ -243,6 +244,37 @@ def wait_for_gate(args: argparse.Namespace, ref: str, candidate: str) -> bool:
     return False
 
 
+def read_native_protection(args: argparse.Namespace) -> dict | None:
+    cp = gh("api", f"repos/{args.github_repository}/branches/{args.branch}", check=False)
+    if cp.returncode != 0:
+        print("MAIN_WRITE_PROTECTION_READBACK_FAILED", file=sys.stderr)
+        if cp.stderr:
+            print(cp.stderr.strip(), file=sys.stderr)
+        return None
+    try:
+        data = json.loads(cp.stdout or "{}")
+    except json.JSONDecodeError:
+        print("MAIN_WRITE_PROTECTION_READBACK_INVALID", file=sys.stderr)
+        return None
+
+    protected = data.get("protected") is True
+    status = data.get("protection", {}).get("required_status_checks", {}) or {}
+    enforcement = str(status.get("enforcement_level") or "off")
+    contexts = [str(value) for value in status.get("contexts", []) if value]
+    checks = [
+        str(row.get("context") or row.get("name"))
+        for row in status.get("checks", [])
+        if isinstance(row, dict) and (row.get("context") or row.get("name"))
+    ]
+    required_present = args.required_job in set(contexts + checks)
+    return {
+        "protected": protected,
+        "enforcement": enforcement,
+        "requiredPresent": required_present,
+        "nativeRequiredActive": protected and enforcement != "off" and required_present,
+    }
+
+
 def main() -> int:
     args = parse_args()
     invalid = validate_args(args)
@@ -323,6 +355,26 @@ def main() -> int:
                 cleanup_staging(args.remote, stage)
                 print(f"MAIN_WRITE_GATE_ONLY_PASS: attempt={attempt} base={base} commit={candidate}")
                 return 0
+
+            protection = read_native_protection(args)
+            if protection is None:
+                cleanup_staging(args.remote, stage)
+                return 10
+            if protection["protected"] and not protection["nativeRequiredActive"]:
+                cleanup_staging(args.remote, stage)
+                print(
+                    "MAIN_WRITE_PROTECTION_READBACK_AMBIGUOUS: "
+                    f"protected=true enforcement={protection['enforcement']} required={protection['requiredPresent']}",
+                    file=sys.stderr,
+                )
+                return 10
+            if protection["nativeRequiredActive"]:
+                print(
+                    "MAIN_WRITE_NATIVE_PROTECTION_ACTIVE: "
+                    f"enforcement={protection['enforcement']} required={args.required_job}"
+                )
+                print(f"MAIN_WRITE_CHECKED_PR_REQUIRED: base={base} commit={candidate} ref={stage}")
+                return 9
 
         if args.pre_push_delay > 0:
             time.sleep(args.pre_push_delay)

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { assert, deepEqual, equal } from '../../tooling/assertions.mjs';
 import { resolveTerminalTransition } from '../../tooling/release-terminal-transition.mjs';
@@ -186,15 +187,32 @@ export async function runSuite(){
   assert(adminSource.includes('ADMIN_TRANSITION_IDENTITY_MUTATION'),'admin transition identity guard missing');
   pass(assertions,'R2.8-existing-admin-engine-reused');
 
+  const mainWriteSource=fs.readFileSync(path.join(REPO,'products/simcore/tooling/release-terminal-main-write.mjs'),'utf8');
+  assert(mainWriteSource.includes('scripts/repo-main-write.py'),'terminal adapter must name shared writer');
+  equal((mainWriteSource.match(/spawnSync\('python3'/g)||[]).length,1,'terminal adapter executes shared writer exactly once');
+  for(const token of ['parseCheckedPrHandoff','MAIN_GATE_PASS','CHECKED_PR_REQUIRED','MAIN_HEALTH','PR_RECOVERY','Required']) assert(mainWriteSource.includes(token),`terminal main-write adapter missing ${token}`);
+  pass(assertions,'R2.8-truthful-main-write-adapter');
+
+  const checkedPrSource=fs.readFileSync(path.join(REPO,'products/simcore/tooling/release-state-checked-pr.mjs'),'utf8');
+  for(const token of ['consume-terminal','cleanup-terminal','release-terminal-main-write','R2_8_CHECKED_PR_PRODUCTION_MOVED','R2_8_CHECKED_PR_TERMINAL_DURABLE_NOT_PASS']) assert(checkedPrSource.includes(token),`checked-PR helper missing terminal contract ${token}`);
+  pass(assertions,'R2.8-checked-pr-terminal-contract');
+
+  const adapterIntegration=spawnSync(process.execPath,['products/simcore/tests/release-terminal-main-write.integration.test.mjs'],{cwd:REPO,encoding:'utf8',maxBuffer:8*1024*1024});
+  equal(adapterIntegration.status,0,`terminal main-write integration failed: ${adapterIntegration.stderr||adapterIntegration.stdout}`);
+  assert(adapterIntegration.stdout.includes('R2_8_TERMINAL_MAIN_WRITE_INTEGRATION_PASS'),'terminal main-write integration terminal line');
+  pass(assertions,'R2.8-terminal-main-write-integration');
+
   const workflow=fs.readFileSync(path.join(REPO,'.github/workflows/product-simcore-terminal-convergence-r2-8.yml'),'utf8');
   for(const token of [
     "products/simcore/releases/live-evidence/*.json",
     'release-terminal-transition.mjs',
     'admin-state-transition.mjs',
     'sync-state.mjs',
-    'scripts/repo-main-write.py',
-    '--required-profile MAIN_HEALTH',
-    '--required-job Required',
+    'release-terminal-main-write.mjs',
+    'release-state-checked-pr.mjs',
+    '--mode consume-terminal',
+    '--mode cleanup-terminal',
+    'pull-requests: write',
     'ALREADY_DURABLE',
     'ELIGIBLE_TO_PROJECT',
     'release-simcore',
@@ -203,7 +221,7 @@ export async function runSuite(){
   assert(!workflow.includes('schedule:'),'terminal convergence must not poll');
   assert(!workflow.includes('gh workflow run'),'terminal convergence must not dispatch release workflows');
   assert(!workflow.includes('release-publish.mjs'),'terminal convergence must not publish');
-  equal((workflow.match(/scripts\/repo-main-write\.py/g)||[]).length,1,'exactly one main gateway invocation');
+  equal((workflow.match(/scripts\/repo-main-write\.py/g)||[]).length,0,'workflow must route through truthful terminal adapter rather than invoke writer directly');
   pass(assertions,'R2.8-thin-event-adapter-boundary');
 
   return {coverage:'EXECUTABLE',status:'PASS',assertions};

@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -68,6 +69,11 @@ def remote_text(remote: Path, path: str) -> str:
     return git(remote, "show", f"main:{path}").stdout
 
 
+def remote_refs(remote: Path, prefix: str) -> list[str]:
+    got = git(remote, "for-each-ref", "--format=%(refname)", prefix).stdout
+    return [line.strip() for line in got.splitlines() if line.strip()]
+
+
 def new_remote(root: Path, name: str) -> tuple[Path, Path]:
     remote = root / f"{name}.git"
     seed = root / f"{name}-seed"
@@ -86,6 +92,73 @@ def new_remote(root: Path, name: str) -> tuple[Path, Path]:
     git(seed, "push", "-u", "origin", "main")
     git(remote, "symbolic-ref", "HEAD", "refs/heads/main")
     return remote, seed
+
+
+def fake_gh_bin(root: Path) -> Path:
+    bindir = root / "fake-gh-bin"
+    bindir.mkdir(parents=True, exist_ok=True)
+    gh_path = bindir / "gh"
+    gh_path.write_text(
+        """#!/usr/bin/env python3
+import json
+import os
+import subprocess
+import sys
+
+args = sys.argv[1:]
+if args[:2] == ['workflow', 'run']:
+    raise SystemExit(0)
+if args[:2] == ['run', 'list']:
+    sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+    print(json.dumps([{'databaseId': 501, 'headSha': sha, 'status': 'completed', 'conclusion': 'success'}]))
+    raise SystemExit(0)
+if args[:2] == ['run', 'view']:
+    print(json.dumps({'status': 'completed', 'conclusion': 'success', 'jobs': [{'name': 'Required', 'conclusion': 'success'}]}))
+    raise SystemExit(0)
+if args and args[0] == 'api':
+    protected = os.environ.get('FAKE_GH_PROTECTED') == '1'
+    if protected:
+        payload = {
+            'protected': True,
+            'protection': {
+                'required_status_checks': {
+                    'enforcement_level': 'everyone',
+                    'contexts': [],
+                    'checks': [{'context': 'Required', 'app_id': 15368}],
+                },
+            },
+        }
+    else:
+        payload = {
+            'protected': False,
+            'protection': {
+                'required_status_checks': {
+                    'enforcement_level': 'off',
+                    'contexts': [],
+                    'checks': [],
+                },
+            },
+        }
+    print(json.dumps(payload))
+    raise SystemExit(0)
+print('unexpected fake gh invocation: ' + ' '.join(args), file=sys.stderr)
+raise SystemExit(64)
+""",
+        encoding="utf-8",
+    )
+    gh_path.chmod(0o755)
+    return bindir
+
+
+def protected_env(bindir: Path, *, enabled: bool) -> dict[str, str]:
+    return {
+        "PATH": f"{bindir}{os.pathsep}{os.environ.get('PATH', '')}",
+        "GH_TOKEN": "test-token",
+        "GITHUB_REPOSITORY": "owner/repo",
+        "GITHUB_RUN_ID": "4242",
+        "GITHUB_RUN_ATTEMPT": "1",
+        "FAKE_GH_PROTECTED": "1" if enabled else "0",
+    }
 
 
 def test_disjoint_stale_bases(root: Path) -> None:
@@ -165,6 +238,62 @@ def test_denied_path(root: Path) -> None:
     assert remote_text(remote, "denied.txt") == "denied-base\n"
 
 
+def test_native_protection_preserves_checked_pr_recovery(root: Path) -> None:
+    remote, _ = new_remote(root, "native-protected")
+    work = clone(remote, root / "native-protected-work")
+    bindir = fake_gh_bin(root)
+    base = git(remote, "rev-parse", "refs/heads/main").stdout.strip()
+    write(work, "simcore.txt", "simcore-native-recovery\n")
+    payload = commit(work, "native recovery payload", "simcore.txt")
+    got = helper(
+        work,
+        payload,
+        ["simcore.txt"],
+        "--required-workflow", "simcore-ci.yml",
+        "--required-profile", "MAIN_HEALTH",
+        "--required-job", "Required",
+        "--staging-prefix", "test-native",
+        check=False,
+        env=protected_env(bindir, enabled=True),
+    )
+    assert got.returncode == 9, (got.stdout, got.stderr)
+    assert "MAIN_WRITE_REQUIRED_GATE_PASS" in got.stdout
+    assert "MAIN_WRITE_NATIVE_PROTECTION_ACTIVE" in got.stdout
+    match = re.search(r"MAIN_WRITE_CHECKED_PR_REQUIRED: base=([0-9a-f]{40}) commit=([0-9a-f]{40}) ref=([^\s]+)", got.stdout)
+    assert match, got.stdout
+    observed_base, candidate, stage = match.groups()
+    assert observed_base == base
+    assert git(remote, "rev-parse", "refs/heads/main").stdout.strip() == base
+    assert remote_text(remote, "simcore.txt") == "simcore-base\n"
+    refs = remote_refs(remote, "refs/heads/test-native/")
+    assert refs == [f"refs/heads/{stage}"], refs
+    assert git(remote, "rev-parse", refs[0]).stdout.strip() == candidate
+
+
+def test_native_protection_off_keeps_direct_landing(root: Path) -> None:
+    remote, _ = new_remote(root, "native-off")
+    work = clone(remote, root / "native-off-work")
+    bindir = fake_gh_bin(root)
+    write(work, "simcore.txt", "simcore-direct-landing\n")
+    payload = commit(work, "direct landing payload", "simcore.txt")
+    got = helper(
+        work,
+        payload,
+        ["simcore.txt"],
+        "--required-workflow", "simcore-ci.yml",
+        "--required-profile", "MAIN_HEALTH",
+        "--required-job", "Required",
+        "--staging-prefix", "test-native-off",
+        env=protected_env(bindir, enabled=False),
+    )
+    assert got.returncode == 0, (got.stdout, got.stderr)
+    assert "MAIN_WRITE_REQUIRED_GATE_PASS" in got.stdout
+    assert "MAIN_WRITE_LANDED" in got.stdout
+    assert "MAIN_WRITE_CHECKED_PR_REQUIRED" not in got.stdout
+    assert remote_text(remote, "simcore.txt") == "simcore-direct-landing\n"
+    assert remote_refs(remote, "refs/heads/test-native-off/") == []
+
+
 def load_helper_module():
     spec = importlib.util.spec_from_file_location("repo_main_write", HELPER)
     assert spec and spec.loader
@@ -179,6 +308,7 @@ def gate_args(**overrides):
         "required_profile": "MAIN_HEALTH",
         "required_job": "Required",
         "github_repository": "owner/repo",
+        "branch": "main",
         "gate_timeout_seconds": 30,
         "gate_poll_seconds": 0.2,
     }
@@ -236,6 +366,29 @@ def test_gate_failed_required_job_fails() -> None:
         assert mod.wait_for_gate(args, "stage/ref", "a" * 40) is False
 
 
+def test_native_protection_readback() -> None:
+    mod = load_helper_module()
+    args = gate_args()
+    protected = {
+        "protected": True,
+        "protection": {
+            "required_status_checks": {
+                "enforcement_level": "everyone",
+                "contexts": [],
+                "checks": [{"context": "Required", "app_id": 15368}],
+            },
+        },
+    }
+    with patch.object(mod, "gh", return_value=cp(0, json.dumps(protected))):
+        got = mod.read_native_protection(args)
+    assert got == {
+        "protected": True,
+        "enforcement": "everyone",
+        "requiredPresent": True,
+        "nativeRequiredActive": True,
+    }
+
+
 def test_staging_ref_safety() -> None:
     mod = load_helper_module()
     assert mod.safe_ref_prefix("repo-main-write-gate")
@@ -253,10 +406,13 @@ def main() -> int:
         test_actual_push_race_retry(root)
         test_content_conflict(root)
         test_denied_path(root)
+        test_native_protection_preserves_checked_pr_recovery(root)
+        test_native_protection_off_keeps_direct_landing(root)
     test_gate_exact_candidate_and_required_job()
     test_gate_wrong_candidate_not_accepted()
     test_gate_missing_required_job_fails()
     test_gate_failed_required_job_fails()
+    test_native_protection_readback()
     test_staging_ref_safety()
     source = HELPER.read_text(encoding="utf-8")
     assert "--force" not in source

@@ -245,3 +245,31 @@ Next legal step for the current v0.70.11 release gate is the explicit operator-c
 That check must remain separate from any #1660 runtime repair.
 
 No next runtime version is authorized by this packet.
+
+## 11. Post-merge documentation validation incident
+
+The first documentation-sync PR for this packet passed PR CI but failed merged-main MAIN_HEALTH.
+
+```text
+PR = #1973
+first merged main = a4d73a3dafce175dcf57389ded03303486d46e8f
+PR SimCore CI = 34348254716 / PASS
+merged-main SimCore CI = 34348365241 / FAIL
+GATE_REGRESSION = FAIL
+reason = PERMANENT_REGRESSION_FAIL
+stderr = closure-integrity: active human current-state prose duplicates version literal
+```
+
+Root cause: active human prose in `CURRENT_DEVELOPMENT.md` repeated the current version literal even though the machine-managed production snapshot exclusively owns that identity.
+
+Classification:
+
+```text
+FIX = DOCS_AUTHORITY_DUPLICATION
+runtime impact = NONE
+release-simcore impact = NONE
+production bytes impact = NONE
+repair = make active human current-state prose identity-free
+```
+
+The repair is validated with the dedicated `closure-integrity` suite before the follow-up PR.

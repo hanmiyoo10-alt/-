@@ -41,6 +41,26 @@ function runCommand(root, command, args, code, env = process.env) {
   if (r.status !== 0) fail(code, `${command} ${args.join(' ')}\n${r.stdout || ''}\n${r.stderr || ''}`.trim());
   return (r.stdout || '').trim();
 }
+const HEX40 = /^[0-9a-f]{40}$/;
+const SAFE_HANDOFF_REF = /^[A-Za-z0-9._/-]{1,180}$/;
+export function parseCheckedPrHandoff(status, stdout = '', stderr = '') {
+  if (status !== 9) return null;
+  const text = String(stdout || '');
+  const protection = text.match(/^MAIN_WRITE_NATIVE_PROTECTION_ACTIVE:.*$/gm) || [];
+  const handoffs = [...text.matchAll(/^MAIN_WRITE_CHECKED_PR_REQUIRED: base=([0-9a-f]{40}) commit=([0-9a-f]{40}) ref=([^\s]+)$/gm)];
+  if (protection.length !== 1 || handoffs.length !== 1) fail('R2_6_MAIN_GATE_CHECKED_PR_INVALID', `protection=${protection.length} handoffs=${handoffs.length}`);
+  const [, base, commit, ref] = handoffs[0];
+  if (!HEX40.test(base) || !HEX40.test(commit) || !SAFE_HANDOFF_REF.test(ref) || ref.includes('..') || ref.includes('@{') || ref.startsWith('/') || ref.endsWith('/')) fail('R2_6_MAIN_GATE_CHECKED_PR_INVALID', ref);
+  if (String(stderr || '').trim()) fail('R2_6_MAIN_GATE_CHECKED_PR_INVALID', 'unexpected stderr');
+  return { base, commit, ref };
+}
+function runGateway(root, args) {
+  const r = spawnSync('python3', args, { cwd:root, encoding:'utf8', env:process.env, maxBuffer:4*1024*1024 });
+  if (r.status === 0) return { result:'LANDED', stdout:(r.stdout || '').trim() };
+  const checkedPr = parseCheckedPrHandoff(r.status, r.stdout, r.stderr);
+  if (checkedPr) return { result:'CHECKED_PR_REQUIRED', checkedPr, stdout:(r.stdout || '').trim() };
+  fail('R2_6_MAIN_GATE_FAIL', `python3 ${args.join(' ')}\n${r.stdout || ''}\n${r.stderr || ''}`.trim());
+}
 function uniqueSorted(values) { return [...new Set(values)].sort(); }
 function policyAllows(policy, rel) {
   const p = policy?.postPublishState;
@@ -126,7 +146,25 @@ export function run(argv = process.argv.slice(2)) {
     '--required-job', gate.requiredJob,
     '--staging-prefix', a['staging-prefix'],
   ];
-  runCommand(root, 'python3', gatewayArgs, 'R2_6_MAIN_GATE_FAIL');
+  const gatewayResult = runGateway(root, gatewayArgs);
+  if (gatewayResult.result === 'CHECKED_PR_REQUIRED') {
+    const report = {
+      schemaVersion:1,
+      tool:'release-state-main-gate',
+      mode:envelope.mode,
+      releaseId:envelope.releaseId,
+      result:'CHECKED_PR_REQUIRED',
+      changedPaths:envelope.changedPaths,
+      productionMutation:envelope.productionMutation,
+      mainMutation:'CHECKED_PR_PENDING',
+      payloadCommit,
+      durableMainCommit:null,
+      gateway:gate.mainGateway,
+      checkedPr:{ ...gatewayResult.checkedPr, workflow:gate.requiredWorkflow, profile:'PR_RECOVERY', job:gate.requiredJob },
+    };
+    writeReport(reportPath, report);
+    return report;
+  }
   runCommand(root, 'git', ['fetch','--no-tags','origin','main'], 'R2_6_MAIN_GATE_FAIL');
   const durableMainCommit = runCommand(root, 'git', ['rev-parse','origin/main'], 'R2_6_MAIN_GATE_FAIL');
   const report = {
@@ -150,6 +188,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     const result = run();
     console.log(JSON.stringify(result));
+    if (result.result === 'CHECKED_PR_REQUIRED') process.exitCode = 9;
   } catch (e) {
     console.error(e.code || 'R2_6_MAIN_GATE_FAIL', e.message || '');
     process.exit(2);

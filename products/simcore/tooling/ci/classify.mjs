@@ -29,6 +29,7 @@ const exact=Object.freeze({
   'products/simcore/tooling/release-state-converge.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/release-state-preplay.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/release-state-main-gate.mjs':['CI_SELF','HARNESS','STATE_SYNC','SHARED_MAIN_COORDINATION'],
+  'products/simcore/tooling/release-state-checked-pr.mjs':['CI_SELF','HARNESS','STATE_SYNC','SHARED_MAIN_COORDINATION'],
   'products/simcore/tooling/release-state-reobserve.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/root-path.mjs':['CI_SELF','HARNESS','STATE_SYNC'],
   'products/simcore/tooling/release-recovery-decision.mjs':['CI_SELF','HARNESS','STATE_SYNC'],

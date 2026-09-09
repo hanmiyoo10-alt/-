@@ -196,6 +196,10 @@ jobs:
       github.event.pull_request.merged == true &&
       startsWith(github.event.pull_request.title, 'SimCore permanent release state recovery: ')
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: write
+      pull-requests: write
     steps:
       - name: Checkout current main administrative authority
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -314,12 +318,14 @@ jobs:
           git diff --check
 
       - name: Commit and gate owner-declared recovered state
+        id: main_gate
         shell: bash
         env:
           RELEASE_ID: ${{ steps.recovery.outputs.release_id }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          set +e
           node products/simcore/tooling/release-state-main-gate.mjs \
             --root . \
             --envelope .simcore-release/post-publish-state-envelope.json \
@@ -327,6 +333,36 @@ jobs:
             --message "state(simcore): recover ${RELEASE_ID} live pending" \
             --staging-prefix simcore-rs2-6-post-publish-recovery \
             --report .simcore-release/main-gate-report.json
+          code=$?
+          set -e
+          case "$code" in
+            0) echo 'checked_pr_required=false' >> "$GITHUB_OUTPUT" ;;
+            9)
+              python3 - <<'PY2'
+          import json
+          r=json.load(open('.simcore-release/main-gate-report.json'))
+          assert r['result'] == 'CHECKED_PR_REQUIRED'
+          assert r['mainMutation'] == 'CHECKED_PR_PENDING'
+          print('R2_6_MAIN_GATE_CHECKED_PR_HANDOFF_PASS')
+          PY2
+              echo 'checked_pr_required=true' >> "$GITHUB_OUTPUT"
+              ;;
+            *) exit "$code" ;;
+          esac
+
+      - name: Consume protected-main checked PR handoff
+        if: steps.main_gate.outputs.checked_pr_required == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node products/simcore/tooling/release-state-checked-pr.mjs \
+            --root . \
+            --mode consume \
+            --main-gate-report .simcore-release/main-gate-report.json \
+            --envelope .simcore-release/post-publish-state-envelope.json \
+            --report .simcore-release/checked-pr-consume-report.json
 
       - name: Reobserve durable main truth through shared verifier
         shell: bash
@@ -345,3 +381,17 @@ jobs:
             --production-identity .simcore-release/observed/identity.json \
             --landed-main-commit "$LANDED_MAIN" \
             --report .simcore-release/durable-reobserve-report.json
+
+      - name: Cleanup consumed checked-PR staging ref
+        if: steps.main_gate.outputs.checked_pr_required == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node products/simcore/tooling/release-state-checked-pr.mjs \
+            --root . \
+            --mode cleanup \
+            --consume-report .simcore-release/checked-pr-consume-report.json \
+            --durable-report .simcore-release/durable-reobserve-report.json \
+            --report .simcore-release/checked-pr-cleanup-report.json

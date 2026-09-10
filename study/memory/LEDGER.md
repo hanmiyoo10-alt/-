@@ -83,3 +83,20 @@ Related memory IDs: P-002, S-PSAT-002
 Follow-up trigger: 실제 PSAT 오답에서 동의표현/재진술/범주변환 때문에 틀리는 사례가 반복되는지 확인.
 Resolution / later evidence: 추가 문제풀이 근거 필요.
 ```
+
+### E-2026-09-10-003 — After Effects 기초 모션 실습 완료
+
+```text
+Entry ID: E-2026-09-10-003
+Date: 2026-09-10
+Subject / scope: After Effects / 타이포그래피 모션그래픽 기초
+Status: OBSERVED
+Observation: 사용자는 After Effects를 처음 사용하는 상태에서 Composition과 Shape Layer를 만들고, Position / Scale / Opacity 키프레임, Easy Ease, Graph Editor의 Speed Graph 조절을 순서대로 직접 실습했다.
+Context: 50초~1분 10초 분량의 가로형 타이포그래피 기반 모션그래픽 중간고사 과제를 준비하는 과정. 주제 후보로 “집 가고 싶다”를 검토 중이다.
+Result: 오브젝트 이동, 확대·축소, 페이드 인·아웃을 키프레임으로 만들었고, Easy Ease와 Speed Graph를 적용했을 때 속도감이 달라지는 것을 직접 확인했다.
+Interpretation: 현재는 복잡한 효과보다 기본 Transform 애니메이션과 타이밍 조절을 실제 텍스트 모션으로 전이하는 단계가 적절하다.
+Confidence: HIGH
+Related memory IDs: 없음
+Follow-up trigger: Rotation과 Text Layer / Text Animator를 익힌 뒤 실제 과제 콘티에 기본 모션을 적용하는지 확인.
+Resolution / later evidence: 상세 세션 기록은 study/logs/2026-09-10-after-effects-basics.md 참조.
+```

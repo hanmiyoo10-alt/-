@@ -6,6 +6,9 @@ import { spawnSync } from 'node:child_process';
 const HEX40=/^[0-9a-f]{40}$/;
 const RELEASE_ID=/^simcore-v[0-9]+\.[0-9]+\.[0-9]+-(?:new|correction|rollback|noop)-[0-9]{2,}$/;
 const SAFE_REF=/^[A-Za-z0-9._/-]{1,180}$/;
+const ACTIONS_PR_CREATE_POLICY_DENIAL='GitHub Actions is not permitted to create or approve pull requests.';
+const TERMINAL_ASSISTANT_PR_WAIT_ATTEMPTS=60;
+const TERMINAL_ASSISTANT_PR_WAIT_SECONDS='2';
 
 function fail(code,detail=''){const e=new Error(detail?`${code}: ${detail}`:code);e.code=code;throw e;}
 function parseArgs(argv){
@@ -37,6 +40,11 @@ function safeRef(ref){return typeof ref==='string'&&SAFE_REF.test(ref)&&!ref.inc
 function uniqueSorted(values){return [...new Set(values)].sort();}
 function requireRepo(){const repo=String(process.env.GITHUB_REPOSITORY||'');if(!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo))fail('R2_6_CHECKED_PR_REPOSITORY_INVALID');if(!process.env.GH_TOKEN)fail('R2_6_CHECKED_PR_TOKEN_MISSING');return repo;}
 function ghJson(root,args){const raw=out(root,'gh',args);try{return JSON.parse(raw);}catch(e){fail('R2_6_CHECKED_PR_GH_JSON_INVALID',e.message);}}
+function parseGhResult(result){
+  const raw=String(result?.stdout||'').trim();
+  if(!raw)fail('R2_6_CHECKED_PR_GH_JSON_INVALID','empty output');
+  try{return JSON.parse(raw);}catch(e){fail('R2_6_CHECKED_PR_GH_JSON_INVALID',e.message);}
+}
 function remoteHead(root,ref){
   const raw=cmd(root,'git',['ls-remote','origin',`refs/heads/${ref}`]).stdout.trim();
   if(!raw)return null;
@@ -76,25 +84,51 @@ function assertExactPayload(root,base,commit,expected){
   const wanted=uniqueSorted(expected);
   if(JSON.stringify(actual)!==JSON.stringify(wanted))fail('R2_6_CHECKED_PR_PATH_SET_MISMATCH',`actual=${JSON.stringify(actual)} expected=${JSON.stringify(wanted)}`);
 }
-function resolveOrCreatePr(root,repo,releaseId,base,commit,ref){
-  const title=`SimCore checked state landing: ${releaseId}`;
+function queryExactOpenPr(root,repo,title,base,commit,ref){
   const all=ghJson(root,['api','--method','GET',`repos/${repo}/pulls`,'-f','state=open','-f','base=main','-f','per_page=100']);
   if(!Array.isArray(all))fail('R2_6_CHECKED_PR_QUERY_INVALID');
   const same=all.filter((pr)=>pr?.title===title);
   if(same.length>1)fail('R2_6_CHECKED_PR_DUPLICATE_OPEN',title);
-  if(same.length===1){
-    const pr=same[0];
-    if(pr?.base?.sha!==base||pr?.head?.sha!==commit||pr?.head?.ref!==ref||pr?.head?.repo?.full_name!==repo)fail('R2_6_CHECKED_PR_EXISTING_MISMATCH',String(pr?.number||''));
-    return {number:Number(pr.number),title,reused:true};
-  }
-  const body=[
+  if(same.length===0)return null;
+  const pr=same[0];
+  if(pr?.base?.sha!==base||pr?.head?.sha!==commit||pr?.head?.ref!==ref||pr?.head?.repo?.full_name!==repo)fail('R2_6_CHECKED_PR_EXISTING_MISMATCH',String(pr?.number||''));
+  if(!Number.isInteger(Number(pr?.number))||Number(pr.number)<=0)fail('R2_6_CHECKED_PR_QUERY_INVALID','number');
+  return pr;
+}
+function checkedPrBody(releaseId,base,commit,ref){
+  return [
     'Machine-owned SimCore protected-main state landing.','',`Release: ${releaseId}`,`Frozen base: ${base}`,`Exact checked head: ${commit}`,`Preserved ref: ${ref}`,'',
     'Created by release-state-checked-pr.mjs after repo-main-write MAIN_HEALTH / Required PASS.',
     'Merge is forbidden until PR_RECOVERY / Required PASS and frozen-base revalidation.',
   ].join('\n');
-  const pr=ghJson(root,['api','--method','POST',`repos/${repo}/pulls`,'-f',`title=${title}`,'-f',`head=${ref}`,'-f','base=main','-f',`body=${body}`]);
-  if(!Number.isInteger(Number(pr?.number))||pr?.base?.sha!==base||pr?.head?.sha!==commit||pr?.head?.repo?.full_name!==repo)fail('R2_6_CHECKED_PR_CREATE_INVALID');
-  return {number:Number(pr.number),title,reused:false};
+}
+function isActionsPrCreatePolicyDenial(result){
+  const text=`${result?.stdout||''}\n${result?.stderr||''}`;
+  return result?.status!==0&&text.includes(ACTIONS_PR_CREATE_POLICY_DENIAL)&&text.includes('HTTP 403');
+}
+function commandFailure(command,args,result){
+  fail('R2_6_CHECKED_PR_COMMAND_FAIL',`${command} ${args.join(' ')}\n${result?.stdout||''}\n${result?.stderr||''}`.trim());
+}
+function resolveOrCreatePr(root,repo,releaseId,base,commit,ref,{assistantCreateFallback=false}={}){
+  const title=`SimCore checked state landing: ${releaseId}`;
+  const existing=queryExactOpenPr(root,repo,title,base,commit,ref);
+  if(existing)return {number:Number(existing.number),title,reused:true};
+  const body=checkedPrBody(releaseId,base,commit,ref);
+  const args=['api','--method','POST',`repos/${repo}/pulls`,'-f',`title=${title}`,'-f',`head=${ref}`,'-f','base=main','-f',`body=${body}`];
+  const created=cmd(root,'gh',args,{check:false});
+  if(created.status===0){
+    const pr=parseGhResult(created);
+    if(!Number.isInteger(Number(pr?.number))||pr?.base?.sha!==base||pr?.head?.sha!==commit||pr?.head?.ref!==ref||pr?.head?.repo?.full_name!==repo)fail('R2_6_CHECKED_PR_CREATE_INVALID');
+    return {number:Number(pr.number),title,reused:false};
+  }
+  if(!assistantCreateFallback||!isActionsPrCreatePolicyDenial(created))commandFailure('gh',args,created);
+  console.log(`R2_8_CHECKED_PR_ASSISTANT_CREATE_REQUIRED: title=${title} base=${base} commit=${commit} ref=${ref}`);
+  for(let i=0;i<TERMINAL_ASSISTANT_PR_WAIT_ATTEMPTS;i+=1){
+    const external=queryExactOpenPr(root,repo,title,base,commit,ref);
+    if(external)return {number:Number(external.number),title,reused:true};
+    if(i+1<TERMINAL_ASSISTANT_PR_WAIT_ATTEMPTS)cmd(root,'sleep',[TERMINAL_ASSISTANT_PR_WAIT_SECONDS]);
+  }
+  fail('R2_8_CHECKED_PR_ASSISTANT_PR_MISSING',title);
 }
 function dispatchRecoveryCi(root,repo,cp,productionCommit){
   const started=Math.floor(Date.now()/1000);
@@ -144,7 +178,7 @@ function consumeNormalized(root,input,reportPath){
   if(kind==='TERMINAL')assertTerminalProduction(root,productionCommit);
   const remote=remoteHead(root,cp.ref);if(remote!==cp.commit)fail('R2_6_CHECKED_PR_REF_MOVED',`expected=${cp.commit} actual=${remote||'MISSING'}`);
   assertExactPayload(root,cp.base,cp.commit,changedPaths);
-  const pr=resolveOrCreatePr(root,repo,releaseId,cp.base,cp.commit,cp.ref);
+  const pr=resolveOrCreatePr(root,repo,releaseId,cp.base,cp.commit,cp.ref,{assistantCreateFallback:kind==='TERMINAL'});
   const runId=dispatchRecoveryCi(root,repo,cp,productionCommit);
   assertMainBase(root,cp.base);
   if(kind==='TERMINAL')assertTerminalProduction(root,productionCommit);

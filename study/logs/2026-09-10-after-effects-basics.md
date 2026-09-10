@@ -100,28 +100,58 @@ Graph Editor
 Speed Graph
 ```
 
-## 오늘의 다음 목표
+## 오징어게임 레퍼런스 확보
 
-Google Drive에 있는 것으로 예상되는 **오징어게임 관련 영상 파일을 레퍼런스로 확보한 뒤, 그 영상의 모션을 After Effects에서 따라 만들어본다.**
-
-파일을 찾으면 바로 전체를 복제하려 하지 않고 다음 순서로 진행한다.
+Google Drive의 정리 경로에서 실제 레퍼런스 파일을 확인했다.
 
 ```text
-1. 레퍼런스 영상 확인
-2. 첫 장면 또는 짧은 구간을 선정
-3. 텍스트 / 도형 / 배경 요소 분해
-4. Position / Scale / Opacity / Rotation 여부 확인
-5. 키프레임 타이밍 추정
-6. Easy Ease / Speed Graph로 속도감 맞추기
-7. 원본과 나란히 비교해 차이 수정
+학교_전공공부
+→ 01_과목자료
+→ 영상편집실습
 ```
 
-정확한 파일 위치와 영상 내용은 아직 확인 전이다.
+해당 폴더 안에 다음 파일이 있다.
+
+```text
+Squid Game - Intro motion logo - English version (1080p).mp4
+Squid Game - Intro motion logo - English version (1080p).mp3
+오징어게임 로고 (Squid Game LOGO) (1080p).mp3
+오징어게임.png
+[영상편집실습]1주차-목요일.pdf
+```
+
+오늘 따라 만들 기준 영상은 `Squid Game - Intro motion logo - English version (1080p).mp4`로 확인했다.
+
+기술 정보:
+
+```text
+1920 x 1080
+30 fps
+약 18.09초
+H.264 video + AAC audio
+```
+
+1초 간격으로 전체 흐름을 확인한 결과, 검은 배경 위에 기하학적 선/도형이 조립되고 한글 로고 형태가 완성된 뒤 분해되며, 이어 영어 `SQUID GAME` 로고가 조립되어 완성되고 마지막에 페이드 아웃되는 구조다.
+
+## 오늘의 다음 목표
+
+레퍼런스 전체를 한 번에 복제하지 않고 첫 짧은 구간부터 역설계한다.
+
+```text
+1. 기준 영상을 AE에 import
+2. 영상과 동일한 1920x1080 / 30fps 컴포지션 생성
+3. 0~3초 구간을 우선 관찰
+4. 검은 배경과 선/원/삼각형/사각형 요소를 Shape Layer로 분해
+5. Position / Scale / Opacity 중심으로 첫 조립 모션 재현
+6. 필요한 경우 Rotation 추가
+7. Easy Ease / Speed Graph로 원본 속도감 맞추기
+8. 원본과 나란히 비교해 차이 수정
+```
 
 ## 다음 학습 순서
 
-1. Google Drive에서 오징어게임 레퍼런스 영상 찾기
-2. 레퍼런스 첫 구간 역설계 및 재현
+1. 오징어게임 레퍼런스 MP4를 AE 프로젝트에 import
+2. 0~3초 첫 구간 역설계 및 재현
 3. 필요한 경우 Rotation 기초 익히기
 4. 실제 Text Layer 생성 및 텍스트 모션 적용
 5. Text Animator 기초

@@ -63,3 +63,15 @@ Windows PC를 추가로 연결하지 않아도, 이미 연결된 Android 장치�
 사용자가 별도 메인 Android 장치에서 Remote Desktop Commander 기기 인증을 완료했고, 서버에서 새 온라인 장치로 나타나는 것을 확인했다. 기존 중복 의심 세션과는 별개의 장치임도 시스템 정보로 확인했다.
 
 해당 장치에는 Termux와 Node.js가 이미 준비되어 있고 원격 명령 실행이 가능하다. `rclone`과 `ffmpeg` 설치를 시작했으나, 패키지 설치 완료 여부는 아직 검증되지 않았다. 계정 주소, 기기 ID, 인증 코드 등 민감하거나 개인적인 연결 정보는 이 공개 기록에 저장하지 않는다.
+
+## 메인 Android 현재 상태 정리
+
+메인 Android의 **Termux 네이티브 환경**에서 `rclone 1.75.1-termux`와 `ffmpeg 8.1.2` 설치 완료를 실제 실행으로 확인했다.
+
+Google Drive OAuth 흐름은 한 번 `Got code`까지 도달해 인증 자체가 성공한 증거는 확보했다. 다만 그 실행은 인증 정보를 출력하는 `authorize` 흐름이었고, `schooldrive`라는 remote 이름이 존재한다는 사실만으로 해당 인증 정보가 현재 rclone 설정에 정상 저장되었다고 간주하지 않는다. 실제 Drive 접근 검증은 아직 필요하다.
+
+또한 사용자 화면의 `root@localhost:...#` 프롬프트는 Ubuntu/PRoot의 root 환경이고, Remote Desktop Commander가 현재 명령을 실행하는 표면은 Termux 앱 사용자 환경임을 확인했다. 두 환경은 HOME과 rclone 설정 경로가 다르므로, 한쪽에서 만든 설정이 다른 쪽에 자동으로 나타난다고 가정하지 않는다. 이후 rclone 설정·검증은 한 환경으로 통일해서 진행한다.
+
+OAuth 인증 자료가 터미널/대화 출력에 노출된 적이 있으므로 해당 인증을 장기적으로 재사용하기보다 기존 권한을 폐기하고 새 인증으로 교체하는 쪽을 안전한 다음 단계로 둔다. 실제 토큰, 계정 주소, 기기 식별자 등 민감 정보는 이 기록에 저장하지 않는다.
+
+현재 메인 Android의 Remote Desktop Commander 세션은 오프라인으로 확인되어 원격 `rclone` 접근 테스트를 수행할 수 없다. 따라서 다음 필수 단계는 `원격 세션 재연결 → schooldrive 실제 접근 확인 → 대상 MP4 확보 → ffmpeg로 검증용 사본 생성 → 실제 프레임 검증` 순서이며, 이 전까지 대상 영상과 P/S/R/T 조합은 계속 `CONTENT_UNVERIFIED`로 유지한다.

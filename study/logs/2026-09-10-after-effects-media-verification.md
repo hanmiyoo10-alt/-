@@ -51,3 +51,9 @@ Windows PC를 추가로 연결하지 않아도, 이미 연결된 Android 장치�
 - **Git:** 이 영상 원본을 Git 저장소에 넣는 방식은 사용하지 않는다. 기준 저장소는 public이고, 학습 화면 녹화 같은 비공개 원본을 Git에 올리는 것은 저장소의 민감/비공개 자료 비저장 원칙과 맞지 않는다. `git-lfs`도 현재 설치되어 있지 않으며, 설치 여부와 무관하게 이 목적의 전송 우회로로 삼지 않는다.
 
 현재 가장 현실적인 무-PC 우회 후보는 `Android Termux + rclone + ffmpeg` 경로다.
+
+## CLI 경로 실행 상태
+
+사용자 승인 후 Android의 Ubuntu/PRoot 환경에 `rclone 1.60.1`과 `ffmpeg 6.1.1` 설치를 완료했다. Google Drive용 `schooldrive` remote를 생성했고, 현재 남은 단계는 OAuth 인증 토큰 발급이다.
+
+온라인으로 보이는 두 원격 세션은 모두 같은 Samsung `SM-G998N` 모델과 같은 Download 경로를 보고해 동일 단말의 중복 세션일 가능성이 있다. 사용자 요청에 따라 두 번째 온라인 세션에서 rclone OAuth 로컬 인증 URL을 브라우저로 열도록 시도했다. 인증 성공 여부는 아직 확인되지 않았다.

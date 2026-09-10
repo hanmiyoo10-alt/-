@@ -35,6 +35,7 @@ REVIEW_QUEUE_SOURCE = study/problems/REVIEW_QUEUE.md
 - 실제 교재/문제풀이가 시작되면 본인 해석을 먼저 만든 뒤 O/X 검증을 통해 해석 오류의 종류를 잡는다.
 - 개별 문제의 실수와 반복되는 약점을 분리해서 기록하고, 다른 문제로 교정이 전이되는지 확인한다.
 - After Effects 기초 조작을 익혀 50초~1분 10초 분량의 가로형 타이포그래피 기반 모션그래픽 중간고사 작품을 완성한다.
+- 오늘은 Google Drive의 오징어게임 관련 레퍼런스 영상을 찾아 짧은 구간을 역설계하고 After Effects에서 따라 만들어본다.
 
 ## Active subjects
 
@@ -85,6 +86,8 @@ AFTER_EFFECTS = ACTIVE
 - Position / Scale / Opacity 키프레임 실습 완료.
 - Easy Ease와 Graph Editor / Speed Graph 실습 완료.
 - 중간고사 주제 후보는 `집 가고 싶다`이며 아직 최종 확정은 아니다.
+- 오늘의 즉시 목표는 Google Drive에 있는 것으로 예상되는 오징어게임 관련 레퍼런스 영상을 확보하고, 첫 짧은 구간을 요소와 타이밍으로 분해한 뒤 따라 만드는 것이다.
+- 레퍼런스 파일의 실제 위치와 영상 내용은 아직 확인 전이다.
 - 상세 기록: `study/logs/2026-09-10-after-effects-basics.md`
 
 ## Problem-memory operating rule
@@ -113,17 +116,20 @@ AFTER_EFFECTS = ACTIVE
 - PSAT에서의 독학 선호를 전반적인 학습 성향으로 성급하게 일반화하지 않는다.
 - 같은 문제를 외워서 맞힌 것을 교정 성공으로 오판하지 않고, 다른 문제로 전이되는지 확인한다.
 - After Effects 과제 작업 중 키프레임이 보이는 증빙용 작업 화면을 중간중간 캡처한다.
+- 레퍼런스 영상은 한 번에 전체를 흉내 내기보다 짧은 구간을 선택해 텍스트/도형/배경과 Transform 요소를 분해한 뒤 재현한다.
 
 ## Immediate next memory action
 
 ### After Effects
 
 ```text
-1. Rotation 기초를 익힌다.
-2. Text Layer를 만든다.
-3. Position / Scale / Opacity / Rotation을 실제 텍스트에 적용한다.
-4. Text Animator 기초를 익힌다.
-5. “집 가고 싶다” 주제의 60초 내외 콘티와 타임라인을 설계한다.
+1. Google Drive에서 오징어게임 관련 레퍼런스 영상 파일을 찾는다.
+2. 첫 장면 또는 짧은 구간을 선정한다.
+3. 텍스트 / 도형 / 배경과 Position / Scale / Opacity / Rotation 요소를 분해한다.
+4. 키프레임 타이밍을 잡고 Easy Ease / Speed Graph로 속도감을 맞춘다.
+5. 원본과 비교하면서 첫 구간을 재현한다.
+6. 필요한 시점에 Rotation / Text Layer / Text Animator를 추가로 익힌다.
+7. 이후 “집 가고 싶다” 주제의 60초 내외 콘티와 타임라인을 설계한다.
 ```
 
 ### PSAT

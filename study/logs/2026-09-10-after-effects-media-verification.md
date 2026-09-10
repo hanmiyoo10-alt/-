@@ -4,74 +4,101 @@
 
 After Effects 기초 실습 중 Google Drive에 올린 화면 녹화를 실제 프레임으로 확인할 수 있는지 기록한다.
 
-## 현재 미검증 영상
+## 대상 영상
 
 ```text
 파일: 화면 녹화 중 2026-09-10 140237.mp4
 Drive 표시 크기: 301,604,286 bytes (약 301.6 MB)
-상태: CONTENT_UNVERIFIED
+상태: CONTENT_VERIFIED_FOR_PSRT_COMBINATION
 ```
 
-Drive 폴더에서 파일 존재와 메타데이터는 확인했지만, 현재 사용 중인 원본 파일 가져오기 경로의 268,435,456-byte 제한보다 파일이 커서 원본 다운로드가 거부되었다. 따라서 이 영상 안의 After Effects 동작, 키프레임, P/S/R/T 조합 성공 여부는 아직 확인했다고 기록하지 않는다.
+초기에는 Drive 폴더에서 파일 존재와 메타데이터만 확인했고, 당시 사용 중이던 원본 파일 가져오기 경로의 268,435,456-byte 제한보다 파일이 커서 원본 다운로드가 거부되었다. 따라서 그 시점에는 영상 안의 After Effects 동작, 키프레임, P/S/R/T 조합 성공 여부를 확인했다고 기록하지 않았다.
 
-## 다음 검증 경로
+이후 별도 Android Termux + rclone 경로를 구성해 원본을 실제로 확보하고 프레임을 검토하면서 아래의 제한된 범위는 검증 완료로 갱신했다.
 
-다음 중 하나로 더 작은 증거를 확보한 뒤 다시 확인한다.
+## 초기 검증 경로
+
+처음에는 다음 중 하나로 더 작은 증거를 확보하는 경로를 검토했다.
 
 - 필요한 동작만 포함한 짧은 화면 녹화로 다시 올리기
 - 해상도/비트레이트를 낮춰 256 MiB 미만으로 내보내기
 - 키프레임과 Composition이 함께 보이는 스크린샷 또는 짧은 클립 올리기
 
-검증 전에는 기존 학습 진척을 유지하되, 이 새 영상이 증명하려던 단계는 완료로 승격하지 않는다.
+실제 해결은 원본을 다른 전송 경로로 Android에 받아 프레임을 직접 추출하는 방식으로 진행됐다.
 
 ## 원격 처리 가능성 확인
 
 Remote Desktop Commander의 연결 상태를 확인한 결과, 현재 온라인으로 보이는 두 장치는 모두 Android 환경이며 Windows 작업 PC는 온라인 장치로 확인되지 않았다.
 
-따라서 현재 상태에서는 원격 장치에서 해당 Windows 화면 녹화 원본을 직접 잘라낼 수 없다. 다만 원본 파일이 있는 Windows PC가 Remote Desktop Commander에 온라인으로 연결되면, 그 PC에서 `ffmpeg` 등으로 원본을 여러 짧은 클립으로 분할하거나 해상도/비트레이트를 낮춘 사본을 만든 뒤 256 MiB 제한 아래의 검증용 파일만 Drive에 올리는 경로를 사용할 수 있다.
-
-이 경로는 원본을 다시 녹화하지 않고도 검증 가능한 작은 증거를 만드는 대안으로 유지한다.
+따라서 당시 상태에서는 원격 장치에서 해당 Windows 화면 녹화 원본을 직접 잘라낼 수 없었다. 다만 원본 파일이 있는 Windows PC가 Remote Desktop Commander에 온라인으로 연결되면, 그 PC에서 `ffmpeg` 등으로 원본을 여러 짧은 클립으로 분할하거나 해상도/비트레이트를 낮춘 사본을 만든 뒤 256 MiB 제한 아래의 검증용 파일만 Drive에 올리는 경로도 대안으로 유지할 수 있다.
 
 ## Android 중계 우회 경로 확인
 
-Windows PC를 추가로 연결하지 않아도, 이미 연결된 Android 장치를 중계 지점으로 쓰는 가능성을 확인했다. 현재 원격 Android 환경에서는 `/storage/emulated/0/Download` 경로 접근이 가능하고 `termux-setup-storage`도 존재한다.
+Windows PC를 추가로 연결하지 않아도, 연결된 Android 장치를 중계 지점으로 쓰는 가능성을 확인했다. Android 환경에서 `/storage/emulated/0/Download` 접근이 가능했고, 이후 메인 Android의 Termux 네이티브 환경에 `rclone`과 `ffmpeg`를 설치해 이 우회 경로를 실제로 사용했다.
 
-따라서 사용자가 Google Drive 앱에서 문제의 MP4를 Android의 일반 `Download` 폴더로 직접 내려받을 수 있다면, Remote Desktop Commander가 그 로컬 파일을 찾아 후속 처리하는 경로가 성립할 가능성이 높다.
-
-현재 원격 Android에는 `ffmpeg` 실행 파일이 확인되지 않았다. 실제 영상 분할/재인코딩을 하려면 먼저 해당 장치에 `ffmpeg`를 설치하거나 동등한 로컬 영상 처리 도구를 사용할 필요가 있다. 설치는 사용자 승인 후에만 수행한다.
-
-또 다른 우회는 파일을 일시적으로 비로그인 다운로드 가능한 링크로 공개한 뒤 직접 HTTP로 가져오는 방식이지만, 현재 Drive 파일은 비로그인 직접 다운로드 시 Google 로그인 화면으로 리디렉션되어 이 경로는 현재 상태로는 사용할 수 없다.
+비로그인 다운로드 가능한 링크로 직접 HTTP 접근하는 방식도 검토했지만, 당시 Drive 파일은 비로그인 직접 다운로드 시 Google 로그인 화면으로 리디렉션되어 사용할 수 없었다.
 
 ## CLI / Skill / Git 대안 점검
 
-연결된 Android 원격 환경에서 현재 확인되는 CLI는 `git`, `curl`, `python3`이며 `rclone`, `ffmpeg`, `gdown`, `git-lfs`는 설치되어 있지 않다.
-
-- **CLI:** 가장 유력한 우회다. Android Termux에 `rclone`을 설치하고 Google Drive를 OAuth로 한 번 인증하면, Drive connector의 256 MiB 다운로드 제한과 다른 경로로 301.6 MB 원본을 Android 로컬 저장소에 받을 수 있다. 이후 `ffmpeg`를 설치해 짧은 검증용 클립으로 분할할 수 있다. 인증/설치는 사용자 승인 후 진행해야 한다.
-- **Skill:** Skill 자체는 파일 전송 한도를 우회하는 전송 수단이 아니다. 다만 위 CLI 경로가 안정화되면 `Drive 원본 찾기 → 로컬 다운로드 → 분할 → 검증용 클립 생성` 절차를 반복 가능한 skill/workflow로 묶는 것은 가능하다.
-- **Git:** 이 영상 원본을 Git 저장소에 넣는 방식은 사용하지 않는다. 기준 저장소는 public이고, 학습 화면 녹화 같은 비공개 원본을 Git에 올리는 것은 저장소의 민감/비공개 자료 비저장 원칙과 맞지 않는다. `git-lfs`도 현재 설치되어 있지 않으며, 설치 여부와 무관하게 이 목적의 전송 우회로로 삼지 않는다.
-
-현재 가장 현실적인 무-PC 우회 후보는 `Android Termux + rclone + ffmpeg` 경로다.
+- **CLI:** 실제 해결 경로가 됐다. Android Termux의 `rclone`로 Drive 원본을 받고, `ffmpeg`로 메타데이터 확인 및 프레임 추출을 수행했다.
+- **Skill:** Skill 자체는 파일 전송 한도를 우회하는 전송 수단은 아니다. 다만 `Drive 원본 찾기 → 로컬 다운로드 → 프레임/검증용 클립 생성 → 검토` 절차가 반복된다면 별도 workflow로 묶을 수 있다.
+- **Git:** 영상 원본은 Git 저장소에 넣지 않는다. 기준 저장소는 public이고, 학습 화면 녹화 같은 비공개 원본을 Git 전송 우회로로 사용하지 않는다.
 
 ## CLI 경로 실행 상태
 
-사용자 승인 후 Android의 Ubuntu/PRoot 환경에 `rclone 1.60.1`과 `ffmpeg 6.1.1` 설치를 완료했다. Google Drive용 `schooldrive` remote를 생성했고, 현재 남은 단계는 OAuth 인증 토큰 발급이다.
+초기 Android의 Ubuntu/PRoot 환경에는 `rclone 1.60.1`과 `ffmpeg 6.1.1`을 설치했으나, 브라우저 OAuth handoff와 환경 혼선 때문에 안정적인 검증 경로로 마무리되지 않았다.
 
-온라인으로 보이는 두 원격 세션은 모두 같은 Samsung `SM-G998N` 모델과 같은 Download 경로를 보고해 동일 단말의 중복 세션일 가능성이 있다. 사용자 요청에 따라 두 번째 온라인 세션에서 rclone OAuth 로컬 인증 URL을 브라우저로 열도록 시도했다. 인증 성공 여부는 아직 확인되지 않았다.
+이후 별도 메인 Android 장치를 Remote Desktop Commander에 연결했고, 그 장치의 **Termux 네이티브 환경**에서 `rclone 1.75.1-termux`와 `ffmpeg 8.1.2` 설치 완료를 실제 실행으로 확인했다.
 
-## 메인 Android 장치 추가 연결
+사용자 화면의 `root@localhost:...#` 프롬프트는 Ubuntu/PRoot의 root 환경이고, 최종적으로 사용한 rclone 설정·다운로드 표면은 Termux 앱 사용자 환경이었다. 두 환경은 HOME과 rclone 설정 경로가 다르므로, 이후 작업도 동일 환경으로 통일한다.
 
-사용자가 별도 메인 Android 장치에서 Remote Desktop Commander 기기 인증을 완료했고, 서버에서 새 온라인 장치로 나타나는 것을 확인했다. 기존 중복 의심 세션과는 별개의 장치임도 시스템 정보로 확인했다.
+OAuth 인증 자료가 터미널/대화 출력에 노출된 적이 있으므로 실제 토큰, 계정 주소, 기기 식별자 등 민감 정보는 이 공개 기록에 저장하지 않는다.
 
-해당 장치에는 Termux와 Node.js가 이미 준비되어 있고 원격 명령 실행이 가능하다. `rclone`과 `ffmpeg` 설치를 시작했으나, 패키지 설치 완료 여부는 아직 검증되지 않았다. 계정 주소, 기기 ID, 인증 코드 등 민감하거나 개인적인 연결 정보는 이 공개 기록에 저장하지 않는다.
+## 실제 Drive 접근 및 원본 확보 검증
 
-## 메인 Android 현재 상태 정리
+메인 Android 원격 세션을 다시 연결한 뒤 Termux 네이티브 환경에서 다음을 확인했다.
 
-메인 Android의 **Termux 네이티브 환경**에서 `rclone 1.75.1-termux`와 `ffmpeg 8.1.2` 설치 완료를 실제 실행으로 확인했다.
+```text
+rclone remote 이름: schooldrive
+Drive 접근 테스트: 성공
+대상 파일 조회: 성공
+Drive 파일 크기: 301,604,286 bytes
+Android 로컬 사본 크기: 301,604,286 bytes
+```
 
-Google Drive OAuth 흐름은 한 번 `Got code`까지 도달해 인증 자체가 성공한 증거는 확보했다. 다만 그 실행은 인증 정보를 출력하는 `authorize` 흐름이었고, `schooldrive`라는 remote 이름이 존재한다는 사실만으로 해당 인증 정보가 현재 rclone 설정에 정상 저장되었다고 간주하지 않는다. 실제 Drive 접근 검증은 아직 필요하다.
+Drive 접근 테스트는 저장 용량 정보만 요청하는 읽기 작업으로 성공 여부를 확인했고, 대상 폴더에서는 정확한 파일명과 크기가 조회됐다. 이후 원본을 Android의 검증용 Download 하위 폴더로 복사했고 로컬 `stat` 결과가 Drive 표시 크기와 정확히 일치했다.
 
-또한 사용자 화면의 `root@localhost:...#` 프롬프트는 Ubuntu/PRoot의 root 환경이고, Remote Desktop Commander가 현재 명령을 실행하는 표면은 Termux 앱 사용자 환경임을 확인했다. 두 환경은 HOME과 rclone 설정 경로가 다르므로, 한쪽에서 만든 설정이 다른 쪽에 자동으로 나타난다고 가정하지 않는다. 이후 rclone 설정·검증은 한 환경으로 통일해서 진행한다.
+`ffprobe`로 확인한 로컬 원본 메타데이터는 다음과 같다.
 
-OAuth 인증 자료가 터미널/대화 출력에 노출된 적이 있으므로 해당 인증을 장기적으로 재사용하기보다 기존 권한을 폐기하고 새 인증으로 교체하는 쪽을 안전한 다음 단계로 둔다. 실제 토큰, 계정 주소, 기기 식별자 등 민감 정보는 이 기록에 저장하지 않는다.
+```text
+video codec: H.264
+frame size: 1918 x 1030
+frame rate: 30 fps
+duration: 약 285.18초
+```
 
-현재 메인 Android의 Remote Desktop Commander 세션은 오프라인으로 확인되어 원격 `rclone` 접근 테스트를 수행할 수 없다. 따라서 다음 필수 단계는 `원격 세션 재연결 → schooldrive 실제 접근 확인 → 대상 MP4 확보 → ffmpeg로 검증용 사본 생성 → 실제 프레임 검증` 순서이며, 이 전까지 대상 영상과 P/S/R/T 조합은 계속 `CONTENT_UNVERIFIED`로 유지한다.
+이 검증은 원본 Drive 파일을 수정하거나 삭제하지 않고 로컬 사본만 사용했다.
+
+## 실제 프레임 검증 결과
+
+전체 녹화에서 10초 간격 접촉시트를 만들고, 후반 Transform 실습 구간에는 2초 간격 접촉시트와 고해상도 개별 프레임을 추가로 추출해 확인했다.
+
+고해상도 프레임에서는 한 Shape Layer의 Layer Transform 아래 `Position`, `Scale`, `Rotation`, `Opacity` 네 항목 모두 애니메이션 스톱워치가 활성화되어 있었고, 같은 짧은 타임라인 구간에 복수 키프레임이 배치된 상태가 확인됐다. 별도 프레임에서는 Position 좌표, Scale 값, Rotation 각도, Opacity 값이 서로 다른 상태로 나타났고, 접촉시트의 연속 샘플에서도 사각형의 위치·크기·회전이 달라지는 것이 보였다.
+
+특히 Opacity는 0%인 시점이 확인됐고, 선택된 레이어의 바운딩 박스는 남아 있지만 실제 Stroke는 보이지 않는 상태여서 값 변화와 화면 상태가 일치했다.
+
+따라서 이 영상이 증명하려던 범위인 **P/S/R/T 네 기본 Transform을 한 짧은 구간에서 함께 키프레임으로 구성한 사실**은 검증 완료로 본다.
+
+다만 이 상태 라벨은 4분 45초 전체 녹화의 모든 동작을 프레임 단위로 전수 검증했다는 뜻은 아니다. 현재 검증 범위는 `대상 원본 확보의 무결성 + P/S/R/T 조합 구간의 실제 프레임 확인`에 한정한다.
+
+## 현재 결론
+
+```text
+DRIVE_ACCESS = VERIFIED
+LOCAL_COPY_BYTE_MATCH = VERIFIED
+VIDEO_DECODING = VERIFIED
+PSRT_COMBINATION = VERIFIED
+FULL_RECORDING_EXHAUSTIVE_REVIEW = NOT_CLAIMED
+```
+
+학습 진척 기준으로는 P/S/R/T 자유 조합 단계를 완료로 승격할 수 있다. 다음 단계는 키프레임 간격 변화로 조합 모션의 속도를 다시 의도적으로 바꿔 보거나, 교수 예제의 원위치 복귀/Opacity 처리와 레퍼런스 응용으로 넘어가는 것이다.

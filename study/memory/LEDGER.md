@@ -185,3 +185,20 @@ Related memory IDs: E-2026-09-10-003, E-2026-09-10-005, E-2026-09-10-006, E-2026
 Follow-up trigger: 동일 조합을 별도 안내 없이 다시 만들거나, 키프레임 간격을 바꿔 속도 차이를 의도적으로 재현하는지 확인.
 Resolution / later evidence: 대용량 원본의 바이트 크기 일치, ffprobe 메타데이터 확인, 접촉시트 및 고해상도 프레임 검토로 P/S/R/T 동시 키프레임 구성을 확인함. 기술 검증 세부는 study/logs/2026-09-10-after-effects-media-verification.md 참조.
 ```
+
+### E-2026-09-10-009 — P/S/R/T 조합의 키프레임 간격 변화로 속도 차이 재확인
+
+```text
+Entry ID: E-2026-09-10-009
+Date: 2026-09-10
+Subject / scope: After Effects / 조합 모션 타이밍
+Status: OBSERVED
+Observation: `화면 녹화 중 2026-09-10 155706.mp4`를 실제 프레임으로 검토했다. P/S/R/T 조합 모션의 끝 키프레임들을 뒤쪽으로 옮긴 뒤 재생한 구간에서, 사각형이 이전보다 긴 시간에 걸쳐 위치·크기·회전 상태를 변화시키는 것이 확인됐다. 기존 최종값이 Position 오른쪽 이동, Scale 150%, Rotation 90° 등으로 크게 잡혀 있어 화면상 변화가 과장되게 커지는 모습도 함께 확인됐다.
+Context: P/S/R/T 자유 조합 단계 검증 직후, 같은 값 변화에서 키프레임 간격만 넓혀 속도 차이를 다시 체감하는 연습.
+Result: 키프레임 간격을 넓히면 같은 Transform 변화가 더 느린 시간축으로 재생된다는 점을 조합 모션에서도 재확인했다.
+Interpretation: 단독 Position 연습에서 익힌 `키프레임 간격 = 속도` 개념을 여러 Transform이 동시에 적용된 경우에도 연결할 수 있다. 과장된 화면 크기 변화는 오류라기보다 현재 조합의 큰 Scale/Position/Rotation 최종값이 동시에 보간된 결과다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-10-003, E-2026-09-10-008
+Follow-up trigger: 교수 예제의 24초 부근 원위치 복귀/Opacity 처리에서 시작 상태를 복사해 되돌리는 흐름을 적용하는지 확인.
+Resolution / later evidence: Drive 원본 175,386,030 bytes를 직접 내려받아 ffprobe와 다중 시점 프레임 접촉시트 및 고해상도 프레임으로 확인함.
+```

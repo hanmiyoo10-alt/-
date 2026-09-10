@@ -103,9 +103,11 @@ function terminalDurable(f,disposition='ALREADY_DURABLE'){
 function readState(f){return JSON.parse(fs.readFileSync(f.state,'utf8'));}
 function makeSemanticCommit(f,{state=null,extra=null,message='semantic variant'}={}){
   git(f.work,'reset','--hard',f.baseSha);
-  if(state!==null)fs.writeFileSync(path.join(f.work,'state.txt'),state);
-  if(extra!==null)fs.writeFileSync(path.join(f.work,'extra.txt'),extra);
-  git(f.work,'add','.');git(f.work,'commit','-m',message);const commit=git(f.work,'rev-parse','HEAD');git(f.work,'reset','--hard',f.baseSha);return commit;
+  const staged=[];
+  if(state!==null){fs.writeFileSync(path.join(f.work,'state.txt'),state);staged.push('state.txt');}
+  if(extra!==null){fs.writeFileSync(path.join(f.work,'extra.txt'),extra);staged.push('extra.txt');}
+  if(staged.length===0)throw new Error('semantic variant requires an explicit changed path');
+  git(f.work,'add',...staged);git(f.work,'commit','-m',message);const commit=git(f.work,'rev-parse','HEAD');git(f.work,'reset','--hard',f.baseSha);return commit;
 }
 function testSuccess(base){
   const f=fixture(base,'success');const r=runConsume(f);if(r.status!==0)throw new Error(`success consume failed ${r.stderr}`);const report=JSON.parse(fs.readFileSync(path.join(f.work,'consume.json')));if(report.result!=='CHECKED_PR_MERGED'||report.validationRunId!==101||report.prNumber!==77)throw new Error('success report invalid');

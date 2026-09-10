@@ -202,3 +202,20 @@ Related memory IDs: E-2026-09-10-003, E-2026-09-10-008
 Follow-up trigger: 교수 예제의 24초 부근 원위치 복귀/Opacity 처리에서 시작 상태를 복사해 되돌리는 흐름을 적용하는지 확인.
 Resolution / later evidence: Drive 원본 175,386,030 bytes를 직접 내려받아 ffprobe와 다중 시점 프레임 접촉시트 및 고해상도 프레임으로 확인함.
 ```
+
+### E-2026-09-10-010 — AE 첫 학습일 종료 상태와 24초 복귀 미완료 구간 확정
+
+```text
+Entry ID: E-2026-09-10-010
+Date: 2026-09-10
+Subject / scope: After Effects / 일일 학습 마감
+Status: OBSERVED
+Observation: 하루 동안 영어 UI 전환, Composition/Shape Layer, Align/Anchor Point, Position/Scale/Rotation/Opacity 단독 키프레임, 키프레임 간격에 따른 속도 변화, Easy Ease, Speed Graph, Hold Keyframe, P/S/R/T 자유 조합, 조합 모션의 키프레임 간격 변화까지 실제 조작 및 화면 증거로 확인했다. 마지막 화면 녹화 `화면 녹화 중 2026-09-10 163504.mp4`에서는 Composition Duration이 30초로 변경되어 있고 24초에 Opacity 100% 키프레임이 생성된 것을 확인했다. 그러나 24초의 Position/Scale/Rotation은 약 `1577,542 / 150% / 90°`로 남아 있어 정상 원위치 복귀는 아직 완료되지 않았다. 녹화 마지막 0초 상태도 약 `1577,542 / 150% / 90° / 0%`로 보여 시작 키프레임 상태 재확인이 필요하다.
+Context: 교수 2주차 흐름의 기본 Transform 반복 연습을 마무리하고 다음 학습일 재개 지점을 고정하는 과정.
+Result: 오늘의 기본 조작 학습은 다수 항목에서 검증됐지만, `24초 원위치 복귀` 단계는 미완료 상태로 남겼다. 상세 최신 검토는 `study/logs/2026-09-10-after-effects-24s-return-review.md`가 소유한다.
+Interpretation: 다음 학습일에는 24초에서 Position `960,540`, Scale `100%`, Rotation `0°`, Opacity `100%`를 맞춘 뒤 0초 시작 상태를 확인하고 재생으로 원상복귀를 검증해야 한다. 이 필수 검증이 끝나기 전에는 24초 복귀를 완료로 간주하지 않는다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-10-003, E-2026-09-10-005, E-2026-09-10-006, E-2026-09-10-007, E-2026-09-10-008, E-2026-09-10-009
+Follow-up trigger: 다음 AE 세션 시작 시 24초 P/S/R/T 정상값과 0초 시작 상태를 화면에서 확인하고 전체 복귀 재생을 검증한다.
+Resolution / later evidence: OPEN — 다음 학습일 검증 대기.
+```

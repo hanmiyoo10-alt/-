@@ -73,8 +73,7 @@ function validateTerminalInputs(report){
   if(!Array.isArray(report.changedPaths)||report.changedPaths.length===0)fail('R2_8_CHECKED_PR_TERMINAL_REPORT_INVALID','changedPaths');
   if(report.gateway!=='scripts/repo-main-write.py'||report.mainMutation!=='CHECKED_PR_PENDING')fail('R2_8_CHECKED_PR_TERMINAL_REPORT_INVALID','gateway');
   const cp=validateCheckedPr(report.checkedPr,'R2_8_CHECKED_PR_TERMINAL_REPORT_INVALID');
-  if(cp.commit!==report.payloadCommit)fail('R2_8_CHECKED_PR_TERMINAL_REPORT_INVALID','payloadCommit mismatch');
-  return {kind:'TERMINAL',releaseId:report.releaseId,productionCommit:report.productionCommit,changedPaths:report.changedPaths,cp,mainGateResult:report.result};
+  return {kind:'TERMINAL',releaseId:report.releaseId,productionCommit:report.productionCommit,payloadCommit:report.payloadCommit,changedPaths:report.changedPaths,cp,mainGateResult:report.result};
 }
 function assertExactPayload(root,base,commit,expected){
   cmd(root,'git',['fetch','--no-tags','origin','main']);
@@ -83,6 +82,20 @@ function assertExactPayload(root,base,commit,expected){
   const actual=cmd(root,'git',['diff','--name-only',`${base}...${commit}`]).stdout.split(/\r?\n/).filter(Boolean).sort();
   const wanted=uniqueSorted(expected);
   if(JSON.stringify(actual)!==JSON.stringify(wanted))fail('R2_6_CHECKED_PR_PATH_SET_MISMATCH',`actual=${JSON.stringify(actual)} expected=${JSON.stringify(wanted)}`);
+}
+function assertTerminalSemanticPayload(root,payloadCommit,expected){
+  const exists=cmd(root,'git',['cat-file','-e',`${payloadCommit}^{commit}`],{check:false});
+  if(exists.status!==0)fail('R2_8_CHECKED_PR_PAYLOAD_INVALID',payloadCommit);
+  const parent=out(root,'git',['rev-parse',`${payloadCommit}^`],'R2_8_CHECKED_PR_PAYLOAD_INVALID');
+  const actual=cmd(root,'git',['diff','--name-only',parent,payloadCommit]).stdout.split(/\r?\n/).filter(Boolean).sort();
+  const wanted=uniqueSorted(expected);
+  if(JSON.stringify(actual)!==JSON.stringify(wanted))fail('R2_8_CHECKED_PR_PAYLOAD_PATH_SET_MISMATCH',`actual=${JSON.stringify(actual)} expected=${JSON.stringify(wanted)}`);
+}
+function assertTerminalReplayParity(root,payloadCommit,checkedCommit,expected){
+  const wanted=uniqueSorted(expected);
+  const parity=cmd(root,'git',['diff','--quiet',payloadCommit,checkedCommit,'--',...wanted],{check:false});
+  if(parity.status===1)fail('R2_8_CHECKED_PR_REPLAY_PARITY_MISMATCH',`payload=${payloadCommit} checked=${checkedCommit}`);
+  if(parity.status!==0)fail('R2_8_CHECKED_PR_REPLAY_PARITY_CHECK_FAIL',`status=${parity.status}`);
 }
 function queryExactOpenPr(root,repo,title,base,commit,ref){
   const all=ghJson(root,['api','--method','GET',`repos/${repo}/pulls`,'-f','state=open','-f','base=main','-f','per_page=100']);
@@ -172,12 +185,16 @@ function verifyDurableBytes(root,commit,paths){
   return main;
 }
 function consumeNormalized(root,input,reportPath){
-  const {kind,releaseId,productionCommit,changedPaths,cp}=input;
+  const {kind,releaseId,productionCommit,payloadCommit,changedPaths,cp}=input;
   const repo=requireRepo();
   assertMainBase(root,cp.base);
   if(kind==='TERMINAL')assertTerminalProduction(root,productionCommit);
   const remote=remoteHead(root,cp.ref);if(remote!==cp.commit)fail('R2_6_CHECKED_PR_REF_MOVED',`expected=${cp.commit} actual=${remote||'MISSING'}`);
   assertExactPayload(root,cp.base,cp.commit,changedPaths);
+  if(kind==='TERMINAL'){
+    assertTerminalSemanticPayload(root,payloadCommit,changedPaths);
+    assertTerminalReplayParity(root,payloadCommit,cp.commit,changedPaths);
+  }
   const pr=resolveOrCreatePr(root,repo,releaseId,cp.base,cp.commit,cp.ref,{assistantCreateFallback:kind==='TERMINAL'});
   const runId=dispatchRecoveryCi(root,repo,cp,productionCommit);
   assertMainBase(root,cp.base);

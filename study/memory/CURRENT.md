@@ -35,7 +35,7 @@ REVIEW_QUEUE_SOURCE = study/problems/REVIEW_QUEUE.md
 - 실제 교재/문제풀이가 시작되면 본인 해석을 먼저 만든 뒤 O/X 검증을 통해 해석 오류의 종류를 잡는다.
 - 개별 문제의 실수와 반복되는 약점을 분리해서 기록하고, 다른 문제로 교정이 전이되는지 확인한다.
 - After Effects 기초 조작을 익혀 50초~1분 10초 분량의 가로형 타이포그래피 기반 모션그래픽 중간고사 작품을 완성한다.
-- 오늘은 확보한 오징어게임 인트로 모션 로고 레퍼런스의 0~3초 구간부터 역설계하고 After Effects에서 따라 만든다.
+- **2026-09-10 즉시 목표:** 교수 수업의 오늘 목표에 맞춰 AE 기본 조작 흐름에 익숙해진다. 기본 도형 생성 → 중앙 정렬/Anchor Point → Position / Scale / Rotation / Opacity → 키프레임 시작·끝점 → 키프레임 간격으로 속도 조절을 반복 연습하고, 오징어게임 로고는 이 기본기를 적용하는 응용 예제로 사용한다.
 
 ## Active subjects
 
@@ -85,12 +85,15 @@ AFTER_EFFECTS = ACTIVE
 - Composition과 Shape Layer 생성 실습 완료.
 - Position / Scale / Opacity 키프레임 실습 완료.
 - Easy Ease와 Graph Editor / Speed Graph 실습 완료.
+- Rotation은 아직 별도 반복 연습이 남아 있다.
 - 중간고사 주제 후보는 `집 가고 싶다`이며 아직 최종 확정은 아니다.
-- 기준 레퍼런스 파일을 확인했다: `Squid Game - Intro motion logo - English version (1080p).mp4`.
+- 기준 레퍼런스 파일: `Squid Game - Intro motion logo - English version (1080p).mp4`.
 - Drive 정리 경로: `학교_전공공부 → 01_과목자료 → 영상편집실습`.
-- 레퍼런스는 1920x1080, 30fps, 약 18.09초다.
-- 전체 흐름은 검은 배경 위 기하학적 요소 조립 → 한글 로고 완성/분해 → 영어 SQUID GAME 로고 조립/완성 → 페이드 아웃 구조다.
-- 오늘의 즉시 목표는 0~3초 첫 조립 구간을 Shape Layer와 기본 Transform 키프레임으로 재현하는 것이다.
+- 수업 녹음/전사: `음성 260910_091822.m4a`, `음성 260910_091822_original.txt`.
+- 녹음에서 교수는 약 09:29에 처음 다루는 학생 기준의 기본 습득을 오늘 목표로 설명하고, 기본 도형 연습 뒤 오징어게임 로고 형태로 확장할 계획을 말한다.
+- 약 16:31에는 기초 모션 네 가지로 Position / Scale / Rotation / Opacity를 제시하고 하나씩 연습한다고 설명한다.
+- 약 21:41에는 움직임에 최소 두 개 이상의 키프레임이 필요하다고 설명하고, 약 22:23부터 키프레임 간격으로 속도를 조절하는 원리를 다룬다.
+- 따라서 오늘의 학습 성공 기준은 오징어게임 영상을 완성하는 것이 아니라, 위 기본 조작을 스스로 반복할 수 있을 정도로 익숙해지는 것이다.
 - 상세 기록: `study/logs/2026-09-10-after-effects-basics.md`
 
 ## Problem-memory operating rule
@@ -119,22 +122,21 @@ AFTER_EFFECTS = ACTIVE
 - PSAT에서의 독학 선호를 전반적인 학습 성향으로 성급하게 일반화하지 않는다.
 - 같은 문제를 외워서 맞힌 것을 교정 성공으로 오판하지 않고, 다른 문제로 전이되는지 확인한다.
 - After Effects 과제 작업 중 키프레임이 보이는 증빙용 작업 화면을 중간중간 캡처한다.
-- 레퍼런스 영상은 한 번에 전체를 흉내 내기보다 짧은 구간을 선택해 텍스트/도형/배경과 Transform 요소를 분해한 뒤 재현한다.
+- AE 초반에는 결과물 완성 속도보다 기본 조작을 반복해서 손에 익히는 것을 우선한다.
 
 ## Immediate next memory action
 
 ### After Effects
 
 ```text
-1. 기준 MP4를 AE 프로젝트에 import한다.
-2. 1920x1080 / 30fps 컴포지션을 기준 영상에 맞춘다.
-3. 0~3초 구간을 재생하며 도형 요소와 등장 순서를 분해한다.
-4. Shape Layer로 원/삼각형/사각형/선 요소를 만든다.
-5. Position / Scale / Opacity 중심으로 키프레임을 잡는다.
-6. 필요한 경우 Rotation을 추가한다.
-7. Easy Ease / Speed Graph로 원본 속도감에 맞춘다.
-8. 원본과 비교하면서 첫 구간을 완성한다.
-9. 이후 Text Layer / Text Animator를 익히고 “집 가고 싶다” 과제 콘티로 전이한다.
+1. Shape Layer로 정사각형/원/삼각형 같은 기본 도형을 다시 만든다.
+2. Align과 Anchor Point 중앙 배치를 반복한다.
+3. Position / Scale / Rotation / Opacity를 각각 단독으로 한 번씩 만든다.
+4. 각 모션에서 시작/끝 키프레임을 직접 찍는다.
+5. 키프레임 간격을 넓히고 좁혀 속도 변화가 어떻게 생기는지 확인한다.
+6. Easy Ease / Speed Graph는 기본 키프레임 감각을 강화하는 보조 연습으로 사용한다.
+7. 익숙해지면 오징어게임 레퍼런스의 짧은 구간을 응용 문제로 재현한다.
+8. 이후 Text Layer / Text Animator와 “집 가고 싶다” 과제 콘티로 전이한다.
 ```
 
 ### PSAT

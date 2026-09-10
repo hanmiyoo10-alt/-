@@ -134,3 +134,20 @@ Related memory IDs: E-2026-09-10-003
 Follow-up trigger: 다음 Rotation 작업에서 `x`와 `°` 필드를 혼동하지 않고 원하는 각도를 독립적으로 설정하는지 확인.
 Resolution / later evidence: 두 번째 화면 녹화에서 `0x+90°`와 두 Rotation 키프레임, 사각형의 90도 회전을 확인함.
 ```
+
+### E-2026-09-10-006 — Opacity 단독 재연습을 화면 녹화로 재확인
+
+```text
+Entry ID: E-2026-09-10-006
+Date: 2026-09-10
+Subject / scope: After Effects / Opacity 기본 조작 재연습
+Status: OBSERVED
+Observation: 새 화면 녹화에서 Shape Layer의 Layer Transform Opacity에 0초 `100%`, 1초 `0%` 키프레임이 잡혀 있고, 재생 구간에서 사각형 선이 점차 사라지는 변화가 확인됐다.
+Context: 교수 수업 흐름에 맞춰 Position → Scale → Rotation → Opacity를 기본 도형으로 다시 반복하는 과정.
+Result: Opacity 두 키프레임으로 100%에서 0%로 변하는 기본 페이드 아웃을 다시 만들었고, 이번 재연습 기준으로 Position / Scale / Rotation / Opacity 네 기본 Transform을 모두 한 번씩 다시 확인했다.
+Interpretation: 기본 P/S/R/T 단독 조작 재연습은 완료된 것으로 보고, 다음 단계는 교수 흐름의 Toggle Hold Keyframe과 기본 Transform 조합 연습이 적절하다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-10-003, E-2026-09-10-005
+Follow-up trigger: Hold keyframe을 일반 보간과 비교해 보고, P/S/R/T를 자유 조합한 짧은 모션을 스스로 구성하는지 확인.
+Resolution / later evidence: `화면 녹화 중 2026-09-10 132957.mp4`에서 두 Opacity 키프레임과 1초 지점 `0%`, 재생 중 페이드 변화를 확인함.
+```

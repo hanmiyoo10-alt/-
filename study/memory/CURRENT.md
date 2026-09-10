@@ -35,7 +35,7 @@ REVIEW_QUEUE_SOURCE = study/problems/REVIEW_QUEUE.md
 - 실제 교재/문제풀이가 시작되면 본인 해석을 먼저 만든 뒤 O/X 검증을 통해 해석 오류의 종류를 잡는다.
 - 개별 문제의 실수와 반복되는 약점을 분리해서 기록하고, 다른 문제로 교정이 전이되는지 확인한다.
 - After Effects 기초 조작을 익혀 50초~1분 10초 분량의 가로형 타이포그래피 기반 모션그래픽 중간고사 작품을 완성한다.
-- 오늘은 Google Drive의 오징어게임 관련 레퍼런스 영상을 찾아 짧은 구간을 역설계하고 After Effects에서 따라 만들어본다.
+- 오늘은 확보한 오징어게임 인트로 모션 로고 레퍼런스의 0~3초 구간부터 역설계하고 After Effects에서 따라 만든다.
 
 ## Active subjects
 
@@ -86,8 +86,11 @@ AFTER_EFFECTS = ACTIVE
 - Position / Scale / Opacity 키프레임 실습 완료.
 - Easy Ease와 Graph Editor / Speed Graph 실습 완료.
 - 중간고사 주제 후보는 `집 가고 싶다`이며 아직 최종 확정은 아니다.
-- 오늘의 즉시 목표는 Google Drive에 있는 것으로 예상되는 오징어게임 관련 레퍼런스 영상을 확보하고, 첫 짧은 구간을 요소와 타이밍으로 분해한 뒤 따라 만드는 것이다.
-- 레퍼런스 파일의 실제 위치와 영상 내용은 아직 확인 전이다.
+- 기준 레퍼런스 파일을 확인했다: `Squid Game - Intro motion logo - English version (1080p).mp4`.
+- Drive 정리 경로: `학교_전공공부 → 01_과목자료 → 영상편집실습`.
+- 레퍼런스는 1920x1080, 30fps, 약 18.09초다.
+- 전체 흐름은 검은 배경 위 기하학적 요소 조립 → 한글 로고 완성/분해 → 영어 SQUID GAME 로고 조립/완성 → 페이드 아웃 구조다.
+- 오늘의 즉시 목표는 0~3초 첫 조립 구간을 Shape Layer와 기본 Transform 키프레임으로 재현하는 것이다.
 - 상세 기록: `study/logs/2026-09-10-after-effects-basics.md`
 
 ## Problem-memory operating rule
@@ -123,13 +126,15 @@ AFTER_EFFECTS = ACTIVE
 ### After Effects
 
 ```text
-1. Google Drive에서 오징어게임 관련 레퍼런스 영상 파일을 찾는다.
-2. 첫 장면 또는 짧은 구간을 선정한다.
-3. 텍스트 / 도형 / 배경과 Position / Scale / Opacity / Rotation 요소를 분해한다.
-4. 키프레임 타이밍을 잡고 Easy Ease / Speed Graph로 속도감을 맞춘다.
-5. 원본과 비교하면서 첫 구간을 재현한다.
-6. 필요한 시점에 Rotation / Text Layer / Text Animator를 추가로 익힌다.
-7. 이후 “집 가고 싶다” 주제의 60초 내외 콘티와 타임라인을 설계한다.
+1. 기준 MP4를 AE 프로젝트에 import한다.
+2. 1920x1080 / 30fps 컴포지션을 기준 영상에 맞춘다.
+3. 0~3초 구간을 재생하며 도형 요소와 등장 순서를 분해한다.
+4. Shape Layer로 원/삼각형/사각형/선 요소를 만든다.
+5. Position / Scale / Opacity 중심으로 키프레임을 잡는다.
+6. 필요한 경우 Rotation을 추가한다.
+7. Easy Ease / Speed Graph로 원본 속도감에 맞춘다.
+8. 원본과 비교하면서 첫 구간을 완성한다.
+9. 이후 Text Layer / Text Animator를 익히고 “집 가고 싶다” 과제 콘티로 전이한다.
 ```
 
 ### PSAT

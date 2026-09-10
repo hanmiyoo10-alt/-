@@ -117,3 +117,20 @@ Related memory IDs: E-2026-09-10-003
 Follow-up trigger: Google Drive에서 레퍼런스 파일을 찾고, 첫 장면의 타이밍·텍스트·Transform 요소를 분해해 실제로 재현하기 시작했는지 확인.
 Resolution / later evidence: 파일 위치와 정확한 영상 내용은 아직 확인 전.
 ```
+
+### E-2026-09-10-005 — Rotation 단위 혼동을 화면 증거로 교정
+
+```text
+Entry ID: E-2026-09-10-005
+Date: 2026-09-10
+Subject / scope: After Effects / Rotation 기본 조작
+Status: OBSERVED
+Observation: Rotation 실습의 첫 화면 녹화에서 2초 키프레임 값이 `90x+0°`로 입력되어, 1초 중간값이 `45x+0°`로 나타나는 90회전 애니메이션이 만들어졌다. 이어 올린 두 번째 화면 녹화에서는 2초 값을 `0x+90°`로 고쳐 사각형이 가로에서 세로로 90도 회전하는 것을 확인했다.
+Context: 교수 수업 흐름에 맞춰 Position → Scale → Rotation → Opacity를 기본 도형으로 다시 반복하는 과정.
+Result: AE Rotation의 왼쪽 `x` 값은 회전 횟수(revolutions), 오른쪽 `°` 값은 추가 각도라는 차이를 실제 오류와 수정으로 확인했고, Rotation 두 키프레임 동작을 정상 재현했다.
+Interpretation: 숫자 `90`을 입력할 때는 `90x`가 아니라 `0x+90°`가 되어야 한다는 단위 구분을 다음 Rotation 작업의 즉시 점검 항목으로 두는 것이 유용하다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-10-003
+Follow-up trigger: 다음 Rotation 작업에서 `x`와 `°` 필드를 혼동하지 않고 원하는 각도를 독립적으로 설정하는지 확인.
+Resolution / later evidence: 두 번째 화면 녹화에서 `0x+90°`와 두 Rotation 키프레임, 사각형의 90도 회전을 확인함.
+```

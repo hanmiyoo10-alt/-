@@ -100,3 +100,20 @@ Related memory IDs: 없음
 Follow-up trigger: Rotation과 Text Layer / Text Animator를 익힌 뒤 실제 과제 콘티에 기본 모션을 적용하는지 확인.
 Resolution / later evidence: 상세 세션 기록은 study/logs/2026-09-10-after-effects-basics.md 참조.
 ```
+
+### E-2026-09-10-004 — 오늘의 AE 목표를 레퍼런스 따라 만들기로 구체화
+
+```text
+Entry ID: E-2026-09-10-004
+Date: 2026-09-10
+Subject / scope: After Effects / 오늘 실습 목표
+Status: OBSERVED
+Observation: 사용자는 Google Drive에 있는 것으로 예상되는 오징어게임 관련 영상 파일을 레퍼런스로 삼아, 오늘 After Effects에서 그 영상의 모션을 따라 만들어보는 것을 목표로 정했다.
+Context: Position / Scale / Opacity / Easy Ease / Speed Graph 기초 실습 직후, 실제 레퍼런스 복제로 학습 단계를 올리는 시점.
+Result: 오늘 세션의 다음 작업은 레퍼런스 영상을 확보한 뒤 장면을 분해하고, 이미 익힌 Transform 키프레임과 속도 조절을 이용해 재현하는 것으로 구체화됨.
+Interpretation: 단순 기능별 연습에서 실제 모션 역설계와 재현 중심 실습으로 넘어가는 단계다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-10-003
+Follow-up trigger: Google Drive에서 레퍼런스 파일을 찾고, 첫 장면의 타이밍·텍스트·Transform 요소를 분해해 실제로 재현하기 시작했는지 확인.
+Resolution / later evidence: 파일 위치와 정확한 영상 내용은 아직 확인 전.
+```

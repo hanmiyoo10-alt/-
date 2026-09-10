@@ -57,3 +57,9 @@ Windows PC를 추가로 연결하지 않아도, 이미 연결된 Android 장치�
 사용자 승인 후 Android의 Ubuntu/PRoot 환경에 `rclone 1.60.1`과 `ffmpeg 6.1.1` 설치를 완료했다. Google Drive용 `schooldrive` remote를 생성했고, 현재 남은 단계는 OAuth 인증 토큰 발급이다.
 
 온라인으로 보이는 두 원격 세션은 모두 같은 Samsung `SM-G998N` 모델과 같은 Download 경로를 보고해 동일 단말의 중복 세션일 가능성이 있다. 사용자 요청에 따라 두 번째 온라인 세션에서 rclone OAuth 로컬 인증 URL을 브라우저로 열도록 시도했다. 인증 성공 여부는 아직 확인되지 않았다.
+
+## 메인 Android 장치 추가 연결
+
+사용자가 별도 메인 Android 장치에서 Remote Desktop Commander 기기 인증을 완료했고, 서버에서 새 온라인 장치로 나타나는 것을 확인했다. 기존 중복 의심 세션과는 별개의 장치임도 시스템 정보로 확인했다.
+
+해당 장치에는 Termux와 Node.js가 이미 준비되어 있고 원격 명령 실행이 가능하다. `rclone`과 `ffmpeg` 설치를 시작했으나, 패키지 설치 완료 여부는 아직 검증되지 않았다. 계정 주소, 기기 ID, 인증 코드 등 민감하거나 개인적인 연결 정보는 이 공개 기록에 저장하지 않는다.

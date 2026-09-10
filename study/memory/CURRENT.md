@@ -83,17 +83,17 @@ AFTER_EFFECTS = ACTIVE
 
 - 영어 UI 전환 완료.
 - Composition과 Shape Layer 생성 실습 완료.
-- Position / Scale / Opacity 키프레임 실습 완료.
+- Position / Scale / Opacity 키프레임 실습 이력이 있고, 이번 교수 흐름 재연습에서는 Position / Scale / Rotation까지 다시 확인 완료.
+- Position 키프레임 간격을 넓혀 같은 이동을 더 느리게 만드는 속도 변화를 실제 화면에서 재확인했다.
+- Rotation 재연습에서 처음에는 `90x+0°`로 입력해 90회전이 걸렸고, 두 번째 화면 녹화에서 `0x+90°`로 수정해 사각형이 90도 회전하는 것을 확인했다. 다음 Rotation 작업에서는 `x`(회전 횟수)와 `°`(추가 각도) 필드를 구분한다.
 - Easy Ease와 Graph Editor / Speed Graph 실습 완료.
-- Rotation은 아직 별도 반복 연습이 남아 있다.
 - 중간고사 주제 후보는 `집 가고 싶다`이며 아직 최종 확정은 아니다.
 - 기준 레퍼런스 파일: `Squid Game - Intro motion logo - English version (1080p).mp4`.
 - Drive 정리 경로: `학교_전공공부 → 01_과목자료 → 영상편집실습`.
-- 수업 녹음/전사: `음성 260910_091822.m4a`, `음성 260910_091822_original.txt`.
-- 녹음에서 교수는 약 09:29에 처음 다루는 학생 기준의 기본 습득을 오늘 목표로 설명하고, 기본 도형 연습 뒤 오징어게임 로고 형태로 확장할 계획을 말한다.
-- 약 16:31에는 기초 모션 네 가지로 Position / Scale / Rotation / Opacity를 제시하고 하나씩 연습한다고 설명한다.
-- 약 21:41에는 움직임에 최소 두 개 이상의 키프레임이 필요하다고 설명하고, 약 22:23부터 키프레임 간격으로 속도를 조절하는 원리를 다룬다.
-- 따라서 오늘의 학습 성공 기준은 오징어게임 영상을 완성하는 것이 아니라, 위 기본 조작을 스스로 반복할 수 있을 정도로 익숙해지는 것이다.
+- 기존 수업 녹음/전사: `음성 260910_091822.m4a`, `음성 260910_091822_original.txt`.
+- 추가 수업 녹음/전사: `영상편집실습.m4a`, `영상편집실습_original.txt`. 추가 녹음은 약 75분이며 자동 전사는 오탈자가 있어 타임코드/작업 순서 복원용 보조 근거로만 사용한다.
+- 추가 전사에서 약 06:03에 Rotation 단축키 `R`, 약 07:28에 음수 회전 방향, 약 07:55~08:29에 Anchor Point가 회전 기준이라는 설명, 약 09:56에 Opacity, 약 13:09에 Hold keyframe, 약 18:01에 0~20초 자유 Transform 연습, 약 44:44에 24초 부근 원위치 복귀 작업이 이어진다.
+- 따라서 지금 바로 다음 교수 흐름은 Opacity를 다시 확인한 뒤 Hold keyframe을 보고, 기본 Transform을 자유롭게 조합해 보는 단계다.
 - 상세 기록: `study/logs/2026-09-10-after-effects-basics.md`
 
 ## Problem-memory operating rule
@@ -123,20 +123,20 @@ AFTER_EFFECTS = ACTIVE
 - 같은 문제를 외워서 맞힌 것을 교정 성공으로 오판하지 않고, 다른 문제로 전이되는지 확인한다.
 - After Effects 과제 작업 중 키프레임이 보이는 증빙용 작업 화면을 중간중간 캡처한다.
 - AE 초반에는 결과물 완성 속도보다 기본 조작을 반복해서 손에 익히는 것을 우선한다.
+- Rotation 입력에서는 `90x`와 `90°`를 혼동하지 않는지 한 번 더 확인한다.
 
 ## Immediate next memory action
 
 ### After Effects
 
 ```text
-1. Shape Layer로 정사각형/원/삼각형 같은 기본 도형을 다시 만든다.
-2. Align과 Anchor Point 중앙 배치를 반복한다.
-3. Position / Scale / Rotation / Opacity를 각각 단독으로 한 번씩 만든다.
-4. 각 모션에서 시작/끝 키프레임을 직접 찍는다.
-5. 키프레임 간격을 넓히고 좁혀 속도 변화가 어떻게 생기는지 확인한다.
-6. Easy Ease / Speed Graph는 기본 키프레임 감각을 강화하는 보조 연습으로 사용한다.
-7. 익숙해지면 오징어게임 레퍼런스의 짧은 구간을 응용 문제로 재현한다.
-8. 이후 Text Layer / Text Animator와 “집 가고 싶다” 과제 콘티로 전이한다.
+1. 현재 Shape Layer에서 Opacity를 다시 단독으로 한 번 만든다.
+2. Opacity의 시작/끝 키프레임을 직접 찍고 재생해 페이드 변화를 확인한다.
+3. 교수 녹음의 다음 흐름대로 Hold keyframe이 일반 보간과 어떻게 다른지 짧게 확인한다.
+4. Position / Scale / Rotation / Opacity 네 가지를 한 번씩 다시 만든 상태인지 점검한다.
+5. 그 다음 0~20초 구간처럼 네 가지 Transform을 자유롭게 조합해 기본 조작을 손에 익힌다.
+6. 이후 교수 예제의 24초 원위치 복귀/Opacity 처리와 오징어게임 레퍼런스 응용으로 넘어간다.
+7. 익숙해진 뒤 Text Layer / Text Animator와 “집 가고 싶다” 과제 콘티로 전이한다.
 ```
 
 ### PSAT

@@ -168,3 +168,20 @@ Related memory IDs: E-2026-09-10-006
 Follow-up trigger: P/S/R/T를 자유 조합하는 짧은 구간에서 Hold와 일반 보간을 의도에 맞게 구분해 사용하는지 확인.
 Resolution / later evidence: 최신 화면 녹화에서 Hold 적용 메뉴 조작과 재생 중 즉시 사라지는 결과를 확인함.
 ```
+
+### E-2026-09-10-008 — P/S/R/T 조합을 대용량 화면 녹화에서 직접 검증
+
+```text
+Entry ID: E-2026-09-10-008
+Date: 2026-09-10
+Subject / scope: After Effects / 기본 Transform 조합
+Status: OBSERVED
+Observation: 301,604,286-byte 화면 녹화 원본을 Google Drive에서 Android 중계 장치로 내려받아 원본 크기 일치를 확인한 뒤 실제 프레임을 추출했다. 추출 프레임에서 한 Shape Layer의 Position / Scale / Rotation / Opacity 네 Layer Transform 모두 애니메이션 스톱워치가 활성화되어 있고 같은 짧은 구간에 복수 키프레임이 배치된 것을 확인했다. 연속 샘플에서는 사각형의 위치·크기·회전 상태가 달라지고 Opacity가 0%인 시점도 확인됐다.
+Context: 단독 P/S/R/T와 Hold까지 익힌 뒤, 교수 흐름의 자유 Transform 조합 단계를 화면 녹화로 증명하려던 과정. 원본은 기존 Drive connector의 256 MiB 제한을 초과해 별도 rclone 경로로 확보했다.
+Result: P/S/R/T 네 기본 Transform을 한 짧은 구간에서 함께 키프레임으로 구성한 사실을 실제 영상 프레임으로 검증했다.
+Interpretation: 기본 Transform 조합 단계는 완료로 승격할 수 있으며, 다음에는 키프레임 타이밍 변형과 교수 예제의 원위치 복귀/Opacity 처리 또는 레퍼런스 응용으로 넘어가는 것이 적절하다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-10-003, E-2026-09-10-005, E-2026-09-10-006, E-2026-09-10-007
+Follow-up trigger: 동일 조합을 별도 안내 없이 다시 만들거나, 키프레임 간격을 바꿔 속도 차이를 의도적으로 재현하는지 확인.
+Resolution / later evidence: 대용량 원본의 바이트 크기 일치, ffprobe 메타데이터 확인, 접촉시트 및 고해상도 프레임 검토로 P/S/R/T 동시 키프레임 구성을 확인함. 기술 검증 세부는 study/logs/2026-09-10-after-effects-media-verification.md 참조.
+```

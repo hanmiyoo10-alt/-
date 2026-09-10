@@ -1,7 +1,7 @@
 # Current Study Memory Snapshot
 
 Status: `SNAPSHOT_READY`
-As of: `2026-09-07`
+As of: `2026-09-10`
 
 이 문서는 새 대화/세션이 공부 맥락을 빠르게 재구성하기 위한 **current-only projection**입니다.
 
@@ -34,11 +34,13 @@ REVIEW_QUEUE_SOURCE = study/problems/REVIEW_QUEUE.md
 - PSAT에 맞는 문제풀이 체계를 만들고, 문제를 단순 반복하기보다 유형·판단 구조·오답 패턴을 축적한다.
 - 실제 교재/문제풀이가 시작되면 본인 해석을 먼저 만든 뒤 O/X 검증을 통해 해석 오류의 종류를 잡는다.
 - 개별 문제의 실수와 반복되는 약점을 분리해서 기록하고, 다른 문제로 교정이 전이되는지 확인한다.
+- After Effects 기초 조작을 익혀 50초~1분 10초 분량의 가로형 타이포그래피 기반 모션그래픽 중간고사 작품을 완성한다.
 
 ## Active subjects
 
 ```text
 PSAT = ACTIVE
+AFTER_EFFECTS = ACTIVE
 ```
 
 현재 스냅샷은 다른 과목을 비활성이라고 단정하지 않는다. 장기기억 시스템에 현재 활성으로 확인된 범위만 투영한다.
@@ -76,6 +78,15 @@ PSAT = ACTIVE
 
 별도 강의를 기본 전제로 두지 않는다. 독학으로 특정 영역이 반복적으로 막힐 때만 보조 설명 수단을 재검토한다.
 
+## Current After Effects state
+
+- 영어 UI 전환 완료.
+- Composition과 Shape Layer 생성 실습 완료.
+- Position / Scale / Opacity 키프레임 실습 완료.
+- Easy Ease와 Graph Editor / Speed Graph 실습 완료.
+- 중간고사 주제 후보는 `집 가고 싶다`이며 아직 최종 확정은 아니다.
+- 상세 기록: `study/logs/2026-09-10-after-effects-basics.md`
+
 ## Problem-memory operating rule
 
 ```text
@@ -101,8 +112,21 @@ PSAT = ACTIVE
 - 패턴 분류가 지나치게 세분화되어 문제풀이 속도를 잡아먹지 않는지 확인한다.
 - PSAT에서의 독학 선호를 전반적인 학습 성향으로 성급하게 일반화하지 않는다.
 - 같은 문제를 외워서 맞힌 것을 교정 성공으로 오판하지 않고, 다른 문제로 전이되는지 확인한다.
+- After Effects 과제 작업 중 키프레임이 보이는 증빙용 작업 화면을 중간중간 캡처한다.
 
 ## Immediate next memory action
+
+### After Effects
+
+```text
+1. Rotation 기초를 익힌다.
+2. Text Layer를 만든다.
+3. Position / Scale / Opacity / Rotation을 실제 텍스트에 적용한다.
+4. Text Animator 기초를 익힌다.
+5. “집 가고 싶다” 주제의 60초 내외 콘티와 타임라인을 설계한다.
+```
+
+### PSAT
 
 실제 PSAT 교재나 문제를 다루기 시작하면 다음 순서를 사용한다.
 

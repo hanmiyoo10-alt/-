@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const HERE=path.dirname(fileURLToPath(import.meta.url));
 const ROOT=path.resolve(HERE,'../../..');
 const ADAPTER=path.join(ROOT,'products/simcore/tooling/release-terminal-main-write.mjs');
-function sh(cwd,cmd,args,{check=true,env=process.env}={}){const r=spawnSync(cmd,args,{cwd,encoding:'utf8',env,maxBuffer:8*1024*1024});if(check&&r.status!==0)throw new Error(`${cmd} ${args.join(' ')}\n${r.stdout}\n${r.stderr}`);return r;}
+function sh(cwd,cmd,args,{check=true,env=process.env,input=null}={}){const r=spawnSync(cmd,args,{cwd,encoding:'utf8',env,input,maxBuffer:8*1024*1024});if(check&&r.status!==0)throw new Error(`${cmd} ${args.join(' ')}\n${r.stdout}\n${r.stderr}`);return r;}
 function git(cwd,...args){return sh(cwd,'git',args).stdout.trim();}
 function fixture(base,name){
   const remote=path.join(base,`${name}.git`);sh(base,'git',['init','--bare',remote]);
@@ -22,28 +22,30 @@ function fixture(base,name){
   fs.writeFileSync(path.join(work,'product-manifest.json'),'terminal manifest\n');
   fs.writeFileSync(path.join(work,'docs/CURRENT_DEVELOPMENT.md'),'terminal development\n');
   git(work,'add','.');git(work,'commit','-m','terminal payload');const payload=git(work,'rev-parse','HEAD');
+  const tree=git(work,'rev-parse',`${payload}^{tree}`);const checked=sh(work,'git',['commit-tree',tree,'-p',baseSha],{input:'protected terminal replay\n'}).stdout.trim();
+  if(checked===payload)throw new Error('fixture failed to create distinct payload and checked commits');
   const scripts=path.join(work,'scripts');fs.mkdirSync(scripts,{recursive:true});
   const fake=path.join(scripts,'repo-main-write.py');
   fs.writeFileSync(fake,`#!/usr/bin/python3
 import json,os,subprocess,sys
-mode=os.environ['FAKE_WRITER_MODE'];base=os.environ['FAKE_BASE'];payload=os.environ['FAKE_PAYLOAD'];ref=os.environ['FAKE_REF']
+mode=os.environ['FAKE_WRITER_MODE'];base=os.environ['FAKE_BASE'];payload=os.environ['FAKE_PAYLOAD'];checked=os.environ['FAKE_CHECKED'];ref=os.environ['FAKE_REF']
 json.dump(sys.argv[1:],open(os.environ['FAKE_CALL_LOG'],'w'))
 if mode=='landed':
     subprocess.check_call(['git','push','origin',payload+':refs/heads/main'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     sys.exit(0)
 if mode=='checked':
     print('MAIN_WRITE_NATIVE_PROTECTION_ACTIVE: Required enforced')
-    print(f'MAIN_WRITE_CHECKED_PR_REQUIRED: base={base} commit={payload} ref={ref}')
+    print(f'MAIN_WRITE_CHECKED_PR_REQUIRED: base={base} commit={checked} ref={ref}')
     sys.exit(9)
 if mode=='malformed':
-    print(f'MAIN_WRITE_CHECKED_PR_REQUIRED: base={base} commit={payload} ref={ref}')
+    print(f'MAIN_WRITE_CHECKED_PR_REQUIRED: base={base} commit={checked} ref={ref}')
     sys.exit(9)
 sys.exit(3)
 `);fs.chmodSync(fake,0o755);
-  return {remote,work,baseSha,payload,ref:`simcore-r2-8-test/${name}`,callLog:path.join(base,`${name}-call.json`)};
+  return {remote,work,baseSha,payload,checked,ref:`simcore-r2-8-test/${name}`,callLog:path.join(base,`${name}-call.json`)};
 }
 function runAdapter(f,mode){
-  const env={...process.env,FAKE_WRITER_MODE:mode,FAKE_BASE:f.baseSha,FAKE_PAYLOAD:f.payload,FAKE_REF:f.ref,FAKE_CALL_LOG:f.callLog};
+  const env={...process.env,FAKE_WRITER_MODE:mode,FAKE_BASE:f.baseSha,FAKE_PAYLOAD:f.payload,FAKE_CHECKED:f.checked,FAKE_REF:f.ref,FAKE_CALL_LOG:f.callLog};
   return sh(f.work,process.execPath,[ADAPTER,'--root','.', '--release-id','simcore-v9.9.9-new-91','--production-commit',f.baseSha,'--payload-commit',f.payload,'--report','report.json'],{check:false,env});
 }
 function testDirectLanding(base){
@@ -54,8 +56,10 @@ function testDirectLanding(base){
 }
 function testCheckedHandoff(base){
   const f=fixture(base,'checked');const r=runAdapter(f,'checked');if(r.status!==9)throw new Error(`checked handoff status ${r.status} ${r.stderr}`);
-  const report=JSON.parse(fs.readFileSync(path.join(f.work,'report.json')));if(report.result!=='CHECKED_PR_REQUIRED'||report.checkedPr.base!==f.baseSha||report.checkedPr.commit!==f.payload||report.checkedPr.ref!==f.ref)throw new Error('checked report invalid');
+  const report=JSON.parse(fs.readFileSync(path.join(f.work,'report.json')));
+  if(f.payload===f.checked)throw new Error('checked fixture identities collapsed');
+  if(report.result!=='CHECKED_PR_REQUIRED'||report.payloadCommit!==f.payload||report.checkedPr.base!==f.baseSha||report.checkedPr.commit!==f.checked||report.checkedPr.ref!==f.ref)throw new Error('checked report did not preserve distinct semantic and transport identities');
 }
 function testMalformedHandoff(base){const f=fixture(base,'malformed');const r=runAdapter(f,'malformed');if(r.status===0||!r.stderr.includes('R2_6_MAIN_GATE_CHECKED_PR_INVALID'))throw new Error(`malformed handoff not blocked ${r.stderr}`);}
 const base=fs.mkdtempSync(path.join(os.tmpdir(),'simcore-r2-8-main-write-'));
-try{testDirectLanding(base);testCheckedHandoff(base);testMalformedHandoff(base);console.log('R2_8_TERMINAL_MAIN_WRITE_INTEGRATION_PASS direct + checked + malformed');}finally{fs.rmSync(base,{recursive:true,force:true});}
+try{testDirectLanding(base);testCheckedHandoff(base);testMalformedHandoff(base);console.log('R2_8_TERMINAL_MAIN_WRITE_INTEGRATION_PASS direct + distinct-identity checked + malformed');}finally{fs.rmSync(base,{recursive:true,force:true});}

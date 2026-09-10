@@ -87,6 +87,7 @@ AFTER_EFFECTS = ACTIVE
 - Position 키프레임 간격을 넓혀 같은 이동을 더 느리게 만드는 속도 변화를 실제 화면에서 재확인했다.
 - Rotation 재연습에서 처음에는 `90x+0°`로 입력해 90회전이 걸렸고, 두 번째 화면 녹화에서 `0x+90°`로 수정해 사각형이 90도 회전하는 것을 확인했다. 다음 Rotation 작업에서는 `x`(회전 횟수)와 `°`(추가 각도) 필드를 구분한다.
 - Opacity 재연습에서는 0초 `100%`, 1초 `0%` 두 키프레임을 만들어 사각형이 사라지는 페이드 아웃을 화면 녹화로 재확인했다.
+- `Toggle Hold Keyframe` 재생 확인 완료. 일반 Opacity 보간처럼 서서히 희미해지지 않고 앞 값을 유지하다 다음 키프레임에서 즉시 사라지는 차이를 화면 녹화로 확인했다.
 - Easy Ease와 Graph Editor / Speed Graph 실습 완료.
 - 중간고사 주제 후보는 `집 가고 싶다`이며 아직 최종 확정은 아니다.
 - 기준 레퍼런스 파일: `Squid Game - Intro motion logo - English version (1080p).mp4`.
@@ -94,7 +95,7 @@ AFTER_EFFECTS = ACTIVE
 - 기존 수업 녹음/전사: `음성 260910_091822.m4a`, `음성 260910_091822_original.txt`.
 - 추가 수업 녹음/전사: `영상편집실습.m4a`, `영상편집실습_original.txt`. 추가 녹음은 약 75분이며 자동 전사는 오탈자가 있어 타임코드/작업 순서 복원용 보조 근거로만 사용한다.
 - 추가 전사에서 약 06:03에 Rotation 단축키 `R`, 약 07:28에 음수 회전 방향, 약 07:55~08:29에 Anchor Point가 회전 기준이라는 설명, 약 09:56에 Opacity, 약 13:09에 Hold keyframe, 약 18:01에 0~20초 자유 Transform 연습, 약 44:44에 24초 부근 원위치 복귀 작업이 이어진다.
-- 따라서 지금 바로 다음 교수 흐름은 **Toggle Hold Keyframe을 일반 보간과 비교한 뒤, P/S/R/T를 자유롭게 조합해 보는 단계**다.
+- 따라서 지금 바로 다음 교수 흐름은 **P/S/R/T를 한 짧은 구간에서 자유롭게 조합해 기본 조작을 손에 익히는 단계**다.
 - 상세 기록: `study/logs/2026-09-10-after-effects-basics.md`
 
 ## Problem-memory operating rule
@@ -131,12 +132,11 @@ AFTER_EFFECTS = ACTIVE
 ### After Effects
 
 ```text
-1. 교수 흐름대로 Toggle Hold Keyframe을 일반 보간과 짧게 비교한다.
-2. Hold가 중간값을 보간하지 않고 앞 값을 유지하다 다음 키프레임에서 즉시 바뀌는지 직접 본다.
-3. Position / Scale / Rotation / Opacity 네 가지를 한 짧은 구간에서 자유롭게 조합해 기본 조작을 손에 익힌다.
-4. 필요하면 키프레임 복사/붙여넣기로 Opacity 깜빡임을 한 번 만든다.
-5. 이후 교수 예제의 24초 원위치 복귀/Opacity 처리와 오징어게임 레퍼런스 응용으로 넘어간다.
-6. 익숙해진 뒤 Text Layer / Text Animator와 “집 가고 싶다” 과제 콘티로 전이한다.
+1. Position / Scale / Rotation / Opacity 네 가지를 한 짧은 구간에서 자유롭게 조합해 기본 조작을 손에 익힌다.
+2. 필요하면 키프레임 복사/붙여넣기로 Opacity 깜빡임을 한 번 만든다.
+3. 키프레임 간격을 직접 바꿔 조합 모션의 속도 차이를 다시 확인한다.
+4. 이후 교수 예제의 24초 원위치 복귀/Opacity 처리와 오징어게임 레퍼런스 응용으로 넘어간다.
+5. 익숙해진 뒤 Text Layer / Text Animator와 “집 가고 싶다” 과제 콘티로 전이한다.
 ```
 
 ### PSAT

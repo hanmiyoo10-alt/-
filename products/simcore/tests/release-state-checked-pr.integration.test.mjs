@@ -78,8 +78,11 @@ function fixture(base,name){
   const work=path.join(base,`${name}-work`);sh(base,'git',['clone',remote,work]);
   git(work,'config','user.name','test');git(work,'config','user.email','test@example.com');
   fs.writeFileSync(path.join(work,'state.txt'),'base\n');git(work,'add','state.txt');git(work,'commit','-m','base');git(work,'branch','-M','main');git(work,'push','origin','main');
-  const baseSha=git(work,'rev-parse','HEAD');git(work,'push','origin',`${baseSha}:refs/heads/release-simcore`);fs.writeFileSync(path.join(work,'state.txt'),'checked\n');git(work,'add','state.txt');git(work,'commit','-m','checked payload');const head=git(work,'rev-parse','HEAD');
-  const ref=`simcore-test/${name}`;git(work,'push','origin',`HEAD:refs/heads/${ref}`);git(work,'reset','--hard',baseSha);
+  const baseSha=git(work,'rev-parse','HEAD');git(work,'push','origin',`${baseSha}:refs/heads/release-simcore`);
+  fs.writeFileSync(path.join(work,'state.txt'),'checked\n');git(work,'add','state.txt');git(work,'commit','-m','semantic payload');const payload=git(work,'rev-parse','HEAD');
+  const tree=git(work,'rev-parse',`${payload}^{tree}`);const head=sh(work,'git',['commit-tree',tree,'-p',baseSha],{input:'protected replay\n'}).stdout.trim();
+  if(head===payload)throw new Error('fixture failed to create distinct semantic and checked commits');
+  const ref=`simcore-test/${name}`;git(work,'push','origin',`${head}:refs/heads/${ref}`);git(work,'reset','--hard',baseSha);
   const suffix={success:'91',moved:'92',required:'93',terminal:'94',terminalcleanup:'95',terminaldrift:'96',terminalfallback:'97',terminaltimeout:'98'}[name]||'99';
   const releaseId=`simcore-v9.9.9-new-${suffix}`;
   writeJson(work,'gate.json',{schemaVersion:1,tool:'release-state-main-gate',mode:'PERMANENT',releaseId,result:'CHECKED_PR_REQUIRED',changedPaths:['state.txt'],productionMutation:'ALREADY_PUBLISHED_UPSTREAM',mainMutation:'CHECKED_PR_PENDING',payloadCommit:head,durableMainCommit:null,gateway:'scripts/repo-main-write.py',checkedPr:{base:baseSha,commit:head,ref,workflow:'simcore-ci.yml',profile:'PR_RECOVERY',job:'Required'}});
@@ -87,17 +90,23 @@ function fixture(base,name){
   const state=path.join(base,`${name}-gh.json`);fs.writeFileSync(state,JSON.stringify({pr:null,merge_calls:0,moved:false,get_calls:0,post_calls:0}));
   const bin=fakeGh(path.join(base,`${name}-fake`));
   const env={...process.env,PATH:`${bin}${path.delimiter}${process.env.PATH}`,GH_TOKEN:'test',GITHUB_REPOSITORY:'owner/repo',FAKE_MAIN_BASE:baseSha,FAKE_HEAD:head,FAKE_REF:ref,FAKE_REMOTE:remote,FAKE_STATE:state,FAKE_TITLE:`SimCore checked state landing: ${releaseId}`};
-  return {remote,work,baseSha,head,ref,state,env,releaseId};
+  return {remote,work,baseSha,payload,head,ref,state,env,releaseId};
 }
 function runConsume(f,extra={}){return sh(f.work,process.execPath,[HELPER,'--root','.', '--mode','consume','--main-gate-report','gate.json','--envelope','envelope.json','--report','consume.json'],{check:false,env:{...f.env,...extra}});}
-function writeTerminalReport(f){
-  writeJson(f.work,'terminal-write.json',{schemaVersion:1,tool:'release-terminal-main-write',releaseId:f.releaseId,productionCommit:f.baseSha,payloadCommit:f.head,changedPaths:['state.txt'],gateway:'scripts/repo-main-write.py',result:'CHECKED_PR_REQUIRED',mainMutation:'CHECKED_PR_PENDING',durableMainCommit:null,checkedPr:{base:f.baseSha,commit:f.head,ref:f.ref,workflow:'simcore-ci.yml',profile:'PR_RECOVERY',job:'Required'}});
+function writeTerminalReport(f,{payloadCommit=f.payload,changedPaths=['state.txt']}={}){
+  writeJson(f.work,'terminal-write.json',{schemaVersion:1,tool:'release-terminal-main-write',releaseId:f.releaseId,productionCommit:f.baseSha,payloadCommit,changedPaths,gateway:'scripts/repo-main-write.py',result:'CHECKED_PR_REQUIRED',mainMutation:'CHECKED_PR_PENDING',durableMainCommit:null,checkedPr:{base:f.baseSha,commit:f.head,ref:f.ref,workflow:'simcore-ci.yml',profile:'PR_RECOVERY',job:'Required'}});
 }
-function runTerminalConsume(f,extra={}){writeTerminalReport(f);return sh(f.work,process.execPath,[HELPER,'--root','.', '--mode','consume-terminal','--terminal-write-report','terminal-write.json','--report','consume.json'],{check:false,env:{...f.env,...extra}});}
+function runTerminalConsume(f,extra={},reportOptions={}){writeTerminalReport(f,reportOptions);return sh(f.work,process.execPath,[HELPER,'--root','.', '--mode','consume-terminal','--terminal-write-report','terminal-write.json','--report','consume.json'],{check:false,env:{...f.env,...extra}});}
 function terminalDurable(f,disposition='ALREADY_DURABLE'){
   return {schemaVersion:1,product:'SimCore',disposition,code:disposition==='ALREADY_DURABLE'?'R2_8_TERMINAL_ALREADY_DURABLE':'R2_8_TERMINAL_ELIGIBLE',productionMutation:'NONE',mainMutation:disposition==='ALREADY_DURABLE'?'NONE':'LOCAL_TERMINAL_STATE_PENDING_GATEWAY',evidencePath:`products/simcore/releases/live-evidence/${f.releaseId}.json`};
 }
 function readState(f){return JSON.parse(fs.readFileSync(f.state,'utf8'));}
+function makeSemanticCommit(f,{state=null,extra=null,message='semantic variant'}={}){
+  git(f.work,'reset','--hard',f.baseSha);
+  if(state!==null)fs.writeFileSync(path.join(f.work,'state.txt'),state);
+  if(extra!==null)fs.writeFileSync(path.join(f.work,'extra.txt'),extra);
+  git(f.work,'add','.');git(f.work,'commit','-m',message);const commit=git(f.work,'rev-parse','HEAD');git(f.work,'reset','--hard',f.baseSha);return commit;
+}
 function testSuccess(base){
   const f=fixture(base,'success');const r=runConsume(f);if(r.status!==0)throw new Error(`success consume failed ${r.stderr}`);const report=JSON.parse(fs.readFileSync(path.join(f.work,'consume.json')));if(report.result!=='CHECKED_PR_MERGED'||report.validationRunId!==101||report.prNumber!==77)throw new Error('success report invalid');
   const main=sh(base,'git',['--git-dir',f.remote,'rev-parse','refs/heads/main']).stdout.trim();const want=sh(base,'git',['--git-dir',f.remote,'rev-parse',`${f.head}:state.txt`]).stdout.trim();const got=sh(base,'git',['--git-dir',f.remote,'rev-parse',`${main}:state.txt`]).stdout.trim();if(want!==got)throw new Error('durable bytes mismatch');
@@ -105,12 +114,20 @@ function testSuccess(base){
 }
 function testMainMoveBlocksMerge(base){const f=fixture(base,'moved');const r=runConsume(f,{FAKE_MOVE_MAIN_ON_RUN_VIEW:'1'});if(r.status===0||!r.stderr.includes('R2_6_CHECKED_PR_MAIN_MOVED'))throw new Error(`main move not blocked ${r.stderr}`);const st=readState(f);if(st.merge_calls!==0)throw new Error('merge called after main moved');}
 function testRequiredFailureBlocksMerge(base){const f=fixture(base,'required');const r=runConsume(f,{FAKE_REQUIRED_FAIL:'1'});if(r.status===0||!r.stderr.includes('R2_6_CHECKED_PR_CI_FAIL'))throw new Error(`Required failure not blocked ${r.stderr}`);const st=readState(f);if(st.merge_calls!==0)throw new Error('merge called after Required failure');}
-function testTerminalSuccess(base){
-  const f=fixture(base,'terminal');const r=runTerminalConsume(f);if(r.status!==0)throw new Error(`terminal consume failed ${r.stderr}`);
-  const report=JSON.parse(fs.readFileSync(path.join(f.work,'consume.json')));if(report.result!=='CHECKED_PR_MERGED'||report.inputKind!=='TERMINAL')throw new Error('terminal consume report invalid');
+function testTerminalDistinctIdentitySuccess(base){
+  const f=fixture(base,'terminal');if(f.payload===f.head)throw new Error('terminal identity fixture not distinct');const r=runTerminalConsume(f);if(r.status!==0)throw new Error(`terminal distinct-identity consume failed ${r.stderr}`);
+  const report=JSON.parse(fs.readFileSync(path.join(f.work,'consume.json')));if(report.result!=='CHECKED_PR_MERGED'||report.inputKind!=='TERMINAL'||report.checkedCommit!==f.head)throw new Error('terminal distinct-identity report invalid');
   writeJson(f.work,'durable.json',terminalDurable(f));
   const c=sh(f.work,process.execPath,[HELPER,'--root','.', '--mode','cleanup-terminal','--consume-report','consume.json','--durable-report','durable.json','--report','cleanup.json'],{check:false,env:f.env});if(c.status!==0)throw new Error(`terminal cleanup failed ${c.stderr}`);
   const ls=sh(base,'git',['--git-dir',f.remote,'show-ref',`refs/heads/${f.ref}`],{check:false});if(ls.status===0)throw new Error('terminal staging ref not deleted');
+}
+function testTerminalPayloadPathMismatchFailsBeforePr(base){
+  const f=fixture(base,'terminalpathmismatch');const bad=makeSemanticCommit(f,{extra:'unexpected\n',message:'semantic wrong path'});const r=runTerminalConsume(f,{}, {payloadCommit:bad});
+  if(r.status===0||!r.stderr.includes('R2_8_CHECKED_PR_PAYLOAD_PATH_SET_MISMATCH'))throw new Error(`semantic path mismatch not blocked ${r.stderr}`);const st=readState(f);if(st.get_calls!==0||st.post_calls!==0||st.merge_calls!==0)throw new Error(`semantic path mismatch reached PR API ${JSON.stringify(st)}`);
+}
+function testTerminalReplayParityMismatchFailsBeforePr(base){
+  const f=fixture(base,'terminalparitymismatch');const bad=makeSemanticCommit(f,{state:'different\n',message:'semantic wrong content'});const r=runTerminalConsume(f,{}, {payloadCommit:bad});
+  if(r.status===0||!r.stderr.includes('R2_8_CHECKED_PR_REPLAY_PARITY_MISMATCH'))throw new Error(`semantic replay parity mismatch not blocked ${r.stderr}`);const st=readState(f);if(st.get_calls!==0||st.post_calls!==0||st.merge_calls!==0)throw new Error(`semantic replay mismatch reached PR API ${JSON.stringify(st)}`);
 }
 function testTerminalExistingPrReuse(base){
   const f=fixture(base,'terminalreuse');const r=runTerminalConsume(f,{FAKE_EXTERNAL_PR_AFTER_GET:'1'});if(r.status!==0)throw new Error(`terminal exact PR reuse failed ${r.stderr}`);
@@ -160,7 +177,9 @@ try{
   testSuccess(base);
   testMainMoveBlocksMerge(base);
   testRequiredFailureBlocksMerge(base);
-  testTerminalSuccess(base);
+  testTerminalDistinctIdentitySuccess(base);
+  testTerminalPayloadPathMismatchFailsBeforePr(base);
+  testTerminalReplayParityMismatchFailsBeforePr(base);
   testTerminalExistingPrReuse(base);
   testTerminalPolicyDeniedAssistantFallback(base);
   testTerminalPolicyDeniedTimeout(base);
@@ -171,5 +190,5 @@ try{
   testTerminalCleanupRequiresDurable(base);
   testTerminalProductionMoveBlocksMerge(base);
   testTerminalCannotMasqueradeAsPostPublish(base);
-  console.log('R2_6_CHECKED_PR_INTEGRATION_PASS post-publish + terminal + assistant-policy-fallback + timeout + mismatch + duplicate + non-policy + Required-fail + durable-cleanup + production-drift');
+  console.log('R2_6_CHECKED_PR_INTEGRATION_PASS post-publish + distinct-terminal-identities + replay-parity + assistant-policy-fallback + timeout + mismatch + duplicate + non-policy + Required-fail + durable-cleanup + production-drift');
 }finally{fs.rmSync(base,{recursive:true,force:true});}

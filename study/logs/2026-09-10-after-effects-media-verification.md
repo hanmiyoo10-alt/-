@@ -31,3 +31,13 @@ Remote Desktop Commander의 연결 상태를 확인한 결과, 현재 온라인�
 따라서 현재 상태에서는 원격 장치에서 해당 Windows 화면 녹화 원본을 직접 잘라낼 수 없다. 다만 원본 파일이 있는 Windows PC가 Remote Desktop Commander에 온라인으로 연결되면, 그 PC에서 `ffmpeg` 등으로 원본을 여러 짧은 클립으로 분할하거나 해상도/비트레이트를 낮춘 사본을 만든 뒤 256 MiB 제한 아래의 검증용 파일만 Drive에 올리는 경로를 사용할 수 있다.
 
 이 경로는 원본을 다시 녹화하지 않고도 검증 가능한 작은 증거를 만드는 대안으로 유지한다.
+
+## Android 중계 우회 경로 확인
+
+Windows PC를 추가로 연결하지 않아도, 이미 연결된 Android 장치를 중계 지점으로 쓰는 가능성을 확인했다. 현재 원격 Android 환경에서는 `/storage/emulated/0/Download` 경로 접근이 가능하고 `termux-setup-storage`도 존재한다.
+
+따라서 사용자가 Google Drive 앱에서 문제의 MP4를 Android의 일반 `Download` 폴더로 직접 내려받을 수 있다면, Remote Desktop Commander가 그 로컬 파일을 찾아 후속 처리하는 경로가 성립할 가능성이 높다.
+
+현재 원격 Android에는 `ffmpeg` 실행 파일이 확인되지 않았다. 실제 영상 분할/재인코딩을 하려면 먼저 해당 장치에 `ffmpeg`를 설치하거나 동등한 로컬 영상 처리 도구를 사용할 필요가 있다. 설치는 사용자 승인 후에만 수행한다.
+
+또 다른 우회는 파일을 일시적으로 비로그인 다운로드 가능한 링크로 공개한 뒤 직접 HTTP로 가져오는 방식이지만, 현재 Drive 파일은 비로그인 직접 다운로드 시 Google 로그인 화면으로 리디렉션되어 이 경로는 현재 상태로는 사용할 수 없다.

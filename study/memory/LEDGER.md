@@ -151,3 +151,20 @@ Related memory IDs: E-2026-09-10-003, E-2026-09-10-005
 Follow-up trigger: Hold keyframe을 일반 보간과 비교해 보고, P/S/R/T를 자유 조합한 짧은 모션을 스스로 구성하는지 확인.
 Resolution / later evidence: `화면 녹화 중 2026-09-10 132957.mp4`에서 두 Opacity 키프레임과 1초 지점 `0%`, 재생 중 페이드 변화를 확인함.
 ```
+
+### E-2026-09-10-007 — Hold Keyframe의 불연속 전환을 화면 녹화로 확인
+
+```text
+Entry ID: E-2026-09-10-007
+Date: 2026-09-10
+Subject / scope: After Effects / Toggle Hold Keyframe
+Status: OBSERVED
+Observation: `화면 녹화 중 2026-09-10 134025.mp4`에서 Opacity 시작 키프레임에 Hold를 적용한 뒤 재생했고, 사각형이 중간값으로 서서히 희미해지지 않고 앞 상태를 유지하다가 다음 키프레임 시점에서 즉시 사라지는 전환이 확인됐다.
+Context: 교수 2주차 흐름에서 Opacity 기본 재연습 다음 단계로 `Toggle Hold Keyframe`의 보간 생략을 확인하는 과정.
+Result: 일반 Opacity 보간의 점진적 페이드와 Hold 적용 후의 불연속 전환 차이를 실제 화면에서 비교할 수 있게 됐다.
+Interpretation: Hold는 앞 키프레임 값을 다음 키프레임 직전까지 유지하고, 다음 키프레임에서 값이 즉시 바뀌는 기능으로 이해하면 된다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-10-006
+Follow-up trigger: P/S/R/T를 자유 조합하는 짧은 구간에서 Hold와 일반 보간을 의도에 맞게 구분해 사용하는지 확인.
+Resolution / later evidence: 최신 화면 녹화에서 Hold 적용 메뉴 조작과 재생 중 즉시 사라지는 결과를 확인함.
+```

@@ -1420,3 +1420,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f6f5fb70debfcc2de082b052efa6c4faf047a597)
 - Event ID: `16a568f527b85e187127c7add7effa5dc808a4232bfa64d407850905c5a37fe2`
 <!-- canonical-main-doc-promoted:16a568f527b85e187127c7add7effa5dc808a4232bfa64d407850905c5a37fe2 -->
+
+### 2026-09-11 — [repo-incident:P1] MEMORY_SYNC_FAILED — plugin:simcore
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/1980)
+- Event ID: `bfe6ac8a4c63b246fba157aa060bdc98e8362fd79b78bbd98c051d6ef3eb3b49`
+<!-- canonical-main-doc-promoted:bfe6ac8a4c63b246fba157aa060bdc98e8362fd79b78bbd98c051d6ef3eb3b49 -->

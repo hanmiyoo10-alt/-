@@ -1434,3 +1434,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/502)
 - Event ID: `b8f023e730a5a795a30811db42ac3874def29640e340191bca07f6b344c0da83`
 <!-- canonical-main-doc-promoted:b8f023e730a5a795a30811db42ac3874def29640e340191bca07f6b344c0da83 -->
+
+### 2026-09-11 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `INCIDENT`
+- Transition: `OPEN`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `f791b425ae5b076e3939f5daf5314aa17ac9998f19f4484a03c90e5c9bddb0fa`
+<!-- canonical-main-doc-promoted:f791b425ae5b076e3939f5daf5314aa17ac9998f19f4484a03c90e5c9bddb0fa -->

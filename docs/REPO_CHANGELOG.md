@@ -1441,3 +1441,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
 - Event ID: `f791b425ae5b076e3939f5daf5314aa17ac9998f19f4484a03c90e5c9bddb0fa`
 <!-- canonical-main-doc-promoted:f791b425ae5b076e3939f5daf5314aa17ac9998f19f4484a03c90e5c9bddb0fa -->
+
+### 2026-09-11 — Merge pull request #2018 from hanmiyoo10-alt/feat/app-api-mod-lab-root-20260911
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `10e27f0e2ce88c883125413a0902be6555d7c157`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/10e27f0e2ce88c883125413a0902be6555d7c157)
+- Event ID: `1304c53c75a731825442086ee72e59c40a412a3a1d6dd75a5a9d9bf23e64553e`
+<!-- canonical-main-doc-promoted:1304c53c75a731825442086ee72e59c40a412a3a1d6dd75a5a9d9bf23e64553e -->

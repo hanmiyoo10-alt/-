@@ -30,7 +30,7 @@
 - Durable promotion: branch/PR + explicit CI dispatch; exact-head merge only when base main is unchanged.
 - Generated commits are filtered with `[repo-docs-generated]` to prevent recursive documentation.
 
-## Registered projects/products (6)
+## Registered projects/products (7)
 
 - Source: `.github/plugin-control-plane/registry.json`
 - Detailed durable view: `docs/REPO_PROJECT_CATALOG.md`

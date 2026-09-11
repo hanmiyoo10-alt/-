@@ -35,7 +35,7 @@ jobs:
           targets: aarch64-linux-android
       - uses: taiki-e/install-action@v2
         with:
-          tool: tauri-cli
+          tool: tauri-cli@2.11.4
       - name: Validate zero-bridge security contract
         run: python validate_webview_shell.py
       - name: Validate Rust formatting and metadata

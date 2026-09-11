@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "product": "App API Mod Lab",
+  "product_root": "products/app-api-mod-lab",
+  "source_repo": null,
+  "current_state": "products/app-api-mod-lab/CURRENT.md",
+  "decisions": "products/app-api-mod-lab/docs/decisions.md",
+  "current_priority": "TARGET_AUTHORITY_AND_SCOPE_SELECTION",
+  "validation_status": "BOOTSTRAP",
+  "release_authority": null
+}

@@ -77,6 +77,10 @@ export async function runSuite() {
   for(const token of ['release-state-main-gate.mjs','release-state-reobserve.mjs','release-state-checked-pr.mjs','--mode RECOVERY']) assert(recovery.includes(token),`recovery workflow shared boundary missing: ${token}`);
   const ci=fs.readFileSync('.github/workflows/simcore-ci.yml','utf8');
   for(const token of ['PR_RECOVERY','pr_base_commit','pr_head_commit','VERIFIER_PROFILE=PR_MAIN',"steps.profile.outputs.profile == 'PR_RECOVERY'"]) assert(ci.includes(token),`PR_RECOVERY CI contract missing: ${token}`);
+  const proposedVerifier=between(ci,'\n      - name: Run proposed permanent verifier','\n      - name: Resolve bounded conclusion');
+  assert(proposedVerifier.includes('PROFILE: ${{ steps.profile.outputs.verifier_profile }}'),'PR_RECOVERY proposed verifier does not consume resolved PR_MAIN profile');
+  assert(!proposedVerifier.includes('PROFILE: ${{ steps.profile.outputs.profile }}'),'PR_RECOVERY outer transport profile leaked into proposed verifier');
+  pass('R2.6-C4-pr-recovery-verifier-profile-projection');
   for(const workflow of [permanent,recovery]) for(const token of ['checked_pr_required','--mode consume','--mode cleanup','pull-requests: write']) assert(workflow.includes(token),`checked PR caller parity missing: ${token}`);
   const permanentPost=between(permanent,'\n  post-publish-state:','\n  required:');
   const recoveryPost=between(recovery,'\n  permanent-recovery:');

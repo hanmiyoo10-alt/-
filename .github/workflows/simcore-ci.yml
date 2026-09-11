@@ -276,7 +276,7 @@ jobs:
         id: check
         shell: bash
         env:
-          PROFILE: ${{ steps.profile.outputs.profile }}
+          PROFILE: ${{ steps.profile.outputs.verifier_profile }}
           CANDIDATE: ${{ steps.profile.outputs.candidate_commit }}
           EXPECTED_PRODUCTION: ${{ steps.profile.outputs.expected_production_commit }}
           CANDIDATE_REQUIRED_AUTHORITY: ${{ steps.profile.outputs.candidate_required_authority }}

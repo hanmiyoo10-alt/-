@@ -1463,3 +1463,17 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/10e27f0e2ce88c883125413a0902be6555d7c157)
 - Event ID: `1304c53c75a731825442086ee72e59c40a412a3a1d6dd75a5a9d9bf23e64553e`
 <!-- canonical-main-doc-promoted:1304c53c75a731825442086ee72e59c40a412a3a1d6dd75a5a9d9bf23e64553e -->
+
+### 2026-09-11 — [repo-incident:P1] REQUIRED_CHECK_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/502)
+- Event ID: `baccc39b6498e2cf308a5d7ccfbf425da0fbb510de30820e0905a328b21558dd`
+<!-- canonical-main-doc-promoted:baccc39b6498e2cf308a5d7ccfbf425da0fbb510de30820e0905a328b21558dd -->
+
+### 2026-09-11 — [repo-incident:P1] PROTECTION_GUARD_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
+- Event ID: `eb8c7514dd003a8d7b77cefa97b1d13bade6c5c294689573fcc87c6fda3582a4`
+<!-- canonical-main-doc-promoted:eb8c7514dd003a8d7b77cefa97b1d13bade6c5c294689573fcc87c6fda3582a4 -->

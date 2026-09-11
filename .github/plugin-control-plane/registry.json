@@ -82,6 +82,19 @@
     }
   },
   "products": {
+    "app-api-mod-lab": {
+      "displayName": "App API Mod Lab",
+      "lifecycle": "research-product-root",
+      "issueValues": ["app-api-mod-lab", "App API Mod Lab", "앱 API 개조", "앱 API 개조 랩"],
+      "paths": [
+        "products/app-api-mod-lab/**"
+      ],
+      "statusAdapter": "prototype",
+      "authority": {
+        "evidence": "products/app-api-mod-lab/CURRENT.md",
+        "manifest": "products/app-api-mod-lab/product.json"
+      }
+    },
     "pocketrisu-helper-mod": {
       "displayName": "PocketRisu Helper Mod",
       "lifecycle": "operations-product-root",

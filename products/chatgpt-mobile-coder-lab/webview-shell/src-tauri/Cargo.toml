@@ -1,0 +1,15 @@
+[package]
+name = "chatgpt-webview-shell"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "chatgpt_webview_shell_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.5.5", features = [] }
+
+[dependencies]
+tauri = { version = "=2.10.2", features = [] }

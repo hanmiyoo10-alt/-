@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ChatGPT WebView No-Login Smoke",
+  "version": "0.1.0",
+  "identifier": "io.hanmiyoo.mobilecoder.chatgptnologinsmoke",
+  "build": {
+    "frontendDist": "https://chatgpt.com"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "ChatGPT WebView No-Login Smoke",
+        "url": "https://chatgpt.com",
+        "devtools": false
+      }
+    ],
+    "security": {
+      "capabilities": []
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all"
+  }
+}

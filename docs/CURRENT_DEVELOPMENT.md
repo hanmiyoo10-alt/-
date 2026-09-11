@@ -51,7 +51,7 @@ This block is the terminal administrative state backed by accepted real long-cha
 
 The machine-managed blocks above are authoritative for current production identity, validation status, and terminal release state. For active work after a terminal handoff, `product-manifest.json` is the machine-readable current operational-priority authority; the terminal block's `Current priority` records the handoff selected by the terminal evidence transaction. Human-authored sections below record interpretation, historical evidence, constraints, and follow-up decisions; they do not override machine authority.
 
-The machine-managed production snapshot identifies the current release as `Operator Release Card Metadata Repair`, and the machine-managed live gate remains `PENDING_REAL_LONG_CHAT`. Fresh same-generation real-long-chat packet `#1972` (`mttz5h6b-pkiclo`) exercises ordinary Mode C, reroll/repeat-send, C→A→C mode/source transitions, and a genuine one-character manual edit. Request/output/binding/mirror/hook behavior, reroll identity handling, genuine-edit classification/rebuild, Evidence/Lineage/Handoff/Frame controls, and observed scope controls pass in the supplied packet. The release-specific operator-card identity check is still `NOT_EXERCISED`, so #1657 remains open and the current release is not terminally validated by this packet. Separately, visible standalone `internal:` planning-control alias contamination recurs in RAW assistant `@3213`, strengthening advancement-holding FIX `#1660`; no blind global strip is authorized. Performance variance strengthens WATCH `#1588` and WATCH `#1626` without a new correctness failure. Provider cache remains `UNVERIFIED`. No LIVE_PASS, HUMAN_EVIDENCE terminal convergence, next runtime version, feature, architecture change, or performance optimization is authorized by this packet.
+The machine-managed production snapshot identifies `Operator Release Card Metadata Repair` v0.70.11 as current production and records terminal validation `LIVE_PASS`. Accepted HUMAN_EVIDENCE for `simcore-v0.70.11-new-03` was consumed by R2.8 terminal convergence, and attempt 3 of run `34547337280` completed the exact checked-state chain through PR #2011, explicit `PR_RECOVERY` validation, public `Required`, protected merge, `ALREADY_DURABLE` reobservation, and staging cleanup. Durable main for that terminal landing is `ce2ca0b99ba0d3ec6aadf4f6f471d7698e9468bd`; production remains `01769eb6db7244e3682bb8ba6001d89aea4e0ed8`. The current machine priority is `POST_07011_NEXT_STEP_REVIEW`. This administrative convergence authorizes no next runtime version, feature, architecture change, or performance optimization by itself. Independent runtime, performance, cache, and other anomaly lanes remain owned by their separate repository records and must be freshly read before promotion. Provider cache remains `UNVERIFIED`.
 
 ## Historical validated precursor — v0.63.55
 
@@ -1177,39 +1177,34 @@ When continuing development in a new conversation:
 Current promoted next action:
 
 ```text
-Complete the current release-specific operator-card identity check exactly as defined by the release design.
-Do not infer LIVE_PASS from mixed-path packet #1972; that packet leaves the operator-card UI check NOT_EXERCISED.
-Keep #1660 as a separate advancement-holding runtime FIX; the current mixed-path packet confirms a fresh visible `internal:` recurrence at assistant @3213.
-Keep #1588 and #1626 as independent performance WATCH lanes; do not promote an optimization without source-proven ownership.
-Do not fabricate HUMAN_EVIDENCE terminal convergence or a next runtime version.
+Review `POST_07011_NEXT_STEP_REVIEW` against fresh repository authority before promoting any next SimCore transaction.
+Preserve v0.70.11 `LIVE_PASS` and the closed #2006 PR_RECOVERY projection contract unless new independent evidence contradicts them.
+Do not infer or invent a next runtime version, feature, architecture change, or optimization from terminal convergence alone.
+Fresh-read independent runtime, performance, cache, and anomaly issue lanes before deciding which one, if any, is legally promotable.
+Any runtime change still requires its own design/evidence record, implementation branch, CI, release-simcore deployment, real long-chat validation, and main continuity synchronization.
 ```
 
 Current bounded state:
 
 ```text
-production identity = read authoritative machine-managed snapshot above
-release live gate = read authoritative machine-managed live-gate block above
-machine validation / lifecycle = read authoritative machine-managed blocks above
-mixed-path packet #1972 = PASS FOR OBSERVED RUNTIME CONTROLS
-operator-card identity live check = NOT_EXERCISED
-#1657 operator release card repair = FIX / OPEN until release-specific card identity is proven
-#1660 visible standalone internal: planning-control alias = FIX / OPEN / v0.70.11 RECURRENCE CONFIRMED / advancement-holding
-#1588 host-local telemetry OUTPUT_COMMIT latency = WATCH
-#1626 request Turn-storage latency variance = WATCH
-cache/history PRE_SIMCORE mutation causality = DEFER
+production identity = 0.70.11 / 01769eb6db7244e3682bb8ba6001d89aea4e0ed8 / a1721dcdd9a34f3398c0c5899e8981ba1143ead4
+validation = LIVE_PASS
+R lifecycle = REAL_RELEASE_LIVE_PASS
+current priority = POST_07011_NEXT_STEP_REVIEW
+accepted HUMAN_EVIDENCE = products/simcore/releases/live-evidence/simcore-v0.70.11-new-03.json
+R2.8 terminal convergence = PASS / run 34547337280 attempt 3
+#2006 PR_RECOVERY verifier projection = FIX RESOLVED / CLOSED CONTRACT
 provider cache = UNVERIFIED
 latest.js == install.js = mandatory / verified
-LIVE_PASS = NOT CLAIMED
-HUMAN_EVIDENCE terminal convergence = NOT EXECUTED
 
 next legal administrative path
-→ exercise and preserve the explicit current-release operator-card identity check
-→ then evaluate the release-specific terminal gate without absorbing #1660 into the v0.70.11 repair scope
-→ execute R2.8 HUMAN_EVIDENCE only when explicit human terminal decision, checkpoint, and next-priority values are supplied
+→ review POST_07011_NEXT_STEP_REVIEW against fresh repository authority
+→ choose at most one separately authorized next transaction
+→ do not infer a next runtime version from LIVE_PASS alone
 
 runtime work
-→ #1660 must be resolved or evidence-reclassified before any further runtime advancement
-→ do not mix #1660 repair with performance optimization or release-system work
+→ no runtime change is authorized by this terminal administrative convergence
+→ fresh-read each independent runtime/performance/anomaly issue before promotion
 → any runtime change requires its own design/evidence, work branch, CI, release-simcore deployment, real long-chat validation, then main documentation/continuity synchronization
 
 observed anomaly

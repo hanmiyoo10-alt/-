@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "app-api-mod-lab",
+  "kind": "product",
+  "displayName": "App API Mod Lab",
+  "lifecycle": "research-product-root",
+  "projectPath": "products/app-api-mod-lab",
+  "guidelines": "docs/APP_API_MOD_LAB_GUIDELINES.md",
+  "authority": {
+    "type": "evidence",
+    "evidence": "products/app-api-mod-lab/CURRENT.md",
+    "manifest": "products/app-api-mod-lab/product.json"
+  },
+  "memory": {
+    "profile": "check-only",
+    "outputs": []
+  },
+  "alerts": {
+    "policy": "repo-default"
+  }
+}

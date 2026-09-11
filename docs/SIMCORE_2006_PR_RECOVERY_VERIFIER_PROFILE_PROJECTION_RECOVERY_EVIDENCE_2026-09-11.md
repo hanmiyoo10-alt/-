@@ -1,10 +1,10 @@
 # SimCore #2006 PR_RECOVERY Verifier Profile Projection Recovery Evidence
 
 Date: 2026-09-11 KST
-Status: **FIX MERGED · POSTMERGE CI PASS · FRESH R2.8 OPERATIONAL REPROOF PENDING**
+Status: **CLOSED · KEEP · FIX RESOLVED · POSTMERGE CI PASS · NATURAL R2.8 END-TO-END PASS · NONRUNTIME**
 Tracking: #2006
-Related checked transport: #2005
-Authority: `docs/SIMCORE_1959_CHECKED_PR_CALLER_CONSUMPTION_DESIGN_2026-09-09.md`
+Related checked transports: #2005 (pre-fix evidence), #2011 (post-fix proof)
+Authority: `docs/SIMCORE_1959_CHECKED_PR_CALLER_CONSUMPTION_DESIGN_2026-09-09.md` · `docs/SIMCORE_1990_R2_8_ACTIONS_PR_CREATE_POLICY_FALLBACK_DESIGN_2026-09-11.md` · `docs/SIMCORE_2000_R2_8_DUAL_COMMIT_IDENTITY_DESIGN_2026-09-11.md`
 
 ## 1. Classification
 
@@ -119,19 +119,176 @@ Required public gate              PRESERVED
 
 ## 7. Fresh operational reproof
 
-The old #2005 head predates the workflow repair and must not be rewritten or treated as post-fix operational proof.
+The old #2005 head remains closed and unmerged as pre-fix failure evidence. It was not rewritten or reused as post-fix proof.
 
-A fresh R2.8 transaction must therefore be triggered from the repaired main while preserving the exact accepted v0.70.11 HUMAN_EVIDENCE decision and production identity. Expected proof:
+The repaired-main reproof was triggered from:
 
 ```text
-fresh repaired-main R2.8 staging head
-→ checked transport PR
-→ PR_RECOVERY resolves outer profile to PR_MAIN verifier profile
-→ Verify SUCCESS
-→ Required SUCCESS
-→ frozen-base revalidation
-→ protected-main merge
-→ durable reobservation PASS / ALREADY_DURABLE as applicable
+PR #2008 merge / frozen R2.8 base
+0c3abb6feb6d7414f0e833a910e215248c4bd141
 ```
 
-Until that sequence completes, #2006 remains operationally open and v0.70.11 terminal convergence is not declared complete by this document.
+Fresh terminal convergence authority:
+
+```text
+R2.8 run                 34547337280
+successful attempt       3
+terminal job             103113641551 · SUCCESS
+accepted HUMAN_EVIDENCE  products/simcore/releases/live-evidence/simcore-v0.70.11-new-03.json
+production commit        01769eb6db7244e3682bb8ba6001d89aea4e0ed8
+production blob          a1721dcdd9a34f3398c0c5899e8981ba1143ead4
+frozen base              0c3abb6feb6d7414f0e833a910e215248c4bd141
+exact checked head       e8731f7015396d8dc99e9256bade063d71d08b3c
+checked PR               #2011
+merge / durable main     ce2ca0b99ba0d3ec6aadf4f6f471d7698e9468bd
+```
+
+Attempts 1 and 2 reached the already-frozen #1990 assistant-create fallback but did not receive the connector-created checked PR inside the bounded consumer window. Attempt 2 was repo-recorded as:
+
+```text
+DEFER · R2_8_BOUNDED_ASSISTANT_BRIDGE_TIMING · NON-CORRECTNESS
+```
+
+That classification remains correct. The attempt-2 exact staging state was not landed late as a substitute for the same-run contract. Attempt 3 re-ran the failed R2.8 job from the same frozen main and the exact checked PR was created while the bounded consumer was active.
+
+## 8. Exact PR_RECOVERY verifier proof
+
+Attempt 3 generated:
+
+```text
+staging ref
+simcore-r2-8-terminal-convergence/e8731f701539-1-34547337280-3-2378-1789090274584
+
+checked head
+e8731f7015396d8dc99e9256bade063d71d08b3c
+
+changed paths
+docs/CURRENT_DEVELOPMENT.md
+product-manifest.json
+```
+
+The checked head was exactly one commit ahead of frozen base and changed only terminal administrative state toward `LIVE_PASS` / `POST_07011_NEXT_STEP_REVIEW`.
+
+The active same-run helper consumed exact PR #2011 and launched the explicit protected validation:
+
+```text
+SimCore CI validation run  34551077059
+transport profile           PR_RECOVERY
+Verify job                  103113924875 · SUCCESS
+Required job                103113968876 · SUCCESS
+```
+
+The direct Verify logs prove the repaired projection boundary:
+
+```text
+INPUT_PROFILE                 PR_RECOVERY
+resolver verifier_profile     PR_MAIN
+Select source PROFILE         PR_MAIN
+Run proposed verifier PROFILE PR_MAIN
+PR base                       0c3abb6feb6d7414f0e833a910e215248c4bd141
+PR head                       e8731f7015396d8dc99e9256bade063d71d08b3c
+expected production           01769eb6db7244e3682bb8ba6001d89aea4e0ed8
+scope labels                  STATE_SYNC
+GATE_STATIC                   PASS
+GATE_STATE                    PASS
+reasonCodes                   []
+conclusion                    PASS
+```
+
+The original `CI_PROFILE_INVALID` failure is absent. `PR_RECOVERY` remains the transport profile, while the proposed permanent verifier now receives exactly the frozen `PR_MAIN` verifier semantics required by #1959.
+
+## 9. Same-run protected merge and durable reobservation
+
+The R2.8 attempt itself, not a manual merge, performed the protected transition after `Required` succeeded.
+
+Observed chain:
+
+```text
+CHECKED_PR_REQUIRED
+→ exact PR #2011 discovered inside bounded window
+→ PR_RECOVERY / Required PASS
+→ frozen base/head revalidation PASS
+→ CHECKED_PR_MERGED
+→ durable main ce2ca0b99ba0d3ec6aadf4f6f471d7698e9468bd
+→ ALREADY_DURABLE
+→ CHECKED_PR_CLEANUP_PASS
+→ staging ref deleted
+→ TERMINAL_CONVERGENCE_PASS
+```
+
+PR #2011 exact identity:
+
+```text
+base        0c3abb6feb6d7414f0e833a910e215248c4bd141
+head        e8731f7015396d8dc99e9256bade063d71d08b3c
+merge       ce2ca0b99ba0d3ec6aadf4f6f471d7698e9468bd
+changed     2 files
+runtime     NONE
+```
+
+Durable main now records:
+
+```text
+production version  0.70.11
+validation           LIVE_PASS
+priority             POST_07011_NEXT_STEP_REVIEW
+terminal disposition LIVE_PASS
+R lifecycle          REAL_RELEASE_LIVE_PASS
+```
+
+## 10. Production authority reobservation
+
+Final operational readback confirms production never moved during this control-plane repair or terminal administrative landing:
+
+```text
+release-simcore commit 01769eb6db7244e3682bb8ba6001d89aea4e0ed8
+latest.js blob         a1721dcdd9a34f3398c0c5899e8981ba1143ead4
+install.js blob        a1721dcdd9a34f3398c0c5899e8981ba1143ead4
+version                0.70.11
+latest == install      PASS
+```
+
+No new runtime deployment is applicable. No new real-long-chat session is required by #2006 because this transaction changes only release-system/control-plane profile projection. The HUMAN_EVIDENCE used by R2.8 is the already-accepted v0.70.11 live evidence and was re-read exactly, not manufactured by this repair.
+
+## 11. Three-lens closure
+
+### Stabilization
+
+**STRONGER**
+
+The outer transport identity and inner verifier identity are now explicit and fail-closed. Exact PR base/head, expected production, public Required, protected merge, durable re-readback, and cleanup were all exercised naturally.
+
+### Automation
+
+**MORE AUTOMATIC AND SAFER**
+
+The existing resolver output is consumed directly by the proposed verifier. Attempt 3 also proves the frozen #1990 connector fallback can complete the same-run chain without bypassing Required or manually merging the checked PR.
+
+### Simplification
+
+**SIMPLER**
+
+The repair removes accidental duplicate ownership of verifier profile at the call boundary and reuses the already-authoritative `verifier_profile` primitive. No new profile, truth source, compatibility layer, or runtime state was added.
+
+Material tradeoff: **NONE OBSERVED**.
+
+## 12. Final disposition
+
+```text
+#2006 blocker                     FIX RESOLVED
+PR_RECOVERY transport             PRESERVED
+resolved verifier profile         PR_MAIN
+natural explicit validation       PASS
+Required                           PASS
+protected checked-state merge      PASS
+ALREADY_DURABLE readback           PASS
+staging cleanup                    PASS
+runtime / release-simcore change   NONE
+attempt-2 timing DEFER             RESOLVED BY ATTEMPT 3
+R2.8 terminal convergence          PASS
+final disposition                  CLOSED / KEEP
+```
+
+A separate `CURRENT_DEVELOPMENT` human-current-state drift recurrence was discovered during final readback and tracked under #1545. It is a documentation continuity defect only and does not weaken the #2006 correctness verdict or production identity.
+
+Do not reopen #2006 unless new independent evidence shows that `PR_RECOVERY` again leaks its outer transport profile into the proposed permanent verifier or another frozen exact-identity guard fails.

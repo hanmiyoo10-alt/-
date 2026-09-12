@@ -141,6 +141,8 @@ Closure rules are fail closed:
 5. `BLOCKED_CAPABILITY` may coexist with `DONE` only when the affected capability/evidence is explicitly non-blocking for that packet's acceptance; otherwise the packet remains blocked/not done.
 6. Safety-critical live proof remains blocking whenever the activated packet declared it required.
 7. Applying this taxonomy never retroactively weakens an already-activated packet's acceptance contract. In particular, v1.1 `V11-V1` keeps its original natural-live-observation requirement until that original acceptance is satisfied or explicitly redesigned through a separate reviewed decision.
+8. Native GitHub issue closure alone is not proof-taxonomy `DONE` evidence.
+9. When required acceptance remains after merge, especially blocking `POSTMERGE_CONVERGENCE` or `LIVE_PROVEN` evidence, the implementation PR MUST use non-closing linkage such as `Refs #<packet>` and MUST NOT use `Fixes` or `Closes`. A closing keyword may be used only when merge itself satisfies every required acceptance item and no required postmerge proof remains.
 
 The taxonomy is coordination/proof language only. The underlying Git, CI, release, production, branch-protection, incident, and project authorities still decide whether the cited evidence is true.
 

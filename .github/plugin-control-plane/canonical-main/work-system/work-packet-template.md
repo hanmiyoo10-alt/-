@@ -54,6 +54,8 @@ Ordered stages:
 
 An ordinary continuation advances at most one substantial stage. A tiny read-only task may collapse stages only when it genuinely completes in at most two bounded reads. A safety-critical recovery may continue only to the nearest safe stop when delaying would create material risk, and that exception must be recorded. Explicit user instruction may authorize a broader run. Staging never removes required Git, CI, release, production, authority, validation, uncertainty, or evidence checks.
 
+This packet body is a current lifecycle projection, not an immutable activation snapshot. Before or atomically with native issue closure, reconcile State; completed/current/next stage; evidence-backed Proof / closure terms; required acceptance UNKNOWNs; and Handoff / exact next action so the body does not advertise already-completed work. Native closure or a final comment alone does not override a contradictory stale body. If terminal evidence conflicts with this body, classify the body projection as stale, re-read terminal evidence, and do not resume the stale advertised stage without fresh re-attribution.
+
 ## Bounded write scope
 
 - <PATH_OR_ISSUE>

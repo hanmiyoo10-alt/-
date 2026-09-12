@@ -4,6 +4,10 @@ const fs = require('fs');
 const path = require('path');
 
 const REGISTRY_PATH = path.join(__dirname, 'registry.json');
+const CUSTOM_SCOPE_LABEL_PREFIX = 'scope:';
+const CUSTOM_SCOPE_LABEL_NAME_BOUND = 50;
+const CUSTOM_SCOPE_ID_MAX_LENGTH = CUSTOM_SCOPE_LABEL_NAME_BOUND - CUSTOM_SCOPE_LABEL_PREFIX.length;
+const TRUSTED_CUSTOM_SCOPE_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 
 function loadRegistry() {
   return JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8'));
@@ -109,16 +113,58 @@ function extractIssueScopeValue(body = '') {
   return null;
 }
 
+function extractIssueCustomScopeValue(body = '') {
+  const lines = String(body).replace(/\r/g, '').split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    if (lines[i].trim() === '### Custom scope') {
+      for (let j = i + 1; j < lines.length; j += 1) {
+        const value = lines[j].trim();
+        if (/^###\s+/.test(value)) return null;
+        if (value) return value;
+      }
+    }
+    const direct = lines[i].match(/^Custom scope:\s*(.+)$/i);
+    if (direct) return direct[1].trim();
+  }
+  return null;
+}
+
 function extractIssuePluginValue(body = '') {
   return extractIssueScopeValue(body);
 }
 
-function classifyIssueBody(body, registry = loadRegistry()) {
+function customScopeLabelDefinition(value, registry = loadRegistry()) {
+  const id = String(value || '').trim();
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id)) return null;
+  if (id.length > CUSTOM_SCOPE_ID_MAX_LENGTH) return null;
+  const reserved = new Set(['custom', ...labelDefinitions(registry)
+    .filter((def) => def.name.startsWith(CUSTOM_SCOPE_LABEL_PREFIX))
+    .map((def) => def.name.slice(CUSTOM_SCOPE_LABEL_PREFIX.length))]);
+  if (reserved.has(id)) return null;
+  return {
+    name: `${CUSTOM_SCOPE_LABEL_PREFIX}${id}`,
+    color: 'c5def5',
+    description: 'Trusted custom repository issue scope',
+  };
+}
+
+function trustedCustomScopeAssociation(value = '') {
+  return TRUSTED_CUSTOM_SCOPE_ASSOCIATIONS.has(String(value).toUpperCase());
+}
+
+function classifyIssueBody(body, registry = loadRegistry(), options = {}) {
   const value = extractIssueScopeValue(body);
   if (!value) return {explicit: false, labels: []};
 
   if (value === 'repo') return {explicit: true, labels: ['scope:repo']};
   if (value === 'shared') return {explicit: true, labels: ['scope:shared']};
+  if (value === 'custom') {
+    const definition = trustedCustomScopeAssociation(options.authorAssociation)
+      ? customScopeLabelDefinition(extractIssueCustomScopeValue(body), registry)
+      : null;
+    if (!definition) return {explicit: true, labels: ['scope:unclassified']};
+    return {explicit: true, labels: [definition.name], customLabelDefinition: definition};
+  }
 
   const pluginMatches = Object.entries(registry.plugins || {})
     .filter(([, plugin]) => (plugin.issueValues || []).includes(value));
@@ -223,7 +269,10 @@ module.exports = {
   matchesAny,
   classifyPaths,
   extractIssueScopeValue,
+  extractIssueCustomScopeValue,
   extractIssuePluginValue,
+  customScopeLabelDefinition,
+  trustedCustomScopeAssociation,
   classifyIssueBody,
   statusIssueTitle,
   resolveStatusIssueIdentity,

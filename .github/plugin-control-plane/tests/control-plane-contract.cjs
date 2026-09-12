@@ -72,6 +72,12 @@ assert.deepEqual(classifyPaths(['tools/agent-skill-security/corpus.json'], regis
 assert.deepEqual(classifyPaths(['.github/workflows/agent-skill-security-benchmark.yml'], registry).labels, ['scope:repo']);
 assert.deepEqual(classifyPaths(['tools/other-security-tool/README.md'], registry).labels, ['scope:unclassified']);
 assert.deepEqual(classifyPaths(['.github/workflows/agent-skill-security-benchmark-extra.yml'], registry).labels, ['scope:unclassified']);
+assert.deepEqual(classifyPaths(['.agents/skills/agent-execution-compactness/SKILL.md'], registry).labels, ['scope:repo']);
+assert.deepEqual(classifyPaths(['.agents/skills/plugin-authority-scan/SKILL.md'], registry).labels, ['scope:repo']);
+assert.deepEqual(classifyPaths(['.agents/skills/plugin-impact-scope/SKILL.md'], registry).labels, ['scope:repo']);
+assert.deepEqual(classifyPaths(['docs/REPOSITORY_AGENT_EXECUTION_COMPACTNESS_V1_DESIGN_2026-09-07.md'], registry).labels, ['scope:repo']);
+assert.deepEqual(classifyPaths(['.agents/README.md'], registry).labels, ['scope:unclassified']);
+assert.deepEqual(classifyPaths(['docs/REPOSITORY_AGENT_EXECUTION_COMPACTNESS_V1_DESIGN_2026-09-08.md'], registry).labels, ['scope:unclassified']);
 assert.deepEqual(classifyPaths(['docs/REPOSITORY_PLUGIN_CONTROL_PLANE_IMPLEMENTATION.md'], registry).labels, ['scope:repo']);
 assert.deepEqual(
   classifyPaths(['plugins/usage-dashboard/latest.js', 'plugins/simcore/latest.js'], registry).labels,

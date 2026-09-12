@@ -56,6 +56,8 @@ assert.deepEqual(policy.closureTaxonomy.rules, {
   safetyCriticalLiveProofRemainsBlockingWhenRequired: true,
   blockedCapabilityMayCoexistWithDoneOnlyWhenExplicitlyNonBlocking: true,
   taxonomyMayRetroactivelyWeakenActivatedAcceptance: false,
+  nativeGitHubIssueClosureIsDoneEvidence: false,
+  blockingPostmergeAcceptanceAllowsPrClosingKeyword: false,
 });
 assert.ok(policy.packetStates.includes('DONE'));
 assert.equal(policy.closureTaxonomy.roles.closure.includes('DONE'), true);
@@ -220,6 +222,10 @@ assert.match(readme, /`BLOCKED_CAPABILITY` may coexist with `DONE` only when the
 assert.match(readme, /Safety-critical live proof remains blocking whenever the activated packet declared it required/);
 assert.match(readme, /never retroactively weakens an already-activated packet's acceptance contract/);
 assert.match(readme, /v1\.1 `V11-V1` keeps its original natural-live-observation requirement/);
+assert.equal(policy.closureTaxonomy.rules.nativeGitHubIssueClosureIsDoneEvidence, false);
+assert.equal(policy.closureTaxonomy.rules.blockingPostmergeAcceptanceAllowsPrClosingKeyword, false);
+assert.ok(readme.includes("Native GitHub issue closure alone is not proof-taxonomy `DONE` evidence."));
+assert.ok(readme.includes("the implementation PR MUST use non-closing linkage such as `Refs #<packet>` and MUST NOT use `Fixes` or `Closes`"));
 assert.match(template, /## Proof \/ closure/);
 assert.match(template, /Evidence terms reached:/);
 assert.match(template, /Required acceptance UNKNOWNs:/);
@@ -228,6 +234,8 @@ assert.match(template, /`DONE` belongs in the packet lifecycle State only after 
 assert.match(template, /required UNKNOWN evidence is `NONE`/);
 assert.match(template, /may coexist with `DONE` only when the affected evidence was explicitly declared non-blocking/);
 assert.match(template, /Do not infer `LIVE_PROVEN` from `CONTRACT_PROVEN`/);
+assert.ok(template.includes("PR linkage is fail closed: if required acceptance remains after merge"));
+assert.ok(template.includes("Native GitHub issue closure alone is not proof-taxonomy `DONE` evidence."));
 assert.match(readme, /## Normal canonical-main startup/);
 assert.match(readme, /exactly two required reads/);
 assert.match(readme, /1\. read direct current `main` authority/);

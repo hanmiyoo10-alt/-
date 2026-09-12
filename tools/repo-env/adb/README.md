@@ -48,6 +48,8 @@ A verified remote-shell quirk on native Termux is that the shell may omit `PREFI
 
 `adb.sh` corrects only that narrow case. When the resolved executable is the Termux ADB binary and the current `TMPDIR` is missing or not writable, the wrapper points `TMPDIR` at the writable Termux prefix temp directory before executing ADB. Ubuntu/Debian ADB is left unchanged.
 
+On the observed `M` remote path, the outer Desktop Commander service had a valid Termux `TMPDIR`, while newly spawned command shells did not. The remote integration creates its local MCP child from the SDK default environment plus explicit config, and Terminal Manager launches Bash commands as login shells (`bash -l -c`). A device-local `~/.bash_profile` can therefore restore a missing `TMPDIR` for all new Bash remote command sessions. This remains host configuration: the repository bootstrap does not modify user shell profiles automatically, and `adb.sh` remains the bounded fallback when that host normalization is absent.
+
 An empty `adb devices` list is not an installation failure. It proves the local server is runnable but means no target is currently connected, paired, or authorized.
 
 Wireless pairing, USB-debugging consent, device trust prompts, and target-specific connection details remain explicit device operations. This bootstrap does not enable Developer Options, weaken Android security controls, or auto-pair devices.

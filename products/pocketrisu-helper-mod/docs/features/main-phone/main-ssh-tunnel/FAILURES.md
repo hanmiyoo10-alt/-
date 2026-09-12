@@ -28,3 +28,17 @@ Recovery evidence:
 Follow-up:
 - issue #2048 tracks incident evidence;
 - isolated hardening PR adds a core-only supervisor guard and preserves explicit operator `down`.
+
+### 2026-09-12 — CI / product validator baseline blocker
+
+Observed:
+- PR #2060 was updated to current `main`; exact diff remains only six `main-ssh-tunnel` files;
+- branch protection `Required` check passes;
+- `PocketRisu helper docs` workflow fails;
+- failure set matches current-main baseline errors in unrelated Feature-IDs.
+
+Disposition:
+- do not weaken or bypass `validate_docs.py`;
+- do not mix unrelated feature-document repairs into PR #2060;
+- baseline validator debt is tracked separately in issue #2064;
+- merge remains blocked by product-policy GREEN despite branch-protection Required being green.

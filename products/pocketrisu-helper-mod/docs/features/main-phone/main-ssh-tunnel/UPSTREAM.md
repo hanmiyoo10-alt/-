@@ -2,7 +2,7 @@
 
 Feature-ID: `main-ssh-tunnel`
 Area: `main-phone`
-PR status: `OPEN (#2060)`
+PR status: `BLOCKED_BASELINE_CI (#2060)`
 Isolation status: `ISOLATED`
 Deployment status: `NOT_READY`
 
@@ -49,4 +49,7 @@ Keep the existing runit-owned SSH tunnel behavior, but add a tiny independent gu
 ## Review / PR state
 - incident evidence: repository issue #2048
 - PR: #2060
-- next action: wait for Required/PR checks and review; do not merge in the IMPLEMENTATION_PR stage.
+- branch protection `Required`: PASS on current head.
+- product workflow `PocketRisu helper docs`: FAIL from pre-existing baseline errors unrelated to this Feature-ID.
+- baseline CI debt: issue #2064.
+- next action: keep merge blocked until product-policy GREEN can be established without weakening validation or mixing unrelated Feature-IDs.

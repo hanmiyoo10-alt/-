@@ -48,3 +48,18 @@ Resolution:
 - after merging current `main` into PR #2060, the candidate passes the helper docs validator, isolated guard regression, shell syntax, and `git diff --check`;
 - exact candidate diff remains confined to the six `main-ssh-tunnel` files;
 - remote refreshed PR checks are still required before GREEN/merge.
+
+
+### 2026-09-12 — POST_DEPLOY_VERIFY / merge convergence checkpoint
+
+Resolution evidence:
+- PR #2060 merged as `d9e93115f943138ad7c675fcc675e4a0460714b9`;
+- merged-main `Required` and `PocketRisu helper docs` passed;
+- fresh detached-main syntax, guard regression, helper-docs validator, and `git diff --check` passed;
+- fresh main-phone INSPECT_ONLY shows current localhost health ready, but central `runsvdir` still absent and the merged guard/Boot launcher not installed.
+
+Disposition:
+- repository repair is `DEPLOY_READY` only;
+- do not mark real-device deployment or post-deploy verification complete yet;
+- keep central `runsvdir` death cause as `UNKNOWN`;
+- next mutation is bounded to backup + install of the two guard files on the main phone.

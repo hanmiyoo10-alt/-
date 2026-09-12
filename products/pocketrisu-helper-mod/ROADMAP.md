@@ -1,6 +1,19 @@
 # ROADMAP
 
-기준: 2026-08-23
+기준: 2026-09-12
+
+
+## DEPLOY_READY — main-ssh-tunnel supervisor hardening
+
+- PR #2060 merged: `d9e93115f943138ad7c675fcc675e4a0460714b9`.
+- core `runsv`가 사라졌을 때만 복구하고 explicit `down`을 존중하는 guard + Termux:Boot launcher 준비 완료.
+- merged-main Required/helper-docs와 fresh detached-main 회귀 검증 PASS.
+- 서버폰 코드/서비스, notification relay, passive reconnect watcher 의미는 변경하지 않음.
+- 중앙 `runsvdir` 사망 원인은 계속 `UNKNOWN`.
+- 현재 메인폰에는 guard/Boot launcher가 아직 설치되지 않았으므로 실기기 배포/POST_DEPLOY_VERIFY는 미완료.
+
+다음 한 단계:
+- 메인폰 backup → 두 파일 설치 → guard loop 확인 → localhost health/기존 notify/reconnect 경로 보존 확인 → bounded supervisor-loss 검증.
 
 ## 완료 — legacy upstream PR rebuild 준비
 

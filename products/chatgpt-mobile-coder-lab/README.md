@@ -2,8 +2,8 @@
 
 Android 두 대와 서로 다른 ChatGPT 계정 두 개를 사용해, **일반 ChatGPT 채팅을 가능한 한 Codex 같은 코딩 작업면으로 확장하는 방법**을 조사하고 검증하는 독립 실험 루트다.
 
-> 기준 시점: 2026-09-09  
-> 상태: `ACTIVE / INVESTIGATE`  
+> 기준 시점: 2026-09-12
+> 상태: `CORE COMPLETE / OPERATIONAL HARDENING`
 > 성격: 연구·실험 기록. production/release/runtime authority가 아니다.
 
 ## 목표
@@ -22,6 +22,12 @@ ChatGPT가 reasoning 담당
 ```
 
 핵심 요구는 **Codex CLI 자체를 쓰는 것**이 아니라, 평소 사용하는 ChatGPT 채팅을 주 인터페이스와 reasoning layer로 유지하면서 로컬 개발 도구의 손발을 붙이는 것이다.
+
+## 핵심 목표 완료 판정
+
+2026-09-12 기준 핵심 목표는 **COMPLETE**로 닫는다. 서버폰과 메인폰 모두 승인된 Remote Desktop Commander repository 실행면으로 검증됐고, 독립 branch/worktree에서의 실제 Git 작업과 두 물리 장치의 동시 실행까지 확인됐다. repository-wide 공통 규칙도 승인된 원격 실행을 기본 작업면으로 채택한다.
+
+이 완료 판정은 모든 운영 하드닝이 끝났다는 뜻이 아니다. 장시간 안정성, 최소 권한, 선택적 account-session 증명, 과거 smoke 자산 정리 같은 후속 항목은 [`docs/OPERATIONS_BACKLOG.md`](docs/OPERATIONS_BACKLOG.md)에서 별도 추적한다.
 
 ## 실제 환경
 

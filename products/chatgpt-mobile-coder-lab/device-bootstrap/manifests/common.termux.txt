@@ -1,0 +1,14 @@
+# package|command
+git|git
+gh|gh
+nodejs|node
+nodejs|npm
+python|python
+tmux|tmux
+openssh|ssh
+rsync|rsync
+make|make
+clang|clang
+curl|curl
+termux-services|sv
+proot-distro|proot-distro

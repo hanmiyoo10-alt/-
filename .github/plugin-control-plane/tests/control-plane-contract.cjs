@@ -8,6 +8,7 @@ const {
   classifyPaths,
   classifyIssueBody,
   validateRegistry,
+  labelDefinitions,
   resolveStatusIssueIdentity,
 } = require('../lib.cjs');
 const {projectRows} = require('../canonical-main/observers/project-status.cjs');
@@ -59,6 +60,13 @@ assert.deepEqual(classifyPaths(['products/simcore/tooling/check.mjs'], registry)
 assert.deepEqual(classifyPaths(['plugins/devpass/README.md'], registry).labels, ['plugin:devpass']);
 assert.deepEqual(classifyPaths(['plugins/termux/large-doc-editor/server.py'], registry).labels, ['plugin:termux-large-doc-editor']);
 assert.deepEqual(classifyPaths(['voyage-token-check/DESIGN_STATUS.md'], registry).labels, ['plugin:voyage-token-check']);
+assert.deepEqual(classifyPaths(['products/app-api-mod-lab/CURRENT.md'], registry).labels, ['product:app-api-mod-lab']);
+const mclBootstrap = classifyPaths(['products/chatgpt-mobile-coder-lab/device-bootstrap/bootstrap.sh'], registry);
+assert.deepEqual(mclBootstrap.labels, ['scope:research-product']);
+assert.deepEqual(mclBootstrap.unclassifiedPaths, []);
+const mclDocs = classifyPaths(['products/chatgpt-mobile-coder-lab/docs/decisions.md'], registry);
+assert.deepEqual(mclDocs.labels, ['scope:research-product']);
+assert.deepEqual(mclDocs.unclassifiedPaths, []);
 assert.deepEqual(classifyPaths(['products/pocketrisu-helper-mod/CURRENT.md'], registry).labels, ['product:pocketrisu-helper-mod']);
 assert.deepEqual(classifyPaths(['.github/workflows/pocketrisu-helper-docs.yml'], registry).labels, ['product:pocketrisu-helper-mod']);
 assert.deepEqual(classifyPaths(['plugins/test-a/latest.js'], registry).labels, ['scope:test-fixture']);
@@ -91,6 +99,12 @@ assert.deepEqual(
 const unknown = classifyPaths(['misc/unknown.txt'], registry);
 assert.deepEqual(unknown.labels, ['scope:unclassified']);
 assert.deepEqual(unknown.unclassifiedPaths, ['misc/unknown.txt']);
+const researchProductLabel = labelDefinitions(registry).find((entry) => entry.name === 'scope:research-product');
+assert.deepEqual(researchProductLabel, {
+  name: 'scope:research-product',
+  color: 'c5def5',
+  description: 'Repository-recognized research product path; non-production with no release or runtime authority',
+});
 
 assert.deepEqual(
   classifyIssueBody('### Scope\n\nusage-dashboard\n\n### Summary\nwork', registry),

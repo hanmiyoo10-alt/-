@@ -165,6 +165,7 @@ function labelDefinitions(registry = loadRegistry()) {
     ['scope:multi-product', 'd876e3', 'Change touches more than one registered product'],
     ['scope:multi-owner', 'd876e3', 'Change spans registered plugin and product ownership boundaries'],
     ['scope:unclassified', 'b60205', 'Operational scope could not be classified deterministically'],
+    ['scope:research-product', 'c5def5', 'Repository-recognized research product path; non-production with no release or runtime authority'],
     ['scope:template', 'c5def5', 'Template-only path'],
     ['scope:test-fixture', 'c5def5', 'Repository test fixture path'],
     ['control-plane:status', '0e8a16', 'Mutable operational status issue'],

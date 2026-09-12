@@ -81,6 +81,34 @@
         "panel": "dedicated",
         "clear": true
       }
+    },
+    {
+      "label": "Repo: Repository Read MCP Unit Tests",
+      "type": "process",
+      "command": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/repo-ci-mcp/tests",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
     }
   ]
 }

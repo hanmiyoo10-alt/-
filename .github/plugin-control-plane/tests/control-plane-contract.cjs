@@ -117,10 +117,33 @@ assert.deepEqual(classifyIssueBody('### Scope\n\nshared', registry), {explicit: 
 assert.deepEqual(classifyIssueBody('### Scope\n\nnot-registered', registry), {explicit: true, labels: ['scope:unclassified']});
 assert.deepEqual(classifyIssueBody('just prose', registry), {explicit: false, labels: []});
 
+const customIssueBody = (id) => `### Scope\n\ncustom\n\n### Custom scope\n\n${id}\n\n### Summary\nwork`;
+const customDefinition = {
+  name: 'scope:ops-lab',
+  color: 'c5def5',
+  description: 'Trusted custom repository issue scope',
+};
+for (const authorAssociation of ['OWNER', 'MEMBER', 'COLLABORATOR']) {
+  assert.deepEqual(classifyIssueBody(customIssueBody('ops-lab'), registry, {authorAssociation}), {
+    explicit: true,
+    labels: ['scope:ops-lab'],
+    customLabelDefinition: customDefinition,
+  });
+}
+const maxCustomId = 'a'.repeat(44);
+assert.equal(classifyIssueBody(customIssueBody(maxCustomId), registry, {authorAssociation: 'OWNER'}).labels[0].length, 50);
+for (const invalidId of ['', 'Bad-Scope', 'bad--scope', '-bad', 'bad-', 'repo', 'research-product', 'custom', 'a'.repeat(45)]) {
+  assert.deepEqual(classifyIssueBody(customIssueBody(invalidId), registry, {authorAssociation: 'OWNER'}), {explicit: true, labels: ['scope:unclassified']});
+}
+assert.deepEqual(classifyIssueBody(customIssueBody('ops-lab'), registry, {authorAssociation: 'NONE'}), {explicit: true, labels: ['scope:unclassified']});
+
 const issueTemplate = fs.readFileSync(path.join(root, '.github/ISSUE_TEMPLATE/plugin-work.yml'), 'utf8');
 assert.match(issueTemplate, /label:\s*Scope/);
 assert.match(issueTemplate, /voyage-token-check/);
 assert.match(issueTemplate, /pocketrisu-helper-mod/);
+assert.match(issueTemplate, /^        - custom$/m);
+assert.match(issueTemplate, /label:\s*Custom scope/);
+assert.match(issueTemplate, /1-44 characters/);
 
 function triggerBlock(source, trigger) {
   const match = source.match(new RegExp(`^  ${trigger}:\\n([\\s\\S]*?)(?=^  [a-z_]+:|^permissions:)`, 'm'));
@@ -180,7 +203,11 @@ assert.doesNotMatch(prClassifier, /child_process|execSync|spawnSync|require\(['"
 const issueWorkflow = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-issue.yml'), 'utf8');
 assert.match(issueWorkflow, /issues:/);
 assert.match(issueWorkflow, /classify-issue/);
+const issueWorkflowPermissions = issueWorkflow.match(/^permissions:\n([\s\S]*?)^jobs:/m);
+assert.ok(issueWorkflowPermissions, 'issue workflow permissions block must exist');
+assert.equal(issueWorkflowPermissions[1].trim(), 'contents: read\n  issues: write');
 assert.doesNotMatch(issueWorkflow, /pull_request_target/);
+assert.doesNotMatch(issueWorkflow, /pull-requests:\s*write/);
 
 const statusWorkflow = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-status.yml'), 'utf8');
 assert.match(statusWorkflow, /schedule:/);
@@ -200,6 +227,9 @@ assert.match(controlPlaneReadme, /intentionally redundant metadata-only fallback
 assert.match(controlPlaneReadme, /pull-requests: write/);
 assert.match(controlPlaneReadme, /never execute PR-head code/);
 assert.match(controlPlaneReadme, /`pull_request` observer remains read-only evidence/);
+assert.match(controlPlaneReadme, /Trusted custom issue scopes/);
+assert.match(controlPlaneReadme, /scope:unclassified/);
+assert.match(controlPlaneReadme, /at most 44 characters/);
 
 const controller = fs.readFileSync(path.join(root, '.github/plugin-control-plane/controller.cjs'), 'utf8');
 assert.match(controller, /DECLARED_MISSING/);
@@ -208,6 +238,11 @@ assert.match(controller, /PENDING —/);
 assert.match(controller, /pocketRisuHelperStatus/);
 assert.match(controller, /registry\.products/);
 assert.match(controller, /product:/);
+assert.match(controller, /async function ensureLabel\(repo, def\)/);
+assert.match(controller, /const existing = await api\(repo, `\/labels\/\$\{encoded\}`, \{allow404: true\}\)/);
+assert.match(controller, /if \(!existing\) await api\(repo, '\/labels', \{method: 'POST', body: def\}\)/);
+assert.match(controller, /authorAssociation: issue\.author_association/);
+assert.match(controller, /if \(bodyResult\.customLabelDefinition\) await ensureLabel\(repo, bodyResult\.customLabelDefinition\)/);
 assert.match(controller, /const statusLabel = encodeURIComponent\('control-plane:status'\)/);
 assert.match(controller, /resolveStatusIssueIdentity/);
 assert.match(controller, /CLOSED_STATUS_DUPLICATE/);

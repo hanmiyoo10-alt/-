@@ -1557,3 +1557,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2444e707e694cb777f54d8521b851cb84203b9f4)
 - Event ID: `69fc7e0990b6c73a942c31690bb7dfb7a64a0f4ad26d88dbc8569d0380be96bb`
 <!-- canonical-main-doc-promoted:69fc7e0990b6c73a942c31690bb7dfb7a64a0f4ad26d88dbc8569d0380be96bb -->
+
+### 2026-09-12 — Merge pull request #2096 from hanmiyoo10-alt/repo/vscode-scope-bootstrap-2094
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `49563967a1705e0508c183786135001d511f11c7`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/49563967a1705e0508c183786135001d511f11c7)
+- Event ID: `b90bc09106bfad3cfff2603d3afbb863df5ff70f8ed06470b5df2fa014648994`
+<!-- canonical-main-doc-promoted:b90bc09106bfad3cfff2603d3afbb863df5ff70f8ed06470b5df2fa014648994 -->

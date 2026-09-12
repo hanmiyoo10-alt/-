@@ -336,6 +336,18 @@ For mutations, preserve project-approved branch/worktree isolation and verify th
 
 If the intended remote device is offline, ambiguous, lacks the required capability, or would widen authority/security scope unnecessarily, fall back to the narrowest safe evidence-equivalent repository/connector/local surface and report the limitation when it materially affects the task. This default must not force remote execution when another authorized surface is narrower, safer, or required by the owning contract.
 
+### RCR-D18 — Prefer official, least-privilege host administration paths
+
+**Class:** `DEFAULT`
+
+For repository-related host/tool installation or administration, prefer the vendor/OS-supported package manager, signed installer, repository, or documented management path that is suitable for the current host. When practical, begin with non-mutating capability/provenance checks or planning before package installation, policy changes, service changes, or privileged mutation.
+
+Use only the privilege level and effect surface required by the selected authorized route. Preserve host and organization execution policy, endpoint security, package policy, signing requirements, firewall/security controls, and equivalent administrative boundaries; do not disable, weaken, or bypass them merely to make installation or management succeed.
+
+If the preferred route is unavailable or blocked, choose the narrowest authorized alternative that remains inside the existing security boundary, such as another vendor-supported package form, an administrator-approved path, or an explicit environment-owned manual step. Unsupported or community routes must remain separately classified and require explicit scope/evidence before mutation. If no authorized route is available, surface the blocker and stop rather than manufacturing success or introducing a hidden workaround.
+
+Installation/bootstrap tooling should be idempotent where practical: if the required capability is already satisfied, avoid unnecessary reinstall, upgrade, privilege use, network access, service changes, or other mutation. This rule is about transparent normal administration, not evading endpoint security, suppressing detection, hiding activity, or optimizing for security tooling not to observe an authorized action.
+
 ## 6. Conditional common rules
 
 ### RCR-C01 — Generated artifacts remain derived

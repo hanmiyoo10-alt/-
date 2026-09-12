@@ -1,6 +1,6 @@
 # CURRENT — ChatGPT Mobile Coder Lab
 
-최종 갱신 기준: **2026-09-09**
+최종 갱신 기준: **2026-09-12**
 
 새 채팅이나 다른 ChatGPT 계정에서 이 실험을 이어갈 때 가장 먼저 읽는 현재 상태 체크포인트다. 상세 시간순 기록은 `docs/experiment-log.md`와 `docs/checkpoints/`를 본다.
 
@@ -36,6 +36,21 @@ ordinary ChatGPT mobile
 ```
 
 즉 일반 ChatGPT 모바일이 로컬 개발환경의 실질적인 coding agent brain으로 동작하고, Remote Desktop Commander가 filesystem/shell/Git 실행 손발을 제공하는 구조가 실제로 성립했다.
+
+## 메인폰 원격 실행 — ISOLATED WORKTREE LEVEL PASS
+
+2026-09-12 기준 메인폰도 Remote Desktop Commander를 통한 repository 실행면으로 검증됐다.
+
+```text
+repository: /data/data/com.termux/files/home/nyang-repo
+landing worktree: /data/data/com.termux/files/home/nyang-worktrees/mainphone-work
+landing branch: mainphone/work
+verified SHA: c76e7397fc33d48bb997b1e1b1e00bcfbf2f629c
+```
+
+기존 활성 작업 트리 `chore/add-codex-cli`와 그 안의 미추적 `package-lock.json`은 건드리지 않았다. 별도 disposable worktree에서 create → dirty detection → delete → clean rollback을 검증했고, `mainphone/work`는 clean fast-forward만 사용해 현재 `origin/main`과 동일 SHA로 동기화했다. 상세 증거는 `docs/checkpoints/2026-09-12-mainphone-remote-operational.md`를 본다.
+
+이 결과는 메인폰 자체의 독립 원격 실행 가능성을 증명하지만, 서로 다른 두 ChatGPT 계정이 두 폰에서 동시에 실제 feature 작업을 수행하는 end-to-end concurrency 증명과는 구분한다.
 
 ## 서버폰 환경
 
@@ -206,14 +221,14 @@ status: clean
 2. Android/PRoot reconnect와 장시간 channel stability를 검증한다.
 3. `/root` 전체 권한 대신 coding worktree 중심으로 권한/작업 범위를 더 좁힐 수 있는지 검토한다.
 4. repository-owned guideline/test discovery를 포함한 실제 feature 작업 루프를 검증한다.
-5. 메인폰의 별도 ChatGPT 계정에도 독립 branch/worktree + Remote Desktop Commander 경로를 구성해 two-account concurrent workflow를 검증한다.
+5. 메인폰의 독립 Remote Desktop Commander + landing/worktree 경로는 검증 완료. 다음은 서로 다른 두 ChatGPT 계정이 두 폰에서 동시에 실제 feature 작업을 수행하는 two-account concurrent workflow를 검증한다.
 6. smoke PR/branches/worktrees의 정리 정책을 결정한다.
 
 ## 현재 권장 다음 단계
 
 **PR #1937은 merge하지 않고 smoke evidence로 유지하거나 닫은 뒤, 서버폰 Remote Desktop Commander를 기존 PocketRisu runtime과 분리된 persistent service로 안전하게 운영하는 방법을 검증한다.**
 
-그 다음 메인폰에도 동일한 bridge를 별도 계정/branch/worktree로 구성해 두 ChatGPT 계정이 같은 repository에서 서로 다른 작업을 동시에 수행하는 end-to-end concurrency test로 넘어간다.
+메인폰 bridge + 독립 landing/worktree 구성은 2026-09-12 검증 완료. 다음 단계는 두 ChatGPT 계정이 두 폰에서 같은 repository의 서로 다른 작업을 동시에 수행하는 end-to-end concurrency test다.
 
 ## 안전 원칙
 

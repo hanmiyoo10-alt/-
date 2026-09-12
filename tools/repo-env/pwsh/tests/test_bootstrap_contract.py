@@ -100,6 +100,11 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("Cloning or opening the repository never installs anything automatically", text)
         self.assertIn("Termux / Android", text)
 
+    def test_documented_windows_usage_does_not_bypass_execution_policy(self) -> None:
+        text = README.read_text(encoding="utf-8")
+        self.assertNotIn("-ExecutionPolicy Bypass", text)
+        self.assertIn("does not disable or bypass the host execution policy", text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -46,6 +46,7 @@ PocketRisu는 서버폰에서 별도 runtime으로 운영되지만 이 실험의
 ```
 
 실제 기능 변경은 각 landing branch/worktree를 직접 수정하는 대신 current `origin/main`에서 기기별 feature branch와 독립 worktree를 만든다. 원격 호출은 대상 기기와 absolute repository/worktree path를 명시해 다른 기기의 작업공간과 섞이지 않게 한다.
+기기 소유권을 눈에 보이게 유지하기 위해 feature branch도 `mainphone/*`와 `server/*` prefix로 분리하는 것을 기본 형태로 둔다.
 
 ## 작업공간 원칙
 

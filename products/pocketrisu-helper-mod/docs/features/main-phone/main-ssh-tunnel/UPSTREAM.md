@@ -2,9 +2,9 @@
 
 Feature-ID: `main-ssh-tunnel`
 Area: `main-phone`
-PR status: `VALIDATING (#2060)`
+PR status: `MERGED (#2060)`
 Isolation status: `ISOLATED`
-Deployment status: `NOT_READY`
+Deployment status: `DEPLOY_READY`
 
 ## Problem / motivation
 On 2026-09-12 the main phone lost its central Termux `runsvdir`. The PocketRisu server and server sshd remained healthy and reachable, but once the core tunnel supervisor disappeared the localhost PocketRisu path was no longer respawned. Root cause of the `runsvdir` death remains `UNKNOWN`; the repair must not claim otherwise.
@@ -48,8 +48,10 @@ Keep the existing runit-owned SSH tunnel behavior, but add a tiny independent gu
 
 ## Review / PR state
 - incident evidence: repository issue #2048
-- PR: #2060
-- branch protection `Required`: PASS on current head.
-- baseline CI debt #2064 was repaired by merged PR #2066.
-- refreshed candidate on current `main`: shell syntax PASS, isolated guard regression PASS, `PocketRisu helper docs` PASS, `git diff --check` PASS, exact diff remains six `main-ssh-tunnel` files.
-- next action: require refreshed remote PR checks/review/conflict state to reach GREEN before merge.
+- PR #2060: MERGED as `d9e93115f943138ad7c675fcc675e4a0460714b9`.
+- merged-main `Required`: PASS.
+- merged-main `PocketRisu helper docs`: PASS.
+- fresh detached-main shell syntax, isolated guard regression, helper-docs validator, and `git diff --check`: PASS.
+- main-phone pre-deploy INSPECT_ONLY: localhost health ready; central `runsvdir` absent; guard and Boot launcher absent.
+- root cause of central `runsvdir` death remains `UNKNOWN`.
+- next action: deploy only the two merged guard files to the main phone with backup-first and verify without broad service restart.

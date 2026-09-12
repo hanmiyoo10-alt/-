@@ -4,13 +4,16 @@ This directory is a convenience adapter for repository development work. It is n
 
 ## Current shell
 
-The first shared task is:
+The shared repository tasks are:
 
 - `Repo: Plugin Control Plane Contracts`
+- `Repo: Agent Skill Security Contract Tests`
 
-It delegates to the same existing Plugin Control Plane receipt runner and manifest used by repository CI. The task does not reimplement validation logic inside VS Code.
+`Repo: Plugin Control Plane Contracts` delegates to the same existing Plugin Control Plane receipt runner and manifest used by repository CI. The task does not reimplement validation logic inside VS Code.
 
-Run it from `Tasks: Run Task` in the Command Palette when a human editor entrypoint is useful.
+`Repo: Agent Skill Security Contract Tests` delegates directly to the stdlib-only unittest command owned by `tools/agent-skill-security/README.md`. It validates the advisory benchmark harness contract only. A PASS is not a security certification and does not replace Agent Skills CI, Required, or any security/release authority.
+
+Run either task from `Tasks: Run Task` in the Command Palette when a human editor entrypoint is useful.
 
 ## Authority boundary
 
@@ -21,6 +24,6 @@ Run it from `Tasks: Run Task` in the Command Palette when a human editor entrypo
 
 ## Scope boundary
 
-This first shell intentionally contains no product-specific tasks and no `settings.json`.
+This shared shell intentionally contains no product-specific tasks and no `settings.json`.
 
 Product/plugin task groups require their owning project guidelines and exact existing command surfaces to be read first, then should be added through separately bounded work so groups such as `SimCore: ...` or `Usage Dashboard: ...` remain owned by the correct project authority.

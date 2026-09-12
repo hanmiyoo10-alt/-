@@ -1,6 +1,7 @@
 # Failures — plugin-update-fetch
 
 Feature-ID: `plugin-update-fetch`
+Stages: `CI | PR_REVIEW | MERGE | DEPLOY | POST_DEPLOY_VERIFY`
 
 ## 2026-08-17 — first cache-safe updater failed on real mobile localhost runtime
 

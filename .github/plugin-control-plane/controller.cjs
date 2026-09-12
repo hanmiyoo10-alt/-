@@ -7,6 +7,8 @@ const {
   classifyIssueBody,
   managedLabel,
   labelDefinitions,
+  fixedLabelMetadataDecision,
+  resolveStatusIssueIdentity,
 } = require('./lib.cjs');
 
 const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
@@ -60,14 +62,23 @@ function repoFrom(event) {
   return repo;
 }
 
+async function ensureLabel(repo, def) {
+  const encoded = encodeURIComponent(def.name);
+  const existing = await api(repo, `/labels/${encoded}`, {allow404: true});
+  if (!existing) await api(repo, '/labels', {method: 'POST', body: def});
+  return existing || def;
+}
+
+async function ensureFixedLabel(repo, def) {
+  const encoded = encodeURIComponent(def.name);
+  const existing = await api(repo, `/labels/${encoded}`, {allow404: true});
+  const decision = fixedLabelMetadataDecision(existing, def);
+  if (decision.action === 'create') await api(repo, '/labels', {method: 'POST', body: decision.body});
+  if (decision.action === 'update') await api(repo, `/labels/${encoded}`, {method: 'PATCH', body: decision.body});
+}
+
 async function ensureLabels(repo, registry) {
-  for (const def of labelDefinitions(registry)) {
-    const encoded = encodeURIComponent(def.name);
-    const existing = await api(repo, `/labels/${encoded}`, {allow404: true});
-    if (!existing) {
-      await api(repo, '/labels', {method: 'POST', body: def});
-    }
-  }
+  for (const def of labelDefinitions(registry)) await ensureFixedLabel(repo, def);
 }
 
 async function replaceManagedLabels(repo, number, currentLabels, desiredManaged, registry) {
@@ -107,9 +118,11 @@ async function classifyIssue() {
   const registry = loadRegistry();
   const issue = event.issue;
   if (!issue?.number || issue.pull_request) throw new Error('issue event required');
+  const bodyResult = classifyIssueBody(issue.body || '', registry, {
+    authorAssociation: issue.author_association,
+  });
   await ensureLabels(repo, registry);
-
-  const bodyResult = classifyIssueBody(issue.body || '', registry);
+  if (bodyResult.customLabelDefinition) await ensureLabel(repo, bodyResult.customLabelDefinition);
   const current = (issue.labels || []).map((label) => label.name);
   let desired = bodyResult.labels;
   if (!bodyResult.explicit) {
@@ -271,11 +284,10 @@ async function searchCount(query) {
   return row.total_count || 0;
 }
 
-async function findStatusIssue(repo, kind, id) {
-  const labels = encodeURIComponent(`control-plane:status,${kind}:${id}`);
-  const rows = await api(repo, `/issues?state=all&labels=${labels}&per_page=100`);
-  const title = `[${kind}-status:${id}]`;
-  return rows.find((issue) => !issue.pull_request && issue.title === title) || null;
+async function findStatusIssues(repo, kind, id) {
+  const statusLabel = encodeURIComponent('control-plane:status');
+  const rows = await api(repo, `/issues?state=all&labels=${statusLabel}&per_page=100`);
+  return resolveStatusIssueIdentity(rows, kind, id);
 }
 
 function table(rows) {
@@ -325,11 +337,17 @@ async function refreshStatus() {
       '<!-- plugin-control-plane-status -->',
     ].join('\n');
 
-    const existing = await findStatusIssue(repo, kind, id);
+    const identity = await findStatusIssues(repo, kind, id);
+    const existing = identity.canonical;
     if (existing) {
       await api(repo, `/issues/${existing.number}`, {method: 'PATCH', body: {body, state: 'open'}});
       const current = (existing.labels || []).map((row) => row.name);
       await replaceManagedLabels(repo, existing.number, current, [label, 'control-plane:status'], registry);
+      for (const duplicate of identity.duplicates) {
+        if (duplicate.state !== 'open') continue;
+        await api(repo, `/issues/${duplicate.number}`, {method: 'PATCH', body: {state: 'closed'}});
+        console.log(`CLOSED_STATUS_DUPLICATE:${kind}:${id}:#${duplicate.number}`);
+      }
       console.log(`UPDATED_STATUS:${kind}:${id}:#${existing.number}`);
     } else {
       const created = await api(repo, '/issues', {method: 'POST', body: {

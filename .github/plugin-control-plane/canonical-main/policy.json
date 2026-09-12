@@ -89,7 +89,7 @@
     "writerInventory": [
       {"workflow": "simcore-release-state-sync.yml", "mode": "active"},
       {"workflow": "simcore-r2-7-status-projection.yml", "mode": "active"},
-      {"workflow": "product-simcore-terminal-convergence-r2-8.yml", "mode": "active"},
+      {"workflow": "product-simcore-terminal-convergence-r2-8.yml", "mode": "active", "delegatedAdapter": "products/simcore/tooling/release-terminal-main-write.mjs"},
       {"workflow": "product-simcore-candidate-materialize.yml", "mode": "active"},
       {"workflow": "usage-dashboard-project-memory.yml", "mode": "active"},
       {"workflow": "simcore-release-command.yml", "mode": "legacy-dormant"},

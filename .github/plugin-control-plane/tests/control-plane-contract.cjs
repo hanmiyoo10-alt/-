@@ -8,7 +8,11 @@ const {
   classifyPaths,
   classifyIssueBody,
   validateRegistry,
+  labelDefinitions,
+  fixedLabelMetadataDecision,
+  resolveStatusIssueIdentity,
 } = require('../lib.cjs');
+const {projectRows} = require('../canonical-main/observers/project-status.cjs');
 
 const root = path.resolve(__dirname, '../../..');
 const registry = loadRegistry();
@@ -22,8 +26,33 @@ assert.deepEqual(Object.keys(registry.plugins).sort(), [
   'voyage-token-check',
 ]);
 assert.deepEqual(Object.keys(registry.products).sort(), [
+  'app-api-mod-lab',
   'pocketrisu-helper-mod',
 ]);
+
+const statusLabel = {name: 'control-plane:status'};
+const duplicateStatusIssues = [
+  {number: 1977, title: '[plugin-status:voyage-token-check]', state: 'open', labels: [statusLabel], body: 'Last refreshed: 2026-09-12T07:30:00Z'},
+  {number: 283, title: '[plugin-status:voyage-token-check]', state: 'open', labels: [statusLabel], body: 'Last refreshed: 2026-09-09T12:37:49.877Z'},
+];
+const duplicateIdentity = resolveStatusIssueIdentity(duplicateStatusIssues, 'plugin', 'voyage-token-check');
+assert.equal(duplicateIdentity.canonical.number, 283, 'lowest generated status issue number is canonical');
+assert.deepEqual(duplicateIdentity.duplicates.map((row) => row.number), [1977]);
+const voyageRegistry = {plugins: {'voyage-token-check': {}}, products: {}};
+const duplicateRow = projectRows(voyageRegistry, duplicateStatusIssues, 150, Date.parse('2026-09-12T07:31:00Z'))[0];
+assert.equal(duplicateRow.issue.number, 283);
+assert.deepEqual(duplicateRow.duplicates.map((row) => row.number), [1977]);
+assert.equal(duplicateRow.fresh, false, 'open duplicate generated views must fail project freshness closed');
+const singleRow = projectRows(voyageRegistry, [{
+  number: 283,
+  title: '[plugin-status:voyage-token-check]',
+  state: 'open',
+  labels: [statusLabel],
+  body: 'Last refreshed: 2026-09-12T07:30:00Z',
+}], 150, Date.parse('2026-09-12T07:31:00Z'))[0];
+assert.equal(singleRow.issue.number, 283);
+assert.deepEqual(singleRow.duplicates, []);
+assert.equal(singleRow.fresh, true, 'single canonical generated status view keeps normal freshness behavior');
 
 assert.deepEqual(classifyPaths(['plugins/usage-dashboard/src/parts.cjs'], registry).labels, ['plugin:usage-dashboard']);
 assert.deepEqual(classifyPaths(['.github/workflows/reusable-usage-dashboard-validate.yml'], registry).labels, ['plugin:usage-dashboard']);
@@ -32,6 +61,13 @@ assert.deepEqual(classifyPaths(['products/simcore/tooling/check.mjs'], registry)
 assert.deepEqual(classifyPaths(['plugins/devpass/README.md'], registry).labels, ['plugin:devpass']);
 assert.deepEqual(classifyPaths(['plugins/termux/large-doc-editor/server.py'], registry).labels, ['plugin:termux-large-doc-editor']);
 assert.deepEqual(classifyPaths(['voyage-token-check/DESIGN_STATUS.md'], registry).labels, ['plugin:voyage-token-check']);
+assert.deepEqual(classifyPaths(['products/app-api-mod-lab/CURRENT.md'], registry).labels, ['product:app-api-mod-lab']);
+const mclBootstrap = classifyPaths(['products/chatgpt-mobile-coder-lab/device-bootstrap/bootstrap.sh'], registry);
+assert.deepEqual(mclBootstrap.labels, ['scope:research-product']);
+assert.deepEqual(mclBootstrap.unclassifiedPaths, []);
+const mclDocs = classifyPaths(['products/chatgpt-mobile-coder-lab/docs/decisions.md'], registry);
+assert.deepEqual(mclDocs.labels, ['scope:research-product']);
+assert.deepEqual(mclDocs.unclassifiedPaths, []);
 assert.deepEqual(classifyPaths(['products/pocketrisu-helper-mod/CURRENT.md'], registry).labels, ['product:pocketrisu-helper-mod']);
 assert.deepEqual(classifyPaths(['.github/workflows/pocketrisu-helper-docs.yml'], registry).labels, ['product:pocketrisu-helper-mod']);
 assert.deepEqual(classifyPaths(['plugins/test-a/latest.js'], registry).labels, ['scope:test-fixture']);
@@ -39,7 +75,19 @@ assert.deepEqual(classifyPaths(['plugins/test-b/install.js'], registry).labels, 
 assert.deepEqual(classifyPaths(['plugins/_template/latest.js'], registry).labels, ['scope:template']);
 assert.deepEqual(classifyPaths(['README.md'], registry).labels, ['scope:shared']);
 assert.deepEqual(classifyPaths(['products/README.md'], registry).labels, ['scope:shared']);
+assert.deepEqual(classifyPaths(['.vscode/tasks.json'], registry).labels, ['scope:shared']);
 assert.deepEqual(classifyPaths(['.github/plugin-control-plane/registry.json'], registry).labels, ['scope:repo']);
+assert.deepEqual(classifyPaths(['.github/tooling/ci-summary/manifests/plugin-control-plane.json'], registry).labels, ['scope:repo']);
+assert.deepEqual(classifyPaths(['tools/agent-skill-security/corpus.json'], registry).labels, ['scope:repo']);
+assert.deepEqual(classifyPaths(['.github/workflows/agent-skill-security-benchmark.yml'], registry).labels, ['scope:repo']);
+assert.deepEqual(classifyPaths(['tools/other-security-tool/README.md'], registry).labels, ['scope:unclassified']);
+assert.deepEqual(classifyPaths(['.github/workflows/agent-skill-security-benchmark-extra.yml'], registry).labels, ['scope:unclassified']);
+assert.deepEqual(classifyPaths(['.agents/skills/agent-execution-compactness/SKILL.md'], registry).labels, ['scope:repo']);
+assert.deepEqual(classifyPaths(['.agents/skills/plugin-authority-scan/SKILL.md'], registry).labels, ['scope:repo']);
+assert.deepEqual(classifyPaths(['.agents/skills/plugin-impact-scope/SKILL.md'], registry).labels, ['scope:repo']);
+assert.deepEqual(classifyPaths(['docs/REPOSITORY_AGENT_EXECUTION_COMPACTNESS_V1_DESIGN_2026-09-07.md'], registry).labels, ['scope:repo']);
+assert.deepEqual(classifyPaths(['.agents/README.md'], registry).labels, ['scope:unclassified']);
+assert.deepEqual(classifyPaths(['docs/REPOSITORY_AGENT_EXECUTION_COMPACTNESS_V1_DESIGN_2026-09-08.md'], registry).labels, ['scope:unclassified']);
 assert.deepEqual(classifyPaths(['docs/REPOSITORY_PLUGIN_CONTROL_PLANE_IMPLEMENTATION.md'], registry).labels, ['scope:repo']);
 assert.deepEqual(
   classifyPaths(['plugins/usage-dashboard/latest.js', 'plugins/simcore/latest.js'], registry).labels,
@@ -52,6 +100,30 @@ assert.deepEqual(
 const unknown = classifyPaths(['misc/unknown.txt'], registry);
 assert.deepEqual(unknown.labels, ['scope:unclassified']);
 assert.deepEqual(unknown.unclassifiedPaths, ['misc/unknown.txt']);
+const researchProductLabel = labelDefinitions(registry).find((entry) => entry.name === 'scope:research-product');
+assert.deepEqual(researchProductLabel, {
+  name: 'scope:research-product',
+  color: 'c5def5',
+  description: 'Repository-recognized research product path; non-production with no release or runtime authority',
+});
+
+const fixedUnclassified = labelDefinitions(registry).find((entry) => entry.name === 'scope:unclassified');
+assert.deepEqual(fixedLabelMetadataDecision(null, fixedUnclassified), {action: 'create', body: fixedUnclassified});
+assert.deepEqual(fixedLabelMetadataDecision({
+  name: fixedUnclassified.name,
+  color: fixedUnclassified.color.toUpperCase(),
+  description: fixedUnclassified.description,
+}, fixedUnclassified), {action: 'none', body: null});
+assert.deepEqual(fixedLabelMetadataDecision({
+  name: fixedUnclassified.name,
+  color: 'ffffff',
+  description: fixedUnclassified.description,
+}, fixedUnclassified), {action: 'update', body: {color: fixedUnclassified.color}});
+assert.deepEqual(fixedLabelMetadataDecision({
+  name: fixedUnclassified.name,
+  color: fixedUnclassified.color,
+  description: 'Plugin scope could not be classified deterministically',
+}, fixedUnclassified), {action: 'update', body: {description: fixedUnclassified.description}});
 
 assert.deepEqual(
   classifyIssueBody('### Scope\n\nusage-dashboard\n\n### Summary\nwork', registry),
@@ -64,10 +136,55 @@ assert.deepEqual(classifyIssueBody('### Scope\n\nshared', registry), {explicit: 
 assert.deepEqual(classifyIssueBody('### Scope\n\nnot-registered', registry), {explicit: true, labels: ['scope:unclassified']});
 assert.deepEqual(classifyIssueBody('just prose', registry), {explicit: false, labels: []});
 
+const customIssueBody = (id) => `### Scope\n\ncustom\n\n### Custom scope\n\n${id}\n\n### Summary\nwork`;
+const customDefinition = {
+  name: 'scope:ops-lab',
+  color: 'c5def5',
+  description: 'Trusted custom repository issue scope',
+};
+for (const authorAssociation of ['OWNER', 'MEMBER', 'COLLABORATOR']) {
+  assert.deepEqual(classifyIssueBody(customIssueBody('ops-lab'), registry, {authorAssociation}), {
+    explicit: true,
+    labels: ['scope:ops-lab'],
+    customLabelDefinition: customDefinition,
+  });
+}
+const maxCustomId = 'a'.repeat(44);
+assert.equal(classifyIssueBody(customIssueBody(maxCustomId), registry, {authorAssociation: 'OWNER'}).labels[0].length, 50);
+for (const invalidId of ['', 'Bad-Scope', 'bad--scope', '-bad', 'bad-', 'repo', 'research-product', 'custom', 'a'.repeat(45)]) {
+  assert.deepEqual(classifyIssueBody(customIssueBody(invalidId), registry, {authorAssociation: 'OWNER'}), {explicit: true, labels: ['scope:unclassified']});
+}
+assert.deepEqual(classifyIssueBody(customIssueBody('ops-lab'), registry, {authorAssociation: 'NONE'}), {explicit: true, labels: ['scope:unclassified']});
+
 const issueTemplate = fs.readFileSync(path.join(root, '.github/ISSUE_TEMPLATE/plugin-work.yml'), 'utf8');
 assert.match(issueTemplate, /label:\s*Scope/);
 assert.match(issueTemplate, /voyage-token-check/);
 assert.match(issueTemplate, /pocketrisu-helper-mod/);
+assert.match(issueTemplate, /^        - custom$/m);
+assert.match(issueTemplate, /label:\s*Custom scope/);
+assert.match(issueTemplate, /1-44 characters/);
+
+function triggerBlock(source, trigger) {
+  const match = source.match(new RegExp(`^  ${trigger}:\\n([\\s\\S]*?)(?=^  [a-z_]+:|^permissions:)`, 'm'));
+  assert.ok(match, `${trigger} trigger must exist`);
+  return match[1];
+}
+
+function triggerList(block, key) {
+  const match = block.match(new RegExp(`^    ${key}:\\n((?:      - .+\\n?)+)`, 'm'));
+  assert.ok(match, `${key} list must exist`);
+  return [...match[1].matchAll(/^      - ['"]?(.+?)['"]?$/gm)].map((entry) => entry[1]);
+}
+
+const controlPlaneCiWorkflow = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-ci.yml'), 'utf8');
+const pullRequestTrigger = triggerBlock(controlPlaneCiWorkflow, 'pull_request');
+const pushTrigger = triggerBlock(controlPlaneCiWorkflow, 'push');
+assert.deepEqual(triggerList(pushTrigger, 'branches'), ['main']);
+assert.deepEqual(triggerList(pushTrigger, 'paths'), triggerList(pullRequestTrigger, 'paths'));
+assert.match(controlPlaneCiWorkflow, /^  workflow_dispatch:\s*$/m);
+const controlPlaneCiPermissions = controlPlaneCiWorkflow.match(/^permissions:\n([\s\S]*?)^jobs:/m);
+assert.ok(controlPlaneCiPermissions, 'workflow permissions block must exist');
+assert.equal(controlPlaneCiPermissions[1].trim(), 'contents: read');
 
 const observerWorkflow = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-pr-observe.yml'), 'utf8');
 assert.match(observerWorkflow, /pull_request:/);
@@ -99,13 +216,19 @@ assert.match(prClassifier, /classifyPaths\(paths, registry\)/);
 assert.match(prClassifier, /PLUGIN_CONTROL_PLANE_PR_RECONCILED/);
 assert.match(prClassifier, /PLUGIN_CONTROL_PLANE_PR_RECONCILE_SUMMARY/);
 assert.match(prClassifier, /preserved = current\.filter/);
+assert.match(prClassifier, /fixedLabelMetadataDecision\(existing, def\)/);
+assert.match(prClassifier, /method: 'PATCH'/);
 assert.doesNotMatch(prClassifier, /workflow_run|pull_request_target/);
 assert.doesNotMatch(prClassifier, /child_process|execSync|spawnSync|require\(['"]vm['"]\)/);
 
 const issueWorkflow = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-issue.yml'), 'utf8');
 assert.match(issueWorkflow, /issues:/);
 assert.match(issueWorkflow, /classify-issue/);
+const issueWorkflowPermissions = issueWorkflow.match(/^permissions:\n([\s\S]*?)^jobs:/m);
+assert.ok(issueWorkflowPermissions, 'issue workflow permissions block must exist');
+assert.equal(issueWorkflowPermissions[1].trim(), 'contents: read\n  issues: write');
 assert.doesNotMatch(issueWorkflow, /pull_request_target/);
+assert.doesNotMatch(issueWorkflow, /pull-requests:\s*write/);
 
 const statusWorkflow = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-status.yml'), 'utf8');
 assert.match(statusWorkflow, /schedule:/);
@@ -125,6 +248,9 @@ assert.match(controlPlaneReadme, /intentionally redundant metadata-only fallback
 assert.match(controlPlaneReadme, /pull-requests: write/);
 assert.match(controlPlaneReadme, /never execute PR-head code/);
 assert.match(controlPlaneReadme, /`pull_request` observer remains read-only evidence/);
+assert.match(controlPlaneReadme, /Trusted custom issue scopes/);
+assert.match(controlPlaneReadme, /scope:unclassified/);
+assert.match(controlPlaneReadme, /at most 44 characters/);
 
 const controller = fs.readFileSync(path.join(root, '.github/plugin-control-plane/controller.cjs'), 'utf8');
 assert.match(controller, /DECLARED_MISSING/);
@@ -133,6 +259,18 @@ assert.match(controller, /PENDING —/);
 assert.match(controller, /pocketRisuHelperStatus/);
 assert.match(controller, /registry\.products/);
 assert.match(controller, /product:/);
+assert.match(controller, /async function ensureLabel\(repo, def\)/);
+assert.match(controller, /if \(!existing\) await api\(repo, '\/labels', \{method: 'POST', body: def\}\)/);
+assert.match(controller, /async function ensureFixedLabel\(repo, def\)/);
+assert.match(controller, /fixedLabelMetadataDecision\(existing, def\)/);
+assert.match(controller, /decision\.action === 'update'/);
+assert.match(controller, /method: 'PATCH'/);
+assert.match(controller, /ensureFixedLabel\(repo, def\)/);
+assert.match(controller, /authorAssociation: issue\.author_association/);
+assert.match(controller, /if \(bodyResult\.customLabelDefinition\) await ensureLabel\(repo, bodyResult\.customLabelDefinition\)/);
+assert.match(controller, /const statusLabel = encodeURIComponent\('control-plane:status'\)/);
+assert.match(controller, /resolveStatusIssueIdentity/);
+assert.match(controller, /CLOSED_STATUS_DUPLICATE/);
 assert.doesNotMatch(controller, /productionVersion\s*:/);
 
 console.log('PLUGIN_CONTROL_PLANE_CONTRACTS:OK');

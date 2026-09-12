@@ -112,6 +112,11 @@
   },
   "nonOperationalScopes": [
     {
+      "id": "research-product",
+      "label": "scope:research-product",
+      "paths": ["products/chatgpt-mobile-coder-lab/**"]
+    },
+    {
       "id": "template",
       "label": "scope:template",
       "paths": ["plugins/_template/**"]
@@ -126,11 +131,17 @@
     ".github/plugin-control-plane/**",
     ".github/workflows/plugin-control-plane-*.yml",
     ".github/ISSUE_TEMPLATE/plugin-work.yml",
+    ".github/tooling/ci-summary/manifests/plugin-control-plane.json",
+    ".github/workflows/agent-skill-security-benchmark.yml",
+    "tools/agent-skill-security/**",
+    ".agents/skills/**",
+    "docs/REPOSITORY_AGENT_EXECUTION_COMPACTNESS_V1_DESIGN_2026-09-07.md",
     "docs/REPOSITORY_PLUGIN_CONTROL_PLANE_*.md"
   ],
   "sharedPaths": [
     "README.md",
     "products/README.md",
+    ".vscode/**",
     ".github/workflows/repo-main-write-coordination-migration.yml"
   ]
 }

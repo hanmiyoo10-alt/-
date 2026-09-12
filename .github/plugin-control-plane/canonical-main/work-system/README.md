@@ -141,8 +141,20 @@ Closure rules are fail closed:
 5. `BLOCKED_CAPABILITY` may coexist with `DONE` only when the affected capability/evidence is explicitly non-blocking for that packet's acceptance; otherwise the packet remains blocked/not done.
 6. Safety-critical live proof remains blocking whenever the activated packet declared it required.
 7. Applying this taxonomy never retroactively weakens an already-activated packet's acceptance contract. In particular, v1.1 `V11-V1` keeps its original natural-live-observation requirement until that original acceptance is satisfied or explicitly redesigned through a separate reviewed decision.
+8. Native GitHub issue closure alone is not proof-taxonomy `DONE` evidence.
+9. When required acceptance remains after merge, especially blocking `POSTMERGE_CONVERGENCE` or `LIVE_PROVEN` evidence, the implementation PR MUST use non-closing linkage such as `Refs #<packet>` and MUST NOT use `Fixes` or `Closes`. A closing keyword may be used only when merge itself satisfies every required acceptance item and no required postmerge proof remains.
 
 The taxonomy is coordination/proof language only. The underlying Git, CI, release, production, branch-protection, incident, and project authorities still decide whether the cited evidence is true.
+
+## Packet body lifecycle projection and terminal close-sync
+
+A generic work-packet body using `<!-- canonical-main-work-packet:v1 -->` is a current resumable lifecycle projection, not an immutable activation snapshot. Once terminal evidence is established, the closer MUST reconcile the packet body before or atomically with native GitHub closure so the body no longer advertises an already-completed next stage.
+
+Terminal close-sync must align, as applicable, the lifecycle State; completed/current/next interaction stage; evidence-backed Proof / closure terms; required acceptance UNKNOWNs; and Handoff / exact next action. Close-sync may only project proof already established by repository evidence. It MUST NOT manufacture `LIVE_PROVEN`, clear an `UNKNOWN` by omission, or weaken activated acceptance.
+
+A final comment or native GitHub closure does not make a contradictory stale packet body acceptable. If terminal evidence and the packet body conflict, treat the body as a stale lifecycle projection, re-read the terminal evidence, and do not resume the stale advertised stage without fresh re-attribution.
+
+The existing `canonical-main-a1-standard-auto-close:v1` profile remains separately owned by deterministic closure bookkeeping. This generic close-sync contract does not broaden that opt-in automation boundary.
 
 ## Parallelism
 

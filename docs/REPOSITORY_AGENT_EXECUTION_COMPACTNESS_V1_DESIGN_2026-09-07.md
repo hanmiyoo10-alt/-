@@ -538,3 +538,83 @@ Repository-wide applicability now covers the four established compactness axes t
 Mechanical Agent Skills coverage should fail if the repository-wide scope language disappears or if any currently registered project guideline or the future guideline template loses the common-rules inheritance path. The project guideline bodies themselves should remain unchanged unless a project-owned reason independently requires an edit.
 
 This promotion still makes no claim that repository-side compactness controls exact ChatGPT host tool-card height, grouping, token accounting, or Work credits. Those remain host/product-side outcomes that require separate measurement if claimed.
+
+## 21. Exact immutable result read-reuse extension (U-27 A1 / #2071)
+
+U-27 A1 specializes the existing read/result compactness contract for one narrow case: an agent already consumed an exact immutable validation/result and later needs to make a claim only about that same immutable object. The optimization is **read reuse**, not validation execution reuse.
+
+Conceptual decision:
+
+```text
+same immutable result already captured
++ exact immutable identity preserved
++ same scoped claim
++ prior bounded evidence sufficient
++ no current/latest/newer-state proof requested
+→ READ_REUSE_EXACT_RESULT / REUSE_EXACT_RESULT
+
+otherwise
+→ READ_REQUIRED
+```
+
+### 21.1 Exact identity and provenance
+
+Reuse requires owner-defined immutable identity. Examples include exact workflow run ID + head SHA/check identity, immutable artifact digest, immutable commit-bound report identity, or an exact issue/comment evidence object. A1 normalizes the locator/provenance shape only; it never invents identity and never becomes the underlying result authority.
+
+A bounded reuse projection must preserve the semantic equivalent of source owner, exact source locator, exact immutable identity, original scoped result, and `claimsCurrentState=false`. Reusing an immutable FAIL is allowed when the new claim is only that the same exact result failed; read reuse is not a green-result cache.
+
+### 21.2 Fresh-read boundary
+
+`READ_REQUIRED` remains mandatory for current/latest/now/exact-current-main claims, post-mutation/post-merge/post-publish claims, mutable or ambiguous prior sources, missing immutable identity, `UNKNOWN`/`CONFLICT`/partial/stale/invalid evidence, stronger claims than the captured scope supports, and failure-detail/provenance requests whose detail was not previously captured.
+
+A1 therefore does not requalify an old immutable result into a current-state claim. It only avoids rereading bulky output when the exact immutable result itself is the object of the later claim.
+
+### 21.3 Validation execution remains separate
+
+A1 does not introduce `REUSE_CURRENT` and does not authorize E1/E2/E3 execution reuse from the U-27 design. Tests, lint, build, static checks, local validators, GitHub Required/exact-head CI, release/promotion verifiers, current-production/pre-publish rechecks, post-merge/post-publish convergence, and live/device/external evidence continue to execute whenever their owning contracts require them.
+
+An old exact result may be cited compactly as historical immutable evidence while a new required validation still runs. The two operations are deliberately separate.
+
+### 21.4 Mechanical evaluation contract
+
+The Agent Skill fixture gains `exact_result_read_reuse_evals` without changing the existing execution-route eval identities, `read_payload_evals`, or `connector_response_evals`.
+
+Required safe cases cover exact PASS run reuse, exact immutable commit-report reuse, and exact FAIL run reuse. Required fail-closed cases cover current-main, latest-CI, missing immutable identity, prior UNKNOWN/partial evidence, uncaptured failure detail, and an attempted use of read reuse to skip a newly required validation execution.
+
+This slice adds no workflow, MCP tool, cache daemon, mutable result database, Required/protection change, release/production/runtime/device mutation, or token/latency guarantee. U-27 remains only partially implemented after A1; later execution-reuse slices require separate activation and owner-level contracts.
+
+## 22. Bounded same-state local execution-reuse extension (U-27 A2-01 / #2077)
+
+U-27 A2-01 implements only the E1 same-state execution-reuse rung for one explicitly admitted deterministic local validator: `agent-execution-compactness:skill-contract`. It is non-authoritative local development evidence and does not create a general test cache.
+
+### 22.1 Eligibility and current-worker barrier
+
+A prior PASS may produce `REUSE_CURRENT / REUSE_SAME_STATE` only when the same active worker continuously proves the exact validator/command identity, identical proof scope, unchanged checkout HEAD and worktree, unchanged runtime/interpreter and relevant environment, no mutation-producing action since the PASS, and no owner requirement for a fresh invocation.
+
+A2-01 intentionally uses a whole-work-state barrier. Any repository/worktree mutation, including an apparently unrelated edit, invalidates reuse. Missing or reconstructed worker continuity, changed or unknown HEAD/worktree/runtime/environment, a changed validator/profile, non-PASS prior evidence, or a stronger proof request is `RUN_REQUIRED`.
+
+Read-only evidence retrieval does not itself mutate the local validation state, but it cannot promote the local PASS into broader authority. Conversation memory alone cannot reconstruct an E1 barrier after a resumed/new worker boundary.
+
+### 22.2 Bounded receipt semantics
+
+The receipt is ephemeral current-worker evidence only. A reuse decision preserves validator identity, origin PASS evidence, source HEAD, `SAME_UNINTERRUPTED_WORK_STATE`, bounded runtime identity, `claimsCrossRevision=false`, and `claimsAuthoritativeCurrentState=false`. No repository-wide cache, receipt database, daemon, or mutable truth store is introduced.
+
+Decisive fail-closed reasons use the U-27 design vocabulary where practical: `RUN_IDENTITY_CHANGED`, `RUN_INPUT_CHANGED`, `RUN_INPUT_UNKNOWN`, `RUN_ENVIRONMENT_CHANGED`, `RUN_POLICY_CHANGED`, and `RUN_RECEIPT_STALE_OR_INVALID`.
+
+### 22.3 Always-fresh authority boundary
+
+`ALWAYS_RUN / ALWAYS_RUN_OWNER_CONTRACT` remains mandatory wherever the owning contract requires fresh execution. Local E1 reuse therefore cannot satisfy GitHub Required, Agent Skills CI on an exact PR head or merged main, release/promotion/publish verification, current-production checks, post-merge/post-publish convergence, live/device/external-system proof, or another fresh transaction-bound owner gate.
+
+The focused local unittest may reduce only an immediate duplicate development invocation. It never substitutes for repository CI even though CI later executes related tests.
+
+### 22.4 A1 composition and later rungs
+
+A1 `READ_REUSE_EXACT_RESULT` and A2 `REUSE_CURRENT` remain separate decisions. A1 avoids rereading one immutable historical result; A2 may satisfy only the one admitted duplicate local execution while exact same-state continuity is proven. If A2 is invalid but a later question asks only about the old immutable result, A1 may still apply.
+
+E2 cross-revision owner-policy requalification and E3 authoritative-input observation remain inactive. Any path-sensitive invalidation map or cross-revision reuse requires a separately activated owner-level packet.
+
+### 22.5 Mechanical evaluation contract
+
+The fixture adds `same_state_execution_reuse_evals` with two safe cases and fail-closed cases for tracked/unrelated mutation, HEAD/worktree uncertainty, runtime/environment change, validator identity change, non-PASS prior evidence, resumed-worker continuity loss, and attempted substitution for authoritative fresh execution.
+
+This slice changes no workflow, Required/protection setting, project/runtime/release/production/device authority, or persistent validation-state owner. U-27 remains partially implemented after A2-01.

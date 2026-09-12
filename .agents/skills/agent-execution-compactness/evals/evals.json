@@ -1,6 +1,411 @@
 {
   "skill_name": "agent-execution-compactness",
   "schema_version": 1,
+  "exact_result_read_reuse_evals": [
+    {
+      "id": "exact-workflow-run-pass-reuse",
+      "prompt": "An exact workflow run and named check on an exact head SHA were already consumed as PASS. The later question asks only what that same run/check concluded.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": true,
+        "current_state_requested": false,
+        "prior_evidence_complete": true,
+        "detail_available": true,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REUSE_EXACT_RESULT",
+      "expected_reason": "REUSE_EXACT_RESULT",
+      "assertions": [
+        "Preserve run/check/head identity and original PASS scope.",
+        "Set claimsCurrentState=false."
+      ]
+    },
+    {
+      "id": "exact-commit-report-reuse",
+      "prompt": "An immutable commit-bound report was already consumed with its exact commit/report identity. A later explanation cites only that same report scope.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": true,
+        "current_state_requested": false,
+        "prior_evidence_complete": true,
+        "detail_available": true,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REUSE_EXACT_RESULT",
+      "expected_reason": "REUSE_EXACT_RESULT",
+      "assertions": [
+        "Reuse bounded provenance instead of rereading the report.",
+        "Do not infer current state from the old report."
+      ]
+    },
+    {
+      "id": "exact-workflow-run-fail-reuse",
+      "prompt": "An exact immutable workflow run/check was already consumed as FAIL. The later question asks only whether that same run failed.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": true,
+        "current_state_requested": false,
+        "prior_evidence_complete": true,
+        "detail_available": true,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REUSE_EXACT_RESULT",
+      "expected_reason": "REUSE_EXACT_RESULT",
+      "assertions": [
+        "Reuse is not green-only.",
+        "Preserve the original scoped FAIL result."
+      ]
+    },
+    {
+      "id": "current-main-after-barrier",
+      "prompt": "A prior exact run was consumed, but the question is now: is current main green after repository state may have advanced?",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": false,
+        "current_state_requested": true,
+        "prior_evidence_complete": true,
+        "detail_available": true,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REQUIRED",
+      "assertions": [
+        "Current-state claims require fresh evidence.",
+        "Do not requalify the prior exact run as current."
+      ]
+    },
+    {
+      "id": "latest-ci-result",
+      "prompt": "The caller asks for the latest CI result, while only an older exact immutable run is already captured.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": false,
+        "current_state_requested": true,
+        "prior_evidence_complete": true,
+        "detail_available": true,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REQUIRED",
+      "assertions": [
+        "Latest identity must be freshly established.",
+        "Old exact-result provenance cannot answer a latest query."
+      ]
+    },
+    {
+      "id": "missing-immutable-identity",
+      "prompt": "A prior result summary exists, but its exact immutable run/report identity is absent or ambiguous.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": false,
+        "same_result_claim": true,
+        "current_state_requested": false,
+        "prior_evidence_complete": true,
+        "detail_available": true,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REQUIRED",
+      "assertions": [
+        "Do not invent missing identity.",
+        "Fetch authoritative evidence with a usable exact locator."
+      ]
+    },
+    {
+      "id": "prior-unknown-or-partial",
+      "prompt": "The prior observation was UNKNOWN/partial and the new question needs a definite result.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": true,
+        "current_state_requested": false,
+        "prior_evidence_complete": false,
+        "detail_available": true,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REQUIRED",
+      "assertions": [
+        "Incomplete evidence cannot be upgraded through reuse.",
+        "Preserve UNKNOWN until stronger evidence is read."
+      ]
+    },
+    {
+      "id": "failure-detail-not-captured",
+      "prompt": "The exact prior run is known to have failed, but the new question asks for failure detail/provenance that was not captured in the bounded prior evidence.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": true,
+        "current_state_requested": false,
+        "prior_evidence_complete": true,
+        "detail_available": false,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REQUIRED",
+      "assertions": [
+        "Perform targeted detail read.",
+        "Do not fabricate missing failure provenance."
+      ]
+    },
+    {
+      "id": "required-validation-execution-cannot-be-skipped",
+      "prompt": "A caller points at an old exact PASS and asks to use read reuse so a newly required exact-head validation does not have to execute.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": false,
+        "current_state_requested": true,
+        "prior_evidence_complete": true,
+        "detail_available": true,
+        "required_new_execution": true
+      },
+      "expected_read_disposition": "READ_REQUIRED",
+      "expected_execution_effect": "PRESERVE_REQUIRED_EXECUTION",
+      "assertions": [
+        "Reject the inference that read reuse grants execution reuse.",
+        "Keep the owning required execution unchanged."
+      ]
+    }
+  ],
+  "same_state_execution_reuse_evals": [
+    {
+      "id": "same-state-immediate-duplicate-pass",
+      "prompt": "The focused local compactness skill-contract validator just passed and the same worker immediately receives the identical validation request with no intervening mutation.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": true,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false,
+        "intervening_read_only": false
+      },
+      "expected_validation_disposition": "REUSE_CURRENT",
+      "expected_reason": "REUSE_SAME_STATE",
+      "assertions": [
+        "Preserve the exact local validator PASS provenance.",
+        "Keep claimsCrossRevision=false and claimsAuthoritativeCurrentState=false."
+      ]
+    },
+    {
+      "id": "same-state-read-only-intervening",
+      "prompt": "The focused local validator passed, then the worker only read repository evidence; HEAD, worktree, runtime, environment, and requested claim remain unchanged.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": true,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false,
+        "intervening_read_only": true
+      },
+      "expected_validation_disposition": "REUSE_CURRENT",
+      "expected_reason": "REUSE_SAME_STATE",
+      "assertions": [
+        "A read-only evidence fetch does not invalidate the same-state barrier.",
+        "Do not broaden the local PASS into repository authority."
+      ]
+    },
+    {
+      "id": "same-state-file-edit-invalidates",
+      "prompt": "The focused local validator passed, then a tracked file was edited before the same validation was requested again.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": false,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false
+      },
+      "expected_validation_disposition": "RUN_REQUIRED",
+      "expected_reason": "RUN_INPUT_CHANGED",
+      "assertions": [
+        "Run the owning local validator again after the edit.",
+        "Do not reuse a pre-mutation PASS."
+      ]
+    },
+    {
+      "id": "same-state-unrelated-edit-invalidates",
+      "prompt": "The focused local validator passed, then an apparently unrelated repository file was edited before the duplicate request.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": false,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false,
+        "unrelated_mutation": true
+      },
+      "expected_validation_disposition": "RUN_REQUIRED",
+      "expected_reason": "RUN_INPUT_CHANGED",
+      "assertions": [
+        "A2-01 uses a whole-work-state barrier.",
+        "Do not infer E2 path irrelevance from an unrelated-looking edit."
+      ]
+    },
+    {
+      "id": "same-state-head-or-worktree-unknown",
+      "prompt": "A prior PASS exists, but the current worker cannot prove the same HEAD and unchanged worktree.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": false,
+        "worktree_unchanged": false,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": false,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false
+      },
+      "expected_validation_disposition": "RUN_REQUIRED",
+      "expected_reason": "RUN_INPUT_UNKNOWN",
+      "assertions": [
+        "Unknown state is not evidence of equivalence.",
+        "Run the validator instead of reconstructing the barrier."
+      ]
+    },
+    {
+      "id": "same-state-runtime-environment-changed",
+      "prompt": "The focused local validator passed, but the Python runtime or relevant execution environment changed before the duplicate request.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": true,
+        "environment_same": false,
+        "runtime_same": false,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false
+      },
+      "expected_validation_disposition": "RUN_REQUIRED",
+      "expected_reason": "RUN_ENVIRONMENT_CHANGED",
+      "assertions": [
+        "Environment identity participates in E1 validity.",
+        "Fresh local execution is required."
+      ]
+    },
+    {
+      "id": "same-state-validator-identity-changed",
+      "prompt": "A prior PASS exists, but the validator command/profile identity differs from the one that produced it.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": false,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": true,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false
+      },
+      "expected_validation_disposition": "RUN_REQUIRED",
+      "expected_reason": "RUN_IDENTITY_CHANGED",
+      "assertions": [
+        "Validator identity must match exactly.",
+        "Do not transfer a PASS across command/profile identity."
+      ]
+    },
+    {
+      "id": "same-state-prior-nonpass",
+      "prompt": "The prior focused local result was FAIL/UNKNOWN/partial rather than a complete PASS, and a satisfying validation is requested.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "UNKNOWN",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": true,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false
+      },
+      "expected_validation_disposition": "RUN_REQUIRED",
+      "expected_reason": "RUN_RECEIPT_STALE_OR_INVALID",
+      "assertions": [
+        "A2-01 execution reuse is PASS-only.",
+        "Incomplete or non-PASS evidence cannot satisfy validation."
+      ]
+    },
+    {
+      "id": "same-state-resumed-worker",
+      "prompt": "A prior PASS is mentioned after a resumed or new worker boundary, but continuous no-mutation evidence is unavailable.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": true,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": false,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false,
+        "resumed_worker": true
+      },
+      "expected_validation_disposition": "RUN_REQUIRED",
+      "expected_reason": "RUN_RECEIPT_STALE_OR_INVALID",
+      "assertions": [
+        "Conversation memory cannot reconstruct execution reuse authority.",
+        "Run fresh when worker continuity is not proven."
+      ]
+    },
+    {
+      "id": "same-state-authoritative-proof-always-runs",
+      "prompt": "A local PASS exists, but the caller asks it to satisfy Agent Skills CI, GitHub Required, release, post-merge, or live proof that the owner requires to execute freshly.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": true,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": true,
+        "authoritative_proof_requested": true
+      },
+      "expected_validation_disposition": "ALWAYS_RUN",
+      "expected_reason": "ALWAYS_RUN_OWNER_CONTRACT",
+      "assertions": [
+        "Reject the inference that local E1 reuse can satisfy authoritative proof.",
+        "Preserve the owning fresh execution unchanged."
+      ],
+      "expected_execution_effect": "PRESERVE_REQUIRED_EXECUTION"
+    }
+  ],
   "connector_response_evals": [
     {
       "id": "action-specific-pr-metadata",

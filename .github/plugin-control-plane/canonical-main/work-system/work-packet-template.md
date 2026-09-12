@@ -54,6 +54,8 @@ Ordered stages:
 
 An ordinary continuation advances at most one substantial stage. A tiny read-only task may collapse stages only when it genuinely completes in at most two bounded reads. A safety-critical recovery may continue only to the nearest safe stop when delaying would create material risk, and that exception must be recorded. Explicit user instruction may authorize a broader run. Staging never removes required Git, CI, release, production, authority, validation, uncertainty, or evidence checks.
 
+This packet body is a current lifecycle projection, not an immutable activation snapshot. Before or atomically with native issue closure, reconcile State; completed/current/next stage; evidence-backed Proof / closure terms; required acceptance UNKNOWNs; and Handoff / exact next action so the body does not advertise already-completed work. Native closure or a final comment alone does not override a contradictory stale body. If terminal evidence conflicts with this body, classify the body projection as stale, re-read terminal evidence, and do not resume the stale advertised stage without fresh re-attribution.
+
 ## Bounded write scope
 
 - <PATH_OR_ISSUE>
@@ -80,6 +82,8 @@ Use only evidence-backed terms from the Work System taxonomy:
 - Explicitly non-blocking pending/capability evidence: <NONE_OR_ITEM_PLUS_ACCEPTANCE_REFERENCE>
 
 `DONE` belongs in the packet lifecycle State only after every declared required acceptance item is satisfied at its required proof level and required UNKNOWN evidence is `NONE`. `OBSERVATIONAL_PENDING` or `BLOCKED_CAPABILITY` may coexist with `DONE` only when the affected evidence was explicitly declared non-blocking by this packet's acceptance. Do not infer `LIVE_PROVEN` from `CONTRACT_PROVEN`.
+
+PR linkage is fail closed: if required acceptance remains after merge, especially blocking `POSTMERGE_CONVERGENCE` or `LIVE_PROVEN` evidence, use `Refs #<packet>` and do not use `Fixes` or `Closes`. A closing keyword is allowed only when merge itself satisfies every required acceptance item and no required postmerge proof remains. Native GitHub issue closure alone is not proof-taxonomy `DONE` evidence.
 
 ## Stop condition
 

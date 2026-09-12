@@ -1,10 +1,10 @@
 # CURRENT — ChatGPT Mobile Coder Lab
 
-최종 갱신 기준: **2026-09-09**
+최종 갱신 기준: **2026-09-12**
 
 새 채팅이나 다른 ChatGPT 계정에서 이 실험을 이어갈 때 가장 먼저 읽는 현재 상태 체크포인트다. 상세 시간순 기록은 `docs/experiment-log.md`와 `docs/checkpoints/`를 본다.
 
-## 목표 — PROVEN AT PR-PUBLICATION LEVEL
+## 목표 — CORE COMPLETE / PROVEN AT PR-PUBLICATION LEVEL
 
 목표는 일반 ChatGPT 채팅을 reasoning/chat surface로 유지하면서 Android 서버폰의 실제 개발환경에 filesystem/shell/Git/test 도구를 연결해 Codex에 가까운 개발 루프를 만드는 것이다.
 
@@ -16,6 +16,12 @@
 - 같은 working tree를 공유하지 않는다.
 - 일반 ChatGPT 채팅 경로를 주력으로 사용한다.
 - Codex CLI는 보조 경로이며 주력 목표와 동일시하지 않는다.
+
+### 핵심 목표 완료 판정 — COMPLETE
+
+2026-09-12 기준 이 실험의 핵심 목표는 완료로 닫는다. 서버폰의 full remote coding/PR loop, 서버폰 runit + 실제 Android reboot persistence, 메인폰 isolated worktree remote execution, 두 물리 장치의 concurrent Git execution이 모두 증거로 남아 있다.
+
+남은 항목은 핵심 기능 blocker가 아니라 운영 하드닝 또는 선택적 추가 증명이다. 별도 [`docs/OPERATIONS_BACKLOG.md`](docs/OPERATIONS_BACKLOG.md)에서 추적한다.
 
 ## 현재 결론
 
@@ -36,6 +42,36 @@ ordinary ChatGPT mobile
 ```
 
 즉 일반 ChatGPT 모바일이 로컬 개발환경의 실질적인 coding agent brain으로 동작하고, Remote Desktop Commander가 filesystem/shell/Git 실행 손발을 제공하는 구조가 실제로 성립했다.
+
+## 메인폰 원격 실행 — ISOLATED WORKTREE LEVEL PASS
+
+2026-09-12 기준 메인폰도 Remote Desktop Commander를 통한 repository 실행면으로 검증됐다.
+
+```text
+repository: /data/data/com.termux/files/home/nyang-repo
+landing worktree: /data/data/com.termux/files/home/nyang-worktrees/mainphone-work
+landing branch: mainphone/work
+verified SHA: c76e7397fc33d48bb997b1e1b1e00bcfbf2f629c
+```
+
+기존 활성 작업 트리 `chore/add-codex-cli`와 그 안의 미추적 `package-lock.json`은 건드리지 않았다. 별도 disposable worktree에서 create → dirty detection → delete → clean rollback을 검증했고, `mainphone/work`는 clean fast-forward만 사용해 현재 `origin/main`과 동일 SHA로 동기화했다. 상세 증거는 `docs/checkpoints/2026-09-12-mainphone-remote-operational.md`를 본다.
+
+이 결과는 메인폰 자체의 독립 원격 실행 가능성을 증명한다. 이후 두 물리 장치의 동시 remote Git 실행도 별도 checkpoint에서 검증했다.
+
+## 두 폰 동시 remote execution — PASS / ACCOUNT IDENTITY BOUNDARY
+
+2026-09-12 메인폰과 서버폰에서 서로 다른 feature branch/worktree와 서로 다른 파일을 준비한 뒤 동일한 barrier 시각에 commit/push를 시작했다.
+
+```text
+main phone release:   2026-09-12T12:53:09Z
+main phone push done: 2026-09-12T12:53:12Z
+server release:       2026-09-12T12:53:09Z
+server push done:     2026-09-12T12:53:15Z
+```
+
+따라서 최소 `12:53:09Z`부터 `12:53:12Z`까지 두 물리 장치가 같은 repository의 서로 다른 branch/worktree에서 동시에 Git 작업을 수행한 것이 직접 관찰됐다. 각 branch는 별도 PR #2111 / #2112로 게시됐고 repository gate를 통과해 순서대로 merge됐다.
+
+이번 checkpoint가 직접 증명하는 것은 **two-device concurrent remote execution**이다. 이 단일 tool session은 각 모바일 ChatGPT의 로그인 계정 정체성을 독립적으로 재검증하지 않았으므로, `two different ChatGPT accounts concurrently invoked`라는 더 강한 claim은 기존 account-specific evidence 또는 별도 account-session checkpoint가 필요하다. 상세 증거는 `docs/checkpoints/2026-09-12-two-phone-concurrent-remote-execution.md`를 본다.
 
 ## 서버폰 환경
 
@@ -198,22 +234,21 @@ status: clean
 
 따라서 device landing branch와 feature/test worktree를 분리하는 운영 방식이 실제로 동작했다.
 
-## 현재 남은 핵심 과제
+## 운영 하드닝 backlog — NOT CORE BLOCKERS
 
-기능 가능성 자체는 더 이상 주요 blocker가 아니다. 다음은 운영화 문제다.
+핵심 목표 완료 이후 남은 작업은 [`docs/OPERATIONS_BACKLOG.md`](docs/OPERATIONS_BACKLOG.md)로 분리한다. 현재 분류는 다음과 같다.
 
-1. Remote Desktop Commander foreground `npx ... remote` 실행을 안전한 persistent process로 운영할 방법을 확정한다.
-2. Android/PRoot reconnect와 장시간 channel stability를 검증한다.
-3. `/root` 전체 권한 대신 coding worktree 중심으로 권한/작업 범위를 더 좁힐 수 있는지 검토한다.
-4. repository-owned guideline/test discovery를 포함한 실제 feature 작업 루프를 검증한다.
-5. 메인폰의 별도 ChatGPT 계정에도 독립 branch/worktree + Remote Desktop Commander 경로를 구성해 two-account concurrent workflow를 검증한다.
-6. smoke PR/branches/worktrees의 정리 정책을 결정한다.
+- 메인폰 bridge의 reboot/reconnect 대칭 검증과 두 기기의 장시간 channel soak.
+- 서버폰 `/root` 전체보다 coding worktree 중심으로 더 좁은 권한 범위를 적용할 수 있는지 검토.
+- 실제 feature 작업에서 repository-owned guideline/test discovery를 반복 검증하는 운영 품질 강화.
+- 필요할 때만 두 ChatGPT 로그인 계정의 동시 호출 identity를 별도 account-session checkpoint로 증명.
+- 과거 smoke PR/branch/worktree의 보존·정리 정책 확정.
 
-## 현재 권장 다음 단계
+서버폰 persistent service와 실제 Android reboot persistence는 이미 PASS이므로 미완료 항목으로 다시 취급하지 않는다.
 
-**PR #1937은 merge하지 않고 smoke evidence로 유지하거나 닫은 뒤, 서버폰 Remote Desktop Commander를 기존 PocketRisu runtime과 분리된 persistent service로 안전하게 운영하는 방법을 검증한다.**
+## 현재 권장 운영
 
-그 다음 메인폰에도 동일한 bridge를 별도 계정/branch/worktree로 구성해 두 ChatGPT 계정이 같은 repository에서 서로 다른 작업을 동시에 수행하는 end-to-end concurrency test로 넘어간다.
+새 기능을 더 붙이는 별도 필수 단계는 없다. 현재 검증된 remote execution baseline을 보존하면서 실제 repository 작업에 사용하고, 위 backlog 항목은 필요가 발생하거나 별도 목표로 승인될 때 좁게 진행한다.
 
 ## 안전 원칙
 

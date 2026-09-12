@@ -10,6 +10,7 @@ const {
   loadProtectedMainContract,
   requiredCheckNames,
   directWriterInventory,
+  delegatedWriterContractErrors,
   writerContractErrors,
   observeProtection,
 } = require('../protected-main.cjs');
@@ -69,9 +70,33 @@ assert.equal(capability.reasonCode, 'ADMINISTRATION_WRITE_UNAVAILABLE');
 assert.equal(capability.stableTarget, 'branch:main/native-protection');
 assert.notEqual(capability.evidenceFingerprint, 'UNKNOWN');
 
-const inventory = (policy.adapters.writerInventory || []).map((row) => row.workflow).sort();
-assert.deepEqual(directWriterInventory(root), inventory, 'every direct repo-main-write workflow must be inventory-classified');
+const inventoryRows = policy.adapters.writerInventory || [];
+const directInventory = inventoryRows.filter((row) => !row.delegatedAdapter).map((row) => row.workflow).sort();
+const delegatedInventory = inventoryRows.filter((row) => row.delegatedAdapter);
+assert.deepEqual(directWriterInventory(root), directInventory, 'every direct repo-main-write workflow must be inventory-classified as direct');
+assert.deepEqual(delegatedInventory.map((row) => row.workflow), ['product-simcore-terminal-convergence-r2-8.yml']);
+const r28Writer = delegatedInventory[0];
+assert.equal(r28Writer.delegatedAdapter, 'products/simcore/tooling/release-terminal-main-write.mjs');
+assert.deepEqual(delegatedWriterContractErrors(root, r28Writer), [], 'R2.8 delegated workflow -> adapter -> shared gateway chain must satisfy Required/no-force contract');
 assert.deepEqual(writerContractErrors(root, policy, contract), [], 'writers, recovery guard, and native activation gate must satisfy protected-main gating');
+
+const wrongAdapterPolicy = clone(policy);
+const wrongAdapterWriter = wrongAdapterPolicy.adapters.writerInventory.find((row) => row.workflow === 'product-simcore-terminal-convergence-r2-8.yml');
+wrongAdapterWriter.delegatedAdapter = '.github/plugin-control-plane/canonical-main/policy.json';
+const wrongAdapterErrors = writerContractErrors(root, wrongAdapterPolicy, contract);
+assert(wrongAdapterErrors.includes('PROTECTED_MAIN_DELEGATED_ADAPTER_NOT_REFERENCED:product-simcore-terminal-convergence-r2-8.yml'));
+assert(wrongAdapterErrors.includes('PROTECTED_MAIN_DELEGATED_GATEWAY_MISSING:product-simcore-terminal-convergence-r2-8.yml'));
+assert(wrongAdapterErrors.includes('PROTECTED_MAIN_DELEGATED_REQUIRED_WORKFLOW_MISSING:product-simcore-terminal-convergence-r2-8.yml'));
+assert(wrongAdapterErrors.includes('PROTECTED_MAIN_DELEGATED_REQUIRED_PROFILE_MISSING:product-simcore-terminal-convergence-r2-8.yml'));
+assert(wrongAdapterErrors.includes('PROTECTED_MAIN_DELEGATED_REQUIRED_JOB_MISSING:product-simcore-terminal-convergence-r2-8.yml'));
+
+const directMisclassifiedPolicy = clone(policy);
+const directMisclassifiedWriter = directMisclassifiedPolicy.adapters.writerInventory.find((row) => row.workflow === 'product-simcore-terminal-convergence-r2-8.yml');
+delete directMisclassifiedWriter.delegatedAdapter;
+assert(
+  writerContractErrors(root, directMisclassifiedPolicy, contract).includes('PROTECTED_MAIN_INVENTORY_WRITER_PATH_MISSING:product-simcore-terminal-convergence-r2-8.yml'),
+  'delegated R2.8 must fail closed if it is reclassified as a direct workflow writer',
+);
 
 const offBranch = {
   protected: false,

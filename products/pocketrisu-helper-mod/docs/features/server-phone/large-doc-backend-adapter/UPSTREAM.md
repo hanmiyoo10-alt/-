@@ -1,5 +1,11 @@
 # Upstream / PR notes — SERVER-LARGE-DOC-BACKEND-ADAPTER
 
+Feature-ID: `large-doc-backend-adapter`
+Area: `server-phone`
+PR status: `NOT_PREPARED`
+Isolation status: `NEEDS_REVIEW`
+Deployment status: `NOT_READY`
+
 상태: **HOLD — design first**
 
 ## 현재 판단
@@ -22,3 +28,20 @@
 - PR 2 후보: explicit chunk write/save, PR 1 검증 후에만.
 
 원본 large-doc-editor 자체 변경과 PocketRisu adapter 변경은 동일 PR에 섞지 않는다.
+
+## Minimal upstream scope
+The first candidate slice is read-only `files/open/chunk` adapter behavior with workspace/path/session/error boundaries. Write/save, DB/save optimization, Usage/DevPass integration, server-phone Android notifications, and runtime-manager changes remain outside this first slice.
+
+## Dependencies
+The existing `plugins/termux/large-doc-editor/server.py` is reference evidence for document-session/chunk/workspace semantics. Any PocketRisu adapter must fit current PocketRisu server/API/plugin boundaries without changing the original large-doc-editor in the same PR.
+
+## Verification evidence
+The feature is still design-first. Existing evidence is the recorded INSPECT_ONLY architecture analysis and reference backend behavior; implementation, CI, deploy, and real-device adapter verification have not started.
+
+## Upstream pitch
+Not ready for an upstream pitch. First prove the use-case is not already covered and validate the isolated read-only slice; only then consider a separately staged write/save follow-up.
+
+## Review / PR state
+- PR: none
+- current state: HOLD — design first
+- next action: inspect server-phone `:8765` service/workspace ownership before runtime code changes

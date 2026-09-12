@@ -4,6 +4,10 @@ const fs = require('fs');
 const path = require('path');
 
 const REGISTRY_PATH = path.join(__dirname, 'registry.json');
+const CUSTOM_SCOPE_LABEL_PREFIX = 'scope:';
+const CUSTOM_SCOPE_LABEL_NAME_BOUND = 50;
+const CUSTOM_SCOPE_ID_MAX_LENGTH = CUSTOM_SCOPE_LABEL_NAME_BOUND - CUSTOM_SCOPE_LABEL_PREFIX.length;
+const TRUSTED_CUSTOM_SCOPE_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 
 function loadRegistry() {
   return JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8'));
@@ -109,16 +113,58 @@ function extractIssueScopeValue(body = '') {
   return null;
 }
 
+function extractIssueCustomScopeValue(body = '') {
+  const lines = String(body).replace(/\r/g, '').split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    if (lines[i].trim() === '### Custom scope') {
+      for (let j = i + 1; j < lines.length; j += 1) {
+        const value = lines[j].trim();
+        if (/^###\s+/.test(value)) return null;
+        if (value) return value;
+      }
+    }
+    const direct = lines[i].match(/^Custom scope:\s*(.+)$/i);
+    if (direct) return direct[1].trim();
+  }
+  return null;
+}
+
 function extractIssuePluginValue(body = '') {
   return extractIssueScopeValue(body);
 }
 
-function classifyIssueBody(body, registry = loadRegistry()) {
+function customScopeLabelDefinition(value, registry = loadRegistry()) {
+  const id = String(value || '').trim();
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id)) return null;
+  if (id.length > CUSTOM_SCOPE_ID_MAX_LENGTH) return null;
+  const reserved = new Set(['custom', ...labelDefinitions(registry)
+    .filter((def) => def.name.startsWith(CUSTOM_SCOPE_LABEL_PREFIX))
+    .map((def) => def.name.slice(CUSTOM_SCOPE_LABEL_PREFIX.length))]);
+  if (reserved.has(id)) return null;
+  return {
+    name: `${CUSTOM_SCOPE_LABEL_PREFIX}${id}`,
+    color: 'c5def5',
+    description: 'Trusted custom repository issue scope',
+  };
+}
+
+function trustedCustomScopeAssociation(value = '') {
+  return TRUSTED_CUSTOM_SCOPE_ASSOCIATIONS.has(String(value).toUpperCase());
+}
+
+function classifyIssueBody(body, registry = loadRegistry(), options = {}) {
   const value = extractIssueScopeValue(body);
   if (!value) return {explicit: false, labels: []};
 
   if (value === 'repo') return {explicit: true, labels: ['scope:repo']};
   if (value === 'shared') return {explicit: true, labels: ['scope:shared']};
+  if (value === 'custom') {
+    const definition = trustedCustomScopeAssociation(options.authorAssociation)
+      ? customScopeLabelDefinition(extractIssueCustomScopeValue(body), registry)
+      : null;
+    if (!definition) return {explicit: true, labels: ['scope:unclassified']};
+    return {explicit: true, labels: [definition.name], customLabelDefinition: definition};
+  }
 
   const pluginMatches = Object.entries(registry.plugins || {})
     .filter(([, plugin]) => (plugin.issueValues || []).includes(value));
@@ -134,6 +180,24 @@ function classifyIssueBody(body, registry = loadRegistry()) {
   return {explicit: true, labels: ['scope:unclassified']};
 }
 
+function statusIssueTitle(kind, id) {
+  return `[${kind}-status:${id}]`;
+}
+
+function resolveStatusIssueIdentity(issues, kind, id) {
+  const title = statusIssueTitle(kind, id);
+  const candidates = (issues || [])
+    .filter((issue) => !issue.pull_request && issue.title === title)
+    .filter((issue) => (issue.labels || []).some((label) => (typeof label === "string" ? label : label?.name) === "control-plane:status"))
+    .sort((a, b) => a.number - b.number);
+  return {
+    title,
+    canonical: candidates[0] || null,
+    duplicates: candidates.slice(1),
+    candidates,
+  };
+}
+
 function managedLabel(label, registry = loadRegistry()) {
   return (registry.managedLabelPrefixes || []).some((prefix) => label.startsWith(prefix))
     || label === 'control-plane:status';
@@ -147,6 +211,7 @@ function labelDefinitions(registry = loadRegistry()) {
     ['scope:multi-product', 'd876e3', 'Change touches more than one registered product'],
     ['scope:multi-owner', 'd876e3', 'Change spans registered plugin and product ownership boundaries'],
     ['scope:unclassified', 'b60205', 'Operational scope could not be classified deterministically'],
+    ['scope:research-product', 'c5def5', 'Repository-recognized research product path; non-production with no release or runtime authority'],
     ['scope:template', 'c5def5', 'Template-only path'],
     ['scope:test-fixture', 'c5def5', 'Repository test fixture path'],
     ['control-plane:status', '0e8a16', 'Mutable operational status issue'],
@@ -158,6 +223,15 @@ function labelDefinitions(registry = loadRegistry()) {
     defs.push([`product:${id}`, '0052cc', product.displayName]);
   }
   return defs.map(([name, color, description]) => ({name, color, description}));
+}
+
+function fixedLabelMetadataDecision(existing, def) {
+  if (!existing) return {action: 'create', body: def};
+  const patch = {};
+  if (String(existing.color || '').toLowerCase() !== String(def.color || '').toLowerCase()) patch.color = def.color;
+  if ((existing.description ?? '') !== (def.description ?? '')) patch.description = def.description;
+  if (Object.keys(patch).length) return {action: 'update', body: patch};
+  return {action: 'none', body: null};
 }
 
 function validateRegistry(registry = loadRegistry()) {
@@ -204,9 +278,15 @@ module.exports = {
   matchesAny,
   classifyPaths,
   extractIssueScopeValue,
+  extractIssueCustomScopeValue,
   extractIssuePluginValue,
+  customScopeLabelDefinition,
+  trustedCustomScopeAssociation,
   classifyIssueBody,
+  statusIssueTitle,
+  resolveStatusIssueIdentity,
   managedLabel,
   labelDefinitions,
+  fixedLabelMetadataDecision,
   validateRegistry,
 };

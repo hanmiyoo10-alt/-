@@ -1,0 +1,9 @@
+# package|command
+git|git
+gh|gh
+python3|python3
+tmux|tmux
+openssh-client|ssh
+curl|curl
+build-essential|cc
+build-essential|make

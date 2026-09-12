@@ -1549,3 +1549,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/755c37a7ca3e9028a5604242bb5ae1a97627057d)
 - Event ID: `ce5a828afbed606d966056831d2550576953d2a55161515ea0683cc92d3fc572`
 <!-- canonical-main-doc-promoted:ce5a828afbed606d966056831d2550576953d2a55161515ea0683cc92d3fc572 -->
+
+### 2026-09-12 — Merge pull request #2085 from hanmiyoo10-alt/repo/work-packet-body-close-sync-2083
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `2444e707e694cb777f54d8521b851cb84203b9f4`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2444e707e694cb777f54d8521b851cb84203b9f4)
+- Event ID: `69fc7e0990b6c73a942c31690bb7dfb7a64a0f4ad26d88dbc8569d0380be96bb`
+<!-- canonical-main-doc-promoted:69fc7e0990b6c73a942c31690bb7dfb7a64a0f4ad26d88dbc8569d0380be96bb -->

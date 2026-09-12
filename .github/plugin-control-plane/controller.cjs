@@ -7,6 +7,7 @@ const {
   classifyIssueBody,
   managedLabel,
   labelDefinitions,
+  fixedLabelMetadataDecision,
   resolveStatusIssueIdentity,
 } = require('./lib.cjs');
 
@@ -68,8 +69,16 @@ async function ensureLabel(repo, def) {
   return existing || def;
 }
 
+async function ensureFixedLabel(repo, def) {
+  const encoded = encodeURIComponent(def.name);
+  const existing = await api(repo, `/labels/${encoded}`, {allow404: true});
+  const decision = fixedLabelMetadataDecision(existing, def);
+  if (decision.action === 'create') await api(repo, '/labels', {method: 'POST', body: decision.body});
+  if (decision.action === 'update') await api(repo, `/labels/${encoded}`, {method: 'PATCH', body: decision.body});
+}
+
 async function ensureLabels(repo, registry) {
-  for (const def of labelDefinitions(registry)) await ensureLabel(repo, def);
+  for (const def of labelDefinitions(registry)) await ensureFixedLabel(repo, def);
 }
 
 async function replaceManagedLabels(repo, number, currentLabels, desiredManaged, registry) {

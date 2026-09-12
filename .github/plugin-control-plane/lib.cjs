@@ -225,6 +225,15 @@ function labelDefinitions(registry = loadRegistry()) {
   return defs.map(([name, color, description]) => ({name, color, description}));
 }
 
+function fixedLabelMetadataDecision(existing, def) {
+  if (!existing) return {action: 'create', body: def};
+  const patch = {};
+  if (String(existing.color || '').toLowerCase() !== String(def.color || '').toLowerCase()) patch.color = def.color;
+  if ((existing.description ?? '') !== (def.description ?? '')) patch.description = def.description;
+  if (Object.keys(patch).length) return {action: 'update', body: patch};
+  return {action: 'none', body: null};
+}
+
 function validateRegistry(registry = loadRegistry()) {
   const errors = [];
   if (registry.schemaVersion !== 1) errors.push('schemaVersion must be 1');
@@ -278,5 +287,6 @@ module.exports = {
   resolveStatusIssueIdentity,
   managedLabel,
   labelDefinitions,
+  fixedLabelMetadataDecision,
   validateRegistry,
 };

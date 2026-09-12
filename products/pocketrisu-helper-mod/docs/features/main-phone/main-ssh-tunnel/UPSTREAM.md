@@ -39,7 +39,7 @@ Pre-PR validation:
 - shell syntax for both scripts: PASS;
 - isolated regression test: PASS;
 - branch `git diff --check`: PASS;
-- helper docs validator: both `main` and candidate currently return the same unrelated baseline failure set (`rc=1`), with no candidate-only delta.
+- historical pre-#2066 helper docs validation: `main` and candidate returned the same unrelated baseline failure set (`rc=1`), with no candidate-only delta; after #2066 repaired that baseline and this branch was refreshed onto current `main`, the helper docs validator passes.
 
 Real-device destructive proof is deferred until merge/postmerge deployment. The test must not deliberately kill the server or server sshd.
 

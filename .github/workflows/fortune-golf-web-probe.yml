@@ -1,0 +1,68 @@
+name: Fortune Golf Web Probe
+on:
+  push:
+    branches: [fortune-golf-apk]
+    paths: ['.github/workflows/fortune-golf-web-probe.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fortune-golf-web-probe
+  cancel-in-progress: false
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout pinned WIE
+        uses: actions/checkout@v4
+        with:
+          repository: dlunch/wie
+          ref: 1ed8710956e727629e67db762ddc1e6bd6151a1f
+          submodules: recursive
+          persist-credentials: false
+      - name: Checkout verified Probe 11 overlay
+        uses: actions/checkout@v4
+        with:
+          ref: cefe56950c8a31066d05dc844c493958ec752fbe
+          path: .probe
+          sparse-checkout: fortune-probe
+          persist-credentials: false
+      - name: Apply Probe 11
+        run: python .probe/fortune-probe/apply.py .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: fortune-golf-web
+          cache-on-failure: true
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - name: Build identical web frontend
+        run: |
+          npm ci
+          npm run build:prod
+      - name: Check output and record provenance
+        run: |
+          test -s wie-web/dist/index.html
+          test -n "$(find wie-web/dist -name '*.wasm' -size +0c -print -quit)"
+          cp LICENSE wie-web/dist/WIE-LICENSE.txt
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json
+          root = Path('wie-web/dist')
+          files = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.rglob('*')) if p.is_file()}
+          info = {'wie_commit': '1ed8710956e727629e67db762ddc1e6bd6151a1f', 'overlay_commit': 'cefe56950c8a31066d05dc844c493958ec752fbe', 'probe': 11, 'sha256': files, 'game_files_included': False}
+          (root / 'probe-build.json').write_text(json.dumps(info, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fortune-golf-probe11-web
+          path: wie-web/dist/
+          if-no-files-found: error

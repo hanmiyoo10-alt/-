@@ -27,11 +27,13 @@ sh tools/repo-env/pwsh/bootstrap.sh verify
 Windows, runnable from Windows PowerShell 5.1 before `pwsh` exists:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\repo-env\pwsh\bootstrap.ps1 -Mode Check
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\repo-env\pwsh\bootstrap.ps1 -Mode Plan
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\repo-env\pwsh\bootstrap.ps1 -Mode Install
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\repo-env\pwsh\bootstrap.ps1 -Mode Verify
+powershell.exe -NoProfile -File tools\repo-env\pwsh\bootstrap.ps1 -Mode Check
+powershell.exe -NoProfile -File tools\repo-env\pwsh\bootstrap.ps1 -Mode Plan
+powershell.exe -NoProfile -File tools\repo-env\pwsh\bootstrap.ps1 -Mode Install
+powershell.exe -NoProfile -File tools\repo-env\pwsh\bootstrap.ps1 -Mode Verify
 ```
+
+The repository bootstrap does not disable or bypass the host execution policy. If an organization or host policy blocks script execution or package installation, surface that restriction and use the environment's authorized installation path instead of weakening the policy.
 
 For the observed Windows/Codex environment where the WiX/MSI route is preferred, the Windows bootstrap also accepts `-InstallerType Wix`. This is an explicit selection, not an automatic fallback, because Microsoft package availability can change across PowerShell release lines.
 

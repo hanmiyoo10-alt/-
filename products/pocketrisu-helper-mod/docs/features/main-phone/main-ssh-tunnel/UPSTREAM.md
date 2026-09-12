@@ -2,7 +2,7 @@
 
 Feature-ID: `main-ssh-tunnel`
 Area: `main-phone`
-PR status: `PREPARED`
+PR status: `OPEN (#2060)`
 Isolation status: `ISOLATED`
 Deployment status: `NOT_READY`
 
@@ -35,11 +35,11 @@ Existing device evidence before this PR:
 - main core service: `runsv not running`;
 - core-only manual `runsv` recovery restored localhost health and remained stable on recheck.
 
-PR validation target:
-- shell syntax for both scripts;
-- isolated regression test passes;
-- PocketRisu helper docs validator passes;
-- exact diff contains only this Feature-ID.
+Pre-PR validation:
+- shell syntax for both scripts: PASS;
+- isolated regression test: PASS;
+- branch `git diff --check`: PASS;
+- helper docs validator: both `main` and candidate currently return the same unrelated baseline failure set (`rc=1`), with no candidate-only delta.
 
 Real-device destructive proof is deferred until merge/postmerge deployment. The test must not deliberately kill the server or server sshd.
 
@@ -48,4 +48,5 @@ Keep the existing runit-owned SSH tunnel behavior, but add a tiny independent gu
 
 ## Review / PR state
 - incident evidence: repository issue #2048
-- next action: open the isolated PR, run Required/feature validation, then stop before merge.
+- PR: #2060
+- next action: wait for Required/PR checks and review; do not merge in the IMPLEMENTATION_PR stage.

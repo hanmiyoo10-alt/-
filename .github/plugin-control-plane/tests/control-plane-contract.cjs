@@ -8,7 +8,9 @@ const {
   classifyPaths,
   classifyIssueBody,
   validateRegistry,
+  resolveStatusIssueIdentity,
 } = require('../lib.cjs');
+const {projectRows} = require('../canonical-main/observers/project-status.cjs');
 
 const root = path.resolve(__dirname, '../../..');
 const registry = loadRegistry();
@@ -25,6 +27,30 @@ assert.deepEqual(Object.keys(registry.products).sort(), [
   'app-api-mod-lab',
   'pocketrisu-helper-mod',
 ]);
+
+const statusLabel = {name: 'control-plane:status'};
+const duplicateStatusIssues = [
+  {number: 1977, title: '[plugin-status:voyage-token-check]', state: 'open', labels: [statusLabel], body: 'Last refreshed: 2026-09-12T07:30:00Z'},
+  {number: 283, title: '[plugin-status:voyage-token-check]', state: 'open', labels: [statusLabel], body: 'Last refreshed: 2026-09-09T12:37:49.877Z'},
+];
+const duplicateIdentity = resolveStatusIssueIdentity(duplicateStatusIssues, 'plugin', 'voyage-token-check');
+assert.equal(duplicateIdentity.canonical.number, 283, 'lowest generated status issue number is canonical');
+assert.deepEqual(duplicateIdentity.duplicates.map((row) => row.number), [1977]);
+const voyageRegistry = {plugins: {'voyage-token-check': {}}, products: {}};
+const duplicateRow = projectRows(voyageRegistry, duplicateStatusIssues, 150, Date.parse('2026-09-12T07:31:00Z'))[0];
+assert.equal(duplicateRow.issue.number, 283);
+assert.deepEqual(duplicateRow.duplicates.map((row) => row.number), [1977]);
+assert.equal(duplicateRow.fresh, false, 'open duplicate generated views must fail project freshness closed');
+const singleRow = projectRows(voyageRegistry, [{
+  number: 283,
+  title: '[plugin-status:voyage-token-check]',
+  state: 'open',
+  labels: [statusLabel],
+  body: 'Last refreshed: 2026-09-12T07:30:00Z',
+}], 150, Date.parse('2026-09-12T07:31:00Z'))[0];
+assert.equal(singleRow.issue.number, 283);
+assert.deepEqual(singleRow.duplicates, []);
+assert.equal(singleRow.fresh, true, 'single canonical generated status view keeps normal freshness behavior');
 
 assert.deepEqual(classifyPaths(['plugins/usage-dashboard/src/parts.cjs'], registry).labels, ['plugin:usage-dashboard']);
 assert.deepEqual(classifyPaths(['.github/workflows/reusable-usage-dashboard-validate.yml'], registry).labels, ['plugin:usage-dashboard']);
@@ -157,6 +183,9 @@ assert.match(controller, /PENDING —/);
 assert.match(controller, /pocketRisuHelperStatus/);
 assert.match(controller, /registry\.products/);
 assert.match(controller, /product:/);
+assert.match(controller, /const statusLabel = encodeURIComponent\('control-plane:status'\)/);
+assert.match(controller, /resolveStatusIssueIdentity/);
+assert.match(controller, /CLOSED_STATUS_DUPLICATE/);
 assert.doesNotMatch(controller, /productionVersion\s*:/);
 
 console.log('PLUGIN_CONTROL_PLANE_CONTRACTS:OK');

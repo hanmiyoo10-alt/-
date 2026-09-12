@@ -7,6 +7,7 @@ const {
   classifyIssueBody,
   managedLabel,
   labelDefinitions,
+  resolveStatusIssueIdentity,
 } = require('./lib.cjs');
 
 const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
@@ -271,11 +272,10 @@ async function searchCount(query) {
   return row.total_count || 0;
 }
 
-async function findStatusIssue(repo, kind, id) {
-  const labels = encodeURIComponent(`control-plane:status,${kind}:${id}`);
-  const rows = await api(repo, `/issues?state=all&labels=${labels}&per_page=100`);
-  const title = `[${kind}-status:${id}]`;
-  return rows.find((issue) => !issue.pull_request && issue.title === title) || null;
+async function findStatusIssues(repo, kind, id) {
+  const statusLabel = encodeURIComponent('control-plane:status');
+  const rows = await api(repo, `/issues?state=all&labels=${statusLabel}&per_page=100`);
+  return resolveStatusIssueIdentity(rows, kind, id);
 }
 
 function table(rows) {
@@ -325,11 +325,17 @@ async function refreshStatus() {
       '<!-- plugin-control-plane-status -->',
     ].join('\n');
 
-    const existing = await findStatusIssue(repo, kind, id);
+    const identity = await findStatusIssues(repo, kind, id);
+    const existing = identity.canonical;
     if (existing) {
       await api(repo, `/issues/${existing.number}`, {method: 'PATCH', body: {body, state: 'open'}});
       const current = (existing.labels || []).map((row) => row.name);
       await replaceManagedLabels(repo, existing.number, current, [label, 'control-plane:status'], registry);
+      for (const duplicate of identity.duplicates) {
+        if (duplicate.state !== 'open') continue;
+        await api(repo, `/issues/${duplicate.number}`, {method: 'PATCH', body: {state: 'closed'}});
+        console.log(`CLOSED_STATUS_DUPLICATE:${kind}:${id}:#${duplicate.number}`);
+      }
       console.log(`UPDATED_STATUS:${kind}:${id}:#${existing.number}`);
     } else {
       const created = await api(repo, '/issues', {method: 'POST', body: {

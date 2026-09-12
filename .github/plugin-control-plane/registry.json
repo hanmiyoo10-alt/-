@@ -112,6 +112,11 @@
   },
   "nonOperationalScopes": [
     {
+      "id": "research-product",
+      "label": "scope:research-product",
+      "paths": ["products/chatgpt-mobile-coder-lab/**"]
+    },
+    {
       "id": "template",
       "label": "scope:template",
       "paths": ["plugins/_template/**"]
@@ -136,6 +141,7 @@
   "sharedPaths": [
     "README.md",
     "products/README.md",
+    ".vscode/**",
     ".github/workflows/repo-main-write-coordination-migration.yml"
   ]
 }

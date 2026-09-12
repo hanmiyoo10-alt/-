@@ -16,8 +16,17 @@ body:
         - pocketrisu-helper-mod
         - shared
         - repo
+        - custom
     validations:
       required: true
+  - type: input
+    id: custom_scope
+    attributes:
+      label: Custom scope
+      description: Used only when Scope is custom. Enter a lowercase ASCII slug of 1-44 characters using letters, digits, and single hyphens.
+      placeholder: example-scope
+    validations:
+      required: false
   - type: textarea
     id: summary
     attributes:

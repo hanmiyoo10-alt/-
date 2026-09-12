@@ -314,6 +314,28 @@ A tiny read-only task may collapse stages when it genuinely completes in at most
 
 Projects or domain contracts may specialize this `DEFAULT` where their own workflow needs a different checkpoint shape, but they must preserve repository-wide hard invariants and their existing owning gates.
 
+### RCR-D16 — Prefer PowerShell 7 for Unicode-sensitive Windows text I/O
+
+**Class:** `DEFAULT`
+
+When repository work on Windows uses PowerShell to read or write non-ASCII or otherwise encoding-sensitive text, prefer PowerShell 7 (`pwsh`) over Windows PowerShell 5.1 (`powershell.exe`).
+
+If a file format, BOM policy, existing file encoding, or external consumer imposes an explicit encoding contract, preserve that contract and specify `-Encoding` where appropriate rather than relying on shell defaults. This preference does not imply that `pwsh` repairs already mis-encoded data.
+
+If `pwsh` is unavailable, use an explicit compatible encoding strategy or surface the limitation before performing an encoding-sensitive write. This is a tool-selection default, not a repository-wide requirement that every Windows host install PowerShell 7.
+
+### RCR-D17 — Prefer authorized remote execution for repository work
+
+**Class:** `DEFAULT`
+
+When an authorized remote execution bridge is available and can reach the repository or project environment needed for the task, prefer that bridge as the default execution surface for repository filesystem, shell, Git, test, and validation work. In the currently verified mobile coding environment, Remote Desktop Commander is the reference implementation of this pattern.
+
+Treat the remote bridge as an execution transport, not as a new repository, production, release, runtime, security, or approval authority. Before acting, identify the intended device and repository/worktree explicitly, read the current owning authority and project rules, and preserve existing Git/CI/main-write/release/production gates. Do not trust an implicit remote working directory when an absolute repository/worktree path or `git -C <absolute-path> ...` can make the target unambiguous.
+
+For mutations, preserve project-approved branch/worktree isolation and verify the exact diff, staged file set, and required validation before commit, push, PR, merge, release, or production actions. A permanent device landing branch or shared working tree must not become a convenience mutation surface merely because remote execution is available.
+
+If the intended remote device is offline, ambiguous, lacks the required capability, or would widen authority/security scope unnecessarily, fall back to the narrowest safe evidence-equivalent repository/connector/local surface and report the limitation when it materially affects the task. This default must not force remote execution when another authorized surface is narrower, safer, or required by the owning contract.
+
 ## 6. Conditional common rules
 
 ### RCR-C01 — Generated artifacts remain derived

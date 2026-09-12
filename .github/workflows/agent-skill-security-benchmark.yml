@@ -7,6 +7,12 @@ on:
       - '.agents/skills/**'
       - 'tools/agent-skill-security/**'
       - '.github/workflows/agent-skill-security-benchmark.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.agents/skills/**'
+      - 'tools/agent-skill-security/**'
+      - '.github/workflows/agent-skill-security-benchmark.yml'
 
 permissions:
   contents: read

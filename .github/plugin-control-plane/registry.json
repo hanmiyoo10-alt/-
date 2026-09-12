@@ -129,6 +129,8 @@
     ".github/tooling/ci-summary/manifests/plugin-control-plane.json",
     ".github/workflows/agent-skill-security-benchmark.yml",
     "tools/agent-skill-security/**",
+    ".agents/skills/**",
+    "docs/REPOSITORY_AGENT_EXECUTION_COMPACTNESS_V1_DESIGN_2026-09-07.md",
     "docs/REPOSITORY_PLUGIN_CONTROL_PLANE_*.md"
   ],
   "sharedPaths": [

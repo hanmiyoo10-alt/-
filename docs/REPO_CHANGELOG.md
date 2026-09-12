@@ -1573,3 +1573,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/69afc00c5c8f9ff269fd63422be2faa18ee9b440)
 - Event ID: `2f5358feedb439e423255b195bc84e15e6dea1777b370e1d89aaf5d304633334`
 <!-- canonical-main-doc-promoted:2f5358feedb439e423255b195bc84e15e6dea1777b370e1d89aaf5d304633334 -->
+
+### 2026-09-12 — Merge pull request #2105 from hanmiyoo10-alt/repo/custom-scope-2098
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `9bcf36c95f11a72c0cef4eb53eaf6185890cb0e8`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/9bcf36c95f11a72c0cef4eb53eaf6185890cb0e8)
+- Event ID: `31ba9ab74ddd0b1443184b25616dd27746a9231869f7b7233bae4942610a4c96`
+<!-- canonical-main-doc-promoted:31ba9ab74ddd0b1443184b25616dd27746a9231869f7b7233bae4942610a4c96 -->

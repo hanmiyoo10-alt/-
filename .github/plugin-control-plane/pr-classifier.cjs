@@ -5,6 +5,7 @@ const {
   classifyPaths,
   managedLabel,
   labelDefinitions,
+  fixedLabelMetadataDecision,
 } = require('./lib.cjs');
 
 const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
@@ -32,8 +33,11 @@ async function api(repo, endpoint, options = {}) {
 
 async function ensureLabels(repo, registry) {
   for (const def of labelDefinitions(registry)) {
-    const existing = await api(repo, `/labels/${encodeURIComponent(def.name)}`, {allow404: true});
-    if (!existing) await api(repo, '/labels', {method: 'POST', body: def});
+    const encoded = encodeURIComponent(def.name);
+    const existing = await api(repo, `/labels/${encoded}`, {allow404: true});
+    const decision = fixedLabelMetadataDecision(existing, def);
+    if (decision.action === 'create') await api(repo, '/labels', {method: 'POST', body: decision.body});
+    if (decision.action === 'update') await api(repo, `/labels/${encoded}`, {method: 'PATCH', body: decision.body});
   }
 }
 

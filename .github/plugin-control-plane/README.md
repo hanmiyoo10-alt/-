@@ -36,4 +36,18 @@ The two trusted-main reconciliation invokers hold `pull-requests: write` only be
 - independently modeled product roots use `product:<id>`;
 - repository/shared/ambiguous/multi-owner conditions use `scope:<id>`.
 
+## Fixed managed label metadata
+
+Entries returned by `labelDefinitions(registry)` are repository-owned fixed label definitions. Trusted-main metadata writers create a missing fixed label and idempotently reconcile an existing fixed label's color and description when they drift from that definition. Matching fixed metadata produces no write, and label names are identity keys rather than rename targets.
+
+Dynamic custom `scope:<id>` labels are intentionally outside this reconciliation set. Existing custom labels keep the #2098 reuse-as-is contract: they are not rewritten or garbage-collected.
+
+## Trusted custom issue scopes
+
+Repository work issues may choose `Scope = custom` and provide a `Custom scope` machine ID. This is issue metadata only; it never creates product, release, deployment, or runtime authority.
+
+Custom IDs use lowercase ASCII letters and digits with single hyphen separators. The repository bounds the final managed label name to 50 characters, so the custom ID is at most 44 characters after the `scope:` prefix. Fixed built-in scope IDs are reserved.
+
+A new custom label is eligible only when the issue author's association is `OWNER`, `MEMBER`, or `COLLABORATOR`. Missing, invalid, reserved, or untrusted custom input fails closed to `scope:unclassified` and does not create a label. Existing custom labels are reused as-is; the controller does not rewrite or garbage-collect them. PR changed-path classification remains registry/path based and does not manufacture custom scopes.
+
 The machine registry remains locator-only. Mutable production facts stay in each workstream's existing source of truth.

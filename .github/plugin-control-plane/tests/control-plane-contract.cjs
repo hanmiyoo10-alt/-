@@ -66,6 +66,7 @@ assert.deepEqual(classifyPaths(['plugins/test-b/install.js'], registry).labels, 
 assert.deepEqual(classifyPaths(['plugins/_template/latest.js'], registry).labels, ['scope:template']);
 assert.deepEqual(classifyPaths(['README.md'], registry).labels, ['scope:shared']);
 assert.deepEqual(classifyPaths(['products/README.md'], registry).labels, ['scope:shared']);
+assert.deepEqual(classifyPaths(['.vscode/tasks.json'], registry).labels, ['scope:shared']);
 assert.deepEqual(classifyPaths(['.github/plugin-control-plane/registry.json'], registry).labels, ['scope:repo']);
 assert.deepEqual(classifyPaths(['.github/tooling/ci-summary/manifests/plugin-control-plane.json'], registry).labels, ['scope:repo']);
 assert.deepEqual(classifyPaths(['tools/agent-skill-security/corpus.json'], registry).labels, ['scope:repo']);

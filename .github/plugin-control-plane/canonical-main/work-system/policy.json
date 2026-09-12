@@ -40,7 +40,9 @@
       "observationalPendingRequiresExplicitNonBlockingAcceptance": true,
       "safetyCriticalLiveProofRemainsBlockingWhenRequired": true,
       "blockedCapabilityMayCoexistWithDoneOnlyWhenExplicitlyNonBlocking": true,
-      "taxonomyMayRetroactivelyWeakenActivatedAcceptance": false
+      "taxonomyMayRetroactivelyWeakenActivatedAcceptance": false,
+      "nativeGitHubIssueClosureIsDoneEvidence": false,
+      "blockingPostmergeAcceptanceAllowsPrClosingKeyword": false
     }
   },
   "executionCompactness": {

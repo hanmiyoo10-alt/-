@@ -134,6 +134,24 @@ function classifyIssueBody(body, registry = loadRegistry()) {
   return {explicit: true, labels: ['scope:unclassified']};
 }
 
+function statusIssueTitle(kind, id) {
+  return `[${kind}-status:${id}]`;
+}
+
+function resolveStatusIssueIdentity(issues, kind, id) {
+  const title = statusIssueTitle(kind, id);
+  const candidates = (issues || [])
+    .filter((issue) => !issue.pull_request && issue.title === title)
+    .filter((issue) => (issue.labels || []).some((label) => (typeof label === "string" ? label : label?.name) === "control-plane:status"))
+    .sort((a, b) => a.number - b.number);
+  return {
+    title,
+    canonical: candidates[0] || null,
+    duplicates: candidates.slice(1),
+    candidates,
+  };
+}
+
 function managedLabel(label, registry = loadRegistry()) {
   return (registry.managedLabelPrefixes || []).some((prefix) => label.startsWith(prefix))
     || label === 'control-plane:status';
@@ -206,6 +224,8 @@ module.exports = {
   extractIssueScopeValue,
   extractIssuePluginValue,
   classifyIssueBody,
+  statusIssueTitle,
+  resolveStatusIssueIdentity,
   managedLabel,
   labelDefinitions,
   validateRegistry,

@@ -81,6 +81,8 @@ Use only evidence-backed terms from the Work System taxonomy:
 
 `DONE` belongs in the packet lifecycle State only after every declared required acceptance item is satisfied at its required proof level and required UNKNOWN evidence is `NONE`. `OBSERVATIONAL_PENDING` or `BLOCKED_CAPABILITY` may coexist with `DONE` only when the affected evidence was explicitly declared non-blocking by this packet's acceptance. Do not infer `LIVE_PROVEN` from `CONTRACT_PROVEN`.
 
+PR linkage is fail closed: if required acceptance remains after merge, especially blocking `POSTMERGE_CONVERGENCE` or `LIVE_PROVEN` evidence, use `Refs #<packet>` and do not use `Fixes` or `Closes`. A closing keyword is allowed only when merge itself satisfies every required acceptance item and no required postmerge proof remains. Native GitHub issue closure alone is not proof-taxonomy `DONE` evidence.
+
 ## Stop condition
 
 <EXACT_STOP_CONDITION>

@@ -41,6 +41,7 @@ assert.deepEqual(classifyPaths(['plugins/_template/latest.js'], registry).labels
 assert.deepEqual(classifyPaths(['README.md'], registry).labels, ['scope:shared']);
 assert.deepEqual(classifyPaths(['products/README.md'], registry).labels, ['scope:shared']);
 assert.deepEqual(classifyPaths(['.github/plugin-control-plane/registry.json'], registry).labels, ['scope:repo']);
+assert.deepEqual(classifyPaths(['.github/tooling/ci-summary/manifests/plugin-control-plane.json'], registry).labels, ['scope:repo']);
 assert.deepEqual(classifyPaths(['docs/REPOSITORY_PLUGIN_CONTROL_PLANE_IMPLEMENTATION.md'], registry).labels, ['scope:repo']);
 assert.deepEqual(
   classifyPaths(['plugins/usage-dashboard/latest.js', 'plugins/simcore/latest.js'], registry).labels,

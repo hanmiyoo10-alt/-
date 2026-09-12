@@ -5,9 +5,11 @@
   "type": "module",
   "engines": { "node": ">=20" },
   "scripts": {
-    "test": "node --test tests/web-acquisition.test.mjs"
+    "test": "node --test tests/web-acquisition.test.mjs tests/web-acquisition-crawl.test.mjs"
   },
   "dependencies": {
+    "@crawlee/basic": "3.18.1",
+    "@crawlee/utils": "3.18.1",
     "playwright": "1.63.0"
   }
 }

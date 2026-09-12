@@ -8,12 +8,15 @@ The shared repository tasks are:
 
 - `Repo: Plugin Control Plane Contracts`
 - `Repo: Agent Skill Security Contract Tests`
+- `Repo: Agent Execution Compactness Contract Tests`
 
 `Repo: Plugin Control Plane Contracts` delegates to the same existing Plugin Control Plane receipt runner and manifest used by repository CI. The task does not reimplement validation logic inside VS Code.
 
 `Repo: Agent Skill Security Contract Tests` delegates directly to the stdlib-only unittest command owned by `tools/agent-skill-security/README.md`. It validates the advisory benchmark harness contract only. A PASS is not a security certification and does not replace Agent Skills CI, Required, or any security/release authority.
 
-Run either task from `Tasks: Run Task` in the Command Palette when a human editor entrypoint is useful.
+`Repo: Agent Execution Compactness Contract Tests` delegates directly to the unittest command owned by `.agents/skills/agent-execution-compactness/SKILL.md`. Its PASS is non-authoritative local-development evidence only and does not satisfy Required, Agent Skills CI, release/promotion, postmerge convergence, production, or any owner-required fresh proof. VS Code does not implement or persist same-state reuse; that remains owned by the skill contract.
+
+Run any task from `Tasks: Run Task` in the Command Palette when a human editor entrypoint is useful.
 
 ## Authority boundary
 

@@ -213,7 +213,7 @@ class SkillContractTests(unittest.TestCase):
         text = SKILL.read_text(encoding="utf-8")
         section = text[
             text.index("## Read/result payload companion contract"):
-            text.index("## Connector-response selection companion contract")
+            text.index("## Exact immutable result read-reuse companion contract")
         ]
         for required in (
             "Unknown location:",
@@ -231,7 +231,7 @@ class SkillContractTests(unittest.TestCase):
         text = SKILL.read_text(encoding="utf-8")
         section = text[
             text.index("## Read/result payload companion contract"):
-            text.index("## Connector-response selection companion contract")
+            text.index("## Exact immutable result read-reuse companion contract")
         ]
         for required in (
             "whole-file/full-body reads remain valid",
@@ -283,6 +283,83 @@ class SkillContractTests(unittest.TestCase):
         )
         self.assertFalse(
             cases["known-large-source-local-question"]["facts"]["completeness_required"]
+        )
+
+    def test_exact_result_read_reuse_is_read_only_and_identity_bound(self):
+        text = SKILL.read_text(encoding="utf-8")
+        section = text[
+            text.index("## Exact immutable result read-reuse companion contract"):
+            text.index("## Connector-response selection companion contract")
+        ]
+        for required in (
+            "specialization of the read/result compactness axis",
+            "It optimizes **result reading only**.",
+            "READ_REUSE_EXACT_RESULT",
+            "reason: REUSE_EXACT_RESULT",
+            "sourceOwner: <existing owner>",
+            "sourceLocator: <exact immutable locator>",
+            "sourceIdentity: <owner-defined immutable identity>",
+            "scopedResult: <already-observed PASS, FAIL, or other exact result>",
+            "claimsCurrentState: false",
+            "Missing or ambiguous identity is never invented.",
+            "reuse is not green-only",
+        ):
+            self.assertIn(required, section)
+
+    def test_exact_result_read_reuse_fails_closed_for_newer_or_stronger_claims(self):
+        text = SKILL.read_text(encoding="utf-8")
+        section = text[
+            text.index("## Exact immutable result read-reuse companion contract"):
+            text.index("## Connector-response selection companion contract")
+        ]
+        for required in (
+            "Return `READ_REQUIRED` when any of these apply:",
+            "`current`, `latest`, `now`, exact-current-main, post-mutation, post-merge, post-publish",
+            "prior source is mutable, or exact immutable identity is missing or ambiguous",
+            "`UNKNOWN`, `CONFLICT`, partial, stale, invalid, or insufficient",
+            "failure drill-down needs details or provenance that were not captured",
+            "authority, currentness, security, or trust boundary requires a fresh read",
+            "requested claim differs from the prior result's original scope",
+            "A1 does not introduce `REUSE_CURRENT`.",
+            "preserve that execution unchanged",
+        ):
+            self.assertIn(required, section)
+
+    def test_exact_result_read_reuse_eval_fixtures_cover_safe_and_fail_closed_paths(self):
+        payload = json.loads(EVALS.read_text(encoding="utf-8"))
+        cases = {case["id"]: case for case in payload["exact_result_read_reuse_evals"]}
+        self.assertEqual(
+            set(cases),
+            {
+                "exact-workflow-run-pass-reuse",
+                "exact-commit-report-reuse",
+                "exact-workflow-run-fail-reuse",
+                "current-main-after-barrier",
+                "latest-ci-result",
+                "missing-immutable-identity",
+                "prior-unknown-or-partial",
+                "failure-detail-not-captured",
+                "required-validation-execution-cannot-be-skipped",
+            },
+        )
+        reusable = {
+            "exact-workflow-run-pass-reuse",
+            "exact-commit-report-reuse",
+            "exact-workflow-run-fail-reuse",
+        }
+        self.assertEqual(
+            {case_id for case_id, case in cases.items() if case["expected_read_disposition"] == "READ_REUSE_EXACT_RESULT"},
+            reusable,
+        )
+        for case_id in reusable:
+            self.assertEqual(cases[case_id]["expected_reason"], "REUSE_EXACT_RESULT")
+            self.assertTrue(cases[case_id]["facts"]["exact_identity"])
+            self.assertFalse(cases[case_id]["facts"]["current_state_requested"])
+        for case_id in set(cases) - reusable:
+            self.assertEqual(cases[case_id]["expected_read_disposition"], "READ_REQUIRED")
+        self.assertEqual(
+            cases["required-validation-execution-cannot-be-skipped"]["expected_execution_effect"],
+            "PRESERVE_REQUIRED_EXECUTION",
         )
 
     def test_connector_response_companion_contract_is_distinct_and_bounded(self):

@@ -169,6 +169,243 @@
       ]
     }
   ],
+  "same_state_execution_reuse_evals": [
+    {
+      "id": "same-state-immediate-duplicate-pass",
+      "prompt": "The focused local compactness skill-contract validator just passed and the same worker immediately receives the identical validation request with no intervening mutation.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": true,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false,
+        "intervening_read_only": false
+      },
+      "expected_validation_disposition": "REUSE_CURRENT",
+      "expected_reason": "REUSE_SAME_STATE",
+      "assertions": [
+        "Preserve the exact local validator PASS provenance.",
+        "Keep claimsCrossRevision=false and claimsAuthoritativeCurrentState=false."
+      ]
+    },
+    {
+      "id": "same-state-read-only-intervening",
+      "prompt": "The focused local validator passed, then the worker only read repository evidence; HEAD, worktree, runtime, environment, and requested claim remain unchanged.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": true,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false,
+        "intervening_read_only": true
+      },
+      "expected_validation_disposition": "REUSE_CURRENT",
+      "expected_reason": "REUSE_SAME_STATE",
+      "assertions": [
+        "A read-only evidence fetch does not invalidate the same-state barrier.",
+        "Do not broaden the local PASS into repository authority."
+      ]
+    },
+    {
+      "id": "same-state-file-edit-invalidates",
+      "prompt": "The focused local validator passed, then a tracked file was edited before the same validation was requested again.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": false,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false
+      },
+      "expected_validation_disposition": "RUN_REQUIRED",
+      "expected_reason": "RUN_INPUT_CHANGED",
+      "assertions": [
+        "Run the owning local validator again after the edit.",
+        "Do not reuse a pre-mutation PASS."
+      ]
+    },
+    {
+      "id": "same-state-unrelated-edit-invalidates",
+      "prompt": "The focused local validator passed, then an apparently unrelated repository file was edited before the duplicate request.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": false,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false,
+        "unrelated_mutation": true
+      },
+      "expected_validation_disposition": "RUN_REQUIRED",
+      "expected_reason": "RUN_INPUT_CHANGED",
+      "assertions": [
+        "A2-01 uses a whole-work-state barrier.",
+        "Do not infer E2 path irrelevance from an unrelated-looking edit."
+      ]
+    },
+    {
+      "id": "same-state-head-or-worktree-unknown",
+      "prompt": "A prior PASS exists, but the current worker cannot prove the same HEAD and unchanged worktree.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": false,
+        "worktree_unchanged": false,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": false,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false
+      },
+      "expected_validation_disposition": "RUN_REQUIRED",
+      "expected_reason": "RUN_INPUT_UNKNOWN",
+      "assertions": [
+        "Unknown state is not evidence of equivalence.",
+        "Run the validator instead of reconstructing the barrier."
+      ]
+    },
+    {
+      "id": "same-state-runtime-environment-changed",
+      "prompt": "The focused local validator passed, but the Python runtime or relevant execution environment changed before the duplicate request.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": true,
+        "environment_same": false,
+        "runtime_same": false,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false
+      },
+      "expected_validation_disposition": "RUN_REQUIRED",
+      "expected_reason": "RUN_ENVIRONMENT_CHANGED",
+      "assertions": [
+        "Environment identity participates in E1 validity.",
+        "Fresh local execution is required."
+      ]
+    },
+    {
+      "id": "same-state-validator-identity-changed",
+      "prompt": "A prior PASS exists, but the validator command/profile identity differs from the one that produced it.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": false,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": true,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false
+      },
+      "expected_validation_disposition": "RUN_REQUIRED",
+      "expected_reason": "RUN_IDENTITY_CHANGED",
+      "assertions": [
+        "Validator identity must match exactly.",
+        "Do not transfer a PASS across command/profile identity."
+      ]
+    },
+    {
+      "id": "same-state-prior-nonpass",
+      "prompt": "The prior focused local result was FAIL/UNKNOWN/partial rather than a complete PASS, and a satisfying validation is requested.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "UNKNOWN",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": true,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false
+      },
+      "expected_validation_disposition": "RUN_REQUIRED",
+      "expected_reason": "RUN_RECEIPT_STALE_OR_INVALID",
+      "assertions": [
+        "A2-01 execution reuse is PASS-only.",
+        "Incomplete or non-PASS evidence cannot satisfy validation."
+      ]
+    },
+    {
+      "id": "same-state-resumed-worker",
+      "prompt": "A prior PASS is mentioned after a resumed or new worker boundary, but continuous no-mutation evidence is unavailable.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": true,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": false,
+        "owner_requires_fresh_execution": false,
+        "authoritative_proof_requested": false,
+        "resumed_worker": true
+      },
+      "expected_validation_disposition": "RUN_REQUIRED",
+      "expected_reason": "RUN_RECEIPT_STALE_OR_INVALID",
+      "assertions": [
+        "Conversation memory cannot reconstruct execution reuse authority.",
+        "Run fresh when worker continuity is not proven."
+      ]
+    },
+    {
+      "id": "same-state-authoritative-proof-always-runs",
+      "prompt": "A local PASS exists, but the caller asks it to satisfy Agent Skills CI, GitHub Required, release, post-merge, or live proof that the owner requires to execute freshly.",
+      "facts": {
+        "eligible_validator": true,
+        "prior_result": "PASS",
+        "same_validator_identity": true,
+        "same_claim_scope": true,
+        "same_head": true,
+        "worktree_unchanged": true,
+        "environment_same": true,
+        "runtime_same": true,
+        "continuous_barrier": true,
+        "owner_requires_fresh_execution": true,
+        "authoritative_proof_requested": true
+      },
+      "expected_validation_disposition": "ALWAYS_RUN",
+      "expected_reason": "ALWAYS_RUN_OWNER_CONTRACT",
+      "assertions": [
+        "Reject the inference that local E1 reuse can satisfy authoritative proof.",
+        "Preserve the owning fresh execution unchanged."
+      ],
+      "expected_execution_effect": "PRESERVE_REQUIRED_EXECUTION"
+    }
+  ],
   "connector_response_evals": [
     {
       "id": "action-specific-pr-metadata",

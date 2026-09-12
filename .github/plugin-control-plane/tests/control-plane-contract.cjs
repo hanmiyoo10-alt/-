@@ -9,6 +9,7 @@ const {
   classifyIssueBody,
   validateRegistry,
   labelDefinitions,
+  fixedLabelMetadataDecision,
   resolveStatusIssueIdentity,
 } = require('../lib.cjs');
 const {projectRows} = require('../canonical-main/observers/project-status.cjs');
@@ -106,6 +107,24 @@ assert.deepEqual(researchProductLabel, {
   description: 'Repository-recognized research product path; non-production with no release or runtime authority',
 });
 
+const fixedUnclassified = labelDefinitions(registry).find((entry) => entry.name === 'scope:unclassified');
+assert.deepEqual(fixedLabelMetadataDecision(null, fixedUnclassified), {action: 'create', body: fixedUnclassified});
+assert.deepEqual(fixedLabelMetadataDecision({
+  name: fixedUnclassified.name,
+  color: fixedUnclassified.color.toUpperCase(),
+  description: fixedUnclassified.description,
+}, fixedUnclassified), {action: 'none', body: null});
+assert.deepEqual(fixedLabelMetadataDecision({
+  name: fixedUnclassified.name,
+  color: 'ffffff',
+  description: fixedUnclassified.description,
+}, fixedUnclassified), {action: 'update', body: {color: fixedUnclassified.color}});
+assert.deepEqual(fixedLabelMetadataDecision({
+  name: fixedUnclassified.name,
+  color: fixedUnclassified.color,
+  description: 'Plugin scope could not be classified deterministically',
+}, fixedUnclassified), {action: 'update', body: {description: fixedUnclassified.description}});
+
 assert.deepEqual(
   classifyIssueBody('### Scope\n\nusage-dashboard\n\n### Summary\nwork', registry),
   {explicit: true, labels: ['plugin:usage-dashboard']},
@@ -197,6 +216,8 @@ assert.match(prClassifier, /classifyPaths\(paths, registry\)/);
 assert.match(prClassifier, /PLUGIN_CONTROL_PLANE_PR_RECONCILED/);
 assert.match(prClassifier, /PLUGIN_CONTROL_PLANE_PR_RECONCILE_SUMMARY/);
 assert.match(prClassifier, /preserved = current\.filter/);
+assert.match(prClassifier, /fixedLabelMetadataDecision\(existing, def\)/);
+assert.match(prClassifier, /method: 'PATCH'/);
 assert.doesNotMatch(prClassifier, /workflow_run|pull_request_target/);
 assert.doesNotMatch(prClassifier, /child_process|execSync|spawnSync|require\(['"]vm['"]\)/);
 
@@ -239,8 +260,12 @@ assert.match(controller, /pocketRisuHelperStatus/);
 assert.match(controller, /registry\.products/);
 assert.match(controller, /product:/);
 assert.match(controller, /async function ensureLabel\(repo, def\)/);
-assert.match(controller, /const existing = await api\(repo, `\/labels\/\$\{encoded\}`, \{allow404: true\}\)/);
 assert.match(controller, /if \(!existing\) await api\(repo, '\/labels', \{method: 'POST', body: def\}\)/);
+assert.match(controller, /async function ensureFixedLabel\(repo, def\)/);
+assert.match(controller, /fixedLabelMetadataDecision\(existing, def\)/);
+assert.match(controller, /decision\.action === 'update'/);
+assert.match(controller, /method: 'PATCH'/);
+assert.match(controller, /ensureFixedLabel\(repo, def\)/);
 assert.match(controller, /authorAssociation: issue\.author_association/);
 assert.match(controller, /if \(bodyResult\.customLabelDefinition\) await ensureLabel\(repo, bodyResult\.customLabelDefinition\)/);
 assert.match(controller, /const statusLabel = encodeURIComponent\('control-plane:status'\)/);

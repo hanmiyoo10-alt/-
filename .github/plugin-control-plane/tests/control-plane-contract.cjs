@@ -22,6 +22,7 @@ assert.deepEqual(Object.keys(registry.plugins).sort(), [
   'voyage-token-check',
 ]);
 assert.deepEqual(Object.keys(registry.products).sort(), [
+  'app-api-mod-lab',
   'pocketrisu-helper-mod',
 ]);
 

@@ -212,7 +212,16 @@ const directWriterFiles = fs.readdirSync(workflowDir)
   .filter((name) => /\.ya?ml$/.test(name))
   .filter((name) => fs.readFileSync(path.join(workflowDir, name), 'utf8').includes('scripts/repo-main-write.py'))
   .sort();
-assert.deepEqual(directWriterFiles, policy.adapters.writerInventory.map((row) => row.workflow).sort(), 'every direct repo-main-write workflow must be classified');
+const directInventoryFiles = policy.adapters.writerInventory
+  .filter((row) => !row.delegatedAdapter)
+  .map((row) => row.workflow)
+  .sort();
+const delegatedInventoryFiles = policy.adapters.writerInventory
+  .filter((row) => row.delegatedAdapter)
+  .map((row) => row.workflow)
+  .sort();
+assert.deepEqual(directWriterFiles, directInventoryFiles, 'every direct repo-main-write workflow must be classified as a direct inventory writer');
+assert.deepEqual(delegatedInventoryFiles, ['product-simcore-terminal-convergence-r2-8.yml'], 'R2.8 remains inventory-classified through its explicit delegated adapter');
 
 const appContractPath = path.join(__dirname, '../notification-bot/app-contract.json');
 const appContract = JSON.parse(fs.readFileSync(appContractPath, 'utf8'));

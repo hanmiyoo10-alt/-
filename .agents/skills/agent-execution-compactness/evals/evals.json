@@ -1,6 +1,174 @@
 {
   "skill_name": "agent-execution-compactness",
   "schema_version": 1,
+  "exact_result_read_reuse_evals": [
+    {
+      "id": "exact-workflow-run-pass-reuse",
+      "prompt": "An exact workflow run and named check on an exact head SHA were already consumed as PASS. The later question asks only what that same run/check concluded.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": true,
+        "current_state_requested": false,
+        "prior_evidence_complete": true,
+        "detail_available": true,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REUSE_EXACT_RESULT",
+      "expected_reason": "REUSE_EXACT_RESULT",
+      "assertions": [
+        "Preserve run/check/head identity and original PASS scope.",
+        "Set claimsCurrentState=false."
+      ]
+    },
+    {
+      "id": "exact-commit-report-reuse",
+      "prompt": "An immutable commit-bound report was already consumed with its exact commit/report identity. A later explanation cites only that same report scope.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": true,
+        "current_state_requested": false,
+        "prior_evidence_complete": true,
+        "detail_available": true,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REUSE_EXACT_RESULT",
+      "expected_reason": "REUSE_EXACT_RESULT",
+      "assertions": [
+        "Reuse bounded provenance instead of rereading the report.",
+        "Do not infer current state from the old report."
+      ]
+    },
+    {
+      "id": "exact-workflow-run-fail-reuse",
+      "prompt": "An exact immutable workflow run/check was already consumed as FAIL. The later question asks only whether that same run failed.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": true,
+        "current_state_requested": false,
+        "prior_evidence_complete": true,
+        "detail_available": true,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REUSE_EXACT_RESULT",
+      "expected_reason": "REUSE_EXACT_RESULT",
+      "assertions": [
+        "Reuse is not green-only.",
+        "Preserve the original scoped FAIL result."
+      ]
+    },
+    {
+      "id": "current-main-after-barrier",
+      "prompt": "A prior exact run was consumed, but the question is now: is current main green after repository state may have advanced?",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": false,
+        "current_state_requested": true,
+        "prior_evidence_complete": true,
+        "detail_available": true,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REQUIRED",
+      "assertions": [
+        "Current-state claims require fresh evidence.",
+        "Do not requalify the prior exact run as current."
+      ]
+    },
+    {
+      "id": "latest-ci-result",
+      "prompt": "The caller asks for the latest CI result, while only an older exact immutable run is already captured.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": false,
+        "current_state_requested": true,
+        "prior_evidence_complete": true,
+        "detail_available": true,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REQUIRED",
+      "assertions": [
+        "Latest identity must be freshly established.",
+        "Old exact-result provenance cannot answer a latest query."
+      ]
+    },
+    {
+      "id": "missing-immutable-identity",
+      "prompt": "A prior result summary exists, but its exact immutable run/report identity is absent or ambiguous.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": false,
+        "same_result_claim": true,
+        "current_state_requested": false,
+        "prior_evidence_complete": true,
+        "detail_available": true,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REQUIRED",
+      "assertions": [
+        "Do not invent missing identity.",
+        "Fetch authoritative evidence with a usable exact locator."
+      ]
+    },
+    {
+      "id": "prior-unknown-or-partial",
+      "prompt": "The prior observation was UNKNOWN/partial and the new question needs a definite result.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": true,
+        "current_state_requested": false,
+        "prior_evidence_complete": false,
+        "detail_available": true,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REQUIRED",
+      "assertions": [
+        "Incomplete evidence cannot be upgraded through reuse.",
+        "Preserve UNKNOWN until stronger evidence is read."
+      ]
+    },
+    {
+      "id": "failure-detail-not-captured",
+      "prompt": "The exact prior run is known to have failed, but the new question asks for failure detail/provenance that was not captured in the bounded prior evidence.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": true,
+        "current_state_requested": false,
+        "prior_evidence_complete": true,
+        "detail_available": false,
+        "required_new_execution": false
+      },
+      "expected_read_disposition": "READ_REQUIRED",
+      "assertions": [
+        "Perform targeted detail read.",
+        "Do not fabricate missing failure provenance."
+      ]
+    },
+    {
+      "id": "required-validation-execution-cannot-be-skipped",
+      "prompt": "A caller points at an old exact PASS and asks to use read reuse so a newly required exact-head validation does not have to execute.",
+      "facts": {
+        "immutable": true,
+        "exact_identity": true,
+        "same_result_claim": false,
+        "current_state_requested": true,
+        "prior_evidence_complete": true,
+        "detail_available": true,
+        "required_new_execution": true
+      },
+      "expected_read_disposition": "READ_REQUIRED",
+      "expected_execution_effect": "PRESERVE_REQUIRED_EXECUTION",
+      "assertions": [
+        "Reject the inference that read reuse grants execution reuse.",
+        "Keep the owning required execution unchanged."
+      ]
+    }
+  ],
   "connector_response_evals": [
     {
       "id": "action-specific-pr-metadata",

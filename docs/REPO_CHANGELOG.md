@@ -1485,3 +1485,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1d2a553369bd2337989d6362a89a9c1179ed6db0)
 - Event ID: `a5dfd76f82a0bf434fafaa37eae9aa91265760a0e7e2e1d6639cf852812d33ae`
 <!-- canonical-main-doc-promoted:a5dfd76f82a0bf434fafaa37eae9aa91265760a0e7e2e1d6639cf852812d33ae -->
+
+### 2026-09-12 — Merge pull request #2055 from hanmiyoo10-alt/repo/control-plane-summary-ownership-2053
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `6517faef20a10ace8a5c0dcce43265ab9120de00`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/6517faef20a10ace8a5c0dcce43265ab9120de00)
+- Event ID: `4113bdb2069fc2f11cc886881cebd1b7ba56ffce16a71e1c7163b2dd251f687a`
+<!-- canonical-main-doc-promoted:4113bdb2069fc2f11cc886881cebd1b7ba56ffce16a71e1c7163b2dd251f687a -->

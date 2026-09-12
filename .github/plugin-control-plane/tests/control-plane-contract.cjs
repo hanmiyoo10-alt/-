@@ -71,6 +71,28 @@ assert.match(issueTemplate, /label:\s*Scope/);
 assert.match(issueTemplate, /voyage-token-check/);
 assert.match(issueTemplate, /pocketrisu-helper-mod/);
 
+function triggerBlock(source, trigger) {
+  const match = source.match(new RegExp(`^  ${trigger}:\\n([\\s\\S]*?)(?=^  [a-z_]+:|^permissions:)`, 'm'));
+  assert.ok(match, `${trigger} trigger must exist`);
+  return match[1];
+}
+
+function triggerList(block, key) {
+  const match = block.match(new RegExp(`^    ${key}:\\n((?:      - .+\\n?)+)`, 'm'));
+  assert.ok(match, `${key} list must exist`);
+  return [...match[1].matchAll(/^      - ['"]?(.+?)['"]?$/gm)].map((entry) => entry[1]);
+}
+
+const controlPlaneCiWorkflow = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-ci.yml'), 'utf8');
+const pullRequestTrigger = triggerBlock(controlPlaneCiWorkflow, 'pull_request');
+const pushTrigger = triggerBlock(controlPlaneCiWorkflow, 'push');
+assert.deepEqual(triggerList(pushTrigger, 'branches'), ['main']);
+assert.deepEqual(triggerList(pushTrigger, 'paths'), triggerList(pullRequestTrigger, 'paths'));
+assert.match(controlPlaneCiWorkflow, /^  workflow_dispatch:\s*$/m);
+const controlPlaneCiPermissions = controlPlaneCiWorkflow.match(/^permissions:\n([\s\S]*?)^jobs:/m);
+assert.ok(controlPlaneCiPermissions, 'workflow permissions block must exist');
+assert.equal(controlPlaneCiPermissions[1].trim(), 'contents: read');
+
 const observerWorkflow = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-pr-observe.yml'), 'utf8');
 assert.match(observerWorkflow, /pull_request:/);
 assert.match(observerWorkflow, /contents:\s*read/);

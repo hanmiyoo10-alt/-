@@ -362,6 +362,88 @@ class SkillContractTests(unittest.TestCase):
             "PRESERVE_REQUIRED_EXECUTION",
         )
 
+    def test_same_state_execution_reuse_is_narrow_pass_only_and_worker_bound(self):
+        text = SKILL.read_text(encoding="utf-8")
+        section = text[
+            text.index("## Bounded same-state local validation execution-reuse companion contract"):
+            text.index("## Connector-response selection companion contract")
+        ]
+        for required in (
+            "validatorId: agent-execution-compactness:skill-contract",
+            "authorityClass: NON_AUTHORITATIVE_LOCAL_DEVELOPMENT",
+            "REUSE_CURRENT",
+            "RUN_REQUIRED",
+            "ALWAYS_RUN",
+            "reason `REUSE_SAME_STATE`",
+            "originResult: PASS",
+            "stateBarrier: SAME_UNINTERRUPTED_WORK_STATE",
+            "claimsCrossRevision: false",
+            "claimsAuthoritativeCurrentState: false",
+        ):
+            self.assertIn(required, section)
+
+        self.assertIn("current-worker state only", section)
+        self.assertIn("Do not persist it as a repository-wide result store.", section)
+        self.assertIn("A1 and A2 remain separate.", section)
+        self.assertIn("E2 owner-policy cross-revision reuse and E3 authoritative-input requalification remain inactive.", section)
+
+    def test_same_state_execution_reuse_fails_closed_on_mutation_uncertainty_and_authority(self):
+        text = SKILL.read_text(encoding="utf-8")
+        section = text[
+            text.index("## Bounded same-state local validation execution-reuse companion contract"):
+            text.index("## Connector-response selection companion contract")
+        ]
+        for required in (
+            "Any repository/worktree mutation after the PASS invalidates A2-01 reuse",
+            "apparently unrelated file edit",
+            "dependency/environment installation or replacement",
+            "action whose state effect is unknown",
+            "Missing, ambiguous, reconstructed, resumed-worker, or stale barrier evidence resolves to `RUN_REQUIRED`",
+            "A prior FAIL, UNKNOWN, partial, or incomplete result cannot satisfy",
+            "`ALWAYS_RUN` with reason `ALWAYS_RUN_OWNER_CONTRACT`",
+            "GitHub Required",
+            "Agent Skills CI on a PR head or merged main",
+            "release/promotion/publish verification",
+            "post-merge/post-publish convergence",
+            "live/device/external-system evidence",
+        ):
+            self.assertIn(required, section)
+
+    def test_same_state_execution_reuse_eval_fixtures_cover_safe_and_fail_closed_paths(self):
+        payload = json.loads(EVALS.read_text(encoding="utf-8"))
+        cases = {case["id"]: case for case in payload["same_state_execution_reuse_evals"]}
+
+        expected_ids = {
+            "same-state-immediate-duplicate-pass",
+            "same-state-read-only-intervening",
+            "same-state-file-edit-invalidates",
+            "same-state-unrelated-edit-invalidates",
+            "same-state-head-or-worktree-unknown",
+            "same-state-runtime-environment-changed",
+            "same-state-validator-identity-changed",
+            "same-state-prior-nonpass",
+            "same-state-resumed-worker",
+            "same-state-authoritative-proof-always-runs",
+        }
+        self.assertEqual(set(cases), expected_ids)
+        reusable = {
+            "same-state-immediate-duplicate-pass",
+            "same-state-read-only-intervening",
+        }
+        for case_id in reusable:
+            self.assertEqual(cases[case_id]["expected_validation_disposition"], "REUSE_CURRENT")
+            self.assertEqual(cases[case_id]["expected_reason"], "REUSE_SAME_STATE")
+            self.assertEqual(cases[case_id]["facts"]["prior_result"], "PASS")
+            self.assertTrue(cases[case_id]["facts"]["continuous_barrier"])
+        for case_id in expected_ids - reusable - {"same-state-authoritative-proof-always-runs"}:
+            self.assertEqual(cases[case_id]["expected_validation_disposition"], "RUN_REQUIRED")
+        authoritative = cases["same-state-authoritative-proof-always-runs"]
+        self.assertEqual(authoritative["expected_validation_disposition"], "ALWAYS_RUN")
+        self.assertEqual(authoritative["expected_reason"], "ALWAYS_RUN_OWNER_CONTRACT")
+        self.assertEqual(authoritative["expected_execution_effect"], "PRESERVE_REQUIRED_EXECUTION")
+        self.assertEqual(cases["same-state-unrelated-edit-invalidates"]["expected_reason"], "RUN_INPUT_CHANGED")
+        self.assertFalse(cases["same-state-resumed-worker"]["facts"]["continuous_barrier"])
+
     def test_connector_response_companion_contract_is_distinct_and_bounded(self):
         text = SKILL.read_text(encoding="utf-8")
         for required in (

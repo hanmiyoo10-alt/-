@@ -15,13 +15,14 @@ Repository-wide execution-routing procedure for development and validation work.
 
 This contract applies across repository/project scopes that inherit `docs/REPOSITORY_COMMON_RULES.md`, including work outside canonical-main coordination. Canonical-main packet wiring is one enforcement adapter that makes the repository default explicit at that boundary; it is not the scope owner and does not limit this skill to canonical-main work. Project-specific contracts may specialize this repository `DEFAULT` inside their valid scope, but they must preserve repository hard invariants and required authority/evidence.
 
-This skill answers five related questions:
+This skill answers six related questions:
 
 1. **What is the narrowest execution surface that preserves the required validation while keeping the directly visible execution payload bounded?**
 2. **When several repository/tool calls prove one semantic result, can an existing composition or harness preserve the same evidence with lower repository-owned visible fan-out?**
 3. **When repository evidence must be read, what is the smallest authoritative excerpt or bounded projection that answers the question without hiding required context?**
 4. **Before retrieval, what is the narrowest evidence-equivalent connector/result surface that avoids unnecessary full-object or broad collection payloads?**
 5. **When an exact immutable validation/result was already observed, can that same result be cited without rereading bulky output while preserving fresh-state and validation-execution boundaries?**
+6. **When one explicitly eligible local validator just passed, can an immediate duplicate request reuse that PASS only while the exact same work state and runtime are continuously proven unchanged?**
 
 It operationalizes `docs/REPOSITORY_COMMON_RULES.md`,
 `docs/REPOSITORY_AGENT_EXECUTION_COMPACTNESS_V1_DESIGN_2026-09-07.md`, and
@@ -36,6 +37,8 @@ It is development policy, not a source of mutable product, runtime, release, or 
 - Never shrink a repository read/result by omitting authority markers, source identity, disagreement, `UNKNOWN`, failure provenance, security context, or required freshness evidence.
 - Never choose a smaller connector/result surface when it would omit exact ref/SHA identity, currentness, authority, disagreement, partial/failure state, permission context, or required completeness.
 - Never turn exact-result read reuse into permission to skip, satisfy, or requalify a validation execution; current/latest/exact-head/release/live evidence follows its owning fresh-proof contract.
+- Same-state execution reuse is opt-in per validator and is local development evidence only; absent complete continuous same-state proof, run the validator.
+- Never use local same-state reuse to satisfy GitHub Required, exact-head CI, release/promotion, current-production, post-merge/post-publish, live/device, or other owner-required fresh execution.
 - Never place secrets, credentials, tokens, private sensitive payloads, or authentication material into inline execution text.
 - Do not bypass Git, CI, main-write, release, security, production, or project-specific gates.
 - Do not invent a new writer, executor, privileged hook, interception framework, proxy truth owner, or opaque mega-call merely to make commands or activity counts smaller.
@@ -186,6 +189,55 @@ Return `READ_REQUIRED` when any of these apply:
 
 A1 does not introduce `REUSE_CURRENT`. Exact-result read reuse cannot satisfy or skip tests, lint, build, static checks, local validators, GitHub Required/exact-head CI, release or promotion verifiers, current-production/pre-publish rechecks, post-merge/post-publish convergence, or live/device/external evidence required by an owning contract. If the new request requires one of those executions, preserve that execution unchanged.
 
+## Bounded same-state local validation execution-reuse companion contract
+
+U-27 A2-01 adds one narrowly scoped execution-reuse case. It does not add a sixth execution route, does not create a cache/database/daemon, and does not authorize cross-revision reuse.
+
+The only eligible validator in A2-01 is:
+
+```text
+validatorId: agent-execution-compactness:skill-contract
+command: python -m unittest discover -s .agents/skills/agent-execution-compactness/tests -p 'test_*.py' -v
+authorityClass: NON_AUTHORITATIVE_LOCAL_DEVELOPMENT
+```
+
+Use these validation dispositions:
+
+```text
+REUSE_CURRENT
+RUN_REQUIRED
+ALWAYS_RUN
+```
+
+`REUSE_CURRENT` with reason `REUSE_SAME_STATE` is legal only for a prior PASS from that exact validator when the requested proof scope, checkout HEAD, worktree state, validator identity, runtime/interpreter identity, and relevant environment are unchanged, no mutation-producing action has occurred since the PASS, the owner does not require a fresh invocation, and the current worker has continuous evidence of that barrier.
+
+A bounded reuse record preserves semantics equivalent to:
+
+```text
+validationDisposition: REUSE_CURRENT
+reason: REUSE_SAME_STATE
+validatorId: agent-execution-compactness:skill-contract
+originResult: PASS
+originEvidence: <captured local validator result>
+sourceHead: <exact local HEAD at execution>
+stateBarrier: SAME_UNINTERRUPTED_WORK_STATE
+runtimeIdentity: <bounded interpreter identity>
+claimsCrossRevision: false
+claimsAuthoritativeCurrentState: false
+```
+
+This evidence is current-worker state only. Do not persist it as a repository-wide result store. Missing, ambiguous, reconstructed, resumed-worker, or stale barrier evidence resolves to `RUN_REQUIRED`; conversation memory alone cannot reconstruct reuse authority.
+
+Any repository/worktree mutation after the PASS invalidates A2-01 reuse, including an apparently unrelated file edit, generated-file change, checkout/reset/commit/merge/rebase, dependency/environment installation or replacement, or an action whose state effect is unknown. A read-only evidence fetch does not itself invalidate the receipt, but it cannot broaden the PASS into stronger authority.
+
+Use the first decisive fail-closed reason where practical: `RUN_IDENTITY_CHANGED`, `RUN_INPUT_CHANGED`, `RUN_INPUT_UNKNOWN`, `RUN_ENVIRONMENT_CHANGED`, `RUN_POLICY_CHANGED`, or `RUN_RECEIPT_STALE_OR_INVALID`.
+
+A prior FAIL, UNKNOWN, partial, or incomplete result cannot satisfy a new validation request through A2-01. A changed validator/command/profile, changed or unknown HEAD/worktree/runtime/environment, different proof scope, resumed/new worker without continuous barrier evidence, or owner-required fresh invocation is `RUN_REQUIRED`.
+
+`ALWAYS_RUN` with reason `ALWAYS_RUN_OWNER_CONTRACT` applies when the owning proof contract requires fresh execution. A2-01 therefore cannot satisfy GitHub Required, Agent Skills CI on a PR head or merged main, release/promotion/publish verification, current-production checks, post-merge/post-publish convergence, live/device/external-system evidence, or another validator whose owner requires a fresh transaction-bound invocation.
+
+A1 and A2 remain separate. `READ_REUSE_EXACT_RESULT` may cite the same old immutable result without rereading it. `REUSE_CURRENT` may satisfy only the one repeated local validator request while the exact same-state barrier is continuously proven. E2 owner-policy cross-revision reuse and E3 authoritative-input requalification remain inactive.
+
 ## Connector-response selection companion contract
 
 Connector-response selection is a companion compactness axis distinct from execution-program size, call fan-out, and source-range/read selection. It does not add a sixth execution route.
@@ -260,6 +312,8 @@ If a proposed compact route weakens the required work, reject that route.
 Before manual fan-out, also ask whether one existing composition or harness proves the same semantic result with fewer repository-owned visible calls. Prefer it only when the evidence contract remains equivalent.
 
 Before rereading a validation/result, first ask whether the exact immutable result was already observed and the request is only about that same result. Use `READ_REUSE_EXACT_RESULT` only with exact identity, bounded provenance, and `claimsCurrentState: false`; otherwise use `READ_REQUIRED`. This read choice never skips a required validation execution.
+
+Before rerunning the one A2-01 eligible local validator, classify whether the current worker continuously proves the exact same PASS-bound work state and runtime. Only then may `REUSE_CURRENT / REUSE_SAME_STATE` satisfy that duplicate local request; any mutation, uncertainty, resumed-worker boundary, stronger proof scope, or owner-required fresh execution resolves to `RUN_REQUIRED` or `ALWAYS_RUN`. This validation disposition does not add an execution route.
 
 Before a broad connector read, ask whether an existing bounded projection, action-specific connector tool, server-side filter, targeted read, or already captured result answers the same semantic question with equivalent authority. Prefer the narrower result surface when it does.
 

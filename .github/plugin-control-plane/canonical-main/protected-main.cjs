@@ -40,6 +40,46 @@ function directWriterInventory(root) {
     .sort();
 }
 
+function repositoryPath(root, relativePath) {
+  if (typeof relativePath !== 'string' || !relativePath || path.isAbsolute(relativePath)) return null;
+  const base = path.resolve(root);
+  const file = path.resolve(base, relativePath);
+  if (file !== base && !file.startsWith(`${base}${path.sep}`)) return null;
+  return file;
+}
+
+function requiredArgumentPair(text, flag, value) {
+  const escape = (input) => String(input).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`${escape(flag)}(?:['"]\\s*,\\s*['"]|\\s+)${escape(value)}`).test(text);
+}
+
+function delegatedWriterContractErrors(root, row) {
+  const errors = [];
+  const name = row?.workflow;
+  const adapterPath = row?.delegatedAdapter;
+  const workflow = name ? workflowText(root, name) : null;
+  const adapterFile = repositoryPath(root, adapterPath);
+
+  if (!workflow) errors.push(`PROTECTED_MAIN_DELEGATED_WORKFLOW_MISSING:${name || 'UNKNOWN'}`);
+  if (!adapterFile) {
+    errors.push(`PROTECTED_MAIN_DELEGATED_ADAPTER_PATH_INVALID:${name || 'UNKNOWN'}`);
+    return errors;
+  }
+  const adapter = fs.existsSync(adapterFile) ? fs.readFileSync(adapterFile, 'utf8') : null;
+  if (!adapter) errors.push(`PROTECTED_MAIN_DELEGATED_ADAPTER_FILE_MISSING:${name || 'UNKNOWN'}`);
+  if (workflow && !workflow.includes(adapterPath)) errors.push(`PROTECTED_MAIN_DELEGATED_ADAPTER_NOT_REFERENCED:${name}`);
+  if (!adapter) return errors;
+
+  if (!adapter.includes('scripts/repo-main-write.py')) errors.push(`PROTECTED_MAIN_DELEGATED_GATEWAY_MISSING:${name}`);
+  if (!requiredArgumentPair(adapter, '--required-workflow', 'simcore-ci.yml')) errors.push(`PROTECTED_MAIN_DELEGATED_REQUIRED_WORKFLOW_MISSING:${name}`);
+  if (!requiredArgumentPair(adapter, '--required-profile', 'MAIN_HEALTH')) errors.push(`PROTECTED_MAIN_DELEGATED_REQUIRED_PROFILE_MISSING:${name}`);
+  if (!requiredArgumentPair(adapter, '--required-job', 'Required')) errors.push(`PROTECTED_MAIN_DELEGATED_REQUIRED_JOB_MISSING:${name}`);
+  if ((workflow && /--force(?:\s|$)|force-with-lease/.test(workflow)) || /['"]--force['"]|--force(?:\s|$)|force-with-lease/.test(adapter)) {
+    errors.push(`PROTECTED_MAIN_DELEGATED_FORCE_PATH_FORBIDDEN:${name}`);
+  }
+  return errors;
+}
+
 function activationCapability(contract = loadProtectedMainContract()) {
   const capability = contract.activation?.capability || {};
   const state = Object.values(READINESS_STATES).includes(capability.state)
@@ -113,8 +153,11 @@ function softEnforcementContractErrors(root, contract = loadProtectedMainContrac
 
 function writerContractErrors(root, policy, contract = loadProtectedMainContract()) {
   const errors = [];
-  const inventory = new Map((policy.adapters?.writerInventory || []).map((row) => [row.workflow, row.mode]));
-  const activeInventory = [...inventory.entries()].filter(([, mode]) => mode === 'active').map(([name]) => name).sort();
+  const inventoryRows = policy.adapters?.writerInventory || [];
+  const inventory = new Map(inventoryRows.map((row) => [row.workflow, row]));
+  const activeInventory = inventoryRows.filter((row) => row.mode === 'active').map((row) => row.workflow).sort();
+  const directInventory = inventoryRows.filter((row) => !row.delegatedAdapter).map((row) => row.workflow).sort();
+  const delegatedInventory = inventoryRows.filter((row) => row.delegatedAdapter);
   const declaredActive = [...(contract.activeWriters || [])].sort();
   const directWriters = directWriterInventory(root);
 
@@ -123,16 +166,19 @@ function writerContractErrors(root, policy, contract = loadProtectedMainContract
   }
 
   for (const name of directWriters) if (!inventory.has(name)) errors.push(`PROTECTED_MAIN_WRITER_UNCLASSIFIED:${name}`);
-  for (const name of inventory.keys()) if (!directWriters.includes(name)) errors.push(`PROTECTED_MAIN_INVENTORY_WRITER_PATH_MISSING:${name}`);
+  for (const name of directInventory) if (!directWriters.includes(name)) errors.push(`PROTECTED_MAIN_INVENTORY_WRITER_PATH_MISSING:${name}`);
+  for (const row of delegatedInventory) errors.push(...delegatedWriterContractErrors(root, row));
 
   for (const name of declaredActive) {
+    const row = inventory.get(name);
     const text = workflowText(root, name);
     if (text === null) {
       errors.push(`PROTECTED_MAIN_ACTIVE_WRITER_MISSING:${name}`);
       continue;
     }
-    if (!text.includes('scripts/repo-main-write.py')) errors.push(`PROTECTED_MAIN_GATEWAY_MISSING:${name}`);
     if (!/actions:\s*write/.test(text)) errors.push(`PROTECTED_MAIN_ACTIONS_WRITE_MISSING:${name}`);
+    if (row?.delegatedAdapter) continue;
+    if (!text.includes('scripts/repo-main-write.py')) errors.push(`PROTECTED_MAIN_GATEWAY_MISSING:${name}`);
     if (!/--required-workflow\s+simcore-ci\.yml/.test(text)) errors.push(`PROTECTED_MAIN_REQUIRED_WORKFLOW_MISSING:${name}`);
     if (!/--required-profile\s+MAIN_HEALTH/.test(text)) errors.push(`PROTECTED_MAIN_REQUIRED_PROFILE_MISSING:${name}`);
     if (!/--required-job\s+Required/.test(text)) errors.push(`PROTECTED_MAIN_REQUIRED_JOB_MISSING:${name}`);
@@ -223,6 +269,7 @@ module.exports = {
   requiredCheckNames,
   workflowText,
   directWriterInventory,
+  delegatedWriterContractErrors,
   softEnforcementContractErrors,
   writerContractErrors,
   observeProtection,

@@ -126,13 +126,15 @@ PocketRisu는 이미 별도 운영 authority와 안정 baseline을 갖고 있으
 
 ```text
 일반 ChatGPT
-→ Plugin/App/relay tool call
-→ 서버폰 filesystem/shell/git/test
+→ authorized Plugin/App/relay tool call
+→ explicit mainphone/serverphone execution surface
+→ explicit repository/worktree
+→ filesystem/shell/git/test
 ```
 
 ### 현재 1순위
 
-Remote Desktop Commander의 모바일 ChatGPT 실사용 가능성.
+Remote Desktop Commander를 서버폰과 메인폰 양쪽에서 검증된 기본 실행 bridge로 사용한다. 원격 호출은 대상 기기와 absolute repository/worktree path를 명시하고, 실제 변경은 기기별 feature branch/worktree에서 수행한다.
 
 ### 차선
 

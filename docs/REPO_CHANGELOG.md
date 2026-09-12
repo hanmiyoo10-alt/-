@@ -1565,3 +1565,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/49563967a1705e0508c183786135001d511f11c7)
 - Event ID: `b90bc09106bfad3cfff2603d3afbb863df5ff70f8ed06470b5df2fa014648994`
 <!-- canonical-main-doc-promoted:b90bc09106bfad3cfff2603d3afbb863df5ff70f8ed06470b5df2fa014648994 -->
+
+### 2026-09-12 — Merge pull request #2102 from hanmiyoo10-alt/repo/mcl-research-ownership-2095
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `69afc00c5c8f9ff269fd63422be2faa18ee9b440`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/69afc00c5c8f9ff269fd63422be2faa18ee9b440)
+- Event ID: `2f5358feedb439e423255b195bc84e15e6dea1777b370e1d89aaf5d304633334`
+<!-- canonical-main-doc-promoted:2f5358feedb439e423255b195bc84e15e6dea1777b370e1d89aaf5d304633334 -->

@@ -1,10 +1,19 @@
 'use strict';
 
+function buildIssueListEndpoint(state = 'open', page = 1, labels = []) {
+  const params = new URLSearchParams();
+  params.set('state', state);
+  params.set('per_page', '100');
+  params.set('page', String(page));
+  if (Array.isArray(labels) && labels.length) params.set('labels', labels.join(','));
+  return `/issues?${params.toString()}`;
+}
+
 function createIssueStore(client) {
-  async function listIssues(state = 'open', maxPages = 5) {
+  async function listIssues(state = 'open', maxPages = 5, labels = []) {
     const result = [];
     for (let page = 1; page <= maxPages; page += 1) {
-      const rows = await client.api(`/issues?state=${state}&per_page=100&page=${page}`);
+      const rows = await client.api(buildIssueListEndpoint(state, page, labels));
       result.push(...rows.filter((row) => !row.pull_request));
       if (rows.length < 100) return result;
     }
@@ -32,4 +41,4 @@ function createIssueStore(client) {
   return {listIssues, getIssue, listIssueComments, ensureLabels, createIssue, updateIssue, replaceLabels};
 }
 
-module.exports = {createIssueStore};
+module.exports = {buildIssueListEndpoint, createIssueStore};

@@ -6,6 +6,7 @@
     {"name": "syntax-required-guard", "command": ["bash", "-n", ".github/plugin-control-plane/canonical-main/required-guard.sh"]},
     {"name": "control-plane-contract", "command": ["node", ".github/plugin-control-plane/tests/control-plane-contract.cjs"]},
     {"name": "canonical-main-contract", "command": ["node", ".github/plugin-control-plane/canonical-main/tests/canonical-main-contract.cjs"]},
+    {"name": "canonical-main-issue-store-contract", "command": ["node", ".github/plugin-control-plane/canonical-main/tests/issue-store-contract.cjs"]},
     {"name": "bootstrap-rollout-contract", "command": ["node", ".github/plugin-control-plane/canonical-main/tests/bootstrap-rollout-contract.cjs"]},
     {"name": "rehearsal-contract", "command": ["node", ".github/plugin-control-plane/canonical-main/tests/rehearsal-contract.cjs"]},
     {"name": "notification-bot-contract", "command": ["node", ".github/plugin-control-plane/canonical-main/tests/notification-bot-contract.cjs"]},

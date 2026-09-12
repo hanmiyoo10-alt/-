@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Repo: Plugin Control Plane Contracts",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        ".github/tooling/ci-summary/receipt_runner.py",
+        "--manifest",
+        ".github/tooling/ci-summary/manifests/plugin-control-plane.json",
+        "--report",
+        "${workspaceFolder}/.ci-summary/plugin-control-plane-receipt.json"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    }
+  ]
+}

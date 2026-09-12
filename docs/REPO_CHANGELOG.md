@@ -1493,3 +1493,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/6517faef20a10ace8a5c0dcce43265ab9120de00)
 - Event ID: `4113bdb2069fc2f11cc886881cebd1b7ba56ffce16a71e1c7163b2dd251f687a`
 <!-- canonical-main-doc-promoted:4113bdb2069fc2f11cc886881cebd1b7ba56ffce16a71e1c7163b2dd251f687a -->
+
+### 2026-09-12 — Merge pull request #2039 from hanmiyoo10-alt/fix/canonical-main-issue-pagination-2036
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `b4f1b51e5b427fa6574ac9314c57a83d943ed9dc`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/b4f1b51e5b427fa6574ac9314c57a83d943ed9dc)
+- Event ID: `5e06dc4794eaac15150e8615116db286006a6ef54048ca74569ecdbb5cb61a17`
+<!-- canonical-main-doc-promoted:5e06dc4794eaac15150e8615116db286006a6ef54048ca74569ecdbb5cb61a17 -->

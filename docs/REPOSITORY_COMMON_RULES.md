@@ -348,6 +348,16 @@ If the preferred route is unavailable or blocked, choose the narrowest authorize
 
 Installation/bootstrap tooling should be idempotent where practical: if the required capability is already satisfied, avoid unnecessary reinstall, upgrade, privilege use, network access, service changes, or other mutation. This rule is about transparent normal administration, not evading endpoint security, suppressing detection, hiding activity, or optimizing for security tooling not to observe an authorized action.
 
+### RCR-D19 — Iterate authorized fallbacks and reconverge on original intent
+
+**Class:** `DEFAULT`
+
+When a preferred implementation or validation path is blocked, preserve the original semantic intent and mandatory success contract, record the exact blocker, and choose the narrowest authorized fallback that can advance the missing proof. A fallback must continue to preserve applicable hard invariants, security boundaries, owning authority, Git/CI/release/production gates, and project-specific mandatory criteria.
+
+Scope every fallback result to what its evidence actually proves. Do not relabel bounded or partial progress as complete success, and do not silently lower mandatory acceptance criteria merely because a fallback is easier to execute. If a fallback is also blocked, iterate from the newly observed blocker rather than blindly widening scope.
+
+Keep temporary workaround layers explicit and removable or idempotent where practical. When the original path becomes available again, or a simpler authorized path is proven evidence-equivalent under the required validation, remove unnecessary fallback layers and reconverge on the original intended function or that simpler equivalent. If no authorized fallback can satisfy the remaining mandatory contract, preserve the result as blocked, unknown, or partial rather than manufacturing success.
+
 ## 6. Conditional common rules
 
 ### RCR-C01 — Generated artifacts remain derived

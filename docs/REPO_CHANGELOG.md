@@ -1501,3 +1501,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/b4f1b51e5b427fa6574ac9314c57a83d943ed9dc)
 - Event ID: `5e06dc4794eaac15150e8615116db286006a6ef54048ca74569ecdbb5cb61a17`
 <!-- canonical-main-doc-promoted:5e06dc4794eaac15150e8615116db286006a6ef54048ca74569ecdbb5cb61a17 -->
+
+### 2026-09-12 — Merge pull request #2058 from hanmiyoo10-alt/repo/plugin-control-plane-postmerge-ci-2052
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `fd9a11a502459ae67735a542cd4e203769a4707d`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/fd9a11a502459ae67735a542cd4e203769a4707d)
+- Event ID: `425ad5453b9e7f8d563efae9aec550e5959f155a36174bc02e82aaf890516eb2`
+<!-- canonical-main-doc-promoted:425ad5453b9e7f8d563efae9aec550e5959f155a36174bc02e82aaf890516eb2 -->

@@ -1533,3 +1533,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/eb0f23251728094bc45931684a3d0d19c77e3523)
 - Event ID: `f58dccdc560b472652957ae5c74912f8a19002855aad8ac6ba018499ae2ed9da`
 <!-- canonical-main-doc-promoted:f58dccdc560b472652957ae5c74912f8a19002855aad8ac6ba018499ae2ed9da -->
+
+### 2026-09-12 — Merge pull request #2079 from hanmiyoo10-alt/repo/agent-skill-security-scope-2076
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `1325bc128c1756060f3b20355f4237397789b10e`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1325bc128c1756060f3b20355f4237397789b10e)
+- Event ID: `4f2dc0453c31002ce49a4710512fa3c1788146752ff4f63fb3032da0b09c08ca`
+<!-- canonical-main-doc-promoted:4f2dc0453c31002ce49a4710512fa3c1788146752ff4f63fb3032da0b09c08ca -->

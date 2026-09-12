@@ -1477,3 +1477,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/437)
 - Event ID: `eb8c7514dd003a8d7b77cefa97b1d13bade6c5c294689573fcc87c6fda3582a4`
 <!-- canonical-main-doc-promoted:eb8c7514dd003a8d7b77cefa97b1d13bade6c5c294689573fcc87c6fda3582a4 -->
+
+### 2026-09-12 — Merge pull request #2047 from hanmiyoo10-alt/repo/control-plane-ci-bootstrap-recovery-2045
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `1d2a553369bd2337989d6362a89a9c1179ed6db0`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1d2a553369bd2337989d6362a89a9c1179ed6db0)
+- Event ID: `a5dfd76f82a0bf434fafaa37eae9aa91265760a0e7e2e1d6639cf852812d33ae`
+<!-- canonical-main-doc-promoted:a5dfd76f82a0bf434fafaa37eae9aa91265760a0e7e2e1d6639cf852812d33ae -->

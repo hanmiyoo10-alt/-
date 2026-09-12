@@ -1,0 +1,39 @@
+name: Web Acquisition CI
+
+on:
+  pull_request:
+    paths:
+      - '.agents/skills/web-acquisition-routing/**'
+      - 'tools/web-acquisition/**'
+      - '.github/workflows/web-acquisition-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.agents/skills/web-acquisition-routing/**'
+      - 'tools/web-acquisition/**'
+      - '.github/workflows/web-acquisition-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Set up Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Install package
+        working-directory: tools/web-acquisition
+        run: npm ci
+      - name: Install Chromium headless shell
+        working-directory: tools/web-acquisition
+        run: npx playwright install --with-deps --only-shell chromium
+      - name: Run deterministic acquisition tests
+        working-directory: tools/web-acquisition
+        run: npm test

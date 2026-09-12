@@ -1,0 +1,13 @@
+{
+  "name": "@hanmiyoo10-alt/web-acquisition",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test tests/web-acquisition.test.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.63.0"
+  }
+}

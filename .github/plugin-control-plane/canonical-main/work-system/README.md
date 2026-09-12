@@ -146,6 +146,16 @@ Closure rules are fail closed:
 
 The taxonomy is coordination/proof language only. The underlying Git, CI, release, production, branch-protection, incident, and project authorities still decide whether the cited evidence is true.
 
+## Packet body lifecycle projection and terminal close-sync
+
+A generic work-packet body using `<!-- canonical-main-work-packet:v1 -->` is a current resumable lifecycle projection, not an immutable activation snapshot. Once terminal evidence is established, the closer MUST reconcile the packet body before or atomically with native GitHub closure so the body no longer advertises an already-completed next stage.
+
+Terminal close-sync must align, as applicable, the lifecycle State; completed/current/next interaction stage; evidence-backed Proof / closure terms; required acceptance UNKNOWNs; and Handoff / exact next action. Close-sync may only project proof already established by repository evidence. It MUST NOT manufacture `LIVE_PROVEN`, clear an `UNKNOWN` by omission, or weaken activated acceptance.
+
+A final comment or native GitHub closure does not make a contradictory stale packet body acceptable. If terminal evidence and the packet body conflict, treat the body as a stale lifecycle projection, re-read the terminal evidence, and do not resume the stale advertised stage without fresh re-attribution.
+
+The existing `canonical-main-a1-standard-auto-close:v1` profile remains separately owned by deterministic closure bookkeeping. This generic close-sync contract does not broaden that opt-in automation boundary.
+
 ## Parallelism
 
 Different packets may proceed in parallel only when their authority and write scopes do not conflict.

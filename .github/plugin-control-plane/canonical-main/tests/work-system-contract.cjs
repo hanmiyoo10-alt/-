@@ -236,6 +236,18 @@ assert.match(template, /may coexist with `DONE` only when the affected evidence 
 assert.match(template, /Do not infer `LIVE_PROVEN` from `CONTRACT_PROVEN`/);
 assert.ok(template.includes("PR linkage is fail closed: if required acceptance remains after merge"));
 assert.ok(template.includes("Native GitHub issue closure alone is not proof-taxonomy `DONE` evidence."));
+assert.match(readme, /## Packet body lifecycle projection and terminal close-sync/);
+assert.ok(readme.includes('current resumable lifecycle projection, not an immutable activation snapshot'));
+assert.match(readme, /reconcile the packet body before or atomically with native GitHub closure/);
+assert.match(readme, /lifecycle State; completed\/current\/next interaction stage; evidence-backed Proof \/ closure terms; required acceptance UNKNOWNs; and Handoff \/ exact next action/);
+assert.match(readme, /MUST NOT manufacture `LIVE_PROVEN`, clear an `UNKNOWN` by omission, or weaken activated acceptance/);
+assert.match(readme, /final comment or native GitHub closure does not make a contradictory stale packet body acceptable/);
+assert.match(readme, /do not resume the stale advertised stage without fresh re-attribution/);
+assert.match(readme, /does not broaden that opt-in automation boundary/);
+assert.ok(template.includes('current lifecycle projection, not an immutable activation snapshot'));
+assert.ok(template.includes('Before or atomically with native issue closure'));
+assert.ok(template.includes('Native closure or a final comment alone does not override a contradictory stale body'));
+assert.ok(template.includes('do not resume the stale advertised stage without fresh re-attribution'));
 assert.match(readme, /## Normal canonical-main startup/);
 assert.match(readme, /exactly two required reads/);
 assert.match(readme, /1\. read direct current `main` authority/);

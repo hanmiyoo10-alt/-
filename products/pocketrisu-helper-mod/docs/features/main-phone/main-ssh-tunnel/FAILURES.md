@@ -42,3 +42,9 @@ Disposition:
 - do not mix unrelated feature-document repairs into PR #2060;
 - baseline validator debt is tracked separately in issue #2064;
 - merge remains blocked by product-policy GREEN despite branch-protection Required being green.
+
+Resolution:
+- repository baseline debt was repaired separately by PR #2066 and issue #2064 closed completed;
+- after merging current `main` into PR #2060, the candidate passes the helper docs validator, isolated guard regression, shell syntax, and `git diff --check`;
+- exact candidate diff remains confined to the six `main-ssh-tunnel` files;
+- remote refreshed PR checks are still required before GREEN/merge.

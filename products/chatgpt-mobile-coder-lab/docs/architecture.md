@@ -30,6 +30,23 @@
 
 PocketRisu는 서버폰에서 별도 runtime으로 운영되지만 이 실험의 coding workspace와 ownership을 섞지 않는다.
 
+## 검증된 원격 실행면
+
+두 Android 폰은 모두 Remote Desktop Commander를 통한 repository 실행면으로 사용할 수 있다. 이 문서는 durable path/ownership 구조만 기록하며, 현재 SHA나 online 상태 같은 mutable fact는 `CURRENT.md`와 checkpoint가 소유한다.
+
+```text
+메인폰
+  repository: /data/data/com.termux/files/home/nyang-repo
+  landing worktree: /data/data/com.termux/files/home/nyang-worktrees/mainphone-work
+  landing branch: mainphone/work
+
+서버폰
+  repository: /root/nyang-repo
+  landing branch: server/work
+```
+
+실제 기능 변경은 각 landing branch/worktree를 직접 수정하는 대신 current `origin/main`에서 기기별 feature branch와 독립 worktree를 만든다. 원격 호출은 대상 기기와 absolute repository/worktree path를 명시해 다른 기기의 작업공간과 섞이지 않게 한다.
+
 ## 작업공간 원칙
 
 ### Device baseline branch

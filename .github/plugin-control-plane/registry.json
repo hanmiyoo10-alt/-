@@ -126,6 +126,7 @@
     ".github/plugin-control-plane/**",
     ".github/workflows/plugin-control-plane-*.yml",
     ".github/ISSUE_TEMPLATE/plugin-work.yml",
+    ".github/tooling/ci-summary/manifests/plugin-control-plane.json",
     "docs/REPOSITORY_PLUGIN_CONTROL_PLANE_*.md"
   ],
   "sharedPaths": [

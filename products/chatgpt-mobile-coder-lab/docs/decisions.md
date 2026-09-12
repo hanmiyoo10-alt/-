@@ -135,6 +135,7 @@ PocketRisu는 이미 별도 운영 authority와 안정 baseline을 갖고 있으
 ### 현재 1순위
 
 Remote Desktop Commander를 서버폰과 메인폰 양쪽에서 검증된 기본 실행 bridge로 사용한다. 원격 호출은 대상 기기와 absolute repository/worktree path를 명시하고, 실제 변경은 기기별 feature branch/worktree에서 수행한다.
+기기별 branch namespace도 `mainphone/*`와 `server/*`로 구분해 remote execution provenance가 Git history와 PR surface에서도 드러나게 한다.
 
 ### 차선
 

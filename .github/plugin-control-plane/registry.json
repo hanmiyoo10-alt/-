@@ -127,6 +127,8 @@
     ".github/workflows/plugin-control-plane-*.yml",
     ".github/ISSUE_TEMPLATE/plugin-work.yml",
     ".github/tooling/ci-summary/manifests/plugin-control-plane.json",
+    ".github/workflows/agent-skill-security-benchmark.yml",
+    "tools/agent-skill-security/**",
     "docs/REPOSITORY_PLUGIN_CONTROL_PLANE_*.md"
   ],
   "sharedPaths": [

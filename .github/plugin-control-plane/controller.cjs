@@ -61,14 +61,15 @@ function repoFrom(event) {
   return repo;
 }
 
+async function ensureLabel(repo, def) {
+  const encoded = encodeURIComponent(def.name);
+  const existing = await api(repo, `/labels/${encoded}`, {allow404: true});
+  if (!existing) await api(repo, '/labels', {method: 'POST', body: def});
+  return existing || def;
+}
+
 async function ensureLabels(repo, registry) {
-  for (const def of labelDefinitions(registry)) {
-    const encoded = encodeURIComponent(def.name);
-    const existing = await api(repo, `/labels/${encoded}`, {allow404: true});
-    if (!existing) {
-      await api(repo, '/labels', {method: 'POST', body: def});
-    }
-  }
+  for (const def of labelDefinitions(registry)) await ensureLabel(repo, def);
 }
 
 async function replaceManagedLabels(repo, number, currentLabels, desiredManaged, registry) {
@@ -108,9 +109,11 @@ async function classifyIssue() {
   const registry = loadRegistry();
   const issue = event.issue;
   if (!issue?.number || issue.pull_request) throw new Error('issue event required');
+  const bodyResult = classifyIssueBody(issue.body || '', registry, {
+    authorAssociation: issue.author_association,
+  });
   await ensureLabels(repo, registry);
-
-  const bodyResult = classifyIssueBody(issue.body || '', registry);
+  if (bodyResult.customLabelDefinition) await ensureLabel(repo, bodyResult.customLabelDefinition);
   const current = (issue.labels || []).map((label) => label.name);
   let desired = bodyResult.labels;
   if (!bodyResult.explicit) {

@@ -448,8 +448,19 @@ remote desktop commander write smoke test
 → local filesystem write/read/delete
 ```
 
-## 현재 실험 checkpoint
+## 2026-09-12 — 핵심 실험 종료
 
-다음 단계는 **동일 disposable worktree에서 tracked text file 하나를 한 줄 수정하고 `git diff --check`/`git diff`로 검증한 뒤 정확히 원상복구하는 patch-level smoke test**다.
+9월 9일의 마지막 기록 이후 다음 단계들이 모두 실제 증거와 함께 완료됐다.
 
-그 뒤에만 named feature branch/worktree를 만들어 실제 개발 작업, 테스트, commit/push/PR 단계를 각각 분리해 검증한다.
+- tracked patch + rollback 검증.
+- named branch/worktree에서 local commit, push, exact remote SHA verification, PR publication.
+- 서버폰 Remote Desktop Commander의 pinned runit service 전환과 restart/session recovery.
+- 실제 Android reboot 후 Termux:Boot → runit → persisted session restore → ChatGPT tool delivery.
+- 메인폰의 독립 isolated-worktree remote execution.
+- 메인폰과 서버폰이 서로 다른 branch/worktree에서 동시에 commit/push하는 two-device concurrency 검증.
+- repository-wide `RCR-D17`에 authorized remote execution 기본값 반영.
+- PR #2114를 통한 core-goal completion 상태와 운영 하드닝 backlog 분리.
+
+따라서 이 실험의 핵심 목표는 **COMPLETE**로 종료한다. 현재 상태 authority는 `../CURRENT.md`, 선택적 후속 운영 하드닝은 `OPERATIONS_BACKLOG.md`, 상세 증거는 `checkpoints/`가 소유한다.
+
+과거 smoke PR/branch/worktree의 보존 또는 정리는 core completion을 막지 않으며 `OPERATIONS_BACKLOG.md`의 별도 cleanup 정책 항목으로 남긴다. 서로 다른 두 ChatGPT 로그인 계정의 동시 호출 identity를 더 강하게 재증명하는 작업도 필요할 때만 privacy-safe 별도 checkpoint로 수행한다.

@@ -1581,3 +1581,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/9bcf36c95f11a72c0cef4eb53eaf6185890cb0e8)
 - Event ID: `31ba9ab74ddd0b1443184b25616dd27746a9231869f7b7233bae4942610a4c96`
 <!-- canonical-main-doc-promoted:31ba9ab74ddd0b1443184b25616dd27746a9231869f7b7233bae4942610a4c96 -->
+
+### 2026-09-12 — Merge pull request #2116 from hanmiyoo10-alt/repo/fixed-label-metadata-2110
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `020cf6671f8a25aa1e30bb29956e5353a77b9044`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/020cf6671f8a25aa1e30bb29956e5353a77b9044)
+- Event ID: `c74e5715c596f92d8186894aabb14a387476baeab213dbd5b820e98828c09cda`
+<!-- canonical-main-doc-promoted:c74e5715c596f92d8186894aabb14a387476baeab213dbd5b820e98828c09cda -->

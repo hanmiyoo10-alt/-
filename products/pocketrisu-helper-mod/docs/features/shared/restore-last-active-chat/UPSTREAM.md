@@ -6,6 +6,18 @@ PR status: `MERGED_UPSTREAM`
 Isolation status: `ACCEPTED`
 Deployment status: `UPSTREAM`
 
+## Minimal upstream scope
+Persist and restore the last active character/chat through the existing canonical selection/hydration path, clear it on deliberate Home/deselect, and fail safely when stored state is unavailable or stale. Session/write-lock, notifications, DB/save, plugin reload, and Termux wiring are outside scope.
+
+## Dependencies
+The feature relies on PocketRisu bootstrap/database readiness and the existing canonical `changeChar()` selection path. Current upstream behavior additionally depends on the `nodeOnlyRestoreLastChat` opt-in setting introduced after the original merge.
+
+## Verification evidence
+The submitted upstream validation covered reload restoration, deliberate Home persistence, `pnpm check` with no errors, and a successful production build. PR #60 merged upstream; later commit `ab4670d91857db1d32bf67ed41f406df02a91efa` retained the mechanism but made it opt-in.
+
+## Upstream pitch
+The upstream contribution preserves user continuity after reload/mobile runtime recreation without inventing a parallel character-selection path. The feature is already merged upstream; future work should be a regression fix or a separately scoped behavior change.
+
 ## Official PR result
 - Repository: `PocketRisu/PocketRisu`
 - PR: `#60` — `feat: restore last active chat after reload`

@@ -10,6 +10,15 @@ Local PRs: `https://github.com/hanmiyoo10-alt/PocketRisu/pull/4` through `#8`
 Official upstream PRs: `https://github.com/PocketRisu/PocketRisu/pull/67`, `#68`, `#69`, `#73`
 Tracked upstream heads: A `864b999fd4f4a74d4fb9a8866c7ce5a628265d02`; B `8756113790b84c0a1bc6bd40b1229f21fa7ce137`; C `f60e0618d1776d6918eec9e634b2e90f333e1bf2`; D `263a54fe3c54f0a3c9ef2cfafc1258211f7577fd`
 
+## Minimal upstream scope
+This dossier owns only the staged `/api/patch` DB/save optimization history: accepted Stage B/C behavior, the partially adopted Stage A result, and the superseded Stage D/E experiments. It does not authorize new runtime wiring, deployment changes, or revival of retired plugin-storage paths.
+
+## Verification evidence
+The authoritative evidence is the recorded official PR disposition, maintainer review, merged upstream commits for Stage B/C, and the 2026-08-28 status snapshot below. Historical benchmark numbers are provenance for the retired architecture, not a current production-performance claim.
+
+## Upstream pitch
+The accepted contribution was to remove repeated whole-database hash/clone work while preserving patch atomicity and behavior. Future optimization against the newer per-key plugin-storage architecture requires a fresh Feature-ID and fresh measurements.
+
 ## Final series disposition
 
 - **Stage A / upstream #67 — PARTIAL ADOPTION / CLOSED.** Empty-patch early return was adopted in `develop` via `e3a63daa`. The isolated opaque revision ETag was not accepted because `/api/read` and 409 responses still minted content-MD5 ETags, so mixing a random patch-success token with content hashes could create false conflicts.

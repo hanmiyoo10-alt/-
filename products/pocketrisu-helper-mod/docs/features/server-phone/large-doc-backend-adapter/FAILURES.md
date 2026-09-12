@@ -1,5 +1,8 @@
 # Failures — SERVER-LARGE-DOC-BACKEND-ADAPTER
 
+Feature-ID: `large-doc-backend-adapter`
+Stages: `CI | PR_REVIEW | MERGE | DEPLOY | POST_DEPLOY_VERIFY`
+
 아직 구현/CI/deploy를 시작하지 않았다.
 
 확인된 실패 없음.

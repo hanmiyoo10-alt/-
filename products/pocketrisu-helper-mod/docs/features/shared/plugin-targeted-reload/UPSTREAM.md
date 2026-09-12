@@ -6,6 +6,18 @@ PR status: `REIMPLEMENTED_UPSTREAM`
 Isolation status: `ACCEPTED_DESIGN`
 Deployment status: `UPSTREAM_v1.11.0`
 
+## Minimal upstream scope
+Reload only the updated V3 plugin while preserving unrelated V3 plugin runtime state, including targeted listener/provider cleanup. Plugin download/fetch fallback, DB/save work, notifications, and unrelated persistence ordering are outside this Feature-ID.
+
+## Dependencies
+The accepted design depends on current V3 plugin lifecycle ownership and the upstream permission/global-cleanup model. No separate Termux or server-phone runtime dependency is part of this feature.
+
+## Verification evidence
+Historical upstream submission evidence covered repeated update-url reloads without browser refresh while an unrelated V3 plugin remained active. Maintainer review accepted the diagnosis and ownership-tagging design, and upstream reimplemented it as commit `a55c4eef` for the v1.11.0 line.
+
+## Upstream pitch
+The upstream value is isolation: updating one V3 plugin must not tear down unrelated plugin UI/providers. That design is already accepted/reimplemented upstream, so no rebuild is needed unless a regression proves the contract has broken.
+
 ## Official PR result
 - Repository: `PocketRisu/PocketRisu`
 - PR: `#62` — `fix: reload updated V3 plugins in isolation`

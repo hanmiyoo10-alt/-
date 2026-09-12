@@ -3,6 +3,9 @@
 const {ANCHOR_START, parseAnchorMarker} = require('../main-delta-anchor.cjs');
 const {classifyPath, deriveRiskAndAction, summarizeCommitNoise} = require('../main-delta-presentation.cjs');
 
+const SHA_RE = /^[0-9a-f]{40}$/;
+const COMPARE_FILE_CEILING = 300;
+
 function unknown(summary, reasonCode, data = {}) {
   return {
     known: false,
@@ -12,11 +15,20 @@ function unknown(summary, reasonCode, data = {}) {
   };
 }
 
-function knownDelta({anchorSha, generation, headSha, commitCount, files, commits = []}) {
+function knownDelta({
+  anchorSha,
+  generation,
+  headSha,
+  commitCount,
+  files,
+  commits = [],
+  fileEvidenceSource = 'compare',
+  commitMessageCoverageComplete = commits.length === commitCount,
+}) {
   const classified = files.map(classifyPath);
   const risk = deriveRiskAndAction(classified);
-  const noise = summarizeCommitNoise(commits, commitCount);
-  const commitSummary = noise.routineGeneratedDocCommitCount > 0
+  const noise = commitMessageCoverageComplete ? summarizeCommitNoise(commits, commitCount) : null;
+  const commitSummary = noise?.routineGeneratedDocCommitCount > 0
     ? `${commitCount} total commit(s) (${noise.meaningfulCommitCount} meaningful + ${noise.routineGeneratedDocCommitCount} routine generated-doc)`
     : `${commitCount} commit(s)`;
   return {
@@ -29,9 +41,11 @@ function knownDelta({anchorSha, generation, headSha, commitCount, files, commits
       generation,
       headSha,
       commitCount,
-      meaningfulCommitCount: noise.meaningfulCommitCount,
-      routineGeneratedDocCommitCount: noise.routineGeneratedDocCommitCount,
+      meaningfulCommitCount: noise ? noise.meaningfulCommitCount : null,
+      routineGeneratedDocCommitCount: noise ? noise.routineGeneratedDocCommitCount : null,
+      commitMessageCoverageComplete,
       fileCount: files.length,
+      fileEvidenceSource,
       riskLevel: risk.riskLevel,
       actionRequired: risk.actionRequired,
       actionCode: risk.actionCode,
@@ -39,6 +53,59 @@ function knownDelta({anchorSha, generation, headSha, commitCount, files, commits
       claimsCurrentHealth: false,
     },
   };
+}
+
+function treeEntriesToLeafMap(tree, treeRole) {
+  if (!tree || typeof tree !== 'object' || Array.isArray(tree) || !Array.isArray(tree.tree)) {
+    return {ok: false, reasonCode: 'MAIN_DELTA_TREE_RESPONSE_INVALID', treeRole};
+  }
+  if (tree.truncated === true) return {ok: false, reasonCode: 'MAIN_DELTA_TREE_TRUNCATED', treeRole};
+  if (tree.truncated !== false) return {ok: false, reasonCode: 'MAIN_DELTA_TREE_RESPONSE_INVALID', treeRole};
+
+  const leaves = new Map();
+  for (const entry of tree.tree) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      return {ok: false, reasonCode: 'MAIN_DELTA_TREE_ENTRY_INVALID', treeRole};
+    }
+    if (entry.type === 'tree') continue;
+    if (
+      typeof entry.path !== 'string'
+      || entry.path.length === 0
+      || typeof entry.type !== 'string'
+      || entry.type.length === 0
+      || typeof entry.mode !== 'string'
+      || entry.mode.length === 0
+      || !SHA_RE.test(String(entry.sha || ''))
+      || leaves.has(entry.path)
+    ) {
+      return {ok: false, reasonCode: 'MAIN_DELTA_TREE_ENTRY_INVALID', treeRole};
+    }
+    leaves.set(entry.path, `${entry.type}\0${entry.mode}\0${entry.sha}`);
+  }
+  return {ok: true, leaves};
+}
+
+function changedPathsFromTrees(baseLeaves, headLeaves) {
+  const paths = new Set([...baseLeaves.keys(), ...headLeaves.keys()]);
+  return [...paths]
+    .filter((path) => baseLeaves.get(path) !== headLeaves.get(path))
+    .sort();
+}
+
+async function fetchCompleteTree(client, commitSha, treeRole) {
+  try {
+    const commit = await client.api(`/git/commits/${commitSha}`);
+    const treeSha = commit?.tree?.sha;
+    if (!SHA_RE.test(String(treeSha || ''))) {
+      return {ok: false, reasonCode: 'MAIN_DELTA_TREE_COMMIT_INVALID', treeRole};
+    }
+    const tree = await client.api(`/git/trees/${treeSha}?recursive=1`);
+    const parsed = treeEntriesToLeafMap(tree, treeRole);
+    if (!parsed.ok) return parsed;
+    return {ok: true, treeSha, leaves: parsed.leaves};
+  } catch {
+    return {ok: false, reasonCode: 'MAIN_DELTA_TREE_FETCH_FAILED', treeRole};
+  }
 }
 
 async function observe(context) {
@@ -54,10 +121,21 @@ async function observe(context) {
   if (parsed.error) {
     return unknown('last-seen anchor marker is invalid', parsed.error, {validationErrors: parsed.validationErrors || []});
   }
-  if (!/^[0-9a-f]{40}$/.test(String(mainSha || ''))) return unknown('current main SHA is invalid', 'MAIN_DELTA_MAIN_SHA_INVALID');
+  if (!SHA_RE.test(String(mainSha || ''))) return unknown('current main SHA is invalid', 'MAIN_DELTA_MAIN_SHA_INVALID');
 
   const {anchorSha, generation} = parsed.state;
-  if (anchorSha === mainSha) return knownDelta({anchorSha, generation, headSha: mainSha, commitCount: 0, files: [], commits: []});
+  if (anchorSha === mainSha) {
+    return knownDelta({
+      anchorSha,
+      generation,
+      headSha: mainSha,
+      commitCount: 0,
+      files: [],
+      commits: [],
+      fileEvidenceSource: 'identical',
+      commitMessageCoverageComplete: true,
+    });
+  }
   if (!client || typeof client.api !== 'function') return unknown('GitHub compare client is unavailable', 'MAIN_DELTA_COMPARE_CLIENT_UNAVAILABLE', {anchorSha, headSha: mainSha});
 
   const comparison = await client.api(`/compare/${anchorSha}...${mainSha}`);
@@ -69,19 +147,56 @@ async function observe(context) {
     });
   }
 
-  const files = Array.isArray(comparison.files) ? comparison.files.map((row) => row?.filename).filter(Boolean) : [];
-  if (files.length >= 300) {
-    return unknown('changed-file compare reached the GitHub bounded file ceiling', 'MAIN_DELTA_COMPARE_FILE_BOUNDARY', {
-      anchorSha,
-      headSha: mainSha,
-      observedFileCount: files.length,
-    });
+  const compareFiles = Array.isArray(comparison.files) ? comparison.files.map((row) => row?.filename).filter(Boolean) : [];
+  let files = compareFiles;
+  let fileEvidenceSource = 'compare';
+  if (compareFiles.length >= COMPARE_FILE_CEILING) {
+    const baseTree = await fetchCompleteTree(client, anchorSha, 'anchor');
+    if (!baseTree.ok) {
+      return unknown('complete anchor tree evidence is unavailable at the compare file boundary', baseTree.reasonCode, {
+        anchorSha,
+        headSha: mainSha,
+        observedFileCount: compareFiles.length,
+        treeRole: baseTree.treeRole,
+      });
+    }
+    const headTree = await fetchCompleteTree(client, mainSha, 'head');
+    if (!headTree.ok) {
+      return unknown('complete head tree evidence is unavailable at the compare file boundary', headTree.reasonCode, {
+        anchorSha,
+        headSha: mainSha,
+        observedFileCount: compareFiles.length,
+        treeRole: headTree.treeRole,
+      });
+    }
+    files = changedPathsFromTrees(baseTree.leaves, headTree.leaves);
+    fileEvidenceSource = 'git-tree-fallback';
   }
+
+  const commits = Array.isArray(comparison.commits) ? comparison.commits : [];
   const commitCount = Number.isSafeInteger(comparison.ahead_by)
     ? comparison.ahead_by
-    : (Array.isArray(comparison.commits) ? comparison.commits.length : 0);
-  const commits = Array.isArray(comparison.commits) ? comparison.commits : [];
-  return knownDelta({anchorSha, generation, headSha: mainSha, commitCount, files, commits});
+    : commits.length;
+  const commitMessageCoverageComplete = Number.isSafeInteger(comparison.ahead_by)
+    && comparison.ahead_by >= 0
+    && commits.length === comparison.ahead_by;
+  return knownDelta({
+    anchorSha,
+    generation,
+    headSha: mainSha,
+    commitCount,
+    files,
+    commits,
+    fileEvidenceSource,
+    commitMessageCoverageComplete,
+  });
 }
 
-module.exports = {knownDelta, observe, unknown};
+module.exports = {
+  changedPathsFromTrees,
+  fetchCompleteTree,
+  knownDelta,
+  observe,
+  treeEntriesToLeafMap,
+  unknown,
+};

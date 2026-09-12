@@ -44,6 +44,22 @@ function snapshot(overrides = {}) {
   return {...base, ...overrides, observations: {...base.observations, ...(overrides.observations || {})}, incidents: {...base.incidents, ...(overrides.incidents || {})}, freshness: {...base.freshness, ...(overrides.freshness || {})}};
 }
 
+function leaf(path, sha, type = 'blob', mode = '100644') {
+  return {path, type, mode, sha};
+}
+
+function boundaryComparison(overrides = {}) {
+  return {
+    status: 'ahead',
+    ahead_by: 400,
+    commits: [
+      {sha: 'c'.repeat(40), commit: {message: 'docs: promote canonical-main generated documentation (#99)'}},
+    ],
+    files: Array.from({length: 300}, (_, index) => ({filename: `docs/compare-${index}.md`})),
+    ...overrides,
+  };
+}
+
 (async () => {
   const calls = [];
   const observed = await mainDelta.observe({
@@ -67,11 +83,108 @@ function snapshot(overrides = {}) {
   assert.equal(observed.data.commitCount, 2);
   assert.equal(observed.data.meaningfulCommitCount, 1);
   assert.equal(observed.data.routineGeneratedDocCommitCount, 1);
+  assert.equal(observed.data.commitMessageCoverageComplete, true);
   assert.equal(observed.data.fileCount, 2);
+  assert.equal(observed.data.fileEvidenceSource, 'compare');
   assert.equal(observed.data.riskLevel, 'HIGH');
   assert.equal(observed.data.actionCode, 'REVIEW_CHANGED_GOVERNANCE_PATHS');
   assert(observed.data.riskDrivers.includes('.github/workflows/example.yml'));
-  assert.deepEqual(calls, [{path: `/compare/${anchorSha}...${mainSha}`, options: undefined}], 'Q1 delta observation must be read-only compare access');
+  assert.deepEqual(calls, [{path: `/compare/${anchorSha}...${mainSha}`, options: undefined}], 'below-ceiling observation must remain compare-only');
+
+  const baseTreeSha = '1'.repeat(40);
+  const headTreeSha = '2'.repeat(40);
+  const baseTree = {
+    truncated: false,
+    tree: [
+      leaf('docs/removed.md', '3'.repeat(40)),
+      leaf('src/changed.js', '4'.repeat(40)),
+      leaf('docs/same.md', '5'.repeat(40)),
+      {path: 'nested', type: 'tree', mode: '040000', sha: '6'.repeat(40)},
+    ],
+  };
+  const headTree = {
+    truncated: false,
+    tree: [
+      leaf('docs/added.md', '7'.repeat(40)),
+      leaf('src/changed.js', '8'.repeat(40)),
+      leaf('docs/same.md', '5'.repeat(40)),
+      {path: 'nested', type: 'tree', mode: '040000', sha: '9'.repeat(40)},
+    ],
+  };
+  const baseLeaves = mainDelta.treeEntriesToLeafMap(baseTree, 'anchor');
+  const headLeaves = mainDelta.treeEntriesToLeafMap(headTree, 'head');
+  assert.equal(baseLeaves.ok, true);
+  assert.equal(headLeaves.ok, true);
+  assert.deepEqual(
+    mainDelta.changedPathsFromTrees(baseLeaves.leaves, headLeaves.leaves),
+    ['docs/added.md', 'docs/removed.md', 'src/changed.js'],
+    'tree fallback must capture additions, deletions, and identity changes without rename claims',
+  );
+
+  const boundaryCalls = [];
+  const boundaryObserved = await mainDelta.observe({
+    allIssues: [issue()],
+    mainSha,
+    client: {api: async (path) => {
+      boundaryCalls.push(path);
+      if (path === `/compare/${anchorSha}...${mainSha}`) return boundaryComparison();
+      if (path === `/git/commits/${anchorSha}`) return {tree: {sha: baseTreeSha}};
+      if (path === `/git/trees/${baseTreeSha}?recursive=1`) return baseTree;
+      if (path === `/git/commits/${mainSha}`) return {tree: {sha: headTreeSha}};
+      if (path === `/git/trees/${headTreeSha}?recursive=1`) return headTree;
+      throw new Error(`unexpected path ${path}`);
+    }},
+  });
+  assert.equal(boundaryObserved.known, true);
+  assert.equal(boundaryObserved.data.commitCount, 400);
+  assert.equal(boundaryObserved.data.commitMessageCoverageComplete, false);
+  assert.equal(boundaryObserved.data.meaningfulCommitCount, null);
+  assert.equal(boundaryObserved.data.routineGeneratedDocCommitCount, null);
+  assert.equal(boundaryObserved.data.fileCount, 3);
+  assert.equal(boundaryObserved.data.fileEvidenceSource, 'git-tree-fallback');
+  assert.equal(boundaryObserved.data.riskLevel, 'MEDIUM');
+  assert(boundaryObserved.data.riskDrivers.includes('src/changed.js'));
+  assert.equal(boundaryObserved.summary, 'MEDIUM — 400 commit(s) / 3 file(s)');
+  assert.doesNotMatch(boundaryObserved.summary, /meaningful|routine generated-doc/);
+  assert.deepEqual(boundaryCalls, [
+    `/compare/${anchorSha}...${mainSha}`,
+    `/git/commits/${anchorSha}`,
+    `/git/trees/${baseTreeSha}?recursive=1`,
+    `/git/commits/${mainSha}`,
+    `/git/trees/${headTreeSha}?recursive=1`,
+  ]);
+
+  const truncated = await mainDelta.observe({
+    allIssues: [issue()],
+    mainSha,
+    client: {api: async (path) => {
+      if (path === `/compare/${anchorSha}...${mainSha}`) return boundaryComparison();
+      if (path === `/git/commits/${anchorSha}`) return {tree: {sha: baseTreeSha}};
+      if (path === `/git/trees/${baseTreeSha}?recursive=1`) return {truncated: true, tree: []};
+      throw new Error(`unexpected path ${path}`);
+    }},
+  });
+  assert.equal(truncated.known, false);
+  assert.equal(truncated.data.reasonCode, 'MAIN_DELTA_TREE_TRUNCATED');
+  assert.equal(truncated.data.treeRole, 'anchor');
+
+  const malformed = await mainDelta.observe({
+    allIssues: [issue()],
+    mainSha,
+    client: {api: async (path) => {
+      if (path === `/compare/${anchorSha}...${mainSha}`) return boundaryComparison();
+      if (path === `/git/commits/${anchorSha}`) return {tree: {sha: baseTreeSha}};
+      if (path === `/git/trees/${baseTreeSha}?recursive=1`) return baseTree;
+      if (path === `/git/commits/${mainSha}`) return {tree: {sha: headTreeSha}};
+      if (path === `/git/trees/${headTreeSha}?recursive=1`) {
+        return {truncated: false, tree: [{path: 'bad', type: 'blob', mode: '100644', sha: 'not-a-sha'}]};
+      }
+      throw new Error(`unexpected path ${path}`);
+    }},
+  });
+  assert.equal(malformed.known, false);
+  assert.equal(malformed.data.reasonCode, 'MAIN_DELTA_TREE_ENTRY_INVALID');
+  assert.equal(malformed.data.treeRole, 'head');
 
   const noChange = await mainDelta.observe({allIssues: [issue(renderAnchorMarker({schemaVersion: 1, scope: 'canonical-main', anchorSha: mainSha, generation: 8, advancedFrom: anchorSha, advanceReason: 'EXPLICIT_BRIEF_DELIVERED', sourceRefs: []}))], mainSha, client: {api: async () => { throw new Error('compare must not run for identical anchor'); }}});
   assert.equal(noChange.known, true);
@@ -80,6 +193,8 @@ function snapshot(overrides = {}) {
   assert.equal(noChange.data.commitCount, 0);
   assert.equal(noChange.data.meaningfulCommitCount, 0);
   assert.equal(noChange.data.routineGeneratedDocCommitCount, 0);
+  assert.equal(noChange.data.commitMessageCoverageComplete, true);
+  assert.equal(noChange.data.fileEvidenceSource, 'identical');
 
   const divergent = await mainDelta.observe({allIssues: [issue()], mainSha, client: {api: async () => ({status: 'diverged', ahead_by: 1, files: []})}});
   assert.equal(divergent.known, false);

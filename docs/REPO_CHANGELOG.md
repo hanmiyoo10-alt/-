@@ -1541,3 +1541,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1325bc128c1756060f3b20355f4237397789b10e)
 - Event ID: `4f2dc0453c31002ce49a4710512fa3c1788146752ff4f63fb3032da0b09c08ca`
 <!-- canonical-main-doc-promoted:4f2dc0453c31002ce49a4710512fa3c1788146752ff4f63fb3032da0b09c08ca -->
+
+### 2026-09-12 — Merge pull request #2084 from hanmiyoo10-alt/repo/agent-skill-core-scope-2082
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `755c37a7ca3e9028a5604242bb5ae1a97627057d`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/755c37a7ca3e9028a5604242bb5ae1a97627057d)
+- Event ID: `ce5a828afbed606d966056831d2550576953d2a55161515ea0683cc92d3fc572`
+<!-- canonical-main-doc-promoted:ce5a828afbed606d966056831d2550576953d2a55161515ea0683cc92d3fc572 -->

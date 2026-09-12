@@ -1,5 +1,7 @@
 'use strict';
 
+const {resolveStatusIssueIdentity} = require('../../lib.cjs');
+
 function parseRefresh(body = '') {
   const match = body.match(/Last refreshed:\s*([^\n]+)/);
   if (!match) return null;
@@ -10,9 +12,11 @@ function projectRows(registry, openIssues, freshnessMinutes, now = Date.now()) {
   const owners = [...Object.entries(registry.plugins || {}).map(([id, owner]) => ({kind: 'plugin', id, owner})), ...Object.entries(registry.products || {}).map(([id, owner]) => ({kind: 'product', id, owner}))];
   const boundMs = freshnessMinutes * 60 * 1000;
   return owners.map(({kind, id, owner}) => {
-    const issue = openIssues.find((row) => row.title === `[${kind}-status:${id}]`);
+    const identity = resolveStatusIssueIdentity(openIssues, kind, id);
+    const issue = identity.canonical;
+    const duplicates = identity.duplicates;
     const refreshed = issue ? parseRefresh(issue.body || '') : null;
-    return {kind, id, owner, issue, refreshed, fresh: refreshed !== null && now - refreshed <= boundMs};
+    return {kind, id, owner, issue, duplicates, refreshed, fresh: duplicates.length === 0 && refreshed !== null && now - refreshed <= boundMs};
   });
 }
 async function observe(context) {

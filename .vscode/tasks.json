@@ -137,6 +137,27 @@
         "panel": "dedicated",
         "clear": true
       }
+    },
+    {
+      "label": "Usage Dashboard: Full Test Suite",
+      "type": "process",
+      "command": "node",
+      "args": [
+        "plugins/usage-dashboard/tests/run-all.cjs"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
     }
   ]
 }

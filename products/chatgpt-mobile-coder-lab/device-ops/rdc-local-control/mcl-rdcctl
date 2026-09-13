@@ -1,0 +1,106 @@
+#!/bin/sh
+set -eu
+
+SCHEMA=mcl-rdcctl.v1
+PROFILE=s-termux
+CONTEXT=termux
+EXPECTED_VERSION=0.2.50
+SERVICE_NAME=desktop-commander-remote-termux
+PREFIX=/data/data/com.termux/files/usr
+HOME_DIR=/data/data/com.termux/files/home
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+RDC_VERIFY="$SCRIPT_DIR/../rdc-termux/verify.sh"
+
+if [ "${MCL_RDCCTL_TEST_MODE:-0}" = 1 ]; then
+  ROOT=${MCL_RDCCTL_TEST_ROOT:-}
+  [ -n "$ROOT" ] || { echo "BLOCKED test fixture missing" >&2; exit 2; }
+  PREFIX="$ROOT/prefix"
+  HOME_DIR="$ROOT/home"
+  RDC_VERIFY="$ROOT/rdc-termux/verify.sh"
+fi
+
+INSTALL_DIR="$HOME_DIR/.local/share/$SERVICE_NAME"
+SERVICE_DIR="$PREFIX/var/service/$SERVICE_NAME"
+PACKAGE_JSON="$INSTALL_DIR/node_modules/@wonderwhy-er/desktop-commander/package.json"
+TERMUX_PROPERTIES="$HOME_DIR/.termux/termux.properties"
+SV="$PREFIX/bin/sv"
+usage() {
+  echo "BLOCKED unsupported command" >&2
+  exit 2
+}
+
+[ "$#" -eq 3 ] || usage
+ACTION=$1
+[ "$2" = "--profile" ] || usage
+[ "$3" = "$PROFILE" ] || { echo "BLOCKED unsupported profile" >&2; exit 2; }
+case "$ACTION" in status|verify) ;; *) usage ;; esac
+
+rdc_version=unknown
+if [ -r "$PACKAGE_JSON" ]; then
+  candidate=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PACKAGE_JSON" | sed -n '1p')
+  if printf '%s\n' "$candidate" | grep -Eq '^[0-9]+[.][0-9]+[.][0-9]+$'; then
+    rdc_version=$candidate
+  fi
+fi
+
+service_state=unknown
+if [ ! -d "$SERVICE_DIR" ]; then
+  service_state=missing
+elif [ -x "$SV" ]; then
+  raw_status=$($SV status "$SERVICE_DIR" 2>&1 || true)
+  case "$raw_status" in run:*) service_state=running ;; down:*) service_state=stopped ;; *) service_state=unknown ;; esac
+fi
+managed_profile=unknown
+if [ -x "$RDC_VERIFY" ]; then
+  if PREFIX="$PREFIX" HOME="$HOME_DIR" RDC_TERMUX_SERVICE_NAME="$SERVICE_NAME" "$RDC_VERIFY" >/dev/null 2>&1; then
+    managed_profile=pass
+  else
+    managed_profile=fail
+  fi
+fi
+
+external_command_policy=unknown
+if [ ! -e "$TERMUX_PROPERTIES" ]; then
+  external_command_policy=disabled
+elif [ -r "$TERMUX_PROPERTIES" ]; then
+  if grep -Eq '^[[:space:]]*allow-external-apps[[:space:]]*=[[:space:]]*true([[:space:]]|$)' "$TERMUX_PROPERTIES"; then
+    external_command_policy=enabled
+  else
+    external_command_policy=disabled
+  fi
+fi
+
+known_fail=0
+has_unknown=0
+[ "$managed_profile" != fail ] || known_fail=1
+[ "$service_state" != stopped ] || known_fail=1
+[ "$service_state" != missing ] || known_fail=1
+[ "$external_command_policy" != enabled ] || known_fail=1
+[ "$rdc_version" = unknown ] || [ "$rdc_version" = "$EXPECTED_VERSION" ] || known_fail=1
+[ "$managed_profile" != unknown ] || has_unknown=1
+[ "$service_state" != unknown ] || has_unknown=1
+[ "$external_command_policy" != unknown ] || has_unknown=1
+[ "$rdc_version" != unknown ] || has_unknown=1
+
+if [ "$known_fail" -eq 1 ]; then
+  result=fail
+elif [ "$has_unknown" -eq 1 ]; then
+  result=unknown
+else
+  result=pass
+fi
+
+printf '%s\n' \
+  "schema=$SCHEMA" \
+  "profile=$PROFILE" \
+  "execution_context=$CONTEXT" \
+  "rdc_version=$rdc_version" \
+  "service_state=$service_state" \
+  "managed_profile=$managed_profile" \
+  "external_command_policy=$external_command_policy" \
+  "result=$result"
+
+if [ "$ACTION" = verify ] && [ "$result" != pass ]; then
+  exit 1
+fi
+exit 0

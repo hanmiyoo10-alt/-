@@ -194,13 +194,8 @@ test('popup and dialog attempts cannot remain OK', async () => {
 });
 test('download attempt is recorded and no artifact is persisted', async () => {
   const downloadsPath = await mkdtemp(path.join(os.tmpdir(), 'web-acq-downloads-'));
-  await withServer((request, response) => {
-    if (request.url === '/file') {
-      response.setHeader('content-disposition', 'attachment; filename="x.txt"');
-      response.end('DOWNLOAD_BODY');
-      return;
-    }
-    response.end('<body><button id="go" type="button" onclick="const a=document.createElement(\'a\');a.href=\'/file\';a.download=\'x.txt\';a.click()">go</button></body>');
+  await withServer((_request, response) => {
+    response.end('<body><button id="go" type="button" onclick="const b=new Blob([\'DOWNLOAD_BODY\'],{type:\'text/plain\'});const a=document.createElement(\'a\');a.href=URL.createObjectURL(b);a.download=\'x.txt\';a.click()">go</button></body>');
   }, async (port) => {
     const result = await reveal(`http://127.0.0.1:${port}/`, one('clickReveal', '#go'), {
       launchOptions: { downloadsPath },

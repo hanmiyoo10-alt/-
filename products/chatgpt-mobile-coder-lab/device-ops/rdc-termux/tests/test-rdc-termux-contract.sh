@@ -4,6 +4,7 @@ set -eu
 HERE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 INSTALL="$HERE/install.sh"
 VERIFY="$HERE/verify.sh"
+SHIM="$HERE/device-name-shim.cjs"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 PASS=0
@@ -51,6 +52,16 @@ echo "run: $2: (pid 123) 1s"
 MOCK
   chmod 755 "$PREFIX/bin/sv"
 }
+DESKTOP_COMMANDER_DEVICE_NAME=S-Termux node --require "$SHIM" --input-type=module -e "import os from 'node:os'; if (os.hostname() !== 'S-Termux') process.exit(1)"
+if DESKTOP_COMMANDER_DEVICE_NAME= node --require "$SHIM" -e "process.exit(0)" >/dev/null 2>&1; then fail "empty device label accepted"; fi
+ok "device-name shim reaches ESM hostname and fails closed"
+
+make_fixture labelblocked
+if RDC_TERMUX_DEVICE_NAME='bad label' sh "$INSTALL" --apply > "$ROOT/labelblocked.out" 2>&1; then fail "invalid device label accepted"; fi
+[ ! -s "$MOCK_LOG" ] || fail "invalid device label mutated package state"
+[ ! -e "$PREFIX/var/service/desktop-commander-remote-termux" ] || fail "invalid device label created service"
+ok "installer rejects unsafe device labels before mutation"
+
 make_fixture check
 out=$(sh "$INSTALL" --check)
 [ ! -e "$HOME/.local/share/desktop-commander-remote-termux" ] || fail "check mutated install path"
@@ -63,6 +74,9 @@ mkdir -p "$PREFIX/var/service/desktop-commander-remote"
 echo ORIGINAL > "$PREFIX/var/service/desktop-commander-remote/run"
 original_sum=$(cksum "$PREFIX/var/service/desktop-commander-remote/run")
 sh "$INSTALL" --apply > "$ROOT/apply.out"
+shimfile="$HOME/.local/share/desktop-commander-remote-termux/device-name-shim.cjs"
+[ -f "$shimfile" ] || fail "managed device-name shim missing"
+grep -Fq "// mcl-rdc-termux-device-name:v1" "$shimfile" || fail "managed shim marker missing"
 [ -e "$PREFIX/var/service/desktop-commander-remote-termux/down" ] || fail "new service not disabled after apply"
 [ "$(cksum "$PREFIX/var/service/desktop-commander-remote/run")" = "$original_sum" ] || fail "existing S endpoint changed"
 [ "$(grep -c '^npm$' "$MOCK_LOG")" -eq 1 ] || fail "package install count"
@@ -71,6 +85,8 @@ ok "apply creates only the sibling managed service"
 
 runfile="$PREFIX/var/service/desktop-commander-remote-termux/run"
 grep -Fq "DESKTOP_COMMANDER_DEVICE_NAME='S-Termux'" "$runfile" || fail "device label missing"
+grep -Fq "SHIM='$shimfile'" "$runfile" || fail "managed shim path missing"
+grep -Fq -- '--require "$SHIM"' "$runfile" || fail "managed shim preload missing"
 grep -Fq 'bin/node' "$runfile" || fail "Termux node path missing"
 ! grep -Fq 'proot-distro' "$runfile" || fail "PRoot invocation present"
 ! grep -Fq '/root/' "$runfile" || fail "Ubuntu home present"
@@ -78,11 +94,13 @@ ok "generated service is Termux-native and distinct"
 before_run=$(cksum "$runfile")
 before_log=$(cksum "$PREFIX/var/service/desktop-commander-remote-termux/log/run")
 before_pkg=$(cksum "$HOME/.local/share/desktop-commander-remote-termux/node_modules/@wonderwhy-er/desktop-commander/package.json")
+before_shim=$(cksum "$shimfile")
 sh "$INSTALL" --apply > "$ROOT/apply2.out"
 [ "$(grep -c '^npm$' "$MOCK_LOG")" -eq 1 ] || fail "second apply reinstalled package"
 [ "$(cksum "$runfile")" = "$before_run" ] || fail "second apply rewrote run"
 [ "$(cksum "$PREFIX/var/service/desktop-commander-remote-termux/log/run")" = "$before_log" ] || fail "second apply rewrote log"
 [ "$(cksum "$HOME/.local/share/desktop-commander-remote-termux/node_modules/@wonderwhy-er/desktop-commander/package.json")" = "$before_pkg" ] || fail "second apply rewrote package"
+[ "$(cksum "$shimfile")" = "$before_shim" ] || fail "second apply rewrote device-name shim"
 ok "second apply is a managed-state no-op"
 
 sh "$INSTALL" --activate > "$ROOT/activate.out"
@@ -96,6 +114,14 @@ echo UNMANAGED > "$PREFIX/var/service/desktop-commander-remote-termux/run"
 if sh "$INSTALL" --apply > "$ROOT/blocked.out" 2>&1; then fail "unmanaged target accepted"; fi
 [ ! -s "$MOCK_LOG" ] || fail "blocked target mutated package state"
 ok "unmanaged target fails closed before mutation"
+
+make_fixture shimblocked
+mkdir -p "$HOME/.local/share/desktop-commander-remote-termux"
+echo UNMANAGED > "$HOME/.local/share/desktop-commander-remote-termux/device-name-shim.cjs"
+if sh "$INSTALL" --apply > "$ROOT/shimblocked.out" 2>&1; then fail "unmanaged shim accepted"; fi
+[ ! -s "$MOCK_LOG" ] || fail "unmanaged shim mutated package state"
+ok "unmanaged device-name shim fails closed before mutation"
+
 make_fixture policy
 sh "$INSTALL" --apply > "$ROOT/policy-apply.out"
 POLICY=$(printf '%s%s' 'allow-external' '-apps')
@@ -106,6 +132,7 @@ ok "verify fails closed when broader command policy is enabled"
 ! grep -Fq 'termux.properties' "$INSTALL" || fail "installer edits Termux properties"
 ! grep -Fq "$POLICY" "$INSTALL" || fail "installer changes broader command policy"
 ! grep -Fq 'proot-distro' "$INSTALL" || fail "installer contains PRoot route"
+! grep -Fq 'NODE_OPTIONS' "$INSTALL" || fail "installer uses global Node preload surface"
 ! grep -Fq '/root/' "$INSTALL" || fail "installer contains Ubuntu home"
 ! grep -Eiq 'copy.*(auth|session)|(auth|session).*copy' "$INSTALL" || fail "installer contains auth/session copy"
 ok "installer excludes security, PRoot, and auth/session widening"

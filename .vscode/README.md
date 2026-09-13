@@ -12,6 +12,10 @@ The shared repository tasks are:
 - `Repo: Repository Read MCP Unit Tests`
 - `Repo: Repository Patch Write Contract Tests`
 
+The product-specific convenience tasks currently exposed are:
+
+- `Usage Dashboard: Full Test Suite`
+
 `Repo: Plugin Control Plane Contracts` delegates to the same existing Plugin Control Plane receipt runner and manifest used by repository CI. The task does not reimplement validation logic inside VS Code.
 
 `Repo: Agent Skill Security Contract Tests` delegates directly to the stdlib-only unittest command owned by `tools/agent-skill-security/README.md`. It validates the advisory benchmark harness contract only. A PASS is not a security certification and does not replace Agent Skills CI, Required, or any security/release authority.
@@ -21,6 +25,8 @@ The shared repository tasks are:
 `Repo: Repository Read MCP Unit Tests` delegates directly to the unit-test command owned by `.github/workflows/repository-read-mcp-ci.yml`. It is local unit-test evidence only. Repository Read MCP remains read-only, and a PASS does not replace Repository Read MCP CI, protected `Required`, canonical-main currentness/status reads, release, or production authority. The task does not install dependencies; local install/import prerequisites remain owned by `tools/repo-ci-mcp/README.md`.
 
 `Repo: Repository Patch Write Contract Tests` delegates directly to the offline unittest command owned by `tools/repo-write/README.md` and used by `.github/workflows/repo-patch-write.yml`. A PASS is local contract evidence only: it neither authorizes nor proves that a repository write occurred. Real Repository Patch Write mutations remain governed by the existing exact-head, queue, and direct-CLI safety contract. The task does not replace Repository Patch Write workflow validation, protected `Required`, current-main checks, release, or production authority, and it does not install local Python or Git prerequisites.
+
+`Usage Dashboard: Full Test Suite` delegates directly to `node plugins/usage-dashboard/tests/run-all.cjs`, the existing registry-driven full-test-suite phase used by the Usage Dashboard validator. A PASS is local test-suite evidence only and does not replace materialization, reconciliation, syntax checks, test-tree cleanliness guards, release-candidate validation, exact candidate identity, protected `Required`, release/production authority, deployment, or real-device physical verification. The task performs no product, release, repository-write, or device mutation. Automated agents should invoke the same owner command directly when safe; the VS Code task remains an optional human convenience entrypoint.
 
 Run any task from `Tasks: Run Task` in the Command Palette when a human editor entrypoint is useful.
 
@@ -33,6 +39,6 @@ Run any task from `Tasks: Run Task` in the Command Palette when a human editor e
 
 ## Scope boundary
 
-This shared shell intentionally contains no product-specific tasks and no `settings.json`.
+This shell contains one separately grouped product-specific task, `Usage Dashboard: Full Test Suite`, added only after reading the Usage Dashboard project authority and existing owner runner. It still contains no `settings.json`.
 
-Product/plugin task groups require their owning project guidelines and exact existing command surfaces to be read first, then should be added through separately bounded work so groups such as `SimCore: ...` or `Usage Dashboard: ...` remain owned by the correct project authority.
+Additional product/plugin task groups require their owning project guidelines and exact existing command surfaces to be read first, then must be added through separately bounded work so groups such as `SimCore: ...`, `Usage Dashboard: ...`, or others remain owned by the correct project authority.

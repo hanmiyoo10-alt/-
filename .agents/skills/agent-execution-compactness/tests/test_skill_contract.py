@@ -549,6 +549,53 @@ class SkillContractTests(unittest.TestCase):
             self.assertIn("## Repository common-rules inheritance", text, guideline.as_posix())
             self.assertIn("docs/REPOSITORY_COMMON_RULES.md", text, guideline.as_posix())
 
+    def test_common_rules_d19_promotes_only_proven_equivalent_fallbacks(self):
+        common_text = COMMON_RULES.read_text(encoding="utf-8")
+        section = common_text[
+            common_text.index("### RCR-D19"):
+            common_text.index("## 6. Conditional common rules")
+        ]
+        normalized = " ".join(section.split())
+        for required in (
+            "evidence strength equal to or stronger than the prior path",
+            "no wider authority, security, or effect boundary",
+            "a separately reviewed change may promote the simpler path to canonical ownership",
+            "affected callers and compatibility",
+            "neighboring baseline preservation",
+            "Retire or clearly deprecate redundant superseded paths",
+            "hidden dual ownership",
+            "Simplification must not weaken acceptance",
+            "blocked, unknown, or partial rather than manufacturing success",
+        ):
+            self.assertIn(required, normalized)
+
+    def test_common_rules_security_sensitive_tests_are_fixture_first_and_fail_closed(self):
+        common_text = COMMON_RULES.read_text(encoding="utf-8")
+        section = common_text[
+            common_text.index("### RCR-C12"):
+            common_text.index("## 7. Deliberately project-only rules")
+        ]
+        normalized = " ".join(section.split())
+        for required in (
+            "**Class:** `CONDITIONAL`",
+            "current repository/project owner",
+            "deterministic repository-owned localhost, mock, or synthetic fixtures",
+            "does not implicitly authorize live third-party scanning",
+            "Credentials, cookies, tokens, private session material",
+            "finite requests/actions",
+            "activate separate explicit authority",
+            "cannot disable, suppress, bypass, or override platform/tool safety controls",
+            "repository-owned local behavioral fixture",
+            "evidence-equivalent mock / stub / injected transport",
+            "static contract / schema / reason-code / effect-guard wiring proof",
+            "source/diff review as supporting evidence only",
+            "not permission to skip owner-mandated evidence or lower mandatory acceptance",
+            "Static or source proof cannot impersonate runtime/behavioral proof",
+            "preserve `BLOCKED`, `UNKNOWN`, or `PARTIAL`",
+            "separately reviewed `RCR-D19` promotion path",
+        ):
+            self.assertIn(required, normalized)
+
     def test_skill_creates_no_execution_authority(self):
         text = SKILL.read_text(encoding="utf-8")
         self.assertIn("development policy, not a source of mutable product, runtime, release, or production truth", text)

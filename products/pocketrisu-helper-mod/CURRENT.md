@@ -1,6 +1,6 @@
 # CURRENT — 포켓리스 보조 개조
 
-최종 갱신 기준: **2026-08-23**
+최종 갱신 기준: **2026-09-13**
 
 새 채팅이나 작업 재개 시 가장 먼저 읽는 현재 상태 체크포인트.
 
@@ -59,6 +59,20 @@
 
 다음 한 단계:
 - official PR #67의 maintainer review/check 결과를 기다린다. 결과가 나오면 최신 `develop`에서 Stage B 중복/충돌을 다시 검사한 뒤에만 다음 정식 PR을 준비한다.
+
+## 진행 중 — PocketRisu 화면 꺼짐 방지
+
+상태: **IMPLEMENTATION_PR**
+
+- Feature-ID: `keep-screen-awake`.
+- 로컬 구현 PR: `hanmiyoo10-alt/PocketRisu#9` DRAFT.
+- PocketRisu 문서가 visible일 때 브라우저 Screen Wake Lock을 요청하고 hidden에서 해제, 복귀 시 재요청하는 독립 client 기능으로 범위를 고정했다.
+- 기존 `keepSessionAlive` session/audio 설정, DB/schema, 서버폰 서비스에는 손대지 않는다.
+- 원격 로컬 검증 실행 표면 이상은 repo issue `#701`에 기록했고, 구현 branch/PR 경로로 안전하게 fallback했다.
+- PR CI와 실제 메인폰 화면 타임아웃 검증은 아직 미완료이며 `VERIFIED`로 간주하지 않는다.
+
+다음 한 단계:
+- PR #9 required checks를 확인한 뒤 메인폰 foreground 실기기에서 시스템 화면 타임아웃을 넘겨 화면 유지 여부를 검증한다.
 
 ## 현재 P0 — 전화/이어폰 알림 무한소리
 

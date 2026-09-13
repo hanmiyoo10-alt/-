@@ -195,11 +195,12 @@ test('popup and dialog attempts cannot remain OK', async () => {
 test('download attempt is recorded and no artifact is persisted', async () => {
   const downloadsPath = await mkdtemp(path.join(os.tmpdir(), 'web-acq-downloads-'));
   await withServer((_request, response) => {
-    response.end('<body><button id="go" type="button" onclick="const b=new Blob([\'DOWNLOAD_BODY\'],{type:\'text/plain\'});const a=document.createElement(\'a\');a.href=URL.createObjectURL(b);a.download=\'x.txt\';a.hidden=true;document.body.append(a);a.click()">go</button></body>');
+    response.end('<body><span id="diag">NOT_RUN</span><button id="go" type="button" onclick="const d=document.getElementById(\'diag\');d.textContent=\'HANDLER_RAN\';const b=new Blob([\'DOWNLOAD_BODY\'],{type:\'text/plain\'});const a=document.createElement(\'a\');a.href=URL.createObjectURL(b);a.download=\'x.txt\';a.hidden=true;document.body.append(a);a.click();d.textContent+=window.__u26RevealDownloadBlocked?.attempted?\'|GUARD_MARKED\':\'|GUARD_MISSED\'">go</button></body>');
   }, async (port) => {
     const result = await reveal(`http://127.0.0.1:${port}/`, one('clickReveal', '#go'), {
       launchOptions: { downloadsPath },
     });
+    if (result.status === 'OK') assert.match(result.text, /HANDLER_RAN\|(GUARD_MARKED|GUARD_MISSED)/);
     assert.equal(result.status, 'BLOCKED');
     assert.equal(result.failureReason, 'REVEAL_DOWNLOAD_FORBIDDEN');
     assert.deepEqual(await readdir(downloadsPath), []);

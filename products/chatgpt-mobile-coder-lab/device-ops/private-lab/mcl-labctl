@@ -2,7 +2,6 @@
 set -eu
 
 SCHEMA=mcl-private-check.v1
-CHECK=substrate-smoke
 LAB_NAME=mcl-private-lab
 PREFIX=/data/data/com.termux/files/usr
 PD="$PREFIX/bin/proot-distro"
@@ -21,7 +20,8 @@ usage() {
 
 [ "$#" -eq 2 ] || usage
 ACTION=$1
-[ "$2" = "$CHECK" ] || usage
+CHECK=$2
+case "$CHECK" in substrate-smoke|rdc-rotation-repro) ;; *) usage ;; esac
 case "$ACTION" in run|receipt) ;; *) usage ;; esac
 
 emit_receipt() {
@@ -39,7 +39,6 @@ validate_receipt() {
   [ -n "$bytes" ] && [ "$bytes" -le "$MAX_RECEIPT_BYTES" ] || return 1
   lines=$(printf '%s\n' "$candidate" | wc -l | tr -d '[:space:]')
   [ "$lines" -eq 4 ] || return 1
-
   line1=$(printf '%s\n' "$candidate" | sed -n '1p')
   line2=$(printf '%s\n' "$candidate" | sed -n '2p')
   line3=$(printf '%s\n' "$candidate" | sed -n '3p')
@@ -47,28 +46,28 @@ validate_receipt() {
   [ "$line1" = "schema=$SCHEMA" ] || return 1
   [ "$line2" = "check=$CHECK" ] || return 1
   [ "$line4" = 'details=withheld' ] || return 1
-
   RECEIPT_RESULT=${line3#result=}
   [ "result=$RECEIPT_RESULT" = "$line3" ] || return 1
-  case "$RECEIPT_RESULT" in
-    pass|fail|blocked|manual_auth_required|unknown) ;;
-    *) return 1 ;;
-  esac
+  case "$RECEIPT_RESULT" in pass|fail|blocked|manual_auth_required|unknown) ;; *) return 1 ;; esac
   VALID_RECEIPT=$candidate
-  return 0
 }
 
 read_receipt() {
-  candidate=$(
-    "$PD" login --isolated "$LAB_NAME" -- /bin/sh -lc '
-# mcl-labctl:read-receipt:v1
+  case "$CHECK" in
+    substrate-smoke) READ_SCRIPT='# mcl-labctl:read-receipt:v1
 receipt=/opt/mcl-private-lab/receipts/substrate-smoke.receipt
 [ -f "$receipt" ] || exit 3
 bytes=$(wc -c < "$receipt") || exit 4
 [ "$bytes" -le 256 ] || exit 5
-cat "$receipt"
-' 2>/dev/null
-  ) || return 1
+cat "$receipt"' ;;
+    rdc-rotation-repro) READ_SCRIPT='# mcl-labctl:read-receipt:v1
+receipt=/opt/mcl-private-lab/receipts/rdc-rotation-repro.receipt
+[ -f "$receipt" ] || exit 3
+bytes=$(wc -c < "$receipt") || exit 4
+[ "$bytes" -le 256 ] || exit 5
+cat "$receipt"' ;;
+  esac
+  candidate=$("$PD" login --isolated "$LAB_NAME" -- /bin/sh -lc "$READ_SCRIPT" 2>/dev/null) || return 1
   validate_receipt "$candidate"
 }
 
@@ -80,32 +79,26 @@ receipt=/opt/mcl-private-lab/receipts/substrate-smoke.receipt
 tmp=/opt/mcl-private-lab/receipts/.substrate-smoke.receipt.tmp
 result=pass
 [ -f /etc/mcl-private-lab ] || result=fail
-for d in vendor fixtures results receipts; do
-  [ -d "/opt/mcl-private-lab/$d" ] || result=fail
-done
-for c in node npm git python3; do
-  command -v "$c" >/dev/null 2>&1 || result=fail
-done
+for d in vendor fixtures results receipts; do [ -d "/opt/mcl-private-lab/$d" ] || result=fail; done
+for c in node npm git python3; do command -v "$c" >/dev/null 2>&1 || result=fail; done
 umask 077
-{
-  printf "%s\n" \
-    "schema=mcl-private-check.v1" \
-    "check=substrate-smoke" \
-    "result=$result" \
-    "details=withheld"
-} > "$tmp"
+printf "%s\n" "schema=mcl-private-check.v1" "check=substrate-smoke" "result=$result" "details=withheld" > "$tmp"
 mv -f "$tmp" "$receipt"
 [ "$result" = pass ]
 ' >/dev/null 2>&1
 }
 
-[ -x "$PD" ] || {
-  emit_receipt blocked
-  exit 1
+run_rdc_rotation_repro() {
+  "$PD" login --isolated "$LAB_NAME" -- /usr/bin/node \
+    /opt/mcl-private-lab/vendor/rdc-session-rotation/probe.mjs >/dev/null 2>&1
 }
 
+[ -x "$PD" ] || { emit_receipt blocked; exit 1; }
 if [ "$ACTION" = run ]; then
-  if run_substrate_smoke; then run_rc=0; else run_rc=$?; fi
+  case "$CHECK" in
+    substrate-smoke) if run_substrate_smoke; then run_rc=0; else run_rc=$?; fi ;;
+    rdc-rotation-repro) if run_rdc_rotation_repro; then run_rc=0; else run_rc=$?; fi ;;
+  esac
   if read_receipt; then
     printf '%s\n' "$VALID_RECEIPT"
     [ "$RECEIPT_RESULT" = pass ] && exit 0
@@ -114,7 +107,6 @@ if [ "$ACTION" = run ]; then
   [ "$run_rc" -le 1 ] && emit_receipt unknown || emit_receipt blocked
   exit 1
 fi
-
 if read_receipt; then
   printf '%s\n' "$VALID_RECEIPT"
   [ "$RECEIPT_RESULT" = pass ] && exit 0

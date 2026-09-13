@@ -358,6 +358,11 @@ Scope every fallback result to what its evidence actually proves. Do not relabel
 
 Keep temporary workaround layers explicit and removable or idempotent where practical. When the original path becomes available again, or a simpler authorized path is proven evidence-equivalent under the required validation, remove unnecessary fallback layers and reconverge on the original intended function or that simpler equivalent. If no authorized fallback can satisfy the remaining mandatory contract, preserve the result as blocked, unknown, or partial rather than manufacturing success.
 
+
+Temporary fallback layers are candidates for removal rather than permanent second-class architecture by default. When one fallback, or a composition distilled from multiple fallback paths, is repeatedly proven under the required validation to satisfy the same semantic contract with evidence strength equal to or stronger than the prior path and with no wider authority, security, or effect boundary, a separately reviewed change may promote the simpler path to canonical ownership.
+
+Before replacement, verify affected callers and compatibility, required validation, neighboring baseline preservation, and owning authority. Retire or clearly deprecate redundant superseded paths where practical rather than leaving hidden dual ownership merely because both implementations exist. Simplification must not weaken acceptance, erase failure provenance, or convert project-specific authority into repository-wide authority.
+
 ## 6. Conditional common rules
 
 ### RCR-C01 — Generated artifacts remain derived
@@ -457,6 +462,29 @@ Do not let externalization, lazy hydration, projection, compatibility adaptation
 When operations can overlap, be superseded, or complete after their target or lifecycle state has advanced, an operation must not apply a late mutation merely because it started earlier, completed successfully, failed, or still observes the same value. Before an effect can overwrite, roll back, restore, repopulate, retarget, or otherwise reverse or replace shared or authoritative state, the operation must still satisfy the owning contract's current operation/target authority for that effect.
 
 Projects retain ownership of the proof mechanism and revocation semantics. Depending on the system, valid mechanisms may include serialization, an operation token/generation, epoch or revision checks, compare-and-swap/preconditions, stable captured target identity, or another owner-defined currentness guard. This rule does not require a token system when operations cannot race or when late effects are explicitly safe under the owning contract, such as properly defined idempotent, commutative, or append-only effects. Temporal recency alone does not manufacture semantic authority.
+
+### RCR-C12 — Security-sensitive repository tests stay authorized, defensive, and fixture-first
+
+**Class:** `CONDITIONAL`
+
+When repository tests or validation exercise security-sensitive behavior such as request interception, unsafe-target rejection, method blocking, auth/session isolation, redirect policy, sandboxing, input validation, or exploit-regression rejection, identify the current repository/project owner and state the defensive contract before constructing or running the test.
+
+Prefer deterministic repository-owned localhost, mock, or synthetic fixtures and the smallest inert input that proves the guard. Bound effects to finite requests/actions and avoid broad enumeration, stealth, uncontrolled concurrency, or arbitrary offensive payload execution. Credentials, cookies, tokens, private session material, private payloads, and raw sensitive logs stay out of Git, prompts, fixtures, and issue evidence unless a separately authorized owner explicitly requires and safely handles them.
+
+A normal implementation or test packet does not implicitly authorize live third-party scanning, exploitation, credential testing, persistence, evasion, destructive actions, or bypass of access/security controls. If real external security testing, authenticated assessment, exploit reproduction against a real owned target, or production security mutation is genuinely required, stop ordinary work and activate separate explicit authority that records permission, target ownership, effect limits, and proof requirements.
+
+Repository governance cannot disable, suppress, bypass, or override platform/tool safety controls. A `security-test` label does not manufacture authorization or safety; the actual target, effect surface, credentials, and execution path remain evidence-bearing facts.
+
+When the preferred behavioral validator is unavailable or blocked, compose with `RCR-D19` and prefer the highest practical authorized rung that can prove the required claim:
+
+```text
+repository-owned local behavioral fixture
+→ evidence-equivalent mock / stub / injected transport
+→ static contract / schema / reason-code / effect-guard wiring proof
+→ source/diff review as supporting evidence only
+```
+
+This ladder is not permission to skip owner-mandated evidence or lower mandatory acceptance. Static or source proof cannot impersonate runtime/behavioral proof when the owner requires behavior. If no rung satisfies a mandatory criterion, preserve `BLOCKED`, `UNKNOWN`, or `PARTIAL`. A lower-risk rung that repeatedly proves the complete required contract may become canonical only through the separately reviewed `RCR-D19` promotion path.
 
 ## 7. Deliberately project-only rules
 

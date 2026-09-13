@@ -5,11 +5,14 @@ MODE=check
 VERSION="${RDC_TERMUX_VERSION:-0.2.50}"
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 HOME="${HOME:-/data/data/com.termux/files/home}"
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 SERVICE_NAME="${RDC_TERMUX_SERVICE_NAME:-desktop-commander-remote-termux}"
 DEVICE_NAME="${RDC_TERMUX_DEVICE_NAME:-S-Termux}"
 INSTALL_DIR="${RDC_TERMUX_INSTALL_DIR:-$HOME/.local/share/$SERVICE_NAME}"
 SERVICE_DIR="${RDC_TERMUX_SERVICE_DIR:-$PREFIX/var/service/$SERVICE_NAME}"
 LOG_DIR="${RDC_TERMUX_LOG_DIR:-$HOME/.local/state/$SERVICE_NAME}"
+SHIM_SOURCE="$SCRIPT_DIR/device-name-shim.cjs"
+SHIM_TARGET="$INSTALL_DIR/device-name-shim.cjs"
 NPM="${RDC_TERMUX_NPM:-$PREFIX/bin/npm}"
 SV="${RDC_TERMUX_SV:-$PREFIX/bin/sv}"
 ORIGINAL_SERVICE_DIR="$PREFIX/var/service/desktop-commander-remote"
@@ -28,6 +31,10 @@ case "$MODE" in check|apply|activate) ;; *) usage ;; esac
   echo "BLOCKED service target overlaps existing S endpoint" >&2
   exit 1
 }
+case "$DEVICE_NAME" in [A-Za-z0-9]*) ;; *) echo "BLOCKED invalid device label" >&2; exit 1 ;; esac
+case "$DEVICE_NAME" in *[!A-Za-z0-9._-]*) echo "BLOCKED invalid device label" >&2; exit 1 ;; esac
+[ "${#DEVICE_NAME}" -le 64 ] || { echo "BLOCKED invalid device label" >&2; exit 1; }
+[ -f "$SHIM_SOURCE" ] || { echo "BLOCKED managed device-name shim source missing" >&2; exit 1; }
 
 package_ok() {
   [ -f "$PACKAGE_JSON" ] && [ -x "$ENTRY" ] || return 1
@@ -37,9 +44,14 @@ managed_file_ok() {
   file=$1
   [ -f "$file" ] && grep -Fq '# mcl-rdc-termux:v1' "$file"
 }
+managed_shim_ok() {
+  file=$1
+  [ -f "$file" ] && grep -Fq '// mcl-rdc-termux-device-name:v1' "$file"
+}
 
 show_state() {
   if package_ok; then echo "PRESENT package:$VERSION"; else echo "MISSING package:$VERSION"; fi
+  if managed_shim_ok "$SHIM_TARGET" && cmp -s "$SHIM_SOURCE" "$SHIM_TARGET"; then echo "PRESENT shim:$DEVICE_NAME"; elif [ -e "$SHIM_TARGET" ] && ! managed_shim_ok "$SHIM_TARGET"; then echo "BLOCKED unmanaged-shim:$DEVICE_NAME"; else echo "MISSING shim:$DEVICE_NAME"; fi
   if managed_file_ok "$SERVICE_DIR/run"; then echo "PRESENT service:$SERVICE_NAME"; elif [ -e "$SERVICE_DIR/run" ]; then echo "BLOCKED unmanaged-service:$SERVICE_NAME"; else echo "MISSING service:$SERVICE_NAME"; fi
   if managed_file_ok "$SERVICE_DIR/log/run"; then echo "PRESENT log:$SERVICE_NAME"; elif [ -e "$SERVICE_DIR/log/run" ]; then echo "BLOCKED unmanaged-log:$SERVICE_NAME"; else echo "MISSING log:$SERVICE_NAME"; fi
 }
@@ -57,6 +69,10 @@ if [ -e "$SERVICE_DIR/log/run" ] && ! managed_file_ok "$SERVICE_DIR/log/run"; th
   echo "BLOCKED existing target log is not repo-managed" >&2
   exit 1
 fi
+if [ -e "$SHIM_TARGET" ] && ! managed_shim_ok "$SHIM_TARGET"; then
+  echo "BLOCKED existing device-name shim is not repo-managed" >&2
+  exit 1
+fi
 
 if package_ok; then
   echo "PRESENT package:$VERSION"
@@ -65,6 +81,13 @@ else
   "$NPM" install --prefix "$INSTALL_DIR" --omit=dev --ignore-scripts --no-save "@wonderwhy-er/desktop-commander@$VERSION"
   package_ok || { echo "FAILED package install" >&2; exit 1; }
   echo "INSTALLED package:$VERSION"
+fi
+if [ -f "$SHIM_TARGET" ] && cmp -s "$SHIM_SOURCE" "$SHIM_TARGET"; then
+  echo "PRESENT shim:$DEVICE_NAME"
+else
+  cp "$SHIM_SOURCE" "$SHIM_TARGET"
+  chmod 644 "$SHIM_TARGET"
+  echo "INSTALLED shim:$DEVICE_NAME"
 fi
 write_service_run() {
   out=$1
@@ -76,6 +99,7 @@ PREFIX='$PREFIX'
 HOME='$HOME'
 INSTALL='$INSTALL_DIR'
 ENTRY='$ENTRY'
+SHIM='$SHIM_TARGET'
 export PREFIX HOME PATH="\$PREFIX/bin:\$PATH"
 export DESKTOP_COMMANDER_DEVICE_NAME='$DEVICE_NAME'
 "\$PREFIX/bin/termux-wake-lock" >/dev/null 2>&1 || true
@@ -92,7 +116,7 @@ stop_child() {
 }
 trap 'stop_child; exit 0' TERM INT HUP
 cd "\$HOME"
-"\$PREFIX/bin/setsid" "\$PREFIX/bin/node" "\$ENTRY" remote 2>&1 &
+"\$PREFIX/bin/setsid" "\$PREFIX/bin/node" --require "\$SHIM" "\$ENTRY" remote 2>&1 &
 child_pid=\$!
 wait "\$child_pid"
 rc=\$?

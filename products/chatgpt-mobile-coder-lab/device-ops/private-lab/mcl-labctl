@@ -1,0 +1,124 @@
+#!/bin/sh
+set -eu
+
+SCHEMA=mcl-private-check.v1
+CHECK=substrate-smoke
+LAB_NAME=mcl-private-lab
+PREFIX=/data/data/com.termux/files/usr
+PD="$PREFIX/bin/proot-distro"
+MAX_RECEIPT_BYTES=256
+
+if [ "${MCL_LABCTL_TEST_MODE:-0}" = 1 ]; then
+  TEST_ROOT=${MCL_LABCTL_TEST_ROOT:-}
+  [ -n "$TEST_ROOT" ] || { echo "BLOCKED test fixture missing" >&2; exit 2; }
+  PD="$TEST_ROOT/proot-distro"
+fi
+
+usage() {
+  echo "BLOCKED unsupported command" >&2
+  exit 2
+}
+
+[ "$#" -eq 2 ] || usage
+ACTION=$1
+[ "$2" = "$CHECK" ] || usage
+case "$ACTION" in run|receipt) ;; *) usage ;; esac
+
+emit_receipt() {
+  result=$1
+  printf '%s\n' \
+    "schema=$SCHEMA" \
+    "check=$CHECK" \
+    "result=$result" \
+    'details=withheld'
+}
+
+validate_receipt() {
+  candidate=$1
+  bytes=$(printf '%s' "$candidate" | wc -c | tr -d '[:space:]')
+  [ -n "$bytes" ] && [ "$bytes" -le "$MAX_RECEIPT_BYTES" ] || return 1
+  lines=$(printf '%s\n' "$candidate" | wc -l | tr -d '[:space:]')
+  [ "$lines" -eq 4 ] || return 1
+
+  line1=$(printf '%s\n' "$candidate" | sed -n '1p')
+  line2=$(printf '%s\n' "$candidate" | sed -n '2p')
+  line3=$(printf '%s\n' "$candidate" | sed -n '3p')
+  line4=$(printf '%s\n' "$candidate" | sed -n '4p')
+  [ "$line1" = "schema=$SCHEMA" ] || return 1
+  [ "$line2" = "check=$CHECK" ] || return 1
+  [ "$line4" = 'details=withheld' ] || return 1
+
+  RECEIPT_RESULT=${line3#result=}
+  [ "result=$RECEIPT_RESULT" = "$line3" ] || return 1
+  case "$RECEIPT_RESULT" in
+    pass|fail|blocked|manual_auth_required|unknown) ;;
+    *) return 1 ;;
+  esac
+  VALID_RECEIPT=$candidate
+  return 0
+}
+
+read_receipt() {
+  candidate=$(
+    "$PD" login --isolated "$LAB_NAME" -- /bin/sh -lc '
+# mcl-labctl:read-receipt:v1
+receipt=/opt/mcl-private-lab/receipts/substrate-smoke.receipt
+[ -f "$receipt" ] || exit 3
+bytes=$(wc -c < "$receipt") || exit 4
+[ "$bytes" -le 256 ] || exit 5
+cat "$receipt"
+' 2>/dev/null
+  ) || return 1
+  validate_receipt "$candidate"
+}
+
+run_substrate_smoke() {
+  "$PD" login --isolated "$LAB_NAME" -- /bin/sh -lc '
+# mcl-labctl:run-substrate-smoke:v1
+set -u
+receipt=/opt/mcl-private-lab/receipts/substrate-smoke.receipt
+tmp=/opt/mcl-private-lab/receipts/.substrate-smoke.receipt.tmp
+result=pass
+[ -f /etc/mcl-private-lab ] || result=fail
+for d in vendor fixtures results receipts; do
+  [ -d "/opt/mcl-private-lab/$d" ] || result=fail
+done
+for c in node npm git python3; do
+  command -v "$c" >/dev/null 2>&1 || result=fail
+done
+umask 077
+{
+  printf "%s\n" \
+    "schema=mcl-private-check.v1" \
+    "check=substrate-smoke" \
+    "result=$result" \
+    "details=withheld"
+} > "$tmp"
+mv -f "$tmp" "$receipt"
+[ "$result" = pass ]
+' >/dev/null 2>&1
+}
+
+[ -x "$PD" ] || {
+  emit_receipt blocked
+  exit 1
+}
+
+if [ "$ACTION" = run ]; then
+  if run_substrate_smoke; then run_rc=0; else run_rc=$?; fi
+  if read_receipt; then
+    printf '%s\n' "$VALID_RECEIPT"
+    [ "$RECEIPT_RESULT" = pass ] && exit 0
+    exit 1
+  fi
+  [ "$run_rc" -le 1 ] && emit_receipt unknown || emit_receipt blocked
+  exit 1
+fi
+
+if read_receipt; then
+  printf '%s\n' "$VALID_RECEIPT"
+  [ "$RECEIPT_RESULT" = pass ] && exit 0
+  exit 1
+fi
+emit_receipt unknown
+exit 1

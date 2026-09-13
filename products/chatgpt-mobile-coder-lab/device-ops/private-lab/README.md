@@ -77,3 +77,25 @@ Malformed or oversized stored content is not forwarded. Version 1 has no arbitra
 argument/environment passthrough, plugin mechanism, network/provider dependency, package installation, or
 provider/session ownership. `manual_auth_required` is reserved receipt vocabulary only; v1 does not produce
 or investigate authentication state.
+
+## Credential-free RDC rotation/restart reproduction
+
+`experiments/rdc-session-rotation/` owns the public-vendor `0.2.50` baseline reproduction for #2197.
+It does not own live provider authentication or session repair. `prepare.sh` accepts only `--check` or `--apply`,
+uses the exact package `@wonderwhy-er/desktop-commander@0.2.50`, and prepares only the dedicated lab vendor subtree.
+The apply path is a later live stage; repository implementation tests use a mocked `proot-distro` and perform no package fetch.
+
+After preparation, the only new public controller check is:
+
+```sh
+./mcl-labctl run rdc-rotation-repro
+./mcl-labctl receipt rdc-rotation-repro
+```
+
+The probe confirms the exact package version and exact audited `device.js` baseline, checks the bounded persistence/refresh
+structure, then runs a deterministic credential-free `generation-0` / `generation-1` rotation-and-restart model.
+A `pass` receipt means only that the declared **v0.2.50 failure-class reproduction assertions passed**. It does not mean
+Desktop Commander is healthy, does not prove every historical S-Termux failure had the same cause, and does not repair #2178.
+
+No live S credential/session material, token-shaped fixture, provider request, source snippet, package-manager output, path,
+command line, environment dump, or free-form diagnostic crosses the `mcl-private-check.v1` receipt boundary.

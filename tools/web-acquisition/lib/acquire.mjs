@@ -157,12 +157,9 @@ async function installNetworkGuard(context, page, options) {
   async function armReveal() {
     if (revealArmed) return;
     revealArmed = true;
-    await page.exposeBinding('__u26RecordRevealEffect', (_source, reason, url) => {
-      if (reason === 'REVEAL_DOWNLOAD_FORBIDDEN') recordEffect(reason, { url });
-    });
     await page.evaluate(() => {
       const recordDownload = (anchor) => {
-        void window.__u26RecordRevealEffect('REVEAL_DOWNLOAD_FORBIDDEN', anchor.href || null);
+        window.__u26RevealDownloadBlocked = { attempted: true, url: anchor.href || null };
       };
       const nativeAnchorClick = HTMLAnchorElement.prototype.click;
       HTMLAnchorElement.prototype.click = function guardedDownloadClick() {
@@ -195,6 +192,16 @@ async function installNetworkGuard(context, page, options) {
     page.on('dialog', dialogHandler);
   }
 
+  async function flushRevealEffects() {
+    if (!revealArmed) return;
+    const effect = await page.evaluate(() => {
+      const value = window.__u26RevealDownloadBlocked ?? null;
+      window.__u26RevealDownloadBlocked = null;
+      return value;
+    }).catch(() => null);
+    if (effect?.attempted) recordEffect('REVEAL_DOWNLOAD_FORBIDDEN', { url: effect.url });
+  }
+
   async function stop() {
     if (popupHandler) context.off('page', popupHandler);
     if (downloadHandler) page.off('download', downloadHandler);
@@ -206,6 +213,7 @@ async function installNetworkGuard(context, page, options) {
     blockedEffects: () => blockedEffects.slice(0, 20),
     firstBlockedReason: () => blockedEffects[0]?.reason ?? null,
     armReveal,
+    flushRevealEffects,
     stop,
   };
 }

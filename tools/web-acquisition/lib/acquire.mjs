@@ -154,9 +154,29 @@ async function installNetworkGuard(context, page, options) {
   let downloadHandler = null;
   let dialogHandler = null;
 
-  function armReveal() {
+  async function armReveal() {
     if (revealArmed) return;
     revealArmed = true;
+    await page.exposeBinding('__u26RecordRevealEffect', (_source, reason, url) => {
+      if (reason === 'REVEAL_DOWNLOAD_FORBIDDEN') recordEffect(reason, { url });
+    });
+    await page.evaluate(() => {
+      const recordDownload = (anchor) => {
+        void window.__u26RecordRevealEffect('REVEAL_DOWNLOAD_FORBIDDEN', anchor.href || null);
+      };
+      const nativeAnchorClick = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function guardedDownloadClick() {
+        if (this.hasAttribute('download')) { recordDownload(this); return; }
+        return nativeAnchorClick.call(this);
+      };
+      document.addEventListener('click', (event) => {
+        const target = event.target instanceof Element ? event.target.closest('a[download]') : null;
+        if (!target) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        recordDownload(target);
+      }, true);
+    });
     popupHandler = (popup) => {
       if (popup === page) return;
       recordEffect('REVEAL_POPUP_FORBIDDEN', { url: popup.url() });
@@ -314,7 +334,7 @@ export async function acquirePage(requestedUrl, options = {}) {
     }
 
     if (mode === 'boundedReveal') {
-      guard.armReveal();
+      await guard.armReveal();
       const outcome = await executeRevealPlan(page, revealPlan, guard);
       const revealFailure = applyRevealOutcome(result, outcome, guard);
       if (revealFailure) return revealFailure;

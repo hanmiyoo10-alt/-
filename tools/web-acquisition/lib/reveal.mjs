@@ -214,7 +214,7 @@ export async function executeRevealPlan(page, plan, effectGuard) {
 
     try {
       await target.locator.click({ timeout });
-      await page.waitForTimeout(Math.min(150, Math.max(1, deadline - Date.now())));
+      await page.waitForTimeout(Math.min(25, Math.max(1, deadline - Date.now())));
     } catch (error) {
       const blocked = effectGuard.firstBlockedReason();
       const reason = blocked ?? (error?.name === 'TimeoutError'

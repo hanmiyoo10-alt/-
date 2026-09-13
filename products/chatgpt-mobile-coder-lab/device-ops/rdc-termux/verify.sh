@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 VERSION="${RDC_TERMUX_VERSION:-0.2.50}"
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 HOME="${HOME:-/data/data/com.termux/files/home}"
 SERVICE_NAME="${RDC_TERMUX_SERVICE_NAME:-desktop-commander-remote-termux}"
@@ -11,7 +12,10 @@ TERMUX_PROPERTIES="${RDC_TERMUX_TERMUX_PROPERTIES:-$HOME/.termux/termux.properti
 SV="${RDC_TERMUX_SV:-$PREFIX/bin/sv}"
 PACKAGE_JSON="$INSTALL_DIR/node_modules/@wonderwhy-er/desktop-commander/package.json"
 ENTRY="$INSTALL_DIR/node_modules/@wonderwhy-er/desktop-commander/dist/index.js"
+DEVICE_JS="$INSTALL_DIR/node_modules/@wonderwhy-er/desktop-commander/dist/remote-device/device.js"
 SHIM="$INSTALL_DIR/device-name-shim.cjs"
+NODE="${RDC_TERMUX_NODE:-$PREFIX/bin/node}"
+SESSION_TRANSFORM="$SCRIPT_DIR/../rdc-common/session-persistence-transform.mjs"
 REQUIRE_RUNNING=0
 [ "$#" -le 1 ] || exit 2
 [ "$#" -eq 0 ] || { [ "$1" = "--require-running" ] || exit 2; REQUIRE_RUNNING=1; }
@@ -19,7 +23,10 @@ fail() { echo "FAILED $*" >&2; exit 1; }
 [ "$SERVICE_DIR" != "$PREFIX/var/service/desktop-commander-remote" ] || fail "service overlaps existing endpoint"
 [ -f "$PACKAGE_JSON" ] || fail "package missing"
 [ -x "$ENTRY" ] || fail "entry missing"
+[ -f "$DEVICE_JS" ] || fail "device source missing"
+[ -f "$SESSION_TRANSFORM" ] || fail "managed session transform missing"
 grep -Fq '"version": "'"$VERSION"'"' "$PACKAGE_JSON" || fail "package version"
+"$NODE" "$SESSION_TRANSFORM" --verify "$DEVICE_JS" || fail "session persistence hardening"
 [ -f "$SERVICE_DIR/run" ] || fail "service run missing"
 [ -f "$SERVICE_DIR/log/run" ] || fail "log run missing"
 [ -f "$SHIM" ] || fail "device-name shim missing"

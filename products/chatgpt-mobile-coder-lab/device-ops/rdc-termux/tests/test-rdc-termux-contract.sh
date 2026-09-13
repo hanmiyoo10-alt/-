@@ -8,6 +8,8 @@ SHIM="$HERE/device-name-shim.cjs"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 PASS=0
+REAL_NODE=$(command -v node)
+export REAL_NODE
 
 ok() {
   PASS=$((PASS + 1))
@@ -39,12 +41,39 @@ while [ "$#" -gt 0 ]; do
 done
 [ -n "$out" ] || exit 2
 pkg="$out/node_modules/@wonderwhy-er/desktop-commander"
-mkdir -p "$pkg/dist"
+mkdir -p "$pkg/dist/remote-device"
 printf '%s\n' '{' '  "name": "@wonderwhy-er/desktop-commander",' '  "version": "0.2.50"' '}' > "$pkg/package.json"
 printf '%s\n' '#!/bin/sh' 'exit 0' > "$pkg/dist/index.js"
+printf '%s\n' '// fixture vendor source' > "$pkg/dist/remote-device/device.js"
 chmod 755 "$pkg/dist/index.js"
 MOCK
   chmod 755 "$PREFIX/bin/npm"
+
+  cat > "$PREFIX/bin/node" <<'MOCK'
+#!/bin/sh
+set -eu
+echo "node $*" >> "$MOCK_LOG"
+script=${1:-}
+mode=${2:-}
+case "$script:$mode" in
+  *session-persistence-transform.mjs:--check)
+    echo 'MISSING session-persistence state:upstream sha256:fixture'
+    exit 0
+    ;;
+  *session-persistence-transform.mjs:--apply)
+    state="$HOME/.mock-session-managed"
+    if [ -e "$state" ]; then echo 'PRESENT session-persistence sha256:fixture-managed'; else : > "$state"; echo 'INSTALLED session-persistence sha256:fixture-managed'; fi
+    exit 0
+    ;;
+  *session-persistence-transform.mjs:--verify)
+    [ -e "$HOME/.mock-session-managed" ] || exit 1
+    echo 'PRESENT session-persistence state:managed sha256:fixture-managed'
+    exit 0
+    ;;
+esac
+exec "$REAL_NODE" "$@"
+MOCK
+  chmod 755 "$PREFIX/bin/node"
 
   cat > "$PREFIX/bin/sv" <<'MOCK'
 #!/bin/sh
@@ -80,8 +109,10 @@ grep -Fq "// mcl-rdc-termux-device-name:v1" "$shimfile" || fail "managed shim ma
 [ -e "$PREFIX/var/service/desktop-commander-remote-termux/down" ] || fail "new service not disabled after apply"
 [ "$(cksum "$PREFIX/var/service/desktop-commander-remote/run")" = "$original_sum" ] || fail "existing S endpoint changed"
 [ "$(grep -c '^npm$' "$MOCK_LOG")" -eq 1 ] || fail "package install count"
+grep -Fq 'session-persistence-transform.mjs --apply' "$MOCK_LOG" || fail "session transform apply not wired"
 sh "$VERIFY" > "$ROOT/verify.out"
-ok "apply creates only the sibling managed service"
+grep -Fq 'session-persistence-transform.mjs --verify' "$MOCK_LOG" || fail "session transform verify not wired"
+ok "apply creates only the sibling managed service with common session hardening"
 
 runfile="$PREFIX/var/service/desktop-commander-remote-termux/run"
 grep -Fq "DESKTOP_COMMANDER_DEVICE_NAME='S-Termux'" "$runfile" || fail "device label missing"
@@ -101,6 +132,7 @@ sh "$INSTALL" --apply > "$ROOT/apply2.out"
 [ "$(cksum "$PREFIX/var/service/desktop-commander-remote-termux/log/run")" = "$before_log" ] || fail "second apply rewrote log"
 [ "$(cksum "$HOME/.local/share/desktop-commander-remote-termux/node_modules/@wonderwhy-er/desktop-commander/package.json")" = "$before_pkg" ] || fail "second apply rewrote package"
 [ "$(cksum "$shimfile")" = "$before_shim" ] || fail "second apply rewrote device-name shim"
+[ "$(grep -c 'session-persistence-transform.mjs --apply' "$MOCK_LOG")" -eq 2 ] || fail "session transform apply count"
 ok "second apply is a managed-state no-op"
 
 sh "$INSTALL" --activate > "$ROOT/activate.out"

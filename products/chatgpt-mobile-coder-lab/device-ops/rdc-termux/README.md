@@ -12,7 +12,7 @@ This endpoint is deliberately separate from the existing `S` endpoint, which ent
 - Desktop Commander is pinned to `0.2.50`, the current verified Termux-native baseline on the main phone.
 - The generated service uses Termux Node directly and never invokes `proot-distro`.
 - A repository-managed CommonJS preload overrides `os.hostname()` only inside the sibling RDC Node process so Desktop Commander 0.2.50 registers as `S-Termux`.
-- Android/kernel hostname is not changed, vendor `node_modules` are not patched, and global `NODE_OPTIONS` is not used.
+- Android/kernel hostname is not changed and global `NODE_OPTIONS` is not used. Device identity remains a preload-only shim; the only vendor source mutation is the checksum-guarded common session-persistence transform on pinned `device.js`.
 - No RDC auth/session files are copied or transplanted.
 - No PocketRisu, `sshd`, Tailscale, Termux:Boot, branch/worktree, release, or production state is owned here.
 - `allow-external-apps` is not enabled or modified by this profile.
@@ -25,13 +25,13 @@ This endpoint is deliberately separate from the existing `S` endpoint, which ent
 ./install.sh --apply
 ./verify.sh
 ```
-`--check` is read-only. `--apply` installs only missing/changed managed package and service files and leaves the new service disabled with a runit `down` marker. `--activate` performs the same bounded apply and then explicitly starts the new sibling service.
+`--check` is read-only. `--apply` installs only missing/changed managed package and service files, applies the exact checksum-guarded common session-persistence transform, and leaves the new service disabled with a runit `down` marker. `--activate` performs the same bounded apply and then explicitly starts the new sibling service.
 
 The service's first authorization, if required by Remote Desktop Commander, is an external consent boundary. Do not clone the existing endpoint's session to bypass that flow.
 
 ## Verification
 
-`verify.sh` checks the pinned package, managed device-name shim, explicit process-local `--require` preload wiring, ownership markers, distinct service path, direct Termux Node entrypoint, absence of PRoot execution, distinct device label, and that the broader Termux external-command policy remains disabled.
+`verify.sh` checks the pinned package, exact repository-managed session-persistence transform state, managed device-name shim, explicit process-local `--require` preload wiring, ownership markers, distinct service path, direct Termux Node entrypoint, absence of PRoot execution, distinct device label, and that the broader Termux external-command policy remains disabled. It never reads persisted session contents.
 
 For live proof after merge:
 

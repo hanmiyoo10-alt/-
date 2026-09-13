@@ -18,6 +18,9 @@ SV="${RDC_TERMUX_SV:-$PREFIX/bin/sv}"
 ORIGINAL_SERVICE_DIR="$PREFIX/var/service/desktop-commander-remote"
 PACKAGE_JSON="$INSTALL_DIR/node_modules/@wonderwhy-er/desktop-commander/package.json"
 ENTRY="$INSTALL_DIR/node_modules/@wonderwhy-er/desktop-commander/dist/index.js"
+DEVICE_JS="$INSTALL_DIR/node_modules/@wonderwhy-er/desktop-commander/dist/remote-device/device.js"
+NODE="${RDC_TERMUX_NODE:-$PREFIX/bin/node}"
+SESSION_TRANSFORM="$SCRIPT_DIR/../rdc-common/session-persistence-transform.mjs"
 
 usage() {
   echo "usage: $0 [--check|--apply|--activate]" >&2
@@ -35,9 +38,10 @@ case "$DEVICE_NAME" in [A-Za-z0-9]*) ;; *) echo "BLOCKED invalid device label" >
 case "$DEVICE_NAME" in *[!A-Za-z0-9._-]*) echo "BLOCKED invalid device label" >&2; exit 1 ;; esac
 [ "${#DEVICE_NAME}" -le 64 ] || { echo "BLOCKED invalid device label" >&2; exit 1; }
 [ -f "$SHIM_SOURCE" ] || { echo "BLOCKED managed device-name shim source missing" >&2; exit 1; }
+[ -f "$SESSION_TRANSFORM" ] || { echo "BLOCKED managed session transform missing" >&2; exit 1; }
 
 package_ok() {
-  [ -f "$PACKAGE_JSON" ] && [ -x "$ENTRY" ] || return 1
+  [ -f "$PACKAGE_JSON" ] && [ -x "$ENTRY" ] && [ -f "$DEVICE_JS" ] || return 1
   grep -Fq '"version": "'"$VERSION"'"' "$PACKAGE_JSON"
 }
 managed_file_ok() {
@@ -50,7 +54,13 @@ managed_shim_ok() {
 }
 
 show_state() {
-  if package_ok; then echo "PRESENT package:$VERSION"; else echo "MISSING package:$VERSION"; fi
+  if package_ok; then
+    echo "PRESENT package:$VERSION"
+    "$NODE" "$SESSION_TRANSFORM" --check "$DEVICE_JS"
+  else
+    echo "MISSING package:$VERSION"
+    echo "MISSING session-persistence:package-unavailable"
+  fi
   if managed_shim_ok "$SHIM_TARGET" && cmp -s "$SHIM_SOURCE" "$SHIM_TARGET"; then echo "PRESENT shim:$DEVICE_NAME"; elif [ -e "$SHIM_TARGET" ] && ! managed_shim_ok "$SHIM_TARGET"; then echo "BLOCKED unmanaged-shim:$DEVICE_NAME"; else echo "MISSING shim:$DEVICE_NAME"; fi
   if managed_file_ok "$SERVICE_DIR/run"; then echo "PRESENT service:$SERVICE_NAME"; elif [ -e "$SERVICE_DIR/run" ]; then echo "BLOCKED unmanaged-service:$SERVICE_NAME"; else echo "MISSING service:$SERVICE_NAME"; fi
   if managed_file_ok "$SERVICE_DIR/log/run"; then echo "PRESENT log:$SERVICE_NAME"; elif [ -e "$SERVICE_DIR/log/run" ]; then echo "BLOCKED unmanaged-log:$SERVICE_NAME"; else echo "MISSING log:$SERVICE_NAME"; fi
@@ -82,6 +92,7 @@ else
   package_ok || { echo "FAILED package install" >&2; exit 1; }
   echo "INSTALLED package:$VERSION"
 fi
+"$NODE" "$SESSION_TRANSFORM" --apply "$DEVICE_JS"
 if [ -f "$SHIM_TARGET" ] && cmp -s "$SHIM_SOURCE" "$SHIM_TARGET"; then
   echo "PRESENT shim:$DEVICE_NAME"
 else

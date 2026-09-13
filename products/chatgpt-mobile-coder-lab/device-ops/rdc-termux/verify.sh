@@ -11,6 +11,7 @@ TERMUX_PROPERTIES="${RDC_TERMUX_TERMUX_PROPERTIES:-$HOME/.termux/termux.properti
 SV="${RDC_TERMUX_SV:-$PREFIX/bin/sv}"
 PACKAGE_JSON="$INSTALL_DIR/node_modules/@wonderwhy-er/desktop-commander/package.json"
 ENTRY="$INSTALL_DIR/node_modules/@wonderwhy-er/desktop-commander/dist/index.js"
+SHIM="$INSTALL_DIR/device-name-shim.cjs"
 REQUIRE_RUNNING=0
 [ "$#" -le 1 ] || exit 2
 [ "$#" -eq 0 ] || { [ "$1" = "--require-running" ] || exit 2; REQUIRE_RUNNING=1; }
@@ -21,8 +22,12 @@ fail() { echo "FAILED $*" >&2; exit 1; }
 grep -Fq '"version": "'"$VERSION"'"' "$PACKAGE_JSON" || fail "package version"
 [ -f "$SERVICE_DIR/run" ] || fail "service run missing"
 [ -f "$SERVICE_DIR/log/run" ] || fail "log run missing"
+[ -f "$SHIM" ] || fail "device-name shim missing"
+grep -Fq '// mcl-rdc-termux-device-name:v1' "$SHIM" || fail "device-name shim ownership marker"
 grep -Fq '# mcl-rdc-termux:v1' "$SERVICE_DIR/run" || fail "service ownership marker"
 grep -Fq "DESKTOP_COMMANDER_DEVICE_NAME='$DEVICE_NAME'" "$SERVICE_DIR/run" || fail "device label"
+grep -Fq "SHIM='$SHIM'" "$SERVICE_DIR/run" || fail "device-name shim path"
+grep -Fq -- '--require "$SHIM"' "$SERVICE_DIR/run" || fail "device-name shim preload"
 grep -Fq 'bin/node' "$SERVICE_DIR/run" || fail "Termux node missing"
 ! grep -Fq 'proot-distro' "$SERVICE_DIR/run" || fail "service enters PRoot"
 ! grep -Fq '/root/' "$SERVICE_DIR/run" || fail "service uses Ubuntu home"

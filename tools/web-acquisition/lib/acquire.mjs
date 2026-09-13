@@ -161,11 +161,6 @@ async function installNetworkGuard(context, page, options) {
       const recordDownload = (anchor) => {
         window.__u26RevealDownloadBlocked = { attempted: true, url: anchor.href || null };
       };
-      const nativeAnchorClick = HTMLAnchorElement.prototype.click;
-      HTMLAnchorElement.prototype.click = function guardedDownloadClick() {
-        if (this.hasAttribute('download')) { recordDownload(this); return; }
-        return nativeAnchorClick.call(this);
-      };
       document.addEventListener('click', (event) => {
         const target = event.target instanceof Element ? event.target.closest('a[download]') : null;
         if (!target) return;

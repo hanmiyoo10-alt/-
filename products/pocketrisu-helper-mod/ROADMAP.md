@@ -1,6 +1,6 @@
 # ROADMAP
 
-기준: 2026-08-23
+기준: 2026-09-13
 
 ## 완료 — legacy upstream PR rebuild 준비
 
@@ -37,6 +37,16 @@
 고정 순서: `A 결과 → latest develop 재검사 → B → 재검사 → C → D → E`.
 중복 구현, upstream 구조 변경, 의미 있는 충돌이 발견된 단계는 억지 포팅하지 않고 `SKIP/HOLD`로 기록한다.
 Worker pre-launch structured clone과 chunk-store CDC/hash/SQLite commit은 이 series 범위 밖이며 별도 Feature-ID 전까지 HOLD.
+
+## 진행 중 — 앱 화면 꺼짐 방지
+
+- Feature-ID: `keep-screen-awake`.
+- `hanmiyoo10-alt/PocketRisu#9` DRAFT에서 Screen Wake Lock 기반 구현 중.
+- visible 문서에서만 display wake lock을 소유하고 hidden에서는 해제한다.
+- 기존 `keepSessionAlive`, settings schema/UI, Android native wake lock은 범위 밖이다.
+- required checks와 메인폰 실제 화면 타임아웃 검증이 남아 있다.
+
+다음 순서: `PR checks → main-phone real-device timeout test → 검증 근거 기록 → merge 여부 판단`.
 
 ## P0
 

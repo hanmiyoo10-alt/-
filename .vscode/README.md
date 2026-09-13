@@ -16,6 +16,7 @@ The product-specific convenience tasks currently exposed are:
 
 - `Usage Dashboard: Full Test Suite`
 - `SimCore: CI Contract Self-Test`
+- `Termux Large Doc Editor: Unit Tests`
 
 `Repo: Plugin Control Plane Contracts` delegates to the same existing Plugin Control Plane receipt runner and manifest used by repository CI. The task does not reimplement validation logic inside VS Code.
 
@@ -31,6 +32,8 @@ The product-specific convenience tasks currently exposed are:
 
 `SimCore: CI Contract Self-Test` delegates directly to `node products/simcore/tooling/ci/self-test.mjs`, the primary SimCore CI contract self-test invoked by current `GATE_CI_SELF`. A PASS is local primary-self-test evidence only and does not replace permanent runtime regression `batch-a`, latest/install correctness or equality, syntax or architecture gates, the complete `GATE_CI_SELF` result (which also includes MCP-tooling self-test coverage), state-sync, coordination, legacy-compat, MCP tooling gates, exact candidate identity, protected `Required`, candidate/release approval or publication, `release-simcore`, live diagnostics, or `LIVE_PASS`. The task performs no materialization, repository write, release/publisher, production, credential, or device/runtime mutation. Automated agents should invoke the same owner command directly when safe; the VS Code task remains an optional human convenience entrypoint.
 
+`Termux Large Doc Editor: Unit Tests` delegates directly to `python -m unittest discover -s tests -v` from `plugins/termux/large-doc-editor`, the existing stdlib-only prototype unit-test command owned by that project README. A PASS is local prototype unit-test evidence only and does not prove Android/Termux UI behavior, shared-storage permissions, localhost server behavior beyond the tested chunk-store contract, large-fixture responsiveness, input-to-paint latency, Google Docs comparison, production readiness, release identity, deployment, protected `Required`, or real-device validation. The task installs no dependencies, grants no permissions, starts no server, and performs no release/production/device mutation. Automated agents should invoke the same owner command directly when safe; the VS Code task remains an optional human convenience entrypoint.
+
 Run any task from `Tasks: Run Task` in the Command Palette when a human editor entrypoint is useful.
 
 ## Authority boundary
@@ -42,6 +45,6 @@ Run any task from `Tasks: Run Task` in the Command Palette when a human editor e
 
 ## Scope boundary
 
-This shell contains two separately grouped product-specific tasks, `Usage Dashboard: Full Test Suite` and `SimCore: CI Contract Self-Test`, each added only after reading its owning project authority and existing owner command. It still contains no `settings.json`.
+This shell contains three separately grouped product-specific tasks, `Usage Dashboard: Full Test Suite`, `SimCore: CI Contract Self-Test`, and `Termux Large Doc Editor: Unit Tests`, each added only after reading its owning project authority and existing owner command. It still contains no `settings.json`.
 
 Additional product/plugin task groups require their owning project guidelines and exact existing command surfaces to be read first, then must be added through separately bounded work so groups such as `SimCore: ...`, `Usage Dashboard: ...`, or others remain owned by the correct project authority.

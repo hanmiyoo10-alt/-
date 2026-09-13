@@ -158,6 +158,27 @@
         "panel": "dedicated",
         "clear": true
       }
+    },
+    {
+      "label": "SimCore: CI Contract Self-Test",
+      "type": "process",
+      "command": "node",
+      "args": [
+        "products/simcore/tooling/ci/self-test.mjs"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
     }
   ]
 }

@@ -47,3 +47,33 @@ An existing unmarked target fails closed rather than being adopted or replaced.
 - Ordinary project `node_modules` stay ordinary project dependencies.
 - Sensitive private tester implementation is out of repository scope.
 - PRoot creation is a later live stage. The implementation PR only defines and tests this contract with synthetic fixtures.
+
+
+## Credential-free runner v1
+
+`mcl-labctl` is the public, repository-reviewed gateway for bounded checks inside the already-created lab.
+Version 1 deliberately supports one check only:
+
+```sh
+./mcl-labctl run substrate-smoke
+./mcl-labctl receipt substrate-smoke
+```
+
+`run` enters `mcl-private-lab` only through `proot-distro login --isolated`, runs the fixed built-in
+substrate check, and stores a fixed receipt in the lab. Child stdout/stderr is not forwarded.
+`receipt` reads the stored receipt without rerunning the check.
+
+The only outward schema is:
+
+```text
+schema=mcl-private-check.v1
+check=substrate-smoke
+result=<pass|fail|blocked|manual_auth_required|unknown>
+details=withheld
+```
+
+The controller validates exact field order, approved enums, and bounded size before forwarding a stored receipt.
+Malformed or oversized stored content is not forwarded. Version 1 has no arbitrary command, script/path,
+argument/environment passthrough, plugin mechanism, network/provider dependency, package installation, or
+provider/session ownership. `manual_auth_required` is reserved receipt vocabulary only; v1 does not produce
+or investigate authentication state.

@@ -3,13 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "test": "node --test tests/web-acquisition.test.mjs tests/web-acquisition-crawl.test.mjs"
+    "test": "node --test tests/web-acquisition.test.mjs tests/web-acquisition-crawl.test.mjs tests/web-acquisition-firecrawl.test.mjs"
   },
   "dependencies": {
     "@crawlee/basic": "3.18.1",
     "@crawlee/utils": "3.18.1",
+    "ajv": "8.20.0",
     "playwright": "1.63.0"
   }
 }

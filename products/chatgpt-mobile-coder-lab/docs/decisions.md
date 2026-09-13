@@ -175,3 +175,18 @@ ChatGPT의 모바일 plugin/MCP 지원, 요금제, Codex usage 정책 등은 이
 ### 이유
 
 제품 정책은 바뀔 수 있다. 이 저장소에는 당시 관찰과 실험 판단만 기록하고, 실제 작업 전에는 현재 공식 문서/UI를 다시 확인한다.
+## D-011 — 서버폰 direct-Termux 실행은 별도 RDC endpoint로 분리한다
+
+상태: `ACTIVE`
+
+### 결정
+
+서버폰의 기존 `S` Remote Desktop Commander endpoint는 Ubuntu PRoot 작업면으로 그대로 보존한다.
+
+실제 Termux 문맥이 필요한 작업은 별도 `S-Termux` endpoint를 사용한다. 이 endpoint는 Termux HOME과 Termux Node에서 직접 실행하고, 별도 install/service/log/state 경로를 사용한다.
+
+### 이유
+
+Android 외부 앱의 arbitrary Termux command 실행 권한을 넓히는 것보다 기존 runit/RDC 실행 owner 안에 sibling endpoint를 추가하는 편이 더 좁은 권한·효과 표면이다.
+
+기존 `S` endpoint를 교체하면 이미 검증된 `/root/...` 개발 흐름을 흔들 수 있으므로 병존 구조를 사용한다.

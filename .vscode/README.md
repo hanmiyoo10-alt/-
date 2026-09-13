@@ -15,6 +15,7 @@ The shared repository tasks are:
 The product-specific convenience tasks currently exposed are:
 
 - `Usage Dashboard: Full Test Suite`
+- `SimCore: CI Contract Self-Test`
 
 `Repo: Plugin Control Plane Contracts` delegates to the same existing Plugin Control Plane receipt runner and manifest used by repository CI. The task does not reimplement validation logic inside VS Code.
 
@@ -28,6 +29,8 @@ The product-specific convenience tasks currently exposed are:
 
 `Usage Dashboard: Full Test Suite` delegates directly to `node plugins/usage-dashboard/tests/run-all.cjs`, the existing registry-driven full-test-suite phase used by the Usage Dashboard validator. A PASS is local test-suite evidence only and does not replace materialization, reconciliation, syntax checks, test-tree cleanliness guards, release-candidate validation, exact candidate identity, protected `Required`, release/production authority, deployment, or real-device physical verification. The task performs no product, release, repository-write, or device mutation. Automated agents should invoke the same owner command directly when safe; the VS Code task remains an optional human convenience entrypoint.
 
+`SimCore: CI Contract Self-Test` delegates directly to `node products/simcore/tooling/ci/self-test.mjs`, the primary SimCore CI contract self-test invoked by current `GATE_CI_SELF`. A PASS is local primary-self-test evidence only and does not replace permanent runtime regression `batch-a`, latest/install correctness or equality, syntax or architecture gates, the complete `GATE_CI_SELF` result (which also includes MCP-tooling self-test coverage), state-sync, coordination, legacy-compat, MCP tooling gates, exact candidate identity, protected `Required`, candidate/release approval or publication, `release-simcore`, live diagnostics, or `LIVE_PASS`. The task performs no materialization, repository write, release/publisher, production, credential, or device/runtime mutation. Automated agents should invoke the same owner command directly when safe; the VS Code task remains an optional human convenience entrypoint.
+
 Run any task from `Tasks: Run Task` in the Command Palette when a human editor entrypoint is useful.
 
 ## Authority boundary
@@ -39,6 +42,6 @@ Run any task from `Tasks: Run Task` in the Command Palette when a human editor e
 
 ## Scope boundary
 
-This shell contains one separately grouped product-specific task, `Usage Dashboard: Full Test Suite`, added only after reading the Usage Dashboard project authority and existing owner runner. It still contains no `settings.json`.
+This shell contains two separately grouped product-specific tasks, `Usage Dashboard: Full Test Suite` and `SimCore: CI Contract Self-Test`, each added only after reading its owning project authority and existing owner command. It still contains no `settings.json`.
 
 Additional product/plugin task groups require their owning project guidelines and exact existing command surfaces to be read first, then must be added through separately bounded work so groups such as `SimCore: ...`, `Usage Dashboard: ...`, or others remain owned by the correct project authority.

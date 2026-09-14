@@ -98,6 +98,7 @@ class ScreenOnTests(unittest.TestCase):
         lines = screen_on.command_companion_setup(runner=runner)
         self.assertIsNone(screen_on._load_companion_token())
         self.assertIn("pairing=USER_ACTION_REQUIRED", lines)
+        self.assertTrue(any("shown automatically" in line for line in lines))
         self.assertFalse(any(c[:3] == ["cmd", "activity", "broadcast"] for c in runner.calls))
 
     def test_companion_setup_pairs_with_one_time_code_then_stores_private_token(self):

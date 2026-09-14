@@ -26,11 +26,23 @@ final class PairingStore {
         return code != null && code.matches("[0-9]{8}");
     }
 
-    static String armPairing(Context context) {
+    static boolean isReusablePairingCode(String code, long expiresAt, long now) {
+        return isValidPairingCode(code) && expiresAt >= now;
+    }
+
+    static String getOrArmPairing(Context context) {
+        SharedPreferences preferences = prefs(context);
+        String storedCode = preferences.getString(KEY_PAIR_CODE, null);
+        long expiresAt = preferences.getLong(KEY_PAIR_EXPIRES_AT, 0L);
+        long now = System.currentTimeMillis();
+        if (isReusablePairingCode(storedCode, expiresAt, now)) {
+            return storedCode;
+        }
+
         String code = String.format(Locale.US, "%08d", RNG.nextInt(100_000_000));
-        prefs(context).edit()
+        preferences.edit()
                 .putString(KEY_PAIR_CODE, code)
-                .putLong(KEY_PAIR_EXPIRES_AT, System.currentTimeMillis() + PAIR_TTL_MS)
+                .putLong(KEY_PAIR_EXPIRES_AT, now + PAIR_TTL_MS)
                 .apply();
         return code;
     }

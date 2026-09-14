@@ -161,7 +161,7 @@ def command_companion_setup(pair_code: str | None = None, runner: Runner = subpr
         return [
             "pairing=USER_ACTION_REQUIRED",
             f"package={COMPANION_PACKAGE}",
-            "next=Open 'Termux Screen On Companion' from the Android app launcher, tap 'Generate one-time pairing code', then rerun setup with --pair-code CODE.",
+            "next=Open 'Termux Screen On Companion' from the Android app launcher; the one-time pairing code is shown automatically. Then rerun setup with --pair-code CODE.",
         ]
     if not _PAIR_CODE_RE.fullmatch(pair_code):
         raise ScreenOnError("Pairing code must be exactly 8 decimal digits")
@@ -175,7 +175,7 @@ def command_companion_setup(pair_code: str | None = None, runner: Runner = subpr
         pair_code=pair_code,
     )
     if code == COMPANION_RESULT_PAIR_CODE_REJECTED:
-        raise ScreenOnError("Companion rejected the one-time pairing code; generate a new code in the app and retry")
+        raise ScreenOnError("Companion rejected the one-time pairing code; close and reopen the app to get a fresh code, then retry")
     if code != COMPANION_RESULT_PAIRED or data != "pairing=PAIRED":
         raise ScreenOnError(f"Companion did not confirm pairing: result={code} data={data!r}")
     _write_companion_token(token)

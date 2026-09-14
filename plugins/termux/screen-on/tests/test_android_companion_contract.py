@@ -11,10 +11,16 @@ ANDROID_NS = "{http://schemas.android.com/apk/res/android}"
 
 
 class AndroidCompanionContractTests(unittest.TestCase):
-    def test_pairing_window_hides_overlays_without_weakening_touch_filter(self):
+    def test_pairing_window_hides_overlays_and_auto_surfaces_code(self):
         source = PAIRING_ACTIVITY.read_text()
         self.assertIn("Build.VERSION.SDK_INT >= Build.VERSION_CODES.S", source)
         self.assertIn("getWindow().setHideOverlayWindows(true);", source)
+        self.assertIn("setContentView(root);\n        showPairingCode();", source)
+        self.assertIn("PairingStore.getOrArmPairing(this)", source)
+        self.assertNotIn("Generate one-time pairing code", source)
+
+    def test_security_sensitive_revoke_keeps_obscured_touch_filter(self):
+        source = PAIRING_ACTIVITY.read_text()
         self.assertIn("setFilterTouchesWhenObscured(true);", source)
         self.assertIn("onFilterTouchEventForSecurity", source)
         self.assertIn("Tap blocked because another window is covering this screen.", source)
@@ -33,8 +39,8 @@ class AndroidCompanionContractTests(unittest.TestCase):
 
     def test_pairing_ui_repair_has_distinguishable_install_version(self):
         build = BUILD_FILE.read_text()
-        self.assertIn("versionCode 2", build)
-        self.assertIn("versionName '0.1.1'", build)
+        self.assertIn("versionCode 3", build)
+        self.assertIn("versionName '0.1.2'", build)
 
 
 if __name__ == "__main__":

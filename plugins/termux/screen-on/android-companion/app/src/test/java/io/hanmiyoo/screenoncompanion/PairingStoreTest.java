@@ -15,6 +15,14 @@ public final class PairingStoreTest {
     }
 
     @Test
+    public void pendingPairingCodeIsReusedOnlyWhileValid() {
+        assertTrue(PairingStore.isReusablePairingCode("12345678", 200L, 200L));
+        assertTrue(PairingStore.isReusablePairingCode("12345678", 200L, 199L));
+        assertFalse(PairingStore.isReusablePairingCode("12345678", 199L, 200L));
+        assertFalse(PairingStore.isReusablePairingCode("bad", 200L, 100L));
+    }
+
+    @Test
     public void pairingCodeFormatIsExactlyEightDigits() {
         assertTrue(PairingStore.isValidPairingCode("12345678"));
         assertFalse(PairingStore.isValidPairingCode("1234567"));

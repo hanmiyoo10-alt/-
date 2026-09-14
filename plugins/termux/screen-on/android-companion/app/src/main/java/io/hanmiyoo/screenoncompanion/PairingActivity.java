@@ -34,12 +34,8 @@ public final class PairingActivity extends Activity {
 
         status = new TextView(this);
         status.setTextSize(18);
-        status.setText("Tap Generate one-time pairing code, then use that code from Termux within 2 minutes.");
+        status.setText("Preparing one-time pairing code...");
         root.addView(status);
-
-        SecureActionButton generate = new SecureActionButton("Generate one-time pairing code");
-        generate.setOnClickListener(v -> generatePairingCode());
-        root.addView(generate);
 
         Button overlay = new Button(this);
         overlay.setText("Open Display over other apps");
@@ -49,19 +45,20 @@ public final class PairingActivity extends Activity {
         SecureActionButton revoke = new SecureActionButton("Revoke Termux control");
         revoke.setOnClickListener(v -> {
             PairingStore.revoke(this);
-            status.setText("Termux control and any pending pairing code were revoked.");
+            status.setText("Termux control and any pending pairing code were revoked. Close and reopen the app to create a new code.");
         });
         root.addView(revoke);
 
         setContentView(root);
+        showPairingCode();
     }
 
-    private void generatePairingCode() {
-        status.setText("Generating pairing code...");
+    private void showPairingCode() {
         try {
-            String code = PairingStore.armPairing(this);
+            String code = PairingStore.getOrArmPairing(this);
             status.setText("Pairing code: " + code
-                    + "\nValid for 2 minutes and one pairing attempt.");
+                    + "\nValid for 2 minutes and one pairing attempt."
+                    + "\nOpening this app is the user approval step for generating the code.");
         } catch (RuntimeException error) {
             status.setText("Pairing code generation failed ("
                     + error.getClass().getSimpleName()
@@ -87,8 +84,7 @@ public final class PairingActivity extends Activity {
         public boolean onFilterTouchEventForSecurity(MotionEvent event) {
             boolean allowed = super.onFilterTouchEventForSecurity(event);
             if (!allowed) {
-                status.setText("Tap blocked because another window is covering this screen. "
-                        + "Close bubbles or overlays and try again.");
+                status.setText("Tap blocked because another window is covering this screen. Close bubbles or overlays and try again.");
             }
             return allowed;
         }

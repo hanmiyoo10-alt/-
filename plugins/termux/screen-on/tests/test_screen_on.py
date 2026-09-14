@@ -19,6 +19,7 @@ class FakeRunner:
         self.receivers = {
             (screen_on.PACKAGE, screen_on.ADD_ACTION): screen_on.RECEIVER,
             (screen_on.PACKAGE, screen_on.REMOVE_ACTION): screen_on.RECEIVER,
+            (screen_on.COMPANION_PACKAGE, screen_on.COMPANION_PAIR_ACTION): screen_on.COMPANION_RECEIVER,
             (screen_on.COMPANION_PACKAGE, screen_on.COMPANION_ON_ACTION): screen_on.COMPANION_RECEIVER,
             (screen_on.COMPANION_PACKAGE, screen_on.COMPANION_OFF_ACTION): screen_on.COMPANION_RECEIVER,
             (screen_on.COMPANION_PACKAGE, screen_on.COMPANION_STATUS_ACTION): screen_on.COMPANION_RECEIVER,
@@ -26,6 +27,7 @@ class FakeRunner:
         self.broadcasts = {
             screen_on.ADD_ACTION: (0, ""),
             screen_on.REMOVE_ACTION: (0, ""),
+            screen_on.COMPANION_PAIR_ACTION: (screen_on.COMPANION_RESULT_PAIRED, "pairing=PAIRED"),
             screen_on.COMPANION_ON_ACTION: (screen_on.COMPANION_RESULT_ON, "overlay=ON"),
             screen_on.COMPANION_OFF_ACTION: (screen_on.COMPANION_RESULT_OFF, "overlay=OFF"),
             screen_on.COMPANION_STATUS_ACTION: (screen_on.COMPANION_RESULT_STATUS_OFF, "overlay=OFF"),
@@ -91,16 +93,39 @@ class ScreenOnTests(unittest.TestCase):
         start = next(c for c in runner.calls if c[:2] == ["am", "start"])
         self.assertEqual(start[start.index("-d") + 1], f"package:{screen_on.PACKAGE}")
 
-    def test_companion_setup_opens_pairing_activity_and_stores_private_token(self):
+    def test_companion_setup_without_code_requires_user_launcher_action(self):
+        runner = FakeRunner()
+        lines = screen_on.command_companion_setup(runner=runner)
+        self.assertIsNone(screen_on._load_companion_token())
+        self.assertIn("pairing=USER_ACTION_REQUIRED", lines)
+        self.assertFalse(any(c[:3] == ["cmd", "activity", "broadcast"] for c in runner.calls))
+
+    def test_companion_setup_pairs_with_one_time_code_then_stores_private_token(self):
         runner = FakeRunner()
         with mock.patch.object(screen_on.secrets, "token_hex", return_value="b" * 64):
-            lines = screen_on.command_companion_setup(runner)
-        start = next(c for c in runner.calls if c[:2] == ["am", "start"])
-        self.assertEqual(start[start.index("-n") + 1], screen_on.COMPANION_PAIRING_ACTIVITY)
-        self.assertEqual(start[start.index("--es") + 2], "b" * 64)
+            lines = screen_on.command_companion_setup("12345678", runner)
+        call = next(c for c in runner.calls if c[:3] == ["cmd", "activity", "broadcast"])
+        self.assertEqual(call[call.index("-a") + 1], screen_on.COMPANION_PAIR_ACTION)
+        self.assertEqual(call[call.index("--es") + 1], screen_on.COMPANION_TOKEN_EXTRA)
+        self.assertEqual(call[call.index("--es") + 2], "b" * 64)
+        pair_index = call.index(screen_on.COMPANION_PAIR_CODE_EXTRA)
+        self.assertEqual(call[pair_index + 1], "12345678")
         self.assertEqual(screen_on._load_companion_token(), "b" * 64)
         self.assertEqual(screen_on.COMPANION_TOKEN_PATH.stat().st_mode & 0o777, 0o600)
-        self.assertIn("pairing=AWAITING_USER_APPROVAL", lines)
+        self.assertIn("pairing=YES", lines)
+
+    def test_companion_setup_rejection_does_not_store_token(self):
+        runner = FakeRunner()
+        runner.broadcasts[screen_on.COMPANION_PAIR_ACTION] = (screen_on.COMPANION_RESULT_PAIR_CODE_REJECTED, "pairing=REJECTED")
+        with self.assertRaises(screen_on.ScreenOnError):
+            screen_on.command_companion_setup("12345678", runner)
+        self.assertIsNone(screen_on._load_companion_token())
+
+    def test_companion_setup_rejects_invalid_pair_code_before_broadcast(self):
+        runner = FakeRunner()
+        with self.assertRaises(screen_on.ScreenOnError):
+            screen_on.command_companion_setup("1234", runner)
+        self.assertFalse(any(c[:3] == ["cmd", "activity", "broadcast"] for c in runner.calls))
 
     def test_companion_on_requires_local_pairing_token(self):
         with self.assertRaises(screen_on.ScreenOnError): screen_on.command_companion_on(FakeRunner())
@@ -149,11 +174,11 @@ class ScreenOnTests(unittest.TestCase):
         self.assertIn("overlay=ON", lines)
         self.assertIn("keep_awake_effect=UNKNOWN", lines)
 
-    def test_companion_doctor_checks_three_actions(self):
+    def test_companion_doctor_checks_all_owned_actions(self):
         self.pair_locally(); runner = FakeRunner()
         screen_on.command_companion_doctor(runner)
         queries = [c for c in runner.calls if c[:3] == ["cmd", "package", "query-receivers"]]
-        self.assertEqual({c[c.index("-a") + 1] for c in queries}, {screen_on.COMPANION_ON_ACTION, screen_on.COMPANION_OFF_ACTION, screen_on.COMPANION_STATUS_ACTION})
+        self.assertEqual({c[c.index("-a") + 1] for c in queries}, {screen_on.COMPANION_PAIR_ACTION, screen_on.COMPANION_ON_ACTION, screen_on.COMPANION_OFF_ACTION, screen_on.COMPANION_STATUS_ACTION})
 
     def test_invalid_token_file_fails_closed(self):
         screen_on.COMPANION_TOKEN_PATH.parent.mkdir(parents=True)

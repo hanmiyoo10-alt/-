@@ -14,7 +14,7 @@ The user must explicitly grant Android **Display over other apps** permission.
 
 The first receiver design incorrectly reused `com.termux.permission.RUN_COMMAND`, which is Termux's inbound command permission and did not admit this device's Termux-originated broadcast. The replacement uses a 256-bit capability token.
 
-Termux generates the token and opens an explicit exported `PairingActivity`. The activity stores the token in companion-private `SharedPreferences` only after a visible user tap on **Allow Termux control**. The exported ON/OFF/STATUS receiver rejects every request whose token is missing or does not match. A reinstall clears the companion token and therefore fails closed until pairing is repeated.
+The pairing activity is a normal launcher activity because native Termux cannot reliably start an Android activity on the tested Android 16 device. The user explicitly opens the app and taps **Generate one-time pairing code**. That 8-digit code is app-private, valid for two minutes, and consumed by the first pairing attempt whether it succeeds or fails. Termux sends the code with a fresh 256-bit capability token using the explicit `PAIR` action. The companion stores the capability token only after the code is accepted, and ON/OFF/STATUS reject every request whose capability token is missing or does not match. A reinstall clears companion pairing state and therefore fails closed until pairing is repeated.
 
 The receiver returns distinct ordered-broadcast result codes for authorization required, overlay permission required, ON, OFF, and STATUS. Physical screen-timeout behavior still requires real-device validation.
 

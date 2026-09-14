@@ -21,20 +21,24 @@ REMOVE_ACTION = "com.eonsoft.ACTION_REMOVE_VIEW"
 
 COMPANION_PACKAGE = "io.hanmiyoo.screenoncompanion"
 COMPANION_RECEIVER = f"{COMPANION_PACKAGE}/.ScreenOnReceiver"
-COMPANION_PAIRING_ACTIVITY = f"{COMPANION_PACKAGE}/.PairingActivity"
+COMPANION_PAIR_ACTION = f"{COMPANION_PACKAGE}.action.PAIR"
 COMPANION_ON_ACTION = f"{COMPANION_PACKAGE}.action.ON"
 COMPANION_OFF_ACTION = f"{COMPANION_PACKAGE}.action.OFF"
 COMPANION_STATUS_ACTION = f"{COMPANION_PACKAGE}.action.STATUS"
 COMPANION_TOKEN_EXTRA = "token"
+COMPANION_PAIR_CODE_EXTRA = "pair_code"
 COMPANION_RESULT_ON = 101
 COMPANION_RESULT_OFF = 102
 COMPANION_RESULT_STATUS_ON = 103
 COMPANION_RESULT_STATUS_OFF = 104
+COMPANION_RESULT_PAIRED = 105
 COMPANION_RESULT_PERMISSION_REQUIRED = 201
 COMPANION_RESULT_AUTH_REQUIRED = 202
+COMPANION_RESULT_PAIR_CODE_REJECTED = 203
 COMPANION_RESULT_ERROR = 500
 COMPANION_TOKEN_PATH = Path.home() / ".config" / "termux-screen-on" / "companion-token"
 _TOKEN_RE = re.compile(r"^[0-9a-f]{64}$")
+_PAIR_CODE_RE = re.compile(r"^[0-9]{8}$")
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 _BROADCAST_RESULT = re.compile(r'Broadcast completed: result=(-?\d+)(?:,\s*data="([^"]*)")?')
@@ -70,11 +74,21 @@ def preflight(action: str, runner: Runner = subprocess.run, *, package: str = PA
     require_receiver(action, runner, package=package, receiver=receiver)
 
 
-def _broadcast(action: str, runner: Runner, *, package: str, receiver: str, token: str | None = None) -> tuple[int, str]:
+def _broadcast(
+    action: str,
+    runner: Runner,
+    *,
+    package: str,
+    receiver: str,
+    token: str | None = None,
+    pair_code: str | None = None,
+) -> tuple[int, str]:
     preflight(action, runner, package=package, receiver=receiver)
     args = ["cmd", "activity", "broadcast", "--user", USER, "--include-stopped-packages", "-a", action, "-n", receiver]
     if token is not None:
         args.extend(["--es", COMPANION_TOKEN_EXTRA, token])
+    if pair_code is not None:
+        args.extend(["--es", COMPANION_PAIR_CODE_EXTRA, pair_code])
     result = _run(args, runner)
     if result.returncode != 0:
         raise ScreenOnError(f"Android rejected the broadcast transport: {_detail(result)}")
@@ -140,14 +154,37 @@ def _load_companion_token() -> str | None:
     return token
 
 
-def command_companion_setup(runner: Runner = subprocess.run) -> list[str]:
+def command_companion_setup(pair_code: str | None = None, runner: Runner = subprocess.run) -> list[str]:
     require_package(runner, COMPANION_PACKAGE)
+    require_receiver(COMPANION_PAIR_ACTION, runner, package=COMPANION_PACKAGE, receiver=COMPANION_RECEIVER)
+    if pair_code is None:
+        return [
+            "pairing=USER_ACTION_REQUIRED",
+            f"package={COMPANION_PACKAGE}",
+            "next=Open 'Termux Screen On Companion' from the Android app launcher, tap 'Generate one-time pairing code', then rerun setup with --pair-code CODE.",
+        ]
+    if not _PAIR_CODE_RE.fullmatch(pair_code):
+        raise ScreenOnError("Pairing code must be exactly 8 decimal digits")
     token = secrets.token_hex(32)
-    result = _run(["am", "start", "--user", USER, "-n", COMPANION_PAIRING_ACTIVITY, "--es", COMPANION_TOKEN_EXTRA, token], runner)
-    if result.returncode != 0:
-        raise ScreenOnError(f"Could not open companion pairing screen: {_detail(result)}")
+    code, data = _broadcast(
+        COMPANION_PAIR_ACTION,
+        runner,
+        package=COMPANION_PACKAGE,
+        receiver=COMPANION_RECEIVER,
+        token=token,
+        pair_code=pair_code,
+    )
+    if code == COMPANION_RESULT_PAIR_CODE_REJECTED:
+        raise ScreenOnError("Companion rejected the one-time pairing code; generate a new code in the app and retry")
+    if code != COMPANION_RESULT_PAIRED or data != "pairing=PAIRED":
+        raise ScreenOnError(f"Companion did not confirm pairing: result={code} data={data!r}")
     _write_companion_token(token)
-    return ["pairing_request=OPENED", f"package={COMPANION_PACKAGE}", "pairing=AWAITING_USER_APPROVAL", "next=Tap 'Allow Termux control', then grant 'Display over other apps'."]
+    return [
+        f"transport=OK activity_manager_result={code}",
+        data,
+        "pairing=YES",
+        "next=Open the companion app and grant 'Display over other apps', then run status.",
+    ]
 
 
 def _require_companion_token() -> str:
@@ -203,7 +240,7 @@ def command_companion_status(runner: Runner = subprocess.run) -> list[str]:
 
 def command_companion_doctor(runner: Runner = subprocess.run) -> list[str]:
     require_package(runner, COMPANION_PACKAGE)
-    for action in (COMPANION_ON_ACTION, COMPANION_OFF_ACTION, COMPANION_STATUS_ACTION):
+    for action in (COMPANION_PAIR_ACTION, COMPANION_ON_ACTION, COMPANION_OFF_ACTION, COMPANION_STATUS_ACTION):
         require_receiver(action, runner, package=COMPANION_PACKAGE, receiver=COMPANION_RECEIVER)
     return [f"package=OK {COMPANION_PACKAGE}", f"receiver=OK {COMPANION_RECEIVER}", *command_companion_status(runner)]
 
@@ -211,6 +248,7 @@ def command_companion_doctor(runner: Runner = subprocess.run) -> list[str]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Control the Termux screen keep-awake route.")
     parser.add_argument("--backend", choices=("eonsoft", "companion"), default="eonsoft", help="Effect backend. Default remains the real-device-verified EONSOFT route.")
+    parser.add_argument("--pair-code", help="8-digit one-time code shown by the companion app; valid only with --backend companion setup.")
     parser.add_argument("command", choices=("doctor", "setup", "on", "off", "status"))
     return parser
 
@@ -218,14 +256,21 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     eonsoft_commands = {"doctor": command_doctor, "setup": command_setup, "on": command_on, "off": command_off}
-    companion_commands = {"doctor": command_companion_doctor, "setup": command_companion_setup, "on": command_companion_on, "off": command_companion_off, "status": command_companion_status}
+    companion_commands = {"doctor": command_companion_doctor, "on": command_companion_on, "off": command_companion_off, "status": command_companion_status}
     try:
         if args.backend == "eonsoft":
+            if args.pair_code is not None:
+                raise ScreenOnError("--pair-code is valid only with --backend companion setup")
             if args.command == "status":
                 raise ScreenOnError("Reliable EONSOFT status remains unavailable; use doctor instead")
             lines = eonsoft_commands[args.command]()
         else:
-            lines = companion_commands[args.command]()
+            if args.command == "setup":
+                lines = command_companion_setup(args.pair_code)
+            else:
+                if args.pair_code is not None:
+                    raise ScreenOnError("--pair-code is valid only with --backend companion setup")
+                lines = companion_commands[args.command]()
     except ScreenOnError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

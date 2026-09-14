@@ -5,21 +5,16 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
-import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 public final class PairingActivity extends Activity {
-    private String requestedToken;
     private TextView status;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        requestedToken = getIntent() == null
-                ? null
-                : getIntent().getStringExtra(CommandProtocol.EXTRA_TOKEN);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -32,20 +27,17 @@ public final class PairingActivity extends Activity {
         root.addView(title);
 
         status = new TextView(this);
-        status.setText(PairingStore.isValidToken(requestedToken)
-                ? "Termux requested control. Tap Allow only if you started setup from Termux."
-                : "Invalid pairing request. Re-run companion setup from Termux.");
+        status.setText("Tap Generate one-time pairing code, then use that code from Termux within 2 minutes.");
         root.addView(status);
 
-        Button allow = new Button(this);
-        allow.setText("Allow Termux control");
-        allow.setEnabled(PairingStore.isValidToken(requestedToken));
-        allow.setFilterTouchesWhenObscured(true);
-        allow.setOnClickListener(v -> {
-            PairingStore.approve(this, requestedToken);
-            status.setText("Termux control paired. Next, grant Display over other apps.");
+        Button generate = new Button(this);
+        generate.setText("Generate one-time pairing code");
+        generate.setFilterTouchesWhenObscured(true);
+        generate.setOnClickListener(v -> {
+            String code = PairingStore.armPairing(this);
+            status.setText("Pairing code: " + code + "\nValid for 2 minutes and one pairing attempt.");
         });
-        root.addView(allow);
+        root.addView(generate);
 
         Button overlay = new Button(this);
         overlay.setText("Open Display over other apps");
@@ -54,9 +46,10 @@ public final class PairingActivity extends Activity {
 
         Button revoke = new Button(this);
         revoke.setText("Revoke Termux control");
+        revoke.setFilterTouchesWhenObscured(true);
         revoke.setOnClickListener(v -> {
             PairingStore.revoke(this);
-            status.setText("Termux control revoked. Re-run setup to pair again.");
+            status.setText("Termux control and any pending pairing code were revoked.");
         });
         root.addView(revoke);
 

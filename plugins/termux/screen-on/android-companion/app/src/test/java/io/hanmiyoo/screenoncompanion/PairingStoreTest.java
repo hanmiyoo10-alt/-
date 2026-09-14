@@ -13,4 +13,12 @@ public final class PairingStoreTest {
         assertFalse(PairingStore.isValidToken("A".repeat(64)));
         assertFalse(PairingStore.isValidToken(null));
     }
+
+    @Test
+    public void pairingCodeFormatIsExactlyEightDigits() {
+        assertTrue(PairingStore.isValidPairingCode("12345678"));
+        assertFalse(PairingStore.isValidPairingCode("1234567"));
+        assertFalse(PairingStore.isValidPairingCode("abcdefgh"));
+        assertFalse(PairingStore.isValidPairingCode(null));
+    }
 }

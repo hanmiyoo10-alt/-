@@ -14,6 +14,16 @@ public final class ScreenOnReceiver extends BroadcastReceiver {
         }
 
         String token = intent.getStringExtra(CommandProtocol.EXTRA_TOKEN);
+        if (CommandProtocol.ACTION_PAIR.equals(action)) {
+            String pairCode = intent.getStringExtra(CommandProtocol.EXTRA_PAIR_CODE);
+            if (!PairingStore.approveWithPairingCode(context, pairCode, token)) {
+                reply(CommandProtocol.RESULT_PAIR_CODE_REJECTED, "pairing=REJECTED");
+                return;
+            }
+            reply(CommandProtocol.RESULT_PAIRED, "pairing=PAIRED");
+            return;
+        }
+
         if (!PairingStore.isAuthorized(context, token)) {
             reply(CommandProtocol.RESULT_AUTH_REQUIRED, "pairing=REQUIRED");
             return;

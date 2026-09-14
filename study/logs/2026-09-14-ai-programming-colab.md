@@ -49,6 +49,8 @@ print(f'3과목의 평균 점수는 {avg:.2f} 점 이다.')
 
 This is evidence that the specific `f-string + :.2f` correction was successfully applied once. It is not yet treated as durable mastery; a fresh transfer problem should confirm it.
 
+Immediately after that successful cell, the learner added a self-explanation equivalent to “for decimals, use `f` and wrap the variable in `{}`.” This captures part of the structure correctly but still needs one precision correction: `f'...'` plus `{...}` performs interpolation, while `:.2f` specifically controls two-decimal floating-point display. Keep these roles separate in the next explanation and transfer check.
+
 The following string-output exercise combines several string-syntax rules at once.
 
 Observed concepts colliding in that exercise:
@@ -76,7 +78,7 @@ The successful f-string correction is added to the current working evidence, but
 
 Teach and test the boundary in this order:
 
-1. give one fresh f-string formatting problem to confirm `:.2f` transfers;
+1. give one fresh f-string formatting problem to confirm `:.2f` transfers and distinguish interpolation (`f` + `{}`) from numeric formatting (`:.2f`);
 2. apostrophe inside a double-quoted string;
 3. double quotes inside a single-quoted string;
 4. `\n` as a newline versus `\\n` as the two literal characters backslash+n;

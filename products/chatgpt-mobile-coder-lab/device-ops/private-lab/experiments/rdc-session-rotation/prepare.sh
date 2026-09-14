@@ -164,6 +164,33 @@ env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/
 ' >/dev/null 2>&1
 }
 
+classify_apply_staging() {
+  if apply_stage_state=$(inspect_stage); then :; else printf '%s\n' conflict; return 0; fi
+  case "$apply_stage_state" in
+    none|cleanup_eligible) printf '%s\n' "$apply_stage_state" ;;
+    target_conflict|stage_conflict) printf '%s\n' conflict ;;
+    *) printf '%s\n' conflict ;;
+  esac
+}
+
+emit_apply_failure() {
+  apply_class=$1
+  apply_staging=$(classify_apply_staging)
+  emit_diag blocked "$apply_class" "$apply_staging"
+  exit 1
+}
+
+emit_apply_precondition_failure() {
+  if apply_pre_state=$(inspect_stage); then :; else emit_diag unknown unknown conflict; exit 1; fi
+  case "$apply_pre_state" in
+    target_conflict) emit_diag blocked target_conflict conflict ;;
+    stage_conflict) emit_diag blocked stage_conflict conflict ;;
+    none|cleanup_eligible) emit_diag unknown unknown "$apply_pre_state" ;;
+    *) emit_diag unknown unknown conflict ;;
+  esac
+  exit 1
+}
+
 cleanup_stage() {
   "$PD" login --isolated "$LAB_NAME" -- /bin/sh -lc '
 # mcl-rdc-rotation-repro:cleanup-stage:v1
@@ -224,10 +251,10 @@ if [ "$MODE" = cleanup ]; then
 fi
 
 if [ "$MODE" = check ]; then check_state; exit $?; fi
-if state=$(check_state); then :; else echo 'BLOCKED vendor target' >&2; exit 1; fi
+if state=$(check_state); then :; else emit_apply_precondition_failure; fi
 [ "$state" = 'MISSING vendor:0.2.50' ] || { printf '%s\n' "$state"; exit 0; }
 
-"$PD" login --isolated "$LAB_NAME" -- /bin/sh -lc '
+if "$PD" login --isolated "$LAB_NAME" -- /bin/sh -lc '
 # mcl-rdc-rotation-repro:stage-probe:v1
 set -eu
 stage=/opt/mcl-private-lab/vendor/.rdc-session-rotation-stage
@@ -237,9 +264,9 @@ umask 077
 cat > "$stage/probe.mjs.tmp"
 mv -f "$stage/probe.mjs.tmp" "$stage/probe.mjs"
 printf "%s\n" "mcl-rdc-rotation-stage:v1" > "$stage/.mcl-rdc-rotation-stage-v1"
-' < "$PROBE_SOURCE" >/dev/null 2>&1
+' < "$PROBE_SOURCE" >/dev/null 2>&1; then :; else emit_apply_precondition_failure; fi
 
-"$PD" login --isolated "$LAB_NAME" -- /bin/sh -lc '
+if "$PD" login --isolated "$LAB_NAME" -- /bin/sh -lc '
 # mcl-rdc-rotation-repro:install:v1
 set -eu
 base=/opt/mcl-private-lab/vendor
@@ -262,7 +289,7 @@ printf "%s\n" "mcl-rdc-rotation-repro:v1" > "$tmp/.mcl-rdc-rotation-repro-v1"
 mv -T "$tmp" "$target"
 trap - EXIT HUP INT TERM
 rm -rf "$stage"
-' >/dev/null 2>&1
-state=$(check_state) || { echo 'BLOCKED post-install verification' >&2; exit 1; }
-[ "$state" = 'PRESENT vendor:0.2.50' ] || { echo 'BLOCKED post-install verification' >&2; exit 1; }
+' >/dev/null 2>&1; then :; else emit_apply_failure install_failed; fi
+if state=$(check_state); then :; else emit_apply_failure verify_failed; fi
+[ "$state" = 'PRESENT vendor:0.2.50' ] || emit_apply_failure verify_failed
 echo 'INSTALLED vendor:0.2.50'

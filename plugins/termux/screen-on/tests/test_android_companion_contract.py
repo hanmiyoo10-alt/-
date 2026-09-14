@@ -6,6 +6,7 @@ SCREEN_ON_DIR = Path(__file__).resolve().parents[1]
 APP_DIR = SCREEN_ON_DIR / "android-companion" / "app"
 MANIFEST = APP_DIR / "src" / "main" / "AndroidManifest.xml"
 PAIRING_ACTIVITY = APP_DIR / "src" / "main" / "java" / "io" / "hanmiyoo" / "screenoncompanion" / "PairingActivity.java"
+STARTUP_DIAGNOSTICS = APP_DIR / "src" / "main" / "java" / "io" / "hanmiyoo" / "screenoncompanion" / "StartupDiagnostics.java"
 BUILD_FILE = APP_DIR / "build.gradle"
 ANDROID_NS = "{http://schemas.android.com/apk/res/android}"
 
@@ -15,9 +16,22 @@ class AndroidCompanionContractTests(unittest.TestCase):
         source = PAIRING_ACTIVITY.read_text()
         self.assertIn("Build.VERSION.SDK_INT >= Build.VERSION_CODES.S", source)
         self.assertIn("getWindow().setHideOverlayWindows(true);", source)
-        self.assertIn("setContentView(root);\n        showPairingCode();", source)
+        self.assertIn("buildBaseUi();", source)
+        self.assertIn("runStartupSequence();", source)
         self.assertIn("PairingStore.getOrArmPairing(this)", source)
         self.assertNotIn("Generate one-time pairing code", source)
+
+    def test_startup_diagnostics_fail_closed_without_logging_pairing_material(self):
+        activity = PAIRING_ACTIVITY.read_text()
+        diagnostics = STARTUP_DIAGNOSTICS.read_text()
+        self.assertIn("Startup diagnostic safe mode", activity)
+        self.assertIn("PHASE_OVERLAY_PROTECTION", activity)
+        self.assertIn("PHASE_PAIRING_CODE_VISIBLE", activity)
+        self.assertIn("STABLE_UI_DELAY_MS", activity)
+        self.assertIn("status.hasWindowFocus()", activity)
+        self.assertIn("requiresSafeMode", diagnostics)
+        self.assertNotIn("Log.", activity)
+        self.assertNotIn("pair_code", diagnostics)
 
     def test_security_sensitive_revoke_keeps_obscured_touch_filter(self):
         source = PAIRING_ACTIVITY.read_text()
@@ -34,13 +48,14 @@ class AndroidCompanionContractTests(unittest.TestCase):
 
     def test_pairing_failures_are_visible_without_logging_pairing_material(self):
         source = PAIRING_ACTIVITY.read_text()
-        self.assertIn("Pairing code generation failed", source)
+        self.assertIn("Startup failed during", source)
+        self.assertIn("No pairing action was completed", source)
         self.assertNotIn("Log.", source)
 
     def test_pairing_ui_repair_has_distinguishable_install_version(self):
         build = BUILD_FILE.read_text()
-        self.assertIn("versionCode 3", build)
-        self.assertIn("versionName '0.1.2'", build)
+        self.assertIn("versionCode 4", build)
+        self.assertIn("versionName '0.1.3'", build)
 
 
 if __name__ == "__main__":

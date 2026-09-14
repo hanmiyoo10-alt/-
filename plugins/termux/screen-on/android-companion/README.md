@@ -18,6 +18,8 @@ The pairing activity is a normal launcher activity because native Termux cannot 
 
 The receiver returns distinct ordered-broadcast result codes for authorization required, overlay permission required, ON, OFF, and STATUS. Physical screen-timeout behavior still requires real-device validation.
 
+During the current real-device pairing investigation, launcher startup records only a sanitized phase marker in app-private preferences. The base UI is shown before overlay protection or pairing-code generation. If a prior launch stops before the UI remains stable, the next launch enters diagnostic safe mode and displays only the previous phase name; it does not expose pairing codes/tokens or proceed with pairing.
+
 ## Build
 
 The repository workflow `screen-on-android-companion.yml` runs unit tests and builds a debug APK. Source merge or a debug artifact is not production deployment; Termux production/release authority remains UNKNOWN.

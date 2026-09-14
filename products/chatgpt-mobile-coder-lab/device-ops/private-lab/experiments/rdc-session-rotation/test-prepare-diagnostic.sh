@@ -24,6 +24,18 @@ printf '%s\n' "$*" >> "$LOG"
 script=${7:-}
 case "$script" in
   *mcl-rdc-rotation-repro:check:v1*)
+    if [ "$MODE" = check_exec_exact ] || [ "$MODE" = check_exec_wrong ]; then
+      target="$LABROOT/opt/mcl-private-lab/vendor/rdc-session-rotation"
+      pkgroot="$target/node_modules/@wonderwhy-er/desktop-commander"
+      mkdir -p "$pkgroot"
+      printf '%s\n' 'mock fixed probe' > "$target/probe.mjs"
+      printf '%s\n' 'mcl-rdc-rotation-repro:v1' > "$target/.mcl-rdc-rotation-repro-v1"
+      if [ "$MODE" = check_exec_exact ]; then version=0.2.50; else version=0.2.49; fi
+      printf '%s\n' "{\"version\": \"$version\"}" > "$pkgroot/package.json"
+      mapped=$(printf '%s\n' "$script" | sed "s#/opt/mcl-private-lab#$LABROOT/opt/mcl-private-lab#g")
+      /bin/sh -c "$mapped" </dev/null
+      exit $?
+    fi
     target="$LABROOT/opt/mcl-private-lab/vendor/rdc-session-rotation"
     marker="$target/.mcl-rdc-rotation-repro-v1"
     pkg="$target/node_modules/@wonderwhy-er/desktop-commander/package.json"
@@ -400,6 +412,24 @@ if out=$("$PREP" --apply </dev/null 2>"$err"); then fail "wrong identity payload
 [ "$out" = "$(expected_diag blocked package_identity_failed cleanup_eligible)" ] || fail "wrong identity payload classification mismatch"
 [ ! -s "$err" ] || fail "wrong identity payload leaked stderr"
 ok "actual install identity payload terminates and maps wrong version to package_identity_failed"
+
+reset_lab
+export MOCK_DIAG_MODE=check_exec_exact
+err="$TMP/check-exact.err"
+: > "$err"
+out=$("$PREP" --check </dev/null 2>"$err")
+[ "$out" = 'PRESENT vendor:0.2.50' ] || fail "actual check payload did not terminate and accept exact version"
+[ ! -s "$err" ] || fail "actual exact check payload leaked stderr"
+ok "actual check payload terminates and accepts exact version without stdin"
+
+reset_lab
+export MOCK_DIAG_MODE=check_exec_wrong
+err="$TMP/check-wrong.err"
+: > "$err"
+if out=$("$PREP" --check </dev/null 2>"$err"); then fail "wrong check payload exited zero"; fi
+[ "$out" = 'BLOCKED vendor:version' ] || fail "actual wrong-version check payload classification mismatch"
+[ ! -s "$err" ] || fail "actual wrong-version check payload leaked stderr"
+ok "actual check payload terminates and rejects wrong version without stdin"
 
 reset_lab
 export MOCK_DIAG_MODE=archive_success

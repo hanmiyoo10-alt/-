@@ -40,15 +40,21 @@ case "$script" in
   *mcl-rdc-rotation-repro:install:v1*)
     echo PRIVATE_CHILD_STDOUT
     echo PRIVATE_CHILD_STDERR >&2
+    record="$LABROOT/opt/mcl-private-lab/vendor/.rdc-session-rotation-stage/.mcl-rdc-rotation-classifier-v1"
+    write_record() { printf '%s\n' "$1" > "$record"; }
     case "$MODE" in
-      precondition_fail) printf '%s\n' install_precondition_failed >&3; exit 71 ;;
-      workspace_fail) printf '%s\n' workspace_failed >&3; exit 71 ;;
-      package_install_fail) printf '%s\n' package_install_failed >&3; exit 71 ;;
-      package_identity_fail) printf '%s\n' package_identity_failed >&3; exit 71 ;;
-      materialize_fail) printf '%s\n' materialize_failed >&3; exit 71 ;;
-      publish_fail) printf '%s\n' publish_failed >&3; exit 71 ;;
+      precondition_fail) write_record install_precondition_failed; exit 71 ;;
+      workspace_fail) write_record workspace_failed; exit 71 ;;
+      package_install_fail) write_record package_install_failed; exit 71 ;;
+      package_identity_fail) write_record package_identity_failed; exit 71 ;;
+      materialize_fail) write_record materialize_failed; exit 71 ;;
+      publish_fail) write_record publish_failed; exit 71 ;;
       entry_fail) exit 71 ;;
-      malformed_fd3) printf '%s\n' unexpected_child_value >&3; exit 71 ;;
+      unexpected_record) printf '%s\n' unexpected_child_value > "$record"; exit 71 ;;
+      oversize_record) printf '%040d\n' 0 > "$record"; exit 71 ;;
+      multiline_record) printf '%s\n%s\n' workspace_failed publish_failed > "$record"; exit 71 ;;
+      symlink_record) ln -s "$LABROOT/opt/mcl-private-lab/vendor/.rdc-session-rotation-stage/probe.mjs" "$record"; exit 71 ;;
+      workspace_fail_fd3_noise) write_record workspace_failed; (printf '%s\n' unexpected_fd3_value >&3) 2>/dev/null || true; exit 71 ;;
       verify_fail)
         target="$LABROOT/opt/mcl-private-lab/vendor/rdc-session-rotation"
         stage="$LABROOT/opt/mcl-private-lab/vendor/.rdc-session-rotation-stage"
@@ -64,7 +70,7 @@ case "$script" in
     echo PRIVATE_CHILD_STDOUT
     echo PRIVATE_CHILD_STDERR >&2
     [ "$MODE" != lab_fail ] ;;
-  *mcl-rdc-rotation-repro:inspect-stage:v1*|*mcl-rdc-rotation-repro:cleanup-stage:v1*)
+  *mcl-rdc-rotation-repro:inspect-stage:v1*|*mcl-rdc-rotation-repro:cleanup-stage:v1*|*mcl-rdc-rotation-repro:read-install-classifier:v1*)
     mapped=$(printf '%s\n' "$script" | sed "s#/opt/mcl-private-lab#$LABROOT/opt/mcl-private-lab#g")
     sh -c "$mapped" ;;
   *mcl-rdc-rotation-repro:npm-probe:v1*)
@@ -99,6 +105,8 @@ stage_path() { printf '%s' "$LABROOT/opt/mcl-private-lab/vendor/.rdc-session-rot
 target_path() { printf '%s' "$LABROOT/opt/mcl-private-lab/vendor/rdc-session-rotation"; }
 legacy_stage() { s=$(stage_path); mkdir -p "$s"; cp "$PROBE" "$s/probe.mjs"; }
 marked_stage() { legacy_stage; printf '%s\n' 'mcl-rdc-rotation-stage:v1' > "$(stage_path)/.mcl-rdc-rotation-stage-v1"; }
+classifier_path() { printf '%s' "$(stage_path)/.mcl-rdc-rotation-classifier-v1"; }
+write_classifier() { printf '%s\n' "$1" > "$(classifier_path)"; }
 expected_diag() {
   printf '%s\n' \
     'schema=mcl-private-prepare-diagnostic.v1' \
@@ -220,6 +228,14 @@ out=$("$PREP" --cleanup)
 ok "cleanup removes exact future marked stage"
 
 reset_lab
+marked_stage
+write_classifier package_install_failed
+out=$("$PREP" --cleanup)
+[ "$out" = "$(expected_diag pass ready none)" ] || fail "classified cleanup receipt mismatch"
+[ ! -e "$(stage_path)" ] || fail "classified stage not removed"
+ok "cleanup accepts only exact allowlisted classifier record shape"
+
+reset_lab
 legacy_stage
 printf x > "$(stage_path)/extra"
 if out=$("$PREP" --cleanup); then fail "conflicting cleanup exited zero"; fi
@@ -268,16 +284,37 @@ grep -Fq PRIVATE_CHILD "$err" && fail "install entry child stderr leaked"
 ok "empty install entry failure emits only sanitized install_entry_failed and preserves staging"
 
 reset_lab
-export MOCK_DIAG_MODE=malformed_fd3
-err="$TMP/malformed-fd3.err"
+marked_stage
+write_classifier workspace_failed
+out=$("$PREP" --diagnose)
+[ "$out" = "$(expected_diag pass ready cleanup_eligible)" ] || fail "classified stage not cleanup eligible"
+ok "exact allowlisted classifier record remains packet-owned cleanup state"
+
+for mode in unexpected_record oversize_record multiline_record symlink_record; do
+  reset_lab
+  export MOCK_DIAG_MODE=$mode
+  err="$TMP/$mode.err"
+  : > "$err"
+  if out=$("$PREP" --apply 2>"$err"); then fail "$mode exited zero"; fi
+  [ "$out" = "$(expected_diag blocked install_failed conflict)" ] || fail "$mode fail-closed classification mismatch"
+  [ -e "$(stage_path)/probe.mjs" ] || fail "$mode auto-cleaned staging"
+  [ ! -e "$(target_path)" ] || fail "$mode created target"
+  printf '%s\n' "$out" | grep -Fq PRIVATE_CHILD && fail "$mode child stdout leaked"
+  grep -Fq PRIVATE_CHILD "$err" && fail "$mode child stderr leaked"
+  ok "$mode cannot escape fixed classifier vocabulary"
+done
+
+reset_lab
+export MOCK_DIAG_MODE=workspace_fail_fd3_noise
+fd3="$TMP/fd3-noise.capture"
+: > "$fd3"
+err="$TMP/fd3-noise.err"
 : > "$err"
-if out=$("$PREP" --apply 2>"$err"); then fail "malformed fd3 failure exited zero"; fi
-[ "$out" = "$(expected_diag blocked install_failed cleanup_eligible)" ] || fail "malformed fd3 fallback mismatch"
-[ -e "$(stage_path)/probe.mjs" ] || fail "malformed fd3 auto-cleaned staging"
-[ ! -e "$(target_path)" ] || fail "malformed fd3 created target"
-printf '%s\n' "$out" | grep -Fq PRIVATE_CHILD && fail "malformed fd3 child stdout leaked"
-grep -Fq PRIVATE_CHILD "$err" && fail "malformed fd3 child stderr leaked"
-ok "unexpected fd3 payload remains fail-closed as install_failed"
+if out=$("$PREP" --apply 3>"$fd3" 2>"$err"); then fail "fd3-noise fixture exited zero"; fi
+[ "$out" = "$(expected_diag blocked workspace_failed cleanup_eligible)" ] || fail "fd3 noise changed classifier semantics"
+[ ! -s "$fd3" ] || fail "install command inherited caller fd3"
+[ ! -s "$err" ] || fail "fd3-noise fixture leaked stderr"
+ok "classifier record is authoritative and install fd3 is explicitly closed"
 
 for spec in \
   precondition_fail:install_precondition_failed \
@@ -321,6 +358,9 @@ if "$PREP" --arbitrary >/dev/null 2>&1; then fail "unsupported mode accepted"; f
 grep -Fq "PACKAGE='@wonderwhy-er/desktop-commander'" "$PREP" || fail "fixed package constant missing"
 grep -Fq "VERSION='0.2.50'" "$PREP" || fail "fixed version constant missing"
 grep -Fq 'mcl-rdc-rotation-stage:v1' "$PREP" || fail "future stage ownership marker missing"
+grep -Fq '.mcl-rdc-rotation-classifier-v1' "$PREP" || fail "fixed classifier record missing"
+! grep -Fq '3>&1' "$PREP" || fail "fd3 classifier transport still present"
+grep -Fq '3>&-' "$PREP" || fail "install fd3 is not explicitly closed"
 grep -Fq '/usr/bin/npm ping --silent >/dev/null 2>&1' "$PREP" || fail "network probe not output-suppressed"
 grep -Fq '/usr/bin/npm view "@wonderwhy-er/desktop-commander@0.2.50" version --silent >/dev/null 2>&1' "$PREP" || fail "package probe not output-suppressed"
 sh -n "$PREP"

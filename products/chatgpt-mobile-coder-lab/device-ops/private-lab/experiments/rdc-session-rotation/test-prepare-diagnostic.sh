@@ -57,6 +57,36 @@ case "$script" in
       multiline_record) printf '%s\n%s\n' workspace_failed publish_failed > "$record"; exit 71 ;;
       symlink_record) ln -s "$LABROOT/opt/mcl-private-lab/vendor/.rdc-session-rotation-stage/probe.mjs" "$record"; exit 71 ;;
       workspace_fail_fd3_noise) write_record workspace_failed; (printf '%s\n' unexpected_fd3_value >&3) 2>/dev/null || true; exit 71 ;;
+      identity_exec_exact|identity_exec_wrong)
+        fixture="$LABROOT/identity-fixture"
+        pkgroot="$fixture/node_modules/@wonderwhy-er/desktop-commander"
+        mkdir -p "$pkgroot"
+        if [ "$MODE" = identity_exec_exact ]; then version=0.2.50; else version=0.2.49; fi
+        printf '%s\n' "{\"version\": \"$version\"}" > "$pkgroot/package.json"
+        identity_script="$fixture/identity.sh"
+        {
+          printf '%s\n' '#!/bin/sh' 'set -eu'
+          printf '%s\n' 'pkg_root=${IDENTITY_PKG_ROOT:?}' 'record=${IDENTITY_RECORD:?}'
+          printf '%s\n' 'milestone() {' '  [ "$1" = package_identity_failed ] || exit 90' '  printf "%s\\n" "$1" > "$record"' '  exit 71' '}'
+          printf '%s\n' "$script" | sed -n '/^pkg=\$pkg_root\/package.json$/ {p;n;p;q;}'
+        } > "$identity_script"
+        [ "$(grep -c '^pkg=\$pkg_root/package.json$\|package_identity_failed$' "$identity_script")" -eq 2 ] || exit 91
+        export IDENTITY_PKG_ROOT="$pkgroot" IDENTITY_RECORD="$record"
+        if /bin/sh "$identity_script" </dev/null; then
+          [ "$MODE" = identity_exec_exact ] || exit 92
+          target="$LABROOT/opt/mcl-private-lab/vendor/rdc-session-rotation"
+          stage="$LABROOT/opt/mcl-private-lab/vendor/.rdc-session-rotation-stage"
+          target_pkg="$target/node_modules/@wonderwhy-er/desktop-commander"
+          mkdir -p "$target_pkg/dist/remote-device"
+          cp "$stage/probe.mjs" "$target/probe.mjs"
+          cp "$pkgroot/package.json" "$target_pkg/package.json"
+          printf '%s\n' 'mock exact package source' > "$target_pkg/dist/remote-device/device.js"
+          printf '%s\n' 'mcl-rdc-rotation-repro:v1' > "$target/.mcl-rdc-rotation-repro-v1"
+          rm -rf "$stage"
+          exit 0
+        else
+          exit $?
+        fi ;;
       archive_success)
         target="$LABROOT/opt/mcl-private-lab/vendor/rdc-session-rotation"
         stage="$LABROOT/opt/mcl-private-lab/vendor/.rdc-session-rotation-stage"
@@ -352,6 +382,24 @@ for spec in \
   grep -Fq PRIVATE_CHILD "$err" && fail "$class child stderr leaked"
   ok "$class is independently sanitized and preserves staging"
 done
+
+reset_lab
+export MOCK_DIAG_MODE=identity_exec_exact
+err="$TMP/identity-exact.err"
+: > "$err"
+out=$("$PREP" --apply </dev/null 2>"$err")
+[ "$out" = 'INSTALLED vendor:0.2.50' ] || fail "exact identity payload did not terminate and install"
+[ ! -s "$err" ] || fail "exact identity payload leaked stderr"
+ok "actual install identity payload terminates and accepts exact version without stdin"
+
+reset_lab
+export MOCK_DIAG_MODE=identity_exec_wrong
+err="$TMP/identity-wrong.err"
+: > "$err"
+if out=$("$PREP" --apply </dev/null 2>"$err"); then fail "wrong identity payload exited zero"; fi
+[ "$out" = "$(expected_diag blocked package_identity_failed cleanup_eligible)" ] || fail "wrong identity payload classification mismatch"
+[ ! -s "$err" ] || fail "wrong identity payload leaked stderr"
+ok "actual install identity payload terminates and maps wrong version to package_identity_failed"
 
 reset_lab
 export MOCK_DIAG_MODE=archive_success

@@ -1,0 +1,46 @@
+name: ChatGPT Rust Toolchain Bridge
+
+on:
+  push:
+    branches:
+      - chatgpt/rust-toolchain-bridge-20260915
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fetch and verify Rust stable components
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p rust-dist
+          cd rust-dist
+
+          base='https://static.rust-lang.org/dist'
+          files=(
+            'rust-1.98.1-x86_64-unknown-linux-gnu.tar.xz'
+            'rust-std-1.98.1-aarch64-linux-android.tar.xz'
+          )
+
+          for f in "${files[@]}"; do
+            curl --fail --location --retry 5 --retry-all-errors --proto '=https' --tlsv1.2 \
+              -o "$f" "$base/$f"
+            curl --fail --location --retry 5 --retry-all-errors --proto '=https' --tlsv1.2 \
+              -o "$f.sha256" "$base/$f.sha256"
+            expected="$(awk '{print $1}' "$f.sha256")"
+            actual="$(sha256sum "$f" | awk '{print $1}')"
+            test "$actual" = "$expected"
+            printf '%s  %s\n' "$actual" "$f" >> VERIFIED_SHA256SUMS
+          done
+
+      - name: Upload verified Rust distribution
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: rust-1.98.1-linux-x86_64-plus-android-aarch64
+          path: rust-dist/
+          if-no-files-found: error
+          retention-days: 1

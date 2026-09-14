@@ -51,18 +51,50 @@ jobs:
             sdkmanager --version | head -n 1 | sed 's/^/sdkmanager=/'
           } > "$GITHUB_WORKSPACE/ANDROID_TOOLCHAIN_MANIFEST.txt"
 
-          tar -I 'zstd -T0 -6' -cf "$GITHUB_WORKSPACE/android-sdk-api36-ndk-r30-linux-x86_64.tar.zst" \
+          bundle="$GITHUB_WORKSPACE/android-sdk-api36-ndk-r30-linux-x86_64.tar.zst"
+          tar -I 'zstd -T0 -6' -cf "$bundle" \
             -C "$sdk" cmdline-tools platform-tools platforms build-tools ndk licenses
-          sha256sum "$GITHUB_WORKSPACE/android-sdk-api36-ndk-r30-linux-x86_64.tar.zst" \
-            > "$GITHUB_WORKSPACE/android-sdk-api36-ndk-r30-linux-x86_64.tar.zst.sha256"
+          sha256sum "$bundle" > "$bundle.sha256"
+          split -b 350M -d -a 2 "$bundle" "$GITHUB_WORKSPACE/android-sdk.part-"
+          test -f "$GITHUB_WORKSPACE/android-sdk.part-00"
+          test -f "$GITHUB_WORKSPACE/android-sdk.part-01"
+          test -f "$GITHUB_WORKSPACE/android-sdk.part-02"
+          rm -f "$bundle"
 
-      - name: Upload Android toolchain bundle
+      - name: Upload Android toolchain part 00
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: android-sdk-api36-ndk-r30-linux-x86_64
+          name: android-sdk-part-00
+          path: android-sdk.part-00
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload Android toolchain part 01
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: android-sdk-part-01
+          path: android-sdk.part-01
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload Android toolchain part 02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: android-sdk-part-02
+          path: android-sdk.part-02
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload Android toolchain metadata
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: android-sdk-metadata
           path: |
-            android-sdk-api36-ndk-r30-linux-x86_64.tar.zst
             android-sdk-api36-ndk-r30-linux-x86_64.tar.zst.sha256
             ANDROID_TOOLCHAIN_MANIFEST.txt
           if-no-files-found: error
+          compression-level: 0
           retention-days: 1

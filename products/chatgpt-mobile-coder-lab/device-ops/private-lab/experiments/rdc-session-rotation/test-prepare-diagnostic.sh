@@ -46,6 +46,8 @@ case "$script" in
       precondition_fail) write_record install_precondition_failed; exit 71 ;;
       workspace_fail) write_record workspace_failed; exit 71 ;;
       package_install_fail) write_record package_install_failed; exit 71 ;;
+      package_archive_fail) write_record package_archive_failed; exit 71 ;;
+      package_extract_fail) write_record package_extract_failed; exit 71 ;;
       package_identity_fail) write_record package_identity_failed; exit 71 ;;
       materialize_fail) write_record materialize_failed; exit 71 ;;
       publish_fail) write_record publish_failed; exit 71 ;;
@@ -55,6 +57,17 @@ case "$script" in
       multiline_record) printf '%s\n%s\n' workspace_failed publish_failed > "$record"; exit 71 ;;
       symlink_record) ln -s "$LABROOT/opt/mcl-private-lab/vendor/.rdc-session-rotation-stage/probe.mjs" "$record"; exit 71 ;;
       workspace_fail_fd3_noise) write_record workspace_failed; (printf '%s\n' unexpected_fd3_value >&3) 2>/dev/null || true; exit 71 ;;
+      archive_success)
+        target="$LABROOT/opt/mcl-private-lab/vendor/rdc-session-rotation"
+        stage="$LABROOT/opt/mcl-private-lab/vendor/.rdc-session-rotation-stage"
+        pkgroot="$target/node_modules/@wonderwhy-er/desktop-commander"
+        mkdir -p "$pkgroot/dist/remote-device"
+        cp "$stage/probe.mjs" "$target/probe.mjs"
+        printf '%s\n' 'mcl-rdc-rotation-repro:v1' > "$target/.mcl-rdc-rotation-repro-v1"
+        printf '%s\n' '{"name":"@wonderwhy-er/desktop-commander","version": "0.2.50"}' > "$pkgroot/package.json"
+        printf '%s\n' 'mock exact package source' > "$pkgroot/dist/remote-device/device.js"
+        rm -rf "$stage"
+        exit 0 ;;
       verify_fail)
         target="$LABROOT/opt/mcl-private-lab/vendor/rdc-session-rotation"
         stage="$LABROOT/opt/mcl-private-lab/vendor/.rdc-session-rotation-stage"
@@ -320,6 +333,8 @@ for spec in \
   precondition_fail:install_precondition_failed \
   workspace_fail:workspace_failed \
   package_install_fail:package_install_failed \
+  package_archive_fail:package_archive_failed \
+  package_extract_fail:package_extract_failed \
   package_identity_fail:package_identity_failed \
   materialize_fail:materialize_failed \
   publish_fail:publish_failed; do
@@ -337,6 +352,26 @@ for spec in \
   grep -Fq PRIVATE_CHILD "$err" && fail "$class child stderr leaked"
   ok "$class is independently sanitized and preserves staging"
 done
+
+reset_lab
+export MOCK_DIAG_MODE=archive_success
+err="$TMP/archive-success.err"
+: > "$err"
+out=$("$PREP" --apply 2>"$err")
+[ "$out" = 'INSTALLED vendor:0.2.50' ] || fail "package-only apply success output mismatch"
+[ ! -s "$err" ] || fail "package-only apply success leaked stderr"
+target=$(target_path)
+pkgroot="$target/node_modules/@wonderwhy-er/desktop-commander"
+[ -f "$pkgroot/package.json" ] || fail "package-only apply missing package identity"
+[ -f "$pkgroot/dist/remote-device/device.js" ] || fail "package-only apply missing audited source"
+[ -f "$target/probe.mjs" ] || fail "package-only apply missing fixed probe"
+[ -f "$target/.mcl-rdc-rotation-repro-v1" ] || fail "package-only apply missing ownership marker"
+[ ! -e "$(stage_path)" ] || fail "package-only apply left staging"
+set -- "$target/node_modules"/*
+[ "$#" -eq 1 ] && [ "$(basename "$1")" = '@wonderwhy-er' ] || fail "package-only apply materialized unrelated dependency root"
+set -- "$target/node_modules/@wonderwhy-er"/*
+[ "$#" -eq 1 ] && [ "$(basename "$1")" = 'desktop-commander' ] || fail "package-only apply materialized unrelated scoped dependency"
+ok "package-only acquisition preserves exact target shape without transitive dependencies"
 
 reset_lab
 export MOCK_DIAG_MODE=verify_fail
@@ -363,6 +398,9 @@ grep -Fq '.mcl-rdc-rotation-classifier-v1' "$PREP" || fail "fixed classifier rec
 grep -Fq '3>&-' "$PREP" || fail "install fd3 is not explicitly closed"
 grep -Fq '/usr/bin/npm ping --silent >/dev/null 2>&1' "$PREP" || fail "network probe not output-suppressed"
 grep -Fq '/usr/bin/npm view "@wonderwhy-er/desktop-commander@0.2.50" version --silent >/dev/null 2>&1' "$PREP" || fail "package probe not output-suppressed"
+grep -Fq '/usr/bin/npm pack --ignore-scripts --pack-destination "$archive_dir"' "$PREP" || fail "package-only archive acquisition missing"
+! grep -Fq '/usr/bin/npm install --prefix' "$PREP" || fail "broad transitive dependency install still present"
+grep -Fq '/usr/bin/tar --no-same-owner --no-same-permissions --strip-components=1 -xzf "$archive" -C "$pkg_root"' "$PREP" || fail "fixed archive extraction missing"
 sh -n "$PREP"
 sh -n "$0"
 ok "surface remains fixed, isolated, output-bounded, and shell-valid"

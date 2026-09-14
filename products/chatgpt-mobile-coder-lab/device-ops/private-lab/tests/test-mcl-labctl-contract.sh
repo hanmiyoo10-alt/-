@@ -216,9 +216,11 @@ out=$("$PREP" --apply)
 [ "$out" = 'INSTALLED vendor:0.2.50' ] || fail "prepare apply mismatch"
 cmp -s "$PROBE" "$PCAP" || fail "fixed probe content was not transferred exactly"
 grep -Fq '@wonderwhy-er/desktop-commander@0.2.50' "$PLOG" || fail "pinned vendor package missing"
-grep -Fq -- '--omit=dev --ignore-scripts --no-save' "$PLOG" || fail "narrow npm flags missing"
+grep -Fq '/usr/bin/npm pack --ignore-scripts --pack-destination "$archive_dir"' "$PLOG" || fail "package-only archive contract missing"
+! grep -Fq '/usr/bin/npm install --prefix' "$PLOG" || fail "broad dependency install remains in prepare contract"
+grep -Fq '/usr/bin/tar --no-same-owner --no-same-permissions --strip-components=1 -xzf "$archive" -C "$pkg_root"' "$PLOG" || fail "fixed package extraction contract missing"
 ! grep -Eq -- '--shared-home|--bind|-b[[:space:]]' "$PLOG" || fail "prepare used host sharing"
-ok "prepare apply mock proves fixed isolated probe transfer and pinned install contract"
+ok "prepare apply mock proves fixed isolated probe transfer and pinned package-only contract"
 
 if "$PREP" --apply extra >/dev/null 2>&1; then fail "prepare accepted extra args"; fi
 if "$PREP" --other >/dev/null 2>&1; then fail "prepare accepted unsupported mode"; fi

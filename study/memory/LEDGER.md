@@ -100,3 +100,20 @@ Related memory IDs: NONE
 Follow-up trigger: 실제 Colab 코드 실습에서 어떤 오류/혼동이 반복되는지 확인하거나, 사용자가 언급한 오후 4:57 Colab 자료가 식별될 때 갱신한다.
 Resolution / later evidence: 초기 진입 상태. 추가 실습 근거 필요.
 ```
+
+### E-2026-09-14-002 — 오후 4:57 Colab 노트북 식별
+
+```text
+Entry ID: E-2026-09-14-002
+Date: 2026-09-14
+Subject / scope: AI 프로그래밍입문 / Colab source locator
+Status: OBSERVED
+Observation: Google Drive의 `코랩` 폴더에서 `Untitled1.ipynb`가 2026-09-14 16:57 KST에 마지막 수정된 것으로 확인되어 사용자가 지정한 `오후 4:57` 자료와 일치했다.
+Context: 2주차 폴더가 비어 있어 실제 실습 자료의 위치를 다시 추적한 과정.
+Result: `Untitled1.ipynb`에는 변수, 사칙연산, `input()`, `int()`, 문자열 출력, 몫/나머지, 누적 대입 등 초반 수업 범위를 직접 시행착오로 연습한 기록이 존재한다.
+Interpretation: 현재 AI 프로그래밍 실습 증거를 볼 때는 1주차 PDF뿐 아니라 `코랩/Untitled1.ipynb`를 우선 확인해야 한다. 개별 실수는 아직 durable 약점으로 일반화하지 않는다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-14-001
+Follow-up trigger: 노트북의 시행착오에서 같은 오류 구조가 여러 번 반복되는지 분류하고, 다른 문제에서도 재현되는지 확인한다.
+Resolution / later evidence: `오후 4:57` 자료 식별 문제는 해소됨.
+```

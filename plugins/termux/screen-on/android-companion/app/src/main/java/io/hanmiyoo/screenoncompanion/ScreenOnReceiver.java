@@ -13,6 +13,12 @@ public final class ScreenOnReceiver extends BroadcastReceiver {
             return;
         }
 
+        String token = intent.getStringExtra(CommandProtocol.EXTRA_TOKEN);
+        if (!PairingStore.isAuthorized(context, token)) {
+            reply(CommandProtocol.RESULT_AUTH_REQUIRED, "pairing=REQUIRED");
+            return;
+        }
+
         try {
             if (CommandProtocol.ACTION_ON.equals(action)) {
                 if (!OverlayController.hasPermission(context)) {

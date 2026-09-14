@@ -6,10 +6,12 @@
         android:allowBackup="false"
         android:label="Termux Screen On Companion"
         android:supportsRtl="true">
+        <activity
+            android:name=".PairingActivity"
+            android:exported="true" />
         <receiver
             android:name=".ScreenOnReceiver"
-            android:exported="true"
-            android:permission="com.termux.permission.RUN_COMMAND">
+            android:exported="true">
             <intent-filter>
                 <action android:name="io.hanmiyoo.screenoncompanion.action.ON" />
                 <action android:name="io.hanmiyoo.screenoncompanion.action.OFF" />

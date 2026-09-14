@@ -13,5 +13,6 @@ public class CommandProtocolTest {
         assertTrue(CommandProtocol.isKnownAction(CommandProtocol.ACTION_STATUS));
         assertFalse(CommandProtocol.isKnownAction("com.eonsoft.ACTION_ADD_VIEW"));
         assertFalse(CommandProtocol.isKnownAction(null));
+        assertTrue(CommandProtocol.RESULT_AUTH_REQUIRED != CommandProtocol.RESULT_PERMISSION_REQUIRED);
     }
 }

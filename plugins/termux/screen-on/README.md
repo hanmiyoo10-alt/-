@@ -8,19 +8,17 @@ This directory owns the Termux-controlled Android display keep-awake experiment.
 
 ### `eonsoft` (default, verified fallback)
 
-`com.eonsoft.ACTION_ADD_VIEW` / `ACTION_REMOVE_VIEW` target `com.eonsoft.ScreenON/.ViewReceiver`. Issue #2194 verified physical keep-awake behavior on the main phone after the user granted **Display over other apps**.
-
-Broadcast completion alone is not proof of effect for this backend, so overlay permission and resulting keep-awake state stay `UNKNOWN` in the wrapper.
+`com.eonsoft.ACTION_ADD_VIEW` / `ACTION_REMOVE_VIEW` target `com.eonsoft.ScreenON/.ViewReceiver`. Issue #2194 verified physical keep-awake behavior on the main phone after the user granted **Display over other apps**. Broadcast completion alone is not proof of effect, so the wrapper keeps that effect state `UNKNOWN`.
 
 ### `companion` (repo-owned candidate)
 
-`plugins/termux/screen-on/android-companion/` is a minimal Android app owned by this repository. It creates a 1 x 1 `TYPE_APPLICATION_OVERLAY` window carrying `FLAG_KEEP_SCREEN_ON`, `FLAG_NOT_FOCUSABLE`, and `FLAG_NOT_TOUCHABLE`.
+`android-companion/` owns a 1 x 1 `TYPE_APPLICATION_OVERLAY` carrying `FLAG_KEEP_SCREEN_ON`, `FLAG_NOT_FOCUSABLE`, and `FLAG_NOT_TOUCHABLE`. It does not request INTERNET, use `FLAG_TURN_SCREEN_ON`, mutate Android's global timeout, require root/self-ADB, or bypass the lock screen.
 
-It deliberately does not request INTERNET, use `FLAG_TURN_SCREEN_ON`, mutate Android's global timeout, require root/self-ADB, or bypass the lock screen. The exported command receiver is protected by `com.termux.permission.RUN_COMMAND`; real-device validation must prove this gate before the backend can replace EONSOFT.
+The companion uses explicit user-approved capability pairing instead of reusing Termux's inbound `RUN_COMMAND` permission. `setup` generates a 256-bit token in Termux private storage and opens the companion pairing activity. The companion stores that token only after the user taps **Allow Termux control**. ON/OFF/STATUS reject missing or mismatched tokens.
 
 ## Commands
 
-The existing verified route remains unchanged by default:
+The verified EONSOFT route remains unchanged by default:
 
 ```bash
 python plugins/termux/screen-on/screen_on.py doctor
@@ -29,7 +27,7 @@ python plugins/termux/screen-on/screen_on.py on
 python plugins/termux/screen-on/screen_on.py off
 ```
 
-The repo-owned candidate is always explicit during parity testing:
+The repo-owned candidate remains explicit during parity testing:
 
 ```bash
 python plugins/termux/screen-on/screen_on.py --backend companion doctor
@@ -39,9 +37,9 @@ python plugins/termux/screen-on/screen_on.py --backend companion status
 python plugins/termux/screen-on/screen_on.py --backend companion off
 ```
 
-`setup` opens the package-specific Android overlay-permission page. The user must grant **Display over other apps** manually.
+For companion setup, tap **Allow Termux control** and then **Open Display over other apps** to grant the Android overlay permission. The local token is stored at `~/.config/termux-screen-on/companion-token` with mode 0600. Reinstalling or clearing the companion invalidates pairing until setup is repeated.
 
-For the companion backend, ON/OFF/STATUS use distinct ordered-broadcast result codes. An attached overlay is stronger evidence than transport success, but `keep_awake_effect` remains `UNKNOWN` until the main phone passes the same physical timeout observation used for #2194.
+ON/OFF/STATUS use distinct ordered-broadcast result codes. An attached overlay is stronger evidence than transport success, but `keep_awake_effect` remains `UNKNOWN` until the main phone passes the same physical timeout observation used for #2194.
 
 ## Tests
 
@@ -49,16 +47,11 @@ For the companion backend, ON/OFF/STATUS use distinct ordered-broadcast result c
 python -m unittest discover -s plugins/termux/screen-on/tests -p 'test_*.py'
 ```
 
-The companion build is validated by `.github/workflows/screen-on-android-companion.yml`, which runs the Python regression suite, Android unit tests, and a debug APK build.
+The companion workflow runs Python regression tests, Android unit tests, and a debug APK build.
 
 ## Dependency-removal boundary
 
-Do **not** uninstall EONSOFT Screen ON merely because the companion source builds. The third-party app remains the verified fallback until #2202 records:
-
-1. Termux can invoke the permission-protected companion receiver;
-2. overlay permission failure is surfaced correctly;
-3. the companion overlay stays attached and keeps the physical display awake past the normal timeout;
-4. OFF removes the overlay and restores normal timeout behavior.
+Do **not** uninstall EONSOFT Screen ON until #2202 records all of the following: companion pairing/auth works on the real device; overlay permission denial is surfaced correctly; ON keeps the physical display awake past timeout; and OFF restores normal timeout behavior.
 
 ## Release boundary
 

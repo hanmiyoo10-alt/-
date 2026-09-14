@@ -5,6 +5,7 @@ HERE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 INSTALL="$HERE/install.sh"
 VERIFY="$HERE/verify.sh"
 SHIM="$HERE/device-name-shim.cjs"
+WHICH_SHIM="$HERE/which-rg-shim.sh"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 PASS=0
@@ -46,12 +47,22 @@ chmod 755 "$pkg/dist/index.js"
 MOCK
   chmod 755 "$PREFIX/bin/npm"
 
+  printf "%s\n" "#!/bin/sh" "exit 0" > "$PREFIX/bin/rg"
+  chmod 755 "$PREFIX/bin/rg"
+
   cat > "$PREFIX/bin/sv" <<'MOCK'
 #!/bin/sh
 echo "run: $2: (pid 123) 1s"
 MOCK
   chmod 755 "$PREFIX/bin/sv"
 }
+make_fixture whichshim
+resolved=$(PATH="$PREFIX/bin" "$WHICH_SHIM" rg)
+[ "$resolved" = "$PREFIX/bin/rg" ] || fail "ripgrep discovery shim path"
+if PATH="$PREFIX/bin" "$WHICH_SHIM" git >/dev/null 2>&1; then fail "ripgrep discovery shim accepted another command"; fi
+if PATH="$PREFIX/bin" "$WHICH_SHIM" rg extra >/dev/null 2>&1; then fail "ripgrep discovery shim accepted extra arguments"; fi
+ok "ripgrep discovery shim resolves only rg through PATH"
+
 DESKTOP_COMMANDER_DEVICE_NAME=S-Termux node --require "$SHIM" --input-type=module -e "import os from 'node:os'; if (os.hostname() !== 'S-Termux') process.exit(1)"
 if DESKTOP_COMMANDER_DEVICE_NAME= node --require "$SHIM" -e "process.exit(0)" >/dev/null 2>&1; then fail "empty device label accepted"; fi
 ok "device-name shim reaches ESM hostname and fails closed"
@@ -75,7 +86,10 @@ echo ORIGINAL > "$PREFIX/var/service/desktop-commander-remote/run"
 original_sum=$(cksum "$PREFIX/var/service/desktop-commander-remote/run")
 sh "$INSTALL" --apply > "$ROOT/apply.out"
 shimfile="$HOME/.local/share/desktop-commander-remote-termux/device-name-shim.cjs"
+whichfile="$HOME/.local/share/desktop-commander-remote-termux/tool-shims/which"
 [ -f "$shimfile" ] || fail "managed device-name shim missing"
+[ -x "$whichfile" ] || fail "managed ripgrep discovery shim missing"
+grep -Fq "# mcl-rdc-termux-which-rg:v1" "$whichfile" || fail "managed ripgrep discovery shim marker missing"
 grep -Fq "// mcl-rdc-termux-device-name:v1" "$shimfile" || fail "managed shim marker missing"
 [ -e "$PREFIX/var/service/desktop-commander-remote-termux/down" ] || fail "new service not disabled after apply"
 [ "$(cksum "$PREFIX/var/service/desktop-commander-remote/run")" = "$original_sum" ] || fail "existing S endpoint changed"
@@ -90,17 +104,21 @@ grep -Fq -- '--require "$SHIM"' "$runfile" || fail "managed shim preload missing
 grep -Fq 'bin/node' "$runfile" || fail "Termux node path missing"
 ! grep -Fq 'proot-distro' "$runfile" || fail "PRoot invocation present"
 ! grep -Fq '/root/' "$runfile" || fail "Ubuntu home present"
+grep -Fq "export PREFIX HOME PATH=\"\$TOOL_SHIM_DIR:\$PREFIX/bin:\$PATH\"" "$runfile" || fail "process-local ripgrep discovery PATH missing"
+! grep -Fq "/system/bin" "$runfile" || fail "generated service widened PATH to Android system bin"
 ok "generated service is Termux-native and distinct"
 before_run=$(cksum "$runfile")
 before_log=$(cksum "$PREFIX/var/service/desktop-commander-remote-termux/log/run")
 before_pkg=$(cksum "$HOME/.local/share/desktop-commander-remote-termux/node_modules/@wonderwhy-er/desktop-commander/package.json")
 before_shim=$(cksum "$shimfile")
+before_which=$(cksum "$whichfile")
 sh "$INSTALL" --apply > "$ROOT/apply2.out"
 [ "$(grep -c '^npm$' "$MOCK_LOG")" -eq 1 ] || fail "second apply reinstalled package"
 [ "$(cksum "$runfile")" = "$before_run" ] || fail "second apply rewrote run"
 [ "$(cksum "$PREFIX/var/service/desktop-commander-remote-termux/log/run")" = "$before_log" ] || fail "second apply rewrote log"
 [ "$(cksum "$HOME/.local/share/desktop-commander-remote-termux/node_modules/@wonderwhy-er/desktop-commander/package.json")" = "$before_pkg" ] || fail "second apply rewrote package"
 [ "$(cksum "$shimfile")" = "$before_shim" ] || fail "second apply rewrote device-name shim"
+[ "$(cksum "$whichfile")" = "$before_which" ] || fail "second apply rewrote ripgrep discovery shim"
 ok "second apply is a managed-state no-op"
 
 sh "$INSTALL" --activate > "$ROOT/activate.out"
@@ -122,6 +140,13 @@ if sh "$INSTALL" --apply > "$ROOT/shimblocked.out" 2>&1; then fail "unmanaged sh
 [ ! -s "$MOCK_LOG" ] || fail "unmanaged shim mutated package state"
 ok "unmanaged device-name shim fails closed before mutation"
 
+make_fixture whichblocked
+mkdir -p "$HOME/.local/share/desktop-commander-remote-termux/tool-shims"
+echo UNMANAGED > "$HOME/.local/share/desktop-commander-remote-termux/tool-shims/which"
+if sh "$INSTALL" --apply > "$ROOT/whichblocked.out" 2>&1; then fail "unmanaged ripgrep discovery shim accepted"; fi
+[ ! -s "$MOCK_LOG" ] || fail "unmanaged ripgrep discovery shim mutated package state"
+ok "unmanaged ripgrep discovery shim fails closed before mutation"
+
 make_fixture policy
 sh "$INSTALL" --apply > "$ROOT/policy-apply.out"
 POLICY=$(printf '%s%s' 'allow-external' '-apps')
@@ -135,6 +160,8 @@ ok "verify fails closed when broader command policy is enabled"
 ! grep -Fq 'NODE_OPTIONS' "$INSTALL" || fail "installer uses global Node preload surface"
 ! grep -Fq '/root/' "$INSTALL" || fail "installer contains Ubuntu home"
 ! grep -Eiq 'copy.*(auth|session)|(auth|session).*copy' "$INSTALL" || fail "installer contains auth/session copy"
+! grep -Fq "/system/bin" "$INSTALL" || fail "installer widens process PATH to Android system bin"
+! grep -Fq "/system/bin" "$WHICH_SHIM" || fail "ripgrep discovery shim depends on Android system bin"
 ok "installer excludes security, PRoot, and auth/session widening"
 
 echo "1..$PASS"

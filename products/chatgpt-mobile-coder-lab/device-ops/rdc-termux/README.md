@@ -12,6 +12,8 @@ This endpoint is deliberately separate from the existing `S` endpoint, which ent
 - Desktop Commander is pinned to `0.2.50`, the current verified Termux-native baseline on the main phone.
 - The generated service uses Termux Node directly and never invokes `proot-distro`.
 - A repository-managed CommonJS preload overrides `os.hostname()` only inside the sibling RDC Node process so Desktop Commander 0.2.50 registers as `S-Termux`.
+- A repository-managed process-local `which` shim handles only `which rg` for Desktop Commander ripgrep discovery, resolving `rg` through the sibling Termux `PATH`.
+- The profile does not add `/system/bin` to RDC `PATH`, install a global `which` package, or patch vendor ripgrep resolver code.
 - Android/kernel hostname is not changed, vendor `node_modules` are not patched, and global `NODE_OPTIONS` is not used.
 - No RDC auth/session files are copied or transplanted.
 - No PocketRisu, `sshd`, Tailscale, Termux:Boot, branch/worktree, release, or production state is owned here.
@@ -31,7 +33,7 @@ The service's first authorization, if required by Remote Desktop Commander, is a
 
 ## Verification
 
-`verify.sh` checks the pinned package, managed device-name shim, explicit process-local `--require` preload wiring, ownership markers, distinct service path, direct Termux Node entrypoint, absence of PRoot execution, distinct device label, and that the broader Termux external-command policy remains disabled.
+`verify.sh` checks the pinned package, managed device-name shim, process-local ripgrep discovery shim, exact private-shim/Termux `PATH` wiring, explicit `--require` preload wiring, ownership markers, distinct service path, direct Termux Node entrypoint, absence of PRoot execution, distinct device label, and that the broader Termux external-command policy remains disabled.
 
 For live proof after merge:
 

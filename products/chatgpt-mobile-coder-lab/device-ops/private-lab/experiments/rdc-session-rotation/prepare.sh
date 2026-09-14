@@ -38,7 +38,7 @@ validate_diag() {
   case "$DIAG_RESULT" in pass|blocked|unknown) ;; *) return 1 ;; esac
   DIAG_CLASS=${line4#class=}
   [ "class=$DIAG_CLASS" = "$line4" ] || return 1
-  case "$DIAG_CLASS" in ready|lab_unavailable|stage_conflict|target_conflict|npm_unavailable|network_unavailable|package_unavailable|install_failed|install_entry_failed|install_precondition_failed|workspace_failed|package_install_failed|package_identity_failed|materialize_failed|publish_failed|verify_failed|unknown) ;; *) return 1 ;; esac
+  case "$DIAG_CLASS" in ready|lab_unavailable|stage_conflict|target_conflict|npm_unavailable|network_unavailable|package_unavailable|install_failed|install_entry_failed|install_precondition_failed|workspace_failed|package_install_failed|package_archive_failed|package_extract_failed|package_identity_failed|materialize_failed|publish_failed|verify_failed|unknown) ;; *) return 1 ;; esac
   DIAG_STAGING=${line5#staging=}
   [ "staging=$DIAG_STAGING" = "$line5" ] || return 1
   case "$DIAG_STAGING" in none|cleanup_eligible|conflict) ;; *) return 1 ;; esac
@@ -122,7 +122,7 @@ valid_classifier() {
   [ "$lines" -eq 1 ] || return 1
   value=$(cat "$classifier") || return 1
   case "$value" in
-    install_precondition_failed|workspace_failed|package_install_failed|package_identity_failed|materialize_failed|publish_failed) return 0 ;;
+    install_precondition_failed|workspace_failed|package_install_failed|package_archive_failed|package_extract_failed|package_identity_failed|materialize_failed|publish_failed) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -193,7 +193,7 @@ lines=$(wc -l < "$record") || invalid
 [ "$lines" -eq 1 ] || invalid
 value=$(cat "$record") || invalid
 case "$value" in
-  install_precondition_failed|workspace_failed|package_install_failed|package_identity_failed|materialize_failed|publish_failed) printf "%s\n" "$value" ;;
+  install_precondition_failed|workspace_failed|package_install_failed|package_archive_failed|package_extract_failed|package_identity_failed|materialize_failed|publish_failed) printf "%s\n" "$value" ;;
   *) invalid ;;
 esac
 ' 2>/dev/null
@@ -242,7 +242,7 @@ valid_classifier() {
   [ "$lines" -eq 1 ] || return 1
   value=$(cat "$classifier") || return 1
   case "$value" in
-    install_precondition_failed|workspace_failed|package_install_failed|package_identity_failed|materialize_failed|publish_failed) return 0 ;;
+    install_precondition_failed|workspace_failed|package_install_failed|package_archive_failed|package_extract_failed|package_identity_failed|materialize_failed|publish_failed) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -326,7 +326,7 @@ stage=$base/.rdc-session-rotation-stage
 classifier=$stage/.mcl-rdc-rotation-classifier-v1
 milestone() {
   case "$1" in
-    install_precondition_failed|workspace_failed|package_install_failed|package_identity_failed|materialize_failed|publish_failed) ;;
+    install_precondition_failed|workspace_failed|package_install_failed|package_archive_failed|package_extract_failed|package_identity_failed|materialize_failed|publish_failed) ;;
     *) exit 1 ;;
   esac
   [ ! -e "$classifier" ] && [ ! -L "$classifier" ] || exit 1
@@ -339,11 +339,20 @@ milestone() {
 [ -f "$stage/.mcl-rdc-rotation-stage-v1" ] && grep -Fxq "mcl-rdc-rotation-stage:v1" "$stage/.mcl-rdc-rotation-stage-v1" || milestone install_precondition_failed
 tmp=$(mktemp -d "$base/.rdc-session-rotation.XXXXXX") || milestone workspace_failed
 trap "rm -rf \"$tmp\"" EXIT HUP INT TERM
+archive_dir=$tmp/.package-archive
+pkg_root=$tmp/node_modules/@wonderwhy-er/desktop-commander
+mkdir -p "$archive_dir" "$pkg_root" || milestone workspace_failed
 env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-  /usr/bin/npm install --prefix "$tmp" --omit=dev --ignore-scripts --no-save \
-  "@wonderwhy-er/desktop-commander@0.2.50" >/dev/null 2>&1 || milestone package_install_failed
-pkg=$tmp/node_modules/@wonderwhy-er/desktop-commander/package.json
-[ -f "$pkg" ] && grep -Fq '"version": "0.2.50"' "$pkg" || milestone package_identity_failed
+  /usr/bin/npm pack --ignore-scripts --pack-destination "$archive_dir" \
+  "@wonderwhy-er/desktop-commander@0.2.50" >/dev/null 2>&1 || milestone package_archive_failed
+set -- "$archive_dir"/*.tgz
+[ "$#" -eq 1 ] && [ -f "$1" ] && [ ! -L "$1" ] || milestone package_archive_failed
+archive=$1
+/usr/bin/tar --no-same-owner --no-same-permissions --strip-components=1 -xzf "$archive" -C "$pkg_root" \
+  >/dev/null 2>&1 || milestone package_extract_failed
+rm -rf "$archive_dir" || milestone materialize_failed
+pkg=$pkg_root/package.json
+[ -f "$pkg" ] && [ ! -L "$pkg" ] && grep -Fq '"version": "0.2.50"' "$pkg" || milestone package_identity_failed
 cp "$stage/probe.mjs" "$tmp/probe.mjs" || milestone materialize_failed
 chmod 0644 "$tmp/probe.mjs" || milestone materialize_failed
 printf "%s\n" "mcl-rdc-rotation-repro:v1" > "$tmp/.mcl-rdc-rotation-repro-v1" || milestone materialize_failed
@@ -354,7 +363,7 @@ rm -rf "$stage"
 ' 3>&- >/dev/null 2>&1; then :; else
   if install_class=$(read_install_classifier); then :; else install_class=invalid; fi
   case "$install_class" in
-    install_precondition_failed|workspace_failed|package_install_failed|package_identity_failed|materialize_failed|publish_failed) emit_apply_failure "$install_class" ;;
+    install_precondition_failed|workspace_failed|package_install_failed|package_archive_failed|package_extract_failed|package_identity_failed|materialize_failed|publish_failed) emit_apply_failure "$install_class" ;;
     absent) emit_apply_failure install_entry_failed ;;
     invalid) emit_apply_failure install_failed ;;
     *) emit_apply_failure install_failed ;;

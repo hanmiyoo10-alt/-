@@ -9,7 +9,7 @@ fail() {
   exit 1
 }
 
-for cmd in cmp cp grep mkdir mktemp rm sha256sum tar; do
+for cmd in awk cmp cp grep mkdir mktemp rm sha256sum tar; do
   command -v "$cmd" >/dev/null 2>&1 || fail "missing-$cmd"
 done
 

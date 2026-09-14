@@ -41,6 +41,11 @@ case "$script" in
     echo PRIVATE_CHILD_STDOUT
     echo PRIVATE_CHILD_STDERR >&2
     case "$MODE" in
+      workspace_fail) printf '%s\n' workspace_failed >&3; exit 71 ;;
+      package_install_fail) printf '%s\n' package_install_failed >&3; exit 71 ;;
+      package_identity_fail) printf '%s\n' package_identity_failed >&3; exit 71 ;;
+      materialize_fail) printf '%s\n' materialize_failed >&3; exit 71 ;;
+      publish_fail) printf '%s\n' publish_failed >&3; exit 71 ;;
       install_fail) exit 71 ;;
       verify_fail)
         target="$LABROOT/opt/mcl-private-lab/vendor/rdc-session-rotation"
@@ -259,6 +264,27 @@ if out=$("$PREP" --apply 2>"$err"); then fail "install failure exited zero"; fi
 printf '%s\n' "$out" | grep -Fq PRIVATE_CHILD && fail "install child stdout leaked"
 grep -Fq PRIVATE_CHILD "$err" && fail "install child stderr leaked"
 ok "install/materialization failure emits only sanitized install_failed and preserves staging"
+
+for spec in \
+  workspace_fail:workspace_failed \
+  package_install_fail:package_install_failed \
+  package_identity_fail:package_identity_failed \
+  materialize_fail:materialize_failed \
+  publish_fail:publish_failed; do
+  mode=${spec%%:*}
+  class=${spec#*:}
+  reset_lab
+  export MOCK_DIAG_MODE=$mode
+  err="$TMP/$mode.err"
+  : > "$err"
+  if out=$("$PREP" --apply 2>"$err"); then fail "$class exited zero"; fi
+  [ "$out" = "$(expected_diag blocked "$class" cleanup_eligible)" ] || fail "$class classification mismatch"
+  [ -e "$(stage_path)/probe.mjs" ] || fail "$class auto-cleaned staging"
+  [ ! -e "$(target_path)" ] || fail "$class created target"
+  printf '%s\n' "$out" | grep -Fq PRIVATE_CHILD && fail "$class child stdout leaked"
+  grep -Fq PRIVATE_CHILD "$err" && fail "$class child stderr leaked"
+  ok "$class is independently sanitized and preserves staging"
+done
 
 reset_lab
 export MOCK_DIAG_MODE=verify_fail

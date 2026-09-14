@@ -1,0 +1,50 @@
+name: ChatGPT uv Python 3.12 Bridge
+
+on:
+  push:
+    branches:
+      - chatgpt/uv-python-bridge-20260915
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Install matching uv and managed Python 3.12
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --no-input 'uv==0.10.0'
+          export UV_PYTHON_INSTALL_DIR="$GITHUB_WORKSPACE/uv-python"
+          mkdir -p "$UV_PYTHON_INSTALL_DIR"
+          uv --version
+          uv python install 3.12
+          uv python list --only-installed
+          py="$(uv python find 3.12)"
+          "$py" --version
+          "$py" - <<'PY'
+          import ssl, sqlite3, ctypes, bz2, lzma, sys
+          print(sys.executable)
+          print(ssl.OPENSSL_VERSION)
+          print(sqlite3.sqlite_version)
+          PY
+          printf 'uv=%s\n' "$(uv --version)" > UV_PYTHON_312_MANIFEST.txt
+          printf 'python=%s\n' "$("$py" --version 2>&1)" >> UV_PYTHON_312_MANIFEST.txt
+          printf 'source_path=%s\n' "$py" >> UV_PYTHON_312_MANIFEST.txt
+          tar -I 'zstd -T0 -6' -cf uv-python-3.12-linux-x86_64.tar.zst -C "$UV_PYTHON_INSTALL_DIR" .
+          sha256sum uv-python-3.12-linux-x86_64.tar.zst > uv-python-3.12-linux-x86_64.tar.zst.sha256
+
+      - name: Upload uv-managed Python bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: uv-python-3.12-linux-x86_64
+          path: |
+            uv-python-3.12-linux-x86_64.tar.zst
+            uv-python-3.12-linux-x86_64.tar.zst.sha256
+            UV_PYTHON_312_MANIFEST.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1

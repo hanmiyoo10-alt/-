@@ -90,7 +90,7 @@ probe=$target/probe.mjs
 if [ ! -e "$target" ]; then echo "MISSING vendor:0.2.50"; exit 0; fi
 [ -d "$target" ] || { echo "BLOCKED vendor:unmanaged"; exit 1; }
 [ -f "$marker" ] && grep -Fxq "mcl-rdc-rotation-repro:v1" "$marker" || { echo "BLOCKED vendor:unmanaged"; exit 1; }
-[ -f "$pkg" ] && grep -Fq '"version": "0.2.50"' "$pkg" || { echo "BLOCKED vendor:version"; exit 1; }
+[ -f "$pkg" ] && grep -Fq "\"version\": \"0.2.50\"" "$pkg" || { echo "BLOCKED vendor:version"; exit 1; }
 [ -f "$probe" ] || { echo "BLOCKED vendor:probe"; exit 1; }
 echo "PRESENT vendor:0.2.50"
 ' 2>/dev/null

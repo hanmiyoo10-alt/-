@@ -117,3 +117,20 @@ Related memory IDs: E-2026-09-14-001
 Follow-up trigger: 노트북의 시행착오에서 같은 오류 구조가 여러 번 반복되는지 분류하고, 다른 문제에서도 재현되는지 확인한다.
 Resolution / later evidence: `오후 4:57` 자료 식별 문제는 해소됨.
 ```
+
+### E-2026-09-14-003 — 현재 경계: 문자열 리터럴과 이스케이프 조합
+
+```text
+Entry ID: E-2026-09-14-003
+Date: 2026-09-14
+Subject / scope: AI 프로그래밍입문 / 현재 숙련 경계
+Status: OBSERVED
+Observation: 사용자는 `Untitled1.ipynb`의 마지막 문자열 출력 문제 이전 범위는 이제 대체로 수월하게 풀 수 있다고 직접 확인했다. 마지막 문제에서는 `print('It's really hot!', ...)`처럼 작은따옴표 문자열 내부의 apostrophe가 먼저 문자열 경계를 깨뜨렸고, 같은 문제 안에 `\n`, `\t`, 경로의 역슬래시, 내부 따옴표가 동시에 등장했다.
+Context: 노트북 마지막 시행착오를 역추적하며 현재 막힌 지점을 분리하는 과정.
+Result: 계산/변수/input/int/기본 연산 자체보다 `STRING_LITERAL_BOUNDARY`와 `ESCAPE_SEQUENCE`가 결합되는 순간이 현재 첫 명확한 병목으로 보인다.
+Interpretation: 이스케이프 문자 전반을 약점으로 일반화하지 않는다. 먼저 따옴표 경계와 문자열 내부/외부를 안정적으로 구분한 뒤 `\n`, `\t`, `\\`를 각각 분리 연습하고 새 예제로 전이를 확인한다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-14-002
+Follow-up trigger: 따옴표만 있는 문제, `\n`만 있는 문제, `\\`만 있는 문제를 각각 풀고 조합 문제에서도 안정적으로 해결되는지 확인한다.
+Resolution / later evidence: 현재 병목 후보로 유지. 반복 증거 전에는 durable 약점으로 승격하지 않음.
+```

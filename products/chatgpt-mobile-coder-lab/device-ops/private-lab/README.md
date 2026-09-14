@@ -81,8 +81,8 @@ or investigate authentication state.
 ## Credential-free RDC rotation/restart reproduction
 
 `experiments/rdc-session-rotation/` owns the public-vendor `0.2.50` baseline reproduction for #2197.
-It does not own live provider authentication or session repair. `prepare.sh` accepts only `--check` or `--apply`,
-uses the exact package `@wonderwhy-er/desktop-commander@0.2.50`, and prepares only the dedicated lab vendor subtree.
+It does not own live provider authentication or session repair. `prepare.sh` accepts only the fixed `--check`, `--apply`,
+`--diagnose`, or `--cleanup` modes, uses the exact package `@wonderwhy-er/desktop-commander@0.2.50`, and prepares only the dedicated lab vendor subtree.
 The apply path is a later live stage; repository implementation tests use a mocked `proot-distro` and perform no package fetch.
 
 After preparation, the only new public controller check is:
@@ -126,6 +126,11 @@ details=withheld
 A `pass/ready` diagnostic means only that the bounded preparation prerequisites are reachable. It does not install
 anything, does not run `rdc-rotation-repro`, and does not prove or repair #2178. Ambiguous failures remain `unknown`.
 Raw npm output, paths, environment data, provider/session material, and free-form diagnostics never cross this boundary.
+
+The same strict schema also classifies bounded `--apply` failures without exposing child output. `install_failed` means the
+fixed isolated install/materialization block returned nonzero before post-install verification; it does **not** prove npm
+itself was the failing sub-step. `verify_failed` means that block returned success but the subsequent fixed exact-target
+check failed or mismatched. Failed apply never auto-cleans staging; `--cleanup` remains the explicit reviewed cleanup action.
 
 `--cleanup` is a fixed single-target action. It is idempotent when staging is absent and refuses to remove anything
 unless the final experiment target is absent and staging is proven packet-owned immediately before deletion. Legacy

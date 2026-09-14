@@ -23,6 +23,36 @@ printf '%s\n' "$*" >> "$LOG"
 [ "$1" = login ] && [ "$2" = --isolated ] && [ "$3" = mcl-private-lab ] && [ "$4" = -- ] || exit 60
 script=${7:-}
 case "$script" in
+  *mcl-rdc-rotation-repro:check:v1*)
+    target="$LABROOT/opt/mcl-private-lab/vendor/rdc-session-rotation"
+    marker="$target/.mcl-rdc-rotation-repro-v1"
+    pkg="$target/node_modules/@wonderwhy-er/desktop-commander/package.json"
+    probe="$target/probe.mjs"
+    if [ ! -e "$target" ]; then echo "MISSING vendor:0.2.50"; exit 0; fi
+    [ -d "$target" ] || { echo "BLOCKED vendor:unmanaged"; exit 1; }
+    [ -f "$marker" ] && grep -Fxq "mcl-rdc-rotation-repro:v1" "$marker" || { echo "BLOCKED vendor:unmanaged"; exit 1; }
+    [ -f "$pkg" ] && grep -Fq '"version": "0.2.50"' "$pkg" || { echo "BLOCKED vendor:version"; exit 1; }
+    [ -f "$probe" ] || { echo "BLOCKED vendor:probe"; exit 1; }
+    echo "PRESENT vendor:0.2.50" ;;
+  *mcl-rdc-rotation-repro:stage-probe:v1*)
+    mapped=$(printf '%s\n' "$script" | sed "s#/opt/mcl-private-lab#$LABROOT/opt/mcl-private-lab#g")
+    sh -c "$mapped" ;;
+  *mcl-rdc-rotation-repro:install:v1*)
+    echo PRIVATE_CHILD_STDOUT
+    echo PRIVATE_CHILD_STDERR >&2
+    case "$MODE" in
+      install_fail) exit 71 ;;
+      verify_fail)
+        target="$LABROOT/opt/mcl-private-lab/vendor/rdc-session-rotation"
+        stage="$LABROOT/opt/mcl-private-lab/vendor/.rdc-session-rotation-stage"
+        mkdir -p "$target/node_modules/@wonderwhy-er/desktop-commander"
+        cp "$stage/probe.mjs" "$target/probe.mjs"
+        printf '%s\n' 'mcl-rdc-rotation-repro:v1' > "$target/.mcl-rdc-rotation-repro-v1"
+        printf '%s\n' '{"version": "0.2.49"}' > "$target/node_modules/@wonderwhy-er/desktop-commander/package.json"
+        rm -rf "$stage"
+        exit 0 ;;
+      *) exit 61 ;;
+    esac ;;
   *mcl-rdc-rotation-repro:lab-probe:v1*)
     echo PRIVATE_CHILD_STDOUT
     echo PRIVATE_CHILD_STDERR >&2
@@ -194,6 +224,53 @@ reset_lab
 out=$("$PREP" --cleanup)
 [ "$out" = "$(expected_diag pass ready none)" ] || fail "absent cleanup receipt mismatch"
 ok "cleanup is idempotent when staging is absent"
+
+reset_lab
+marked_stage
+err="$TMP/apply-precondition.err"
+: > "$err"
+if out=$("$PREP" --apply 2>"$err"); then fail "pre-existing stage apply exited zero"; fi
+[ "$out" = "$(expected_diag unknown unknown cleanup_eligible)" ] || fail "precondition failure classification mismatch"
+[ -e "$(stage_path)/probe.mjs" ] || fail "precondition failure auto-cleaned staging"
+! grep -Fq 'mcl-rdc-rotation-repro:install:v1' "$LOG" || fail "precondition failure attempted install"
+[ ! -s "$err" ] || fail "precondition failure leaked stderr"
+ok "apply precondition failure preserves exact staging without inventing install failure"
+
+reset_lab
+legacy_stage
+printf x > "$(stage_path)/extra"
+err="$TMP/apply-conflict.err"
+: > "$err"
+if out=$("$PREP" --apply 2>"$err"); then fail "conflicting stage apply exited zero"; fi
+[ "$out" = "$(expected_diag blocked stage_conflict conflict)" ] || fail "apply stage-conflict classification mismatch"
+[ -e "$(stage_path)/extra" ] || fail "apply stage conflict mutated staging"
+! grep -Fq 'mcl-rdc-rotation-repro:install:v1' "$LOG" || fail "apply stage conflict attempted install"
+[ ! -s "$err" ] || fail "apply stage conflict leaked stderr"
+ok "apply stage conflict fails closed before install"
+
+reset_lab
+export MOCK_DIAG_MODE=install_fail
+err="$TMP/install-fail.err"
+: > "$err"
+if out=$("$PREP" --apply 2>"$err"); then fail "install failure exited zero"; fi
+[ "$out" = "$(expected_diag blocked install_failed cleanup_eligible)" ] || fail "install failure classification mismatch"
+[ -e "$(stage_path)/probe.mjs" ] || fail "install failure auto-cleaned staging"
+[ ! -e "$(target_path)" ] || fail "install failure created target"
+printf '%s\n' "$out" | grep -Fq PRIVATE_CHILD && fail "install child stdout leaked"
+grep -Fq PRIVATE_CHILD "$err" && fail "install child stderr leaked"
+ok "install/materialization failure emits only sanitized install_failed and preserves staging"
+
+reset_lab
+export MOCK_DIAG_MODE=verify_fail
+err="$TMP/verify-fail.err"
+: > "$err"
+if out=$("$PREP" --apply 2>"$err"); then fail "verify failure exited zero"; fi
+[ "$out" = "$(expected_diag blocked verify_failed conflict)" ] || fail "verify failure classification mismatch"
+[ -e "$(target_path)" ] || fail "verify failure unexpectedly removed target"
+[ ! -e "$(stage_path)" ] || fail "verify-failure fixture left staging"
+printf '%s\n' "$out" | grep -Fq PRIVATE_CHILD && fail "verify child stdout leaked"
+grep -Fq PRIVATE_CHILD "$err" && fail "verify child stderr leaked"
+ok "post-install mismatch emits only sanitized verify_failed"
 
 if "$PREP" --diagnose extra >/dev/null 2>&1; then fail "diagnose accepted extra args"; fi
 if "$PREP" --cleanup extra >/dev/null 2>&1; then fail "cleanup accepted extra args"; fi

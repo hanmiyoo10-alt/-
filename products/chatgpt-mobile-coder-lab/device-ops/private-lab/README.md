@@ -99,3 +99,40 @@ Desktop Commander is healthy, does not prove every historical S-Termux failure h
 
 No live S credential/session material, token-shaped fixture, provider request, source snippet, package-manager output, path,
 command line, environment dump, or free-form diagnostic crosses the `mcl-private-check.v1` receipt boundary.
+
+
+## Sanitized RDC prepare diagnostics and safe staging cleanup
+
+The #2201 prerequisite keeps diagnosis separate from the #2197 reproduction. `prepare.sh` now has two additional fixed modes:
+
+```sh
+./experiments/rdc-session-rotation/prepare.sh --diagnose
+./experiments/rdc-session-rotation/prepare.sh --cleanup
+```
+
+`--diagnose` never installs the RDC package. It checks only the dedicated isolated lab, the fixed npm toolchain,
+a fixed registry reachability probe, the exact `@wonderwhy-er/desktop-commander@0.2.50` package lookup, and the fixed
+staging/target state. Child stdout/stderr remains suppressed. Its only outward form is the strict six-field schema:
+
+```text
+schema=mcl-private-prepare-diagnostic.v1
+check=rdc-rotation-prepare
+result=<pass|blocked|unknown>
+class=<ready|lab_unavailable|stage_conflict|target_conflict|npm_unavailable|network_unavailable|package_unavailable|install_failed|verify_failed|unknown>
+staging=<none|cleanup_eligible|conflict>
+details=withheld
+```
+
+A `pass/ready` diagnostic means only that the bounded preparation prerequisites are reachable. It does not install
+anything, does not run `rdc-rotation-repro`, and does not prove or repair #2178. Ambiguous failures remain `unknown`.
+Raw npm output, paths, environment data, provider/session material, and free-form diagnostics never cross this boundary.
+
+`--cleanup` is a fixed single-target action. It is idempotent when staging is absent and refuses to remove anything
+unless the final experiment target is absent and staging is proven packet-owned immediately before deletion. Legacy
+staging is eligible only when it contains exactly the repository-owned `probe.mjs` bytes and nothing else. Future
+staging adds `.mcl-rdc-rotation-stage-v1` with exact marker `mcl-rdc-rotation-stage:v1`; extra entries, symlinks,
+wrong probe bytes, or an existing final target all fail closed. Cleanup never removes the completed vendor target,
+the broader vendor directory, npm cache, existing M Ubuntu content, or arbitrary paths.
+
+These modes are repository-reviewable control surfaces only. Their live diagnostic/cleanup use is deferred until after
+merge and postmerge convergence. A later #2197 vendor retry remains separately authorized and is not performed by #2201.

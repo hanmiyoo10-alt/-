@@ -38,7 +38,7 @@ validate_diag() {
   case "$DIAG_RESULT" in pass|blocked|unknown) ;; *) return 1 ;; esac
   DIAG_CLASS=${line4#class=}
   [ "class=$DIAG_CLASS" = "$line4" ] || return 1
-  case "$DIAG_CLASS" in ready|lab_unavailable|stage_conflict|target_conflict|npm_unavailable|network_unavailable|package_unavailable|install_failed|verify_failed|unknown) ;; *) return 1 ;; esac
+  case "$DIAG_CLASS" in ready|lab_unavailable|stage_conflict|target_conflict|npm_unavailable|network_unavailable|package_unavailable|install_failed|workspace_failed|package_install_failed|package_identity_failed|materialize_failed|publish_failed|verify_failed|unknown) ;; *) return 1 ;; esac
   DIAG_STAGING=${line5#staging=}
   [ "staging=$DIAG_STAGING" = "$line5" ] || return 1
   case "$DIAG_STAGING" in none|cleanup_eligible|conflict) ;; *) return 1 ;; esac
@@ -266,7 +266,7 @@ mv -f "$stage/probe.mjs.tmp" "$stage/probe.mjs"
 printf "%s\n" "mcl-rdc-rotation-stage:v1" > "$stage/.mcl-rdc-rotation-stage-v1"
 ' < "$PROBE_SOURCE" >/dev/null 2>&1; then :; else emit_apply_precondition_failure; fi
 
-if "$PD" login --isolated "$LAB_NAME" -- /bin/sh -lc '
+if install_class=$("$PD" login --isolated "$LAB_NAME" -- /bin/sh -lc '
 # mcl-rdc-rotation-repro:install:v1
 set -eu
 base=/opt/mcl-private-lab/vendor
@@ -275,21 +275,24 @@ stage=$base/.rdc-session-rotation-stage
 [ ! -e "$target" ] && [ ! -L "$target" ] || exit 20
 [ -f "$stage/probe.mjs" ] && [ ! -L "$stage/probe.mjs" ] || exit 21
 [ -f "$stage/.mcl-rdc-rotation-stage-v1" ] && grep -Fxq "mcl-rdc-rotation-stage:v1" "$stage/.mcl-rdc-rotation-stage-v1" || exit 21
-tmp=$(mktemp -d "$base/.rdc-session-rotation.XXXXXX")
+milestone() { printf '%s\n' "$1" >&3; exit 1; }
+tmp=$(mktemp -d "$base/.rdc-session-rotation.XXXXXX") || milestone workspace_failed
 trap "rm -rf \"$tmp\"" EXIT HUP INT TERM
 env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
   /usr/bin/npm install --prefix "$tmp" --omit=dev --ignore-scripts --no-save \
-  "@wonderwhy-er/desktop-commander@0.2.50" >/dev/null 2>&1
+  "@wonderwhy-er/desktop-commander@0.2.50" >/dev/null 2>&1 || milestone package_install_failed
 pkg=$tmp/node_modules/@wonderwhy-er/desktop-commander/package.json
-[ -f "$pkg" ] && grep -Fq '"version": "0.2.50"' "$pkg" || exit 22
-cp "$stage/probe.mjs" "$tmp/probe.mjs"
-chmod 0644 "$tmp/probe.mjs"
-printf "%s\n" "mcl-rdc-rotation-repro:v1" > "$tmp/.mcl-rdc-rotation-repro-v1"
-[ ! -e "$target" ] && [ ! -L "$target" ] || exit 23
-mv -T "$tmp" "$target"
+[ -f "$pkg" ] && grep -Fq '"version": "0.2.50"' "$pkg" || milestone package_identity_failed
+cp "$stage/probe.mjs" "$tmp/probe.mjs" || milestone materialize_failed
+chmod 0644 "$tmp/probe.mjs" || milestone materialize_failed
+printf "%s\n" "mcl-rdc-rotation-repro:v1" > "$tmp/.mcl-rdc-rotation-repro-v1" || milestone materialize_failed
+[ ! -e "$target" ] && [ ! -L "$target" ] || milestone publish_failed
+mv -T "$tmp" "$target" || milestone publish_failed
 trap - EXIT HUP INT TERM
 rm -rf "$stage"
-' >/dev/null 2>&1; then :; else emit_apply_failure install_failed; fi
+' 3>&1 >/dev/null 2>&1); then :; else
+  case "$install_class" in workspace_failed|package_install_failed|package_identity_failed|materialize_failed|publish_failed) emit_apply_failure "$install_class" ;; *) emit_apply_failure install_failed ;; esac
+fi
 if state=$(check_state); then :; else emit_apply_failure verify_failed; fi
 [ "$state" = 'PRESENT vendor:0.2.50' ] || emit_apply_failure verify_failed
 echo 'INSTALLED vendor:0.2.50'

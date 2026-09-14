@@ -1,28 +1,26 @@
-# Termux Screen ON Wrapper
+# Termux Screen On Controller
 
 Prototype status: **NON-PRODUCTION**
 
-A narrow native-Termux wrapper around the real-device-verified broadcast surface exposed by EONSOFT Screen ON (`com.eonsoft.ScreenON`). It does not modify PocketRisu, change Android's global screen timeout, require self-ADB, or bypass the lock screen.
+This directory owns the Termux-controlled Android display keep-awake experiment. The existing EONSOFT Screen ON route remains the default verified backend while issue #2202 validates a repository-owned Android companion.
 
-## Verified device contract
+## Backends
 
-Issue #2194 established on the main Android device that:
+### `eonsoft` (default, verified fallback)
 
-- `com.eonsoft.ACTION_ADD_VIEW` resolves to `com.eonsoft.ScreenON/.ViewReceiver` and can keep the display awake after the Screen ON **Display over other apps** permission is enabled.
-- `com.eonsoft.ACTION_REMOVE_VIEW` resolves to the same receiver and is the app's matching remove request.
-- Broadcast completion alone is not proof that keep-awake is active. With overlay permission disabled, Android still reported `Broadcast completed: result=0` while the display later timed out normally.
-- Ordinary Termux could not reliably query Screen ON's overlay app-op/effect state, so this wrapper preserves that state as `UNKNOWN` rather than inventing a status.
+`com.eonsoft.ACTION_ADD_VIEW` / `ACTION_REMOVE_VIEW` target `com.eonsoft.ScreenON/.ViewReceiver`. Issue #2194 verified physical keep-awake behavior on the main phone after the user granted **Display over other apps**.
 
-## Requirements
+Broadcast completion alone is not proof of effect for this backend, so overlay permission and resulting keep-awake state stay `UNKNOWN` in the wrapper.
 
-- Android user 0 on the currently verified device shape.
-- EONSOFT Screen ON installed as package `com.eonsoft.ScreenON`.
-- Screen ON's **Display over other apps** permission enabled before relying on keep-awake behavior.
-- Python 3 in Termux.
+### `companion` (repo-owned candidate)
+
+`plugins/termux/screen-on/android-companion/` is a minimal Android app owned by this repository. It creates a 1 x 1 `TYPE_APPLICATION_OVERLAY` window carrying `FLAG_KEEP_SCREEN_ON`, `FLAG_NOT_FOCUSABLE`, and `FLAG_NOT_TOUCHABLE`.
+
+It deliberately does not request INTERNET, use `FLAG_TURN_SCREEN_ON`, mutate Android's global timeout, require root/self-ADB, or bypass the lock screen. The exported command receiver is protected by `com.termux.permission.RUN_COMMAND`; real-device validation must prove this gate before the backend can replace EONSOFT.
 
 ## Commands
 
-From the repository root:
+The existing verified route remains unchanged by default:
 
 ```bash
 python plugins/termux/screen-on/screen_on.py doctor
@@ -31,15 +29,19 @@ python plugins/termux/screen-on/screen_on.py on
 python plugins/termux/screen-on/screen_on.py off
 ```
 
-`doctor` is read-only. It verifies that the package exists and that both explicit receiver routes resolve. It reports overlay permission and keep-awake readiness as `UNKNOWN`, because ordinary Termux cannot prove those states reliably.
+The repo-owned candidate is always explicit during parity testing:
 
-`setup` opens Android's package-specific overlay-permission screen for Screen ON. The user must enable **Display over other apps** there; the wrapper does not grant the permission itself.
+```bash
+python plugins/termux/screen-on/screen_on.py --backend companion doctor
+python plugins/termux/screen-on/screen_on.py --backend companion setup
+python plugins/termux/screen-on/screen_on.py --backend companion on
+python plugins/termux/screen-on/screen_on.py --backend companion status
+python plugins/termux/screen-on/screen_on.py --backend companion off
+```
 
-`on` performs package/receiver preflight and then sends the explicit `ACTION_ADD_VIEW` broadcast. A successful command reports only activity-manager transport success and keeps `keep_awake=UNKNOWN`.
+`setup` opens the package-specific Android overlay-permission page. The user must grant **Display over other apps** manually.
 
-`off` performs the corresponding explicit `ACTION_REMOVE_VIEW` request. It does not claim that the resulting overlay state was independently observed.
-
-A `status` command is intentionally absent until a reliable, least-privilege observation surface exists.
+For the companion backend, ON/OFF/STATUS use distinct ordered-broadcast result codes. An attached overlay is stronger evidence than transport success, but `keep_awake_effect` remains `UNKNOWN` until the main phone passes the same physical timeout observation used for #2194.
 
 ## Tests
 
@@ -47,8 +49,17 @@ A `status` command is intentionally absent until a reliable, least-privilege obs
 python -m unittest discover -s plugins/termux/screen-on/tests -p 'test_*.py'
 ```
 
-The tests use an injected command runner. They verify the exact package/receiver/action wiring, fail-closed behavior, setup intent, and the contract that transport success must not be promoted into a fabricated keep-awake status.
+The companion build is validated by `.github/workflows/screen-on-android-companion.yml`, which runs the Python regression suite, Android unit tests, and a debug APK build.
+
+## Dependency-removal boundary
+
+Do **not** uninstall EONSOFT Screen ON merely because the companion source builds. The third-party app remains the verified fallback until #2202 records:
+
+1. Termux can invoke the permission-protected companion receiver;
+2. overlay permission failure is surfaced correctly;
+3. the companion overlay stays attached and keeps the physical display awake past the normal timeout;
+4. OFF removes the overlay and restores normal timeout behavior.
 
 ## Release boundary
 
-The Termux route still has no established production release branch or production manifest. This directory is therefore an implementation prototype only and does not establish a production/update authority.
+The Termux route still has no established production release branch, production manifest, or deployment authority. Source merge or a debug APK does not establish production deployment.

@@ -41,12 +41,14 @@ case "$script" in
     echo PRIVATE_CHILD_STDOUT
     echo PRIVATE_CHILD_STDERR >&2
     case "$MODE" in
+      precondition_fail) printf '%s\n' install_precondition_failed >&3; exit 71 ;;
       workspace_fail) printf '%s\n' workspace_failed >&3; exit 71 ;;
       package_install_fail) printf '%s\n' package_install_failed >&3; exit 71 ;;
       package_identity_fail) printf '%s\n' package_identity_failed >&3; exit 71 ;;
       materialize_fail) printf '%s\n' materialize_failed >&3; exit 71 ;;
       publish_fail) printf '%s\n' publish_failed >&3; exit 71 ;;
-      install_fail) exit 71 ;;
+      entry_fail) exit 71 ;;
+      malformed_fd3) printf '%s\n' unexpected_child_value >&3; exit 71 ;;
       verify_fail)
         target="$LABROOT/opt/mcl-private-lab/vendor/rdc-session-rotation"
         stage="$LABROOT/opt/mcl-private-lab/vendor/.rdc-session-rotation-stage"
@@ -254,18 +256,31 @@ if out=$("$PREP" --apply 2>"$err"); then fail "conflicting stage apply exited ze
 ok "apply stage conflict fails closed before install"
 
 reset_lab
-export MOCK_DIAG_MODE=install_fail
-err="$TMP/install-fail.err"
+export MOCK_DIAG_MODE=entry_fail
+err="$TMP/entry-fail.err"
 : > "$err"
-if out=$("$PREP" --apply 2>"$err"); then fail "install failure exited zero"; fi
-[ "$out" = "$(expected_diag blocked install_failed cleanup_eligible)" ] || fail "install failure classification mismatch"
-[ -e "$(stage_path)/probe.mjs" ] || fail "install failure auto-cleaned staging"
-[ ! -e "$(target_path)" ] || fail "install failure created target"
-printf '%s\n' "$out" | grep -Fq PRIVATE_CHILD && fail "install child stdout leaked"
-grep -Fq PRIVATE_CHILD "$err" && fail "install child stderr leaked"
-ok "install/materialization failure emits only sanitized install_failed and preserves staging"
+if out=$("$PREP" --apply 2>"$err"); then fail "install entry failure exited zero"; fi
+[ "$out" = "$(expected_diag blocked install_entry_failed cleanup_eligible)" ] || fail "install entry failure classification mismatch"
+[ -e "$(stage_path)/probe.mjs" ] || fail "install entry failure auto-cleaned staging"
+[ ! -e "$(target_path)" ] || fail "install entry failure created target"
+printf '%s\n' "$out" | grep -Fq PRIVATE_CHILD && fail "install entry child stdout leaked"
+grep -Fq PRIVATE_CHILD "$err" && fail "install entry child stderr leaked"
+ok "empty install entry failure emits only sanitized install_entry_failed and preserves staging"
+
+reset_lab
+export MOCK_DIAG_MODE=malformed_fd3
+err="$TMP/malformed-fd3.err"
+: > "$err"
+if out=$("$PREP" --apply 2>"$err"); then fail "malformed fd3 failure exited zero"; fi
+[ "$out" = "$(expected_diag blocked install_failed cleanup_eligible)" ] || fail "malformed fd3 fallback mismatch"
+[ -e "$(stage_path)/probe.mjs" ] || fail "malformed fd3 auto-cleaned staging"
+[ ! -e "$(target_path)" ] || fail "malformed fd3 created target"
+printf '%s\n' "$out" | grep -Fq PRIVATE_CHILD && fail "malformed fd3 child stdout leaked"
+grep -Fq PRIVATE_CHILD "$err" && fail "malformed fd3 child stderr leaked"
+ok "unexpected fd3 payload remains fail-closed as install_failed"
 
 for spec in \
+  precondition_fail:install_precondition_failed \
   workspace_fail:workspace_failed \
   package_install_fail:package_install_failed \
   package_identity_fail:package_identity_failed \

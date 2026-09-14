@@ -352,7 +352,7 @@ archive=$1
   >/dev/null 2>&1 || milestone package_extract_failed
 rm -rf "$archive_dir" || milestone materialize_failed
 pkg=$pkg_root/package.json
-[ -f "$pkg" ] && [ ! -L "$pkg" ] && grep -Fq '"version": "0.2.50"' "$pkg" || milestone package_identity_failed
+[ -f "$pkg" ] && [ ! -L "$pkg" ] && grep -Fq "\"version\": \"0.2.50\"" "$pkg" || milestone package_identity_failed
 cp "$stage/probe.mjs" "$tmp/probe.mjs" || milestone materialize_failed
 chmod 0644 "$tmp/probe.mjs" || milestone materialize_failed
 printf "%s\n" "mcl-rdc-rotation-repro:v1" > "$tmp/.mcl-rdc-rotation-repro-v1" || milestone materialize_failed

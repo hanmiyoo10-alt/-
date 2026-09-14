@@ -3,8 +3,10 @@ package io.hanmiyoo.screenoncompanion;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.view.MotionEvent;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -15,6 +17,10 @@ public final class PairingActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            getWindow().setHideOverlayWindows(true);
+        }
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -27,16 +33,12 @@ public final class PairingActivity extends Activity {
         root.addView(title);
 
         status = new TextView(this);
+        status.setTextSize(18);
         status.setText("Tap Generate one-time pairing code, then use that code from Termux within 2 minutes.");
         root.addView(status);
 
-        Button generate = new Button(this);
-        generate.setText("Generate one-time pairing code");
-        generate.setFilterTouchesWhenObscured(true);
-        generate.setOnClickListener(v -> {
-            String code = PairingStore.armPairing(this);
-            status.setText("Pairing code: " + code + "\nValid for 2 minutes and one pairing attempt.");
-        });
+        SecureActionButton generate = new SecureActionButton("Generate one-time pairing code");
+        generate.setOnClickListener(v -> generatePairingCode());
         root.addView(generate);
 
         Button overlay = new Button(this);
@@ -44,9 +46,7 @@ public final class PairingActivity extends Activity {
         overlay.setOnClickListener(v -> openOverlaySettings());
         root.addView(overlay);
 
-        Button revoke = new Button(this);
-        revoke.setText("Revoke Termux control");
-        revoke.setFilterTouchesWhenObscured(true);
+        SecureActionButton revoke = new SecureActionButton("Revoke Termux control");
         revoke.setOnClickListener(v -> {
             PairingStore.revoke(this);
             status.setText("Termux control and any pending pairing code were revoked.");
@@ -56,10 +56,41 @@ public final class PairingActivity extends Activity {
         setContentView(root);
     }
 
+    private void generatePairingCode() {
+        status.setText("Generating pairing code...");
+        try {
+            String code = PairingStore.armPairing(this);
+            status.setText("Pairing code: " + code
+                    + "\nValid for 2 minutes and one pairing attempt.");
+        } catch (RuntimeException error) {
+            status.setText("Pairing code generation failed ("
+                    + error.getClass().getSimpleName()
+                    + "). Close and reopen the app, then retry.");
+        }
+    }
+
     private void openOverlaySettings() {
         Intent intent = new Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 Uri.parse("package:" + getPackageName()));
         startActivity(intent);
+    }
+
+    private final class SecureActionButton extends Button {
+        SecureActionButton(String label) {
+            super(PairingActivity.this);
+            setText(label);
+            setFilterTouchesWhenObscured(true);
+        }
+
+        @Override
+        public boolean onFilterTouchEventForSecurity(MotionEvent event) {
+            boolean allowed = super.onFilterTouchEventForSecurity(event);
+            if (!allowed) {
+                status.setText("Tap blocked because another window is covering this screen. "
+                        + "Close bubbles or overlays and try again.");
+            }
+            return allowed;
+        }
     }
 }

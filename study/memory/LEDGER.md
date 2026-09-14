@@ -83,3 +83,20 @@ Related memory IDs: P-002, S-PSAT-002
 Follow-up trigger: 실제 PSAT 오답에서 동의표현/재진술/범주변환 때문에 틀리는 사례가 반복되는지 확인.
 Resolution / later evidence: 추가 문제풀이 근거 필요.
 ```
+
+### E-2026-09-14-001 — AI 프로그래밍 공부 시작
+
+```text
+Entry ID: E-2026-09-14-001
+Date: 2026-09-14
+Subject / scope: AI 프로그래밍입문 / Python / Colab
+Status: OBSERVED
+Observation: 사용자가 AI 프로그래밍 공부를 시작한다고 명시했고, Google Drive의 `학교_전공공부/AI 프로그래밍입문`에서 1주차 Python 입문 자료와 변수·연산자 자료를 확인했다.
+Context: 새 공부 주제를 기존 PSAT 흐름과 분리해 시작하는 과정.
+Result: 현재 확인된 초반 범위는 Colab 사용, Python 기본 자료형, 변수, `input()`과 형 변환, 기본 연산자이다.
+Interpretation: 과목별 실제 실습 증거를 쌓기 전까지 기존 학습 전략의 전이를 확정하지 않고, 실행 전 결과 예측과 오류 원인 분류를 시험한다.
+Confidence: HIGH
+Related memory IDs: NONE
+Follow-up trigger: 실제 Colab 코드 실습에서 어떤 오류/혼동이 반복되는지 확인하거나, 사용자가 언급한 오후 4:57 Colab 자료가 식별될 때 갱신한다.
+Resolution / later evidence: 초기 진입 상태. 추가 실습 근거 필요.
+```

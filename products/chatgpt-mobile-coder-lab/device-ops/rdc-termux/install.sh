@@ -13,6 +13,9 @@ SERVICE_DIR="${RDC_TERMUX_SERVICE_DIR:-$PREFIX/var/service/$SERVICE_NAME}"
 LOG_DIR="${RDC_TERMUX_LOG_DIR:-$HOME/.local/state/$SERVICE_NAME}"
 SHIM_SOURCE="$SCRIPT_DIR/device-name-shim.cjs"
 SHIM_TARGET="$INSTALL_DIR/device-name-shim.cjs"
+WHICH_SHIM_SOURCE="$SCRIPT_DIR/which-rg-shim.sh"
+TOOL_SHIM_DIR="$INSTALL_DIR/tool-shims"
+WHICH_SHIM_TARGET="$TOOL_SHIM_DIR/which"
 NPM="${RDC_TERMUX_NPM:-$PREFIX/bin/npm}"
 SV="${RDC_TERMUX_SV:-$PREFIX/bin/sv}"
 ORIGINAL_SERVICE_DIR="$PREFIX/var/service/desktop-commander-remote"
@@ -35,6 +38,7 @@ case "$DEVICE_NAME" in [A-Za-z0-9]*) ;; *) echo "BLOCKED invalid device label" >
 case "$DEVICE_NAME" in *[!A-Za-z0-9._-]*) echo "BLOCKED invalid device label" >&2; exit 1 ;; esac
 [ "${#DEVICE_NAME}" -le 64 ] || { echo "BLOCKED invalid device label" >&2; exit 1; }
 [ -f "$SHIM_SOURCE" ] || { echo "BLOCKED managed device-name shim source missing" >&2; exit 1; }
+[ -f "$WHICH_SHIM_SOURCE" ] || { echo "BLOCKED managed ripgrep discovery shim source missing" >&2; exit 1; }
 
 package_ok() {
   [ -f "$PACKAGE_JSON" ] && [ -x "$ENTRY" ] || return 1
@@ -48,10 +52,15 @@ managed_shim_ok() {
   file=$1
   [ -f "$file" ] && grep -Fq '// mcl-rdc-termux-device-name:v1' "$file"
 }
+managed_which_shim_ok() {
+  file=$1
+  [ -f "$file" ] && grep -Fq "mcl-rdc-termux-which-rg:v1" "$file"
+}
 
 show_state() {
   if package_ok; then echo "PRESENT package:$VERSION"; else echo "MISSING package:$VERSION"; fi
   if managed_shim_ok "$SHIM_TARGET" && cmp -s "$SHIM_SOURCE" "$SHIM_TARGET"; then echo "PRESENT shim:$DEVICE_NAME"; elif [ -e "$SHIM_TARGET" ] && ! managed_shim_ok "$SHIM_TARGET"; then echo "BLOCKED unmanaged-shim:$DEVICE_NAME"; else echo "MISSING shim:$DEVICE_NAME"; fi
+  if managed_which_shim_ok "$WHICH_SHIM_TARGET" && cmp -s "$WHICH_SHIM_SOURCE" "$WHICH_SHIM_TARGET"; then echo "PRESENT tool-shim:which-rg"; elif [ -e "$WHICH_SHIM_TARGET" ] && ! managed_which_shim_ok "$WHICH_SHIM_TARGET"; then echo "BLOCKED unmanaged-tool-shim:which-rg"; else echo "MISSING tool-shim:which-rg"; fi
   if managed_file_ok "$SERVICE_DIR/run"; then echo "PRESENT service:$SERVICE_NAME"; elif [ -e "$SERVICE_DIR/run" ]; then echo "BLOCKED unmanaged-service:$SERVICE_NAME"; else echo "MISSING service:$SERVICE_NAME"; fi
   if managed_file_ok "$SERVICE_DIR/log/run"; then echo "PRESENT log:$SERVICE_NAME"; elif [ -e "$SERVICE_DIR/log/run" ]; then echo "BLOCKED unmanaged-log:$SERVICE_NAME"; else echo "MISSING log:$SERVICE_NAME"; fi
 }
@@ -73,6 +82,10 @@ if [ -e "$SHIM_TARGET" ] && ! managed_shim_ok "$SHIM_TARGET"; then
   echo "BLOCKED existing device-name shim is not repo-managed" >&2
   exit 1
 fi
+if [ -e "$WHICH_SHIM_TARGET" ] && ! managed_which_shim_ok "$WHICH_SHIM_TARGET"; then
+  echo "BLOCKED existing ripgrep discovery shim is not repo-managed" >&2
+  exit 1
+fi
 
 if package_ok; then
   echo "PRESENT package:$VERSION"
@@ -89,6 +102,14 @@ else
   chmod 644 "$SHIM_TARGET"
   echo "INSTALLED shim:$DEVICE_NAME"
 fi
+if [ -f "$WHICH_SHIM_TARGET" ] && cmp -s "$WHICH_SHIM_SOURCE" "$WHICH_SHIM_TARGET"; then
+  echo "PRESENT tool-shim:which-rg"
+else
+  mkdir -p "$TOOL_SHIM_DIR"
+  cp "$WHICH_SHIM_SOURCE" "$WHICH_SHIM_TARGET"
+  chmod 755 "$WHICH_SHIM_TARGET"
+  echo "INSTALLED tool-shim:which-rg"
+fi
 write_service_run() {
   out=$1
   cat > "$out" <<RUNEOF
@@ -100,7 +121,8 @@ HOME='$HOME'
 INSTALL='$INSTALL_DIR'
 ENTRY='$ENTRY'
 SHIM='$SHIM_TARGET'
-export PREFIX HOME PATH="\$PREFIX/bin:\$PATH"
+TOOL_SHIM_DIR='$TOOL_SHIM_DIR'
+export PREFIX HOME PATH="\$TOOL_SHIM_DIR:\$PREFIX/bin:\$PATH"
 export DESKTOP_COMMANDER_DEVICE_NAME='$DEVICE_NAME'
 "\$PREFIX/bin/termux-wake-lock" >/dev/null 2>&1 || true
 child_pid=""

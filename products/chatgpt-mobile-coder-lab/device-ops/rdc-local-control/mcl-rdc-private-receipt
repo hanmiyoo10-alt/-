@@ -1,0 +1,73 @@
+#!/bin/sh
+set -eu
+
+SCHEMA=mcl-private-check.v1
+CHECK=s-termux-session-recovery
+DETAILS=withheld
+HOME_DIR=/data/data/com.termux/files/home
+MAX_BYTES=256
+
+blocked_missing() {
+  echo "BLOCKED private receipt unavailable" >&2
+  exit 1
+}
+
+blocked_invalid() {
+  echo "BLOCKED private receipt invalid" >&2
+  exit 1
+}
+
+[ "$#" -eq 0 ] || {
+  echo "BLOCKED unsupported command" >&2
+  exit 2
+}
+
+if [ "${MCL_RDC_PRIVATE_RECEIPT_TEST_MODE:-0}" = 1 ]; then
+  ROOT=${MCL_RDC_PRIVATE_RECEIPT_TEST_ROOT:-}
+  [ -n "$ROOT" ] || {
+    echo "BLOCKED test fixture missing" >&2
+    exit 2
+  }
+  HOME_DIR="$ROOT/home"
+fi
+
+RECEIPT="$HOME_DIR/.local/share/mcl-private/receipts/s-termux-session-recovery.receipt"
+
+[ ! -L "$RECEIPT" ] || blocked_invalid
+[ -f "$RECEIPT" ] && [ -r "$RECEIPT" ] || blocked_missing
+
+bytes=$(wc -c <"$RECEIPT" 2>/dev/null) || blocked_invalid
+case "$bytes" in
+  ''|*[!0-9]*) blocked_invalid ;;
+esac
+[ "$bytes" -le "$MAX_BYTES" ] || blocked_invalid
+
+lines=$(wc -l <"$RECEIPT" 2>/dev/null) || blocked_invalid
+case "$lines" in
+  ''|*[!0-9]*) blocked_invalid ;;
+esac
+[ "$lines" -eq 4 ] || blocked_invalid
+
+line1=$(sed -n '1p' "$RECEIPT") || blocked_invalid
+line2=$(sed -n '2p' "$RECEIPT") || blocked_invalid
+line3=$(sed -n '3p' "$RECEIPT") || blocked_invalid
+line4=$(sed -n '4p' "$RECEIPT") || blocked_invalid
+
+[ "$line1" = "schema=$SCHEMA" ] || blocked_invalid
+[ "$line2" = "check=$CHECK" ] || blocked_invalid
+[ "$line4" = "details=$DETAILS" ] || blocked_invalid
+
+case "$line3" in
+  result=pass) result=pass ;;
+  result=fail) result=fail ;;
+  result=blocked) result=blocked ;;
+  result=manual_auth_required) result=manual_auth_required ;;
+  result=unknown) result=unknown ;;
+  *) blocked_invalid ;;
+esac
+
+printf '%s\n' \
+  "schema=$SCHEMA" \
+  "check=$CHECK" \
+  "result=$result" \
+  "details=$DETAILS"

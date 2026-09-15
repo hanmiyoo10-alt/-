@@ -30,6 +30,10 @@ function countOccurrences(text, token) {
   }
   return count;
 }
+function countStandaloneMarkerLines(text, marker) {
+  return String(text).split(/\r?\n/).filter((line) => line.trim() === marker).length;
+}
+
 function extraKeys(value, allowed) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
   const expected = new Set(allowed);
@@ -91,11 +95,11 @@ function validateTarget(issue, issueNumber, surface) {
   if (surface === 'WORK_PACKET') {
     if (issueNumber === QUEUE_ISSUE) reasons.push('WORK_QUEUE_SURFACE_REQUIRED');
     if (!['open', 'closed'].includes(issue.state)) reasons.push('TARGET_STATE_INVALID');
-    if (countOccurrences(body, PACKET_MARKER) !== 1) reasons.push('WORK_PACKET_MARKER_COUNT_INVALID');
+    if (countStandaloneMarkerLines(body, PACKET_MARKER) !== 1) reasons.push('WORK_PACKET_MARKER_COUNT_INVALID');
   } else if (surface === 'WORK_QUEUE') {
     if (issueNumber !== QUEUE_ISSUE) reasons.push('WORK_QUEUE_ISSUE_INVALID');
     if (issue.state !== 'open') reasons.push('WORK_QUEUE_NOT_OPEN');
-    if (countOccurrences(body, QUEUE_MARKER) !== 1) reasons.push('WORK_QUEUE_MARKER_COUNT_INVALID');
+    if (countStandaloneMarkerLines(body, QUEUE_MARKER) !== 1) reasons.push('WORK_QUEUE_MARKER_COUNT_INVALID');
   }
   return [...new Set(reasons)].sort();
 }
@@ -321,6 +325,7 @@ module.exports = {
   applyPatch,
   bodyDigest,
   countOccurrences,
+  countStandaloneMarkerLines,
   executeCoordinationBodyPatch,
   exitCodeFor,
   parseArgs,

@@ -107,6 +107,84 @@ grep -Fq 'bin/node' "$runfile" || fail "Termux node path missing"
 grep -Fq "export PREFIX HOME PATH=\"\$TOOL_SHIM_DIR:\$PREFIX/bin:\$PATH\"" "$runfile" || fail "process-local ripgrep discovery PATH missing"
 ! grep -Fq "/system/bin" "$runfile" || fail "generated service widened PATH to Android system bin"
 ok "generated service is Termux-native and distinct"
+grep -Fq 'rc=0' "$runfile" || fail "child wait status initializer missing"
+grep -Fq 'wait "$child_pid" || rc=$?' "$runfile" || fail "child wait is still exposed to errexit"
+
+for tool in setsid kill sleep; do
+  host_tool=$(command -v "$tool") || fail "host $tool unavailable"
+  case "$host_tool" in /*) ;; *) host_tool="/usr/bin/$tool" ;; esac
+  [ -x "$host_tool" ] || fail "host $tool path unavailable"
+  cat > "$PREFIX/bin/$tool" <<MOCK
+#!/bin/sh
+exec '$host_tool' "\$@"
+MOCK
+  chmod 755 "$PREFIX/bin/$tool"
+done
+cat > "$PREFIX/bin/sleep" <<'MOCK'
+#!/bin/sh
+exec /bin/sleep 0.01
+MOCK
+chmod 755 "$PREFIX/bin/sleep"
+cat > "$PREFIX/bin/termux-wake-lock" <<'MOCK'
+#!/bin/sh
+exit 0
+MOCK
+cat > "$PREFIX/bin/node" <<'MOCK'
+#!/bin/sh
+case "${RDC_TEST_NODE_MODE:-cleanup}" in
+  exit7) exit 7 ;;
+  cleanup) trap '' TERM; while :; do /bin/sleep 1; done ;;
+  *) exit 2 ;;
+esac
+MOCK
+chmod 755 "$PREFIX/bin/termux-wake-lock" "$PREFIX/bin/node"
+
+(
+service_pid=
+child_pid=
+cleanup_lifecycle() {
+  [ -z "$service_pid" ] || kill -KILL "$service_pid" 2>/dev/null || true
+  [ -z "$child_pid" ] || kill -KILL -- "-$child_pid" 2>/dev/null || true
+}
+trap cleanup_lifecycle EXIT HUP INT TERM
+
+if RDC_TEST_NODE_MODE=exit7 sh "$runfile" > "$ROOT/lifecycle-exit.out" 2>&1; then
+  fail "generated service lost nonzero child exit status"
+else
+  child_status=$?
+fi
+[ "$child_status" -eq 7 ] || fail "generated service changed child exit status"
+
+RDC_TEST_NODE_MODE=cleanup sh "$runfile" > "$ROOT/lifecycle-term.out" 2>&1 &
+service_pid=$!
+child_pid=
+i=0
+while [ "$i" -lt 100 ]; do
+  child_pid=$(ps -o pid= --ppid "$service_pid" 2>/dev/null | awk 'NR==1 {gsub(/[[:space:]]/, ""); print; exit}')
+  [ -z "$child_pid" ] || break
+  sleep 0.02
+  i=$((i + 1))
+done
+[ -n "$child_pid" ] || { kill -KILL "$service_pid" 2>/dev/null || true; fail "generated service child did not start"; }
+kill -TERM "$service_pid"
+i=0
+while kill -0 "$service_pid" 2>/dev/null && [ "$i" -lt 350 ]; do sleep 0.02; i=$((i + 1)); done
+if kill -0 "$service_pid" 2>/dev/null; then
+  kill -KILL "$service_pid" 2>/dev/null || true
+  kill -KILL -- "-$child_pid" 2>/dev/null || true
+  fail "generated service TERM trap did not exit"
+fi
+wait "$service_pid" || fail "generated service TERM trap returned nonzero"
+i=0
+while kill -0 "$child_pid" 2>/dev/null && [ "$i" -lt 100 ]; do sleep 0.02; i=$((i + 1)); done
+if kill -0 "$child_pid" 2>/dev/null; then
+  fail "setsid child group survived generated TERM cleanup"
+fi
+service_pid=
+child_pid=
+)
+ok "generated service guards wait from errexit and cleans its setsid child group"
+
 before_run=$(cksum "$runfile")
 before_log=$(cksum "$PREFIX/var/service/desktop-commander-remote-termux/log/run")
 before_pkg=$(cksum "$HOME/.local/share/desktop-commander-remote-termux/node_modules/@wonderwhy-er/desktop-commander/package.json")

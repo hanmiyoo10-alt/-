@@ -140,8 +140,8 @@ trap 'stop_child; exit 0' TERM INT HUP
 cd "\$HOME"
 "\$PREFIX/bin/setsid" "\$PREFIX/bin/node" --require "\$SHIM" "\$ENTRY" remote 2>&1 &
 child_pid=\$!
-wait "\$child_pid"
-rc=\$?
+rc=0
+wait "\$child_pid" || rc=\$?
 trap - TERM INT HUP
 exit "\$rc"
 RUNEOF

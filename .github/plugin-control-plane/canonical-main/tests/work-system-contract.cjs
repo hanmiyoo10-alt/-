@@ -290,4 +290,54 @@ assert.match(readme, /`active-packets` is a bounded write-scope-overlap discover
 assert.match(readme, /unresolved overlap remains `UNKNOWN` or `CONFLICT`/);
 assert.match(readme, /Disjoint nonterminal packets remain eligible to proceed in parallel/);
 
+const {classifyQueueBody, REASON_CODES} = require(path.join(dir, 'queue-hygiene.cjs'));
+
+const pointerOnlyFixture = `# Canonical Main — Work Queue
+## Live health
+- \`LIVE HEALTH: direct main + #485\`
+- Do not duplicate mutable current SHA / Required / production / protection truth here.
+## Current coordination
+- Active writer: #2278 CM-WQ-HYGIENE-V1-01
+## Historical evidence
+- Historical synchronization of current main SHA: 1111111111111111111111111111111111111111
+- Historical Required PASS — run 12345
+- Historical production MATCH snapshot
+- Historical native protection ACTIVE snapshot
+- Historical #485 state: CLEAR at activation.`;
+
+const pointerOnlyResult = classifyQueueBody(pointerOnlyFixture);
+assert.equal(pointerOnlyResult.state, 'PASS');
+assert.equal(pointerOnlyResult.pointerCount, 1);
+assert.equal(pointerOnlyResult.activeWriterProjectionCount, 1);
+assert.deepEqual(pointerOnlyResult.findings, []);
+
+const duplicateFixture = (line) => `${pointerOnlyFixture}\n${line}`;
+const expectFailCode = (line, code) => {
+  const result = classifyQueueBody(duplicateFixture(line));
+  assert.equal(result.state, 'FAIL');
+  const match = result.findings.find((item) => item.code === code);
+  assert.ok(match, `expected ${code}`);
+  assert.ok(Number.isInteger(match.line) && match.line > 0);
+  assert.ok(match.excerpt.length > 0 && match.excerpt.length <= 240);
+};
+
+expectFailCode('- Current main SHA: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', REASON_CODES.DUPLICATE_LIVE_MAIN_SHA);
+expectFailCode('- Required: PASS — run 99999', REASON_CODES.DUPLICATE_REQUIRED_STATE);
+expectFailCode('- Production identity: MATCH', REASON_CODES.DUPLICATE_PRODUCTION_STATE);
+expectFailCode('- Native protection: ACTIVE / protected true', REASON_CODES.DUPLICATE_NATIVE_PROTECTION_STATE);
+expectFailCode('- #485 is currently CLEAR', REASON_CODES.DUPLICATE_ISSUE_485_CURRENT_STATE);
+expectFailCode('- #485 remains CLEAR', REASON_CODES.DUPLICATE_ISSUE_485_CURRENT_STATE);
+expectFailCode('- Active writer: #999 competing-owner', REASON_CODES.DUPLICATE_ACTIVE_WRITER_PROJECTION);
+
+const ambiguousResult = classifyQueueBody(`${pointerOnlyFixture}\n- Possible active-writer candidate: #999; status unverified.`);
+assert.equal(ambiguousResult.state, 'UNKNOWN');
+assert.ok(ambiguousResult.findings.some((item) => item.code === REASON_CODES.ACTIVE_WRITER_STATUS_UNRESOLVED));
+
+assert.equal(classifyQueueBody(pointerOnlyFixture.replace('LIVE HEALTH: direct main + #485', 'LIVE HEALTH: see operator view')).state, 'FAIL');
+assert.equal(classifyQueueBody(`${pointerOnlyFixture}\n- \`LIVE HEALTH: direct main + #485\``).state, 'FAIL');
+assert.match(readme, /## #465 pointer-only hygiene classifier/);
+assert.match(readme, /`PASS \/ WARN \/ FAIL \/ UNKNOWN`/);
+assert.match(readme, /never fetches GitHub and never mutates #465/);
+assert.match(readme, /clearly labeled historical synchronization\/packet evidence remains allowed/i);
+
 console.log('work-system-contract: ok');

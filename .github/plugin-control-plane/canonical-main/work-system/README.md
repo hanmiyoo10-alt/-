@@ -28,6 +28,25 @@ Repository, Git, CI, release, and project authorities remain above all of these 
 
 This prevents a stale coordination queue from competing with the direct repository authority and the #485 derived operator projection.
 
+### #465 pointer-only hygiene classifier
+
+`work-system/queue-hygiene.cjs` is the read-only enforcement helper for this body contract. It classifies exact body text supplied by the caller; it never fetches GitHub and never mutates #465.
+
+Its machine-readable top-level result is `PASS / WARN / FAIL / UNKNOWN`. `FAIL` means the supplied body proves a contract violation. `UNKNOWN` means the text itself exposes an active-writer claim that requires external packet/PR evidence before it can be resolved. `WARN` is reserved for non-blocking advisory findings. Absence of a finding is not a claim that #465 exhaustively lists repository work.
+
+The classifier fails on duplicated mutable current-health claims for current/live `main` SHA, Required state/run, production identity/state, native-protection state, freehand current #485 state, or more than one unambiguous active-writer projection. The canonical `LIVE HEALTH: direct main + #485` pointer and its explanatory no-duplication rule are not findings. Clearly labeled historical synchronization/packet evidence remains allowed; token presence alone does not make a SHA, run, packet, PR, or status word current authority.
+
+Each finding carries a stable reason code, a 1-based body line number, and a bounded excerpt. Ambiguous active-writer prose remains `UNKNOWN` rather than being converted into invented terminality. Current repository truth still comes from direct `main`, #485, packet/PR evidence, and the owning authorities named above.
+
+Module callers use `classifyQueueBody(body)`. The bounded CLI accepts either one body-text file path or stdin:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/queue-hygiene.cjs /path/to/issue-465-body.md
+cat /path/to/issue-465-body.md | node .github/plugin-control-plane/canonical-main/work-system/queue-hygiene.cjs
+```
+
+CLI exit status is `1` for `FAIL`, `2` for `UNKNOWN`, and `0` for `PASS` or `WARN`. The helper has no auto-fix mode and grants no issue-write, merge, release, production, or protection authority.
+
 ## Live issue markers
 
 - Idea inventory: `<!-- canonical-main-idea-inventory:v1 -->`

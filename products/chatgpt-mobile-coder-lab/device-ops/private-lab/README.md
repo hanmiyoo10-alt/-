@@ -141,3 +141,24 @@ the broader vendor directory, npm cache, existing M Ubuntu content, or arbitrary
 
 These modes are repository-reviewable control surfaces only. Their live diagnostic/cleanup use is deferred until after
 merge and postmerge convergence. A later #2197 vendor retry remains separately authorized and is not performed by #2201.
+
+## Optional isolated analysis essentials
+
+The minimal PRIVATE LAB bootstrap remains intentionally limited to the Node/Git/Python substrate. Optional host-independent
+analysis tools use the separate repository-reviewed profile:
+
+```sh
+./analysis-profile.sh --check
+./analysis-profile.sh --apply
+```
+
+Version 1 owns exactly the Ubuntu packages `ripgrep`, `jq`, and `file`, providing lab-native `/usr/bin/rg`, `/usr/bin/jq`,
+and `/usr/bin/file`. Every inspection and install enters the managed lab only through `proot-distro login --isolated` and
+uses a lab-native PATH. A tool is `PRESENT` only when the fixed package is installed and its fixed `/usr/bin` executable is
+present and executable. Package/binary mismatches fail closed.
+
+This separation is deliberate: a non-isolated PRoot login may expose M Termux host binaries, so inherited `command -v`
+results are not proof of lab-native installation. `--check` is read-only. `--apply` installs only missing fixed packages with
+no-remove/no-upgrade safeguards, suppresses raw apt output, and verifies the fixed package/native-command pairs afterward.
+The profile has no arbitrary package, command, path, URL, environment, bind, shared-home, provider/session, service, Git,
+RDC, VM, or Android-setting passthrough. PRoot remains a userland/filesystem boundary, not a VM security boundary.

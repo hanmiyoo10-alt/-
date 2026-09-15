@@ -37,6 +37,12 @@ function ensurePacketEligible(issue) {
   const body = String(issue?.body || ''); if (!body.includes(WORK_PACKET_MARKER)) return blocked('EVIDENCE_UNKNOWN','WORK_PACKET_MARKER_MISSING'); if (!body.includes(AUTO_CLOSE_OPT_IN)) return blocked('EVIDENCE_UNKNOWN','AUTO_CLOSE_OPT_IN_MISSING');
   const state = body.match(/\*\*State:\s*([A-Z_]+)\*\*/)?.[1]; if (!['ACTIVE','IN_PROGRESS','REVIEW','DONE'].includes(state)) return blocked('EVIDENCE_UNKNOWN',`PACKET_STATE_${state || 'UNKNOWN'}`); return {state:'READY', packetState:state, packetId:packetId(body)};
 }
+function packetClosureIntent(issue) {
+  const body = String(issue?.body || ''); if (!body.includes(AUTO_CLOSE_OPT_IN)) return Object.freeze({state:'IGNORE_NON_OPT_IN'});
+  const state = body.match(/\*\*State:\s*([A-Z_]+)\*\*/)?.[1] || null;
+  if (body.includes(WORK_PACKET_MARKER) && issue?.state === 'closed' && state === 'DONE' && body.includes(EVIDENCE_START)) return Object.freeze({state:'IDEMPOTENT_TERMINAL', packetId:packetId(body)});
+  return Object.freeze({state:'LEGACY_PREFLIGHT'});
+}
 function evidenceProjection(bundle, ctx) { return {schemaVersion:1, packet:ctx.packetNumber, design:ctx.designNumber, proofRunId:ctx.proofRunId, targetSha:bundle.targetSha, pr:bundle.pr, prHead:bundle.evidence?.prHead, mergedMain:bundle.evidence?.mergedMain, ops:bundle.evidence?.ops, protection:bundle.evidence?.protection, incidents:bundle.evidence?.incidents, missing:bundle.missing, failures:bundle.failures, taxonomy:['IMPLEMENTED','CONTRACT_PROVEN','LIVE_PROVEN','DONE']}; }
 function renderEvidence(bundle, ctx) { return [EVIDENCE_START,'## Automatic closure evidence','', '```json', JSON.stringify(evidenceProjection(bundle,ctx),null,2), '```','', '> Generated issue-only bookkeeping. Repository/Git/CI/release authorities remain authoritative.',EVIDENCE_END].join('\n'); }
 function renderPacketDone(body, bundle, ctx) { let next = String(body || ''); if (!next.includes(WORK_PACKET_MARKER) || !next.includes(AUTO_CLOSE_OPT_IN)) throw new Error('packet not auto-close eligible'); const m = next.match(/\*\*State:\s*([A-Z_]+)\*\*/); if (!m) throw new Error('packet state missing'); if (m[1] !== 'DONE') next = next.replace(m[0],'**State: DONE**'); return blockReplace(next,EVIDENCE_START,EVIDENCE_END,renderEvidence(bundle,ctx)); }
@@ -71,12 +77,16 @@ function note(line){ console.log(line); if(process.env.GITHUB_STEP_SUMMARY) fs.a
 function blockAndReturn(repo,packet,target,run,decision){ upsertComment(repo,packet,blockedMarker(packet),renderBlocked(packet,target,run,decision)); note(`AUTO_CLOSURE=BLOCKED reason=${decision.reasonCode} next=${decision.next}`); }
 function run() {
   const repo=String(process.env.GITHUB_REPOSITORY||'').trim(), target=String(process.env.PROOF_TARGET_SHA||'').trim(), proofRunId=num(process.env.PROOF_RUN_ID), conclusion=String(process.env.PROOF_RUN_CONCLUSION||'').trim(); if(!repo||!target||!proofRunId||!process.env.GH_TOKEN) throw new Error('closure-bookkeeping missing environment');
-  const queueIssue=getIssue(repo,QUEUE_ISSUE), queue=parseQueue(queueIssue?.body), pr=associatedPr(repo,target); if(!pr){ note('AUTO_CLOSURE=IGNORED_NO_ASSOCIATED_PR'); return; } const id=parsePrIdentity(pr.body); if(!id){ note(`AUTO_CLOSURE=IGNORED_PR_WITHOUT_EXPLICIT_MARKERS pr=${pr.number}`); return; }
-  if(queue.valid&&queue.state==='IDLE'&&queue.activeNone&&queue.coordinationActiveNone&&queue.latestPacket!==id.packet){ note('AUTO_CLOSURE=NO_ACTIVE_PACKET'); return; }
-  const qd=queueDisposition(queue,id); if(qd.state==='BLOCKED'){ blockAndReturn(repo,queue.activePacket||id.packet,target,proofRunId,qd); return; }
-  if(conclusion!=='success'){ blockAndReturn(repo,id.packet,target,proofRunId,blocked('EVIDENCE_UNKNOWN',`PROOF_WORKFLOW_${conclusion||'UNKNOWN'}`)); return; }
-  const loaded=artifactBundle(repo,proofRunId,target); if(!loaded.bundle){ blockAndReturn(repo,id.packet,target,proofRunId,blocked('EVIDENCE_UNKNOWN',loaded.error)); return; } const pd=classifyBundle(loaded.bundle,target); if(pd.state!=='READY'){ blockAndReturn(repo,id.packet,target,proofRunId,pd); return; }
-  const packet=getIssue(repo,id.packet), eligible=ensurePacketEligible(packet); if(eligible.state!=='READY'){ blockAndReturn(repo,id.packet,target,proofRunId,eligible); return; }
+  const pr=associatedPr(repo,target); if(!pr){ note("AUTO_CLOSURE=IGNORED_NO_ASSOCIATED_PR"); return; } const id=parsePrIdentity(pr.body); if(!id){ note(`AUTO_CLOSURE=IGNORED_PR_WITHOUT_EXPLICIT_MARKERS pr=${pr.number}`); return; }
+  const packet=getIssue(repo,id.packet), intent=packetClosureIntent(packet);
+  if(intent.state==="IGNORE_NON_OPT_IN"){ note(`AUTO_CLOSURE=IGNORED_NON_OPT_IN packet=${id.packet}`); return; }
+  if(intent.state==="IDEMPOTENT_TERMINAL"){ note(`AUTO_CLOSURE=IDEMPOTENT_TERMINAL packet=${id.packet}`); return; }
+  const eligible=ensurePacketEligible(packet); if(eligible.state!=="READY"){ blockAndReturn(repo,id.packet,target,proofRunId,eligible); return; }
+  const queueIssue=getIssue(repo,QUEUE_ISSUE), queue=parseQueue(queueIssue?.body);
+  if(queue.valid&&queue.state==="IDLE"&&queue.activeNone&&queue.coordinationActiveNone&&queue.latestPacket!==id.packet){ note("AUTO_CLOSURE=NO_ACTIVE_PACKET"); return; }
+  const qd=queueDisposition(queue,id); if(qd.state==="BLOCKED"){ blockAndReturn(repo,queue.activePacket||id.packet,target,proofRunId,qd); return; }
+  if(conclusion!=="success"){ blockAndReturn(repo,id.packet,target,proofRunId,blocked("EVIDENCE_UNKNOWN",`PROOF_WORKFLOW_${conclusion||"UNKNOWN"}`)); return; }
+  const loaded=artifactBundle(repo,proofRunId,target); if(!loaded.bundle){ blockAndReturn(repo,id.packet,target,proofRunId,blocked("EVIDENCE_UNKNOWN",loaded.error)); return; } const pd=classifyBundle(loaded.bundle,target); if(pd.state!=="READY"){ blockAndReturn(repo,id.packet,target,proofRunId,pd); return; }
   const ctx={packetNumber:id.packet,designNumber:id.design,proofRunId,packetIdValue:eligible.packetId}, freshQueue=getIssue(repo,QUEUE_ISSUE); if(String(freshQueue?.updated_at||'')!==String(queueIssue?.updated_at||'')){ blockAndReturn(repo,id.packet,target,proofRunId,blocked('PACKET_SCOPE_OVERLAP','QUEUE_CHANGED_DURING_PREFLIGHT')); return; }
   const packetDone=eligible.packetState==='DONE'&&packet.state==='closed'&&String(packet.body||'').includes(EVIDENCE_START), q=parseQueue(freshQueue.body), queueDone=q.state==='IDLE'&&q.latestPacket===id.packet&&q.activeNone&&q.coordinationActiveNone; let packetChanged=false;
   try { if(!packetDone){ patchIssue(repo,id.packet,{body:renderPacketDone(packet.body,loaded.bundle,ctx),state:'closed',state_reason:'completed'}); packetChanged=true; } if(!queueDone) patchIssue(repo,QUEUE_ISSUE,{body:renderQueueIdle(freshQueue.body,{...ctx,bundle:loaded.bundle})}); }
@@ -84,4 +94,4 @@ function run() {
   upsertComment(repo,id.design,provenanceMarker('design',id.packet),renderProvenance('design',loaded.bundle,ctx)); upsertComment(repo,MEMORY_ISSUE,provenanceMarker('memory',id.packet),renderProvenance('memory',loaded.bundle,ctx)); upsertComment(repo,AUDIT_ISSUE,provenanceMarker('audit',id.packet),renderProvenance('audit',loaded.bundle,ctx)); note(`AUTO_CLOSURE=DONE packet=${id.packet} target=${target} proofRun=${proofRunId} artifact=${loaded.artifactId}`);
 }
 if(require.main===module) run();
-module.exports={AUTO_CLOSE_OPT_IN,EVIDENCE_START,QUEUE_END,QUEUE_START,WORK_PACKET_MARKER,blocked,classifyBundle,ensurePacketEligible,parsePrIdentity,parseQueue,queueDisposition,renderBlocked,renderPacketDone,renderQueueIdle};
+module.exports={AUTO_CLOSE_OPT_IN,EVIDENCE_START,QUEUE_END,QUEUE_START,WORK_PACKET_MARKER,blocked,classifyBundle,ensurePacketEligible,packetClosureIntent,parsePrIdentity,parseQueue,queueDisposition,renderBlocked,renderPacketDone,renderQueueIdle};

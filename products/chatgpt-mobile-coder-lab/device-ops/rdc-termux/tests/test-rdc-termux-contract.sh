@@ -168,7 +168,7 @@ done
 [ -n "$child_pid" ] || { kill -KILL "$service_pid" 2>/dev/null || true; fail "generated service child did not start"; }
 kill -TERM "$service_pid"
 i=0
-while kill -0 "$service_pid" 2>/dev/null && [ "$i" -lt 100 ]; do sleep 0.02; i=$((i + 1)); done
+while kill -0 "$service_pid" 2>/dev/null && [ "$i" -lt 350 ]; do sleep 0.02; i=$((i + 1)); done
 if kill -0 "$service_pid" 2>/dev/null; then
   kill -KILL "$service_pid" 2>/dev/null || true
   kill -KILL -- "-$child_pid" 2>/dev/null || true

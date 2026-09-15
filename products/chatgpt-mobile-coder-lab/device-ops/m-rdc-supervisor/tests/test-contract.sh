@@ -58,7 +58,8 @@ wait_for_file() {
     [ -s "$file" ] || fail "timed out waiting for $file"
 }
 
-mkdir -p "$PREFIX/bin" "$TARGET" "$HOME_FIX" "$TEST_STATE"
+mkdir -p "$PREFIX/bin" "$TARGET/supervise" "$HOME_FIX" "$TEST_STATE"
+touch "$TARGET/supervise/ok"
 ln -s "$(command -v nohup)" "$PREFIX/bin/nohup"
 ln -s "$(command -v sleep)" "$PREFIX/bin/sleep"
 printf '#!%s\n' "$(command -v sh)" > "$PREFIX/bin/sv"
@@ -73,6 +74,10 @@ if [ -e "$service/supervisor-up" ]; then
     echo "run: service: (pid 123) 1s"
     exit 0
 fi
+if [ ! -e "$service/supervise/ok" ]; then
+    echo "warning: $service: unable to open supervise/ok: file does not exist"
+    exit 1
+fi
 echo "fail: service: runsv not running"
 exit 1
 EOF
@@ -84,6 +89,7 @@ set -eu
 service="$1"
 name="$(basename "$service")"
 mkdir -p "$service/supervise"
+: > "$service/supervise/ok"
 lock="$service/supervise/lock.fixture"
 mkdir "$lock" 2>/dev/null || exit 1
 child=
@@ -265,8 +271,26 @@ fi
 [ "$(printf '%s\n' "$apply_out" | wc -l | tr -d ' ')" = 6 ] || fail "install receipt line count"
 rm -f "$TARGET/ambiguous"
 touch "$TARGET/supervisor-up"
+[ ! -e "$GUARD_SERVICE/supervise/ok" ] || fail "guard service not virgin before first launch"
+mv "$GUARD_SERVICE/run" "$GUARD_SERVICE/run.real"
+ln -s "$GUARD_SERVICE/run.real" "$GUARD_SERVICE/run"
+set +e
+run_launcher >/dev/null 2>&1
+identity_rc=$?
+set -e
+[ "$identity_rc" -eq 2 ] || fail "virgin guard service accepted symlink run rc=$identity_rc"
+[ ! -e "$TEST_STATE/guard-runsv.pid" ] || fail "invalid guard run identity started supervisor"
+rm "$GUARD_SERVICE/run"
+mv "$GUARD_SERVICE/run.real" "$GUARD_SERVICE/run"
+set +e
+virgin_status="$("$PREFIX/bin/sv" status "$GUARD_SERVICE" 2>&1)"
+virgin_rc=$?
+set -e
+[ "$virgin_rc" -eq 1 ] || fail "virgin guard service status rc=$virgin_rc"
+printf "%s\n" "$virgin_status" | grep -Fq "unable to open supervise/ok: file does not exist" || fail "virgin guard service status text"
 run_launcher
 wait_for_file "$TEST_STATE/guard-runsv.pid"
+[ -e "$GUARD_SERVICE/supervise/ok" ] || fail "guard supervisor did not materialize supervise/ok"
 wait_for_file "$TEST_STATE/guard-child.pid"
 [ "$(cat "$TEST_STATE/guard-runsv.count")" = 1 ] || fail "guard supervisor start count"
 guard_supervisor_pid="$(cat "$TEST_STATE/guard-runsv.pid")"

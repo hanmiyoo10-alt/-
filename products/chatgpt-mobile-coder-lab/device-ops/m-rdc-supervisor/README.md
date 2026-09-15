@@ -65,7 +65,7 @@ $PREFIX/var/service/mcl-m-rdc-supervisor-guard/run
 $HOME/.termux/boot/31-mcl-m-rdc-supervisor-guard
 ```
 
-The Boot launcher never starts the guard child directly. It checks only the fixed guard service, respects its explicit `down` marker, and starts a dedicated `runsv` only when `sv status` reports the recognized `runsv not running` state. Ambiguous status fails closed.
+The Boot launcher never starts the guard child directly. It checks only the fixed guard service, respects its explicit `down` marker, and starts a dedicated `runsv` only when `sv status` reports either the recognized `runsv not running` state or the virgin-service `unable to open supervise/ok: file does not exist` state while the fixed service directory and executable regular `run` identity are valid. Ambiguous status still fails closed.
 
 Ordinary runit `supervise/lock` provides the primary single-owner boundary for the guard service. The launcher also serializes its own short check/start section, and the guard child keeps its existing single-instance lock.
 Live installation remains a later `EXPERIMENT_CLOSE` action after merge and postmerge convergence. The implementation PR uses synthetic fixtures only.

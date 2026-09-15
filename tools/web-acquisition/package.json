@@ -7,7 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test tests/web-acquisition.test.mjs tests/web-acquisition-crawl.test.mjs tests/web-acquisition-firecrawl.test.mjs"
+    "test": "node --test tests/web-acquisition.test.mjs tests/web-acquisition-crawl.test.mjs tests/web-acquisition-firecrawl.test.mjs tests/web-acquisition-reveal.test.mjs"
   },
   "dependencies": {
     "@crawlee/basic": "3.18.1",

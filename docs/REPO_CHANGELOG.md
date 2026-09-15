@@ -1613,3 +1613,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/87f19c381939c6cbd31113e73058e99b6a9e00ce)
 - Event ID: `180bea854cbc335a2ec4de72c4e72b82c0e10c008ddb9649c7968fb2d83d38e4`
 <!-- canonical-main-doc-promoted:180bea854cbc335a2ec4de72c4e72b82c0e10c008ddb9649c7968fb2d83d38e4 -->
+
+### 2026-09-15 — Merge pull request #2279 from hanmiyoo10-alt/canonical-main/queue-hygiene-2278
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `4394805f140bf991c340a501b548a63c1e556449`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/4394805f140bf991c340a501b548a63c1e556449)
+- Event ID: `0a765ea7d0066eede824535eff676e4b55ebf055d43ddd7e8ffe995bf18bb079`
+<!-- canonical-main-doc-promoted:0a765ea7d0066eede824535eff676e4b55ebf055d43ddd7e8ffe995bf18bb079 -->

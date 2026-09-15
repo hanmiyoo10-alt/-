@@ -1,0 +1,19 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -u
+
+PREFIX=/data/data/com.termux/files/usr
+HOME_DIR=/data/data/com.termux/files/home
+if [ "${MCL_M_RDC_SUPERVISOR_TEST_MODE:-0}" = "1" ]; then
+    TEST_ROOT="${MCL_M_RDC_SUPERVISOR_TEST_ROOT:?test root required}"
+    PREFIX="$TEST_ROOT/prefix"
+    HOME_DIR="$TEST_ROOT/home"
+fi
+
+GUARD="$HOME_DIR/.local/bin/mcl-m-rdc-supervisor-guard"
+STATE="$HOME_DIR/.local/state/mcl-m-rdc-supervisor-guard"
+NOHUP="$PREFIX/bin/nohup"
+
+[ -x "$GUARD" ] || exit 0
+mkdir -p "$STATE"
+"$NOHUP" "$GUARD" --loop >> "$STATE/launcher.log" 2>&1 &
+exit 0

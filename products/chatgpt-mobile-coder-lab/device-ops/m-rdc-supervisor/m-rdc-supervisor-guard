@@ -1,0 +1,151 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -u
+
+PREFIX=/data/data/com.termux/files/usr
+HOME_DIR=/data/data/com.termux/files/home
+if [ "${MCL_M_RDC_SUPERVISOR_TEST_MODE:-0}" = "1" ]; then
+    TEST_ROOT="${MCL_M_RDC_SUPERVISOR_TEST_ROOT:?test root required}"
+    PREFIX="$TEST_ROOT/prefix"
+    HOME_DIR="$TEST_ROOT/home"
+fi
+
+SERVICE="$PREFIX/var/service/desktop-commander-remote"
+STATE="$HOME_DIR/.local/state/mcl-m-rdc-supervisor-guard"
+SV="$PREFIX/bin/sv"
+RUNSV="$PREFIX/bin/runsv"
+NOHUP="$PREFIX/bin/nohup"
+SLEEP="$PREFIX/bin/sleep"
+INTERVAL=15
+LOCKDIR="$STATE/guard.lock"
+PIDFILE="$STATE/guard.pid"
+EVENTS="$STATE/events.log"
+RUNSV_LOG="$STATE/runsv.log"
+SUPERVISION=unknown
+read_state() {
+    if [ ! -d "$SERVICE" ]; then
+        SUPERVISION=service_missing
+        return 0
+    fi
+    if [ -e "$SERVICE/down" ]; then
+        SUPERVISION=operator_down
+        return 0
+    fi
+
+    status="$($SV status "$SERVICE" 2>&1 || true)"
+    case "$status" in
+        run:*|down:*) SUPERVISION=running ;;
+        *"runsv not running"*) SUPERVISION=missing ;;
+        *) SUPERVISION=unknown ;;
+    esac
+}
+
+emit_check() {
+    read_state
+    printf '%s\n' \
+        'schema=mcl-m-rdc-supervisor.v1' \
+        'service=desktop-commander-remote' \
+        "supervision=$SUPERVISION" \
+        'details=withheld'
+    case "$SUPERVISION" in
+        running) return 0 ;;
+        unknown) return 2 ;;
+        *) return 1 ;;
+    esac
+}
+log_event() {
+    mkdir -p "$STATE"
+    printf '%s\n' "$1" >> "$EVENTS"
+}
+
+restore_supervisor() {
+    read_state
+    case "$SUPERVISION" in
+        running) return 0 ;;
+        service_missing)
+            log_event 'skip=service-missing'
+            return 0
+            ;;
+        operator_down)
+            log_event 'skip=operator-down'
+            return 0
+            ;;
+        unknown)
+            log_event 'skip=ambiguous-status'
+            return 2
+            ;;
+        missing) ;;
+    esac
+
+    mkdir -p "$STATE"
+    read_state
+    [ "$SUPERVISION" = missing ] || return 0
+    log_event 'action=start-rdc-runsv'
+    "$NOHUP" "$RUNSV" "$SERVICE" >> "$RUNSV_LOG" 2>&1 &
+    i=0
+    while [ "$i" -lt 5 ]; do
+        "$SLEEP" 1
+        read_state
+        case "$SUPERVISION" in
+            running)
+                log_event 'result=supervisor-restored'
+                return 0
+                ;;
+            operator_down)
+                log_event 'result=operator-down-during-repair'
+                return 1
+                ;;
+            unknown)
+                log_event 'result=ambiguous-after-start'
+                return 1
+                ;;
+        esac
+        i=$((i + 1))
+    done
+
+    log_event 'result=supervisor-start-failed'
+    return 1
+}
+
+acquire_loop_lock() {
+    mkdir -p "$STATE"
+    if mkdir "$LOCKDIR" 2>/dev/null; then
+        printf '%s\n' "$$" > "$PIDFILE"
+        return 0
+    fi
+    oldpid="$(cat "$PIDFILE" 2>/dev/null || true)"
+    if [ -n "$oldpid" ] && kill -0 "$oldpid" 2>/dev/null; then
+        return 1
+    fi
+
+    rm -rf "$LOCKDIR"
+    mkdir "$LOCKDIR" 2>/dev/null || return 1
+    printf '%s\n' "$$" > "$PIDFILE"
+}
+
+cleanup() {
+    current="$(cat "$PIDFILE" 2>/dev/null || true)"
+    [ "$current" = "$$" ] && rm -f "$PIDFILE"
+    rmdir "$LOCKDIR" 2>/dev/null || true
+}
+
+case "${1:-}" in
+    --check)
+        emit_check
+        ;;
+    --once)
+        restore_supervisor
+        ;;
+    --loop)
+        acquire_loop_lock || exit 0
+        trap cleanup EXIT INT TERM HUP
+        log_event 'guard=started'
+        while :; do
+            restore_supervisor || true
+            "$SLEEP" "$INTERVAL"
+        done
+        ;;
+    *)
+        printf '%s\n' 'usage: m-rdc-supervisor-guard --check|--once|--loop' >&2
+        exit 2
+        ;;
+esac

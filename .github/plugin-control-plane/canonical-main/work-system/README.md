@@ -315,3 +315,34 @@ The next worker resumes from repository evidence, not from an assumed chat trans
 ## Authority boundary
 
 The work system coordinates work; it does not authorize production or release changes. Existing exact-head CI, main-write, protection, release, and project-specific authorities remain unchanged.
+
+## Proof-level / live-observation eligibility classifier
+
+`work-system/proof-eligibility.cjs` is a deterministic read-only classifier for caller-supplied activated acceptance facts. It projects one of:
+
+`LIVE_REQUIRED / OBSERVATIONAL_PENDING_ALLOWED / NOT_APPLICABLE / NOT_REQUIRED / BLOCKED_CAPABILITY / UNKNOWN / CONFLICT`.
+
+It does not parse arbitrary packet prose, fetch GitHub, verify runtime events, create synthetic events, mutate repository or coordination state, or claim Git/CI/release/production truth. The caller remains responsible for supplying current authority-backed acceptance facts.
+
+The input is schema version `1` with explicit `acceptance` booleans and `syntheticEventPolicy: AUTHORIZED | FORBIDDEN`. Unknown fields, missing acceptance facts, unsupported values, and ambiguous structures fail closed. Contradictory activated facts return `CONFLICT` rather than choosing the convenient disposition.
+
+Key semantics:
+
+- `LIVE_REQUIRED` requires an explicit activated live requirement that remains unsatisfied.
+- `OBSERVATIONAL_PENDING_ALLOWED` requires both explicit pending eligibility and explicit non-blocking acceptance.
+- `NOT_APPLICABLE` and `NOT_REQUIRED` require their corresponding explicit activated declarations; event absence alone proves neither.
+- `BLOCKED_CAPABILITY` requires explicit capability unavailability and preserves the activated blocking/non-blocking declaration in `closureBlocking`.
+- a required live proof cannot be retroactively weakened into non-blocking pending or another green-by-absence disposition.
+- when synthetic event creation is forbidden, `syntheticLiveEventForbidden` remains true; the classifier never recommends manufacturing an event merely to turn a packet green.
+- `UNKNOWN` and `CONFLICT` are closure-blocking and fail closed.
+
+Every result keeps `claimsLiveProven: false`, `claimsDone: false`, and `mutationAuthorized: false`. This helper classifies proof eligibility only; it never manufactures proof-taxonomy evidence or DONE authority.
+
+Invocation uses a bounded JSON request from a file or stdin:
+
+```bash
+node .github/plugin-control-plane/canonical-main/work-system/proof-eligibility.cjs /path/to/request.json
+cat /path/to/request.json | node .github/plugin-control-plane/canonical-main/work-system/proof-eligibility.cjs
+```
+
+`sourceRefs` must contain 1–16 non-empty bounded source locators, and every acceptance field is explicit rather than inferred from prose.

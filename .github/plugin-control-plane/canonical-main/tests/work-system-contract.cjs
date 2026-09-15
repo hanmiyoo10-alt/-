@@ -667,4 +667,150 @@ activityResult = classifyPrActivity({
 assert.equal(activityResult.state, 'CONFLICT');
 assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.SUCCESSOR_NATIVE_STATE_CONFLICT);
 
+
+const {
+  classifyProofEligibility,
+  REASON_CODES: PROOF_ELIGIBILITY_REASON_CODES,
+} = require(path.join(dir, 'proof-eligibility.cjs'));
+const proofEligibilitySource = fs.readFileSync(path.join(dir, 'proof-eligibility.cjs'), 'utf8');
+const proofFixture = (overrides = {}) => ({
+  schemaVersion: 1,
+  sourceRefs: ['fixture:activated-acceptance'],
+  acceptance: {
+    liveApplies: true,
+    liveRequired: false,
+    liveSatisfied: false,
+    observationalPendingAllowed: false,
+    observationalPendingNonBlocking: false,
+    notApplicable: false,
+    liveNotRequired: false,
+    capabilityUnavailable: false,
+    capabilityBlockNonBlocking: false,
+    syntheticEventPolicy: 'FORBIDDEN',
+    ...overrides,
+  },
+});
+
+let proofResult = classifyProofEligibility(proofFixture({liveRequired: true}));
+assert.equal(proofResult.disposition, 'LIVE_REQUIRED');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.LIVE_REQUIRED_UNSATISFIED);
+assert.equal(proofResult.closureBlocking, true);
+assert.equal(proofResult.syntheticLiveEventForbidden, true);
+assert.equal(proofResult.claimsLiveProven, false);
+assert.equal(proofResult.claimsDone, false);
+assert.equal(proofResult.mutationAuthorized, false);
+
+proofResult = classifyProofEligibility(proofFixture({
+  observationalPendingAllowed: true,
+  observationalPendingNonBlocking: true,
+}));
+assert.equal(proofResult.disposition, 'OBSERVATIONAL_PENDING_ALLOWED');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.OBSERVATIONAL_PENDING_EXPLICIT_NONBLOCKING);
+assert.equal(proofResult.closureBlocking, false);
+assert.equal(proofResult.syntheticLiveEventForbidden, true);
+
+proofResult = classifyProofEligibility(proofFixture({liveNotRequired: true}));
+assert.equal(proofResult.disposition, 'NOT_REQUIRED');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.LIVE_EXPLICIT_NOT_REQUIRED);
+assert.equal(proofResult.closureBlocking, false);
+
+proofResult = classifyProofEligibility(proofFixture({
+  liveApplies: false,
+  notApplicable: true,
+}));
+assert.equal(proofResult.disposition, 'NOT_APPLICABLE');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.LIVE_EXPLICIT_NOT_APPLICABLE);
+assert.equal(proofResult.closureBlocking, false);
+
+proofResult = classifyProofEligibility(proofFixture({capabilityUnavailable: true}));
+assert.equal(proofResult.disposition, 'BLOCKED_CAPABILITY');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.CAPABILITY_UNAVAILABLE_BLOCKING);
+assert.equal(proofResult.closureBlocking, true);
+
+proofResult = classifyProofEligibility(proofFixture({
+  capabilityUnavailable: true,
+  capabilityBlockNonBlocking: true,
+}));
+assert.equal(proofResult.disposition, 'BLOCKED_CAPABILITY');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.CAPABILITY_UNAVAILABLE_NONBLOCKING);
+assert.equal(proofResult.closureBlocking, false);
+
+const missingProofField = proofFixture();
+delete missingProofField.acceptance.liveRequired;
+proofResult = classifyProofEligibility(missingProofField);
+assert.equal(proofResult.disposition, 'UNKNOWN');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.INPUT_MISSING_FIELD);
+assert.equal(proofResult.closureBlocking, true);
+
+proofResult = classifyProofEligibility({...proofFixture(), unexpected: true});
+assert.equal(proofResult.disposition, 'UNKNOWN');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.INPUT_UNKNOWN_FIELD);
+
+proofResult = classifyProofEligibility(proofFixture({
+  liveRequired: true,
+  liveNotRequired: true,
+}));
+assert.equal(proofResult.disposition, 'CONFLICT');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.ACTIVATED_ACCEPTANCE_CONFLICT);
+assert.equal(proofResult.closureBlocking, true);
+assert.equal(proofResult.syntheticLiveEventForbidden, true);
+proofResult = classifyProofEligibility(proofFixture({
+  liveRequired: true,
+  observationalPendingAllowed: true,
+  observationalPendingNonBlocking: true,
+}));
+assert.equal(proofResult.disposition, 'CONFLICT');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.ACTIVATED_ACCEPTANCE_CONFLICT);
+
+proofResult = classifyProofEligibility(proofFixture({
+  liveRequired: true,
+  capabilityUnavailable: true,
+  capabilityBlockNonBlocking: true,
+}));
+assert.equal(proofResult.disposition, 'CONFLICT');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.ACTIVATED_ACCEPTANCE_CONFLICT);
+
+proofResult = classifyProofEligibility(proofFixture({
+  liveRequired: true,
+  liveSatisfied: true,
+}));
+assert.equal(proofResult.disposition, 'UNKNOWN');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.LIVE_ALREADY_SATISFIED_OUTSIDE_ELIGIBILITY);
+assert.equal(proofResult.claimsLiveProven, false);
+
+proofResult = classifyProofEligibility(proofFixture());
+assert.equal(proofResult.disposition, 'UNKNOWN');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.ACTIVATED_ACCEPTANCE_UNRESOLVED);
+
+assert.doesNotMatch(proofEligibilitySource, /child_process|https?:\/\/|gh\s+api|fetch\s*\(/);
+assert.match(readme, /## Proof-level \/ live-observation eligibility classifier/);
+assert.match(readme, /`LIVE_REQUIRED \/ OBSERVATIONAL_PENDING_ALLOWED \/ NOT_APPLICABLE \/ NOT_REQUIRED \/ BLOCKED_CAPABILITY \/ UNKNOWN \/ CONFLICT`/);
+assert.match(readme, /does not parse arbitrary packet prose, fetch GitHub, verify runtime events, create synthetic events, mutate repository or coordination state/i);
+assert.match(readme, /required live proof cannot be retroactively weakened/i);
+assert.match(readme, /`claimsLiveProven: false`, `claimsDone: false`, and `mutationAuthorized: false`/);
+
+
+proofResult = classifyProofEligibility({
+  ...proofFixture(),
+  sourceRefs: [],
+});
+assert.equal(proofResult.disposition, 'UNKNOWN');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.INPUT_FIELD_INVALID);
+
+proofResult = classifyProofEligibility(proofFixture({
+  liveApplies: false,
+  liveNotRequired: true,
+}));
+assert.equal(proofResult.disposition, 'CONFLICT');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.ACTIVATED_ACCEPTANCE_CONFLICT);
+
+const unknownAcceptanceField = proofFixture();
+unknownAcceptanceField.acceptance.extra = true;
+proofResult = classifyProofEligibility(unknownAcceptanceField);
+assert.equal(proofResult.disposition, 'UNKNOWN');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.INPUT_UNKNOWN_FIELD);
+
+assert.match(readme, /proof-eligibility\.cjs \/path\/to\/request\.json/);
+assert.match(readme, /`sourceRefs` must contain 1–16 non-empty bounded source locators/);
+
 console.log('work-system-contract: ok');

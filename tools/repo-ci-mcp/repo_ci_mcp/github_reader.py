@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
 from dataclasses import dataclass
@@ -171,3 +173,46 @@ class GitHubReader:
             return raw.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise GitHubReadError(f"job log UTF-8 decode failed: {self._redact(exc)}") from None
+
+
+    def resolve_commit(self, ref: str) -> str:
+        if not isinstance(ref, str) or not ref or len(ref) > 200:
+            raise GitHubReadError("ref must be a non-empty string <= 200 characters")
+        value = self._get_json(f"{self._repo_api_prefix}/commits/{quote(ref, safe='')}")
+        sha = value.get("sha")
+        if not isinstance(sha, str) or len(sha) != 40:
+            raise GitHubReadError("resolved commit sha is invalid")
+        if any(ch not in "0123456789abcdef" for ch in sha.lower()):
+            raise GitHubReadError("resolved commit sha is invalid")
+        return sha
+
+    def get_repository_file(self, path: str, commit_sha: str, *, max_bytes: int) -> dict[str, Any]:
+        if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes <= 0:
+            raise ValueError("max_bytes must be a positive integer")
+        encoded_path = "/".join(quote(part, safe="") for part in path.split("/"))
+        value = self._get_json(
+            f"{self._repo_api_prefix}/contents/{encoded_path}",
+            {"ref": commit_sha},
+        )
+        if value.get("type") != "file":
+            raise GitHubReadError("repository content is not a file")
+        size = value.get("size")
+        if isinstance(size, bool) or not isinstance(size, int) or size < 0:
+            raise GitHubReadError("repository file size is invalid")
+        if size > max_bytes:
+            raise GitHubReadError(f"repository file exceeds {max_bytes} byte bound")
+        blob_sha = value.get("sha")
+        if not isinstance(blob_sha, str) or len(blob_sha) != 40:
+            raise GitHubReadError("repository blob sha is invalid")
+        if value.get("encoding") != "base64" or not isinstance(value.get("content"), str):
+            raise GitHubReadError("repository file content is not available as base64")
+        encoded = "".join(value["content"].split())
+        try:
+            raw = base64.b64decode(encoded, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise GitHubReadError(f"repository file base64 decode failed: {self._redact(exc)}") from None
+        if len(raw) > max_bytes:
+            raise GitHubReadError(f"repository file exceeds {max_bytes} byte bound")
+        if len(raw) != size:
+            raise GitHubReadError("repository file decoded size does not match metadata")
+        return {"content": raw, "blob_sha": blob_sha, "size": size}

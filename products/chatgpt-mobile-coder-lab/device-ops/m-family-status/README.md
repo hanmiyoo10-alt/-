@@ -49,6 +49,14 @@ the VM owner's effective-memory policy. It does not inspect RDC provider/session
 state, authentication material, Git state, PIDs, command lines, cgroup paths, or
 private logs.
 
+## Durability and versioning
+
+`mcl-env-status v1` is the permanent recommended first-pass preflight for future main-phone `M` family work when its projected fields are sufficient for the question at hand. This durability applies to the interface and semantics, not to any observed runtime value. Every receipt remains a point-in-time projection of the existing owners.
+
+The `status` command, `schema=mcl-m-family-status.v1`, exact eight-line field order, read-only behavior, owner delegation, unknown preservation, child-output suppression, and lack of an aggregate health result form the v1 compatibility contract. If a field is non-pass/`unknown`, or more specific evidence is required, consumers must drill into the actual semantic owner rather than treating this adapter as stronger authority.
+
+An incompatible receipt or semantic change requires a separately reviewed migration. Prefer a new schema version over silently changing v1.
+
 ## Mutation boundary
 
 Version 1 has no install, apply, repair, restart, cleanup, download, package,

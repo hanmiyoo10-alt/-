@@ -1605,3 +1605,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f0db321f9763e11cfa6e1b4e2d88031d479886a1)
 - Event ID: `8a29486495af4f8b176fbf8de91e20d35095cac640e5755de5a54140b006eaaa`
 <!-- canonical-main-doc-promoted:8a29486495af4f8b176fbf8de91e20d35095cac640e5755de5a54140b006eaaa -->
+
+### 2026-09-15 — Merge pull request #2269 from hanmiyoo10-alt/server/cm-closure-legacy-optin-2266
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `87f19c381939c6cbd31113e73058e99b6a9e00ce`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/87f19c381939c6cbd31113e73058e99b6a9e00ce)
+- Event ID: `180bea854cbc335a2ec4de72c4e72b82c0e10c008ddb9649c7968fb2d83d38e4`
+<!-- canonical-main-doc-promoted:180bea854cbc335a2ec4de72c4e72b82c0e10c008ddb9649c7968fb2d83d38e4 -->

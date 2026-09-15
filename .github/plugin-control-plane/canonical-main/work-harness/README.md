@@ -199,6 +199,44 @@ The machine result is compact JSON with `COMPLETE`, `PARTIAL`, `UNKNOWN`, or `FA
 
 This surface uses only the existing GitHub issue API through the canonical-main GitHub client. It adds no workflow-wide `issue_comment` listener, no contents/ref/PR/release/production authority, no new mutable truth owner, no mutation capability to `tools/repo-ci-mcp/**`, and no claim that repository code can suppress host UI activity cards. Its compactness benefit is narrower: when this harness is available, one visible repository command can preserve the two required durable issue comments internally.
 
+## CAS-style coordination issue-body patch
+
+`coordination-body-patch.cjs` is the Work Harness issue-only adapter for narrow packet/queue body reconciliation. It does not decide what lifecycle or proof text is true; callers must already have authority for the requested coordination edit.
+
+The CLI accepts one bounded JSON request file:
+
+```sh
+node .github/plugin-control-plane/canonical-main/work-harness/coordination-body-patch.cjs \
+  --request-file /path/to/request.json
+```
+
+A v1 request names exactly one eligible surface, one issue, the SHA-256 digest of the complete expected prior body, and one operation. Eligible surfaces are only:
+
+- `WORK_PACKET`: a non-PR issue with exactly one `canonical-main-work-packet:v1` marker; open or closed packets are eligible for evidence-backed body reconciliation;
+- `WORK_QUEUE`: exactly issue #465, open, with exactly one `canonical-main-work-queue:v1` marker.
+
+Every other issue/body class fails closed. The adapter PATCHes only the GitHub issue `body` field. It has no title, state, state_reason, label, assignee, comment, PR, ref, file, workflow, release, production, runtime, or protection mutation authority.
+
+V1 transformations are exact only:
+
+- `replaceExact` requires one non-empty `oldText` occurrence and replaces it once with exact `newText`;
+- `replaceMarkerBlock` requires unique ordered start/end markers and an exact replacement block carrying those same boundary markers;
+- zero/multiple matches, malformed marker ranges, no-op replacements, regex/fuzzy matching, append-if-missing, callbacks, evaluation, and arbitrary code all fail before mutation.
+
+The currentness sequence is intentionally explicit:
+
+1. read the eligible issue and require its complete body digest to equal `expectedBodySha256`;
+2. derive the exact target body in memory;
+3. re-read immediately before PATCH and require byte-identical body/digest evidence;
+4. PATCH only `{ body: <derived target> }`;
+5. perform mandatory post-write read-back and require byte-identical target body plus the expected after-digest before reporting `UPDATED`.
+
+If the second read observes drift, the adapter returns `BLOCKED` and performs no PATCH. Once a PATCH has been attempted, read-back failure, mismatch, or an unknown PATCH response returns `UNKNOWN` with `mutationMayHaveOccurred=true`; the adapter does not retry from the stale expectation.
+
+This is **CAS-style** currentness protection, not a server-atomic compare-and-swap primitive. GitHub issue PATCH transport does not establish an atomic conditional body write here, so a small final read-to-PATCH race remains possible. Mandatory post-write read-back detects observed divergence instead of pretending that interval cannot exist.
+
+The request-file ceiling is 32 KiB. CLI exit status is `0` for `UPDATED`, `2` for `BLOCKED`, and `3` for `UNKNOWN`.
+
 ## Current non-goals
 
 The current Harness still does **not** add:

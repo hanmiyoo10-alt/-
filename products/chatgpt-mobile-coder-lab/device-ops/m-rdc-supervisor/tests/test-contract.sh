@@ -17,13 +17,26 @@ HOME_FIX="$TEST_ROOT/home"
 SERVICE="$PREFIX/var/service/desktop-commander-remote"
 TEST_STATE="$TMP/test-state"
 
+force_stop_pid() {
+    pid="$1"
+    [ -n "$pid" ] || return 0
+    kill "$pid" 2>/dev/null || return 0
+    i=0
+    while kill -0 "$pid" 2>/dev/null && [ "$i" -lt 3 ]; do
+        sleep 1
+        i=$((i + 1))
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+        kill -KILL "$pid" 2>/dev/null || true
+    fi
+    wait "$pid" 2>/dev/null || true
+}
 cleanup() {
     if [ -r "$TEST_STATE/runsv.pid" ]; then
-        kill "$(cat "$TEST_STATE/runsv.pid")" 2>/dev/null || true
+        force_stop_pid "$(cat "$TEST_STATE/runsv.pid")"
     fi
-    if [ -n "${LOOP_PID:-}" ]; then
-        kill "$LOOP_PID" 2>/dev/null || true
-    fi
+    force_stop_pid "${SECOND_PID:-}"
+    force_stop_pid "${LOOP_PID:-}"
     rm -rf "$TMP"
 }
 trap cleanup EXIT INT TERM HUP
@@ -67,7 +80,7 @@ cleanup_runsv() {
     rm -f "$service/supervisor-up"
 }
 trap 'cleanup_runsv; exit 0' TERM INT HUP
-while :; do sleep 30; done
+while :; do sleep 1; done
 EOF
 chmod +x "$PREFIX/bin/runsv"
 
@@ -76,6 +89,41 @@ run_guard() {
     MCL_M_RDC_SUPERVISOR_TEST_ROOT="$TEST_ROOT" \
     MCL_M_RDC_TEST_STATE="$TEST_STATE" \
     sh "$GUARD" "$@"
+}
+start_guard_loop() {
+    MCL_M_RDC_SUPERVISOR_TEST_MODE=1 \
+    MCL_M_RDC_SUPERVISOR_TEST_ROOT="$TEST_ROOT" \
+    MCL_M_RDC_SUPERVISOR_TEST_INTERVAL=1 \
+    MCL_M_RDC_TEST_STATE="$TEST_STATE" \
+    sh "$GUARD" --loop >/dev/null 2>&1 &
+    LOOP_PID=$!
+}
+wait_for_loop_lock() {
+    lock_pid="$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/guard.pid"
+    i=0
+    while [ ! -s "$lock_pid" ] && [ "$i" -lt 20 ]; do
+        sleep 1
+        i=$((i + 1))
+    done
+    [ -s "$lock_pid" ] || fail "loop lock not acquired"
+}
+stop_loop_with_signal() {
+    sig="$1"
+    kill -s "$sig" "$LOOP_PID" 2>/dev/null || fail "$sig signal delivery"
+    i=0
+    while kill -0 "$LOOP_PID" 2>/dev/null && [ "$i" -lt 5 ]; do
+        sleep 1
+        i=$((i + 1))
+    done
+    if kill -0 "$LOOP_PID" 2>/dev/null; then
+        kill -KILL "$LOOP_PID" 2>/dev/null || true
+        wait "$LOOP_PID" 2>/dev/null || true
+        fail "loop ignored $sig"
+    fi
+    wait "$LOOP_PID" || fail "loop signal exit $sig"
+    LOOP_PID=
+    [ ! -e "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/guard.pid" ] || fail "pidfile survived $sig"
+    [ ! -d "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/guard.lock" ] || fail "lock survived $sig"
 }
 set +e
 check_out="$(run_guard --check 2>&1)"
@@ -96,7 +144,7 @@ grep -Fxq 'result=supervisor-restored' "$HOME_FIX/.local/state/mcl-m-rdc-supervi
 run_guard --once
 [ "$(cat "$TEST_STATE/runsv.count")" = 1 ] || fail "healthy supervisor restarted"
 
-kill "$(cat "$TEST_STATE/runsv.pid")" 2>/dev/null || true
+force_stop_pid "$(cat "$TEST_STATE/runsv.pid")"
 sleep 1
 rm -f "$SERVICE/supervisor-up"
 touch "$SERVICE/down"
@@ -115,26 +163,23 @@ grep -Fxq 'skip=ambiguous-status' "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-g
 
 rm -f "$SERVICE/ambiguous"
 touch "$SERVICE/supervisor-up"
-run_guard --loop >/dev/null 2>&1 &
-LOOP_PID=$!
-lock_pid="$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/guard.pid"
-i=0
-while [ ! -s "$lock_pid" ] && [ "$i" -lt 20 ]; do
-    sleep 1
-    i=$((i + 1))
-done
-[ -s "$lock_pid" ] || fail "loop lock not acquired"
-run_guard --loop >/dev/null 2>&1 &
+start_guard_loop
+wait_for_loop_lock
+MCL_M_RDC_SUPERVISOR_TEST_MODE=1 \
+MCL_M_RDC_SUPERVISOR_TEST_ROOT="$TEST_ROOT" \
+MCL_M_RDC_SUPERVISOR_TEST_INTERVAL=1 \
+MCL_M_RDC_TEST_STATE="$TEST_STATE" \
+sh "$GUARD" --loop >/dev/null 2>&1 &
 SECOND_PID=$!
 sleep 1
 if kill -0 "$SECOND_PID" 2>/dev/null; then
-    kill "$SECOND_PID" 2>/dev/null || true
+    force_stop_pid "$SECOND_PID"
+    SECOND_PID=
     fail "duplicate guard remained running"
 fi
 wait "$SECOND_PID"
-kill "$LOOP_PID" 2>/dev/null || true
-wait "$LOOP_PID" 2>/dev/null || true
-LOOP_PID=
+SECOND_PID=
+stop_loop_with_signal TERM
 run_install() {
     MCL_M_RDC_SUPERVISOR_TEST_MODE=1 \
     MCL_M_RDC_SUPERVISOR_TEST_ROOT="$TEST_ROOT" \

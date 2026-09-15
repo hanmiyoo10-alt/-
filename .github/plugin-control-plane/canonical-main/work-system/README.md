@@ -47,6 +47,39 @@ cat /path/to/issue-465-body.md | node .github/plugin-control-plane/canonical-mai
 
 CLI exit status is `1` for `FAIL`, `2` for `UNKNOWN`, and `0` for `PASS` or `WARN`. The helper has no auto-fix mode and grants no issue-write, merge, release, production, or protection authority.
 
+### Write-scope overlap resolver
+
+`work-system/scope-overlap.cjs` is the pure read-only classifier for the existing `active-packets` write-scope-overlap contract. It consumes supplied packet/PR evidence only; it does not fetch GitHub, mutate issues, or grant write authority.
+
+Its top-level result vocabulary is `DISJOINT / OVERLAP / UNKNOWN / CONFLICT`, with precedence `CONFLICT > OVERLAP > UNKNOWN > DISJOINT`.
+
+Supported v1 scope forms are deliberately narrow:
+
+- `path:<repo-relative-file>` for one exact repository path;
+- `path:<repo-relative-prefix>/**` for one deterministic trailing-prefix scope;
+- `surface:<kind>:<identity>` for one exact coordination-surface identity.
+
+Absolute paths, traversal, and wildcard/pattern syntax outside the single trailing `/**` form fail closed to `UNKNOWN`. Path-prefix containment is checked deterministically in both directions; surface scopes overlap only on exact normalized identity.
+
+Callers provide `requestedScopes`, a bounded discovery disposition (`COMPLETE / PARTIAL / UNKNOWN`), and concretely identified candidates. Packet candidates use current native issue state plus exact `canonical-main-work-packet:v1` body text. Open PR candidates use their supplied changed-file inventory. Standard packet scope headings Bounded write scope, Bounded implementation write scope, and Locked write scope are parsed deterministically; an explicit preservation/non-write boundary stops scope collection.
+
+#465 remains seed-only and non-exhaustive. `DISJOINT` requires bounded discovery `COMPLETE`; `PARTIAL` or `UNKNOWN` discovery cannot be promoted to disjointness merely because no supplied candidate overlaps.
+
+Terminal packet states (`DONE / CANCELLED / SUPERSEDED`) and closed/merged PRs do not block solely by historical existence. An open PR with a matching observed changed file proves `OVERLAP` even if the overall file inventory is incomplete; without a match, incomplete open-PR file evidence remains `UNKNOWN`.
+
+When a packet explicitly links an open PR, an observed PR changed file outside the packet's parsed bounded write scope is `CONFLICT` scope-drift evidence. The resolver never decides that an open PR is stale or superseded from age, branch name, mergeability, or inactivity.
+
+Every non-`DISJOINT` finding carries a stable reason code, owner/source refs, the requested scope, and bounded evidence. `OVERLAP` proves only a current write-scope collision in supplied evidence; it does not choose which owner wins or claim a semantic/code defect.
+
+Module callers use `resolveScopeOverlap(input)`. The bounded CLI accepts JSON from one file or stdin:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/scope-overlap.cjs /path/to/input.json
+cat /path/to/input.json | node .github/plugin-control-plane/canonical-main/work-system/scope-overlap.cjs
+```
+
+CLI exit status is `0` for `DISJOINT`, `1` for `OVERLAP`, `2` for `UNKNOWN`, and `3` for `CONFLICT`. No current SHA, packet number, PR number, cache, network client, auto-close behavior, or repository-global active-work registry is embedded in the classifier.
+
 ## Live issue markers
 
 - Idea inventory: `<!-- canonical-main-idea-inventory:v1 -->`

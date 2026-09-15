@@ -80,6 +80,20 @@ cat /path/to/input.json | node .github/plugin-control-plane/canonical-main/work-
 
 CLI exit status is `0` for `DISJOINT`, `1` for `OVERLAP`, `2` for `UNKNOWN`, and `3` for `CONFLICT`. No current SHA, packet number, PR number, cache, network client, auto-close behavior, or repository-global active-work registry is embedded in the classifier.
 
+### Evidence-backed PR activity classification
+
+`work-system/pr-activity.cjs` is the pure read-only activity classifier for open-PR overlap evidence. It consumes caller-supplied native PR, linked packet, and optional merged-successor evidence only; it does not fetch GitHub, close PRs, mutate packets, or maintain a PR registry.
+
+Its result vocabulary is `ACTIVE_WRITER / NONBLOCKING_PROVEN / UNKNOWN / CONFLICT`. Only `NONBLOCKING_PROVEN` may suppress an otherwise-open PR from overlap consideration. `ACTIVE_WRITER` remains eligible to block by path, while `UNKNOWN` and `CONFLICT` remain fail-closed.
+
+Native closed PRs are nonblocking. An open PR linked to a current nonterminal packet remains `ACTIVE_WRITER`. A properly closed terminal linked packet may prove the open PR nonblocking. A merged successor may do so only when the caller supplies an explicit supersedes relation plus exact ancestry or patch-equivalence proof. Missing proof stays `UNKNOWN`; contradictory proof or lifecycle/native-state disagreement is `CONFLICT`.
+
+Age, inactivity, branch naming, draft state, mergeability, base drift, review age, or CI history never prove supersession. In particular, an old or currently unmergeable PR remains active when current packet evidence still owns it.
+
+`scope-overlap.cjs` accepts this activity evidence only as an optional composition for an open PR candidate. Activity evidence is optional; without it, the existing open-PR overlap behavior is unchanged. `NONBLOCKING_PROVEN` omits that candidate from overlap blocking while preserving the activity result in output; `UNKNOWN` yields overlap `UNKNOWN`, and `CONFLICT` yields overlap `CONFLICT`. This never manufactures bounded discovery completeness, so `DISJOINT` still requires caller-supplied `COMPLETE` discovery.
+
+Module callers use `classifyPrActivity(input)`. The bounded CLI accepts one JSON file or stdin. Determinate `ACTIVE_WRITER` and `NONBLOCKING_PROVEN` exit zero; `UNKNOWN` exits 2 and `CONFLICT` exits 3. The classifier embeds no timestamp threshold, current SHA, PR number, packet number, network client, mutation path, or auto-cleanup rule.
+
 ## Live issue markers
 
 - Idea inventory: `<!-- canonical-main-idea-inventory:v1 -->`

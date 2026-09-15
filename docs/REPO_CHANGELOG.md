@@ -1597,3 +1597,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/7c7d1429e5de6e0faa4a6a281d1d181cbd221cfb)
 - Event ID: `ea8d62452207560168f8ae6fafd036a44ab74b1301d13381779c069a732c8d7f`
 <!-- canonical-main-doc-promoted:ea8d62452207560168f8ae6fafd036a44ab74b1301d13381779c069a732c8d7f -->
+
+### 2026-09-15 — Merge pull request #2263 from hanmiyoo10-alt/server/cm-work-queue-multi-owner-2262
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `f0db321f9763e11cfa6e1b4e2d88031d479886a1`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f0db321f9763e11cfa6e1b4e2d88031d479886a1)
+- Event ID: `8a29486495af4f8b176fbf8de91e20d35095cac640e5755de5a54140b006eaaa`
+<!-- canonical-main-doc-promoted:8a29486495af4f8b176fbf8de91e20d35095cac640e5755de5a54140b006eaaa -->

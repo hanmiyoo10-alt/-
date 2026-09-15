@@ -1,7 +1,9 @@
-import subprocess
-import unittest
-from pathlib import Path
 import importlib.util
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+from unittest import mock
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "screen_on.py"
 spec = importlib.util.spec_from_file_location("screen_on", MODULE_PATH)
@@ -13,93 +15,176 @@ spec.loader.exec_module(screen_on)
 class FakeRunner:
     def __init__(self):
         self.calls = []
-        self.package_present = True
-        self.receiver_present = True
-        self.broadcast_stdout = "Broadcasting: Intent {}\nBroadcast completed: result=0\n"
+        self.packages = {screen_on.PACKAGE, screen_on.COMPANION_PACKAGE}
+        self.receivers = {
+            (screen_on.PACKAGE, screen_on.ADD_ACTION): screen_on.RECEIVER,
+            (screen_on.PACKAGE, screen_on.REMOVE_ACTION): screen_on.RECEIVER,
+            (screen_on.COMPANION_PACKAGE, screen_on.COMPANION_PAIR_ACTION): screen_on.COMPANION_RECEIVER,
+            (screen_on.COMPANION_PACKAGE, screen_on.COMPANION_ON_ACTION): screen_on.COMPANION_RECEIVER,
+            (screen_on.COMPANION_PACKAGE, screen_on.COMPANION_OFF_ACTION): screen_on.COMPANION_RECEIVER,
+            (screen_on.COMPANION_PACKAGE, screen_on.COMPANION_STATUS_ACTION): screen_on.COMPANION_RECEIVER,
+        }
+        self.broadcasts = {
+            screen_on.ADD_ACTION: (0, ""),
+            screen_on.REMOVE_ACTION: (0, ""),
+            screen_on.COMPANION_PAIR_ACTION: (screen_on.COMPANION_RESULT_PAIRED, "pairing=PAIRED"),
+            screen_on.COMPANION_ON_ACTION: (screen_on.COMPANION_RESULT_ON, "overlay=ON"),
+            screen_on.COMPANION_OFF_ACTION: (screen_on.COMPANION_RESULT_OFF, "overlay=OFF"),
+            screen_on.COMPANION_STATUS_ACTION: (screen_on.COMPANION_RESULT_STATUS_OFF, "overlay=OFF"),
+        }
         self.broadcast_returncode = 0
-        self.setup_returncode = 0
+        self.start_returncode = 0
 
     def __call__(self, args, **kwargs):
         self.calls.append(list(args))
         if args[:2] == ["pm", "path"]:
-            if self.package_present:
-                return subprocess.CompletedProcess(args, 0, "package:/fake/base.apk\n", "")
-            return subprocess.CompletedProcess(args, 1, "", "package not found")
-
+            package = args[-1]
+            return subprocess.CompletedProcess(args, 0, "package:/fake/base.apk\n", "") if package in self.packages else subprocess.CompletedProcess(args, 1, "", "missing")
         if args[:3] == ["cmd", "package", "query-receivers"]:
-            stdout = f"{screen_on.RECEIVER}\n" if self.receiver_present else "No receivers found\n"
-            return subprocess.CompletedProcess(args, 0, stdout, "")
-
+            package = args[args.index("-p") + 1]
+            action = args[args.index("-a") + 1]
+            receiver = self.receivers.get((package, action))
+            return subprocess.CompletedProcess(args, 0, f"{receiver}\n" if receiver else "No receivers found\n", "")
         if args[:3] == ["cmd", "activity", "broadcast"]:
-            return subprocess.CompletedProcess(
-                args,
-                self.broadcast_returncode,
-                self.broadcast_stdout,
-                "broadcast failed" if self.broadcast_returncode else "",
-            )
-
+            action = args[args.index("-a") + 1]
+            code, data = self.broadcasts.get(action, (0, ""))
+            suffix = f', data="{data}"' if data else ""
+            return subprocess.CompletedProcess(args, self.broadcast_returncode, f"Broadcast completed: result={code}{suffix}\n" if not self.broadcast_returncode else "", "denied" if self.broadcast_returncode else "")
         if args[:2] == ["am", "start"]:
-            return subprocess.CompletedProcess(
-                args,
-                self.setup_returncode,
-                "Starting: Intent {}\n" if not self.setup_returncode else "",
-                "start failed" if self.setup_returncode else "",
-            )
-
+            return subprocess.CompletedProcess(args, self.start_returncode, "", "start failed" if self.start_returncode else "")
         raise AssertionError(f"unexpected command: {args}")
 
 
 class ScreenOnTests(unittest.TestCase):
-    def test_doctor_reports_transport_ready_but_effect_unknown(self):
-        runner = FakeRunner()
-        lines = screen_on.command_doctor(runner)
-        self.assertIn("transport_ready=YES", lines)
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.old_token_path = screen_on.COMPANION_TOKEN_PATH
+        screen_on.COMPANION_TOKEN_PATH = Path(self.tmp.name) / "config" / "token"
+
+    def tearDown(self):
+        screen_on.COMPANION_TOKEN_PATH = self.old_token_path
+        self.tmp.cleanup()
+
+    def pair_locally(self, token="a" * 64):
+        screen_on._write_companion_token(token)
+        return token
+
+    def test_cli_default_backend_preserves_eonsoft_baseline(self):
+        self.assertEqual(screen_on.build_parser().parse_args(["doctor"]).backend, "eonsoft")
+
+    def test_eonsoft_doctor_preserves_unknown_effect(self):
+        lines = screen_on.command_doctor(FakeRunner())
         self.assertIn("overlay_permission=UNKNOWN", lines)
         self.assertIn("keep_awake_ready=UNKNOWN", lines)
 
-    def test_on_sends_explicit_add_broadcast_and_preserves_unknown_effect(self):
+    def test_eonsoft_on_and_off_keep_existing_actions(self):
         runner = FakeRunner()
-        lines = screen_on.command_on(runner)
-        broadcast = next(call for call in runner.calls if call[:3] == ["cmd", "activity", "broadcast"])
-        self.assertEqual(broadcast[broadcast.index("-a") + 1], screen_on.ADD_ACTION)
-        self.assertEqual(broadcast[broadcast.index("-n") + 1], screen_on.RECEIVER)
-        self.assertIn("keep_awake=UNKNOWN", lines)
+        screen_on.command_on(runner)
+        screen_on.command_off(runner)
+        actions = [c[c.index("-a") + 1] for c in runner.calls if c[:3] == ["cmd", "activity", "broadcast"]]
+        self.assertEqual(actions, [screen_on.ADD_ACTION, screen_on.REMOVE_ACTION])
 
-    def test_off_sends_explicit_remove_broadcast(self):
-        runner = FakeRunner()
-        lines = screen_on.command_off(runner)
-        broadcast = next(call for call in runner.calls if call[:3] == ["cmd", "activity", "broadcast"])
-        self.assertEqual(broadcast[broadcast.index("-a") + 1], screen_on.REMOVE_ACTION)
-        self.assertIn("overlay_release=UNKNOWN", lines)
+    def test_missing_eonsoft_package_fails_closed(self):
+        runner = FakeRunner(); runner.packages.remove(screen_on.PACKAGE)
+        with self.assertRaises(screen_on.ScreenOnError): screen_on.command_on(runner)
 
-    def test_missing_package_fails_closed_before_broadcast(self):
-        runner = FakeRunner()
-        runner.package_present = False
-        with self.assertRaises(screen_on.ScreenOnError):
-            screen_on.command_on(runner)
-        self.assertFalse(any(call[:3] == ["cmd", "activity", "broadcast"] for call in runner.calls))
-
-    def test_receiver_mismatch_fails_closed_before_broadcast(self):
-        runner = FakeRunner()
-        runner.receiver_present = False
-        with self.assertRaises(screen_on.ScreenOnError):
-            screen_on.command_on(runner)
-        self.assertFalse(any(call[:3] == ["cmd", "activity", "broadcast"] for call in runner.calls))
-
-    def test_shell_success_without_activity_manager_result_zero_is_not_accepted(self):
-        runner = FakeRunner()
-        runner.broadcast_stdout = "Broadcast completed: result=-1\n"
-        with self.assertRaises(screen_on.ScreenOnError):
-            screen_on.command_on(runner)
-
-    def test_setup_opens_package_specific_overlay_settings(self):
-        runner = FakeRunner()
-        lines = screen_on.command_setup(runner)
-        start = next(call for call in runner.calls if call[:2] == ["am", "start"])
-        self.assertEqual(start[start.index("-a") + 1], screen_on.OVERLAY_SETTINGS_ACTION)
+    def test_eonsoft_setup_opens_package_overlay_settings(self):
+        runner = FakeRunner(); screen_on.command_setup(runner)
+        start = next(c for c in runner.calls if c[:2] == ["am", "start"])
         self.assertEqual(start[start.index("-d") + 1], f"package:{screen_on.PACKAGE}")
-        self.assertIn("settings_open_request=OK", lines)
+
+    def test_companion_setup_without_code_requires_user_launcher_action(self):
+        runner = FakeRunner()
+        lines = screen_on.command_companion_setup(runner=runner)
+        self.assertIsNone(screen_on._load_companion_token())
+        self.assertIn("pairing=USER_ACTION_REQUIRED", lines)
+        self.assertTrue(any("shown automatically" in line for line in lines))
+        self.assertFalse(any(c[:3] == ["cmd", "activity", "broadcast"] for c in runner.calls))
+
+    def test_companion_setup_pairs_with_one_time_code_then_stores_private_token(self):
+        runner = FakeRunner()
+        with mock.patch.object(screen_on.secrets, "token_hex", return_value="b" * 64):
+            lines = screen_on.command_companion_setup("12345678", runner)
+        call = next(c for c in runner.calls if c[:3] == ["cmd", "activity", "broadcast"])
+        self.assertEqual(call[call.index("-a") + 1], screen_on.COMPANION_PAIR_ACTION)
+        self.assertEqual(call[call.index("--es") + 1], screen_on.COMPANION_TOKEN_EXTRA)
+        self.assertEqual(call[call.index("--es") + 2], "b" * 64)
+        pair_index = call.index(screen_on.COMPANION_PAIR_CODE_EXTRA)
+        self.assertEqual(call[pair_index + 1], "12345678")
+        self.assertEqual(screen_on._load_companion_token(), "b" * 64)
+        self.assertEqual(screen_on.COMPANION_TOKEN_PATH.stat().st_mode & 0o777, 0o600)
+        self.assertIn("pairing=YES", lines)
+
+    def test_companion_setup_rejection_does_not_store_token(self):
+        runner = FakeRunner()
+        runner.broadcasts[screen_on.COMPANION_PAIR_ACTION] = (screen_on.COMPANION_RESULT_PAIR_CODE_REJECTED, "pairing=REJECTED")
+        with self.assertRaises(screen_on.ScreenOnError):
+            screen_on.command_companion_setup("12345678", runner)
+        self.assertIsNone(screen_on._load_companion_token())
+
+    def test_companion_setup_rejects_invalid_pair_code_before_broadcast(self):
+        runner = FakeRunner()
+        with self.assertRaises(screen_on.ScreenOnError):
+            screen_on.command_companion_setup("1234", runner)
+        self.assertFalse(any(c[:3] == ["cmd", "activity", "broadcast"] for c in runner.calls))
+
+    def test_companion_on_requires_local_pairing_token(self):
+        with self.assertRaises(screen_on.ScreenOnError): screen_on.command_companion_on(FakeRunner())
+
+    def test_companion_on_sends_token_and_requires_distinct_ack(self):
+        token = self.pair_locally(); runner = FakeRunner()
+        lines = screen_on.command_companion_on(runner)
+        call = next(c for c in runner.calls if c[:3] == ["cmd", "activity", "broadcast"])
+        self.assertEqual(call[call.index("--es") + 1], screen_on.COMPANION_TOKEN_EXTRA)
+        self.assertEqual(call[call.index("--es") + 2], token)
+        self.assertTrue(any("activity_manager_result=101" in line for line in lines))
+
+    def test_companion_auth_required_fails_closed(self):
+        self.pair_locally(); runner = FakeRunner()
+        runner.broadcasts[screen_on.COMPANION_ON_ACTION] = (screen_on.COMPANION_RESULT_AUTH_REQUIRED, "pairing=REQUIRED")
+        with self.assertRaises(screen_on.ScreenOnError): screen_on.command_companion_on(runner)
+
+    def test_companion_overlay_permission_missing_fails_closed(self):
+        self.pair_locally(); runner = FakeRunner()
+        runner.broadcasts[screen_on.COMPANION_ON_ACTION] = (screen_on.COMPANION_RESULT_PERMISSION_REQUIRED, "overlay_permission=DENIED")
+        with self.assertRaises(screen_on.ScreenOnError): screen_on.command_companion_on(runner)
+
+    def test_companion_status_without_token_preserves_unknown_effect(self):
+        lines = screen_on.command_companion_status(FakeRunner())
+        self.assertIn("pairing=NO", lines)
+        self.assertIn("overlay=UNKNOWN", lines)
+
+    def test_companion_status_auth_rejection_is_not_pairing_success(self):
+        self.pair_locally(); runner = FakeRunner()
+        runner.broadcasts[screen_on.COMPANION_STATUS_ACTION] = (screen_on.COMPANION_RESULT_AUTH_REQUIRED, "pairing=REQUIRED")
+        lines = screen_on.command_companion_status(runner)
+        self.assertIn("pairing=NO", lines)
+        self.assertIn("overlay=UNKNOWN", lines)
+
+    def test_companion_status_permission_denied_is_authenticated(self):
+        self.pair_locally(); runner = FakeRunner()
+        runner.broadcasts[screen_on.COMPANION_STATUS_ACTION] = (screen_on.COMPANION_RESULT_PERMISSION_REQUIRED, "overlay_permission=DENIED")
+        lines = screen_on.command_companion_status(runner)
+        self.assertIn("pairing=YES", lines)
+        self.assertIn("overlay_permission=NO", lines)
+
+    def test_companion_status_attached_keeps_physical_effect_unknown(self):
+        self.pair_locally(); runner = FakeRunner()
+        runner.broadcasts[screen_on.COMPANION_STATUS_ACTION] = (screen_on.COMPANION_RESULT_STATUS_ON, "overlay=ON")
+        lines = screen_on.command_companion_status(runner)
+        self.assertIn("overlay=ON", lines)
+        self.assertIn("keep_awake_effect=UNKNOWN", lines)
+
+    def test_companion_doctor_checks_all_owned_actions(self):
+        self.pair_locally(); runner = FakeRunner()
+        screen_on.command_companion_doctor(runner)
+        queries = [c for c in runner.calls if c[:3] == ["cmd", "package", "query-receivers"]]
+        self.assertEqual({c[c.index("-a") + 1] for c in queries}, {screen_on.COMPANION_PAIR_ACTION, screen_on.COMPANION_ON_ACTION, screen_on.COMPANION_OFF_ACTION, screen_on.COMPANION_STATUS_ACTION})
+
+    def test_invalid_token_file_fails_closed(self):
+        screen_on.COMPANION_TOKEN_PATH.parent.mkdir(parents=True)
+        screen_on.COMPANION_TOKEN_PATH.write_text("bad\n")
+        with self.assertRaises(screen_on.ScreenOnError): screen_on.command_companion_status(FakeRunner())
 
 
-if __name__ == "__main__":
-    unittest.main()
+if __name__ == "__main__": unittest.main()

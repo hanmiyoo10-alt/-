@@ -106,7 +106,10 @@
     "duplicateProductionState": false,
     "duplicateNativeProtectionState": false,
     "allowHistoricalSynchronizationSha": true,
-    "historicalSynchronizationShaMustBeLabeled": true
+    "historicalSynchronizationShaMustBeLabeled": true,
+    "maxHumanFacingMutableActiveWriterProjections": 1,
+    "surfacesMayDuplicateActiveWriter": false,
+    "activeWriterProjectionExhaustive": false
   },
   "readRouting": {
     "version": 1,
@@ -117,8 +120,15 @@
         "stopAfterReads": true
       },
       "EXECUTION": {
-        "add": ["issue-465", "active-packet"],
-        "requiresPacketBootstrapBeforeMutation": true
+        "add": ["issue-465", "active-packets"],
+        "requiresPacketBootstrapBeforeMutation": true,
+        "activePacketDiscovery": {
+          "mode": "write-scope-overlap",
+          "queueSeedOnly": true,
+          "inspectConcretelyIdentifiedNonterminalOwners": true,
+          "unresolvedOverlapDisposition": "UNKNOWN_OR_CONFLICT",
+          "disjointParallelismPreserved": true
+        }
       },
       "MEMORY_CONTEXT": {
         "add": ["issue-462"]

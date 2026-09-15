@@ -1637,3 +1637,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/6e713190bd4254f1d48b7775129f62024360cc95)
 - Event ID: `1f5dd80b9082a64fe465703bac70a73cc4fdbd908fefb98ce20a0f22e8d4ed87`
 <!-- canonical-main-doc-promoted:1f5dd80b9082a64fe465703bac70a73cc4fdbd908fefb98ce20a0f22e8d4ed87 -->
+
+### 2026-09-15 — Merge pull request #2295 from hanmiyoo10-alt/canonical-main/coord-body-marker-repair-2294
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `db408aa852ab9f53513129bff82763aa3a5037f8`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/db408aa852ab9f53513129bff82763aa3a5037f8)
+- Event ID: `a4637201be7b4cff32be456645bafcaf10157dac47137bd0a13a548500549a63`
+<!-- canonical-main-doc-promoted:a4637201be7b4cff32be456645bafcaf10157dac47137bd0a13a548500549a63 -->

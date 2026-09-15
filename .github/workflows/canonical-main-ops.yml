@@ -28,6 +28,7 @@ on:
       - SimCore R2.8 Human-Evidence Terminal Convergence
       - SimCore Generic Candidate Materialize
       - Usage Dashboard Project Memory
+      - Repository Control Plane — Status views
       - Canonical Main Protection Guard
       - Canonical Main Proof Bundle
     types: [completed]

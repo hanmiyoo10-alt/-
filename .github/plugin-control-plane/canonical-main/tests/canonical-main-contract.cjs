@@ -197,6 +197,7 @@ assert.match(workflow, /SimCore release state sync/);
 assert.match(workflow, /SimCore R2\.7 Durable Status Projection/);
 assert.match(workflow, /SimCore R2\.8 Human-Evidence Terminal Convergence/);
 assert.match(workflow, /Usage Dashboard Project Memory/);
+assert.match(workflow, /Repository Control Plane — Status views/);
 assert.match(workflow, /contents:\s*read/);
 assert.match(workflow, /actions:\s*read/);
 assert.match(workflow, /issues:\s*write/);

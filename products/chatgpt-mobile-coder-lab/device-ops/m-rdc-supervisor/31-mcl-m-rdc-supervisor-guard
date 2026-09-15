@@ -45,7 +45,14 @@ terminate() {
     exit 0
 }
 
-[ -x "$SERVICE/run" ] || exit 0
+if [ ! -e "$SERVICE" ]; then
+    exit 0
+fi
+[ -d "$SERVICE" ] && [ ! -L "$SERVICE" ] || exit 2
+if [ ! -e "$SERVICE/run" ]; then
+    exit 0
+fi
+[ -f "$SERVICE/run" ] && [ ! -L "$SERVICE/run" ] && [ -x "$SERVICE/run" ] || exit 2
 [ ! -e "$SERVICE/down" ] || exit 0
 acquire_lock || exit 0
 trap cleanup EXIT
@@ -56,7 +63,7 @@ case "$status" in
     run:*|down:*)
         exit 0
         ;;
-    *"runsv not running"*)
+    *"runsv not running"*|*"unable to open supervise/ok: file does not exist"*)
         mkdir -p "$STATE"
         "$NOHUP" "$RUNSV" "$SERVICE" >> "$SUPERVISOR_LOG" 2>&1 &
         i=0
@@ -65,7 +72,7 @@ case "$status" in
             status="$($SV status "$SERVICE" 2>&1 || true)"
             case "$status" in
                 run:*|down:*) exit 0 ;;
-                *"runsv not running"*) ;;
+                *"runsv not running"*|*"unable to open supervise/ok: file does not exist"*) ;;
                 *) exit 2 ;;
             esac
             i=$((i + 1))

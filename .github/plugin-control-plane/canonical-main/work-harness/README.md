@@ -212,8 +212,10 @@ node .github/plugin-control-plane/canonical-main/work-harness/coordination-body-
 
 A v1 request names exactly one eligible surface, one issue, the SHA-256 digest of the complete expected prior body, and one operation. Eligible surfaces are only:
 
-- `WORK_PACKET`: a non-PR issue with exactly one `canonical-main-work-packet:v1` marker; open or closed packets are eligible for evidence-backed body reconciliation;
-- `WORK_QUEUE`: exactly issue #465, open, with exactly one `canonical-main-work-queue:v1` marker.
+- `WORK_PACKET`: a non-PR issue with exactly one standalone `canonical-main-work-packet:v1` marker line after trimming; open or closed packets are eligible for evidence-backed body reconciliation;
+- `WORK_QUEUE`: exactly issue #465, open, with exactly one standalone `canonical-main-work-queue:v1` marker line after trimming.
+
+Quoted or example marker text inside a longer prose, heading, or inline-code line does not count as an additional target marker surface. Exact patch-operation uniqueness remains raw byte/text occurrence based.
 
 Every other issue/body class fails closed. The adapter PATCHes only the GitHub issue `body` field. It has no title, state, state_reason, label, assignee, comment, PR, ref, file, workflow, release, production, runtime, or protection mutation authority.
 

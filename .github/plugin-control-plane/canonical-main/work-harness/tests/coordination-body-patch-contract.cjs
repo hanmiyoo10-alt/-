@@ -20,6 +20,8 @@ const {
 const PACKET = 2287;
 const PACKET_BODY = `${PACKET_MARKER}\n# Packet\n\nState: READY\nToken: old`;
 const QUEUE_BODY = `# Queue\n${QUEUE_MARKER}\n\nToken: old`;
+const DOCUMENTED_PACKET_BODY = `${PACKET_MARKER}\n# Packet\n\nEligibility: \`${PACKET_MARKER}\`\nToken: old`;
+const DOCUMENTED_QUEUE_BODY = `# Queue\n${QUEUE_MARKER}\n\nEligibility: \`${QUEUE_MARKER}\`\nToken: old`;
 const EXACT_OPERATION = Object.freeze({ type: 'replaceExact', oldText: 'Token: old', newText: 'Token: new' });
 
 function requestFor(body, extras = {}) {
@@ -82,8 +84,14 @@ assert.ok(validateRequest({ ...validRequest, operation: { type: 'replaceExact', 
 
 assert.deepEqual(validateTarget({ number: PACKET, state: 'open', body: PACKET_BODY }, PACKET, 'WORK_PACKET'), []);
 assert.deepEqual(validateTarget({ number: PACKET, state: 'closed', body: PACKET_BODY }, PACKET, 'WORK_PACKET'), []);
+assert.deepEqual(validateTarget({ number: PACKET, state: 'open', body: DOCUMENTED_PACKET_BODY }, PACKET, 'WORK_PACKET'), []);
+assert.ok(validateTarget({ number: PACKET, state: 'open', body: `Example: \`${PACKET_MARKER}\`` }, PACKET, 'WORK_PACKET').includes('WORK_PACKET_MARKER_COUNT_INVALID'));
+assert.ok(validateTarget({ number: PACKET, state: 'open', body: `${PACKET_MARKER}\n${PACKET_MARKER}` }, PACKET, 'WORK_PACKET').includes('WORK_PACKET_MARKER_COUNT_INVALID'));
 assert.ok(validateTarget({ number: PACKET, state: 'open', body: '# generic' }, PACKET, 'WORK_PACKET').includes('WORK_PACKET_MARKER_COUNT_INVALID'));
 assert.deepEqual(validateTarget({ number: QUEUE_ISSUE, state: 'open', body: QUEUE_BODY }, QUEUE_ISSUE, 'WORK_QUEUE'), []);
+assert.deepEqual(validateTarget({ number: QUEUE_ISSUE, state: 'open', body: DOCUMENTED_QUEUE_BODY }, QUEUE_ISSUE, 'WORK_QUEUE'), []);
+assert.ok(validateTarget({ number: QUEUE_ISSUE, state: 'open', body: `Example: \`${QUEUE_MARKER}\`` }, QUEUE_ISSUE, 'WORK_QUEUE').includes('WORK_QUEUE_MARKER_COUNT_INVALID'));
+assert.ok(validateTarget({ number: QUEUE_ISSUE, state: 'open', body: `${QUEUE_MARKER}\n${QUEUE_MARKER}` }, QUEUE_ISSUE, 'WORK_QUEUE').includes('WORK_QUEUE_MARKER_COUNT_INVALID'));
 assert.ok(validateTarget({ number: QUEUE_ISSUE, state: 'open', body: QUEUE_BODY + '\n' + PACKET_MARKER }, QUEUE_ISSUE, 'WORK_PACKET').includes('WORK_QUEUE_SURFACE_REQUIRED'));
 assert.ok(validateTarget({ number: 999, state: 'open', body: QUEUE_BODY }, 999, 'WORK_QUEUE').includes('WORK_QUEUE_ISSUE_INVALID'));
 assert.ok(validateTarget({ number: QUEUE_ISSUE, state: 'closed', body: QUEUE_BODY }, QUEUE_ISSUE, 'WORK_QUEUE').includes('WORK_QUEUE_NOT_OPEN'));

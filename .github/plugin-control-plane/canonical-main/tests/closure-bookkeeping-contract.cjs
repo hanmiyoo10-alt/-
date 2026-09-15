@@ -12,6 +12,7 @@ const {
   classifyBundle,
   ensurePacketEligible,
   parsePrIdentity,
+  packetClosureIntent,
   parseQueue,
   queueDisposition,
   renderBlocked,
@@ -98,6 +99,12 @@ assert.equal(eligible.state, 'READY');
 assert.equal(eligible.packetId, 'V12-A2');
 assert.equal(ensurePacketEligible({body: packetBody.replace(AUTO_CLOSE_OPT_IN, '')}).state, 'BLOCKED');
 
+const nonOptInPacketBody = packetBody.replace(AUTO_CLOSE_OPT_IN, '');
+assert.equal(packetClosureIntent({state: 'open', body: nonOptInPacketBody}).state, 'IGNORE_NON_OPT_IN');
+assert.equal(packetClosureIntent({state: 'open', body: packetBody}).state, 'LEGACY_PREFLIGHT');
+const terminalPacketBody = renderPacketDone(packetBody, bundle(), {packetNumber: 677, designNumber: 650, proofRunId: 104, packetIdValue: 'V12-A2'});
+assert.equal(packetClosureIntent({state: 'closed', body: terminalPacketBody}).state, 'IDEMPOTENT_TERMINAL');
+
 const queueBody = [
   '# queue',
   '**Queue state: ACTIVE / CANONICAL-MAIN-V1.2**',
@@ -124,6 +131,13 @@ assert.equal(queueDisposition(queue, identity).state, 'READY');
 const overlap = queueDisposition(queue, {packet: 999, design: 650});
 assert.equal(overlap.reasonCode, 'PACKET_SCOPE_OVERLAP');
 assert.equal(overlap.next, 'RESOLVE_PACKET_SCOPE_OVERLAP');
+
+const modernQueue = parseQueue(['# queue', '**Queue state: ACTIVE**', QUEUE_START, '- Active writable packet: **#2028 CURRENT**.', QUEUE_END].join('\n'));
+assert.equal(modernQueue.valid, false);
+const incompatibleLegacyProfile = queueDisposition(modernQueue, identity);
+assert.equal(incompatibleLegacyProfile.state, 'BLOCKED');
+assert.equal(incompatibleLegacyProfile.reasonCode, 'EVIDENCE_UNKNOWN');
+assert.equal(incompatibleLegacyProfile.detail, 'QUEUE_MARKER_UNKNOWN');
 
 const context = {packetNumber: 677, designNumber: 650, proofRunId: 104, packetIdValue: 'V12-A2'};
 const donePacket = renderPacketDone(packetBody, bundle(), context);
@@ -162,6 +176,12 @@ const githubRoot = path.resolve(__dirname, '..', '..', '..');
 const workflow = fs.readFileSync(path.join(githubRoot, 'workflows', 'canonical-main-ops.yml'), 'utf8');
 const pluginManifest = JSON.parse(fs.readFileSync(path.join(githubRoot, 'tooling', 'ci-summary', 'manifests', 'plugin-control-plane.json'), 'utf8'));
 const writer = fs.readFileSync(path.join(__dirname, '..', 'orchestrator', 'closure-bookkeeping.cjs'), 'utf8');
+const runSource = writer.slice(writer.indexOf('function run()'));
+const packetReadIndex = runSource.indexOf('const packet=getIssue(repo,id.packet)');
+const queueReadIndex = runSource.indexOf('const queueIssue=getIssue(repo,QUEUE_ISSUE)');
+assert(packetReadIndex >= 0 && queueReadIndex >= 0 && packetReadIndex < queueReadIndex, 'packet opt-in/terminal preflight must precede legacy queue read');
+assert(/AUTO_CLOSURE=IGNORED_NON_OPT_IN/.test(runSource));
+assert(/AUTO_CLOSURE=IDEMPOTENT_TERMINAL/.test(runSource));
 
 assert(/- Canonical Main Proof Bundle/.test(workflow), 'existing ops writer must observe completed A1 proof workflow');
 assert(/closure-bookkeeping:/.test(workflow), 'ops workflow must own the narrow closure job');

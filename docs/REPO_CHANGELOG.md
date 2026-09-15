@@ -1621,3 +1621,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/4394805f140bf991c340a501b548a63c1e556449)
 - Event ID: `0a765ea7d0066eede824535eff676e4b55ebf055d43ddd7e8ffe995bf18bb079`
 <!-- canonical-main-doc-promoted:0a765ea7d0066eede824535eff676e4b55ebf055d43ddd7e8ffe995bf18bb079 -->
+
+### 2026-09-15 — Merge pull request #2285 from hanmiyoo10-alt/canonical-main/scope-overlap-2282
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `c438e2e6b6465cd9c9e15bbc2186794d672b3e34`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c438e2e6b6465cd9c9e15bbc2186794d672b3e34)
+- Event ID: `0730001ca488b465cc6200ab6ddf59b183ac5a73ba34e2e6b61af22c399bf86b`
+<!-- canonical-main-doc-promoted:0730001ca488b465cc6200ab6ddf59b183ac5a73ba34e2e6b61af22c399bf86b -->

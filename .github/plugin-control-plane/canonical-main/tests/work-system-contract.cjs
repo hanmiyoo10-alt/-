@@ -115,13 +115,23 @@ assert.equal(policy.queueProjection.duplicateProductionState, false);
 assert.equal(policy.queueProjection.duplicateNativeProtectionState, false);
 assert.equal(policy.queueProjection.allowHistoricalSynchronizationSha, true);
 assert.equal(policy.queueProjection.historicalSynchronizationShaMustBeLabeled, true);
+assert.equal(policy.queueProjection.maxHumanFacingMutableActiveWriterProjections, 1);
+assert.equal(policy.queueProjection.surfacesMayDuplicateActiveWriter, false);
+assert.equal(policy.queueProjection.activeWriterProjectionExhaustive, false);
 
 assert.equal(policy.readRouting.version, 1);
 assert.deepEqual(policy.readRouting.baseReads, ['direct-main', 'issue-485']);
 assert.deepEqual(policy.readRouting.intents.STATUS_SESSION, {add: [], stopAfterReads: true});
 assert.deepEqual(policy.readRouting.intents.EXECUTION, {
-  add: ['issue-465', 'active-packet'],
+  add: ['issue-465', 'active-packets'],
   requiresPacketBootstrapBeforeMutation: true,
+  activePacketDiscovery: {
+    mode: 'write-scope-overlap',
+    queueSeedOnly: true,
+    inspectConcretelyIdentifiedNonterminalOwners: true,
+    unresolvedOverlapDisposition: 'UNKNOWN_OR_CONFLICT',
+    disjointParallelismPreserved: true,
+  },
 });
 assert.deepEqual(policy.readRouting.intents.MEMORY_CONTEXT.add, ['issue-462']);
 assert.deepEqual(policy.readRouting.intents.IDEA_DESIGN_CONTEXT.add, ['issue-464']);
@@ -140,7 +150,7 @@ const routeFor = (...names) => [...new Set([
   ...names.flatMap((name) => policy.readRouting.intents[name].add),
 ])];
 assert.deepEqual(routeFor('STATUS_SESSION'), ['direct-main', 'issue-485']);
-assert.deepEqual(routeFor('EXECUTION'), ['direct-main', 'issue-485', 'issue-465', 'active-packet']);
+assert.deepEqual(routeFor('EXECUTION'), ['direct-main', 'issue-485', 'issue-465', 'active-packets']);
 assert.deepEqual(routeFor('MEMORY_CONTEXT'), ['direct-main', 'issue-485', 'issue-462']);
 assert.deepEqual(routeFor('IDEA_DESIGN_CONTEXT'), ['direct-main', 'issue-485', 'issue-464']);
 assert.deepEqual(routeFor('AUDIT_CONTEXT'), ['direct-main', 'issue-485', 'issue-293']);
@@ -169,6 +179,9 @@ assert.match(readme, /`LIVE HEALTH: direct main \+ #485` is the only current-hea
 assert.match(readme, /MUST NOT duplicate a current `main` SHA, Required state\/run, production identity state, or native-protection state as live truth/);
 assert.match(readme, /explicitly historical synchronization\/packet evidence/);
 assert.match(readme, /read direct current `main` and #485 rather than refreshing #465 merely to copy time-sensitive evidence/);
+assert.match(readme, /at most one human-facing mutable active-writer projection/);
+assert.match(readme, /stable `## Surfaces` pointers MUST NOT repeat mutable active-writer state/);
+assert.match(readme, /not an exhaustive registry of nonterminal work/);
 assert.match(readme, /## Execution compactness contract/);
 assert.match(readme, /\.agents\/skills\/agent-execution-compactness\/SKILL\.md/);
 for (const route of policy.executionCompactness.routes) {
@@ -261,7 +274,7 @@ assert.match(readme, /This fast path ends as soon as repository work is requeste
 assert.match(readme, /The two-read protocol never authorizes a write, merge, release, protection change, or project\/runtime action/);
 assert.match(readme, /## Intent-aware read routing/);
 assert.match(readme, /`STATUS_SESSION` adds nothing/);
-assert.match(readme, /`EXECUTION` adds only `issue-465 \+ active-packet`/);
+assert.match(readme, /`EXECUTION` adds only `issue-465 \+ active-packets`/);
 assert.match(readme, /`MEMORY_CONTEXT` adds only `issue-462`/);
 assert.match(readme, /`IDEA_DESIGN_CONTEXT` adds only `issue-464`/);
 assert.match(readme, /`AUDIT_CONTEXT` adds only `issue-293`/);
@@ -272,5 +285,9 @@ assert.match(readme, /A read plan never grants write, merge, release, production
 assert.match(readme, /unchanged evidence is a read-only no-op/);
 assert.match(readme, /do not rewrite #465 or durable surfaces merely to refresh timestamps/);
 assert.ok(permanentCommands.includes('work-system-contract.cjs'));
+
+assert.match(readme, /`active-packets` is a bounded write-scope-overlap discovery step/);
+assert.match(readme, /unresolved overlap remains `UNKNOWN` or `CONFLICT`/);
+assert.match(readme, /Disjoint nonterminal packets remain eligible to proceed in parallel/);
 
 console.log('work-system-contract: ok');

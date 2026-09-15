@@ -291,6 +291,7 @@ assert.match(readme, /unresolved overlap remains `UNKNOWN` or `CONFLICT`/);
 assert.match(readme, /Disjoint nonterminal packets remain eligible to proceed in parallel/);
 
 const {classifyQueueBody, REASON_CODES} = require(path.join(dir, 'queue-hygiene.cjs'));
+const {resolveScopeOverlap, REASON_CODES: OVERLAP_REASON_CODES} = require(path.join(dir, 'scope-overlap.cjs'));
 
 const pointerOnlyFixture = `# Canonical Main — Work Queue
 ## Live health
@@ -339,5 +340,153 @@ assert.match(readme, /## #465 pointer-only hygiene classifier/);
 assert.match(readme, /`PASS \/ WARN \/ FAIL \/ UNKNOWN`/);
 assert.match(readme, /never fetches GitHub and never mutates #465/);
 assert.match(readme, /clearly labeled historical synchronization\/packet evidence remains allowed/i);
+
+
+const overlapPacketBody = (state, scopes) => `<!-- canonical-main-work-packet:v1 -->
+## State
+\`${state}\`
+## Bounded write scope
+${scopes.map((scope, index) => `${index + 1}. \`${scope}\``).join('\n')}
+## Handoff
+fixture`;
+const resolveOverlap = (requestedScopes, candidates, discovery = 'COMPLETE') => resolveScopeOverlap({
+  requestedScopes,
+  discovery,
+  candidates,
+});
+const expectOverlapFinding = (result, state, code) => {
+  assert.equal(result.state, state);
+  const match = result.findings.find((item) => item.code === code);
+  assert.ok(match, `expected ${code}`);
+  assert.ok(match.ownerRef);
+  assert.ok(match.requestedScope);
+  assert.ok(match.evidence.length > 0 && match.evidence.length <= 240);
+  assert.ok(Array.isArray(match.sourceRefs) && match.sourceRefs.length > 0);
+};
+
+const disjointPacket = {
+  type: 'packet',
+  ref: '#10',
+  issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['path:docs/**']),
+};
+assert.equal(resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [disjointPacket]).state, 'DISJOINT');
+
+const implementationHeadingPacket = {
+  type: 'packet', ref: '#10b', issueState: 'open',
+  body: `<!-- canonical-main-work-packet:v1 -->
+## State
+\`IN_PROGRESS\`
+## Bounded implementation write scope
+1. \`tools/repo-ci-mcp/**\`
+Preservation / non-write surfaces:
+- \`docs/**\`
+## Handoff
+fixture`,
+};
+assert.equal(resolveOverlap(['path:docs/README.md'], [implementationHeadingPacket]).state, 'DISJOINT');
+assert.equal(resolveOverlap(['path:tools/repo-ci-mcp/server.py'], [implementationHeadingPacket]).state, 'OVERLAP');
+
+let overlapResult = resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [{
+  type: 'packet', ref: '#11', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['path:tools/repo-ci-mcp/README.md']),
+}]);
+expectOverlapFinding(overlapResult, 'OVERLAP', OVERLAP_REASON_CODES.WRITE_SCOPE_OVERLAP);
+
+overlapResult = resolveOverlap(['path:tools/repo-ci-mcp/**'], [{
+  type: 'packet', ref: '#12', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['path:tools/repo-ci-mcp/README.md']),
+}]);
+assert.equal(overlapResult.state, 'OVERLAP');
+
+overlapResult = resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [{
+  type: 'packet', ref: '#13', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['path:tools/repo-ci-mcp/**']),
+}]);
+assert.equal(overlapResult.state, 'OVERLAP');
+
+overlapResult = resolveOverlap(['surface:issue:465'], [{
+  type: 'packet', ref: '#14', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['surface:issue:465']),
+}]);
+assert.equal(overlapResult.state, 'OVERLAP');
+
+overlapResult = resolveOverlap(['path:tools/./repo-ci-mcp/README.md'], [{
+  type: 'packet', ref: '#15', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['path:tools/repo-ci-mcp/README.md']),
+}]);
+assert.equal(overlapResult.state, 'OVERLAP');
+
+expectOverlapFinding(
+  resolveOverlap(['path:../secret'], [disjointPacket]),
+  'UNKNOWN',
+  OVERLAP_REASON_CODES.REQUESTED_SCOPE_INVALID,
+);
+
+expectOverlapFinding(
+  resolveOverlap(['path:src/README.md'], [disjointPacket], 'PARTIAL'),
+  'UNKNOWN',
+  OVERLAP_REASON_CODES.DISCOVERY_INCOMPLETE,
+);
+
+expectOverlapFinding(
+  resolveOverlap(['path:tools/*.js'], [disjointPacket]),
+  'UNKNOWN',
+  OVERLAP_REASON_CODES.REQUESTED_SCOPE_INVALID,
+);
+
+expectOverlapFinding(resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [{
+  type: 'pr', ref: '#20', state: 'open', filesComplete: false,
+  changedFiles: ['tools/repo-ci-mcp/README.md'],
+}]), 'OVERLAP', OVERLAP_REASON_CODES.WRITE_SCOPE_OVERLAP);
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#21', state: 'open', filesComplete: false,
+  changedFiles: ['tools/repo-ci-mcp/README.md'],
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.PR_CHANGED_FILES_INCOMPLETE);
+
+assert.equal(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#22', issueState: 'open',
+  body: overlapPacketBody('DONE', ['path:docs/README.md']),
+}, {
+  type: 'pr', ref: '#23', state: 'closed', filesComplete: true,
+  changedFiles: ['docs/README.md'],
+}]).state, 'DISJOINT');
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#24', issueState: 'closed',
+  body: overlapPacketBody('IN_PROGRESS', ['path:other/**']),
+}]), 'CONFLICT', OVERLAP_REASON_CODES.PACKET_NATIVE_STATE_CONFLICT);
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#30', issueState: 'open', linkedPrRef: '#31',
+  body: overlapPacketBody('IN_PROGRESS', ['path:tools/repo-ci-mcp/**']),
+}, {
+  type: 'pr', ref: '#31', state: 'open', filesComplete: true,
+  changedFiles: ['tools/repo-ci-mcp/README.md', '.github/workflows/unrelated.yml'],
+}]), 'CONFLICT', OVERLAP_REASON_CODES.PACKET_PR_SCOPE_DRIFT);
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#32', issueState: 'open', linkedPrRef: '#33',
+  body: overlapPacketBody('IN_PROGRESS', ['path:tools/repo-ci-mcp/**']),
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.LINKED_PR_EVIDENCE_MISSING);
+
+assert.equal(resolveOverlap(['path:src/README.md'], [disjointPacket], 'UNKNOWN').state, 'UNKNOWN');
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#21b', state: 'open', filesComplete: false,
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.PR_CHANGED_FILES_INCOMPLETE);
+
+assert.equal(resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#23b', state: 'merged', filesComplete: true,
+  changedFiles: ['docs/README.md'],
+}]).state, 'DISJOINT');
+
+assert.match(readme, /## Write-scope overlap resolver/);
+assert.match(readme, /`DISJOINT \/ OVERLAP \/ UNKNOWN \/ CONFLICT`/);
+assert.match(readme, /supplied packet\/PR evidence only/);
+assert.match(readme, /#465 remains seed-only and non-exhaustive/);
+assert.match(readme, /`DISJOINT` requires bounded discovery `COMPLETE`/);
+assert.match(readme, /does not fetch GitHub, mutate issues, or grant write authority/);
 
 console.log('work-system-contract: ok');

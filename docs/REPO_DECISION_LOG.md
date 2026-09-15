@@ -29,3 +29,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/467)
 - Event ID: `cd00586f76eddaae1e9e1e9ad1a02f4b3d729e5cb369f9656f303c771c6b38ca`
 <!-- canonical-main-doc-promoted:cd00586f76eddaae1e9e1e9ad1a02f4b3d729e5cb369f9656f303c771c6b38ca -->
+
+### 2026-09-15 — SimCore candidate receipt persistence must consume protected-main checked-PR handoff
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2026)
+- Event ID: `129d0dd1bc54a00daecceca1a202714b9fb07f07be5bcb8985ffadcb283b64d6`
+<!-- canonical-main-doc-promoted:129d0dd1bc54a00daecceca1a202714b9fb07f07be5bcb8985ffadcb283b64d6 -->

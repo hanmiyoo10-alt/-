@@ -3,10 +3,12 @@ set -u
 
 PREFIX=/data/data/com.termux/files/usr
 HOME_DIR=/data/data/com.termux/files/home
+INTERVAL=15
 if [ "${MCL_M_RDC_SUPERVISOR_TEST_MODE:-0}" = "1" ]; then
     TEST_ROOT="${MCL_M_RDC_SUPERVISOR_TEST_ROOT:?test root required}"
     PREFIX="$TEST_ROOT/prefix"
     HOME_DIR="$TEST_ROOT/home"
+    INTERVAL="${MCL_M_RDC_SUPERVISOR_TEST_INTERVAL:-15}"
 fi
 
 SERVICE="$PREFIX/var/service/desktop-commander-remote"
@@ -15,7 +17,6 @@ SV="$PREFIX/bin/sv"
 RUNSV="$PREFIX/bin/runsv"
 NOHUP="$PREFIX/bin/nohup"
 SLEEP="$PREFIX/bin/sleep"
-INTERVAL=15
 LOCKDIR="$STATE/guard.lock"
 PIDFILE="$STATE/guard.pid"
 EVENTS="$STATE/events.log"
@@ -127,6 +128,11 @@ cleanup() {
     [ "$current" = "$$" ] && rm -f "$PIDFILE"
     rmdir "$LOCKDIR" 2>/dev/null || true
 }
+terminate_loop() {
+    cleanup
+    trap - EXIT TERM
+    exit 0
+}
 
 case "${1:-}" in
     --check)
@@ -137,7 +143,8 @@ case "${1:-}" in
         ;;
     --loop)
         acquire_loop_lock || exit 0
-        trap cleanup EXIT INT TERM HUP
+        trap cleanup EXIT
+        trap terminate_loop TERM
         log_event 'guard=started'
         while :; do
             restore_supervisor || true

@@ -20,7 +20,8 @@ Repository, Git, CI, release, and project authorities remain above all of these 
 `#465` is coordination only. Its normal human-facing body MUST use pointer-only live-health semantics:
 
 - `LIVE HEALTH: direct main + #485` is the only current-health pointer;
-- the queue may show active packet, next candidate, coordination blocker, latest completed packet, and stable links to durable surfaces;
+- the queue may show at most one human-facing mutable active-writer projection, plus next candidate, coordination blocker, latest completed packet, and stable links to durable surfaces;
+- stable `## Surfaces` pointers MUST NOT repeat mutable active-writer state; #465 is not an exhaustive registry of nonterminal work;
 - it MUST NOT duplicate a current `main` SHA, Required state/run, production identity state, or native-protection state as live truth;
 - when an exact SHA is required as packet evidence, it may appear only as explicitly historical synchronization/packet evidence and must never be presented as current health;
 - if a reader needs current health, read direct current `main` and #485 rather than refreshing #465 merely to copy time-sensitive evidence.
@@ -195,7 +196,11 @@ The machine-readable routing contract lives in `work-system/policy.json` under `
 Every route starts with the same ordered base reads: `direct-main`, then `issue-485`.
 
 - `STATUS_SESSION` adds nothing. Its exact route is only `direct-main + issue-485`, and when no additional intent exists the reader stops after those two reads.
-- `EXECUTION` adds only `issue-465 + active-packet`, then escalates to the existing worker/packet bootstrap before any mutation.
+- `EXECUTION` adds only `issue-465 + active-packets`, then escalates to the existing worker/packet bootstrap before any mutation.
+
+For `EXECUTION`, `active-packets` is a bounded write-scope-overlap discovery step, not a claim that one global active packet exists. Start with the requested mutation scope and #465 hints, then inspect every concretely identified nonterminal packet or open PR whose declared or observed write scope can overlap it. #465 seeds discovery but is not exhaustive authority.
+
+If an overlap candidate cannot be resolved from current evidence, unresolved overlap remains `UNKNOWN` or `CONFLICT` and mutation stops. Disjoint nonterminal packets remain eligible to proceed in parallel; unrelated open work does not serialize the whole repository.
 - `MEMORY_CONTEXT` adds only `issue-462`.
 - `IDEA_DESIGN_CONTEXT` adds only `issue-464` when idea/design identity, lifecycle, overlap, or priority is actually needed.
 - `AUDIT_CONTEXT` adds only `issue-293`.

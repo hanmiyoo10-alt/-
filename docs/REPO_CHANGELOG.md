@@ -1629,3 +1629,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c438e2e6b6465cd9c9e15bbc2186794d672b3e34)
 - Event ID: `0730001ca488b465cc6200ab6ddf59b183ac5a73ba34e2e6b61af22c399bf86b`
 <!-- canonical-main-doc-promoted:0730001ca488b465cc6200ab6ddf59b183ac5a73ba34e2e6b61af22c399bf86b -->
+
+### 2026-09-15 — Merge pull request #2290 from hanmiyoo10-alt/canonical-main/coord-body-patch-2287
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `6e713190bd4254f1d48b7775129f62024360cc95`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/6e713190bd4254f1d48b7775129f62024360cc95)
+- Event ID: `1f5dd80b9082a64fe465703bac70a73cc4fdbd908fefb98ce20a0f22e8d4ed87`
+<!-- canonical-main-doc-promoted:1f5dd80b9082a64fe465703bac70a73cc4fdbd908fefb98ce20a0f22e8d4ed87 -->

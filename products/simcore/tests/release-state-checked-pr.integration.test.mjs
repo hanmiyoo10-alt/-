@@ -97,6 +97,36 @@ function writeTerminalReport(f,{payloadCommit=f.payload,changedPaths=['state.txt
   writeJson(f.work,'terminal-write.json',{schemaVersion:1,tool:'release-terminal-main-write',releaseId:f.releaseId,productionCommit:f.baseSha,payloadCommit,changedPaths,gateway:'scripts/repo-main-write.py',result:'CHECKED_PR_REQUIRED',mainMutation:'CHECKED_PR_PENDING',durableMainCommit:null,checkedPr:{base:f.baseSha,commit:f.head,ref:f.ref,workflow:'simcore-ci.yml',profile:'PR_RECOVERY',job:'Required'}});
 }
 function runTerminalConsume(f,extra={},reportOptions={}){writeTerminalReport(f,reportOptions);return sh(f.work,process.execPath,[HELPER,'--root','.', '--mode','consume-terminal','--terminal-write-report','terminal-write.json','--report','consume.json'],{check:false,env:{...f.env,...extra}});}
+function candidateInputPaths(f){
+  const intent='simcore-v9.9.9-intent-99';
+  return {intent,receipt:`products/simcore/releases/candidate-receipts/${intent}.json`,shadow:`products/simcore/releases/spec-shadows/${f.releaseId}.json`};
+}
+function writeCandidateInputs(f){
+  const {intent,receipt,shadow}=candidateInputPaths(f),candidateCommit='c'.repeat(40);
+  const report={schemaVersion:1,product:'SimCore',intentId:intent,targetVersion:'9.9.9',releaseName:'Candidate fixture',releaseMode:'NEW_VERSION',expectedProductionCommit:f.baseSha,sourceCommit:'b'.repeat(40),candidateCommit,candidateReleaseBlob:'d'.repeat(40),candidateFetchRef:`candidate/simcore/${intent}`,candidateDisposition:'CREATED',builderPath:'products/simcore/tooling/build-fixture.py',builderSha256:'e'.repeat(64),verificationSuite:'batch-a',changedPaths:['plugins/simcore/latest.js','plugins/simcore/install.js'],productionMutation:'NONE',releaseAuthority:'CANDIDATE_TRANSPORT_ONLY',result:'PASS'};
+  const receiptJson={schemaVersion:1,product:'SimCore',intentId:intent,releaseId:f.releaseId,candidateDisposition:'CREATED',expectedProductionCommit:f.baseSha,sourceCommit:'b'.repeat(40),candidateCommit,candidateReleaseBlob:'d'.repeat(40),candidateFetchRef:`candidate/simcore/${intent}`,builderPath:'products/simcore/tooling/build-fixture.py',builderSha256:'e'.repeat(64),verifierCommit:'f'.repeat(40),verificationSuite:'batch-a',verificationReportSha256:'1'.repeat(64),result:'PASS',productionMutation:'NONE',releaseAuthority:'CANDIDATE_RECEIPT_ONLY'};
+  const shadowJson={schemaVersion:1,product:'SimCore',authority:'SHADOW_ONLY',intentId:intent,releaseId:f.releaseId,candidateReceiptPath:receipt,derivedSpec:{schemaVersion:1,releaseId:f.releaseId,product:'SimCore',version:'9.9.9',releaseName:'Candidate fixture',releaseMode:'NEW_VERSION',candidateCommit,expectedProductionCommit:f.baseSha,candidateReleaseBlob:'d'.repeat(40),primaryGoalId:'FIXTURE',changeClass:'RUNTIME_FEATURE',evidenceRefs:['docs/fixture.md'],liveGate:{required:true,scenarioId:'FIXTURE',closeAuthority:'HUMAN_EVIDENCE'}}};
+  writeJson(f.work,'.candidate/report.json',report);writeJson(f.work,receipt,receiptJson);writeJson(f.work,shadow,shadowJson);
+  fs.mkdirSync(path.join(f.work,'.candidate'),{recursive:true});
+  fs.writeFileSync(path.join(f.work,'.candidate/main-write.stdout'),`MAIN_WRITE_NATIVE_PROTECTION_ACTIVE: enforcement=everyone required=Required\nMAIN_WRITE_CHECKED_PR_REQUIRED: base=${f.baseSha} commit=${f.head} ref=${f.ref}\n`);
+  fs.writeFileSync(path.join(f.work,'.candidate/main-write.stderr'),'');
+  f.candidateCommit=candidateCommit;f.receiptPath=receipt;f.shadowPath=shadow;
+}
+function candidateFixture(base,name){
+  const f=fixture(base,name);git(f.work,'reset','--hard',f.baseSha);sh(f.work,'git',['clean','-fd']);
+  writeCandidateInputs(f);git(f.work,'add',f.receiptPath,f.shadowPath);git(f.work,'commit','-m','candidate semantic payload');f.payload=git(f.work,'rev-parse','HEAD');
+  const tree=git(f.work,'rev-parse',`${f.payload}^{tree}`);f.head=sh(f.work,'git',['commit-tree',tree,'-p',f.baseSha],{input:'candidate protected replay\n'}).stdout.trim();
+  git(f.work,'push','--force','origin',`${f.head}:refs/heads/${f.ref}`);git(f.work,'reset','--hard',f.baseSha);sh(f.work,'git',['clean','-fd']);
+  f.env={...f.env,FAKE_HEAD:f.head,FAKE_TITLE:`SimCore checked state landing: ${f.releaseId}`};writeCandidateInputs(f);
+  return f;
+}
+function runCandidateConsume(f,extra={},payload=f.payload){return sh(f.work,process.execPath,[HELPER,'--root','.', '--mode','consume-candidate','--main-write-status','9','--main-write-stdout','.candidate/main-write.stdout','--main-write-stderr','.candidate/main-write.stderr','--candidate-report','.candidate/report.json','--receipt',f.receiptPath,'--spec-shadow',f.shadowPath,'--payload-commit',payload,'--report','consume.json'],{check:false,env:{...f.env,...extra}});}
+function makeCandidateSemanticVariant(f,{extra=false,mutateReceipt=false}={}){
+  git(f.work,'reset','--hard',f.baseSha);sh(f.work,'git',['clean','-fd']);writeCandidateInputs(f);
+  if(mutateReceipt){const v=JSON.parse(fs.readFileSync(path.join(f.work,f.receiptPath),'utf8'));v.verifierCommit='0'.repeat(40);writeJson(f.work,f.receiptPath,v);}
+  const staged=[f.receiptPath,f.shadowPath];if(extra){fs.writeFileSync(path.join(f.work,'extra.txt'),'unexpected\n');staged.push('extra.txt');}
+  git(f.work,'add',...staged);git(f.work,'commit','-m','candidate semantic variant');const commit=git(f.work,'rev-parse','HEAD');git(f.work,'reset','--hard',f.baseSha);sh(f.work,'git',['clean','-fd']);writeCandidateInputs(f);return commit;
+}
 function terminalDurable(f,disposition='ALREADY_DURABLE'){
   return {schemaVersion:1,product:'SimCore',disposition,code:disposition==='ALREADY_DURABLE'?'R2_8_TERMINAL_ALREADY_DURABLE':'R2_8_TERMINAL_ELIGIBLE',productionMutation:'NONE',mainMutation:disposition==='ALREADY_DURABLE'?'NONE':'LOCAL_TERMINAL_STATE_PENDING_GATEWAY',evidencePath:`products/simcore/releases/live-evidence/${f.releaseId}.json`};
 }
@@ -174,6 +204,20 @@ function testTerminalCannotMasqueradeAsPostPublish(base){
   if(r.status===0||!r.stderr.includes('R2_6_CHECKED_PR_GATE_REPORT_INVALID'))throw new Error(`terminal input masquerade not blocked ${r.stderr}`);
   const st=readState(f);if(st.merge_calls!==0)throw new Error('merge called for terminal masquerade');
 }
+function testCandidateSuccessAndCleanup(base){
+  const f=candidateFixture(base,'candidatesuccess');const r=runCandidateConsume(f);if(r.status!==0)throw new Error(`candidate consume failed ${r.stderr}`);
+  const report=JSON.parse(fs.readFileSync(path.join(f.work,'consume.json')));if(report.result!=='CHECKED_PR_MERGED'||report.inputKind!=='CANDIDATE'||report.candidateCommit!==f.candidateCommit)throw new Error('candidate consume report invalid');
+  const main=sh(base,'git',['--git-dir',f.remote,'rev-parse','refs/heads/main']).stdout.trim();for(const rel of [f.receiptPath,f.shadowPath]){const want=sh(base,'git',['--git-dir',f.remote,'rev-parse',`${f.head}:${rel}`]).stdout.trim();const got=sh(base,'git',['--git-dir',f.remote,'rev-parse',`${main}:${rel}`]).stdout.trim();if(want!==got)throw new Error(`candidate durable bytes mismatch ${rel}`);}
+  writeJson(f.work,'durable-candidate.json',{schemaVersion:1,product:'SimCore',result:'SIMCORE_CANDIDATE_RECEIPT_DURABLE_PASS',candidateCommit:f.candidateCommit,receiptPath:f.receiptPath,shadowPath:f.shadowPath});
+  const c=sh(f.work,process.execPath,[HELPER,'--root','.', '--mode','cleanup-candidate','--consume-report','consume.json','--durable-report','durable-candidate.json','--report','cleanup.json'],{check:false,env:f.env});if(c.status!==0)throw new Error(`candidate cleanup failed ${c.stderr}`);
+  const ls=sh(base,'git',['--git-dir',f.remote,'show-ref',`refs/heads/${f.ref}`],{check:false});if(ls.status===0)throw new Error('candidate staging ref not deleted');
+}
+function testCandidateRequiredFailureBlocksMerge(base){const f=candidateFixture(base,'candidaterequired');const r=runCandidateConsume(f,{FAKE_REQUIRED_FAIL:'1'});if(r.status===0||!r.stderr.includes('R2_6_CHECKED_PR_CI_FAIL'))throw new Error(`candidate Required failure not blocked ${r.stderr}`);if(readState(f).merge_calls!==0)throw new Error('candidate merged after Required failure');}
+function testCandidateMainMoveBlocksMerge(base){const f=candidateFixture(base,'candidatemoved');const r=runCandidateConsume(f,{FAKE_MOVE_MAIN_ON_RUN_VIEW:'1'});if(r.status===0||!r.stderr.includes('R2_6_CHECKED_PR_MAIN_MOVED'))throw new Error(`candidate main move not blocked ${r.stderr}`);if(readState(f).merge_calls!==0)throw new Error('candidate merged after main moved');}
+function testCandidateProductionMoveBlocksBeforePr(base){const f=candidateFixture(base,'candidateproduction');sh(base,'git',['--git-dir',f.remote,'update-ref','refs/heads/release-simcore',f.head,f.baseSha]);const r=runCandidateConsume(f);if(r.status===0||!r.stderr.includes('CANDIDATE_CHECKED_PR_PRODUCTION_MOVED'))throw new Error(`candidate production move not blocked ${r.stderr}`);const st=readState(f);if(st.get_calls!==0||st.post_calls!==0||st.merge_calls!==0)throw new Error('candidate production drift reached PR API');}
+function testCandidatePayloadPathMismatchFailsBeforePr(base){const f=candidateFixture(base,'candidatepath');const bad=makeCandidateSemanticVariant(f,{extra:true});const r=runCandidateConsume(f,{},bad);if(r.status===0||!r.stderr.includes('CANDIDATE_CHECKED_PR_PAYLOAD_PATH_SET_MISMATCH'))throw new Error(`candidate path mismatch not blocked ${r.stderr}`);const st=readState(f);if(st.get_calls!==0||st.post_calls!==0||st.merge_calls!==0)throw new Error('candidate path mismatch reached PR API');}
+function testCandidateReplayParityFailsBeforePr(base){const f=candidateFixture(base,'candidateparity');const bad=makeCandidateSemanticVariant(f,{mutateReceipt:true});const r=runCandidateConsume(f,{},bad);if(r.status===0||!r.stderr.includes('CANDIDATE_CHECKED_PR_REPLAY_PARITY_MISMATCH'))throw new Error(`candidate parity mismatch not blocked ${r.stderr}`);const st=readState(f);if(st.get_calls!==0||st.post_calls!==0||st.merge_calls!==0)throw new Error('candidate parity mismatch reached PR API');}
+function testCandidateCleanupRequiresDurableReobserve(base){const f=candidateFixture(base,'candidatecleanup');const r=runCandidateConsume(f);if(r.status!==0)throw new Error(`candidate cleanup fixture consume failed ${r.stderr}`);writeJson(f.work,'durable-candidate.json',{schemaVersion:1,product:'SimCore',result:'NOT_DURABLE',candidateCommit:f.candidateCommit,receiptPath:f.receiptPath,shadowPath:f.shadowPath});const c=sh(f.work,process.execPath,[HELPER,'--root','.', '--mode','cleanup-candidate','--consume-report','consume.json','--durable-report','durable-candidate.json','--report','cleanup.json'],{check:false,env:f.env});if(c.status===0||!c.stderr.includes('CANDIDATE_CHECKED_PR_DURABLE_NOT_PASS'))throw new Error(`candidate premature cleanup not blocked ${c.stderr}`);const ls=sh(base,'git',['--git-dir',f.remote,'show-ref',`refs/heads/${f.ref}`],{check:false});if(ls.status!==0)throw new Error('candidate ref deleted before durable reobserve');}
 const base=fs.mkdtempSync(path.join(os.tmpdir(),'simcore-checked-pr-'));
 try{
   testSuccess(base);
@@ -192,5 +236,12 @@ try{
   testTerminalCleanupRequiresDurable(base);
   testTerminalProductionMoveBlocksMerge(base);
   testTerminalCannotMasqueradeAsPostPublish(base);
-  console.log('R2_6_CHECKED_PR_INTEGRATION_PASS post-publish + distinct-terminal-identities + replay-parity + assistant-policy-fallback + timeout + mismatch + duplicate + non-policy + Required-fail + durable-cleanup + production-drift');
+  testCandidateSuccessAndCleanup(base);
+  testCandidateRequiredFailureBlocksMerge(base);
+  testCandidateMainMoveBlocksMerge(base);
+  testCandidateProductionMoveBlocksBeforePr(base);
+  testCandidatePayloadPathMismatchFailsBeforePr(base);
+  testCandidateReplayParityFailsBeforePr(base);
+  testCandidateCleanupRequiresDurableReobserve(base);
+  console.log('R2_6_CHECKED_PR_INTEGRATION_PASS post-publish + terminal + candidate checked-PR transport + replay-parity + assistant-policy-fallback + Required-fail + durable-cleanup + production-drift');
 }finally{fs.rmSync(base,{recursive:true,force:true});}

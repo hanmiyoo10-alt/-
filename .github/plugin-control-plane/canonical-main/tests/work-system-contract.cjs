@@ -292,6 +292,7 @@ assert.match(readme, /Disjoint nonterminal packets remain eligible to proceed in
 
 const {classifyQueueBody, REASON_CODES} = require(path.join(dir, 'queue-hygiene.cjs'));
 const {resolveScopeOverlap, REASON_CODES: OVERLAP_REASON_CODES} = require(path.join(dir, 'scope-overlap.cjs'));
+const {classifyPrActivity, REASON_CODES: PR_ACTIVITY_REASON_CODES} = require(path.join(dir, 'pr-activity.cjs'));
 
 const pointerOnlyFixture = `# Canonical Main — Work Queue
 ## Live health
@@ -488,5 +489,182 @@ assert.match(readme, /supplied packet\/PR evidence only/);
 assert.match(readme, /#465 remains seed-only and non-exhaustive/);
 assert.match(readme, /`DISJOINT` requires bounded discovery `COMPLETE`/);
 assert.match(readme, /does not fetch GitHub, mutate issues, or grant write authority/);
+
+
+const activityPacketBody = (state) => `<!-- canonical-main-work-packet:v1 -->
+## State
+\`${state}\`
+## Bounded write scope
+1. \`tools/repo-ci-mcp/**\`
+## Handoff
+fixture`;
+const shaA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const shaB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+let activityResult = classifyPrActivity({
+  pr: {ref: '#2210', state: 'open', merged: false, headSha: shaA, sourceRefs: ['pr:#2210']},
+  linkedPacket: {
+    ref: '#2209', issueState: 'open', linkedPrRef: '#2210',
+    body: activityPacketBody('IN_PROGRESS'), sourceRefs: ['issue:#2209'],
+  },
+  mergeable: false,
+  ageDays: 999,
+});
+assert.equal(activityResult.state, 'ACTIVE_WRITER');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.LINKED_PACKET_ACTIVE);
+activityResult = classifyPrActivity({
+  pr: {ref: '#40', state: 'open', merged: false, headSha: shaA},
+  updatedAt: '2000-01-01T00:00:00Z',
+  draft: true,
+  mergeable: false,
+  ciConclusion: 'failure',
+  branchName: 'old-looking-branch',
+});
+assert.equal(activityResult.state, 'ACTIVE_WRITER');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.OPEN_PR_DEFAULT_ACTIVE);
+
+activityResult = classifyPrActivity({
+  pr: {ref: '#41', state: 'closed', merged: false, headSha: shaA},
+});
+assert.equal(activityResult.state, 'NONBLOCKING_PROVEN');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.PR_NATIVE_TERMINAL);
+
+activityResult = classifyPrActivity({
+  pr: {ref: '#42', state: 'open', merged: false, headSha: shaA},
+  linkedPacket: {
+    ref: '#142', issueState: 'closed', linkedPrRef: '#42',
+    body: activityPacketBody('SUPERSEDED'),
+  },
+});
+assert.equal(activityResult.state, 'NONBLOCKING_PROVEN');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.LINKED_PACKET_TERMINAL);
+activityResult = classifyPrActivity({
+  pr: {ref: '#43', state: 'open', merged: false, headSha: shaA},
+  linkedPacket: {
+    ref: '#143', issueState: 'open', linkedPrRef: '#43',
+    body: activityPacketBody('DONE'),
+  },
+});
+assert.equal(activityResult.state, 'CONFLICT');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.PACKET_NATIVE_STATE_CONFLICT);
+
+activityResult = classifyPrActivity({
+  pr: {ref: '#44', state: 'open', merged: false, headSha: shaA},
+  successor: {
+    ref: '#144', state: 'closed', merged: true, mergeSha: shaB,
+    supersedesRef: '#44', ancestry: 'PROVEN', patchEquivalent: null,
+  },
+});
+assert.equal(activityResult.state, 'NONBLOCKING_PROVEN');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.MERGED_SUCCESSOR_PROVEN);
+
+activityResult = classifyPrActivity({
+  pr: {ref: '#45', state: 'open', merged: false, headSha: shaA},
+  successor: {
+    ref: '#145', state: 'closed', merged: true, mergeSha: shaB,
+    supersedesRef: '#45', ancestry: 'UNKNOWN',
+  },
+});
+assert.equal(activityResult.state, 'UNKNOWN');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.SUPERSESSION_PROOF_INCOMPLETE);
+activityResult = classifyPrActivity({
+  pr: {ref: '#46', state: 'open', merged: false, headSha: shaA},
+  successor: {
+    ref: '#146', state: 'closed', merged: true, mergeSha: shaB,
+    supersedesRef: '#46', ancestry: 'CONTRADICTED',
+  },
+});
+assert.equal(activityResult.state, 'CONFLICT');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.SUPERSESSION_PROOF_CONTRADICTED);
+
+activityResult = classifyPrActivity({
+  pr: {ref: '#47', state: 'open', merged: false, headSha: shaA},
+  linkedPacket: {
+    ref: '#147', issueState: 'open', linkedPrRef: '#47',
+    body: activityPacketBody('IN_PROGRESS'),
+  },
+  successor: {
+    ref: '#247', state: 'closed', merged: true, mergeSha: shaB,
+    supersedesRef: '#47', ancestry: 'PROVEN',
+  },
+});
+assert.equal(activityResult.state, 'CONFLICT');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.ACTIVE_PACKET_SUPERSESSION_CONFLICT);
+const legacyActivityFree = resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#50', state: 'open', filesComplete: true,
+  changedFiles: ['docs/README.md'],
+}]);
+assert.equal(legacyActivityFree.state, 'OVERLAP');
+assert.equal(Object.hasOwn(legacyActivityFree, 'candidateActivity'), false);
+
+let composedActivity = resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#51', state: 'open', merged: false, headSha: shaA, filesComplete: true,
+  changedFiles: ['docs/README.md'],
+  activityEvidence: {linkedPacket: {
+    ref: '#151', issueState: 'closed', linkedPrRef: '#51',
+    body: activityPacketBody('SUPERSEDED'),
+  }},
+}]);
+assert.equal(composedActivity.state, 'DISJOINT');
+assert.equal(composedActivity.candidateActivity[0].state, 'NONBLOCKING_PROVEN');
+
+composedActivity = resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#52', state: 'open', merged: false, headSha: shaA, filesComplete: true,
+  changedFiles: ['docs/README.md'],
+  activityEvidence: {successor: {
+    ref: '#152', state: 'closed', merged: true, mergeSha: shaB,
+    supersedesRef: '#52', ancestry: 'UNKNOWN',
+  }},
+}]);
+assert.equal(composedActivity.state, 'UNKNOWN');
+assert.equal(composedActivity.findings[0].code, OVERLAP_REASON_CODES.PR_ACTIVITY_UNKNOWN);
+composedActivity = resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#53', state: 'open', merged: false, headSha: shaA, filesComplete: true,
+  changedFiles: ['docs/README.md'],
+  activityEvidence: {linkedPacket: {
+    ref: '#153', issueState: 'open', linkedPrRef: '#53',
+    body: activityPacketBody('IN_PROGRESS'),
+  }},
+}]);
+assert.equal(composedActivity.state, 'OVERLAP');
+assert.equal(composedActivity.candidateActivity[0].state, 'ACTIVE_WRITER');
+
+composedActivity = resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#54', state: 'open', merged: false, headSha: shaA, filesComplete: true,
+  changedFiles: ['docs/README.md'],
+  activityEvidence: {linkedPacket: {
+    ref: '#154', issueState: 'open', linkedPrRef: '#54',
+    body: activityPacketBody('DONE'),
+  }},
+}]);
+assert.equal(composedActivity.state, 'CONFLICT');
+assert.equal(composedActivity.findings[0].code, OVERLAP_REASON_CODES.PR_ACTIVITY_CONFLICT);
+
+composedActivity = resolveOverlap(['path:src/README.md'], [{
+  type: 'pr', ref: '#55', state: 'open', merged: false, headSha: shaA, filesComplete: true,
+  changedFiles: ['docs/README.md'],
+  activityEvidence: {linkedPacket: {
+    ref: '#155', issueState: 'closed', linkedPrRef: '#55',
+    body: activityPacketBody('SUPERSEDED'),
+  }},
+}], 'PARTIAL');
+assert.equal(composedActivity.state, 'UNKNOWN');
+assert.ok(composedActivity.findings.some((item) => item.code === OVERLAP_REASON_CODES.DISCOVERY_INCOMPLETE));
+assert.match(readme, /## Evidence-backed PR activity classification/);
+assert.match(readme, /`ACTIVE_WRITER \/ NONBLOCKING_PROVEN \/ UNKNOWN \/ CONFLICT`/);
+assert.match(readme, /Only `NONBLOCKING_PROVEN` may suppress an otherwise-open PR/);
+assert.match(readme, /age, inactivity, branch naming, draft state, mergeability, base drift, review age, or CI history/i);
+assert.match(readme, /activity evidence is optional; without it, the existing open-PR overlap behavior is unchanged/i);
+assert.match(readme, /does not fetch GitHub, close PRs, mutate packets, or maintain a PR registry/i);
+
+activityResult = classifyPrActivity({
+  pr: {ref: '#48', state: 'open', merged: false, headSha: shaA},
+  successor: {
+    ref: '#148', state: 'open', merged: true, mergeSha: shaB,
+    supersedesRef: '#48', ancestry: 'PROVEN',
+  },
+});
+assert.equal(activityResult.state, 'CONFLICT');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.SUCCESSOR_NATIVE_STATE_CONFLICT);
 
 console.log('work-system-contract: ok');

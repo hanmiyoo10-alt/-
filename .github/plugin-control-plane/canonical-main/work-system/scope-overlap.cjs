@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const {classifyPrActivity} = require('./pr-activity.cjs');
 
 const PACKET_MARKER = '<!-- canonical-main-work-packet:v1 -->';
 const PACKET_STATES = new Set([
@@ -20,6 +21,8 @@ const REASON_CODES = Object.freeze({
   PACKET_SCOPE_UNRESOLVED: 'PACKET_SCOPE_UNRESOLVED',
   PACKET_NATIVE_STATE_CONFLICT: 'PACKET_NATIVE_STATE_CONFLICT',
   PR_CHANGED_FILES_INCOMPLETE: 'PR_CHANGED_FILES_INCOMPLETE',
+  PR_ACTIVITY_UNKNOWN: 'PR_ACTIVITY_UNKNOWN',
+  PR_ACTIVITY_CONFLICT: 'PR_ACTIVITY_CONFLICT',
   LINKED_PR_EVIDENCE_MISSING: 'LINKED_PR_EVIDENCE_MISSING',
   PACKET_PR_SCOPE_DRIFT: 'PACKET_PR_SCOPE_DRIFT',
   WRITE_SCOPE_OVERLAP: 'WRITE_SCOPE_OVERLAP',
@@ -171,6 +174,7 @@ function candidateRef(candidate, index) {
 
 function resolveScopeOverlap(input) {
   const findings = [];
+  const candidateActivity = [];
   const requested = [];
   const rawRequested = Array.isArray(input?.requestedScopes) ? input.requestedScopes : [];
 
@@ -346,6 +350,29 @@ function resolveScopeOverlap(input) {
     }
     if (prState !== 'open') return;
 
+    if (Object.prototype.hasOwnProperty.call(candidate, 'activityEvidence')) {
+      const evidence = candidate.activityEvidence && typeof candidate.activityEvidence === 'object'
+        ? candidate.activityEvidence
+        : {};
+      const activity = classifyPrActivity({
+        pr: {
+          ref, state: 'open', merged: candidate.merged === true, headSha: candidate.headSha, sourceRefs: [ref],
+        },
+        linkedPacket: evidence.linkedPacket,
+        successor: evidence.successor,
+      });
+      candidateActivity.push(activity);
+      if (activity.state === 'NONBLOCKING_PROVEN') return;
+      if (activity.state === 'UNKNOWN' || activity.state === 'CONFLICT') {
+        findings.push(makeFinding(
+          activity.state === 'CONFLICT' ? REASON_CODES.PR_ACTIVITY_CONFLICT : REASON_CODES.PR_ACTIVITY_UNKNOWN,
+          activity.state, ref, requested[0]?.normalized || '<unresolved>', activity.evidence, activity.sourceRefs,
+          {candidateType: 'pr', activityReasonCode: activity.reasonCode},
+        ));
+        return;
+      }
+    }
+
     const changedFiles = Array.isArray(candidate.changedFiles) ? candidate.changedFiles : [];
     let matched = false;
     for (const changedFile of changedFiles) {
@@ -437,6 +464,7 @@ function resolveScopeOverlap(input) {
     requestedScopes: requested.map((scope) => scope.normalized),
     candidateCount: candidates.length,
     findings,
+    ...(candidateActivity.length > 0 ? {candidateActivity} : {}),
   };
 }
 

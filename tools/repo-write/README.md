@@ -135,3 +135,37 @@ resolution.
 The selected write payload can be proportional to the semantic diff rather
 than the old/new whole-file body. No exact ChatGPT host-card, token, credit, or
 Work-usage saving is claimed.
+
+## Read-only currentness replay planner
+
+`currentness_replay.py` is the bounded planning companion for stale candidate
+currentization. It never rewrites, pushes, rebases, merges, or updates a PR.
+It consumes exact local Git commits plus the caller's owning validation IDs:
+
+```bash
+python tools/repo-write/currentness_replay.py \
+  --repo . \
+  --request-file request.json
+```
+
+The request uses schema version 1 with exact `candidateBase`, `candidateHead`,
+`currentMain`, `owningCi`, and non-empty `requiredValidations` for stale-base
+proof. Top-level states are `CURRENT`, `DISJOINT_REPLAY_PROVEN`, `OVERLAP`,
+`CONFLICT`, and `UNKNOWN`.
+
+`DISJOINT_REPLAY_PROVEN` requires more than path disjointness. The planner
+derives both changed-path sets from Git, dry-applies the complete candidate
+patch to exact current main in an isolated temporary worktree, preserves the
+stable patch ID, and requires every candidate-owned final blob+mode identity
+to match the original candidate head. Binary and non-regular modes fail closed.
+
+A replay-proven result still grants no mutation or merge authority. Because any
+actual reconciliation creates a new candidate head, protected `Required`, the
+owning exact-head CI, and every caller-declared packet/project validation are
+reported as `RERUN_REQUIRED`. Prior exact-head results remain historical only,
+and a fresh direct-main/#485/current-owner barrier is still required before an
+actual writer or merge operation.
+
+The existing `patch_branch.py` writer remains unchanged and continues to reject
+stale `expected_head`. The planner validates a possible future reconciliation;
+it does not weaken that exact-head/CAS contract or add a remote reconciler.

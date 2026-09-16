@@ -59,3 +59,50 @@ production action.
 python3 products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/tests/test-contract.py -v
 cd tools/repo-ci-mcp && python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
+
+## Disposable live-proof harness
+
+`mcl-notebook-live-proof` is a notebook-specific operational proof harness. It
+mechanizes the saved-uncommitted A -> B sequence already proven manually on M
+and S; it is not a generic worktree manager or remote command runner.
+
+Use it only after the surrounding task has already established current Work
+System scope evidence, selected the exact D-012 executor, acquired the matching
+D-013 repository-workspace lease, and recorded the D-014 phase manifest.
+
+```text
+products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/mcl-notebook-live-proof \
+  --executor S|M \
+  --base-sha <exact-40-hex-commit> \
+  --branch <server/*|mainphone/*> \
+  --worktree <absolute-disposable-worktree>
+```
+
+The executor selects fixed repository, landing, worktree-root, and branch-prefix
+profiles. The CLI does not accept an arbitrary repository root, landing root,
+reader path, fixture path, command, shell string, or environment payload. The
+base commit must already exist locally; the harness does not fetch or sync it.
+
+The fixed proof creates one namespaced disposable branch/worktree at the exact
+base, writes a bounded untracked nbformat-4 fixture with marker A, reads it with
+the repository-owned `mcl-notebook-read`, saves marker B, and reads again. PASS
+requires both observations to remain `untracked` at the unchanged base HEAD,
+with different exact content hashes and no notebook/shared-reader cache delta.
+
+Cleanup removes only harness-owned state whose identities still match. The
+fixture is deleted only when its bytes match one of the two fixed fixture
+hashes; the worktree is removed without force only when clean and unchanged;
+the branch is deleted with an exact expected-SHA ref update. Foreign files,
+branch/HEAD movement, or unexpected `.pyc`/`__pycache__` artifacts block cleanup
+instead of being reset, cleaned, or overwritten.
+
+The bounded JSON receipt reports semantic executor/base identity, reader and
+harness source hashes, A/B content hashes, cache disposition, cleanup and
+landing/control preservation. It intentionally omits absolute worktree paths,
+notebook bodies, raw command output, device/session/account identifiers,
+credentials, and environment dumps.
+
+The harness never acquires or releases D-013, creates D-014 envelopes, selects a
+route, fetches/syncs a landing workspace, commits, pushes, opens/merges a PR, or
+mutates a service/runtime/release/production surface. It proves saved filesystem
+state only and does not claim access to unsaved editor or Colab buffers.

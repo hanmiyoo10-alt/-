@@ -1,0 +1,123 @@
+{
+  "skill_name": "mcl-preflight",
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "s-owner-first-pass",
+      "prompt": "D-012 already selected route S and executor S for ordinary repository work. Run first-pass preflight.",
+      "facts": {
+        "route": "S",
+        "executor": "S",
+        "s_env_receipt_valid": true,
+        "common_ubuntu_profile": "pass",
+        "github_cli_auth": "pass",
+        "repository_access": "pass"
+      },
+      "expected": {
+        "owner": "mcl-s-env-status.v1",
+        "route_changed": false,
+        "aggregate_ready_present": false,
+        "later_guards_required": true
+      }
+    },
+    {
+      "id": "s-to-m-explicit-fallback",
+      "prompt": "D-012 explicitly selected route S with executor M as the documented ordinary-repository fallback.",
+      "facts": {
+        "route": "S",
+        "executor": "M",
+        "m_env_receipt_valid": true
+      },
+      "expected": {
+        "fallback_is_route_input": true,
+        "silent_reroute_performed": false,
+        "owner": "mcl-m-family-status.v1"
+      }
+    },
+    {
+      "id": "route-executor-conflict",
+      "prompt": "The route says M_PRIVATE_LAB but the executor is S.",
+      "facts": {
+        "route": "M_PRIVATE_LAB",
+        "executor": "S"
+      },
+      "expected": {
+        "preflight_state": "UNKNOWN",
+        "owner_invoked": false,
+        "route_guessed": false
+      }
+    },
+    {
+      "id": "s-termux-owner-only",
+      "prompt": "D-012 selected S_TERMUX and the bounded local RDC owner is available.",
+      "facts": {
+        "route": "S_TERMUX",
+        "executor": "S_TERMUX",
+        "rdc_local_receipt": "pass"
+      },
+      "expected": {
+        "owner": "mcl-rdcctl.v1",
+        "ubuntu_repo_path_assumed": false,
+        "aggregate_ready_present": false
+      }
+    },
+    {
+      "id": "private-lab-blocked-no-reroute",
+      "prompt": "D-012 selected M_PRIVATE_LAB and the first-pass M receipt says the PRIVATE LAB substrate is blocked.",
+      "facts": {
+        "route": "M_PRIVATE_LAB",
+        "executor": "M_PRIVATE_LAB",
+        "private_lab_substrate": "blocked"
+      },
+      "expected": {
+        "blocked_preserved": true,
+        "silent_reroute_performed": false,
+        "repair_performed": false
+      }
+    },
+    {
+      "id": "vm-not-ready-no-raw-recompute",
+      "prompt": "D-012 selected M_VM_LAB and mcl-env-status reports vm_admission=not_ready.",
+      "facts": {
+        "route": "M_VM_LAB",
+        "executor": "M_VM_LAB",
+        "vm_admission": "not_ready"
+      },
+      "expected": {
+        "not_ready_preserved": true,
+        "raw_host_memory_recomputed": false,
+        "vm_started": false
+      }
+    },
+    {
+      "id": "s-private-missing-receipt",
+      "prompt": "D-012 selected S_PRIVATE_LOCAL but no authorized fixed sanitized receipt is available.",
+      "facts": {
+        "route": "S_PRIVATE_LOCAL",
+        "executor": "S_PRIVATE_LOCAL",
+        "fixed_receipt_available": false
+      },
+      "expected": {
+        "preflight_state": "UNKNOWN",
+        "sensitive_command_constructed": false,
+        "private_payload_requested": false
+      }
+    },
+    {
+      "id": "mutable-work-keeps-separate-guards",
+      "prompt": "S first-pass environment fields all look usable and the next phase would edit repository source.",
+      "facts": {
+        "route": "S",
+        "executor": "S",
+        "owner_fields_nonblocking": true,
+        "repository_mutation_requested": true
+      },
+      "expected": {
+        "overlap_guard_required": true,
+        "lease_guard_required": true,
+        "git_currentness_guard_required": true,
+        "preflight_grants_mutation": false
+      }
+    }
+  ]
+}

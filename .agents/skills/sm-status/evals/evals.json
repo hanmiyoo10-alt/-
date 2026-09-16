@@ -1,0 +1,185 @@
+{
+  "skill_name": "sm-status",
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "healthy-bounded-projection",
+      "prompt": "Run sm-status when all three named RDC devices are online, both local origin/main refs equal current GitHub main, both Git worktrees are clean, the S-Termux owner passes, M supervision is running, PRIVATE LAB passes, and VM admission passes.",
+      "facts": {
+        "rdc_s": "online",
+        "rdc_s_termux": "online",
+        "rdc_m": "online",
+        "s_tracking_matches_github": true,
+        "m_tracking_matches_github": true,
+        "s_dirty": false,
+        "m_dirty": false,
+        "s_termux_owner": "pass",
+        "m_supervision": "running",
+        "m_env_valid": true
+      },
+      "expected": {
+        "s_origin_main_tracking": "same",
+        "m_origin_main_tracking": "same",
+        "s_repo_dirty": "no",
+        "m_repo_dirty": "no",
+        "aggregate_result_present": false
+      },
+      "assertions": [
+        "Receipt formation does not create a whole-system PASS.",
+        "Only bounded owner fields are projected."
+      ]
+    },
+    {
+      "id": "device-offline-preserves-unknown",
+      "prompt": "S-Termux is offline in RDC device presence and no direct S-Termux owner call can be made.",
+      "facts": {
+        "rdc_s_termux": "offline",
+        "s_termux_owner_available": false
+      },
+      "expected": {
+        "rdc_s_termux": "offline",
+        "s_termux_profile": "unknown"
+      },
+      "assertions": [
+        "Offline transport is not rewritten as local-profile fail.",
+        "Do not infer owner state without owner evidence."
+      ]
+    },
+    {
+      "id": "stale-tracking-is-not-broken",
+      "prompt": "S is online and clean, but its local origin/main differs from the freshly read GitHub main SHA.",
+      "facts": {
+        "rdc_s": "online",
+        "s_dirty": false,
+        "github_main_known": true,
+        "s_origin_main_known": true,
+        "s_tracking_matches_github": false
+      },
+      "expected": {
+        "s_repo_dirty": "no",
+        "s_origin_main_tracking": "stale",
+        "git_fetch_performed": false
+      },
+      "assertions": [
+        "Stale means only remote-tracking divergence from current GitHub main.",
+        "Status collection never fetches to repair the observation."
+      ]
+    },
+    {
+      "id": "dirty-worktree-stays-observation",
+      "prompt": "M landing worktree is dirty while its local origin/main matches GitHub main.",
+      "facts": {
+        "rdc_m": "online",
+        "m_dirty": true,
+        "m_tracking_matches_github": true
+      },
+      "expected": {
+        "m_repo_dirty": "yes",
+        "m_origin_main_tracking": "same",
+        "sync_performed": false
+      },
+      "assertions": [
+        "Dirty state is reported without stash, reset, sync, or branch movement.",
+        "Tracking freshness and worktree cleanliness remain separate claims."
+      ]
+    },
+    {
+      "id": "malformed-m-family-receipt",
+      "prompt": "M is online, but mcl-env-status emits malformed or unrecognized output.",
+      "facts": {
+        "rdc_m": "online",
+        "m_env_valid": false
+      },
+      "expected": {
+        "m_private_lab_substrate": "unknown",
+        "m_private_lab_analysis": "unknown",
+        "m_vm_lab": "unknown",
+        "m_vm_admission": "unknown"
+      },
+      "assertions": [
+        "Malformed child output cannot be upgraded into a stronger state.",
+        "Do not pass through free-form child diagnostics."
+      ]
+    },
+    {
+      "id": "vm-not-ready-preserved",
+      "prompt": "The valid M family receipt says vm_lab=not_prepared and vm_admission=not_ready.",
+      "facts": {
+        "m_env_valid": true,
+        "m_vm_lab": "not_prepared",
+        "m_vm_admission": "not_ready"
+      },
+      "expected": {
+        "m_vm_lab": "not_prepared",
+        "m_vm_admission": "not_ready"
+      },
+      "assertions": [
+        "Do not run raw admission logic when the owner says not_ready.",
+        "Do not reinterpret not_ready as blocked or fail."
+      ]
+    },
+    {
+      "id": "missing-github-main",
+      "prompt": "Device Git refs are readable but the current GitHub main SHA cannot be established.",
+      "facts": {
+        "github_main_known": false,
+        "s_origin_main_known": true,
+        "m_origin_main_known": true
+      },
+      "expected": {
+        "s_origin_main_tracking": "unknown",
+        "m_origin_main_tracking": "unknown"
+      },
+      "assertions": [
+        "A local ref alone cannot prove freshness against current GitHub main."
+      ]
+    },
+    {
+      "id": "privacy-metadata-is-not-receipt-data",
+      "prompt": "RDC list_devices returns device IDs, session IDs, auth-token metadata, versions, timestamps, and online state.",
+      "facts": {
+        "provider_metadata_present": true,
+        "device_presence_known": true
+      },
+      "expected": {
+        "provider_metadata_emitted": false,
+        "presence_only": true
+      },
+      "assertions": [
+        "Project only online, offline, or unknown for the three public device names.",
+        "Never echo provider identity or authentication metadata."
+      ]
+    },
+    {
+      "id": "watchdog-has-no-v1-field",
+      "prompt": "The user asks for the unified status including watchdog state, but no bounded watchdog receipt owner is available to sm-status v1.",
+      "facts": {
+        "bounded_watchdog_owner_available": false
+      },
+      "expected": {
+        "watchdog_field_present": false
+      },
+      "assertions": [
+        "Do not invent watchdog state from process lists or channel symptoms.",
+        "A future bounded owner requires an explicit schema migration or compatible reviewed extension."
+      ]
+    },
+    {
+      "id": "unexpected-branch-is-reported-verbatim",
+      "prompt": "The M landing worktree is clean but currently on an unexpected mainphone/* branch.",
+      "facts": {
+        "m_branch_known": true,
+        "m_dirty": false
+      },
+      "expected": {
+        "m_repo_branch": "observed-branch",
+        "m_repo_dirty": "no",
+        "branch_health_label_present": false
+      },
+      "assertions": [
+        "Report the observed branch without manufacturing pass or fail.",
+        "Branch policy belongs to its owning workflow, not the projection."
+      ]
+    }
+  ]
+}

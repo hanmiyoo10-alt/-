@@ -1685,3 +1685,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3842c6d264df1344c218034c097ac65575eb154f)
 - Event ID: `acab22e5eb3553310df3675e35dc1b42b9a7ba081f3ec4c6f55a526d931e1e85`
 <!-- canonical-main-doc-promoted:acab22e5eb3553310df3675e35dc1b42b9a7ba081f3ec4c6f55a526d931e1e85 -->
+
+### 2026-09-16 — Merge pull request #2348 from hanmiyoo10-alt/feat/cm-wq-surface-state-2345
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `d85ecac88b429dcc37bd725de65631321d15497a`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d85ecac88b429dcc37bd725de65631321d15497a)
+- Event ID: `ceb1cc632d523603a914ccc3468ea530572c1f602d6340c2f5e246c9c4120c3a`
+<!-- canonical-main-doc-promoted:ceb1cc632d523603a914ccc3468ea530572c1f602d6340c2f5e246c9c4120c3a -->

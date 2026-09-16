@@ -169,3 +169,38 @@ actual writer or merge operation.
 The existing `patch_branch.py` writer remains unchanged and continues to reject
 stale `expected_head`. The planner validates a possible future reconciliation;
 it does not weaken that exact-head/CAS contract or add a remote reconciler.
+
+
+## Compact candidate/merge payload identity
+
+`payload_identity.py` is the read-only root-tree snapshot companion for postmerge
+candidate/merge comparison. It accepts only exact local Git commit identities:
+
+```bash
+python tools/repo-write/payload_identity.py \
+  --repo . \
+  --request-file request.json
+```
+
+The v1 request contains exactly `schemaVersion`, `candidateCommit`, and
+`mergeCommit`. Both commits must be full 40-hex identities reachable from the
+local repository. Root-tree identities are derived from Git rather than trusted
+from caller input.
+
+The machine states are `TREE_IDENTICAL`, `TREE_DIFFERENT`, and `UNKNOWN`.
+`TREE_IDENTICAL` proves only that the two exact commits resolve to the same full
+root-tree object. Different commit identities may therefore still have an
+identical root tree, which is common when a merge commit preserves the complete
+candidate snapshot.
+
+`TREE_DIFFERENT` proves only that the whole root snapshots differ. It does not
+claim that the candidate-owned semantic payload diverged, because unrelated
+base movement or merge composition can also change the root tree. When that
+deeper claim is required, use an owning semantic comparison such as the
+currentness replay planner instead of upgrading this result.
+
+Every result is scoped to `ROOT_TREE_SNAPSHOT_ONLY` and fixes
+`mutationAuthorized=false`, `mergeAuthorized=false`, and
+`ciFreshnessAuthorized=false`. The helper does not create worktrees, mutate
+refs, access remotes or GitHub, reuse CI, or decide release/production/packet
+acceptance. Invalid or unreachable commit evidence remains `UNKNOWN`.

@@ -4,7 +4,11 @@ import json
 import unittest
 from typing import Any
 
-from repo_ci_mcp.notebook import MAX_NOTEBOOK_BYTES, repo_notebook_read
+from repo_ci_mcp.notebook import (
+    MAX_NOTEBOOK_BYTES,
+    project_notebook_bytes,
+    repo_notebook_read,
+)
 
 
 class FakeReader:
@@ -159,6 +163,27 @@ class NotebookReadTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("ref must be", result["error"])
         self.assertEqual(reader.calls, [])
+
+
+    def test_bytes_projection_preserves_bounded_semantics_without_git_identity(self):
+        result = project_notebook_bytes(
+            make_notebook(), "demo.ipynb", start_cell=1, max_cells=1, include_outputs=True
+        )
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["window"], {"start_cell": 1, "returned": 1, "has_more": True})
+        self.assertEqual(result["cells"][0]["index"], 1)
+        self.assertEqual(result["cells"][0]["outputs"][0]["text"], "x\n")
+        rendered = json.dumps(result)
+        self.assertNotIn("<b>42</b>", rendered)
+        self.assertNotIn("AAAA", rendered)
+        self.assertNotIn("requested_ref", result)
+        self.assertNotIn("resolved_commit_sha", result)
+        self.assertNotIn("blob_sha", result)
+
+    def test_bytes_projection_enforces_notebook_byte_bound(self):
+        result = project_notebook_bytes(b"x" * (MAX_NOTEBOOK_BYTES + 1), "demo.ipynb")
+        self.assertFalse(result["ok"])
+        self.assertIn("byte bound", result["error"])
 
 
 if __name__ == "__main__":

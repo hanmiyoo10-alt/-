@@ -1,0 +1,216 @@
+#!/bin/sh
+set -u
+
+SCHEMA='mcl-landing-freshness.v1'
+CANONICAL_ORIGIN='https://github.com/hanmiyoo10-alt/-.git'
+S_REPO='/root/nyang-repo'
+S_BRANCH='server/work'
+M_REPO='/data/data/com.termux/files/home/nyang-worktrees/mainphone-work'
+M_BRANCH='mainphone/work'
+
+operation=${1-}
+route=${2-}
+if [ "$#" -ne 2 ] || { [ "$operation" != status ] && [ "$operation" != refresh ]; }; then
+  printf '%s\n' 'mcl-landing-freshness: invalid invocation' >&2
+  exit 64
+fi
+
+case "$route" in
+  S) REPO=$S_REPO; INTENDED_BRANCH=$S_BRANCH ;;
+  M) REPO=$M_REPO; INTENDED_BRANCH=$M_BRANCH ;;
+  *)
+    printf '%s\n' 'mcl-landing-freshness: unsupported route' >&2
+    exit 64
+    ;;
+esac
+
+is_sha() {
+  printf '%s\n' "$1" | grep -Eq '^[0-9a-f]{40}$'
+}
+valid_origin_url() {
+  case "$1" in
+    "$CANONICAL_ORIGIN"|'https://github.com/hanmiyoo10-alt/-'|'git@github.com:hanmiyoo10-alt/-.git'|'ssh://git@github.com/hanmiyoo10-alt/-.git') return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+safe_branch() {
+  value=$1
+  case "$value" in
+    ''|*[!A-Za-z0-9._/-]*) printf '%s' unknown ;;
+    *) printf '%s' "$value" ;;
+  esac
+}
+
+ACTUAL_BRANCH=unknown
+WORKTREE=unknown
+LANDING_HEAD=unknown
+ORIGIN_MAIN=unknown
+REMOTE_MAIN=unknown
+ORIGIN_REMOTE_RELATION=unknown
+LANDING_RELATION=unknown
+CONTEXT_OK=0
+REMOTE_OK=0
+
+collect_local() {
+  CONTEXT_OK=0
+  [ -d "$REPO" ] || return 1
+  top=$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null) || return 1
+  [ "$top" = "$REPO" ] || return 1
+  raw_branch=$(git -C "$REPO" branch --show-current 2>/dev/null) || raw_branch=''
+  ACTUAL_BRANCH=$(safe_branch "$raw_branch")
+
+  if porcelain=$(git -C "$REPO" status --porcelain 2>/dev/null); then
+    if [ -z "$porcelain" ]; then WORKTREE=clean; else WORKTREE=dirty; fi
+  else
+    WORKTREE=unknown
+  fi
+
+  head_sha=$(git -C "$REPO" rev-parse --verify HEAD 2>/dev/null) || head_sha=''
+  if is_sha "$head_sha"; then LANDING_HEAD=$head_sha; fi
+
+  origin_sha=$(git -C "$REPO" rev-parse --verify refs/remotes/origin/main 2>/dev/null) || origin_sha=''
+  if is_sha "$origin_sha"; then
+    ORIGIN_MAIN=$origin_sha
+  elif ! git -C "$REPO" show-ref --verify --quiet refs/remotes/origin/main; then
+    ORIGIN_MAIN=missing
+  fi
+
+  origin_url=$(git -C "$REPO" config --get remote.origin.url 2>/dev/null) || return 1
+  valid_origin_url "$origin_url" || return 1
+  effective_origin=$(git -C "$REPO" remote get-url origin 2>/dev/null) || return 1
+  valid_origin_url "$effective_origin" || return 1
+  if git -C "$REPO" config --get remote.origin.uploadpack >/dev/null 2>&1; then return 1; fi
+  if git -C "$REPO" config --get remote.origin.proxy >/dev/null 2>&1; then return 1; fi
+  CONTEXT_OK=1
+  return 0
+}
+
+read_remote_main() {
+  REMOTE_OK=0
+  REMOTE_MAIN=unknown
+  raw=$(git -C "$REPO" ls-remote --exit-code origin refs/heads/main 2>/dev/null) || return 1
+  set -- $raw
+  [ "$#" -eq 2 ] || return 1
+  is_sha "$1" || return 1
+  [ "$2" = refs/heads/main ] || return 1
+  REMOTE_MAIN=$1
+  REMOTE_OK=1
+  return 0
+}
+
+compute_relations() {
+  ORIGIN_REMOTE_RELATION=unknown
+  LANDING_RELATION=unknown
+
+  if [ "$REMOTE_OK" -eq 1 ]; then
+    if [ "$ORIGIN_MAIN" = "$REMOTE_MAIN" ]; then
+      ORIGIN_REMOTE_RELATION=same
+    elif [ "$ORIGIN_MAIN" = missing ] || is_sha "$ORIGIN_MAIN"; then
+      ORIGIN_REMOTE_RELATION=stale
+    fi
+  fi
+
+  if [ "$ACTUAL_BRANCH" != "$INTENDED_BRANCH" ]; then
+    LANDING_RELATION=branch_mismatch
+    return 0
+  fi
+  [ "$REMOTE_OK" -eq 1 ] || return 0
+  is_sha "$LANDING_HEAD" || return 0
+  if [ "$LANDING_HEAD" = "$REMOTE_MAIN" ]; then
+    LANDING_RELATION=equal
+    return 0
+  fi
+  git -C "$REPO" cat-file -e "$REMOTE_MAIN^{commit}" 2>/dev/null || return 0
+  if git -C "$REPO" merge-base --is-ancestor "$LANDING_HEAD" "$REMOTE_MAIN" 2>/dev/null; then
+    LANDING_RELATION=behind_ff
+  elif git -C "$REPO" merge-base --is-ancestor "$REMOTE_MAIN" "$LANDING_HEAD" 2>/dev/null; then
+    LANDING_RELATION=ahead
+  elif git -C "$REPO" merge-base "$LANDING_HEAD" "$REMOTE_MAIN" >/dev/null 2>&1; then
+    LANDING_RELATION=diverged
+  fi
+}
+
+emit_receipt() {
+  printf '%s\n' \
+    "schema=$SCHEMA" \
+    "operation=$operation" \
+    "route=$route" \
+    "intended_branch=$INTENDED_BRANCH" \
+    "actual_branch=$ACTUAL_BRANCH" \
+    "worktree=$WORKTREE" \
+    "landing_head=$LANDING_HEAD" \
+    "origin_main=$ORIGIN_MAIN" \
+    "remote_main=$REMOTE_MAIN" \
+    "origin_remote_relation=$ORIGIN_REMOTE_RELATION" \
+    "landing_relation=$LANDING_RELATION" \
+    "refresh=$REFRESH" \
+    'details=withheld'
+}
+
+refresh_observation() {
+  ACTUAL_BRANCH=unknown
+  WORKTREE=unknown
+  LANDING_HEAD=unknown
+  ORIGIN_MAIN=unknown
+  REMOTE_MAIN=unknown
+  ORIGIN_REMOTE_RELATION=unknown
+  LANDING_RELATION=unknown
+  CONTEXT_OK=0
+  REMOTE_OK=0
+  collect_local || true
+  if [ "$CONTEXT_OK" -eq 1 ]; then read_remote_main || true; fi
+  compute_relations
+}
+
+refresh_observation
+
+if [ "$operation" = status ]; then
+  REFRESH=not_requested
+  emit_receipt
+  if [ "$CONTEXT_OK" -eq 1 ] && [ "$REMOTE_OK" -eq 1 ]; then exit 0; fi
+  exit 2
+fi
+
+if [ "$CONTEXT_OK" -ne 1 ] || [ "$ACTUAL_BRANCH" != "$INTENDED_BRANCH" ] || [ "$WORKTREE" != clean ] || [ "$REMOTE_OK" -ne 1 ] || [ "$LANDING_RELATION" = ahead ] || [ "$LANDING_RELATION" = diverged ]; then
+  REFRESH=blocked
+  emit_receipt
+  exit 3
+fi
+
+before_head=$LANDING_HEAD
+before_branch=$ACTUAL_BRANCH
+before_origin=$ORIGIN_MAIN
+before_status=$(git -C "$REPO" status --porcelain 2>/dev/null) || before_status='__unknown__'
+if ! git -C "$REPO" fetch --quiet --no-tags origin refs/heads/main:refs/remotes/origin/main 2>/dev/null; then
+  after_origin=$(git -C "$REPO" rev-parse --verify refs/remotes/origin/main 2>/dev/null) || after_origin=missing
+  if [ "$after_origin" = "$before_origin" ]; then REFRESH=failed; else REFRESH=unknown; fi
+  refresh_observation
+  emit_receipt
+  exit 4
+fi
+
+refresh_observation
+after_status=$(git -C "$REPO" status --porcelain 2>/dev/null) || after_status='__unknown__'
+
+if [ "$LANDING_HEAD" != "$before_head" ] || [ "$ACTUAL_BRANCH" != "$before_branch" ] || [ "$after_status" != "$before_status" ]; then
+  REFRESH=unknown
+  emit_receipt
+  exit 5
+fi
+
+if [ "$CONTEXT_OK" -ne 1 ] || [ "$REMOTE_OK" -ne 1 ]; then
+  REFRESH=unknown
+  emit_receipt
+  exit 5
+fi
+
+if [ "$ORIGIN_MAIN" = "$REMOTE_MAIN" ]; then
+  REFRESH=refreshed
+  emit_receipt
+  exit 0
+fi
+
+REFRESH=unknown
+emit_receipt
+exit 5

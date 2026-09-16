@@ -183,3 +183,24 @@ Next-time cue: 음함수에서 지수함수가 나오면 변수부터 확인한�
 Related pattern IDs: none; 이 형태의 `e^y` 연쇄법칙 오류는 현재 한 사례이므로 새 패턴으로 승격하지 않음.  
 Review state: NONE  
 Later evidence / resolution: pending; 다음 음함수·합성함수 문제에서 `e^y -> e^y y'`가 cue 없이 전이되는지 확인.
+
+### AI-MATH-W3-R1
+
+Problem ID: AI-MATH-W3-R1  
+Date: 2026-09-16  
+Subject / area: AI 수학 / 3주차 복습, 음함수 미분·곱의 미분·연쇄법칙  
+Source ref: 3주차 복습 문제 `x e^y + y = 2`, 사용자 풀이 사진 `20260916_162629551.jpg`  
+Result: WRONG  
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: `x e^y + y = 2`를 `x`에 대해 미분하고 `y'`를 정리한다.  
+User interpretation / approach: 문제의 `x e^y`를 풀이 첫 줄에서 `x e^x`로 바꿔 적은 뒤, `e^x + x e^x + y' = 0`으로 미분하여 `y' = -e^x(x+1)`을 얻었다. 곱의 미분 두 항 구조는 사용했지만 원래 지수 변수 `y`를 보존하지 못했다.  
+Correct reasoning summary: 원래 식을 그대로 두고 미분하면 `e^y + x e^y y' + y' = 0`. 따라서 `y'(x e^y + 1) = -e^y`이고 `y' = -e^y/(x e^y + 1)`이다.
+
+Error type: KNOWLEDGE_GAP  
+Error mechanism: `y=y(x)`인 음함수 상황에서 지수에 들어간 종속변수 `y`를 미분 변수 `x`로 바꿔 적어 원래 함수 구조가 먼저 변형되었다. 이는 3.7에서 `e^y`에 내부 미분 `y'`를 붙이지 못한 오류와 같은 핵심 병목으로, `e^y`를 `x`에 대한 합성함수로 보존·처리하는 단계가 불안정하다.  
+Next-time cue: 미분하기 전 원래 식의 지수 변수를 먼저 확인하고 그대로 복사한다. `e^x -> e^x`, `e^y -> e^y y'`. 그 뒤에 곱의 미분을 적용한다.
+
+Related pattern IDs: AI-MATH-P2  
+Review state: NONE  
+Later evidence / resolution: 3.7과 다른 복습 문제에서 같은 구조가 재현되어 AI-MATH-P2 후보 패턴 승격 근거가 됨.

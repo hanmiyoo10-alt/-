@@ -37,4 +37,23 @@ Later evidence / resolution:
 
 ## Entries
 
-아직 등록된 문제 기록이 없습니다.
+### AI-MATH-W3-3.1
+
+Problem ID: AI-MATH-W3-3.1  
+Date: 2026-09-16  
+Subject / area: AI 수학 / 도함수와 미분 법칙  
+Source ref: `AI 수학 입문` 3주차 연습문제 3.1, 사용자 풀이 사진 `20260916_133912874.jpg`  
+Result: WRONG  
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 곱 형태의 유리식 표현을 편한 방식으로 미분한 뒤 특정 점의 도함수 값을 계산한다.  
+User interpretation / approach: 곱의 미분법을 바로 쓰지 않고 식을 전개하여 `1 + u^-2 + u^-1 + u^-3` 형태로 만든 뒤 항별로 미분하고 `u=-1`을 대입했다. 전개 전략과 전개 결과는 맞았다.  
+Correct reasoning summary: `d(u^n)/du = n u^(n-1)`을 각 항에 적용하면 `J'(u) = -2u^-3 - u^-2 - 3u^-4`이고, `u=-1`을 대입하면 `J'(-1)=-2`이다.
+
+Error type: CALC_PROCESS  
+Error mechanism: 마지막 항 `u^-3`을 미분하면서 계수를 `-3`이 아니라 `-4`로 적었다. 지수는 `-4`로 내려가는 것이 맞지만 앞의 계수는 원래 지수 `-3`이어야 한다. 이 한 단계 때문에 최종값을 `-3`으로 계산했다.  
+Next-time cue: 거듭제곱 미분 때 `원래 지수 → 앞의 계수`, `지수는 1 감소`를 두 동작으로 분리해 확인한다. 예: `u^-3 → -3u^-4`.
+
+Related pattern IDs: none; 단일 사례이므로 패턴으로 승격하지 않음.  
+Review state: NONE  
+Later evidence / resolution: pending.

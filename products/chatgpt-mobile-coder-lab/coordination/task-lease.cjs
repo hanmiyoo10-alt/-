@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const { createGitHubClient } = require('../../../.github/plugin-control-plane/canonical-main/infra/github-client.cjs');
 const { normalizeScope, scopesOverlap } = require('../../../.github/plugin-control-plane/canonical-main/work-system/scope-overlap.cjs');
+const { extractPacketLifecycle } = require('../../../.github/plugin-control-plane/canonical-main/work-system/packet-projection.cjs');
 
 const LEDGER_MARKER = '<!-- mcl-task-lease-state:v1 -->';
 const STATE_ISSUE_NUMBER = 2352;
@@ -16,7 +17,6 @@ const LANDING_METADATA = Object.freeze({
   S: Object.freeze({branch: 'server/work', worktree: '/root/nyang-repo', scope: 'surface:mcl-landing-origin-main:S'}),
   M: Object.freeze({branch: 'mainphone/work', worktree: '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work', scope: 'surface:mcl-landing-origin-main:M'}),
 });
-const PACKET_STATES = new Set(['READY', 'CLAIMED', 'IN_PROGRESS', 'REVIEW', 'DONE', 'BLOCKED', 'CANCELLED', 'SUPERSEDED']);
 const TERMINAL_PACKET_STATES = new Set(['DONE', 'CANCELLED', 'SUPERSEDED']);
 const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
@@ -186,12 +186,6 @@ function parseLedger(body) {
   return {ok: true, state, reasonCodes: []};
 }
 
-function extractPacketLifecycle(body) {
-  const text = typeof body === 'string' ? body : '';
-  const section = text.match(/^## State\s*\n([^\n]+)/mi)?.[1] || text.match(/^\*\*State:\s*([^*]+)\*\*/mi)?.[1] || '';
-  const match = section.match(/\b(READY|CLAIMED|IN_PROGRESS|REVIEW|DONE|BLOCKED|CANCELLED|SUPERSEDED)\b/);
-  return match && PACKET_STATES.has(match[1]) ? match[1] : null;
-}
 function routeExecutorCompatible(route, executor) {
   if (!ROUTES.includes(route) || !EXECUTORS.has(executor)) return false;
   if (route === 'S') return executor === 'S' || executor === 'M';

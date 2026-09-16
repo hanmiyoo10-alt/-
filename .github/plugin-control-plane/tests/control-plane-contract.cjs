@@ -13,6 +13,11 @@ const {
   resolveStatusIssueIdentity,
 } = require('../lib.cjs');
 const {projectRows} = require('../canonical-main/observers/project-status.cjs');
+const {
+  findStatusIssues,
+  reconcileStatusIssue,
+  runStatusOwnerTasks,
+} = require('../controller.cjs');
 
 const root = path.resolve(__dirname, '../../..');
 const registry = loadRegistry();
@@ -235,6 +240,8 @@ assert.match(statusWorkflow, /schedule:/);
 assert.match(statusWorkflow, /Reconcile open PR ownership from trusted main/);
 assert.match(statusWorkflow, /pr-classifier\.cjs/);
 assert.match(statusWorkflow, /refresh-status/);
+assert.doesNotMatch(statusWorkflow, /if ! node .*refresh-status/);
+assert.match(statusWorkflow, /node \.github\/plugin-control-plane\/controller\.cjs refresh-status/);
 assert.match(statusWorkflow, /voyage-token-check\/\*\*/);
 assert.match(statusWorkflow, /products\/pocketrisu-helper-mod\/\*\*/);
 assert.match(statusWorkflow, /issues:\s*write/);
@@ -251,6 +258,8 @@ assert.match(controlPlaneReadme, /`pull_request` observer remains read-only evid
 assert.match(controlPlaneReadme, /Trusted custom issue scopes/);
 assert.match(controlPlaneReadme, /scope:unclassified/);
 assert.match(controlPlaneReadme, /at most 44 characters/);
+assert.match(controlPlaneReadme, /independent exact-title\/status-label\/generated-marker lookup/);
+assert.match(controlPlaneReadme, /overall controller exit nonzero/);
 
 const controller = fs.readFileSync(path.join(root, '.github/plugin-control-plane/controller.cjs'), 'utf8');
 assert.match(controller, /DECLARED_MISSING/);
@@ -271,6 +280,125 @@ assert.match(controller, /if \(bodyResult\.customLabelDefinition\) await ensureL
 assert.match(controller, /const statusLabel = encodeURIComponent\('control-plane:status'\)/);
 assert.match(controller, /resolveStatusIssueIdentity/);
 assert.match(controller, /CLOSED_STATUS_DUPLICATE/);
+assert.match(controller, /STATUS_POST_CREATE_IDENTITY_MISMATCH/);
+assert.match(controller, /STATUS_REFRESH_PARTIAL_FAILURE/);
 assert.doesNotMatch(controller, /productionVersion\s*:/);
 
-console.log('PLUGIN_CONTROL_PLANE_CONTRACTS:OK');
+async function runStatusRefreshContracts() {
+  const status = {name: 'control-plane:status'};
+  const generatedBody = 'Last refreshed: 2026-09-16T00:00:00Z\n<!-- plugin-control-plane-status -->';
+  const canonical = {number: 275, title: '[plugin-status:termux-large-doc-editor]', state: 'open', labels: [status], body: generatedBody};
+  const duplicate = {number: 2317, title: canonical.title, state: 'open', labels: [status], body: generatedBody};
+  const unrelated = Array.from({length: 100}, (_, index) => ({
+    number: 3000 + index,
+    title: `[plugin-status:unrelated-${index}]`,
+    state: 'open',
+    labels: [status],
+    body: generatedBody,
+  }));
+  const pageCalls = [];
+  const pagedIdentity = await findStatusIssues('hanmiyoo10-alt/-', 'plugin', 'termux-large-doc-editor', async (_repo, endpoint) => {
+    pageCalls.push(endpoint);
+    if (endpoint.endsWith('page=1')) return unrelated;
+    if (endpoint.endsWith('page=2')) return [duplicate, canonical];
+    throw new Error(`unexpected page: ${endpoint}`);
+  });
+  assert.equal(pageCalls.length, 2, 'status discovery must paginate until a short page');
+  assert.equal(pagedIdentity.canonical.number, 275);
+  assert.deepEqual(pagedIdentity.duplicates.map((row) => row.number), [2317]);
+
+  const registryForStatus = {plugins: {}, products: {}, managedLabelPrefixes: ['plugin:', 'product:', 'scope:']};
+  const updateCalls = [];
+  await reconcileStatusIssue('hanmiyoo10-alt/-', 'plugin', 'termux-large-doc-editor', 'plugin:termux-large-doc-editor', generatedBody, registryForStatus, {
+    api: async (_repo, endpoint, options = {}) => {
+      updateCalls.push({endpoint, method: options.method || 'GET'});
+      if (endpoint.startsWith('/issues?')) return [];
+      return {};
+    },
+    rawApi: async () => ({total_count: 1, items: [canonical]}),
+  });
+  assert.equal(updateCalls.some((call) => call.endpoint === '/issues' && call.method === 'POST'), false, 'exact lookup hit must prevent create');
+  assert.equal(updateCalls.some((call) => call.endpoint === '/issues/275' && call.method === 'PATCH'), true, 'exact lookup hit must update canonical');
+
+  const failedGuardCalls = [];
+  await assert.rejects(
+    reconcileStatusIssue('hanmiyoo10-alt/-', 'plugin', 'missing', 'plugin:missing', generatedBody, registryForStatus, {
+      api: async (_repo, endpoint, options = {}) => {
+        failedGuardCalls.push({endpoint, method: options.method || 'GET'});
+        if (endpoint.startsWith('/issues?')) return [];
+        throw new Error(`unexpected mutation: ${endpoint}`);
+      },
+      rawApi: async () => { throw new Error('HTTP 403'); },
+    }),
+    /HTTP 403/,
+  );
+  assert.equal(failedGuardCalls.some((call) => call.endpoint === '/issues' && call.method === 'POST'), false, 'failed exact lookup must not create');
+
+  let exactReads = 0;
+  const createCalls = [];
+  const created = {number: 2400, title: '[plugin-status:new-owner]', state: 'open', labels: [status], body: generatedBody};
+  const createResult = await reconcileStatusIssue('hanmiyoo10-alt/-', 'plugin', 'new-owner', 'plugin:new-owner', generatedBody, registryForStatus, {
+    api: async (_repo, endpoint, options = {}) => {
+      createCalls.push({endpoint, method: options.method || 'GET'});
+      if (endpoint.startsWith('/issues?')) return [];
+      if (endpoint === '/issues' && options.method === 'POST') return created;
+      throw new Error(`unexpected create-path call: ${endpoint}`);
+    },
+    rawApi: async () => {
+      exactReads += 1;
+      return exactReads === 1 ? {total_count: 0, items: []} : {total_count: 1, items: [created]};
+    },
+  });
+  assert.equal(createResult.action, 'created');
+  assert.equal(createCalls.filter((call) => call.endpoint === '/issues' && call.method === 'POST').length, 1);
+  assert.equal(exactReads, 2, 'create path must exact-check before and after create');
+
+  let duplicateRead = 0;
+  await assert.rejects(
+    reconcileStatusIssue('hanmiyoo10-alt/-', 'plugin', 'race-owner', 'plugin:race-owner', generatedBody, registryForStatus, {
+      api: async (_repo, endpoint, options = {}) => {
+        if (endpoint.startsWith('/issues?')) return [];
+        if (endpoint === '/issues' && options.method === 'POST') return {number: 2500};
+        throw new Error(`unexpected race-path call: ${endpoint}`);
+      },
+      rawApi: async () => {
+        duplicateRead += 1;
+        if (duplicateRead === 1) return {total_count: 0, items: []};
+        return {total_count: 2, items: [
+          {number: 2499, title: '[plugin-status:race-owner]', state: 'open', labels: [status], body: generatedBody},
+          {number: 2500, title: '[plugin-status:race-owner]', state: 'open', labels: [status], body: generatedBody},
+        ]};
+      },
+    }),
+    /STATUS_POST_CREATE_IDENTITY_MISMATCH/,
+  );
+
+  const visited = [];
+  let partialError = null;
+  try {
+    await runStatusOwnerTasks([
+      {kind: 'plugin', id: 'one'},
+      {kind: 'plugin', id: 'two'},
+      {kind: 'product', id: 'three'},
+    ], async (entry) => {
+      visited.push(entry.id);
+      if (entry.id === 'two') {
+        const error = new Error('fixture failure');
+        error.code = 'FIXTURE_FAILURE';
+        throw error;
+      }
+    });
+  } catch (error) {
+    partialError = error;
+  }
+  assert.deepEqual(visited, ['one', 'two', 'three'], 'owner failure must not prevent later safe owner processing');
+  assert.equal(partialError?.code, 'STATUS_REFRESH_PARTIAL_FAILURE');
+  assert.deepEqual(partialError?.failures, [{kind: 'plugin', id: 'two', code: 'FIXTURE_FAILURE'}]);
+}
+
+runStatusRefreshContracts()
+  .then(() => console.log('PLUGIN_CONTROL_PLANE_CONTRACTS:OK'))
+  .catch((error) => {
+    console.error(error.stack || error.message || String(error));
+    process.exitCode = 1;
+  });

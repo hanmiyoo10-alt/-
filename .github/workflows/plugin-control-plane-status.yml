@@ -45,6 +45,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! node .github/plugin-control-plane/controller.cjs refresh-status; then
-            echo "::warning::Repository Control Plane status refresh failed; no release/product authority is affected."
-          fi
+          node .github/plugin-control-plane/controller.cjs refresh-status

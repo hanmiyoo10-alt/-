@@ -82,12 +82,12 @@ Pattern: `y=y(x)`인 상황에서 함수 안쪽의 종속변수 `y`를 그대로
 State: IMPROVING  
 Confidence: MEDIUM  
 First observed: 2026-09-16, AI-MATH-W3-3.7  
-Last observed: 2026-09-16, AI-MATH-W3-R3  
-Evidence problem IDs: AI-MATH-W3-3.7, AI-MATH-W3-R1, AI-MATH-W3-R2, AI-MATH-W3-R3  
+Last observed: 2026-09-16, AI-MATH-W3-R4  
+Evidence problem IDs: AI-MATH-W3-3.7, AI-MATH-W3-R1, AI-MATH-W3-R2, AI-MATH-W3-R3, AI-MATH-W3-R4  
 Typical trigger: 음함수 미분에서 `g(y)`가 나오고, 특히 `x g(y)`처럼 곱의 미분과 연쇄법칙을 동시에 적용해야 할 때.  
 Failure mechanism: 미분 변수 `x`에 주의를 두면서 원래 식의 내부 변수 `y`를 `x`로 정규화해버리거나, `g(y)`를 합성함수로 보지 않아 내부 미분 `y'`를 누락한다.  
 Correction cue: 미분 전에 함수 안쪽 변수를 먼저 확인하고 원래 식을 그대로 복사한다. `e^x -> e^x`, `e^y -> e^y y'`; 일반적으로 `g(y) -> g'(y)y'`. 그 뒤 곱의 미분을 적용한다.  
-Success evidence: AI-MATH-W3-R2에서는 명시적 cue 뒤 `sin(y)`를 보존하고 `(sin y)'=cos(y)y'`를 정확히 적용했다. AI-MATH-W3-R3에서는 공식 힌트 없이 `cos(y)`를 보존하고 `(cos y)'=-sin(y)y'`를 정확히 적용했으며, 곱의 미분까지 맞게 수행했다. R3의 최종 오답은 연쇄법칙이 아니라 마지막 대수 부호 처리에서 발생했다.  
-Review trigger: 다음에는 `e^y`가 직접 등장하는 음함수 문제를 별도 공식 힌트 없이 풀어, 원래 실패 형태에서도 `e^y` 보존과 `y'` 부착이 전이되는지 확인한다.  
+Success evidence: AI-MATH-W3-R2에서는 명시적 cue 뒤 `sin(y)`를 보존하고 `(sin y)'=cos(y)y'`를 정확히 적용했다. AI-MATH-W3-R3에서는 공식 힌트 없이 `cos(y)`를 보존하고 `(cos y)'=-sin(y)y'`를 정확히 적용했으며, 곱의 미분까지 맞게 수행했다. AI-MATH-W3-R4에서는 직접 실패 형태였던 `e^y`가 다시 등장했을 때 공식 힌트 없이 `e^y + x e^y y' + y' = 0`에서 `y' = -e^y/(x e^y + 1)`까지 정확히 완결했다.  
+Review trigger: 같은 날 즉시 반복보다 간격을 둔 다음 음함수 문제에서 `e^y` 또는 다른 `g(y)`가 다시 나올 때, 별도 힌트 없이 내부 변수 보존과 `y'` 부착이 유지되는지 확인한다.  
 Related strategy IDs: none  
-Notes: 두 번의 `e^y` 관련 실패 뒤 cue-assisted `sin(y)` 성공, 이어 무힌트 `cos(y)` 성공이 확인되어 핵심 메커니즘에는 개선 증거가 생겼다. 다만 직접 실패 형태인 `e^y` 자체의 무힌트 재검증은 아직 남아 있어 `STABLE`로 보지 않는다.
+Notes: 두 번의 `e^y` 관련 실패 뒤 cue-assisted `sin(y)` 성공, 무힌트 `cos(y)` 성공, 이어 직접 실패 형태인 `e^y`의 무힌트 완전 정답이 확인되어 개선 증거가 강화되었다. 다만 직접 성공은 아직 한 번이므로 `STABLE`로 올리지 않고 `IMPROVING`을 유지한다.

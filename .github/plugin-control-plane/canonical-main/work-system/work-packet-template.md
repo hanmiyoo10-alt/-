@@ -4,6 +4,9 @@
 
 **State: READY**
 
+Keep `State` as the packet lifecycle projection. Preserve exactly one canonical lifecycle token (`READY / CLAIMED / IN_PROGRESS / REVIEW / DONE / BLOCKED / CANCELLED / SUPERSEDED`) here when updating stage bookkeeping. Do not replace lifecycle State with stage-only prose; update `Interaction stage` separately.
+
+
 ## Primary goal
 
 <ONE_PRIMARY_GOAL>

@@ -7,7 +7,14 @@ const dir = path.join(root, '.github/plugin-control-plane/canonical-main/work-sy
 const policy = JSON.parse(fs.readFileSync(path.join(dir, 'policy.json'), 'utf8'));
 const readme = fs.readFileSync(path.join(dir, 'README.md'), 'utf8');
 const template = fs.readFileSync(path.join(dir, 'work-packet-template.md'), 'utf8');
+const packetProjectionSource = fs.readFileSync(path.join(dir, 'packet-projection.cjs'), 'utf8');
 const commonRules = fs.readFileSync(path.join(root, 'docs/REPOSITORY_COMMON_RULES.md'), 'utf8');
+const {
+  PACKET_STATES,
+  REASON_CODES: PACKET_PROJECTION_REASON_CODES,
+  classifyPacketProjection,
+  extractPacketLifecycle,
+} = require(path.join(dir, 'packet-projection.cjs'));
 const pluginManifest = JSON.parse(fs.readFileSync(path.join(root, '.github/tooling/ci-summary/manifests/plugin-control-plane.json'), 'utf8'));
 const permanentCommands = pluginManifest.checks.map((check) => check.command.join(' ')).join('\n');
 
@@ -23,6 +30,104 @@ assert.equal(policy.classification.uncertainSystemImpact, 'SYSTEM_UPDATE_REQUIRE
 assert.deepEqual(policy.classification.ordering, ['importance-desc', 'difficulty-asc', 'size-asc']);
 assert.ok(policy.ideaStates.includes('PACKETIZED'));
 assert.ok(policy.packetStates.includes('BLOCKED'));
+
+
+assert.deepEqual(PACKET_STATES, policy.packetStates);
+const packetFixture = (stateLine, currentStage = 'AUTHORITY_SCOPE') => [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '',
+  stateLine,
+  '',
+  '## Interaction stage',
+  '',
+  `- Current stage: \`${currentStage}\``,
+].join('\n');
+
+let packetProjection = classifyPacketProjection(packetFixture('**State: READY**'));
+assert.equal(packetProjection.disposition, 'PASS');
+assert.equal(packetProjection.lifecycle, 'READY');
+assert.equal(packetProjection.interactionStage, 'AUTHORITY_SCOPE');
+assert.equal(packetProjection.mutationAuthorized, false);
+assert.equal(extractPacketLifecycle(packetFixture('**State: READY**')), 'READY');
+
+const headingPacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '',
+  '## State',
+  '`IN_PROGRESS / VALIDATION_MERGE COMPLETE`',
+  '',
+  '## Interaction stage',
+  '',
+  '- Current stage: `VALIDATION_MERGE`',
+].join('\n');
+assert.equal(extractPacketLifecycle(headingPacket), 'IN_PROGRESS');
+assert.equal(classifyPacketProjection(headingPacket).disposition, 'PASS');
+
+
+const stageOnly = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '',
+  '## State',
+  '`POSTMERGE_CONVERGENCE COMPLETE / READY_FOR_EXPERIMENT_CLOSE`',
+  '',
+  '## Interaction stage',
+  '',
+  '- Current stage: `EXPERIMENT_CLOSE`',
+].join('\n');
+assert.equal(extractPacketLifecycle(stageOnly), null);
+packetProjection = classifyPacketProjection(stageOnly);
+assert.equal(packetProjection.disposition, 'UNKNOWN');
+assert.ok(packetProjection.reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.PACKET_LIFECYCLE_UNKNOWN));
+
+const proofOnly = `${stageOnly}\n\n## Proof / closure\n- Evidence terms reached: DONE`;
+assert.equal(extractPacketLifecycle(proofOnly), null);
+assert.ok(classifyPacketProjection(proofOnly).reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.PACKET_LIFECYCLE_UNKNOWN));
+
+const lifecycleWithoutStage = '<!-- canonical-main-work-packet:v1 -->\n\n**State: IN_PROGRESS**\n';
+assert.equal(extractPacketLifecycle(lifecycleWithoutStage), 'IN_PROGRESS');
+packetProjection = classifyPacketProjection(lifecycleWithoutStage);
+assert.equal(packetProjection.lifecycle, 'IN_PROGRESS');
+assert.equal(packetProjection.disposition, 'UNKNOWN');
+assert.ok(packetProjection.reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.INTERACTION_STAGE_SECTION_MISSING));
+
+
+packetProjection = classifyPacketProjection(packetFixture('**State: IN_PROGRESS / REVIEW**'));
+assert.equal(packetProjection.disposition, 'CONFLICT');
+assert.ok(packetProjection.reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.PACKET_LIFECYCLE_CONFLICT));
+
+const duplicateState = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '',
+  '**State: READY**',
+  '',
+  '## State',
+  'READY',
+  '',
+  '## Interaction stage',
+  '',
+  '- Current stage: `AUTHORITY_SCOPE`',
+].join('\n');
+packetProjection = classifyPacketProjection(duplicateState);
+assert.equal(packetProjection.disposition, 'CONFLICT');
+assert.ok(packetProjection.reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.STATE_PROJECTION_DUPLICATE));
+
+packetProjection = classifyPacketProjection(packetFixture('**State: READY**').replace('<!-- canonical-main-work-packet:v1 -->', ''));
+assert.equal(packetProjection.disposition, 'UNKNOWN');
+assert.ok(packetProjection.reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.PACKET_MARKER_MISSING));
+
+packetProjection = classifyPacketProjection(`<!-- canonical-main-work-packet:v1 -->\n${packetFixture('**State: READY**')}`);
+assert.equal(packetProjection.disposition, 'CONFLICT');
+assert.ok(packetProjection.reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.PACKET_MARKER_DUPLICATE));
+
+
+assert.match(packetProjectionSource, /require\('\.\/policy\.json'\)/);
+assert.doesNotMatch(packetProjectionSource, /child_process|https?:\/\/|gh\s+api|fetch\s*\(/);
+assert.doesNotMatch(packetProjectionSource, /issueState|nativeState/);
+assert.match(readme, /Lifecycle `State` and `Interaction stage` are separate packet axes/);
+assert.match(readme, /Stage-only State prose never implies/);
+assert.match(readme, /packet-projection\.cjs/);
+assert.match(template, /Preserve exactly one canonical lifecycle token/);
+assert.match(template, /Do not replace lifecycle State with stage-only prose/);
 assert.equal(policy.parallelism.requireDisjointWriteScopes, true);
 assert.equal(policy.parallelism.oneActiveOwnerPerPacket, true);
 assert.equal(policy.parallelism.splitOnScopeExpansion, true);

@@ -190,3 +190,19 @@ ChatGPT의 모바일 plugin/MCP 지원, 요금제, Codex usage 정책 등은 이
 Android 외부 앱의 arbitrary Termux command 실행 권한을 넓히는 것보다 기존 runit/RDC 실행 owner 안에 sibling endpoint를 추가하는 편이 더 좁은 권한·효과 표면이다.
 
 기존 `S` endpoint를 교체하면 이미 검증된 `/root/...` 개발 흐름을 흔들 수 있으므로 병존 구조를 사용한다.
+
+## D-012 - 실행 surface는 semantic requirement로 먼저 선택한다
+
+상태: `ACTIVE`
+
+### 결정
+
+Mobile Coder Lab의 S/M 작업은 현재 online/dirty/readiness 상태보다 먼저 작업의 semantic requirement를 분류한다. Durable v1 routing policy는 [`device-routing.md`](device-routing.md)가 소유한다.
+
+일반 device-agnostic repository 작업은 S Ubuntu PRoot를 기본 선호 surface로 사용하되, D-001/D-002에 따라 M도 합법적인 explicit target/fallback으로 유지한다. S-Termux, M PRIVATE LAB, M VM LAB, S device-local private execution처럼 문맥 자체가 필요한 작업은 그 owner로만 라우팅하며, target이 unavailable하다는 이유로 다른 semantic context로 조용히 우회하지 않는다.
+
+`sm-status`와 owner preflight는 route 선택 뒤의 현재 상태 evidence일 뿐 routing authority가 아니다. 여러 execution context가 필요한 작업은 phase별로 나누고, routing policy 자체는 dispatcher, lease, runtime truth, Git/CI/main-write/release/production authority를 소유하지 않는다.
+
+### 이유
+
+현재 S/M 구조는 두 독립 repository worker와 별도 native-Termux/lab owners를 함께 보존한다. Semantic routing과 current status를 분리해야 기존 owner를 침범하지 않으면서도 반복 가능한 device 선택 정책을 유지할 수 있다.

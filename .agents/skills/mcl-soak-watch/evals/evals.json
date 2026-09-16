@@ -1,0 +1,158 @@
+{
+  "skill_name": "mcl-soak-watch",
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "no-prior-snapshot",
+      "prompt": "Collect a current soak snapshot with no prior receipt supplied.",
+      "facts": {
+        "sm_status_valid": true,
+        "roundtrip_s": "pass",
+        "roundtrip_s_termux": "pass",
+        "roundtrip_m": "pass",
+        "prior_supplied": false
+      },
+      "expected": {
+        "change": "no_prior",
+        "changed_fields": "none",
+        "aggregate_health_present": false
+      },
+      "assertions": [
+        "No prior receipt is searched for implicitly.",
+        "A complete snapshot is not a whole-system health verdict."
+      ]
+    },
+    {
+      "id": "same-valid-prior",
+      "prompt": "A valid prior receipt is supplied and every reviewed comparable field equals the current snapshot.",
+      "facts": {
+        "prior_valid": true,
+        "all_comparable_fields_equal": true
+      },
+      "expected": {
+        "change": "same",
+        "changed_fields": "none"
+      },
+      "assertions": [
+        "Comparison is literal over reviewed fields only.",
+        "No equality claim extends beyond the receipt."
+      ]
+    },
+    {
+      "id": "changed-fields-ordered",
+      "prompt": "A valid prior receipt differs in rdc_m, roundtrip_m, and m_repo_dirty.",
+      "facts": {
+        "prior_valid": true,
+        "differences": ["m_repo_dirty", "roundtrip_m", "rdc_m"]
+      },
+      "expected": {
+        "change": "changed",
+        "changed_fields": "rdc_m,roundtrip_m,m_repo_dirty"
+      },
+      "assertions": [
+        "Changed fields follow the documented comparable-key order.",
+        "The comparison does not infer why any field changed."
+      ]
+    },
+    {
+      "id": "invalid-prior-fails-closed",
+      "prompt": "The caller supplies a prior receipt with the wrong schema or malformed field order.",
+      "facts": {
+        "prior_supplied": true,
+        "prior_valid": false
+      },
+      "expected": {
+        "change": "unknown",
+        "changed_fields": "unknown"
+      },
+      "assertions": [
+        "Do not partially trust a malformed prior receipt."
+      ]
+    },
+    {
+      "id": "offline-without-attempt-keeps-roundtrip-unknown",
+      "prompt": "sm-status reports S-Termux offline and no roundtrip attempt is made.",
+      "facts": {
+        "rdc_s_termux": "offline",
+        "roundtrip_attempted": false
+      },
+      "expected": {
+        "rdc_s_termux": "offline",
+        "roundtrip_s_termux": "unknown"
+      },
+      "assertions": [
+        "Presence and roundtrip remain separate observations.",
+        "Do not invent a failed attempted roundtrip when no attempt occurred."
+      ]
+    },
+    {
+      "id": "explicit-roundtrip-failure-has-no-cause",
+      "prompt": "An attempted M roundtrip returns an explicit transport/tool-delivery failure.",
+      "facts": {
+        "roundtrip_attempted": true,
+        "roundtrip_m": "fail"
+      },
+      "expected": {
+        "roundtrip_m": "fail",
+        "root_cause_present": false
+      },
+      "assertions": [
+        "Fail proves only the attempted roundtrip failed.",
+        "Do not attribute the failure to network, provider, process, supervisor, watchdog, or auth state."
+      ]
+    },
+    {
+      "id": "malformed-sm-status-preserves-unknown",
+      "prompt": "The delegated sm-status child receipt is malformed while direct roundtrip evidence is available.",
+      "facts": {
+        "sm_status_valid": false,
+        "roundtrip_s": "pass"
+      },
+      "expected": {
+        "rdc_s": "unknown",
+        "s_termux_profile": "unknown",
+        "m_rdc_supervision": "unknown",
+        "s_repo_dirty": "unknown",
+        "m_repo_dirty": "unknown",
+        "roundtrip_s": "pass"
+      },
+      "assertions": [
+        "Do not reconstruct delegated fields from lower-level device state.",
+        "Independent bounded roundtrip evidence may remain available."
+      ]
+    },
+    {
+      "id": "privacy-and-watchdog-boundary",
+      "prompt": "Tool metadata and raw watchdog/channel evidence are visible during collection.",
+      "facts": {
+        "private_metadata_present": true,
+        "raw_watchdog_or_channel_evidence_present": true
+      },
+      "expected": {
+        "private_metadata_emitted": false,
+        "watchdog_field_present": false,
+        "channel_health_field_present": false
+      },
+      "assertions": [
+        "Only reviewed bounded receipt fields may be emitted.",
+        "No raw watchdog or channel state is synthesized into health."
+      ]
+    },
+    {
+      "id": "unknown-value-can-still-be-a-change",
+      "prompt": "A valid prior receipt had roundtrip_s=pass and the current bounded observation is roundtrip_s=unknown.",
+      "facts": {
+        "prior_valid": true,
+        "prior_roundtrip_s": "pass",
+        "current_roundtrip_s": "unknown"
+      },
+      "expected": {
+        "change": "changed",
+        "changed_fields": "roundtrip_s"
+      },
+      "assertions": [
+        "UNKNOWN is preserved as an enum value and is not silently equal to prior PASS."
+      ]
+    }
+  ]
+}

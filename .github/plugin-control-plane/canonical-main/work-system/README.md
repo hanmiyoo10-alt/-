@@ -47,6 +47,28 @@ cat /path/to/issue-465-body.md | node .github/plugin-control-plane/canonical-mai
 
 CLI exit status is `1` for `FAIL`, `2` for `UNKNOWN`, and `0` for `PASS` or `WARN`. The helper has no auto-fix mode and grants no issue-write, merge, release, production, or protection authority.
 
+### Cross-surface packet-reference hygiene classifier
+
+`work-system/coordination-reference-hygiene.cjs` is a pure read-only classifier for packet references embedded in mutable coordination prose outside the referenced packet's own body. It consumes caller-supplied prose plus caller-supplied packet evidence; it does not fetch GitHub and never mutates coordination surfaces.
+
+Its top-level result vocabulary is `PASS / STALE / UNKNOWN / CONFLICT`, with fail-closed precedence `CONFLICT > STALE > UNKNOWN > PASS`.
+
+V1 deliberately recognizes only narrow routing roles that can misdirect resumed work: `active writer`, `current owner`, `current packet`, `next candidate`, `next packet`, and an explicitly labeled coordination/current blocker. A bare `#1234` token is not promoted into a current-role claim.
+
+A terminal packet is not stale merely because it is referenced historically. Explicit `latest completed`, `completed`, `historical`, `legacy`, `prior`, or `previous` framing remains permitted, including references to terminal packets.
+
+For a supported current-role reference, caller evidence may include the native issue state and canonical packet lifecycle state. `DONE`, `CANCELLED`, and `SUPERSEDED` are terminal lifecycle states; `BLOCKED` remains nonterminal. A current-role reference to coherent terminal lifecycle evidence becomes `STALE`. Missing packet/lifecycle evidence remains `UNKNOWN`. Material disagreement between supplied native issue state and lifecycle state becomes `CONFLICT`; native closure alone is never converted into proof-taxonomy `DONE`.
+
+Each recognized reference carries a bounded issue number, 1-based line, excerpt, role, disposition, and stable reason code. Output is capped, deterministic, and explicitly denies network and mutation authority.
+
+Module callers use `classifyCoordinationReferences(input)`. The bounded CLI accepts one JSON file or stdin with this shape:
+
+```json
+{"prose":"- Next packet: #2342","packets":[{"issueNumber":2342,"nativeState":"open","lifecycleState":"IN_PROGRESS"}]}
+```
+
+CLI exit status is `0` for `PASS`, `1` for `STALE`, `2` for `UNKNOWN`, and `3` for `CONFLICT`. The helper does not repair prose, close packets, redefine #2083 packet-body close-sync, or widen #465 queue-hygiene ownership.
+
 ### Write-scope overlap resolver
 
 `work-system/scope-overlap.cjs` is the pure read-only classifier for the existing `active-packets` write-scope-overlap contract. It consumes supplied packet/PR evidence only; it does not fetch GitHub, mutate issues, or grant write authority.

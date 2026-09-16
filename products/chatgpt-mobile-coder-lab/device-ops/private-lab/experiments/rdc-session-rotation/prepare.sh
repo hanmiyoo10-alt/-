@@ -38,7 +38,7 @@ validate_diag() {
   case "$DIAG_RESULT" in pass|blocked|unknown) ;; *) return 1 ;; esac
   DIAG_CLASS=${line4#class=}
   [ "class=$DIAG_CLASS" = "$line4" ] || return 1
-  case "$DIAG_CLASS" in ready|lab_unavailable|stage_conflict|target_conflict|npm_unavailable|network_unavailable|package_unavailable|install_failed|verify_failed|unknown) ;; *) return 1 ;; esac
+  case "$DIAG_CLASS" in ready|lab_unavailable|stage_conflict|target_conflict|npm_unavailable|network_unavailable|package_unavailable|install_failed|install_entry_failed|install_precondition_failed|workspace_failed|package_install_failed|package_archive_failed|package_extract_failed|package_identity_failed|materialize_failed|publish_failed|verify_failed|unknown) ;; *) return 1 ;; esac
   DIAG_STAGING=${line5#staging=}
   [ "staging=$DIAG_STAGING" = "$line5" ] || return 1
   case "$DIAG_STAGING" in none|cleanup_eligible|conflict) ;; *) return 1 ;; esac
@@ -90,7 +90,7 @@ probe=$target/probe.mjs
 if [ ! -e "$target" ]; then echo "MISSING vendor:0.2.50"; exit 0; fi
 [ -d "$target" ] || { echo "BLOCKED vendor:unmanaged"; exit 1; }
 [ -f "$marker" ] && grep -Fxq "mcl-rdc-rotation-repro:v1" "$marker" || { echo "BLOCKED vendor:unmanaged"; exit 1; }
-[ -f "$pkg" ] && grep -Fq '"version": "0.2.50"' "$pkg" || { echo "BLOCKED vendor:version"; exit 1; }
+[ -f "$pkg" ] && grep -Fq "\"version\": \"0.2.50\"" "$pkg" || { echo "BLOCKED vendor:version"; exit 1; }
 [ -f "$probe" ] || { echo "BLOCKED vendor:probe"; exit 1; }
 echo "PRESENT vendor:0.2.50"
 ' 2>/dev/null
@@ -112,13 +112,27 @@ set -eu
 target=/opt/mcl-private-lab/vendor/rdc-session-rotation
 stage=/opt/mcl-private-lab/vendor/.rdc-session-rotation-stage
 stage_marker=$stage/.mcl-rdc-rotation-stage-v1
+classifier=$stage/.mcl-rdc-rotation-classifier-v1
 conflict() { printf "%s\n" stage_conflict; exit 0; }
+valid_classifier() {
+  [ -f "$classifier" ] && [ ! -L "$classifier" ] || return 1
+  bytes=$(wc -c < "$classifier") || return 1
+  [ "$bytes" -le 32 ] || return 1
+  lines=$(wc -l < "$classifier") || return 1
+  [ "$lines" -eq 1 ] || return 1
+  value=$(cat "$classifier") || return 1
+  case "$value" in
+    install_precondition_failed|workspace_failed|package_install_failed|package_archive_failed|package_extract_failed|package_identity_failed|materialize_failed|publish_failed) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 if [ -e "$target" ] || [ -L "$target" ]; then printf "%s\n" target_conflict; exit 0; fi
 if [ ! -e "$stage" ] && [ ! -L "$stage" ]; then printf "%s\n" none; exit 0; fi
 [ -d "$stage" ] && [ ! -L "$stage" ] || conflict
 count=0
 have_probe=0
 have_marker=0
+have_classifier=0
 for entry in "$stage"/* "$stage"/.[!.]* "$stage"/..?*; do
   [ -e "$entry" ] || [ -L "$entry" ] || continue
   count=$((count + 1))
@@ -127,11 +141,12 @@ for entry in "$stage"/* "$stage"/.[!.]* "$stage"/..?*; do
     "$stage/.mcl-rdc-rotation-stage-v1")
       [ -f "$entry" ] && [ ! -L "$entry" ] && grep -Fxq "mcl-rdc-rotation-stage:v1" "$entry" || conflict
       have_marker=1 ;;
+    "$classifier") valid_classifier || conflict; have_classifier=1 ;;
     *) conflict ;;
   esac
 done
 [ "$have_probe" -eq 1 ] || conflict
-case "$count:$have_marker" in 1:0|2:1) ;; *) conflict ;; esac
+case "$count:$have_marker:$have_classifier" in 1:0:0|2:1:0|3:1:1) ;; *) conflict ;; esac
 cmp -s "$stage/probe.mjs" - || conflict
 printf "%s\n" cleanup_eligible
 ' < "$PROBE_SOURCE" 2>/dev/null
@@ -162,6 +177,26 @@ set -eu
 env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
   /usr/bin/npm view "@wonderwhy-er/desktop-commander@0.2.50" version --silent >/dev/null 2>&1
 ' >/dev/null 2>&1
+}
+
+read_install_classifier() {
+  "$PD" login --isolated "$LAB_NAME" -- /bin/sh -lc '
+# mcl-rdc-rotation-repro:read-install-classifier:v1
+set -eu
+record=/opt/mcl-private-lab/vendor/.rdc-session-rotation-stage/.mcl-rdc-rotation-classifier-v1
+invalid() { printf "%s\n" invalid; exit 0; }
+if [ ! -e "$record" ] && [ ! -L "$record" ]; then printf "%s\n" absent; exit 0; fi
+[ -f "$record" ] && [ ! -L "$record" ] || invalid
+bytes=$(wc -c < "$record") || invalid
+[ "$bytes" -le 32 ] || invalid
+lines=$(wc -l < "$record") || invalid
+[ "$lines" -eq 1 ] || invalid
+value=$(cat "$record") || invalid
+case "$value" in
+  install_precondition_failed|workspace_failed|package_install_failed|package_archive_failed|package_extract_failed|package_identity_failed|materialize_failed|publish_failed) printf "%s\n" "$value" ;;
+  *) invalid ;;
+esac
+' 2>/dev/null
 }
 
 classify_apply_staging() {
@@ -197,13 +232,27 @@ cleanup_stage() {
 set -eu
 target=/opt/mcl-private-lab/vendor/rdc-session-rotation
 stage=/opt/mcl-private-lab/vendor/.rdc-session-rotation-stage
+classifier=$stage/.mcl-rdc-rotation-classifier-v1
 conflict() { printf "%s\n" stage_conflict; exit 0; }
+valid_classifier() {
+  [ -f "$classifier" ] && [ ! -L "$classifier" ] || return 1
+  bytes=$(wc -c < "$classifier") || return 1
+  [ "$bytes" -le 32 ] || return 1
+  lines=$(wc -l < "$classifier") || return 1
+  [ "$lines" -eq 1 ] || return 1
+  value=$(cat "$classifier") || return 1
+  case "$value" in
+    install_precondition_failed|workspace_failed|package_install_failed|package_archive_failed|package_extract_failed|package_identity_failed|materialize_failed|publish_failed) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 if [ -e "$target" ] || [ -L "$target" ]; then printf "%s\n" target_conflict; exit 0; fi
 if [ ! -e "$stage" ] && [ ! -L "$stage" ]; then printf "%s\n" none; exit 0; fi
 [ -d "$stage" ] && [ ! -L "$stage" ] || conflict
 count=0
 have_probe=0
 have_marker=0
+have_classifier=0
 for entry in "$stage"/* "$stage"/.[!.]* "$stage"/..?*; do
   [ -e "$entry" ] || [ -L "$entry" ] || continue
   count=$((count + 1))
@@ -212,16 +261,18 @@ for entry in "$stage"/* "$stage"/.[!.]* "$stage"/..?*; do
     "$stage/.mcl-rdc-rotation-stage-v1")
       [ -f "$entry" ] && [ ! -L "$entry" ] && grep -Fxq "mcl-rdc-rotation-stage:v1" "$entry" || conflict
       have_marker=1 ;;
+    "$classifier") valid_classifier || conflict; have_classifier=1 ;;
     *) conflict ;;
   esac
 done
 [ "$have_probe" -eq 1 ] || conflict
-case "$count:$have_marker" in 1:0|2:1) ;; *) conflict ;; esac
+case "$count:$have_marker:$have_classifier" in 1:0:0|2:1:0|3:1:1) ;; *) conflict ;; esac
 cmp -s "$stage/probe.mjs" - || conflict
 rm -rf -- "$stage"
 printf "%s\n" cleaned
 ' < "$PROBE_SOURCE" 2>/dev/null
 }
+
 
 if [ "$MODE" = diagnose ]; then
   lab_probe || { emit_diag blocked lab_unavailable conflict; exit 1; }
@@ -272,24 +323,52 @@ set -eu
 base=/opt/mcl-private-lab/vendor
 target=$base/rdc-session-rotation
 stage=$base/.rdc-session-rotation-stage
-[ ! -e "$target" ] && [ ! -L "$target" ] || exit 20
-[ -f "$stage/probe.mjs" ] && [ ! -L "$stage/probe.mjs" ] || exit 21
-[ -f "$stage/.mcl-rdc-rotation-stage-v1" ] && grep -Fxq "mcl-rdc-rotation-stage:v1" "$stage/.mcl-rdc-rotation-stage-v1" || exit 21
-tmp=$(mktemp -d "$base/.rdc-session-rotation.XXXXXX")
+classifier=$stage/.mcl-rdc-rotation-classifier-v1
+milestone() {
+  case "$1" in
+    install_precondition_failed|workspace_failed|package_install_failed|package_archive_failed|package_extract_failed|package_identity_failed|materialize_failed|publish_failed) ;;
+    *) exit 1 ;;
+  esac
+  [ ! -e "$classifier" ] && [ ! -L "$classifier" ] || exit 1
+  umask 077
+  printf "%s\n" "$1" > "$classifier" || exit 1
+  exit 1
+}
+[ ! -e "$target" ] && [ ! -L "$target" ] || milestone install_precondition_failed
+[ -f "$stage/probe.mjs" ] && [ ! -L "$stage/probe.mjs" ] || milestone install_precondition_failed
+[ -f "$stage/.mcl-rdc-rotation-stage-v1" ] && grep -Fxq "mcl-rdc-rotation-stage:v1" "$stage/.mcl-rdc-rotation-stage-v1" || milestone install_precondition_failed
+tmp=$(mktemp -d "$base/.rdc-session-rotation.XXXXXX") || milestone workspace_failed
 trap "rm -rf \"$tmp\"" EXIT HUP INT TERM
+archive_dir=$tmp/.package-archive
+pkg_root=$tmp/node_modules/@wonderwhy-er/desktop-commander
+mkdir -p "$archive_dir" "$pkg_root" || milestone workspace_failed
 env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-  /usr/bin/npm install --prefix "$tmp" --omit=dev --ignore-scripts --no-save \
-  "@wonderwhy-er/desktop-commander@0.2.50" >/dev/null 2>&1
-pkg=$tmp/node_modules/@wonderwhy-er/desktop-commander/package.json
-[ -f "$pkg" ] && grep -Fq '"version": "0.2.50"' "$pkg" || exit 22
-cp "$stage/probe.mjs" "$tmp/probe.mjs"
-chmod 0644 "$tmp/probe.mjs"
-printf "%s\n" "mcl-rdc-rotation-repro:v1" > "$tmp/.mcl-rdc-rotation-repro-v1"
-[ ! -e "$target" ] && [ ! -L "$target" ] || exit 23
-mv -T "$tmp" "$target"
+  /usr/bin/npm pack --ignore-scripts --pack-destination "$archive_dir" \
+  "@wonderwhy-er/desktop-commander@0.2.50" >/dev/null 2>&1 || milestone package_archive_failed
+set -- "$archive_dir"/*.tgz
+[ "$#" -eq 1 ] && [ -f "$1" ] && [ ! -L "$1" ] || milestone package_archive_failed
+archive=$1
+/usr/bin/tar --no-same-owner --no-same-permissions --strip-components=1 -xzf "$archive" -C "$pkg_root" \
+  >/dev/null 2>&1 || milestone package_extract_failed
+rm -rf "$archive_dir" || milestone materialize_failed
+pkg=$pkg_root/package.json
+[ -f "$pkg" ] && [ ! -L "$pkg" ] && grep -Fq "\"version\": \"0.2.50\"" "$pkg" || milestone package_identity_failed
+cp "$stage/probe.mjs" "$tmp/probe.mjs" || milestone materialize_failed
+chmod 0644 "$tmp/probe.mjs" || milestone materialize_failed
+printf "%s\n" "mcl-rdc-rotation-repro:v1" > "$tmp/.mcl-rdc-rotation-repro-v1" || milestone materialize_failed
+[ ! -e "$target" ] && [ ! -L "$target" ] || milestone publish_failed
+mv -T "$tmp" "$target" || milestone publish_failed
 trap - EXIT HUP INT TERM
 rm -rf "$stage"
-' >/dev/null 2>&1; then :; else emit_apply_failure install_failed; fi
+' 3>&- >/dev/null 2>&1; then :; else
+  if install_class=$(read_install_classifier); then :; else install_class=invalid; fi
+  case "$install_class" in
+    install_precondition_failed|workspace_failed|package_install_failed|package_archive_failed|package_extract_failed|package_identity_failed|materialize_failed|publish_failed) emit_apply_failure "$install_class" ;;
+    absent) emit_apply_failure install_entry_failed ;;
+    invalid) emit_apply_failure install_failed ;;
+    *) emit_apply_failure install_failed ;;
+  esac
+fi
 if state=$(check_state); then :; else emit_apply_failure verify_failed; fi
 [ "$state" = 'PRESENT vendor:0.2.50' ] || emit_apply_failure verify_failed
 echo 'INSTALLED vendor:0.2.50'

@@ -186,6 +186,7 @@ jobs:
     permissions:
       contents: write
       actions: write
+      pull-requests: write
     steps:
       - name: Checkout current main administrative authority
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -244,6 +245,7 @@ jobs:
           git diff --check
 
       - name: Commit and gate machine-known candidate truth
+        id: main_write
         shell: bash
         env:
           INTENT: ${{ needs.materialize.outputs.intent_id }}
@@ -257,16 +259,47 @@ jobs:
           git add "$RECEIPT" "$SHADOW"
           if git diff --cached --quiet; then
             echo 'SIMCORE_CANDIDATE_RECEIPT_ALREADY_DURABLE'
+            echo 'checked_pr_required=false' >> "$GITHUB_OUTPUT"
           else
             git commit -m "state(simcore): record candidate ${INTENT}"
             PAYLOAD="$(git rev-parse HEAD)"
+            set +e
             python3 scripts/repo-main-write.py --commit "$PAYLOAD" \
               --allow "$RECEIPT" \
               --allow "$SHADOW" \
               --required-workflow simcore-ci.yml \
               --required-profile MAIN_HEALTH \
               --required-job Required \
-              --staging-prefix simcore-candidate-receipt
+              --staging-prefix simcore-candidate-receipt \
+              > .simcore-candidate/main-write.stdout \
+              2> .simcore-candidate/main-write.stderr
+            MAIN_WRITE_CODE=$?
+            set -e
+            cat .simcore-candidate/main-write.stdout
+            if test -s .simcore-candidate/main-write.stderr; then cat .simcore-candidate/main-write.stderr >&2; fi
+            case "$MAIN_WRITE_CODE" in
+              0)
+                echo 'checked_pr_required=false' >> "$GITHUB_OUTPUT"
+                ;;
+              9)
+                node products/simcore/tooling/release-state-checked-pr.mjs \
+                  --root . \
+                  --mode consume-candidate \
+                  --main-write-status "$MAIN_WRITE_CODE" \
+                  --main-write-stdout .simcore-candidate/main-write.stdout \
+                  --main-write-stderr .simcore-candidate/main-write.stderr \
+                  --candidate-report .simcore-candidate/report.json \
+                  --receipt "$RECEIPT" \
+                  --spec-shadow "$SHADOW" \
+                  --payload-commit "$PAYLOAD" \
+                  --report .simcore-candidate/checked-pr-consume-report.json
+                echo 'checked_pr_required=true' >> "$GITHUB_OUTPUT"
+                ;;
+              *)
+                echo "SIMCORE_CANDIDATE_MAIN_WRITE_FAIL:$MAIN_WRITE_CODE" >&2
+                exit "$MAIN_WRITE_CODE"
+                ;;
+            esac
           fi
 
       - name: Reobserve durable machine receipt
@@ -289,5 +322,20 @@ jobs:
           assert r['productionMutation']=='NONE'
           assert s['authority']=='SHADOW_ONLY'
           assert s['derivedSpec']['candidateCommit']==os.environ['C']
+          with open('.simcore-candidate/durable-reobserve.json','w') as f:
+              json.dump({'schemaVersion':1,'product':'SimCore','result':'SIMCORE_CANDIDATE_RECEIPT_DURABLE_PASS','candidateCommit':os.environ['C'],'receiptPath':os.environ['RECEIPT'],'shadowPath':os.environ['SHADOW']},f,indent=2)
+              f.write('\n')
           print('SIMCORE_CANDIDATE_RECEIPT_DURABLE_PASS')
           PY
+
+      - name: Cleanup checked candidate staging ref
+        if: steps.main_write.outputs.checked_pr_required == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node products/simcore/tooling/release-state-checked-pr.mjs \
+            --root . \
+            --mode cleanup-candidate \
+            --consume-report .simcore-candidate/checked-pr-consume-report.json \
+            --durable-report .simcore-candidate/durable-reobserve.json \
+            --report .simcore-candidate/checked-pr-cleanup-report.json

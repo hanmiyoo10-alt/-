@@ -115,13 +115,26 @@ assert.equal(policy.queueProjection.duplicateProductionState, false);
 assert.equal(policy.queueProjection.duplicateNativeProtectionState, false);
 assert.equal(policy.queueProjection.allowHistoricalSynchronizationSha, true);
 assert.equal(policy.queueProjection.historicalSynchronizationShaMustBeLabeled, true);
+assert.equal(policy.queueProjection.humanFacingSurfaceAvailabilityLabel, 'Queue surface: ENABLED');
+assert.equal(policy.queueProjection.surfaceAvailabilityImpliesActiveWriter, false);
+assert.equal(policy.queueProjection.minHumanFacingMutableActiveWriterProjections, 0);
+assert.equal(policy.queueProjection.maxHumanFacingMutableActiveWriterProjections, 1);
+assert.equal(policy.queueProjection.surfacesMayDuplicateActiveWriter, false);
+assert.equal(policy.queueProjection.activeWriterProjectionExhaustive, false);
 
 assert.equal(policy.readRouting.version, 1);
 assert.deepEqual(policy.readRouting.baseReads, ['direct-main', 'issue-485']);
 assert.deepEqual(policy.readRouting.intents.STATUS_SESSION, {add: [], stopAfterReads: true});
 assert.deepEqual(policy.readRouting.intents.EXECUTION, {
-  add: ['issue-465', 'active-packet'],
+  add: ['issue-465', 'active-packets'],
   requiresPacketBootstrapBeforeMutation: true,
+  activePacketDiscovery: {
+    mode: 'write-scope-overlap',
+    queueSeedOnly: true,
+    inspectConcretelyIdentifiedNonterminalOwners: true,
+    unresolvedOverlapDisposition: 'UNKNOWN_OR_CONFLICT',
+    disjointParallelismPreserved: true,
+  },
 });
 assert.deepEqual(policy.readRouting.intents.MEMORY_CONTEXT.add, ['issue-462']);
 assert.deepEqual(policy.readRouting.intents.IDEA_DESIGN_CONTEXT.add, ['issue-464']);
@@ -140,7 +153,7 @@ const routeFor = (...names) => [...new Set([
   ...names.flatMap((name) => policy.readRouting.intents[name].add),
 ])];
 assert.deepEqual(routeFor('STATUS_SESSION'), ['direct-main', 'issue-485']);
-assert.deepEqual(routeFor('EXECUTION'), ['direct-main', 'issue-485', 'issue-465', 'active-packet']);
+assert.deepEqual(routeFor('EXECUTION'), ['direct-main', 'issue-485', 'issue-465', 'active-packets']);
 assert.deepEqual(routeFor('MEMORY_CONTEXT'), ['direct-main', 'issue-485', 'issue-462']);
 assert.deepEqual(routeFor('IDEA_DESIGN_CONTEXT'), ['direct-main', 'issue-485', 'issue-464']);
 assert.deepEqual(routeFor('AUDIT_CONTEXT'), ['direct-main', 'issue-485', 'issue-293']);
@@ -169,6 +182,12 @@ assert.match(readme, /`LIVE HEALTH: direct main \+ #485` is the only current-hea
 assert.match(readme, /MUST NOT duplicate a current `main` SHA, Required state\/run, production identity state, or native-protection state as live truth/);
 assert.match(readme, /explicitly historical synchronization\/packet evidence/);
 assert.match(readme, /read direct current `main` and #485 rather than refreshing #465 merely to copy time-sensitive evidence/);
+assert.match(readme, /`Queue surface: ENABLED` is the canonical modern availability label/);
+assert.match(readme, /active-writer projection cardinality is `0\.\.1`/);
+assert.match(readme, /zero projected writers is valid/);
+assert.match(readme, /at most one human-facing mutable active-writer projection/);
+assert.match(readme, /stable `## Surfaces` pointers MUST NOT repeat mutable active-writer state/);
+assert.match(readme, /not an exhaustive registry of nonterminal work/);
 assert.match(readme, /## Execution compactness contract/);
 assert.match(readme, /\.agents\/skills\/agent-execution-compactness\/SKILL\.md/);
 for (const route of policy.executionCompactness.routes) {
@@ -261,7 +280,7 @@ assert.match(readme, /This fast path ends as soon as repository work is requeste
 assert.match(readme, /The two-read protocol never authorizes a write, merge, release, protection change, or project\/runtime action/);
 assert.match(readme, /## Intent-aware read routing/);
 assert.match(readme, /`STATUS_SESSION` adds nothing/);
-assert.match(readme, /`EXECUTION` adds only `issue-465 \+ active-packet`/);
+assert.match(readme, /`EXECUTION` adds only `issue-465 \+ active-packets`/);
 assert.match(readme, /`MEMORY_CONTEXT` adds only `issue-462`/);
 assert.match(readme, /`IDEA_DESIGN_CONTEXT` adds only `issue-464`/);
 assert.match(readme, /`AUDIT_CONTEXT` adds only `issue-293`/);
@@ -272,5 +291,625 @@ assert.match(readme, /A read plan never grants write, merge, release, production
 assert.match(readme, /unchanged evidence is a read-only no-op/);
 assert.match(readme, /do not rewrite #465 or durable surfaces merely to refresh timestamps/);
 assert.ok(permanentCommands.includes('work-system-contract.cjs'));
+
+assert.match(readme, /`active-packets` is a bounded write-scope-overlap discovery step/);
+assert.match(readme, /unresolved overlap remains `UNKNOWN` or `CONFLICT`/);
+assert.match(readme, /Disjoint nonterminal packets remain eligible to proceed in parallel/);
+
+const {classifyQueueBody, REASON_CODES} = require(path.join(dir, 'queue-hygiene.cjs'));
+const {classifyCoordinationReferences, REASON_CODES: COORD_REF_REASON_CODES} = require(path.join(dir, 'coordination-reference-hygiene.cjs'));
+const {resolveScopeOverlap, REASON_CODES: OVERLAP_REASON_CODES} = require(path.join(dir, 'scope-overlap.cjs'));
+const {classifyPrActivity, REASON_CODES: PR_ACTIVITY_REASON_CODES} = require(path.join(dir, 'pr-activity.cjs'));
+
+const pointerOnlyFixture = `# Canonical Main — Work Queue
+**Queue surface: ENABLED**
+## Live health
+- \`LIVE HEALTH: direct main + #485\`
+- Do not duplicate mutable current SHA / Required / production / protection truth here.
+## Current coordination
+- Active writer: #2278 CM-WQ-HYGIENE-V1-01
+## Historical evidence
+- Historical synchronization of current main SHA: 1111111111111111111111111111111111111111
+- Historical Required PASS — run 12345
+- Historical production MATCH snapshot
+- Historical native protection ACTIVE snapshot
+- Historical #485 state: CLEAR at activation.`;
+
+const pointerOnlyResult = classifyQueueBody(pointerOnlyFixture);
+assert.equal(pointerOnlyResult.state, 'PASS');
+assert.equal(pointerOnlyResult.pointerCount, 1);
+assert.equal(pointerOnlyResult.activeWriterProjectionCount, 1);
+assert.deepEqual(pointerOnlyResult.findings, []);
+
+const zeroWriterFixture = pointerOnlyFixture.replace('\n- Active writer: #2278 CM-WQ-HYGIENE-V1-01', '');
+const zeroWriterResult = classifyQueueBody(zeroWriterFixture);
+assert.equal(zeroWriterResult.state, 'PASS');
+assert.equal(zeroWriterResult.activeWriterProjectionCount, 0);
+assert.deepEqual(zeroWriterResult.findings, []);
+
+const duplicateFixture = (line) => `${pointerOnlyFixture}\n${line}`;
+const expectFailCode = (line, code) => {
+  const result = classifyQueueBody(duplicateFixture(line));
+  assert.equal(result.state, 'FAIL');
+  const match = result.findings.find((item) => item.code === code);
+  assert.ok(match, `expected ${code}`);
+  assert.ok(Number.isInteger(match.line) && match.line > 0);
+  assert.ok(match.excerpt.length > 0 && match.excerpt.length <= 240);
+};
+
+expectFailCode('- Current main SHA: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', REASON_CODES.DUPLICATE_LIVE_MAIN_SHA);
+expectFailCode('- Required: PASS — run 99999', REASON_CODES.DUPLICATE_REQUIRED_STATE);
+expectFailCode('- Production identity: MATCH', REASON_CODES.DUPLICATE_PRODUCTION_STATE);
+expectFailCode('- Native protection: ACTIVE / protected true', REASON_CODES.DUPLICATE_NATIVE_PROTECTION_STATE);
+expectFailCode('- #485 is currently CLEAR', REASON_CODES.DUPLICATE_ISSUE_485_CURRENT_STATE);
+expectFailCode('- #485 remains CLEAR', REASON_CODES.DUPLICATE_ISSUE_485_CURRENT_STATE);
+expectFailCode('- Active writer: #999 competing-owner', REASON_CODES.DUPLICATE_ACTIVE_WRITER_PROJECTION);
+
+const ambiguousResult = classifyQueueBody(`${pointerOnlyFixture}\n- Possible active-writer candidate: #999; status unverified.`);
+assert.equal(ambiguousResult.state, 'UNKNOWN');
+assert.ok(ambiguousResult.findings.some((item) => item.code === REASON_CODES.ACTIVE_WRITER_STATUS_UNRESOLVED));
+
+assert.equal(classifyQueueBody(pointerOnlyFixture.replace('LIVE HEALTH: direct main + #485', 'LIVE HEALTH: see operator view')).state, 'FAIL');
+assert.equal(classifyQueueBody(`${pointerOnlyFixture}\n- \`LIVE HEALTH: direct main + #485\``).state, 'FAIL');
+
+const oldModernLabelResult = classifyQueueBody(pointerOnlyFixture.replace(
+  '**Queue surface: ENABLED**',
+  '**Queue state: ACTIVE**',
+));
+assert.equal(oldModernLabelResult.state, 'WARN');
+assert.equal(oldModernLabelResult.activeWriterProjectionCount, 1);
+assert.ok(oldModernLabelResult.findings.some((item) => item.code === REASON_CODES.AMBIGUOUS_QUEUE_STATE_LABEL));
+
+const legacyQueueLabelResult = classifyQueueBody(pointerOnlyFixture.replace(
+  '**Queue surface: ENABLED**',
+  '**Queue state: ACTIVE / CANONICAL-MAIN-V1.2**',
+));
+assert.equal(legacyQueueLabelResult.state, 'PASS');
+assert.equal(legacyQueueLabelResult.findings.some((item) => item.code === REASON_CODES.AMBIGUOUS_QUEUE_STATE_LABEL), false);
+
+assert.match(readme, /## #465 pointer-only hygiene classifier/);
+assert.match(readme, /`PASS \/ WARN \/ FAIL \/ UNKNOWN`/);
+assert.match(readme, /never fetches GitHub and never mutates #465/);
+assert.match(readme, /clearly labeled historical synchronization\/packet evidence remains allowed/i);
+assert.match(readme, /exact standalone old modern label `Queue state: ACTIVE` is a non-blocking naming `WARN`/i);
+
+const terminalPacket = {issueNumber: 2340, nativeState: 'closed', lifecycleState: 'DONE'};
+const activePacket = {issueNumber: 2342, nativeState: 'open', lifecycleState: 'IN_PROGRESS'};
+const classifyRefs = (prose, packets = [terminalPacket, activePacket]) => classifyCoordinationReferences({prose, packets});
+
+const staleRef = classifyRefs('- Active writer: #2340 payload identity packet');
+assert.equal(staleRef.state, 'STALE');
+assert.equal(staleRef.findings[0].code, COORD_REF_REASON_CODES.TERMINAL_PACKET_IN_CURRENT_ROLE);
+assert.equal(staleRef.findings[0].role, 'ACTIVE_WRITER');
+assert.equal(staleRef.findings[0].line, 1);
+assert.ok(staleRef.findings[0].excerpt.length <= 240);
+assert.equal(staleRef.mutationAuthorized, false);
+assert.equal(staleRef.networkAuthorized, false);
+
+for (const prose of [
+  '- Latest completed packet: #2340 payload identity packet',
+  '- Historical packet #2340 remains useful evidence',
+  '- Legacy #2340 reference is retained for context',
+]) {
+  const result = classifyRefs(prose);
+  assert.equal(result.state, 'PASS');
+  assert.equal(result.findings[0].disposition, 'PASS');
+}
+
+assert.equal(classifyRefs('- Current packet: #2342 coordination reference hygiene').state, 'PASS');
+assert.equal(classifyRefs('- #2340 exists in this sentence but has no supported role').state, 'PASS');
+
+const mixedRoleRef = classifyRefs('- Current packet: #2342 replaces previous #2340');
+assert.equal(mixedRoleRef.state, 'PASS');
+assert.deepEqual(mixedRoleRef.findings.map((item) => item.issueNumber), [2342]);
+const historicalWriterRef = classifyRefs('- Historical active writer: #2340');
+assert.equal(historicalWriterRef.state, 'PASS');
+assert.equal(historicalWriterRef.findings[0].role, 'HISTORICAL');
+assert.equal(classifyRefs('- Coordination blocker: #2346', [
+  {issueNumber: 2346, nativeState: 'open', lifecycleState: 'BLOCKED'},
+]).state, 'PASS');
+assert.throws(() => classifyRefs('- Current packet: #2347', [
+  {issueNumber: 2347, nativeState: 'open', lifecycleState: 'MYSTERY'},
+]), /registered Work System state/);
+
+const unknownRef = classifyRefs('- Next packet: #999 missing evidence');
+assert.equal(unknownRef.state, 'UNKNOWN');
+assert.equal(unknownRef.findings[0].code, COORD_REF_REASON_CODES.CURRENT_PACKET_EVIDENCE_MISSING);
+
+const conflictRef = classifyRefs('- Coordination blocker: #2343 inconsistent packet', [
+  {issueNumber: 2343, nativeState: 'open', lifecycleState: 'DONE'},
+]);
+assert.equal(conflictRef.state, 'CONFLICT');
+assert.equal(conflictRef.findings[0].code, COORD_REF_REASON_CODES.PACKET_NATIVE_LIFECYCLE_CONFLICT);
+
+const missingLifecycle = classifyRefs('- Current owner: #2344 owner', [
+  {issueNumber: 2344, nativeState: 'open'},
+]);
+assert.equal(missingLifecycle.state, 'UNKNOWN');
+assert.equal(missingLifecycle.findings[0].code, COORD_REF_REASON_CODES.PACKET_LIFECYCLE_EVIDENCE_MISSING);
+
+const precedenceRef = classifyRefs([
+  '- Next candidate: #2340 stale candidate',
+  '- Current owner: #2345 conflict owner',
+].join('\n'), [terminalPacket, {issueNumber: 2345, nativeState: 'closed', lifecycleState: 'IN_PROGRESS'}]);
+assert.equal(precedenceRef.state, 'CONFLICT');
+assert.equal(precedenceRef.findings.length, 2);
+assert.ok(precedenceRef.findings.every((item) => item.excerpt.length <= 240));
+
+assert.match(readme, /## Cross-surface packet-reference hygiene classifier/);
+assert.match(readme, /`PASS \/ STALE \/ UNKNOWN \/ CONFLICT`/);
+assert.match(readme, /does not fetch GitHub and never mutates coordination surfaces/);
+assert.match(readme, /terminal packet is not stale merely because it is referenced historically/i);
+
+
+const overlapPacketBody = (state, scopes) => `<!-- canonical-main-work-packet:v1 -->
+## State
+\`${state}\`
+## Bounded write scope
+${scopes.map((scope, index) => `${index + 1}. \`${scope}\``).join('\n')}
+## Handoff
+fixture`;
+const resolveOverlap = (requestedScopes, candidates, discovery = 'COMPLETE') => resolveScopeOverlap({
+  requestedScopes,
+  discovery,
+  candidates,
+});
+const expectOverlapFinding = (result, state, code) => {
+  assert.equal(result.state, state);
+  const match = result.findings.find((item) => item.code === code);
+  assert.ok(match, `expected ${code}`);
+  assert.ok(match.ownerRef);
+  assert.ok(match.requestedScope);
+  assert.ok(match.evidence.length > 0 && match.evidence.length <= 240);
+  assert.ok(Array.isArray(match.sourceRefs) && match.sourceRefs.length > 0);
+};
+
+const disjointPacket = {
+  type: 'packet',
+  ref: '#10',
+  issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['path:docs/**']),
+};
+assert.equal(resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [disjointPacket]).state, 'DISJOINT');
+
+const implementationHeadingPacket = {
+  type: 'packet', ref: '#10b', issueState: 'open',
+  body: `<!-- canonical-main-work-packet:v1 -->
+## State
+\`IN_PROGRESS\`
+## Bounded implementation write scope
+1. \`tools/repo-ci-mcp/**\`
+Preservation / non-write surfaces:
+- \`docs/**\`
+## Handoff
+fixture`,
+};
+assert.equal(resolveOverlap(['path:docs/README.md'], [implementationHeadingPacket]).state, 'DISJOINT');
+assert.equal(resolveOverlap(['path:tools/repo-ci-mcp/server.py'], [implementationHeadingPacket]).state, 'OVERLAP');
+
+let overlapResult = resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [{
+  type: 'packet', ref: '#11', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['path:tools/repo-ci-mcp/README.md']),
+}]);
+expectOverlapFinding(overlapResult, 'OVERLAP', OVERLAP_REASON_CODES.WRITE_SCOPE_OVERLAP);
+
+overlapResult = resolveOverlap(['path:tools/repo-ci-mcp/**'], [{
+  type: 'packet', ref: '#12', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['path:tools/repo-ci-mcp/README.md']),
+}]);
+assert.equal(overlapResult.state, 'OVERLAP');
+
+overlapResult = resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [{
+  type: 'packet', ref: '#13', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['path:tools/repo-ci-mcp/**']),
+}]);
+assert.equal(overlapResult.state, 'OVERLAP');
+
+overlapResult = resolveOverlap(['surface:issue:465'], [{
+  type: 'packet', ref: '#14', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['surface:issue:465']),
+}]);
+assert.equal(overlapResult.state, 'OVERLAP');
+
+overlapResult = resolveOverlap(['path:tools/./repo-ci-mcp/README.md'], [{
+  type: 'packet', ref: '#15', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['path:tools/repo-ci-mcp/README.md']),
+}]);
+assert.equal(overlapResult.state, 'OVERLAP');
+
+expectOverlapFinding(
+  resolveOverlap(['path:../secret'], [disjointPacket]),
+  'UNKNOWN',
+  OVERLAP_REASON_CODES.REQUESTED_SCOPE_INVALID,
+);
+
+expectOverlapFinding(
+  resolveOverlap(['path:src/README.md'], [disjointPacket], 'PARTIAL'),
+  'UNKNOWN',
+  OVERLAP_REASON_CODES.DISCOVERY_INCOMPLETE,
+);
+
+expectOverlapFinding(
+  resolveOverlap(['path:tools/*.js'], [disjointPacket]),
+  'UNKNOWN',
+  OVERLAP_REASON_CODES.REQUESTED_SCOPE_INVALID,
+);
+
+expectOverlapFinding(resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [{
+  type: 'pr', ref: '#20', state: 'open', filesComplete: false,
+  changedFiles: ['tools/repo-ci-mcp/README.md'],
+}]), 'OVERLAP', OVERLAP_REASON_CODES.WRITE_SCOPE_OVERLAP);
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#21', state: 'open', filesComplete: false,
+  changedFiles: ['tools/repo-ci-mcp/README.md'],
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.PR_CHANGED_FILES_INCOMPLETE);
+
+assert.equal(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#22', issueState: 'open',
+  body: overlapPacketBody('DONE', ['path:docs/README.md']),
+}, {
+  type: 'pr', ref: '#23', state: 'closed', filesComplete: true,
+  changedFiles: ['docs/README.md'],
+}]).state, 'DISJOINT');
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#24', issueState: 'closed',
+  body: overlapPacketBody('IN_PROGRESS', ['path:other/**']),
+}]), 'CONFLICT', OVERLAP_REASON_CODES.PACKET_NATIVE_STATE_CONFLICT);
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#30', issueState: 'open', linkedPrRef: '#31',
+  body: overlapPacketBody('IN_PROGRESS', ['path:tools/repo-ci-mcp/**']),
+}, {
+  type: 'pr', ref: '#31', state: 'open', filesComplete: true,
+  changedFiles: ['tools/repo-ci-mcp/README.md', '.github/workflows/unrelated.yml'],
+}]), 'CONFLICT', OVERLAP_REASON_CODES.PACKET_PR_SCOPE_DRIFT);
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#32', issueState: 'open', linkedPrRef: '#33',
+  body: overlapPacketBody('IN_PROGRESS', ['path:tools/repo-ci-mcp/**']),
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.LINKED_PR_EVIDENCE_MISSING);
+
+assert.equal(resolveOverlap(['path:src/README.md'], [disjointPacket], 'UNKNOWN').state, 'UNKNOWN');
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#21b', state: 'open', filesComplete: false,
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.PR_CHANGED_FILES_INCOMPLETE);
+
+assert.equal(resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#23b', state: 'merged', filesComplete: true,
+  changedFiles: ['docs/README.md'],
+}]).state, 'DISJOINT');
+
+assert.match(readme, /## Write-scope overlap resolver/);
+assert.match(readme, /`DISJOINT \/ OVERLAP \/ UNKNOWN \/ CONFLICT`/);
+assert.match(readme, /supplied packet\/PR evidence only/);
+assert.match(readme, /#465 remains seed-only and non-exhaustive/);
+assert.match(readme, /`DISJOINT` requires bounded discovery `COMPLETE`/);
+assert.match(readme, /does not fetch GitHub, mutate issues, or grant write authority/);
+
+
+const activityPacketBody = (state) => `<!-- canonical-main-work-packet:v1 -->
+## State
+\`${state}\`
+## Bounded write scope
+1. \`tools/repo-ci-mcp/**\`
+## Handoff
+fixture`;
+const shaA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const shaB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+let activityResult = classifyPrActivity({
+  pr: {ref: '#2210', state: 'open', merged: false, headSha: shaA, sourceRefs: ['pr:#2210']},
+  linkedPacket: {
+    ref: '#2209', issueState: 'open', linkedPrRef: '#2210',
+    body: activityPacketBody('IN_PROGRESS'), sourceRefs: ['issue:#2209'],
+  },
+  mergeable: false,
+  ageDays: 999,
+});
+assert.equal(activityResult.state, 'ACTIVE_WRITER');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.LINKED_PACKET_ACTIVE);
+activityResult = classifyPrActivity({
+  pr: {ref: '#40', state: 'open', merged: false, headSha: shaA},
+  updatedAt: '2000-01-01T00:00:00Z',
+  draft: true,
+  mergeable: false,
+  ciConclusion: 'failure',
+  branchName: 'old-looking-branch',
+});
+assert.equal(activityResult.state, 'ACTIVE_WRITER');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.OPEN_PR_DEFAULT_ACTIVE);
+
+activityResult = classifyPrActivity({
+  pr: {ref: '#41', state: 'closed', merged: false, headSha: shaA},
+});
+assert.equal(activityResult.state, 'NONBLOCKING_PROVEN');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.PR_NATIVE_TERMINAL);
+
+activityResult = classifyPrActivity({
+  pr: {ref: '#42', state: 'open', merged: false, headSha: shaA},
+  linkedPacket: {
+    ref: '#142', issueState: 'closed', linkedPrRef: '#42',
+    body: activityPacketBody('SUPERSEDED'),
+  },
+});
+assert.equal(activityResult.state, 'NONBLOCKING_PROVEN');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.LINKED_PACKET_TERMINAL);
+activityResult = classifyPrActivity({
+  pr: {ref: '#43', state: 'open', merged: false, headSha: shaA},
+  linkedPacket: {
+    ref: '#143', issueState: 'open', linkedPrRef: '#43',
+    body: activityPacketBody('DONE'),
+  },
+});
+assert.equal(activityResult.state, 'CONFLICT');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.PACKET_NATIVE_STATE_CONFLICT);
+
+activityResult = classifyPrActivity({
+  pr: {ref: '#44', state: 'open', merged: false, headSha: shaA},
+  successor: {
+    ref: '#144', state: 'closed', merged: true, mergeSha: shaB,
+    supersedesRef: '#44', ancestry: 'PROVEN', patchEquivalent: null,
+  },
+});
+assert.equal(activityResult.state, 'NONBLOCKING_PROVEN');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.MERGED_SUCCESSOR_PROVEN);
+
+activityResult = classifyPrActivity({
+  pr: {ref: '#45', state: 'open', merged: false, headSha: shaA},
+  successor: {
+    ref: '#145', state: 'closed', merged: true, mergeSha: shaB,
+    supersedesRef: '#45', ancestry: 'UNKNOWN',
+  },
+});
+assert.equal(activityResult.state, 'UNKNOWN');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.SUPERSESSION_PROOF_INCOMPLETE);
+activityResult = classifyPrActivity({
+  pr: {ref: '#46', state: 'open', merged: false, headSha: shaA},
+  successor: {
+    ref: '#146', state: 'closed', merged: true, mergeSha: shaB,
+    supersedesRef: '#46', ancestry: 'CONTRADICTED',
+  },
+});
+assert.equal(activityResult.state, 'CONFLICT');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.SUPERSESSION_PROOF_CONTRADICTED);
+
+activityResult = classifyPrActivity({
+  pr: {ref: '#47', state: 'open', merged: false, headSha: shaA},
+  linkedPacket: {
+    ref: '#147', issueState: 'open', linkedPrRef: '#47',
+    body: activityPacketBody('IN_PROGRESS'),
+  },
+  successor: {
+    ref: '#247', state: 'closed', merged: true, mergeSha: shaB,
+    supersedesRef: '#47', ancestry: 'PROVEN',
+  },
+});
+assert.equal(activityResult.state, 'CONFLICT');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.ACTIVE_PACKET_SUPERSESSION_CONFLICT);
+const legacyActivityFree = resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#50', state: 'open', filesComplete: true,
+  changedFiles: ['docs/README.md'],
+}]);
+assert.equal(legacyActivityFree.state, 'OVERLAP');
+assert.equal(Object.hasOwn(legacyActivityFree, 'candidateActivity'), false);
+
+let composedActivity = resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#51', state: 'open', merged: false, headSha: shaA, filesComplete: true,
+  changedFiles: ['docs/README.md'],
+  activityEvidence: {linkedPacket: {
+    ref: '#151', issueState: 'closed', linkedPrRef: '#51',
+    body: activityPacketBody('SUPERSEDED'),
+  }},
+}]);
+assert.equal(composedActivity.state, 'DISJOINT');
+assert.equal(composedActivity.candidateActivity[0].state, 'NONBLOCKING_PROVEN');
+
+composedActivity = resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#52', state: 'open', merged: false, headSha: shaA, filesComplete: true,
+  changedFiles: ['docs/README.md'],
+  activityEvidence: {successor: {
+    ref: '#152', state: 'closed', merged: true, mergeSha: shaB,
+    supersedesRef: '#52', ancestry: 'UNKNOWN',
+  }},
+}]);
+assert.equal(composedActivity.state, 'UNKNOWN');
+assert.equal(composedActivity.findings[0].code, OVERLAP_REASON_CODES.PR_ACTIVITY_UNKNOWN);
+composedActivity = resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#53', state: 'open', merged: false, headSha: shaA, filesComplete: true,
+  changedFiles: ['docs/README.md'],
+  activityEvidence: {linkedPacket: {
+    ref: '#153', issueState: 'open', linkedPrRef: '#53',
+    body: activityPacketBody('IN_PROGRESS'),
+  }},
+}]);
+assert.equal(composedActivity.state, 'OVERLAP');
+assert.equal(composedActivity.candidateActivity[0].state, 'ACTIVE_WRITER');
+
+composedActivity = resolveOverlap(['path:docs/README.md'], [{
+  type: 'pr', ref: '#54', state: 'open', merged: false, headSha: shaA, filesComplete: true,
+  changedFiles: ['docs/README.md'],
+  activityEvidence: {linkedPacket: {
+    ref: '#154', issueState: 'open', linkedPrRef: '#54',
+    body: activityPacketBody('DONE'),
+  }},
+}]);
+assert.equal(composedActivity.state, 'CONFLICT');
+assert.equal(composedActivity.findings[0].code, OVERLAP_REASON_CODES.PR_ACTIVITY_CONFLICT);
+
+composedActivity = resolveOverlap(['path:src/README.md'], [{
+  type: 'pr', ref: '#55', state: 'open', merged: false, headSha: shaA, filesComplete: true,
+  changedFiles: ['docs/README.md'],
+  activityEvidence: {linkedPacket: {
+    ref: '#155', issueState: 'closed', linkedPrRef: '#55',
+    body: activityPacketBody('SUPERSEDED'),
+  }},
+}], 'PARTIAL');
+assert.equal(composedActivity.state, 'UNKNOWN');
+assert.ok(composedActivity.findings.some((item) => item.code === OVERLAP_REASON_CODES.DISCOVERY_INCOMPLETE));
+assert.match(readme, /## Evidence-backed PR activity classification/);
+assert.match(readme, /`ACTIVE_WRITER \/ NONBLOCKING_PROVEN \/ UNKNOWN \/ CONFLICT`/);
+assert.match(readme, /Only `NONBLOCKING_PROVEN` may suppress an otherwise-open PR/);
+assert.match(readme, /age, inactivity, branch naming, draft state, mergeability, base drift, review age, or CI history/i);
+assert.match(readme, /activity evidence is optional; without it, the existing open-PR overlap behavior is unchanged/i);
+assert.match(readme, /does not fetch GitHub, close PRs, mutate packets, or maintain a PR registry/i);
+
+activityResult = classifyPrActivity({
+  pr: {ref: '#48', state: 'open', merged: false, headSha: shaA},
+  successor: {
+    ref: '#148', state: 'open', merged: true, mergeSha: shaB,
+    supersedesRef: '#48', ancestry: 'PROVEN',
+  },
+});
+assert.equal(activityResult.state, 'CONFLICT');
+assert.equal(activityResult.reasonCode, PR_ACTIVITY_REASON_CODES.SUCCESSOR_NATIVE_STATE_CONFLICT);
+
+
+const {
+  classifyProofEligibility,
+  REASON_CODES: PROOF_ELIGIBILITY_REASON_CODES,
+} = require(path.join(dir, 'proof-eligibility.cjs'));
+const proofEligibilitySource = fs.readFileSync(path.join(dir, 'proof-eligibility.cjs'), 'utf8');
+const proofFixture = (overrides = {}) => ({
+  schemaVersion: 1,
+  sourceRefs: ['fixture:activated-acceptance'],
+  acceptance: {
+    liveApplies: true,
+    liveRequired: false,
+    liveSatisfied: false,
+    observationalPendingAllowed: false,
+    observationalPendingNonBlocking: false,
+    notApplicable: false,
+    liveNotRequired: false,
+    capabilityUnavailable: false,
+    capabilityBlockNonBlocking: false,
+    syntheticEventPolicy: 'FORBIDDEN',
+    ...overrides,
+  },
+});
+
+let proofResult = classifyProofEligibility(proofFixture({liveRequired: true}));
+assert.equal(proofResult.disposition, 'LIVE_REQUIRED');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.LIVE_REQUIRED_UNSATISFIED);
+assert.equal(proofResult.closureBlocking, true);
+assert.equal(proofResult.syntheticLiveEventForbidden, true);
+assert.equal(proofResult.claimsLiveProven, false);
+assert.equal(proofResult.claimsDone, false);
+assert.equal(proofResult.mutationAuthorized, false);
+
+proofResult = classifyProofEligibility(proofFixture({
+  observationalPendingAllowed: true,
+  observationalPendingNonBlocking: true,
+}));
+assert.equal(proofResult.disposition, 'OBSERVATIONAL_PENDING_ALLOWED');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.OBSERVATIONAL_PENDING_EXPLICIT_NONBLOCKING);
+assert.equal(proofResult.closureBlocking, false);
+assert.equal(proofResult.syntheticLiveEventForbidden, true);
+
+proofResult = classifyProofEligibility(proofFixture({liveNotRequired: true}));
+assert.equal(proofResult.disposition, 'NOT_REQUIRED');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.LIVE_EXPLICIT_NOT_REQUIRED);
+assert.equal(proofResult.closureBlocking, false);
+
+proofResult = classifyProofEligibility(proofFixture({
+  liveApplies: false,
+  notApplicable: true,
+}));
+assert.equal(proofResult.disposition, 'NOT_APPLICABLE');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.LIVE_EXPLICIT_NOT_APPLICABLE);
+assert.equal(proofResult.closureBlocking, false);
+
+proofResult = classifyProofEligibility(proofFixture({capabilityUnavailable: true}));
+assert.equal(proofResult.disposition, 'BLOCKED_CAPABILITY');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.CAPABILITY_UNAVAILABLE_BLOCKING);
+assert.equal(proofResult.closureBlocking, true);
+
+proofResult = classifyProofEligibility(proofFixture({
+  capabilityUnavailable: true,
+  capabilityBlockNonBlocking: true,
+}));
+assert.equal(proofResult.disposition, 'BLOCKED_CAPABILITY');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.CAPABILITY_UNAVAILABLE_NONBLOCKING);
+assert.equal(proofResult.closureBlocking, false);
+
+const missingProofField = proofFixture();
+delete missingProofField.acceptance.liveRequired;
+proofResult = classifyProofEligibility(missingProofField);
+assert.equal(proofResult.disposition, 'UNKNOWN');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.INPUT_MISSING_FIELD);
+assert.equal(proofResult.closureBlocking, true);
+
+proofResult = classifyProofEligibility({...proofFixture(), unexpected: true});
+assert.equal(proofResult.disposition, 'UNKNOWN');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.INPUT_UNKNOWN_FIELD);
+
+proofResult = classifyProofEligibility(proofFixture({
+  liveRequired: true,
+  liveNotRequired: true,
+}));
+assert.equal(proofResult.disposition, 'CONFLICT');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.ACTIVATED_ACCEPTANCE_CONFLICT);
+assert.equal(proofResult.closureBlocking, true);
+assert.equal(proofResult.syntheticLiveEventForbidden, true);
+proofResult = classifyProofEligibility(proofFixture({
+  liveRequired: true,
+  observationalPendingAllowed: true,
+  observationalPendingNonBlocking: true,
+}));
+assert.equal(proofResult.disposition, 'CONFLICT');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.ACTIVATED_ACCEPTANCE_CONFLICT);
+
+proofResult = classifyProofEligibility(proofFixture({
+  liveRequired: true,
+  capabilityUnavailable: true,
+  capabilityBlockNonBlocking: true,
+}));
+assert.equal(proofResult.disposition, 'CONFLICT');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.ACTIVATED_ACCEPTANCE_CONFLICT);
+
+proofResult = classifyProofEligibility(proofFixture({
+  liveRequired: true,
+  liveSatisfied: true,
+}));
+assert.equal(proofResult.disposition, 'UNKNOWN');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.LIVE_ALREADY_SATISFIED_OUTSIDE_ELIGIBILITY);
+assert.equal(proofResult.claimsLiveProven, false);
+
+proofResult = classifyProofEligibility(proofFixture());
+assert.equal(proofResult.disposition, 'UNKNOWN');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.ACTIVATED_ACCEPTANCE_UNRESOLVED);
+
+assert.doesNotMatch(proofEligibilitySource, /child_process|https?:\/\/|gh\s+api|fetch\s*\(/);
+assert.match(readme, /## Proof-level \/ live-observation eligibility classifier/);
+assert.match(readme, /`LIVE_REQUIRED \/ OBSERVATIONAL_PENDING_ALLOWED \/ NOT_APPLICABLE \/ NOT_REQUIRED \/ BLOCKED_CAPABILITY \/ UNKNOWN \/ CONFLICT`/);
+assert.match(readme, /does not parse arbitrary packet prose, fetch GitHub, verify runtime events, create synthetic events, mutate repository or coordination state/i);
+assert.match(readme, /required live proof cannot be retroactively weakened/i);
+assert.match(readme, /`claimsLiveProven: false`, `claimsDone: false`, and `mutationAuthorized: false`/);
+
+
+proofResult = classifyProofEligibility({
+  ...proofFixture(),
+  sourceRefs: [],
+});
+assert.equal(proofResult.disposition, 'UNKNOWN');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.INPUT_FIELD_INVALID);
+
+proofResult = classifyProofEligibility(proofFixture({
+  liveApplies: false,
+  liveNotRequired: true,
+}));
+assert.equal(proofResult.disposition, 'CONFLICT');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.ACTIVATED_ACCEPTANCE_CONFLICT);
+
+const unknownAcceptanceField = proofFixture();
+unknownAcceptanceField.acceptance.extra = true;
+proofResult = classifyProofEligibility(unknownAcceptanceField);
+assert.equal(proofResult.disposition, 'UNKNOWN');
+assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.INPUT_UNKNOWN_FIELD);
+
+assert.match(readme, /proof-eligibility\.cjs \/path\/to\/request\.json/);
+assert.match(readme, /`sourceRefs` must contain 1–16 non-empty bounded source locators/);
 
 console.log('work-system-contract: ok');

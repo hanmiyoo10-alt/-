@@ -51,3 +51,13 @@ Custom IDs use lowercase ASCII letters and digits with single hyphen separators.
 A new custom label is eligible only when the issue author's association is `OWNER`, `MEMBER`, or `COLLABORATOR`. Missing, invalid, reserved, or untrusted custom input fails closed to `scope:unclassified` and does not create a label. Existing custom labels are reused as-is; the controller does not rewrite or garbage-collect them. PR changed-path classification remains registry/path based and does not manufacture custom scopes.
 
 The machine registry remains locator-only. Mutable production facts stay in each workstream's existing source of truth.
+
+## Mutable status refresh safety
+
+Generated status issues are derived metadata views. The trusted status refresh keeps one long-lived generated issue per registered owner and must fail closed when identity evidence is incomplete.
+
+Status discovery is explicitly paginated and bounded. A broad-list miss does not authorize creation by itself: the controller performs an independent exact-title/status-label/generated-marker lookup immediately before create. A lookup failure or incomplete response blocks creation. A genuine create is followed by an exact identity read-back; duplicate or contradictory read-back is failure evidence, not success.
+
+Owner refreshes are failure-isolated for evidence collection: one owner failure does not erase safe results from later owners, but any owner failure makes the overall controller exit nonzero. The status workflow preserves that nonzero result as a failed job. This failure does not change release or product authority; it means only that the derived status projection is incomplete and must not be treated as fresh.
+
+Existing duplicate generated views are reconciled only through this trusted refresh path. Manual status-issue cleanup or manual #485 edits are not validation for the controller contract.

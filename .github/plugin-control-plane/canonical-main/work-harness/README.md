@@ -199,6 +199,63 @@ The machine result is compact JSON with `COMPLETE`, `PARTIAL`, `UNKNOWN`, or `FA
 
 This surface uses only the existing GitHub issue API through the canonical-main GitHub client. It adds no workflow-wide `issue_comment` listener, no contents/ref/PR/release/production authority, no new mutable truth owner, no mutation capability to `tools/repo-ci-mcp/**`, and no claim that repository code can suppress host UI activity cards. Its compactness benefit is narrower: when this harness is available, one visible repository command can preserve the two required durable issue comments internally.
 
+## Derived canonical-main stage receipt
+
+`stage-receipt.cjs` is a read-only projector for #2275 item 10. It accepts bounded structured stage facts already established by owning authority/evidence and emits one deterministic `CANONICAL_MAIN_STAGE_RECEIPT` plus a compact Markdown projection. It does not read GitHub, discover truth, parse arbitrary packet prose, or write repository/issue state.
+
+```sh
+node .github/plugin-control-plane/canonical-main/work-harness/stage-receipt.cjs --input-file facts.json
+node .github/plugin-control-plane/canonical-main/work-harness/stage-receipt.cjs --input-file facts.json --format markdown
+```
+
+V1 carries packet/stage identity, exact authority refs, required gates and evidence locators, bounded scope/diff identity, Work System proof terms, required UNKNOWN/conflict/blocker/dependency evidence, and the exact next legal action. `mutationAuthorized=false` and `executionAuthorized=false` are invariant. Output identity is a stable SHA-256 digest over the normalized semantic receipt.
+
+The input shape is strict and bounded. Unsupported fields, control characters, oversized values, suspicious credential-like material, malformed exact SHA/diff identities, and contradictory duplicate authority/gate facts fail closed. Required semantic fields that are omitted are projected as explicit UNKNOWN evidence rather than silently meaning NONE. A claimed PASS without an evidence locator becomes UNKNOWN. `CONTRACT_PROVEN` never implies `LIVE_PROVEN`, and unresolved required evidence rejects a supplied `DONE` claim.
+
+`PASS`/`FAIL`/`BLOCKED`/`UNKNOWN`/`CONFLICT` on this receipt describe only the completeness and supplied stage evidence of this derived projection. They do not grant stage transition, mutation, execution, merge, release, production, or runtime authority. `NOT_APPLICABLE` and `EXPECTED_NO_RUN` are resolved gate results only when the caller supplies an evidence locator from the owning trigger/gate classifier.
+
+For durable checkpoint recording, render the receipt as Markdown into a bounded body file and pass that body to the existing `stage-checkpoint.cjs`. The existing checkpoint harness remains the sole packet + #293 recording/idempotency adapter; the receipt projector adds no second writer or truth store.
+
+## CAS-style coordination issue-body patch
+
+`coordination-body-patch.cjs` is the Work Harness issue-only adapter for narrow packet/queue body reconciliation. It does not decide what lifecycle or proof text is true; callers must already have authority for the requested coordination edit.
+
+The CLI accepts one bounded JSON request file:
+
+```sh
+node .github/plugin-control-plane/canonical-main/work-harness/coordination-body-patch.cjs \
+  --request-file /path/to/request.json
+```
+
+A v1 request names exactly one eligible surface, one issue, the SHA-256 digest of the complete expected prior body, and one operation. Eligible surfaces are only:
+
+- `WORK_PACKET`: a non-PR issue with exactly one standalone `canonical-main-work-packet:v1` marker line after trimming; open or closed packets are eligible for evidence-backed body reconciliation;
+- `WORK_QUEUE`: exactly issue #465, open, with exactly one standalone `canonical-main-work-queue:v1` marker line after trimming.
+
+Quoted or example marker text inside a longer prose, heading, or inline-code line does not count as an additional target marker surface. Exact patch-operation uniqueness remains raw byte/text occurrence based.
+
+Every other issue/body class fails closed. The adapter PATCHes only the GitHub issue `body` field. It has no title, state, state_reason, label, assignee, comment, PR, ref, file, workflow, release, production, runtime, or protection mutation authority.
+
+V1 transformations are exact only:
+
+- `replaceExact` requires one non-empty `oldText` occurrence and replaces it once with exact `newText`;
+- `replaceMarkerBlock` requires unique ordered start/end markers and an exact replacement block carrying those same boundary markers;
+- zero/multiple matches, malformed marker ranges, no-op replacements, regex/fuzzy matching, append-if-missing, callbacks, evaluation, and arbitrary code all fail before mutation.
+
+The currentness sequence is intentionally explicit:
+
+1. read the eligible issue and require its complete body digest to equal `expectedBodySha256`;
+2. derive the exact target body in memory;
+3. re-read immediately before PATCH and require byte-identical body/digest evidence;
+4. PATCH only `{ body: <derived target> }`;
+5. perform mandatory post-write read-back and require byte-identical target body plus the expected after-digest before reporting `UPDATED`.
+
+If the second read observes drift, the adapter returns `BLOCKED` and performs no PATCH. Once a PATCH has been attempted, read-back failure, mismatch, or an unknown PATCH response returns `UNKNOWN` with `mutationMayHaveOccurred=true`; the adapter does not retry from the stale expectation.
+
+This is **CAS-style** currentness protection, not a server-atomic compare-and-swap primitive. GitHub issue PATCH transport does not establish an atomic conditional body write here, so a small final read-to-PATCH race remains possible. Mandatory post-write read-back detects observed divergence instead of pretending that interval cannot exist.
+
+The request-file ceiling is 32 KiB. CLI exit status is `0` for `UPDATED`, `2` for `BLOCKED`, and `3` for `UNKNOWN`.
+
 ## Current non-goals
 
 The current Harness still does **not** add:

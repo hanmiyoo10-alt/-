@@ -1,0 +1,85 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -u
+
+PREFIX=/data/data/com.termux/files/usr
+HOME_DIR=/data/data/com.termux/files/home
+if [ "${MCL_M_RDC_SUPERVISOR_TEST_MODE:-0}" = "1" ]; then
+    TEST_ROOT="${MCL_M_RDC_SUPERVISOR_TEST_ROOT:?test root required}"
+    PREFIX="$TEST_ROOT/prefix"
+    HOME_DIR="$TEST_ROOT/home"
+fi
+
+SERVICE="$PREFIX/var/service/mcl-m-rdc-supervisor-guard"
+STATE="$HOME_DIR/.local/state/mcl-m-rdc-supervisor-guard"
+SV="$PREFIX/bin/sv"
+RUNSV="$PREFIX/bin/runsv"
+NOHUP="$PREFIX/bin/nohup"
+SLEEP="$PREFIX/bin/sleep"
+LOCKDIR="$STATE/launcher.lock"
+PIDFILE="$STATE/launcher.pid"
+SUPERVISOR_LOG="$STATE/guard-supervisor.log"
+
+acquire_lock() {
+    mkdir -p "$STATE"
+    if mkdir "$LOCKDIR" 2>/dev/null; then
+        printf '%s\n' "$$" > "$PIDFILE"
+        return 0
+    fi
+    oldpid="$(cat "$PIDFILE" 2>/dev/null || true)"
+    if [ -n "$oldpid" ] && kill -0 "$oldpid" 2>/dev/null; then
+        return 1
+    fi
+
+    rm -rf "$LOCKDIR"
+    mkdir "$LOCKDIR" 2>/dev/null || return 1
+    printf '%s\n' "$$" > "$PIDFILE"
+}
+cleanup() {
+    current="$(cat "$PIDFILE" 2>/dev/null || true)"
+    [ "$current" = "$$" ] && rm -f "$PIDFILE"
+    rmdir "$LOCKDIR" 2>/dev/null || true
+}
+terminate() {
+    cleanup
+    trap - EXIT INT TERM HUP
+    exit 0
+}
+
+if [ ! -e "$SERVICE" ]; then
+    exit 0
+fi
+[ -d "$SERVICE" ] && [ ! -L "$SERVICE" ] || exit 2
+if [ ! -e "$SERVICE/run" ]; then
+    exit 0
+fi
+[ -f "$SERVICE/run" ] && [ ! -L "$SERVICE/run" ] && [ -x "$SERVICE/run" ] || exit 2
+[ ! -e "$SERVICE/down" ] || exit 0
+acquire_lock || exit 0
+trap cleanup EXIT
+trap terminate INT TERM HUP
+
+status="$($SV status "$SERVICE" 2>&1 || true)"
+case "$status" in
+    run:*|down:*)
+        exit 0
+        ;;
+    *"runsv not running"*|*"unable to open supervise/ok: file does not exist"*)
+        mkdir -p "$STATE"
+        "$NOHUP" "$RUNSV" "$SERVICE" >> "$SUPERVISOR_LOG" 2>&1 &
+        i=0
+        while [ "$i" -lt 5 ]; do
+            "$SLEEP" 1
+            status="$($SV status "$SERVICE" 2>&1 || true)"
+            case "$status" in
+                run:*|down:*) exit 0 ;;
+                *"runsv not running"*|*"unable to open supervise/ok: file does not exist"*) ;;
+                *) exit 2 ;;
+            esac
+            i=$((i + 1))
+        done
+        exit 1
+        ;;
+    *)
+        exit 2
+        ;;
+esac

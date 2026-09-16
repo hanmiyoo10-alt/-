@@ -75,6 +75,27 @@ Error type: KNOWLEDGE_GAP
 Error mechanism: 함수의 합성 구조와 연쇄법칙 적용 순서는 인식했지만 기본 도함수 `d(tan x)/dx = sec^2 x`, `d(sqrt{x})/dx = 1/(2sqrt{x})`를 정확히 꺼내 쓰지 못해 식이 섞였다.  
 Next-time cue: 연쇄법칙 문제에서는 층을 나눈 뒤 각 층 옆에 기본 도함수만 먼저 적는다: `tan → sec^2`, `sqrt{x} → 1/(2sqrt{x})`, `1+t^2 → 2t`. 그 다음 세 항을 곱한다.
 
-Related pattern IDs: none; 단일 사례이므로 패턴으로 승격하지 않음.  
+Related pattern IDs: AI-MATH-P1  
+Review state: NONE  
+Later evidence / resolution: pending.
+
+### AI-MATH-W3-3.3
+
+Problem ID: AI-MATH-W3-3.3  
+Date: 2026-09-16  
+Subject / area: AI 수학 / 곱의 미분법, 지수함수·삼각함수 미분  
+Source ref: `AI 수학 입문` 3주차 연습문제 3.3, 사용자 풀이 사진 `20260916_135845068.jpg`  
+Result: PARTIAL  
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: `e^theta`와 `(tan theta - theta)`의 곱을 곱의 미분법으로 미분한다.  
+User interpretation / approach: 전체 식을 두 인수로 나누고 곱의 미분법의 두 항 구조를 사용하려 했다. 다만 첫 항에서 `(e^theta)'`를 `e^theta`로 유지하지 못했고, 두 번째 항에서 `(tan theta)'`를 `sec^2 theta`로 바꾸지 못했다.  
+Correct reasoning summary: `g'(theta) = e^theta(tan theta - theta) + e^theta(sec^2 theta - 1)`. 필요하면 `sec^2 theta - 1 = tan^2 theta`를 써서 `e^theta(tan theta - theta + tan^2 theta)`로 정리할 수 있다.  
+
+Error type: KNOWLEDGE_GAP  
+Error mechanism: 곱의 미분법이라는 큰 구조는 인식했지만 기본 도함수 회수 단계에서 `(e^theta)' = e^theta`와 `(tan theta)' = sec^2 theta`를 정확히 유지하지 못했다. 특히 `tan` 도함수 오류는 3.2에 이어 다시 나타났다.  
+Next-time cue: 곱의 미분을 전개하기 전에 각 인수 위에 도함수를 따로 적는다: `e^theta -> e^theta`, `tan theta - theta -> sec^2 theta - 1`. 그 다음 `u'v + uv'`에 대입한다.  
+
+Related pattern IDs: AI-MATH-P1  
 Review state: NONE  
 Later evidence / resolution: pending.

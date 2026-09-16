@@ -204,3 +204,24 @@ Next-time cue: 미분하기 전 원래 식의 지수 변수를 먼저 확인하�
 Related pattern IDs: AI-MATH-P2  
 Review state: NONE  
 Later evidence / resolution: 3.7과 다른 복습 문제에서 같은 구조가 재현되어 AI-MATH-P2 후보 패턴 승격 근거가 됨.
+
+### AI-MATH-W3-R2
+
+Problem ID: AI-MATH-W3-R2  
+Date: 2026-09-16  
+Subject / area: AI 수학 / 3주차 복습, 음함수 미분·곱의 미분·연쇄법칙  
+Source ref: 3주차 복습 문제 `x sin(y) + y = 1`, 사용자 풀이 사진 `20260916_163501189.jpg`  
+Result: PARTIAL  
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: `x sin(y) + y = 1`을 `x`에 대해 미분하고 `y'`를 정리한다.  
+User interpretation / approach: 원래 식의 `sin(y)`를 그대로 보존했고, `x sin(y)`에 곱의 미분을 적용해 `sin(y) + x cos(y)y' + y' = 0`을 정확히 얻었다. 이어 `(x cos(y) + 1)y' = -sin(y)`까지도 정확히 정리했다. 다만 마지막 분수 표기에서 분모를 `x(cos(y)+1)`처럼 적어 바로 앞 줄의 `x cos(y)+1`과 불일치했다.  
+Correct reasoning summary: `sin(y) + x cos(y)y' + y' = 0`, 따라서 `(x cos(y)+1)y' = -sin(y)`이고 `y' = -sin(y)/(x cos(y)+1)`이다.
+
+Error type: CALC_PROCESS  
+Error mechanism: 음함수 합성함수 처리와 곱의 미분은 맞았고, 오류는 마지막 식을 분수 형태로 옮기는 과정에서 괄호 범위를 넓혀 `+1`까지 `x`의 곱으로 묶은 대수 표기 단계에서 발생했다.  
+Next-time cue: `y'`를 분수로 옮기기 직전 한 줄의 계수를 그대로 분모로 복사한다. 이번 경우 분모는 `(x cos(y)+1)` 전체이며 `x(cos(y)+1)`로 바꾸지 않는다.
+
+Related pattern IDs: AI-MATH-P2  
+Review state: NONE  
+Later evidence / resolution: `sin(y)`에 대해 `cos(y)y'`를 cue 이후 정확히 적용해, 종속변수 합성함수에 내부 미분을 붙이는 구조의 성공 증거가 생겼다. 다만 cue-assisted이고 마지막 대수 정리 실수가 있어 완전한 무힌트 전이 성공으로 보지는 않음.

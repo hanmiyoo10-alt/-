@@ -1669,3 +1669,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3e9e1138f7ef7e886e17ebeadce727bd2ea2c66f)
 - Event ID: `cc6e3c278c2e92ee1bdbbd098a6914ef97cfc77ae8f086d2b5dc9394a6c146f8`
 <!-- canonical-main-doc-promoted:cc6e3c278c2e92ee1bdbbd098a6914ef97cfc77ae8f086d2b5dc9394a6c146f8 -->
+
+### 2026-09-16 — Merge pull request #2339 from hanmiyoo10-alt/feat/cm-stage-receipt-2338
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `15763569e6870dc32e7eee5e0fae5da24764f5aa`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/15763569e6870dc32e7eee5e0fae5da24764f5aa)
+- Event ID: `fc44a38573398f157d496db54e3c73dc92228f2b6f6de084ab0ee93d3fe0b2ce`
+<!-- canonical-main-doc-promoted:fc44a38573398f157d496db54e3c73dc92228f2b6f6de084ab0ee93d3fe0b2ce -->

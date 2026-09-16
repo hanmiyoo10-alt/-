@@ -186,6 +186,12 @@ Packet lifecycle:
 
 Alternate states: `BLOCKED / CANCELLED / SUPERSEDED`.
 
+Lifecycle `State` and `Interaction stage` are separate packet axes. A producer MUST preserve exactly one canonical lifecycle token from `policy.json` in the State projection while stage bookkeeping changes independently. Stage-only State prose never implies `READY`, `IN_PROGRESS`, `REVIEW`, or `DONE`.
+
+`work-system/packet-projection.cjs` is the pure read-only parser/classifier for this boundary. It derives lifecycle and stage vocabularies from `policy.json`, accepts the existing `**State: ...**` and `## State` one-line forms, and returns bounded `PASS / UNKNOWN / CONFLICT` evidence. Missing lifecycle remains explicit `UNKNOWN`; duplicate State projections or multiple lifecycle tokens are `CONFLICT`. The helper never fetches GitHub, rewrites a packet, advances a stage, closes an issue, or grants mutation authority.
+
+Mutation consumers that require packet lifecycle evidence should reuse this parser rather than infer lifecycle from interaction-stage text, proof terms, or native issue state.
+
 ## Execution compactness contract
 
 Canonical-main packets make the existing repository-wide compact execution policy explicit at the packet boundary. This does not create a new compactness owner. `RCR-D14` remains the repository default and `.agents/skills/agent-execution-compactness/SKILL.md` owns the routing procedure and guardrail semantics.

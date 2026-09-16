@@ -59,6 +59,14 @@ case "$UNZIP" in
   *) echo 'BLOCKED package-command-mismatch' >&2; exit 1 ;;
 esac
 
+SQLITE3=$(inspect sqlite3 /usr/bin/sqlite3) || {
+  echo 'BLOCKED inspection-failed' >&2; exit 1;
+}
+case "$SQLITE3" in
+  0:0|1:1) ;;
+  *) echo 'BLOCKED package-command-mismatch' >&2; exit 1 ;;
+esac
+
 emit_check() {
   state=$1 tool=$2 package=$3
   if [ "$state" = 1:1 ]; then
@@ -71,12 +79,14 @@ emit_check() {
 if [ "$MODE" = check ]; then
   emit_check "$ZSTD" zstd zstd
   emit_check "$UNZIP" unzip unzip
+  emit_check "$SQLITE3" sqlite3 sqlite3
   exit 0
 fi
 
 set --
 [ "$ZSTD" = 1:1 ] || set -- "$@" zstd
 [ "$UNZIP" = 1:1 ] || set -- "$@" unzip
+[ "$SQLITE3" = 1:1 ] || set -- "$@" sqlite3
 if [ "$#" -gt 0 ]; then
   "$PD" login --isolated "$LAB_NAME" -- /bin/sh -c '
     PATH=/usr/sbin:/usr/bin:/sbin:/bin
@@ -93,8 +103,13 @@ AFTER_ZSTD=$(inspect zstd /usr/bin/zstd) || {
 AFTER_UNZIP=$(inspect unzip /usr/bin/unzip) || {
   echo 'BLOCKED inspection-failed' >&2; exit 1;
 }
+AFTER_SQLITE3=$(inspect sqlite3 /usr/bin/sqlite3) || {
+  echo 'BLOCKED inspection-failed' >&2; exit 1;
+}
 [ "$AFTER_ZSTD" = 1:1 ] || { echo 'FAILED tool:zstd package:zstd' >&2; exit 1; }
 [ "$AFTER_UNZIP" = 1:1 ] || { echo 'FAILED tool:unzip package:unzip' >&2; exit 1; }
+[ "$AFTER_SQLITE3" = 1:1 ] || { echo 'FAILED tool:sqlite3 package:sqlite3' >&2; exit 1; }
 
 if [ "$ZSTD" = 1:1 ]; then echo 'PRESENT tool:zstd package:zstd'; else echo 'INSTALLED tool:zstd package:zstd'; fi
 if [ "$UNZIP" = 1:1 ]; then echo 'PRESENT tool:unzip package:unzip'; else echo 'INSTALLED tool:unzip package:unzip'; fi
+if [ "$SQLITE3" = 1:1 ]; then echo 'PRESENT tool:sqlite3 package:sqlite3'; else echo 'INSTALLED tool:sqlite3 package:sqlite3'; fi

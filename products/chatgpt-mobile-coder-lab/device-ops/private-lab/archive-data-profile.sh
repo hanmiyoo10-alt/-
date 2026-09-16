@@ -51,34 +51,50 @@ case "$ZSTD" in
   *) echo 'BLOCKED package-command-mismatch' >&2; exit 1 ;;
 esac
 
-if [ "$MODE" = check ]; then
-  if [ "$ZSTD" = 1:1 ]; then
-    echo 'PRESENT tool:zstd package:zstd'
+UNZIP=$(inspect unzip /usr/bin/unzip) || {
+  echo 'BLOCKED inspection-failed' >&2; exit 1;
+}
+case "$UNZIP" in
+  0:0|1:1) ;;
+  *) echo 'BLOCKED package-command-mismatch' >&2; exit 1 ;;
+esac
+
+emit_check() {
+  state=$1 tool=$2 package=$3
+  if [ "$state" = 1:1 ]; then
+    echo "PRESENT tool:$tool package:$package"
   else
-    echo 'MISSING tool:zstd package:zstd'
+    echo "MISSING tool:$tool package:$package"
   fi
+}
+
+if [ "$MODE" = check ]; then
+  emit_check "$ZSTD" zstd zstd
+  emit_check "$UNZIP" unzip unzip
   exit 0
 fi
 
-if [ "$ZSTD" != 1:1 ]; then
+set --
+[ "$ZSTD" = 1:1 ] || set -- "$@" zstd
+[ "$UNZIP" = 1:1 ] || set -- "$@" unzip
+if [ "$#" -gt 0 ]; then
   "$PD" login --isolated "$LAB_NAME" -- /bin/sh -c '
     PATH=/usr/sbin:/usr/bin:/sbin:/bin
     export PATH DEBIAN_FRONTEND=noninteractive
-    apt-get install -y --no-remove --no-upgrade --no-install-recommends zstd >/dev/null 2>&1
-  ' >/dev/null 2>&1 || {
-    echo 'FAILED profile:archive-data-zstd' >&2; exit 1;
+    apt-get install -y --no-remove --no-upgrade --no-install-recommends "$@" >/dev/null 2>&1
+  ' sh "$@" >/dev/null 2>&1 || {
+    echo 'FAILED profile:archive-data' >&2; exit 1;
   }
 fi
 
-AFTER=$(inspect zstd /usr/bin/zstd) || {
+AFTER_ZSTD=$(inspect zstd /usr/bin/zstd) || {
   echo 'BLOCKED inspection-failed' >&2; exit 1;
 }
-[ "$AFTER" = 1:1 ] || {
-  echo 'FAILED tool:zstd package:zstd' >&2; exit 1;
+AFTER_UNZIP=$(inspect unzip /usr/bin/unzip) || {
+  echo 'BLOCKED inspection-failed' >&2; exit 1;
 }
+[ "$AFTER_ZSTD" = 1:1 ] || { echo 'FAILED tool:zstd package:zstd' >&2; exit 1; }
+[ "$AFTER_UNZIP" = 1:1 ] || { echo 'FAILED tool:unzip package:unzip' >&2; exit 1; }
 
-if [ "$ZSTD" = 1:1 ]; then
-  echo 'PRESENT tool:zstd package:zstd'
-else
-  echo 'INSTALLED tool:zstd package:zstd'
-fi
+if [ "$ZSTD" = 1:1 ]; then echo 'PRESENT tool:zstd package:zstd'; else echo 'INSTALLED tool:zstd package:zstd'; fi
+if [ "$UNZIP" = 1:1 ]; then echo 'PRESENT tool:unzip package:unzip'; else echo 'INSTALLED tool:unzip package:unzip'; fi

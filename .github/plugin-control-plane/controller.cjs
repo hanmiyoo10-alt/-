@@ -11,8 +11,11 @@ const {
   resolveStatusIssueIdentity,
 } = require('./lib.cjs');
 
-const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
-if (!token) throw new Error('GH_TOKEN/GITHUB_TOKEN is required');
+function githubToken() {
+  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+  if (!token) throw new Error('GH_TOKEN/GITHUB_TOKEN is required');
+  return token;
+}
 
 async function api(repo, endpoint, options = {}) {
   const method = options.method || 'GET';
@@ -20,7 +23,7 @@ async function api(repo, endpoint, options = {}) {
     method,
     headers: {
       'Accept': 'application/vnd.github+json',
-      'Authorization': `Bearer ${token}`,
+      'Authorization': `Bearer ${githubToken()}`,
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'repository-plugin-control-plane',
       ...(options.headers || {}),
@@ -41,7 +44,7 @@ async function rawApi(urlPath, options = {}) {
     method: options.method || 'GET',
     headers: {
       'Accept': 'application/vnd.github+json',
-      'Authorization': `Bearer ${token}`,
+      'Authorization': `Bearer ${githubToken()}`,
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'repository-plugin-control-plane',
     },
@@ -81,10 +84,10 @@ async function ensureLabels(repo, registry) {
   for (const def of labelDefinitions(registry)) await ensureFixedLabel(repo, def);
 }
 
-async function replaceManagedLabels(repo, number, currentLabels, desiredManaged, registry) {
+async function replaceManagedLabels(repo, number, currentLabels, desiredManaged, registry, apiFn = api) {
   const preserved = currentLabels.filter((label) => !managedLabel(label, registry));
   const labels = [...new Set([...preserved, ...desiredManaged])].sort();
-  await api(repo, `/issues/${number}/labels`, {method: 'PUT', body: {labels}});
+  await apiFn(repo, `/issues/${number}/labels`, {method: 'PUT', body: {labels}});
   return labels;
 }
 
@@ -284,10 +287,102 @@ async function searchCount(query) {
   return row.total_count || 0;
 }
 
-async function findStatusIssues(repo, kind, id) {
+const STATUS_PAGE_SIZE = 100;
+const STATUS_PAGE_BOUND = 10;
+const STATUS_MARKER = '<!-- plugin-control-plane-status -->';
+
+function statusRefreshError(code, message) {
+  const error = new Error(`${code}: ${message}`);
+  error.code = code;
+  return error;
+}
+
+async function listStatusIssues(repo, apiFn = api) {
   const statusLabel = encodeURIComponent('control-plane:status');
-  const rows = await api(repo, `/issues?state=all&labels=${statusLabel}&per_page=100`);
+  const rows = [];
+  for (let page = 1; page <= STATUS_PAGE_BOUND; page += 1) {
+    const pageRows = await apiFn(repo, `/issues?state=all&labels=${statusLabel}&per_page=${STATUS_PAGE_SIZE}&page=${page}`);
+    if (!Array.isArray(pageRows)) throw statusRefreshError('STATUS_LIST_INVALID', 'status issue listing was not an array');
+    rows.push(...pageRows);
+    if (pageRows.length < STATUS_PAGE_SIZE) return rows;
+  }
+  throw statusRefreshError('STATUS_LIST_BOUND_EXCEEDED', `status issue pagination exceeded ${STATUS_PAGE_BOUND * STATUS_PAGE_SIZE} items`);
+}
+
+async function findStatusIssues(repo, kind, id, apiFn = api) {
+  const rows = await listStatusIssues(repo, apiFn);
   return resolveStatusIssueIdentity(rows, kind, id);
+}
+
+async function findExactStatusIssues(repo, kind, id, rawApiFn = rawApi) {
+  const title = `[${kind}-status:${id}]`;
+  const query = `repo:${repo} is:issue in:title "${title}" label:"control-plane:status"`;
+  const row = await rawApiFn(`/search/issues?q=${encodeURIComponent(query)}&per_page=100`);
+  if (!row || !Array.isArray(row.items)) throw statusRefreshError('STATUS_EXACT_LOOKUP_INVALID', 'exact status search response was invalid');
+  if ((row.total_count || 0) > row.items.length) throw statusRefreshError('STATUS_EXACT_LOOKUP_INCOMPLETE', 'exact status search response was incomplete');
+  const identity = resolveStatusIssueIdentity(row.items, kind, id);
+  for (const candidate of identity.candidates) {
+    if (!(candidate.body || '').includes(STATUS_MARKER)) {
+      throw statusRefreshError('STATUS_IDENTITY_MARKER_MISMATCH', `status issue #${candidate.number} lacks generated marker`);
+    }
+  }
+  return identity;
+}
+
+async function reconcileStatusIssue(repo, kind, id, label, body, registry, transport = {}) {
+  const apiFn = transport.api || api;
+  const rawApiFn = transport.rawApi || rawApi;
+  let identity = await findStatusIssues(repo, kind, id, apiFn);
+  if (!identity.canonical) identity = await findExactStatusIssues(repo, kind, id, rawApiFn);
+
+  if (!identity.canonical) {
+    const created = await apiFn(repo, '/issues', {method: 'POST', body: {
+      title: `[${kind}-status:${id}]`,
+      body,
+      labels: [label, 'control-plane:status'],
+    }});
+    const readback = await findExactStatusIssues(repo, kind, id, rawApiFn);
+    if (!readback.canonical || readback.canonical.number !== created.number || readback.duplicates.length !== 0) {
+      throw statusRefreshError('STATUS_POST_CREATE_IDENTITY_MISMATCH', `created status issue #${created.number} did not read back as the unique canonical identity`);
+    }
+    console.log(`CREATED_STATUS:${kind}:${id}:#${created.number}`);
+    return {action: 'created', number: created.number, identity: readback};
+  }
+
+  const existing = identity.canonical;
+  await apiFn(repo, `/issues/${existing.number}`, {method: 'PATCH', body: {body, state: 'open'}});
+  const current = (existing.labels || []).map((row) => typeof row === 'string' ? row : row.name);
+  await replaceManagedLabels(repo, existing.number, current, [label, 'control-plane:status'], registry, apiFn);
+  for (const duplicate of identity.duplicates) {
+    if (duplicate.state !== 'open') continue;
+    await apiFn(repo, `/issues/${duplicate.number}`, {method: 'PATCH', body: {state: 'closed'}});
+    console.log(`CLOSED_STATUS_DUPLICATE:${kind}:${id}:#${duplicate.number}`);
+  }
+  console.log(`UPDATED_STATUS:${kind}:${id}:#${existing.number}`);
+  return {action: 'updated', number: existing.number, identity};
+}
+
+function statusFailureCode(error) {
+  return /^[A-Z0-9_]+$/.test(error?.code || '') ? error.code : 'STATUS_OWNER_REFRESH_FAILED';
+}
+
+async function runStatusOwnerTasks(owners, task) {
+  const failures = [];
+  for (const entry of owners) {
+    try {
+      await task(entry);
+    } catch (error) {
+      const code = statusFailureCode(error);
+      failures.push({kind: entry.kind, id: entry.id, code});
+      console.error(`STATUS_REFRESH_OWNER_FAILED:${entry.kind}:${entry.id}:${code}`);
+    }
+  }
+  if (failures.length) {
+    const error = statusRefreshError('STATUS_REFRESH_PARTIAL_FAILURE', JSON.stringify(failures));
+    error.failures = failures;
+    throw error;
+  }
+  return {processed: owners.length, failures: []};
 }
 
 function table(rows) {
@@ -303,10 +398,9 @@ async function refreshStatus() {
   const owners = [
     ...Object.entries(registry.plugins || {}).map(([id, owner]) => ({kind: 'plugin', id, owner})),
     ...Object.entries(registry.products || {}).map(([id, owner]) => ({kind: 'product', id, owner})),
-  ];
+  ].filter(({id}) => !only || id === only);
 
-  for (const {kind, id, owner} of owners) {
-    if (only && id !== only) continue;
+  return runStatusOwnerTasks(owners, async ({kind, id, owner}) => {
     const label = `${kind}:${id}`;
     const rows = await statusFor(repo, owner);
     const openPrs = await searchCount(`repo:${repo} is:pr is:open label:"${label}"`);
@@ -334,30 +428,10 @@ async function refreshStatus() {
       '',
       `Last refreshed: ${new Date().toISOString()}`,
       '',
-      '<!-- plugin-control-plane-status -->',
+      STATUS_MARKER,
     ].join('\n');
-
-    const identity = await findStatusIssues(repo, kind, id);
-    const existing = identity.canonical;
-    if (existing) {
-      await api(repo, `/issues/${existing.number}`, {method: 'PATCH', body: {body, state: 'open'}});
-      const current = (existing.labels || []).map((row) => row.name);
-      await replaceManagedLabels(repo, existing.number, current, [label, 'control-plane:status'], registry);
-      for (const duplicate of identity.duplicates) {
-        if (duplicate.state !== 'open') continue;
-        await api(repo, `/issues/${duplicate.number}`, {method: 'PATCH', body: {state: 'closed'}});
-        console.log(`CLOSED_STATUS_DUPLICATE:${kind}:${id}:#${duplicate.number}`);
-      }
-      console.log(`UPDATED_STATUS:${kind}:${id}:#${existing.number}`);
-    } else {
-      const created = await api(repo, '/issues', {method: 'POST', body: {
-        title: `[${kind}-status:${id}]`,
-        body,
-        labels: [label, 'control-plane:status'],
-      }});
-      console.log(`CREATED_STATUS:${kind}:${id}:#${created.number}`);
-    }
-  }
+    await reconcileStatusIssue(repo, kind, id, label, body, registry);
+  });
 }
 
 async function main() {
@@ -368,7 +442,17 @@ async function main() {
   throw new Error(`unknown command: ${command}`);
 }
 
-main().catch((error) => {
-  console.error(error.stack || error.message || String(error));
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.stack || error.message || String(error));
+    process.exitCode = 1;
+  });
+}
+
+module.exports = {
+  findStatusIssues,
+  findExactStatusIssues,
+  listStatusIssues,
+  reconcileStatusIssue,
+  runStatusOwnerTasks,
+};

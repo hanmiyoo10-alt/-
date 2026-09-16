@@ -225,3 +225,24 @@ Next-time cue: `y'`를 분수로 옮기기 직전 한 줄의 계수를 그대로
 Related pattern IDs: AI-MATH-P2  
 Review state: NONE  
 Later evidence / resolution: `sin(y)`에 대해 `cos(y)y'`를 cue 이후 정확히 적용해, 종속변수 합성함수에 내부 미분을 붙이는 구조의 성공 증거가 생겼다. 다만 cue-assisted이고 마지막 대수 정리 실수가 있어 완전한 무힌트 전이 성공으로 보지는 않음.
+
+### AI-MATH-W3-R3
+
+Problem ID: AI-MATH-W3-R3  
+Date: 2026-09-16  
+Subject / area: AI 수학 / 3주차 복습, 음함수 미분·곱의 미분·연쇄법칙  
+Source ref: 3주차 복습 문제 `x cos(y) + y = 2`, 사용자 풀이 사진 `20260916_164051277.jpg`  
+Result: PARTIAL  
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 공식 힌트 없이 `x cos(y) + y = 2`를 `x`에 대해 미분하고 `y'`를 정리한다.  
+User interpretation / approach: 원래 식의 `cos(y)`를 그대로 보존하고, `x cos(y)`에 곱의 미분을 적용해 `cos(y) - x sin(y)y' + y' = 0`을 정확히 얻었다. 이어 `-y'(x sin(y)-1) = -cos(y)`까지도 올바르게 정리했다. 다만 마지막 분수로 옮길 때 음수를 한 번 더 붙여 `-cos(y)/(x sin(y)-1)`로 적었다.  
+Correct reasoning summary: `cos(y) - x sin(y)y' + y' = 0`, 따라서 `y'(1-x sin(y))=-cos(y)`. 그러므로 `y'=-cos(y)/(1-x sin(y))`, 동치로 `y'=cos(y)/(x sin(y)-1)`이다.
+
+Error type: CALC_PROCESS  
+Error mechanism: 음함수에서 종속변수 `y`를 보존하고 `(cos y)'=-sin(y)y'`를 적용하는 핵심 연쇄법칙과 곱의 미분은 무힌트로 정확했다. 오류는 이미 올바른 식 `-y'(x sin(y)-1)=-cos(y)`에서 양변의 음수를 나누는 마지막 대수 부호 처리에서 발생했다.  
+Next-time cue: 마지막에 `y'`를 고립시킬 때는 분자·분모 부호를 동시에 바꾸면 같은 식이라는 점을 이용해 한 형태만 유지한다. 예: `-cos/(1-a) = cos/(a-1)`.
+
+Related pattern IDs: AI-MATH-P1, AI-MATH-P2  
+Review state: NONE  
+Later evidence / resolution: P2의 핵심 메커니즘인 `g(y)`의 내부 변수 보존과 `y'` 부착이 공식 힌트 없이 다른 함수 `cos(y)`에서 전이되었다. P1 관점에서도 `cos -> -sin`은 무힌트로 정확히 회수했지만, 반복 실패가 있었던 `tan -> sec^2`와 `sec -> sec tan`의 무힌트 확인은 아직 남아 있다.

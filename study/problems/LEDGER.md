@@ -120,3 +120,24 @@ Next-time cue: 다층 합성함수는 각 층을 먼저 한 줄짜리 미분표�
 Related pattern IDs: AI-MATH-P1  
 Review state: NONE  
 Later evidence / resolution: `tan -> sec^2` 회수는 성공하여 AI-MATH-P1의 첫 성공 증거로 사용.
+
+### AI-MATH-W3-3.5
+
+Problem ID: AI-MATH-W3-3.5  
+Date: 2026-09-16  
+Subject / area: AI 수학 / 곱의 미분법, 접선의 방정식  
+Source ref: `AI 수학 입문` 3주차 연습문제 3.5, 사용자 풀이 사진 `20260916_141349792.jpg`  
+Result: CORRECT  
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 주어진 곡선을 미분해 `(0,1)`에서의 접선 기울기를 구하고 접선의 방정식을 완성한다.  
+User interpretation / approach: `e^x cos x`에 곱의 미분법을 적용하고 `sin x`를 미분한 뒤, `x=0`을 대입해 기울기 `2`를 구했다. 이어 점 `(0,1)`을 사용해 접선을 `y=2x+1`로 완성했다.  
+Correct reasoning summary: `y' = e^x(cos x - sin x) + cos x`, 따라서 `y'(0)=2`이고 접선은 `y-1=2(x-0)`, 즉 `y=2x+1`이다.
+
+Error type: none  
+Error mechanism: none  
+Next-time cue: 현재 흐름을 유지한다: 미분식 완성 → 접점의 x값 대입 → 점기울기식으로 접선 작성.
+
+Related pattern IDs: AI-MATH-P1  
+Review state: NONE  
+Later evidence / resolution: `e^x -> e^x`와 삼각함수 기본 도함수를 곱의 미분 안에서 정확히 회수한 성공 사례. AI-MATH-P1 개선 증거로 추가.

@@ -20,7 +20,9 @@ Repository, Git, CI, release, and project authorities remain above all of these 
 `#465` is coordination only. Its normal human-facing body MUST use pointer-only live-health semantics:
 
 - `LIVE HEALTH: direct main + #485` is the only current-health pointer;
-- the queue may show at most one human-facing mutable active-writer projection, plus next candidate, coordination blocker, latest completed packet, and stable links to durable surfaces;
+- `Queue surface: ENABLED` is the canonical modern availability label; `ENABLED` means the coordination surface is available and does not assert active-writer presence;
+- the human-facing mutable active-writer projection cardinality is `0..1`; zero projected writers is valid and does not mean disabled, idle, complete, or exhaustive;
+- when present, the queue may show at most one human-facing mutable active-writer projection, plus next candidate, coordination blocker, latest completed packet, and stable links to durable surfaces;
 - stable `## Surfaces` pointers MUST NOT repeat mutable active-writer state; #465 is not an exhaustive registry of nonterminal work;
 - it MUST NOT duplicate a current `main` SHA, Required state/run, production identity state, or native-protection state as live truth;
 - when an exact SHA is required as packet evidence, it may appear only as explicitly historical synchronization/packet evidence and must never be presented as current health;
@@ -35,6 +37,8 @@ This prevents a stale coordination queue from competing with the direct reposito
 Its machine-readable top-level result is `PASS / WARN / FAIL / UNKNOWN`. `FAIL` means the supplied body proves a contract violation. `UNKNOWN` means the text itself exposes an active-writer claim that requires external packet/PR evidence before it can be resolved. `WARN` is reserved for non-blocking advisory findings. Absence of a finding is not a claim that #465 exhaustively lists repository work.
 
 The classifier fails on duplicated mutable current-health claims for current/live `main` SHA, Required state/run, production identity/state, native-protection state, freehand current #485 state, or more than one unambiguous active-writer projection. The canonical `LIVE HEALTH: direct main + #485` pointer and its explanatory no-duplication rule are not findings. Clearly labeled historical synchronization/packet evidence remains allowed; token presence alone does not make a SHA, run, packet, PR, or status word current authority.
+
+The exact standalone old modern label `Queue state: ACTIVE` is a non-blocking naming `WARN`: it is ambiguous between surface availability and writer activity. Use `Queue surface: ENABLED` for the modern queue. This warning does not apply to the separately owned legacy `ACTIVE|IDLE / CANONICAL-MAIN-V1.2` profile, and it never infers active-writer presence or absence.
 
 Each finding carries a stable reason code, a 1-based body line number, and a bounded excerpt. Ambiguous active-writer prose remains `UNKNOWN` rather than being converted into invented terminality. Current repository truth still comes from direct `main`, #485, packet/PR evidence, and the owning authorities named above.
 

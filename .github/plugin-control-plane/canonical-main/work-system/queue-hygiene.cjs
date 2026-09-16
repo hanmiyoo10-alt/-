@@ -5,6 +5,7 @@ const SHA40 = /\b[0-9a-f]{40}\b/i;
 const CURRENT_WORD = /\b(current|currently|live|latest|now|present|tip)\b/i;
 const STRONG_CURRENT_WORD = /\b(currently|live|latest|now|present|tip)\b/i;
 const HISTORICAL_WORD = /\b(historical|history|previously|prior|synchronization|packet evidence|activation snapshot|at activation|merged as|request commit)\b/i;
+const AMBIGUOUS_MODERN_QUEUE_STATE = /^\s*\*\*Queue state:\s*ACTIVE\*\*\s*$/i;
 
 const REASON_CODES = Object.freeze({
   MISSING_CANONICAL_POINTER: 'MISSING_CANONICAL_POINTER',
@@ -16,6 +17,7 @@ const REASON_CODES = Object.freeze({
   DUPLICATE_ISSUE_485_CURRENT_STATE: 'DUPLICATE_ISSUE_485_CURRENT_STATE',
   DUPLICATE_ACTIVE_WRITER_PROJECTION: 'DUPLICATE_ACTIVE_WRITER_PROJECTION',
   ACTIVE_WRITER_STATUS_UNRESOLVED: 'ACTIVE_WRITER_STATUS_UNRESOLVED',
+  AMBIGUOUS_QUEUE_STATE_LABEL: 'AMBIGUOUS_QUEUE_STATE_LABEL',
 });
 
 function boundedExcerpt(line) {
@@ -90,6 +92,15 @@ function classifyQueueBody(body) {
     const lineNumber = index + 1;
     if (CANONICAL_POINTER.test(line)) pointerLines.push(lineNumber);
     if (isActiveWriterProjection(line)) writerLines.push({lineNumber, line});
+    if (AMBIGUOUS_MODERN_QUEUE_STATE.test(line)) {
+      findings.push(finding(
+        REASON_CODES.AMBIGUOUS_QUEUE_STATE_LABEL,
+        'WARN',
+        lineNumber,
+        line,
+        'Use **Queue surface: ENABLED**; surface availability does not assert active-writer presence.',
+      ));
+    }
     if (isLiveMainShaClaim(line)) {
       findings.push(finding(REASON_CODES.DUPLICATE_LIVE_MAIN_SHA, 'FAIL', lineNumber, line));
     }

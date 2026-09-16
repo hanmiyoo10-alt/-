@@ -127,6 +127,12 @@ noDiffInput.scope.diffEvidenceLocator = 'git-diff:unexpected';
 const noDiffConflict = projectStageReceipt(noDiffInput);
 assert.equal(noDiffConflict.status, 'CONFLICT');
 assert.ok(noDiffConflict.conflicts.includes('SCOPE_DIFF_NOT_APPLICABLE_CONFLICT'));
+
+const missingScopePathsInput = fixture('AUTHORITY_SCOPE');
+missingScopePathsInput.scope.paths = [];
+const missingScopePaths = projectStageReceipt(missingScopePathsInput);
+assert.equal(missingScopePaths.status, 'UNKNOWN');
+assert.ok(missingScopePaths.requiredUnknowns.includes('SCOPE_PATHS_MISSING'));
 const unsupported = fixture();
 unsupported.logs = ['arbitrary raw log'];
 const unsupportedResult = projectStageReceipt(unsupported);

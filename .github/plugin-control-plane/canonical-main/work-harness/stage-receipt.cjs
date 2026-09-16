@@ -174,7 +174,7 @@ function normalizeScope(value, reasons, unknowns, conflicts) {
     diffRequired = null;
   }
   if (diffRequired === undefined) diffRequired = null;
-  if (!stablePaths.length && diffRequired !== false) unknowns.push('SCOPE_PATHS_MISSING');
+  if (!stablePaths.length) unknowns.push('SCOPE_PATHS_MISSING');
   let diffIdentity = atom(value.diffIdentity, 'scope.diffIdentity', reasons, { maxBytes: 96 });
   let diffEvidenceLocator = atom(value.diffEvidenceLocator, 'scope.diffEvidenceLocator', reasons);
   if (diffIdentity && !/^[0-9a-f]{64}$/i.test(diffIdentity)) reasons.push('INPUT_SCOPE_DIFF_IDENTITY_INVALID');

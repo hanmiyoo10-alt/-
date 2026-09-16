@@ -199,44 +199,6 @@ The machine result is compact JSON with `COMPLETE`, `PARTIAL`, `UNKNOWN`, or `FA
 
 This surface uses only the existing GitHub issue API through the canonical-main GitHub client. It adds no workflow-wide `issue_comment` listener, no contents/ref/PR/release/production authority, no new mutable truth owner, no mutation capability to `tools/repo-ci-mcp/**`, and no claim that repository code can suppress host UI activity cards. Its compactness benefit is narrower: when this harness is available, one visible repository command can preserve the two required durable issue comments internally.
 
-## Derived machine-readable stage receipt
-
-`stage-receipt.cjs` is a deterministic, read-only projector for source-linked stage facts. It standardizes evidence already established by the caller or existing owners; it does not parse arbitrary packet prose, discover missing truth, call GitHub, or write repository/issue state.
-
-Use a bounded structured JSON input:
-
-```sh
-node .github/plugin-control-plane/canonical-main/work-harness/stage-receipt.cjs \
-  --input-file /path/to/stage-facts.json \
-  --format json
-```
-
-The v1 receipt carries packet identity, RCR-D15 stage, authoritative refs with exact identities, required gates with evidence locators, bounded scope/diff identity, source-linked Work System proof terms, required UNKNOWN/conflict/blocker/dependency evidence, the exact next legal action, and a deterministic receipt digest. Every receipt fixes `mutationAuthorized=false` and `executionAuthorized=false`.
-
-Fail-closed rules are semantic rather than cosmetic:
-
-- missing authority identity, required gate evidence, diff evidence when required, scope, or next action remains explicit `UNKNOWN`;
-- duplicate authority locators or gate names that disagree become `CONFLICT`;
-- a `PASS` gate without an evidence locator is downgraded to `UNKNOWN`;
-- proof terms are projected only when explicitly supplied with evidence and are never upgraded by inference;
-- `CONTRACT_PROVEN` never implies `LIVE_PROVEN`, and an inconsistent `DONE` claim is removed while the receipt becomes `CONFLICT`;
-- unsupported fields, arbitrary raw-log fields, control characters, oversized input/result surfaces, and common credential/token forms are rejected rather than copied into the receipt.
-
-Input is capped at 16 KiB, the canonical machine payload at 7 KiB, and the compact Markdown rendering at 8 KiB. Semantically unordered collections are normalized before hashing so equivalent structured evidence produces the same SHA-256 receipt digest.
-
-For durable checkpoint recording, render the already-projected receipt and hand that bounded Markdown to the existing recorder:
-
-```text
-owning authority/evidence
-→ structured stage facts
-→ stage-receipt.cjs
-→ compact Markdown rendering
-→ stage-checkpoint.cjs
-→ packet issue + #293
-```
-
-`stage-checkpoint.cjs` remains the only issue-recording adapter in this composition. The receipt projector adds no second writer, mutable truth store, health owner, queue owner, release/runtime authority, or orchestration subsystem.
-
 ## Derived canonical-main stage receipt
 
 `stage-receipt.cjs` is a read-only projector for #2275 item 10. It accepts bounded structured stage facts already established by owning authority/evidence and emits one deterministic `CANONICAL_MAIN_STAGE_RECEIPT` plus a compact Markdown projection. It does not read GitHub, discover truth, parse arbitrary packet prose, or write repository/issue state.

@@ -291,6 +291,7 @@ assert.match(readme, /unresolved overlap remains `UNKNOWN` or `CONFLICT`/);
 assert.match(readme, /Disjoint nonterminal packets remain eligible to proceed in parallel/);
 
 const {classifyQueueBody, REASON_CODES} = require(path.join(dir, 'queue-hygiene.cjs'));
+const {classifyCoordinationReferences, REASON_CODES: COORD_REF_REASON_CODES} = require(path.join(dir, 'coordination-reference-hygiene.cjs'));
 const {resolveScopeOverlap, REASON_CODES: OVERLAP_REASON_CODES} = require(path.join(dir, 'scope-overlap.cjs'));
 const {classifyPrActivity, REASON_CODES: PR_ACTIVITY_REASON_CODES} = require(path.join(dir, 'pr-activity.cjs'));
 
@@ -341,6 +342,74 @@ assert.match(readme, /## #465 pointer-only hygiene classifier/);
 assert.match(readme, /`PASS \/ WARN \/ FAIL \/ UNKNOWN`/);
 assert.match(readme, /never fetches GitHub and never mutates #465/);
 assert.match(readme, /clearly labeled historical synchronization\/packet evidence remains allowed/i);
+
+const terminalPacket = {issueNumber: 2340, nativeState: 'closed', lifecycleState: 'DONE'};
+const activePacket = {issueNumber: 2342, nativeState: 'open', lifecycleState: 'IN_PROGRESS'};
+const classifyRefs = (prose, packets = [terminalPacket, activePacket]) => classifyCoordinationReferences({prose, packets});
+
+const staleRef = classifyRefs('- Active writer: #2340 payload identity packet');
+assert.equal(staleRef.state, 'STALE');
+assert.equal(staleRef.findings[0].code, COORD_REF_REASON_CODES.TERMINAL_PACKET_IN_CURRENT_ROLE);
+assert.equal(staleRef.findings[0].role, 'ACTIVE_WRITER');
+assert.equal(staleRef.findings[0].line, 1);
+assert.ok(staleRef.findings[0].excerpt.length <= 240);
+assert.equal(staleRef.mutationAuthorized, false);
+assert.equal(staleRef.networkAuthorized, false);
+
+for (const prose of [
+  '- Latest completed packet: #2340 payload identity packet',
+  '- Historical packet #2340 remains useful evidence',
+  '- Legacy #2340 reference is retained for context',
+]) {
+  const result = classifyRefs(prose);
+  assert.equal(result.state, 'PASS');
+  assert.equal(result.findings[0].disposition, 'PASS');
+}
+
+assert.equal(classifyRefs('- Current packet: #2342 coordination reference hygiene').state, 'PASS');
+assert.equal(classifyRefs('- #2340 exists in this sentence but has no supported role').state, 'PASS');
+
+const mixedRoleRef = classifyRefs('- Current packet: #2342 replaces previous #2340');
+assert.equal(mixedRoleRef.state, 'PASS');
+assert.deepEqual(mixedRoleRef.findings.map((item) => item.issueNumber), [2342]);
+const historicalWriterRef = classifyRefs('- Historical active writer: #2340');
+assert.equal(historicalWriterRef.state, 'PASS');
+assert.equal(historicalWriterRef.findings[0].role, 'HISTORICAL');
+assert.equal(classifyRefs('- Coordination blocker: #2346', [
+  {issueNumber: 2346, nativeState: 'open', lifecycleState: 'BLOCKED'},
+]).state, 'PASS');
+assert.throws(() => classifyRefs('- Current packet: #2347', [
+  {issueNumber: 2347, nativeState: 'open', lifecycleState: 'MYSTERY'},
+]), /registered Work System state/);
+
+const unknownRef = classifyRefs('- Next packet: #999 missing evidence');
+assert.equal(unknownRef.state, 'UNKNOWN');
+assert.equal(unknownRef.findings[0].code, COORD_REF_REASON_CODES.CURRENT_PACKET_EVIDENCE_MISSING);
+
+const conflictRef = classifyRefs('- Coordination blocker: #2343 inconsistent packet', [
+  {issueNumber: 2343, nativeState: 'open', lifecycleState: 'DONE'},
+]);
+assert.equal(conflictRef.state, 'CONFLICT');
+assert.equal(conflictRef.findings[0].code, COORD_REF_REASON_CODES.PACKET_NATIVE_LIFECYCLE_CONFLICT);
+
+const missingLifecycle = classifyRefs('- Current owner: #2344 owner', [
+  {issueNumber: 2344, nativeState: 'open'},
+]);
+assert.equal(missingLifecycle.state, 'UNKNOWN');
+assert.equal(missingLifecycle.findings[0].code, COORD_REF_REASON_CODES.PACKET_LIFECYCLE_EVIDENCE_MISSING);
+
+const precedenceRef = classifyRefs([
+  '- Next candidate: #2340 stale candidate',
+  '- Current owner: #2345 conflict owner',
+].join('\n'), [terminalPacket, {issueNumber: 2345, nativeState: 'closed', lifecycleState: 'IN_PROGRESS'}]);
+assert.equal(precedenceRef.state, 'CONFLICT');
+assert.equal(precedenceRef.findings.length, 2);
+assert.ok(precedenceRef.findings.every((item) => item.excerpt.length <= 240));
+
+assert.match(readme, /## Cross-surface packet-reference hygiene classifier/);
+assert.match(readme, /`PASS \/ STALE \/ UNKNOWN \/ CONFLICT`/);
+assert.match(readme, /does not fetch GitHub and never mutates coordination surfaces/);
+assert.match(readme, /terminal packet is not stale merely because it is referenced historically/i);
 
 
 const overlapPacketBody = (state, scopes) => `<!-- canonical-main-work-packet:v1 -->

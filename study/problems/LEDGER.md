@@ -99,3 +99,24 @@ Next-time cue: 곱의 미분을 전개하기 전에 각 인수 위에 도함수�
 Related pattern IDs: AI-MATH-P1  
 Review state: NONE  
 Later evidence / resolution: pending.
+
+### AI-MATH-W3-3.4
+
+Problem ID: AI-MATH-W3-3.4  
+Date: 2026-09-16  
+Subject / area: AI 수학 / 다층 연쇄법칙  
+Source ref: `AI 수학 입문` 3주차 연습문제 3.4, 사용자 풀이 사진 `Scanned_20260916-1407.jpg`  
+Result: PARTIAL  
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: `tan^2 x + e^(sec(x^2))`를 항별로 다층 연쇄법칙을 적용해 미분한다.  
+User interpretation / approach: 첫 항에서 `tan x -> sec^2 x`를 정확히 회수하고 제곱의 바깥 미분과 결합하려 했다. 둘째 항에서도 `e^( ) -> sec( ) -> x^2`의 층 구조를 표시해 연쇄법칙 적용 방향은 맞게 잡았다. 다만 `sec(x^2)`의 도함수를 `sec(x^2)tan(x^2) * 2x`로 명확히 완성하지 못해 최종 식의 표기가 꼬였다.  
+Correct reasoning summary: `f'(x) = 2 tan x sec^2 x + e^(sec(x^2)) * sec(x^2) * tan(x^2) * 2x`이다.
+
+Error type: KNOWLEDGE_GAP  
+Error mechanism: 다층 합성 구조는 인식했지만 가운데 기본 함수 `sec`의 도함수 `sec u tan u`를 완전한 식으로 회수하지 못했다. 반면 이전 두 문제에서 반복 실패했던 `tan -> sec^2`는 이번 문제에서 정확히 사용했다.  
+Next-time cue: 다층 합성함수는 각 층을 먼저 한 줄짜리 미분표로 바꾼 뒤 곱한다: `e^u -> e^u`, `sec v -> sec v tan v`, `x^2 -> 2x`.  
+
+Related pattern IDs: AI-MATH-P1  
+Review state: NONE  
+Later evidence / resolution: `tan -> sec^2` 회수는 성공하여 AI-MATH-P1의 첫 성공 증거로 사용.

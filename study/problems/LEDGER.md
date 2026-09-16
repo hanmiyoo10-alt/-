@@ -77,7 +77,7 @@ Next-time cue: 연쇄법칙 문제에서는 층을 나눈 뒤 각 층 옆에 기
 
 Related pattern IDs: AI-MATH-P1  
 Review state: NONE  
-Later evidence / resolution: pending.
+Later evidence / resolution: AI-MATH-W3-R5에서 `(tan x)'=sec^2 x`를 공식 힌트 없이 정확히 회수했다. 직접 실패 형태의 무힌트 교정 성공이 한 번 확인됨.
 
 ### AI-MATH-W3-3.3
 
@@ -98,7 +98,7 @@ Next-time cue: 곱의 미분을 전개하기 전에 각 인수 위에 도함수�
 
 Related pattern IDs: AI-MATH-P1  
 Review state: NONE  
-Later evidence / resolution: pending.
+Later evidence / resolution: AI-MATH-W3-R5에서 `(tan x)'=sec^2 x`를 공식 힌트 없이 정확히 회수했다. 단순 기본함수 형태에서 무힌트 성공이 생겼으며, 복합 구조 안에서의 유지 여부는 추후 확인 대상이다.
 
 ### AI-MATH-W3-3.4
 
@@ -119,7 +119,7 @@ Next-time cue: 다층 합성함수는 각 층을 먼저 한 줄짜리 미분표�
 
 Related pattern IDs: AI-MATH-P1  
 Review state: NONE  
-Later evidence / resolution: `tan -> sec^2` 회수는 성공하여 AI-MATH-P1의 첫 성공 증거로 사용.
+Later evidence / resolution: 당시 `tan -> sec^2` 적용 성공은 문제 제시 과정의 직접 cue 이후 나온 cue-assisted 실행 증거였으므로 무힌트 회수 성공으로 보지 않는다. 이후 AI-MATH-W3-R5에서 `tan`과 `sec` 도함수를 둘 다 공식 힌트 없이 정확히 회수했다.
 
 ### AI-MATH-W3-3.5
 
@@ -140,7 +140,7 @@ Next-time cue: 현재 흐름을 유지한다: 미분식 완성 → 접점의 x�
 
 Related pattern IDs: AI-MATH-P1  
 Review state: NONE  
-Later evidence / resolution: `e^x -> e^x`와 삼각함수 기본 도함수를 곱의 미분 안에서 정확히 회수한 성공 사례. AI-MATH-P1 개선 증거로 추가.
+Later evidence / resolution: 문제 제시 때 `(e^x)'=e^x`, `(cos x)'=-sin x`, `(sin x)'=cos x` 공식과 곱의 미분 힌트가 제공된 상태에서 정확히 적용한 cue-assisted 성공이다. 따라서 기본 도함수의 독립 회수 성공으로는 세지 않는다.
 
 ### AI-MATH-W3-3.6
 
@@ -161,7 +161,7 @@ Next-time cue: `x`와 `y(x)`가 곱으로 섞이면 먼저 블록을 둘로 나�
 
 Related pattern IDs: none; 단일 음함수 사례이므로 새 패턴으로 승격하지 않음.  
 Review state: NONE  
-Later evidence / resolution: 3.7에서 두 곱을 각각 두 항으로 펼치려는 구조는 전이되었지만, `e^y`의 연쇄법칙 적용 실패로 완전한 교정 성공까지는 확인되지 않음.
+Later evidence / resolution: 3.7에서 두 곱을 각각 두 항으로 펼치려는 구조는 전이되었지만, 당시 문제 제시에서 `A'B+AB'`를 직접 cue로 제공한 상태였으므로 독립 전이 성공으로 보지는 않는다. `e^y` 연쇄법칙 적용 실패도 남아 있어 완전 교정 성공은 미확인 상태였다.
 
 ### AI-MATH-W3-3.7
 
@@ -267,3 +267,24 @@ Next-time cue: 현재 흐름을 유지한다. 원래 내부 변수 `y`를 보존
 Related pattern IDs: AI-MATH-P2  
 Review state: NONE  
 Later evidence / resolution: 직접 실패가 반복되었던 `e^y` 형태에서 공식 힌트 없이 완전한 정답이 확인되었다. P2의 개선을 지지하는 직접 성공 증거지만, 한 번의 성공만으로 안정적 습득으로 확정하지는 않는다.
+
+### AI-MATH-W3-R5
+
+Problem ID: AI-MATH-W3-R5  
+Date: 2026-09-16  
+Subject / area: AI 수학 / 3주차 복습, 기본 삼각함수 도함수 회수  
+Source ref: 3주차 복습 문제 `f(x)=tan x + sec x`, 사용자 풀이 사진 `20260916_165324665.jpg`  
+Result: CORRECT  
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 공식 힌트 없이 `tan x`와 `sec x`의 기본 도함수를 각각 회수해 합의 도함수를 구한다.  
+User interpretation / approach: `(tan x)'=sec^2 x`를 정확히 썼고, `(sec x)'=sec x tan x` 구조도 정확히 회수해 최종적으로 `f'(x)=sec^2 x + sec x tan x`를 얻었다. 사진의 두 번째 항은 `sec tan x`처럼 변수 표기가 압축되어 보이지만 문맥과 구조상 `sec x tan x`를 의도한 것으로 판단한다.  
+Correct reasoning summary: 합의 미분법과 기본 도함수 `(tan x)'=sec^2 x`, `(sec x)'=sec x tan x`를 적용하면 `f'(x)=sec^2 x + sec x tan x`이다.
+
+Error type: none  
+Error mechanism: none  
+Next-time cue: 현재 회수 흐름을 유지하되, 삼각함수 곱에서는 각 함수의 입력 변수를 모두 적어 `sec x tan x`처럼 표기를 명확히 한다.
+
+Related pattern IDs: AI-MATH-P1  
+Review state: NONE  
+Later evidence / resolution: P1에서 직접 반복 실패가 있었던 `tan -> sec^2`와 `sec -> sec tan`을 둘 다 공식 힌트 없이 정확히 회수한 첫 직접 무힌트 성공 사례. 한 번의 성공만으로 안정적 습득으로 확정하지는 않는다.

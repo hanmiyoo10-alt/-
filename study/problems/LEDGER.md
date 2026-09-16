@@ -182,7 +182,7 @@ Next-time cue: 음함수에서 지수함수가 나오면 변수부터 확인한�
 
 Related pattern IDs: none; 이 형태의 `e^y` 연쇄법칙 오류는 현재 한 사례이므로 새 패턴으로 승격하지 않음.  
 Review state: NONE  
-Later evidence / resolution: pending; 다음 음함수·합성함수 문제에서 `e^y -> e^y y'`가 cue 없이 전이되는지 확인.
+Later evidence / resolution: AI-MATH-W3-R4에서 `e^y`가 직접 다시 등장했을 때 공식 힌트 없이 원래 지수 `y`를 보존하고 `e^y y'`를 정확히 적용해 최종 도함수까지 맞혔다. 직접 실패 형태의 무힌트 교정 성공이 한 번 확인됨.
 
 ### AI-MATH-W3-R1
 
@@ -203,7 +203,7 @@ Next-time cue: 미분하기 전 원래 식의 지수 변수를 먼저 확인하�
 
 Related pattern IDs: AI-MATH-P2  
 Review state: NONE  
-Later evidence / resolution: 3.7과 다른 복습 문제에서 같은 구조가 재현되어 AI-MATH-P2 후보 패턴 승격 근거가 됨.
+Later evidence / resolution: 3.7과 R1에서 같은 오류 구조가 반복되어 AI-MATH-P2 후보 패턴 승격 근거가 됨. 이후 R4에서는 같은 `x e^y + y = constant` 구조를 공식 힌트 없이 정확히 미분해 직접 교정 성공이 확인됨.
 
 ### AI-MATH-W3-R2
 
@@ -246,3 +246,24 @@ Next-time cue: 마지막에 `y'`를 고립시킬 때는 분자·분모 부호를
 Related pattern IDs: AI-MATH-P1, AI-MATH-P2  
 Review state: NONE  
 Later evidence / resolution: P2의 핵심 메커니즘인 `g(y)`의 내부 변수 보존과 `y'` 부착이 공식 힌트 없이 다른 함수 `cos(y)`에서 전이되었다. P1 관점에서도 `cos -> -sin`은 무힌트로 정확히 회수했지만, 반복 실패가 있었던 `tan -> sec^2`와 `sec -> sec tan`의 무힌트 확인은 아직 남아 있다.
+
+### AI-MATH-W3-R4
+
+Problem ID: AI-MATH-W3-R4  
+Date: 2026-09-16  
+Subject / area: AI 수학 / 3주차 복습, 음함수 미분·곱의 미분·연쇄법칙  
+Source ref: 3주차 복습 문제 `x e^y + y = 3`, 사용자 풀이 사진 `20260916_164733273.jpg`  
+Result: CORRECT  
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 공식 힌트 없이 `x e^y + y = 3`을 `x`에 대해 미분하고 `y'`를 정리한다.  
+User interpretation / approach: 원래 식의 `e^y`를 그대로 보존했고, `x e^y`에 곱의 미분과 연쇄법칙을 결합해 `e^y + x e^y y' + y' = 0`을 정확히 얻었다. 이어 `(x e^y + 1)y' = -e^y`로 묶고 `y' = -e^y/(x e^y + 1)`까지 정확히 정리했다.  
+Correct reasoning summary: `d(x e^y)/dx = e^y + x e^y y'`이므로 `e^y + x e^y y' + y' = 0`. 따라서 `(x e^y + 1)y' = -e^y`, 최종적으로 `y' = -e^y/(x e^y + 1)`이다.
+
+Error type: none  
+Error mechanism: none  
+Next-time cue: 현재 흐름을 유지한다. 원래 내부 변수 `y`를 보존한 뒤 `e^y -> e^y y'`, 그 다음 곱의 미분과 `y'` 정리를 순서대로 수행한다.
+
+Related pattern IDs: AI-MATH-P2  
+Review state: NONE  
+Later evidence / resolution: 직접 실패가 반복되었던 `e^y` 형태에서 공식 힌트 없이 완전한 정답이 확인되었다. P2의 개선을 지지하는 직접 성공 증거지만, 한 번의 성공만으로 안정적 습득으로 확정하지는 않는다.

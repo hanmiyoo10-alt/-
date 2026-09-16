@@ -61,18 +61,18 @@ Correction cue = 핵심 명사를 지문 표현으로 역번역한 뒤 범위가
 Pattern ID: AI-MATH-P1  
 Scope: AI 수학 / 기본 도함수 회수, 특히 삼각함수  
 Pattern: 함수 구조나 적용해야 할 미분법은 인식하지만, 실제 전개 단계에서 기본 도함수 공식을 원함수와 혼동하거나 완전한 식으로 회수하지 못하는 오류가 반복됨. 직접 반복 확인된 시작 사례는 `(tan x)' = sec^2 x` 회수 실패였고, 이후 `sec` 도함수에서도 유사한 병목이 나타났다.  
-State: CANDIDATE  
+State: IMPROVING  
 Confidence: MEDIUM  
 First observed: 2026-09-16, AI-MATH-W3-3.2  
-Last observed: 2026-09-16, AI-MATH-W3-R3  
-Evidence problem IDs: AI-MATH-W3-3.2, AI-MATH-W3-3.3, AI-MATH-W3-3.4, AI-MATH-W3-3.5, AI-MATH-W3-R3  
+Last observed: 2026-09-16, AI-MATH-W3-R5  
+Evidence problem IDs: AI-MATH-W3-3.2, AI-MATH-W3-3.3, AI-MATH-W3-3.4, AI-MATH-W3-3.5, AI-MATH-W3-R3, AI-MATH-W3-R5  
 Typical trigger: 연쇄법칙이나 곱의 미분법 안에서 여러 기본 도함수를 동시에 꺼내야 할 때.  
 Failure mechanism: 상위 구조 판단에 주의를 쓰는 동안 기본 도함수 공식을 검증 없이 바로 적어 원함수와 도함수를 혼동하거나, `sec u -> sec u tan u`처럼 필요한 한 층의 공식을 끝까지 쓰지 못한다.  
 Correction cue: 큰 미분법을 적용하기 전에 각 기본 함수 옆에 도함수만 먼저 짧게 적는다. 예: `tan -> sec^2`, `sec -> sec tan`, `e^x -> e^x`, `sqrt{x} -> 1/(2sqrt{x})`.  
-Success evidence: AI-MATH-W3-3.4에서 `tan -> sec^2`를 cue 이후 정확히 회수했다. AI-MATH-W3-3.5에서는 문제 제시 때 기본 도함수 공식이 함께 제공된 상태에서 `e^x -> e^x`, `cos -> -sin`, `sin -> cos`를 정확히 적용하고 접선 문제까지 완결했다. AI-MATH-W3-R3에서는 공식 힌트 없이 `(cos y)'=-sin(y)y'`를 정확히 적용했다. 다만 반복 실패가 직접 확인된 `tan -> sec^2`와 `sec -> sec tan`의 무힌트 성공은 아직 확인되지 않았다.  
-Review trigger: 다음 문제에서 `tan` 또는 `sec` 기본 도함수가 다시 등장할 때, 별도 힌트 없이 정확히 회수되는지 확인한다.  
+Success evidence: AI-MATH-W3-3.4에서는 명시적 cue 이후 `tan -> sec^2`를 정확히 적용했고, AI-MATH-W3-3.5도 기본 도함수 공식이 제공된 상태에서 정확히 적용했다. 두 사례는 cue-assisted이다. AI-MATH-W3-R3에서는 공식 힌트 없이 `(cos y)'=-sin(y)y'`를 정확히 적용했다. AI-MATH-W3-R5에서는 기본 도함수만 묻는 무힌트 문제에서 `(tan x)'=sec^2 x`와 `(sec x)'=sec x tan x`를 둘 다 정확히 회수했다.  
+Review trigger: 같은 날 즉시 반복보다 간격을 둔 뒤 `tan` 또는 `sec`가 연쇄법칙·곱의 미분 안에 다시 들어간 문제에서 별도 힌트 없이 정확히 회수되는지 확인한다.  
 Related strategy IDs: none  
-Notes: 이전 `IMPROVING` 판정은 cue-assisted 성공을 개선 증거로 과하게 해석한 면이 있어 `CANDIDATE`로 조정했다. R3에서 `cos -> -sin`의 무힌트 성공이 생겼지만, 패턴의 직접 반복 실패 대상인 `tan`/`sec`이 아직 미검증이므로 상태는 유지한다.
+Notes: cue-assisted 성공만 있던 시점에는 `CANDIDATE`로 보수적으로 유지했으나, R5에서 직접 실패 대상인 `tan`과 `sec` 도함수를 둘 다 무힌트로 정확히 회수해 개선 증거가 생겼다. 다만 직접 무힌트 성공은 아직 한 번이므로 `STABLE`로 올리지 않고 `IMPROVING`을 유지한다.
 
 ### AI-MATH-P2
 

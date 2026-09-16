@@ -226,3 +226,20 @@ V1 lease는 explicit acquire/release와 generation만 사용한다. TTL, inactiv
 `device-routing.md`는 작업의 semantic execution surface를 선택하고 `sm-status`/device owner는 현재 상태를 관찰하지만, 어느 worker가 지금 특정 mutable scope/workspace를 예약했는지는 소유하지 않는다.
 
 이 세 축을 분리해야 routing/status evidence를 write authority로 승격하지 않으면서 두 독립 worker의 중복 claim을 막을 수 있다.
+## D-014 — S/M phase handoff uses immutable manifests and completion receipts
+
+상태: `ACTIVE`
+
+### 결정
+
+Mobile Coder Lab의 독립 S/M worker 사이 phase continuity는 [`task-handoff.md`](task-handoff.md)의 immutable `TASK_MANIFEST` + `COMPLETION_RECEIPT` contract가 소유한다.
+
+Manifest는 exact packet-body snapshot, semantic route/executor, normalized scope, workspace, bounded authority/input/output expectations, 그리고 필요한 경우 D-013 lease acquisition evidence를 기록한다. Completion receipt는 같은 manifest의 bounded phase result와 validation/output evidence를 연결하며, mutable phase에서는 matching lease release evidence 뒤에만 유효하다.
+
+이 contract는 Work System packet lifecycle/`DONE`, Work Harness Work Record/Coordination Receipt, D-012 routing, D-013 reservation, Git currentness, CI, merge, release, production authority를 대체하지 않는다. `COMPLETE`는 해당 semantic phase의 evidence disposition일 뿐 whole packet completion이 아니다.
+
+V1은 deterministic immutable envelope만 제공하며 새 workflow writer, central task DB, scheduler/dispatcher, TTL/latest-wins semantics를 추가하지 않는다. Durable GitHub transport가 필요하면 owning packet의 append-only comment를 선호하고 packet body는 lifecycle/close-sync projection으로 남긴다.
+
+### 이유
+
+두 독립 worker가 대화 기억이나 shared mutable filesystem 없이 작업을 넘기려면 exact phase context와 result provenance가 필요하지만, 이를 mutable task truth로 만들면 이미 존재하는 Work System/Harness/routing/lease authority와 충돌한다. Immutable phase evidence로 한정하면 handoff 복구성을 높이면서 기존 owner 경계를 보존할 수 있다.

@@ -7,6 +7,7 @@ Read-only MCP surface for bounded repository result retrieval.
 ```text
 repo_ci_summary(workflow?, ref?, run_id?)
 repo_ci_overview(workflows, ref?)
+repo_notebook_read(path, ref?, start_cell=0, max_cells=20, include_outputs=false)
 canonical_main_status()
 ```
 
@@ -16,6 +17,8 @@ canonical_main_status()
 
 The overview uses the existing latest-per-workflow ref semantics. It is not an atomic exact-current-main snapshot across independently triggered workflow families and does not substitute older green runs.
 
+`repo_notebook_read` resolves the requested Git ref to one exact commit and reads one repository-relative `.ipynb` at that immutable identity. It returns a bounded cell window with markdown/code/raw source and safe notebook metadata. Saved outputs are off by default; optional output projection keeps bounded textual forms while omitting binary/image, HTML, JavaScript, and attachment payloads. This is fresh-on-call GitHub state, not a view of unsaved Colab or uncommitted remote-working-tree edits.
+
 `canonical_main_status` implements the canonical-main `STATUS_SESSION` read plan as one user-visible MCP call. Internally it reads direct `main`, reads issue #485, then re-reads direct `main` as a capture-coherence barrier. Direct `main` remains repository authority and #485 remains a derived operator projection. A mismatch returns `SETTLING_OR_STALE`; main movement, invalid/missing capsule data, or read failure returns `UNKNOWN` rather than green-by-absence.
 
 The same captured #485 body also contributes a bounded triage index for `Active P0/P1 incidents` and `Attention queue (P2)`. The index returns only severity, state, incident issue number, reason code, known/count/truncation metadata, and explicit triage parse reason codes when the section is missing, unknown, or malformed. It does not fetch incident bodies automatically. Detailed evidence remains a targeted incident-issue drill-down, so routine non-clear orientation does not require a second visible #485 read.
@@ -23,6 +26,9 @@ The same captured #485 body also contributes a bounded triage index for `Active 
 ## Safety boundary
 
 - GitHub reads only
+- notebook paths are repository-relative `.ipynb` only and refs are pinned to an exact commit before content retrieval
+- notebook source is <=1 MiB; each read returns 1–50 cells with bounded source/output text
+- notebook saved outputs are source-only by default; binary/image, HTML, JavaScript, and attachment payloads are omitted
 - no issue, PR, release, workflow, product, runtime, ref, branch, or production mutation
 - canonical-main composition preserves explicit direct-main and issue-485 source locators
 - canonical-main capsule fields are bounded and parsed fail-closed

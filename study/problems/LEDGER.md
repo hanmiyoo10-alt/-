@@ -57,3 +57,24 @@ Next-time cue: 거듭제곱 미분 때 `원래 지수 → 앞의 계수`, `지�
 Related pattern IDs: none; 단일 사례이므로 패턴으로 승격하지 않음.  
 Review state: NONE  
 Later evidence / resolution: pending.
+
+### AI-MATH-W3-3.2
+
+Problem ID: AI-MATH-W3-3.2  
+Date: 2026-09-16  
+Subject / area: AI 수학 / 연쇄법칙  
+Source ref: `AI 수학 입문` 3주차 연습문제 3.2, 사용자 풀이 사진 `20260916_135115459.jpg`  
+Result: PARTIAL  
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: `tan(sqrt(1+t^2))` 형태의 다층 합성함수를 연쇄법칙으로 미분한다.  
+User interpretation / approach: 바깥 `tan`, 가운데 제곱근, 안쪽 `1+t^2`의 세 층을 표시하고 각 층의 미분을 곱하려는 연쇄법칙 구조는 올바르게 잡았다. 다만 최종 식을 확정하지 못했고 `tan` 및 제곱근의 도함수 표현이 섞였다.  
+Correct reasoning summary: 바깥부터 미분하면 `sec^2(sqrt(1+t^2)) * (1/(2sqrt(1+t^2))) * 2t`이고, 정리하면 `F'(t) = t sec^2(sqrt(1+t^2)) / sqrt(1+t^2)`이다.
+
+Error type: KNOWLEDGE_GAP  
+Error mechanism: 함수의 합성 구조와 연쇄법칙 적용 순서는 인식했지만 기본 도함수 `d(tan x)/dx = sec^2 x`, `d(sqrt{x})/dx = 1/(2sqrt{x})`를 정확히 꺼내 쓰지 못해 식이 섞였다.  
+Next-time cue: 연쇄법칙 문제에서는 층을 나눈 뒤 각 층 옆에 기본 도함수만 먼저 적는다: `tan → sec^2`, `sqrt{x} → 1/(2sqrt{x})`, `1+t^2 → 2t`. 그 다음 세 항을 곱한다.
+
+Related pattern IDs: none; 단일 사례이므로 패턴으로 승격하지 않음.  
+Review state: NONE  
+Later evidence / resolution: pending.

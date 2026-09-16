@@ -1,0 +1,101 @@
+# Mobile Coder Lab task lease v1
+
+Status: `IMPLEMENTATION CANDIDATE / #2350`
+
+This contract owns only short-lived coordination reservation state for Mobile Coder Lab work. It does not own repository write authority, device health, Git currentness, CI, main write, release, or production truth.
+
+## Authority composition
+
+Use the existing owners in this order for repository mutation:
+
+```text
+semantic route (`device-routing.md`)
+→ bounded current status when relevant (`sm-status` / device owner)
+→ current packet/PR write-scope overlap (canonical-main Work System)
+→ MCL task lease acquire/validate
+→ existing Git/worktree/currentness guards
+→ authorized mutation
+```
+
+A lease never upgrades `UNKNOWN`, bypasses an overlap, or proves that an executor is healthy or safe to write.
+
+## State owner
+
+V1 uses exactly one MCL-only GitHub issue ledger: **#2352**.
+
+The ledger is not #465 and is not a repository-global active-work registry. The controller accepts no caller-selected issue number.
+
+Before controller merge the ledger remains:
+- `status=INACTIVE`;
+- `generation=0`;
+- `controllerCommit=null`;
+- zero active leases.
+Activation is a separate owner-only operation after merge. It requires the supplied controller commit to equal current protected `main`; workflow checkout is pinned to `main`. Activation advances the ledger generation and records that exact controller commit.
+
+## Lease identity
+
+An active lease records bounded coordination metadata only:
+- deterministic `leaseId` derived from the normalized lease profile;
+- current source packet ref and SHA-256 of the complete observed packet body;
+- durable routing class and exact selected executor;
+- normalized `path:` / `surface:` scopes using Work System grammar;
+- deterministic scope fingerprint;
+- fresh scope-overlap disposition, which must be `DISJOINT`;
+- isolated feature branch and absolute worktree when repository-backed;
+- optional observed base SHA as evidence only;
+- bounded source refs.
+
+The controller never stores ChatGPT account identity, RDC/device/session identifiers, auth material, tokens, private logs, command lines, or environment dumps.
+
+## Routing and workspace rules
+
+Acquisition cannot use an ambiguous `either` holder. Exact executor values are:
+`S`, `M`, `S_TERMUX`, `M_PRIVATE_LAB`, `M_VM_LAB`, `S_PRIVATE_LOCAL`.
+
+`S` routing may resolve to exact executor `S` or the documented device-agnostic fallback `M`. Every semantic-context-specific route must resolve to the same exact context.
+
+Repository-backed S work must use a `server/*` feature branch and an isolated worktree under `/root/nyang-worktrees/`. Repository-backed M work must use `mainphone/*` and `/data/data/com.termux/files/home/nyang-worktrees/`. Landing branches/worktrees are not leasable feature workspaces.
+Non-repository contexts use explicit `not_applicable` branch/worktree identity instead of inventing a repository path.
+
+## Conflict rules
+
+Acquire fails closed when the ledger, expected generation, packet evidence, route/executor relation, workspace, or required scope-overlap evidence is invalid or stale.
+
+It also conflicts when:
+- the same packet already holds a materially different lease profile;
+- any active MCL lease overlaps the requested normalized scopes;
+- another active repository lease reserves the same branch or worktree.
+
+The same executor may hold multiple leases when packets, normalized scopes, and repository workspaces are disjoint. V1 does not lock an entire phone.
+
+An exact retry of the immediately preceding successful acquire is idempotent and returns the existing lease without advancing generation again.
+
+## Release and lifetime
+
+V1 has no TTL, renewal timer, inactivity takeover, or age-based supersession. Time passage does not prove that an owner disappeared.
+
+Release requires the current ledger generation, exact active lease id, and matching source packet ref. It removes the active reservation, advances generation, and retains only one bounded `lastRelease` identity so a current-generation retry can return an idempotent no-op.
+
+Recovery from an abandoned lease is therefore an explicit owner action against current evidence, not automatic expiration. Any future TTL design requires separate authority.
+## Mutation path
+
+Supported ledger mutation is only `.github/workflows/mcl-task-lease.yml` plus the fixed controller. The workflow:
+- is `workflow_dispatch` only;
+- admits repository-owner dispatches only;
+- has exactly `contents: read` and `issues: write` permissions;
+- uses one fixed `mcl-task-lease-v1` concurrency group with `cancel-in-progress: false`;
+- checks out trusted `main`, not a caller-selected controller ref;
+- accepts only `activate`, `acquire`, or `release`;
+- cannot select another state issue or pass arbitrary shell/command text.
+
+The controller re-reads #2352 and its exact generation before a PATCH, re-reads again immediately before writing, and validates post-write readback. Manual/out-of-protocol ledger edits are not serialized by GitHub itself; any body drift or malformed marker is `CONFLICT`/`UNKNOWN`, never an inferred free lease.
+
+For acquire, the controller also re-reads the source packet and requires its full body SHA-256 and nonterminal packet lifecycle to match the supplied evidence. The separate Work System remains responsible for producing the fresh repository overlap disposition; the lease controller only accepts `DISJOINT` and never computes a stronger repository authority claim.
+
+## Bounded result
+
+Controller stdout is a compact result object containing operation status, generation, optional lease id, stable reason codes, and explicit `false` values for repository/device/merge/release/production authorization. Ledger body contents are never echoed in the outward result.
+
+## Non-goals
+
+No dispatcher, scheduler, task manifest, worktree creator/cleaner, device repair, health inference, secret store, global queue database, Git writer, merge gate, release publisher, or production authority is introduced by this contract.

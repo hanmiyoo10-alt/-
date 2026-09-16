@@ -1,0 +1,118 @@
+name: MCL Task Lease
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Bounded lease operation
+        required: true
+        type: choice
+        options: [activate, acquire, release]
+      expected_generation:
+        description: Exact current ledger generation expected by the caller
+        required: true
+        type: string
+      controller_commit:
+        description: Current main SHA for activate only
+        required: false
+        type: string
+      packet_ref:
+        description: Source packet reference
+        required: false
+        type: string
+      packet_body_sha256:
+        description: SHA-256 of the complete current source packet body
+        required: false
+        type: string
+      route:
+        description: Durable device-routing class
+        required: false
+        type: choice
+        options: [S, M, S_TERMUX, M_PRIVATE_LAB, M_VM_LAB, S_PRIVATE_LOCAL]
+      executor:
+        description: Exact selected execution surface
+        required: false
+        type: choice
+        options: [S, M, S_TERMUX, M_PRIVATE_LAB, M_VM_LAB, S_PRIVATE_LOCAL]
+      scopes_json:
+        description: JSON array of normalized coordination scopes
+        required: false
+        default: '[]'
+        type: string
+      scope_disposition:
+        description: Fresh Work System scope-overlap disposition
+        required: false
+        default: UNKNOWN
+        type: choice
+        options: [DISJOINT, OVERLAP, UNKNOWN, CONFLICT]
+      workspace_kind:
+        description: Whether this lease binds an isolated repository worktree
+        required: false
+        default: not_applicable
+        type: choice
+        options: [repository, not_applicable]
+      branch:
+        description: Exact feature branch or not_applicable
+        required: false
+        default: not_applicable
+        type: string
+      worktree:
+        description: Exact absolute isolated worktree or not_applicable
+        required: false
+        default: not_applicable
+        type: string
+      observed_base_sha:
+        description: Optional exact observed base SHA evidence
+        required: false
+        type: string
+      lease_id:
+        description: Exact active lease id for release only
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: mcl-task-lease-v1
+  cancel-in-progress: false
+
+jobs:
+  mutate-ledger:
+    if: github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted main lease controller
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Use repository Node runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply bounded MCL lease operation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          MCL_LEASE_OPERATION: ${{ inputs.operation }}
+          MCL_LEASE_EXPECTED_GENERATION: ${{ inputs.expected_generation }}
+          MCL_LEASE_CONTROLLER_COMMIT: ${{ inputs.controller_commit }}
+          MCL_LEASE_PACKET_REF: ${{ inputs.packet_ref }}
+          MCL_LEASE_PACKET_BODY_SHA256: ${{ inputs.packet_body_sha256 }}
+          MCL_LEASE_ROUTE: ${{ inputs.route }}
+          MCL_LEASE_EXECUTOR: ${{ inputs.executor }}
+          MCL_LEASE_SCOPES_JSON: ${{ inputs.scopes_json }}
+          MCL_LEASE_SCOPE_DISPOSITION: ${{ inputs.scope_disposition }}
+          MCL_LEASE_WORKSPACE_KIND: ${{ inputs.workspace_kind }}
+          MCL_LEASE_BRANCH: ${{ inputs.branch }}
+          MCL_LEASE_WORKTREE: ${{ inputs.worktree }}
+          MCL_LEASE_OBSERVED_BASE_SHA: ${{ inputs.observed_base_sha }}
+          MCL_LEASE_ID: ${{ inputs.lease_id }}
+        run: |
+          set -euo pipefail
+          node products/chatgpt-mobile-coder-lab/coordination/task-lease.cjs

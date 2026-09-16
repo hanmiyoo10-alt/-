@@ -178,7 +178,7 @@ def _project_cell(cell: dict[str, Any], index: int, *, include_outputs: bool) ->
     return result
 
 
-def _validate_path(path: str) -> str:
+def validate_notebook_path(path: str) -> str:
     if not isinstance(path, str) or not path or len(path) > 500:
         raise NotebookReadError("path must be a non-empty repository-relative string")
     if "\\" in path or path.startswith("/"):
@@ -217,6 +217,57 @@ def _decode_notebook(raw: bytes) -> dict[str, Any]:
     return value
 
 
+def project_notebook_bytes(
+    raw: bytes,
+    path: str,
+    start_cell: int = 0,
+    max_cells: int = DEFAULT_MAX_CELLS,
+    include_outputs: bool = False,
+) -> dict[str, Any]:
+    """Project bounded notebook semantics from already-captured UTF-8 bytes."""
+    try:
+        clean_path = validate_notebook_path(path)
+        start_cell, max_cells = _validate_window(start_cell, max_cells)
+        if not isinstance(include_outputs, bool):
+            raise NotebookReadError("include_outputs must be boolean")
+        if not isinstance(raw, bytes):
+            raise NotebookReadError("raw notebook content must be bytes")
+        if len(raw) > MAX_NOTEBOOK_BYTES:
+            raise NotebookReadError(
+                f"notebook exceeds {MAX_NOTEBOOK_BYTES} byte bound"
+            )
+        notebook = _decode_notebook(raw)
+        cells = notebook["cells"]
+        validated = [_validate_cell(cell, index) for index, cell in enumerate(cells)]
+        end = min(start_cell + max_cells, len(validated))
+        projected = [
+            _project_cell(validated[index], index, include_outputs=include_outputs)
+            for index in range(start_cell, end)
+        ]
+        return {
+            "ok": True,
+            "path": clean_path,
+            "size_bytes": len(raw),
+            "nbformat": notebook["nbformat"],
+            "nbformat_minor": notebook["nbformat_minor"],
+            "metadata": _safe_notebook_metadata(notebook.get("metadata", {})),
+            "cell_count": len(validated),
+            "window": {
+                "start_cell": start_cell,
+                "returned": len(projected),
+                "has_more": end < len(validated),
+            },
+            "include_outputs": include_outputs,
+            "cells": projected,
+        }
+    except NotebookReadError as exc:
+        return {
+            "ok": False,
+            "path": str(path)[:500],
+            "error": str(exc)[:500],
+        }
+
+
 def repo_notebook_read(
     reader: GitHubReader,
     path: str,
@@ -229,34 +280,27 @@ def repo_notebook_read(
     try:
         if not isinstance(requested_ref, str) or not requested_ref or len(requested_ref) > 200:
             raise NotebookReadError("ref must be a non-empty string <= 200 characters")
-        clean_path = _validate_path(path)
+        clean_path = validate_notebook_path(path)
         start_cell, max_cells = _validate_window(start_cell, max_cells)
         if not isinstance(include_outputs, bool):
             raise NotebookReadError("include_outputs must be boolean")
         resolved_sha = reader.resolve_commit(requested_ref)
         source = reader.get_repository_file(clean_path, resolved_sha, max_bytes=MAX_NOTEBOOK_BYTES)
-        notebook = _decode_notebook(source["content"])
-        cells = notebook["cells"]
-        validated = [_validate_cell(cell, index) for index, cell in enumerate(cells)]
-        end = min(start_cell + max_cells, len(validated))
-        projected = [
-            _project_cell(validated[index], index, include_outputs=include_outputs)
-            for index in range(start_cell, end)
-        ]
+        projected = project_notebook_bytes(
+            source["content"],
+            clean_path,
+            start_cell=start_cell,
+            max_cells=max_cells,
+            include_outputs=include_outputs,
+        )
+        if not projected["ok"]:
+            projected["requested_ref"] = requested_ref
+            return projected
         return {
-            "ok": True,
-            "path": clean_path,
+            **projected,
             "requested_ref": requested_ref,
             "resolved_commit_sha": resolved_sha,
             "blob_sha": source["blob_sha"],
-            "size_bytes": source["size"],
-            "nbformat": notebook["nbformat"],
-            "nbformat_minor": notebook["nbformat_minor"],
-            "metadata": _safe_notebook_metadata(notebook.get("metadata", {})),
-            "cell_count": len(validated),
-            "window": {"start_cell": start_cell, "returned": len(projected), "has_more": end < len(validated)},
-            "include_outputs": include_outputs,
-            "cells": projected,
         }
     except (GitHubReadError, NotebookReadError) as exc:
         return {"ok": False, "path": str(path)[:500], "requested_ref": str(requested_ref)[:200], "error": str(exc)[:500]}

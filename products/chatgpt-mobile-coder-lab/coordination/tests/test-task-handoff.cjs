@@ -109,7 +109,7 @@ test('invalid scope grammar is rejected', () => expectThrow(
   () => handoff.buildManifest(manifestInput({ scopes: ['not-a-scope'] })),
   /MANIFEST_SCOPE_INVALID/,
 ));
-test('S route requires repository workspace', () => expectThrow(
+test('S route rejects not-applicable workspace', () => expectThrow(
   () => handoff.buildManifest(manifestInput({ workspace: { kind: 'not_applicable', branch: 'not_applicable', worktree: 'not_applicable' } })),
   /WORKSPACE_S_ROUTE_REPOSITORY_REQUIRED/,
 ));
@@ -119,6 +119,35 @@ test('S route supports documented M repository fallback', () => {
     workspace: { kind: 'repository', branch: 'mainphone/task-handoff-2359', worktree: '/data/data/com.termux/files/home/nyang-worktrees/task-handoff-2359' },
   }));
   assert.equal(m.executor, 'M');
+});
+
+test('landing_metadata manifest reuses exact D-013 S identity', () => {
+  const m = handoff.buildManifest(manifestInput({
+    phaseId: 'landing-refresh-s',
+    scopes: ['surface:mcl-landing-origin-main:S'],
+    workspace: { kind: 'landing_metadata', branch: 'server/work', worktree: '/root/nyang-repo' },
+    observedBaseSha: baseSha,
+  }));
+  assert.equal(m.workspace.kind, 'landing_metadata');
+});
+test('landing_metadata manifest supports documented S route fallback to exact M identity', () => {
+  const m = handoff.buildManifest(manifestInput({
+    phaseId: 'landing-refresh-m-fallback', executor: 'M',
+    scopes: ['surface:mcl-landing-origin-main:M'],
+    workspace: { kind: 'landing_metadata', branch: 'mainphone/work', worktree: '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work' },
+    observedBaseSha: baseSha,
+  }));
+  assert.equal(m.executor, 'M');
+});
+test('landing_metadata manifest rejects mismatched scope identity and missing observed head', () => {
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    scopes: ['surface:mcl-landing-origin-main:M'],
+    workspace: { kind: 'landing_metadata', branch: 'server/work', worktree: '/root/nyang-repo' },
+  })), /LANDING_METADATA_SCOPE_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    scopes: ['surface:mcl-landing-origin-main:S'], observedBaseSha: null,
+    workspace: { kind: 'landing_metadata', branch: 'server/work', worktree: '/root/nyang-repo' },
+  })), /LANDING_METADATA_BASE_SHA_REQUIRED/);
 });
 test('context route supports not-applicable repo workspace', () => {
   const m = handoff.buildManifest(manifestInput({
@@ -181,6 +210,18 @@ test('complete repository phase requires clean workspace result', () => expectTh
   () => handoff.buildCompletionReceipt(manifest, receiptInput({ workspaceResult: 'unknown' })),
   /RECEIPT_COMPLETE_WORKSPACE_NOT_CONVERGED/,
 ));
+
+test('complete landing_metadata phase also requires clean workspace result after release', () => {
+  const m = handoff.buildManifest(manifestInput({
+    phaseId: 'landing-refresh-receipt',
+    scopes: ['surface:mcl-landing-origin-main:S'],
+    workspace: { kind: 'landing_metadata', branch: 'server/work', worktree: '/root/nyang-repo' },
+    observedBaseSha: baseSha,
+  }));
+  const r = handoff.buildCompletionReceipt(m, receiptInput());
+  assert.equal(handoff.validateReceiptAgainstManifest(r, m).status, 'VALID');
+  expectThrow(() => handoff.buildCompletionReceipt(m, receiptInput({workspaceResult:'not_applicable'})), /RECEIPT_COMPLETE_WORKSPACE_NOT_CONVERGED/);
+});
 test('blocked phase can preserve bounded unknowns after lease release', () => {
   const r = handoff.buildCompletionReceipt(manifest, receiptInput({
     disposition: 'BLOCKED', outputRefs: [], validationRefs: [], workspaceResult: 'unknown',
@@ -213,6 +254,8 @@ test('different semantic phases produce different immutable manifest ids', () =>
 test('library contains no GitHub network device or shell writer path', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '..', 'task-handoff.cjs'), 'utf8');
   assert.doesNotMatch(source, /createGitHubClient|child_process|execSync|spawnSync|https\.request|fetch\s*\(/);
+  assert.match(source, /validateWorkspace: validateLeaseWorkspace/);
+  assert.match(source, /validateLandingMetadataBinding/);
 });
 test('library contains no time-based lifetime or latest-wins primitive', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '..', 'task-handoff.cjs'), 'utf8');

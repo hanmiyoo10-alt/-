@@ -28,7 +28,7 @@ D-012 semantic route
 → existing feature-worktree/currentness guards
 → authorized mutation
 ```
-A successful local guard never proves those earlier or later gates. In particular, `refresh` does not acquire or release a lease and does not compute packet/PR overlap.
+A successful local guard never proves those earlier or later gates. In particular, `refresh` does not acquire or release a lease and does not compute packet/PR overlap. Its D-013 reservation must be the exact fixed `landing_metadata` profile for the selected executor and matching `surface:mcl-landing-origin-main:<executor>` scope.
 
 ## Commands
 
@@ -49,7 +49,7 @@ It never fetches or moves a ref. If the remote commit object is already availabl
 
 ### `refresh`
 
-`refresh` is a bounded Git-metadata mutation. The caller must already hold the applicable current external authority described above.
+`refresh` is a bounded Git-metadata mutation. The caller must already hold the applicable current external authority described above, including the exact D-013 `landing_metadata` reservation for this fixed landing and an observed landing HEAD SHA.
 
 Before fetching it independently requires:
 - the exact fixed landing Git top-level;
@@ -104,4 +104,4 @@ Raw Git/network error output, credentials/tokens, account/device/session identif
 
 Synthetic contract tests may copy this script and replace only its compile-time fixed topology constants (S/M paths and canonical origin) with temporary Git fixture values. The production CLI itself has no test-only path override, environment override, arbitrary command hook, or generic remote/ref input.
 
-A later real-device experiment may run `status` on natural S/M state. `refresh` remains legal only when the naturally selected route already satisfies expected branch, clean state, current packet/PR overlap, D-013 lease, and neighboring currentness guards. Do not switch a landing branch merely to make the proof pass.
+A later real-device experiment may run `status` on natural S/M state. `refresh` remains legal only when the naturally selected route already satisfies expected branch, clean state, current packet/PR overlap, the exact D-013 `landing_metadata` lease, and neighboring currentness guards. Do not switch a landing branch merely to make the proof pass.

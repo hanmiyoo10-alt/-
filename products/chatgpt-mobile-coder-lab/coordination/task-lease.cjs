@@ -11,6 +11,11 @@ const OWNER_PACKET_REF = '#2350';
 const CONTROLLER_PATH = 'products/chatgpt-mobile-coder-lab/coordination/task-lease.cjs';
 const ROUTES = Object.freeze(['S_PRIVATE_LOCAL', 'M_VM_LAB', 'M_PRIVATE_LAB', 'S_TERMUX', 'M', 'S']);
 const EXECUTORS = new Set(ROUTES);
+const WORKSPACE_KINDS = Object.freeze(['repository', 'not_applicable', 'landing_metadata']);
+const LANDING_METADATA = Object.freeze({
+  S: Object.freeze({branch: 'server/work', worktree: '/root/nyang-repo', scope: 'surface:mcl-landing-origin-main:S'}),
+  M: Object.freeze({branch: 'mainphone/work', worktree: '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work', scope: 'surface:mcl-landing-origin-main:M'}),
+});
 const PACKET_STATES = new Set(['READY', 'CLAIMED', 'IN_PROGRESS', 'REVIEW', 'DONE', 'BLOCKED', 'CANCELLED', 'SUPERSEDED']);
 const TERMINAL_PACKET_STATES = new Set(['DONE', 'CANCELLED', 'SUPERSEDED']);
 const SHA40_RE = /^[0-9a-f]{40}$/;
@@ -80,21 +85,44 @@ function renderLedger(state) {
     'Coordination state only. This issue grants no repository, device, runtime, merge, release, or production authority. It must remain inactive until the reviewed controller is merged and explicitly activated through the bounded workflow.',
   ].join('\n');
 }
+function landingMetadataIdentity(executor) {
+  return LANDING_METADATA[executor] || null;
+}
 function validateWorkspace(workspace, executor) {
   if (!workspace || typeof workspace !== 'object' || Array.isArray(workspace)) return ['WORKSPACE_INVALID'];
-  if (!['repository', 'not_applicable'].includes(workspace.kind)) return ['WORKSPACE_KIND_INVALID'];
+  if (!WORKSPACE_KINDS.includes(workspace.kind)) return ['WORKSPACE_KIND_INVALID'];
   if (workspace.kind === 'not_applicable') {
     return workspace.branch === 'not_applicable' && workspace.worktree === 'not_applicable'
       ? [] : ['WORKSPACE_NOT_APPLICABLE_FIELDS_INVALID'];
+  }
+  if (workspace.kind === 'landing_metadata') {
+    const identity = landingMetadataIdentity(executor);
+    if (!identity) return ['WORKSPACE_LANDING_EXECUTOR_INVALID'];
+    if (workspace.branch !== identity.branch || workspace.worktree !== identity.worktree) return ['WORKSPACE_LANDING_IDENTITY_INVALID'];
+    return [];
   }
   if (!['S', 'M'].includes(executor)) return ['WORKSPACE_REPOSITORY_EXECUTOR_INVALID'];
   if (typeof workspace.branch !== 'string' || typeof workspace.worktree !== 'string') return ['WORKSPACE_FIELDS_INVALID'];
   const prefix = executor === 'S' ? 'server/' : 'mainphone/';
   if (!workspace.branch.startsWith(prefix) || workspace.branch === `${prefix}work`) return ['WORKSPACE_BRANCH_INVALID'];
   if (!path.posix.isAbsolute(workspace.worktree) || path.posix.normalize(workspace.worktree) !== workspace.worktree) return ['WORKTREE_PATH_INVALID'];
+  const landing = landingMetadataIdentity(executor);
+  if (landing && workspace.worktree === landing.worktree) return ['WORKTREE_LANDING_RESERVED'];
   const root = executor === 'S' ? '/root/nyang-worktrees/' : '/data/data/com.termux/files/home/nyang-worktrees/';
   if (!workspace.worktree.startsWith(root) || workspace.worktree === root.slice(0, -1)) return ['WORKTREE_ROOT_INVALID'];
   return [];
+}
+function validateLandingMetadataBinding({workspace, executor, scopes, observedBaseSha}) {
+  if (workspace?.kind !== 'landing_metadata') return [];
+  const identity = landingMetadataIdentity(executor);
+  if (!identity) return ['LANDING_METADATA_EXECUTOR_INVALID'];
+  const errors = [];
+  if (!Array.isArray(scopes) || scopes.length !== 1 || scopes[0] !== identity.scope) errors.push('LANDING_METADATA_SCOPE_INVALID');
+  if (!SHA40_RE.test(observedBaseSha || '')) errors.push('LANDING_METADATA_BASE_SHA_REQUIRED');
+  return errors;
+}
+function isGitWorkspace(workspace) {
+  return workspace?.kind === 'repository' || workspace?.kind === 'landing_metadata';
 }
 
 function validateLease(lease) {
@@ -110,6 +138,7 @@ function validateLease(lease) {
   if (lease.scopeDisposition !== 'DISJOINT') errors.push('LEASE_SCOPE_DISPOSITION_INVALID');
   errors.push(...validateWorkspace(lease.workspace, lease.executor));
   if (lease.observedBaseSha !== null && !SHA40_RE.test(lease.observedBaseSha || '')) errors.push('LEASE_BASE_SHA_INVALID');
+  errors.push(...validateLandingMetadataBinding({workspace: lease.workspace, executor: lease.executor, scopes: lease.scopes, observedBaseSha: lease.observedBaseSha}));
   if (!Array.isArray(lease.sourceRefs) || lease.sourceRefs.length < 1 || lease.sourceRefs.length > 8) errors.push('LEASE_SOURCE_REFS_INVALID');
   return errors;
 }
@@ -207,9 +236,10 @@ function normalizeAcquireRequest(request) {
     worktree: request?.worktree,
   };
   reasonCodes.push(...validateWorkspace(workspace, request?.executor));
-  if (request?.route === 'S' && workspace.kind !== 'repository') reasonCodes.push('REQUEST_S_ROUTE_REPOSITORY_REQUIRED');
+  if (request?.route === 'S' && !['repository', 'landing_metadata'].includes(workspace.kind)) reasonCodes.push('REQUEST_S_ROUTE_REPOSITORY_REQUIRED');
   const observedBaseSha = request?.observedBaseSha || null;
   if (observedBaseSha !== null && !SHA40_RE.test(observedBaseSha)) reasonCodes.push('REQUEST_BASE_SHA_INVALID');
+  reasonCodes.push(...validateLandingMetadataBinding({workspace, executor: request?.executor, scopes: scopeResult.scopes, observedBaseSha}));
   if (reasonCodes.length) return {ok: false, reasonCodes: uniq(reasonCodes).sort()};
 
   const profile = {
@@ -271,7 +301,7 @@ function planAcquire(state, request) {
     if (leaseScopesOverlap(active, candidate)) {
       return result('CONFLICT', ['ACTIVE_LEASE_SCOPE_OVERLAP'], {generation: state.generation, leaseId: active.leaseId});
     }
-    if (active.workspace.kind === 'repository' && candidate.workspace.kind === 'repository') {
+    if (isGitWorkspace(active.workspace) && isGitWorkspace(candidate.workspace)) {
       if (active.workspace.branch === candidate.workspace.branch) {
         return result('CONFLICT', ['ACTIVE_LEASE_BRANCH_RESERVED'], {generation: state.generation, leaseId: active.leaseId});
       }
@@ -454,14 +484,17 @@ if (require.main === module) {
 module.exports = {
   CONTROLLER_PATH,
   EXECUTORS,
+  LANDING_METADATA,
   LEDGER_MARKER,
   MAX_ACTIVE_LEASES,
   OWNER_PACKET_REF,
   ROUTES,
   STATE_ISSUE_NUMBER,
+  WORKSPACE_KINDS,
   digest,
   executeOperation,
   extractPacketLifecycle,
+  landingMetadataIdentity,
   normalizeAcquireRequest,
   parseLedger,
   planAcquire,
@@ -472,5 +505,7 @@ module.exports = {
   requestFromEnv,
   result,
   run,
+  validateLandingMetadataBinding,
   validateLedger,
+  validateWorkspace,
 };

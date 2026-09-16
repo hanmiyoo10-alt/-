@@ -41,7 +41,7 @@ An active lease records bounded coordination metadata only:
 - normalized `path:` / `surface:` scopes using Work System grammar;
 - deterministic scope fingerprint;
 - fresh scope-overlap disposition, which must be `DISJOINT`;
-- isolated feature branch and absolute worktree when repository-backed;
+- exact workspace kind plus branch/worktree identity: isolated feature workspace, fixed landing-metadata workspace, or explicit non-repository `not_applicable`;
 - optional observed base SHA as evidence only;
 - bounded source refs.
 
@@ -54,7 +54,10 @@ Acquisition cannot use an ambiguous `either` holder. Exact executor values are:
 
 `S` routing may resolve to exact executor `S` or the documented device-agnostic fallback `M`. Every semantic-context-specific route must resolve to the same exact context.
 
-Repository-backed S work must use a `server/*` feature branch and an isolated worktree under `/root/nyang-worktrees/`. Repository-backed M work must use `mainphone/*` and `/data/data/com.termux/files/home/nyang-worktrees/`. Landing branches/worktrees are not leasable feature workspaces.
+Repository-backed S work must use a `server/*` feature branch and an isolated worktree under `/root/nyang-worktrees/`. Repository-backed M work must use `mainphone/*` and `/data/data/com.termux/files/home/nyang-worktrees/`. Landing branches/worktrees remain invalid **feature** workspaces.
+
+The additive `landing_metadata` kind is reserved only for the fixed ordinary landing Git-metadata mutation owned by `landing-freshness`: executor `S` binds `server/work` + `/root/nyang-repo` + exact scope `surface:mcl-landing-origin-main:S`; executor `M` binds `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + exact scope `surface:mcl-landing-origin-main:M`. It requires a non-null observed landing HEAD SHA and accepts no caller-selected landing identity. Route `S` may use the documented exact executor `M` fallback, which binds only the M identity.
+
 Non-repository contexts use explicit `not_applicable` branch/worktree identity instead of inventing a repository path.
 
 ## Conflict rules
@@ -64,9 +67,9 @@ Acquire fails closed when the ledger, expected generation, packet evidence, rout
 It also conflicts when:
 - the same packet already holds a materially different lease profile;
 - any active MCL lease overlaps the requested normalized scopes;
-- another active repository lease reserves the same branch or worktree.
+- another active Git-workspace lease (`repository` or `landing_metadata`) reserves the same branch or worktree.
 
-The same executor may hold multiple leases when packets, normalized scopes, and repository workspaces are disjoint. V1 does not lock an entire phone.
+The same executor may hold multiple leases when packets, normalized scopes, and workspace identities are disjoint. V1 does not lock an entire phone.
 
 An exact retry of the immediately preceding successful acquire is idempotent and returns the existing lease without advancing generation again.
 
@@ -86,7 +89,8 @@ Supported ledger mutation is only `.github/workflows/mcl-task-lease.yml` plus th
 - uses one fixed `mcl-task-lease-v1` concurrency group with `cancel-in-progress: false`;
 - checks out trusted `main`, not a caller-selected controller ref;
 - accepts only `activate`, `acquire`, or `release`;
-- cannot select another state issue or pass arbitrary shell/command text.
+- cannot select another state issue or pass arbitrary shell/command text;
+- admits the reviewed `landing_metadata` workspace kind without adding any new permission, state issue, or writer.
 
 The controller re-reads #2352 and its exact generation before a PATCH, re-reads again immediately before writing, and validates post-write readback. Manual/out-of-protocol ledger edits are not serialized by GitHub itself; any body drift or malformed marker is `CONFLICT`/`UNKNOWN`, never an inferred free lease.
 

@@ -53,6 +53,20 @@ function acquireRequest(overrides = {}) {
   };
 }
 
+function landingAcquireRequest(executor = 'S', overrides = {}) {
+  const identity = lease.landingMetadataIdentity(executor);
+  return acquireRequest({
+    route: executor,
+    executor,
+    scopes: [identity.scope],
+    workspaceKind: 'landing_metadata',
+    branch: identity.branch,
+    worktree: identity.worktree,
+    observedBaseSha: 'c'.repeat(40),
+    ...overrides,
+  });
+}
+
 function stateFromPlan(plan) {
   assert.equal(plan.changed, true);
   const parsed = lease.parseLedger(plan.updatedBody);
@@ -213,11 +227,47 @@ ok('routing compatibility permits S fallback to M but not semantic context subst
   assert.ok(wrong.reasonCodes.includes('REQUEST_ROUTE_EXECUTOR_CONFLICT'));
 });
 
-ok('landing branches and permanent repository paths are not leasable workspaces', () => {
-  const landing = lease.normalizeAcquireRequest(acquireRequest({branch:'server/work'}));
-  assert.equal(landing.ok, false);
-  const permanent = lease.normalizeAcquireRequest(acquireRequest({worktree:'/root/nyang-repo'}));
-  assert.equal(permanent.ok, false);
+ok('landing branches and permanent repository paths are not leasable feature workspaces', () => {
+  const sBranch = lease.normalizeAcquireRequest(acquireRequest({branch:'server/work'}));
+  assert.equal(sBranch.ok, false);
+  const sPermanent = lease.normalizeAcquireRequest(acquireRequest({worktree:'/root/nyang-repo'}));
+  assert.equal(sPermanent.ok, false);
+  const mBranch = lease.normalizeAcquireRequest(acquireRequest({route:'M', executor:'M', branch:'mainphone/work', worktree:'/data/data/com.termux/files/home/nyang-worktrees/task-a'}));
+  assert.equal(mBranch.ok, false);
+  const mPermanent = lease.normalizeAcquireRequest(acquireRequest({route:'M', executor:'M', branch:'mainphone/task-a', worktree:'/data/data/com.termux/files/home/nyang-worktrees/mainphone-work'}));
+  assert.equal(mPermanent.ok, false);
+});
+
+ok('landing_metadata accepts only fixed S and M identities including S fallback to M', () => {
+  const s = lease.normalizeAcquireRequest(landingAcquireRequest('S'));
+  assert.equal(s.ok, true);
+  assert.equal(s.lease.workspace.kind, 'landing_metadata');
+  assert.deepEqual(s.lease.scopes, ['surface:mcl-landing-origin-main:S']);
+  const mFallback = lease.normalizeAcquireRequest(landingAcquireRequest('M', {route:'S'}));
+  assert.equal(mFallback.ok, true);
+  assert.equal(mFallback.lease.executor, 'M');
+  assert.equal(mFallback.lease.workspace.branch, 'mainphone/work');
+  assert.deepEqual(mFallback.lease.scopes, ['surface:mcl-landing-origin-main:M']);
+});
+ok('landing_metadata rejects arbitrary identity scope and missing observed head', () => {
+  for (const request of [
+    landingAcquireRequest('S', {branch:'server/other'}),
+    landingAcquireRequest('S', {worktree:'/root/nyang-worktrees/not-landing'}),
+    landingAcquireRequest('S', {scopes:['surface:mcl-landing-origin-main:M']}),
+    acquireRequest({route:'S_TERMUX', executor:'S_TERMUX', scopes:['surface:mcl-landing-origin-main:S'], workspaceKind:'landing_metadata', branch:'server/work', worktree:'/root/nyang-repo'}),
+    landingAcquireRequest('S', {observedBaseSha:null}),
+  ]) {
+    assert.equal(lease.normalizeAcquireRequest(request).ok, false);
+  }
+});
+ok('duplicate landing metadata reservation conflicts while S and M remain independently reservable', () => {
+  const first = stateFromPlan(lease.planAcquire(activeState(), landingAcquireRequest('S')));
+  const duplicate = lease.planAcquire(first, landingAcquireRequest('S', {expectedGeneration:2, packetRef:'#2353'}));
+  assert.equal(duplicate.status, 'CONFLICT');
+  assert.ok(duplicate.reasonCodes.includes('ACTIVE_LEASE_SCOPE_OVERLAP'));
+  const mPlan = lease.planAcquire(first, landingAcquireRequest('M', {expectedGeneration:2, packetRef:'#2353'}));
+  assert.equal(mPlan.status, 'ACQUIRE_READY');
+  assert.equal(stateFromPlan(mPlan).activeLeases.length, 2);
 });
 
 ok('non-repository semantic contexts require explicit not_applicable workspace', () => {
@@ -263,6 +313,7 @@ ok('workflow is one fixed owner-only serialized issue writer', () => {
   assert.equal(workflow.includes('issue_number:'), false);
   assert.equal(workflow.includes('shell_command'), false);
   assert.equal(workflow.includes('workflow_call:'), false);
+  assert.ok(workflow.includes('options: [repository, landing_metadata, not_applicable]'));
 });
 class FakeClient {
   constructor(state, packetBody) {
@@ -296,7 +347,7 @@ okAsync('execute acquire verifies packet hash, writes once, and validates readba
   assert.equal(lease.parseLedger(client.body).state.activeLeases.length, 1);
 });
 
-ok('S semantic route requires an isolated repository workspace', () => {
+ok('S semantic route rejects not_applicable workspace', () => {
   const invalid = lease.normalizeAcquireRequest(acquireRequest({
     workspaceKind:'not_applicable', branch:'not_applicable', worktree:'not_applicable', observedBaseSha:null,
   }));

@@ -15,11 +15,22 @@ from unittest import mock
 
 SCRIPT = Path(__file__).resolve().parents[1] / "mcl-notebook-read"
 REPO_ROOT = SCRIPT.parents[4]
+
+
+def _exec_module_without_bytecode(loader, module) -> None:
+    previous = sys.dont_write_bytecode
+    try:
+        sys.dont_write_bytecode = True
+        loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = previous
+
+
 LOADER = importlib.machinery.SourceFileLoader("mcl_notebook_read", str(SCRIPT))
 SPEC = importlib.util.spec_from_loader(LOADER.name, LOADER)
 assert SPEC is not None
 MODULE = importlib.util.module_from_spec(SPEC)
-LOADER.exec_module(MODULE)
+_exec_module_without_bytecode(LOADER, MODULE)
 
 
 def make_notebook(source: str, *, rich: bool = False) -> bytes:
@@ -139,6 +150,45 @@ class WorkingTreeNotebookTests(unittest.TestCase):
         self.assertEqual(result.returncode, 127)
         self.assertEqual(result.stdout, "")
         self.assertIn("python3", result.stderr)
+
+    def test_harness_bootstrap_is_cache_clean_and_restores_bytecode_setting(self) -> None:
+        harness = Path(__file__).resolve()
+
+        def cache_fingerprint() -> dict[str, str]:
+            return {
+                str(path.relative_to(SCRIPT.parent)): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in sorted(SCRIPT.parent.rglob("*.pyc"))
+            }
+
+        before = cache_fingerprint()
+        probe = (
+            "import runpy,sys\n"
+            "sys.dont_write_bytecode=False\n"
+            f"runpy.run_path({str(harness)!r}, run_name='mcl_harness_probe')\n"
+            "print(sys.dont_write_bytecode)\n"
+        )
+        env = os.environ.copy()
+        env.pop("PYTHONDONTWRITEBYTECODE", None)
+        env.pop("PYTHONPYCACHEPREFIX", None)
+        result = subprocess.run(
+            [sys.executable, "-c", probe],
+            cwd="/", env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "False")
+        self.assertEqual(cache_fingerprint(), before)
+
+    def test_harness_loader_restores_bytecode_setting_on_failure(self) -> None:
+        loader = mock.Mock()
+        loader.exec_module.side_effect = RuntimeError("blocked loader")
+        previous = sys.dont_write_bytecode
+        try:
+            sys.dont_write_bytecode = False
+            with self.assertRaisesRegex(RuntimeError, "blocked loader"):
+                _exec_module_without_bytecode(loader, object())
+            self.assertFalse(sys.dont_write_bytecode)
+        finally:
+            sys.dont_write_bytecode = previous
 
     def test_untracked_saved_edits_are_fresh_and_not_identified_by_head(self) -> None:
         target = self.repo / "draft.ipynb"

@@ -107,6 +107,9 @@
     "duplicateNativeProtectionState": false,
     "allowHistoricalSynchronizationSha": true,
     "historicalSynchronizationShaMustBeLabeled": true,
+    "humanFacingSurfaceAvailabilityLabel": "Queue surface: ENABLED",
+    "surfaceAvailabilityImpliesActiveWriter": false,
+    "minHumanFacingMutableActiveWriterProjections": 0,
     "maxHumanFacingMutableActiveWriterProjections": 1,
     "surfacesMayDuplicateActiveWriter": false,
     "activeWriterProjectionExhaustive": false

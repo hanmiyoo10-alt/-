@@ -206,3 +206,23 @@ Mobile Coder Lab의 S/M 작업은 현재 online/dirty/readiness 상태보다 먼
 ### 이유
 
 현재 S/M 구조는 두 독립 repository worker와 별도 native-Termux/lab owners를 함께 보존한다. Semantic routing과 current status를 분리해야 기존 owner를 침범하지 않으면서도 반복 가능한 device 선택 정책을 유지할 수 있다.
+
+## D-013 — S/M mutable work uses a separate coordination lease, not routing or health as ownership
+
+상태: `ACTIVE`
+
+### 결정
+
+Mobile Coder Lab에서 병렬 mutable work의 예약은 [`task-lease.md`](task-lease.md)의 MCL-only coordination lease가 소유한다.
+
+Lease는 semantic routing이나 current status를 대체하지 않는다. Repository 작업에서는 먼저 기존 canonical-main Work System의 packet/PR write-scope overlap을 `DISJOINT`로 증명한 뒤 lease를 획득하고, 실제 mutation 직전에도 기존 Git/worktree/currentness guard를 다시 적용한다.
+
+같은 S 또는 M에서도 서로 다른 packet, disjoint scope, 다른 isolated workspace라면 별도 lease로 병렬 작업할 수 있다. 물리 기기 전체를 잠그지 않는다.
+
+V1 lease는 explicit acquire/release와 generation만 사용한다. TTL, inactivity takeover, age-based supersession은 authority가 아니다.
+
+### 이유
+
+`device-routing.md`는 작업의 semantic execution surface를 선택하고 `sm-status`/device owner는 현재 상태를 관찰하지만, 어느 worker가 지금 특정 mutable scope/workspace를 예약했는지는 소유하지 않는다.
+
+이 세 축을 분리해야 routing/status evidence를 write authority로 승격하지 않으면서 두 독립 worker의 중복 claim을 막을 수 있다.

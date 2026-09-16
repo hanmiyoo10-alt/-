@@ -1,9 +1,8 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const path = require('node:path');
 const { normalizeScope } = require('../../../.github/plugin-control-plane/canonical-main/work-system/scope-overlap.cjs');
-const { ROUTES, EXECUTORS } = require('./task-lease.cjs');
+const { ROUTES, EXECUTORS, validateWorkspace: validateLeaseWorkspace, validateLandingMetadataBinding } = require('./task-lease.cjs');
 
 const MANIFEST_START = '<!-- mcl-task-manifest:v1 -->';
 const MANIFEST_END = '<!-- /mcl-task-manifest:v1 -->';
@@ -76,23 +75,13 @@ function routeExecutorCompatible(route, executor) {
   if (!ROUTES.includes(route) || !EXECUTORS.has(executor)) return false;
   return route === 'S' ? executor === 'S' || executor === 'M' : route === executor;
 }
-function validateWorkspace(workspace, executor, route) {
+function validateWorkspace(workspace, executor, route, scopes, observedBaseSha) {
   const errors = exactKeys(workspace, new Set(['kind', 'branch', 'worktree']), ['kind', 'branch', 'worktree'], 'WORKSPACE');
   if (errors.length) return errors;
-  if (!['repository', 'not_applicable'].includes(workspace.kind)) errors.push('WORKSPACE_KIND_INVALID');
-  if (workspace.kind === 'not_applicable') {
-    if (workspace.branch !== 'not_applicable' || workspace.worktree !== 'not_applicable') errors.push('WORKSPACE_NOT_APPLICABLE_FIELDS_INVALID');
-    if (route === 'S') errors.push('WORKSPACE_S_ROUTE_REPOSITORY_REQUIRED');
-    return errors;
-  }
-  if (!['S', 'M'].includes(executor)) return [...errors, 'WORKSPACE_REPOSITORY_EXECUTOR_INVALID'];
-  if (typeof workspace.branch !== 'string' || typeof workspace.worktree !== 'string') return [...errors, 'WORKSPACE_FIELDS_INVALID'];
-  const prefix = executor === 'S' ? 'server/' : 'mainphone/';
-  const root = executor === 'S' ? '/root/nyang-worktrees/' : '/data/data/com.termux/files/home/nyang-worktrees/';
-  if (!workspace.branch.startsWith(prefix) || workspace.branch === `${prefix}work`) errors.push('WORKSPACE_BRANCH_INVALID');
-  if (!path.posix.isAbsolute(workspace.worktree) || path.posix.normalize(workspace.worktree) !== workspace.worktree) errors.push('WORKSPACE_PATH_INVALID');
-  if (!workspace.worktree.startsWith(root) || workspace.worktree === root.slice(0, -1)) errors.push('WORKSPACE_ROOT_INVALID');
-  return errors;
+  errors.push(...validateLeaseWorkspace(workspace, executor));
+  if (route === 'S' && !['repository', 'landing_metadata'].includes(workspace.kind)) errors.push('WORKSPACE_S_ROUTE_REPOSITORY_REQUIRED');
+  errors.push(...validateLandingMetadataBinding({workspace, executor, scopes, observedBaseSha}));
+  return [...new Set(errors)].sort();
 }
 function normalizeLeaseEvidence(value, required) {
   if (!required) return value === null ? { errors: [], value: null } : { errors: ['MANIFEST_LEASE_EVIDENCE_FORBIDDEN'], value: null };
@@ -122,8 +111,9 @@ function normalizeManifestCore(input) {
   if (!EXECUTORS.has(input?.executor)) errors.push('MANIFEST_EXECUTOR_INVALID');
   if (!routeExecutorCompatible(input?.route, input?.executor)) errors.push('MANIFEST_ROUTE_EXECUTOR_CONFLICT');
   const scopes = normalizeScopes(input?.scopes);
-  errors.push(...scopes.errors, ...validateWorkspace(input?.workspace, input?.executor, input?.route));
+  errors.push(...scopes.errors);
   if (input?.observedBaseSha !== null && !SHA40_RE.test(input?.observedBaseSha || '')) errors.push('MANIFEST_BASE_SHA_INVALID');
+  errors.push(...validateWorkspace(input?.workspace, input?.executor, input?.route, scopes.value, input?.observedBaseSha));
   if (!['REQUIRED', 'NOT_REQUIRED'].includes(input?.leaseRequirement)) errors.push('MANIFEST_LEASE_REQUIREMENT_INVALID');
   const lease = normalizeLeaseEvidence(input?.leaseEvidence, input?.leaseRequirement === 'REQUIRED');
   errors.push(...lease.errors);
@@ -275,7 +265,7 @@ function validateReceiptAgainstManifest(receiptInput, manifestInput) {
     if (r.blockerRefs.length) errors.push('RECEIPT_COMPLETE_HAS_BLOCKER');
     if (!r.outputRefs.length) errors.push('RECEIPT_COMPLETE_OUTPUT_REQUIRED');
     if (!r.validationRefs.length) errors.push('RECEIPT_COMPLETE_VALIDATION_REQUIRED');
-    const expectedWorkspace = m.workspace.kind === 'repository' ? 'clean' : 'not_applicable';
+    const expectedWorkspace = m.workspace.kind === 'not_applicable' ? 'not_applicable' : 'clean';
     if (r.workspaceResult !== expectedWorkspace) errors.push('RECEIPT_COMPLETE_WORKSPACE_NOT_CONVERGED');
   }
   if (r.disposition === 'BLOCKED' && !r.blockerRefs.length && !r.requiredUnknownRefs.length) errors.push('RECEIPT_BLOCKED_REASON_REQUIRED');

@@ -46,18 +46,18 @@ on:
         type: choice
         options: [DISJOINT, OVERLAP, UNKNOWN, CONFLICT]
       workspace_kind:
-        description: Whether this lease binds an isolated repository worktree
+        description: Reservation workspace kind (isolated repository, fixed landing metadata, or non-repository)
         required: false
         default: not_applicable
         type: choice
-        options: [repository, not_applicable]
+        options: [repository, landing_metadata, not_applicable]
       branch:
-        description: Exact feature branch or not_applicable
+        description: Exact reviewed branch identity or not_applicable
         required: false
         default: not_applicable
         type: string
       worktree:
-        description: Exact absolute isolated worktree or not_applicable
+        description: Exact reviewed absolute workspace path or not_applicable
         required: false
         default: not_applicable
         type: string

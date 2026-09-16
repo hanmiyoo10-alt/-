@@ -161,4 +161,25 @@ Next-time cue: `x`와 `y(x)`가 곱으로 섞이면 먼저 블록을 둘로 나�
 
 Related pattern IDs: none; 단일 음함수 사례이므로 새 패턴으로 승격하지 않음.  
 Review state: NONE  
-Later evidence / resolution: pending; 다음 음함수 문제에서 같은 cue가 전이되는지 확인.
+Later evidence / resolution: 3.7에서 두 곱을 각각 두 항으로 펼치려는 구조는 전이되었지만, `e^y`의 연쇄법칙 적용 실패로 완전한 교정 성공까지는 확인되지 않음.
+
+### AI-MATH-W3-3.7
+
+Problem ID: AI-MATH-W3-3.7  
+Date: 2026-09-16  
+Subject / area: AI 수학 / 음함수 미분, 곱의 미분, 연쇄법칙, 접선과 절편  
+Source ref: `AI 수학 입문` 3주차 연습문제 3.7, 사용자 풀이 사진 `20260916_142942714.jpg`  
+Result: PARTIAL  
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 음함수 곡선을 미분해 `(0,1)`에서의 접선 기울기를 구하고, 접선의 `x`절편을 계산한다.  
+User interpretation / approach: `xe^y`와 `ye^x`를 곱으로 보고 미분 항을 여러 개로 펼치려 했고, 이후 `y'`를 정리해 접선 기울기와 절편까지 구하려 했다. 그러나 `e^y`와 `e^x`를 구분하지 못하고 `d(e^y)/dx = e^y y'`를 적용하지 않아 `y'=-(1+x+y)` 형태로 진행했다. 그 결과 `(0,1)`에서 기울기를 `-2`로 계산했고, 마지막 절편 계산에서도 부호가 뒤집혔다.  
+Correct reasoning summary: `d(xe^y)/dx = e^y + x e^y y'`, `d(ye^x)/dx = y'e^x + ye^x`이므로 `e^y + x e^y y' + y'e^x + ye^x = 0`. 따라서 `y' = -(e^y + y e^x)/(x e^y + e^x)`. `(0,1)`에서 `y'=-(e+1)`이고 접선은 `y=1-(e+1)x`; 따라서 `x`절편은 `1/(e+1)`이다.
+
+Error type: KNOWLEDGE_GAP  
+Error mechanism: 곱의 미분의 외형은 이전 문제보다 더 충실하게 펼쳤지만, `y`가 `x`의 함수인 상태에서 `e^y`를 미분할 때 원함수 `e^y`를 유지하고 내부 미분 `y'`를 곱해야 한다는 연쇄법칙이 적용되지 않았다. 별도로 접선식에서 `0=-2x+1`이라면 `x=1/2`인데 `-1/2`로 적은 부호 계산 실수도 있었다.  
+Next-time cue: 음함수에서 지수함수가 나오면 변수부터 확인한다. `e^x -> e^x`, `e^y -> e^y y'`. 그 다음에만 곱의 미분 `A'B + AB'`를 적용한다. 절편은 마지막에 원식에 대입해 부호를 한 번 검산한다.  
+
+Related pattern IDs: none; 이 형태의 `e^y` 연쇄법칙 오류는 현재 한 사례이므로 새 패턴으로 승격하지 않음.  
+Review state: NONE  
+Later evidence / resolution: pending; 다음 음함수·합성함수 문제에서 `e^y -> e^y y'`가 cue 없이 전이되는지 확인.

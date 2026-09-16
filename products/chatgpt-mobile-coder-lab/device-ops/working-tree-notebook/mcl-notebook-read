@@ -13,13 +13,18 @@ SCRIPT_PATH = Path(__file__).resolve()
 SOURCE_REPO_ROOT = SCRIPT_PATH.parents[4]
 sys.path.insert(0, str(SOURCE_REPO_ROOT / "tools" / "repo-ci-mcp"))
 
-from repo_ci_mcp.notebook import (  # noqa: E402
-    DEFAULT_MAX_CELLS,
-    MAX_NOTEBOOK_BYTES,
-    NotebookReadError,
-    project_notebook_bytes,
-    validate_notebook_path,
-)
+_previous_dont_write_bytecode = sys.dont_write_bytecode
+try:
+    sys.dont_write_bytecode = True
+    from repo_ci_mcp.notebook import (  # noqa: E402
+        DEFAULT_MAX_CELLS,
+        MAX_NOTEBOOK_BYTES,
+        NotebookReadError,
+        project_notebook_bytes,
+        validate_notebook_path,
+    )
+finally:
+    sys.dont_write_bytecode = _previous_dont_write_bytecode
 
 
 class LocalNotebookError(RuntimeError):

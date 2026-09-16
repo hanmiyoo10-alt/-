@@ -22,7 +22,7 @@ make_fixture() {
   printf '%s\n' '# mcl-private-lab:v1' > "$LAB/etc/mcl-private-lab"
   : > "$LOG"
   : > "$APTLOG"
-  for c in zstd unzip; do
+  for c in zstd unzip sqlite3; do
     printf '#!/bin/sh\nexit 0\n' > "$HOSTBIN/$c"
     chmod 755 "$HOSTBIN/$c"
   done
@@ -44,7 +44,7 @@ case "$script" in
     package=${9:-}
     native=${10:-}
     case "$package:$native" in
-      zstd:/usr/bin/zstd|unzip:/usr/bin/unzip) ;;
+      zstd:/usr/bin/zstd|unzip:/usr/bin/unzip|sqlite3:/usr/bin/sqlite3) ;;
       *) exit 44 ;;
     esac
     pkg=0
@@ -66,7 +66,7 @@ case "$script" in
     fi
     for package in "$@"; do
       case "$package" in
-        zstd|unzip) ;;
+        zstd|unzip|sqlite3) ;;
         *) exit 45 ;;
       esac
       : > "$root/.pkg-$package"
@@ -99,6 +99,7 @@ make_fixture absent
 out=$("$PROFILE" --check)
 printf '%s\n' "$out" | grep -Fqx 'MISSING tool:zstd package:zstd' || fail 'zstd missing state absent'
 printf '%s\n' "$out" | grep -Fqx 'MISSING tool:unzip package:unzip' || fail 'unzip missing state absent'
+printf '%s\n' "$out" | grep -Fqx 'MISSING tool:sqlite3 package:sqlite3' || fail 'sqlite3 missing state absent'
 [ ! -s "$APTLOG" ] || fail 'check invoked apt'
 ok 'isolated check ignores host lookalikes and stays read-only'
 
@@ -107,15 +108,18 @@ mark_present zstd
 out=$("$PROFILE" --check)
 printf '%s\n' "$out" | grep -Fqx 'PRESENT tool:zstd package:zstd' || fail 'zstd present lost'
 printf '%s\n' "$out" | grep -Fqx 'MISSING tool:unzip package:unzip' || fail 'unzip missing not independent'
-ok 'zstd stays present while unzip remains independently missing'
+printf '%s\n' "$out" | grep -Fqx 'MISSING tool:sqlite3 package:sqlite3' || fail 'sqlite3 missing not independent'
+ok 'zstd stays present while later archive/data tools remain independently missing'
 
 make_fixture present
 mark_present zstd
 mark_present unzip
+mark_present sqlite3
 out=$("$PROFILE" --check)
 printf '%s\n' "$out" | grep -Fqx 'PRESENT tool:zstd package:zstd' || fail 'zstd not present'
 printf '%s\n' "$out" | grep -Fqx 'PRESENT tool:unzip package:unzip' || fail 'unzip not present'
-ok 'both fixed package/native pairs converge'
+printf '%s\n' "$out" | grep -Fqx 'PRESENT tool:sqlite3 package:sqlite3' || fail 'sqlite3 not present'
+ok 'all three fixed package/native pairs converge'
 
 make_fixture zstd_package_mismatch
 : > "$LAB/.pkg-zstd"
@@ -132,25 +136,36 @@ grep -Fqx 'BLOCKED package-command-mismatch' "$ROOT/err" || fail 'unzip binary-o
 [ ! -s "$APTLOG" ] || fail 'unzip mismatch invoked apt'
 ok 'unzip binary-present package-missing blocks before mutation'
 
+make_fixture sqlite3_package_mismatch
+: > "$LAB/.pkg-sqlite3"
+if "$PROFILE" --apply >"$ROOT/out" 2>"$ROOT/err"; then fail 'sqlite3 package-only mismatch accepted'; fi
+grep -Fqx 'BLOCKED package-command-mismatch' "$ROOT/err" || fail 'sqlite3 package-only mismatch not bounded'
+[ ! -s "$APTLOG" ] || fail 'sqlite3 mismatch invoked apt'
+ok 'sqlite3 package-present binary-missing blocks before mutation'
+
 make_fixture apply_partial
 mark_present zstd
+mark_present unzip
 out=$("$PROFILE" --apply)
 printf '%s\n' "$out" | grep -Fqx 'PRESENT tool:zstd package:zstd' || fail 'apply partial zstd not preserved'
-printf '%s\n' "$out" | grep -Fqx 'INSTALLED tool:unzip package:unzip' || fail 'apply partial unzip install missing'
-grep -Fqx 'install unzip' "$APTLOG" || fail 'apply partial requested more than unzip'
-ok 'apply with zstd present requests exactly unzip'
+printf '%s\n' "$out" | grep -Fqx 'PRESENT tool:unzip package:unzip' || fail 'apply partial unzip not preserved'
+printf '%s\n' "$out" | grep -Fqx 'INSTALLED tool:sqlite3 package:sqlite3' || fail 'apply partial sqlite3 install missing'
+grep -Fqx 'install sqlite3' "$APTLOG" || fail 'apply partial requested more than sqlite3'
+ok 'apply with zstd and unzip present requests exactly sqlite3'
 make_fixture apply_all_absent
 out=$("$PROFILE" --apply)
 printf '%s\n' "$out" | grep -Fqx 'INSTALLED tool:zstd package:zstd' || fail 'all absent zstd install missing'
 printf '%s\n' "$out" | grep -Fqx 'INSTALLED tool:unzip package:unzip' || fail 'all absent unzip install missing'
-grep -Fqx 'install zstd unzip' "$APTLOG" || fail 'all absent fixed order mismatch'
-ok 'fully absent apply requests exactly zstd then unzip'
+printf '%s\n' "$out" | grep -Fqx 'INSTALLED tool:sqlite3 package:sqlite3' || fail 'all absent sqlite3 install missing'
+grep -Fqx 'install zstd unzip sqlite3' "$APTLOG" || fail 'all absent fixed order mismatch'
+ok 'fully absent apply requests exactly zstd then unzip then sqlite3'
 
 before=$(wc -l < "$APTLOG" | tr -d ' ')
 out=$("$PROFILE" --apply)
 [ "$(wc -l < "$APTLOG" | tr -d ' ')" = "$before" ] || fail 'second apply invoked apt'
 printf '%s\n' "$out" | grep -Fqx 'PRESENT tool:zstd package:zstd' || fail 'second apply zstd not present'
 printf '%s\n' "$out" | grep -Fqx 'PRESENT tool:unzip package:unzip' || fail 'second apply unzip not present'
+printf '%s\n' "$out" | grep -Fqx 'PRESENT tool:sqlite3 package:sqlite3' || fail 'second apply sqlite3 not present'
 ok 'repeated apply is a converged no-op'
 
 make_fixture apt_fail
@@ -181,9 +196,10 @@ grep -Fq 'apt-get install -y --no-remove --no-upgrade --no-install-recommends "$
 ! grep -Fq '    shift' "$PROFILE" || fail 'inner shell drops fixed package args'
 grep -Fq 'set -- "$@" zstd' "$PROFILE" || fail 'zstd allowlist step missing'
 grep -Fq 'set -- "$@" unzip' "$PROFILE" || fail 'unzip allowlist step missing'
-! grep -Eq '\bsqlite3\b|\bstrace\b|\blsof\b|\biproute2\b|\bclang\b|\bcmake\b|\bgdb\b' "$PROFILE" || fail 'later-rung package leaked into v2'
+grep -Fq 'set -- "$@" sqlite3' "$PROFILE" || fail 'sqlite3 allowlist step missing'
+! grep -Eq '\bstrace\b|\blsof\b|\biproute2\b|\bclang\b|\bcmake\b|\bgdb\b' "$PROFILE" || fail 'later-rung package leaked into v3'
 ! grep -Eiq 'auth[_ -]?token|refresh[_ -]?token|session[_ -]?file|private[_ -]?key|tailscale|sshd|runit|adb' "$PROFILE" || fail 'forbidden runtime surface present'
-ok 'profile is isolated, two-package-only, and excludes later/sensitive surfaces'
+ok 'profile is isolated, three-package-only, and excludes later/sensitive surfaces'
 
 sh -n "$PROFILE"
 sh -n "$0"

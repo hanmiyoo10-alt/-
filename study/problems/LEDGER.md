@@ -141,3 +141,24 @@ Next-time cue: 현재 흐름을 유지한다: 미분식 완성 → 접점의 x�
 Related pattern IDs: AI-MATH-P1  
 Review state: NONE  
 Later evidence / resolution: `e^x -> e^x`와 삼각함수 기본 도함수를 곱의 미분 안에서 정확히 회수한 성공 사례. AI-MATH-P1 개선 증거로 추가.
+
+### AI-MATH-W3-3.6
+
+Problem ID: AI-MATH-W3-3.6  
+Date: 2026-09-16  
+Subject / area: AI 수학 / 음함수 미분, 곱의 미분, 접선 기울기 조건  
+Source ref: `AI 수학 입문` 3주차 연습문제 3.6, 사용자 풀이 사진 `20260916_142041361.jpg`  
+Result: PARTIAL  
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 음함수로 주어진 곡선에서 접선 기울기가 `-1`인 점을 모두 찾는다.  
+User interpretation / approach: `y`를 `x`의 함수로 보고 음함수 미분에서 `y'`를 붙여야 한다는 방향은 인식했고, 미분 결과에 기울기 조건 `y'=-1`을 연결하려 했다. 다만 `x^2y^2`와 `xy`를 미분할 때 각각 곱의 미분의 한 항을 빠뜨려 `2xy^2`와 `y` 항이 누락되었고, 그 결과 `xy=1/2`라는 잘못된 조건으로 진행했다.  
+Correct reasoning summary: `d(x^2y^2)/dx = 2xy^2 + 2x^2yy'`, `d(xy)/dx = y + xy'`이므로 `2xy^2 + 2x^2yy' + y + xy' = 0`. 따라서 곡선 위에서는 `y' = -(2xy^2+y)/(2x^2y+x) = -y/x`로 정리할 수 있고, `y'=-1`이면 `y=x`. 이를 원래 식에 대입하면 `x^4+x^2=2`, 따라서 `x=±1`이고 점은 `(1,1)`, `(-1,-1)`이다. (`2xy+1=0`은 원래 곡선을 만족하지 않아 약분에 문제없다.)
+
+Error type: CALC_PROCESS  
+Error mechanism: 음함수 미분에서 `y` 쪽 미분에 집중하면서, `x^2y^2`와 `xy`가 모두 두 인수의 곱이라는 사실을 끝까지 적용하지 못해 각 항의 `x` 쪽 미분 성분을 누락했다. 이전 문제에서 곱의 미분법 자체를 사용한 성공 증거가 있으므로 현재는 개념 부재보다 혼합 구조에서의 절차 누락으로 기록한다.  
+Next-time cue: `x`와 `y(x)`가 곱으로 섞이면 먼저 블록을 둘로 나눈다: `(x^2)(y^2)`, `(x)(y)`. 각 블록마다 반드시 `A'B + AB'` 두 항을 모두 쓴 뒤 `y'`를 모은다.  
+
+Related pattern IDs: none; 단일 음함수 사례이므로 새 패턴으로 승격하지 않음.  
+Review state: NONE  
+Later evidence / resolution: pending; 다음 음함수 문제에서 같은 cue가 전이되는지 확인.

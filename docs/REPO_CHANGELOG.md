@@ -1677,3 +1677,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/15763569e6870dc32e7eee5e0fae5da24764f5aa)
 - Event ID: `fc44a38573398f157d496db54e3c73dc92228f2b6f6de084ab0ee93d3fe0b2ce`
 <!-- canonical-main-doc-promoted:fc44a38573398f157d496db54e3c73dc92228f2b6f6de084ab0ee93d3fe0b2ce -->
+
+### 2026-09-16 — Merge pull request #2344 from hanmiyoo10-alt/feat/cm-coord-ref-hygiene-2342
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `3842c6d264df1344c218034c097ac65575eb154f`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3842c6d264df1344c218034c097ac65575eb154f)
+- Event ID: `acab22e5eb3553310df3675e35dc1b42b9a7ba081f3ec4c6f55a526d931e1e85`
+<!-- canonical-main-doc-promoted:acab22e5eb3553310df3675e35dc1b42b9a7ba081f3ec4c6f55a526d931e1e85 -->

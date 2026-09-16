@@ -73,3 +73,21 @@ Success evidence: AI-MATH-W3-3.4에서 이전 두 문제에서 실패했던 `tan
 Review trigger: 다음 문제에서 기본 함수 도함수가 다시 등장할 때, 별도 힌트 없이 정확히 회수되는지 확인. 특히 아직 직접 성공 확인이 없는 `sec -> sec tan`을 다시 점검한다.  
 Related strategy IDs: none  
 Notes: 기본 도함수 회수는 연속해서 개선 증거가 생겼지만 `sec` 도함수는 아직 직접 재검증되지 않았다. 따라서 `IMPROVING` 상태를 유지한다.
+
+### AI-MATH-P2
+
+Pattern ID: AI-MATH-P2  
+Scope: AI 수학 / 음함수 미분에서 종속변수가 들어간 지수함수  
+Pattern: `y=y(x)`인 상황에서 `e^y`의 지수 변수를 그대로 보존하지 못해 `e^x`처럼 바꾸거나, 미분 시 내부 미분 `y'`를 붙이지 않는 오류가 반복됨.  
+State: CANDIDATE  
+Confidence: MEDIUM  
+First observed: 2026-09-16, AI-MATH-W3-3.7  
+Last observed: 2026-09-16, AI-MATH-W3-R1  
+Evidence problem IDs: AI-MATH-W3-3.7, AI-MATH-W3-R1  
+Typical trigger: 음함수 미분에서 `e^y`와 `e^x`가 함께 나오거나, `x e^y`처럼 곱의 미분과 연쇄법칙을 동시에 적용해야 할 때.  
+Failure mechanism: 미분 변수 `x`에 주의를 두면서 원래 식의 지수 변수 `y`를 `x`로 정규화해버리거나, `e^y`를 합성함수로 보지 않아 `d(e^y)/dx = e^y y'`의 내부 미분을 누락한다.  
+Correction cue: 미분 전에 지수만 먼저 동그라미 치고 변수 확인: `e^x -> e^x`, `e^y -> e^y y'`. 원래 식을 한 번 그대로 복사한 뒤 미분을 시작한다.  
+Success evidence: 아직 없음.  
+Review trigger: 다음 음함수 문제에서 `e^y` 또는 다른 `g(y)` 합성함수가 나오면, 별도 힌트 없이 원래 지수 변수를 보존하고 `y'`를 붙이는지 확인한다.  
+Related strategy IDs: none  
+Notes: 두 서로 다른 문제에서 같은 구조가 반복되어 후보 패턴으로 승격했다. 현재 범위는 `e^y`처럼 종속변수가 직접 들어간 합성함수에 한정하며, 음함수 미분 전반의 약점으로 일반화하지 않는다.

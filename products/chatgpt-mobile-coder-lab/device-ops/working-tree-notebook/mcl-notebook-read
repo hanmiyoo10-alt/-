@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path, PurePosixPath
+
+SCRIPT_PATH = Path(__file__).resolve()
+SOURCE_REPO_ROOT = SCRIPT_PATH.parents[4]
+sys.path.insert(0, str(SOURCE_REPO_ROOT / "tools" / "repo-ci-mcp"))
+
+from repo_ci_mcp.notebook import (  # noqa: E402
+    DEFAULT_MAX_CELLS,
+    MAX_NOTEBOOK_BYTES,
+    NotebookReadError,
+    project_notebook_bytes,
+    validate_notebook_path,
+)
+
+
+class LocalNotebookError(RuntimeError):
+    """Unsafe, ambiguous, or unavailable local notebook read."""
+
+
+def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", "-C", str(root), *args],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+
+
+def _worktree_root(value: str) -> Path:
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        raise LocalNotebookError("repo root must be an absolute path")
+    try:
+        root = candidate.resolve(strict=True)
+    except OSError as exc:
+        raise LocalNotebookError(f"repo root unavailable: {str(exc)[:200]}") from None
+    probe = _git(root, "rev-parse", "--show-toplevel")
+    if probe.returncode != 0:
+        raise LocalNotebookError("repo root must be a Git worktree")
+    try:
+        actual = Path(probe.stdout.strip()).resolve(strict=True)
+    except OSError:
+        raise LocalNotebookError("Git worktree root could not be resolved") from None
+    if actual != root:
+        raise LocalNotebookError("repo root must equal the Git worktree top-level")
+    return root
+
+
+def _safe_target(root: Path, clean_path: str) -> Path:
+    current = root
+    for part in PurePosixPath(clean_path).parts:
+        current = current / part
+        if current.is_symlink():
+            raise LocalNotebookError("notebook path must not traverse symlinks")
+    try:
+        target = current.resolve(strict=True)
+    except OSError as exc:
+        raise LocalNotebookError(f"notebook file unavailable: {str(exc)[:200]}") from None
+    try:
+        target.relative_to(root)
+    except ValueError:
+        raise LocalNotebookError("notebook path escapes the selected worktree") from None
+    if not target.is_file():
+        raise LocalNotebookError("notebook path must resolve to a regular file")
+    return target
+
+
+def _signature(stat_result: os.stat_result) -> tuple[int, int, int, int, int]:
+    return (
+        stat_result.st_dev,
+        stat_result.st_ino,
+        stat_result.st_size,
+        stat_result.st_mtime_ns,
+        stat_result.st_ctime_ns,
+    )
+
+
+def _read_snapshot(target: Path) -> bytes:
+    before = target.stat(follow_symlinks=False)
+    if before.st_size > MAX_NOTEBOOK_BYTES:
+        raise LocalNotebookError(
+            f"notebook exceeds {MAX_NOTEBOOK_BYTES} byte bound"
+        )
+    with target.open("rb") as handle:
+        opened = os.fstat(handle.fileno())
+        data = handle.read(MAX_NOTEBOOK_BYTES + 1)
+        finished = os.fstat(handle.fileno())
+    after = target.stat(follow_symlinks=False)
+    signatures = (_signature(before), _signature(opened), _signature(finished), _signature(after))
+    if len(set(signatures)) != 1:
+        raise LocalNotebookError("notebook changed during bounded read")
+    if len(data) > MAX_NOTEBOOK_BYTES:
+        raise LocalNotebookError(
+            f"notebook exceeds {MAX_NOTEBOOK_BYTES} byte bound"
+        )
+    return data
+
+
+def _git_head(root: Path) -> str | None:
+    result = _git(root, "rev-parse", "--verify", "HEAD")
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _path_state(root: Path, clean_path: str) -> str:
+    ignored = _git(root, "check-ignore", "-q", "--", clean_path)
+    if ignored.returncode == 0:
+        return "ignored"
+    tracked = _git(root, "ls-files", "--error-unmatch", "--", clean_path)
+    if tracked.returncode == 0:
+        changed = _git(root, "diff", "--quiet", "HEAD", "--", clean_path)
+        if changed.returncode == 0:
+            return "tracked-clean"
+        if changed.returncode == 1:
+            return "tracked-modified"
+        return "unknown"
+    if tracked.returncode == 1:
+        return "untracked"
+    return "unknown"
+
+
+def read_worktree_notebook(
+    repo_root: str,
+    path: str,
+    *,
+    start_cell: int = 0,
+    max_cells: int = DEFAULT_MAX_CELLS,
+    include_outputs: bool = False,
+) -> dict[str, object]:
+    try:
+        clean_path = validate_notebook_path(path)
+    except NotebookReadError as exc:
+        raise LocalNotebookError(str(exc)) from None
+    root = _worktree_root(repo_root)
+    target = _safe_target(root, clean_path)
+    data = _read_snapshot(target)
+    projected = project_notebook_bytes(
+        data,
+        clean_path,
+        start_cell=start_cell,
+        max_cells=max_cells,
+        include_outputs=include_outputs,
+    )
+    if not projected["ok"]:
+        return {
+            **projected,
+            "source_kind": "working_tree",
+            "content_sha256": hashlib.sha256(data).hexdigest(),
+            "git_head_sha": _git_head(root),
+            "path_state": _path_state(root, clean_path),
+        }
+    return {
+        **projected,
+        "source_kind": "working_tree",
+        "content_sha256": hashlib.sha256(data).hexdigest(),
+        "git_head_sha": _git_head(root),
+        "path_state": _path_state(root, clean_path),
+    }
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Read a saved working-tree .ipynb safely")
+    parser.add_argument("--repo-root", required=True)
+    parser.add_argument("--path", required=True)
+    parser.add_argument("--start-cell", type=int, default=0)
+    parser.add_argument("--max-cells", type=int, default=DEFAULT_MAX_CELLS)
+    parser.add_argument("--include-outputs", action="store_true")
+    return parser
+
+
+def main() -> int:
+    args = _parser().parse_args()
+    try:
+        result = read_worktree_notebook(
+            args.repo_root,
+            args.path,
+            start_cell=args.start_cell,
+            max_cells=args.max_cells,
+            include_outputs=args.include_outputs,
+        )
+    except (LocalNotebookError, OSError) as exc:
+        result = {
+            "ok": False,
+            "path": str(args.path)[:500],
+            "source_kind": "working_tree",
+            "error": str(exc)[:500],
+        }
+    print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+    return 0 if result.get("ok") else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

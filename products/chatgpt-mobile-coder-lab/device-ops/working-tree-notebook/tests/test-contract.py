@@ -4,6 +4,8 @@ import hashlib
 import importlib.machinery
 import importlib.util
 import json
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -12,6 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 SCRIPT = Path(__file__).resolve().parents[1] / "mcl-notebook-read"
+REPO_ROOT = SCRIPT.parents[4]
 LOADER = importlib.machinery.SourceFileLoader("mcl_notebook_read", str(SCRIPT))
 SPEC = importlib.util.spec_from_loader(LOADER.name, LOADER)
 assert SPEC is not None
@@ -194,6 +197,49 @@ class WorkingTreeNotebookTests(unittest.TestCase):
         rendered = json.dumps(value)
         self.assertNotIn("<b>42</b>", rendered)
         self.assertNotIn("AAAA", rendered)
+
+    def test_ordinary_invocation_does_not_write_source_bytecode(self) -> None:
+        layout = Path(self.tmp.name) / "reader-layout"
+        reader = layout / SCRIPT.relative_to(REPO_ROOT)
+        reader.parent.mkdir(parents=True)
+        shutil.copy2(SCRIPT, reader)
+        source_pkg = REPO_ROOT / "tools" / "repo-ci-mcp" / "repo_ci_mcp"
+        copied_pkg = layout / "tools" / "repo-ci-mcp" / "repo_ci_mcp"
+        copied_pkg.mkdir(parents=True)
+        for source in source_pkg.glob("*.py"):
+            shutil.copy2(source, copied_pkg / source.name)
+        env = os.environ.copy()
+        env.pop("PYTHONDONTWRITEBYTECODE", None)
+        env.pop("PYTHONPYCACHEPREFIX", None)
+        result = subprocess.run(
+            [sys.executable, str(reader), "--repo-root", str(self.repo), "--path", "tracked.ipynb"],
+            cwd="/", env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(list((layout / "tools" / "repo-ci-mcp").rglob("*.pyc")))
+        self.assertFalse(list((layout / "tools" / "repo-ci-mcp").rglob("__pycache__")))
+
+    def test_import_failure_restores_bytecode_setting(self) -> None:
+        layout = Path(self.tmp.name) / "failed-import-layout"
+        reader = layout / SCRIPT.relative_to(REPO_ROOT)
+        reader.parent.mkdir(parents=True)
+        shutil.copy2(SCRIPT, reader)
+        copied_pkg = layout / "tools" / "repo-ci-mcp" / "repo_ci_mcp"
+        copied_pkg.mkdir(parents=True)
+        (copied_pkg / "__init__.py").write_text("raise ImportError('blocked import')\n")
+        probe = (
+            "import runpy,sys\n"
+            "sys.dont_write_bytecode=False\n"
+            f"try: runpy.run_path({str(reader)!r}, run_name='mcl_probe')\n"
+            "except ImportError: pass\n"
+            "else: raise SystemExit('expected ImportError')\n"
+            "print(sys.dont_write_bytecode)\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", probe], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "False")
 
     def test_snapshot_race_fails_closed(self) -> None:
         target = self.repo / "race.ipynb"

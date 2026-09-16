@@ -115,6 +115,9 @@ assert.equal(policy.queueProjection.duplicateProductionState, false);
 assert.equal(policy.queueProjection.duplicateNativeProtectionState, false);
 assert.equal(policy.queueProjection.allowHistoricalSynchronizationSha, true);
 assert.equal(policy.queueProjection.historicalSynchronizationShaMustBeLabeled, true);
+assert.equal(policy.queueProjection.humanFacingSurfaceAvailabilityLabel, 'Queue surface: ENABLED');
+assert.equal(policy.queueProjection.surfaceAvailabilityImpliesActiveWriter, false);
+assert.equal(policy.queueProjection.minHumanFacingMutableActiveWriterProjections, 0);
 assert.equal(policy.queueProjection.maxHumanFacingMutableActiveWriterProjections, 1);
 assert.equal(policy.queueProjection.surfacesMayDuplicateActiveWriter, false);
 assert.equal(policy.queueProjection.activeWriterProjectionExhaustive, false);
@@ -179,6 +182,9 @@ assert.match(readme, /`LIVE HEALTH: direct main \+ #485` is the only current-hea
 assert.match(readme, /MUST NOT duplicate a current `main` SHA, Required state\/run, production identity state, or native-protection state as live truth/);
 assert.match(readme, /explicitly historical synchronization\/packet evidence/);
 assert.match(readme, /read direct current `main` and #485 rather than refreshing #465 merely to copy time-sensitive evidence/);
+assert.match(readme, /`Queue surface: ENABLED` is the canonical modern availability label/);
+assert.match(readme, /active-writer projection cardinality is `0\.\.1`/);
+assert.match(readme, /zero projected writers is valid/);
 assert.match(readme, /at most one human-facing mutable active-writer projection/);
 assert.match(readme, /stable `## Surfaces` pointers MUST NOT repeat mutable active-writer state/);
 assert.match(readme, /not an exhaustive registry of nonterminal work/);
@@ -296,6 +302,7 @@ const {resolveScopeOverlap, REASON_CODES: OVERLAP_REASON_CODES} = require(path.j
 const {classifyPrActivity, REASON_CODES: PR_ACTIVITY_REASON_CODES} = require(path.join(dir, 'pr-activity.cjs'));
 
 const pointerOnlyFixture = `# Canonical Main — Work Queue
+**Queue surface: ENABLED**
 ## Live health
 - \`LIVE HEALTH: direct main + #485\`
 - Do not duplicate mutable current SHA / Required / production / protection truth here.
@@ -313,6 +320,12 @@ assert.equal(pointerOnlyResult.state, 'PASS');
 assert.equal(pointerOnlyResult.pointerCount, 1);
 assert.equal(pointerOnlyResult.activeWriterProjectionCount, 1);
 assert.deepEqual(pointerOnlyResult.findings, []);
+
+const zeroWriterFixture = pointerOnlyFixture.replace('\n- Active writer: #2278 CM-WQ-HYGIENE-V1-01', '');
+const zeroWriterResult = classifyQueueBody(zeroWriterFixture);
+assert.equal(zeroWriterResult.state, 'PASS');
+assert.equal(zeroWriterResult.activeWriterProjectionCount, 0);
+assert.deepEqual(zeroWriterResult.findings, []);
 
 const duplicateFixture = (line) => `${pointerOnlyFixture}\n${line}`;
 const expectFailCode = (line, code) => {
@@ -338,10 +351,27 @@ assert.ok(ambiguousResult.findings.some((item) => item.code === REASON_CODES.ACT
 
 assert.equal(classifyQueueBody(pointerOnlyFixture.replace('LIVE HEALTH: direct main + #485', 'LIVE HEALTH: see operator view')).state, 'FAIL');
 assert.equal(classifyQueueBody(`${pointerOnlyFixture}\n- \`LIVE HEALTH: direct main + #485\``).state, 'FAIL');
+
+const oldModernLabelResult = classifyQueueBody(pointerOnlyFixture.replace(
+  '**Queue surface: ENABLED**',
+  '**Queue state: ACTIVE**',
+));
+assert.equal(oldModernLabelResult.state, 'WARN');
+assert.equal(oldModernLabelResult.activeWriterProjectionCount, 1);
+assert.ok(oldModernLabelResult.findings.some((item) => item.code === REASON_CODES.AMBIGUOUS_QUEUE_STATE_LABEL));
+
+const legacyQueueLabelResult = classifyQueueBody(pointerOnlyFixture.replace(
+  '**Queue surface: ENABLED**',
+  '**Queue state: ACTIVE / CANONICAL-MAIN-V1.2**',
+));
+assert.equal(legacyQueueLabelResult.state, 'PASS');
+assert.equal(legacyQueueLabelResult.findings.some((item) => item.code === REASON_CODES.AMBIGUOUS_QUEUE_STATE_LABEL), false);
+
 assert.match(readme, /## #465 pointer-only hygiene classifier/);
 assert.match(readme, /`PASS \/ WARN \/ FAIL \/ UNKNOWN`/);
 assert.match(readme, /never fetches GitHub and never mutates #465/);
 assert.match(readme, /clearly labeled historical synchronization\/packet evidence remains allowed/i);
+assert.match(readme, /exact standalone old modern label `Queue state: ACTIVE` is a non-blocking naming `WARN`/i);
 
 const terminalPacket = {issueNumber: 2340, nativeState: 'closed', lifecycleState: 'DONE'};
 const activePacket = {issueNumber: 2342, nativeState: 'open', lifecycleState: 'IN_PROGRESS'};

@@ -189,6 +189,10 @@ async function dispatchPlan({repo, plan, client, runner = defaultRunner, sleepFn
   if (watched.code !== 0 || runInfo.conclusion !== 'success') {
     return output('DISPATCH_FAILED', ['WORKFLOW_FAILED_NO_AUTO_RETRY'], common);
   }
+  const logged = runner(['run', 'view', String(runId), '--repo', repo, '--log']);
+  if (logged.code !== 0 || !logged.stdout.includes(plan.leaseId)) {
+    return output('UNKNOWN', ['DISPATCH_RUN_IDENTITY_UNPROVEN'], common);
+  }
   const active = current.ledgerState?.activeLeases || [];
   if (plan.operation === 'acquire' && !active.some((item) => item.leaseId === plan.leaseId)) {
     return output('UNKNOWN', ['ACQUIRE_READBACK_MISSING'], common);

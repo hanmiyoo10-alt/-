@@ -55,6 +55,7 @@ These commands only emit envelopes. They do not post comments, choose a latest e
 - Acquire uses the current ledger generation and caller-supplied `DISJOINT` overlap evidence; this helper does not compute overlap.
 - Release requires the exact packet reference and lease identity against the fresh ledger.
 - Dispatch run ambiguity, workflow failure, malformed ledger evidence, and readback mismatch stay explicit rather than becoming success.
+- A successful dispatched run is accepted only when its bounded workflow log contains the exact planned lease ID; otherwise run attribution remains `UNKNOWN`.
 - Output contains hashes/locators and bounded status only. It does not echo packet bodies, tokens, environment dumps, private device/session identifiers, or shell strings.
 
 ## Non-goals

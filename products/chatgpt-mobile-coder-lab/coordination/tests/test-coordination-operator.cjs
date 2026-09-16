@@ -152,6 +152,64 @@ function manifestInput() {
     assert.equal(calls.filter((args) => args[0] === 'workflow' && args[1] === 'run').length, 1);
   });
 
+  await test('successful workflow run must prove exact lease identity in log', async () => {
+    const request = {expectedGeneration: 7, ...acquireArgs(), packetBodySha256: lease.digest(packetBody())};
+    const acquired = lease.planAcquire(ledgerState(), request);
+    const state = lease.parseLedger(acquired.updatedBody).state;
+    const plan = {status: 'PLAN_READY', operation: 'acquire', leaseId: acquired.leaseId,
+      workflowInputs: {operation: 'acquire', packet_ref: '#2378'}};
+    let listCount = 0;
+    const runner = (args) => {
+      if (args[0] === 'run' && args[1] === 'list') {
+        listCount += 1;
+        const runs = listCount === 1 ? [] : [{databaseId: 92, status: 'completed', conclusion: 'success'}];
+        return {code: 0, stdout: JSON.stringify(runs), stderr: ''};
+      }
+      if (args[0] === 'workflow') return {code: 0, stdout: '', stderr: ''};
+      if (args[0] === 'run' && args[1] === 'watch') return {code: 0, stdout: '', stderr: ''};
+      if (args[0] === 'run' && args[1] === 'view' && args.includes('--json')) {
+        return {code: 0, stdout: JSON.stringify({databaseId: 92, conclusion: 'success', status: 'completed'}), stderr: ''};
+      }
+      if (args[0] === 'run' && args[1] === 'view' && args.includes('--log')) {
+        return {code: 0, stdout: 'another lease completed', stderr: ''};
+      }
+      throw new Error(`unexpected runner args ${args.join(' ')}`);
+    };
+    const result = await operator.dispatchPlan({repo: 'hanmiyoo10-alt/-', plan,
+      client: fakeClient({state}), runner, sleepFn: () => {}, maxPolls: 1});
+    assert.equal(result.status, 'UNKNOWN');
+    assert(result.reasonCodes.includes('DISPATCH_RUN_IDENTITY_UNPROVEN'));
+  });
+
+  await test('successful workflow run completes only with matching lease log and readback', async () => {
+    const request = {expectedGeneration: 7, ...acquireArgs(), packetBodySha256: lease.digest(packetBody())};
+    const acquired = lease.planAcquire(ledgerState(), request);
+    const state = lease.parseLedger(acquired.updatedBody).state;
+    const plan = {status: 'PLAN_READY', operation: 'acquire', leaseId: acquired.leaseId,
+      workflowInputs: {operation: 'acquire', packet_ref: '#2378'}};
+    let listCount = 0;
+    const runner = (args) => {
+      if (args[0] === 'run' && args[1] === 'list') {
+        listCount += 1;
+        const runs = listCount === 1 ? [] : [{databaseId: 93, status: 'completed', conclusion: 'success'}];
+        return {code: 0, stdout: JSON.stringify(runs), stderr: ''};
+      }
+      if (args[0] === 'workflow') return {code: 0, stdout: '', stderr: ''};
+      if (args[0] === 'run' && args[1] === 'watch') return {code: 0, stdout: '', stderr: ''};
+      if (args[0] === 'run' && args[1] === 'view' && args.includes('--json')) {
+        return {code: 0, stdout: JSON.stringify({databaseId: 93, conclusion: 'success', status: 'completed'}), stderr: ''};
+      }
+      if (args[0] === 'run' && args[1] === 'view' && args.includes('--log')) {
+        return {code: 0, stdout: `result ${acquired.leaseId}`, stderr: ''};
+      }
+      throw new Error(`unexpected runner args ${args.join(' ')}`);
+    };
+    const result = await operator.dispatchPlan({repo: 'hanmiyoo10-alt/-', plan,
+      client: fakeClient({state}), runner, sleepFn: () => {}, maxPolls: 1});
+    assert.equal(result.status, 'DISPATCH_COMPLETE');
+    assert.equal(result.runId, 93);
+  });
+
   await test('D-014 manifest command reuses canonical builder and renderer', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-operator-'));
     const inputPath = path.join(dir, 'manifest.json');

@@ -108,6 +108,38 @@ class WorkingTreeNotebookTests(unittest.TestCase):
         self.assertTrue(result.stdout.strip(), result.stderr)
         return result, json.loads(result.stdout)
 
+    def test_direct_invocation_uses_portable_shell_entrypoint(self) -> None:
+        self.assertEqual(SCRIPT.read_text().splitlines()[0], "#!/bin/sh")
+        self.assertTrue(os.access(SCRIPT, os.X_OK))
+        shim_dir = Path(self.tmp.name) / "path-bin"
+        shim_dir.mkdir()
+        (shim_dir / "python3").symlink_to(sys.executable)
+        env = os.environ.copy()
+        env["PATH"] = str(shim_dir) + os.pathsep + env.get("PATH", "")
+        env.pop("PYTHONDONTWRITEBYTECODE", None)
+        env.pop("PYTHONPYCACHEPREFIX", None)
+        result = subprocess.run(
+            [str(SCRIPT), "--repo-root", str(self.repo), "--path", "tracked.ipynb"],
+            cwd="/", env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertTrue(value["ok"])
+        self.assertEqual(value["cells"][0]["source"], "committed")
+
+    def test_direct_invocation_fails_boundedly_without_python3(self) -> None:
+        empty_path = Path(self.tmp.name) / "empty-path"
+        empty_path.mkdir()
+        env = os.environ.copy()
+        env["PATH"] = str(empty_path)
+        result = subprocess.run(
+            [str(SCRIPT), "--repo-root", str(self.repo), "--path", "tracked.ipynb"],
+            cwd="/", env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        )
+        self.assertEqual(result.returncode, 127)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("python3", result.stderr)
+
     def test_untracked_saved_edits_are_fresh_and_not_identified_by_head(self) -> None:
         target = self.repo / "draft.ipynb"
         first = make_notebook("first")

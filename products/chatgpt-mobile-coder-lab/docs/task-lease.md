@@ -17,6 +17,10 @@ semantic route (`device-routing.md`)
 → authorized mutation
 ```
 
+For D-013 `repository` workspaces that opt into the reviewed workspace-holder guard, acquisition is followed by one exact D-014 phase manifest and then an atomic worktree-local holder claim before mutation. The holder is deny-only cooperative safety state in the worktree-specific Git administrative area; it is not a second durable lease, does not add write authority, and must be fresh-checked before later commit/push/PR/release effect boundaries.
+
+The holder may correlate only the exact manifest id, lease id, and a digest of local ephemeral claim material. Raw holder claim material, account identity, RDC/device/session identity, TTL/latest-wins/takeover semantics, and arbitrary caller-selected state paths are forbidden. Holder cleanup is permitted only after current D-013 evidence proves the referenced lease is absent and cleanup never restores or transfers mutation authority. See `workspace-holder.md`.
+
 A lease never upgrades `UNKNOWN`, bypasses an overlap, or proves that an executor is healthy or safe to write.
 
 ## State owner

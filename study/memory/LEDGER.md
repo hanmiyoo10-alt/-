@@ -219,3 +219,20 @@ Related memory IDs: E-2026-09-17-007
 Follow-up trigger: Opacity 키프레임으로 100→0 또는 점멸 패턴을 만들고 키프레임 복사·붙여넣기 흐름을 확인한다.
 Resolution / later evidence: Position·Rotation 기본 연습 완료. Opacity는 아직 미확정이다.
 ```
+
+### E-2026-09-17-009 — Opacity 기본 페이드 연습 완료 확인
+
+```text
+Entry ID: E-2026-09-17-009
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차 / Opacity 기본 연습
+Status: OBSERVED
+Observation: 최신 연습본 `2주차 연습용_망!6.aep`에서 Opacity에 두 키프레임이 존재하며, 첫 키는 0초에서 100%, 두 번째 키는 정확히 1초에서 0%로 확인됐다. 기존 Position 0초→2초와 Rotation 0°→360° 키프레임 데이터는 직전 연습본과 동일하게 유지됐다.
+Context: Position과 Rotation 기본 연습 완료 후 같은 레이어에서 Opacity를 100→0으로 설정한 결과를 프로젝트 구조에서 확인했다.
+Result: 0초→1초 동안 투명도가 100%에서 0%로 감소하는 기본 페이드가 구성됐고, 앞서 만든 이동·회전 애니메이션은 손상되지 않았다.
+Interpretation: Position, Rotation, Opacity 세 기본 Transform 속성에서 '시작값 → 시간 이동 → 끝값' 키프레임 흐름을 각각 재현했다. 다음 관찰은 Opacity 키프레임 쌍을 복사·붙여넣기해 반복 점멸 패턴을 만드는 단계다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-17-007, E-2026-09-17-008
+Follow-up trigger: Opacity의 100→0 키프레임 쌍을 복사해 뒤 구간에 붙여넣고 반복 패턴의 시점·값을 확인한다.
+Resolution / later evidence: Position·Rotation·Opacity 기본 키프레임 연습 완료. Opacity 반복 복사는 아직 미확정이다.
+```

@@ -168,3 +168,20 @@ Related memory IDs: E-2026-09-17-003, E-2026-09-17-004
 Follow-up trigger: Position을 두 키프레임으로 정리하고 Scale 100% 상태를 확인한 뒤 Rotation을 추가해 회전 축과 키프레임 생성 흐름을 관찰한다.
 Resolution / later evidence: 정사각형 수정 성공. Position 중간 키프레임 정리와 Scale 복원은 미확정이다.
 ```
+
+### E-2026-09-17-006 — Position 정리 대부분 성공, 종료 키프레임 시점만 재조정 필요
+
+```text
+Entry ID: E-2026-09-17-006
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차 / Position 정리
+Status: OBSERVED
+Observation: 최신 연습본 `2주차 연습용_망!3.aep`에서 Rectangle Path Size는 250×250, 레이어 Scale은 100%·100%, Position Y는 시작과 끝 모두 538로 확인됐다. Position 키프레임 수도 두 개로 정리됐다. 다만 남은 두 번째 Position 키프레임의 시점은 2초가 아니라 약 1.93초다.
+Context: 직전 연습본에는 약 0초, 1.93초, 2초의 Position 키프레임 세 개가 있었고, 사용자는 중간 키프레임을 삭제해 두 점 애니메이션으로 정리하려 했다.
+Result: 정사각형, Scale, 수평 이동, 키프레임 개수 정리는 성공했다. 삭제 과정에서 2초 키프레임을 제거하고 1.93초 키프레임을 남긴 것으로 보여 종료 시점만 2초로 옮기면 현재 Position 연습 목표를 충족한다.
+Interpretation: 현재 핵심 원리 이해는 확보되고 있으며, 남은 이슈는 키프레임 선택·시점 배치의 정밀 조작이다. 단일 세션 관찰이므로 일반적 약점으로 승격하지 않는다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-17-005
+Follow-up trigger: 두 번째 Position 키프레임을 정확히 2초로 이동한 뒤 재생 결과를 확인하고 Rotation 연습으로 넘어간다.
+Resolution / later evidence: Scale 및 수평 이동 정리 완료. 종료 키프레임 시점은 미확정이다.
+```

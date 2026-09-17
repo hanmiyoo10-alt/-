@@ -202,3 +202,20 @@ Related memory IDs: E-2026-09-17-005, E-2026-09-17-006
 Follow-up trigger: Rotation 키프레임을 설정하고 회전 중심 및 재생 결과를 확인한다.
 Resolution / later evidence: Position 기본 연습 완료. Rotation·Opacity는 아직 미확정이다.
 ```
+
+### E-2026-09-17-008 — Rotation 기본 연습 완료 확인
+
+```text
+Entry ID: E-2026-09-17-008
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차 / Rotation 기본 연습
+Status: OBSERVED
+Observation: 최신 연습본 `2주차 연습용_망!5.aep`에서 Rotation Z에 두 키프레임이 존재하며, 첫 키는 0초에서 0°, 두 번째 키는 정확히 2초에서 360°로 확인됐다. 기존 Position 키프레임도 0초와 2초의 두 점 상태를 유지한다.
+Context: Position 기본 연습 완료 후 같은 0초→2초 구간에 Rotation을 추가해 한 바퀴 회전하도록 설정한 결과를 프로젝트 구조에서 확인했다.
+Result: 0초→2초 동안 왼쪽 이동과 1회전이 동시에 적용되는 구성으로 확인됐다. Rectangle Path 250×250 및 Scale 100% 상태도 유지된다.
+Interpretation: Position에 이어 Rotation에서도 '시작값 → 시간 이동 → 끝값' 키프레임 흐름을 같은 시간 구간에 재현했다. 다음 관찰은 Opacity에서 같은 원리를 값 변화와 반복 복사에 적용하는지에 둔다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-17-007
+Follow-up trigger: Opacity 키프레임으로 100→0 또는 점멸 패턴을 만들고 키프레임 복사·붙여넣기 흐름을 확인한다.
+Resolution / later evidence: Position·Rotation 기본 연습 완료. Opacity는 아직 미확정이다.
+```

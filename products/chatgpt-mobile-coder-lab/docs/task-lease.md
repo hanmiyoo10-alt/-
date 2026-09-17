@@ -56,7 +56,7 @@ Acquisition cannot use an ambiguous `either` holder. Exact executor values are:
 
 Repository-backed S work must use a `server/*` feature branch and an isolated worktree under `/root/nyang-worktrees/`. Repository-backed M work must use `mainphone/*` and `/data/data/com.termux/files/home/nyang-worktrees/`. Landing branches/worktrees remain invalid **feature** workspaces.
 
-The additive `landing_metadata` kind is reserved only for the fixed ordinary landing Git-metadata mutation owned by `landing-freshness`: executor `S` binds `server/work` + `/root/nyang-repo` + exact scope `surface:mcl-landing-origin-main:S`; executor `M` binds `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + exact scope `surface:mcl-landing-origin-main:M`. It requires a non-null observed landing HEAD SHA and accepts no caller-selected landing identity. Route `S` may use the documented exact executor `M` fallback, which binds only the M identity.
+The additive `landing_metadata` kind is reserved only for reviewed fixed ordinary landing Git-metadata/object-store mutation owned by `landing-freshness`: executor `S` binds `server/work` + `/root/nyang-repo` + exact scope `surface:mcl-landing-origin-main:S`; executor `M` binds `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + exact scope `surface:mcl-landing-origin-main:M`. It requires a non-null observed landing HEAD SHA and accepts no caller-selected landing identity. Route `S` may use the documented exact executor `M` fallback, which binds only the M identity.
 
 Non-repository contexts use explicit `not_applicable` branch/worktree identity instead of inventing a repository path.
 
@@ -90,7 +90,7 @@ Supported ledger mutation is only `.github/workflows/mcl-task-lease.yml` plus th
 - checks out trusted `main`, not a caller-selected controller ref;
 - accepts only `activate`, `acquire`, or `release`;
 - cannot select another state issue or pass arbitrary shell/command text;
-- admits the reviewed `landing_metadata` workspace kind without adding any new permission, state issue, or writer.
+- admits the reviewed `landing_metadata` workspace kind for the fixed landing Git-metadata/object-store effect class without adding any new permission, state issue, or writer.
 
 The controller re-reads #2352 and its exact generation before a PATCH, re-reads again immediately before writing, and validates post-write readback. Manual/out-of-protocol ledger edits are not serialized by GitHub itself; any body drift or malformed marker is `CONFLICT`/`UNKNOWN`, never an inferred free lease.
 

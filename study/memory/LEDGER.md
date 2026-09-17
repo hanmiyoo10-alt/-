@@ -117,3 +117,20 @@ Related memory IDs: E-2026-09-17-001
 Follow-up trigger: 해당 프로젝트에서 실제로 막히는 조작과 수정 결과를 관찰해 후속 기록한다.
 Resolution / later evidence: 기준 파일 확인 완료. 학습 성과 자체는 아직 미확정이다.
 ```
+
+### E-2026-09-17-003 — Position 애니메이션 재생 문제 진단 시작
+
+```text
+Entry ID: E-2026-09-17-003
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차 / Position 키프레임
+Status: OBSERVED
+Observation: 사용자는 정사각형 수정 후 프로젝트를 갱신했다고 보고했지만, 재생 시 네모가 움직이지 않는다고 보고했다.
+Context: Drive에서 확인되는 프로젝트는 아직 수정 전과 같은 revision 및 수정 시각으로 보여 최신 로컬 변경이 반영되었는지는 확인되지 않았다. 재생 문제와 키프레임 문제를 분리하기 위해 CTI를 0초에서 2초까지 직접 스크럽해 도형 이동 여부를 확인하도록 안내했다.
+Result: 원인은 아직 미확정이다. 스크럽 시 이동하면 Preview/화면 갱신 문제, 스크럽해도 이동하지 않으면 Position 키프레임 상태 문제로 좁힐 수 있다.
+Interpretation: After Effects의 Caps Lock이 켜져 있으면 Composition 패널 이미지 갱신이 중지되어 실제 시간 진행과 화면 움직임이 분리되어 보일 수 있으므로 우선 확인할 가치가 있다.
+Confidence: MEDIUM
+Related memory IDs: E-2026-09-17-001, E-2026-09-17-002
+Follow-up trigger: 사용자가 CTI 수동 스크럽 시 네모가 움직이는지 확인하면 원인을 Preview 계열 또는 키프레임 계열로 분기한다.
+Resolution / later evidence: 미확정.
+```

@@ -4,6 +4,7 @@ import base64
 import os
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 from urllib.request import Request
 
 from repo_ci_mcp.github_reader import GitHubReadError, GitHubReader, _SafeRedirectHandler
@@ -65,6 +66,23 @@ class ReaderTests(unittest.TestCase):
         with patch.object(GitHubReader, "_get_json", return_value=payload):
             with self.assertRaisesRegex(GitHubReadError, "exceeds 1024 byte bound"):
                 reader.get_repository_file("demo.ipynb", "a" * 40, max_bytes=1024)
+
+    def test_53_branch_reads_encode_name_and_use_protection_endpoint(self):
+        reader = GitHubReader(repository="owner/repo")
+        with patch.object(GitHubReader, "_get_json", return_value={}) as get_json:
+            reader.get_branch("feature/x")
+            reader.get_branch_protection("feature/x")
+        self.assertEqual(get_json.call_args_list[0].args, ("/repos/owner/repo/branches/feature%2Fx",))
+        self.assertEqual(get_json.call_args_list[1].args, ("/repos/owner/repo/branches/feature%2Fx/protection",))
+
+    def test_54_http_error_preserves_status_code_without_token(self):
+        reader = GitHubReader(repository="owner/repo", token="topsecret")
+        error = HTTPError("https://api.github.com/x", 403, "Forbidden topsecret", None, None)
+        with patch.object(reader._opener, "open", side_effect=error):
+            with self.assertRaises(GitHubReadError) as caught:
+                reader._open_bytes("https://api.github.com/x", limit=32)
+        self.assertEqual(caught.exception.status_code, 403)
+        self.assertNotIn("topsecret", str(caught.exception))
 
 
 if __name__ == "__main__":

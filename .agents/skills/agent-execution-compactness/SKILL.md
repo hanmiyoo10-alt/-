@@ -45,6 +45,42 @@ It is development policy, not a source of mutable product, runtime, release, or 
 - Do not claim this repository can hide or suppress ChatGPT tool-activity UI. Reduce repository-owned payload and fan-out instead.
 - If the work contains multiple independent goals, split it into bounded work units before choosing an execution route.
 
+## Fail-closed mutation-barrier shell control flow
+
+When a repository effect depends on fresh authority, currentness, CAS, or another precondition, make the failure path explicit immediately before the existing mutation owner. `set -e` and `set -euo pipefail` are auxiliary shell hygiene only; neither is proof that a failed guard makes later mutation unreachable.
+
+Required shape:
+
+```text
+fresh authority/currentness/CAS checks
+→ explicit checked guard branch
+→ only on proven PASS enter the existing mutation owner
+→ otherwise exit before mutation and preserve BLOCKED / UNKNOWN / CONFLICT
+```
+
+Prefer shell control flow such as:
+
+```sh
+if ! currentness_guard; then
+  exit 1
+fi
+mutation_owner
+```
+
+An evidence-equivalent `if guard; then ...; else exit ...; fi` or explicit status-capture form is acceptable only when the guard executes in an errexit-exempt conditional context and the failure branch exits before mutation. Do not recommend `guard; rc=$?` under `set -e` as a universal safe pattern because the shell may exit before status capture.
+
+Do not use a failed non-final `&&` assertion list as the shell-termination barrier for a later separate mutation. Bash may suppress `errexit` for commands evaluated in compound `&&`/`||` contexts, so this shape is unsafe:
+
+```sh
+set -e
+guard_one && guard_two
+mutation_owner  # separate later statement can still run after guard_one fails
+```
+
+Distinguish that historical hazard from `guard && mutation_owner`, where the mutation is itself syntactically conditional on the guard. The latter does not make `set -e` authoritative and does not replace an explicit guard branch when authority/currentness evidence or failure disposition must be preserved.
+
+A compact command is never allowed to normalize a failed or uncertain guard into success. If the guard result is mismatch, failure, `UNKNOWN`, or `CONFLICT`, stop before the effect owner and preserve that disposition.
+
 ## Pre-routing disposition gate
 
 Apply safety dispositions before selecting any of the five execution routes.

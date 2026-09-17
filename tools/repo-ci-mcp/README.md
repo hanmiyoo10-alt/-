@@ -8,6 +8,7 @@ Read-only MCP surface for bounded repository result retrieval.
 repo_ci_summary(workflow?, ref?, run_id?)
 repo_ci_overview(workflows, ref?)
 repo_notebook_read(path, ref?, start_cell=0, max_cells=20, include_outputs=false)
+repo_branch_protection(branch="main")
 canonical_main_status()
 ```
 
@@ -19,6 +20,8 @@ The overview uses the existing latest-per-workflow ref semantics. It is not an a
 
 `repo_notebook_read` resolves the requested Git ref to one exact commit and reads one repository-relative `.ipynb` at that immutable identity. It returns a bounded cell window with markdown/code/raw source and safe notebook metadata. Saved outputs are off by default; optional output projection keeps bounded textual forms while omitting binary/image, HTML, JavaScript, and attachment payloads. This is fresh-on-call GitHub state, not a view of unsaved Colab or uncommitted remote-working-tree edits.
 
+`repo_branch_protection` reads the requested branch summary first, then requests full GitHub branch-protection detail only when the summary says the branch is protected. A protected branch whose detail endpoint returns HTTP 403 remains `PARTIAL / DETAIL_READ_BLOCKED_PERMISSION` with its protected summary preserved; it is never reported as unprotected. `UNPROTECTED / NOT_CONFIGURED` is reserved for an explicit live branch summary with `protected=false`. Other transport or malformed-detail failures remain `UNKNOWN`. Returned detail is bounded and counts restriction principals rather than serializing user/team/app identities.
+
 `canonical_main_status` implements the canonical-main `STATUS_SESSION` read plan as one user-visible MCP call. Internally it reads direct `main`, reads issue #485, then re-reads direct `main` as a capture-coherence barrier. Direct `main` remains repository authority and #485 remains a derived operator projection. A mismatch returns `SETTLING_OR_STALE`; main movement, invalid/missing capsule data, or read failure returns `UNKNOWN` rather than green-by-absence.
 
 The same captured #485 body also contributes a bounded triage index for `Active P0/P1 incidents` and `Attention queue (P2)`. The index returns only severity, state, incident issue number, reason code, known/count/truncation metadata, and explicit triage parse reason codes when the section is missing, unknown, or malformed. It does not fetch incident bodies automatically. Detailed evidence remains a targeted incident-issue drill-down, so routine non-clear orientation does not require a second visible #485 read.
@@ -26,6 +29,7 @@ The same captured #485 body also contributes a bounded triage index for `Active 
 ## Safety boundary
 
 - GitHub reads only
+- branch-protection detail is summary-first and preserves permission-blocked partial evidence without requesting or exposing token material
 - notebook paths are repository-relative `.ipynb` only and refs are pinned to an exact commit before content retrieval
 - notebook source is <=1 MiB; each read returns 1–50 cells with bounded source/output text
 - notebook saved outputs are source-only by default; binary/image, HTML, JavaScript, and attachment payloads are omitted

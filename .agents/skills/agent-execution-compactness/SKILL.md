@@ -274,6 +274,12 @@ existing bounded repository projection/harness
 
 A smaller connector response is better only when the semantic authority and evidence contract remain equivalent. Action-specific or filtered surfaces are derived access paths, not new truth owners.
 
+### Detailed branch-protection read specialization
+
+When a repository question needs current detailed branch-protection state, prefer the repository-owned bounded `repo_branch_protection` read first. It must preserve the live branch summary separately from the full detail read. A protected summary plus `DETAIL_READ_BLOCKED_PERMISSION` remains permission-blocked partial evidence and must never be converted into `protected=false` or an unprotected claim.
+
+If full detail is still required and an already-authorized user-controlled `gh` read surface is available, use a bounded `gh api repos/<owner>/<repo>/branches/<branch>/protection` fallback. Otherwise preserve the permission-blocked partial result. Never ask the user to paste a GitHub token, persist token material, or treat a lower-privilege connector failure as proof that the repository is unprotected.
+
 ### Preserve connector authority and fallback exceptions
 
 Do not narrow connector selection when doing so would hide or weaken any of these:

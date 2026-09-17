@@ -4,6 +4,7 @@ from typing import Any
 
 from mcp.server import MCPServer
 
+from .branch_protection import repo_branch_protection as build_repo_branch_protection
 from .canonical_main_status import canonical_main_status as build_canonical_main_status
 from .github_reader import GitHubReader
 from .notebook import repo_notebook_read as build_repo_notebook_read
@@ -14,7 +15,8 @@ mcp = MCPServer(
     "Repository CI MCP",
     instructions=(
         "Read-only bounded repository retrieval. This server exposes compact CI summaries, bounded multi-workflow "
-        "CI projections, notebook semantic reads, and canonical-main status composition from explicit GitHub "
+        "CI projections, notebook semantic reads, detailed branch-protection reads, and canonical-main status "
+        "composition from explicit GitHub "
         "authorities only. It never mutates GitHub, workflows, products, runtime, release branches, issues, "
         "pull requests, refs, or production."
     ),
@@ -50,6 +52,12 @@ def repo_notebook_read(
         GitHubReader(), path=path, ref=ref, start_cell=start_cell,
         max_cells=max_cells, include_outputs=include_outputs,
     )
+
+
+@mcp.tool()
+def repo_branch_protection(branch: str = "main") -> dict[str, Any]:
+    """Read bounded branch-protection detail while preserving permission-blocked partial evidence."""
+    return build_repo_branch_protection(GitHubReader(), branch=branch)
 
 
 @mcp.tool()

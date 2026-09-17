@@ -1,0 +1,126 @@
+#!/bin/sh
+set -u
+
+SCHEMA='mcl-main-object-materialize.v1'
+CANONICAL_ORIGIN='https://github.com/hanmiyoo10-alt/-.git'
+S_REPO='/root/nyang-repo'
+M_REPO='/data/data/com.termux/files/home/nyang-worktrees/mainphone-work'
+
+route=${1-}
+expected=${2-}
+if [ "$#" -ne 2 ] || ! printf '%s\n' "$expected" | grep -Eq '^[0-9a-f]{40}$'; then
+  printf '%s\n' 'mcl-main-object-materialize: invalid invocation' >&2
+  exit 64
+fi
+case "$route" in
+  S) REPO=$S_REPO ;;
+  M) REPO=$M_REPO ;;
+  *) printf '%s\n' 'mcl-main-object-materialize: unsupported route' >&2; exit 64 ;;
+esac
+
+valid_origin_url() {
+  case "$1" in
+    "$CANONICAL_ORIGIN"|'https://github.com/hanmiyoo10-alt/-'|'git@github.com:hanmiyoo10-alt/-.git'|'ssh://git@github.com/hanmiyoo10-alt/-.git') return 0 ;;
+    *) return 1 ;;
+  esac
+}
+is_sha() { printf '%s\n' "$1" | grep -Eq '^[0-9a-f]{40}$'; }
+object_state() {
+  if git -C "$REPO" cat-file -e "$expected^{commit}" 2>/dev/null; then printf '%s' present; else printf '%s' missing; fi
+}
+remote_main() {
+  raw=$(git -C "$REPO" ls-remote --exit-code origin refs/heads/main 2>/dev/null) || return 1
+  set -- $raw
+  [ "$#" -eq 2 ] && is_sha "$1" && [ "$2" = refs/heads/main ] || return 1
+  printf '%s' "$1"
+}
+refs_snapshot() { git -C "$REPO" for-each-ref --format='%(refname)%09%(objectname)' 2>/dev/null | LC_ALL=C sort; }
+index_snapshot() { git -C "$REPO" ls-files -s 2>/dev/null | LC_ALL=C sort | sha256sum | awk '{print $1}'; }
+fetch_head_snapshot() {
+  gitdir=$(git -C "$REPO" rev-parse --absolute-git-dir 2>/dev/null) || return 1
+  path=$gitdir/FETCH_HEAD
+  if [ -e "$path" ]; then
+    [ -f "$path" ] || return 1
+    sum=$(sha256sum "$path" 2>/dev/null | awk '{print $1}') || return 1
+    printf 'present:%s' "$sum"
+  else
+    printf '%s' missing
+  fi
+}
+
+REMOTE_MAIN=unknown
+OBJECT_BEFORE=unknown
+OBJECT_AFTER=unknown
+HEAD_PRESERVED=unknown
+BRANCH_PRESERVED=unknown
+WORKTREE_PRESERVED=unknown
+REFS_PRESERVED=unknown
+INDEX_PRESERVED=unknown
+FETCH_HEAD_PRESERVED=unknown
+MATERIALIZATION=blocked
+emit() {
+  printf '%s\n' \
+    "schema=$SCHEMA" "route=$route" "expected_main=$expected" \
+    "remote_main=$REMOTE_MAIN" "object_before=$OBJECT_BEFORE" "object_after=$OBJECT_AFTER" \
+    "head_preserved=$HEAD_PRESERVED" "branch_preserved=$BRANCH_PRESERVED" \
+    "worktree_preserved=$WORKTREE_PRESERVED" "refs_preserved=$REFS_PRESERVED" \
+    "index_preserved=$INDEX_PRESERVED" "fetch_head_preserved=$FETCH_HEAD_PRESERVED" "materialization=$MATERIALIZATION" 'details=withheld'
+}
+
+[ -d "$REPO" ] || { emit; exit 3; }
+top=$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null) || { emit; exit 3; }
+[ "$top" = "$REPO" ] || { emit; exit 3; }
+origin_url=$(git -C "$REPO" config --get remote.origin.url 2>/dev/null) || { emit; exit 3; }
+effective_origin=$(git -C "$REPO" remote get-url origin 2>/dev/null) || { emit; exit 3; }
+valid_origin_url "$origin_url" && valid_origin_url "$effective_origin" || { emit; exit 3; }
+if git -C "$REPO" config --get remote.origin.uploadpack >/dev/null 2>&1 || git -C "$REPO" config --get remote.origin.proxy >/dev/null 2>&1; then emit; exit 3; fi
+before_status=$(git -C "$REPO" status --porcelain 2>/dev/null) || { emit; exit 3; }
+[ -z "$before_status" ] || { emit; exit 3; }
+before_head=$(git -C "$REPO" rev-parse --verify HEAD 2>/dev/null) || { emit; exit 3; }
+is_sha "$before_head" || { emit; exit 3; }
+before_branch=$(git -C "$REPO" branch --show-current 2>/dev/null) || { emit; exit 3; }
+before_refs=$(refs_snapshot) || { emit; exit 3; }
+before_index=$(index_snapshot) || { emit; exit 3; }
+before_fetch_head=$(fetch_head_snapshot) || { emit; exit 3; }
+OBJECT_BEFORE=$(object_state)
+REMOTE_MAIN=$(remote_main) || { REMOTE_MAIN=unknown; emit; exit 3; }
+[ "$REMOTE_MAIN" = "$expected" ] || { emit; exit 3; }
+
+if [ "$OBJECT_BEFORE" = present ]; then
+  OBJECT_AFTER=present
+  HEAD_PRESERVED=yes; BRANCH_PRESERVED=yes; WORKTREE_PRESERVED=yes; REFS_PRESERVED=yes; INDEX_PRESERVED=yes; FETCH_HEAD_PRESERVED=yes
+  MATERIALIZATION=already_present
+  emit
+  exit 0
+fi
+
+if ! git -C "$REPO" fetch --quiet --no-tags --no-write-fetch-head "$effective_origin" refs/heads/main 2>/dev/null; then
+  MATERIALIZATION=failed
+  OBJECT_AFTER=$(object_state)
+  emit
+  exit 4
+fi
+
+after_head=$(git -C "$REPO" rev-parse --verify HEAD 2>/dev/null) || after_head=unknown
+after_branch=$(git -C "$REPO" branch --show-current 2>/dev/null) || after_branch=unknown
+after_status=$(git -C "$REPO" status --porcelain 2>/dev/null) || after_status='__unknown__'
+after_refs=$(refs_snapshot) || after_refs='__unknown__'
+after_index=$(index_snapshot) || after_index='__unknown__'
+after_fetch_head=$(fetch_head_snapshot) || after_fetch_head='__unknown__'
+OBJECT_AFTER=$(object_state)
+[ "$after_head" = "$before_head" ] && HEAD_PRESERVED=yes || HEAD_PRESERVED=no
+[ "$after_branch" = "$before_branch" ] && BRANCH_PRESERVED=yes || BRANCH_PRESERVED=no
+[ "$after_status" = "$before_status" ] && WORKTREE_PRESERVED=yes || WORKTREE_PRESERVED=no
+[ "$after_refs" = "$before_refs" ] && REFS_PRESERVED=yes || REFS_PRESERVED=no
+[ "$after_index" = "$before_index" ] && INDEX_PRESERVED=yes || INDEX_PRESERVED=no
+[ "$after_fetch_head" = "$before_fetch_head" ] && FETCH_HEAD_PRESERVED=yes || FETCH_HEAD_PRESERVED=no
+post_remote=$(remote_main) || post_remote=unknown
+REMOTE_MAIN=$post_remote
+if [ "$OBJECT_AFTER" = present ] && [ "$HEAD_PRESERVED" = yes ] && [ "$BRANCH_PRESERVED" = yes ] && [ "$WORKTREE_PRESERVED" = yes ] && [ "$REFS_PRESERVED" = yes ] && [ "$INDEX_PRESERVED" = yes ] && [ "$FETCH_HEAD_PRESERVED" = yes ] && [ "$REMOTE_MAIN" = "$expected" ]; then
+  MATERIALIZATION=materialized
+  emit
+  exit 0
+fi
+MATERIALIZATION=unknown
+emit
+exit 5

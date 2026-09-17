@@ -4,6 +4,7 @@ set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 OWNER=$(CDPATH= cd -- "$HERE/.." && pwd)
 SOURCE="$OWNER/mcl-landing-freshness"
+MATERIALIZE_SOURCE="$OWNER/mcl-main-object-materialize"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 
@@ -288,6 +289,184 @@ fi
 grep -Fq 'fetch --quiet --no-tags origin refs/heads/main:refs/remotes/origin/main' "$SOURCE" || fail 'fixed fetch contract missing'
 grep -Fq "S_REPO='/root/nyang-repo'" "$SOURCE" || fail 'fixed S path missing'
 grep -Fq "M_REPO='/data/data/com.termux/files/home/nyang-worktrees/mainphone-work'" "$SOURCE" || fail 'fixed M path missing'
+pass
+
+# No-ref current-main object materializer contract.
+make_materialize_tool() {
+  dest=$1
+  sed \
+    -e "s|CANONICAL_ORIGIN='https://github.com/hanmiyoo10-alt/-.git'|CANONICAL_ORIGIN='file://$REMOTE'|" \
+    -e "s|S_REPO='/root/nyang-repo'|S_REPO='$S_FIX'|" \
+    -e "s|M_REPO='/data/data/com.termux/files/home/nyang-worktrees/mainphone-work'|M_REPO='$M_FIX'|" \
+    "$MATERIALIZE_SOURCE" >"$dest"
+  chmod +x "$dest"
+}
+MAT_TOOL="$TMP/mcl-main-object-materialize"
+make_materialize_tool "$MAT_TOOL"
+
+printf 'four\n' >>"$SEED/file.txt"
+git -C "$SEED" add file.txt
+git -C "$SEED" commit -q -m four
+git -C "$SEED" push -q origin main
+remote_four=$(git -C "$SEED" rev-parse HEAD)
+
+git -C "$S_FIX" cat-file -e "$remote_four^{commit}" 2>/dev/null && fail 'S unexpectedly has remote_four before materialization'
+s_head_before=$(git -C "$S_FIX" rev-parse HEAD)
+s_branch_before=$(git -C "$S_FIX" branch --show-current)
+s_refs_before=$(git -C "$S_FIX" for-each-ref --format='%(refname)%09%(objectname)' | LC_ALL=C sort)
+s_origin_before=$(origin_main "$S_FIX")
+set +e
+OUT=$("$MAT_TOOL" S "$remote_four" 2>"$TMP/stderr")
+RC=$?
+set -e
+assert_eq "$RC" 0
+assert_eq "$(field schema)" mcl-main-object-materialize.v1
+assert_eq "$(field materialization)" materialized
+assert_eq "$(field object_before)" missing
+assert_eq "$(field object_after)" present
+assert_eq "$(field head_preserved)" yes
+assert_eq "$(field branch_preserved)" yes
+assert_eq "$(field worktree_preserved)" yes
+assert_eq "$(field refs_preserved)" yes
+assert_eq "$(field index_preserved)" yes
+assert_eq "$(field fetch_head_preserved)" yes
+assert_eq "$(git -C "$S_FIX" rev-parse HEAD)" "$s_head_before"
+assert_eq "$(git -C "$S_FIX" branch --show-current)" "$s_branch_before"
+assert_eq "$(git -C "$S_FIX" for-each-ref --format='%(refname)%09%(objectname)' | LC_ALL=C sort)" "$s_refs_before"
+assert_eq "$(origin_main "$S_FIX")" "$s_origin_before"
+pass
+
+# Historical M branch mismatch remains untouched and is eligible.
+git -C "$M_FIX" cat-file -e "$remote_four^{commit}" 2>/dev/null && fail 'M unexpectedly has remote_four before materialization'
+m_branch_before=$(git -C "$M_FIX" branch --show-current)
+m_refs_before=$(git -C "$M_FIX" for-each-ref --format='%(refname)%09%(objectname)' | LC_ALL=C sort)
+set +e
+OUT=$("$MAT_TOOL" M "$remote_four" 2>"$TMP/stderr")
+RC=$?
+set -e
+assert_eq "$RC" 0
+assert_eq "$(field materialization)" materialized
+assert_eq "$(field object_after)" present
+assert_eq "$(git -C "$M_FIX" branch --show-current)" "$m_branch_before"
+assert_eq "$(git -C "$M_FIX" for-each-ref --format='%(refname)%09%(objectname)' | LC_ALL=C sort)" "$m_refs_before"
+pass
+
+# Already-present is deterministic and performs no ref movement.
+set +e
+OUT=$("$MAT_TOOL" S "$remote_four" 2>"$TMP/stderr")
+RC=$?
+set -e
+assert_eq "$RC" 0
+assert_eq "$(field materialization)" already_present
+assert_eq "$(field object_before)" present
+assert_eq "$(field object_after)" present
+pass
+
+# Remote-main mismatch blocks before materialization.
+old_expected=$(git -C "$SEED" rev-parse HEAD~1)
+refs_before=$(git -C "$S_FIX" for-each-ref --format='%(refname)%09%(objectname)' | LC_ALL=C sort)
+set +e
+OUT=$("$MAT_TOOL" S "$old_expected" 2>"$TMP/stderr")
+RC=$?
+set -e
+assert_eq "$RC" 3
+assert_eq "$(field materialization)" blocked
+assert_eq "$(git -C "$S_FIX" for-each-ref --format='%(refname)%09%(objectname)' | LC_ALL=C sort)" "$refs_before"
+pass
+
+# Dirty landing fails closed.
+printf 'dirty\n' >"$S_FIX/materialize-dirty.txt"
+set +e
+OUT=$("$MAT_TOOL" S "$remote_four" 2>"$TMP/stderr")
+RC=$?
+set -e
+assert_eq "$RC" 3
+assert_eq "$(field materialization)" blocked
+rm "$S_FIX/materialize-dirty.txt"
+pass
+
+# Malformed input and unsupported route are rejected without a receipt.
+set +e
+OUT=$("$MAT_TOOL" S abc 2>"$TMP/stderr"); RC=$?
+set -e
+assert_eq "$RC" 64
+[ -z "$OUT" ] || fail 'malformed SHA emitted a receipt'
+set +e
+OUT=$("$MAT_TOOL" S_TERMUX "$remote_four" 2>"$TMP/stderr"); RC=$?
+set -e
+assert_eq "$RC" 64
+[ -z "$OUT" ] || fail 'unsupported materializer route emitted a receipt'
+pass
+
+# Effective origin rewrite and uploadpack override fail closed.
+git -C "$S_FIX" config "url.file://$TMP/rewritten-materialize.git.insteadOf" "file://$REMOTE"
+set +e
+OUT=$("$MAT_TOOL" S "$remote_four" 2>"$TMP/stderr"); RC=$?
+set -e
+assert_eq "$RC" 3
+git -C "$S_FIX" config --unset-all "url.file://$TMP/rewritten-materialize.git.insteadOf"
+git -C "$S_FIX" config remote.origin.uploadpack /bin/false
+set +e
+OUT=$("$MAT_TOOL" S "$remote_four" 2>"$TMP/stderr"); RC=$?
+set -e
+assert_eq "$RC" 3
+git -C "$S_FIX" config --unset-all remote.origin.uploadpack
+pass
+
+# Fetch failure is bounded and emits no raw stderr.
+printf 'five\n' >>"$SEED/file.txt"
+git -C "$SEED" add file.txt
+git -C "$SEED" commit -q -m five
+git -C "$SEED" push -q origin main
+remote_five=$(git -C "$SEED" rev-parse HEAD)
+cat >"$TMP/bin/git" <<EOF
+#!/bin/sh
+case " \$* " in *' fetch '*) exit 42 ;; esac
+exec '$REAL_GIT' "\$@"
+EOF
+chmod +x "$TMP/bin/git"
+set +e
+OUT=$(PATH="$TMP/bin:$PATH" "$MAT_TOOL" S "$remote_five" 2>"$TMP/stderr")
+RC=$?
+set -e
+ERR=$(cat "$TMP/stderr")
+assert_eq "$RC" 4
+assert_eq "$(field materialization)" failed
+assert_eq "$ERR" ''
+pass
+
+# Post-fetch remote drift cannot become pass.
+cat >"$TMP/bin/git" <<EOF
+#!/bin/sh
+state='$TMP/lsremote-count'
+case " \$* " in
+*' ls-remote '*)
+  n=0; [ -f "\$state" ] && n=\$(cat "\$state")
+  n=\$((n+1)); printf '%s' "\$n" >"\$state"
+  if [ "\$n" -ge 2 ]; then printf '%s\\trefs/heads/main\\n' '1111111111111111111111111111111111111111'; exit 0; fi
+  ;;
+esac
+exec '$REAL_GIT' "\$@"
+EOF
+chmod +x "$TMP/bin/git"
+rm -f "$TMP/lsremote-count"
+set +e
+OUT=$(PATH="$TMP/bin:$PATH" "$MAT_TOOL" S "$remote_five" 2>"$TMP/stderr")
+RC=$?
+set -e
+assert_eq "$RC" 5
+assert_eq "$(field materialization)" unknown
+assert_eq "$(field object_after)" present
+pass
+
+# Static no-ref/no-destructive-command contract.
+grep -Fq 'fetch --quiet --no-tags --no-write-fetch-head "$effective_origin" refs/heads/main' "$MATERIALIZE_SOURCE" || fail 'no-ref fetch contract missing'
+if grep -Eq 'git -C "\$REPO" (merge |pull |switch |checkout |reset |stash |clean |worktree |tag |push |commit |update-ref )' "$MATERIALIZE_SOURCE"; then
+  fail 'forbidden materializer Git mutation command found'
+fi
+if grep -Eq 'git -C "\$REPO" branch (--delete|--move|--copy|-d|-D|-m|-M|-c|-C)( |$)' "$MATERIALIZE_SOURCE"; then
+  fail 'forbidden materializer branch mutation found'
+fi
 pass
 
 printf 'PASS: %s contract groups\n' "$TESTS"

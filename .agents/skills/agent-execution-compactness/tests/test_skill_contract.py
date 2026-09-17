@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -540,6 +542,76 @@ class SkillContractTests(unittest.TestCase):
         self.assertTrue(
             cases["direct-authority-no-compact-equivalent"]["facts"]["currentness_barrier_changed"]
         )
+
+    def test_shell_mutation_barrier_contract_requires_explicit_fail_closed_control_flow(self):
+        text = SKILL.read_text(encoding="utf-8")
+        section = text[
+            text.index("## Fail-closed mutation-barrier shell control flow"):
+            text.index("## Pre-routing disposition gate")
+        ]
+        for required in (
+            "`set -e` and `set -euo pipefail` are auxiliary shell hygiene only",
+            "explicit checked guard branch",
+            "preserve BLOCKED / UNKNOWN / CONFLICT",
+            "Do not recommend `guard; rc=$?` under `set -e` as a universal safe pattern",
+            "failed non-final `&&` assertion list",
+            "guard_one && guard_two",
+            "guard && mutation_owner",
+            "mutation is itself syntactically conditional on the guard",
+        ):
+            self.assertIn(required, section)
+
+    def test_shell_mutation_barrier_eval_corpus_covers_unsafe_and_safe_shapes(self):
+        payload = json.loads(EVALS.read_text(encoding="utf-8"))
+        cases = {case["id"]: case for case in payload["shell_mutation_barrier_evals"]}
+        self.assertEqual(
+            set(cases),
+            {
+                "unsafe-errexit-and-list-later-mutation",
+                "safe-explicit-if-guard",
+                "safe-conditional-status-capture",
+                "guard-and-mutation-same-list-distinct",
+            },
+        )
+        self.assertEqual(cases["unsafe-errexit-and-list-later-mutation"]["expected_guard_disposition"], "UNSAFE_BARRIER")
+        self.assertEqual(cases["safe-explicit-if-guard"]["expected_guard_disposition"], "EXPLICIT_GUARD")
+        self.assertTrue(cases["unsafe-errexit-and-list-later-mutation"]["facts"]["mutation_is_separate_statement"])
+        self.assertFalse(cases["guard-and-mutation-same-list-distinct"]["facts"]["mutation_is_separate_statement"])
+
+    def test_bash_errexit_and_list_can_fall_through_but_explicit_guard_cannot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            unsafe_marker = tmp_path / "unsafe-marker"
+            safe_marker = tmp_path / "safe-marker"
+            unsafe = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    'set -e; test "x" = "y" && printf "unreachable\n"; printf "mutation\n" > "$1"',
+                    "bash",
+                    str(unsafe_marker),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            safe = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    'set -e; if ! test "x" = "y"; then exit 17; fi; printf "mutation\n" > "$1"',
+                    "bash",
+                    str(safe_marker),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(unsafe.returncode, 0)
+            self.assertTrue(unsafe_marker.exists())
+            self.assertEqual(unsafe_marker.read_text(encoding="utf-8"), "mutation\n")
+            self.assertEqual(safe.returncode, 17)
+            self.assertFalse(safe_marker.exists())
 
     def test_repository_wide_scope_and_project_inheritance_are_explicit(self):
         skill_text = SKILL.read_text(encoding="utf-8")

@@ -287,3 +287,20 @@ Related memory IDs: E-2026-09-17-009, E-2026-09-17-010, E-2026-09-17-011
 Follow-up trigger: 재생 화면에서 0~1초 100%, 1~2초 0%, 2~3초 100%처럼 구간 값이 유지되다가 키프레임 순간에 즉시 전환되는지 체감 확인한다.
 Resolution / later evidence: Opacity 반복 및 Hold 적용 완료. 재생 체감 확인만 남음.
 ```
+
+### E-2026-09-17-013 — 원 Shape Layer 생성 및 중앙 배치 확인
+
+```text
+Entry ID: E-2026-09-17-013
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차 / Ellipse Shape Layer
+Status: OBSERVED
+Observation: 최신 연습본 `2주차 연습용_망!10_원 copy.aep`에서 새 `Shape Layer 1`이 기존 `모양 레이어 1`과 별도 레이어로 존재하고, 새 레이어의 Ellipse Size는 225×225로 확인됐다. 레이어 Position과 Vector Position을 합산한 실제 도형 중심은 1920×1080 컴포지션의 정확한 중앙인 (960, 540)이다. 새 원 레이어에는 키프레임 데이터가 없다.
+Context: 기존 네모 애니메이션을 유지한 채 레이어 선택을 해제하고 Ellipse Tool로 정원을 만든 뒤 화면 중앙 정렬을 수행했다.
+Result: 원은 정원 비율을 유지하며 새 Shape Layer로 분리되어 있고, 시각적 중심이 컴포지션 중앙에 놓였다. 기존 네모 레이어의 전체 `LIST Layr` 블록은 직전 `망!9`와 바이트 단위로 동일해 기존 Position·Rotation·Opacity Hold 애니메이션이 보존됐다.
+Interpretation: 새 도형 생성 시 기존 애니메이션 레이어를 건드리지 않고 별도 Shape Layer를 만드는 흐름과 화면 중앙 배치를 재현했다. 다만 메인 AEP 레이어 구조에서는 Anchor Point가 독립 속성으로 노출되지 않아 앵커 십자표시가 도형 중앙에 있는지는 이 파일 구조만으로 확정하지 않는다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-17-012
+Follow-up trigger: AE 화면에서 새 원 레이어의 Anchor Point 표시가 원 중심에 있는지 시각 확인한 뒤 다음 도형 연습으로 진행한다.
+Resolution / later evidence: 원 생성·별도 레이어·정원 크기·화면 중앙 배치 및 기존 네모 애니메이션 보존 확인. 앵커의 정확한 시각 위치는 별도 확인 필요.
+```

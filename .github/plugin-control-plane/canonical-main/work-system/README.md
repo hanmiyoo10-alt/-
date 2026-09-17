@@ -87,7 +87,9 @@ Supported v1 scope forms are deliberately narrow:
 
 Absolute paths, traversal, and wildcard/pattern syntax outside the single trailing `/**` form fail closed to `UNKNOWN`. Path-prefix containment is checked deterministically in both directions; surface scopes overlap only on exact normalized identity.
 
-Callers provide `requestedScopes`, a bounded discovery disposition (`COMPLETE / PARTIAL / UNKNOWN`), and concretely identified candidates. Packet candidates use current native issue state plus exact `canonical-main-work-packet:v1` body text. Open PR candidates use their supplied changed-file inventory. Standard packet scope headings Bounded write scope, Bounded implementation write scope, and Locked write scope are parsed deterministically; an explicit preservation/non-write boundary stops scope collection.
+Callers provide `requestedScopes`, a bounded discovery disposition (`COMPLETE / PARTIAL / UNKNOWN`), and concretely identified candidates. Packet candidates use current native issue state plus exact `canonical-main-work-packet:v1` body text. Open PR candidates use their supplied changed-file inventory. Packet lifecycle is consumed from the canonical `packet-projection.cjs` lifecycle parser rather than re-derived from stage/proof prose or a second local state vocabulary.
+
+Write-scope parsing accepts only exact reviewed heading names: `Bounded write scope`, `Bounded implementation write scope`, `Locked write scope`, plus compatibility aliases `Bounded IMPLEMENTATION_PR write scope` and `Repository write-scope ceiling used by IMPLEMENTATION_PR`. There is no fuzzy heading/prose scan. Exactly one recognized deterministic scope section is required; multiple recognized sections are `CONFLICT`, while missing, unsupported, malformed, or invalid scope evidence remains `UNKNOWN`. An explicit preservation/non-write boundary stops scope collection.
 
 #465 remains seed-only and non-exhaustive. `DISJOINT` requires bounded discovery `COMPLETE`; `PARTIAL` or `UNKNOWN` discovery cannot be promoted to disjointness merely because no supplied candidate overlaps.
 

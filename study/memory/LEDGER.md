@@ -185,3 +185,20 @@ Related memory IDs: E-2026-09-17-005
 Follow-up trigger: 두 번째 Position 키프레임을 정확히 2초로 이동한 뒤 재생 결과를 확인하고 Rotation 연습으로 넘어간다.
 Resolution / later evidence: Scale 및 수평 이동 정리 완료. 종료 키프레임 시점은 미확정이다.
 ```
+
+### E-2026-09-17-007 — Position 기본 연습 완료 확인
+
+```text
+Entry ID: E-2026-09-17-007
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차 / Position 기본 연습
+Status: OBSERVED
+Observation: 최신 연습본 `2주차 연습용_망!4.aep`에서 Rectangle Path Size 250×250, 레이어 Scale 100%·100%, Position 키프레임 두 개가 각각 0초와 정확히 2초에 존재하며, 좌표는 약 (948, 538)에서 (573, 538)로 확인됐다.
+Context: 직전 연습본에서 두 번째 Position 키프레임이 약 1.93초에 남아 있어 정확히 2초로 옮기도록 교정한 뒤 다시 업로드한 결과를 확인했다.
+Result: 정사각형 유지, Scale 기본값, 수평 이동, 0초→2초 두 점 Position 애니메이션이라는 현재 미니 연습 목표를 모두 충족했다.
+Interpretation: Position의 '시작값 → 시간 이동 → 끝값' 흐름은 이번 세션에서 실제 프로젝트 구조로 검증됐다. 다음 관찰은 Rotation에서 동일한 키프레임 원리를 독립적으로 재현하는지에 둔다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-17-005, E-2026-09-17-006
+Follow-up trigger: Rotation 키프레임을 설정하고 회전 중심 및 재생 결과를 확인한다.
+Resolution / later evidence: Position 기본 연습 완료. Rotation·Opacity는 아직 미확정이다.
+```

@@ -1709,3 +1709,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/16509689af505ecfcf786a8cef3564ec1346c594)
 - Event ID: `ea4f7f39b683e1d6859c6d35f18f4913eaea83f6db1e8153e78c353b61bf39f5`
 <!-- canonical-main-doc-promoted:ea4f7f39b683e1d6859c6d35f18f4913eaea83f6db1e8153e78c353b61bf39f5 -->
+
+### 2026-09-17 — Merge pull request #2423 from hanmiyoo10-alt/server/scope-projection-compat-2405
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `8f3e1da6c876db592aa20f13b74fa5597ef7345c`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8f3e1da6c876db592aa20f13b74fa5597ef7345c)
+- Event ID: `a53ffc3645c8beb50bb803bc368daabc446de16ae61b559b4f168f5bfa81ec73`
+<!-- canonical-main-doc-promoted:a53ffc3645c8beb50bb803bc368daabc446de16ae61b559b4f168f5bfa81ec73 -->

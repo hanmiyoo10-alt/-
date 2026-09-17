@@ -4,6 +4,7 @@ import base64
 import binascii
 import json
 import os
+import re
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -172,6 +173,21 @@ class GitHubReader:
             raise GitHubReadError("workflow_runs must be an array")
         return [item for item in runs if isinstance(item, dict)]
 
+    def list_runs_exact_sha(self, commit_sha: str) -> tuple[int, list[dict[str, Any]]]:
+        if not isinstance(commit_sha, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha):
+            raise GitHubReadError("commit_sha must be a full 40-hex SHA")
+        value = self._get_json(
+            f"{self._repo_api_prefix}/actions/runs",
+            {"head_sha": commit_sha.lower(), "per_page": 100},
+        )
+        total = value.get("total_count")
+        runs = value.get("workflow_runs")
+        if isinstance(total, bool) or not isinstance(total, int) or total < 0:
+            raise GitHubReadError("workflow_runs total_count must be a non-negative integer")
+        if not isinstance(runs, list):
+            raise GitHubReadError("workflow_runs must be an array")
+        return total, [item for item in runs if isinstance(item, dict)]
+
     def list_jobs(self, run_id: int) -> tuple[int, list[dict[str, Any]]]:
         value = self._get_json(
             f"{self._repo_api_prefix}/actions/runs/{run_id}/jobs",
@@ -235,3 +251,27 @@ class GitHubReader:
         if len(raw) != size:
             raise GitHubReadError("repository file decoded size does not match metadata")
         return {"content": raw, "blob_sha": blob_sha, "size": size}
+
+    def compare_changed_paths(self, before_sha: str, after_sha: str) -> tuple[list[str], bool]:
+        for name, value in (("before_sha", before_sha), ("after_sha", after_sha)):
+            if not isinstance(value, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", value):
+                raise GitHubReadError(f"{name} must be a full 40-hex SHA")
+        before = before_sha.lower()
+        after = after_sha.lower()
+        value = self._get_json(f"{self._repo_api_prefix}/compare/{before}...{after}")
+        base = value.get("base_commit")
+        merge_base = value.get("merge_base_commit")
+        status = value.get("status")
+        if not isinstance(base, dict) or base.get("sha") != before:
+            raise GitHubReadError("compare base identity mismatch")
+        if not isinstance(merge_base, dict) or merge_base.get("sha") != before or status not in {"ahead", "identical"}:
+            raise GitHubReadError("compare transition is not an ancestor transition")
+        files = value.get("files")
+        if not isinstance(files, list):
+            raise GitHubReadError("compare files must be an array")
+        paths: list[str] = []
+        for item in files:
+            if not isinstance(item, dict) or not isinstance(item.get("filename"), str):
+                raise GitHubReadError("compare file metadata is invalid")
+            paths.append(item["filename"])
+        return paths, len(paths) < 300

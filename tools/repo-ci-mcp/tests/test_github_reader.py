@@ -85,5 +85,23 @@ class ReaderTests(unittest.TestCase):
         self.assertNotIn("topsecret", str(caught.exception))
 
 
+    def test_55_exact_sha_run_inventory_uses_head_sha_without_event_filter(self):
+        reader = GitHubReader(repository="owner/repo")
+        payload = {"total_count": 2, "workflow_runs": [{"id": 1}, {"id": 2}]}
+        with patch.object(GitHubReader, "_get_json", return_value=payload) as get_json:
+            total, runs = reader.list_runs_exact_sha("a" * 40)
+        self.assertEqual((total, len(runs)), (2, 2))
+        get_json.assert_called_once_with("/repos/owner/repo/actions/runs", {"head_sha": "a" * 40, "per_page": 100})
+
+    def test_56_compare_changed_paths_requires_ancestor_and_marks_300_incomplete(self):
+        reader = GitHubReader(repository="owner/repo")
+        payload = {"base_commit": {"sha": "b" * 40}, "merge_base_commit": {"sha": "b" * 40}, "status": "ahead",
+                   "files": [{"filename": f"f/{i}"} for i in range(300)]}
+        with patch.object(GitHubReader, "_get_json", return_value=payload):
+            paths, complete = reader.compare_changed_paths("b" * 40, "a" * 40)
+        self.assertEqual(len(paths), 300)
+        self.assertFalse(complete)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,7 @@ from mcp.server import MCPServer
 
 from .branch_protection import repo_branch_protection as build_repo_branch_protection
 from .canonical_main_status import canonical_main_status as build_canonical_main_status
+from .exact_sha import repo_ci_exact_sha as build_repo_ci_exact_sha
 from .github_reader import GitHubReader
 from .notebook import repo_notebook_read as build_repo_notebook_read
 from .overview import repo_ci_overview as build_repo_ci_overview
@@ -37,6 +38,12 @@ def repo_ci_summary(
 def repo_ci_overview(workflows: list[str], ref: str | None = None) -> dict[str, Any]:
     """Project 2–5 validated workflow summaries into one bounded read-only CI overview."""
     return build_repo_ci_overview(GitHubReader(), workflows=workflows, ref=ref)
+
+
+@mcp.tool()
+def repo_ci_exact_sha(sha: str, workflow: str | None = None, event: str | None = None, ref: str | None = None, before_sha: str | None = None) -> dict[str, Any]:
+    """Inventory all-event exact-SHA workflow runs and explain a proven workflow absence conservatively."""
+    return build_repo_ci_exact_sha(GitHubReader(), sha=sha, workflow=workflow, event=event, ref=ref, before_sha=before_sha)
 
 
 @mcp.tool()

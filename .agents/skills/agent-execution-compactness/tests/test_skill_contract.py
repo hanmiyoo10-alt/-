@@ -444,6 +444,19 @@ class SkillContractTests(unittest.TestCase):
         self.assertEqual(cases["same-state-unrelated-edit-invalidates"]["expected_reason"], "RUN_INPUT_CHANGED")
         self.assertFalse(cases["same-state-resumed-worker"]["facts"]["continuous_barrier"])
 
+    def test_branch_protection_detail_routing_preserves_permission_boundary(self):
+        text = SKILL.read_text(encoding="utf-8")
+        section = text[text.index("### Detailed branch-protection read specialization"):text.index("### Preserve connector authority and fallback exceptions")]
+        for required in (
+            "repository-owned bounded `repo_branch_protection` read first",
+            "DETAIL_READ_BLOCKED_PERMISSION",
+            "must never be converted into `protected=false`",
+            "already-authorized user-controlled `gh` read surface",
+            "gh api repos/<owner>/<repo>/branches/<branch>/protection",
+            "Never ask the user to paste a GitHub token",
+        ):
+            self.assertIn(required, section)
+
     def test_connector_response_companion_contract_is_distinct_and_bounded(self):
         text = SKILL.read_text(encoding="utf-8")
         for required in (

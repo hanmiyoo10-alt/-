@@ -19,6 +19,10 @@ DEFAULT_TIMEOUT_SECONDS = 20.0
 class GitHubReadError(RuntimeError):
     """Bounded read-only GitHub transport failure."""
 
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
 
 class _SafeRedirectHandler(HTTPRedirectHandler):
     """Never carry Authorization across origins while following redirects."""
@@ -121,7 +125,9 @@ class GitHubReader:
         except GitHubReadError:
             raise
         except HTTPError as exc:
-            raise GitHubReadError(f"GitHub HTTP {exc.code}: {self._redact(exc.reason)}") from None
+            raise GitHubReadError(
+                f"GitHub HTTP {exc.code}: {self._redact(exc.reason)}", status_code=exc.code
+            ) from None
         except URLError as exc:
             raise GitHubReadError(f"GitHub transport error: {self._redact(exc.reason)}") from None
         except OSError as exc:
@@ -139,6 +145,19 @@ class GitHubReader:
         if not isinstance(value, dict):
             raise GitHubReadError("GitHub JSON response root must be an object")
         return value
+
+    def _branch_name(self, branch: str) -> str:
+        if not isinstance(branch, str) or not branch or len(branch) > 200 or any(ch in branch for ch in "\r\n\x00"):
+            raise GitHubReadError("branch must be a non-empty string <= 200 characters")
+        return branch
+
+    def get_branch(self, branch: str) -> dict[str, Any]:
+        name = self._branch_name(branch)
+        return self._get_json(f"{self._repo_api_prefix}/branches/{quote(name, safe='')}")
+
+    def get_branch_protection(self, branch: str) -> dict[str, Any]:
+        name = self._branch_name(branch)
+        return self._get_json(f"{self._repo_api_prefix}/branches/{quote(name, safe='')}/protection")
 
     def get_run(self, run_id: int) -> dict[str, Any]:
         return self._get_json(f"{self._repo_api_prefix}/actions/runs/{run_id}")

@@ -236,3 +236,20 @@ Related memory IDs: E-2026-09-17-007, E-2026-09-17-008
 Follow-up trigger: Opacity의 100→0 키프레임 쌍을 복사해 뒤 구간에 붙여넣고 반복 패턴의 시점·값을 확인한다.
 Resolution / later evidence: Position·Rotation·Opacity 기본 키프레임 연습 완료. Opacity 반복 복사는 아직 미확정이다.
 ```
+
+### E-2026-09-17-010 — Opacity 키프레임 쌍 복사 성공
+
+```text
+Entry ID: E-2026-09-17-010
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차 / Opacity 반복 복사
+Status: OBSERVED
+Observation: 최신 연습본 `2주차 연습용_망!7.aep`에서 Opacity 키프레임이 네 개로 늘었고, 시점·값은 0초 100%, 1초 0%, 4초 100%, 5초 0%로 확인됐다.
+Context: 직전 연습본의 0초 100% → 1초 0% 두 키프레임을 선택해 복사한 뒤 뒤쪽 시간에 붙여넣는 연습을 수행했다.
+Result: 복사된 키프레임 쌍은 값 순서 100%→0%와 쌍 내부 1초 간격을 그대로 보존했다. 원본 쌍의 마지막 키프레임 1초와 복사본 첫 키프레임 4초 사이에는 3초 간격이 있다.
+Interpretation: 다중 키프레임 선택과 복사·붙여넣기 자체는 성공했다. 연속 반복을 만들려면 붙여넣기 기준 시점을 의도한 주기에 맞춰 배치하는 단계가 다음 확인 포인트다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-17-009
+Follow-up trigger: 수업 의도에 맞춰 연속 점멸을 만들 경우 복사본의 시작 시점을 조정하고, Hold Keyframe 단계에서는 보간이 갑작스러운 전환으로 바뀌는지 확인한다.
+Resolution / later evidence: Opacity 키프레임 복사·붙여넣기 성공. 연속 반복 간격과 Hold 적용은 아직 미확정이다.
+```

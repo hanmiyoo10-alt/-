@@ -270,3 +270,20 @@ Related memory IDs: E-2026-09-17-009, E-2026-09-17-010
 Follow-up trigger: 네 Opacity 키프레임에 Toggle Hold Keyframe을 적용하고 재생 시 값이 구간 사이에서 보간되지 않고 다음 키에서 즉시 전환되는지 확인한다.
 Resolution / later evidence: Opacity 연속 반복 시점 배치 완료. Hold 적용은 아직 미확정이다.
 ```
+
+### E-2026-09-17-012 — Opacity Hold Keyframe 적용 확인
+
+```text
+Entry ID: E-2026-09-17-012
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차 / Opacity Hold Keyframe
+Status: OBSERVED
+Observation: 최신 연습본 `2주차 연습용_망!9.aep`에서 Opacity 네 키프레임의 시점·값은 0초 100%, 1초 0%, 2초 100%, 3초 0%로 유지되며, 직전 `망!8` 대비 네 키프레임 각각의 보간 상태 플래그가 동일하게 Hold 상태로 변경된 것이 프로젝트 구조에서 확인됐다.
+Context: `망!8`에서 연속 1초 간격의 Opacity 반복을 만든 뒤 네 키프레임 전체에 Toggle Hold Keyframe을 적용했다.
+Result: 값과 시점은 그대로 보존된 채 Opacity 보간이 Hold로 전환됐다. 기존 Position·Rotation 데이터에는 변화가 없다.
+Interpretation: 기본 페이드, 키프레임 복사, 반복 간격 정리, Hold 전환까지 Opacity 연습 흐름을 실제 프로젝트 구조에서 모두 재현했다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-17-009, E-2026-09-17-010, E-2026-09-17-011
+Follow-up trigger: 재생 화면에서 0~1초 100%, 1~2초 0%, 2~3초 100%처럼 구간 값이 유지되다가 키프레임 순간에 즉시 전환되는지 체감 확인한다.
+Resolution / later evidence: Opacity 반복 및 Hold 적용 완료. 재생 체감 확인만 남음.
+```

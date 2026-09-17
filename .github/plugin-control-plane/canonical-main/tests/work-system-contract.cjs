@@ -372,6 +372,14 @@ assert.ok(template.includes('current lifecycle projection, not an immutable acti
 assert.ok(template.includes('Before or atomically with native issue closure'));
 assert.ok(template.includes('Native closure or a final comment alone does not override a contradictory stale body'));
 assert.ok(template.includes('do not resume the stale advertised stage without fresh re-attribution'));
+assert.match(readme, /reserved self-coordination surface for faithful lifecycle bookkeeping/);
+assert.match(readme, /separate from implementation\/effect write scope/);
+assert.match(readme, /MUST NOT change the primary goal, add\/remove\/weaken acceptance criteria, widen or reinterpret implementation\/effect write scope/);
+assert.match(readme, /Native GitHub closure remains downstream of evidence-backed terminal body reconciliation and never proves `DONE` by itself/);
+assert.match(readme, /reserved self surface is not emitted into or inferred from write-scope overlap classification/);
+assert.ok(template.includes("reserved self-bookkeeping surface for faithful lifecycle State"));
+assert.ok(template.includes("cannot change the primary goal, acceptance, external write scope, or evidence to manufacture completion"));
+assert.ok(template.includes("does not gain an implicit self-issue token"));
 assert.match(readme, /## Normal canonical-main startup/);
 assert.match(readme, /exactly two required reads/);
 assert.match(readme, /1\. read direct current `main` authority/);
@@ -615,6 +623,12 @@ overlapResult = resolveOverlap(['surface:issue:465'], [{
   body: overlapPacketBody('IN_PROGRESS', ['surface:issue:465']),
 }]);
 assert.equal(overlapResult.state, 'OVERLAP');
+
+const reservedSelfPacket = {
+  type: 'packet', ref: '#2410', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['path:docs/**']),
+};
+assert.equal(resolveOverlap(['surface:issue:2410'], [reservedSelfPacket]).state, 'DISJOINT');
 
 overlapResult = resolveOverlap(['path:tools/./repo-ci-mcp/README.md'], [{
   type: 'packet', ref: '#15', issueState: 'open',

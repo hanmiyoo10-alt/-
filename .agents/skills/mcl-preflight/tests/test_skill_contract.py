@@ -105,6 +105,21 @@ class MclPreflightSkillContractTests(unittest.TestCase):
         self.assertTrue(expected["git_currentness_guard_required"])
         self.assertFalse(expected["preflight_grants_mutation"])
 
+    def test_optional_host_resource_delegation_is_scoped(self):
+        self.assertIn("## Optional host-resource preflight", self.skill)
+        self.assertIn("mcl-host-resource-preflight", self.skill)
+        self.assertIn("Do not invoke the host-resource sibling merely because a task exists", self.skill)
+        self.assertIn("Capacity floors remain caller/packet-owned", self.skill)
+        self.assertIn("VM admission remains owned by the VM owner", self.skill)
+
+    def test_eval_resource_delegation_is_optional(self):
+        delegated = next(item for item in self.evals["cases"] if item["id"] == "host-resource-explicit-delegation")
+        tiny = next(item for item in self.evals["cases"] if item["id"] == "tiny-task-does-not-force-resource-check")
+        self.assertTrue(delegated["expected"]["base_owner_first"])
+        self.assertEqual(delegated["expected"]["host_resource_owner"], "mcl-host-resource-preflight")
+        self.assertFalse(delegated["expected"]["aggregate_ready_present"])
+        self.assertFalse(tiny["expected"]["host_resource_invoked"])
+
 
 if __name__ == "__main__":
     unittest.main()

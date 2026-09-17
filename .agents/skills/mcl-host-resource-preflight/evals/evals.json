@@ -1,0 +1,109 @@
+{
+  "skill_name": "mcl-host-resource-preflight",
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "s-capacity-delegates-common-owner",
+      "prompt": "Route S/executor S needs 1 GiB free disk and pressure context.",
+      "facts": {
+        "target": "S",
+        "disk_floor": 1073741824,
+        "resource_guard_disk": "pass",
+        "s_load1": "0.42",
+        "s_thermal_samples": 0
+      },
+      "expected": {
+        "capacity_owner": "repo-resource-guard.v1",
+        "s_disk": "pass",
+        "s_thermal_max_c": "unknown",
+        "route_changed": false
+      }
+    },
+    {
+      "id": "m-memory-unknown-swap-cannot-upgrade",
+      "prompt": "M effective memory is unknown from the common guard while swap is readable.",
+      "facts": {
+        "target": "M",
+        "memory_floor": 1,
+        "resource_guard_memory": "unknown",
+        "m_swap_free_bytes": 8589934592
+      },
+      "expected": {
+        "m_memory": "unknown",
+        "swap_substitutes_for_ram": false,
+        "aggregate_ready_present": false
+      }
+    },
+    {
+      "id": "battery-command-presence-not-proof",
+      "prompt": "termux-battery-status exists but the call fails; bounded dumpsys battery is parseable.",
+      "facts": {
+        "battery_command_present": true,
+        "battery_command_call": "failed",
+        "dumpsys_level": 81,
+        "dumpsys_status": 3,
+        "dumpsys_temperature_tenths_c": 287
+      },
+      "expected": {
+        "battery_percent": 81,
+        "battery_state": "discharging",
+        "battery_temp_c": 28.7,
+        "presence_treated_as_success": false
+      }
+    },
+    {
+      "id": "battery-permission-or-malformed-unknown",
+      "prompt": "Battery fallback output is permission denied or malformed.",
+      "facts": {
+        "battery_command_call": "failed",
+        "dumpsys_parseable": false
+      },
+      "expected": {
+        "battery_percent": "unknown",
+        "battery_state": "unknown",
+        "raw_output_exposed": false
+      }
+    },
+    {
+      "id": "thermal-zero-readable-is-unknown",
+      "prompt": "No valid readable thermal-zone temperature exists on S-Termux.",
+      "facts": {
+        "target": "S",
+        "thermal_valid_samples": 0
+      },
+      "expected": {
+        "s_thermal_max_c": "unknown",
+        "pass_by_absence": false,
+        "thermalservice_fallback_used": false
+      }
+    },
+    {
+      "id": "pressure-not-requested",
+      "prompt": "A small S task requests only a disk floor and no pressure context.",
+      "facts": {
+        "target": "S",
+        "pressure": "not_requested",
+        "disk_floor": 1
+      },
+      "expected": {
+        "s_load1": "not_requested",
+        "s_battery_percent": "not_requested",
+        "s_thermal_max_c": "not_requested"
+      }
+    },
+    {
+      "id": "route-target-conflict-fails-closed",
+      "prompt": "Route M_PRIVATE_LAB executor M_PRIVATE_LAB is paired with target S.",
+      "facts": {
+        "route": "M_PRIVATE_LAB",
+        "executor": "M_PRIVATE_LAB",
+        "target": "S"
+      },
+      "expected": {
+        "preflight_state": "UNKNOWN",
+        "resource_owner_invoked": false,
+        "route_guessed": false
+      }
+    }
+  ]
+}

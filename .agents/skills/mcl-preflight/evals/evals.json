@@ -118,6 +118,34 @@
         "git_currentness_guard_required": true,
         "preflight_grants_mutation": false
       }
+    },
+    {
+      "id": "host-resource-explicit-delegation",
+      "prompt": "D-012 selected S/S and this build step explicitly needs host capacity evidence before later mutation.",
+      "facts": {
+        "route": "S",
+        "executor": "S",
+        "host_resource_evidence_required": true
+      },
+      "expected": {
+        "base_owner_first": true,
+        "host_resource_owner": "mcl-host-resource-preflight",
+        "resource_floor_owner": "caller_or_packet",
+        "aggregate_ready_present": false
+      }
+    },
+    {
+      "id": "tiny-task-does-not-force-resource-check",
+      "prompt": "D-012 selected S/S for a tiny read-only repository inspection with no resource question.",
+      "facts": {
+        "route": "S",
+        "executor": "S",
+        "host_resource_evidence_required": false
+      },
+      "expected": {
+        "host_resource_invoked": false,
+        "existing_first_pass_unchanged": true
+      }
     }
   ]
 }

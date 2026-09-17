@@ -63,6 +63,8 @@ This packet body is a current lifecycle projection, not an immutable activation 
 
 - <PATH_OR_ISSUE>
 
+The entries above are implementation/effect outputs and external coordination targets. The packet's own GitHub issue is a reserved self-bookkeeping surface for faithful lifecycle State, interaction-stage, evidence-backed proof/UNKNOWN, Handoff, and terminal close-sync projection; do not add the packet's own issue here solely for that bookkeeping. Reserved self-bookkeeping cannot change the primary goal, acceptance, external write scope, or evidence to manufacture completion, and it grants no authority over any other issue or repository/runtime surface. Overlap classification considers only explicitly declared implementation/effect scopes and does not gain an implicit self-issue token.
+
 ## Dependencies / blockers
 
 - <NONE_OR_EXPLICIT_DEPENDENCY>

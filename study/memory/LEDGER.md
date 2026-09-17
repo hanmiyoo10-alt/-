@@ -304,3 +304,20 @@ Related memory IDs: E-2026-09-17-012
 Follow-up trigger: AE 화면에서 새 원 레이어의 Anchor Point 표시가 원 중심에 있는지 시각 확인한 뒤 다음 도형 연습으로 진행한다.
 Resolution / later evidence: 원 생성·별도 레이어·정원 크기·화면 중앙 배치 및 기존 네모 애니메이션 보존 확인. 앵커의 정확한 시각 위치는 별도 확인 필요.
 ```
+
+### E-2026-09-17-014 — 삼각형 생성 성공, 원과 같은 Shape Layer에 합쳐짐
+
+```text
+Entry ID: E-2026-09-17-014
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차 / Polygon·Shape Layer 분리
+Status: OBSERVED
+Observation: 최신 연습본 `2주차 연습용_망!11_삼.aep`에서 Polystar Path의 Points 값은 3.0으로 확인되어 삼각형 생성 자체는 성공했다. 그러나 새 Polystar 그룹과 기존 Ellipse 그룹이 모두 같은 `Shape Layer 1`의 Contents 안에 존재하며, 별도의 새 Shape Layer는 생성되지 않았다.
+Context: 직전 `망!10_원 copy.aep`의 원 레이어를 유지한 채 Polygon Tool로 삼각형을 새 도형 레이어에 만들려는 단계였다.
+Result: 삼각형 도형 규칙은 맞지만 레이어 분리 목표는 미완료다. 두 도형이 같은 Shape Layer에 들어간 상태에서 레이어 기준점/정렬이 다시 계산되어 원과 삼각형을 각각 독립적으로 중앙 정렬하기 어렵다. 기존 네모 애니메이션 레이어의 `LIST Layr` 블록은 직전 파일과 바이트 단위로 동일해 손상되지 않았다.
+Interpretation: Polygon Tool 사용과 Points=3 설정은 재현했지만, 새 도형을 만들기 전에 모든 레이어 선택을 완전히 해제하는 단계가 누락된 것으로 보인다. 단일 사례이므로 일반적 학습 성향으로 승격하지 않는다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-17-013
+Follow-up trigger: `Shape Layer 1 > Contents`에서 이번에 추가한 `Polystar 1`만 삭제하고, 타임라인 빈 공간을 클릭해 모든 레이어 선택을 해제한 뒤 Polygon Tool로 삼각형을 새 Shape Layer에 다시 만든다. Points=3과 중앙 배치를 다시 확인한다.
+Resolution / later evidence: 삼각형 모양 생성은 성공. 별도 Shape Layer 생성과 독립 중앙 배치는 미완료.
+```

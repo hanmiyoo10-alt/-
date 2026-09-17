@@ -1701,3 +1701,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/170d219d0f104f651e4fbe48b331d07c694470b5)
 - Event ID: `b75a657eff8f4ec8ffcbda08b63383c0d7afc7de20ca5582f96fc3ee0f8f1b2e`
 <!-- canonical-main-doc-promoted:b75a657eff8f4ec8ffcbda08b63383c0d7afc7de20ca5582f96fc3ee0f8f1b2e -->
+
+### 2026-09-17 — Merge pull request #2411 from hanmiyoo10-alt/server/packet-self-bookkeeping-2410
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `16509689af505ecfcf786a8cef3564ec1346c594`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/16509689af505ecfcf786a8cef3564ec1346c594)
+- Event ID: `ea4f7f39b683e1d6859c6d35f18f4913eaea83f6db1e8153e78c353b61bf39f5`
+<!-- canonical-main-doc-promoted:ea4f7f39b683e1d6859c6d35f18f4913eaea83f6db1e8153e78c353b61bf39f5 -->

@@ -321,3 +321,20 @@ Related memory IDs: E-2026-09-17-013
 Follow-up trigger: `Shape Layer 1 > Contents`에서 이번에 추가한 `Polystar 1`만 삭제하고, 타임라인 빈 공간을 클릭해 모든 레이어 선택을 해제한 뒤 Polygon Tool로 삼각형을 새 Shape Layer에 다시 만든다. Points=3과 중앙 배치를 다시 확인한다.
 Resolution / later evidence: 삼각형 모양 생성은 성공. 별도 Shape Layer 생성과 독립 중앙 배치는 미완료.
 ```
+
+### E-2026-09-17-015 — 삼각형 별도 Shape Layer 분리 및 중앙 배치 성공
+
+```text
+Entry ID: E-2026-09-17-015
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차 / Polygon·Shape Layer 분리 교정
+Status: OBSERVED
+Observation: 최신 연습본 `2주차 연습용_망!12_삼.aep`에서 삼각형은 새 `Shape Layer 2`의 `Polystar 1`로 존재하고, 기존 원은 별도 `Shape Layer 1`의 `Ellipse 1`로 유지된다. Polystar Path의 Points 값은 3.0이다. 삼각형의 레이어 Position, Vector Position, Rotation, Outer Radius로 계산한 시각적 바운딩 박스 중심은 약 (960.000003, 539.999997)로 1920×1080 컴포지션 중앙과 일치한다.
+Context: 직전 `망!11_삼.aep`에서 원과 삼각형이 같은 Shape Layer에 합쳐진 것을 확인한 뒤 Polystar만 삭제하고, 모든 레이어 선택을 해제한 상태에서 삼각형을 다시 생성해 중앙 정렬했다.
+Result: 삼각형이 원과 독립된 Shape Layer로 분리됐고 Points=3 및 중앙 배치가 모두 확인됐다. 기존 원 레이어와 네모 애니메이션 레이어는 별도 레이어로 유지된다.
+Interpretation: 새 도형 생성 전에 레이어 선택을 해제해야 독립 Shape Layer가 생성된다는 교정 절차를 이번 재시도에서 성공적으로 적용했다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-17-013, E-2026-09-17-014
+Follow-up trigger: 다음 도형 또는 미디어 배치 단계에서도 새 레이어 생성이 필요한 경우 작업 전 선택 상태를 확인한다.
+Resolution / later evidence: 삼각형 생성, 별도 Shape Layer 분리, Points=3, 중앙 배치 완료.
+```

@@ -100,3 +100,20 @@ Related memory IDs: P-001
 Follow-up trigger: Position, Rotation, Opacity를 각각 독립적으로 재현한 뒤 어느 단계에서 막히는지와 도움 없이 반복 가능한지를 관찰한다.
 Resolution / later evidence: 미확정. 오늘 재연습 결과로 후속 기록한다.
 ```
+
+### E-2026-09-17-002 — 2주차 연습 기준 파일 확인
+
+```text
+Entry ID: E-2026-09-17-002
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차
+Status: OBSERVED
+Observation: 사용자가 오늘 재연습에 사용할 After Effects 프로젝트 파일을 Drive의 `영상편집실습/중간고사/2주차/2주차 연습` 폴더에 업로드했고, 파일 존재를 확인했다.
+Context: 확인된 파일명은 `2주차 연습용_망!.aep`이다.
+Result: 오늘 2주차 재연습에서 동일 프로젝트를 기준본으로 사용할 수 있는 상태다.
+Interpretation: 이후 도움과 복습 기록은 이 파일을 기준으로 연결하면 세션 간 연속성을 유지하기 쉽다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-17-001
+Follow-up trigger: 해당 프로젝트에서 실제로 막히는 조작과 수정 결과를 관찰해 후속 기록한다.
+Resolution / later evidence: 기준 파일 확인 완료. 학습 성과 자체는 아직 미확정이다.
+```

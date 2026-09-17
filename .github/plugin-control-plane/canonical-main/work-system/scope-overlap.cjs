@@ -1,13 +1,17 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {classifyPrActivity} = require('./pr-activity.cjs');
+const {parseLifecycle} = require('./packet-projection.cjs');
 
 const PACKET_MARKER = '<!-- canonical-main-work-packet:v1 -->';
-const PACKET_STATES = new Set([
-  'READY', 'CLAIMED', 'IN_PROGRESS', 'REVIEW', 'DONE',
-  'BLOCKED', 'CANCELLED', 'SUPERSEDED',
-]);
 const TERMINAL_PACKET_STATES = new Set(['DONE', 'CANCELLED', 'SUPERSEDED']);
+const PACKET_SCOPE_HEADINGS = Object.freeze([
+  'Bounded write scope',
+  'Bounded implementation write scope',
+  'Locked write scope',
+  'Bounded IMPLEMENTATION_PR write scope',
+  'Repository write-scope ceiling used by IMPLEMENTATION_PR',
+]);
 const DISCOVERY_STATES = new Set(['COMPLETE', 'PARTIAL', 'UNKNOWN']);
 
 const REASON_CODES = Object.freeze({
@@ -110,33 +114,39 @@ function scopesOverlap(left, right) {
   return contains(right.value, left.value);
 }
 
-function sectionLines(body, heading) {
+function sectionBlocks(body, heading) {
   const lines = body.split(/\r?\n/);
-  const start = lines.findIndex((line) => line.trim().toLowerCase() === `## ${heading}`.toLowerCase());
-  if (start < 0) return null;
-  let end = lines.length;
-  for (let index = start + 1; index < lines.length; index += 1) {
-    if (/^##\s+/.test(lines[index].trim())) {
-      end = index;
-      break;
+  const blocks = [];
+  for (let start = 0; start < lines.length; start += 1) {
+    if (lines[start].trim().toLowerCase() !== `## ${heading}`.toLowerCase()) continue;
+    let end = lines.length;
+    for (let index = start + 1; index < lines.length; index += 1) {
+      if (/^##\s+/.test(lines[index].trim())) {
+        end = index;
+        break;
+      }
     }
+    blocks.push(lines.slice(start + 1, end));
   }
-  return lines.slice(start + 1, end);
-}
-
-function extractPacketState(body) {
-  const stateSection = sectionLines(body, 'State');
-  const stateText = stateSection ? stateSection.find((line) => line.trim()) : null;
-  const fallback = body.match(/^\*\*State:\s*([^*]+)\*\*/mi)?.[1];
-  const source = stateText || fallback || '';
-  const match = source.match(/\b(READY|CLAIMED|IN_PROGRESS|REVIEW|DONE|BLOCKED|CANCELLED|SUPERSEDED)\b/);
-  return match && PACKET_STATES.has(match[1]) ? match[1] : null;
+  return blocks;
 }
 
 function extractPacketScopes(body) {
-  const headings = ['Bounded write scope', 'Bounded implementation write scope', 'Locked write scope'];
-  const lines = headings.map((heading) => sectionLines(body, heading)).find(Boolean);
-  if (!lines) return {ok: false, scopes: [], reason: 'missing deterministic write-scope section'};
+  const matches = PACKET_SCOPE_HEADINGS.flatMap((heading) => (
+    sectionBlocks(body, heading).map((lines) => ({heading, lines}))
+  ));
+  if (matches.length === 0) {
+    return {ok: false, conflict: false, scopes: [], reason: 'missing deterministic write-scope section'};
+  }
+  if (matches.length > 1) {
+    return {
+      ok: false,
+      conflict: true,
+      scopes: [],
+      reason: `multiple deterministic write-scope sections: ${matches.map((item) => item.heading).join(', ')}`,
+    };
+  }
+  const lines = matches[0].lines;
   const scopes = [];
   const invalid = [];
 
@@ -157,13 +167,14 @@ function extractPacketScopes(body) {
   if (scopes.length === 0 || invalid.length > 0) {
     return {
       ok: false,
+      conflict: false,
       scopes,
       reason: invalid.length > 0
         ? `unsupported bounded scope entry: ${invalid[0].token}`
         : 'no deterministic bounded scope entries found',
     };
   }
-  return {ok: true, scopes, reason: null};
+  return {ok: true, conflict: false, scopes, reason: null};
 }
 
 function candidateRef(candidate, index) {
@@ -272,14 +283,18 @@ function resolveScopeOverlap(input) {
         ));
         return;
       }
-      const lifecycle = extractPacketState(body);
+      const lifecycleEvidence = parseLifecycle(body);
+      const lifecycle = lifecycleEvidence.lifecycle;
       if (!lifecycle || !['open', 'closed'].includes(issueState)) {
+        const lifecycleDetail = lifecycleEvidence.reasonCodes.length > 0
+          ? `canonical lifecycle unresolved: ${lifecycleEvidence.reasonCodes.join(',')}`
+          : 'native issue state is unresolved';
         findings.push(makeFinding(
           REASON_CODES.PACKET_STATE_UNRESOLVED,
-          'UNKNOWN',
+          lifecycleEvidence.conflict ? 'CONFLICT' : 'UNKNOWN',
           ref,
           requested[0]?.normalized || '<unresolved>',
-          'packet lifecycle or native issue state is unresolved',
+          lifecycleDetail,
           [ref],
         ));
         return;
@@ -304,7 +319,7 @@ function resolveScopeOverlap(input) {
       if (!parsedScopes.ok) {
         findings.push(makeFinding(
           REASON_CODES.PACKET_SCOPE_UNRESOLVED,
-          'UNKNOWN',
+          parsedScopes.conflict ? 'CONFLICT' : 'UNKNOWN',
           ref,
           requested[0]?.normalized || '<unresolved>',
           parsedScopes.reason,

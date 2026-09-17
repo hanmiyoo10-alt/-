@@ -8,6 +8,7 @@ const policy = JSON.parse(fs.readFileSync(path.join(dir, 'policy.json'), 'utf8')
 const readme = fs.readFileSync(path.join(dir, 'README.md'), 'utf8');
 const template = fs.readFileSync(path.join(dir, 'work-packet-template.md'), 'utf8');
 const packetProjectionSource = fs.readFileSync(path.join(dir, 'packet-projection.cjs'), 'utf8');
+const scopeOverlapSource = fs.readFileSync(path.join(dir, 'scope-overlap.cjs'), 'utf8');
 const commonRules = fs.readFileSync(path.join(root, 'docs/REPOSITORY_COMMON_RULES.md'), 'utf8');
 const {
   PACKET_STATES,
@@ -555,13 +556,14 @@ assert.match(readme, /does not fetch GitHub and never mutates coordination surfa
 assert.match(readme, /terminal packet is not stale merely because it is referenced historically/i);
 
 
-const overlapPacketBody = (state, scopes) => `<!-- canonical-main-work-packet:v1 -->
+const overlapPacketBodyWithHeading = (state, heading, scopes) => `<!-- canonical-main-work-packet:v1 -->
 ## State
 \`${state}\`
-## Bounded write scope
+## ${heading}
 ${scopes.map((scope, index) => `${index + 1}. \`${scope}\``).join('\n')}
 ## Handoff
 fixture`;
+const overlapPacketBody = (state, scopes) => overlapPacketBodyWithHeading(state, 'Bounded write scope', scopes);
 const resolveOverlap = (requestedScopes, candidates, discovery = 'COMPLETE') => resolveScopeOverlap({
   requestedScopes,
   discovery,
@@ -599,6 +601,48 @@ fixture`,
 };
 assert.equal(resolveOverlap(['path:docs/README.md'], [implementationHeadingPacket]).state, 'DISJOINT');
 assert.equal(resolveOverlap(['path:tools/repo-ci-mcp/server.py'], [implementationHeadingPacket]).state, 'OVERLAP');
+
+for (const [heading, ref] of [
+  ['Bounded IMPLEMENTATION_PR write scope', '#10c'],
+  ['Repository write-scope ceiling used by IMPLEMENTATION_PR', '#10d'],
+]) {
+  const packet = {
+    type: 'packet', ref, issueState: 'open',
+    body: overlapPacketBodyWithHeading('BLOCKED', heading, ['tools/repo-ci-mcp/**']),
+  };
+  assert.equal(resolveOverlap(['path:docs/README.md'], [packet]).state, 'DISJOINT');
+  assert.equal(resolveOverlap(['path:tools/repo-ci-mcp/server.py'], [packet]).state, 'OVERLAP');
+}
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#10e', issueState: 'open',
+  body: overlapPacketBodyWithHeading('IN_PROGRESS', 'Implementation write scope', ['docs/**']),
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+
+const competingScopeSections = `${overlapPacketBody('IN_PROGRESS', ['docs/**'])}\n## Locked write scope\n1. \`tools/**\``;
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#10f', issueState: 'open', body: competingScopeSections,
+}]), 'CONFLICT', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#10g', issueState: 'open',
+  body: overlapPacketBodyWithHeading('IN_PROGRESS', 'Bounded IMPLEMENTATION_PR write scope', ['../secret']),
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+
+for (const [state, ref] of [
+  ['AUTHORITY_SCOPE NEXT / NO INSTALL OR VENDOR-MUTATION AUTHORITY YET', '#10h'],
+  ['AUTHORITY_SCOPE COMPLETE / IMPLEMENTATION_PR NEXT / NO DEVICE OR SESSION MUTATION', '#10i'],
+]) {
+  expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+    type: 'packet', ref, issueState: 'open',
+    body: overlapPacketBodyWithHeading(state, 'Repository write-scope ceiling used by IMPLEMENTATION_PR', ['docs/**']),
+  }]), 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_STATE_UNRESOLVED);
+}
+
+const lifecycleConflictPacket = overlapPacketBody('IN_PROGRESS / REVIEW', ['docs/**']);
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#10j', issueState: 'open', body: lifecycleConflictPacket,
+}]), 'CONFLICT', OVERLAP_REASON_CODES.PACKET_STATE_UNRESOLVED);
 
 let overlapResult = resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [{
   type: 'packet', ref: '#11', issueState: 'open',
@@ -707,6 +751,13 @@ assert.match(readme, /supplied packet\/PR evidence only/);
 assert.match(readme, /#465 remains seed-only and non-exhaustive/);
 assert.match(readme, /`DISJOINT` requires bounded discovery `COMPLETE`/);
 assert.match(readme, /does not fetch GitHub, mutate issues, or grant write authority/);
+assert.match(scopeOverlapSource, /require\('\.\/packet-projection\.cjs'\)/);
+assert.doesNotMatch(scopeOverlapSource, /function extractPacketState/);
+assert.doesNotMatch(scopeOverlapSource, /const PACKET_STATES/);
+assert.match(readme, /`Bounded IMPLEMENTATION_PR write scope`/);
+assert.match(readme, /`Repository write-scope ceiling used by IMPLEMENTATION_PR`/);
+assert.match(readme, /multiple recognized sections are `CONFLICT`/);
+assert.match(readme, /missing, unsupported, malformed, or invalid scope evidence remains `UNKNOWN`/);
 
 
 const activityPacketBody = (state) => `<!-- canonical-main-work-packet:v1 -->

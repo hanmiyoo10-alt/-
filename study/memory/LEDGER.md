@@ -134,3 +134,20 @@ Related memory IDs: E-2026-09-17-001, E-2026-09-17-002
 Follow-up trigger: 사용자가 CTI 수동 스크럽 시 네모가 움직이는지 확인하면 원인을 Preview 계열 또는 키프레임 계열로 분기한다.
 Resolution / later evidence: 미확정.
 ```
+
+### E-2026-09-17-004 — Position 키프레임 정상, Preview 계열로 원인 축소
+
+```text
+Entry ID: E-2026-09-17-004
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차 / Position 키프레임·Preview
+Status: OBSERVED
+Observation: 사용자는 CTI를 손으로 0초에서 2초까지 스크럽하면 네모가 실제로 움직이고, Caps Lock은 켜져 있지 않다고 확인했다.
+Context: 같은 Drive 연습 폴더에 새 수정본 `2주차 연습용_망!1.aep`도 별도 파일로 업로드된 것을 확인했다.
+Result: Position 키프레임과 시간에 따른 위치 변화 자체는 동작한다. 재생 시 움직이지 않는 현상은 키프레임 생성 실패보다는 Preview/재생 설정 또는 입력 포커스 계열로 범위가 좁혀졌다.
+Interpretation: 다음 진단은 Preview 패널에서 Spacebar 단축키의 비디오 포함 여부와 기본 설정을 확인하고, 필요하면 Preview 설정을 Reset하는 순서가 적절하다. 정확한 Preview 원인은 아직 확정하지 않는다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-17-003
+Follow-up trigger: Preview 패널을 기본값으로 복원한 뒤 Spacebar 재생에서 CTI와 Composition 화면이 함께 갱신되는지 확인한다.
+Resolution / later evidence: 키프레임 계열 문제 가능성은 낮아졌고 Preview 계열 진단으로 전환한다.
+```

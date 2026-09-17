@@ -1,0 +1,449 @@
+#!/bin/sh
+'exec' 'python3' "$0" "$@"
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import subprocess
+from pathlib import Path
+
+SCRIPT_PATH = Path(__file__).resolve()
+READER_RELATIVE = Path("products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/mcl-notebook-read")
+FIXTURE_RELATIVE = Path(".mcl-notebook-live-proof.ipynb")
+CACHE_ROOTS = (
+    Path("products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook"),
+    Path("tools/repo-ci-mcp"),
+)
+SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
+MARKER_A = "MCL live proof marker A"
+MARKER_B = "MCL live proof marker B"
+AUTHORITY = {
+    "repositoryMutationAuthorized": False,
+    "deviceMutationAuthorized": False,
+    "mergeAuthorized": False,
+    "releaseAuthorized": False,
+    "productionAuthorized": False,
+}
+PROFILES = {
+    "S": {
+        "control_repo": Path("/root/nyang-repo"),
+        "landing": Path("/root/nyang-repo"),
+        "worktree_root": Path("/root/nyang-worktrees"),
+        "branch_prefix": "server/",
+    },
+    "M": {
+        "control_repo": Path("/data/data/com.termux/files/home/nyang-repo"),
+        "landing": Path("/data/data/com.termux/files/home/nyang-worktrees/mainphone-work"),
+        "worktree_root": Path("/data/data/com.termux/files/home/nyang-worktrees"),
+        "branch_prefix": "mainphone/",
+    },
+}
+
+
+class ProofError(RuntimeError):
+    def __init__(self, reason_code: str):
+        super().__init__(reason_code)
+        self.reason_code = reason_code
+
+
+def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        argv,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+
+def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return _run(["git", "-C", str(root), *args])
+
+
+def _require_git(root: Path, *args: str, reason: str) -> str:
+    result = _git(root, *args)
+    if result.returncode != 0:
+        raise ProofError(reason)
+    return result.stdout.strip()
+
+
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _sha256_file(path: Path) -> str:
+    return _sha256_bytes(path.read_bytes())
+
+
+def _notebook_bytes(marker: str) -> bytes:
+    value = {
+        "nbformat": 4,
+        "nbformat_minor": 5,
+        "metadata": {},
+        "cells": [{"cell_type": "markdown", "metadata": {}, "source": marker}],
+    }
+    return (json.dumps(value, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
+
+
+def _status(root: Path) -> str:
+    result = _git(root, "status", "--porcelain=v1", "-uall")
+    if result.returncode != 0:
+        raise ProofError("GIT_STATUS_UNAVAILABLE")
+    return result.stdout
+
+
+def _head(root: Path) -> str:
+    return _require_git(root, "rev-parse", "--verify", "HEAD", reason="HEAD_UNAVAILABLE")
+
+
+def _branch(root: Path) -> str:
+    result = _git(root, "symbolic-ref", "--quiet", "--short", "HEAD")
+    if result.returncode != 0:
+        raise ProofError("BRANCH_UNAVAILABLE")
+    return result.stdout.strip()
+
+
+def _repo_snapshot(root: Path) -> dict[str, str]:
+    return {"head": _head(root), "branch": _branch(root), "status": _status(root)}
+
+
+def _branch_sha(control: Path, branch: str) -> str | None:
+    ref = f"refs/heads/{branch}"
+    probe = _git(control, "show-ref", "--verify", "--quiet", ref)
+    if probe.returncode == 1:
+        return None
+    if probe.returncode != 0:
+        raise ProofError("BRANCH_LOOKUP_FAILED")
+    return _require_git(control, "rev-parse", "--verify", ref, reason="BRANCH_LOOKUP_FAILED")
+
+
+def _registered_worktrees(control: Path) -> set[str]:
+    result = _git(control, "worktree", "list", "--porcelain")
+    if result.returncode != 0:
+        raise ProofError("WORKTREE_INVENTORY_FAILED")
+    values = set()
+    for line in result.stdout.splitlines():
+        if line.startswith("worktree "):
+            values.add(os.path.abspath(line[9:]))
+    return values
+
+
+def _artifact_snapshot(root: Path) -> dict[str, str]:
+    snapshot: dict[str, str] = {}
+    for relative_root in CACHE_ROOTS:
+        base = root / relative_root
+        if not base.exists():
+            continue
+        for path in sorted(base.rglob("*")):
+            rel = path.relative_to(root).as_posix()
+            if path.is_dir() and path.name == "__pycache__":
+                snapshot[rel + "/"] = "dir"
+            elif path.is_file() and path.suffix == ".pyc":
+                snapshot[rel] = _sha256_file(path)
+    return snapshot
+
+
+def _fixture_status_only(root: Path) -> bool:
+    lines = [line for line in _status(root).splitlines() if line]
+    return lines == [f"?? {FIXTURE_RELATIVE.as_posix()}"]
+
+
+def _validate_profile(executor: str, base_sha: str, branch: str, worktree: Path) -> dict[str, object]:
+    if executor not in PROFILES:
+        raise ProofError("EXECUTOR_INVALID")
+    profile = PROFILES[executor]
+    control = Path(profile["control_repo"])
+    landing = Path(profile["landing"])
+    root = Path(profile["worktree_root"])
+    prefix = str(profile["branch_prefix"])
+    if not SHA40_RE.fullmatch(base_sha):
+        raise ProofError("BASE_SHA_INVALID")
+    if not branch.startswith(prefix):
+        raise ProofError("BRANCH_NAMESPACE_INVALID")
+    if _git(control, "check-ref-format", "--branch", branch).returncode != 0:
+        raise ProofError("BRANCH_INVALID")
+    if not worktree.is_absolute():
+        raise ProofError("WORKTREE_NOT_ABSOLUTE")
+    if not control.is_dir() or not landing.is_dir() or not root.is_dir():
+        raise ProofError("PROFILE_PATH_UNAVAILABLE")
+    if worktree.exists() or worktree.is_symlink():
+        raise ProofError("WORKTREE_TARGET_EXISTS")
+    if worktree.parent.resolve(strict=True) != root.resolve(strict=True):
+        raise ProofError("WORKTREE_ROOT_INVALID")
+    actual = _require_git(control, "rev-parse", "--show-toplevel", reason="CONTROL_REPO_INVALID")
+    if Path(actual).resolve(strict=True) != control.resolve(strict=True):
+        raise ProofError("CONTROL_REPO_INVALID")
+    return profile
+
+
+def _preflight(executor: str, base_sha: str, branch: str, worktree: Path) -> dict[str, object]:
+    profile = _validate_profile(executor, base_sha, branch, worktree)
+    control = Path(profile["control_repo"])
+    landing = Path(profile["landing"])
+    if _branch_sha(control, branch) is not None:
+        raise ProofError("BRANCH_ALREADY_EXISTS")
+    if os.path.abspath(str(worktree)) in _registered_worktrees(control):
+        raise ProofError("WORKTREE_ALREADY_REGISTERED")
+    commit = _git(control, "rev-parse", "--verify", f"{base_sha}^{{commit}}")
+    if commit.returncode != 0 or commit.stdout.strip() != base_sha:
+        raise ProofError("BASE_COMMIT_UNAVAILABLE")
+    landing_top = _require_git(landing, "rev-parse", "--show-toplevel", reason="LANDING_INVALID")
+    if Path(landing_top).resolve(strict=True) != landing.resolve(strict=True):
+        raise ProofError("LANDING_INVALID")
+    landing_before = _repo_snapshot(landing)
+    if landing_before["status"]:
+        raise ProofError("LANDING_NOT_CLEAN")
+    return {
+        "profile": profile,
+        "control_before": _repo_snapshot(control),
+        "landing_before": landing_before,
+    }
+
+
+def _run_reader(worktree: Path) -> dict[str, object]:
+    reader = worktree / READER_RELATIVE
+    result = _run([str(reader), "--repo-root", str(worktree), "--path", FIXTURE_RELATIVE.as_posix()])
+    if result.returncode != 0:
+        raise ProofError("READER_FAILED")
+    try:
+        value = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        raise ProofError("READER_OUTPUT_INVALID") from None
+    if not isinstance(value, dict) or value.get("ok") is not True:
+        raise ProofError("READER_OUTPUT_INVALID")
+    return value
+
+
+def _assert_reader(value: dict[str, object], marker: str, expected_hash: str, base_sha: str) -> None:
+    if value.get("source_kind") != "working_tree":
+        raise ProofError("READER_SOURCE_KIND_MISMATCH")
+    if value.get("path_state") != "untracked":
+        raise ProofError("READER_PATH_STATE_MISMATCH")
+    if value.get("git_head_sha") != base_sha:
+        raise ProofError("READER_HEAD_MISMATCH")
+    if value.get("content_sha256") != expected_hash:
+        raise ProofError("READER_HASH_MISMATCH")
+    cells = value.get("cells")
+    if not isinstance(cells, list) or not cells or not isinstance(cells[0], dict):
+        raise ProofError("READER_CELLS_INVALID")
+    if cells[0].get("source") != marker:
+        raise ProofError("READER_MARKER_MISMATCH")
+
+
+def _safe_unlink_fixture(path: Path, expected_hashes: set[str]) -> bool:
+    if not path.exists() and not path.is_symlink():
+        return True
+    if path.is_symlink() or not path.is_file():
+        return False
+    try:
+        digest = _sha256_file(path)
+    except OSError:
+        return False
+    if digest not in expected_hashes:
+        return False
+    path.unlink()
+    return True
+
+
+def _cleanup(
+    control: Path,
+    landing: Path,
+    worktree: Path,
+    branch: str,
+    base_sha: str,
+    expected_hashes: set[str],
+    artifact_before: dict[str, str],
+    control_before: dict[str, str],
+    landing_before: dict[str, str],
+) -> tuple[bool, list[str], bool, bool, bool, bool]:
+    reasons: list[str] = []
+    if worktree.exists():
+        fixture = worktree / FIXTURE_RELATIVE
+        if not _safe_unlink_fixture(fixture, expected_hashes):
+            reasons.append("CLEANUP_FIXTURE_IDENTITY_CHANGED")
+        try:
+            current_artifacts = _artifact_snapshot(worktree)
+        except OSError:
+            current_artifacts = {}
+            reasons.append("CLEANUP_ARTIFACT_SCAN_FAILED")
+        if current_artifacts != artifact_before:
+            reasons.append("CLEANUP_FOREIGN_ARTIFACT_DELTA")
+        try:
+            if _head(worktree) != base_sha or _branch(worktree) != branch:
+                reasons.append("CLEANUP_WORKTREE_IDENTITY_CHANGED")
+            if _status(worktree):
+                reasons.append("CLEANUP_WORKTREE_DIRTY")
+        except ProofError:
+            reasons.append("CLEANUP_WORKTREE_STATE_UNKNOWN")
+        if not reasons:
+            remove = _git(control, "worktree", "remove", str(worktree))
+            if remove.returncode != 0:
+                reasons.append("CLEANUP_WORKTREE_REMOVE_FAILED")
+    branch_sha = _branch_sha(control, branch)
+    if branch_sha is not None:
+        if worktree.exists():
+            reasons.append("CLEANUP_BRANCH_RETAINED_WITH_WORKTREE")
+        elif branch_sha != base_sha:
+            reasons.append("CLEANUP_BRANCH_MOVED")
+        else:
+            delete = _git(control, "update-ref", "-d", f"refs/heads/{branch}", base_sha)
+            if delete.returncode != 0:
+                reasons.append("CLEANUP_BRANCH_DELETE_FAILED")
+    branch_absent = _branch_sha(control, branch) is None
+    worktree_absent = not worktree.exists() and os.path.abspath(str(worktree)) not in _registered_worktrees(control)
+    try:
+        control_preserved = _repo_snapshot(control) == control_before
+    except ProofError:
+        control_preserved = False
+    try:
+        landing_preserved = _repo_snapshot(landing) == landing_before
+    except ProofError:
+        landing_preserved = False
+    if not branch_absent:
+        reasons.append("CLEANUP_BRANCH_PRESENT")
+    if not worktree_absent:
+        reasons.append("CLEANUP_WORKTREE_PRESENT")
+    if not control_preserved:
+        reasons.append("CONTROL_BASELINE_CHANGED")
+    if not landing_preserved:
+        reasons.append("LANDING_BASELINE_CHANGED")
+    unique = sorted(set(reasons))
+    return not unique, unique, branch_absent, worktree_absent, control_preserved, landing_preserved
+
+
+def run_proof(executor: str, base_sha: str, branch: str, worktree_value: str) -> dict[str, object]:
+    worktree = Path(worktree_value)
+    first_hash: str | None = None
+    second_hash: str | None = None
+    reader_hash: str | None = None
+    proof_ok = False
+    phase_started = False
+    cache_delta = "UNKNOWN"
+    reasons: list[str] = []
+    context: dict[str, object] | None = None
+    artifact_before: dict[str, str] = {}
+    bytes_a = _notebook_bytes(MARKER_A)
+    bytes_b = _notebook_bytes(MARKER_B)
+    expected_hashes = {_sha256_bytes(bytes_a), _sha256_bytes(bytes_b)}
+    branch_absent = False
+    worktree_absent = False
+    control_preserved = False
+    landing_preserved = False
+    cleanup_state = "NOT_STARTED"
+    try:
+        context = _preflight(executor, base_sha, branch, worktree)
+        profile = context["profile"]
+        control = Path(profile["control_repo"])
+        landing = Path(profile["landing"])
+        create = _git(control, "worktree", "add", "-b", branch, str(worktree), base_sha)
+        if create.returncode != 0:
+            raise ProofError("WORKTREE_CREATE_FAILED")
+        phase_started = True
+        if _head(worktree) != base_sha or _branch(worktree) != branch:
+            raise ProofError("CREATED_WORKTREE_IDENTITY_MISMATCH")
+        if _branch_sha(control, branch) != base_sha:
+            raise ProofError("CREATED_BRANCH_IDENTITY_MISMATCH")
+        if _status(worktree):
+            raise ProofError("CREATED_WORKTREE_NOT_CLEAN")
+        artifact_before = _artifact_snapshot(worktree)
+        reader = worktree / READER_RELATIVE
+        if not reader.is_file() or reader.is_symlink():
+            raise ProofError("READER_PATH_INVALID")
+        reader_hash = _sha256_file(reader)
+        fixture = worktree / FIXTURE_RELATIVE
+        if fixture.exists() or fixture.is_symlink():
+            raise ProofError("FIXTURE_TARGET_EXISTS")
+        with fixture.open("xb") as handle:
+            handle.write(bytes_a)
+        if not _fixture_status_only(worktree):
+            raise ProofError("FIXTURE_STATUS_INVALID")
+        first = _run_reader(worktree)
+        first_hash = str(first.get("content_sha256"))
+        _assert_reader(first, MARKER_A, _sha256_bytes(bytes_a), base_sha)
+        if _artifact_snapshot(worktree) != artifact_before:
+            cache_delta = "CHANGED"
+            raise ProofError("READER_ARTIFACT_DELTA")
+        fixture.write_bytes(bytes_b)
+        if not _fixture_status_only(worktree):
+            raise ProofError("FIXTURE_STATUS_INVALID")
+        second = _run_reader(worktree)
+        second_hash = str(second.get("content_sha256"))
+        _assert_reader(second, MARKER_B, _sha256_bytes(bytes_b), base_sha)
+        if first_hash == second_hash:
+            raise ProofError("CONTENT_HASH_DID_NOT_CHANGE")
+        if _head(worktree) != base_sha:
+            raise ProofError("HEAD_CHANGED_DURING_PROOF")
+        if _artifact_snapshot(worktree) != artifact_before:
+            cache_delta = "CHANGED"
+            raise ProofError("READER_ARTIFACT_DELTA")
+        cache_delta = "NONE"
+        proof_ok = True
+    except ProofError as exc:
+        reasons.append(exc.reason_code)
+    except (OSError, ValueError, TypeError):
+        reasons.append("UNEXPECTED_ERROR")
+    finally:
+        if context is not None:
+            profile = context["profile"]
+            control = Path(profile["control_repo"])
+            landing = Path(profile["landing"])
+            cleanup_ok, cleanup_reasons, branch_absent, worktree_absent, control_preserved, landing_preserved = _cleanup(
+                control,
+                landing,
+                worktree,
+                branch,
+                base_sha,
+                expected_hashes,
+                artifact_before,
+                context["control_before"],
+                context["landing_before"],
+            )
+            reasons.extend(cleanup_reasons)
+            cleanup_state = "COMPLETE" if cleanup_ok else "BLOCKED"
+        else:
+            cleanup_state = "NOT_APPLICABLE"
+    reasons = sorted(set(reasons))
+    status = "PASS" if proof_ok and not reasons else ("FAIL" if phase_started else "BLOCKED")
+    return {
+        "schema": "mcl-notebook-live-proof.v1",
+        "status": status,
+        "reason_codes": reasons,
+        "executor": executor,
+        "base_sha": base_sha,
+        "first_content_sha256": first_hash,
+        "second_content_sha256": second_hash,
+        "reader_source_sha256": reader_hash,
+        "harness_source_sha256": _sha256_file(SCRIPT_PATH),
+        "head_preserved": proof_ok,
+        "path_state_preserved": proof_ok,
+        "cache_artifact_delta": cache_delta,
+        "cleanup": cleanup_state,
+        "branch_absent_after": branch_absent,
+        "worktree_absent_after": worktree_absent,
+        "control_preserved": control_preserved,
+        "landing_preserved": landing_preserved,
+        "authority": dict(AUTHORITY),
+    }
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run the fixed MCL saved-notebook live proof")
+    parser.add_argument("--executor", required=True, choices=sorted(PROFILES))
+    parser.add_argument("--base-sha", required=True)
+    parser.add_argument("--branch", required=True)
+    parser.add_argument("--worktree", required=True)
+    return parser
+
+
+def main() -> int:
+    args = _parser().parse_args()
+    result = run_proof(args.executor, args.base_sha, args.branch, args.worktree)
+    print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+    return 0 if result["status"] == "PASS" else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

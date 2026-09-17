@@ -151,3 +151,20 @@ Related memory IDs: E-2026-09-17-003
 Follow-up trigger: Preview 패널을 기본값으로 복원한 뒤 Spacebar 재생에서 CTI와 Composition 화면이 함께 갱신되는지 확인한다.
 Resolution / later evidence: 키프레임 계열 문제 가능성은 낮아졌고 Preview 계열 진단으로 전환한다.
 ```
+
+### E-2026-09-17-005 — 정사각형 수정 성공, Position 키프레임 1개 추가 확인
+
+```text
+Entry ID: E-2026-09-17-005
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차 / 도형·Position
+Status: OBSERVED
+Observation: 최신 연습본 `2주차 연습용_망!2.aep`에서 Rectangle Path Size가 250×250으로 확인되어 정사각형 수정은 성공했다. Position에는 약 0초, 1.93초, 2초의 세 키프레임이 존재하며, 2초 직전 키프레임 하나가 추가되어 있다.
+Context: 사용자는 Preview 문제를 해결해 Spacebar 재생이 동작한다고 확인한 뒤 최신 프로젝트를 다시 업로드했다. 최신 파일에서는 레이어 Scale도 약 100.8% 수준의 정적 값으로 저장되어 있다.
+Result: 도형 제약과 기본 Position 애니메이션은 재현 가능해졌다. 다만 현재 연습 목표가 0초→2초 두 점 이동이라면 중간 키프레임을 제거하고 Scale을 100%로 되돌리는 편이 더 단순한 기준본이 된다.
+Interpretation: 키프레임 원리 자체보다 연습 중 속성이나 키프레임을 의도치 않게 추가·변경하지 않고 상태를 관리하는 정밀 조작이 현재 확인할 가치가 있는 다음 포인트다. 단일 세션이므로 일반적 약점으로 확정하지 않는다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-17-003, E-2026-09-17-004
+Follow-up trigger: Position을 두 키프레임으로 정리하고 Scale 100% 상태를 확인한 뒤 Rotation을 추가해 회전 축과 키프레임 생성 흐름을 관찰한다.
+Resolution / later evidence: 정사각형 수정 성공. Position 중간 키프레임 정리와 Scale 복원은 미확정이다.
+```

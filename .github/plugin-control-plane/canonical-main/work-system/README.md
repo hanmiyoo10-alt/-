@@ -253,6 +253,16 @@ Terminal close-sync must align, as applicable, the lifecycle State; completed/cu
 
 A final comment or native GitHub closure does not make a contradictory stale packet body acceptable. If terminal evidence and the packet body conflict, treat the body as a stale lifecycle projection, re-read the terminal evidence, and do not resume the stale advertised stage without fresh re-attribution.
 
+### Reserved packet self-bookkeeping surface
+
+For every canonical work packet bearing `<!-- canonical-main-work-packet:v1 -->`, the packet's own GitHub issue is a reserved self-coordination surface for faithful lifecycle bookkeeping. This reserved self surface is separate from implementation/effect write scope, so a packet does not need to list its own issue under a bounded write-scope section merely to project already-established coordination state.
+
+Reserved self-bookkeeping may update only the lifecycle `State`; completed/current/next `Interaction stage`; evidence-backed Proof / closure terms; required acceptance UNKNOWNs and explicitly permitted non-blocking pending evidence; Stop condition / Handoff / exact next legal action; and native issue closure after the body is reconciled terminal and the packet's acceptance permits `DONE`. Native GitHub closure remains downstream of evidence-backed terminal body reconciliation and never proves `DONE` by itself.
+
+Reserved self-bookkeeping MUST NOT change the primary goal, add/remove/weaken acceptance criteria, widen or reinterpret implementation/effect write scope, manufacture or erase evidence, infer `DONE` or `LIVE_PROVEN`, clear an `UNKNOWN` without evidence, or authorize mutation of another issue, PR, repository file, branch, workflow, device, runtime, release, or production surface. Any body edit beyond faithful self-projection is ordinary mutation and requires explicit bounded authority.
+
+Implementation/effect scope ceilings such as `exactly N paths/surfaces` govern declared work outputs and external coordination targets. Generic `any additional issue surface is scope expansion` wording applies to external effect surfaces unless a packet explicitly and separately forbids lifecycle bookkeeping itself. The reserved self surface is not emitted into or inferred from write-scope overlap classification and grants no implicit external issue or repository mutation authority.
+
 The existing `canonical-main-a1-standard-auto-close:v1` profile remains separately owned by deterministic closure bookkeeping. This generic close-sync contract does not broaden that opt-in automation boundary.
 
 ## Parallelism

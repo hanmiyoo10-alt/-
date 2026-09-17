@@ -253,3 +253,20 @@ Related memory IDs: E-2026-09-17-009
 Follow-up trigger: 수업 의도에 맞춰 연속 점멸을 만들 경우 복사본의 시작 시점을 조정하고, Hold Keyframe 단계에서는 보간이 갑작스러운 전환으로 바뀌는지 확인한다.
 Resolution / later evidence: Opacity 키프레임 복사·붙여넣기 성공. 연속 반복 간격과 Hold 적용은 아직 미확정이다.
 ```
+
+### E-2026-09-17-011 — Opacity 반복 간격 교정 성공
+
+```text
+Entry ID: E-2026-09-17-011
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차 / Opacity 반복 간격
+Status: OBSERVED
+Observation: 최신 연습본 `2주차 연습용_망!8.aep`에서 Opacity 키프레임 네 개의 시점·값이 0초 100%, 1초 0%, 2초 100%, 3초 0%로 확인됐다.
+Context: 직전 연습본에서는 복사된 두 키프레임이 4초와 5초에 있어 원본 쌍과 3초 공백이 있었고, 연속 1초 주기가 되도록 복사본의 시점을 조정했다.
+Result: Opacity 값 순서 100%→0%→100%→0%와 각 인접 키프레임 사이 1초 간격이 모두 성립한다. 기존 Position·Rotation 데이터도 유지된다.
+Interpretation: Opacity 키프레임 복사 후 주기 배치까지 의도한 반복 구조로 정리했다. 현재 키프레임 보간은 Hold로 전환된 상태로 확인되지 않으므로, 다음 단계에서 Hold Keyframe 적용 후 갑작스러운 전환 여부를 별도로 검증한다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-17-009, E-2026-09-17-010
+Follow-up trigger: 네 Opacity 키프레임에 Toggle Hold Keyframe을 적용하고 재생 시 값이 구간 사이에서 보간되지 않고 다음 키에서 즉시 전환되는지 확인한다.
+Resolution / later evidence: Opacity 연속 반복 시점 배치 완료. Hold 적용은 아직 미확정이다.
+```

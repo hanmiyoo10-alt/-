@@ -338,3 +338,20 @@ Related memory IDs: E-2026-09-17-013, E-2026-09-17-014
 Follow-up trigger: 다음 도형 또는 미디어 배치 단계에서도 새 레이어 생성이 필요한 경우 작업 전 선택 상태를 확인한다.
 Resolution / later evidence: 삼각형 생성, 별도 Shape Layer 분리, Points=3, 중앙 배치 완료.
 ```
+
+### E-2026-09-17-016 — PNG 이미지 소스 및 레이어 추가 확인
+
+```text
+Entry ID: E-2026-09-17-016
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차 / PNG 미디어 배치
+Status: OBSERVED
+Observation: 최신 연습본 `2주차 연습용_망!13_사진.aep`에서 새 PNG 소스 `오징어게임.png`가 프로젝트에 포함됐고 소스 크기는 900×900으로 확인됐다. 컴포지션에는 직전 파일보다 `LIST Layr`가 하나 추가되어 총 네 개의 메인 레이어가 존재하며, 새 이미지 레이어에는 키프레임 `ldat`가 없다.
+Context: 삼각형 연습 완료 후 Project 패널의 PNG 이미지를 타임라인에 드래그하고 위치·크기 등 추가 변형은 하지 않는 단계였다.
+Result: PNG 미디어가 새 레이어로 추가됐고, 직전 `망!12_삼.aep`의 삼각형·원·네모 세 `LIST Layr` 블록은 최신 파일에서도 바이트 단위로 동일하게 유지되어 기존 도형 및 애니메이션 데이터가 보존됐다.
+Interpretation: 정적 이미지 소스를 타임라인에 새 레이어로 추가하면서 기존 Shape Layer 작업을 건드리지 않는 흐름을 재현했다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-17-015
+Follow-up trigger: 다음 미디어 배치 단계에서 MP3 등 오디오 소스를 타임라인에 추가하고 기존 이미지·도형 레이어가 유지되는지 확인한다.
+Resolution / later evidence: PNG 이미지 소스 추가, 새 레이어 생성, 기존 도형·애니메이션 보존 확인 완료.
+```

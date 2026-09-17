@@ -83,3 +83,20 @@ Related memory IDs: P-002, S-PSAT-002
 Follow-up trigger: 실제 PSAT 오답에서 동의표현/재진술/범주변환 때문에 틀리는 사례가 반복되는지 확인.
 Resolution / later evidence: 추가 문제풀이 근거 필요.
 ```
+
+### E-2026-09-17-001 — After Effects 2주차 재연습 시작
+
+```text
+Entry ID: E-2026-09-17-001
+Date: 2026-09-17
+Subject / scope: After Effects / 영상편집실습 2주차
+Status: OBSERVED
+Observation: 사용자는 2주차 After Effects 실습이 매우 어렵게 느껴졌다고 보고했고, 오늘 해당 주차를 다시 연습하기로 했다.
+Context: 2주차 자료에는 컴포지션 설정, 도형 생성/정렬/기준점, Position·Rotation·Opacity 키프레임, Hold Keyframe, 이미지·음원 배치, 렌더링까지 여러 조작이 한 세션에 연결되어 있다.
+Result: 아직 실제 재연습 성과는 관찰 전이며, 어려움의 정확한 병목은 미확정이다.
+Interpretation: 전체 완성작을 한 번에 재현하기보다 키프레임의 '시작값 → 시간 이동 → 끝값' 원리를 작은 동작별로 분리해 연습하면 병목을 더 정확히 찾을 수 있다는 가설을 세운다.
+Confidence: MEDIUM
+Related memory IDs: P-001
+Follow-up trigger: Position, Rotation, Opacity를 각각 독립적으로 재현한 뒤 어느 단계에서 막히는지와 도움 없이 반복 가능한지를 관찰한다.
+Resolution / later evidence: 미확정. 오늘 재연습 결과로 후속 기록한다.
+```

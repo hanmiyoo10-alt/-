@@ -84,6 +84,19 @@ session payload, private log, or provider state merely to complete preflight.
 If the fixed producer/receipt is unavailable, preserve blocked/unsupported or
 `UNKNOWN` according to its owner instead of improvising a replacement.
 
+## Optional host-resource preflight
+
+When the already-selected phase explicitly requires phone-host capacity or pressure
+evidence, invoke the sibling `mcl-host-resource-preflight` only after the normal
+route-conditioned owner observation. Pass the same already-selected route/executor
+and exact host target. Capacity floors remain caller/packet-owned.
+
+Do not invoke the host-resource sibling merely because a task exists. Tiny, ordinary,
+or read-only work that does not need resource evidence keeps the existing first-pass
+flow unchanged. A child `pass`, `below_floor`, `unknown`, battery value, thermal value,
+load value, or swap value is scoped evidence only and never becomes aggregate
+readiness or mutation permission. VM admission remains owned by the VM owner.
+
 ## Unknown and blocked evidence
 
 Owner evidence remains scoped. `missing`, `blocked`, `offline`, `stale`,

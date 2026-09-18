@@ -138,20 +138,26 @@ non-sensitive ChatGPT nodes and never enumerates unrelated UI text.
 
 ## Fixed effect allowlist
 
+The launch path first performs one fixed read-only resolver for
+`com.openai.chatgpt` MAIN/LAUNCHER metadata. It accepts exactly one component
+owned by that package and never emits the resolved component in a receipt.
+
 The only effect primitives owned here are equivalent to:
 
 ```text
 adb -s <resolved-S> shell am start
   -a android.intent.action.MAIN
   -c android.intent.category.LAUNCHER
-  -p com.openai.chatgpt
+  -n <validated-com.openai.chatgpt-component>
 
 adb -s <resolved-S> shell input tap <internally-derived-x> <internally-derived-y>
 
 adb -s <resolved-S> shell input text <strictly-encoded-bounded-ascii>
 ```
 
-They are constructed as argv arrays, not through a shell.
+They are constructed as argv arrays, not through a shell. A missing,
+malformed, ambiguous, or other-package launcher component blocks the launch
+without trying an alternate launcher mechanism.
 
 ## Forbidden effects
 

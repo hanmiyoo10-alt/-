@@ -203,6 +203,17 @@ ok('release requires current generation and exact active identity', () => {
   assert.equal(released.lastRelease.leaseId, acquiredPlan.leaseId);
 });
 
+ok('release without packet ref fails closed', () => {
+  const acquiredPlan = lease.planAcquire(activeState(), acquireRequest());
+  const acquired = stateFromPlan(acquiredPlan);
+  const missingPacket = lease.planRelease(acquired, {
+    expectedGeneration: 2,
+    leaseId: acquiredPlan.leaseId,
+  });
+  assert.equal(missingPacket.status, 'BLOCKED');
+  assert.ok(missingPacket.reasonCodes.includes('REQUEST_PACKET_REF_INVALID'));
+});
+
 ok('release retry is idempotent after success at current generation', () => {
   const acquiredPlan = lease.planAcquire(activeState(), acquireRequest());
   const acquired = stateFromPlan(acquiredPlan);
@@ -313,6 +324,9 @@ ok('workflow is one fixed owner-only serialized issue writer', () => {
   assert.equal(workflow.includes('issue_number:'), false);
   assert.equal(workflow.includes('shell_command'), false);
   assert.equal(workflow.includes('workflow_call:'), false);
+  assert.ok(workflow.includes(
+    'packet_ref:\n        description: Source packet reference; required for acquire/release, omit for activate\n        required: false',
+  ));
   assert.ok(workflow.includes('options: [repository, landing_metadata, not_applicable]'));
 });
 class FakeClient {

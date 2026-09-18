@@ -1733,3 +1733,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/e6655a10a3f071c4b21486fad7df9ab33275f2d0)
 - Event ID: `c538fa9c3059181731104572d6f5c87202568a391f83cd98ffc1dc7dda0f4bd5`
 <!-- canonical-main-doc-promoted:c538fa9c3059181731104572d6f5c87202568a391f83cd98ffc1dc7dda0f4bd5 -->
+
+### 2026-09-18 — Merge pull request #2472 from hanmiyoo10-alt/repo/invoke-exec-receipt-2471
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `81a6c7416616651d12ac03d69cc7b2149fa9b282`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/81a6c7416616651d12ac03d69cc7b2149fa9b282)
+- Event ID: `6f3c0b06ae67c147dd895eb67b18da587fd979fc76e53ff3f1a77963816e3297`
+<!-- canonical-main-doc-promoted:6f3c0b06ae67c147dd895eb67b18da587fd979fc76e53ff3f1a77963816e3297 -->

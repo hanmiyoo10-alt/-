@@ -17,6 +17,7 @@ MAX_TEXT_CHARS = 160
 MAX_RESOURCE_ID_CHARS = 160
 MAX_RESOURCE_LOCAL_CHARS = 80
 MAX_COORDINATE = 10000
+MAX_SEMANTIC_LIFT_DEPTH = 2
 WAIT_ATTEMPTS = 8
 WAIT_INTERVAL_SECONDS = 0.75
 DETAILS = "withheld"
@@ -114,32 +115,44 @@ def _semantic_nodes(raw_xml):
     result = []
     visited = 0
     target_present = False
-    for element in root.iter("node"):
-        visited += 1
-        if visited > MAX_NODES:
-            raise BoundedError("node_limit")
-        attrs = element.attrib
-        if attrs.get("package") != TARGET_PACKAGE:
-            continue
-        target_present = True
-        if _sensitive(attrs):
-            continue
-        editable = (
-            attrs.get("class", "").endswith("EditText")
-            or attrs.get("editable", "").lower() == "true"
-        )
-        actionable = attrs.get("clickable", "").lower() == "true"
-        label = _bounded_label(attrs.get("content-desc")) or _bounded_label(attrs.get("text"))
-        result.append({
-            "actionable": actionable,
-            "editable": editable,
-            "label": label,
-            "text": attrs.get("text", ""),
-            "content_desc": attrs.get("content-desc", ""),
-            "focused": attrs.get("focused", "").lower() == "true",
-            "bounds": attrs.get("bounds", ""),
-            "resource_id_local": _resource_id_local(attrs.get("resource-id")),
-        })
+
+    def visit(element, parent_index=None):
+        nonlocal visited, target_present
+        current_index = None
+        if element.tag == "node":
+            visited += 1
+            if visited > MAX_NODES:
+                raise BoundedError("node_limit")
+            attrs = element.attrib
+            is_target = attrs.get("package") == TARGET_PACKAGE
+            if is_target:
+                target_present = True
+            if is_target and not _sensitive(attrs):
+                editable = (
+                    attrs.get("class", "").endswith("EditText")
+                    or attrs.get("editable", "").lower() == "true"
+                )
+                actionable = attrs.get("clickable", "").lower() == "true"
+                label = (
+                    _bounded_label(attrs.get("content-desc"))
+                    or _bounded_label(attrs.get("text"))
+                )
+                current_index = len(result)
+                result.append({
+                    "actionable": actionable,
+                    "editable": editable,
+                    "label": label,
+                    "text": attrs.get("text", ""),
+                    "content_desc": attrs.get("content-desc", ""),
+                    "focused": attrs.get("focused", "").lower() == "true",
+                    "bounds": attrs.get("bounds", ""),
+                    "resource_id_local": _resource_id_local(attrs.get("resource-id")),
+                    "parent_index": parent_index,
+                })
+        for child in element:
+            visit(child, current_index)
+
+    visit(root)
     return target_present, result
 
 def _snapshot_id(raw_xml):
@@ -229,17 +242,34 @@ def _match_count(value):
         return "1"
     return "many"
 
+def _nearest_actionable_target(analysis, source_index):
+    nodes = analysis["nodes"]
+    node = nodes[source_index]
+    if node["actionable"]:
+        return source_index
+    current = source_index
+    for _ in range(MAX_SEMANTIC_LIFT_DEPTH):
+        parent_index = nodes[current].get("parent_index")
+        if parent_index is None:
+            return None
+        parent = nodes[parent_index]
+        if parent["actionable"]:
+            return parent_index
+        current = parent_index
+    return None
+
 def _new_chat_match_indices(analysis):
     labels = set(ALIASES["new_chat"])
-    label_matches = {
-        index for index, node in enumerate(analysis["nodes"])
-        if node["actionable"] and node["label"] in labels
-    }
-    resource_matches = {
-        index for index, node in enumerate(analysis["nodes"])
-        if node["actionable"]
-        and node["resource_id_local"] in NEW_CHAT_RESOURCE_IDS
-    }
+    label_matches = set()
+    resource_matches = set()
+    for index, node in enumerate(analysis["nodes"]):
+        target = _nearest_actionable_target(analysis, index)
+        if target is None:
+            continue
+        if node["label"] in labels:
+            label_matches.add(target)
+        if node["resource_id_local"] in NEW_CHAT_RESOURCE_IDS:
+            resource_matches.add(target)
     return label_matches, resource_matches, label_matches | resource_matches
 
 def find_alias(analysis, alias):

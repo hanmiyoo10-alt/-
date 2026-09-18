@@ -113,8 +113,16 @@ start_new_chat
 ```
 
 There is no substring or fuzzy matching. Label and structural matches are
-deduplicated by the same semantic node index before the normal 0 / 1 / many
-decision. `send` remains label-only.
+deduplicated before the normal 0 / 1 / many decision. `send` remains
+label-only.
+
+For `new_chat` only, exact reviewed semantic evidence may be carried by a
+non-clickable child of the actual clickable affordance. The adapter preserves a
+bounded internal parent link for same-package, non-sensitive nodes and may lift
+that exact evidence to the nearest actionable ancestor within at most two
+parent hops. A package boundary or sensitive ancestor breaks the link, deeper
+evidence does not match, and multiple semantic sources mapping to the same
+actionable ancestor count once. No ancestry/class/path data is emitted.
 
 `probe-new-chat` captures one fresh hierarchy and returns only the snapshot,
 bounded label/resource/combined match counts, an opaque handle for exactly one

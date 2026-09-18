@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MCL GUI Bridge</string>
+    <string name="accessibility_description">ChatGPT Android 앱의 허용된 접근성 노드를 제한적으로 읽고 클릭/텍스트 입력하며, 명시적 요청에서만 해당 창 스크린샷을 캡처합니다. 로그인·비밀번호·다른 앱은 자동화하지 않습니다.</string>
+</resources>

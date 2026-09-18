@@ -25,6 +25,10 @@ class ContractTests(unittest.TestCase):
             'add_argument("--resource-id"',
             'add_argument("--suffix"',
             'add_argument("--query"',
+            'add_argument("--depth"',
+            'add_argument("--parent"',
+            'add_argument("--class"',
+            'add_argument("--selector"',
             '"monkey"',
             '"swipe"',
             '"keyevent"',
@@ -55,6 +59,7 @@ class ContractTests(unittest.TestCase):
         self.assertIn('EXPECTED_MODEL = "SM-G998N"', source)
         self.assertIn('TARGET_PACKAGE = "com.openai.chatgpt"', source)
         self.assertIn('REMOTE_XML = "/data/local/tmp/mcl-adb-ui-v1.xml"', source)
+        self.assertIn("MAX_SEMANTIC_LIFT_DEPTH = 2", source)
 
     def test_workflow_actions_are_full_sha_pinned(self):
         workflow = WORKFLOW.read_text()

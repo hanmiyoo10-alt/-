@@ -1,0 +1,5 @@
+# package|command
+termux-api|termux-battery-status
+termux-api|termux-notification
+termux-api|termux-notification-list
+termux-api|termux-notification-remove

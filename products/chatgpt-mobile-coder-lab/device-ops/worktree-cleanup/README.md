@@ -90,3 +90,51 @@ python3 products/chatgpt-mobile-coder-lab/device-ops/worktree-cleanup/tests/test
 python3 -m py_compile products/chatgpt-mobile-coder-lab/device-ops/worktree-cleanup/mcl-worktree-cleanup \
   products/chatgpt-mobile-coder-lab/device-ops/worktree-cleanup/tests/test-contract.py
 ```
+
+## Read-only inventory sibling
+
+`mcl-worktree-inventory` is the retention-safe read-only companion to the
+single-target cleanup helper. It accepts only:
+
+```text
+mcl-worktree-inventory status --executor S|M
+```
+
+The inventory reuses the fixed S/M profiles from `mcl-worktree-cleanup`.
+It enumerates only registered worktrees directly below the fixed disposable
+root, excludes protected control/landing worktrees, and never accepts a
+caller-selected repository root, worktree root, absolute path, command, or
+retention source.
+
+For a supported branch-family target with a readable exact HEAD, the inventory
+delegates local technical eligibility to the merged cleanup helper's
+`inspect` operation under a fixed per-item timeout. Detached targets,
+unsupported branch families, unreadable identities, owner blockers, and
+timeouts remain explicit `blocked` or `unknown`.
+
+Each row separates local technical evidence from deletion authority:
+
+```text
+technicalStatus = cleanable | blocked | unknown
+retentionStatus = external_required
+applyCandidate  = false
+```
+
+`cleanable` proves only the existing local #2428 cleanup preconditions for
+that observation. It does not mean the worktree should be deleted. Packet,
+checkpoint, or other current retention authority remains external, and this
+v1 inventory never infers permission from age, mtime, name, merged PR state,
+cleanliness, or remote-ref absence.
+
+The scan is bounded to a fixed maximum row count and fixed per-item observation
+time. Truncation or unreadable/slow targets produce `PARTIAL` evidence rather
+than fabricated completeness. Output contains semantic executor, basename,
+Git branch/HEAD identity, fixed reason codes, and `details=withheld`; it omits
+absolute paths, dirty filenames, raw status, holder material, device/session
+identity, credentials, environment, and free-form diagnostics.
+
+Validation:
+
+```text
+python3 products/chatgpt-mobile-coder-lab/device-ops/worktree-cleanup/tests/test-inventory-contract.py
+```

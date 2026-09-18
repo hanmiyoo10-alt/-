@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import subprocess
 import sys
@@ -164,33 +166,65 @@ class ExecutionReceiptAdapterTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "regular non-symlink"):
                 mod._load_report(str(link))
 
-    def test_adapter_source_is_pure_no_execution_or_network(self):
+    def test_adapter_source_is_pure_stdout_only(self):
         source = (ROOT / "execution_receipt_adapter.py").read_text(encoding="utf-8")
         self.assertNotIn("import subprocess", source)
         self.assertNotIn("urllib", source)
         self.assertNotIn("requests", source)
         self.assertNotIn("os.system", source)
         self.assertNotIn("Popen", source)
+        self.assertNotIn("write_text", source)
+        self.assertNotIn(".open(", source)
+        self.assertNotIn("mkdir(", source)
+        self.assertNotIn("--output", source)
 
-    def test_cli_writes_facts_without_raw_failure_message(self):
+    def test_cli_emits_stdout_facts_without_raw_failure_message(self):
         report = self.report("INFRA_ERROR")
         with tempfile.TemporaryDirectory() as td:
             report_path = Path(td) / "report.json"
-            output_path = Path(td) / "facts.json"
+            facts_path = Path(td) / "facts.json"
             report_path.write_text(json.dumps(report), encoding="utf-8")
-            code = mod.main([
-                "--report", str(report_path),
-                "--source-kind", "REPOSITORY_SHA",
-                "--source-locator", "refs/heads/main",
-                "--source-identity", "b" * 40,
-                "--execution-surface", "LOCAL_HARNESS",
-                "--artifact-locator", "artifact:ci/report.json",
-                "--output", str(output_path),
-            ])
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = mod.main([
+                    "--report", str(report_path),
+                    "--source-kind", "REPOSITORY_SHA",
+                    "--source-locator", "refs/heads/main",
+                    "--source-identity", "b" * 40,
+                    "--execution-surface", "LOCAL_HARNESS",
+                    "--artifact-locator", "artifact:ci/report.json",
+                ])
             self.assertEqual(0, code)
-            rendered = output_path.read_text(encoding="utf-8")
+            rendered = stdout.getvalue()
             self.assertNotIn("launch failed", rendered)
             self.assertIn("RUNNER_INFRA_ERROR", rendered)
+
+            facts_path.write_text(rendered, encoding="utf-8")
+            proc = subprocess.run(
+                ["node", str(PROJECTOR), "--input-file", str(facts_path)],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(3, proc.returncode)
+            receipt = json.loads(proc.stdout)
+            self.assertEqual("BLOCKED", receipt["result"])
+
+    def test_cli_rejects_removed_output_argument(self):
+        report = self.report("PASS")
+        with tempfile.TemporaryDirectory() as td:
+            report_path = Path(td) / "report.json"
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                mod.parse_args([
+                    "--report", str(report_path),
+                    "--source-kind", "REPOSITORY_SHA",
+                    "--source-locator", "refs/heads/main",
+                    "--source-identity", "c" * 40,
+                    "--execution-surface", "LOCAL_HARNESS",
+                    "--artifact-locator", "artifact:ci/report.json",
+                    "--output", str(Path(td) / "forbidden.json"),
+                ])
 
 
 if __name__ == "__main__":

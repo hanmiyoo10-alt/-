@@ -225,7 +225,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--source-identity", required=True)
     parser.add_argument("--execution-surface", required=True)
     parser.add_argument("--artifact-locator", required=True)
-    parser.add_argument("--output")
     return parser.parse_args(argv)
 
 
@@ -245,12 +244,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"EXECUTION_RECEIPT_ADAPTER_ERROR:{exc}", file=sys.stderr)
         return 2
     rendered = json.dumps(facts, indent=2, sort_keys=True) + "\n"
-    if args.output:
-        target = Path(args.output)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(rendered, encoding="utf-8")
-    else:
-        sys.stdout.write(rendered)
+    sys.stdout.write(rendered)
     return 0
 
 

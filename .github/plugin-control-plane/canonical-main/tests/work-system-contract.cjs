@@ -668,6 +668,43 @@ overlapResult = resolveOverlap(['surface:issue:465'], [{
 }]);
 assert.equal(overlapResult.state, 'OVERLAP');
 
+const repoClassifiedDisjointPacket = {
+  type: 'packet', ref: '#14a', issueState: 'open', classification: 'scope:repo',
+  body: overlapPacketBody('IN_PROGRESS', ['path:docs/repo-common-a.md']),
+};
+assert.equal(resolveScopeOverlap({
+  requestedScopes: ['path:tools/repo-common-b.cjs'],
+  discovery: 'COMPLETE',
+  classification: 'scope:repo',
+  candidates: [repoClassifiedDisjointPacket],
+}).state, 'DISJOINT');
+
+const semanticSurfacePacket = {
+  type: 'packet', ref: '#14b', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', [
+    'path:docs/repo-common-a.md',
+    'surface:work-system:scope-overlap-contract',
+  ]),
+};
+assert.equal(resolveOverlap(['path:tools/repo-common-b.cjs'], [semanticSurfacePacket]).state, 'DISJOINT');
+expectOverlapFinding(resolveOverlap([
+  'path:tools/repo-common-b.cjs',
+  'surface:work-system:scope-overlap-contract',
+], [semanticSurfacePacket]), 'OVERLAP', OVERLAP_REASON_CODES.WRITE_SCOPE_OVERLAP);
+assert.equal(resolveOverlap([
+  'path:tools/repo-common-b.cjs',
+  'surface:work-system:write-scope-authoring-contract',
+], [semanticSurfacePacket]).state, 'DISJOINT');
+assert.equal(resolveOverlap(['surface:mcl-landing-origin-main:S'], [{
+  type: 'packet', ref: '#14c', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['surface:mcl-landing-origin-main:S']),
+}]).state, 'OVERLAP');
+expectOverlapFinding(
+  resolveOverlap(['surface:repo:*'], [disjointPacket]),
+  'UNKNOWN',
+  OVERLAP_REASON_CODES.REQUESTED_SCOPE_INVALID,
+);
+
 const reservedSelfPacket = {
   type: 'packet', ref: '#2410', issueState: 'open',
   body: overlapPacketBody('IN_PROGRESS', ['path:docs/**']),
@@ -758,6 +795,16 @@ assert.match(readme, /`Bounded IMPLEMENTATION_PR write scope`/);
 assert.match(readme, /`Repository write-scope ceiling used by IMPLEMENTATION_PR`/);
 assert.match(readme, /multiple recognized sections are `CONFLICT`/);
 assert.match(readme, /missing, unsupported, malformed, or invalid scope evidence remains `UNKNOWN`/);
+assert.match(readme, /classification is routing\/context metadata only/);
+assert.match(readme, /do not become implicit path\/surface scopes, locks, leases, or mutation authority/);
+assert.match(readme, /surface:<owning-domain>:<stable-owner-or-effect>/);
+assert.match(readme, /surface:repo:common/);
+assert.match(readme, /preserve `UNKNOWN` or `CONFLICT` instead of inventing a surface or optimistic disjointness/);
+assert.match(template, /classification is context only and never an implicit lock/);
+assert.match(template, /list every writable `path:` scope/);
+assert.match(template, /surface:<owning-domain>:<stable-owner-or-effect>/);
+assert.match(template, /surface:repo:common/);
+assert.match(template, /preserve `UNKNOWN` or `CONFLICT` instead of inventing one/);
 
 
 const activityPacketBody = (state) => `<!-- canonical-main-work-packet:v1 -->

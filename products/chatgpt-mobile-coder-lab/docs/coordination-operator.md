@@ -21,6 +21,21 @@ The helper never patches #2352 directly and never synthesizes a missing packet l
 All GitHub-reading lease commands require an explicit `--repo owner/repo` and `--packet #N`.
 `inspect` reads the exact current packet body and #2352, hashes the exact body bytes, reports the D-013 lifecycle classification and current generation, and optionally normalizes requested scopes.
 
+### GitHub authentication transport
+
+GitHub authentication is transport only and never grants lease or repository authority.
+
+- When `GH_TOKEN` or `GITHUB_TOKEN` is already present, the operator preserves the existing explicit-token fetch client path.
+- When neither environment token is present, the operator may reuse an already authenticated `gh` CLI session through a bounded read-only `gh api` fallback.
+- The fallback accepts only the exact issue GETs required by `readContext`: the requested open packet issue and fixed ledger issue #2352 under the explicit validated `owner/repo`.
+- The fallback does not expose a generic endpoint, HTTP method, request body, or shell-string interface.
+- It never invokes `gh auth token`, login, refresh, or logout, and never reads or writes the credential store.
+- Raw `gh` stderr and credential/account/auth-scope material are not emitted in operator receipts.
+- If both the explicit-token path and authenticated-`gh` read path are unavailable, the command fails closed.
+
+The existing `--dispatch` effect boundary is unchanged. Dispatch still invokes only the fixed `mcl-task-lease.yml` workflow through bounded `gh` argv and still relies on D-013 generation, packet, lease, workflow, and readback checks.
+
+
 ```text
 node products/chatgpt-mobile-coder-lab/coordination/mcl-coordination-operator.cjs inspect \
   --repo owner/repo --packet '#2378' --scopes-json '["path:..."]'

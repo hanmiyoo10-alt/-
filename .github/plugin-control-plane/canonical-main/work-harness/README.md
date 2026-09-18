@@ -216,6 +216,22 @@ The input shape is strict and bounded. Unsupported fields, control characters, o
 
 For durable checkpoint recording, render the receipt as Markdown into a bounded body file and pass that body to the existing `stage-checkpoint.cjs`. The existing checkpoint harness remains the sole packet + #293 recording/idempotency adapter; the receipt projector adds no second writer or truth store.
 
+## Generic repository execution receipt
+
+`execution-receipt.cjs` is the Work Harness read-only projector/validator for #2142's bounded execution-evidence layer. It accepts bounded facts already produced by an owning local, remote, CI, analysis, build, test, or validation surface and emits one deterministic `REPOSITORY_EXECUTION_RECEIPT`. It does not execute the operation, read GitHub, discover authority, mutate repository state, or become a generic runner.
+
+```sh
+node .github/plugin-control-plane/canonical-main/work-harness/execution-receipt.cjs --input-file execution-facts.json
+```
+
+V1 keeps execution state and semantic attention separate. `attentionState` is one of `RUNNING / COMPLETE / NEEDS_REVIEW / BLOCKED / UNKNOWN`; `result` is one of `PASS / FAIL / PARTIAL / UNKNOWN / CONFLICT / BLOCKED`. `NEEDS_REVIEW` deliberately returns control to the agent when deterministic execution completed but semantic judgment is still required.
+
+The receipt carries operation/primitive identity, bounded source identity, execution surface and substage, proof scope, executed-step evidence, generic counters, affected files, artifact/log locators, reason codes, required UNKNOWN/conflict/blocker evidence, optional bounded exit code/stderr tail, and the next legal action. Arrays are normalized for deterministic SHA-256 receipt identity. Missing required evidence cannot remain a green PASS, conflicting duplicate evidence is preserved as CONFLICT, and a nonzero exit cannot coexist with PASS.
+
+Raw logs are not copied into the default receipt. Callers retain them behind bounded artifact/log locators and drill down only when the receipt exposes `NEEDS_REVIEW`, failure, UNKNOWN, CONFLICT, a blocker, ambiguity, or insufficient proof. The projector rejects credential-like material and oversized failure tails rather than sanitizing an unsafe payload into apparent validity.
+
+Every execution receipt fixes `mutationAuthorized=false`, `executionAuthorized=false`, `mergeAuthorized=false`, `releaseAuthorized=false`, `productionAuthorized=false`, `runtimeAuthorityGranted=false`, and `securityAuthorityGranted=false`. Those flags describe the receipt's non-authority boundary, not whether an already-authorized external executor previously ran. Stage, coordination, project-specific, and agent-orchestrator receipts remain separate owners; an execution receipt may only be linked as evidence into those contracts.
+
 ## CAS-style coordination issue-body patch
 
 `coordination-body-patch.cjs` is the Work Harness issue-only adapter for narrow packet/queue body reconciliation. It does not decide what lifecycle or proof text is true; callers must already have authority for the requested coordination edit.

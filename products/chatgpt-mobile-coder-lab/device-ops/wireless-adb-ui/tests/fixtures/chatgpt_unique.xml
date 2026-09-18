@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hierarchy rotation="0">
+  <node package="com.android.systemui" class="android.widget.TextView" text="Status" clickable="false"/>
+  <node package="com.openai.chatgpt" class="android.widget.Button" text="New chat" clickable="true"/>
+  <node package="com.openai.chatgpt" class="android.widget.EditText" text="" clickable="true" editable="true"/>
+  <node package="com.openai.chatgpt" class="android.widget.TextView" text="Conversation body must not leak" clickable="false"/>
+  <node package="com.openai.chatgpt" class="android.widget.EditText" text="user@example.com" password="true" clickable="true" editable="true"/>
+</hierarchy>

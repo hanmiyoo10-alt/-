@@ -1,6 +1,6 @@
 # Mobile Coder Lab task lease v1
 
-Status: `IMPLEMENTATION CANDIDATE / #2350`
+Status: `ACTIVE V1 / owner #2350 / state ledger #2352`
 
 This contract owns only short-lived coordination reservation state for Mobile Coder Lab work. It does not own repository write authority, device health, Git currentness, CI, main write, release, or production truth.
 

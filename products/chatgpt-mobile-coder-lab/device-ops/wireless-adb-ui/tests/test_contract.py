@@ -24,7 +24,12 @@ class ContractTests(unittest.TestCase):
             'add_argument("--category"',
             'add_argument("--resource-id"',
             'add_argument("--suffix"',
+            'add_argument("--url"',
+            'add_argument("--uri"',
+            'add_argument("--scheme"',
+            'add_argument("--host"',
             'add_argument("--query"',
+            'add_argument("--fragment"',
             'add_argument("--depth"',
             'add_argument("--parent"',
             'add_argument("--class"',
@@ -41,6 +46,8 @@ class ContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, source)
         self.assertIn('sub.add_parser("launch-target")', source)
+        self.assertIn('sub.add_parser("launch-landing")', source)
+        self.assertIn('landing.add_argument("--route", choices=sorted(LANDING_ROUTES), required=True)', source)
         self.assertIn('sub.add_parser("probe-new-chat")', source)
         self.assertIn('sub.add_parser("activate")', source)
         self.assertIn('sub.add_parser("type-ascii")', source)

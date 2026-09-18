@@ -1717,3 +1717,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8f3e1da6c876db592aa20f13b74fa5597ef7345c)
 - Event ID: `a53ffc3645c8beb50bb803bc368daabc446de16ae61b559b4f168f5bfa81ec73`
 <!-- canonical-main-doc-promoted:a53ffc3645c8beb50bb803bc368daabc446de16ae61b559b4f168f5bfa81ec73 -->
+
+### 2026-09-18 — Merge pull request #2446 from hanmiyoo10-alt/server/cm-semantic-surface-parallel-2445
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `bd358388f63e6eb19f56ad941d4149f09c56f0eb`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/bd358388f63e6eb19f56ad941d4149f09c56f0eb)
+- Event ID: `552f654ca26e197b83547c305590053e4ae96c8d869f50e8d27340b53a4b5801`
+<!-- canonical-main-doc-promoted:552f654ca26e197b83547c305590053e4ae96c8d869f50e8d27340b53a4b5801 -->

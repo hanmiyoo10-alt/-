@@ -301,3 +301,45 @@ Wireless Debugging 활성화와 pairing은 사용자 승인 Android state이며 
 ### 이유
 
 #2452 capability probe에서 M→S Wireless ADB 연결, S model 확인, screenshot, `uiautomator dump` 생성은 검증됐지만 raw hierarchy 자체를 ChatGPT/RDC surface로 가져오는 단계는 platform tool boundary에 막혔다. M 안에서 hierarchy를 파싱하고 필요한 의미 정보만 receipt로 축약하면 그 boundary를 우회하지 않으면서도 read-only GUI evidence를 얻을 수 있다. Action capability는 별도 reviewed packet 전까지 증명하거나 암묵적으로 허용하지 않는다.
+
+## D-017 — Wireless ADB GUI action is a separate stale-guarded semantic route
+
+상태: `ACTIVE`
+
+### 결정
+
+이미 사용자가 승인한 M→S Wireless ADB 연결을 통해 물리 S의 ChatGPT Android UI에 제한된 GUI effect가 필요한 경우 `S_ANDROID_GUI_ADB_ACTION` route를 사용한다.
+
+기본 구성은 다음이다.
+
+```text
+ordinary ChatGPT
+→ RDC M
+→ M Termux mcl-adb-ui
+→ already user-paired Wireless ADB
+→ fresh S uiautomator hierarchy
+→ M-local semantic handle revalidation
+→ internally derived bounded input primitive
+→ bounded receipt
+```
+
+이 route는 D-016의 `S_ANDROID_GUI_ADB_READ`를 대체하지 않는다. D-016은 read-only evidence owner로 남고, action effect는 별도 reviewed command/receipt에서만 발생한다.
+
+V1 action은 다음으로 제한한다.
+
+- fixed package `com.openai.chatgpt` launch;
+- repository-owned `new_chat|send` alias lookup;
+- fresh snapshot + opaque handle 재검증 뒤 내부 bounds에서 파생한 one-point tap;
+- 1..160자의 영문/숫자/underscore/공백 ASCII만 입력;
+- 빈 editor → focus → exact post-entry text verification;
+- bounded exact visible text wait.
+
+caller가 x/y 좌표, ADB serial, remote path, package/component/action/category 또는 arbitrary shell command를 전달하는 surface는 두지 않는다. node bounds와 파생 좌표는 M-local 내부 상태이며 정상 receipt로 내보내지 않는다.
+
+stale snapshot, missing/ambiguous handle, invalid bounds, non-empty editor, focus 검증 실패, exact post-entry 검증 실패는 더 넓은 입력 방식으로 fallback하지 않고 effect를 차단한다.
+
+명시적으로 제외한다: swipe/gesture/keyevent/clipboard/paste, login/account/unlock/PIN/password/biometric automation, package install/uninstall/clear/force-stop, Android settings/permission/app-op write, backup/app-private-data access, Play Protect/security-control 변경, helper APK.
+
+### 이유
+
+#2453은 raw hierarchy를 ChatGPT/RDC 경계 밖으로 노출하지 않고 M 내부에서 bounded semantic receipt로 변환하는 read-only 경로를 LIVE_PROVEN했다. Action 단계는 ADB input primitive가 AccessibilityNode action과 동등하다고 가정할 수 없으므로, caller coordinates를 허용하지 않고 fresh semantic evidence에서 한 점을 내부 파생한 뒤 stale/ambiguity/text verification을 fail-closed gate로 두는 별도 authority가 필요하다.

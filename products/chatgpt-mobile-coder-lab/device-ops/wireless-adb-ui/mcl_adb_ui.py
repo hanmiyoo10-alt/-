@@ -4,6 +4,7 @@ import hashlib
 import re
 import subprocess
 import sys
+import time
 import xml.etree.ElementTree as ET
 
 EXPECTED_MODEL = "SM-G998N"
@@ -12,7 +13,19 @@ REMOTE_XML = "/data/local/tmp/mcl-adb-ui-v1.xml"
 MAX_XML_BYTES = 1_000_000
 MAX_NODES = 1200
 MAX_LABEL_CHARS = 80
+MAX_TEXT_CHARS = 160
+MAX_COORDINATE = 10000
+WAIT_ATTEMPTS = 8
+WAIT_INTERVAL_SECONDS = 0.75
 DETAILS = "withheld"
+OPAQUE_SNAPSHOT_RE = re.compile(r"^s-[0-9a-f]{16}$")
+OPAQUE_HANDLE_RE = re.compile(r"^h-[0-9a-f]{16}$")
+BOUNDS_RE = re.compile(r"^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$")
+ASCII_TEXT_RE = re.compile(r"^[A-Za-z0-9_ ]{1,160}$")
+ALIASES = {
+    "new_chat": ("New chat", "새 채팅", "새 대화"),
+    "send": ("Send", "보내기"),
+}
 SENSITIVE_TOKENS = (
     "password", "passcode", "verification code", "one-time", "otp",
     "email", "e-mail", "account", "username", "phone number",
@@ -92,6 +105,10 @@ def _semantic_nodes(raw_xml):
             "actionable": actionable,
             "editable": editable,
             "label": label,
+            "text": attrs.get("text", ""),
+            "content_desc": attrs.get("content-desc", ""),
+            "focused": attrs.get("focused", "").lower() == "true",
+            "bounds": attrs.get("bounds", ""),
         })
     return target_present, result
 
@@ -138,6 +155,71 @@ def find_editable(analysis):
     if len(matches) != 1:
         return "ambiguous", "many", "none"
     return "found", "1", _handle(analysis["snapshot"], matches[0], "editable")
+
+def _valid_snapshot(value):
+    return bool(OPAQUE_SNAPSHOT_RE.fullmatch(value or ""))
+
+def _valid_handle(value):
+    return bool(OPAQUE_HANDLE_RE.fullmatch(value or ""))
+
+def parse_bounds(value):
+    match = BOUNDS_RE.fullmatch(value or "")
+    if not match:
+        return None
+    left, top, right, bottom = (int(part) for part in match.groups())
+    if not (0 <= left < right <= MAX_COORDINATE):
+        return None
+    if not (0 <= top < bottom <= MAX_COORDINATE):
+        return None
+    return left, top, right, bottom
+
+def _center(bounds):
+    left, top, right, bottom = bounds
+    return (left + right) // 2, (top + bottom) // 2
+
+def _cleanup_join(*values):
+    if any(value == "fail" for value in values):
+        return "fail"
+    if values and all(value == "pass" for value in values):
+        return "pass"
+    return "unknown"
+
+def _handle_matches(analysis, handle, role):
+    matches = []
+    for index, node in enumerate(analysis["nodes"]):
+        eligible = node["actionable"] if role == "action" else node["editable"]
+        if eligible and _handle(analysis["snapshot"], index, role) == handle:
+            matches.append((index, node))
+    return matches
+
+def find_alias(analysis, alias):
+    labels = ALIASES.get(alias)
+    if labels is None:
+        return "blocked", "unknown", "none"
+    matches = [
+        index for index, node in enumerate(analysis["nodes"])
+        if node["actionable"] and node["label"] in labels
+    ]
+    if not matches:
+        return "not_found", "0", "none"
+    if len(matches) != 1:
+        return "ambiguous", "many", "none"
+    return "found", "1", _handle(analysis["snapshot"], matches[0], "action")
+
+def _valid_ascii_text(value):
+    return bool(ASCII_TEXT_RE.fullmatch(value or ""))
+
+def _exact_text_matches(analysis, value):
+    return [
+        node for node in analysis["nodes"]
+        if node["text"] == value or node["content_desc"] == value
+    ]
+
+def _focused_editables(analysis):
+    return [
+        node for node in analysis["nodes"]
+        if node["editable"] and node["focused"]
+    ]
 
 class AdbClient:
     def __init__(self, runner=None):
@@ -189,6 +271,26 @@ class AdbClient:
         )
         cleanup = "pass" if code == 0 else "fail"
         return raw if dump_ok else None, cleanup
+
+    def launch_target(self, serial):
+        return self.runner.run([
+            "-s", serial, "shell", "am", "start",
+            "-a", "android.intent.action.MAIN",
+            "-c", "android.intent.category.LAUNCHER",
+            "-p", TARGET_PACKAGE,
+        ], timeout=12)
+
+    def tap(self, serial, x, y):
+        return self.runner.run(
+            ["-s", serial, "shell", "input", "tap", str(x), str(y)],
+            timeout=8,
+        )
+
+    def type_text(self, serial, encoded):
+        return self.runner.run(
+            ["-s", serial, "shell", "input", "text", encoded],
+            timeout=12,
+        )
 
 def _print(lines):
     sys.stdout.write("\n".join(lines) + "\n")
@@ -272,6 +374,418 @@ def find_receipt(client, role, label=None):
         f"result={result}", f"cleanup={cleanup}", f"details={DETAILS}",
     ]
 
+def launch_receipt(client):
+    target = client.resolve()
+    connection = target["connection"]
+    model = target["model"]
+    result = "blocked"
+    if connection == "connected" and model == "match":
+        code, _ = client.launch_target(target["serial"])
+        result = "launched" if code == 0 else "unknown"
+    return [
+        "schema=mcl-wireless-adb-ui-launch.v1",
+        "target=s",
+        f"package={TARGET_PACKAGE}",
+        f"connection={connection}",
+        f"model={model}",
+        f"result={result}",
+        f"details={DETAILS}",
+    ]
+
+def find_alias_receipt(client, alias):
+    target = client.resolve()
+    if target["connection"] != "connected" or target["model"] != "match":
+        return [
+            "schema=mcl-wireless-adb-ui-alias.v1",
+            f"alias={alias}",
+            "snapshot=none",
+            "match_count=unknown",
+            "handle=none",
+            "result=blocked",
+            "cleanup=unknown",
+            f"details={DETAILS}",
+        ]
+    raw, cleanup = client.capture(target["serial"])
+    if raw is None:
+        snapshot, count, handle, result = "none", "unknown", "none", "unknown"
+    else:
+        try:
+            analysis = analyze(raw)
+            snapshot = analysis["snapshot"]
+            result, count, handle = find_alias(analysis, alias)
+        except BoundedError:
+            snapshot, count, handle, result = "none", "unknown", "none", "unknown"
+    return [
+        "schema=mcl-wireless-adb-ui-alias.v1",
+        f"alias={alias}",
+        f"snapshot={snapshot}",
+        f"match_count={count}",
+        f"handle={handle}",
+        f"result={result}",
+        f"cleanup={cleanup}",
+        f"details={DETAILS}",
+    ]
+
+def _action_receipt(
+    pre_snapshot="none",
+    post_snapshot="none",
+    freshness="unknown",
+    target_match="unknown",
+    injection="unknown",
+    transition="unknown",
+    cleanup="unknown",
+    result="unknown",
+):
+    return [
+        "schema=mcl-wireless-adb-ui-action.v1",
+        "action=activate",
+        f"pre_snapshot={pre_snapshot}",
+        f"post_snapshot={post_snapshot}",
+        f"freshness={freshness}",
+        f"target_match={target_match}",
+        f"injection={injection}",
+        f"transition={transition}",
+        f"cleanup={cleanup}",
+        f"result={result}",
+        f"details={DETAILS}",
+    ]
+
+def activate_receipt(client, requested_snapshot, handle):
+    if not _valid_snapshot(requested_snapshot) or not _valid_handle(handle):
+        return _action_receipt(result="blocked")
+    target = client.resolve()
+    if target["connection"] != "connected" or target["model"] != "match":
+        return _action_receipt(result="blocked")
+    raw, cleanup_pre = client.capture(target["serial"])
+    if raw is None:
+        return _action_receipt(cleanup=cleanup_pre, result="unknown")
+    try:
+        analysis = analyze(raw)
+    except BoundedError:
+        return _action_receipt(cleanup=cleanup_pre, result="unknown")
+    current = analysis["snapshot"]
+    if current != requested_snapshot:
+        return _action_receipt(
+            pre_snapshot=current,
+            freshness="stale",
+            target_match="unknown",
+            cleanup=cleanup_pre,
+            result="stale",
+        )
+    matches = _handle_matches(analysis, handle, "action")
+    if not matches:
+        return _action_receipt(
+            pre_snapshot=current,
+            freshness="pass",
+            target_match="none",
+            cleanup=cleanup_pre,
+            result="blocked",
+        )
+    if len(matches) != 1:
+        return _action_receipt(
+            pre_snapshot=current,
+            freshness="pass",
+            target_match="ambiguous",
+            cleanup=cleanup_pre,
+            result="blocked",
+        )
+    bounds = parse_bounds(matches[0][1]["bounds"])
+    if bounds is None:
+        return _action_receipt(
+            pre_snapshot=current,
+            freshness="pass",
+            target_match="unique",
+            cleanup=cleanup_pre,
+            result="blocked",
+        )
+    x, y = _center(bounds)
+    code, _ = client.tap(target["serial"], x, y)
+    injection = "pass" if code == 0 else "fail"
+    raw_post, cleanup_post = client.capture(target["serial"])
+    cleanup = _cleanup_join(cleanup_pre, cleanup_post)
+    post_snapshot = "none"
+    transition = "unknown"
+    if raw_post is not None:
+        try:
+            post = analyze(raw_post)
+            post_snapshot = post["snapshot"]
+            transition = "changed" if post_snapshot != current else "same"
+        except BoundedError:
+            pass
+    return _action_receipt(
+        pre_snapshot=current,
+        post_snapshot=post_snapshot,
+        freshness="pass",
+        target_match="unique",
+        injection=injection,
+        transition=transition,
+        cleanup=cleanup,
+        result="acted" if injection == "pass" else "failed",
+    )
+
+def _type_receipt(
+    pre_snapshot="none",
+    post_snapshot="none",
+    freshness="unknown",
+    target_match="unknown",
+    focus="unknown",
+    injection="unknown",
+    verified="unknown",
+    cleanup="unknown",
+    result="unknown",
+):
+    return [
+        "schema=mcl-wireless-adb-ui-type.v1",
+        f"pre_snapshot={pre_snapshot}",
+        f"post_snapshot={post_snapshot}",
+        f"freshness={freshness}",
+        f"target_match={target_match}",
+        f"focus={focus}",
+        f"injection={injection}",
+        f"verified={verified}",
+        f"cleanup={cleanup}",
+        f"result={result}",
+        f"details={DETAILS}",
+    ]
+
+def type_ascii_receipt(client, requested_snapshot, handle, text_value):
+    if not _valid_ascii_text(text_value):
+        return _type_receipt(result="blocked")
+    if not _valid_snapshot(requested_snapshot) or not _valid_handle(handle):
+        return _type_receipt(result="blocked")
+    target = client.resolve()
+    if target["connection"] != "connected" or target["model"] != "match":
+        return _type_receipt(result="blocked")
+    raw_pre, cleanup_pre = client.capture(target["serial"])
+    if raw_pre is None:
+        return _type_receipt(cleanup=cleanup_pre, result="unknown")
+    try:
+        pre = analyze(raw_pre)
+    except BoundedError:
+        return _type_receipt(cleanup=cleanup_pre, result="unknown")
+    current = pre["snapshot"]
+    if current != requested_snapshot:
+        return _type_receipt(
+            pre_snapshot=current,
+            freshness="stale",
+            cleanup=cleanup_pre,
+            result="stale",
+        )
+    matches = _handle_matches(pre, handle, "editable")
+    if not matches:
+        return _type_receipt(
+            pre_snapshot=current,
+            freshness="pass",
+            target_match="none",
+            cleanup=cleanup_pre,
+            result="blocked",
+        )
+    if len(matches) != 1:
+        return _type_receipt(
+            pre_snapshot=current,
+            freshness="pass",
+            target_match="ambiguous",
+            cleanup=cleanup_pre,
+            result="blocked",
+        )
+    node = matches[0][1]
+    if node["text"] != "":
+        return _type_receipt(
+            pre_snapshot=current,
+            freshness="pass",
+            target_match="unique",
+            cleanup=cleanup_pre,
+            result="blocked",
+        )
+    bounds = parse_bounds(node["bounds"])
+    if bounds is None:
+        return _type_receipt(
+            pre_snapshot=current,
+            freshness="pass",
+            target_match="unique",
+            cleanup=cleanup_pre,
+            result="blocked",
+        )
+    x, y = _center(bounds)
+    tap_code, _ = client.tap(target["serial"], x, y)
+    if tap_code != 0:
+        return _type_receipt(
+            pre_snapshot=current,
+            freshness="pass",
+            target_match="unique",
+            focus="fail",
+            injection="fail",
+            cleanup=cleanup_pre,
+            result="failed",
+        )
+    raw_focus, cleanup_focus = client.capture(target["serial"])
+    cleanup = _cleanup_join(cleanup_pre, cleanup_focus)
+    if raw_focus is None:
+        return _type_receipt(
+            pre_snapshot=current,
+            freshness="pass",
+            target_match="unique",
+            focus="unknown",
+            injection="unknown",
+            cleanup=cleanup,
+            result="unknown",
+        )
+    try:
+        focus_analysis = analyze(raw_focus)
+    except BoundedError:
+        return _type_receipt(
+            pre_snapshot=current,
+            freshness="pass",
+            target_match="unique",
+            focus="unknown",
+            cleanup=cleanup,
+            result="unknown",
+        )
+    focused = _focused_editables(focus_analysis)
+    if len(focused) != 1 or focused[0]["text"] != "":
+        return _type_receipt(
+            pre_snapshot=current,
+            post_snapshot=focus_analysis["snapshot"],
+            freshness="pass",
+            target_match="unique",
+            focus="fail",
+            injection="unknown",
+            cleanup=cleanup,
+            result="failed",
+        )
+    encoded = text_value.replace(" ", "%s")
+    input_code, _ = client.type_text(target["serial"], encoded)
+    injection = "pass" if input_code == 0 else "fail"
+    if input_code != 0:
+        return _type_receipt(
+            pre_snapshot=current,
+            post_snapshot=focus_analysis["snapshot"],
+            freshness="pass",
+            target_match="unique",
+            focus="pass",
+            injection=injection,
+            verified="unknown",
+            cleanup=cleanup,
+            result="failed",
+        )
+    raw_post, cleanup_post = client.capture(target["serial"])
+    cleanup = _cleanup_join(cleanup_pre, cleanup_focus, cleanup_post)
+    if raw_post is None:
+        return _type_receipt(
+            pre_snapshot=current,
+            freshness="pass",
+            target_match="unique",
+            focus="pass",
+            injection="pass",
+            verified="unknown",
+            cleanup=cleanup,
+            result="unknown",
+        )
+    try:
+        post = analyze(raw_post)
+    except BoundedError:
+        return _type_receipt(
+            pre_snapshot=current,
+            freshness="pass",
+            target_match="unique",
+            focus="pass",
+            injection="pass",
+            verified="unknown",
+            cleanup=cleanup,
+            result="unknown",
+        )
+    focused_post = _focused_editables(post)
+    verified = (
+        "pass"
+        if len(focused_post) == 1 and focused_post[0]["text"] == text_value
+        else "fail"
+    )
+    return _type_receipt(
+        pre_snapshot=current,
+        post_snapshot=post["snapshot"],
+        freshness="pass",
+        target_match="unique",
+        focus="pass",
+        injection="pass",
+        verified=verified,
+        cleanup=cleanup,
+        result="typed" if verified == "pass" else "failed",
+    )
+
+def wait_text_receipt(client, text_value, sleeper=time.sleep):
+    if not _valid_ascii_text(text_value):
+        return [
+            "schema=mcl-wireless-adb-ui-wait.v1",
+            "query_kind=exact_text",
+            "snapshot=none",
+            "match_count=unknown",
+            "result=blocked",
+            "cleanup=unknown",
+            f"details={DETAILS}",
+        ]
+    target = client.resolve()
+    if target["connection"] != "connected" or target["model"] != "match":
+        return [
+            "schema=mcl-wireless-adb-ui-wait.v1",
+            "query_kind=exact_text",
+            "snapshot=none",
+            "match_count=unknown",
+            "result=blocked",
+            "cleanup=unknown",
+            f"details={DETAILS}",
+        ]
+    cleanups = []
+    snapshot = "none"
+    for attempt in range(WAIT_ATTEMPTS):
+        raw, cleanup = client.capture(target["serial"])
+        cleanups.append(cleanup)
+        if raw is None:
+            return [
+                "schema=mcl-wireless-adb-ui-wait.v1",
+                "query_kind=exact_text",
+                "snapshot=none",
+                "match_count=unknown",
+                "result=unknown",
+                f"cleanup={_cleanup_join(*cleanups)}",
+                f"details={DETAILS}",
+            ]
+        try:
+            analysis = analyze(raw)
+        except BoundedError:
+            return [
+                "schema=mcl-wireless-adb-ui-wait.v1",
+                "query_kind=exact_text",
+                "snapshot=none",
+                "match_count=unknown",
+                "result=unknown",
+                f"cleanup={_cleanup_join(*cleanups)}",
+                f"details={DETAILS}",
+            ]
+        snapshot = analysis["snapshot"]
+        matches = _exact_text_matches(analysis, text_value)
+        if matches:
+            count = "1" if len(matches) == 1 else "many"
+            return [
+                "schema=mcl-wireless-adb-ui-wait.v1",
+                "query_kind=exact_text",
+                f"snapshot={snapshot}",
+                f"match_count={count}",
+                "result=found",
+                f"cleanup={_cleanup_join(*cleanups)}",
+                f"details={DETAILS}",
+            ]
+        if attempt + 1 < WAIT_ATTEMPTS:
+            sleeper(WAIT_INTERVAL_SECONDS)
+    return [
+        "schema=mcl-wireless-adb-ui-wait.v1",
+        "query_kind=exact_text",
+        f"snapshot={snapshot}",
+        "match_count=0",
+        "result=timeout",
+        f"cleanup={_cleanup_join(*cleanups)}",
+        f"details={DETAILS}",
+    ]
+
 def parser():
     root = argparse.ArgumentParser(prog="mcl-adb-ui")
     sub = root.add_subparsers(dest="command", required=True)
@@ -280,6 +794,18 @@ def parser():
     find = sub.add_parser("find-action")
     find.add_argument("--label", required=True)
     sub.add_parser("find-editable")
+    sub.add_parser("launch-target")
+    alias = sub.add_parser("find-alias")
+    alias.add_argument("--alias", choices=sorted(ALIASES), required=True)
+    activate = sub.add_parser("activate")
+    activate.add_argument("--snapshot", required=True)
+    activate.add_argument("--handle", required=True)
+    type_ascii = sub.add_parser("type-ascii")
+    type_ascii.add_argument("--snapshot", required=True)
+    type_ascii.add_argument("--handle", required=True)
+    type_ascii.add_argument("--text", required=True)
+    wait = sub.add_parser("wait-text")
+    wait.add_argument("--exact", required=True)
     return root
 
 def main(argv=None):
@@ -291,8 +817,18 @@ def main(argv=None):
         lines = snapshot_receipt(client)
     elif args.command == "find-action":
         lines = find_receipt(client, "action", args.label)
-    else:
+    elif args.command == "find-editable":
         lines = find_receipt(client, "editable")
+    elif args.command == "launch-target":
+        lines = launch_receipt(client)
+    elif args.command == "find-alias":
+        lines = find_alias_receipt(client, args.alias)
+    elif args.command == "activate":
+        lines = activate_receipt(client, args.snapshot, args.handle)
+    elif args.command == "type-ascii":
+        lines = type_ascii_receipt(client, args.snapshot, args.handle, args.text)
+    else:
+        lines = wait_text_receipt(client, args.exact)
     _print(lines)
     return 0
 

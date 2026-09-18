@@ -8,19 +8,32 @@ SOURCE = OWNER / "mcl_adb_ui.py"
 WORKFLOW = ROOT / ".github/workflows/mcl-wireless-adb-ui.yml"
 
 class ContractTests(unittest.TestCase):
-    def test_v1_has_no_mutation_commands(self):
+    def test_action_surface_is_fixed_and_bounded(self):
         source = SOURCE.read_text()
         for forbidden in (
             'add_parser("click")',
             'add_parser("tap")',
             'add_parser("set-text")',
+            'add_argument("--x"',
+            'add_argument("--y"',
+            'add_argument("--serial"',
+            'add_argument("--path"',
+            '"swipe"',
+            '"keyevent"',
+            '"clipboard"',
             '"install"',
             '"uninstall"',
             '"settings"',
-            '"input"',
             "shell=True",
+            "os.system",
         ):
             self.assertNotIn(forbidden, source)
+        self.assertIn('sub.add_parser("launch-target")', source)
+        self.assertIn('sub.add_parser("activate")', source)
+        self.assertIn('sub.add_parser("type-ascii")', source)
+        self.assertIn('sub.add_parser("wait-text")', source)
+        self.assertIn('["-s", serial, "shell", "input", "tap", str(x), str(y)]', source)
+        self.assertIn('["-s", serial, "shell", "input", "text", encoded]', source)
 
     def test_receipts_withhold_details(self):
         source = SOURCE.read_text()

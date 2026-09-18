@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hierarchy rotation="0">
+  <node package="com.openai.chatgpt" class="android.widget.TextView" text="GUI_BRIDGE_PROBE_OK" clickable="false" bounds="[20,200][500,260]"/>
+</hierarchy>

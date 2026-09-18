@@ -243,3 +243,31 @@ V1은 deterministic immutable envelope만 제공하며 새 workflow writer, cent
 ### 이유
 
 두 독립 worker가 대화 기억이나 shared mutable filesystem 없이 작업을 넘기려면 exact phase context와 result provenance가 필요하지만, 이를 mutable task truth로 만들면 이미 존재하는 Work System/Harness/routing/lease authority와 충돌한다. Immutable phase evidence로 한정하면 handoff 복구성을 높이면서 기존 owner 경계를 보존할 수 있다.
+
+## D-015 — Android GUI host automation is a separate allowlisted MCL route
+
+상태: `ACTIVE`
+
+### 결정
+
+일반 ChatGPT가 물리 서버폰 S의 ChatGPT Android UI를 관찰하거나 제한적으로 조작해야 하는 작업은 `S_ANDROID_GUI` semantic route로 분리한다.
+
+기본 구성은 다음이다.
+
+```text
+ordinary ChatGPT
+→ existing S-Termux RDC transport
+→ MCL mcl-gui
+→ MCL Android GUI companion
+→ allowlisted com.openai.chatgpt UI
+```
+
+`S-Termux`는 transport일 뿐 GUI authority가 아니다. GUI effect owner는 `products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/**`이고, repository source 변경은 계속 ordinary `S` route의 isolated `server/*` worktree에서 수행한다.
+
+V1은 Android AccessibilityService의 semantic node action과 exact-window screenshot만 허용한다. 대상 package는 `com.openai.chatgpt`로 고정하며 raw-coordinate gesture, Playwright/DOM automation, MediaProjection, network-exposed GUI control, clipboard/history 수집, login/password/account automation을 추가하지 않는다.
+
+AccessibilityService는 사용자가 disclosure를 확인한 뒤 Android Settings에서 직접 활성화해야 한다. 잠금, secure window, permission 부재, stale snapshot, ambiguous node, peer identity 불일치는 성공으로 추론하지 않고 명시적으로 block한다.
+
+### 이유
+
+Repository/shell evidence로는 ChatGPT host/client UI 자체에 표시되는 상태를 증명할 수 없는 작업이 있다. 기존 RDC를 포크하거나 TaskBridge companion의 권한을 확대하는 대신, 별도의 좁은 Android GUI owner를 두면 일반 ChatGPT 중심 운영을 유지하면서도 GUI 효과와 privacy/security 경계를 독립적으로 검증할 수 있다. 이 route의 존재는 live readiness나 cloud continuation을 의미하지 않는다.

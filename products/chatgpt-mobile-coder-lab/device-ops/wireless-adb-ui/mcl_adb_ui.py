@@ -14,6 +14,8 @@ MAX_XML_BYTES = 1_000_000
 MAX_NODES = 1200
 MAX_LABEL_CHARS = 80
 MAX_TEXT_CHARS = 160
+MAX_RESOURCE_ID_CHARS = 160
+MAX_RESOURCE_LOCAL_CHARS = 80
 MAX_COORDINATE = 10000
 WAIT_ATTEMPTS = 8
 WAIT_INTERVAL_SECONDS = 0.75
@@ -24,7 +26,19 @@ BOUNDS_RE = re.compile(r"^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$")
 ASCII_TEXT_RE = re.compile(r"^[A-Za-z0-9_ ]{1,160}$")
 COMPONENT_LINE_RE = re.compile(r"^[A-Za-z0-9._]+/[A-Za-z0-9_.$]+$")
 TARGET_COMPONENT_RE = re.compile(r"^com\.openai\.chatgpt/[A-Za-z0-9_.$]+$")
+TARGET_RESOURCE_ID_RE = re.compile(
+    r"^com\.openai\.chatgpt:id/([A-Za-z0-9_]{1,80})$"
+)
 MAX_RESOLVER_BYTES = 8192
+NEW_CHAT_RESOURCE_IDS = frozenset({
+    "new_chat",
+    "new_chat_button",
+    "newchat",
+    "new_conversation",
+    "new_conversation_button",
+    "create_new_chat",
+    "start_new_chat",
+})
 ALIASES = {
     "new_chat": ("New chat", "새 채팅", "새 대화"),
     "send": ("Send", "보내기"),
@@ -78,6 +92,18 @@ def _sensitive(attrs):
     ).lower()
     return any(token in haystack for token in SENSITIVE_TOKENS)
 
+def _resource_id_local(value):
+    value = value or ""
+    if not value or len(value) > MAX_RESOURCE_ID_CHARS or "\x00" in value:
+        return None
+    match = TARGET_RESOURCE_ID_RE.fullmatch(value)
+    if not match:
+        return None
+    local = match.group(1)
+    if len(local) > MAX_RESOURCE_LOCAL_CHARS:
+        return None
+    return local
+
 def _semantic_nodes(raw_xml):
     if not raw_xml or len(raw_xml) > MAX_XML_BYTES:
         raise BoundedError("xml_size")
@@ -112,6 +138,7 @@ def _semantic_nodes(raw_xml):
             "content_desc": attrs.get("content-desc", ""),
             "focused": attrs.get("focused", "").lower() == "true",
             "bounds": attrs.get("bounds", ""),
+            "resource_id_local": _resource_id_local(attrs.get("resource-id")),
         })
     return target_present, result
 
@@ -195,14 +222,38 @@ def _handle_matches(analysis, handle, role):
             matches.append((index, node))
     return matches
 
+def _match_count(value):
+    if value == 0:
+        return "0"
+    if value == 1:
+        return "1"
+    return "many"
+
+def _new_chat_match_indices(analysis):
+    labels = set(ALIASES["new_chat"])
+    label_matches = {
+        index for index, node in enumerate(analysis["nodes"])
+        if node["actionable"] and node["label"] in labels
+    }
+    resource_matches = {
+        index for index, node in enumerate(analysis["nodes"])
+        if node["actionable"]
+        and node["resource_id_local"] in NEW_CHAT_RESOURCE_IDS
+    }
+    return label_matches, resource_matches, label_matches | resource_matches
+
 def find_alias(analysis, alias):
     labels = ALIASES.get(alias)
     if labels is None:
         return "blocked", "unknown", "none"
-    matches = [
-        index for index, node in enumerate(analysis["nodes"])
-        if node["actionable"] and node["label"] in labels
-    ]
+    if alias == "new_chat":
+        _, _, combined = _new_chat_match_indices(analysis)
+        matches = sorted(combined)
+    else:
+        matches = [
+            index for index, node in enumerate(analysis["nodes"])
+            if node["actionable"] and node["label"] in labels
+        ]
     if not matches:
         return "not_found", "0", "none"
     if len(matches) != 1:
@@ -455,6 +506,69 @@ def find_alias_receipt(client, alias):
         f"alias={alias}",
         f"snapshot={snapshot}",
         f"match_count={count}",
+        f"handle={handle}",
+        f"result={result}",
+        f"cleanup={cleanup}",
+        f"details={DETAILS}",
+    ]
+
+def probe_new_chat_receipt(client):
+    target = client.resolve()
+    if target["connection"] != "connected" or target["model"] != "match":
+        return [
+            "schema=mcl-wireless-adb-ui-new-chat-probe.v1",
+            "snapshot=none",
+            "label_match_count=unknown",
+            "resource_match_count=unknown",
+            "combined_match_count=unknown",
+            "handle=none",
+            "result=blocked",
+            "cleanup=unknown",
+            f"details={DETAILS}",
+        ]
+    raw, cleanup = client.capture(target["serial"])
+    if raw is None:
+        return [
+            "schema=mcl-wireless-adb-ui-new-chat-probe.v1",
+            "snapshot=none",
+            "label_match_count=unknown",
+            "resource_match_count=unknown",
+            "combined_match_count=unknown",
+            "handle=none",
+            "result=unknown",
+            f"cleanup={cleanup}",
+            f"details={DETAILS}",
+        ]
+    try:
+        analysis = analyze(raw)
+    except BoundedError:
+        return [
+            "schema=mcl-wireless-adb-ui-new-chat-probe.v1",
+            "snapshot=none",
+            "label_match_count=unknown",
+            "resource_match_count=unknown",
+            "combined_match_count=unknown",
+            "handle=none",
+            "result=unknown",
+            f"cleanup={cleanup}",
+            f"details={DETAILS}",
+        ]
+    label_matches, resource_matches, combined = _new_chat_match_indices(analysis)
+    handle = "none"
+    if len(combined) == 0:
+        result = "not_found"
+    elif len(combined) == 1:
+        result = "found"
+        index = next(iter(combined))
+        handle = _handle(analysis["snapshot"], index, "action")
+    else:
+        result = "ambiguous"
+    return [
+        "schema=mcl-wireless-adb-ui-new-chat-probe.v1",
+        f"snapshot={analysis['snapshot']}",
+        f"label_match_count={_match_count(len(label_matches))}",
+        f"resource_match_count={_match_count(len(resource_matches))}",
+        f"combined_match_count={_match_count(len(combined))}",
         f"handle={handle}",
         f"result={result}",
         f"cleanup={cleanup}",
@@ -832,6 +946,7 @@ def parser():
     sub.add_parser("launch-target")
     alias = sub.add_parser("find-alias")
     alias.add_argument("--alias", choices=sorted(ALIASES), required=True)
+    sub.add_parser("probe-new-chat")
     activate = sub.add_parser("activate")
     activate.add_argument("--snapshot", required=True)
     activate.add_argument("--handle", required=True)
@@ -858,6 +973,8 @@ def main(argv=None):
         lines = launch_receipt(client)
     elif args.command == "find-alias":
         lines = find_alias_receipt(client, args.alias)
+    elif args.command == "probe-new-chat":
+        lines = probe_new_chat_receipt(client)
     elif args.command == "activate":
         lines = activate_receipt(client, args.snapshot, args.handle)
     elif args.command == "type-ascii":

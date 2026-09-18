@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hierarchy rotation="0">
+  <node package="com.openai.chatgpt" class="android.widget.Button" text="New chat" clickable="true" bounds="[10,20][110,120]"/>
+</hierarchy>

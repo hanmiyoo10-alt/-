@@ -26,13 +26,14 @@ Use the first class whose semantic requirement actually applies. Earlier classes
 1. `S_PRIVATE_LOCAL`
 2. `M_VM_LAB`
 3. `M_PRIVATE_LAB`
-4. `S_ANDROID_GUI_ADB_READ`
-5. `S_ANDROID_GUI`
-6. `S_TERMUX`
-7. `M`
-8. `S` with `M` allowed as fallback/explicit target
-9. `UNSUPPORTED / SEPARATE_AUTHORITY`
-10. `UNKNOWN`
+4. `S_ANDROID_GUI_ADB_ACTION`
+5. `S_ANDROID_GUI_ADB_READ`
+6. `S_ANDROID_GUI`
+7. `S_TERMUX`
+8. `M`
+9. `S` with `M` allowed as fallback/explicit target
+10. `UNSUPPORTED / SEPARATE_AUTHORITY`
+11. `UNKNOWN`
 
 ## Routing matrix
 
@@ -41,6 +42,7 @@ Use the first class whose semantic requirement actually applies. Earlier classes
 | `S_PRIVATE_LOCAL` | Proof intrinsically dependent on real live S auth/session or secret-bearing state | Separately authorized S device-local private runner | not applicable | no ordinary repo branch | fixed sanitized receipt gateway/owning private-runner authority when proven | none | GPT/RDC constructing sensitive commands; copying raw auth/session/log/device identifiers outward; improvising a missing private runner |
 | `M_VM_LAB` | Experiment requiring the stronger guest/VM boundary and supported by current VM LAB v1 | M Termux-native fixed QEMU/TCG VM LAB | not applicable | no ordinary host-repo branch | `device-ops/vm-lab/verify.sh` and owner admission path | none | arbitrary image/QEMU/guest command; host repo/home share; standing guest network; bypassing admission |
 | `M_PRIVATE_LAB` | Credential-free reproducible vendor/security experiment not needing VM isolation | dedicated M PRoot `mcl-private-lab` through its reviewed controllers | not applicable | no ordinary host-repo branch | `mcl-env-status status` first pass, then `device-ops/private-lab/**` owner as needed | none | live S credentials/session material; private live logs; shared host home/repo bind; arbitrary command widening; claiming PRoot is VM/kernel isolation |
+| `S_ANDROID_GUI_ADB_ACTION` | Bounded semantic observation/action of visible ChatGPT Android UI after explicit user Wireless-ADB pairing | M Termux stale-guarded semantic adapter over already-paired Wireless ADB to physical S | runtime repo path not applicable; source changes use normal `S` repository worktree | runtime no ordinary repo branch; source changes use isolated `server/*` worktree | `device-ops/wireless-adb-ui/**` action receipt | none | caller coordinates/serial/path; arbitrary ADB shell; swipe/keyevent/clipboard; login/unlock/account automation; package/settings/security mutation; action without fresh semantic evidence |
 | `S_ANDROID_GUI_ADB_READ` | Read-only semantic observation of visible ChatGPT Android UI after explicit user Wireless-ADB pairing | M Termux bounded adapter over already-paired Wireless ADB to physical S | runtime repo path not applicable; source changes use normal `S` repository worktree | runtime no ordinary repo branch; source changes use isolated `server/*` worktree | `device-ops/wireless-adb-ui/**` fixed receipt | none | automatic pairing; raw hierarchy output; arbitrary ADB shell; click/tap/text input; package/settings/security mutation; claiming action capability |
 | `S_ANDROID_GUI` | Visible allowlisted ChatGPT Android UI observation/action that cannot be proven from repository or shell state | physical S Android GUI through the MCL GUI companion; existing `S-Termux` RDC endpoint is transport only | runtime repo path not applicable; source changes use normal `S` repository worktree | runtime no ordinary repo branch; source changes use isolated `server/*` worktree | `device-ops/gui-bridge/**` status/receipt plus explicit user accessibility consent | none | other apps/packages; login/password/account automation; raw-coordinate gestures; DOM/Playwright; network-exposed GUI control; treating S-Termux as GUI authority |
 | `S_TERMUX` | Native server-phone Termux semantics: runit, Termux-host RDC/service state, Termux package/profile work | `S-Termux` native Termux endpoint | **no repository path is assumed** | source changes, when required, are prepared separately in `server/*` isolated repo worktrees | relevant S-Termux owner, such as `mcl-rdcctl` where its contract applies | none to a semantically different context | assuming `/root/nyang-repo` or an M-style path; mutating Ubuntu `S` merely because S-Termux is unavailable |
@@ -64,6 +66,10 @@ Use only when the experiment genuinely needs the stronger guest-kernel boundary 
 ### `M_PRIVATE_LAB`
 
 Use for credential-free, reproducible vendor/security experiments that do not require live S credentials and do not require the VM boundary. The lab remains an isolated PRoot execution owner with bounded reviewed controllers. PRoot improves userland/filesystem separation but is not represented as a VM or kernel security boundary.
+
+### `S_ANDROID_GUI_ADB_ACTION`
+
+Use only when the visible ChatGPT Android client on physical S requires a bounded semantic effect after the user has already enabled and paired Android Wireless Debugging. The route composes as `ordinary ChatGPT -> RDC M -> M Termux mcl-adb-ui -> paired Wireless ADB -> fresh S uiautomator hierarchy -> M-local semantic revalidation -> internally derived bounded input -> bounded receipt`. V1 can launch only `com.openai.chatgpt`, resolve fixed `new_chat|send` aliases, perform one-point taps derived from fresh unique semantic handles, enter strictly bounded ASCII into a verified empty/focused editor, and wait for one exact bounded string. Caller coordinates, serials, paths, arbitrary shell, swipe/keyevent/clipboard, login/unlock/account automation, and package/settings/security mutation are forbidden. Stale, absent, ambiguous, invalid-bounds, focus-failed, or text-verification-failed evidence blocks the effect and never authorizes a wider fallback.
 
 ### `S_ANDROID_GUI_ADB_READ`
 
@@ -91,7 +97,7 @@ Route selection answers **where this semantic job belongs**. Current status answ
 
 After selecting a route, read only the bounded current evidence needed for execution. `sm-status` may project RDC presence, Git branch/dirty/freshness, S-Termux profile state, M supervision, PRIVATE LAB state, and VM admission. Each field remains a scoped observation. No `sm-status` value grants repair, sync, fallback, merge, release, or production authority.
 
-For context-required routes (`S_PRIVATE_LOCAL`, `M_VM_LAB`, `M_PRIVATE_LAB`, `S_ANDROID_GUI_ADB_READ`, `S_ANDROID_GUI`, `S_TERMUX`, `M`), offline/blocked/unknown evidence blocks or defers that semantic phase unless its owning contract explicitly provides an equivalent route. Do not substitute a different context merely to continue.
+For context-required routes (`S_PRIVATE_LOCAL`, `M_VM_LAB`, `M_PRIVATE_LAB`, `S_ANDROID_GUI_ADB_ACTION`, `S_ANDROID_GUI_ADB_READ`, `S_ANDROID_GUI`, `S_TERMUX`, `M`), offline/blocked/unknown evidence blocks or defers that semantic phase unless its owning contract explicitly provides an equivalent route. Do not substitute a different context merely to continue.
 
 For ordinary route `S`, M fallback is allowed only after current Git/worktree/collision evidence proves the M execution workspace is safe for that task. A dirty or stale observation is evidence to preserve, not an instruction to reset, stash, switch, fetch, or sync automatically.
 

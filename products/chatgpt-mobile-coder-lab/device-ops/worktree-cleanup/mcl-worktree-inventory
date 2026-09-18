@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+import json
+import os
+import re
+import runpy
+import subprocess
+import sys
+from pathlib import Path
+
+SCHEMA = "mcl-worktree-inventory.v1"
+MODE = "MCL_WORKTREE_INVENTORY"
+MAX_ROWS = 64
+ENUM_TIMEOUT_SECONDS = 5
+ITEM_TIMEOUT_SECONDS = 2
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+OWNER = Path(__file__).with_name("mcl-worktree-cleanup")
+_OWNER_NS = runpy.run_path(str(OWNER))
+PROFILES = _OWNER_NS["PROFILES"]
+AUTHORITY = {
+    "repositoryMutationAuthorized": False,
+    "deviceMutationAuthorized": False,
+    "mergeAuthorized": False,
+    "releaseAuthorized": False,
+    "productionAuthorized": False,
+}
+
+def _receipt(status, executor, rows=None, reasons=None, **extra):
+    return {
+        "schema": SCHEMA,
+        "mode": MODE,
+        "status": status,
+        "executor": executor,
+        "rows": rows or [],
+        "reasonCodes": sorted(set(reasons or [])),
+        "details": "withheld",
+        "authority": dict(AUTHORITY),
+        **extra,
+    }
+
+def _run(args, timeout):
+    return subprocess.run(
+        args,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        shell=False,
+        timeout=timeout,
+    )
+
+def _parse_worktree_list(text):
+    entries = []
+    current = {}
+    for line in text.splitlines() + [""]:
+        if not line:
+            if current:
+                entries.append(current)
+                current = {}
+            continue
+        key, sep, value = line.partition(" ")
+        current[key] = value if sep else True
+    return entries
+
+def _enumerate(executor, profiles=None):
+    profiles = profiles or PROFILES
+    profile = profiles.get(executor)
+    if profile is None:
+        raise ValueError("EXECUTOR_INVALID")
+    control = profile["control"]
+    root = profile["worktree_root"]
+    if os.path.realpath(root) != os.path.normpath(root):
+        raise RuntimeError("WORKTREE_ROOT_ALIAS")
+    if not os.path.isdir(control) or not os.path.isdir(root):
+        raise RuntimeError("FIXED_PROFILE_ROOT_MISSING")
+    try:
+        result = _run(
+            ["git", "-C", control, "worktree", "list", "--porcelain"],
+            ENUM_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("WORKTREE_ENUMERATION_TIMEOUT")
+    if result.returncode != 0:
+        raise RuntimeError("WORKTREE_ENUMERATION_FAILED")
+    direct = []
+    excluded = 0
+    protected = profile.get("protected_landing")
+    for item in _parse_worktree_list(result.stdout):
+        raw = item.get("worktree")
+        if not isinstance(raw, str):
+            excluded += 1
+            continue
+        path = os.path.normpath(raw)
+        if path == os.path.normpath(control):
+            excluded += 1
+            continue
+        if protected and path == os.path.normpath(protected):
+            excluded += 1
+            continue
+        if os.path.dirname(path) != os.path.normpath(root):
+            excluded += 1
+            continue
+        branch_raw = item.get("branch")
+        branch = None
+        if isinstance(branch_raw, str) and branch_raw.startswith("refs/heads/"):
+            branch = branch_raw[len("refs/heads/"):]
+        direct.append({
+            "target": os.path.basename(path),
+            "branch": branch,
+            "head": item.get("HEAD") if isinstance(item.get("HEAD"), str) else None,
+        })
+    direct.sort(key=lambda item: item["target"])
+    return profile, direct, excluded
+
+def _inspect_with_owner(executor, target, branch, head):
+    args = [
+        sys.executable,
+        str(OWNER),
+        "inspect",
+        "--executor", executor,
+        "--target", target,
+        "--expected-branch", branch,
+        "--expected-head", head,
+    ]
+    try:
+        result = _run(args, ITEM_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        return {"status": "UNKNOWN", "reasonCodes": ["TARGET_INSPECTION_TIMEOUT"]}
+    try:
+        value = json.loads(result.stdout)
+    except Exception:
+        return {"status": "UNKNOWN", "reasonCodes": ["TARGET_INSPECTION_INVALID"]}
+    if result.returncode not in {0, 2} or not isinstance(value, dict):
+        return {"status": "UNKNOWN", "reasonCodes": ["TARGET_INSPECTION_INVALID"]}
+    status = value.get("status")
+    reasons = value.get("reasonCodes")
+    if status not in {"ELIGIBLE", "BLOCKED"} or not isinstance(reasons, list):
+        return {"status": "UNKNOWN", "reasonCodes": ["TARGET_INSPECTION_INVALID"]}
+    if any(not isinstance(reason, str) for reason in reasons):
+        return {"status": "UNKNOWN", "reasonCodes": ["TARGET_INSPECTION_INVALID"]}
+    return {"status": status, "reasonCodes": reasons}
+
+def _row(executor, profile, item, inspect_fn):
+    target = item["target"]
+    branch = item["branch"]
+    head = item["head"]
+    if branch is None:
+        technical = "blocked"
+        reasons = ["TARGET_DETACHED"]
+        observed_branch = "detached"
+    elif not branch.startswith(profile["branch_prefix"]):
+        technical = "blocked"
+        reasons = ["TARGET_BRANCH_FAMILY_CONFLICT"]
+        observed_branch = branch
+    elif not SHA_RE.fullmatch(head or ""):
+        technical = "unknown"
+        reasons = ["TARGET_HEAD_INVALID"]
+        observed_branch = branch
+    else:
+        observed_branch = branch
+        inspected = inspect_fn(executor, target, branch, head)
+        owner_status = inspected.get("status")
+        reasons = sorted(set(inspected.get("reasonCodes") or []))
+        if owner_status == "ELIGIBLE":
+            technical = "cleanable"
+        elif owner_status == "BLOCKED":
+            technical = "blocked"
+        else:
+            technical = "unknown"
+            if not reasons:
+                reasons = ["TARGET_INSPECTION_UNKNOWN"]
+    return {
+        "executor": executor,
+        "target": target,
+        "observedBranch": observed_branch,
+        "observedHead": head if SHA_RE.fullmatch(head or "") else None,
+        "technicalStatus": technical,
+        "reasonCodes": reasons,
+        "retentionStatus": "external_required",
+        "applyCandidate": False,
+        "details": "withheld",
+    }
+
+def inventory(executor, *, profiles=None, enumerate_fn=None, inspect_fn=None,
+              max_rows=MAX_ROWS):
+    profiles = profiles or PROFILES
+    enumerate_fn = enumerate_fn or _enumerate
+    inspect_fn = inspect_fn or _inspect_with_owner
+    try:
+        profile, items, excluded = enumerate_fn(executor, profiles)
+    except (ValueError, RuntimeError) as error:
+        return _receipt("BLOCKED", executor, reasons=[str(error)],
+                        scanComplete=False, truncated=False, totalRows=0,
+                        excludedCount=0)
+    total = len(items)
+    truncated = total > max_rows
+    selected = items[:max_rows]
+    rows = [_row(executor, profile, item, inspect_fn) for item in selected]
+    has_unknown = any(row["technicalStatus"] == "unknown" for row in rows)
+    complete = not truncated and not has_unknown
+    return _receipt(
+        "COMPLETE" if complete else "PARTIAL",
+        executor,
+        rows=rows,
+        scanComplete=complete,
+        truncated=truncated,
+        totalRows=total,
+        emittedRows=len(rows),
+        excludedCount=excluded,
+    )
+
+def _parse(argv):
+    if len(argv) != 3 or argv[0] != "status" or argv[1] != "--executor":
+        raise ValueError("ARGUMENT_INVALID")
+    if argv[2] not in {"S", "M"}:
+        raise ValueError("EXECUTOR_INVALID")
+    return argv[2]
+
+def run_cli(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    try:
+        executor = _parse(argv)
+        result = inventory(executor)
+    except ValueError as error:
+        result = _receipt(
+            "BLOCKED", "unknown", reasons=[str(error)],
+            scanComplete=False, truncated=False, totalRows=0,
+            excludedCount=0,
+        )
+    code = 0 if result["status"] in {"COMPLETE", "PARTIAL"} else 2
+    return code, json.dumps(result, sort_keys=True, separators=(",", ":")) + "\n"
+
+def main():
+    code, text = run_cli()
+    sys.stdout.write(text)
+    return code
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -22,6 +22,9 @@ class ContractTests(unittest.TestCase):
             'add_argument("--package"',
             'add_argument("--action"',
             'add_argument("--category"',
+            'add_argument("--resource-id"',
+            'add_argument("--suffix"',
+            'add_argument("--query"',
             '"monkey"',
             '"swipe"',
             '"keyevent"',
@@ -34,6 +37,7 @@ class ContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, source)
         self.assertIn('sub.add_parser("launch-target")', source)
+        self.assertIn('sub.add_parser("probe-new-chat")', source)
         self.assertIn('sub.add_parser("activate")', source)
         self.assertIn('sub.add_parser("type-ascii")', source)
         self.assertIn('sub.add_parser("wait-text")', source)

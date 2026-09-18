@@ -44,6 +44,13 @@ The separately reviewed action extension adds only:
 ./mcl-adb-ui wait-text --exact <bounded-ascii>
 ```
 
+The separately reviewed new-chat discovery repair also adds one read-only
+diagnostic:
+
+```text
+./mcl-adb-ui probe-new-chat
+```
+
 There is no caller-supplied coordinate, ADB serial, package, component, remote
 path, or arbitrary shell command.
 
@@ -89,6 +96,31 @@ send     -> Send | 보내기
 
 Alias absence remains `not_found`; multiple eligible matches remain
 `ambiguous`. The alias table is not proof of the current live UI vocabulary.
+
+For `new_chat` only, semantic discovery may also use one fixed structural
+channel. A target-package Android resource id is parsed locally only when it
+has the exact `com.openai.chatgpt:id/<local-name>` shape. The local name must
+exactly equal one reviewed value:
+
+```text
+new_chat
+new_chat_button
+newchat
+new_conversation
+new_conversation_button
+create_new_chat
+start_new_chat
+```
+
+There is no substring or fuzzy matching. Label and structural matches are
+deduplicated by the same semantic node index before the normal 0 / 1 / many
+decision. `send` remains label-only.
+
+`probe-new-chat` captures one fresh hierarchy and returns only the snapshot,
+bounded label/resource/combined match counts, an opaque handle for exactly one
+combined match, bounded result/cleanup dispositions, and
+`details=withheld`. It never emits visible labels, resource ids, classes,
+bounds, coordinates, or raw XML, and it performs no UI input.
 
 ## Stale-guarded activation
 

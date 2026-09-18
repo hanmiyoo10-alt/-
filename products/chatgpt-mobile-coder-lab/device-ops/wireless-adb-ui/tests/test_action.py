@@ -19,6 +19,7 @@ class ActionRunner:
         devices=b"List of devices attached\nserial-1\tdevice\n",
         model=b"SM-G998N\n",
         cleanup=0,
+        resolver=b"priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=false\ncom.openai.chatgpt/.MainActivity\n",
         launch=0,
         tap=0,
         text=0,
@@ -28,6 +29,7 @@ class ActionRunner:
         self.devices = devices
         self.model = model
         self.cleanup = cleanup
+        self.resolver = resolver
         self.launch = launch
         self.tap_code = tap
         self.text_code = text
@@ -47,6 +49,8 @@ class ActionRunner:
             return 0, self.last_xml
         if args[-4:] == ["shell", "rm", "-f", m.REMOTE_XML]:
             return self.cleanup, b""
+        if "resolve-activity" in args:
+            return 0, self.resolver
         if "am" in args and "start" in args:
             return self.launch, b""
         if len(args) >= 7 and args[-4:-2] == ["input", "tap"]:
@@ -88,6 +92,17 @@ class ActionRuntimeTests(unittest.TestCase):
         runner = ActionRunner([fixture("action_new_chat.xml")])
         receipt = "\n".join(m.launch_receipt(m.AdbClient(runner)))
         self.assertIn("result=launched", receipt)
+        resolve = [call for call in runner.calls if "resolve-activity" in call][0]
+        self.assertEqual(
+            resolve,
+            (
+                "-s", "serial-1", "shell", "cmd", "package",
+                "resolve-activity", "--brief",
+                "-a", "android.intent.action.MAIN",
+                "-c", "android.intent.category.LAUNCHER",
+                "com.openai.chatgpt",
+            ),
+        )
         launch = [call for call in runner.calls if "am" in call][0]
         self.assertEqual(
             launch,
@@ -95,10 +110,11 @@ class ActionRuntimeTests(unittest.TestCase):
                 "-s", "serial-1", "shell", "am", "start",
                 "-a", "android.intent.action.MAIN",
                 "-c", "android.intent.category.LAUNCHER",
-                "-p", "com.openai.chatgpt",
+                "-n", "com.openai.chatgpt/.MainActivity",
             ),
         )
         self.assertNotIn("serial-1", receipt)
+        self.assertNotIn("MainActivity", receipt)
 
     def test_activate_derives_coordinate_and_withholds_it(self):
         pre = m.analyze(fixture("action_new_chat.xml"))

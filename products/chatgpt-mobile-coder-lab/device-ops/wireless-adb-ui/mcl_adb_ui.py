@@ -22,6 +22,9 @@ OPAQUE_SNAPSHOT_RE = re.compile(r"^s-[0-9a-f]{16}$")
 OPAQUE_HANDLE_RE = re.compile(r"^h-[0-9a-f]{16}$")
 BOUNDS_RE = re.compile(r"^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$")
 ASCII_TEXT_RE = re.compile(r"^[A-Za-z0-9_ ]{1,160}$")
+COMPONENT_LINE_RE = re.compile(r"^[A-Za-z0-9._]+/[A-Za-z0-9_.$]+$")
+TARGET_COMPONENT_RE = re.compile(r"^com\.openai\.chatgpt/[A-Za-z0-9_.$]+$")
+MAX_RESOLVER_BYTES = 8192
 ALIASES = {
     "new_chat": ("New chat", "새 채팅", "새 대화"),
     "send": ("Send", "보내기"),
@@ -272,12 +275,40 @@ class AdbClient:
         cleanup = "pass" if code == 0 else "fail"
         return raw if dump_ok else None, cleanup
 
-    def launch_target(self, serial):
+    def resolve_target_component(self, serial):
+        code, output = self.runner.run([
+            "-s", serial, "shell", "cmd", "package", "resolve-activity", "--brief",
+            "-a", "android.intent.action.MAIN",
+            "-c", "android.intent.category.LAUNCHER",
+            TARGET_PACKAGE,
+        ], timeout=12, max_output=MAX_RESOLVER_BYTES)
+        if code != 0:
+            return "unknown", None
+        text = _decode(output)
+        if not text:
+            return "blocked", None
+        component_lines = []
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if COMPONENT_LINE_RE.fullmatch(line):
+                component_lines.append(line)
+            elif "/" in line:
+                return "blocked", None
+        if len(component_lines) != 1:
+            return "blocked", None
+        component = component_lines[0]
+        if not TARGET_COMPONENT_RE.fullmatch(component):
+            return "blocked", None
+        return "found", component
+
+    def launch_target(self, serial, component):
         return self.runner.run([
             "-s", serial, "shell", "am", "start",
             "-a", "android.intent.action.MAIN",
             "-c", "android.intent.category.LAUNCHER",
-            "-p", TARGET_PACKAGE,
+            "-n", component,
         ], timeout=12)
 
     def tap(self, serial, x, y):
@@ -380,8 +411,12 @@ def launch_receipt(client):
     model = target["model"]
     result = "blocked"
     if connection == "connected" and model == "match":
-        code, _ = client.launch_target(target["serial"])
-        result = "launched" if code == 0 else "unknown"
+        resolution, component = client.resolve_target_component(target["serial"])
+        if resolution == "unknown":
+            result = "unknown"
+        elif resolution == "found":
+            code, _ = client.launch_target(target["serial"], component)
+            result = "launched" if code == 0 else "unknown"
     return [
         "schema=mcl-wireless-adb-ui-launch.v1",
         "target=s",

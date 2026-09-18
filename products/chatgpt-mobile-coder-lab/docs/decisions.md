@@ -271,3 +271,33 @@ AccessibilityService는 사용자가 disclosure를 확인한 뒤 Android Setting
 ### 이유
 
 Repository/shell evidence로는 ChatGPT host/client UI 자체에 표시되는 상태를 증명할 수 없는 작업이 있다. 기존 RDC를 포크하거나 TaskBridge companion의 권한을 확대하는 대신, 별도의 좁은 Android GUI owner를 두면 일반 ChatGPT 중심 운영을 유지하면서도 GUI 효과와 privacy/security 경계를 독립적으로 검증할 수 있다. 이 route의 존재는 live readiness나 cloud continuation을 의미하지 않는다.
+
+## D-016 — Wireless ADB UI reading uses an M-local bounded receipt adapter
+
+상태: `ACTIVE`
+
+### 결정
+
+S의 ChatGPT Android UI를 **읽기 전용으로** 관찰해야 하고, 별도 Android companion 설치 없이 이미 사용자가 승인한 Wireless ADB 연결을 사용할 수 있는 경우 `S_ANDROID_GUI_ADB_READ` route를 사용한다.
+
+기본 구성은 다음이다.
+
+```text
+ordinary ChatGPT
+→ RDC M
+→ M Termux mcl-adb-ui
+→ already user-paired Wireless ADB
+→ S uiautomator hierarchy
+→ M-local parser
+→ bounded receipt
+```
+
+raw hierarchy는 M 내부에서만 처리하고 ordinary ChatGPT에는 고정된 bounded receipt만 전달한다. 대상은 `SM-G998N` 한 대와 `com.openai.chatgpt` package로 제한하며, ADB serial/IP/port/pairing material, 전체 UI text, conversation body, account/credential-like node는 정상 receipt에 포함하지 않는다.
+
+V1은 `status / snapshot / find-action / find-editable` read-only surface만 소유한다. click/tap/text input, arbitrary `adb shell`, caller-selected serial/path, package install/uninstall, Android settings write, backup/app-private-data read, Play Protect/security-control 변경은 허용하지 않는다.
+
+Wireless Debugging 활성화와 pairing은 사용자 승인 Android state이며 이 owner가 자동으로 만들거나 복구하지 않는다. 연결 실패, 다중 target, model mismatch, raw hierarchy 처리 실패, current tool boundary 차단은 더 강한 상태로 추론하지 않고 `offline / ambiguous / unknown / blocked`로 보존한다.
+
+### 이유
+
+#2452 capability probe에서 M→S Wireless ADB 연결, S model 확인, screenshot, `uiautomator dump` 생성은 검증됐지만 raw hierarchy 자체를 ChatGPT/RDC surface로 가져오는 단계는 platform tool boundary에 막혔다. M 안에서 hierarchy를 파싱하고 필요한 의미 정보만 receipt로 축약하면 그 boundary를 우회하지 않으면서도 read-only GUI evidence를 얻을 수 있다. Action capability는 별도 reviewed packet 전까지 증명하거나 암묵적으로 허용하지 않는다.

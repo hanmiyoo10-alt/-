@@ -70,6 +70,26 @@ SIMCORE_HARNESS_SELF_TEST
 
 Mutating and workflow routes remain `HANDOFF_ONLY`.
 
+### Generic execution receipt projection for audited invoke results
+
+`invoke-execution-receipt.cjs` is a pure/read-only adapter from an already-produced Work Harness `EXECUTOR_HANDOFF + EXECUTOR_RESULT` pair into facts accepted by the repository-wide `execution-receipt.cjs` projector.
+
+```text
+validated Work Record + PREFLIGHT
+→ existing dispatch / handoff
+→ existing invoke.cjs
+→ EXECUTOR_RESULT
+→ invoke-execution-receipt.cjs
+→ execution-receipt.cjs
+→ REPOSITORY_EXECUTION_RECEIPT
+```
+
+The adapter never invokes a route and never grants execution authority. It checks envelope integrity and evidence consistency only. `PASS` and `FAIL` require an already-authorized, actually executed read-only handoff; `INFRA_ERROR` becomes `BLOCKED`; `NOT_EXECUTED` remains `BLOCKED`; identity or authorization contradictions become `CONFLICT`.
+
+Normal PASS stdout is deliberately omitted from the GPT-facing facts. The original bounded `EXECUTOR_RESULT` stays behind the caller-supplied artifact locator for targeted drill-down. For non-PASS results, only a bounded stderr tail may be forwarded, and the generic execution-receipt projector still owns sensitive-material rejection and final fail-closed normalization.
+
+Exact source/ref identity, execution-surface identity, and the invocation-result artifact locator are caller-supplied evidence. The adapter does not discover freshness, re-plan PREFLIGHT, select routes, mutate repository state, call GitHub, or broaden the audited adapter registry. The existing `invoke.cjs` remains the sole execution owner for this surface.
+
 ## Coordination Receipt v1 — HARNESS-B3
 
 `receipt.cjs` issues and validates a repository-visible Coordination Receipt only from freshly recomputed, unguarded `STARTABLE + PARALLEL_SAFE` evidence with exact observed refs/bases and audited adapter/project registries.

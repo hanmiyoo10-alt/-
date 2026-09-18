@@ -11,6 +11,7 @@ const WORKFLOW = 'mcl-task-lease.yml';
 const LEDGER_ISSUE = 2352;
 const PACKET_RE = /^#([1-9][0-9]*)$/;
 const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const ISSUE_ENDPOINT_RE = /^\/issues\/([1-9][0-9]*)$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const AUTHORITY = Object.freeze({
   repositoryMutationAuthorized: false,
@@ -134,6 +135,37 @@ function defaultRunner(args) {
   const result = childProcess.spawnSync('gh', args, {encoding: 'utf8', shell: false});
   return {code: result.status ?? 1, stdout: result.stdout || '', stderr: result.stderr || ''};
 }
+
+function createGhIssueReadClient({repo, runner = defaultRunner} = {}) {
+  if (!validateRepo(repo)) throw new Error('REPOSITORY_INVALID');
+  return {
+    repo,
+    async api(endpoint, options = {}) {
+      if (!ISSUE_ENDPOINT_RE.test(endpoint || '')) throw new Error('GH_API_ISSUE_ENDPOINT_INVALID');
+      if (options && Object.keys(options).length > 0) throw new Error('GH_API_ISSUE_OPTIONS_INVALID');
+      const result = runner(['api', `repos/${repo}${endpoint}`, '--method', 'GET',
+        '--header', 'Accept: application/vnd.github+json']);
+      if (result.code !== 0) throw new Error('GH_API_ISSUE_READ_FAILED');
+      try {
+        const value = JSON.parse(result.stdout || '');
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+          throw new Error('invalid');
+        }
+        return value;
+      } catch {
+        throw new Error('GH_API_ISSUE_RESPONSE_INVALID');
+      }
+    },
+  };
+}
+
+function createOperatorGitHubClient({repo, env = process.env, runner = defaultRunner, fetchImpl} = {}) {
+  const token = env.GH_TOKEN || env.GITHUB_TOKEN;
+  if (!token) return createGhIssueReadClient({repo, runner});
+  const options = {token, repo, userAgent: 'mcl-coordination-operator-v1'};
+  if (fetchImpl) options.fetchImpl = fetchImpl;
+  return createGitHubClient(options);
+}
 function parseRuns(text) {
   try {
     const runs = JSON.parse(text || '[]');
@@ -248,7 +280,7 @@ function readManifestInput(filePath) {
   }
 }
 
-async function runCli(argv = process.argv.slice(2), env = process.env) {
+async function runCli(argv = process.argv.slice(2), env = process.env, options = {}) {
   const {command, values} = parseCli(argv);
   if (command === 'handoff-manifest') {
     const manifest = handoff.buildManifest(readJsonInput(values.input));
@@ -261,8 +293,8 @@ async function runCli(argv = process.argv.slice(2), env = process.env) {
   }
   const repo = values.repo;
   if (!validateRepo(repo)) throw new Error('REPOSITORY_INVALID');
-  const client = createGitHubClient({token: env.GH_TOKEN || env.GITHUB_TOKEN, repo,
-    userAgent: 'mcl-coordination-operator-v1'});
+  const runner = options.runner || defaultRunner;
+  const client = createOperatorGitHubClient({repo, env, runner, fetchImpl: options.fetchImpl});
   const packetRef = values.packet;
   if (command === 'inspect') {
     const scopes = parseScopesJson(values['scopes-json']);
@@ -285,7 +317,8 @@ async function runCli(argv = process.argv.slice(2), env = process.env) {
   } else {
     throw new Error('COMMAND_UNSUPPORTED');
   }
-  const final = values.dispatch ? await dispatchPlan({repo, plan, client}) : plan;
+  const final = values.dispatch ? await dispatchPlan({repo, plan, client, runner,
+    sleepFn: options.sleepFn, maxPolls: options.maxPolls}) : plan;
   const code = ['PLAN_READY', 'DISPATCH_COMPLETE'].includes(final.status) ? 0 : 2;
   return {text: `${JSON.stringify(final)}\n`, code};
 }
@@ -303,6 +336,8 @@ module.exports = {
   LEDGER_ISSUE,
   WORKFLOW,
   buildDispatchArgs,
+  createGhIssueReadClient,
+  createOperatorGitHubClient,
   dispatchPlan,
   normalizeRequestedScopes,
   output,

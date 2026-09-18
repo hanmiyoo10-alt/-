@@ -210,6 +210,138 @@ function manifestInput() {
     assert.equal(result.runId, 93);
   });
 
+  await test('env token path preserves fetch client and does not invoke gh fallback', async () => {
+    let runnerCalls = 0;
+    const fetchImpl = async () => ({
+      ok: true, status: 200,
+      async json() { return {state: 'open', body: packetBody()}; },
+      async text() { return ''; },
+    });
+    const client = operator.createOperatorGitHubClient({
+      repo: 'hanmiyoo10-alt/-', env: {GH_TOKEN: 'fixture'},
+      runner: () => { runnerCalls += 1; throw new Error('fallback must not run'); }, fetchImpl,
+    });
+    const issue = await client.api('/issues/2378');
+    assert.equal(issue.state, 'open');
+    assert.equal(runnerCalls, 0);
+  });
+
+  await test('no-env inspect uses only bounded authenticated gh issue reads', async () => {
+    const calls = [];
+    const runner = (args) => {
+      calls.push(args);
+      assert.deepEqual(args.slice(0, 2), ['api', args[1]]);
+      assert.deepEqual(args.slice(2), ['--method', 'GET', '--header', 'Accept: application/vnd.github+json']);
+      if (args[1] === 'repos/hanmiyoo10-alt/-/issues/2378') {
+        return {code: 0, stdout: JSON.stringify({state: 'open', body: packetBody()}), stderr: ''};
+      }
+      if (args[1] === 'repos/hanmiyoo10-alt/-/issues/2352') {
+        return {code: 0, stdout: JSON.stringify({state: 'open', body: lease.renderLedger(ledgerState())}), stderr: ''};
+      }
+      throw new Error(`unexpected api target ${args[1]}`);
+    };
+    const result = await operator.runCli([
+      'inspect', '--repo', 'hanmiyoo10-alt/-', '--packet', '#2378', '--scopes-json', '[]',
+    ], {}, {runner});
+    assert.equal(result.code, 0);
+    const parsed = JSON.parse(result.text);
+    assert.equal(parsed.status, 'READY');
+    assert.equal(parsed.ledgerGeneration, 7);
+    assert.deepEqual(calls.map((args) => args[1]), [
+      'repos/hanmiyoo10-alt/-/issues/2378',
+      'repos/hanmiyoo10-alt/-/issues/2352',
+    ]);
+  });
+
+  await test('gh fallback rejects arbitrary endpoints and request options', async () => {
+    const client = operator.createGhIssueReadClient({
+      repo: 'hanmiyoo10-alt/-',
+      runner: () => { throw new Error('runner must not execute'); },
+    });
+    await assert.rejects(client.api('/pulls/1'), /GH_API_ISSUE_ENDPOINT_INVALID/);
+    await assert.rejects(client.api('/issues/1', {method: 'POST'}), /GH_API_ISSUE_OPTIONS_INVALID/);
+    await assert.rejects(client.api('/issues/0'), /GH_API_ISSUE_ENDPOINT_INVALID/);
+  });
+
+  await test('gh fallback read failures do not expose raw stderr', async () => {
+    const marker = 'PRIVATE_AUTH_MATERIAL';
+    const failed = operator.createGhIssueReadClient({
+      repo: 'hanmiyoo10-alt/-',
+      runner: () => ({code: 1, stdout: '', stderr: marker}),
+    });
+    await assert.rejects(
+      failed.api('/issues/2378'),
+      (error) => error.message === 'GH_API_ISSUE_READ_FAILED' && !String(error).includes(marker),
+    );
+    const malformed = operator.createGhIssueReadClient({
+      repo: 'hanmiyoo10-alt/-',
+      runner: () => ({code: 0, stdout: '{not-json', stderr: marker}),
+    });
+    await assert.rejects(
+      malformed.api('/issues/2378'),
+      (error) => error.message === 'GH_API_ISSUE_RESPONSE_INVALID' && !String(error).includes(marker),
+    );
+  });
+
+  await test('same injected gh runner serves fallback reads and bounded dispatch', async () => {
+    const request = {expectedGeneration: 7, ...acquireArgs(), packetBodySha256: lease.digest(packetBody())};
+    const acquired = lease.planAcquire(ledgerState(), request);
+    const acquiredState = lease.parseLedger(acquired.updatedBody).state;
+    let ledgerReads = 0;
+    let listCount = 0;
+    const calls = [];
+    const runner = (args) => {
+      calls.push(args);
+      if (args[0] === 'api') {
+        if (args[1] === 'repos/hanmiyoo10-alt/-/issues/2378') {
+          return {code: 0, stdout: JSON.stringify({state: 'open', body: packetBody()}), stderr: ''};
+        }
+        if (args[1] === 'repos/hanmiyoo10-alt/-/issues/2352') {
+          ledgerReads += 1;
+          const state = ledgerReads === 1 ? ledgerState() : acquiredState;
+          return {code: 0, stdout: JSON.stringify({state: 'open', body: lease.renderLedger(state)}), stderr: ''};
+        }
+      }
+      if (args[0] === 'run' && args[1] === 'list') {
+        listCount += 1;
+        const runs = listCount === 1 ? [] : [{databaseId: 94, status: 'completed', conclusion: 'success'}];
+        return {code: 0, stdout: JSON.stringify(runs), stderr: ''};
+      }
+      if (args[0] === 'workflow' && args[1] === 'run') return {code: 0, stdout: '', stderr: ''};
+      if (args[0] === 'run' && args[1] === 'watch') return {code: 0, stdout: '', stderr: ''};
+      if (args[0] === 'run' && args[1] === 'view' && args.includes('--json')) {
+        return {code: 0, stdout: JSON.stringify({databaseId: 94, conclusion: 'success', status: 'completed'}), stderr: ''};
+      }
+      if (args[0] === 'run' && args[1] === 'view' && args.includes('--log')) {
+        return {code: 0, stdout: `result ${acquired.leaseId}`, stderr: ''};
+      }
+      throw new Error(`unexpected runner args ${args.join(' ')}`);
+    };
+    const args = acquireArgs();
+    const result = await operator.runCli([
+      'lease-acquire', '--repo', 'hanmiyoo10-alt/-', '--packet', '#2378',
+      '--route', args.route, '--executor', args.executor,
+      '--scopes-json', JSON.stringify(args.scopes), '--scope-disposition', args.scopeDisposition,
+      '--workspace-kind', args.workspaceKind, '--branch', args.branch, '--worktree', args.worktree,
+      '--observed-base-sha', args.observedBaseSha, '--dispatch',
+    ], {}, {runner, sleepFn: () => {}, maxPolls: 1});
+    assert.equal(result.code, 0);
+    const parsed = JSON.parse(result.text);
+    assert.equal(parsed.status, 'DISPATCH_COMPLETE');
+    assert.equal(parsed.runId, 94);
+    assert(calls.some((args) => args[0] === 'api'));
+    assert(calls.some((args) => args[0] === 'workflow' && args[1] === 'run'));
+  });
+
+  await test('operator source contains no credential extraction commands', async () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'mcl-coordination-operator.cjs'), 'utf8');
+    for (const forbidden of [
+      "['auth', 'token']", "['auth', 'login']", "['auth', 'refresh']", "['auth', 'logout']",
+    ]) {
+      assert(!source.includes(forbidden), forbidden);
+    }
+  });
+
   await test('D-014 manifest command reuses canonical builder and renderer', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-operator-'));
     const inputPath = path.join(dir, 'manifest.json');

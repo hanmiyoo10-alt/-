@@ -51,6 +51,56 @@ function acquireArgs(overrides = {}) {
   };
 }
 
+function activeReleaseFixture({generation = 7, body = packetBody()} = {}) {
+  const request = {expectedGeneration: generation, ...acquireArgs(), packetBodySha256: lease.digest(body)};
+  const acquired = lease.planAcquire(ledgerState(generation), request);
+  const state = lease.parseLedger(acquired.updatedBody).state;
+  return {body, leaseId: acquired.leaseId, state};
+}
+
+function dynamicClient({body = packetBody(), states}) {
+  let ledgerReads = 0;
+  return {
+    async api(endpoint) {
+      if (endpoint === '/issues/2378') return {state: 'open', body};
+      if (endpoint === '/issues/2352') {
+        const state = states[Math.min(ledgerReads, states.length - 1)];
+        ledgerReads += 1;
+        return {state: 'open', body: lease.renderLedger(state)};
+      }
+      throw new Error(`unexpected endpoint ${endpoint}`);
+    },
+  };
+}
+
+function failedRunRunner({runId = 501, packetRef = '#2378', leaseId,
+  event = 'workflow_dispatch', workflowName = 'MCL Task Lease',
+  status = 'completed', conclusion = 'failure',
+  operation = 'release', transient = true, packetOverride = packetRef,
+  leaseOverride = leaseId, viewCode = 0, logCode = 0, rawMarker = ''} = {}) {
+  const calls = [];
+  const runner = (args) => {
+    calls.push(args);
+    if (args[0] === 'run' && args[1] === 'view' && args.includes('--json')) {
+      return {code: viewCode, stdout: viewCode === 0 ? JSON.stringify({
+        databaseId: runId, event, workflowName, status, conclusion,
+      }) : '', stderr: rawMarker};
+    }
+    if (args[0] === 'run' && args[1] === 'view' && args.includes('--log')) {
+      const log = [
+        `MCL_LEASE_OPERATION: ${operation}`,
+        `MCL_LEASE_PACKET_REF: ${packetOverride}`,
+        `MCL_LEASE_ID: ${leaseOverride}`,
+        transient ? 'mcl-task-lease fatal: fetch failed' : 'mcl-task-lease fatal: semantic failure',
+        rawMarker,
+      ].join('\n');
+      return {code: logCode, stdout: logCode === 0 ? log : '', stderr: rawMarker};
+    }
+    throw new Error(`unexpected runner args ${args.join(' ')}`);
+  };
+  return {calls, runner};
+}
+
 function manifestInput() {
   return {
     schemaVersion: 1, mode: 'MCL_TASK_MANIFEST', packetRef: '#2378', packetBodySha256: 'c'.repeat(64),
@@ -149,6 +199,252 @@ function manifestInput() {
       client: fakeClient(), runner, sleepFn: () => {}, maxPolls: 1});
     assert.equal(result.status, 'DISPATCH_FAILED');
     assert(result.reasonCodes.includes('WORKFLOW_FAILED_NO_AUTO_RETRY'));
+    assert.equal(calls.filter((args) => args[0] === 'workflow' && args[1] === 'run').length, 1);
+  });
+
+  await test('release recovery rejects missing failed-run id before effect', async () => {
+    const fixture = activeReleaseFixture();
+    let runnerCalls = 0;
+    const result = await operator.planReleaseRecovery({
+      repo: 'hanmiyoo10-alt/-',
+      client: fakeClient({body: fixture.body, state: fixture.state}),
+      runner: () => { runnerCalls += 1; throw new Error('runner must not execute'); },
+      packetRef: '#2378', leaseId: fixture.leaseId, failedRunId: null,
+    });
+    assert.equal(result.status, 'BLOCKED');
+    assert(result.reasonCodes.includes('RECOVERY_FAILED_RUN_ID_INVALID'));
+    assert.equal(runnerCalls, 0);
+  });
+
+  await test('lease-release-recover CLI exposes only a fresh bounded recovery plan', async () => {
+    const fixture = activeReleaseFixture();
+    const calls = [];
+    const runner = (args) => {
+      calls.push(args);
+      if (args[0] === 'api') {
+        if (args[1] === 'repos/hanmiyoo10-alt/-/issues/2378') {
+          return {code: 0, stdout: JSON.stringify({state: 'open', body: fixture.body}), stderr: ''};
+        }
+        if (args[1] === 'repos/hanmiyoo10-alt/-/issues/2352') {
+          return {code: 0, stdout: JSON.stringify({state: 'open', body: lease.renderLedger(fixture.state)}), stderr: ''};
+        }
+      }
+      if (args[0] === 'run' && args[1] === 'view' && args.includes('--json')) {
+        return {code: 0, stdout: JSON.stringify({
+          databaseId: 501, event: 'workflow_dispatch', workflowName: 'MCL Task Lease',
+          status: 'completed', conclusion: 'failure',
+        }), stderr: ''};
+      }
+      if (args[0] === 'run' && args[1] === 'view' && args.includes('--log')) {
+        return {code: 0, stdout: [
+          'MCL_LEASE_OPERATION: release',
+          'MCL_LEASE_PACKET_REF: #2378',
+          `MCL_LEASE_ID: ${fixture.leaseId}`,
+          'mcl-task-lease fatal: fetch failed',
+        ].join('\n'), stderr: ''};
+      }
+      throw new Error(`unexpected runner args ${args.join(' ')}`);
+    };
+    const result = await operator.runCli([
+      'lease-release-recover', '--repo', 'hanmiyoo10-alt/-', '--packet', '#2378',
+      '--lease-id', fixture.leaseId, '--failed-run-id', '501',
+    ], {}, {runner});
+    assert.equal(result.code, 0);
+    const parsed = JSON.parse(result.text);
+    assert.equal(parsed.status, 'PLAN_READY');
+    assert.equal(parsed.recoveryOfRunId, 501);
+    assert.equal(parsed.workflowInputs.expected_generation, String(fixture.state.generation));
+    assert.equal(calls.filter((args) => args[0] === 'workflow').length, 0);
+  });
+
+  await test('release recovery accepts only exact transient failed-run evidence without leaking raw log', async () => {
+    const fixture = activeReleaseFixture();
+    const bad = failedRunRunner({leaseId: fixture.leaseId, transient: false, rawMarker: 'PRIVATE_LOG_MARKER'});
+    const rejected = operator.readFailedReleaseEvidence({
+      repo: 'hanmiyoo10-alt/-', failedRunId: 501, packetRef: '#2378',
+      leaseId: fixture.leaseId, runner: bad.runner,
+    });
+    assert.equal(rejected.status, 'BLOCKED');
+    assert(rejected.reasonCodes.includes('RECOVERY_FAILURE_CLASS_NOT_ELIGIBLE'));
+    assert(!JSON.stringify(rejected).includes('PRIVATE_LOG_MARKER'));
+
+    const mismatch = failedRunRunner({leaseId: fixture.leaseId, packetOverride: '#9999'});
+    const mismatchResult = operator.readFailedReleaseEvidence({
+      repo: 'hanmiyoo10-alt/-', failedRunId: 501, packetRef: '#2378',
+      leaseId: fixture.leaseId, runner: mismatch.runner,
+    });
+    assert.equal(mismatchResult.status, 'BLOCKED');
+    assert(mismatchResult.reasonCodes.includes('RECOVERY_FAILED_RUN_PACKET_MISMATCH'));
+  });
+
+  await test('release recovery rejects non-workflow or non-failed run evidence', async () => {
+    const fixture = activeReleaseFixture();
+    const wrongEvent = failedRunRunner({leaseId: fixture.leaseId, event: 'push'});
+    const eventResult = operator.readFailedReleaseEvidence({
+      repo: 'hanmiyoo10-alt/-', failedRunId: 501, packetRef: '#2378',
+      leaseId: fixture.leaseId, runner: wrongEvent.runner,
+    });
+    assert.equal(eventResult.status, 'BLOCKED');
+    assert(eventResult.reasonCodes.includes('RECOVERY_FAILED_RUN_EVENT_MISMATCH'));
+
+    const wrongWorkflow = failedRunRunner({leaseId: fixture.leaseId, workflowName: 'Other Workflow'});
+    const workflowResult = operator.readFailedReleaseEvidence({
+      repo: 'hanmiyoo10-alt/-', failedRunId: 501, packetRef: '#2378',
+      leaseId: fixture.leaseId, runner: wrongWorkflow.runner,
+    });
+    assert.equal(workflowResult.status, 'BLOCKED');
+    assert(workflowResult.reasonCodes.includes('RECOVERY_FAILED_RUN_WORKFLOW_MISMATCH'));
+
+    const successfulRun = failedRunRunner({leaseId: fixture.leaseId, conclusion: 'success'});
+    const successResult = operator.readFailedReleaseEvidence({
+      repo: 'hanmiyoo10-alt/-', failedRunId: 501, packetRef: '#2378',
+      leaseId: fixture.leaseId, runner: successfulRun.runner,
+    });
+    assert.equal(successResult.status, 'BLOCKED');
+    assert(successResult.reasonCodes.includes('RECOVERY_FAILED_RUN_NOT_COMPLETED_FAILURE'));
+  });
+
+  await test('release recovery does not bypass terminal packet semantics', async () => {
+    const fixture = activeReleaseFixture();
+    const failed = failedRunRunner({leaseId: fixture.leaseId});
+    const result = await operator.planReleaseRecovery({
+      repo: 'hanmiyoo10-alt/-',
+      client: fakeClient({body: packetBody('DONE'), state: fixture.state}),
+      runner: failed.runner, packetRef: '#2378', leaseId: fixture.leaseId, failedRunId: 501,
+    });
+    assert.equal(result.status, 'BLOCKED');
+    assert(result.reasonCodes.includes('PACKET_TERMINAL'));
+  });
+
+  await test('release recovery replans from fresh generation when exact lease identity remains active', async () => {
+    const fixture = activeReleaseFixture();
+    const advanced = {...fixture.state, generation: 12};
+    const failed = failedRunRunner({leaseId: fixture.leaseId});
+    const result = await operator.planReleaseRecovery({
+      repo: 'hanmiyoo10-alt/-', client: fakeClient({body: fixture.body, state: advanced}),
+      runner: failed.runner, packetRef: '#2378', leaseId: fixture.leaseId, failedRunId: 501,
+    });
+    assert.equal(result.status, 'PLAN_READY');
+    assert.equal(result.recoveryOfRunId, 501);
+    assert.equal(result.ledgerGeneration, 12);
+    assert.equal(result.workflowInputs.expected_generation, '12');
+    assert.equal(result.workflowInputs.lease_id, fixture.leaseId);
+    assert(result.reasonCodes.includes('RECOVERY_TRANSIENT_FETCH_FAILURE_PROVEN'));
+  });
+
+  await test('release recovery blocks packet digest drift before recovery dispatch', async () => {
+    const fixture = activeReleaseFixture();
+    const failed = failedRunRunner({leaseId: fixture.leaseId});
+    const result = await operator.planReleaseRecovery({
+      repo: 'hanmiyoo10-alt/-',
+      client: fakeClient({body: `${fixture.body}\n## Note\nnew semantic body\n`, state: fixture.state}),
+      runner: failed.runner, packetRef: '#2378', leaseId: fixture.leaseId, failedRunId: 501,
+    });
+    assert.equal(result.status, 'BLOCKED');
+    assert(result.reasonCodes.includes('RECOVERY_PACKET_DIGEST_DRIFT'));
+  });
+
+  await test('release recovery is a no-op when exact lease is already released', async () => {
+    const fixture = activeReleaseFixture();
+    const releasedPlan = lease.planRelease(fixture.state, {
+      expectedGeneration: fixture.state.generation, leaseId: fixture.leaseId, packetRef: '#2378',
+    });
+    const released = lease.parseLedger(releasedPlan.updatedBody).state;
+    const failed = failedRunRunner({leaseId: fixture.leaseId});
+    const plan = await operator.planReleaseRecovery({
+      repo: 'hanmiyoo10-alt/-', client: fakeClient({body: fixture.body, state: released}),
+      runner: failed.runner, packetRef: '#2378', leaseId: fixture.leaseId, failedRunId: 501,
+    });
+    assert.equal(plan.status, 'RECOVERY_COMPLETE');
+    assert(plan.reasonCodes.includes('LEASE_ALREADY_RELEASED'));
+    let dispatchCalls = 0;
+    const result = await operator.dispatchRecoveryPlan({
+      repo: 'hanmiyoo10-alt/-', plan, client: fakeClient({body: fixture.body, state: released}),
+      runner: () => { dispatchCalls += 1; throw new Error('must not dispatch'); },
+    });
+    assert.equal(result.status, 'RECOVERY_COMPLETE');
+    assert.equal(dispatchCalls, 0);
+  });
+
+  await test('failed recovery dispatch stops after exactly one new workflow dispatch', async () => {
+    const fixture = activeReleaseFixture();
+    const failedEvidence = failedRunRunner({leaseId: fixture.leaseId});
+    const plan = await operator.planReleaseRecovery({
+      repo: 'hanmiyoo10-alt/-', client: fakeClient({body: fixture.body, state: fixture.state}),
+      runner: failedEvidence.runner, packetRef: '#2378', leaseId: fixture.leaseId, failedRunId: 501,
+    });
+    let listCount = 0;
+    const calls = [];
+    const runner = (args) => {
+      calls.push(args);
+      if (args[0] === 'run' && args[1] === 'list') {
+        listCount += 1;
+        return {code: 0, stdout: JSON.stringify(listCount === 1 ? [] : [
+          {databaseId: 601, status: 'completed', conclusion: 'failure'},
+        ]), stderr: ''};
+      }
+      if (args[0] === 'workflow' && args[1] === 'run') return {code: 0, stdout: '', stderr: ''};
+      if (args[0] === 'run' && args[1] === 'watch') return {code: 1, stdout: '', stderr: ''};
+      if (args[0] === 'run' && args[1] === 'view' && args.includes('--json')) {
+        return {code: 0, stdout: JSON.stringify({
+          databaseId: 601, conclusion: 'failure', status: 'completed', event: 'workflow_dispatch',
+        }), stderr: ''};
+      }
+      throw new Error(`unexpected runner args ${args.join(' ')}`);
+    };
+    const result = await operator.dispatchRecoveryPlan({
+      repo: 'hanmiyoo10-alt/-', plan,
+      client: fakeClient({body: fixture.body, state: fixture.state}),
+      runner, sleepFn: () => {}, maxPolls: 1,
+    });
+    assert.equal(result.status, 'DISPATCH_FAILED');
+    assert.equal(result.recoveryOfRunId, 501);
+    assert.equal(result.recoveryRunId, 601);
+    assert.equal(calls.filter((args) => args[0] === 'workflow' && args[1] === 'run').length, 1);
+  });
+
+  await test('successful release recovery dispatches once and requires exact readback', async () => {
+    const fixture = activeReleaseFixture();
+    const failedEvidence = failedRunRunner({leaseId: fixture.leaseId});
+    const plan = await operator.planReleaseRecovery({
+      repo: 'hanmiyoo10-alt/-', client: fakeClient({body: fixture.body, state: fixture.state}),
+      runner: failedEvidence.runner, packetRef: '#2378', leaseId: fixture.leaseId, failedRunId: 501,
+    });
+    const releasedPlan = lease.planRelease(fixture.state, {
+      expectedGeneration: fixture.state.generation, leaseId: fixture.leaseId, packetRef: '#2378',
+    });
+    const released = lease.parseLedger(releasedPlan.updatedBody).state;
+    let listCount = 0;
+    const calls = [];
+    const runner = (args) => {
+      calls.push(args);
+      if (args[0] === 'run' && args[1] === 'list') {
+        listCount += 1;
+        return {code: 0, stdout: JSON.stringify(listCount === 1 ? [] : [
+          {databaseId: 602, status: 'completed', conclusion: 'success'},
+        ]), stderr: ''};
+      }
+      if (args[0] === 'workflow' && args[1] === 'run') return {code: 0, stdout: '', stderr: ''};
+      if (args[0] === 'run' && args[1] === 'watch') return {code: 0, stdout: '', stderr: ''};
+      if (args[0] === 'run' && args[1] === 'view' && args.includes('--json')) {
+        return {code: 0, stdout: JSON.stringify({
+          databaseId: 602, conclusion: 'success', status: 'completed', event: 'workflow_dispatch',
+        }), stderr: ''};
+      }
+      if (args[0] === 'run' && args[1] === 'view' && args.includes('--log')) {
+        return {code: 0, stdout: `result ${fixture.leaseId}`, stderr: ''};
+      }
+      throw new Error(`unexpected runner args ${args.join(' ')}`);
+    };
+    const result = await operator.dispatchRecoveryPlan({
+      repo: 'hanmiyoo10-alt/-', plan,
+      client: fakeClient({body: fixture.body, state: released}),
+      runner, sleepFn: () => {}, maxPolls: 1,
+    });
+    assert.equal(result.status, 'DISPATCH_COMPLETE');
+    assert.equal(result.recoveryOfRunId, 501);
+    assert.equal(result.recoveryRunId, 602);
+    assert.equal(result.leaseId, fixture.leaseId);
     assert.equal(calls.filter((args) => args[0] === 'workflow' && args[1] === 'run').length, 1);
   });
 

@@ -1749,3 +1749,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a139ebbf4a75a43d9f76ef2faef1447b55bb5f6e)
 - Event ID: `7fb5deb8c9dadcaf1850dd773ac71c39b8a5e05d84fa663c1f7be60091db38de`
 <!-- canonical-main-doc-promoted:7fb5deb8c9dadcaf1850dd773ac71c39b8a5e05d84fa663c1f7be60091db38de -->
+
+### 2026-09-20 — Merge pull request #2575 from hanmiyoo10-alt/server/repo-scope-alias-compat-2574
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `121e4353139d2c53a5655d1f700a3a58c0413758`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/121e4353139d2c53a5655d1f700a3a58c0413758)
+- Event ID: `a70ab4b5f8355475898df71e4cc769ce60d1fe4b4e203790373bdc0591e91e22`
+<!-- canonical-main-doc-promoted:a70ab4b5f8355475898df71e4cc769ce60d1fe4b4e203790373bdc0591e91e22 -->

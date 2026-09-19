@@ -1741,3 +1741,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/81a6c7416616651d12ac03d69cc7b2149fa9b282)
 - Event ID: `6f3c0b06ae67c147dd895eb67b18da587fd979fc76e53ff3f1a77963816e3297`
 <!-- canonical-main-doc-promoted:6f3c0b06ae67c147dd895eb67b18da587fd979fc76e53ff3f1a77963816e3297 -->
+
+### 2026-09-19 — Merge pull request #2563 from hanmiyoo10-alt/server/cm-exec-receipt-v2-2561
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `a139ebbf4a75a43d9f76ef2faef1447b55bb5f6e`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a139ebbf4a75a43d9f76ef2faef1447b55bb5f6e)
+- Event ID: `7fb5deb8c9dadcaf1850dd773ac71c39b8a5e05d84fa663c1f7be60091db38de`
+<!-- canonical-main-doc-promoted:7fb5deb8c9dadcaf1850dd773ac71c39b8a5e05d84fa663c1f7be60091db38de -->

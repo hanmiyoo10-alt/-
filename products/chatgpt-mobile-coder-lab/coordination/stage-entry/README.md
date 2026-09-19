@@ -139,6 +139,58 @@ Expected next action:
 CLAIM_OWNER_LOCAL_HOLDER_IF_REQUIRED_THEN_INVOKE_EXISTING_ROUTE_OWNER
 ```
 
+## Operational landing-currentness normalization
+
+Stage-entry keeps authority admission outside the freshness effect:
+
+```text
+packet lifecycle/stage + exact source scopes
+→ complete source overlap = DISJOINT
+→ S preflight
+→ fixed S landing status
+→ optional bounded landing normalization
+→ repository D-013/D-014 + workspace/ref preparation
+```
+
+For the fixed S/S V1.x profile, `inspect` remains read-only and classifies the
+landing as either exact-current or normalization-required. Normalization-required
+is accepted only when the landing is the fixed `server/work` checkout, clean,
+the live remote main already equals the exact protected main, and only local
+`origin/main` is stale or missing. Dirty state, branch mismatch, remote-main
+mismatch, malformed evidence, or another non-reviewed state still fails closed.
+
+Before the effect, stage-entry performs a second complete Work System overlap
+classification for exactly:
+
+```text
+surface:mcl-landing-origin-main:S
+```
+
+Only `DISJOINT` can proceed. It then composes the existing owners without
+redefining them:
+
+```text
+D-013 landing_metadata acquire
+→ D-014 normalization manifest
+→ mcl-landing-freshness refresh S
+→ exact readback
+→ D-013 normal release
+→ D-014 COMPLETE
+→ one full main/packet/source-overlap/preflight/landing/workspace revalidation
+```
+
+There is at most one normalization attempt per stage-entry invocation. A failed
+release is not automatically retried; the separately reviewed explicit D-013
+recovery owner remains the recovery surface.
+
+The normal generic receipt exposes only bounded normalization summary evidence,
+including whether normalization was required/performed and durable evidence
+locators. Raw ledger, manifest, Git, or workflow transcripts remain behind
+targeted drill-down.
+
+This operational normalization never creates or advances packet lifecycle,
+interaction-stage authority, source write scope, or overlap authority.
+
 ## Holder boundary
 
 V1 does not claim, check, release, or export `mcl-workspace-holder`.

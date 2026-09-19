@@ -34,6 +34,9 @@ const S_PREFLIGHT = path.join(
   ROOT, 'products/chatgpt-mobile-coder-lab/device-ops/s-family-status/s-env-status');
 const LANDING = path.join(
   ROOT, 'products/chatgpt-mobile-coder-lab/device-ops/landing-freshness/mcl-landing-freshness');
+const LANDING_SCOPE = 'surface:mcl-landing-origin-main:S';
+const LANDING_BRANCH = 'server/work';
+const LANDING_WORKTREE = '/root/nyang-repo';
 
 const PLAN_FIELDS = new Set([
   'schema', 'phase', 'route', 'executor', 'preflight_owner', 'repository_effect',
@@ -314,7 +317,7 @@ function runOwner(command, args, runner = runDefault) {
   return runner([command, ...args], {cwd: ROOT});
 }
 
-function inspectOwners(mainSha, runner = runDefault) {
+function inspectPreflight(runner = runDefault) {
   const preflightRaw = runOwner(S_PREFLIGHT, ['status'], runner);
   if (preflightRaw.code !== 0) throw new StageError('BLOCKED', ['S_PREFLIGHT_FAILED']);
   const preflight = parseKeyValueReceipt(preflightRaw.stdout);
@@ -325,22 +328,45 @@ function inspectOwners(mainSha, runner = runDefault) {
       || preflight.details !== 'withheld') {
     throw new StageError('BLOCKED', ['S_PREFLIGHT_NOT_READY']);
   }
+  return preflight;
+}
 
-  const landingRaw = runOwner(LANDING, ['status', 'S'], runner);
-  if (landingRaw.code !== 0) throw new StageError('BLOCKED', ['LANDING_STATUS_FAILED']);
-  const landing = parseKeyValueReceipt(landingRaw.stdout);
+function classifyLanding(mainSha, landing) {
   if (landing.schema !== 'mcl-landing-freshness.v1'
       || landing.operation !== 'status'
       || landing.route !== 'S'
-      || landing.actual_branch !== 'server/work'
-      || landing.worktree !== 'clean'
-      || landing.origin_main !== mainSha
-      || landing.remote_main !== mainSha
-      || landing.origin_remote_relation !== 'same'
       || landing.details !== 'withheld') {
-    throw new StageError('BLOCKED', ['LANDING_CURRENTNESS_NOT_READY']);
+    throw new StageError('UNKNOWN', ['LANDING_RECEIPT_INVALID']);
   }
-  return {preflight, landing};
+  if (landing.actual_branch !== LANDING_BRANCH) {
+    throw new StageError('BLOCKED', ['LANDING_BRANCH_NOT_READY']);
+  }
+  if (landing.worktree !== 'clean') {
+    throw new StageError('BLOCKED', ['LANDING_WORKTREE_NOT_CLEAN']);
+  }
+  if (landing.remote_main !== mainSha) {
+    const kind = landing.remote_main === 'unknown' ? 'UNKNOWN' : 'BLOCKED';
+    throw new StageError(kind, ['LANDING_REMOTE_MAIN_MISMATCH']);
+  }
+  if (landing.origin_main === mainSha && landing.origin_remote_relation === 'same') {
+    return {state: 'CURRENT', normalizationRequired: false};
+  }
+  const originKnown = landing.origin_main === 'missing' || SHA40_RE.test(landing.origin_main || '');
+  if (originKnown && landing.origin_main !== mainSha && landing.origin_remote_relation === 'stale') {
+    if (!SHA40_RE.test(landing.landing_head || '')) {
+      throw new StageError('UNKNOWN', ['LANDING_HEAD_INVALID']);
+    }
+    return {state: 'NORMALIZATION_REQUIRED', normalizationRequired: true};
+  }
+  throw new StageError('BLOCKED', ['LANDING_CURRENTNESS_NOT_NORMALIZABLE']);
+}
+
+function inspectLanding(mainSha, runner = runDefault) {
+  const landingRaw = runOwner(LANDING, ['status', 'S'], runner);
+  if (landingRaw.code !== 0) throw new StageError('BLOCKED', ['LANDING_STATUS_FAILED']);
+  const landing = parseKeyValueReceipt(landingRaw.stdout);
+  const classification = classifyLanding(mainSha, landing);
+  return {landing, ...classification};
 }
 
 function inspectContext({packetNumber, plan, runner = runDefault, profile}) {
@@ -360,19 +386,25 @@ function inspectContext({packetNumber, plan, runner = runDefault, profile}) {
   }
 
   const requestedScopes = extractPacketScopes(issue.body);
-  const owners = inspectOwners(firstMain, runner);
   const overlap = discoverOverlap({packetNumber, requestedScopes, runner});
   if (overlap.state === 'CONFLICT') throw new StageError('CONFLICT', ['OVERLAP_CONFLICT']);
   if (overlap.state === 'UNKNOWN') throw new StageError('UNKNOWN', ['OVERLAP_UNKNOWN']);
   if (overlap.state === 'OVERLAP') throw new StageError('BLOCKED', ['OVERLAP_PRESENT']);
 
+  const preflight = inspectPreflight(runner);
+  const landingState = inspectLanding(firstMain, runner);
   const workspace = workspacePrepare.inspectWorkspace({
     packetNumber, baseSha: firstMain, runner, profile,
   });
   if (workspace.status !== 'READY') {
-    const kind = workspace.reasonCodes.some((code) => code.endsWith('_READ_FAILED') || code === 'BASE_OBJECT_MISSING')
-      ? 'UNKNOWN' : 'BLOCKED';
-    throw new StageError(kind, workspace.reasonCodes, {workspace});
+    const baseOnly = landingState.normalizationRequired
+      && workspace.reasonCodes.length === 1
+      && workspace.reasonCodes[0] === 'BASE_OBJECT_MISSING';
+    if (!baseOnly) {
+      const kind = workspace.reasonCodes.some((code) => code.endsWith('_READ_FAILED') || code === 'BASE_OBJECT_MISSING')
+        ? 'UNKNOWN' : 'BLOCKED';
+      throw new StageError(kind, workspace.reasonCodes, {workspace});
+    }
   }
 
   return {
@@ -384,8 +416,10 @@ function inspectContext({packetNumber, plan, runner = runDefault, profile}) {
     packetBodySha256: sha256(issue.body),
     requestedScopes,
     overlap,
-    preflight: owners.preflight,
-    landing: owners.landing,
+    preflight,
+    landing: landingState.landing,
+    landingState: landingState.state,
+    normalizationRequired: landingState.normalizationRequired,
     workspace,
   };
 }
@@ -399,6 +433,238 @@ function invokeOperator(args, runner = runDefault) {
   try { value = JSON.parse(response.stdout); }
   catch { throw new StageError('UNKNOWN', ['D013_OPERATOR_OUTPUT_INVALID']); }
   return value;
+}
+
+function acquireLandingLease(context, runner = runDefault) {
+  const value = invokeOperator([
+    'lease-acquire',
+    '--repo', REPO,
+    '--packet', context.packetRef,
+    '--route', 'S',
+    '--executor', 'S',
+    '--scopes-json', JSON.stringify([LANDING_SCOPE]),
+    '--scope-disposition', 'DISJOINT',
+    '--workspace-kind', 'landing_metadata',
+    '--branch', LANDING_BRANCH,
+    '--worktree', LANDING_WORKTREE,
+    '--observed-base-sha', context.landing.landing_head,
+    '--dispatch',
+  ], runner);
+  if (value.status !== 'DISPATCH_COMPLETE'
+      || !SHA256_RE.test(value.leaseId || '')
+      || !Number.isSafeInteger(value.observedGeneration)
+      || !Number.isSafeInteger(value.runId)
+      || value.runConclusion !== 'success') {
+    throw new StageError('BLOCKED', ['LANDING_D013_ACQUIRE_NOT_PROVEN']);
+  }
+  return value;
+}
+
+function buildLandingManifest(context, lease) {
+  try {
+    return taskHandoff.buildManifest({
+      schemaVersion: 1,
+      mode: 'MCL_TASK_MANIFEST',
+      packetRef: context.packetRef,
+      packetBodySha256: context.packetBodySha256,
+      phaseId: `${context.packetNumber}-stage-entry-landing-normalization`,
+      phaseClass: 'REPOSITORY_MUTATION',
+      route: 'S',
+      executor: 'S',
+      scopes: [LANDING_SCOPE],
+      workspace: {kind: 'landing_metadata', branch: LANDING_BRANCH, worktree: LANDING_WORKTREE},
+      observedBaseSha: context.landing.landing_head,
+      leaseRequirement: 'REQUIRED',
+      leaseEvidence: {
+        ledgerRef: '#2352',
+        leaseId: lease.leaseId,
+        acquiredGeneration: lease.observedGeneration,
+        acquireEvidenceRef: `run:${lease.runId}`,
+      },
+      sourceAuthorityRefs: [
+        context.packetRef,
+        'issue:#2352',
+        'doc:products/chatgpt-mobile-coder-lab/docs/task-lease.md',
+        'doc:products/chatgpt-mobile-coder-lab/docs/task-handoff.md',
+        'doc:products/chatgpt-mobile-coder-lab/device-ops/landing-freshness/README.md',
+      ],
+      inputRefs: [`commit:${context.mainSha}`, `run:${lease.runId}`],
+      expectedOutputRefs: [`commit:${context.mainSha}`],
+      acceptanceRefs: [context.packetRef, 'issue:#2352'],
+      stopCondition: 'Normalize only fixed S origin/main metadata to exact current main, release D-013, record completion, and revalidate stage-entry once.',
+      authority: {
+        repositoryMutationAuthorized: false,
+        deviceMutationAuthorized: false,
+        mergeAuthorized: false,
+        releaseAuthorized: false,
+        productionAuthorized: false,
+      },
+    });
+  } catch {
+    throw new StageError('UNKNOWN', ['LANDING_D014_MANIFEST_BUILD_FAILED']);
+  }
+}
+
+function revalidateBeforeLandingRefresh(context, lease, {
+  runner = runDefault,
+  profile,
+  inspector = inspectContext,
+} = {}) {
+  const fresh = inspector({
+    packetNumber: context.packetNumber,
+    plan: context.plan,
+    runner,
+    profile,
+  });
+  const conflicts = [];
+  if (fresh.mainSha !== context.mainSha) conflicts.push('LANDING_LATE_MAIN_SHA_CONFLICT');
+  if (fresh.packetBodySha256 !== context.packetBodySha256) conflicts.push('LANDING_LATE_PACKET_DIGEST_CONFLICT');
+  if (JSON.stringify(fresh.requestedScopes) !== JSON.stringify(context.requestedScopes)) {
+    conflicts.push('LANDING_LATE_SCOPE_CONFLICT');
+  }
+  if (fresh.overlap.state !== 'DISJOINT') conflicts.push('LANDING_LATE_SOURCE_OVERLAP_CONFLICT');
+  if (!fresh.normalizationRequired || fresh.landingState !== 'NORMALIZATION_REQUIRED') {
+    conflicts.push('LANDING_LATE_NORMALIZATION_STATE_CONFLICT');
+  }
+  if (fresh.landing.landing_head !== context.landing.landing_head) {
+    conflicts.push('LANDING_LATE_HEAD_CONFLICT');
+  }
+  if (conflicts.length) throw new StageError('CONFLICT', conflicts);
+
+  const leaseView = invokeOperator([
+    'inspect',
+    '--repo', REPO,
+    '--packet', context.packetRef,
+    '--scopes-json', JSON.stringify([LANDING_SCOPE]),
+  ], runner);
+  if (leaseView.status !== 'READY') {
+    throw new StageError('UNKNOWN', ['LANDING_LATE_D013_INSPECT_NOT_READY']);
+  }
+  if (leaseView.packetBodySha256 !== context.packetBodySha256) {
+    throw new StageError('CONFLICT', ['LANDING_LATE_D013_PACKET_DIGEST_CONFLICT']);
+  }
+  if (!Array.isArray(leaseView.matchingLeaseIds)
+      || leaseView.matchingLeaseIds.length !== 1
+      || leaseView.matchingLeaseIds[0] !== lease.leaseId) {
+    throw new StageError('CONFLICT', ['LANDING_LATE_D013_LEASE_IDENTITY_CONFLICT']);
+  }
+  if (!Number.isSafeInteger(leaseView.ledgerGeneration)
+      || leaseView.ledgerGeneration < lease.observedGeneration) {
+    throw new StageError('UNKNOWN', ['LANDING_LATE_D013_GENERATION_INVALID']);
+  }
+  return fresh;
+}
+
+function normalizeLandingCurrentness(context, {
+  runner = runDefault,
+  overlapResolver = discoverOverlap,
+  profile,
+  authorityBarrier = revalidateBeforeLandingRefresh,
+} = {}) {
+  if (!context.normalizationRequired || context.landingState !== 'NORMALIZATION_REQUIRED') {
+    return {normalized: false, count: 0, artifacts: []};
+  }
+  const overlap = overlapResolver({
+    packetNumber: context.packetNumber,
+    requestedScopes: [LANDING_SCOPE],
+    runner,
+  });
+  if (overlap.state === 'CONFLICT') throw new StageError('CONFLICT', ['LANDING_NORMALIZATION_OVERLAP_CONFLICT']);
+  if (overlap.state === 'UNKNOWN') throw new StageError('UNKNOWN', ['LANDING_NORMALIZATION_OVERLAP_UNKNOWN']);
+  if (overlap.state === 'OVERLAP') throw new StageError('BLOCKED', ['LANDING_NORMALIZATION_OVERLAP_PRESENT']);
+
+  const lease = acquireLandingLease(context, runner);
+  let released = null;
+  try {
+    authorityBarrier(context, lease, {runner, profile});
+    const manifest = buildLandingManifest(context, lease);
+    const manifestComment = postComment(
+      context.packetNumber, taskHandoff.renderManifest(manifest), runner);
+
+    const refreshedRaw = runOwner(LANDING, ['refresh', 'S'], runner);
+    if (refreshedRaw.code !== 0) throw new StageError('BLOCKED', ['LANDING_REFRESH_FAILED']);
+    const refreshed = parseKeyValueReceipt(refreshedRaw.stdout);
+    if (refreshed.schema !== 'mcl-landing-freshness.v1'
+        || refreshed.operation !== 'refresh'
+        || refreshed.route !== 'S'
+        || refreshed.actual_branch !== LANDING_BRANCH
+        || refreshed.worktree !== 'clean'
+        || refreshed.landing_head !== context.landing.landing_head
+        || refreshed.origin_main !== context.mainSha
+        || refreshed.remote_main !== context.mainSha
+        || refreshed.origin_remote_relation !== 'same'
+        || refreshed.refresh !== 'refreshed'
+        || refreshed.details !== 'withheld') {
+      throw new StageError('UNKNOWN', ['LANDING_REFRESH_READBACK_INVALID']);
+    }
+
+    released = releaseLease(context, lease.leaseId, runner);
+    if (!released.ok) throw new StageError('BLOCKED', ['LANDING_D013_RELEASE_FAILED']);
+
+    const receipt = taskHandoff.buildCompletionReceipt(manifest, {
+      disposition: 'COMPLETE',
+      outputRefs: [`commit:${context.mainSha}`],
+      validationRefs: [`run:${lease.runId}`, `run:${released.value.runId}`],
+      observedRefs: [`commit:${context.mainSha}`, `run:${lease.runId}`, `run:${released.value.runId}`],
+      leaseDisposition: 'RELEASED',
+      leaseReleaseEvidence: {
+        ledgerRef: '#2352',
+        leaseId: lease.leaseId,
+        releasedGeneration: released.value.observedGeneration,
+        evidenceRef: `run:${released.value.runId}`,
+      },
+      workspaceResult: 'clean',
+      blockerRefs: [],
+      requiredUnknownRefs: [],
+    });
+    const completionComment = postComment(
+      context.packetNumber, taskHandoff.renderCompletionReceipt(receipt), runner);
+    return {
+      normalized: true,
+      count: 1,
+      receipt,
+      artifacts: [
+        `issue-comment:${manifestComment}`,
+        `issue-comment:${completionComment}`,
+        `receipt:mcl-task-completion:${receipt.receiptId}`,
+      ],
+    };
+  } catch (error) {
+    if (!released) {
+      const cleanup = releaseLease(context, lease.leaseId, runner);
+      if (!cleanup.ok) {
+        const reasons = error instanceof StageError ? error.reasonCodes : ['LANDING_NORMALIZATION_FAILED'];
+        throw new StageError('BLOCKED', [...reasons, 'LANDING_D013_CLEANUP_RELEASE_FAILED']);
+      }
+    }
+    throw error;
+  }
+}
+
+function revalidateAfterNormalization(context, {
+  runner = runDefault,
+  profile,
+  inspector = inspectContext,
+} = {}) {
+  const fresh = inspector({
+    packetNumber: context.packetNumber,
+    plan: context.plan,
+    runner,
+    profile,
+  });
+  const conflicts = [];
+  if (fresh.mainSha !== context.mainSha) conflicts.push('NORMALIZATION_MAIN_SHA_CONFLICT');
+  if (fresh.packetBodySha256 !== context.packetBodySha256) conflicts.push('NORMALIZATION_PACKET_DIGEST_CONFLICT');
+  if (JSON.stringify(fresh.requestedScopes) !== JSON.stringify(context.requestedScopes)) {
+    conflicts.push('NORMALIZATION_SCOPE_CONFLICT');
+  }
+  if (fresh.overlap.state !== 'DISJOINT') conflicts.push('NORMALIZATION_SOURCE_OVERLAP_CONFLICT');
+  if (fresh.normalizationRequired || fresh.landingState !== 'CURRENT') {
+    conflicts.push('NORMALIZATION_NOT_CONVERGED');
+  }
+  if (fresh.workspace.status !== 'READY') conflicts.push('NORMALIZATION_WORKSPACE_NOT_READY');
+  if (conflicts.length) throw new StageError('CONFLICT', conflicts);
+  return fresh;
 }
 
 function acquireLease(context, runner = runDefault) {
@@ -656,7 +922,7 @@ function revalidateAfterAcquire(context, lease, {
   return fresh;
 }
 
-function applyContext(context, {
+function applyRepositoryContext(context, {
   runner = runDefault,
   profile,
   remoteCreate,
@@ -766,6 +1032,57 @@ function applyContext(context, {
   }
 }
 
+function applyContext(context, {
+  runner = runDefault,
+  profile,
+  normalizationRunner = normalizeLandingCurrentness,
+  normalizationBarrier = revalidateAfterNormalization,
+  ...rest
+} = {}) {
+  let activeContext = context;
+  let normalization = {normalized: false, count: 0, artifacts: []};
+  if (context.normalizationRequired) {
+    try {
+      normalization = normalizationRunner(context, {runner, profile});
+      if (!normalization.normalized || normalization.count !== 1) {
+        throw new StageError('UNKNOWN', ['LANDING_NORMALIZATION_UNPROVEN']);
+      }
+      activeContext = normalizationBarrier(context, {runner, profile});
+    } catch (error) {
+      const explicitRecovery = error instanceof StageError
+        && error.reasonCodes.some((code) => ['LANDING_D013_RELEASE_FAILED', 'LANDING_D013_CLEANUP_RELEASE_FAILED'].includes(code));
+      return errorReceipt(context.packetNumber, error, context.packetBodySha256, {
+        workspaceStateChanged: false,
+        artifacts: normalization.artifacts || [],
+        nextLegalAction: explicitRecovery ? 'EXPLICIT_D013_RECOVERY_REQUIRED' : undefined,
+      });
+    }
+  }
+  const receipt = applyRepositoryContext(activeContext, {
+    runner,
+    profile,
+    ...rest,
+  });
+  const counters = [...(receipt.counters || [])];
+  if (!counters.some((row) => row.name === 'landing_normalization_count')) {
+    counters.push({name: 'landing_normalization_count', value: normalization.count, status: 'KNOWN'});
+  }
+  const steps = [...(receipt.steps || [])];
+  if (normalization.normalized && receipt.result === 'PASS') {
+    steps.splice(1, 0, {
+      name: 'landing-currentness-normalization',
+      result: 'PASS',
+      evidenceLocator: normalization.artifacts.at(-1) || context.packetRef,
+    });
+  }
+  return {
+    ...receipt,
+    counters,
+    steps,
+    artifactLocators: unique([...(receipt.artifactLocators || []), ...normalization.artifacts]),
+  };
+}
+
 function run(argv = process.argv.slice(2), deps = {}) {
   let parsed;
   try {
@@ -784,13 +1101,14 @@ function run(argv = process.argv.slice(2), deps = {}) {
         result: 'PASS',
         counters: [
           {name: 'overlap_candidate_count', value: context.overlap.candidateCount || 0},
+          {name: 'landing_normalization_required', value: context.normalizationRequired ? 1 : 0},
         ],
         steps: [
           {name: 'main-ops-currentness', result: 'PASS', evidenceLocator: 'issue:#485'},
           {name: 'packet-plan-scope', result: 'PASS', evidenceLocator: context.packetRef},
-          {name: 's-preflight', result: 'PASS', evidenceLocator: 'owner:mcl-s-env-status'},
           {name: 'overlap-discovery', result: 'PASS', evidenceLocator: 'owner:work-system-scope-overlap'},
-          {name: 'landing-currentness', result: 'PASS', evidenceLocator: 'owner:mcl-landing-freshness'},
+          {name: 's-preflight', result: 'PASS', evidenceLocator: 'owner:mcl-s-env-status'},
+          {name: context.normalizationRequired ? 'landing-currentness-normalizable' : 'landing-currentness', result: 'PASS', evidenceLocator: 'owner:mcl-landing-freshness'},
           {name: 'workspace-absence', result: 'PASS', evidenceLocator: `receipt:mcl-stage-entry-workspace:${parsed.packetNumber}`},
         ],
         artifacts: [context.packetRef, 'issue:#485', 'issue:#2352'],
@@ -810,22 +1128,32 @@ if (require.main === module) {
 }
 
 module.exports = {
+  LANDING_BRANCH,
+  LANDING_SCOPE,
+  LANDING_WORKTREE,
   MAX_PAGES,
   PAGE_SIZE,
   PLAN_FIELDS,
   REPO,
   SCOPE_HEADINGS,
   StageError,
+  acquireLandingLease,
   acquireLease,
   applyContext,
+  applyRepositoryContext,
   buildHandoff,
+  buildLandingManifest,
   buildManifest,
+  classifyLanding,
   discoverOverlap,
   errorReceipt,
   extractPacketScopes,
   fetchPaged,
   ghJson,
   inspectContext,
+  inspectLanding,
+  inspectPreflight,
+  normalizeLandingCurrentness,
   parseArgs,
   parseKeyValueReceipt,
   parseOpsCapsule,
@@ -834,6 +1162,8 @@ module.exports = {
   receiptFor,
   releaseLease,
   revalidateAfterAcquire,
+  revalidateAfterNormalization,
+  revalidateBeforeLandingRefresh,
   renderHandoff,
   run,
   runDefault,

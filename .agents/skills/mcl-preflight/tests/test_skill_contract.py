@@ -120,6 +120,64 @@ class MclPreflightSkillContractTests(unittest.TestCase):
         self.assertFalse(delegated["expected"]["aggregate_ready_present"])
         self.assertFalse(tiny["expected"]["host_resource_invoked"])
 
+    def test_gui_routes_require_not_applicable_executor(self):
+        for route in [
+            "`S_ANDROID_GUI`",
+            "`S_ANDROID_GUI_ADB_READ`",
+            "`S_ANDROID_GUI_ADB_ACTION`",
+        ]:
+            self.assertIn(route, self.skill)
+        self.assertIn("three GUI routes require `executor=not_applicable`", self.skill)
+        mismatch = next(item for item in self.evals["cases"] if item["id"] == "gui-executor-mismatch")
+        self.assertEqual(mismatch["expected"]["preflight_state"], "UNKNOWN")
+        self.assertFalse(mismatch["expected"]["owner_invoked"])
+        self.assertFalse(mismatch["expected"]["transport_promoted_to_gui_executor"])
+
+    def test_gui_companion_preflight_is_status_only(self):
+        self.assertIn("`mcl-gui status`", self.skill)
+        self.assertIn("`schema=mcl-gui.v1`", self.skill)
+        self.assertIn("This first pass must not invoke `launch-chatgpt`", self.skill)
+        passed = next(item for item in self.evals["cases"] if item["id"] == "gui-companion-status-pass")
+        blocked = next(item for item in self.evals["cases"] if item["id"] == "gui-companion-status-blocked")
+        self.assertFalse(passed["expected"]["gui_effect_invoked"])
+        self.assertFalse(passed["expected"]["snapshot_invoked"])
+        self.assertTrue(blocked["expected"]["blocked_preserved"])
+        self.assertFalse(blocked["expected"]["repair_performed"])
+
+    def test_wireless_adb_routes_use_status_only(self):
+        self.assertIn("`mcl-adb-ui status`", self.skill)
+        self.assertIn("`schema=mcl-wireless-adb-ui-status.v1`", self.skill)
+        self.assertIn("Do not invoke `snapshot`, `find-action`, `find-editable`", self.skill)
+        read_case = next(item for item in self.evals["cases"] if item["id"] == "adb-read-status-pass")
+        action_case = next(item for item in self.evals["cases"] if item["id"] == "adb-action-first-pass-only")
+        self.assertFalse(read_case["expected"]["snapshot_invoked"])
+        self.assertFalse(read_case["expected"]["adb_action_invoked"])
+        self.assertFalse(action_case["expected"]["adb_action_invoked"])
+        self.assertTrue(action_case["expected"]["later_action_owner_gates_required"])
+
+    def test_action_preflight_never_claims_action_readiness(self):
+        self.assertIn("A passing preflight status is not action readiness or action authorization.", self.skill)
+        action_case = next(item for item in self.evals["cases"] if item["id"] == "adb-action-first-pass-only")
+        self.assertFalse(action_case["expected"]["action_ready_claimed"])
+        for token in ["`launch-target`", "`find-alias`", "`probe-new-chat`", "`activate`", "`type-ascii`", "`wait-text`"]:
+            self.assertIn(token, self.skill)
+
+    def test_gui_owner_missing_stays_unknown_without_raw_fallback(self):
+        case = next(item for item in self.evals["cases"] if item["id"] == "gui-owner-missing")
+        self.assertEqual(case["expected"]["preflight_state"], "UNKNOWN")
+        self.assertFalse(case["expected"]["raw_fallback_used"])
+        self.assertFalse(case["expected"]["gui_effect_invoked"])
+        self.assertIn("GUI owner absence or a GUI route/executor mismatch", self.skill)
+
+    def test_gui_privacy_material_is_forbidden(self):
+        for token in [
+            "ADB serial/IP/port/pairing material",
+            "raw GUI hierarchy/node or",
+            "screenshot bytes/paths",
+            "node bounds/coordinates",
+        ]:
+            self.assertIn(token, self.skill)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -60,7 +60,7 @@ function response(code, value) {
   return {code, stdout: typeof value === 'string' ? value : JSON.stringify(value), stderr: ''};
 }
 
-function inspectRunner({mainSequence = [MAIN, MAIN], preflight = 'pass', landingMain = MAIN, issueRows = null} = {}) {
+function inspectRunner({mainSequence = [MAIN, MAIN], preflight = 'pass', landingMain = MAIN, landingRemoteMain = MAIN, issueRows = null} = {}) {
   let mainRead = 0;
   return (args) => {
     if (args[0] === 'gh' && args[1] === 'api') {
@@ -99,8 +99,8 @@ function inspectRunner({mainSequence = [MAIN, MAIN], preflight = 'pass', landing
         'worktree=clean',
         `landing_head=${'b'.repeat(40)}`,
         `origin_main=${landingMain}`,
-        `remote_main=${MAIN}`,
-        'origin_remote_relation=same',
+        `remote_main=${landingRemoteMain}`,
+        `origin_remote_relation=${landingMain === landingRemoteMain ? 'same' : 'stale'}`,
         'landing_relation=behind_ff',
         'refresh=not_requested',
         'details=withheld',
@@ -268,7 +268,7 @@ test('inspect detects main movement before mutation', () => {
   } finally { t.close(); }
 });
 
-test('inspect blocks preflight drift and landing drift', () => {
+test('inspect blocks preflight drift and remote-main drift while allowing eligible stale local origin/main', () => {
   const t1 = tempProfile();
   try {
     assert.throws(() => stage.inspectContext({
@@ -279,9 +279,290 @@ test('inspect blocks preflight drift and landing drift', () => {
   const t2 = tempProfile();
   try {
     assert.throws(() => stage.inspectContext({
-      packetNumber: 77, plan: plan(), runner: inspectRunner({landingMain: 'c'.repeat(40)}), profile: t2.profile,
-    }), /LANDING_CURRENTNESS_NOT_READY/);
+      packetNumber: 77,
+      plan: plan(),
+      runner: inspectRunner({landingRemoteMain: 'c'.repeat(40)}),
+      profile: t2.profile,
+    }), /LANDING_REMOTE_MAIN_MISMATCH/);
   } finally { t2.close(); }
+
+  const t3 = tempProfile();
+  try {
+    const value = stage.inspectContext({
+      packetNumber: 77,
+      plan: plan(),
+      runner: inspectRunner({landingMain: 'c'.repeat(40)}),
+      profile: t3.profile,
+    });
+    assert.equal(value.landingState, 'NORMALIZATION_REQUIRED');
+    assert.equal(value.normalizationRequired, true);
+    assert.equal(value.workspace.status, 'READY');
+  } finally { t3.close(); }
+});
+
+test('source overlap resolves before landing observation or normalization', () => {
+  const t = tempProfile();
+  let landingCalls = 0;
+  const base = inspectRunner({
+    issueRows: [
+      {number: 77, state: 'open', body: PACKET_BODY},
+      {number: 88, state: 'open', body: `<!-- canonical-main-work-packet:v1 -->
+## State
+\`IN_PROGRESS\`
+## Bounded repository write ceiling
+1. \`path:src/**\``},
+    ],
+  });
+  const runner = (args, options) => {
+    if (String(args[0]).endsWith('/mcl-landing-freshness')) landingCalls += 1;
+    return base(args, options);
+  };
+  try {
+    assert.throws(() => stage.inspectContext({
+      packetNumber: 77, plan: plan(), runner, profile: t.profile,
+    }), /OVERLAP_UNKNOWN/);
+    assert.equal(landingCalls, 0);
+  } finally { t.close(); }
+});
+
+test('landing classifier distinguishes exact current from selected stale-local case', () => {
+  const base = {
+    schema: 'mcl-landing-freshness.v1',
+    operation: 'status',
+    route: 'S',
+    actual_branch: 'server/work',
+    worktree: 'clean',
+    landing_head: 'b'.repeat(40),
+    remote_main: MAIN,
+    details: 'withheld',
+  };
+  assert.deepEqual(stage.classifyLanding(MAIN, {
+    ...base, origin_main: MAIN, origin_remote_relation: 'same',
+  }), {state: 'CURRENT', normalizationRequired: false});
+  assert.deepEqual(stage.classifyLanding(MAIN, {
+    ...base, origin_main: 'c'.repeat(40), origin_remote_relation: 'stale',
+  }), {state: 'NORMALIZATION_REQUIRED', normalizationRequired: true});
+  assert.throws(() => stage.classifyLanding(MAIN, {
+    ...base, actual_branch: 'other', origin_main: MAIN, origin_remote_relation: 'same',
+  }), /LANDING_BRANCH_NOT_READY/);
+});
+
+test('BASE_OBJECT_MISSING is deferred only for eligible stale-local normalization', () => {
+  const t1 = tempProfile();
+  const staleBase = inspectRunner({landingMain: 'c'.repeat(40)});
+  const staleRunner = (args, options) => {
+    if (args[0] === 'git' && args.includes('cat-file')) return response(1, '');
+    return staleBase(args, options);
+  };
+  try {
+    const value = stage.inspectContext({
+      packetNumber: 77, plan: plan(), runner: staleRunner, profile: t1.profile,
+    });
+    assert.equal(value.normalizationRequired, true);
+    assert.deepEqual(value.workspace.reasonCodes, ['BASE_OBJECT_MISSING']);
+  } finally { t1.close(); }
+
+  const t2 = tempProfile();
+  const currentBase = inspectRunner();
+  const currentRunner = (args, options) => {
+    if (args[0] === 'git' && args.includes('cat-file')) return response(1, '');
+    return currentBase(args, options);
+  };
+  try {
+    assert.throws(() => stage.inspectContext({
+      packetNumber: 77, plan: plan(), runner: currentRunner, profile: t2.profile,
+    }), /BASE_OBJECT_MISSING/);
+  } finally { t2.close(); }
+});
+
+test('landing manifest and lease identity are fixed to landing_metadata S', () => {
+  const context = {
+    packetNumber: 77,
+    packetRef: '#77',
+    mainSha: MAIN,
+    packetBodySha256: 'd'.repeat(64),
+    landing: {landing_head: 'b'.repeat(40)},
+  };
+  const lease = {leaseId: 'e'.repeat(64), observedGeneration: 20, runId: 900};
+  const manifest = stage.buildLandingManifest(context, lease);
+  assert.deepEqual(manifest.scopes, [stage.LANDING_SCOPE]);
+  assert.equal(manifest.workspace.kind, 'landing_metadata');
+  assert.equal(manifest.workspace.branch, stage.LANDING_BRANCH);
+  assert.equal(manifest.workspace.worktree, stage.LANDING_WORKTREE);
+  assert.equal(manifest.observedBaseSha, 'b'.repeat(40));
+
+  let acquireArgs;
+  const runner = (args) => {
+    acquireArgs = args;
+    return response(0, {
+      status: 'DISPATCH_COMPLETE', leaseId: lease.leaseId,
+      observedGeneration: 20, runId: 900, runConclusion: 'success',
+    });
+  };
+  stage.acquireLandingLease(context, runner);
+  assert(acquireArgs.includes('landing_metadata'));
+  assert(acquireArgs.includes(JSON.stringify([stage.LANDING_SCOPE])));
+  assert(acquireArgs.includes(stage.LANDING_BRANCH));
+  assert(acquireArgs.includes(stage.LANDING_WORKTREE));
+});
+
+test('normalization overlap UNKNOWN blocks before lease acquisition', () => {
+  let runnerCalls = 0;
+  const context = {
+    packetNumber: 77, packetRef: '#77', mainSha: MAIN,
+    packetBodySha256: 'f'.repeat(64),
+    normalizationRequired: true, landingState: 'NORMALIZATION_REQUIRED',
+    landing: {landing_head: 'b'.repeat(40)},
+  };
+  assert.throws(() => stage.normalizeLandingCurrentness(context, {
+    runner: () => { runnerCalls += 1; throw new Error('should not run'); },
+    overlapResolver: () => ({state: 'UNKNOWN'}),
+  }), /LANDING_NORMALIZATION_OVERLAP_UNKNOWN/);
+  assert.equal(runnerCalls, 0);
+});
+
+test('pre-refresh C11 barrier requires unchanged source authority and exact landing lease', () => {
+  const context = {
+    packetNumber: 77,
+    packetRef: '#77',
+    plan: plan(),
+    mainSha: MAIN,
+    packetBodySha256: '9'.repeat(64),
+    requestedScopes: ['path:docs/demo.md'],
+    overlap: {state: 'DISJOINT'},
+    normalizationRequired: true,
+    landingState: 'NORMALIZATION_REQUIRED',
+    landing: {landing_head: 'b'.repeat(40)},
+    workspace: {status: 'READY'},
+  };
+  const lease = {leaseId: '8'.repeat(64), observedGeneration: 50};
+  const runner = (args) => {
+    if (args[0] === process.execPath && args.includes('inspect')) {
+      return response(0, {
+        status: 'READY',
+        packetBodySha256: context.packetBodySha256,
+        ledgerGeneration: 50,
+        matchingLeaseIds: [lease.leaseId],
+      });
+    }
+    throw new Error(args.join(' '));
+  };
+  const fresh = stage.revalidateBeforeLandingRefresh(context, lease, {
+    runner,
+    inspector: () => ({...context}),
+  });
+  assert.equal(fresh.landingState, 'NORMALIZATION_REQUIRED');
+
+  assert.throws(() => stage.revalidateBeforeLandingRefresh(context, lease, {
+    runner,
+    inspector: () => ({...context, mainSha: 'd'.repeat(40)}),
+  }), /LANDING_LATE_MAIN_SHA_CONFLICT/);
+});
+
+test('normalization release transport failure surfaces explicit recovery action', () => {
+  const context = {
+    packetNumber: 77,
+    packetRef: '#77',
+    packetBodySha256: '6'.repeat(64),
+    normalizationRequired: true,
+    landingState: 'NORMALIZATION_REQUIRED',
+  };
+  const receipt = stage.applyContext(context, {
+    normalizationRunner: () => {
+      throw new stage.StageError('BLOCKED', ['LANDING_D013_RELEASE_FAILED']);
+    },
+  });
+  assert.equal(receipt.result, 'BLOCKED');
+  assert.equal(receipt.nextLegalAction, 'EXPLICIT_D013_RECOVERY_REQUIRED');
+});
+
+test('eligible normalization uses one fixed refresh then release and COMPLETE receipt', () => {
+  const context = {
+    packetNumber: 77,
+    packetRef: '#77',
+    mainSha: MAIN,
+    packetBodySha256: '1'.repeat(64),
+    normalizationRequired: true,
+    landingState: 'NORMALIZATION_REQUIRED',
+    landing: {landing_head: 'b'.repeat(40)},
+  };
+  let refreshCalls = 0;
+  let comments = 0;
+  let acquireCalls = 0;
+  let releaseCalls = 0;
+  const runner = (args) => {
+    if (args[0] === process.execPath && args.includes('lease-acquire')) {
+      acquireCalls += 1;
+      return response(0, {
+        status: 'DISPATCH_COMPLETE', leaseId: '2'.repeat(64),
+        observedGeneration: 30, runId: 1001, runConclusion: 'success',
+      });
+    }
+    if (args[0] === process.execPath && args.includes('lease-release')) {
+      releaseCalls += 1;
+      return response(0, {
+        status: 'DISPATCH_COMPLETE', leaseId: '2'.repeat(64),
+        observedGeneration: 31, runId: 1002, runConclusion: 'success',
+      });
+    }
+    if (args[0] === 'gh' && args[1] === 'api' && args.includes('--method')) {
+      comments += 1;
+      return response(0, {id: 100 + comments});
+    }
+    if (String(args[0]).endsWith('/mcl-landing-freshness')) {
+      refreshCalls += 1;
+      assert.deepEqual(args.slice(1), ['refresh', 'S']);
+      return response(0, [
+        'schema=mcl-landing-freshness.v1',
+        'operation=refresh',
+        'route=S',
+        'intended_branch=server/work',
+        'actual_branch=server/work',
+        'worktree=clean',
+        `landing_head=${'b'.repeat(40)}`,
+        `origin_main=${MAIN}`,
+        `remote_main=${MAIN}`,
+        'origin_remote_relation=same',
+        'landing_relation=behind_ff',
+        'refresh=refreshed',
+        'details=withheld',
+        '',
+      ].join('\n'));
+    }
+    throw new Error(args.join(' '));
+  };
+  const value = stage.normalizeLandingCurrentness(context, {
+    runner,
+    overlapResolver: () => ({state: 'DISJOINT'}),
+    authorityBarrier: () => {},
+  });
+  assert.equal(value.normalized, true);
+  assert.equal(value.count, 1);
+  assert.equal(refreshCalls, 1);
+  assert.equal(acquireCalls, 1);
+  assert.equal(releaseCalls, 1);
+  assert.equal(comments, 2);
+  assert.match(value.receipt.receiptId, /^[0-9a-f]{64}$/);
+});
+
+test('normalization revalidation is one-shot and requires exact convergence', () => {
+  const context = {
+    packetNumber: 77, packetRef: '#77', plan: plan(), mainSha: MAIN,
+    packetBodySha256: '3'.repeat(64), requestedScopes: ['path:docs/demo.md'],
+  };
+  const ready = {
+    ...context,
+    overlap: {state: 'DISJOINT'},
+    normalizationRequired: false,
+    landingState: 'CURRENT',
+    workspace: {status: 'READY'},
+  };
+  assert.equal(stage.revalidateAfterNormalization(context, {
+    inspector: () => ready,
+  }).landingState, 'CURRENT');
+  assert.throws(() => stage.revalidateAfterNormalization(context, {
+    inspector: () => ({...ready, normalizationRequired: true, landingState: 'NORMALIZATION_REQUIRED'}),
+  }), /NORMALIZATION_NOT_CONVERGED/);
 });
 
 test('D-014 manifest builder preserves the fixed S repository workspace contract', () => {
@@ -524,6 +805,7 @@ test('apply PASS prepares workspace/ref but does not invoke holder or source eff
       lateBarrier: () => {},
     });
     assert.equal(receipt.result, 'PASS');
+    assert.equal(receipt.counters.find((row) => row.name === 'landing_normalization_count').value, 0);
     assert.equal(comments, 2);
     assert.equal(receipt.nextLegalAction,
       'CLAIM_OWNER_LOCAL_HOLDER_IF_REQUIRED_THEN_INVOKE_EXISTING_ROUTE_OWNER');
@@ -532,6 +814,58 @@ test('apply PASS prepares workspace/ref but does not invoke holder or source eff
     const branch = childProcess.spawnSync('git', ['-C', target, 'branch', '--show-current'],
       {encoding: 'utf8'}).stdout.trim();
     assert.equal(branch, 'server/mcl-packet-78');
+  } finally { f.close(); }
+});
+
+test('successful one-shot normalization composes into existing repository stage preparation', () => {
+  const f = gitFixture();
+  let comments = 0;
+  try {
+    const inspected = workspace.inspectWorkspace({packetNumber: 81, baseSha: f.base, profile: f.profile});
+    const context = {
+      packetNumber: 81,
+      packetRef: '#81',
+      plan: plan(),
+      mainSha: f.base,
+      packetBody: PACKET_BODY,
+      packetBodySha256: '4'.repeat(64),
+      requestedScopes: ['path:docs/demo.md'],
+      overlap: {state: 'DISJOINT'},
+      landing: {landing_head: 'b'.repeat(40)},
+      landingState: 'NORMALIZATION_REQUIRED',
+      normalizationRequired: true,
+      workspace: inspected,
+    };
+    const runner = (args, options) => {
+      if (args[0] === process.execPath && args.includes('lease-acquire')) {
+        return response(0, {
+          status: 'DISPATCH_COMPLETE', leaseId: '5'.repeat(64),
+          observedGeneration: 40, runId: 1101, runConclusion: 'success',
+        });
+      }
+      if (args[0] === 'gh' && args[1] === 'api' && args.includes('--method')) {
+        comments += 1;
+        return response(0, {id: 900 + comments});
+      }
+      return workspace.runDefault(args, options);
+    };
+    const fresh = {...context, landingState: 'CURRENT', normalizationRequired: false, workspace: inspected};
+    const receipt = stage.applyContext(context, {
+      runner,
+      profile: f.profile,
+      remoteCreate: localCreateRemote(f),
+      normalizationRunner: () => ({
+        normalized: true, count: 1, artifacts: ['receipt:mcl-task-completion:fixture'],
+      }),
+      normalizationBarrier: () => fresh,
+      manifestBuilder: () => ({manifestId: '7'.repeat(64)}),
+      manifestRenderer: () => 'manifest-fixture',
+      lateBarrier: () => {},
+    });
+    assert.equal(receipt.result, 'PASS');
+    assert.equal(receipt.counters.find((row) => row.name === 'landing_normalization_count').value, 1);
+    assert(receipt.steps.some((row) => row.name === 'landing-currentness-normalization'));
+    assert(receipt.artifactLocators.includes('receipt:mcl-task-completion:fixture'));
   } finally { f.close(); }
 });
 

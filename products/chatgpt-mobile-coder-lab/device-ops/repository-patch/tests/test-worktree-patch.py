@@ -52,6 +52,8 @@ class WorktreePatchTests(unittest.TestCase):
             ["git", "clone", "--branch", "server/demo", str(self.remote), str(self.worktree)],
             check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
+        run(self.worktree, "config", "user.name", "fixture")
+        run(self.worktree, "config", "user.email", "fixture@example.invalid")
         self.old_root = m.WORKTREE_ROOT
         m.WORKTREE_ROOT = self.worktree.parent
         self.patch = self.tmp / "request.patch"

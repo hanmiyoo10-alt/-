@@ -528,6 +528,7 @@ jobs:
     needs: [resolve_stage, write_candidate]
     if: ${{ needs.resolve_stage.result == 'success' && needs.write_candidate.result == 'success' }}
     permissions:
+      contents: read
       actions: write
       issues: write
     runs-on: ubuntu-latest

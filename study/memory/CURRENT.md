@@ -1,7 +1,7 @@
 # Current Study Memory Snapshot
 
 Status: `SNAPSHOT_READY`
-As of: `2026-09-07`
+As of: `2026-09-14`
 
 이 문서는 새 대화/세션이 공부 맥락을 빠르게 재구성하기 위한 **current-only projection**입니다.
 
@@ -34,14 +34,18 @@ REVIEW_QUEUE_SOURCE = study/problems/REVIEW_QUEUE.md
 - PSAT에 맞는 문제풀이 체계를 만들고, 문제를 단순 반복하기보다 유형·판단 구조·오답 패턴을 축적한다.
 - 실제 교재/문제풀이가 시작되면 본인 해석을 먼저 만든 뒤 O/X 검증을 통해 해석 오류의 종류를 잡는다.
 - 개별 문제의 실수와 반복되는 약점을 분리해서 기록하고, 다른 문제로 교정이 전이되는지 확인한다.
+- AI 프로그래밍입문 과목에서 Python과 Colab 기본기를 실제 코드 실행 중심으로 익힌다.
 
 ## Active subjects
 
 ```text
 PSAT = ACTIVE
+AI_PROGRAMMING = ACTIVE
 ```
 
 현재 스냅샷은 다른 과목을 비활성이라고 단정하지 않는다. 장기기억 시스템에 현재 활성으로 확인된 범위만 투영한다.
+
+AI 프로그래밍 세부 진입점은 `study/computer-science/ai-programming/README.md`를 사용한다.
 
 ## High-value learner patterns
 
@@ -76,6 +80,8 @@ PSAT = ACTIVE
 
 별도 강의를 기본 전제로 두지 않는다. 독학으로 특정 영역이 반복적으로 막힐 때만 보조 설명 수단을 재검토한다.
 
+AI 프로그래밍에는 아직 durable strategy를 확정하지 않는다. 현재는 `E-2026-09-14-001`, `E-2026-09-14-002`의 실습 증거를 관찰 중이다.
+
 ## Problem-memory operating rule
 
 ```text
@@ -101,8 +107,12 @@ PSAT = ACTIVE
 - 패턴 분류가 지나치게 세분화되어 문제풀이 속도를 잡아먹지 않는지 확인한다.
 - PSAT에서의 독학 선호를 전반적인 학습 성향으로 성급하게 일반화하지 않는다.
 - 같은 문제를 외워서 맞힌 것을 교정 성공으로 오판하지 않고, 다른 문제로 전이되는지 확인한다.
+- AI 프로그래밍에서 실행 전 결과 예측과 오류 분류가 실제 이해·재현성 향상에 도움이 되는지 확인한다.
+- `코랩/Untitled1.ipynb`의 시행착오 중 어떤 오류 구조가 반복되고 어떤 것은 한 번의 교정으로 사라지는지 구분한다.
 
 ## Immediate next memory action
+
+### PSAT
 
 실제 PSAT 교재나 문제를 다루기 시작하면 다음 순서를 사용한다.
 
@@ -114,6 +124,17 @@ PSAT = ACTIVE
 5. 같은 구조가 다른 문제에서 반복되면 problems/PATTERNS로 승격한다.
 6. 필요하면 REVIEW_QUEUE에 RETRY 또는 TRANSFER_CHECK를 등록한다.
 7. 충분한 문제 증거가 누적된 경우에만 PROFILE 또는 STRATEGIES를 갱신한다.
+```
+
+### AI programming
+
+```text
+1. 현재 실습 소스는 `코랩/Untitled1.ipynb`로 본다.
+2. 노트북의 시행착오를 오류 유형별로 분류하되 1회성 실수와 반복 혼동을 구분한다.
+3. 이미 스스로 교정한 개념은 새 문제에서 전이되는지 확인한다.
+4. 차이가 있으면 TYPE / INPUT_CONVERSION / OPERATOR / VARIABLE_STATE / OUTPUT_FORMAT 등 가장 좁은 원인으로 분류한다.
+5. 같은 혼동이 반복되면 문제 기억 또는 과목별 문서에 근거를 축적한다.
+6. 반복 근거가 생기기 전에는 새로운 학습 성향이나 전략으로 승격하지 않는다.
 ```
 
 ## Snapshot states

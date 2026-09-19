@@ -2,9 +2,10 @@
 name: mcl-preflight
 description: >-
   Run the bounded Mobile Coder Lab first-pass preflight after D-012 has already
-  selected a semantic route and exact executor. Delegate to the current S, M,
-  S-Termux, PRIVATE LAB, VM LAB, or S-private owner without choosing a route,
-  repairing state, reserving work, or manufacturing aggregate readiness.
+  selected a semantic route and route-compatible executor disposition. Delegate
+  to the current repository, Termux, lab, private, or GUI owner without choosing
+  a route, performing GUI/device effects, repairing state, reserving work, or
+  manufacturing aggregate readiness.
 ---
 
 # Mobile Coder Lab Preflight
@@ -25,13 +26,17 @@ executor=<exact selected execution surface>
 ```
 
 Supported route classes are `S`, `M`, `S_TERMUX`, `M_PRIVATE_LAB`,
-`M_VM_LAB`, and `S_PRIVATE_LOCAL`. Preserve `UNSUPPORTED / SEPARATE_AUTHORITY`
-and `UNKNOWN` without inventing an executor.
+`M_VM_LAB`, `S_PRIVATE_LOCAL`, `S_ANDROID_GUI`,
+`S_ANDROID_GUI_ADB_READ`, and `S_ANDROID_GUI_ADB_ACTION`. Preserve
+`UNSUPPORTED / SEPARATE_AUTHORITY` and `UNKNOWN` without inventing an executor.
 
 Route `S` permits executor `S` or the already-documented ordinary-repository
-fallback `M`. Every context-specific route requires its matching executor.
-Missing, ambiguous, or conflicting route/executor evidence is `UNKNOWN` and
-blocks route-conditioned preflight rather than triggering a new routing choice.
+fallback `M`. Existing non-GUI context-specific routes require their matching
+executor. The three GUI routes require `executor=not_applicable`: their D-012
+route already names the composed semantic surface, and the underlying S-Termux
+or M transport must not be promoted into GUI semantic authority or a new D-013
+executor token. Missing, ambiguous, or conflicting route/executor evidence is `UNKNOWN`
+and blocks route-conditioned preflight rather than triggering a new routing choice.
 ## Owner mapping
 
 Use only the narrow current owner needed for the selected route.
@@ -84,6 +89,44 @@ session payload, private log, or provider state merely to complete preflight.
 If the fixed producer/receipt is unavailable, preserve blocked/unsupported or
 `UNKNOWN` according to its owner instead of improvising a replacement.
 
+### `S_ANDROID_GUI`
+
+Require `executor=not_applicable`. Invoke only the existing bounded
+`mcl-gui status` owner when directly available in its reviewed execution
+context. Accept only `schema=mcl-gui.v1` output and preserve the bounded
+status/disposition reported by that owner.
+
+This first pass must not invoke `launch-chatgpt`, `snapshot`,
+`--screenshot`, `find-action`, `find-editable`, `click`, `set-text`,
+or `wait-text`. Missing user consent, locked/secure UI, peer failure, owner
+unavailability, malformed output, or another blocked disposition remains
+blocked or `UNKNOWN`; preflight never repairs Accessibility or Android state.
+
+### `S_ANDROID_GUI_ADB_READ`
+
+Require `executor=not_applicable`. Invoke only `mcl-adb-ui status` from the
+existing Wireless ADB owner. Accept only the ordered
+`schema=mcl-wireless-adb-ui-status.v1` receipt and project only its bounded
+`connection`, `model`, and `result` fields.
+
+Do not invoke `snapshot`, `find-action`, `find-editable`, launcher/action
+commands, raw hierarchy capture, pairing, or arbitrary `adb shell`. A
+connection/model block remains blocked; missing or malformed evidence remains
+`UNKNOWN` without another-route fallback.
+
+### `S_ANDROID_GUI_ADB_ACTION`
+
+Require `executor=not_applicable` and use the same read-only
+`mcl-adb-ui status` first pass as the READ route. Status evidence proves only
+the bounded Wireless ADB target/transport observation.
+
+Do not invoke `launch-target`, `find-alias`, `probe-new-chat`,
+`activate`, `type-ascii`, `wait-text`, or any other action from preflight.
+Fresh semantic snapshot/handle revalidation, bounds, focus, injection, exact
+post-entry verification, and the actual action receipt remain D-017 owner gates
+immediately around a separately authorized effect.
+A passing preflight status is not action readiness or action authorization.
+
 ## Optional host-resource preflight
 
 When the already-selected phase explicitly requires phone-host capacity or pressure
@@ -103,7 +146,9 @@ Owner evidence remains scoped. `missing`, `blocked`, `offline`, `stale`,
 `not_ready`, malformed output, or transport failure never authorizes repair,
 sync, route fallback, worktree creation, lease acquisition, or repository write.
 Malformed or unrecognized child receipts remain `UNKNOWN`; do not pass through
-free-form child diagnostics.
+free-form child diagnostics. GUI owner absence or a GUI route/executor mismatch
+also remains `UNKNOWN` and invokes no wider GUI, ADB, screenshot, or action
+surface.
 ## Mutable-work guard sequence
 
 A bounded owner observation is first-pass evidence, not permission to mutate.
@@ -136,8 +181,10 @@ projection; this skill is one-route preflight composition only.
 ## Privacy and non-goals
 
 Do not expose device IDs, RDC/session IDs, ChatGPT/account identifiers, token or
-auth scope data, private logs, command lines, PIDs, environment dumps, or raw
-provider state. Public D-012 semantic route names are allowed.
+auth scope data, ADB serial/IP/port/pairing material, raw GUI hierarchy/node or
+conversation text, screenshot bytes/paths, node bounds/coordinates, private
+logs, command lines, PIDs, environment dumps, or raw provider state. Public
+D-012 semantic route names are allowed.
 This skill is not a router, dispatcher, scheduler, queue, central task database,
 health authority, work-reservation owner, worktree lifecycle helper, service
 repair tool, or release/production controller. It does not rewrite

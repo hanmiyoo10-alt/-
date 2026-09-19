@@ -343,3 +343,24 @@ stale snapshot, missing/ambiguous handle, invalid bounds, non-empty editor, focu
 ### 이유
 
 #2453은 raw hierarchy를 ChatGPT/RDC 경계 밖으로 노출하지 않고 M 내부에서 bounded semantic receipt로 변환하는 read-only 경로를 LIVE_PROVEN했다. Action 단계는 ADB input primitive가 AccessibilityNode action과 동등하다고 가정할 수 없으므로, caller coordinates를 허용하지 않고 fresh semantic evidence에서 한 점을 내부 파생한 뒤 stale/ambiguity/text verification을 fail-closed gate로 두는 별도 authority가 필요하다.
+
+
+## D-018 — Central dispatch remains plan-only owner composition
+
+상태: ACTIVE
+
+### 결정
+
+Mobile Coder Lab의 첫 central dispatcher는 .agents/skills/mcl-dispatcher/ 가 소유하는 plan-only planning layer로 둔다.
+
+dispatcher는 매 호출마다 current D-012 device-routing.md를 먼저 읽고 semantic route를 고른 뒤, current route-specific preflight owner와 이후 overlap / D-013 / Git currentness / validation / D-014 guard를 계획에 남긴다. 현재 mcl-preflight가 지원하지 않는 route는 그 skill에 억지로 넣지 않고 current D-012가 지정한 owner를 직접 따른다.
+
+dispatcher receipt는 계획 증거일 뿐 work reservation, readiness, authorization, completion, runtime truth가 아니다. dispatcher 자체는 lease acquire/release, worktree lifecycle, Git/source mutation, device/runtime effect, workflow dispatch, PR merge, queue/database/scheduler를 수행하지 않는다.
+
+ordinary repository S→M fallback도 current D-012가 허용한 candidate로만 표현하며 상태가 나쁘다는 이유로 자동 전환하지 않는다. multi-context task는 semantic phase로 분리한다.
+
+Effectful or autonomous dispatch, queue consumer, background worker, or automatic task executor requires separate reviewed authority after the plan-only layer is proven useful.
+
+### 이유
+
+Routing, status, overlap, reservation, Git currentness, handoff, runtime effects already have separate owners. Centralizing only their planning order reduces operator friction without manufacturing a second authority or silently collapsing those safety boundaries.

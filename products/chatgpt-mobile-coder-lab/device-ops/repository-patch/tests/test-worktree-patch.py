@@ -3,9 +3,11 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -79,6 +81,43 @@ class WorktreePatchTests(unittest.TestCase):
     def tearDown(self):
         m.WORKTREE_ROOT = self.old_root
         shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_helper_import_does_not_write_source_bytecode(self):
+        source_root = self.tmp / "source"
+        primitive = source_root / MODULE_PATH.relative_to(ROOT)
+        helper = source_root / "tools/repo-write/patch_branch.py"
+        primitive.parent.mkdir(parents=True)
+        helper.parent.mkdir(parents=True)
+        shutil.copy2(MODULE_PATH, primitive)
+        shutil.copy2(ROOT / "tools/repo-write/patch_branch.py", helper)
+        before = sorted(path.relative_to(source_root) for path in source_root.rglob("*.pyc"))
+        self.assertEqual(before, [])
+        env = os.environ.copy()
+        env.pop("PYTHONDONTWRITEBYTECODE", None)
+        env.pop("PYTHONPYCACHEPREFIX", None)
+        result = subprocess.run(
+            [sys.executable, str(primitive), "--help"],
+            cwd="/", env=env, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        after = sorted(path.relative_to(source_root) for path in source_root.rglob("*.pyc"))
+        self.assertEqual(after, before)
+
+    def test_helper_import_restores_bytecode_setting_on_failure(self):
+        bad_helper = self.tmp / "bad_patch_writer.py"
+        bad_helper.write_text("raise RuntimeError('blocked loader')\n", encoding="utf-8")
+        previous_writer = m.PATCH_WRITER
+        previous_setting = sys.dont_write_bytecode
+        try:
+            m.PATCH_WRITER = bad_helper
+            sys.dont_write_bytecode = False
+            with self.assertRaisesRegex(RuntimeError, "blocked loader"):
+                m.load_patch_writer()
+            self.assertFalse(sys.dont_write_bytecode)
+        finally:
+            m.PATCH_WRITER = previous_writer
+            sys.dont_write_bytecode = previous_setting
 
     def test_request_schema_is_strict(self):
         parsed = m.load_request(self.request_file)

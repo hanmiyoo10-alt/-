@@ -11,6 +11,7 @@ const PACKET_SCOPE_HEADINGS = Object.freeze([
   'Locked write scope',
   'Bounded IMPLEMENTATION_PR write scope',
   'Repository write-scope ceiling used by IMPLEMENTATION_PR',
+  'Bounded repository write ceiling',
 ]);
 const DISCOVERY_STATES = new Set(['COMPLETE', 'PARTIAL', 'UNKNOWN']);
 
@@ -153,7 +154,9 @@ function extractPacketScopes(body) {
   for (const rawLine of lines) {
     const cleaned = rawLine.replace(/^\s*(?:[-*+]|\d+\.)\s+/, '').trim();
     if (!cleaned) continue;
-    if (/^Preservation(?:\s*\/|\s|:)/i.test(cleaned) || /^Non-write(?:\s|:)/i.test(cleaned)) break;
+    if (/^Preservation(?:\s*\/|\s|:)/i.test(cleaned)
+        || /^Non-write(?:\s|:)/i.test(cleaned)
+        || /^Do not touch unless fresh evidence proves required:/i.test(cleaned)) break;
     const codeToken = cleaned.match(/`([^`]+)`/)?.[1];
     const plainToken = !codeToken && !/\s/.test(cleaned) ? cleaned : null;
     const token = codeToken || plainToken;

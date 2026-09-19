@@ -7,6 +7,12 @@ const { canonicalize, stableHash } = require('./handoff.cjs');
 const ATTENTION_STATES = Object.freeze([
   'RUNNING', 'COMPLETE', 'NEEDS_REVIEW', 'BLOCKED', 'UNKNOWN',
 ]);
+const EXECUTION_LIFECYCLES = Object.freeze([
+  'QUEUED', 'RUNNING', 'FINISHED', 'UNKNOWN',
+]);
+const ATTENTION_DISPOSITIONS = Object.freeze([
+  'COMPLETE', 'NEEDS_REVIEW', 'BLOCKED', 'UNKNOWN', 'CONFLICT',
+]);
 const RESULTS = Object.freeze([
   'PASS', 'FAIL', 'PARTIAL', 'UNKNOWN', 'CONFLICT', 'BLOCKED',
 ]);
@@ -24,6 +30,13 @@ const TOP_FIELDS = new Set([
   'steps', 'counters', 'affectedFiles', 'artifactLocators', 'reasonCodes',
   'requiredUnknowns', 'conflicts', 'blockers', 'exitCode', 'stderrTail',
   'nextLegalAction',
+]);
+const TOP_FIELDS_V2 = new Set([
+  'schemaVersion', 'operationId', 'primitiveId', 'sourceIdentity',
+  'executionSurface', 'stage', 'executionLifecycle', 'attentionDisposition',
+  'result', 'proofScope', 'steps', 'counters', 'affectedFiles',
+  'artifactLocators', 'reasonCodes', 'requiredUnknowns', 'conflicts',
+  'blockers', 'exitCode', 'stderrTail', 'nextLegalAction',
 ]);
 
 function uniqueSorted(values) {
@@ -183,9 +196,9 @@ function normalizeExitCode(value, reasons) {
   return value;
 }
 
-function invalidResult(reasons) {
+function invalidResult(reasons, schemaVersion = 1) {
   return {
-    schemaVersion: 1,
+    schemaVersion,
     mode: 'REPOSITORY_EXECUTION_RECEIPT',
     validity: 'INVALID',
     receiptDigest: null,
@@ -202,19 +215,34 @@ function invalidResult(reasons) {
 
 function projectExecutionReceipt(input) {
   const reasons = [];
-  if (!objectKeys(input, TOP_FIELDS, 'input', reasons)) return invalidResult(reasons);
-  if (input.schemaVersion !== 1) reasons.push('INPUT_SCHEMA_UNSUPPORTED');
+  const isV2 = Boolean(input && typeof input === 'object' && !Array.isArray(input) && input.schemaVersion === 2);
+  const schemaVersion = isV2 ? 2 : 1;
+  const topFields = isV2 ? TOP_FIELDS_V2 : TOP_FIELDS;
+  if (!objectKeys(input, topFields, 'input', reasons)) return invalidResult(reasons, schemaVersion);
+  if (!isV2 && input.schemaVersion !== 1) reasons.push('INPUT_SCHEMA_UNSUPPORTED');
 
   const operationId = atom(input.operationId, 'operationId', reasons, { required: true, maxBytes: 160 });
   const primitiveId = atom(input.primitiveId, 'primitiveId', reasons, { required: true, maxBytes: 160 });
   const executionSurface = atom(input.executionSurface, 'executionSurface', reasons, { required: true, maxBytes: 160 });
   const stage = atom(input.stage, 'stage', reasons, { required: true, maxBytes: 160 });
-  const attentionState = atom(input.attentionState, 'attentionState', reasons, { required: true });
+  const attentionState = isV2 ? null : atom(input.attentionState, 'attentionState', reasons, { required: true });
+  const executionLifecycle = isV2
+    ? atom(input.executionLifecycle, 'executionLifecycle', reasons, { required: true })
+    : null;
+  const attentionDisposition = isV2
+    ? atom(input.attentionDisposition, 'attentionDisposition', reasons, { required: true })
+    : null;
   const suppliedResult = atom(input.result, 'result', reasons, { required: true });
   const proofScope = atom(input.proofScope, 'proofScope', reasons, { required: true });
   const nextLegalAction = atom(input.nextLegalAction, 'nextLegalAction', reasons);
 
   if (attentionState && !ATTENTION_STATES.includes(attentionState)) reasons.push('INPUT_ATTENTION_STATE_INVALID');
+  if (executionLifecycle && !EXECUTION_LIFECYCLES.includes(executionLifecycle)) {
+    reasons.push('INPUT_EXECUTION_LIFECYCLE_INVALID');
+  }
+  if (attentionDisposition && !ATTENTION_DISPOSITIONS.includes(attentionDisposition)) {
+    reasons.push('INPUT_ATTENTION_DISPOSITION_INVALID');
+  }
   if (suppliedResult && !RESULTS.includes(suppliedResult)) reasons.push('INPUT_RESULT_INVALID');
 
   const unknowns = stringList(input.requiredUnknowns, 'requiredUnknowns', reasons);
@@ -240,26 +268,52 @@ function projectExecutionReceipt(input) {
   });
 
   if (!nextLegalAction) unknowns.push('NEXT_LEGAL_ACTION_UNKNOWN');
-  if ((attentionState === 'NEEDS_REVIEW' || suppliedResult !== 'PASS') && !reasonCodes.length) {
+  const needsReview = isV2
+    ? attentionDisposition === 'NEEDS_REVIEW'
+    : attentionState === 'NEEDS_REVIEW';
+  if ((needsReview || suppliedResult !== 'PASS') && !reasonCodes.length) {
     unknowns.push('REASON_CODE_MISSING');
   }
   if (suppliedResult === 'PASS' && exitCode !== null && exitCode !== 0) {
     conflicts.push('PASS_CONFLICTS_WITH_NONZERO_EXIT');
   }
-  if (attentionState === 'RUNNING' && suppliedResult && !['PARTIAL', 'UNKNOWN'].includes(suppliedResult)) {
-    conflicts.push('RUNNING_CONFLICTS_WITH_TERMINAL_RESULT');
-  }
-  if (attentionState === 'BLOCKED' && suppliedResult && !['BLOCKED', 'UNKNOWN'].includes(suppliedResult)) {
-    conflicts.push('BLOCKED_ATTENTION_CONFLICTS_WITH_RESULT');
-  }
-  if (attentionState === 'COMPLETE' && suppliedResult === 'BLOCKED') {
-    conflicts.push('COMPLETE_CONFLICTS_WITH_BLOCKED_RESULT');
-  }
-  if (attentionState === 'UNKNOWN' && suppliedResult === 'PASS') {
-    unknowns.push('ATTENTION_STATE_UNKNOWN');
+  if (!isV2) {
+    if (attentionState === 'RUNNING' && suppliedResult && !['PARTIAL', 'UNKNOWN'].includes(suppliedResult)) {
+      conflicts.push('RUNNING_CONFLICTS_WITH_TERMINAL_RESULT');
+    }
+    if (attentionState === 'BLOCKED' && suppliedResult && !['BLOCKED', 'UNKNOWN'].includes(suppliedResult)) {
+      conflicts.push('BLOCKED_ATTENTION_CONFLICTS_WITH_RESULT');
+    }
+    if (attentionState === 'COMPLETE' && suppliedResult === 'BLOCKED') {
+      conflicts.push('COMPLETE_CONFLICTS_WITH_BLOCKED_RESULT');
+    }
+    if (attentionState === 'UNKNOWN' && suppliedResult === 'PASS') {
+      unknowns.push('ATTENTION_STATE_UNKNOWN');
+    }
+  } else {
+    if (['QUEUED', 'RUNNING'].includes(executionLifecycle)
+        && suppliedResult && ['PASS', 'FAIL'].includes(suppliedResult)) {
+      conflicts.push(`${executionLifecycle}_CONFLICTS_WITH_TERMINAL_RESULT`);
+    }
+    if (executionLifecycle === 'UNKNOWN' && suppliedResult === 'PASS') {
+      unknowns.push('EXECUTION_LIFECYCLE_UNKNOWN');
+    }
+    if (attentionDisposition === 'BLOCKED'
+        && suppliedResult && !['BLOCKED', 'UNKNOWN'].includes(suppliedResult)) {
+      conflicts.push('BLOCKED_DISPOSITION_CONFLICTS_WITH_RESULT');
+    }
+    if (attentionDisposition === 'CONFLICT' && suppliedResult !== 'CONFLICT') {
+      conflicts.push('CONFLICT_DISPOSITION_CONFLICTS_WITH_RESULT');
+    }
+    if (attentionDisposition === 'COMPLETE' && suppliedResult === 'BLOCKED') {
+      conflicts.push('COMPLETE_DISPOSITION_CONFLICTS_WITH_BLOCKED_RESULT');
+    }
+    if (attentionDisposition === 'UNKNOWN' && suppliedResult === 'PASS') {
+      unknowns.push('ATTENTION_DISPOSITION_UNKNOWN');
+    }
   }
 
-  if (reasons.length) return invalidResult(reasons);
+  if (reasons.length) return invalidResult(reasons, schemaVersion);
 
   const stableUnknowns = uniqueSorted(unknowns);
   const stableConflicts = uniqueSorted(conflicts);
@@ -270,9 +324,10 @@ function projectExecutionReceipt(input) {
     else if (stableBlockers.length) result = 'BLOCKED';
     else if (stableUnknowns.length) result = 'UNKNOWN';
   }
+  if (isV2 && stableConflicts.length && result !== 'CONFLICT') result = 'CONFLICT';
 
   const draft = {
-    schemaVersion: 1,
+    schemaVersion,
     mode: 'REPOSITORY_EXECUTION_RECEIPT',
     validity: 'VALID',
     operationId,
@@ -280,7 +335,9 @@ function projectExecutionReceipt(input) {
     sourceIdentity,
     executionSurface,
     stage,
-    attentionState,
+    ...(isV2
+      ? { executionLifecycle, attentionDisposition }
+      : { attentionState }),
     result,
     proofScope,
     steps,
@@ -303,7 +360,7 @@ function projectExecutionReceipt(input) {
     securityAuthorityGranted: false,
   };
   if (Buffer.byteLength(JSON.stringify(canonicalize(draft)), 'utf8') > MAX_RECEIPT_BYTES) {
-    return invalidResult(['RECEIPT_TOO_LARGE']);
+    return invalidResult(['RECEIPT_TOO_LARGE'], schemaVersion);
   }
   return { ...draft, receiptDigest: stableHash(draft) };
 }
@@ -325,6 +382,13 @@ function readInputFile(inputFile) {
 
 function exitCodeFor(receipt) {
   if (receipt?.validity !== 'VALID') return 2;
+  if (receipt.schemaVersion === 2) {
+    if (receipt.executionLifecycle === 'FINISHED'
+        && receipt.attentionDisposition === 'COMPLETE'
+        && receipt.result === 'PASS') return 0;
+    if (['FAIL', 'CONFLICT'].includes(receipt.result)) return 2;
+    return 3;
+  }
   if (receipt.attentionState === 'COMPLETE' && receipt.result === 'PASS') return 0;
   if (['FAIL', 'CONFLICT'].includes(receipt.result)) return 2;
   return 3;
@@ -346,7 +410,9 @@ if (require.main === module) {
 }
 
 module.exports = {
+  ATTENTION_DISPOSITIONS,
   ATTENTION_STATES,
+  EXECUTION_LIFECYCLES,
   MAX_INPUT_BYTES,
   MAX_RECEIPT_BYTES,
   MAX_STDERR_TAIL_BYTES,

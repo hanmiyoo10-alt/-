@@ -55,13 +55,25 @@ class MclDispatcherSkillContractTests(unittest.TestCase):
         self.assertEqual(case["expected"]["phase_routes"], ["S", "S_TERMUX"])
         self.assertFalse(case["expected"]["collapsed_contexts"])
 
-    def test_preflight_coverage_is_not_invented(self):
-        self.assertIn("Do not assume every current D-012 route is supported by `mcl-preflight`", self.skill)
-        self.assertIn("#2487", self.skill)
-        for case_id in ["gui-read-direct-owner", "gui-action-direct-owner"]:
+    def test_current_preflight_coverage_is_consumed_without_freezing_it(self):
+        self.assertIn("Re-read the current preflight contract for the selected route", self.skill)
+        self.assertNotIn("Current GUI routes are a known example tracked by", self.skill)
+        for case_id in ["gui-companion-preflight", "gui-read-preflight", "gui-action-preflight"]:
             case = self.case(case_id)
-            self.assertEqual(case["expected"]["preflight_owner"], "route_owner")
-            self.assertFalse(case["expected"]["forced_through_mcl_preflight"])
+            self.assertTrue(case["input"]["mcl_preflight_supports_route"])
+            self.assertEqual(case["expected"]["executor"], "not_applicable")
+            self.assertEqual(case["expected"]["preflight_owner"], "mcl-preflight")
+            self.assertEqual(case["expected"]["next_gate"], "preflight")
+            self.assertFalse(case["expected"]["effect_performed"])
+        self.assertFalse(self.case("gui-action-preflight")["expected"]["action_authorized"])
+
+    def test_future_unsupported_preflight_route_uses_current_route_owner(self):
+        self.assertIn("If a future current D-012 route is not supported by current `mcl-preflight`", self.skill)
+        case = self.case("future-route-owner-fallback")
+        self.assertFalse(case["input"]["mcl_preflight_supports_route"])
+        self.assertEqual(case["expected"]["preflight_owner"], "route_owner")
+        self.assertEqual(case["expected"]["next_gate"], "route_owner")
+        self.assertFalse(case["expected"]["effect_performed"])
 
     def test_repository_mutation_keeps_separate_guards(self):
         ordered = [
@@ -143,9 +155,10 @@ class MclDispatcherSkillContractTests(unittest.TestCase):
         required = {
             "ordinary-repo-mutable", "ordinary-repo-s-offline-no-auto-switch",
             "repo-read-only-no-lease", "s-termux-split-phase", "private-lab-plan",
-            "vm-lab-plan", "s-private-local-plan", "gui-read-direct-owner",
-            "gui-action-direct-owner", "ambiguous-requirement",
-            "unsupported-requirement", "blocked-context-no-reroute",
+            "vm-lab-plan", "s-private-local-plan", "gui-companion-preflight",
+            "gui-read-preflight", "gui-action-preflight", "future-route-owner-fallback",
+            "ambiguous-requirement", "unsupported-requirement",
+            "blocked-context-no-reroute",
         }
         self.assertTrue(required.issubset(set(ids)))
 

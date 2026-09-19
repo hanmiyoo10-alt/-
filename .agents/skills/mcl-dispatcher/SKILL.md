@@ -58,12 +58,18 @@ After route selection, consume only the current read-only owner named by current
 D-012 or its linked contract.
 
 When the selected route is supported by the current `mcl-preflight` contract,
-`preflight_owner=mcl-preflight` is allowed.
+use `preflight_owner=mcl-preflight` and keep `next_gate=preflight`.
 
-Do not assume every current D-012 route is supported by `mcl-preflight`.
-Current GUI routes are a known example tracked by #2487. When current D-012
-names a route-specific owner that is outside current `mcl-preflight` coverage,
-use `preflight_owner=route_owner` and follow that owner directly.
+Do not assume every future D-012 route is automatically supported by
+`mcl-preflight`. Re-read the current preflight contract for the selected route.
+Current `S_ANDROID_GUI`, `S_ANDROID_GUI_ADB_READ`, and
+`S_ANDROID_GUI_ADB_ACTION` routes are supported there with
+`executor=not_applicable`; preflight remains read-only and performs no GUI/ADB
+effect or action authorization.
+
+If a future current D-012 route is not supported by current `mcl-preflight`,
+use `preflight_owner=route_owner` and follow that current route-specific owner
+directly. This generic fallback is not a second frozen route table.
 
 `sm-status` may supplement bounded observations after routing. It never
 selects the route and never creates a whole-system readiness verdict.

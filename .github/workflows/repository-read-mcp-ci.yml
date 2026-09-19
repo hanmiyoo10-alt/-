@@ -8,7 +8,9 @@ on:
       - '.github/workflows/repository-read-mcp-ci.yml'
       - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/mcl-notebook-read'
       - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/mcl-notebook-live-proof'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/mcl-notebook-owner-invoke.cjs'
       - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/tests/test-contract.py'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/tests/test-owner-invoke.cjs'
   push:
     branches: [main]
     paths:
@@ -17,7 +19,9 @@ on:
       - '.github/workflows/repository-read-mcp-ci.yml'
       - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/mcl-notebook-read'
       - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/mcl-notebook-live-proof'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/mcl-notebook-owner-invoke.cjs'
       - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/tests/test-contract.py'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/tests/test-owner-invoke.cjs'
   workflow_dispatch:
 
 permissions:
@@ -63,6 +67,12 @@ jobs:
         run: |
           set -euo pipefail
           python3 products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/tests/test-contract.py -v
+
+      - name: Run MCL fixed notebook owner-invoke contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/tests/test-owner-invoke.cjs
 
       - name: Render compact CI summary
         if: always()

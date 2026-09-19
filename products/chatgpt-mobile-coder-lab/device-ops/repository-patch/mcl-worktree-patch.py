@@ -40,7 +40,12 @@ def load_patch_writer():
     if spec is None or spec.loader is None:
         raise PatchOwnerError("PATCH_HELPER_LOAD_FAILED")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    previous = sys.dont_write_bytecode
+    try:
+        sys.dont_write_bytecode = True
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = previous
     return module
 
 

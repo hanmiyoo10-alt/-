@@ -1885,3 +1885,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/897cdf47d47dd76491bd91c8de0996204ff26411)
 - Event ID: `16486e8278174a7520ced5fea1f8000093a426a7457ed32b673f6079d1b40999`
 <!-- canonical-main-doc-promoted:16486e8278174a7520ced5fea1f8000093a426a7457ed32b673f6079d1b40999 -->
+
+### 2026-09-20 — docs(repo): promote canonical documentation (#2664)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `e3c7dead36d0641b2abc0f7ef62367fe2e791f0a`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/e3c7dead36d0641b2abc0f7ef62367fe2e791f0a)
+- Event ID: `6813654cb65f82af2ab1f1f06b48846b36d3ed9ac0b151faf79afe5fa39c5ca5`
+<!-- canonical-main-doc-promoted:6813654cb65f82af2ab1f1f06b48846b36d3ed9ac0b151faf79afe5fa39c5ca5 -->

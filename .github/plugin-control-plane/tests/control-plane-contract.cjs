@@ -43,7 +43,39 @@ assert.equal(taxonomyById.get('termux').targetRoot, 'products/standalone/termux'
 assert.equal(taxonomyById.get('mobile-coder-lab').targetRoot, 'products/standalone/mobile-coder-lab');
 assert.equal(taxonomyById.get('simcore').targetRoot, 'plugins/risu/simcore');
 assert.deepEqual(taxonomyById.get('local').sourceRefs, ['plugin:usage-dashboard', 'plugin:devpass', 'plugin:voyage-token-check']);
+assert.deepEqual(taxonomyById.get('local').sourceRoots, [
+  'plugins/usage-dashboard/**',
+  'products/usage-dashboard/**',
+  'plugins/risu/local/usage-dashboard/**',
+  'plugins/risu/local/devpass/**',
+  'plugins/devpass/**',
+  'plugins/risu/local/voyage/**',
+  'voyage-token-check/**',
+  'tools/usage-dashboard-mcp/**',
+]);
 assert.equal(taxonomyById.get('local').risu, 'yes');
+assert.equal(registry.plugins.local.lifecycle, 'compatibility-family');
+assert.deepEqual(registry.plugins.local.paths, ['plugins/risu/local', 'plugins/risu/local/*', 'docs/LOCAL_PLUGIN_GUIDELINES.md']);
+assert.deepEqual(registry.plugins['usage-dashboard'].paths, [
+  'plugins/usage-dashboard/**',
+  'products/usage-dashboard/**',
+  'plugins/risu/local/usage-dashboard/**',
+  '.github/usage-dashboard/**',
+  '.github/workflows/usage-dashboard-*.yml',
+  '.github/workflows/reusable-usage-dashboard-*.yml',
+  'docs/USAGE_DASHBOARD_*.md',
+]);
+assert.equal(registry.plugins['usage-dashboard'].authority.releaseBranch, 'release-usage-dashboard');
+assert.equal(registry.plugins['usage-dashboard'].authority.manifest, 'plugins/usage-dashboard/runtime/product-manifest.json');
+assert.equal(registry.plugins['usage-dashboard'].authority.artifact, 'plugins/usage-dashboard/latest.js');
+assert.deepEqual(registry.plugins.devpass.paths, ['plugins/risu/local/devpass/**', 'plugins/devpass/**']);
+assert.equal(registry.plugins.devpass.authority.declaredBy, 'plugins/risu/local/devpass/README.md');
+assert.equal(registry.plugins.devpass.authority.artifact, 'plugins/devpass/latest.js');
+assert.equal(registry.plugins.devpass.authority.ref, 'main');
+assert.deepEqual(registry.plugins['voyage-token-check'].paths, ['plugins/risu/local/voyage/**', 'voyage-token-check/**']);
+assert.equal(registry.plugins['voyage-token-check'].authority.evidence, 'plugins/risu/local/voyage/DESIGN_STATUS.md');
+assert.equal(registry.plugins.local.statusAdapter, 'evidence');
+assert.equal(registry.plugins.local.authority.evidence, 'plugins/risu/local/README.md');
 assert.equal(taxonomyById.get('local').migration, 'consolidate');
 assert.equal(taxonomyById.get('local-runtime').risu, 'bridge');
 assert.equal(taxonomyById.get('study').family, 'study');
@@ -62,6 +94,7 @@ badRisuTarget.members.find((member) => member.id === 'simcore').targetRoot = 'pl
 assert.match(validateTaxonomy(badRisuTarget, registry).join('\n'), /Risu O plugin targetRoot must be under plugins\/risu\//);
 assert.deepEqual(Object.keys(registry.plugins).sort(), [
   'devpass',
+  'local',
   'simcore',
   'termux-large-doc-editor',
   'usage-dashboard',
@@ -105,12 +138,35 @@ assert.deepEqual(singleRow.duplicates, []);
 assert.equal(singleRow.fresh, true, 'single canonical generated status view keeps normal freshness behavior');
 
 assert.deepEqual(classifyPaths(['plugins/usage-dashboard/src/parts.cjs'], registry).labels, ['plugin:usage-dashboard']);
+assert.deepEqual(classifyPaths(['products/usage-dashboard/README.md'], registry).labels, ['plugin:usage-dashboard']);
+const usageDashboardLanding = classifyPaths(['plugins/risu/local/usage-dashboard/README.md'], registry);
+assert.deepEqual(usageDashboardLanding.labels, ['plugin:usage-dashboard']);
+assert.deepEqual(usageDashboardLanding.ambiguousPaths, []);
+assert.deepEqual(usageDashboardLanding.unclassifiedPaths, []);
+assert.ok(!usageDashboardLanding.labels.includes('plugin:local'));
 assert.deepEqual(classifyPaths(['.github/workflows/reusable-usage-dashboard-validate.yml'], registry).labels, ['plugin:usage-dashboard']);
 assert.deepEqual(classifyPaths(['plugins/simcore/latest.js', 'product-manifest.json'], registry).labels, ['plugin:simcore']);
 assert.deepEqual(classifyPaths(['products/simcore/tooling/check.mjs'], registry).labels, ['plugin:simcore']);
-assert.deepEqual(classifyPaths(['plugins/devpass/README.md'], registry).labels, ['plugin:devpass']);
+const localParentReadme = classifyPaths(['plugins/risu/local/README.md'], registry);
+assert.deepEqual(localParentReadme.labels, ['plugin:local']);
+assert.deepEqual(localParentReadme.ambiguousPaths, []);
+assert.deepEqual(classifyPaths(['docs/LOCAL_PLUGIN_GUIDELINES.md'], registry).labels, ['plugin:local']);
+const voyageBridgePath = classifyPaths(['plugins/risu/local/voyage/DESIGN_STATUS.md'], registry);
+assert.deepEqual(voyageBridgePath.labels, ['plugin:voyage-token-check']);
+assert.deepEqual(voyageBridgePath.ambiguousPaths, []);
+assert.ok(!voyageBridgePath.labels.includes('plugin:local'));
+const devpassCanonicalPath = classifyPaths(['plugins/risu/local/devpass/README.md'], registry);
+assert.deepEqual(devpassCanonicalPath.labels, ['plugin:devpass']);
+assert.deepEqual(devpassCanonicalPath.ambiguousPaths, []);
+assert.ok(!devpassCanonicalPath.labels.includes('plugin:local'));
+const devpassLegacyReadme = classifyPaths(['plugins/devpass/README.md'], registry);
+assert.deepEqual(devpassLegacyReadme.labels, ['plugin:devpass']);
+assert.deepEqual(devpassLegacyReadme.ambiguousPaths, []);
+assert.deepEqual(classifyPaths(['plugins/devpass/latest.js'], registry).labels, ['plugin:devpass']);
 assert.deepEqual(classifyPaths(['plugins/termux/large-doc-editor/server.py'], registry).labels, ['plugin:termux-large-doc-editor']);
-assert.deepEqual(classifyPaths(['voyage-token-check/DESIGN_STATUS.md'], registry).labels, ['plugin:voyage-token-check']);
+const voyageLegacyPath = classifyPaths(['voyage-token-check/DESIGN_STATUS.md'], registry);
+assert.deepEqual(voyageLegacyPath.labels, ['plugin:voyage-token-check']);
+assert.deepEqual(voyageLegacyPath.ambiguousPaths, []);
 assert.deepEqual(classifyPaths(['products/app-api-mod-lab/CURRENT.md'], registry).labels, ['product:app-api-mod-lab']);
 const mclBootstrap = classifyPaths(['products/chatgpt-mobile-coder-lab/device-bootstrap/bootstrap.sh'], registry);
 assert.deepEqual(mclBootstrap.labels, ['scope:research-product']);
@@ -204,6 +260,7 @@ assert.deepEqual(
   classifyIssueBody('### Scope\n\nusage-dashboard\n\n### Summary\nwork', registry),
   {explicit: true, labels: ['plugin:usage-dashboard']},
 );
+assert.deepEqual(classifyIssueBody('Scope: local', registry), {explicit: true, labels: ['plugin:local']});
 assert.deepEqual(classifyIssueBody('Plugin: simcore', registry), {explicit: true, labels: ['plugin:simcore']});
 assert.deepEqual(classifyIssueBody('Scope: voyage-token-check', registry), {explicit: true, labels: ['plugin:voyage-token-check']});
 assert.deepEqual(classifyIssueBody('Scope: pocketrisu-helper-mod', registry), {explicit: true, labels: ['product:pocketrisu-helper-mod']});
@@ -235,6 +292,7 @@ assert.deepEqual(classifyIssueBody(customIssueBody('ops-lab'), registry, {author
 
 const issueTemplate = fs.readFileSync(path.join(root, '.github/ISSUE_TEMPLATE/plugin-work.yml'), 'utf8');
 assert.match(issueTemplate, /label:\s*Scope/);
+assert.match(issueTemplate, /^        - local$/m);
 assert.match(issueTemplate, /voyage-token-check/);
 assert.match(issueTemplate, /pocketrisu-helper-mod/);
 assert.match(issueTemplate, /^        - study$/m);
@@ -316,6 +374,7 @@ assert.match(statusWorkflow, /pr-classifier\.cjs/);
 assert.match(statusWorkflow, /refresh-status/);
 assert.doesNotMatch(statusWorkflow, /if ! node .*refresh-status/);
 assert.match(statusWorkflow, /node \.github\/plugin-control-plane\/controller\.cjs refresh-status/);
+assert.match(statusWorkflow, /plugins\/risu\/local\/\*\*/);
 assert.match(statusWorkflow, /voyage-token-check\/\*\*/);
 assert.match(statusWorkflow, /products\/pocketrisu-helper-mod\/\*\*/);
 assert.match(statusWorkflow, /issues:\s*write/);

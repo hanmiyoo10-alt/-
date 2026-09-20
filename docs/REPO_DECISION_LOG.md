@@ -64,3 +64,24 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2603)
 - Event ID: `9bbf31e5fe6dd90d0c03957c7859fed3aee3fbd100d9124b2f1877dac827387d`
 <!-- canonical-main-doc-promoted:9bbf31e5fe6dd90d0c03957c7859fed3aee3fbd100d9124b2f1877dac827387d -->
+
+### 2026-09-20 — CANONICAL-MAIN-V1.2 — ambient operations, circuit breakers, deterministic closure
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/650)
+- Event ID: `4bedb4b2e8e02acec01891d91e7fcadf3a26d4ff8eed721db5e3782b18997c11`
+<!-- canonical-main-doc-promoted:4bedb4b2e8e02acec01891d91e7fcadf3a26d4ff8eed721db5e3782b18997c11 -->
+
+### 2026-09-20 — Mobile Coder Lab: device-local execution with sanitized GPT review boundary
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2180)
+- Event ID: `7a7d689f323aa3f3db53d29377d3006cec345aa3fb64cba37428271afa21d1d7`
+<!-- canonical-main-doc-promoted:7a7d689f323aa3f3db53d29377d3006cec345aa3fb64cba37428271afa21d1d7 -->
+
+### 2026-09-20 — Register independent Termux subprojects
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2593)
+- Event ID: `fdb5e33db79b46abb7cabbd66cf49c67df1c0658fd55ef1025e218d327f9ae2c`
+<!-- canonical-main-doc-promoted:fdb5e33db79b46abb7cabbd66cf49c67df1c0658fd55ef1025e218d327f9ae2c -->

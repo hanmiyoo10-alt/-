@@ -1,6 +1,6 @@
 # CURRENT — ChatGPT Mobile Coder Lab
 
-최종 갱신 기준: **2026-09-15**
+최종 갱신 기준: **2026-09-20**
 
 새 채팅이나 다른 ChatGPT 계정에서 이 실험을 이어갈 때 가장 먼저 읽는 현재 상태 체크포인트다. 상세 시간순 기록은 `docs/experiment-log.md`와 `docs/checkpoints/`를 본다.
 
@@ -205,8 +205,9 @@ PR: #1937
 title: test(chatgpt-mobile-coder): verify remote PR flow
 base: main
 head: server/remote-pr-smoke-20260909
-state: open
+state: closed
 merged: false
+cleanup: 2026-09-20 completed smoke artifact / intentionally non-merge
 ```
 
 GitHub-side verification:
@@ -220,7 +221,7 @@ deletions: 0
 mergeable: true
 ```
 
-PR merge는 의도적으로 수행하지 않았다.
+PR merge는 의도적으로 수행하지 않았고, 2026-09-20 완료된 smoke-proof artifact로 close했다. Remote branch/worktree는 이 변경에서 삭제하지 않았다.
 
 ## Permanent repository isolation
 
@@ -242,7 +243,7 @@ status: clean
 - 서버폰 `/root` 전체보다 coding worktree 중심으로 더 좁은 권한 범위를 적용할 수 있는지 검토.
 - 실제 feature 작업에서 repository-owned guideline/test discovery를 반복 검증하는 운영 품질 강화.
 - 필요할 때만 두 ChatGPT 로그인 계정의 동시 호출 identity를 별도 account-session checkpoint로 증명.
-- 과거 smoke PR/branch/worktree의 보존·정리 정책 확정.
+- 과거 smoke branch/worktree의 보존·정리 정책 확정. PR #1937은 2026-09-20 완료된 non-merge smoke artifact로 close했고 branch/worktree는 별도 정책 전까지 보존한다.
 
 서버폰 persistent service와 실제 Android reboot persistence는 이미 PASS이므로 미완료 항목으로 다시 취급하지 않는다.
 

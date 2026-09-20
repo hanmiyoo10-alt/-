@@ -2,6 +2,20 @@
   "schemaVersion": 1,
   "managedLabelPrefixes": ["plugin:", "product:", "scope:"],
   "plugins": {
+    "local": {
+      "displayName": "Local",
+      "lifecycle": "compatibility-family",
+      "issueValues": ["local", "Local", "Local plugin"],
+      "paths": [
+        "plugins/risu/local",
+        "plugins/risu/local/*",
+        "docs/LOCAL_PLUGIN_GUIDELINES.md"
+      ],
+      "statusAdapter": "evidence",
+      "authority": {
+        "evidence": "plugins/risu/local/README.md"
+      }
+    },
     "usage-dashboard": {
       "displayName": "Local Usage Dashboard",
       "lifecycle": "production",
@@ -9,6 +23,7 @@
       "paths": [
         "plugins/usage-dashboard/**",
         "products/usage-dashboard/**",
+        "plugins/risu/local/usage-dashboard/**",
         ".github/usage-dashboard/**",
         ".github/workflows/usage-dashboard-*.yml",
         ".github/workflows/reusable-usage-dashboard-*.yml",
@@ -46,11 +61,12 @@
       "lifecycle": "declared-update-channel",
       "issueValues": ["devpass", "DevPass"],
       "paths": [
+        "plugins/risu/local/devpass/**",
         "plugins/devpass/**"
       ],
       "statusAdapter": "devpass",
       "authority": {
-        "declaredBy": "plugins/devpass/README.md",
+        "declaredBy": "plugins/risu/local/devpass/README.md",
         "artifact": "plugins/devpass/latest.js",
         "ref": "main"
       }
@@ -73,11 +89,12 @@
       "lifecycle": "design-evidence-validation",
       "issueValues": ["voyage-token-check", "Voyage Token Check", "Voyage"],
       "paths": [
+        "plugins/risu/local/voyage/**",
         "voyage-token-check/**"
       ],
       "statusAdapter": "evidence",
       "authority": {
-        "evidence": "voyage-token-check/DESIGN_STATUS.md"
+        "evidence": "plugins/risu/local/voyage/DESIGN_STATUS.md"
       }
     }
   },

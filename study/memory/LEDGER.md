@@ -83,3 +83,139 @@ Related memory IDs: P-002, S-PSAT-002
 Follow-up trigger: 실제 PSAT 오답에서 동의표현/재진술/범주변환 때문에 틀리는 사례가 반복되는지 확인.
 Resolution / later evidence: 추가 문제풀이 근거 필요.
 ```
+
+### E-2026-09-10-003 — After Effects 기초 모션 실습 완료
+
+```text
+Entry ID: E-2026-09-10-003
+Date: 2026-09-10
+Subject / scope: After Effects / 타이포그래피 모션그래픽 기초
+Status: OBSERVED
+Observation: 사용자는 After Effects를 처음 사용하는 상태에서 Composition과 Shape Layer를 만들고, Position / Scale / Opacity 키프레임, Easy Ease, Graph Editor의 Speed Graph 조절을 순서대로 직접 실습했다.
+Context: 50초~1분 10초 분량의 가로형 타이포그래피 기반 모션그래픽 중간고사 과제를 준비하는 과정. 주제 후보로 “집 가고 싶다”를 검토 중이다.
+Result: 오브젝트 이동, 확대·축소, 페이드 인·아웃을 키프레임으로 만들었고, Easy Ease와 Speed Graph를 적용했을 때 속도감이 달라지는 것을 직접 확인했다.
+Interpretation: 현재는 복잡한 효과보다 기본 Transform 애니메이션과 타이밍 조절을 실제 텍스트 모션으로 전이하는 단계가 적절하다.
+Confidence: HIGH
+Related memory IDs: 없음
+Follow-up trigger: Rotation과 Text Layer / Text Animator를 익힌 뒤 실제 과제 콘티에 기본 모션을 적용하는지 확인.
+Resolution / later evidence: 상세 세션 기록은 study/logs/2026-09-10-after-effects-basics.md 참조.
+```
+
+### E-2026-09-10-004 — 오늘의 AE 목표를 레퍼런스 따라 만들기로 구체화
+
+```text
+Entry ID: E-2026-09-10-004
+Date: 2026-09-10
+Subject / scope: After Effects / 오늘 실습 목표
+Status: OBSERVED
+Observation: 사용자는 Google Drive에 있는 것으로 예상되는 오징어게임 관련 영상 파일을 레퍼런스로 삼아, 오늘 After Effects에서 그 영상의 모션을 따라 만들어보는 것을 목표로 정했다.
+Context: Position / Scale / Opacity / Easy Ease / Speed Graph 기초 실습 직후, 실제 레퍼런스 복제로 학습 단계를 올리는 시점.
+Result: 오늘 세션의 다음 작업은 레퍼런스 영상을 확보한 뒤 장면을 분해하고, 이미 익힌 Transform 키프레임과 속도 조절을 이용해 재현하는 것으로 구체화됨.
+Interpretation: 단순 기능별 연습에서 실제 모션 역설계와 재현 중심 실습으로 넘어가는 단계다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-10-003
+Follow-up trigger: Google Drive에서 레퍼런스 파일을 찾고, 첫 장면의 타이밍·텍스트·Transform 요소를 분해해 실제로 재현하기 시작했는지 확인.
+Resolution / later evidence: 파일 위치와 정확한 영상 내용은 아직 확인 전.
+```
+
+### E-2026-09-10-005 — Rotation 단위 혼동을 화면 증거로 교정
+
+```text
+Entry ID: E-2026-09-10-005
+Date: 2026-09-10
+Subject / scope: After Effects / Rotation 기본 조작
+Status: OBSERVED
+Observation: Rotation 실습의 첫 화면 녹화에서 2초 키프레임 값이 `90x+0°`로 입력되어, 1초 중간값이 `45x+0°`로 나타나는 90회전 애니메이션이 만들어졌다. 이어 올린 두 번째 화면 녹화에서는 2초 값을 `0x+90°`로 고쳐 사각형이 가로에서 세로로 90도 회전하는 것을 확인했다.
+Context: 교수 수업 흐름에 맞춰 Position → Scale → Rotation → Opacity를 기본 도형으로 다시 반복하는 과정.
+Result: AE Rotation의 왼쪽 `x` 값은 회전 횟수(revolutions), 오른쪽 `°` 값은 추가 각도라는 차이를 실제 오류와 수정으로 확인했고, Rotation 두 키프레임 동작을 정상 재현했다.
+Interpretation: 숫자 `90`을 입력할 때는 `90x`가 아니라 `0x+90°`가 되어야 한다는 단위 구분을 다음 Rotation 작업의 즉시 점검 항목으로 두는 것이 유용하다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-10-003
+Follow-up trigger: 다음 Rotation 작업에서 `x`와 `°` 필드를 혼동하지 않고 원하는 각도를 독립적으로 설정하는지 확인.
+Resolution / later evidence: 두 번째 화면 녹화에서 `0x+90°`와 두 Rotation 키프레임, 사각형의 90도 회전을 확인함.
+```
+
+### E-2026-09-10-006 — Opacity 단독 재연습을 화면 녹화로 재확인
+
+```text
+Entry ID: E-2026-09-10-006
+Date: 2026-09-10
+Subject / scope: After Effects / Opacity 기본 조작 재연습
+Status: OBSERVED
+Observation: 새 화면 녹화에서 Shape Layer의 Layer Transform Opacity에 0초 `100%`, 1초 `0%` 키프레임이 잡혀 있고, 재생 구간에서 사각형 선이 점차 사라지는 변화가 확인됐다.
+Context: 교수 수업 흐름에 맞춰 Position → Scale → Rotation → Opacity를 기본 도형으로 다시 반복하는 과정.
+Result: Opacity 두 키프레임으로 100%에서 0%로 변하는 기본 페이드 아웃을 다시 만들었고, 이번 재연습 기준으로 Position / Scale / Rotation / Opacity 네 기본 Transform을 모두 한 번씩 다시 확인했다.
+Interpretation: 기본 P/S/R/T 단독 조작 재연습은 완료된 것으로 보고, 다음 단계는 교수 흐름의 Toggle Hold Keyframe과 기본 Transform 조합 연습이 적절하다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-10-003, E-2026-09-10-005
+Follow-up trigger: Hold keyframe을 일반 보간과 비교해 보고, P/S/R/T를 자유 조합한 짧은 모션을 스스로 구성하는지 확인.
+Resolution / later evidence: `화면 녹화 중 2026-09-10 132957.mp4`에서 두 Opacity 키프레임과 1초 지점 `0%`, 재생 중 페이드 변화를 확인함.
+```
+
+### E-2026-09-10-007 — Hold Keyframe의 불연속 전환을 화면 녹화로 확인
+
+```text
+Entry ID: E-2026-09-10-007
+Date: 2026-09-10
+Subject / scope: After Effects / Toggle Hold Keyframe
+Status: OBSERVED
+Observation: `화면 녹화 중 2026-09-10 134025.mp4`에서 Opacity 시작 키프레임에 Hold를 적용한 뒤 재생했고, 사각형이 중간값으로 서서히 희미해지지 않고 앞 상태를 유지하다가 다음 키프레임 시점에서 즉시 사라지는 전환이 확인됐다.
+Context: 교수 2주차 흐름에서 Opacity 기본 재연습 다음 단계로 `Toggle Hold Keyframe`의 보간 생략을 확인하는 과정.
+Result: 일반 Opacity 보간의 점진적 페이드와 Hold 적용 후의 불연속 전환 차이를 실제 화면에서 비교할 수 있게 됐다.
+Interpretation: Hold는 앞 키프레임 값을 다음 키프레임 직전까지 유지하고, 다음 키프레임에서 값이 즉시 바뀌는 기능으로 이해하면 된다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-10-006
+Follow-up trigger: P/S/R/T를 자유 조합하는 짧은 구간에서 Hold와 일반 보간을 의도에 맞게 구분해 사용하는지 확인.
+Resolution / later evidence: 최신 화면 녹화에서 Hold 적용 메뉴 조작과 재생 중 즉시 사라지는 결과를 확인함.
+```
+
+### E-2026-09-10-008 — P/S/R/T 조합을 대용량 화면 녹화에서 직접 검증
+
+```text
+Entry ID: E-2026-09-10-008
+Date: 2026-09-10
+Subject / scope: After Effects / 기본 Transform 조합
+Status: OBSERVED
+Observation: 301,604,286-byte 화면 녹화 원본을 Google Drive에서 Android 중계 장치로 내려받아 원본 크기 일치를 확인한 뒤 실제 프레임을 추출했다. 추출 프레임에서 한 Shape Layer의 Position / Scale / Rotation / Opacity 네 Layer Transform 모두 애니메이션 스톱워치가 활성화되어 있고 같은 짧은 구간에 복수 키프레임이 배치된 것을 확인했다. 연속 샘플에서는 사각형의 위치·크기·회전 상태가 달라지고 Opacity가 0%인 시점도 확인됐다.
+Context: 단독 P/S/R/T와 Hold까지 익힌 뒤, 교수 흐름의 자유 Transform 조합 단계를 화면 녹화로 증명하려던 과정. 원본은 기존 Drive connector의 256 MiB 제한을 초과해 별도 rclone 경로로 확보했다.
+Result: P/S/R/T 네 기본 Transform을 한 짧은 구간에서 함께 키프레임으로 구성한 사실을 실제 영상 프레임으로 검증했다.
+Interpretation: 기본 Transform 조합 단계는 완료로 승격할 수 있으며, 다음에는 키프레임 타이밍 변형과 교수 예제의 원위치 복귀/Opacity 처리 또는 레퍼런스 응용으로 넘어가는 것이 적절하다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-10-003, E-2026-09-10-005, E-2026-09-10-006, E-2026-09-10-007
+Follow-up trigger: 동일 조합을 별도 안내 없이 다시 만들거나, 키프레임 간격을 바꿔 속도 차이를 의도적으로 재현하는지 확인.
+Resolution / later evidence: 대용량 원본의 바이트 크기 일치, ffprobe 메타데이터 확인, 접촉시트 및 고해상도 프레임 검토로 P/S/R/T 동시 키프레임 구성을 확인함. 기술 검증 세부는 study/logs/2026-09-10-after-effects-media-verification.md 참조.
+```
+
+### E-2026-09-10-009 — P/S/R/T 조합의 키프레임 간격 변화로 속도 차이 재확인
+
+```text
+Entry ID: E-2026-09-10-009
+Date: 2026-09-10
+Subject / scope: After Effects / 조합 모션 타이밍
+Status: OBSERVED
+Observation: `화면 녹화 중 2026-09-10 155706.mp4`를 실제 프레임으로 검토했다. P/S/R/T 조합 모션의 끝 키프레임들을 뒤쪽으로 옮긴 뒤 재생한 구간에서, 사각형이 이전보다 긴 시간에 걸쳐 위치·크기·회전 상태를 변화시키는 것이 확인됐다. 기존 최종값이 Position 오른쪽 이동, Scale 150%, Rotation 90° 등으로 크게 잡혀 있어 화면상 변화가 과장되게 커지는 모습도 함께 확인됐다.
+Context: P/S/R/T 자유 조합 단계 검증 직후, 같은 값 변화에서 키프레임 간격만 넓혀 속도 차이를 다시 체감하는 연습.
+Result: 키프레임 간격을 넓히면 같은 Transform 변화가 더 느린 시간축으로 재생된다는 점을 조합 모션에서도 재확인했다.
+Interpretation: 단독 Position 연습에서 익힌 `키프레임 간격 = 속도` 개념을 여러 Transform이 동시에 적용된 경우에도 연결할 수 있다. 과장된 화면 크기 변화는 오류라기보다 현재 조합의 큰 Scale/Position/Rotation 최종값이 동시에 보간된 결과다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-10-003, E-2026-09-10-008
+Follow-up trigger: 교수 예제의 24초 부근 원위치 복귀/Opacity 처리에서 시작 상태를 복사해 되돌리는 흐름을 적용하는지 확인.
+Resolution / later evidence: Drive 원본 175,386,030 bytes를 직접 내려받아 ffprobe와 다중 시점 프레임 접촉시트 및 고해상도 프레임으로 확인함.
+```
+
+### E-2026-09-10-010 — AE 첫 학습일 종료 상태와 24초 복귀 미완료 구간 확정
+
+```text
+Entry ID: E-2026-09-10-010
+Date: 2026-09-10
+Subject / scope: After Effects / 일일 학습 마감
+Status: OBSERVED
+Observation: 하루 동안 영어 UI 전환, Composition/Shape Layer, Align/Anchor Point, Position/Scale/Rotation/Opacity 단독 키프레임, 키프레임 간격에 따른 속도 변화, Easy Ease, Speed Graph, Hold Keyframe, P/S/R/T 자유 조합, 조합 모션의 키프레임 간격 변화까지 실제 조작 및 화면 증거로 확인했다. 마지막 화면 녹화 `화면 녹화 중 2026-09-10 163504.mp4`에서는 Composition Duration이 30초로 변경되어 있고 24초에 Opacity 100% 키프레임이 생성된 것을 확인했다. 그러나 24초의 Position/Scale/Rotation은 약 `1577,542 / 150% / 90°`로 남아 있어 정상 원위치 복귀는 아직 완료되지 않았다. 녹화 마지막 0초 상태도 약 `1577,542 / 150% / 90° / 0%`로 보여 시작 키프레임 상태 재확인이 필요하다.
+Context: 교수 2주차 흐름의 기본 Transform 반복 연습을 마무리하고 다음 학습일 재개 지점을 고정하는 과정.
+Result: 오늘의 기본 조작 학습은 다수 항목에서 검증됐지만, `24초 원위치 복귀` 단계는 미완료 상태로 남겼다. 상세 최신 검토는 `study/logs/2026-09-10-after-effects-24s-return-review.md`가 소유한다.
+Interpretation: 다음 학습일에는 24초에서 Position `960,540`, Scale `100%`, Rotation `0°`, Opacity `100%`를 맞춘 뒤 0초 시작 상태를 확인하고 재생으로 원상복귀를 검증해야 한다. 이 필수 검증이 끝나기 전에는 24초 복귀를 완료로 간주하지 않는다.
+Confidence: HIGH
+Related memory IDs: E-2026-09-10-003, E-2026-09-10-005, E-2026-09-10-006, E-2026-09-10-007, E-2026-09-10-008, E-2026-09-10-009
+Follow-up trigger: 다음 AE 세션 시작 시 24초 P/S/R/T 정상값과 0초 시작 상태를 화면에서 확인하고 전체 복귀 재생을 검증한다.
+Resolution / later evidence: OPEN — 다음 학습일 검증 대기.
+```

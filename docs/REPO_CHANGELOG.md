@@ -1821,3 +1821,67 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a8f1687b05877e585639e3a47800ce9d3e465455)
 - Event ID: `68635ee436169fd6108856a504ec6ca74e4ea5cd53606c6e3fcc7a2a1d33c187`
 <!-- canonical-main-doc-promoted:68635ee436169fd6108856a504ec6ca74e4ea5cd53606c6e3fcc7a2a1d33c187 -->
+
+### 2026-09-20 — feat(control-plane): add Local compatibility parent (#2610)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `fb8848128e36cfa794b7389307bc1f0f02538241`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/fb8848128e36cfa794b7389307bc1f0f02538241)
+- Event ID: `2d0b7bd1021d7ac6848e076323cea131c477ea2526d423919b9c43db3b69a594`
+<!-- canonical-main-doc-promoted:2d0b7bd1021d7ac6848e076323cea131c477ea2526d423919b9c43db3b69a594 -->
+
+### 2026-09-20 — feat(control-plane): bridge Voyage into Local family (#2614)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `69d51681dd921379d924cd0cb0797292f295b3ae`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/69d51681dd921379d924cd0cb0797292f295b3ae)
+- Event ID: `cb41523479faaf44d6839859a8ceeb76f67c2bbb80ee8ead6117cc2e1a6775fb`
+<!-- canonical-main-doc-promoted:cb41523479faaf44d6839859a8ceeb76f67c2bbb80ee8ead6117cc2e1a6775fb -->
+
+### 2026-09-20 — refactor(voyage): relocate design root under Local (#2618)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `d167fa1f60294dfb3e20712ca8d8d0fe13b87d09`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d167fa1f60294dfb3e20712ca8d8d0fe13b87d09)
+- Event ID: `e15b72e96071ebc513aaf1bfe46788378f0d98c961255a87221609a62b46e6dd`
+<!-- canonical-main-doc-promoted:e15b72e96071ebc513aaf1bfe46788378f0d98c961255a87221609a62b46e6dd -->
+
+### 2026-09-20 — refactor(devpass): relocate project root under Local (#2625)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `a07f85b6a2dc18fd64f7503d3cbd8eca30fe3144`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a07f85b6a2dc18fd64f7503d3cbd8eca30fe3144)
+- Event ID: `9788eabbed8be8b256099b9426702f45a47ac7367e46a5c6b75e292b5010ae31`
+<!-- canonical-main-doc-promoted:9788eabbed8be8b256099b9426702f45a47ac7367e46a5c6b75e292b5010ae31 -->
+
+### 2026-09-20 — feat(local): add Usage Dashboard compatibility landing (#2629)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `767f582457d78add28e6946164e48e85aaf98c62`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/767f582457d78add28e6946164e48e85aaf98c62)
+- Event ID: `d5cecdcddaaf9e6c64b391cffbfcfb8711855be87549709f41dc929a3f048ea5`
+<!-- canonical-main-doc-promoted:d5cecdcddaaf9e6c64b391cffbfcfb8711855be87549709f41dc929a3f048ea5 -->
+
+### 2026-09-20 — docs(repo): refresh project catalog live-health pointer (#2656)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `f7ad8c38f687c0219baf08a2d6d6f14b72f6ada8`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f7ad8c38f687c0219baf08a2d6d6f14b72f6ada8)
+- Event ID: `eb6928593cec3660afec9e5856c69f3dc8fb06175a3787a54a7f7f069a66fda5`
+<!-- canonical-main-doc-promoted:eb6928593cec3660afec9e5856c69f3dc8fb06175a3787a54a7f7f069a66fda5 -->
+
+### 2026-09-20 — fix(repo-docs): hand generated merge to connected bridge (#2663)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `87aba722410bd3d3415de2ddfdc8e725b2615b07`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/87aba722410bd3d3415de2ddfdc8e725b2615b07)
+- Event ID: `f3b7823a2be03a8bb8704cf40a6cd1668ad3e4db43067dcb6206835a43d3abf6`
+<!-- canonical-main-doc-promoted:f3b7823a2be03a8bb8704cf40a6cd1668ad3e4db43067dcb6206835a43d3abf6 -->
+
+### 2026-09-20 — fix(repo-docs): accept non-draft false in merge handoff (#2665)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `897cdf47d47dd76491bd91c8de0996204ff26411`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/897cdf47d47dd76491bd91c8de0996204ff26411)
+- Event ID: `16486e8278174a7520ced5fea1f8000093a426a7457ed32b673f6079d1b40999`
+<!-- canonical-main-doc-promoted:16486e8278174a7520ced5fea1f8000093a426a7457ed32b673f6079d1b40999 -->

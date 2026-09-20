@@ -85,3 +85,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2593)
 - Event ID: `fdb5e33db79b46abb7cabbd66cf49c67df1c0658fd55ef1025e218d327f9ae2c`
 <!-- canonical-main-doc-promoted:fdb5e33db79b46abb7cabbd66cf49c67df1c0658fd55ef1025e218d327f9ae2c -->
+
+### 2026-09-20 — Canonical Main staged-work friction backlog — freshness, overlap, exact-SHA CI, safe coordination writes
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2275)
+- Event ID: `cb8d6582e38ef445323883fe5282c031b0e3eadda2346cf420434161c9d66f72`
+<!-- canonical-main-doc-promoted:cb8d6582e38ef445323883fe5282c031b0e3eadda2346cf420434161c9d66f72 -->

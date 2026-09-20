@@ -47,3 +47,16 @@ While the profile is `check-only`, it has no writable durable-memory outputs and
 
 Creating this parent does not complete Local consolidation.
 Each child absorption or relocation requires its own authority scope, compatibility proof, validation, and post-merge convergence.
+
+## Nested child routing
+
+The Local family may expose nested compatibility paths while preserving independent child authority.
+
+Current bridge:
+- parent-owned direct surface: `plugins/risu/local/*`
+- parent-owned guideline: `docs/LOCAL_PLUGIN_GUIDELINES.md`
+- Voyage child bridge: `plugins/risu/local/voyage/**` → `plugin:voyage-token-check`
+
+The broad family directory is therefore not itself an ownership claim over every descendant. Child paths must route to the child owner when explicitly registered.
+
+For Voyage, the current evidence authority remains `voyage-token-check/DESIGN_STATUS.md` until a later reviewed physical-relocation slice proves and switches that locator.

@@ -87,7 +87,8 @@
       "lifecycle": "research-product-root",
       "issueValues": ["app-api-mod-lab", "App API Mod Lab", "앱 API 개조", "앱 API 개조 랩"],
       "paths": [
-        "products/app-api-mod-lab/**"
+        "products/app-api-mod-lab/**",
+        ".github/workflows/app-api-mod-lab-ci.yml"
       ],
       "statusAdapter": "prototype",
       "authority": {

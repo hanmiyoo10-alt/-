@@ -38,6 +38,28 @@ A concrete target is implementation-ready only after the work record identifies,
 
 Missing facts remain `UNKNOWN` or `UNASSIGNED`; they must not be guessed for convenience.
 
+## Internal target taxonomy
+
+Concrete targets use the bounded target namespace owned by this product:
+
+```text
+products/app-api-mod-lab/targets/
+├── risu/<target-id>/
+└── standalone/<target-id>/
+```
+
+The Risu O/X classification applies to each concrete target, not permanently to the whole lab. A target's `app / api / hybrid` kind is metadata in its `TARGET.json`, not another required path layer.
+
+Do not create placeholder target directories. Until a target can be named truthfully, the valid state is zero targets.
+
+Every concrete target root must satisfy `products/app-api-mod-lab/target-contract.json` and pass:
+
+`node products/app-api-mod-lab/validate-targets.mjs`
+
+A structural PASS does not prove source/upstream authority, release/deployment authority, runtime correctness, or implementation readiness. Those claims remain governed by the target onboarding contract and direct evidence.
+
+Reusable target code or fixtures should move into a shared area only after at least two concrete targets prove the same reusable contract.
+
 ## Automation boundary
 
 Canonical-main may classify and validate the registered product paths and bootstrap health. It does not gain mutation authority over external apps/services or create a deployment/release channel for this lab.

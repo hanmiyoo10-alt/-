@@ -639,3 +639,46 @@ Next-time cue: 계산된 변수 값을 문장 안에 넣을 때는 f-string의 `
 Related pattern IDs: none
 Review state: QUEUED
 Later evidence / resolution: string-to-int conversion and difference calculation are correct; only value interpolation remains.
+
+
+### AI-PROG-W2-E3-R4
+
+Problem ID: AI-PROG-W2-E3-R4
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 3 최신 코드 수정
+Source ref: current uploaded week-2 assignment Colab, latest saved source
+Result: PARTIAL
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 키와 몸무게를 모두 실수형으로 입력받아 BMI를 계산하고 예시 형식으로 출력한다.
+User interpretation / approach: 몸무게 입력을 `float(input(...))`로 수정해 코드 요구사항은 모두 충족하는 형태가 되었다.
+Correct reasoning summary: 최신 소스는 요구사항에 맞다. 다만 현재 셀의 `execution_count = 32`와 출력은 이전 int 버전 실행 때부터 유지된 것으로 확인되므로, 최신 float 버전을 다시 실행해 성공 결과를 새로 남겨야 완료로 판정할 수 있다.
+
+Error type: VERIFICATION_GAP
+Error mechanism: Colab은 코드 수정 후에도 이전 실행 출력과 execution count를 유지할 수 있으므로, 저장된 코드와 표시된 출력이 동일 실행에서 나온 것인지 분리해 확인해야 한다.
+Next-time cue: 코드 수정 후 반드시 해당 셀을 다시 실행하고 execution count가 갱신됐는지 확인한다.
+
+Related pattern IDs: none
+Review state: QUEUED
+Later evidence / resolution: latest code corrected; rerun evidence pending.
+
+### AI-PROG-W2-E4-R2
+
+Problem ID: AI-PROG-W2-E4-R2
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 4 최종 재검증
+Source ref: current uploaded week-2 assignment Colab, execution count 42
+Result: CORRECT
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 문자열 숫자 두 개를 숫자로 변환해 차이를 계산하고 문장에 실제 결과를 출력한다.
+User interpretation / approach: `difference = int(dogs) - int(cats)`로 172를 계산하고 `print(f'강아지가 고양이보다 {difference}마리 더 많다')`로 출력했다.
+Correct reasoning summary: 문자열→정수 변환, 뺄셈, f-string 값 삽입이 모두 맞으며 실제 출력도 `강아지가 고양이보다 172마리 더 많다`로 PDF 목표와 일치한다.
+
+Error type: none
+Error mechanism: none
+Next-time cue: 문자열 숫자 계산은 `int/float 변환 → 계산 → f-string 삽입` 순서로 확인한다.
+
+Related pattern IDs: none
+Review state: REVIEWED
+Later evidence / resolution: execution count 42에서 정상 실행 및 목표 출력 일치 확인.

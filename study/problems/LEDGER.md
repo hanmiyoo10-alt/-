@@ -574,3 +574,46 @@ Next-time cue: 코드를 고친 뒤 반드시 실행하고, 문제의 자료형 
 Related pattern IDs: none
 Review state: QUEUED
 Later evidence / resolution: output code corrected; weight float conversion and rerun pending.
+
+
+### AI-PROG-W2-E3-R3
+
+Problem ID: AI-PROG-W2-E3-R3
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 3 재검증
+Source ref: current uploaded week-2 assignment Colab, execution count 32
+Result: PARTIAL
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 키와 몸무게를 실수형으로 입력받아 BMI를 계산하고 예시 형식으로 출력한다.
+User interpretation / approach: BMI 계산식과 출력 문구를 정확히 고쳤고, 예시 입력 95와 1.82에서 `당신의 BMI= 28.68입니다.`가 실제로 출력되었다.
+Correct reasoning summary: 계산과 출력은 맞다. 다만 PDF가 키와 몸무게를 모두 실수형으로 입력받으라고 명시하므로 몸무게 입력도 `float(input(...))`로 바꿔야 요구사항을 완전히 충족한다.
+
+Error type: REQUIREMENT_GAP
+Error mechanism: 예시값 95가 정수로도 입력 가능해 실행은 성공하지만, 코드가 소수 몸무게 입력을 허용하지 않아 문제의 실수형 입력 요구를 완전히 만족하지 못한다.
+Next-time cue: 예시값이 정수처럼 보여도 문제 문구에서 요구한 자료형을 우선한다.
+
+Related pattern IDs: none
+Review state: QUEUED
+Later evidence / resolution: execution count 32에서 계산/출력 성공 확인. weight float conversion만 남음.
+
+### AI-PROG-W2-E4
+
+Problem ID: AI-PROG-W2-E4
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 4 문자열 숫자 변환
+Source ref: 2주차 PDF Exercise 4, current uploaded week-2 assignment Colab, execution count 33
+Result: WRONG
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 문자열 `dogs='367'`, `cats='195'`를 숫자로 변환해 강아지가 고양이보다 몇 마리 더 많은지 계산하고 `강아지가 고양이보다 172마리 더 많다`를 출력한다.
+User interpretation / approach: 두 문자열 변수 선언은 정확히 했고 문장 출력도 시도했지만, 두 값을 숫자로 변환하거나 차이를 계산하지 않아 출력에 172가 들어가지 않았다.
+Correct reasoning summary: `int(dogs) - int(cats)`로 차이 172를 계산한 뒤 f-string 등으로 결과를 문장 안에 넣는다.
+
+Error type: KNOWLEDGE_GAP
+Error mechanism: 문자열 변수 선언과 출력 문장은 만들었지만, 문제 핵심인 문자열→정수 변환과 뺄셈 단계를 연결하지 않았다.
+Next-time cue: 문자열로 주어진 숫자를 계산해야 하면 먼저 `int(...)` 또는 `float(...)` 변환이 필요한지 확인한다.
+
+Related pattern IDs: none
+Review state: QUEUED
+Later evidence / resolution: current output omits the numeric difference; correction pending.

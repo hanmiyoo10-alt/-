@@ -617,3 +617,25 @@ Next-time cue: 문자열로 주어진 숫자를 계산해야 하면 먼저 `int(
 Related pattern IDs: none
 Review state: QUEUED
 Later evidence / resolution: current output omits the numeric difference; correction pending.
+
+
+### AI-PROG-W2-E4-R1
+
+Problem ID: AI-PROG-W2-E4-R1
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 4 재시도
+Source ref: current uploaded week-2 assignment Colab, execution count 38
+Result: PARTIAL
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 문자열 `dogs='367'`, `cats='195'`를 숫자로 변환해 차이 172를 계산하고 문장에 실제 숫자를 출력한다.
+User interpretation / approach: `difference = int(dogs) - int(cats)`로 문자열 변환과 뺄셈은 정확히 수행했다. 출력에서 `'강아지가 고양이보다 int(difference)마리 더 많다'`를 사용했다.
+Correct reasoning summary: 따옴표 안의 `int(difference)`는 코드가 아니라 문자 그대로 출력된다. 이미 `difference`는 정수이므로 `print(f'강아지가 고양이보다 {difference}마리 더 많다')`처럼 f-string으로 변수 값을 삽입하면 PDF 목표 출력 `강아지가 고양이보다 172마리 더 많다`가 된다.
+
+Error type: OUTPUT_FORMAT
+Error mechanism: 계산 표현과 문자열 안 텍스트의 경계를 혼동해 변수 표현을 문자열 리터럴 내부에 그대로 적었다.
+Next-time cue: 계산된 변수 값을 문장 안에 넣을 때는 f-string의 `{변수}`를 사용한다.
+
+Related pattern IDs: none
+Review state: QUEUED
+Later evidence / resolution: string-to-int conversion and difference calculation are correct; only value interpolation remains.

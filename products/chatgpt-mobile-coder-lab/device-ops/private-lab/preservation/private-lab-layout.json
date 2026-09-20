@@ -1,0 +1,10 @@
+{
+  "schema": "repo-preservation-spec.v1",
+  "entries": [
+    {"label": "private_lab_marker", "kind": "file_sha256", "path": "etc/mcl-private-lab"},
+    {"label": "fixtures", "kind": "exists_type", "path": "opt/mcl-private-lab/fixtures"},
+    {"label": "receipts", "kind": "exists_type", "path": "opt/mcl-private-lab/receipts"},
+    {"label": "results", "kind": "exists_type", "path": "opt/mcl-private-lab/results"},
+    {"label": "vendor", "kind": "exists_type", "path": "opt/mcl-private-lab/vendor"}
+  ]
+}

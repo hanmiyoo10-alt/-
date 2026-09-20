@@ -1765,3 +1765,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/04b7218c2a0d1bc1030ebd33dbb89c32b8a40ae2)
 - Event ID: `850eb29e228e1671c189313f1163ed8021aeb74a626ef7dd3a90a7a3f6261a5a`
 <!-- canonical-main-doc-promoted:850eb29e228e1671c189313f1163ed8021aeb74a626ef7dd3a90a7a3f6261a5a -->
+
+### 2026-09-20 — feat(control-plane): register study and local runtime scopes (#2591)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `0771d29c720466b3e12683e6d2395ee869411cd3`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/0771d29c720466b3e12683e6d2395ee869411cd3)
+- Event ID: `90040e918882a692a4272f920595bbb8e6632a8bb270ef53feaa0b3d5a3acda8`
+<!-- canonical-main-doc-promoted:90040e918882a692a4272f920595bbb8e6632a8bb270ef53feaa0b3d5a3acda8 -->

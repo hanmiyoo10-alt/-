@@ -230,7 +230,7 @@ jobs:
           gh run watch "$PLUGIN_RUN_ID" --exit-status
           gh run watch "$SIMCORE_RUN_ID" --exit-status
           echo "CANONICAL_MAIN_DOC_PROMOTION:CHECKS_PASS:$HEAD_SHA:$PLUGIN_RUN_ID:$SIMCORE_RUN_ID"
-      - name: Exact-base / exact-head merge
+      - name: Exact-base / exact-head merge handoff
         if: steps.publish.outputs.published == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -240,6 +240,10 @@ jobs:
           BASE_SHA='${{ steps.render.outputs.base_sha }}'
           HEAD_SHA='${{ steps.publish.outputs.head_sha }}'
           PR='${{ steps.publish.outputs.pr }}'
+          PLUGIN_RUN_ID='${{ steps.dispatch.outputs.plugin_run_id }}'
+          SIMCORE_RUN_ID='${{ steps.dispatch.outputs.simcore_run_id }}'
+          API_VERSION='2026-03-10'
+
           git fetch origin main
           CURRENT_MAIN="$(git rev-parse origin/main)"
           if [[ "$CURRENT_MAIN" != "$BASE_SHA" ]]; then
@@ -258,19 +262,59 @@ jobs:
           - Current main SHA: $CURRENT_MAIN
           - Head SHA: $HEAD_SHA
           - PR: #$PR
+          - Plugin Control Plane run: $PLUGIN_RUN_ID
+          - SimCore run: $SIMCORE_RUN_ID
           - Source run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
-          - Merge rule: exact generated head + required CI PASS + unchanged exact base
+          - Merge rule: fresh current main must equal the exact recorded base before bridge merge
           - Direct generated-doc writes to main: forbidden
           EOF
             gh issue edit "$HANDOFF_ISSUE" --body-file /tmp/doc-promotion-handoff.md
             echo "CANONICAL_MAIN_DOC_PROMOTION:STALE_MAIN_SKIP:$BASE_SHA:$CURRENT_MAIN"
             exit 0
           fi
-          PR_HEAD="$(gh pr view "$PR" --json headRefOid --jq .headRefOid)"
-          [[ "$PR_HEAD" == "$HEAD_SHA" ]] || { echo "PR head moved: $PR_HEAD != $HEAD_SHA" >&2; exit 1; }
-          gh pr merge "$PR" --squash --delete-branch --match-head-commit "$HEAD_SHA"
-          git fetch origin main
-          RESULT_SHA="$(git rev-parse origin/main)"
+
+          PR_JSON="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            -H "X-GitHub-Api-Version: $API_VERSION" \
+            "repos/$GITHUB_REPOSITORY/pulls/$PR")"
+          PR_STATE="$(jq -er '.state' <<<"$PR_JSON")"
+          PR_DRAFT="$(jq -er '.draft' <<<"$PR_JSON")"
+          PR_BASE_REF="$(jq -er '.base.ref' <<<"$PR_JSON")"
+          PR_BASE_SHA="$(jq -er '.base.sha' <<<"$PR_JSON")"
+          PR_HEAD="$(jq -er '.head.sha' <<<"$PR_JSON")"
+
+          if [[ "$PR_STATE" != 'open' || "$PR_DRAFT" != 'false' || "$PR_BASE_REF" != 'main' || "$PR_BASE_SHA" != "$BASE_SHA" || "$PR_HEAD" != "$HEAD_SHA" ]]; then
+            cat > /tmp/doc-promotion-handoff.md <<EOF
+          # Canonical Main — Documentation Promotion Bridge
+
+          > Single mutable handoff mailbox between GitHub Actions durable-document rendering and the connected ChatGPT GitHub bridge.
+
+          <!-- canonical-main-doc-promotion-handoff:v1 -->
+
+          **State: STALE_PR**
+
+          - Repository: $GITHUB_REPOSITORY
+          - Source branch: $DOC_BRANCH
+          - Base SHA: $BASE_SHA
+          - Current main SHA: $CURRENT_MAIN
+          - Head SHA: $HEAD_SHA
+          - PR: #$PR
+          - Observed PR state: $PR_STATE
+          - Observed PR draft: $PR_DRAFT
+          - Observed PR base ref: $PR_BASE_REF
+          - Observed PR base SHA: $PR_BASE_SHA
+          - Observed PR head SHA: $PR_HEAD
+          - Plugin Control Plane run: $PLUGIN_RUN_ID
+          - SimCore run: $SIMCORE_RUN_ID
+          - Source run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          - Merge rule: exact generated head + exact base + successful bound check runs
+          - Direct generated-doc writes to main: forbidden
+          EOF
+            gh issue edit "$HANDOFF_ISSUE" --body-file /tmp/doc-promotion-handoff.md
+            echo "CANONICAL_MAIN_DOC_PROMOTION:STALE_PR_SKIP:$PR:$BASE_SHA:$HEAD_SHA"
+            exit 0
+          fi
+
           cat > /tmp/doc-promotion-handoff.md <<EOF
           # Canonical Main — Documentation Promotion Bridge
 
@@ -278,17 +322,21 @@ jobs:
 
           <!-- canonical-main-doc-promotion-handoff:v1 -->
 
-          **State: MERGED**
+          **State: MERGE_READY**
 
           - Repository: $GITHUB_REPOSITORY
           - Source branch: $DOC_BRANCH
           - Base SHA: $BASE_SHA
           - Head SHA: $HEAD_SHA
           - PR: #$PR
-          - Result main SHA: $RESULT_SHA
+          - Plugin Control Plane run: $PLUGIN_RUN_ID
+          - SimCore run: $SIMCORE_RUN_ID
           - Source run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
-          - Merge rule: exact generated head + required CI PASS + unchanged exact base
+          - Bridge authority: connected ChatGPT GitHub connector
+          - Bridge merge effect: squash + expected-head guard equivalent to `--match-head-commit $HEAD_SHA`
+          - Merge rule: fresh current main == exact base; exact open non-draft PR head; exact successful bound check runs; expected-head guarded bridge merge
           - Direct generated-doc writes to main: forbidden
+          - Candidate-head workflow_dispatch proof is not merged-main push proof
           EOF
           gh issue edit "$HANDOFF_ISSUE" --body-file /tmp/doc-promotion-handoff.md
-          echo "CANONICAL_MAIN_DOC_PROMOTION:MERGED:#$PR:$HEAD_SHA:$RESULT_SHA"
+          echo "CANONICAL_MAIN_DOC_PROMOTION:MERGE_READY:#$PR:$BASE_SHA:$HEAD_SHA:$PLUGIN_RUN_ID:$SIMCORE_RUN_ID"

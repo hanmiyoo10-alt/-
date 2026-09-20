@@ -1821,3 +1821,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a8f1687b05877e585639e3a47800ce9d3e465455)
 - Event ID: `68635ee436169fd6108856a504ec6ca74e4ea5cd53606c6e3fcc7a2a1d33c187`
 <!-- canonical-main-doc-promoted:68635ee436169fd6108856a504ec6ca74e4ea5cd53606c6e3fcc7a2a1d33c187 -->
+
+### 2026-09-20 — feat(control-plane): add Local compatibility parent (#2610)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `fb8848128e36cfa794b7389307bc1f0f02538241`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/fb8848128e36cfa794b7389307bc1f0f02538241)
+- Event ID: `2d0b7bd1021d7ac6848e076323cea131c477ea2526d423919b9c43db3b69a594`
+<!-- canonical-main-doc-promoted:2d0b7bd1021d7ac6848e076323cea131c477ea2526d423919b9c43db3b69a594 -->

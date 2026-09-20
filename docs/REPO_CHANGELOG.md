@@ -1853,3 +1853,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a07f85b6a2dc18fd64f7503d3cbd8eca30fe3144)
 - Event ID: `9788eabbed8be8b256099b9426702f45a47ac7367e46a5c6b75e292b5010ae31`
 <!-- canonical-main-doc-promoted:9788eabbed8be8b256099b9426702f45a47ac7367e46a5c6b75e292b5010ae31 -->
+
+### 2026-09-20 — feat(local): add Usage Dashboard compatibility landing (#2629)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `767f582457d78add28e6946164e48e85aaf98c62`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/767f582457d78add28e6946164e48e85aaf98c62)
+- Event ID: `d5cecdcddaaf9e6c64b391cffbfcfb8711855be87549709f41dc929a3f048ea5`
+<!-- canonical-main-doc-promoted:d5cecdcddaaf9e6c64b391cffbfcfb8711855be87549709f41dc929a3f048ea5 -->

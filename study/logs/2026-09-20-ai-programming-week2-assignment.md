@@ -699,3 +699,23 @@ Verified target:
 - same cleaned submission copy previously verified
 
 So the pasted submission URL resolves to the intended final assignment notebook.
+
+
+## Comparison with prior Week-2 study session (2026-09-14 vs 2026-09-20)
+
+Evidence compared:
+- prior session log: `study/logs/2026-09-14-ai-programming-colab.md`
+- current assignment log and problem ledger from 2026-09-20
+
+Observed change:
+- On 2026-09-14, the main bottleneck was the boundary between calculation and representation: the learner had to discover that decimal display was a formatting problem (`f-string + :.2f`), and the following combined string exercise produced SyntaxError around quote boundaries, escapes, literal backslashes, and interpolation.
+- On 2026-09-20, f-string syntax was still not immediately stable in Exercise 2, so this is not evidence of complete mastery. However, once corrected, the structure transferred forward: Exercise 3 used the BMI formula and `{BMI:.2f}`, and Exercise 4 reached the correct numeric conversion/calculation with only the final interpolation boundary needing correction.
+- The dominant errors shifted from “what concept or syntax do I need?” toward narrower requirement and verification issues: exact output text, required float input, and rerunning edited Colab cells so displayed output matches current source.
+- The learner also began writing their own short rules/notes during the current session (e.g. recognizing float for real numbers and f-string braces for inserting values), indicating more active compression of corrections into reusable cues.
+
+Interpretation:
+- improvement is visible in transfer and narrowing of debugging scope;
+- f-string/quote boundaries remain a fragile area and should not yet be treated as fully automatic;
+- the strongest improvement is that earlier corrections are increasingly reused in later problems, so later tasks require fewer conceptual corrections even when formatting details still need review.
+
+Confidence: HIGH for the observed shift in error type and transfer within the available logs; LOW for any claim about absolute wall-clock speed because the prior session does not provide comparable timing measurements.

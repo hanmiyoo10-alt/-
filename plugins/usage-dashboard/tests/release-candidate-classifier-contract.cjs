@@ -13,6 +13,7 @@ assert.equal(classifier.classifyBlobMaps(sameA, changed).classification, 'RELEAS
 assert.deepEqual(classifier.classifyBlobMaps(sameA, changed).changedArtifacts, [ALLOWLIST[0]]);
 assert.throws(() => classifier.classifyBlobMaps({}, changed), /CLASSIFIER_ARTIFACT_MISSING/);
 assert.equal(classifier.releaseControlChangedForPaths(['docs/USAGE_DASHBOARD_GUIDELINES.md']), false);
+assert.equal(classifier.releaseControlChangedForPaths(['plugins/usage-dashboard/tools/release_path_profile.cjs']), true);
 assert.equal(classifier.releaseControlChangedForPaths(['plugins/usage-dashboard/tools/promote_release_blobs.cjs']), true);
 
 const classifierSource = fs.readFileSync('plugins/usage-dashboard/tools/classify_release_candidate.cjs','utf8');

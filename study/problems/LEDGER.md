@@ -354,3 +354,25 @@ Next-time cue: 출력 문제에서는 실행 성공만 보지 말고 문자열 �
 Related pattern IDs: none
 Review state: REVIEWED
 Later evidence / resolution: 이전 SyntaxError와 선행 공백 오류가 모두 해소되었고, 실행 count 4에서 정확한 출력 일치 확인. Exercise 1 완료.
+
+
+### AI-PROG-W2-E2
+
+Problem ID: AI-PROG-W2-E2
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 2 원리금 계산
+Source ref: 2주차 PDF Exercise 2, current uploaded week-2 assignment Colab, execution count 5
+Result: WRONG
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 원금 money, 연이율 rate, 기간 year를 입력받아 `total = money * (1 + rate) ** year`를 계산하고 소수 둘째 자리까지 출력한다.
+User interpretation / approach: 세 입력을 받으려 했고, 원리금 값을 별도 변수에 담아 출력하려 했다. 다만 `input()`을 `print()`로 감싼 뒤 그 반환값을 `int()`로 변환했고, 계산식은 단리 형태 `money * 0.05 * rate`에 가까운 식을 사용했다.
+Correct reasoning summary: `input()` 자체가 문자열을 반환하므로 숫자 변환은 `int(input(...))` 또는 `float(input(...))`처럼 직접 감싼다. 이자율 0.03은 정수가 아니므로 `float`가 필요하다. 기간은 정수로 받고, PDF 공식 그대로 복리 계산 `money * (1 + rate) ** year`를 사용한다. 출력은 f-string의 `:.2f`로 소수 둘째 자리까지 맞춘다.
+
+Error type: KNOWLEDGE_GAP
+Error mechanism: `print()`의 반환값이 `None`이라는 점을 몰라 `int(print(input(...)))`가 `int(None)`이 되어 TypeError가 발생했다. 또한 입력 변수의 의미와 자료형(rate은 float) 및 PDF의 복리 공식이 코드에 정확히 반영되지 않았다.
+Next-time cue: 입력 문제에서는 먼저 각 변수의 자료형을 정한다: 원금 숫자, 이자율 실수, 기간 정수. 그 다음 `input → 형변환 → 계산 → 출력` 순서를 지킨다. `print()`는 값을 받는 함수가 아니라 화면에 보여주는 함수다.
+
+Related pattern IDs: none; 단일 문제 증거이므로 패턴 승격하지 않음.
+Review state: QUEUED
+Later evidence / resolution: current execution stops at first input conversion with TypeError. corrected rerun pending.

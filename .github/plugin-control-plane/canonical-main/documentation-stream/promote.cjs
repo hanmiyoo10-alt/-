@@ -7,6 +7,7 @@ const root = process.cwd();
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
 const policy = JSON.parse(fs.readFileSync(path.join(__dirname, '../policy.json'), 'utf8'));
 const registry = JSON.parse(fs.readFileSync(path.join(__dirname, '../../registry.json'), 'utf8'));
+const taxonomy = JSON.parse(fs.readFileSync(path.join(__dirname, '../../taxonomy.json'), 'utf8'));
 
 async function api(route) {
   const token = process.env.GITHUB_TOKEN; const repo = process.env.GITHUB_REPOSITORY;
@@ -33,7 +34,7 @@ async function main() {
     [config.durableOutputs.decisionLog]: renderDecisionLog(events),
     [config.durableOutputs.changeLog]: renderChangeLog(events),
     [config.durableOutputs.architectureSnapshot]: renderArchitectureSnapshot({ policy, registry, config, branch }),
-    [config.durableOutputs.projectCatalog]: renderProjectCatalog({ registry, root }),
+    [config.durableOutputs.projectCatalog]: renderProjectCatalog({ registry, taxonomy, root }),
   };
   const changed = [];
   for (const [file, content] of Object.entries(outputs)) if (writeIfChanged(file, content)) changed.push(file);

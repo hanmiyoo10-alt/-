@@ -438,3 +438,19 @@ Remaining PDF-exact differences:
 
 Exercise 3 state: `PARTIAL / TWO SMALL FORMATTING-REQUIREMENT FIXES REMAIN`.
 Exercise 4 is not present in the current notebook snapshot yet.
+
+
+## Exercise 3 re-check — latest saved edit
+
+Latest Drive snapshot modified at 2026-09-20 23:19 KST.
+
+Progress:
+- output code is now corrected to `print(f'당신의 BMI= {BMI:.2f}입니다.')`;
+- surrounding parentheses were removed and the space after `BMI=` was added.
+
+Remaining:
+- weight still uses `int(input(...))` instead of the exercise-requested real-number input;
+- newest cell has `execution_count = null` and no output, so the corrected code has not yet been execution-verified.
+
+Exercise 3 state: `PARTIAL / OUTPUT FIXED, WEIGHT FLOAT + RUN REQUIRED`.
+Exercise 4 is not present in the current notebook snapshot yet.

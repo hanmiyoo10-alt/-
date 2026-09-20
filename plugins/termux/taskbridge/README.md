@@ -33,6 +33,25 @@ python taskbridge.py events JOB_ID
 python taskbridge.py cancel JOB_ID
 ```
 
+### Generic execution receipt projection for shell jobs
+
+`execution_receipt.py` is a pure/read-only projector for an already-produced TaskBridge `shell` job status object. It does not execute commands, read TaskBridge SQLite state, inspect processes, dereference `result_ref`, or change lifecycle state.
+
+```text
+authorized remote transport
+→ existing TaskBridge shell job
+→ taskbridge status JOB_ID --json
+→ execution_receipt.py
+→ repository execution-receipt projector
+→ REPOSITORY_EXECUTION_RECEIPT
+```
+
+The caller supplies exact source/ref identity, execution-surface identity, and one bounded status/result artifact locator. The default facts deliberately omit command argv, worker/child PIDs, raw stdout/stderr, environment data, notification content, TaskBridge database paths, and the raw `result_ref` value.
+
+For `shell` jobs, only `COMPLETED` with `exit_code=0` and internally consistent TaskBridge terminal evidence can become generic `PASS`. `FAILED` remains `FAIL`; `ACTIVE` / `RECONNECTED` remain running partial evidence; `CREATED` remains not-started partial evidence; `SUSPECTED_STALL` and `UNKNOWN` preserve uncertainty instead of inferring remote failure; `CANCELLED` is blocked; contradictory lifecycle/exit/local-state evidence becomes conflict.
+
+This projection is derived evidence only. TaskBridge remains the device execution/lifecycle owner, the remote bridge remains transport only, and the receipt does not grant repository, release, production, runtime, security, or merge authority.
+
 Manual ChatGPT observation and calibration:
 
 ```bash

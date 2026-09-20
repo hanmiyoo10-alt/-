@@ -1,0 +1,147 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -eu
+
+[ "$#" -eq 1 ] && [ "$1" = status ] || {
+  echo 'usage: mcl-termux-host-info status' >&2
+  exit 2
+}
+
+termux_info=unknown
+termux_tools_version=unknown
+package_arch=unknown
+android_version=unknown
+repo_entries=unknown
+package_update_view=unknown
+
+emit_receipt() {
+  printf '%s\n' \
+    'schema=mcl-termux-host-info.v1' \
+    "termux_info=$termux_info" \
+    "termux_tools_version=$termux_tools_version" \
+    "package_arch=$package_arch" \
+    "android_version=$android_version" \
+    "repo_entries=$repo_entries" \
+    "package_update_view=$package_update_view" \
+    'details=withheld'
+}
+
+command -v termux-info >/dev/null 2>&1 || {
+  termux_info=missing
+  emit_receipt
+  exit 0
+}
+
+TMP_BASE=
+if [ -n "${PREFIX:-}" ] && [ -d "$PREFIX/tmp" ] && [ -w "$PREFIX/tmp" ]; then
+  TMP_BASE="$PREFIX/tmp"
+elif [ -n "${TMPDIR:-}" ] && [ -d "$TMPDIR" ] && [ -w "$TMPDIR" ]; then
+  TMP_BASE="$TMPDIR"
+else
+  emit_receipt
+  exit 0
+fi
+
+umask 077
+RAW=$(mktemp "$TMP_BASE/mcl-termux-host-info.XXXXXX") || {
+  emit_receipt
+  exit 0
+}
+trap 'rm -f "$RAW"' EXIT HUP INT TERM
+
+set +e
+termux-info >"$RAW" 2>/dev/null
+INFO_RC=$?
+set -e
+if [ "$INFO_RC" -ne 0 ]; then
+  termux_info=failed
+  emit_receipt
+  exit 0
+fi
+termux_info=pass
+
+unique_next_value() {
+  header=$1
+  awk -v header="$header" '
+    $0 == header {
+      count++
+      if ((getline value) <= 0) value=""
+      if (count == 1) first=value
+    }
+    END {
+      if (count != 1) exit 1
+      gsub(/^[[:space:]]+/, "", first)
+      gsub(/[[:space:]]+$/, "", first)
+      print first
+    }
+  ' "$RAW" 2>/dev/null
+}
+
+candidate=$(unique_next_value 'termux-tools version:' || true)
+if [ ${#candidate} -le 32 ] \
+  && printf '%s\n' "$candidate" | grep -Eq '^[0-9]+([.][0-9]+){1,3}([+~-][0-9A-Za-z][0-9A-Za-z._-]*)?$'; then
+  termux_tools_version=$candidate
+fi
+
+candidate=$(unique_next_value 'Packages CPU architecture:' || true)
+case "$candidate" in
+  aarch64|arm|x86_64|i686) package_arch=$candidate ;;
+esac
+
+candidate=$(unique_next_value 'Android version:' || true)
+if printf '%s\n' "$candidate" | grep -Eq '^[1-9][0-9]{0,2}$'; then
+  android_version=$candidate
+fi
+
+candidate=$(awk '
+  $0 == "Subscribed repositories:" {
+    subscribed++
+    inside=1
+    next
+  }
+  $0 == "Updatable packages:" {
+    updatable++
+    inside=0
+    next
+  }
+  inside && /^deb[[:space:]]+/ { count++ }
+  END {
+    if (subscribed == 1 && updatable == 1) print count + 0
+    else exit 1
+  }
+' "$RAW" 2>/dev/null || true)
+if printf '%s\n' "$candidate" | grep -Eq '^[0-9]+$'; then
+  repo_entries=$candidate
+fi
+
+candidate=$(awk '
+  $0 == "Updatable packages:" {
+    updatable++
+    inside=1
+    next
+  }
+  $0 == "termux-tools version:" {
+    tools++
+    inside=0
+    next
+  }
+  inside {
+    line=$0
+    gsub(/^[[:space:]]+/, "", line)
+    gsub(/[[:space:]]+$/, "", line)
+    if (line != "") {
+      lines++
+      value[lines]=line
+    }
+  }
+  END {
+    if (updatable != 1 || tools != 1) exit 1
+    if (lines == 1 && value[1] ~ /^All packages up to date[.!]?$/) print "none"
+    else if (lines > 0) print "present"
+    else print "unknown"
+  }
+' "$RAW" 2>/dev/null || true)
+case "$candidate" in
+  none|present) package_update_view=$candidate ;;
+esac
+
+emit_receipt

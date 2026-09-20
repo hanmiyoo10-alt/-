@@ -7,7 +7,15 @@ const dir = path.join(root, '.github/plugin-control-plane/canonical-main/work-sy
 const policy = JSON.parse(fs.readFileSync(path.join(dir, 'policy.json'), 'utf8'));
 const readme = fs.readFileSync(path.join(dir, 'README.md'), 'utf8');
 const template = fs.readFileSync(path.join(dir, 'work-packet-template.md'), 'utf8');
+const packetProjectionSource = fs.readFileSync(path.join(dir, 'packet-projection.cjs'), 'utf8');
+const scopeOverlapSource = fs.readFileSync(path.join(dir, 'scope-overlap.cjs'), 'utf8');
 const commonRules = fs.readFileSync(path.join(root, 'docs/REPOSITORY_COMMON_RULES.md'), 'utf8');
+const {
+  PACKET_STATES,
+  REASON_CODES: PACKET_PROJECTION_REASON_CODES,
+  classifyPacketProjection,
+  extractPacketLifecycle,
+} = require(path.join(dir, 'packet-projection.cjs'));
 const pluginManifest = JSON.parse(fs.readFileSync(path.join(root, '.github/tooling/ci-summary/manifests/plugin-control-plane.json'), 'utf8'));
 const permanentCommands = pluginManifest.checks.map((check) => check.command.join(' ')).join('\n');
 
@@ -23,6 +31,104 @@ assert.equal(policy.classification.uncertainSystemImpact, 'SYSTEM_UPDATE_REQUIRE
 assert.deepEqual(policy.classification.ordering, ['importance-desc', 'difficulty-asc', 'size-asc']);
 assert.ok(policy.ideaStates.includes('PACKETIZED'));
 assert.ok(policy.packetStates.includes('BLOCKED'));
+
+
+assert.deepEqual(PACKET_STATES, policy.packetStates);
+const packetFixture = (stateLine, currentStage = 'AUTHORITY_SCOPE') => [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '',
+  stateLine,
+  '',
+  '## Interaction stage',
+  '',
+  `- Current stage: \`${currentStage}\``,
+].join('\n');
+
+let packetProjection = classifyPacketProjection(packetFixture('**State: READY**'));
+assert.equal(packetProjection.disposition, 'PASS');
+assert.equal(packetProjection.lifecycle, 'READY');
+assert.equal(packetProjection.interactionStage, 'AUTHORITY_SCOPE');
+assert.equal(packetProjection.mutationAuthorized, false);
+assert.equal(extractPacketLifecycle(packetFixture('**State: READY**')), 'READY');
+
+const headingPacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '',
+  '## State',
+  '`IN_PROGRESS / VALIDATION_MERGE COMPLETE`',
+  '',
+  '## Interaction stage',
+  '',
+  '- Current stage: `VALIDATION_MERGE`',
+].join('\n');
+assert.equal(extractPacketLifecycle(headingPacket), 'IN_PROGRESS');
+assert.equal(classifyPacketProjection(headingPacket).disposition, 'PASS');
+
+
+const stageOnly = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '',
+  '## State',
+  '`POSTMERGE_CONVERGENCE COMPLETE / READY_FOR_EXPERIMENT_CLOSE`',
+  '',
+  '## Interaction stage',
+  '',
+  '- Current stage: `EXPERIMENT_CLOSE`',
+].join('\n');
+assert.equal(extractPacketLifecycle(stageOnly), null);
+packetProjection = classifyPacketProjection(stageOnly);
+assert.equal(packetProjection.disposition, 'UNKNOWN');
+assert.ok(packetProjection.reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.PACKET_LIFECYCLE_UNKNOWN));
+
+const proofOnly = `${stageOnly}\n\n## Proof / closure\n- Evidence terms reached: DONE`;
+assert.equal(extractPacketLifecycle(proofOnly), null);
+assert.ok(classifyPacketProjection(proofOnly).reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.PACKET_LIFECYCLE_UNKNOWN));
+
+const lifecycleWithoutStage = '<!-- canonical-main-work-packet:v1 -->\n\n**State: IN_PROGRESS**\n';
+assert.equal(extractPacketLifecycle(lifecycleWithoutStage), 'IN_PROGRESS');
+packetProjection = classifyPacketProjection(lifecycleWithoutStage);
+assert.equal(packetProjection.lifecycle, 'IN_PROGRESS');
+assert.equal(packetProjection.disposition, 'UNKNOWN');
+assert.ok(packetProjection.reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.INTERACTION_STAGE_SECTION_MISSING));
+
+
+packetProjection = classifyPacketProjection(packetFixture('**State: IN_PROGRESS / REVIEW**'));
+assert.equal(packetProjection.disposition, 'CONFLICT');
+assert.ok(packetProjection.reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.PACKET_LIFECYCLE_CONFLICT));
+
+const duplicateState = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '',
+  '**State: READY**',
+  '',
+  '## State',
+  'READY',
+  '',
+  '## Interaction stage',
+  '',
+  '- Current stage: `AUTHORITY_SCOPE`',
+].join('\n');
+packetProjection = classifyPacketProjection(duplicateState);
+assert.equal(packetProjection.disposition, 'CONFLICT');
+assert.ok(packetProjection.reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.STATE_PROJECTION_DUPLICATE));
+
+packetProjection = classifyPacketProjection(packetFixture('**State: READY**').replace('<!-- canonical-main-work-packet:v1 -->', ''));
+assert.equal(packetProjection.disposition, 'UNKNOWN');
+assert.ok(packetProjection.reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.PACKET_MARKER_MISSING));
+
+packetProjection = classifyPacketProjection(`<!-- canonical-main-work-packet:v1 -->\n${packetFixture('**State: READY**')}`);
+assert.equal(packetProjection.disposition, 'CONFLICT');
+assert.ok(packetProjection.reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.PACKET_MARKER_DUPLICATE));
+
+
+assert.match(packetProjectionSource, /require\('\.\/policy\.json'\)/);
+assert.doesNotMatch(packetProjectionSource, /child_process|https?:\/\/|gh\s+api|fetch\s*\(/);
+assert.doesNotMatch(packetProjectionSource, /issueState|nativeState/);
+assert.match(readme, /Lifecycle `State` and `Interaction stage` are separate packet axes/);
+assert.match(readme, /Stage-only State prose never implies/);
+assert.match(readme, /packet-projection\.cjs/);
+assert.match(template, /Preserve exactly one canonical lifecycle token/);
+assert.match(template, /Do not replace lifecycle State with stage-only prose/);
 assert.equal(policy.parallelism.requireDisjointWriteScopes, true);
 assert.equal(policy.parallelism.oneActiveOwnerPerPacket, true);
 assert.equal(policy.parallelism.splitOnScopeExpansion, true);
@@ -115,6 +221,9 @@ assert.equal(policy.queueProjection.duplicateProductionState, false);
 assert.equal(policy.queueProjection.duplicateNativeProtectionState, false);
 assert.equal(policy.queueProjection.allowHistoricalSynchronizationSha, true);
 assert.equal(policy.queueProjection.historicalSynchronizationShaMustBeLabeled, true);
+assert.equal(policy.queueProjection.humanFacingSurfaceAvailabilityLabel, 'Queue surface: ENABLED');
+assert.equal(policy.queueProjection.surfaceAvailabilityImpliesActiveWriter, false);
+assert.equal(policy.queueProjection.minHumanFacingMutableActiveWriterProjections, 0);
 assert.equal(policy.queueProjection.maxHumanFacingMutableActiveWriterProjections, 1);
 assert.equal(policy.queueProjection.surfacesMayDuplicateActiveWriter, false);
 assert.equal(policy.queueProjection.activeWriterProjectionExhaustive, false);
@@ -179,6 +288,9 @@ assert.match(readme, /`LIVE HEALTH: direct main \+ #485` is the only current-hea
 assert.match(readme, /MUST NOT duplicate a current `main` SHA, Required state\/run, production identity state, or native-protection state as live truth/);
 assert.match(readme, /explicitly historical synchronization\/packet evidence/);
 assert.match(readme, /read direct current `main` and #485 rather than refreshing #465 merely to copy time-sensitive evidence/);
+assert.match(readme, /`Queue surface: ENABLED` is the canonical modern availability label/);
+assert.match(readme, /active-writer projection cardinality is `0\.\.1`/);
+assert.match(readme, /zero projected writers is valid/);
 assert.match(readme, /at most one human-facing mutable active-writer projection/);
 assert.match(readme, /stable `## Surfaces` pointers MUST NOT repeat mutable active-writer state/);
 assert.match(readme, /not an exhaustive registry of nonterminal work/);
@@ -261,6 +373,14 @@ assert.ok(template.includes('current lifecycle projection, not an immutable acti
 assert.ok(template.includes('Before or atomically with native issue closure'));
 assert.ok(template.includes('Native closure or a final comment alone does not override a contradictory stale body'));
 assert.ok(template.includes('do not resume the stale advertised stage without fresh re-attribution'));
+assert.match(readme, /reserved self-coordination surface for faithful lifecycle bookkeeping/);
+assert.match(readme, /separate from implementation\/effect write scope/);
+assert.match(readme, /MUST NOT change the primary goal, add\/remove\/weaken acceptance criteria, widen or reinterpret implementation\/effect write scope/);
+assert.match(readme, /Native GitHub closure remains downstream of evidence-backed terminal body reconciliation and never proves `DONE` by itself/);
+assert.match(readme, /reserved self surface is not emitted into or inferred from write-scope overlap classification/);
+assert.ok(template.includes("reserved self-bookkeeping surface for faithful lifecycle State"));
+assert.ok(template.includes("cannot change the primary goal, acceptance, external write scope, or evidence to manufacture completion"));
+assert.ok(template.includes("does not gain an implicit self-issue token"));
 assert.match(readme, /## Normal canonical-main startup/);
 assert.match(readme, /exactly two required reads/);
 assert.match(readme, /1\. read direct current `main` authority/);
@@ -291,10 +411,12 @@ assert.match(readme, /unresolved overlap remains `UNKNOWN` or `CONFLICT`/);
 assert.match(readme, /Disjoint nonterminal packets remain eligible to proceed in parallel/);
 
 const {classifyQueueBody, REASON_CODES} = require(path.join(dir, 'queue-hygiene.cjs'));
+const {classifyCoordinationReferences, REASON_CODES: COORD_REF_REASON_CODES} = require(path.join(dir, 'coordination-reference-hygiene.cjs'));
 const {resolveScopeOverlap, REASON_CODES: OVERLAP_REASON_CODES} = require(path.join(dir, 'scope-overlap.cjs'));
 const {classifyPrActivity, REASON_CODES: PR_ACTIVITY_REASON_CODES} = require(path.join(dir, 'pr-activity.cjs'));
 
 const pointerOnlyFixture = `# Canonical Main — Work Queue
+**Queue surface: ENABLED**
 ## Live health
 - \`LIVE HEALTH: direct main + #485\`
 - Do not duplicate mutable current SHA / Required / production / protection truth here.
@@ -312,6 +434,12 @@ assert.equal(pointerOnlyResult.state, 'PASS');
 assert.equal(pointerOnlyResult.pointerCount, 1);
 assert.equal(pointerOnlyResult.activeWriterProjectionCount, 1);
 assert.deepEqual(pointerOnlyResult.findings, []);
+
+const zeroWriterFixture = pointerOnlyFixture.replace('\n- Active writer: #2278 CM-WQ-HYGIENE-V1-01', '');
+const zeroWriterResult = classifyQueueBody(zeroWriterFixture);
+assert.equal(zeroWriterResult.state, 'PASS');
+assert.equal(zeroWriterResult.activeWriterProjectionCount, 0);
+assert.deepEqual(zeroWriterResult.findings, []);
 
 const duplicateFixture = (line) => `${pointerOnlyFixture}\n${line}`;
 const expectFailCode = (line, code) => {
@@ -337,19 +465,105 @@ assert.ok(ambiguousResult.findings.some((item) => item.code === REASON_CODES.ACT
 
 assert.equal(classifyQueueBody(pointerOnlyFixture.replace('LIVE HEALTH: direct main + #485', 'LIVE HEALTH: see operator view')).state, 'FAIL');
 assert.equal(classifyQueueBody(`${pointerOnlyFixture}\n- \`LIVE HEALTH: direct main + #485\``).state, 'FAIL');
+
+const oldModernLabelResult = classifyQueueBody(pointerOnlyFixture.replace(
+  '**Queue surface: ENABLED**',
+  '**Queue state: ACTIVE**',
+));
+assert.equal(oldModernLabelResult.state, 'WARN');
+assert.equal(oldModernLabelResult.activeWriterProjectionCount, 1);
+assert.ok(oldModernLabelResult.findings.some((item) => item.code === REASON_CODES.AMBIGUOUS_QUEUE_STATE_LABEL));
+
+const legacyQueueLabelResult = classifyQueueBody(pointerOnlyFixture.replace(
+  '**Queue surface: ENABLED**',
+  '**Queue state: ACTIVE / CANONICAL-MAIN-V1.2**',
+));
+assert.equal(legacyQueueLabelResult.state, 'PASS');
+assert.equal(legacyQueueLabelResult.findings.some((item) => item.code === REASON_CODES.AMBIGUOUS_QUEUE_STATE_LABEL), false);
+
 assert.match(readme, /## #465 pointer-only hygiene classifier/);
 assert.match(readme, /`PASS \/ WARN \/ FAIL \/ UNKNOWN`/);
 assert.match(readme, /never fetches GitHub and never mutates #465/);
 assert.match(readme, /clearly labeled historical synchronization\/packet evidence remains allowed/i);
+assert.match(readme, /exact standalone old modern label `Queue state: ACTIVE` is a non-blocking naming `WARN`/i);
+
+const terminalPacket = {issueNumber: 2340, nativeState: 'closed', lifecycleState: 'DONE'};
+const activePacket = {issueNumber: 2342, nativeState: 'open', lifecycleState: 'IN_PROGRESS'};
+const classifyRefs = (prose, packets = [terminalPacket, activePacket]) => classifyCoordinationReferences({prose, packets});
+
+const staleRef = classifyRefs('- Active writer: #2340 payload identity packet');
+assert.equal(staleRef.state, 'STALE');
+assert.equal(staleRef.findings[0].code, COORD_REF_REASON_CODES.TERMINAL_PACKET_IN_CURRENT_ROLE);
+assert.equal(staleRef.findings[0].role, 'ACTIVE_WRITER');
+assert.equal(staleRef.findings[0].line, 1);
+assert.ok(staleRef.findings[0].excerpt.length <= 240);
+assert.equal(staleRef.mutationAuthorized, false);
+assert.equal(staleRef.networkAuthorized, false);
+
+for (const prose of [
+  '- Latest completed packet: #2340 payload identity packet',
+  '- Historical packet #2340 remains useful evidence',
+  '- Legacy #2340 reference is retained for context',
+]) {
+  const result = classifyRefs(prose);
+  assert.equal(result.state, 'PASS');
+  assert.equal(result.findings[0].disposition, 'PASS');
+}
+
+assert.equal(classifyRefs('- Current packet: #2342 coordination reference hygiene').state, 'PASS');
+assert.equal(classifyRefs('- #2340 exists in this sentence but has no supported role').state, 'PASS');
+
+const mixedRoleRef = classifyRefs('- Current packet: #2342 replaces previous #2340');
+assert.equal(mixedRoleRef.state, 'PASS');
+assert.deepEqual(mixedRoleRef.findings.map((item) => item.issueNumber), [2342]);
+const historicalWriterRef = classifyRefs('- Historical active writer: #2340');
+assert.equal(historicalWriterRef.state, 'PASS');
+assert.equal(historicalWriterRef.findings[0].role, 'HISTORICAL');
+assert.equal(classifyRefs('- Coordination blocker: #2346', [
+  {issueNumber: 2346, nativeState: 'open', lifecycleState: 'BLOCKED'},
+]).state, 'PASS');
+assert.throws(() => classifyRefs('- Current packet: #2347', [
+  {issueNumber: 2347, nativeState: 'open', lifecycleState: 'MYSTERY'},
+]), /registered Work System state/);
+
+const unknownRef = classifyRefs('- Next packet: #999 missing evidence');
+assert.equal(unknownRef.state, 'UNKNOWN');
+assert.equal(unknownRef.findings[0].code, COORD_REF_REASON_CODES.CURRENT_PACKET_EVIDENCE_MISSING);
+
+const conflictRef = classifyRefs('- Coordination blocker: #2343 inconsistent packet', [
+  {issueNumber: 2343, nativeState: 'open', lifecycleState: 'DONE'},
+]);
+assert.equal(conflictRef.state, 'CONFLICT');
+assert.equal(conflictRef.findings[0].code, COORD_REF_REASON_CODES.PACKET_NATIVE_LIFECYCLE_CONFLICT);
+
+const missingLifecycle = classifyRefs('- Current owner: #2344 owner', [
+  {issueNumber: 2344, nativeState: 'open'},
+]);
+assert.equal(missingLifecycle.state, 'UNKNOWN');
+assert.equal(missingLifecycle.findings[0].code, COORD_REF_REASON_CODES.PACKET_LIFECYCLE_EVIDENCE_MISSING);
+
+const precedenceRef = classifyRefs([
+  '- Next candidate: #2340 stale candidate',
+  '- Current owner: #2345 conflict owner',
+].join('\n'), [terminalPacket, {issueNumber: 2345, nativeState: 'closed', lifecycleState: 'IN_PROGRESS'}]);
+assert.equal(precedenceRef.state, 'CONFLICT');
+assert.equal(precedenceRef.findings.length, 2);
+assert.ok(precedenceRef.findings.every((item) => item.excerpt.length <= 240));
+
+assert.match(readme, /## Cross-surface packet-reference hygiene classifier/);
+assert.match(readme, /`PASS \/ STALE \/ UNKNOWN \/ CONFLICT`/);
+assert.match(readme, /does not fetch GitHub and never mutates coordination surfaces/);
+assert.match(readme, /terminal packet is not stale merely because it is referenced historically/i);
 
 
-const overlapPacketBody = (state, scopes) => `<!-- canonical-main-work-packet:v1 -->
+const overlapPacketBodyWithHeading = (state, heading, scopes) => `<!-- canonical-main-work-packet:v1 -->
 ## State
 \`${state}\`
-## Bounded write scope
+## ${heading}
 ${scopes.map((scope, index) => `${index + 1}. \`${scope}\``).join('\n')}
 ## Handoff
 fixture`;
+const overlapPacketBody = (state, scopes) => overlapPacketBodyWithHeading(state, 'Bounded write scope', scopes);
 const resolveOverlap = (requestedScopes, candidates, discovery = 'COMPLETE') => resolveScopeOverlap({
   requestedScopes,
   discovery,
@@ -388,6 +602,107 @@ fixture`,
 assert.equal(resolveOverlap(['path:docs/README.md'], [implementationHeadingPacket]).state, 'DISJOINT');
 assert.equal(resolveOverlap(['path:tools/repo-ci-mcp/server.py'], [implementationHeadingPacket]).state, 'OVERLAP');
 
+for (const [heading, ref] of [
+  ['Bounded IMPLEMENTATION_PR write scope', '#10c'],
+  ['Repository write-scope ceiling used by IMPLEMENTATION_PR', '#10d'],
+  ['Bounded repository write ceiling', '#10d2'],
+]) {
+  const packet = {
+    type: 'packet', ref, issueState: 'open',
+    body: overlapPacketBodyWithHeading('BLOCKED', heading, ['tools/repo-ci-mcp/**']),
+  };
+  assert.equal(resolveOverlap(['path:docs/README.md'], [packet]).state, 'DISJOINT');
+  assert.equal(resolveOverlap(['path:tools/repo-ci-mcp/server.py'], [packet]).state, 'OVERLAP');
+}
+
+const repositoryWriteCeilingPaths = [
+  'products/chatgpt-mobile-coder-lab/device-ops/rdc-termux/runtime-env-forward-shim.cjs',
+  'products/chatgpt-mobile-coder-lab/device-ops/rdc-termux/install.sh',
+  'products/chatgpt-mobile-coder-lab/device-ops/rdc-termux/verify.sh',
+  'products/chatgpt-mobile-coder-lab/device-ops/rdc-termux/tests/test-rdc-termux-contract.sh',
+  'products/chatgpt-mobile-coder-lab/device-ops/rdc-termux/README.md',
+];
+const repositoryWriteCeilingPacket = {
+  type: 'packet', ref: '#2562-fixture', issueState: 'open',
+  body: `<!-- canonical-main-work-packet:v1 -->
+## State
+\`READY\`
+## Bounded repository write ceiling
+Maximum expected source paths:
+${repositoryWriteCeilingPaths.map((scope, index) => `${index + 1}. \`${scope}\``).join('\n')}
+Do not touch unless fresh evidence proves required:
+- \`device-name-shim.cjs\`
+- \`which-rg-shim.sh\`
+## Handoff
+fixture`,
+};
+assert.equal(resolveOverlap(['path:unrelated/example.txt'], [repositoryWriteCeilingPacket]).state, 'DISJOINT');
+for (const scope of repositoryWriteCeilingPaths) {
+  assert.equal(resolveOverlap([`path:${scope}`], [repositoryWriteCeilingPacket]).state, 'OVERLAP');
+}
+assert.equal(resolveOverlap(['path:device-name-shim.cjs'], [repositoryWriteCeilingPacket]).state, 'DISJOINT');
+
+const repositoryWriteCeilingConflict = `${repositoryWriteCeilingPacket.body}
+## Locked write scope
+1. \`tools/**\``;
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#2562-conflict', issueState: 'open', body: repositoryWriteCeilingConflict,
+}]), 'CONFLICT', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#2562-near-match', issueState: 'open',
+  body: overlapPacketBodyWithHeading('READY', 'Bounded repository write ceilings', ['docs/**']),
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#2562-invalid-scope', issueState: 'open',
+  body: overlapPacketBodyWithHeading('READY', 'Bounded repository write ceiling', ['../secret']),
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#2562-lifecycle-unknown', issueState: 'open',
+  body: overlapPacketBodyWithHeading(
+    'AUTHORITY_SCOPE COMPLETE / IMPLEMENTATION_PR NEXT / NO LIVE DEVICE EFFECT AUTHORITY',
+    'Bounded repository write ceiling',
+    ['docs/**'],
+  ),
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_STATE_UNRESOLVED);
+
+assert.equal(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#2562-terminal', issueState: 'open',
+  body: overlapPacketBodyWithHeading('DONE', 'Bounded repository write ceiling', ['docs/**']),
+}]).state, 'DISJOINT');
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#10e', issueState: 'open',
+  body: overlapPacketBodyWithHeading('IN_PROGRESS', 'Implementation write scope', ['docs/**']),
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+
+const competingScopeSections = `${overlapPacketBody('IN_PROGRESS', ['docs/**'])}\n## Locked write scope\n1. \`tools/**\``;
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#10f', issueState: 'open', body: competingScopeSections,
+}]), 'CONFLICT', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#10g', issueState: 'open',
+  body: overlapPacketBodyWithHeading('IN_PROGRESS', 'Bounded IMPLEMENTATION_PR write scope', ['../secret']),
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+
+for (const [state, ref] of [
+  ['AUTHORITY_SCOPE NEXT / NO INSTALL OR VENDOR-MUTATION AUTHORITY YET', '#10h'],
+  ['AUTHORITY_SCOPE COMPLETE / IMPLEMENTATION_PR NEXT / NO DEVICE OR SESSION MUTATION', '#10i'],
+]) {
+  expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+    type: 'packet', ref, issueState: 'open',
+    body: overlapPacketBodyWithHeading(state, 'Repository write-scope ceiling used by IMPLEMENTATION_PR', ['docs/**']),
+  }]), 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_STATE_UNRESOLVED);
+}
+
+const lifecycleConflictPacket = overlapPacketBody('IN_PROGRESS / REVIEW', ['docs/**']);
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#10j', issueState: 'open', body: lifecycleConflictPacket,
+}]), 'CONFLICT', OVERLAP_REASON_CODES.PACKET_STATE_UNRESOLVED);
+
 let overlapResult = resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [{
   type: 'packet', ref: '#11', issueState: 'open',
   body: overlapPacketBody('IN_PROGRESS', ['path:tools/repo-ci-mcp/README.md']),
@@ -411,6 +726,49 @@ overlapResult = resolveOverlap(['surface:issue:465'], [{
   body: overlapPacketBody('IN_PROGRESS', ['surface:issue:465']),
 }]);
 assert.equal(overlapResult.state, 'OVERLAP');
+
+const repoClassifiedDisjointPacket = {
+  type: 'packet', ref: '#14a', issueState: 'open', classification: 'scope:repo',
+  body: overlapPacketBody('IN_PROGRESS', ['path:docs/repo-common-a.md']),
+};
+assert.equal(resolveScopeOverlap({
+  requestedScopes: ['path:tools/repo-common-b.cjs'],
+  discovery: 'COMPLETE',
+  classification: 'scope:repo',
+  candidates: [repoClassifiedDisjointPacket],
+}).state, 'DISJOINT');
+
+const semanticSurfacePacket = {
+  type: 'packet', ref: '#14b', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', [
+    'path:docs/repo-common-a.md',
+    'surface:work-system:scope-overlap-contract',
+  ]),
+};
+assert.equal(resolveOverlap(['path:tools/repo-common-b.cjs'], [semanticSurfacePacket]).state, 'DISJOINT');
+expectOverlapFinding(resolveOverlap([
+  'path:tools/repo-common-b.cjs',
+  'surface:work-system:scope-overlap-contract',
+], [semanticSurfacePacket]), 'OVERLAP', OVERLAP_REASON_CODES.WRITE_SCOPE_OVERLAP);
+assert.equal(resolveOverlap([
+  'path:tools/repo-common-b.cjs',
+  'surface:work-system:write-scope-authoring-contract',
+], [semanticSurfacePacket]).state, 'DISJOINT');
+assert.equal(resolveOverlap(['surface:mcl-landing-origin-main:S'], [{
+  type: 'packet', ref: '#14c', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['surface:mcl-landing-origin-main:S']),
+}]).state, 'OVERLAP');
+expectOverlapFinding(
+  resolveOverlap(['surface:repo:*'], [disjointPacket]),
+  'UNKNOWN',
+  OVERLAP_REASON_CODES.REQUESTED_SCOPE_INVALID,
+);
+
+const reservedSelfPacket = {
+  type: 'packet', ref: '#2410', issueState: 'open',
+  body: overlapPacketBody('IN_PROGRESS', ['path:docs/**']),
+};
+assert.equal(resolveOverlap(['surface:issue:2410'], [reservedSelfPacket]).state, 'DISJOINT');
 
 overlapResult = resolveOverlap(['path:tools/./repo-ci-mcp/README.md'], [{
   type: 'packet', ref: '#15', issueState: 'open',
@@ -489,6 +847,28 @@ assert.match(readme, /supplied packet\/PR evidence only/);
 assert.match(readme, /#465 remains seed-only and non-exhaustive/);
 assert.match(readme, /`DISJOINT` requires bounded discovery `COMPLETE`/);
 assert.match(readme, /does not fetch GitHub, mutate issues, or grant write authority/);
+assert.match(scopeOverlapSource, /require\('\.\/packet-projection\.cjs'\)/);
+assert.doesNotMatch(scopeOverlapSource, /function extractPacketState/);
+assert.doesNotMatch(scopeOverlapSource, /const PACKET_STATES/);
+assert.match(readme, /`Bounded IMPLEMENTATION_PR write scope`/);
+assert.match(readme, /`Repository write-scope ceiling used by IMPLEMENTATION_PR`/);
+assert.match(readme, /`Bounded repository write ceiling`/);
+assert.match(readme, /`Do not touch unless fresh evidence proves required:`/);
+assert.match(readme, /There is no fuzzy heading\/prose scan/);
+assert.equal((scopeOverlapSource.match(/'Bounded repository write ceiling'/g) || []).length, 1);
+assert.match(scopeOverlapSource, /Do not touch unless fresh evidence proves required:/);
+assert.match(readme, /multiple recognized sections are `CONFLICT`/);
+assert.match(readme, /missing, unsupported, malformed, or invalid scope evidence remains `UNKNOWN`/);
+assert.match(readme, /classification is routing\/context metadata only/);
+assert.match(readme, /do not become implicit path\/surface scopes, locks, leases, or mutation authority/);
+assert.match(readme, /surface:<owning-domain>:<stable-owner-or-effect>/);
+assert.match(readme, /surface:repo:common/);
+assert.match(readme, /preserve `UNKNOWN` or `CONFLICT` instead of inventing a surface or optimistic disjointness/);
+assert.match(template, /classification is context only and never an implicit lock/);
+assert.match(template, /list every writable `path:` scope/);
+assert.match(template, /surface:<owning-domain>:<stable-owner-or-effect>/);
+assert.match(template, /surface:repo:common/);
+assert.match(template, /preserve `UNKNOWN` or `CONFLICT` instead of inventing one/);
 
 
 const activityPacketBody = (state) => `<!-- canonical-main-work-packet:v1 -->

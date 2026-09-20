@@ -1,0 +1,87 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -eq 1 ] && [ "$1" = status ] || {
+  echo 'usage: s-env-status status' >&2
+  exit 2
+}
+
+HERE=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+PRODUCT=$(CDPATH= cd -- "$HERE/../.." && pwd)
+COMMON="$PRODUCT/device-bootstrap/verify.sh"
+REPO=/root/nyang-repo
+
+CAPTURE=
+RC=0
+capture() {
+  set +e
+  CAPTURE=$("$@" 2>&1)
+  RC=$?
+  set -e
+}
+
+owner_output_valid() {
+  [ -n "$CAPTURE" ] || return 1
+  ! printf '%s\n' "$CAPTURE" | grep -Ev '^(PRESENT (package:[A-Za-z0-9.+:_-]+|command:[A-Za-z0-9.+:_-]+|git-identity:(user\.name|user\.email)|auth:github|profile:common context:ubuntu)|MISSING (package:[A-Za-z0-9.+:_-]+|git-identity:(user\.name|user\.email))|NEEDS_MANUAL auth:(github|github-cli-unavailable)|BLOCKED [A-Za-z0-9.+:_-]+|FAILED (package:[A-Za-z0-9.+:_-]+|package-manager:[A-Za-z0-9.+:_-]+|command:[A-Za-z0-9.+:_-]+ package:[A-Za-z0-9.+:_-]+))$' >/dev/null
+}
+class_common_profile() {
+  if ! owner_output_valid; then
+    echo unknown
+    return
+  fi
+  if [ "$RC" -eq 0 ] \
+    && printf '%s\n' "$CAPTURE" | grep -Fxq 'PRESENT profile:common context:ubuntu' \
+    && ! printf '%s\n' "$CAPTURE" | grep -Eq '^(MISSING|BLOCKED|FAILED) '; then
+    echo pass
+  elif printf '%s\n' "$CAPTURE" | grep -Eq '^BLOCKED '; then
+    echo blocked
+  elif printf '%s\n' "$CAPTURE" | grep -Eq '^MISSING '; then
+    echo missing
+  elif printf '%s\n' "$CAPTURE" | grep -Eq '^FAILED '; then
+    echo blocked
+  else
+    echo unknown
+  fi
+}
+
+class_github_auth() {
+  if ! owner_output_valid; then
+    echo unknown
+    return
+  fi
+  present=$(printf '%s\n' "$CAPTURE" | grep -Fxc 'PRESENT auth:github' || true)
+  manual=$(printf '%s\n' "$CAPTURE" | grep -Ec '^NEEDS_MANUAL auth:(github|github-cli-unavailable)$' || true)
+  if [ "$present" -eq 1 ] && [ "$manual" -eq 0 ]; then
+    echo pass
+  elif [ "$present" -eq 0 ] && [ "$manual" -eq 1 ]; then
+    echo needs_manual
+  else
+    echo unknown
+  fi
+}
+
+class_repository_access() {
+  command -v git >/dev/null 2>&1 || {
+    echo unknown
+    return
+  }
+  capture git -C "$REPO" rev-parse --show-toplevel
+  if [ "$RC" -eq 0 ] && [ "$CAPTURE" = "$REPO" ]; then
+    echo pass
+  elif [ "$RC" -ne 0 ]; then
+    echo missing
+  else
+    echo unknown
+  fi
+}
+
+capture "$COMMON" --profile common --context ubuntu
+COMMON_STATE=$(class_common_profile)
+AUTH_STATE=$(class_github_auth)
+REPO_STATE=$(class_repository_access)
+printf '%s\n' \
+  'schema=mcl-s-env-status.v1' \
+  "common_ubuntu_profile=$COMMON_STATE" \
+  "github_cli_auth=$AUTH_STATE" \
+  "repository_access=$REPO_STATE" \
+  'details=withheld'

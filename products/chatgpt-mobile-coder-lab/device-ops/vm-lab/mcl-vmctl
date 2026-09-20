@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -eq 1 ] && [ "$1" = start ] || {
+  echo 'usage: mcl-vmctl start' >&2
+  exit 2
+}
+
+HERE=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+VERIFY="$HERE/verify.sh"
+CONTROLLER="$HERE/admission-controller.py"
+
+[ -f "$VERIFY" ] || { echo 'BLOCKED live-preflight-unavailable' >&2; exit 1; }
+[ -f "$CONTROLLER" ] || { echo 'BLOCKED admission-controller-unavailable' >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || {
+  echo 'BLOCKED python-unavailable' >&2
+  exit 1
+}
+
+set +e
+"$VERIFY" --live-preflight >/dev/null
+rc=$?
+set -e
+[ "$rc" -eq 0 ] || exit "$rc"
+
+exec python3 "$CONTROLLER"

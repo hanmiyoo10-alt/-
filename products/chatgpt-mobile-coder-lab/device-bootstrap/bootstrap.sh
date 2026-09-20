@@ -14,7 +14,7 @@ APT_UPDATED=0
 
 usage() {
     cat <<'EOF'
-usage: bootstrap.sh [--check|--apply] [--profile common] [--context auto|termux|ubuntu]
+usage: bootstrap.sh [--check|--apply] [--profile common|termux-api] [--context auto|termux|ubuntu]
 EOF
 }
 
@@ -61,7 +61,7 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
-[ "$PROFILE" = common ] || fail_usage
+case "$PROFILE" in common|termux-api) ;; *) fail_usage ;; esac
 case "$CONTEXT" in auto|termux|ubuntu) ;; *) fail_usage ;; esac
 detect_context() {
     if [ "$CONTEXT" != auto ]; then
@@ -91,9 +91,16 @@ detect_context() {
 
 detect_context
 
-case "$CONTEXT" in
-    termux) MANIFEST="$SCRIPT_DIR/manifests/common.termux.txt" ;;
-    ubuntu) MANIFEST="$SCRIPT_DIR/manifests/common.ubuntu.txt" ;;
+if [ "$PROFILE" = termux-api ] && [ "$CONTEXT" != termux ]; then
+    emit BLOCKED "profile-context:termux-api:$CONTEXT"
+    exit 2
+fi
+
+case "$PROFILE:$CONTEXT" in
+    common:termux) MANIFEST="$SCRIPT_DIR/manifests/common.termux.txt" ;;
+    common:ubuntu) MANIFEST="$SCRIPT_DIR/manifests/common.ubuntu.txt" ;;
+    termux-api:termux) MANIFEST="$SCRIPT_DIR/manifests/termux-api.termux.txt" ;;
+    *) fail_usage ;;
 esac
 
 [ -r "$MANIFEST" ] || {
@@ -202,12 +209,14 @@ ensure_git_identity_field() {
     fi
 }
 
-if command -v git >/dev/null 2>&1; then
-    ensure_git_identity_field user.name "$DEFAULT_GIT_NAME"
-    ensure_git_identity_field user.email "$DEFAULT_GIT_EMAIL"
-else
-    emit BLOCKED git-identity:git-unavailable
-    mark_blocking
+if [ "$PROFILE" = common ]; then
+    if command -v git >/dev/null 2>&1; then
+        ensure_git_identity_field user.name "$DEFAULT_GIT_NAME"
+        ensure_git_identity_field user.email "$DEFAULT_GIT_EMAIL"
+    else
+        emit BLOCKED git-identity:git-unavailable
+        mark_blocking
+    fi
 fi
 check_github_auth() {
     if ! command -v gh >/dev/null 2>&1; then
@@ -235,6 +244,22 @@ check_android_app() {
     fi
 }
 
+check_required_android_app() {
+    package_id=$1
+    label=$2
+    if ! command -v pm >/dev/null 2>&1; then
+        emit NEEDS_MANUAL android-app-check:pm-unavailable
+        mark_blocking
+        return 0
+    fi
+    if pm path "$package_id" >/dev/null 2>&1; then
+        emit PRESENT "android-app:$label"
+    else
+        emit NEEDS_MANUAL "android-app:$label"
+        mark_blocking
+    fi
+}
+
 check_ubuntu_presence() {
     if ! command -v proot-distro >/dev/null 2>&1; then
         emit BLOCKED ubuntu-proot:proot-distro-unavailable
@@ -248,13 +273,16 @@ check_ubuntu_presence() {
         mark_blocking
     fi
 }
-check_github_auth
-
-if [ "$CONTEXT" = termux ]; then
-    check_android_app com.termux.boot termux-boot
-    check_android_app com.termux.api termux-api
-    check_android_app com.tailscale.ipn tailscale
-    check_ubuntu_presence
+if [ "$PROFILE" = common ]; then
+    check_github_auth
+    if [ "$CONTEXT" = termux ]; then
+        check_android_app com.termux.boot termux-boot
+        check_android_app com.termux.api termux-api
+        check_android_app com.tailscale.ipn tailscale
+        check_ubuntu_presence
+    fi
+else
+    check_required_android_app com.termux.api termux-api
 fi
 
 if [ "$BLOCKING" -ne 0 ]; then

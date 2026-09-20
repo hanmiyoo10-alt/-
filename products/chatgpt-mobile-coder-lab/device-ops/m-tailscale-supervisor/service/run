@@ -1,0 +1,20 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -u
+
+PREFIX=/data/data/com.termux/files/usr
+HOME_DIR=/data/data/com.termux/files/home
+if [ "${MCL_M_TAILSCALE_SUPERVISOR_TEST_MODE:-0}" = "1" ]; then
+    TEST_ROOT="${MCL_M_TAILSCALE_SUPERVISOR_TEST_ROOT:?test root required}"
+    PREFIX="$TEST_ROOT/prefix"
+    HOME_DIR="$TEST_ROOT/home"
+fi
+
+GUARD="$HOME_DIR/.local/bin/mcl-m-tailscale-supervisor-guard"
+SLEEP="$PREFIX/bin/sleep"
+
+if [ ! -x "$GUARD" ]; then
+    "$SLEEP" 5
+    exit 111
+fi
+
+exec "$GUARD" --loop

@@ -20,7 +20,9 @@ Repository, Git, CI, release, and project authorities remain above all of these 
 `#465` is coordination only. Its normal human-facing body MUST use pointer-only live-health semantics:
 
 - `LIVE HEALTH: direct main + #485` is the only current-health pointer;
-- the queue may show at most one human-facing mutable active-writer projection, plus next candidate, coordination blocker, latest completed packet, and stable links to durable surfaces;
+- `Queue surface: ENABLED` is the canonical modern availability label; `ENABLED` means the coordination surface is available and does not assert active-writer presence;
+- the human-facing mutable active-writer projection cardinality is `0..1`; zero projected writers is valid and does not mean disabled, idle, complete, or exhaustive;
+- when present, the queue may show at most one human-facing mutable active-writer projection, plus next candidate, coordination blocker, latest completed packet, and stable links to durable surfaces;
 - stable `## Surfaces` pointers MUST NOT repeat mutable active-writer state; #465 is not an exhaustive registry of nonterminal work;
 - it MUST NOT duplicate a current `main` SHA, Required state/run, production identity state, or native-protection state as live truth;
 - when an exact SHA is required as packet evidence, it may appear only as explicitly historical synchronization/packet evidence and must never be presented as current health;
@@ -36,6 +38,8 @@ Its machine-readable top-level result is `PASS / WARN / FAIL / UNKNOWN`. `FAIL` 
 
 The classifier fails on duplicated mutable current-health claims for current/live `main` SHA, Required state/run, production identity/state, native-protection state, freehand current #485 state, or more than one unambiguous active-writer projection. The canonical `LIVE HEALTH: direct main + #485` pointer and its explanatory no-duplication rule are not findings. Clearly labeled historical synchronization/packet evidence remains allowed; token presence alone does not make a SHA, run, packet, PR, or status word current authority.
 
+The exact standalone old modern label `Queue state: ACTIVE` is a non-blocking naming `WARN`: it is ambiguous between surface availability and writer activity. Use `Queue surface: ENABLED` for the modern queue. This warning does not apply to the separately owned legacy `ACTIVE|IDLE / CANONICAL-MAIN-V1.2` profile, and it never infers active-writer presence or absence.
+
 Each finding carries a stable reason code, a 1-based body line number, and a bounded excerpt. Ambiguous active-writer prose remains `UNKNOWN` rather than being converted into invented terminality. Current repository truth still comes from direct `main`, #485, packet/PR evidence, and the owning authorities named above.
 
 Module callers use `classifyQueueBody(body)`. The bounded CLI accepts either one body-text file path or stdin:
@@ -46,6 +50,28 @@ cat /path/to/issue-465-body.md | node .github/plugin-control-plane/canonical-mai
 ```
 
 CLI exit status is `1` for `FAIL`, `2` for `UNKNOWN`, and `0` for `PASS` or `WARN`. The helper has no auto-fix mode and grants no issue-write, merge, release, production, or protection authority.
+
+### Cross-surface packet-reference hygiene classifier
+
+`work-system/coordination-reference-hygiene.cjs` is a pure read-only classifier for packet references embedded in mutable coordination prose outside the referenced packet's own body. It consumes caller-supplied prose plus caller-supplied packet evidence; it does not fetch GitHub and never mutates coordination surfaces.
+
+Its top-level result vocabulary is `PASS / STALE / UNKNOWN / CONFLICT`, with fail-closed precedence `CONFLICT > STALE > UNKNOWN > PASS`.
+
+V1 deliberately recognizes only narrow routing roles that can misdirect resumed work: `active writer`, `current owner`, `current packet`, `next candidate`, `next packet`, and an explicitly labeled coordination/current blocker. A bare `#1234` token is not promoted into a current-role claim.
+
+A terminal packet is not stale merely because it is referenced historically. Explicit `latest completed`, `completed`, `historical`, `legacy`, `prior`, or `previous` framing remains permitted, including references to terminal packets.
+
+For a supported current-role reference, caller evidence may include the native issue state and canonical packet lifecycle state. `DONE`, `CANCELLED`, and `SUPERSEDED` are terminal lifecycle states; `BLOCKED` remains nonterminal. A current-role reference to coherent terminal lifecycle evidence becomes `STALE`. Missing packet/lifecycle evidence remains `UNKNOWN`. Material disagreement between supplied native issue state and lifecycle state becomes `CONFLICT`; native closure alone is never converted into proof-taxonomy `DONE`.
+
+Each recognized reference carries a bounded issue number, 1-based line, excerpt, role, disposition, and stable reason code. Output is capped, deterministic, and explicitly denies network and mutation authority.
+
+Module callers use `classifyCoordinationReferences(input)`. The bounded CLI accepts one JSON file or stdin with this shape:
+
+```json
+{"prose":"- Next packet: #2342","packets":[{"issueNumber":2342,"nativeState":"open","lifecycleState":"IN_PROGRESS"}]}
+```
+
+CLI exit status is `0` for `PASS`, `1` for `STALE`, `2` for `UNKNOWN`, and `3` for `CONFLICT`. The helper does not repair prose, close packets, redefine #2083 packet-body close-sync, or widen #465 queue-hygiene ownership.
 
 ### Write-scope overlap resolver
 
@@ -61,7 +87,13 @@ Supported v1 scope forms are deliberately narrow:
 
 Absolute paths, traversal, and wildcard/pattern syntax outside the single trailing `/**` form fail closed to `UNKNOWN`. Path-prefix containment is checked deterministically in both directions; surface scopes overlap only on exact normalized identity.
 
-Callers provide `requestedScopes`, a bounded discovery disposition (`COMPLETE / PARTIAL / UNKNOWN`), and concretely identified candidates. Packet candidates use current native issue state plus exact `canonical-main-work-packet:v1` body text. Open PR candidates use their supplied changed-file inventory. Standard packet scope headings Bounded write scope, Bounded implementation write scope, and Locked write scope are parsed deterministically; an explicit preservation/non-write boundary stops scope collection.
+Repository, shared, product, or informal `repo-common` classification is routing/context metadata only. Labels such as `scope:repo` and `scope:shared` do not become implicit path/surface scopes, locks, leases, or mutation authority.
+
+For repository-byte mutation, packet authors declare the exact writable `path:` scopes first. Add `surface:<owning-domain>:<stable-owner-or-effect>` only when otherwise-disjoint paths can mutate the same logical owner or effect boundary. The semantic/effect surface supplements the path list and never authorizes another repository path. Reuse one stable owner-defined identity across packets; do not name the packet, branch, worker, account, chat, or executor. Broad umbrella identities such as `surface:repo:common`, `surface:scope:repo`, and `surface:shared:all` are invalid authoring choices because they serialize unrelated work. When the owning authority cannot establish a stable semantic/effect identity, preserve `UNKNOWN` or `CONFLICT` instead of inventing a surface or optimistic disjointness.
+
+Callers provide `requestedScopes`, a bounded discovery disposition (`COMPLETE / PARTIAL / UNKNOWN`), and concretely identified candidates. Packet candidates use current native issue state plus exact `canonical-main-work-packet:v1` body text. Open PR candidates use their supplied changed-file inventory. Packet lifecycle is consumed from the canonical `packet-projection.cjs` lifecycle parser rather than re-derived from stage/proof prose or a second local state vocabulary.
+
+Write-scope parsing accepts only exact reviewed heading names: `Bounded write scope`, `Bounded implementation write scope`, `Locked write scope`, plus compatibility aliases `Bounded IMPLEMENTATION_PR write scope`, `Repository write-scope ceiling used by IMPLEMENTATION_PR`, and `Bounded repository write ceiling`. There is no fuzzy heading/prose scan. Exactly one recognized deterministic scope section is required; multiple recognized sections are `CONFLICT`, while missing, unsupported, malformed, or invalid scope evidence remains `UNKNOWN`. Explicit preservation/non-write boundaries stop scope collection; the repository-observed exact boundary `Do not touch unless fresh evidence proves required:` is supported without widening into a fuzzy `Do not touch` scan.
 
 #465 remains seed-only and non-exhaustive. `DISJOINT` requires bounded discovery `COMPLETE`; `PARTIAL` or `UNKNOWN` discovery cannot be promoted to disjointness merely because no supplied candidate overlaps.
 
@@ -160,6 +192,12 @@ Packet lifecycle:
 
 Alternate states: `BLOCKED / CANCELLED / SUPERSEDED`.
 
+Lifecycle `State` and `Interaction stage` are separate packet axes. A producer MUST preserve exactly one canonical lifecycle token from `policy.json` in the State projection while stage bookkeeping changes independently. Stage-only State prose never implies `READY`, `IN_PROGRESS`, `REVIEW`, or `DONE`.
+
+`work-system/packet-projection.cjs` is the pure read-only parser/classifier for this boundary. It derives lifecycle and stage vocabularies from `policy.json`, accepts the existing `**State: ...**` and `## State` one-line forms, and returns bounded `PASS / UNKNOWN / CONFLICT` evidence. Missing lifecycle remains explicit `UNKNOWN`; duplicate State projections or multiple lifecycle tokens are `CONFLICT`. The helper never fetches GitHub, rewrites a packet, advances a stage, closes an issue, or grants mutation authority.
+
+Mutation consumers that require packet lifecycle evidence should reuse this parser rather than infer lifecycle from interaction-stage text, proof terms, or native issue state.
+
 ## Execution compactness contract
 
 Canonical-main packets make the existing repository-wide compact execution policy explicit at the packet boundary. This does not create a new compactness owner. `RCR-D14` remains the repository default and `.agents/skills/agent-execution-compactness/SKILL.md` owns the routing procedure and guardrail semantics.
@@ -220,6 +258,16 @@ A generic work-packet body using `<!-- canonical-main-work-packet:v1 -->` is a c
 Terminal close-sync must align, as applicable, the lifecycle State; completed/current/next interaction stage; evidence-backed Proof / closure terms; required acceptance UNKNOWNs; and Handoff / exact next action. Close-sync may only project proof already established by repository evidence. It MUST NOT manufacture `LIVE_PROVEN`, clear an `UNKNOWN` by omission, or weaken activated acceptance.
 
 A final comment or native GitHub closure does not make a contradictory stale packet body acceptable. If terminal evidence and the packet body conflict, treat the body as a stale lifecycle projection, re-read the terminal evidence, and do not resume the stale advertised stage without fresh re-attribution.
+
+### Reserved packet self-bookkeeping surface
+
+For every canonical work packet bearing `<!-- canonical-main-work-packet:v1 -->`, the packet's own GitHub issue is a reserved self-coordination surface for faithful lifecycle bookkeeping. This reserved self surface is separate from implementation/effect write scope, so a packet does not need to list its own issue under a bounded write-scope section merely to project already-established coordination state.
+
+Reserved self-bookkeeping may update only the lifecycle `State`; completed/current/next `Interaction stage`; evidence-backed Proof / closure terms; required acceptance UNKNOWNs and explicitly permitted non-blocking pending evidence; Stop condition / Handoff / exact next legal action; and native issue closure after the body is reconciled terminal and the packet's acceptance permits `DONE`. Native GitHub closure remains downstream of evidence-backed terminal body reconciliation and never proves `DONE` by itself.
+
+Reserved self-bookkeeping MUST NOT change the primary goal, add/remove/weaken acceptance criteria, widen or reinterpret implementation/effect write scope, manufacture or erase evidence, infer `DONE` or `LIVE_PROVEN`, clear an `UNKNOWN` without evidence, or authorize mutation of another issue, PR, repository file, branch, workflow, device, runtime, release, or production surface. Any body edit beyond faithful self-projection is ordinary mutation and requires explicit bounded authority.
+
+Implementation/effect scope ceilings such as `exactly N paths/surfaces` govern declared work outputs and external coordination targets. Generic `any additional issue surface is scope expansion` wording applies to external effect surfaces unless a packet explicitly and separately forbids lifecycle bookkeeping itself. The reserved self surface is not emitted into or inferred from write-scope overlap classification and grants no implicit external issue or repository mutation authority.
 
 The existing `canonical-main-a1-standard-auto-close:v1` profile remains separately owned by deterministic closure bookkeeping. This generic close-sync contract does not broaden that opt-in automation boundary.
 

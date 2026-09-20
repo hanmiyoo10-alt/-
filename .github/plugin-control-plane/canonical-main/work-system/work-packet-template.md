@@ -4,6 +4,9 @@
 
 **State: READY**
 
+Keep `State` as the packet lifecycle projection. Preserve exactly one canonical lifecycle token (`READY / CLAIMED / IN_PROGRESS / REVIEW / DONE / BLOCKED / CANCELLED / SUPERSEDED`) here when updating stage bookkeeping. Do not replace lifecycle State with stage-only prose; update `Interaction stage` separately.
+
+
 ## Primary goal
 
 <ONE_PRIMARY_GOAL>
@@ -58,7 +61,12 @@ This packet body is a current lifecycle projection, not an immutable activation 
 
 ## Bounded write scope
 
-- <PATH_OR_ISSUE>
+- `path:<EXACT_REPO_PATH_OR_TRAILING_PREFIX>`
+- `<OPTIONAL surface:<owning-domain>:<stable-owner-or-effect> ONLY WHEN A REAL CROSS-PATH COLLISION BOUNDARY EXISTS>`
+
+Repository/shared/product classification is context only and never an implicit lock. For repository-byte mutation, list every writable `path:` scope. Add a semantic/effect `surface:` only when otherwise-disjoint paths can mutate the same logical owner or effect boundary; it supplements the path list and grants no additional path authority. Reuse the existing owner/effect identity rather than naming the packet, branch, worker, account, chat, or executor. Do not use broad umbrella identities such as `surface:repo:common`, `surface:scope:repo`, or `surface:shared:all`. If a stable owner/effect identity cannot be established from current authority, preserve `UNKNOWN` or `CONFLICT` instead of inventing one.
+
+The entries above are implementation/effect outputs and external coordination targets. The packet's own GitHub issue is a reserved self-bookkeeping surface for faithful lifecycle State, interaction-stage, evidence-backed proof/UNKNOWN, Handoff, and terminal close-sync projection; do not add the packet's own issue here solely for that bookkeeping. Reserved self-bookkeeping cannot change the primary goal, acceptance, external write scope, or evidence to manufacture completion, and it grants no authority over any other issue or repository/runtime surface. Overlap classification considers only explicitly declared implementation/effect scopes and does not gain an implicit self-issue token.
 
 ## Dependencies / blockers
 

@@ -83,6 +83,8 @@ body = command-only trigger / not intended to merge
 → merge_commit_sha presence alone does NOT mean merged
 ```
 
+2026-09-20 status note: #109 was later manually closed without merge after S-11 classified it `COMMAND_ONLY_DONE`. This specimen is intentionally retained as a design-time relationship fact showing that a non-null `merge_commit_sha` did not establish that the PR had merged.
+
 Recent exact-base repository-document promotion PRs also show:
 
 ```text

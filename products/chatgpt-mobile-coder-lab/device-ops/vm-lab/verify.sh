@@ -2,8 +2,11 @@
 set -eu
 
 MODE=${1:-}
-[ "$#" -eq 1 ] || { echo 'usage: verify.sh --check|--admission' >&2; exit 2; }
-case "$MODE" in --check|--admission) ;; *) echo 'usage: verify.sh --check|--admission' >&2; exit 2 ;; esac
+[ "$#" -eq 1 ] || { echo 'usage: verify.sh --check|--admission|--live-preflight' >&2; exit 2; }
+case "$MODE" in
+  --check|--admission|--live-preflight) ;;
+  *) echo 'usage: verify.sh --check|--admission|--live-preflight' >&2; exit 2 ;;
+esac
 
 HERE=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$HERE/../../../.." && pwd)
@@ -44,7 +47,6 @@ command -v qemu-img >/dev/null 2>&1 || fail 'qemu-toolchain-mismatch'
 [ -f "$DISK" ] && [ ! -L "$DISK" ] || fail 'disk-missing'
 [ -f "$VARS" ] && [ ! -L "$VARS" ] || fail 'uefi-vars-missing'
 [ "$(wc -c < "$VARS" | tr -d ' ')" = "$VARS_BYTES" ] || fail 'uefi-vars-contract'
-
 INFO=$(qemu-img info --output=json "$DISK" 2>/dev/null) || fail 'disk-inspection'
 printf '%s' "$INFO" | python3 -c '
 import json, sys
@@ -59,14 +61,32 @@ raise SystemExit(0 if ok else 1)
 echo 'PASS vm-lab-prepared'
 [ "$MODE" = --check ] && exit 0
 [ -f "$GUARD" ] || { echo 'UNKNOWN resource-admission' >&2; exit 2; }
+
 set +e
-python3 "$GUARD" check \
-  --target-root "$HOME" \
-  --min-free-disk-bytes "$DISK_FLOOR" \
-  --min-available-memory-bytes "$MEMORY_FLOOR" \
-  --min-free-inodes "$INODE_FLOOR" >/dev/null 2>&1
+if [ "$MODE" = --live-preflight ]; then
+  python3 "$GUARD" check \
+    --target-root "$HOME" \
+    --min-free-disk-bytes "$DISK_FLOOR" \
+    --min-free-inodes "$INODE_FLOOR" >/dev/null 2>&1
+else
+  python3 "$GUARD" check \
+    --target-root "$HOME" \
+    --min-free-disk-bytes "$DISK_FLOOR" \
+    --min-available-memory-bytes "$MEMORY_FLOOR" \
+    --min-free-inodes "$INODE_FLOOR" >/dev/null 2>&1
+fi
 rc=$?
 set -e
+if [ "$MODE" = --live-preflight ]; then
+  case "$rc" in
+    0) echo 'PASS live-start-preflight' ;;
+    1) echo 'BLOCKED resource-floor' >&2; exit 1 ;;
+    2) echo 'UNKNOWN live-start-preflight' >&2; exit 2 ;;
+    *) echo 'BLOCKED resource-guard-failure' >&2; exit 1 ;;
+  esac
+  exit 0
+fi
+
 case "$rc" in
   0) echo 'PASS boot-admission' ;;
   1) echo 'BLOCKED resource-floor' >&2; exit 1 ;;

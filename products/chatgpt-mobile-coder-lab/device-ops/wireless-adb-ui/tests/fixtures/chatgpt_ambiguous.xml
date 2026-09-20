@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hierarchy rotation="0">
+  <node package="com.openai.chatgpt" class="android.widget.Button" text="New chat" clickable="true"/>
+  <node package="com.openai.chatgpt" class="android.widget.Button" content-desc="New chat" clickable="true"/>
+  <node package="com.openai.chatgpt" class="android.widget.EditText" text="" clickable="true" editable="true"/>
+  <node package="com.openai.chatgpt" class="android.widget.EditText" text="" clickable="true" editable="true"/>
+</hierarchy>

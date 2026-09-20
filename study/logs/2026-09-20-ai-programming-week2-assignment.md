@@ -297,3 +297,27 @@ Still remaining after that blocker:
 - replace `f(print(...))` with an f-string inside `print(...)`, formatting the result with `:.2f`.
 
 Exercise 2 state: `WRONG / PROGRESS MADE`.
+
+
+## Exercise 2 re-check — third attempt
+
+Latest Drive snapshot modified at 2026-09-20 22:48 KST.
+
+Progress verified:
+- `money = int(input(...))` works;
+- `rate = float(input(...))` works;
+- `year = int(input(...))` works;
+- example inputs 3500000, 0.03, 3 are all accepted.
+
+Current blocker:
+- current code uses `total = money(1+rate)*year`;
+- Python interprets `money(...)` as a function call, causing `TypeError: 'int' object is not callable`;
+- compound-interest period must be exponentiation, not multiplication.
+
+Required calculation:
+- `total = money * (1 + rate) ** year`
+
+Final print is also still pending correction:
+- use `print(f'{year}년 후의 원리금은 {total:.2f}원 입니다.')`.
+
+Exercise 2 state: `WRONG / INPUT STAGE COMPLETE`.

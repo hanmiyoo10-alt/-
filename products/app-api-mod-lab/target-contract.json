@@ -22,6 +22,7 @@
     "display_name",
     "ecosystem",
     "kind",
+    "category",
     "authority",
     "scope",
     "privacy",
@@ -42,5 +43,18 @@
   "uncertainty_tokens": [
     "UNKNOWN",
     "UNASSIGNED"
-  ]
+  ],
+  "categories": [
+    "game",
+    "streaming",
+    "social",
+    "productivity",
+    "utility",
+    "developer",
+    "commerce",
+    "finance",
+    "education",
+    "other"
+  ],
+  "category_pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
 }

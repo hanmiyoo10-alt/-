@@ -310,3 +310,25 @@ Next-time cue: 먼저 “파이썬 문법용 따옴표/역슬래시”와 “화
 Related pattern IDs: none; 동일 학습 경계의 반복 증거지만 아직 별도 문제 패턴으로 승격하지 않음.
 Review state: QUEUED
 Later evidence / resolution: A second saved attempt was observed at 2026-09-20 22:18 KST. The user correctly moved toward literal `\\n`, `\\t`, and doubled path backslashes, and added a self-note about escape usage. Execution still ends in `SyntaxError` because `\\n` is being used outside a string as if it were a source-code line break, commas/separate `print()` calls are missing, and `He said "What's there?"` is left outside a quoted string. Exercise 1 remains QUEUED until the user's own Colab executes successfully.
+
+
+### AI-PROG-W2-E1-R1
+
+Problem ID: AI-PROG-W2-E1-R1
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 1 재시도
+Source ref: current uploaded week-2 assignment Colab, execution count 3
+Result: PARTIAL
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: PDF Exercise 1의 5줄 출력과 문자·공백까지 맞춘다.
+User interpretation / approach: 문자열 안에 실제 줄바꿈 `\n`, 리터럴 `\\n`/`\\t`, apostrophe escape, 경로의 doubled backslash를 함께 적용했다. 실행은 성공했다.
+Correct reasoning summary: 현재 출력은 다섯 줄 모두 내용상 맞지만 4번째 줄 `Newline character...` 앞에 공백 한 칸이 추가된다. 원인은 `print()`의 두 인자 사이에 콤마가 있어 기본 구분자 `sep=' '`가 삽입되기 때문이다.
+
+Error type: CARELESS
+Error mechanism: 세 번째 줄까지의 문자열 묶음과 네 번째·다섯 번째 줄 문자열 묶음 사이에 콤마를 둬서 `print()`가 인자 사이에 공백을 자동 삽입했다.
+Next-time cue: 출력 예시를 맞출 때는 실행 성공 뒤 각 줄의 맨 앞/맨 뒤 공백까지 비교한다. 이번에는 해당 콤마를 제거해 인접 문자열을 이어 붙이거나 줄별 `print()`를 사용한다.
+
+Related pattern IDs: none
+Review state: QUEUED
+Later evidence / resolution: SyntaxError는 해소되었고 escape/quote 처리도 성공했다. 정확한 출력 일치를 위한 선행 공백 1칸 제거만 남음.

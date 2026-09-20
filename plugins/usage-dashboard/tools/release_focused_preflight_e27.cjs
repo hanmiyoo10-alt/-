@@ -177,7 +177,7 @@ function main(argv = process.argv.slice(2)) {
     fail('RED_EXECUTION', 'usage');
   } catch (error) {
     const code = error instanceof E27Error ? error.code : 'RED_EXECUTION';
-    const detail = error instanceof E27Error ? error.detail : 'unexpected';
+    const detail = error instanceof E27Error ? error.detail : (error?.message || 'unexpected');
     console.error(`UD_E27_FOCUSED_PREFLIGHT:${code}:${bounded(detail)}`);
     process.exitCode = 1;
   }

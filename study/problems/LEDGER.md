@@ -309,4 +309,4 @@ Next-time cue: 먼저 “파이썬 문법용 따옴표/역슬래시”와 “화
 
 Related pattern IDs: none; 동일 학습 경계의 반복 증거지만 아직 별도 문제 패턴으로 승격하지 않음.
 Review state: QUEUED
-Later evidence / resolution: corrected version execution pending in the user's Colab.
+Later evidence / resolution: A second saved attempt was observed at 2026-09-20 22:18 KST. The user correctly moved toward literal `\\n`, `\\t`, and doubled path backslashes, and added a self-note about escape usage. Execution still ends in `SyntaxError` because `\\n` is being used outside a string as if it were a source-code line break, commas/separate `print()` calls are missing, and `He said "What's there?"` is left outside a quoted string. Exercise 1 remains QUEUED until the user's own Colab executes successfully.

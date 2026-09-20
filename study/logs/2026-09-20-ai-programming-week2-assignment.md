@@ -255,3 +255,25 @@ Verified newest execution:
 Exercise 1 state: `CORRECT / COMPLETE`.
 
 Current notebook snapshot still contains Exercise 1 work only; Exercise 2–4 are not yet present.
+
+
+## Exercise 2 first review
+
+Latest Drive snapshot modified at 2026-09-20 22:39 KST.
+
+Observed new Exercise 2 cell:
+- execution count: 5
+- result: TypeError after the first input
+- first entered value: 350000
+
+Primary blocker:
+- code uses `int(print(input(...)))`;
+- `print()` returns `None`, so `int(None)` raises TypeError.
+
+Additional PDF mismatches:
+- interest rate should accept a decimal such as `0.03`, so it needs floating-point conversion rather than `int`;
+- the PDF formula is compound interest: `total = money * (1 + rate) ** year`;
+- the current expression does not use that formula;
+- the final output needs the actual year and total value, formatted to two decimal places.
+
+Exercise 2 state: `WRONG / CORRECTION NEEDED`.

@@ -1773,3 +1773,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/0771d29c720466b3e12683e6d2395ee869411cd3)
 - Event ID: `90040e918882a692a4272f920595bbb8e6632a8bb270ef53feaa0b3d5a3acda8`
 <!-- canonical-main-doc-promoted:90040e918882a692a4272f920595bbb8e6632a8bb270ef53feaa0b3d5a3acda8 -->
+
+### 2026-09-20 — fix(control-plane): bound fixed label descriptions (#2592)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `1ae1ccc60b6cabffb0ef3e0faa5caaa05744506e`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1ae1ccc60b6cabffb0ef3e0faa5caaa05744506e)
+- Event ID: `1e839c3fbe9aa102d6995f75d728d59430b68c046adb953eef6ef245182d7317`
+<!-- canonical-main-doc-promoted:1e839c3fbe9aa102d6995f75d728d59430b68c046adb953eef6ef245182d7317 -->

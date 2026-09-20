@@ -55,9 +55,13 @@ The Local family may expose nested compatibility paths while preserving independ
 Current bridge:
 - parent-owned direct surface: `plugins/risu/local/*`
 - parent-owned guideline: `docs/LOCAL_PLUGIN_GUIDELINES.md`
+- DevPass canonical project/evidence root: `plugins/risu/local/devpass/**` → `plugin:devpass`
+- DevPass fixed update-channel compatibility root: `plugins/devpass/**` → `plugin:devpass`
 - Voyage canonical child root: `plugins/risu/local/voyage/**` → `plugin:voyage-token-check`
 - Voyage legacy compatibility root: `voyage-token-check/**` → `plugin:voyage-token-check`
 
 The broad family directory is therefore not itself an ownership claim over every descendant. Child paths must route to the child owner when explicitly registered.
+
+For DevPass, current declaration/evidence authority is `plugins/risu/local/devpass/README.md`, while the fixed artifact locator intentionally remains `plugins/devpass/latest.js` and may remain `DECLARED_MISSING`. The old DevPass root must not be mistaken for a current project/evidence root merely because it retains the fixed update target.
 
 For Voyage, current evidence authority is `plugins/risu/local/voyage/DESIGN_STATUS.md`. The old `voyage-token-check/**` tree is compatibility-only and must not regain current authority.

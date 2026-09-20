@@ -66,6 +66,10 @@ assert.equal(byId.local.projectPath, 'plugins/risu/local');
 assert.equal(byId.local.authority.type, 'evidence');
 assert.equal(byId.local.authority.evidence, 'plugins/risu/local/README.md');
 
+assert.equal(byId.devpass.projectPath, 'plugins/risu/local/devpass');
+assert.equal(byId.devpass.authority.type, 'evidence');
+assert.equal(byId.devpass.authority.evidence, 'plugins/risu/local/devpass/README.md');
+
 assert.equal(byId['voyage-token-check'].projectPath, 'plugins/risu/local/voyage');
 assert.equal(byId['voyage-token-check'].authority.type, 'evidence');
 assert.equal(byId['voyage-token-check'].authority.evidence, 'plugins/risu/local/voyage/DESIGN_STATUS.md');

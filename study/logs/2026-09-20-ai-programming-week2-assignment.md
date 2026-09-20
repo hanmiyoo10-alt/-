@@ -454,3 +454,37 @@ Remaining:
 
 Exercise 3 state: `PARTIAL / OUTPUT FIXED, WEIGHT FLOAT + RUN REQUIRED`.
 Exercise 4 is not present in the current notebook snapshot yet.
+
+
+## Exercise 3 re-check — execution verified
+
+Latest Drive snapshot modified at 2026-09-20 23:22 KST.
+
+Verified:
+- `execution_count = 32`
+- execution status: success
+- inputs: 95, 1.82
+- output: `당신의 BMI= 28.68입니다.`
+- BMI formula and output text now match the PDF example
+
+Remaining requirement gap:
+- weight still uses `int(input(...))`;
+- PDF explicitly asks for both height and weight as real-number input, so weight should also use `float(input(...))`.
+
+Exercise 3 state: `PARTIAL / ONLY WEIGHT FLOAT REMAINS`.
+
+## Exercise 4 first review
+
+A new Exercise 4 cell is present and executed successfully (`execution_count = 33`).
+
+Observed:
+- `dogs = '367'`
+- `cats = '195'`
+- current output is a fixed sentence without the numeric difference
+
+PDF requirement:
+- convert the string numbers to numeric values;
+- compute the difference 172;
+- output `강아지가 고양이보다 172마리 더 많다`.
+
+Exercise 4 state: `WRONG / STRING-TO-INT CONVERSION + DIFFERENCE CALCULATION REQUIRED`.

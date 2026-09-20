@@ -136,6 +136,23 @@ class DomainRegistryTests(unittest.TestCase):
         ):
             self.assertIn(token, row)
 
+    def test_voyage_current_domain_metadata_uses_local_family_root(self):
+        domain = next(
+            item for item in self.registry["domains"]
+            if item["scope"] == "plugin:voyage-token-check"
+        )
+        self.assertEqual(domain["lifecycle"], "design-evidence-validation")
+        self.assertEqual(domain["primary_path"], "plugins/risu/local/voyage/**")
+        refs = {(item["kind"], item["value"]) for item in domain["authority_refs"]}
+        self.assertIn(
+            ("evidence", "plugins/risu/local/voyage/DESIGN_STATUS.md"),
+            refs,
+        )
+        self.assertFalse(
+            {kind for kind, _ in refs}
+            & {"release_branch", "manifest", "artifact", "release_spec_dir"}
+        )
+
     def test_domain_registration_explicitly_does_not_promote_skill_scope(self):
         self.assertGreaterEqual(len(self.registry["domains"]), 1)
         self.assertTrue(

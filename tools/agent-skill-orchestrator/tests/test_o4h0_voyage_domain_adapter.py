@@ -14,11 +14,12 @@ from router import RoutingError, route_task
 
 TARGET_SHA = "3908f71122f267375ee5eccb3fa3ca85564c634e"
 OTHER_SHA = "a" * 40
+FROZEN_DOMAIN_REGISTRY = PACKAGE / "tests" / "fixtures" / "voyage-token-check-o4h0-frozen-domain-registry.json"
 
 
 class O4H0VoyageDomainAdapterTests(unittest.TestCase):
     def setUp(self):
-        self.registry = load_domain_registry()
+        self.registry = load_domain_registry(FROZEN_DOMAIN_REGISTRY)
         self.voyage = next(
             item for item in self.registry["domains"]
             if item["scope"] == "plugin:voyage-token-check"

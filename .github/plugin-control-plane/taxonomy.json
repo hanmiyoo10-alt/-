@@ -117,6 +117,7 @@
         "plugins/usage-dashboard/**",
         "products/usage-dashboard/**",
         "plugins/devpass/**",
+        "plugins/risu/local/voyage/**",
         "voyage-token-check/**",
         "tools/usage-dashboard-mcp/**"
       ],

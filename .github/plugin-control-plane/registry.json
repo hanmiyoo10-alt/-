@@ -110,6 +110,32 @@
       }
     }
   },
+  "scopes": [
+    {
+      "id": "study",
+      "label": "scope:study",
+      "displayName": "Study",
+      "issueValues": ["study", "Study"],
+      "paths": ["study/**"],
+      "description": "Independent study and learning root; routing metadata only",
+      "authority": {
+        "posture": "routing-only",
+        "statusProjection": false
+      }
+    },
+    {
+      "id": "local-runtime",
+      "label": "scope:local-runtime",
+      "displayName": "Local Runtime",
+      "issueValues": ["local-runtime", "Local Runtime"],
+      "paths": ["local/**"],
+      "description": "Repository-owned local runtime and operations root; does not replace product, device, release, or production authority",
+      "authority": {
+        "posture": "routing-only",
+        "statusProjection": false
+      }
+    }
+  ],
   "nonOperationalScopes": [
     {
       "id": "research-product",

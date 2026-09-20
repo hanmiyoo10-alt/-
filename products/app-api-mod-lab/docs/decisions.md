@@ -60,3 +60,25 @@ App API Mod Lab 자체는 범용 실험실로 유지하고, 실제 대상만 `ta
 ### 이유
 
 새 target validator는 `targets/**` 아래에 이미 materialize된 대상만 볼 수 있다. 과거 작업이 issue-only 또는 legacy branch에 존재하면 main-tree scan만으로는 누락될 수 있으므로, 그 흔적을 evidence locator로 보존하는 별도 reconciliation layer가 필요하다.
+
+## 2026-09-20 — CHZZK 첫 concrete target materialization
+
+### 결정
+
+기존 issue #2020의 CHZZK reconnaissance를 새 target taxonomy 아래 첫 concrete target으로 materialize한다.
+
+```text
+targets/standalone/chzzk/
+├── TARGET.json
+└── README.md
+```
+
+CHZZK는 Risu X / `api` target으로 분류한다. materialization 후에는 더 이상 legacy candidate가 아니므로 `legacy-candidates.json`에서는 제거한다. provenance는 target metadata와 README가 #2020을 직접 가리킨다.
+
+### 범위
+
+첫 work unit은 public, anonymous, read-only playback reconnaissance로 한정한다. 로그인/세션, write mutation, creator control, payment/ad mutation, deployment/release는 범위 밖이다.
+
+### authority 의미
+
+App API Mod Lab은 repository-local research/probe/client artifacts만 소유한다. NAVER CHZZK external service/runtime authority를 소유하지 않는다. endpoint/runtime liveness는 fresh evidence 전까지 `UNVERIFIED_RUNTIME`이다.

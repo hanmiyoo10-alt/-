@@ -654,3 +654,21 @@ Verified assignment state in cleaned copy:
 - Exercise 2 COMPLETE
 - Exercise 3 COMPLETE
 - Exercise 4 COMPLETE
+
+
+## Final submission-copy check — PDF sample aligned
+
+Latest snapshot modified at 2026-09-20 23:52 KST.
+
+Verified current submission copy:
+- filename: `202431697 배지혜 2주차 과제`;
+- first code cell contains `# 202431697` and `# 배지혜`;
+- Exercise 1: current source and output are correct, execution count 1;
+- Exercise 2: current source and output are correct, execution count 2, output 3824544.50;
+- Exercise 3: current float-based source was rerun with PDF sample inputs 95 and 1.82, execution count 7, output `당신의 BMI= 28.68입니다.`;
+- Exercise 4: current source and output are correct, execution count 5, output `강아지가 고양이보다 172마리 더 많다`.
+
+All four exercises are now content-complete and execution-verified in the cleaned submission copy.
+
+Remaining submission-only check:
+- Drive reports the file as shared but does not expose enough permission metadata to prove `Anyone with the link / Viewer`; confirm this in the Colab Share dialog before pasting the link into Cyber Campus.

@@ -1797,3 +1797,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/bda5c3ddd208e7ade8da4b463e9e71e471ca89e3)
 - Event ID: `736998a2bd2ff07d7cdc23e793df99f31548ac1dd70ff916f93faf474af419f1`
 <!-- canonical-main-doc-promoted:736998a2bd2ff07d7cdc23e793df99f31548ac1dd70ff916f93faf474af419f1 -->
+
+### 2026-09-20 — feat(app-api-mod-lab): add target category taxonomy (#2604)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `8bdeac044d67e63cd80c35f17e48181ed082ada8`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8bdeac044d67e63cd80c35f17e48181ed082ada8)
+- Event ID: `6cd09b022c6eea6c234a3a3aaeacf532a138605a4c841af3eb1182c415690222`
+<!-- canonical-main-doc-promoted:6cd09b022c6eea6c234a3a3aaeacf532a138605a4c841af3eb1182c415690222 -->

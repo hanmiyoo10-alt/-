@@ -36,3 +36,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2026)
 - Event ID: `129d0dd1bc54a00daecceca1a202714b9fb07f07be5bcb8985ffadcb283b64d6`
 <!-- canonical-main-doc-promoted:129d0dd1bc54a00daecceca1a202714b9fb07f07be5bcb8985ffadcb283b64d6 -->
+
+### 2026-09-20 — Register independent repository root scopes
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2590)
+- Event ID: `53950c973fd869c9ca5238eb41389d12962516436d2bbcd336aa9e5cc2dee4de`
+<!-- canonical-main-doc-promoted:53950c973fd869c9ca5238eb41389d12962516436d2bbcd336aa9e5cc2dee4de -->

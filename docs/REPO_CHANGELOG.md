@@ -1829,3 +1829,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/fb8848128e36cfa794b7389307bc1f0f02538241)
 - Event ID: `2d0b7bd1021d7ac6848e076323cea131c477ea2526d423919b9c43db3b69a594`
 <!-- canonical-main-doc-promoted:2d0b7bd1021d7ac6848e076323cea131c477ea2526d423919b9c43db3b69a594 -->
+
+### 2026-09-20 — feat(control-plane): bridge Voyage into Local family (#2614)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `69d51681dd921379d924cd0cb0797292f295b3ae`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/69d51681dd921379d924cd0cb0797292f295b3ae)
+- Event ID: `cb41523479faaf44d6839859a8ceeb76f67c2bbb80ee8ead6117cc2e1a6775fb`
+<!-- canonical-main-doc-promoted:cb41523479faaf44d6839859a8ceeb76f67c2bbb80ee8ead6117cc2e1a6775fb -->

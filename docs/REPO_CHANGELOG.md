@@ -1837,3 +1837,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/69d51681dd921379d924cd0cb0797292f295b3ae)
 - Event ID: `cb41523479faaf44d6839859a8ceeb76f67c2bbb80ee8ead6117cc2e1a6775fb`
 <!-- canonical-main-doc-promoted:cb41523479faaf44d6839859a8ceeb76f67c2bbb80ee8ead6117cc2e1a6775fb -->
+
+### 2026-09-20 — refactor(voyage): relocate design root under Local (#2618)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `d167fa1f60294dfb3e20712ca8d8d0fe13b87d09`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d167fa1f60294dfb3e20712ca8d8d0fe13b87d09)
+- Event ID: `e15b72e96071ebc513aaf1bfe46788378f0d98c961255a87221609a62b46e6dd`
+<!-- canonical-main-doc-promoted:e15b72e96071ebc513aaf1bfe46788378f0d98c961255a87221609a62b46e6dd -->

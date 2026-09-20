@@ -75,3 +75,36 @@ class WebAcquisitionRoutingContractTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WebAcquisitionRoutingV4ContractTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.text = SKILL.read_text(encoding="utf-8")
+        cls.normalized = " ".join(cls.text.split())
+
+    def test_v4_is_a_bounded_reveal_route_after_local_and_provider_routes(self):
+        provider = self.text.index("schema-constrained structured data")
+        reveal = self.text.index("small explicit public-page reveal")
+        self.assertLess(provider, reveal)
+        for token in (
+            "tools/web-acquisition/reveal-cli.mjs",
+            "at most 16 KiB",
+            "1..5 actions",
+            "12 second total",
+            "exactly `clickReveal` and visible-only `waitFor`",
+            "selectors are CSS-only",
+        ):
+            self.assertIn(token, self.normalized)
+
+    def test_v4_effect_guard_and_residual_risk_are_explicit(self):
+        for token in (
+            "only GET/HEAD browser requests may continue",
+            "second top-level navigation",
+            "popup/new-page",
+            "download",
+            "dialog attempts",
+            "does not prove universal remote-side-effect freedom",
+            "#2030 for authenticated/stateful browser sessions",
+        ):
+            self.assertIn(token, self.normalized)

@@ -4,7 +4,8 @@ description: >-
   Route repository web evidence requests to the lightest sufficient surface,
   use isolated Playwright only for public JavaScript-rendered page evidence,
   bounded Crawlee orchestration only for same-origin recursion, and optional
-  Firecrawl structured extraction only with explicit provider opt-in.
+  Firecrawl structured extraction only with explicit provider opt-in, and bounded
+  Playwright reveal interaction only for one public unauthenticated page.
 ---
 
 # Web Acquisition Routing
@@ -26,7 +27,9 @@ Use the first evidence-equivalent surface that is sufficient:
 5. Missing evidence is schema-constrained structured data from exactly one public
    unauthenticated URL, and external-provider egress is explicitly opted in ->
    use `tools/web-acquisition/structured-cli.mjs` with `--provider firecrawl`.
-6. Anything broader, cross-origin, authenticated, stateful, or provider-driven
+6. Missing evidence exists only after a small explicit public-page reveal, with no
+   auth/input/form/navigation workflow -> use `tools/web-acquisition/reveal-cli.mjs`.
+7. Anything broader, cross-origin, authenticated, stateful, or provider-driven
    crawl/search/action work -> return unsupported/separate-authority disposition.
 Browser, Crawlee, Firecrawl availability, or API-key presence is never itself a
 reason to escalate. V2 never replaces v1 when one rendered URL is sufficient,
@@ -61,8 +64,8 @@ Default local acquisition is public, unauthenticated, and stateless only:
   policy proxy, with fresh browser state disposed after each acquisition;
 - never persist cookies, storage state, profiles, credentials, auth/session
   material, downloads, or Crawlee crawl state;
-- no login, CAPTCHA/access-control bypass, arbitrary click automation, or
-  bot-protection bypass.
+- no login, CAPTCHA/access-control bypass, general/arbitrary click automation, or
+  bot-protection bypass; v4 permits only its declared bounded reveal plan.
 ## Bounded v2 crawl contract
 
 V2 is queue/orchestration only. Crawlee does not own browser transport; every
@@ -113,3 +116,40 @@ cookies/auth headers, persistent profile/crawl resume, general browser control
 plane, access-control bypass, or product/runtime mutation. Any such need requires
 a separate authority and trust-boundary design rather than silently widening
 v1, v2, or v3.
+
+## Bounded v4 reveal contract
+
+V4 is a narrow read-oriented public-page reveal mode over the existing v1
+Playwright/policy-proxy transport. It is not general browser automation.
+
+- exactly one public unauthenticated URL plus one bounded machine-readable plan;
+- use `reveal-cli.mjs --plan-file <plan.json> <url>` only when passive v1/v2/v3
+  evidence is insufficient and a small explicit reveal is the missing job;
+- plans are at most 16 KiB, version 1, with 1..5 actions and a 12 second total
+  interaction budget;
+- action types are exactly `clickReveal` and visible-only `waitFor`;
+- selectors are CSS-only, at most 512 characters, and must resolve deterministically;
+- each action timeout is finite, defaults to 2000 ms, and cannot exceed 5000 ms;
+- `clickReveal` is limited to one visible semantic reveal controller: safe buttons,
+  `summary` under `details`, or non-form ARIA button/tab controls;
+- links, edit/input/select surfaces, submit/reset/file/navigation controls, unsafe
+  form ownership, downloads and unsupported controllers fail closed before click;
+- fresh context/browser/proxy state is disposed after every operation and no login,
+  cookie/profile/session persistence, permission grant, or supplied auth state exists.
+
+During the reveal phase, the original target/redirect/subresource policy remains active
+and an additional bounded effect guard is armed only after initial navigation:
+
+- only GET/HEAD browser requests may continue;
+- non-GET/HEAD requests, second top-level navigation, popup/new-page, download, and
+  dialog attempts are explicit blocked effects and make final `OK` impossible;
+- downloads are not accepted, dialogs are dismissed, and no browser permission is granted;
+- result provenance includes bounded `actionsRequested`, `actionsExecuted`,
+  `actionResults`, and `blockedEffects` alongside the rendered evidence.
+
+This guard does not prove universal remote-side-effect freedom. GET/HEAD behavior remains
+site-controlled, so v4 preserves an explicit residual-risk warning and must never be
+presented as a mathematically side-effect-free browser workflow. Anything requiring text
+entry, form submission, navigation workflow, authentication/session continuity, arbitrary
+JavaScript/evaluate input, AI action planning, browser-use, Stagehand, or provider actions
+belongs to separate authority, including #2030 for authenticated/stateful browser sessions.

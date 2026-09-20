@@ -5,7 +5,7 @@
 | Scope | Name | Lifecycle | Primary path | Authority | Guidelines |
 | --- | --- | --- | --- | --- | --- |
 | plugin:devpass | DevPass | declared-update-channel | plugins/devpass/** | declaredBy=plugins/devpass/README.md; artifact=plugins/devpass/latest.js; ref=main | docs/DEVPASS_GUIDELINES.md |
-| plugin:local | Local | compatibility-family | plugins/risu/local/** | evidence=plugins/risu/local/README.md | docs/LOCAL_PLUGIN_GUIDELINES.md |
+| plugin:local | Local | compatibility-family | plugins/risu/local | evidence=plugins/risu/local/README.md | docs/LOCAL_PLUGIN_GUIDELINES.md |
 | plugin:simcore | SimCore | production | plugins/simcore/** | releaseBranch=release-simcore; manifest=product-manifest.json; artifact=plugins/simcore/latest.js | docs/SIMCORE_GUIDELINES.md |
 | plugin:termux-large-doc-editor | Termux Large Doc Editor | prototype | plugins/termux/large-doc-editor/** | evidence=plugins/termux/large-doc-editor/README.md | docs/TERMUX_DEVELOPMENT_GUIDELINES.md |
 | plugin:usage-dashboard | Local Usage Dashboard | production | plugins/usage-dashboard/** | releaseBranch=release-usage-dashboard; manifest=plugins/usage-dashboard/runtime/product-manifest.json; artifact=plugins/usage-dashboard/latest.js; releaseSpecDir=.github/usage-dashboard/releases | docs/USAGE_DASHBOARD_GUIDELINES.md |

@@ -4,7 +4,9 @@ import {fileURLToPath} from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const inventoryPath = path.join(here, 'legacy-candidates.json');
+const targetContractPath = path.join(here, 'target-contract.json');
 const data = JSON.parse(fs.readFileSync(inventoryPath, 'utf8'));
+const targetContract = JSON.parse(fs.readFileSync(targetContractPath, 'utf8'));
 const errors = [];
 
 function fail(message) {
@@ -28,12 +30,14 @@ for (const field of [
 
 const allowedEcosystems = new Set(['risu', 'standalone']);
 const allowedKinds = new Set(['app', 'api', 'hybrid']);
+const allowedCategories = new Set(targetContract.categories || []);
+const categoryRegex = new RegExp(targetContract.category_pattern || 'a^');
 const allowedStates = new Set(['legacy-evidence']);
 const allowedAuthority = new Set(['UNKNOWN', 'UNASSIGNED']);
 const ids = new Set();
 
-if (!Array.isArray(data.candidates) || data.candidates.length === 0) {
-  fail('candidates must contain at least one legacy candidate');
+if (!Array.isArray(data.candidates)) {
+  fail('candidates must be an array');
 }
 
 for (const [index, candidate] of (data.candidates || []).entries()) {
@@ -55,6 +59,13 @@ for (const [index, candidate] of (data.candidates || []).entries()) {
   }
   if (!allowedKinds.has(candidate.proposed_kind)) {
     fail(`${trail}.proposed_kind invalid`);
+  }
+  if (
+    typeof candidate.proposed_category !== 'string' ||
+    !categoryRegex.test(candidate.proposed_category) ||
+    !allowedCategories.has(candidate.proposed_category)
+  ) {
+    fail(`${trail}.proposed_category invalid`);
   }
   if (!allowedStates.has(candidate.candidate_state)) {
     fail(`${trail}.candidate_state invalid`);

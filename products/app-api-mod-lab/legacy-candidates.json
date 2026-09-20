@@ -4,31 +4,5 @@
   "target_materialization_authorized": false,
   "authority_reassignment_authorized": false,
   "source_move_authorized": false,
-  "candidates": [
-    {
-      "id": "fortune-golf",
-      "display_name": "Fortune Golf 3D",
-      "proposed_ecosystem": "standalone",
-      "proposed_kind": "app",
-      "candidate_state": "legacy-evidence",
-      "repository_authority_status": "UNASSIGNED",
-      "materialized": false,
-      "migration_authorized": false,
-      "proposed_target_root": "products/app-api-mod-lab/targets/standalone/fortune-golf",
-      "evidence_locators": [
-        {
-          "type": "branch_path",
-          "branch": "fortune-golf-apk",
-          "path": "docs/fortune-golf-handoff.md",
-          "note": "Legacy branch handoff for Android/WIPI compatibility work."
-        },
-        {
-          "type": "branch_path",
-          "branch": "fortune-golf-apk",
-          "path": "fortune-golf-android/README.md",
-          "note": "Legacy branch Android build entrypoint."
-        }
-      ]
-    }
-  ]
+  "candidates": []
 }

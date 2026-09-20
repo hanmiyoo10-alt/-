@@ -26,10 +26,25 @@ if (!Array.isArray(contract.kinds) || contract.kinds.slice().sort().join(',') !=
   fail('contract kinds must be app, api, hybrid');
 }
 if (contract.id_pattern !== '^[a-z0-9]+(?:-[a-z0-9]+)*$') fail('contract id_pattern mismatch');
+if (contract.category_pattern !== '^[a-z0-9]+(?:-[a-z0-9]+)*$') fail('contract category_pattern mismatch');
+if (!Array.isArray(contract.categories) || contract.categories.length === 0) {
+  fail('contract categories must contain at least one category');
+}
 
 const idRegex = new RegExp(contract.id_pattern);
+const categoryRegex = new RegExp(contract.category_pattern);
 const ecosystemIds = new Set(Object.keys(contract.ecosystems || {}));
 const kinds = new Set(contract.kinds || []);
+const categories = new Set(contract.categories || []);
+
+if (categories.size !== (contract.categories || []).length) {
+  fail('contract categories must be unique');
+}
+for (const category of contract.categories || []) {
+  if (typeof category !== 'string' || !categoryRegex.test(category)) {
+    fail(`invalid contract category: ${category}`);
+  }
+}
 
 if (!fs.existsSync(targetRoot)) fail('targets root missing');
 
@@ -82,9 +97,20 @@ if (fs.existsSync(targetRoot)) {
       }
       if (metadata.schema_version !== 1) fail(`${entry.name}/${targetId}: schema_version must be 1`);
       if (metadata.id !== targetId) fail(`${entry.name}/${targetId}: id must match directory name`);
-      if (typeof metadata.display_name !== 'string' || !metadata.display_name.trim()) fail(`${entry.name}/${targetId}: display_name missing`);
-      if (metadata.ecosystem !== entry.name) fail(`${entry.name}/${targetId}: ecosystem must match parent directory`);
+      if (typeof metadata.display_name !== 'string' || !metadata.display_name.trim()) {
+        fail(`${entry.name}/${targetId}: display_name missing`);
+      }
+      if (metadata.ecosystem !== entry.name) {
+        fail(`${entry.name}/${targetId}: ecosystem must match parent directory`);
+      }
       if (!kinds.has(metadata.kind)) fail(`${entry.name}/${targetId}: invalid kind ${metadata.kind}`);
+      if (
+        typeof metadata.category !== 'string' ||
+        !categoryRegex.test(metadata.category) ||
+        !categories.has(metadata.category)
+      ) {
+        fail(`${entry.name}/${targetId}: invalid category ${metadata.category}`);
+      }
 
       if (!isPlainObject(metadata.authority)) {
         fail(`${entry.name}/${targetId}: authority must be an object`);

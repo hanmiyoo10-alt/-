@@ -13,11 +13,12 @@
 - active concrete target: `chzzk`
 - active target upstream/service authority: `NAVER CHZZK external service`
 - active target API surface: `public anonymous read-only playback reconnaissance`
+- active target category: `streaming`
 - production/runtime/deployment/release authority: `NONE DECLARED`
 - durable-memory profile: `check-only`
-- target taxonomy contract: `targets/` + `target-contract.json` + `validate-targets.mjs` 준비됨
-- concrete targets: `1` — `targets/standalone/chzzk/`
-- legacy candidates: `1` — `fortune-golf`
+- target taxonomy contract: `ecosystem + kind + category` metadata over stable `targets/<ecosystem>/<target-id>/` paths
+- concrete targets: `2` — `targets/standalone/chzzk/`, `targets/standalone/fortune-golf/`
+- legacy candidates: `0` — all currently inventoried legacy candidates have been materialized
 - legacy candidate inventory: `legacy-candidates.json` + `validate-legacy-candidates.mjs`
 
 이 상태에서 repository registration은 ownership locator와 작업 시작점을 제공할 뿐, 특정 앱이나 API에 대한 권한·배포 상태·릴리스 진실을 생성하지 않는다.
@@ -39,11 +40,12 @@
 
 ## 다음 한 단계
 
-CHZZK는 `targets/standalone/chzzk/`에 materialize되었다. 다음 단계는 #2020의 locked scope를 유지한 채 fresh sanitized anonymous playback flow evidence를 확보하는 것이다. Fortune Golf는 계속 `legacy-candidates.json`의 후보로 남으며 별도 migration 승인 전에는 materialize하지 않는다.
+CHZZK는 active research target으로 유지된다. Fortune Golf는 #2602에 따라 `targets/standalone/fortune-golf/`로 materialize되었고 legacy branch의 target-owned source/docs/tools가 target-local layout으로 보존되었다. 다음 Fortune Golf 단계는 옛 branch-only build/workflow를 새 경로에 맞게 별도 이관한 뒤 build/unit/device evidence를 재검증하는 것이다.
 
 ## 아직 완료로 간주하지 않는 것
 
 - CHZZK concrete target root: materialized; endpoint/runtime implementation은 시작 전
+- Fortune Golf concrete target root: materialized; runtime status는 `PARTIAL_HISTORICAL_EVIDENCE`, current compatibility는 미검증
 - 실제 runtime probe: CHZZK `UNVERIFIED_RUNTIME`
 - regression/runtime validation: fresh sanitized anonymous CHZZK flow 필요
 - deployment/release: authority 없음

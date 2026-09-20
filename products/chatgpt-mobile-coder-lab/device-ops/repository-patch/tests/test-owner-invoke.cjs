@@ -163,28 +163,43 @@ function tempInputs() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-repo-patch-owner-test-'));
   const requestPath = path.join(dir, 'request.json');
   const patchPath = path.join(dir, 'request.patch');
+  const manifestPath = path.join(dir, 'manifest.json');
+  const handoffPath = path.join(dir, 'handoff.json');
+  const m = manifest();
   fs.writeFileSync(requestPath, JSON.stringify(request()), 'utf8');
   fs.writeFileSync(patchPath, PATCH);
-  return {dir, requestPath, patchPath};
+  fs.writeFileSync(manifestPath, JSON.stringify(m), 'utf8');
+  fs.writeFileSync(handoffPath, JSON.stringify(handoff(m)), 'utf8');
+  return {dir, requestPath, patchPath, manifestPath, handoffPath, manifest: m};
+}
+function passReceipt(m = manifest()) {
+  return inv.projectGenericReceipt({
+    manifest: m,
+    request: request(),
+    primitiveSourceSha256: '1'.repeat(64),
+    kind: 'PASS',
+    prepare: primitive('PREPARE'),
+    commit: primitive('COMMIT'),
+    push: primitive('PUSH'),
+    exitCode: 0,
+  });
 }
 
-test('CLI accepts only fixed five data arguments', () => {
-  const parsed = inv.parseArgs([
+test('CLI accepts fixed data arguments plus bounded output format only', () => {
+  const base = [
     '--repo', 'owner/repo',
     '--handoff-file', '/tmp/handoff.json',
     '--manifest-file', '/tmp/manifest.json',
     '--request-file', '/tmp/request.json',
     '--patch-file', '/tmp/request.patch',
-  ]);
+  ];
+  const parsed = inv.parseArgs(base);
   assert.equal(parsed.repo, 'owner/repo');
-  assert.throws(() => inv.parseArgs([
-    '--repo', 'owner/repo',
-    '--handoff-file', '/tmp/handoff.json',
-    '--manifest-file', '/tmp/manifest.json',
-    '--request-file', '/tmp/request.json',
-    '--patch-file', '/tmp/request.patch',
-    '--command', 'git status',
-  ]), /ARGUMENT_INVALID/);
+  assert.equal(parsed.format, 'receipt');
+  assert.equal(inv.parseArgs([...base, '--format', 'agent-view']).format, 'agent-view');
+  assert.throws(() => inv.parseArgs([...base, '--format', 'raw']), /FORMAT_INVALID/);
+  assert.throws(() => inv.parseArgs([...base, '--report-file', '/tmp/out']), /ARGUMENT_INVALID/);
+  assert.throws(() => inv.parseArgs([...base, '--command', 'git status']), /ARGUMENT_INVALID/);
 });
 
 test('request parser is strict and sorted', () => {
@@ -335,8 +350,10 @@ test('PASS executes fixed prepare commit push with three guards and generic rece
       assert.equal(call.options.env.MCL_WORKSPACE_HOLDER_CLAIM, undefined);
     }
     assert.equal(receipt.validity, 'VALID');
+    assert.equal(receipt.schemaVersion, 2);
+    assert.equal(receipt.executionLifecycle, 'FINISHED');
+    assert.equal(receipt.attentionDisposition, 'COMPLETE');
     assert.equal(receipt.result, 'PASS');
-    assert.equal(receipt.attentionState, 'COMPLETE');
     assert.equal(receipt.primitiveId, 'mcl:repository-worktree-patch');
     assert.deepEqual(receipt.affectedFiles, PATHS);
     assert.equal(receipt.nextLegalAction,
@@ -438,7 +455,8 @@ test('source exposes no generic command owner or retry surface', () => {
   assert(!source.includes("'adapter-id'"));
   assert(!source.includes('shell: true'));
   assert(source.includes('shell: false'));
-  assert(source.includes("new Set(['repo', 'handoff-file', 'manifest-file', 'request-file', 'patch-file'])"));
+  assert(source.includes("'repo', 'handoff-file', 'manifest-file', 'request-file', 'patch-file', 'format'"));
+  assert(!source.includes("'report-file'"));
   assert(source.includes(inv.PRIMITIVE_RELATIVE));
 });
 
@@ -541,6 +559,122 @@ test('guard drift after commit preserves prepare and commit PASS evidence', asyn
     assert.equal(byName.get('patch-prepare'), 'PASS');
     assert.equal(byName.get('patch-commit'), 'PASS');
     assert.equal(byName.get('patch-push-postverify'), 'SKIPPED');
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('agent-view sidecars are fixed, restrictive and secret-free', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-agent-view-sidecar-'));
+  try {
+    const m = manifest();
+    const receipt = passReceipt(m);
+    const locators = inv.persistAgentArtifacts(receipt, m, {
+      workspaceInspector: () => ({ok: true, reasonCodes: [], holderPath: path.join(dir, 'holder.json')}),
+    });
+    const receiptPath = locators.receiptLocator.slice('local-artifact:'.length).split('#sha256=')[0];
+    const reportPath = locators.reportLocator.slice('local-artifact:'.length).split('#sha256=')[0];
+    for (const filePath of [receiptPath, reportPath]) {
+      const stat = fs.lstatSync(filePath);
+      assert.equal(stat.isFile(), true);
+      assert.equal(stat.isSymbolicLink(), false);
+      assert.equal(stat.mode & 0o777, 0o600);
+      const text = fs.readFileSync(filePath, 'utf8');
+      assert(!text.includes(HOLDER));
+      assert(!text.includes('GH_TOKEN'));
+      assert(!text.includes('GITHUB_TOKEN'));
+      assert(!text.includes(PATCH.toString('utf8')));
+    }
+    const storedReceipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
+    const storedReport = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+    assert.equal(storedReceipt.schemaVersion, 2);
+    assert.equal(storedReceipt.mode, 'REPOSITORY_EXECUTION_RECEIPT');
+    assert.equal(storedReport.mode, 'MCL_REPOSITORY_PATCH_EXECUTION_REPORT');
+    assert.equal(storedReport.receiptDigest, receipt.receiptDigest);
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('repository patch decision view derives bounded PASS effect output', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-agent-view-project-'));
+  try {
+    const m = manifest();
+    const receipt = passReceipt(m);
+    const projected = inv.projectOwnerAgentView(receipt, m, {
+      workspaceInspector: () => ({ok: true, reasonCodes: [], holderPath: path.join(dir, 'holder.json')}),
+    });
+    assert.equal(projected.validity, 'VALID');
+    assert.equal(projected.mode, 'REPOSITORY_AGENT_DECISION_VIEW');
+    assert.equal(projected.phase, 'IMPLEMENTATION_EFFECT');
+    assert.equal(projected.executionLifecycle, 'FINISHED');
+    assert.equal(projected.attentionDisposition, 'COMPLETE');
+    assert.equal(projected.result, 'PASS');
+    assert.equal(projected.output.owner, 'repository-patch-owner');
+    assert.equal(projected.output.filesChanged, 1);
+    assert.equal(projected.output.commitCreated, true);
+    assert.equal(projected.output.remoteHeadExact, true);
+    assert.equal(projected.output.commitLocator, 'commit:' + NEW_HEAD);
+    assert.equal(projected.output.pr, null);
+    assert.equal(projected.attention.length, 0);
+    assert.equal(projected.nextLegalAction,
+      'HOLDER_CHECK_THEN_RELEASE_D013_AND_RECORD_D014_COMPLETION');
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('sidecar failure weakens only the decision view to UNKNOWN', () => {
+  const m = manifest();
+  const receipt = passReceipt(m);
+  const projected = inv.projectOwnerAgentView(receipt, m, {
+    workspaceInspector: () => ({ok: true, reasonCodes: [], holderPath: '/tmp/holder.json'}),
+    writer: () => { throw new Error('write unavailable'); },
+  });
+  assert.equal(receipt.result, 'PASS');
+  assert.equal(projected.validity, 'INVALID');
+  assert.equal(projected.result, 'UNKNOWN');
+  assert.equal(projected.receiptLocator, null);
+  assert.equal(projected.reportLocator, null);
+});
+
+test('agent-view CLI mode emits only the final decision view', async () => {
+  const inputs = tempInputs();
+  try {
+    let calls = 0;
+    const phases = [primitive('PREPARE'), primitive('COMMIT'), primitive('PUSH')];
+    const result = await inv.runCli([
+      '--repo', 'owner/repo',
+      '--handoff-file', inputs.handoffPath,
+      '--manifest-file', inputs.manifestPath,
+      '--request-file', inputs.requestPath,
+      '--patch-file', inputs.patchPath,
+      '--format', 'agent-view',
+    ], {
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {},
+      spawnSyncImpl: () => {
+        const value = phases[calls++];
+        return {status: 0, signal: null, stdout: JSON.stringify(value), stderr: ''};
+      },
+      root: ROOT,
+      agentViewImpl: (receipt) => ({
+        schemaVersion: 1,
+        mode: 'REPOSITORY_AGENT_DECISION_VIEW',
+        validity: 'VALID',
+        phase: 'IMPLEMENTATION_EFFECT',
+        executionLifecycle: receipt.executionLifecycle,
+        attentionDisposition: receipt.attentionDisposition,
+        result: receipt.result,
+        criticalTruncated: false,
+      }),
+    });
+    const parsed = JSON.parse(result.text);
+    assert.equal(calls, 3);
+    assert.equal(parsed.mode, 'REPOSITORY_AGENT_DECISION_VIEW');
+    assert.equal(parsed.result, 'PASS');
+    assert.equal(result.text.includes('REPOSITORY_EXECUTION_RECEIPT'), false);
+    assert.equal(result.code, 0);
   } finally {
     fs.rmSync(inputs.dir, {recursive: true, force: true});
   }

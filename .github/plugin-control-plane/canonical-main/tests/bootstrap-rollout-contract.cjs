@@ -20,6 +20,7 @@ const root = path.resolve(__dirname, '../../../..');
 const descriptorDir = path.join(root, '.github/plugin-control-plane/canonical-main/descriptors');
 const registry = JSON.parse(fs.readFileSync(path.join(root, '.github/plugin-control-plane/registry.json'), 'utf8'));
 const expectedIds = [...Object.keys(registry.plugins || {}), ...Object.keys(registry.products || {})].sort();
+assert.equal(expectedIds.length, 8, 'Local compatibility parent registration should produce eight operational identities');
 const descriptorFiles = fs.readdirSync(descriptorDir).filter((name) => name.endsWith('.json')).sort();
 const descriptors = descriptorFiles.map((name) => JSON.parse(fs.readFileSync(path.join(descriptorDir, name), 'utf8')));
 const actualIds = descriptors.map((descriptor) => descriptor.id).sort();
@@ -60,6 +61,19 @@ assert.deepEqual(byId['usage-dashboard'].memory.outputs, ['docs/USAGE_DASHBOARD_
 assert.equal(byId['usage-dashboard'].authority.releaseBranch, 'release-usage-dashboard');
 assert.equal(byId['usage-dashboard'].authority.manifest, 'plugins/usage-dashboard/runtime/product-manifest.json');
 
+assert.equal(byId.local.lifecycle, 'compatibility-family');
+assert.equal(byId.local.projectPath, 'plugins/risu/local');
+assert.equal(byId.local.authority.type, 'evidence');
+assert.equal(byId.local.authority.evidence, 'plugins/risu/local/README.md');
+
+assert.equal(byId.devpass.projectPath, 'plugins/risu/local/devpass');
+assert.equal(byId.devpass.authority.type, 'evidence');
+assert.equal(byId.devpass.authority.evidence, 'plugins/risu/local/devpass/README.md');
+
+assert.equal(byId['voyage-token-check'].projectPath, 'plugins/risu/local/voyage');
+assert.equal(byId['voyage-token-check'].authority.type, 'evidence');
+assert.equal(byId['voyage-token-check'].authority.evidence, 'plugins/risu/local/voyage/DESIGN_STATUS.md');
+
 assert.equal(byId.simcore.memory.profile, 'registered-renderer');
 assert.equal(byId.simcore.memory.workflow, '.github/workflows/simcore-release-state-sync.yml');
 assert.equal(byId.simcore.memory.renderer, 'products/simcore/tooling/sync-state.mjs');
@@ -71,7 +85,7 @@ assert.deepEqual(byId.simcore.memory.outputs, [
 ]);
 assert.equal(byId.simcore.authority.releaseBranch, 'release-simcore');
 
-for (const id of ['devpass', 'termux-large-doc-editor', 'voyage-token-check', 'pocketrisu-helper-mod']) {
+for (const id of ['devpass', 'local', 'termux-large-doc-editor', 'voyage-token-check', 'pocketrisu-helper-mod']) {
   assert.equal(byId[id].memory.profile, 'check-only', `${id} must not gain a writable memory system during Phase G`);
   assert.deepEqual(byId[id].memory.outputs, [], `${id} check-only profile must have no writable outputs`);
 }

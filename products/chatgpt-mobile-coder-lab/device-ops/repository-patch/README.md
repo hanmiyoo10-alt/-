@@ -124,24 +124,54 @@ There is no automatic retry and no reset/stash/clean rollback. If a later guard
 fails after prepare or commit, the real partial leased workspace is preserved
 for explicit diagnosis/recovery.
 
-## Generic execution receipt
+## Generic execution receipt and agent-view output
 
-Successful invocation is projected through the existing repository-wide
-`REPOSITORY_EXECUTION_RECEIPT` contract with:
+Successful invocation is projected through repository-wide
+`REPOSITORY_EXECUTION_RECEIPT v2` with independent lifecycle, attention and
+result axes:
 
 ```text
 primitiveId=mcl:repository-worktree-patch
 executionSurface=MCL:S
 stage=HOST_ORCHESTRATED_REPOSITORY_PATCH
+executionLifecycle=FINISHED
+attentionDisposition=COMPLETE
 result=PASS
 nextLegalAction=HOLDER_CHECK_THEN_RELEASE_D013_AND_RECORD_D014_COMPLETION
 ```
 
-The receipt records bounded affected paths and the resulting commit locator.
-All mutation/execution/merge/release/production/runtime/security authority
-fields remain false. The receipt is evidence, not permission.
+Only this owner migrates to v2 here; unrelated legacy v1 producers remain
+unchanged. The receipt records bounded affected paths and the resulting commit
+locator. All mutation/execution/merge/release/production/runtime/security
+authority fields remain false. The receipt is evidence, not permission.
 
-The invoker itself does not release D-013, remove the holder, create D-014
+The CLI default remains `--format receipt` implicitly. The only optional
+output selector is `--format agent-view`; no caller-selected output path,
+owner, command, branch, worktree, base, executor, retry or environment payload
+is accepted.
+
+In `agent-view` mode the exact same fixed prepare → commit → push owner path
+runs. After the canonical v2 receipt exists, the owner derives two fixed
+secret-free evidence sidecars in the leased worktree's Git administrative
+directory, outside tracked repository bytes:
+
+- canonical v2 receipt JSON;
+- `MCL_REPOSITORY_PATCH_EXECUTION_REPORT v1` JSON.
+
+Sidecars use restrictive file mode, bounded content and deterministic
+manifest-bound names. They never contain the raw workspace-holder claim,
+credentials/tokens, environment dumps, raw patch bytes, arbitrary argv or full
+stdout/stderr. If sidecar evidence cannot be materialized, the underlying
+canonical effect receipt remains factual while the GPT-facing decision view
+fails closed to UNKNOWN rather than inventing a complete locator.
+
+Normal `agent-view` stdout is one final `REPOSITORY_AGENT_DECISION_VIEW v1`.
+For PASS it exposes only bounded effect facts such as changed-file count,
+commit-created, remote-head-exact and commit locator. `pr=null` is explicit
+because this owner still does not create pull requests. The view proves only
+`IMPLEMENTATION_EFFECT`, not whole `IMPLEMENTATION_PR` completion.
+
+The invoker itself still does not release D-013, remove the holder, create D-014
 completion evidence, open/merge a PR, touch main, or perform release/production
 effects.
 

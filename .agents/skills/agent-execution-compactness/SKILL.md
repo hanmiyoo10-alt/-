@@ -201,9 +201,11 @@ semantic intent
 → targeted drill-down only for NEEDS_REVIEW, failure, UNKNOWN, CONFLICT, blocker, ambiguity, or insufficient proof
 ```
 
-When an existing runner can preserve the evidence needed for the next decision in a bounded receipt, prefer that receipt over pushing the complete stdout/stderr/environment transcript into the interaction. A useful receipt preserves operation/primitive identity, exact source or ref identity when applicable, execution surface and stage/substep identity, checks actually executed, bounded counters/affected files, result and attention state, stable reason codes, artifact/log locators, bounded failure tails when needed, and the next legal action when determinable.
+When an existing runner can preserve the evidence needed for the next decision in a bounded receipt, prefer that receipt over pushing the complete stdout/stderr/environment transcript into the interaction. A useful receipt preserves operation/primitive identity, exact source or ref identity when applicable, execution surface and stage/substep identity, checks actually executed, bounded counters/affected files, lifecycle/attention/result evidence at the schema version actually emitted, stable reason codes, artifact/log locators, bounded failure tails when needed, and the next legal action when determinable.
 
-Use `NEEDS_REVIEW` as an explicit semantic-judgment boundary. A deterministic runner must not silently convert an anomalous-but-successfully-executed result into a stronger PASS/FAIL conclusion merely to avoid returning control to the agent.
+Repository execution receipt v1 remains a compatibility contract with legacy `attentionState` plus `result`. V2 is explicit opt-in and separates `executionLifecycle = QUEUED | RUNNING | FINISHED | UNKNOWN`, `attentionDisposition = COMPLETE | NEEDS_REVIEW | BLOCKED | UNKNOWN | CONFLICT`, and the existing result axis. Never guess v2 values from v1, and never coerce lifecycle `UNKNOWN` into RUNNING or FINISHED merely to simplify orchestration.
+
+Use `NEEDS_REVIEW` as an explicit semantic-judgment boundary. In v2 it may coexist with a nonterminal lifecycle. A deterministic runner must not silently convert an anomalous-but-successfully-executed result into a stronger PASS/FAIL conclusion merely to avoid returning control to the agent.
 
 A receipt may summarize raw detail but must not destroy it when the owning contract requires audit or diagnosis. Preserve exact locators so targeted drill-down can retrieve the smallest relevant raw segment. Do not put secrets, credentials, private payloads, unbounded environment dumps, or arbitrary full logs into the normal receipt.
 

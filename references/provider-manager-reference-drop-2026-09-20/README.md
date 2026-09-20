@@ -48,3 +48,13 @@ Tracking:
 - shared observability idea: U-26 in #464
 - migration design: #2582
 - archive work packet: #2583
+
+## Restore exact copies
+
+To reconstruct working copies in another directory without changing the archived sources:
+
+```bash
+./RESTORE.sh /tmp/provider-manager-reference-restored
+```
+
+The restore script copies both archived source files and verifies their SHA-256 identities against `SHA256SUMS` before reporting success.

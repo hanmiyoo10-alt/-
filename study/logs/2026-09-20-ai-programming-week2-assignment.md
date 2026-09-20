@@ -123,6 +123,32 @@ This remains learning context only and is not assumed to be the assignment requi
 - The audio track is non-empty and has normal recorded signal energy.
 - No authoritative transcript/caption surface was found. Spoken semantic content is therefore not claimed from metadata alone.
 
+## Assignment hypothesis — 2026-09-20
+
+The user identified the PDF Exercise section as the likely week-2 assignment source.
+
+Direct visual re-check of the PDF confirms a dedicated final section titled `Exercise` followed by exactly four exercise slides:
+
+1. `Exercise 1: 역슬래시(\) 출력 프로그램`
+   - reproduce the shown multi-line English output with quotes, literal backslash text, and a Windows-style path.
+2. `Exercise 2: 원리금 계산 프로그램`
+   - input `money`, `rate`, and `year`, then calculate and print `total = money(1+rate)^year`.
+   - shown example: 3,500,000 principal, 0.03 annual rate, 3 years → 3,824,544.50 won.
+3. `Exercise 3: BMI(비만도) 계산 프로그램`
+   - input weight and height as real numbers and compute `bmi = weight / (height**2)`.
+   - shown example: 95 kg, 1.82 m → BMI 28.68.
+4. `Exercise 4: dog와 cat 계산 문제`
+   - given string variables `dogs = '367'` and `cats = '195'`, convert/use them numerically and print that dogs exceed cats by 172.
+
+Current classification:
+```text
+ASSIGNMENT_CANDIDATE = PDF_EXERCISE_1_TO_4
+CONFIDENCE = HIGH
+AUTHORITATIVE_INSTRUCTOR_CONFIRMATION = NOT_YET_VERIFIED
+```
+
+Until a course announcement or spoken instruction confirms submission scope, keep this as a high-confidence assignment candidate rather than an absolute fact.
+
 ## Assignment source search
 
 The 2주차 Drive folder contains no file explicitly named as the assignment.
@@ -132,15 +158,9 @@ Drive-wide searches using:
 - `2주차 과제`
 - `과제`
 
-did not identify a reliable AI 프로그래밍 2주차 assignment prompt.
+did not identify a separate reliable AI 프로그래밍 2주차 assignment prompt.
 
-Therefore:
-
-```text
-ASSIGNMENT_PROMPT = UNKNOWN
-```
-
-Do not infer the assignment from the practice notebook or lecture PDF.
+Therefore the dedicated PDF Exercise section is currently the strongest assignment candidate.
 
 ## Repository write gate observation
 
@@ -152,9 +172,9 @@ The session log is therefore being proposed through a normal branch/PR path.
 
 ## Next action
 
-Acquire the actual assignment prompt from the user or another authoritative course surface, then:
-1. split it into required outputs;
-2. solve one requirement at a time;
-3. run/verify every code result;
-4. preserve any new problem-specific errors in `study/problems/`;
-5. update this session log with verified completion state.
+Proceed through Exercise 1 → 4 unless stronger course evidence changes the scope:
+1. understand the required output;
+2. write the code;
+3. execute and compare with the PDF example;
+4. record any problem-specific errors;
+5. verify final submission form before marking the assignment complete.

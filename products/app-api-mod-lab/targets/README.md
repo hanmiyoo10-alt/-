@@ -17,6 +17,7 @@ targets/
 - `risu/<target-id>` means the target belongs to or requires the Risu ecosystem.
 - `standalone/<target-id>` means the target is independent of Risu.
 - `app / api / hybrid` is metadata in `TARGET.json`, not another required directory layer.
+- `category` is the target's primary product/domain grouping metadata and is also not a directory layer.
 
 Do not create empty target directories. A concrete target begins when its target root and `TARGET.json` can truthfully identify the target and its bounded modification/validation surface.
 
@@ -29,6 +30,7 @@ Each concrete target root must contain `TARGET.json` with:
 - non-empty `display_name`
 - `ecosystem: risu | standalone`, matching the parent directory
 - `kind: app | api | hybrid`
+- required primary `category` from the reviewed category vocabulary in `target-contract.json`
 - `authority.source_upstream`
 - `authority.release`
 - `authority.deployment`
@@ -48,6 +50,7 @@ Authority fields may explicitly use `UNKNOWN` or `UNASSIGNED` when evidence is g
   "display_name": "Example Target",
   "ecosystem": "standalone",
   "kind": "hybrid",
+  "category": "utility",
   "authority": {
     "source_upstream": "UNKNOWN",
     "release": "UNKNOWN",
@@ -65,6 +68,8 @@ Authority fields may explicitly use `UNKNOWN` or `UNASSIGNED` when evidence is g
 ```
 
 This is a format example only. It does not declare a real target or authority.
+
+The primary category is for deterministic browsing/indexing. Reclassification changes metadata, not the target path. Future multi-domain needs should use a separately reviewed secondary/tag field rather than making the primary category ambiguous.
 
 ## Shared extraction
 

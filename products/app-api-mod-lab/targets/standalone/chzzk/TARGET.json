@@ -4,6 +4,7 @@
   "display_name": "NAVER CHZZK",
   "ecosystem": "standalone",
   "kind": "api",
+  "category": "streaming",
   "authority": {
     "source_upstream": "NAVER CHZZK external service; official CHZZK Open API documentation is authoritative only for its documented supported Open API surface; internal web/app API remains unofficial evidence",
     "release": "UNASSIGNED",

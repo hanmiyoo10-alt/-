@@ -13,11 +13,12 @@
 - active concrete target: `chzzk`
 - active target upstream/service authority: `NAVER CHZZK external service`
 - active target API surface: `public anonymous read-only playback reconnaissance`
+- active target category: `streaming`
 - production/runtime/deployment/release authority: `NONE DECLARED`
 - durable-memory profile: `check-only`
-- target taxonomy contract: `targets/` + `target-contract.json` + `validate-targets.mjs` 준비됨
+- target taxonomy contract: `ecosystem + kind + category` metadata over stable `targets/<ecosystem>/<target-id>/` paths
 - concrete targets: `1` — `targets/standalone/chzzk/`
-- legacy candidates: `1` — `fortune-golf`
+- legacy candidates: `1` — `fortune-golf` (`category: game` proposed)
 - legacy candidate inventory: `legacy-candidates.json` + `validate-legacy-candidates.mjs`
 
 이 상태에서 repository registration은 ownership locator와 작업 시작점을 제공할 뿐, 특정 앱이나 API에 대한 권한·배포 상태·릴리스 진실을 생성하지 않는다.

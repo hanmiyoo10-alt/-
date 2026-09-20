@@ -82,3 +82,39 @@ CHZZK는 Risu X / `api` target으로 분류한다. materialization 후에는 더
 ### authority 의미
 
 App API Mod Lab은 repository-local research/probe/client artifacts만 소유한다. NAVER CHZZK external service/runtime authority를 소유하지 않는다. endpoint/runtime liveness는 fresh evidence 전까지 `UNVERIFIED_RUNTIME`이다.
+
+## 2026-09-20 — target primary category axis
+
+### 결정
+
+각 App API Mod Lab target은 Risu ecosystem과 technical kind 외에 하나의 primary product/domain `category`를 가진다.
+
+세 축은 서로 다른 의미를 가진다.
+
+```text
+ecosystem → Risu 관계
+kind      → app / api / hybrid
+category  → game / streaming / utility ... 제품 분야
+```
+
+현재 분류:
+- `chzzk` → `streaming`
+- `fortune-golf` legacy candidate → proposed `game`
+
+### 물리 경로
+
+category는 경로 계층으로 만들지 않는다.
+
+```text
+targets/<ecosystem>/<target-id>/
+```
+
+를 계속 유지한다. category 변경은 metadata 변경이며 디렉터리 이동 사유가 아니다.
+
+### 검증 계약
+
+`target-contract.json`이 reviewed category vocabulary와 slug pattern을 소유하고, `validate-targets.mjs`가 모든 concrete target의 required primary category를 검증한다.
+
+Legacy candidate는 `proposed_category`를 같은 vocabulary로 기록하고 `validate-legacy-candidates.mjs`가 검증한다.
+
+category는 탐색/인덱싱용 분류일 뿐 source/runtime/release/deployment authority를 생성하지 않는다. 다중 분야가 실제로 필요해질 때는 primary category를 모호하게 만들지 않고 별도의 secondary/tag contract를 검토한다.

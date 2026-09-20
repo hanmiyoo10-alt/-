@@ -30,7 +30,7 @@
 | PRODUCT | X | Mobile Coder Lab | scope:research-product | products/chatgpt-mobile-coder-lab/** | products/standalone/mobile-coder-lab | reclassify |
 | PRODUCT | O | PocketRisu | product:pocketrisu-helper-mod | products/pocketrisu-helper-mod/** | products/risu/pocketrisu | regroup |
 | PRODUCT | X | Termux | plugin:termux-large-doc-editor | plugins/termux/** | products/standalone/termux | reclassify |
-| PLUGIN | O | Local | plugin:usage-dashboard<br>plugin:devpass<br>plugin:voyage-token-check | plugins/usage-dashboard/**<br>products/usage-dashboard/**<br>plugins/risu/local/devpass/**<br>plugins/devpass/**<br>plugins/risu/local/voyage/**<br>voyage-token-check/**<br>tools/usage-dashboard-mcp/** | plugins/risu/local | consolidate |
+| PLUGIN | O | Local | plugin:usage-dashboard<br>plugin:devpass<br>plugin:voyage-token-check | plugins/usage-dashboard/**<br>products/usage-dashboard/**<br>plugins/risu/local/usage-dashboard/**<br>plugins/risu/local/devpass/**<br>plugins/devpass/**<br>plugins/risu/local/voyage/**<br>voyage-token-check/**<br>tools/usage-dashboard-mcp/** | plugins/risu/local | consolidate |
 | PLUGIN | O | SimCore | plugin:simcore | plugins/simcore/**<br>products/simcore/**<br>tools/simcore-mcp/** | plugins/risu/simcore | regroup |
 | PLATFORM | X | Agent Platform | scope:repo | .agents/skills/**<br>tools/agent-skill-orchestrator/**<br>tools/agent-skill-eval/**<br>tools/agent-skill-security/** | platform/agents | regroup |
 | PLATFORM | X | Canonical Main | scope:repo | .github/plugin-control-plane/canonical-main/** | platform/canonical-main | regroup |

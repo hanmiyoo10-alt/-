@@ -1813,3 +1813,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/5e0877268c4058516774a2392a903bfd75126812)
 - Event ID: `54ea4261958c8a58fa691da5036adffff4f4879900b3b44122200e9aa31e674e`
 <!-- canonical-main-doc-promoted:54ea4261958c8a58fa691da5036adffff4f4879900b3b44122200e9aa31e674e -->
+
+### 2026-09-20 — feat(control-plane): project repository family navigation (#2608)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `a8f1687b05877e585639e3a47800ce9d3e465455`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a8f1687b05877e585639e3a47800ce9d3e465455)
+- Event ID: `68635ee436169fd6108856a504ec6ca74e4ea5cd53606c6e3fcc7a2a1d33c187`
+<!-- canonical-main-doc-promoted:68635ee436169fd6108856a504ec6ca74e4ea5cd53606c6e3fcc7a2a1d33c187 -->

@@ -1861,3 +1861,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/767f582457d78add28e6946164e48e85aaf98c62)
 - Event ID: `d5cecdcddaaf9e6c64b391cffbfcfb8711855be87549709f41dc929a3f048ea5`
 <!-- canonical-main-doc-promoted:d5cecdcddaaf9e6c64b391cffbfcfb8711855be87549709f41dc929a3f048ea5 -->
+
+### 2026-09-20 — docs(repo): refresh project catalog live-health pointer (#2656)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `f7ad8c38f687c0219baf08a2d6d6f14b72f6ada8`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f7ad8c38f687c0219baf08a2d6d6f14b72f6ada8)
+- Event ID: `eb6928593cec3660afec9e5856c69f3dc8fb06175a3787a54a7f7f069a66fda5`
+<!-- canonical-main-doc-promoted:eb6928593cec3660afec9e5856c69f3dc8fb06175a3787a54a7f7f069a66fda5 -->

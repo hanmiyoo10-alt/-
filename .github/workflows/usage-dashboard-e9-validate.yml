@@ -122,6 +122,7 @@ jobs:
     needs: [resolve_validation, validate_exact]
     if: ${{ always() && needs.resolve_validation.result == 'success' }}
     permissions:
+      contents: read
       actions: write
       issues: write
       pull-requests: write

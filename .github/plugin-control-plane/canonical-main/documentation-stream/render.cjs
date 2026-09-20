@@ -58,7 +58,7 @@ function renderProjectCatalog({ registry, taxonomy = {}, root }) {
   return [
     '# Repository Project Catalog',
     '',
-    '> Generated from `.github/plugin-control-plane/registry.json` and canonical-main descriptors. Operational freshness remains on status issues/#305 rather than this durable catalog.',
+    '> Generated from `.github/plugin-control-plane/registry.json` and canonical-main descriptors. Operational freshness comes from direct current `main` + #485; this durable catalog is not a live health authority.',
     '',
     '| Scope | Name | Lifecycle | Primary path | Authority | Guidelines |',
     '| --- | --- | --- | --- | --- | --- |',

@@ -278,7 +278,7 @@ jobs:
             -H "X-GitHub-Api-Version: $API_VERSION" \
             "repos/$GITHUB_REPOSITORY/pulls/$PR")"
           PR_STATE="$(jq -er '.state' <<<"$PR_JSON")"
-          PR_DRAFT="$(jq -er '.draft' <<<"$PR_JSON")"
+          PR_DRAFT="$(jq -er 'if (.draft | type) == "boolean" then (.draft | tostring) else error("draft must be boolean") end' <<<"$PR_JSON")"
           PR_BASE_REF="$(jq -er '.base.ref' <<<"$PR_JSON")"
           PR_BASE_SHA="$(jq -er '.base.sha' <<<"$PR_JSON")"
           PR_HEAD="$(jq -er '.head.sha' <<<"$PR_JSON")"

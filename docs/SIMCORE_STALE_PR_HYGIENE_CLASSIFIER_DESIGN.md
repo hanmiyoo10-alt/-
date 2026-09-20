@@ -246,7 +246,7 @@ Closed/merged PRs may be omitted from the report or marked as non-open input; th
 
 ## 8. Current examples / evidence constraints
 
-Current repository audit preserves three open legacy/control PRs:
+At the 2026-08-26 design-time repository audit, three open legacy/control PRs were preserved:
 
 ```text
 #2   Release simcore
@@ -277,6 +277,8 @@ shadow/release-system implementation PR
 ```
 
 These examples are design evidence, not hard-coded PR-number rules.
+
+Post-design status note (2026-09-20): PR #109 was manually closed without merge after fresh S-11 classification returned `COMMAND_ONLY_DONE` with `BODY_NOT_INTENDED_TO_MERGE` + `KNOWN_WORK_COMPLETED`. The #109 block above remains the frozen design-time open-state specimen; it is not current PR-state authority.
 
 ---
 

@@ -340,3 +340,24 @@ Required final output form:
 
 Exercise 2 state: `PARTIAL / ONLY FINAL F-STRING REMAINS`.
 Exercise 3 is not present in the current notebook snapshot yet.
+
+
+## Exercise 2 re-check — fifth attempt
+
+Latest Drive snapshot modified at 2026-09-20 22:58 KST.
+
+Verified:
+- principal/rate/year input types are correct;
+- compound-interest formula is correct: `total = money * (1 + rate) ** year`;
+- learner now recognizes that f-string variables belong in `{ }`.
+
+Current blocker at execution count 16:
+- final line starts with malformed `print(f'('...` structure;
+- format specifier is written as `{total\2f}` instead of `{total:.2f}`;
+- result is `SyntaxError`.
+
+Exact target:
+- `print(f'{year}년 후의 원리금은 {total:.2f}원 입니다.')`
+
+Exercise 2 state: `PARTIAL / FINAL F-STRING ONLY`.
+Exercise 3 is not present in the current notebook snapshot yet.

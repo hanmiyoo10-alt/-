@@ -488,3 +488,30 @@ PDF requirement:
 - output `강아지가 고양이보다 172마리 더 많다`.
 
 Exercise 4 state: `WRONG / STRING-TO-INT CONVERSION + DIFFERENCE CALCULATION REQUIRED`.
+
+
+## Exercise 4 re-check
+
+Latest Drive snapshot modified at 2026-09-20 23:28 KST.
+
+Verified newest Exercise 4 execution:
+- `execution_count = 38`
+- `dogs = '367'`
+- `cats = '195'`
+- `difference = int(dogs) - int(cats)` is correct
+
+Current output:
+- `강아지가 고양이보다 int(difference)마리 더 많다`
+
+Current blocker:
+- `int(difference)` is inside quotes, so it is printed as literal text;
+- `difference` is already an int, so no second `int(...)` conversion is needed;
+- use an f-string to insert the value.
+
+Target:
+- `print(f'강아지가 고양이보다 {difference}마리 더 많다')`
+- expected output: `강아지가 고양이보다 172마리 더 많다`
+
+Exercise 4 state: `PARTIAL / CALCULATION COMPLETE, OUTPUT INTERPOLATION REMAINS`.
+
+Exercise 3 remains unchanged from the prior verified state: calculation/output correct, but weight input still uses `int(input(...))` rather than the PDF-requested real-number input.

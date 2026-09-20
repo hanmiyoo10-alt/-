@@ -584,3 +584,28 @@ Submission-format note:
 - Drive metadata reports the file as shared but does not expose enough permission metadata to verify `Anyone with the link / Viewer`; this must still be checked in the Colab Share dialog.
 
 The filename has an inherited copy suffix (`의 사본의 사본`). Week-1 PDF does not impose a filename rule, but renaming to a clean title would reduce submission ambiguity.
+
+
+## Clean submission-copy re-check
+
+Latest submission-copy snapshot modified at 2026-09-20 23:47 KST.
+
+Verified improvements:
+- student number/name are now in a Python code cell as comments: `# 202431697`, `# 배지혜`;
+- Exercise 1 output is correct;
+- Exercise 2 source/output remain correct, including 3824544.50;
+- Exercise 3 uses float for both inputs and output remains `당신의 BMI= 28.68입니다.`;
+- Exercise 4 outputs `강아지가 고양이보다 172마리 더 많다`.
+
+Presentation anomaly:
+- assignment-number Markdown headings are shifted one position downward:
+  - Exercise 1 code appears before the `1번 과제` heading;
+  - `1번 과제` is before Exercise 2;
+  - `2번 과제` is before Exercise 3;
+  - `3번 과제` is before Exercise 4;
+  - a trailing `4번 과제` heading remains after Exercise 4.
+- easiest safe cleanup is to move/add headings so each heading precedes its matching code, or remove the optional headings entirely.
+
+Other submission notes:
+- filename still contains `의 사본의 사본`; filename naming is not mandated by the Week-1 PDF, but a clean rename is advisable;
+- Drive metadata still does not expose enough permission detail to verify `Anyone with the link / Viewer`; check this in the Colab Share dialog.

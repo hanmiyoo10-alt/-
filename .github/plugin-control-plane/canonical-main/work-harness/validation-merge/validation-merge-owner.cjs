@@ -849,6 +849,7 @@ async function finalizeWithClient({client, packetNumber, prNumber, inspectEviden
 const GH_READ_ENDPOINTS = Object.freeze([
   /^\/branches\/main$/,
   /^\/issues\/(?:485|[1-9][0-9]*)$/,
+  /^\/issues\/[1-9][0-9]*\/comments\?per_page=100&page=[1-9][0-9]*$/,
   /^\/pulls\/[1-9][0-9]*$/,
   /^\/pulls\/[1-9][0-9]*\/(?:files|reviews|comments)\?per_page=100&page=[1-9][0-9]*$/,
   /^\/pulls\/[1-9][0-9]*\/requested_reviewers\?per_page=100$/,

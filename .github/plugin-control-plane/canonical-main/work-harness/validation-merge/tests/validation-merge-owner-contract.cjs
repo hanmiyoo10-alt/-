@@ -250,6 +250,9 @@ test('live client falls back to fixed gh read transport when token env is absent
     if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/branches/main') {
       return {code: 0, stdout: JSON.stringify({commit: {sha: BASE}}), stderr: ''};
     }
+    if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/issues/' + PR + '/comments?per_page=100&page=1') {
+      return {code: 0, stdout: '[]', stderr: ''};
+    }
     if (args[0] === 'api' && args[1] === 'graphql') {
       return {code: 0, stdout: JSON.stringify(emptyThreads()), stderr: ''};
     }
@@ -259,12 +262,14 @@ test('live client falls back to fixed gh read transport when token env is absent
     throw new Error('fetch must not be used without env token');
   }});
   assert.deepEqual(await client.api('/branches/main'), {commit: {sha: BASE}});
+  assert.deepEqual(await client.api('/issues/' + PR + '/comments?per_page=100&page=1'), []);
   assert.deepEqual(await client.graphql(owner.REVIEW_THREADS_QUERY, {
     owner: 'hanmiyoo10-alt', name: '-', number: PR,
   }), emptyThreads());
   assert.ok(calls.every((args) => args[0] === 'api'));
   assert.equal(calls.some((args) => args.includes('--method') && args.includes('POST')), false);
   assert.equal(calls.some((args) => args.join(' ').includes('token')), false);
+  await assert.rejects(client.api('/issues/' + PR + '/comments'), /gh read endpoint forbidden/);
   await assert.rejects(client.api('/releases'), /gh read endpoint forbidden/);
   await assert.rejects(client.graphql('query{viewer{login}}', {
     owner: 'hanmiyoo10-alt', name: '-', number: PR,

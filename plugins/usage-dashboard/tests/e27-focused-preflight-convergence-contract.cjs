@@ -5,11 +5,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const e27 = require('../tools/release_focused_preflight_e27.cjs');
+const {LEGACY_ROOT, normalizeRoot} = require('../tools/release_path_profile.cjs');
+const sourceRoot = normalizeRoot(process.env.UD_SOURCE_ROOT || LEGACY_ROOT);
 
 const workflow = fs.readFileSync('.github/workflows/usage-dashboard-stage-e7.yml', 'utf8');
-const reconcileSource = fs.readFileSync('plugins/usage-dashboard/tools/reconcile_release_candidate.py', 'utf8');
-const helperSource = fs.readFileSync('plugins/usage-dashboard/tools/release_focused_preflight_e27.cjs', 'utf8');
-const registrySource = fs.readFileSync('plugins/usage-dashboard/tests/registry.cjs', 'utf8');
+const reconcileSource = fs.readFileSync(`${sourceRoot}/tools/reconcile_release_candidate.py`, 'utf8');
+const helperSource = fs.readFileSync(`${sourceRoot}/tools/release_focused_preflight_e27.cjs`, 'utf8');
+const registrySource = fs.readFileSync(`${sourceRoot}/tests/registry.cjs`, 'utf8');
 const reconciler = fs.readFileSync('.github/workflows/usage-dashboard-e9-release-reconcile.yml', 'utf8');
 const validator = fs.readFileSync('.github/workflows/usage-dashboard-e9-validate.yml', 'utf8');
 const reusableValidator = fs.readFileSync('.github/workflows/reusable-usage-dashboard-validate.yml', 'utf8');
@@ -67,7 +69,8 @@ try {
 }
 
 // E21 is reused as the exact existing executable contract. E27 does not copy its allowlists/markers.
-assert.ok(helperSource.includes("const E21_TEST = 'plugins/usage-dashboard/tests/e21-evidence-consumer-convergence-contract.cjs'"));
+assert.equal(e27.rootContext(sourceRoot).e21Test, `${sourceRoot}/tests/e21-evidence-consumer-convergence-contract.cjs`);
+assert.ok(helperSource.includes('function rootContext(sourceRoot = LEGACY_ROOT)'));
 assert.equal(helperSource.includes("directEvidenceNames = ['verifiedBaseline'"), false, 'E21 static ownership rules must not be copied into E27');
 assert.equal(helperSource.includes('directEvidenceOwners = new Set'), false, 'E21 allowlist must remain single-owned');
 

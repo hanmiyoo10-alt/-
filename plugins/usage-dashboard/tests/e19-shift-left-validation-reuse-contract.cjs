@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const specContract = require('../tools/release_spec_contract_e19.cjs');
 const e18 = require('../tools/derived_impact_e18.cjs');
+const {resolveSourceRoot} = require('./helpers/current-release.cjs');
+const sourceRoot = resolveSourceRoot();
 
 const currentSpec = JSON.parse(fs.readFileSync('.github/usage-dashboard/releases/5.95.json','utf8'));
 assert.deepEqual(specContract.inspectReleaseSpec(currentSpec), [], 'current 5.95 spec must satisfy canonical E19 release-spec shape');
@@ -50,16 +52,16 @@ const p49 = fs.readFileSync('plugins/usage-dashboard/tests/p49-release-notes-dia
 assert.ok(p49.includes('release_spec_contract_e19.cjs'), 'P49 must consume canonical E19 spec shape');
 assert.equal(p49.includes('P49 highlights count must be 1..5'), false, 'P49 must not own a second bounded-array schema implementation');
 
-const reconcile = fs.readFileSync('plugins/usage-dashboard/tools/reconcile_release_candidate.py','utf8');
+const reconcile = fs.readFileSync(`${sourceRoot}/tools/reconcile_release_candidate.py`,'utf8');
 for (const marker of [
   'assert_declared_materializer_second_pass(spec)',
   'E19_MATERIALIZER_NOT_IDEMPOTENT',
   'E19_MATERIALIZER_SECOND_PASS_GREEN',
   'run_shift_left_structural_gates(spec_path)',
   'E19_STRUCTURAL_GATE_REJECTED',
-  'plugins/usage-dashboard/tests/current-release-contract.cjs',
-  'plugins/usage-dashboard/tests/p5-module-layout.cjs',
-  'plugins/usage-dashboard/tests/p49-release-notes-diagnostic-guidance.cjs',
+  "TESTS / 'current-release-contract.cjs'",
+  "TESTS / 'p5-module-layout.cjs'",
+  "TESTS / 'p49-release-notes-diagnostic-guidance.cjs'",
 ]) assert.ok(reconcile.includes(marker), `E19 reconciliation path missing ${marker}`);
 assert.ok(reconcile.indexOf('assert_declared_materializer_second_pass(spec)') < reconcile.indexOf('reconcile_once(spec_path, spec)'), 'declared materializer second pass must precede generic reconciliation');
 assert.ok(reconcile.lastIndexOf('run_shift_left_structural_gates(spec_path)') > reconcile.lastIndexOf("MATERIALIZER_IDEMPOTENT:"), 'cheap structural gates must run after stable reconciliation');

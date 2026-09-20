@@ -6,16 +6,18 @@ import json
 import re
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-MANIFEST_PATH = REPO_ROOT / 'plugins/usage-dashboard/runtime/product-manifest.json'
+from validate_release_candidate import LEGACY_ROOT, normalize_root
+
+REPO_ROOT = Path.cwd().resolve()
 GUIDELINES_PATH = REPO_ROOT / 'docs/USAGE_DASHBOARD_GUIDELINES.md'
 RELEASES_PATH = REPO_ROOT / '.github/usage-dashboard/releases'
 START = '<!-- USAGE_DASHBOARD_RELEASE_STATE_START -->'
 END = '<!-- USAGE_DASHBOARD_RELEASE_STATE_END -->'
-CURRENT_RELEASE_PATTERN = re.compile(r'Current release implementation: `[^`]+`\.')
+CURRENT_RELEASE_PATTERN = re.compile(r'Current release implementation: `[^`]+`.')
 
 
-def release_state_block(manifest: dict) -> str:
+def release_state_block(manifest: dict, source_root: str = LEGACY_ROOT) -> str:
+    root = normalize_root(source_root)
     product = str(manifest.get('productVersion') or '')
     release_branch = str(manifest.get('releaseBranch') or '')
     components = manifest.get('components') or {}
@@ -31,7 +33,7 @@ def release_state_block(manifest: dict) -> str:
         f'- Bridge Engine: `{engine_version}`',
         f'- Bridge Manager: `{manager_version}`',
         f'- Release branch: `{release_branch}`',
-        '- Source: `plugins/usage-dashboard/runtime/product-manifest.json`',
+        f'- Source: `{root}/runtime/product-manifest.json`',
         END,
     ])
 
@@ -69,11 +71,21 @@ def synchronized_text(current: str, block: str, memory: str) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description='Synchronize Local Usage Dashboard project memory with the product manifest and release spec.')
     parser.add_argument('--check', action='store_true', help='fail instead of writing when the snapshot is stale')
+    parser.add_argument('--root', default=LEGACY_ROOT, help='candidate source root')
     args = parser.parse_args()
 
-    manifest = json.loads(MANIFEST_PATH.read_text(encoding='utf-8'))
+    try:
+        source_root = normalize_root(args.root)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    if not GUIDELINES_PATH.is_file() or not RELEASES_PATH.is_dir():
+        raise SystemExit('usage-dashboard project memory must run from the repository root')
+
+    manifest_path = REPO_ROOT / source_root / 'runtime/product-manifest.json'
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
     current = GUIDELINES_PATH.read_text(encoding='utf-8')
-    expected = synchronized_text(current, release_state_block(manifest), current_release_memory(manifest))
+    expected = synchronized_text(current, release_state_block(manifest, source_root), current_release_memory(manifest))
 
     if expected == current:
         print('usage-dashboard project memory: synchronized')

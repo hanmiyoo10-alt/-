@@ -3,14 +3,14 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const {resolveSourceRoot, assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 const {discoverTests} = require('./registry.cjs');
 const {PARTS} = require('../src/parts.cjs');
 const {assertReleaseSpec} = require('../tools/release_spec_contract_e19.cjs');
 
-const root = 'plugins/usage-dashboard';
+const root = resolveSourceRoot();
 const src = `${root}/src`;
-const release = assertCurrentReleaseArtifacts();
+const release = assertCurrentReleaseArtifacts(null, root);
 const core = fs.readFileSync(`${src}/00-runtime-core.part.js`, 'utf8');
 const context = fs.readFileSync(`${src}/50-dashboard-context.part.js`, 'utf8');
 const markup = fs.readFileSync(`${src}/54-dashboard-markup.part.js`, 'utf8');

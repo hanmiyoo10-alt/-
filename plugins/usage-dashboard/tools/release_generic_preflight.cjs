@@ -3,9 +3,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const e24 = require('./release_evidence_handoff_e24.cjs');
+const {LEGACY_ROOT, normalizeRoot} = require('./release_path_profile.cjs');
 
-const TEST_ROOT = 'plugins/usage-dashboard/tests';
 const HISTORICAL_LOCK = 'UD_HISTORICAL_VERSION_LOCK';
+
+function testRootForSourceRoot(sourceRoot = LEGACY_ROOT) {
+  return path.posix.join(normalizeRoot(sourceRoot), 'tests');
+}
 
 function walkCjs(root) {
   const out = [];
@@ -46,7 +50,7 @@ function staleProductAssertions(source, targetVersion) {
   return findings;
 }
 
-function inspect(specPath, testRoot = TEST_ROOT) {
+function inspect(specPath, testRoot = testRootForSourceRoot()) {
   const spec = JSON.parse(fs.readFileSync(specPath, 'utf8'));
   const targetVersion = String(spec.productVersion || '');
   if (!/^3\.0\.0-alpha\.5\.\d+$/.test(targetVersion)) throw new Error(`RELEASE_PREFLIGHT_TARGET_INVALID:${targetVersion}`);
@@ -70,6 +74,7 @@ function inspectReleaseEvidenceContext(spec, context) {
 function parseArgs(args) {
   let specPath = '';
   let contextPath = '';
+  let sourceRoot = LEGACY_ROOT;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === '--spec' && args[index + 1]) {
@@ -80,15 +85,19 @@ function parseArgs(args) {
       contextPath = args[++index];
       continue;
     }
-    throw new Error('usage: node release_generic_preflight.cjs --spec <release-spec> [--release-evidence-context <transaction-local-json>]');
+    if (arg === '--root' && args[index + 1]) {
+      sourceRoot = normalizeRoot(String(args[++index]));
+      continue;
+    }
+    throw new Error('usage: node release_generic_preflight.cjs --spec <release-spec> [--release-evidence-context <transaction-local-json>] [--root <source-root>]');
   }
-  if (!specPath) throw new Error('usage: node release_generic_preflight.cjs --spec <release-spec> [--release-evidence-context <transaction-local-json>]');
-  return {specPath,contextPath};
+  if (!specPath) throw new Error('usage: node release_generic_preflight.cjs --spec <release-spec> [--release-evidence-context <transaction-local-json>] [--root <source-root>]');
+  return {specPath,contextPath,sourceRoot};
 }
 
 function run(argv) {
-  const {specPath,contextPath} = parseArgs(argv.slice(2));
-  const result = inspect(specPath);
+  const {specPath,contextPath,sourceRoot} = parseArgs(argv.slice(2));
+  const result = inspect(specPath, testRootForSourceRoot(sourceRoot));
   if (result.findings.length) {
     for (const finding of result.findings) {
       console.error(`RELEASE_PREFLIGHT_STALE_PRODUCT_LITERAL:${finding.file}:${finding.line}:${finding.literal}:target=${result.targetVersion}:reason=${finding.reason}`);
@@ -115,4 +124,12 @@ if (require.main === module) {
   catch (error) { console.error(error && error.message ? error.message : String(error)); process.exitCode = 1; }
 }
 
-module.exports = {HISTORICAL_LOCK, historicalScopeVersions, staleProductAssertions, inspect, inspectReleaseEvidenceContext, parseArgs};
+module.exports = {
+  HISTORICAL_LOCK,
+  testRootForSourceRoot,
+  historicalScopeVersions,
+  staleProductAssertions,
+  inspect,
+  inspectReleaseEvidenceContext,
+  parseArgs,
+};

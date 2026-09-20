@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const preflight = require('../tools/release_generic_preflight.cjs');
+const {TARGET_ROOT} = require('../tools/release_path_profile.cjs');
 
 const target = '3.0.0-alpha.5.74';
 const stale = "const release={productVersion:'x'};\nassert.equal(release.productVersion, '3.0.0-alpha.5.73');\n";
@@ -23,6 +24,9 @@ assert.equal(preflight.staleProductAssertions(wrongGuard,target)[0].reason,'hist
 assert.deepEqual([...preflight.historicalScopeVersions(historical)],['3.0.0-alpha.5.73']);
 assert.deepEqual(preflight.staleProductAssertions(historical,target),[]);
 assert.deepEqual(preflight.staleProductAssertions(inspectionFixture,target),[], 'inspection-output fixtures are not current release/manifest authority');
+assert.equal(preflight.testRootForSourceRoot(TARGET_ROOT), `${TARGET_ROOT}/tests`);
+assert.throws(()=>preflight.testRootForSourceRoot('plugins/other'), /RELEASE_PATH_PROFILE_UNKNOWN_ROOT/);
+assert.equal(preflight.parseArgs(['--spec','x.json','--root',TARGET_ROOT]).sourceRoot, TARGET_ROOT);
 
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'usage-dashboard-preflight-'));
 try {
@@ -47,5 +51,6 @@ const stage=fs.readFileSync('.github/workflows/usage-dashboard-stage-e7.yml','ut
 assert.match(stage,/release_generic_preflight\.cjs --spec "\$RELEASE_SPEC"/);
 assert.match(stage,/RELEASE_PREFLIGHT_REJECTED/);
 assert.match(stage,/next: release-generic preflight \+ materializing/);
+assert.equal(stage.includes(`--root ${TARGET_ROOT}`), false, 'R1B must not activate target-root preflight in workflow');
 
 console.log('usage-dashboard E7 release-generic preflight contract: OK · authoritative release/manifest assertions only · historical exemption requires lock + exact release-version guard');

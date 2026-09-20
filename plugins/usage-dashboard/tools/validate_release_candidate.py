@@ -5,7 +5,23 @@ import argparse
 import hashlib
 import json
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+
+LEGACY_ROOT = 'plugins/usage-dashboard'
+TARGET_ROOT = 'plugins/risu/local/usage-dashboard'
+ALLOWED_ROOTS = (LEGACY_ROOT, TARGET_ROOT)
+
+
+def normalize_root(value: str) -> str:
+    text = str(value or '')
+    if not text or text != text.strip() or '\\' in text or text.startswith('/') or text.endswith('/'):
+        raise ValueError(f'UD_SOURCE_ROOT_INVALID:{text or "<empty>"}')
+    parts = PurePosixPath(text).parts
+    if any(part in ('', '.', '..') for part in parts):
+        raise ValueError(f'UD_SOURCE_ROOT_INVALID:{text}')
+    if text not in ALLOWED_ROOTS:
+        raise ValueError(f'UD_SOURCE_ROOT_UNKNOWN:{text}')
+    return text
 
 
 def sha256(path: Path) -> str:
@@ -17,68 +33,78 @@ def require_text(path: Path, needle: str) -> None:
         raise SystemExit(f'{path}: missing release marker: {needle}')
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--spec', required=True)
-parser.add_argument('--root', default='plugins/usage-dashboard')
-args = parser.parse_args()
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--spec', required=True)
+    parser.add_argument('--root', default=LEGACY_ROOT)
+    args = parser.parse_args()
 
-spec = json.loads(Path(args.spec).read_text())
-required = {
-    'productVersion', 'engineVersion', 'managerVersion', 'snapshotContract',
-    'recentRequestContract', 'releaseTitle', 'materializer', 'callerWorkflow',
-    'sharedWorkflow',
-}
-missing = sorted(required - spec.keys())
-if missing:
-    raise SystemExit(f'release spec missing: {", ".join(missing)}')
+    try:
+        root_text = normalize_root(args.root)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
 
-for key in ('materializer', 'callerWorkflow', 'sharedWorkflow'):
-    if not Path(str(spec[key])).is_file():
-        raise SystemExit(f'release spec {key} does not exist: {spec[key]}')
+    spec = json.loads(Path(args.spec).read_text())
+    required = {
+        'productVersion', 'engineVersion', 'managerVersion', 'snapshotContract',
+        'recentRequestContract', 'releaseTitle', 'materializer', 'callerWorkflow',
+        'sharedWorkflow',
+    }
+    missing = sorted(required - spec.keys())
+    if missing:
+        raise SystemExit(f'release spec missing: {", ".join(missing)}')
 
-root = Path(args.root)
-runtime = root / 'runtime'
-manifest = json.loads((runtime / 'product-manifest.json').read_text())
-source_manifest = json.loads((root / 'src/manifest.json').read_text())
-product = str(spec['productVersion'])
-engine = str(spec['engineVersion'])
-manager = str(spec['managerVersion'])
+    for key in ('materializer', 'callerWorkflow', 'sharedWorkflow'):
+        if not Path(str(spec[key])).is_file():
+            raise SystemExit(f'release spec {key} does not exist: {spec[key]}')
 
-checks = {
-    'product version': manifest.get('productVersion') == product,
-    'plugin version': manifest.get('components', {}).get('plugin', {}).get('version') == product,
-    'engine version': manifest.get('components', {}).get('bridge', {}).get('requiredVersion') == engine,
-    'manager version': manifest.get('components', {}).get('bridgeManager', {}).get('version') == manager,
-    'manager product': manifest.get('components', {}).get('bridgeManager', {}).get('productVersion') == product,
-    'snapshot contract': manifest.get('contracts', {}).get('snapshot') == spec['snapshotContract'],
-    'recent request contract': manifest.get('contracts', {}).get('recentRequest') == spec['recentRequestContract'],
-    'source manifest version': source_manifest.get('version') == product,
-}
-failed = [name for name, ok in checks.items() if not ok]
-if failed:
-    raise SystemExit('release candidate mismatch: ' + ', '.join(failed))
+    root = Path(root_text)
+    runtime = root / 'runtime'
+    manifest = json.loads((runtime / 'product-manifest.json').read_text())
+    source_manifest = json.loads((root / 'src/manifest.json').read_text())
+    product = str(spec['productVersion'])
+    engine = str(spec['engineVersion'])
+    manager = str(spec['managerVersion'])
 
-for component, filename in [('bridge', 'bridge-engine.mjs'), ('bridgeManager', 'bridge-manager.cjs')]:
-    actual = sha256(runtime / filename)
-    expected = manifest['components'][component]['sha256']
-    if actual != expected:
-        raise SystemExit(f'{component} sha256 mismatch: {actual} != {expected}')
+    checks = {
+        'product version': manifest.get('productVersion') == product,
+        'plugin version': manifest.get('components', {}).get('plugin', {}).get('version') == product,
+        'engine version': manifest.get('components', {}).get('bridge', {}).get('requiredVersion') == engine,
+        'manager version': manifest.get('components', {}).get('bridgeManager', {}).get('version') == manager,
+        'manager product': manifest.get('components', {}).get('bridgeManager', {}).get('productVersion') == product,
+        'snapshot contract': manifest.get('contracts', {}).get('snapshot') == spec['snapshotContract'],
+        'recent request contract': manifest.get('contracts', {}).get('recentRequest') == spec['recentRequestContract'],
+        'source manifest version': source_manifest.get('version') == product,
+    }
+    failed = [name for name, ok in checks.items() if not ok]
+    if failed:
+        raise SystemExit('release candidate mismatch: ' + ', '.join(failed))
 
-bootstrap = runtime / 'bootstrap-bridge-manager.sh'
-if sha256(bootstrap) != manifest['components']['bridgeManager']['bootstrapSha256']:
-    raise SystemExit('bridge manager bootstrap sha256 mismatch')
-if sha256(root / 'latest.js') != source_manifest['artifactSha256']:
-    raise SystemExit('latest.js sha256 mismatch against source manifest')
+    for component, filename in [('bridge', 'bridge-engine.mjs'), ('bridgeManager', 'bridge-manager.cjs')]:
+        actual = sha256(runtime / filename)
+        expected = manifest['components'][component]['sha256']
+        if actual != expected:
+            raise SystemExit(f'{component} sha256 mismatch: {actual} != {expected}')
 
-require_text(root / 'latest.js', f'//@version {product}')
-require_text(root / 'latest.js', f"const VERSION = '{product}';")
-require_text(root / 'latest.js', f"const REQUIRED_BRIDGE_VERSION = '{engine}';")
-require_text(runtime / 'bridge-engine.mjs', f"const VERSION = '{engine}';")
-require_text(runtime / 'bridge-manager.cjs', f"const MANAGER_VERSION = '{manager}';")
-require_text(runtime / 'bridge-manager.cjs', f"const PRODUCT_VERSION = '{product}';")
-require_text(runtime / 'bridge-manager.cjs', f"const BUNDLED_ENGINE_VERSION = '{engine}';")
+    bootstrap = runtime / 'bootstrap-bridge-manager.sh'
+    if sha256(bootstrap) != manifest['components']['bridgeManager']['bootstrapSha256']:
+        raise SystemExit('bridge manager bootstrap sha256 mismatch')
+    if sha256(root / 'latest.js') != source_manifest['artifactSha256']:
+        raise SystemExit('latest.js sha256 mismatch against source manifest')
 
-if not re.fullmatch(r'3\.0\.0-alpha\.\d+\.\d+', product):
-    raise SystemExit(f'unexpected product version format: {product}')
+    require_text(root / 'latest.js', f'//@version {product}')
+    require_text(root / 'latest.js', f"const VERSION = '{product}';")
+    require_text(root / 'latest.js', f"const REQUIRED_BRIDGE_VERSION = '{engine}';")
+    require_text(runtime / 'bridge-engine.mjs', f"const VERSION = '{engine}';")
+    require_text(runtime / 'bridge-manager.cjs', f"const MANAGER_VERSION = '{manager}';")
+    require_text(runtime / 'bridge-manager.cjs', f"const PRODUCT_VERSION = '{product}';")
+    require_text(runtime / 'bridge-manager.cjs', f"const BUNDLED_ENGINE_VERSION = '{engine}';")
 
-print(f'validated {product} / Engine {engine} / Manager {manager} / contracts {spec["snapshotContract"]}/{spec["recentRequestContract"]}')
+    if not re.fullmatch(r'3\.0\.0-alpha\.\d+\.\d+', product):
+        raise SystemExit(f'unexpected product version format: {product}')
+
+    print(f'validated {product} / Engine {engine} / Manager {manager} / contracts {spec["snapshotContract"]}/{spec["recentRequestContract"]}')
+
+
+if __name__ == '__main__':
+    main()

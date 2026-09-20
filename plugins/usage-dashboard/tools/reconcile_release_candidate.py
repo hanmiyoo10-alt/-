@@ -9,33 +9,66 @@ import re
 import subprocess
 from pathlib import Path
 
-ROOT = Path('plugins/usage-dashboard')
+from validate_release_candidate import LEGACY_ROOT, normalize_root
+
+GUIDELINES = Path('docs/USAGE_DASHBOARD_GUIDELINES.md')
+CURRENT_RELEASE_RE = re.compile(r'^Current release implementation: `[^`]+`.$', re.MULTILINE)
+MANAGER_ENGINE_SHA_RE = re.compile(r"const BUNDLED_ENGINE_SHA256 = '[0-9a-f]{64}';")
+
+ROOT = Path(LEGACY_ROOT)
 TOOLS = ROOT / 'tools'
 SRC = ROOT / 'src'
 RUNTIME = ROOT / 'runtime'
 RUNTIME_SRC = ROOT / 'runtime-src'
+TESTS = ROOT / 'tests'
 ENGINE = RUNTIME / 'bridge-engine.mjs'
 MANAGER = RUNTIME / 'bridge-manager.cjs'
 BOOTSTRAP = RUNTIME / 'bootstrap-bridge-manager.sh'
 MANIFEST = RUNTIME / 'product-manifest.json'
 LATEST = ROOT / 'latest.js'
-GUIDELINES = Path('docs/USAGE_DASHBOARD_GUIDELINES.md')
-
 TRACKED_ROOTS = [SRC, RUNTIME, RUNTIME_SRC]
 TRACKED_FILES = [LATEST, GUIDELINES]
-CURRENT_RELEASE_RE = re.compile(r'^Current release implementation: `[^`]+`\.$', re.MULTILINE)
-MANAGER_ENGINE_SHA_RE = re.compile(r"const BUNDLED_ENGINE_SHA256 = '[0-9a-f]{64}';")
-MATERIALIZER_RE = re.compile(r'^plugins/usage-dashboard/tools/[A-Za-z0-9_.-]+\.py$')
 E19_STRUCTURAL_TESTS = [
-    'plugins/usage-dashboard/tests/current-release-contract.cjs',
-    'plugins/usage-dashboard/tests/p5-module-layout.cjs',
-    'plugins/usage-dashboard/tests/p49-release-notes-diagnostic-guidance.cjs',
+    TESTS / 'current-release-contract.cjs',
+    TESTS / 'p5-module-layout.cjs',
+    TESTS / 'p49-release-notes-diagnostic-guidance.cjs',
 ]
 E27_FOCUSED_PREFLIGHT = TOOLS / 'release_focused_preflight_e27.cjs'
 
 
 def fail(code: str, detail: str = '') -> None:
     raise SystemExit(f'{code}:{detail}' if detail else code)
+
+
+def configure_root(value: str) -> str:
+    global ROOT, TOOLS, SRC, RUNTIME, RUNTIME_SRC, TESTS
+    global ENGINE, MANAGER, BOOTSTRAP, MANIFEST, LATEST
+    global TRACKED_ROOTS, TRACKED_FILES, E19_STRUCTURAL_TESTS, E27_FOCUSED_PREFLIGHT
+    try:
+        normalized = normalize_root(value)
+    except ValueError as exc:
+        fail('RECONCILE_SOURCE_ROOT_REJECTED', str(exc))
+
+    ROOT = Path(normalized)
+    TOOLS = ROOT / 'tools'
+    SRC = ROOT / 'src'
+    RUNTIME = ROOT / 'runtime'
+    RUNTIME_SRC = ROOT / 'runtime-src'
+    TESTS = ROOT / 'tests'
+    ENGINE = RUNTIME / 'bridge-engine.mjs'
+    MANAGER = RUNTIME / 'bridge-manager.cjs'
+    BOOTSTRAP = RUNTIME / 'bootstrap-bridge-manager.sh'
+    MANIFEST = RUNTIME / 'product-manifest.json'
+    LATEST = ROOT / 'latest.js'
+    TRACKED_ROOTS = [SRC, RUNTIME, RUNTIME_SRC]
+    TRACKED_FILES = [LATEST, GUIDELINES]
+    E19_STRUCTURAL_TESTS = [
+        TESTS / 'current-release-contract.cjs',
+        TESTS / 'p5-module-layout.cjs',
+        TESTS / 'p49-release-notes-diagnostic-guidance.cjs',
+    ]
+    E27_FOCUSED_PREFLIGHT = TOOLS / 'release_focused_preflight_e27.cjs'
+    return normalized
 
 
 def run(*args: str) -> None:
@@ -125,11 +158,17 @@ def validate_identity(spec: dict) -> None:
         fail('RECONCILE_MANAGER_EMBEDDED_ENGINE_HASH_MISMATCH')
 
 
-def validate_release_memory_contract(spec_path: Path) -> None:
+def selected_env() -> dict[str, str]:
     env = os.environ.copy()
+    env['UD_SOURCE_ROOT'] = ROOT.as_posix()
+    return env
+
+
+def validate_release_memory_contract(spec_path: Path) -> None:
+    env = selected_env()
     env['UD_RELEASE_SPEC'] = spec_path.as_posix()
     result = subprocess.run(
-        ['node', 'plugins/usage-dashboard/tests/current-release-contract.cjs'],
+        ['node', str(TESTS / 'current-release-contract.cjs')],
         env=env,
         check=False,
     )
@@ -139,16 +178,17 @@ def validate_release_memory_contract(spec_path: Path) -> None:
 
 
 def reconcile_once(spec_path: Path, spec: dict) -> None:
-    run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--write')
-    run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--check')
+    root = ROOT.as_posix()
+    run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--write', '--root', root)
+    run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--check', '--root', root)
     sync_manager_engine_hash()
     sync_manifest_hashes()
-    run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--write')
-    run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--check')
+    run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--write', '--root', root)
+    run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--check', '--root', root)
     sync_release_memory(spec)
-    run('python3', str(TOOLS / 'sync_project_guidelines.py'))
+    run('python3', str(TOOLS / 'sync_project_guidelines.py'), '--root', root)
     validate_identity(spec)
-    run('python3', str(TOOLS / 'validate_release_candidate.py'), '--spec', str(spec_path))
+    run('python3', str(TOOLS / 'validate_release_candidate.py'), '--spec', str(spec_path), '--root', root)
     validate_release_memory_contract(spec_path)
 
 
@@ -174,9 +214,14 @@ def candidate_tree_sha() -> str:
         subprocess.run(['git', 'reset', '--mixed', 'HEAD'], check=True, stdout=subprocess.DEVNULL)
 
 
+def materializer_pattern() -> re.Pattern[str]:
+    root = re.escape(ROOT.as_posix())
+    return re.compile(rf'^{root}/tools/[A-Za-z0-9_.-]+\.py$')
+
+
 def assert_declared_materializer_second_pass(spec: dict) -> None:
     materializer_text = str(spec.get('materializer') or '')
-    if not MATERIALIZER_RE.fullmatch(materializer_text):
+    if not materializer_pattern().fullmatch(materializer_text):
         fail('E19_MATERIALIZER_PATH_DENIED', materializer_text or '<missing>')
     materializer = Path(materializer_text)
     if not materializer.is_file():
@@ -205,14 +250,14 @@ def assert_declared_materializer_second_pass(spec: dict) -> None:
 
 
 def run_shift_left_structural_gates(spec_path: Path) -> None:
-    env = os.environ.copy()
+    env = selected_env()
     env['UD_RELEASE_SPEC'] = spec_path.as_posix()
     passed = []
     for test in E19_STRUCTURAL_TESTS:
-        result = subprocess.run(['node', test], env=env, check=False)
+        result = subprocess.run(['node', str(test)], env=env, check=False)
         if result.returncode != 0:
-            fail('E19_STRUCTURAL_GATE_REJECTED', test)
-        passed.append(Path(test).name)
+            fail('E19_STRUCTURAL_GATE_REJECTED', str(test))
+        passed.append(test.name)
     print(f"E19_STRUCTURAL_GATES_GREEN:{','.join(passed)}")
 
 
@@ -220,8 +265,8 @@ def run_e27_focused_preflight(spec_path: Path) -> None:
     if not E27_FOCUSED_PREFLIGHT.is_file():
         fail('E27_FOCUSED_PREFLIGHT_MISSING')
     result = subprocess.run(
-        ['node', str(E27_FOCUSED_PREFLIGHT), '--spec', spec_path.as_posix()],
-        env=os.environ.copy(),
+        ['node', str(E27_FOCUSED_PREFLIGHT), '--spec', spec_path.as_posix(), '--root', ROOT.as_posix()],
+        env=selected_env(),
         check=False,
     )
     if result.returncode != 0:
@@ -232,8 +277,11 @@ def run_e27_focused_preflight(spec_path: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description='Reconcile generated Local Usage Dashboard release candidate state.')
     parser.add_argument('--spec', required=True, help='release spec path under .github/usage-dashboard/releases')
+    parser.add_argument('--root', default=LEGACY_ROOT, help='candidate source root')
     parser.add_argument('--two-pass', action='store_true', help='prove declared materializer + reconciliation are idempotent and run E19/E27 shift-left gates')
     args = parser.parse_args()
+
+    configure_root(args.root)
 
     spec_path = Path(args.spec)
     if not re.fullmatch(r'\.github/usage-dashboard/releases/[A-Za-z0-9._-]+\.json', spec_path.as_posix()):
@@ -243,8 +291,6 @@ def main() -> None:
     spec = load_spec(spec_path)
 
     if args.two_pass:
-        # E7 has already executed the declared materializer once. Prove that the exact
-        # target tree is a no-op under the same materializer before generic reconciliation.
         assert_declared_materializer_second_pass(spec)
 
     reconcile_once(spec_path, spec)
@@ -275,8 +321,6 @@ def main() -> None:
         fail('MATERIALIZER_CRITICAL_HASH_DRIFT')
     print(f"MATERIALIZER_IDEMPOTENT:{spec['productVersion']}")
 
-    # These deterministic contracts now fail before E18 repeat behavior smoke and before
-    # E7 can construct/publish the candidate tree. E27 reuses the exact declared Pxx and E21.
     run_shift_left_structural_gates(spec_path)
     run_e27_focused_preflight(spec_path)
 

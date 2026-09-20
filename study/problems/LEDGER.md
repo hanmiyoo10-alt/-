@@ -420,3 +420,25 @@ Next-time cue: 수학식을 파이썬으로 옮길 때 생략된 곱셈 기호�
 Related pattern IDs: none
 Review state: QUEUED
 Later evidence / resolution: 입력 형변환 단계는 모두 교정 성공. 계산식과 최종 f-string 출력 교정 대기.
+
+
+### AI-PROG-W2-E2-R3
+
+Problem ID: AI-PROG-W2-E2-R3
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 2 재시도 3
+Source ref: current uploaded week-2 assignment Colab, execution count 13
+Result: PARTIAL
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 원금, 연이율, 기간을 입력받아 복리 원리금을 계산하고 소수 둘째 자리까지 출력한다.
+User interpretation / approach: 입력 자료형을 int/float/int로 올바르게 구분했고, 복리 계산식도 `total = money * (1 + rate) ** year`로 정확히 수정했다. 마지막 출력에서 f-string을 사용하려 했으나 `f'{print('...')}` 형태로 중첩해 SyntaxError가 발생했다.
+Correct reasoning summary: f-string은 문자열 자체 앞에 `f`를 붙이고, 문자열 내부에서 변수는 `{year}`, `{total:.2f}`처럼 넣는다. 따라서 `print(f'{year}년 후의 원리금은 {total:.2f}원 입니다.')`가 맞다.
+
+Error type: KNOWLEDGE_GAP
+Error mechanism: f-string의 역할을 `f(...)` 또는 `f'{print(...)}`처럼 함수 호출과 섞어 이해해 문자열 리터럴 경계가 깨졌다.
+Next-time cue: f-string은 함수가 아니라 문자열 문법이다. 먼저 `f'문자열'` 틀을 만들고, 변수만 `{ }` 안에 넣는다.
+
+Related pattern IDs: none
+Review state: QUEUED
+Later evidence / resolution: 입력과 복리 계산식은 교정 완료. 출력 f-string 한 줄 교정만 남음.

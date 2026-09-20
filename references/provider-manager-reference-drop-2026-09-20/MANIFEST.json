@@ -1,7 +1,9 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "status": "REFERENCE_ARCHIVE_ONLY",
-  "trackingIssue": 2583,
+  "archiveTrackingIssue": 2583,
+  "refreshIssues": [2587],
+  "latestObservedFile": "LATEST_OBSERVED.json",
   "artifacts": [
     {
       "id": "yumi-provider-manager-v1.16.3",
@@ -9,7 +11,7 @@
       "version": "1.16.3",
       "bytes": 1018363,
       "sha256": "b71e2b40bc64be0e12ff7be77b0345bcd2c065fc1f567ab5ab77a8dbf3136244",
-      "provenance": "user-supplied-exact; declared upstream URL independently matched at intake"
+      "provenance": "user-supplied-exact; official upstream independently matched at intake and latest refresh"
     },
     {
       "id": "cupcake-provider-manager-v1.35.11-production",
@@ -17,7 +19,15 @@
       "version": "1.35.11",
       "bytes": 1195945,
       "sha256": "00ab4d10902b9c897c34f185ce8ff76267f4ab02e7225513fe6a9745075bb7e8",
-      "provenance": "user-supplied-exact; current upstream had advanced and is not historical byte authority"
+      "provenance": "user-supplied-exact historical reference"
+    },
+    {
+      "id": "cupcake-provider-manager-v1.62.1-production",
+      "file": "cupcake-provider-manager-v1.62.1-production.js",
+      "version": "1.62.1",
+      "bytes": 1727902,
+      "sha256": "f71593e7821e09c7812c34f5654c29312cc80c780532e6a752ea16732411826a",
+      "provenance": "official upstream exact download; /api/versions independently reported the same version, bytes and sha256"
     }
   ]
 }

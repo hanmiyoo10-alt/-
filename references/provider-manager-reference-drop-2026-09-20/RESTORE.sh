@@ -7,6 +7,7 @@ mkdir -p "$out"
 
 cp "$src/yumi-provider-manager-v1.16.3.js" "$out/yumi-provider-manager-v1.16.3.js"
 cp "$src/cupcake-provider-manager-v1.35.11-production.js" "$out/cupcake-provider-manager-v1.35.11-production.js"
+cp "$src/cupcake-provider-manager-v1.62.1-production.js" "$out/cupcake-provider-manager-v1.62.1-production.js"
 
 (
   cd "$out"

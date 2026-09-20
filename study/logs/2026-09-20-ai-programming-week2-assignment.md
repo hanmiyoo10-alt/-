@@ -398,3 +398,23 @@ Verified newest execution:
 Exercise 2 state: `CORRECT / COMPLETE`.
 
 Current notebook snapshot has an empty new code cell after Exercise 2, but no Exercise 3 solution code yet.
+
+
+## Exercise 3 first review
+
+Latest Drive snapshot modified at 2026-09-20 23:15 KST.
+
+Observed new Exercise 3 cell:
+- execution count: 29
+- inputs: weight 95, height 1.82
+- calculation: `BMI = weigh / (heigh**2)`
+- execution status: success
+- calculated value: 28.68
+
+PDF comparison:
+- numeric result is correct;
+- PDF asks for both height and weight as real numbers, while current weight input uses `int`;
+- current output is `(당신의 28.68=입니다.)`, which does not match the example label/order;
+- target output is `당신의 BMI= 28.68입니다.`.
+
+Exercise 3 state: `PARTIAL / CALCULATION CORRECT, INPUT TYPE + OUTPUT TEXT NEED FIX`.

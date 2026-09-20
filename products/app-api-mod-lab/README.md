@@ -8,8 +8,10 @@
 
 1. [`CURRENT.md`](CURRENT.md) — 현재 상태와 다음 한 단계
 2. [`product.json`](product.json) — 제품 루트 locator와 선언 상태
-3. [`docs/decisions.md`](docs/decisions.md) — 범위와 구조 결정 기록
-4. [`../../docs/APP_API_MOD_LAB_GUIDELINES.md`](../../docs/APP_API_MOD_LAB_GUIDELINES.md) — canonical 개발/운영 가이드라인
+3. [`targets/README.md`](targets/README.md) — 대상별 Risu O/X 및 TARGET 계약
+4. [`target-contract.json`](target-contract.json) — machine-readable target contract
+5. [`docs/decisions.md`](docs/decisions.md) — 범위와 구조 결정 기록
+6. [`../../docs/APP_API_MOD_LAB_GUIDELINES.md`](../../docs/APP_API_MOD_LAB_GUIDELINES.md) — canonical 개발/운영 가이드라인
 
 ## Isolation contract
 
@@ -18,6 +20,15 @@
 - shared infrastructure 변경이 필요하면 독립 근거와 별도 검증을 가진 명시적 변경으로 취급한다.
 - 특정 앱이나 API를 대상으로 삼을 때는 구현 전에 그 대상의 source/upstream authority, 변경 표면, 검증 표면을 `CURRENT.md`와 필요 시 대상별 문서에 기록한다.
 - 서로 다른 앱/API 대상은 한 작업 단위에 섞지 않는다.
+
+## 대상 분류
+
+실제 대상은 `targets/risu/<target-id>/` 또는 `targets/standalone/<target-id>/` 아래에서 시작한다.
+
+- Risu O/X는 대상 단위 ecosystem 분류다.
+- `app / api / hybrid`는 `TARGET.json` metadata로 관리한다.
+- 대상이 아직 확정되지 않았다면 target 디렉터리를 만들지 않는다.
+- 구조 검증은 `node products/app-api-mod-lab/validate-targets.mjs`로 수행한다.
 
 ## 기본 작업 흐름
 

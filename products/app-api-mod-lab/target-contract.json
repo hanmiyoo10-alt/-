@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "target_root": "products/app-api-mod-lab/targets",
+  "metadata_file": "TARGET.json",
+  "ecosystems": {
+    "risu": {
+      "display_name": "Risu O"
+    },
+    "standalone": {
+      "display_name": "Risu X"
+    }
+  },
+  "kinds": [
+    "app",
+    "api",
+    "hybrid"
+  ],
+  "id_pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+  "required_fields": [
+    "schema_version",
+    "id",
+    "display_name",
+    "ecosystem",
+    "kind",
+    "authority",
+    "scope",
+    "privacy",
+    "validation_surfaces"
+  ],
+  "authority_fields": [
+    "source_upstream",
+    "release",
+    "deployment"
+  ],
+  "scope_fields": [
+    "owned_surfaces",
+    "preserve_surfaces"
+  ],
+  "privacy_fields": [
+    "credentials_in_git"
+  ],
+  "uncertainty_tokens": [
+    "UNKNOWN",
+    "UNASSIGNED"
+  ]
+}

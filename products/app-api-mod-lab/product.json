@@ -7,5 +7,8 @@
   "decisions": "products/app-api-mod-lab/docs/decisions.md",
   "current_priority": "TARGET_AUTHORITY_AND_SCOPE_SELECTION",
   "validation_status": "BOOTSTRAP",
-  "release_authority": null
+  "release_authority": null,
+  "target_root": "products/app-api-mod-lab/targets",
+  "target_contract": "products/app-api-mod-lab/target-contract.json",
+  "target_validator": "products/app-api-mod-lab/validate-targets.mjs"
 }

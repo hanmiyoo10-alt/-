@@ -45,6 +45,21 @@ node validation-merge-owner.cjs finalize \
 The repository, base branch, expected head, workflow, merge method, GitHub
 endpoint, retry policy and evidence output path are not caller inputs.
 
+## GitHub read transport
+
+The live owner uses the repository's already-authorized GitHub read transport without
+turning credentials into evidence or caller input. If `GH_TOKEN` or `GITHUB_TOKEN` is
+present, the existing fixed REST client is used. If neither environment variable is
+present, V1 falls back to the already-authenticated `gh api` credential store with:
+
+- an exact read-only REST endpoint allowlist owned by this module;
+- the one fixed review-thread GraphQL query only;
+- no caller-selected endpoint, method, command or query;
+- no token extraction, token printing, mutation request, retry loop or merge authority.
+
+A missing/broken authorized transport remains UNKNOWN. The fallback changes transport
+only and does not weaken the currentness, review, overlap or Required barriers.
+
 ## Inspect prerequisites
 
 Inspect requires a canonical `CANONICAL_MAIN_STAGE_RECEIPT` for the same

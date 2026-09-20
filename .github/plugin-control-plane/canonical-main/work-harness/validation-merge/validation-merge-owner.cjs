@@ -2,6 +2,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -845,9 +846,61 @@ async function finalizeWithClient({client, packetNumber, prNumber, inspectEviden
   }
 }
 
-function createLiveClient({env = process.env, fetchImpl = fetch} = {}) {
+const GH_READ_ENDPOINTS = Object.freeze([
+  /^\/branches\/main$/,
+  /^\/issues\/(?:485|[1-9][0-9]*)$/,
+  /^\/pulls\/[1-9][0-9]*$/,
+  /^\/pulls\/[1-9][0-9]*\/(?:files|reviews|comments)\?per_page=100&page=[1-9][0-9]*$/,
+  /^\/pulls\/[1-9][0-9]*\/requested_reviewers\?per_page=100$/,
+  /^\/actions\/runs\?head_sha=[0-9a-f]{40}&per_page=100$/,
+  /^\/actions\/runs\/[1-9][0-9]*\/jobs\?per_page=100$/,
+  /^\/issues\?state=open&per_page=100&page=[1-9][0-9]*$/,
+  /^\/pulls\?state=open&per_page=100&page=[1-9][0-9]*$/,
+]);
+
+function ghReadEndpointAllowed(endpoint) {
+  return GH_READ_ENDPOINTS.some((pattern) => pattern.test(String(endpoint || '')));
+}
+function defaultGhRunner(args) {
+  const result = childProcess.spawnSync('gh', args, {
+    encoding: 'utf8', shell: false, maxBuffer: 8 * 1024 * 1024,
+  });
+  return {code: result.status ?? 1, stdout: result.stdout || '', stderr: result.stderr || ''};
+}
+function parseGhJson(result, reason) {
+  if (!result || result.code !== 0) throw new Error(reason);
+  try { return JSON.parse(result.stdout || ''); } catch { throw new Error(reason); }
+}
+function createGhCliReadClient({runner = defaultGhRunner} = {}) {
+  return {
+    repo: REPO,
+    async api(endpoint, options = {}) {
+      if (options && Object.keys(options).length) throw new Error('gh read options forbidden');
+      if (!ghReadEndpointAllowed(endpoint)) throw new Error('gh read endpoint forbidden');
+      return parseGhJson(runner([
+        'api', 'repos/' + REPO + endpoint, '--method', 'GET',
+        '--header', 'Accept: application/vnd.github+json',
+      ]), 'gh REST read failed');
+    },
+    async graphql(query, variables) {
+      if (query !== REVIEW_THREADS_QUERY
+          || !variables || variables.owner !== 'hanmiyoo10-alt' || variables.name !== '-'
+          || !Number.isInteger(variables.number) || variables.number < 1) {
+        throw new Error('gh GraphQL query forbidden');
+      }
+      return parseGhJson(runner([
+        'api', 'graphql',
+        '-f', 'query=' + query,
+        '-F', 'owner=' + variables.owner,
+        '-F', 'name=' + variables.name,
+        '-F', 'number=' + variables.number,
+      ]), 'gh GraphQL read failed');
+    },
+  };
+}
+function createLiveClient({env = process.env, fetchImpl = fetch, runner = defaultGhRunner} = {}) {
   const token = env.GH_TOKEN || env.GITHUB_TOKEN;
-  if (!token) throw new OwnerError('UNKNOWN', ['GITHUB_TOKEN_REQUIRED']);
+  if (!token) return createGhCliReadClient({runner});
   const rest = createGitHubClient({
     token, repo: REPO, fetchImpl, userAgent: 'canonical-main-validation-merge-owner',
   });
@@ -1026,8 +1079,11 @@ module.exports = {
   REPO,
   REVIEW_THREADS_QUERY,
   OwnerError,
+  createGhCliReadClient,
   createLiveClient,
+  defaultGhRunner,
   discoverOverlap,
+  ghReadEndpointAllowed,
   evidencePaths,
   finalizeWithClient,
   gitAdminDir,

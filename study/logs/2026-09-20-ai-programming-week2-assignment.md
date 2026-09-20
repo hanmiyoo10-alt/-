@@ -515,3 +515,34 @@ Target:
 Exercise 4 state: `PARTIAL / CALCULATION COMPLETE, OUTPUT INTERPOLATION REMAINS`.
 
 Exercise 3 remains unchanged from the prior verified state: calculation/output correct, but weight input still uses `int(input(...))` rather than the PDF-requested real-number input.
+
+
+## Latest verification — Exercise 3 and 4
+
+Latest Drive snapshot modified at 2026-09-20 23:32 KST.
+
+### Exercise 3
+Latest source now uses:
+- `weigh = float(input(...))`
+- `heigh = float(input(...))`
+- correct BMI formula
+- correct output string `당신의 BMI= {BMI:.2f}입니다.`
+
+However, the cell still shows `execution_count = 32` and the same output from the earlier run when the source still used `int(input(...))`. Colab can retain stale output after source edits.
+
+Exercise 3 state: `PARTIAL / CODE CORRECT, RERUN REQUIRED FOR EVIDENCE`.
+
+### Exercise 4
+Verified newest execution:
+- `execution_count = 42`
+- `difference = int(dogs) - int(cats)`
+- `print(f'강아지가 고양이보다 {difference}마리 더 많다')`
+- output: `강아지가 고양이보다 172마리 더 많다`
+
+Exercise 4 state: `CORRECT / COMPLETE`.
+
+Overall verified state:
+- Exercise 1: COMPLETE
+- Exercise 2: COMPLETE
+- Exercise 3: code corrected, rerun required
+- Exercise 4: COMPLETE

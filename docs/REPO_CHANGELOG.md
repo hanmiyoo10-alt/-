@@ -1869,3 +1869,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f7ad8c38f687c0219baf08a2d6d6f14b72f6ada8)
 - Event ID: `eb6928593cec3660afec9e5856c69f3dc8fb06175a3787a54a7f7f069a66fda5`
 <!-- canonical-main-doc-promoted:eb6928593cec3660afec9e5856c69f3dc8fb06175a3787a54a7f7f069a66fda5 -->
+
+### 2026-09-20 — fix(repo-docs): hand generated merge to connected bridge (#2663)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `87aba722410bd3d3415de2ddfdc8e725b2615b07`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/87aba722410bd3d3415de2ddfdc8e725b2615b07)
+- Event ID: `f3b7823a2be03a8bb8704cf40a6cd1668ad3e4db43067dcb6206835a43d3abf6`
+<!-- canonical-main-doc-promoted:f3b7823a2be03a8bb8704cf40a6cd1668ad3e4db43067dcb6206835a43d3abf6 -->

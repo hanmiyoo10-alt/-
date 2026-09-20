@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const REGISTRY_PATH = path.join(__dirname, 'registry.json');
+const TAXONOMY_PATH = path.join(__dirname, 'taxonomy.json');
 const CUSTOM_SCOPE_LABEL_PREFIX = 'scope:';
 const CUSTOM_SCOPE_LABEL_NAME_BOUND = 50;
 const CUSTOM_SCOPE_ID_MAX_LENGTH = CUSTOM_SCOPE_LABEL_NAME_BOUND - CUSTOM_SCOPE_LABEL_PREFIX.length;
@@ -11,6 +12,10 @@ const TRUSTED_CUSTOM_SCOPE_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORA
 
 function loadRegistry() {
   return JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8'));
+}
+
+function loadTaxonomy() {
+  return JSON.parse(fs.readFileSync(TAXONOMY_PATH, 'utf8'));
 }
 
 function escapeRegex(text) {
@@ -315,8 +320,81 @@ function validateRegistry(registry = loadRegistry()) {
   return errors;
 }
 
+
+function validateTaxonomy(taxonomy = loadTaxonomy(), registry = loadRegistry()) {
+  const errors = [];
+  const allowedFamilies = new Set(['product', 'plugin', 'platform', 'study']);
+  const allowedRisu = new Set(['yes', 'no', 'bridge', 'unknown']);
+  const allowedMigrations = new Set(['preserve', 'regroup', 'consolidate', 'reclassify']);
+
+  if (taxonomy.schemaVersion !== 1) errors.push('taxonomy schemaVersion must be 1');
+  if (taxonomy.authority?.posture !== 'navigation-only') errors.push('taxonomy authority posture must be navigation-only');
+  for (const key of ['pathMovesAuthorized', 'identityCollapseAuthorized', 'releaseMutationAuthorized']) {
+    if (taxonomy.authority?.[key] !== false) errors.push(`taxonomy authority.${key} must be false`);
+  }
+
+  const familyAxis = taxonomy.axes?.family;
+  const risuAxis = taxonomy.axes?.risu;
+  if (!Array.isArray(familyAxis) || [...familyAxis].sort().join(',') !== [...allowedFamilies].sort().join(',')) {
+    errors.push('taxonomy family axis must declare product, plugin, platform, study');
+  }
+  if (!Array.isArray(risuAxis) || [...risuAxis].sort().join(',') !== [...allowedRisu].sort().join(',')) {
+    errors.push('taxonomy risu axis must declare yes, no, bridge, unknown');
+  }
+
+  if (taxonomy.directoryConventions?.product?.yes !== 'products/risu') errors.push('taxonomy product Risu O directory must be products/risu');
+  if (taxonomy.directoryConventions?.product?.no !== 'products/standalone') errors.push('taxonomy product Risu X directory must be products/standalone');
+  if (taxonomy.directoryConventions?.plugin?.yes !== 'plugins/risu') errors.push('taxonomy plugin Risu O directory must be plugins/risu');
+  if (taxonomy.directoryConventions?.plugin?.no !== 'plugins/standalone') errors.push('taxonomy plugin Risu X directory must be plugins/standalone');
+
+  const knownRefs = new Set(labelDefinitions(registry).map((def) => def.name));
+  const seenIds = new Set();
+  const seenTargets = new Set();
+
+  for (const [index, member] of (taxonomy.members || []).entries()) {
+    const trail = `taxonomy.members.${index}`;
+    if (!member.id || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(member.id)) errors.push(`${trail}: invalid id`);
+    if (seenIds.has(member.id)) errors.push(`${trail}: duplicate id ${member.id}`);
+    else seenIds.add(member.id);
+    if (!member.displayName) errors.push(`${trail}: displayName missing`);
+    if (!allowedFamilies.has(member.family)) errors.push(`${trail}: invalid family ${member.family}`);
+    if (!allowedRisu.has(member.risu)) errors.push(`${trail}: invalid risu ${member.risu}`);
+    if (!allowedMigrations.has(member.migration)) errors.push(`${trail}: invalid migration ${member.migration}`);
+    if (!Array.isArray(member.sourceRefs)) errors.push(`${trail}: sourceRefs must be an array`);
+    for (const ref of member.sourceRefs || []) {
+      if (!knownRefs.has(ref)) errors.push(`${trail}: unknown sourceRef ${ref}`);
+    }
+    if (!Array.isArray(member.sourceRoots) || !member.sourceRoots.length) errors.push(`${trail}: sourceRoots missing`);
+    for (const root of member.sourceRoots || []) {
+      if (typeof root !== 'string' || !root || root.startsWith('/') || root.includes('..')) errors.push(`${trail}: invalid sourceRoot ${root}`);
+    }
+    if (typeof member.targetRoot !== 'string' || !member.targetRoot || member.targetRoot.startsWith('/') || member.targetRoot.includes('..')) {
+      errors.push(`${trail}: invalid targetRoot`);
+    } else {
+      if (seenTargets.has(member.targetRoot)) errors.push(`${trail}: duplicate targetRoot ${member.targetRoot}`);
+      else seenTargets.add(member.targetRoot);
+      if (member.family === 'product' && member.risu === 'yes' && !member.targetRoot.startsWith('products/risu/')) {
+        errors.push(`${trail}: Risu O product targetRoot must be under products/risu/`);
+      }
+      if (member.family === 'product' && member.risu === 'no' && !member.targetRoot.startsWith('products/standalone/')) {
+        errors.push(`${trail}: Risu X product targetRoot must be under products/standalone/`);
+      }
+      if (member.family === 'plugin' && member.risu === 'yes' && !member.targetRoot.startsWith('plugins/risu/')) {
+        errors.push(`${trail}: Risu O plugin targetRoot must be under plugins/risu/`);
+      }
+      if (member.family === 'plugin' && member.risu === 'no' && !member.targetRoot.startsWith('plugins/standalone/')) {
+        errors.push(`${trail}: Risu X plugin targetRoot must be under plugins/standalone/`);
+      }
+    }
+  }
+
+  if (!Array.isArray(taxonomy.members) || !taxonomy.members.length) errors.push('taxonomy members missing');
+  return errors;
+}
+
 module.exports = {
   loadRegistry,
+  loadTaxonomy,
   globToRegex,
   matchesAny,
   classifyPaths,
@@ -332,4 +410,5 @@ module.exports = {
   labelDefinitions,
   fixedLabelMetadataDecision,
   validateRegistry,
+  validateTaxonomy,
 };

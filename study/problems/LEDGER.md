@@ -288,3 +288,25 @@ Next-time cue: 현재 회수 흐름을 유지하되, 삼각함수 곱에서는 �
 Related pattern IDs: AI-MATH-P1
 Review state: NONE
 Later evidence / resolution: P1에서 직접 반복 실패가 있었던 `tan -> sec^2`와 `sec -> sec tan`을 둘 다 공식 힌트 없이 정확히 회수한 첫 직접 무힌트 성공 사례. 한 번의 성공만으로 안정적 습득으로 확정하지는 않는다.
+
+
+### AI-PROG-W2-E1
+
+Problem ID: AI-PROG-W2-E1
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / 문자열·이스케이프
+Source ref: 2주차 PDF Exercise 1, current uploaded week-2 assignment Colab
+Result: WRONG
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: PDF 예시와 동일한 5줄의 문자열을 출력하며 큰따옴표·작은따옴표·리터럴 역슬래시·리터럴 `\n`/`\t`·Windows식 경로를 정확히 표현한다.
+User interpretation / approach: 하나의 `print()` 안에 여러 문자열을 콤마로 나열하고, 줄을 이어 쓰기 위해 역슬래시를 직접 사용했다. 문자열 내부의 큰따옴표는 일부 구간에서 이스케이프했지만, `What's`의 apostrophe와 리터럴 역슬래시 구간은 아직 분리되지 않았다.
+Correct reasoning summary: 괄호 안에서는 줄 연속용 역슬래시가 필요하지 않다. PDF와 동일한 여러 줄 출력은 여러 번의 `print()`를 쓰는 것이 가장 단순하다. 문자열 안에서 실제 줄바꿈/탭이 아니라 문자 `\n`/`\t` 자체를 보여주려면 `\\n`/`\\t`를 쓰고, 경로의 역슬래시도 `\\`로 출력한다. 작은따옴표 문자열 안의 apostrophe는 `\'`로 처리하거나 바깥 따옴표 종류를 바꾼다.
+
+Error type: KNOWLEDGE_GAP
+Error mechanism: 줄 연속용 `\`와 문자열 안에서 출력할 역슬래시를 같은 역할로 취급했고, `print()` 인자 구분 콤마와 줄 연속 문법이 겹치면서 `SyntaxError`가 발생했다. 또한 `What's`가 작은따옴표 문자열의 경계를 닫는 문제와 `\n`/`\t`가 실제 제어문자로 해석되는 문제도 남아 있었다.
+Next-time cue: 먼저 “파이썬 문법용 따옴표/역슬래시”와 “화면에 출력할 따옴표/역슬래시”를 분리해 본다. 출력할 `\` 하나는 코드에서 `\\`, 출력할 `\n`은 코드에서 `\\n`이다. 여러 줄은 우선 `print()`를 줄별로 하나씩 쓴다.
+
+Related pattern IDs: none; 동일 학습 경계의 반복 증거지만 아직 별도 문제 패턴으로 승격하지 않음.
+Review state: QUEUED
+Later evidence / resolution: corrected version execution pending in the user's Colab.

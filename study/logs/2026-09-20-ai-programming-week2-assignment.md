@@ -609,3 +609,25 @@ Presentation anomaly:
 Other submission notes:
 - filename still contains `의 사본의 사본`; filename naming is not mandated by the Week-1 PDF, but a clean rename is advisable;
 - Drive metadata still does not expose enough permission detail to verify `Anyone with the link / Viewer`; check this in the Colab Share dialog.
+
+
+## Submission-copy final layout re-check
+
+Latest snapshot modified at 2026-09-20 23:48 KST.
+
+Verified cleanup:
+- filename is now `202431697 배지혜 2주차 과제`;
+- student number/name are in the first Python code cell as comments;
+- the shifted assignment-number Markdown headings were removed;
+- solution cells now appear directly in the intended Exercise 1 → 2 → 3 → 4 order;
+- Exercise 1 source is correct;
+- Exercise 2 source is correct and saved output shows 3824544.50;
+- Exercise 3 source uses float for both inputs and saved output shows 28.68;
+- Exercise 4 source is correct and saved output shows 172.
+
+Verification caveat:
+- in this cleaned copy, all code cells currently have `execution_count = null` even though outputs are retained from the source copy;
+- therefore the saved outputs are not fresh execution evidence from this exact cleaned copy;
+- safest pre-submission action is to rerun each solution cell in the cleaned copy so current source and output are freshly paired.
+
+Share permission remains unverified from Drive metadata; check `Anyone with the link / Viewer` in the Colab Share dialog before submission.

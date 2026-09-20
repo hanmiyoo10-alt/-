@@ -28,6 +28,7 @@ The intended future organization is under `plugins/risu/local/`, but target orga
 Nested child paths remain owned by their child identities, not by the Local parent.
 
 Current bridge:
+- `plugins/risu/local/usage-dashboard/**` → `plugin:usage-dashboard` (compatibility/navigation only; production remains `plugins/usage-dashboard/**`)
 - `plugins/risu/local/devpass/**` → `plugin:devpass` (canonical project/evidence)
 - `plugins/devpass/**` → `plugin:devpass` (fixed update-channel compatibility; artifact target remains `plugins/devpass/latest.js`)
 - `plugins/risu/local/voyage/**` → `plugin:voyage-token-check` (canonical)

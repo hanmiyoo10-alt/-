@@ -546,3 +546,18 @@ Overall verified state:
 - Exercise 2: COMPLETE
 - Exercise 3: code corrected, rerun required
 - Exercise 4: COMPLETE
+
+
+## Week 1 PDF submission protocol check
+
+Source checked: both copies of the week-1 PDF (`01파이썬 소개(입문).pdf` and `01파이썬 소개(입문)_260829_143434.pdf`). The submission instructions are consistent and are repeated in the deck.
+
+Verified submission protocol:
+- submit by sharing the practiced/assignment Colab notebook;
+- 반드시 학번과 이름을 주석으로 입력하고 시작;
+- change General access to `링크가 있는 모든 사용자`;
+- permission shown is viewer/read-only;
+- copy the share link;
+- paste that link into the Cyber Campus assignment room.
+
+The PDF does not state a mandatory filename naming convention for submission. It also does not instruct students to download and upload the `.ipynb` file; submission is via the shared Colab link.

@@ -382,3 +382,19 @@ Exact final line:
 
 Exercise 2 state: `PARTIAL / FINAL STRING BOUNDARY ONLY`.
 Exercise 3 is not present in the current notebook snapshot yet.
+
+
+## Exercise 2 final verification
+
+Latest Drive snapshot modified at 2026-09-20 23:07 KST.
+
+Verified newest execution:
+- `execution_count = 24`
+- execution status: success
+- example inputs: 3500000, 0.03, 3
+- output: `3년 후의 원리금은 3824544.50원 입니다.`
+- input conversions, compound-interest formula, f-string interpolation, and `:.2f` formatting are all correct
+
+Exercise 2 state: `CORRECT / COMPLETE`.
+
+Current notebook snapshot has an empty new code cell after Exercise 2, but no Exercise 3 solution code yet.

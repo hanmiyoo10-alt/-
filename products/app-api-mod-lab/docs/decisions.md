@@ -21,3 +21,22 @@
 ### 후속 규칙
 
 첫 실제 대상이 정해지면 source/upstream authority, 변경 표면, 검증 표면을 먼저 기록한 뒤 구현한다. 서로 다른 대상이나 별개 아이디어는 같은 작업 단위에 섞지 않는다.
+
+## 2026-09-20 — 대상별 Risu O/X 내부 taxonomy
+
+### 결정
+
+App API Mod Lab 자체는 범용 실험실로 유지하고, 실제 대상만 `targets/risu/<target-id>/` 또는 `targets/standalone/<target-id>/`로 분류한다.
+
+`app / api / hybrid` 구분은 물리 경로가 아니라 `TARGET.json` metadata로 둔다.
+
+### 이유
+
+- 하나의 실제 개조 대상이 앱 UI, 로컬 런타임, 원격 API를 동시에 포함할 수 있다.
+- app/api를 경로에 고정하면 범위가 넓어질 때 불필요한 디렉터리 이동이 생긴다.
+- Risu O/X는 대상의 ecosystem 경계라 비교적 안정적인 분류 축이다.
+- 아직 대상이 없는 bootstrap 상태에서 가짜 target을 만들 필요가 없다.
+
+### 검증 계약
+
+`target-contract.json`과 `validate-targets.mjs`가 실제 target root의 구조를 검증한다. zero-target 상태는 정상이며, validator PASS는 metadata 구조만 증명하고 외부 authority나 구현 준비 완료를 증명하지 않는다.

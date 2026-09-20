@@ -5,12 +5,13 @@
   "source_repo": null,
   "current_state": "products/app-api-mod-lab/CURRENT.md",
   "decisions": "products/app-api-mod-lab/docs/decisions.md",
-  "current_priority": "TARGET_AUTHORITY_AND_SCOPE_SELECTION",
+  "current_priority": "CHZZK_PUBLIC_READ_ONLY_PLAYBACK_RECONNAISSANCE",
   "validation_status": "BOOTSTRAP",
   "release_authority": null,
   "target_root": "products/app-api-mod-lab/targets",
   "target_contract": "products/app-api-mod-lab/target-contract.json",
   "target_validator": "products/app-api-mod-lab/validate-targets.mjs",
   "legacy_candidates": "products/app-api-mod-lab/legacy-candidates.json",
-  "legacy_candidate_validator": "products/app-api-mod-lab/validate-legacy-candidates.mjs"
+  "legacy_candidate_validator": "products/app-api-mod-lab/validate-legacy-candidates.mjs",
+  "active_target": "products/app-api-mod-lab/targets/standalone/chzzk"
 }

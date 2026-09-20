@@ -10,14 +10,14 @@
 
 - 독립 제품 루트: `products/app-api-mod-lab/`
 - 목적: 향후 앱/API 개조 작업의 격리된 설계·구현·검증 기준점
-- active concrete target: `UNASSIGNED`
-- active target upstream/source repository: `UNASSIGNED`
-- active target API surface: `UNASSIGNED`
+- active concrete target: `chzzk`
+- active target upstream/service authority: `NAVER CHZZK external service`
+- active target API surface: `public anonymous read-only playback reconnaissance`
 - production/runtime/deployment/release authority: `NONE DECLARED`
 - durable-memory profile: `check-only`
 - target taxonomy contract: `targets/` + `target-contract.json` + `validate-targets.mjs` 준비됨
-- concrete targets: `0` — 아직 target root로 승격된 대상은 없음
-- legacy candidates: `2` — `chzzk`, `fortune-golf`
+- concrete targets: `1` — `targets/standalone/chzzk/`
+- legacy candidates: `1` — `fortune-golf`
 - legacy candidate inventory: `legacy-candidates.json` + `validate-legacy-candidates.mjs`
 
 이 상태에서 repository registration은 ownership locator와 작업 시작점을 제공할 뿐, 특정 앱이나 API에 대한 권한·배포 상태·릴리스 진실을 생성하지 않는다.
@@ -39,11 +39,11 @@
 
 ## 다음 한 단계
 
-새 대상을 시작하거나 legacy candidate를 재개할 때 Risu O/X ecosystem, current authority, code/API surface를 먼저 재검증한다. 기존 후보는 `legacy-candidates.json`의 evidence locator를 따라 원본 이슈/브랜치를 읽고, 별도 migration 승인이 있을 때만 `targets/<ecosystem>/<target-id>/TARGET.json`으로 materialize한다.
+CHZZK는 `targets/standalone/chzzk/`에 materialize되었다. 다음 단계는 #2020의 locked scope를 유지한 채 fresh sanitized anonymous playback flow evidence를 확보하는 것이다. Fortune Golf는 계속 `legacy-candidates.json`의 후보로 남으며 별도 migration 승인 전에는 materialize하지 않는다.
 
 ## 아직 완료로 간주하지 않는 것
 
-- concrete target 구현: 아직 새 taxonomy 아래 시작 전
-- 실제 runtime probe: 대상 미지정
-- regression/runtime validation: 대상 미지정
+- CHZZK concrete target root: materialized; endpoint/runtime implementation은 시작 전
+- 실제 runtime probe: CHZZK `UNVERIFIED_RUNTIME`
+- regression/runtime validation: fresh sanitized anonymous CHZZK flow 필요
 - deployment/release: authority 없음

@@ -35,11 +35,9 @@
 
 기존 이슈나 별도 브랜치에 남아 있는 app/API 개조 작업은 곧바로 concrete target으로 취급하지 않는다.
 
-현재 inventory에는:
-- `chzzk` — issue #2020 기반, proposed Risu X / API target
-- `fortune-golf` — `fortune-golf-apk` branch 기반, proposed Risu X / app target
+현재 concrete target은 `targets/standalone/chzzk/`이며 issue #2020에서 이어진 Risu X / API target이다.
 
-가 기록되어 있다.
+현재 legacy inventory에는 `fortune-golf` 하나가 남아 있다. `fortune-golf-apk` branch 기반의 proposed Risu X / app target이며 아직 materialize되지 않았다.
 
 `legacy-candidates.json`은 evidence locator와 proposed classification만 가진다. source/runtime/release authority를 새로 만들지 않으며, `materialized=false` / `migration_authorized=false` 상태에서는 target root를 만들지 않는다.
 

@@ -6,24 +6,6 @@
   "source_move_authorized": false,
   "candidates": [
     {
-      "id": "chzzk",
-      "display_name": "NAVER CHZZK",
-      "proposed_ecosystem": "standalone",
-      "proposed_kind": "api",
-      "candidate_state": "legacy-evidence",
-      "repository_authority_status": "UNASSIGNED",
-      "materialized": false,
-      "migration_authorized": false,
-      "proposed_target_root": "products/app-api-mod-lab/targets/standalone/chzzk",
-      "evidence_locators": [
-        {
-          "type": "issue",
-          "number": 2020,
-          "note": "Existing App API Mod Lab reconnaissance issue explicitly identifies CHZZK as the first real target."
-        }
-      ]
-    },
-    {
       "id": "fortune-golf",
       "display_name": "Fortune Golf 3D",
       "proposed_ecosystem": "standalone",

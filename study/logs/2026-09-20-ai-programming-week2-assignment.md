@@ -56,6 +56,73 @@ The prior unresolved learning boundary remains narrow:
 
 This remains learning context only and is not assumed to be the assignment requirement.
 
+## 2주차 media verification — 2026-09-20
+
+### PDF — `02변수와연산자.pdf`
+
+- Source file verified directly from Drive.
+- 51 pages.
+- Main sequence:
+  1. variables and user input
+  2. expressions/operators
+  3. string formatting
+  4. exercises
+- Verified examples include:
+  - triangle area
+  - swapping two variables
+  - `input()` and `int()`
+  - Celsius/Fahrenheit conversion
+  - circle circumference/area
+  - quotient/remainder
+  - Pythagorean hypotenuse
+  - compound assignment and daily sales
+  - comparison/logical operators and precedence
+  - average score
+  - f-string formatting, `:.2f`, alignment, escape sequences
+- Exercise section contains four tasks:
+  - backslash/special-character output
+  - compound-interest calculation
+  - BMI calculation
+  - dog/cat numeric difference using string values
+
+### Video 1 — `02_변수와 자료형 1.mp4`
+
+- Duration: about 19m 38s.
+- 1920x1080, H.264 video + AAC stereo audio.
+- Sampled frames verify the lecture progresses through:
+  - variable concept
+  - changing stored values
+  - triangle-area example
+  - variable swapping
+  - `input()`
+  - integer conversion
+  - Celsius/Fahrenheit example
+  - circle circumference/area
+  - hands-on Colab practice near the end
+- The sampled slide sequence is consistent with the early part of the 2주차 PDF.
+
+### Video 2 — `02_변수와 자료형 2.mp4`
+
+- Duration: about 16m 19s.
+- 1920x1080, H.264 video + AAC stereo audio.
+- Sampled frames verify:
+  - string-to-number conversion
+  - Colab practice
+  - string indexing/slicing example
+  - f-string/string-formatting section
+  - additional hands-on Colab work
+- This video extends beyond only arithmetic/operators and includes practical string handling/formatting.
+
+### Audio — `음성 260914_130640.m4a`
+
+- Raw source verified directly from Drive.
+- Duration: 1h 31m 23s.
+- AAC mono, 48 kHz.
+- File/container metadata indicates a Samsung Android recording environment.
+- Filename timestamp `260914_130640` plus the duration aligns closely with a finish time around 14:38, which is also consistent with the file metadata creation time.
+- The audio track is non-empty and has normal recorded signal energy.
+- No authoritative transcript/caption surface was found. Spoken semantic content is therefore not claimed from metadata alone.
+
 ## Assignment source search
 
 The 2주차 Drive folder contains no file explicitly named as the assignment.

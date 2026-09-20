@@ -8,7 +8,7 @@ Current posture: `compatibility-family / evidence-only / non-production`.
 
 - Local Usage Dashboard: `plugin:usage-dashboard` → `plugins/usage-dashboard/**`
 - DevPass: `plugin:devpass` → `plugins/devpass/**`
-- Voyage Token Check: `plugin:voyage-token-check` → `voyage-token-check/**`
+- Voyage Token Check: `plugin:voyage-token-check` → `plugins/risu/local/voyage/**`
 
 Those child authorities remain authoritative until a separately reviewed migration proves replacement.
 
@@ -28,7 +28,7 @@ The intended future organization is under `plugins/risu/local/`, but target orga
 Nested child paths remain owned by their child identities, not by the Local parent.
 
 Current bridge:
-- `plugins/risu/local/voyage/**` → `plugin:voyage-token-check`
-- current Voyage design/evidence authority still remains under `voyage-token-check/**`
+- `plugins/risu/local/voyage/**` → `plugin:voyage-token-check` (canonical)
+- `voyage-token-check/**` → `plugin:voyage-token-check` (legacy compatibility stubs)
 
 The Local parent owns only its own direct compatibility surfaces. A nested child path must not be interpreted as authority collapse into `plugin:local`.

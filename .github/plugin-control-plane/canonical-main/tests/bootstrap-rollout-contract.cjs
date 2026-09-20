@@ -66,6 +66,10 @@ assert.equal(byId.local.projectPath, 'plugins/risu/local');
 assert.equal(byId.local.authority.type, 'evidence');
 assert.equal(byId.local.authority.evidence, 'plugins/risu/local/README.md');
 
+assert.equal(byId['voyage-token-check'].projectPath, 'plugins/risu/local/voyage');
+assert.equal(byId['voyage-token-check'].authority.type, 'evidence');
+assert.equal(byId['voyage-token-check'].authority.evidence, 'plugins/risu/local/voyage/DESIGN_STATUS.md');
+
 assert.equal(byId.simcore.memory.profile, 'registered-renderer');
 assert.equal(byId.simcore.memory.workflow, '.github/workflows/simcore-release-state-sync.yml');
 assert.equal(byId.simcore.memory.renderer, 'products/simcore/tooling/sync-state.mjs');

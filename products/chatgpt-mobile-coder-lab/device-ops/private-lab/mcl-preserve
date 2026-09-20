@@ -1,0 +1,99 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../../.." && pwd -P)
+PRESERVE="$REPO_ROOT/tools/repo-env/preservation/preserve.py"
+PREFIX=/data/data/com.termux/files/usr
+STATE_BASE="$PREFIX/var/lib/proot-distro"
+LAB_NAME=mcl-private-lab
+TEST_MODE=${MCL_PRESERVE_TEST_MODE:-0}
+case "$TEST_MODE" in
+  0) ;;
+  1) STATE_BASE="${TMPDIR:-}/mcl-preserve-test-state" ;;
+  *) printf '%s\n' 'BLOCKED mcl-preserve:invalid-test-mode' >&2; exit 2 ;;
+esac
+
+ROOTFS="$STATE_BASE/containers/$LAB_NAME/rootfs"
+LAYOUT_SPEC="$SCRIPT_DIR/preservation/private-lab-layout.json"
+CONTENT_SPEC="$SCRIPT_DIR/preservation/private-lab-content.json"
+
+blocked() {
+  printf 'BLOCKED mcl-preserve:%s\n' "$1" >&2
+  exit 2
+}
+require_runtime() {
+  command -v python3 >/dev/null 2>&1 || blocked python3-unavailable
+  [ -f "$PRESERVE" ] && [ ! -L "$PRESERVE" ] || blocked common-preserve-unavailable
+}
+
+require_tmpdir() {
+  [ -n "${TMPDIR:-}" ] || blocked tmpdir-unavailable
+  case "$TMPDIR" in
+    /*) ;;
+    *) blocked tmpdir-unavailable ;;
+  esac
+  [ -d "$TMPDIR" ] && [ ! -L "$TMPDIR" ] && [ -w "$TMPDIR" ] || blocked tmpdir-unavailable
+  if [ "$TEST_MODE" = 0 ]; then
+    [ "$TMPDIR" = "$PREFIX/tmp" ] || blocked tmpdir-unavailable
+  fi
+}
+
+profile_spec() {
+  case "$1" in
+    private-lab-layout) printf '%s\n' "$LAYOUT_SPEC" ;;
+    private-lab-content) printf '%s\n' "$CONTENT_SPEC" ;;
+    *) blocked invalid-profile ;;
+  esac
+}
+
+safe_basename() {
+  value=$1
+  case "$value" in
+    ""|"."|".."|*[!A-Za-z0-9._-]*) blocked invalid-basename ;;
+  esac
+  case "$value" in
+    [A-Za-z0-9]*) ;;
+    *) blocked invalid-basename ;;
+  esac
+  [ "${#value}" -le 128 ] || blocked invalid-basename
+  path="$TMPDIR/$value"
+  [ -f "$path" ] && [ ! -L "$path" ] || blocked invalid-snapshot-input
+  printf '%s\n' "$path"
+}
+capture_profile() {
+  require_runtime
+  require_tmpdir
+  spec=$(profile_spec "$1")
+  [ -d "$ROOTFS" ] && [ ! -L "$ROOTFS" ] || blocked private-lab-root-unavailable
+  tmp=$(mktemp "$TMPDIR/mcl-preserve.capture.XXXXXX") || blocked temp-create-failed
+  [ -f "$tmp" ] && [ ! -L "$tmp" ] || blocked temp-create-failed
+  trap 'rm -f -- "$tmp"' EXIT HUP INT TERM
+  set +e
+  python3 "$PRESERVE" capture --root "$ROOTFS" --spec "$spec" --output "$tmp" >/dev/null
+  rc=$?
+  set -e
+  if [ "$rc" -ne 0 ]; then
+    exit "$rc"
+  fi
+  cat -- "$tmp"
+}
+
+compare_snapshots() {
+  require_runtime
+  require_tmpdir
+  before=$(safe_basename "$1")
+  after=$(safe_basename "$2")
+  exec python3 "$PRESERVE" compare --before "$before" --after "$after"
+}
+case "${1:-}" in
+  capture)
+    [ "$#" -eq 2 ] || blocked usage
+    capture_profile "$2"
+    ;;
+  compare)
+    [ "$#" -eq 3 ] || blocked usage
+    compare_snapshots "$2" "$3"
+    ;;
+  *) blocked usage ;;
+esac

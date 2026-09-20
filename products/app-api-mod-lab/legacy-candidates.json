@@ -28,7 +28,8 @@
           "path": "fortune-golf-android/README.md",
           "note": "Legacy branch Android build entrypoint."
         }
-      ]
+      ],
+      "proposed_category": "game"
     }
   ]
 }

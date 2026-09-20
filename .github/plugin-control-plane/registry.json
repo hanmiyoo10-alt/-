@@ -7,7 +7,9 @@
       "lifecycle": "compatibility-family",
       "issueValues": ["local", "Local", "Local plugin"],
       "paths": [
-        "plugins/risu/local/**"
+        "plugins/risu/local",
+        "plugins/risu/local/*",
+        "docs/LOCAL_PLUGIN_GUIDELINES.md"
       ],
       "statusAdapter": "evidence",
       "authority": {
@@ -85,7 +87,8 @@
       "lifecycle": "design-evidence-validation",
       "issueValues": ["voyage-token-check", "Voyage Token Check", "Voyage"],
       "paths": [
-        "voyage-token-check/**"
+        "voyage-token-check/**",
+        "plugins/risu/local/voyage/**"
       ],
       "statusAdapter": "evidence",
       "authority": {

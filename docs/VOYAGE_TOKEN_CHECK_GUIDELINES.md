@@ -7,6 +7,9 @@ This document is the canonical bootstrap and operating contract for Voyage Token
 - Authority evidence: `voyage-token-check/DESIGN_STATUS.md`
 - Detailed project/design memory: `voyage-token-check/PROJECT_MEMORY.md`
 - Durable-memory profile: `check-only`
+- Local family compatibility landing: `plugins/risu/local/voyage/README.md`
+
+The compatibility landing is an additional routing/navigation path only. The canonical project root and authority evidence remain under `voyage-token-check/**` during this bridge phase.
 
 Do not infer production state, release identity, or a deployable plugin path from conversation history or from the existence of the project-memory directory. Until production authority is explicitly registered, unknown production fields remain UNKNOWN.
 

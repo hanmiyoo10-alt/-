@@ -22,3 +22,13 @@ Future shared provider/normalization work must compose with #2582 and preserve U
 Broader invocation/routing work remains separately scoped by #2589.
 
 The intended future organization is under `plugins/risu/local/`, but target organization is not current production authority.
+
+## Child compatibility paths
+
+Nested child paths remain owned by their child identities, not by the Local parent.
+
+Current bridge:
+- `plugins/risu/local/voyage/**` → `plugin:voyage-token-check`
+- current Voyage design/evidence authority still remains under `voyage-token-check/**`
+
+The Local parent owns only its own direct compatibility surfaces. A nested child path must not be interpreted as authority collapse into `plugin:local`.

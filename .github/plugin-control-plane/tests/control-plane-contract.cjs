@@ -5,9 +5,11 @@ const fs = require('fs');
 const path = require('path');
 const {
   loadRegistry,
+  loadTaxonomy,
   classifyPaths,
   classifyIssueBody,
   validateRegistry,
+  validateTaxonomy,
   labelDefinitions,
   fixedLabelMetadataDecision,
   resolveStatusIssueIdentity,
@@ -21,8 +23,43 @@ const {
 
 const root = path.resolve(__dirname, '../../..');
 const registry = loadRegistry();
+const taxonomy = loadTaxonomy();
 
 assert.deepEqual(validateRegistry(registry), [], 'registry must be valid and locator-only');
+assert.deepEqual(validateTaxonomy(taxonomy, registry), [], 'family taxonomy must be navigation-only and cross-reference registered owners safely');
+assert.equal(taxonomy.authority.posture, 'navigation-only');
+assert.equal(taxonomy.authority.pathMovesAuthorized, false);
+assert.equal(taxonomy.authority.identityCollapseAuthorized, false);
+assert.equal(taxonomy.authority.releaseMutationAuthorized, false);
+
+const taxonomyById = new Map(taxonomy.members.map((member) => [member.id, member]));
+assert.deepEqual(taxonomy.axes.family, ['product', 'plugin', 'platform', 'study']);
+assert.deepEqual(taxonomy.axes.risu, ['yes', 'no', 'bridge', 'unknown']);
+assert.equal(taxonomyById.get('pocketrisu').family, 'product');
+assert.equal(taxonomyById.get('pocketrisu').risu, 'yes');
+assert.equal(taxonomyById.get('pocketrisu').targetRoot, 'products/risu/pocketrisu');
+assert.equal(taxonomyById.get('app-api-mod-lab').risu, 'no');
+assert.equal(taxonomyById.get('termux').targetRoot, 'products/standalone/termux');
+assert.equal(taxonomyById.get('mobile-coder-lab').targetRoot, 'products/standalone/mobile-coder-lab');
+assert.equal(taxonomyById.get('simcore').targetRoot, 'plugins/risu/simcore');
+assert.deepEqual(taxonomyById.get('local').sourceRefs, ['plugin:usage-dashboard', 'plugin:devpass', 'plugin:voyage-token-check']);
+assert.equal(taxonomyById.get('local').risu, 'yes');
+assert.equal(taxonomyById.get('local').migration, 'consolidate');
+assert.equal(taxonomyById.get('local-runtime').risu, 'bridge');
+assert.equal(taxonomyById.get('study').family, 'study');
+assert.equal(taxonomyById.get('study').risu, 'no');
+
+const unknownTaxonomyRef = JSON.parse(JSON.stringify(taxonomy));
+unknownTaxonomyRef.members[0].sourceRefs = ['plugin:not-real'];
+assert.match(validateTaxonomy(unknownTaxonomyRef, registry).join('\n'), /unknown sourceRef plugin:not-real/);
+
+const duplicateTaxonomyId = JSON.parse(JSON.stringify(taxonomy));
+duplicateTaxonomyId.members[1].id = duplicateTaxonomyId.members[0].id;
+assert.match(validateTaxonomy(duplicateTaxonomyId, registry).join('\n'), /duplicate id pocketrisu/);
+
+const badRisuTarget = JSON.parse(JSON.stringify(taxonomy));
+badRisuTarget.members.find((member) => member.id === 'simcore').targetRoot = 'plugins/standalone/simcore';
+assert.match(validateTaxonomy(badRisuTarget, registry).join('\n'), /Risu O plugin targetRoot must be under plugins\/risu\//);
 assert.deepEqual(Object.keys(registry.plugins).sort(), [
   'devpass',
   'simcore',

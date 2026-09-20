@@ -321,3 +321,22 @@ Final print is also still pending correction:
 - use `print(f'{year}년 후의 원리금은 {total:.2f}원 입니다.')`.
 
 Exercise 2 state: `WRONG / INPUT STAGE COMPLETE`.
+
+
+## Exercise 2 re-check — fourth attempt
+
+Latest Drive snapshot modified at 2026-09-20 22:53 KST.
+
+Progress verified:
+- input types are now correct: principal=int, rate=float, year=int;
+- compound-interest formula is now correct: `total = money * (1 + rate) ** year`.
+
+Current blocker:
+- final line uses malformed f-string syntax similar to `f'{print('...')}`;
+- this causes `SyntaxError: unterminated f-string literal`.
+
+Required final output form:
+- `print(f'{year}년 후의 원리금은 {total:.2f}원 입니다.')`
+
+Exercise 2 state: `PARTIAL / ONLY FINAL F-STRING REMAINS`.
+Exercise 3 is not present in the current notebook snapshot yet.

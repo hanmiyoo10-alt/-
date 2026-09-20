@@ -530,3 +530,25 @@ Next-time cue: 계산 문제는 값이 맞은 뒤 문제 예시의 라벨·기�
 Related pattern IDs: none
 Review state: QUEUED
 Later evidence / resolution: 계산 결과 28.68은 정확. 몸무게 자료형과 출력 문구 교정 후 재검증 필요.
+
+
+### AI-PROG-W2-E3-R1
+
+Problem ID: AI-PROG-W2-E3-R1
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 3 재시도
+Source ref: current uploaded week-2 assignment Colab, execution count 30
+Result: PARTIAL
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 키와 몸무게를 실수형으로 입력받아 BMI를 계산하고 PDF 예시 형식으로 소수 둘째 자리까지 출력한다.
+User interpretation / approach: BMI 공식과 소수 둘째 자리 f-string 출력은 유지했고, 출력 문구에 `BMI=` 라벨을 추가했다. 실행 결과는 `(당신의 BMI=28.68입니다.)`로 정상 출력된다.
+Correct reasoning summary: 수치 계산은 정확하다. PDF 요구에 맞추려면 몸무게도 `float(input(...))`로 받고, 출력은 불필요한 괄호 없이 `당신의 BMI= 28.68입니다.`처럼 등호 뒤 공백까지 맞춘다.
+
+Error type: OUTPUT_FORMAT
+Error mechanism: 계산은 맞지만 문제 요구의 입력 자료형과 예시 출력 문자열을 완전히 일치시키는 마지막 검증이 남았다.
+Next-time cue: 실행 성공 뒤 문제에서 요구한 자료형과 예시의 라벨·괄호·공백을 한 번 더 비교한다.
+
+Related pattern IDs: none
+Review state: QUEUED
+Later evidence / resolution: 계산 및 f-string 숫자 형식은 교정됨. 몸무게 float 변환과 출력 괄호/공백만 남음.

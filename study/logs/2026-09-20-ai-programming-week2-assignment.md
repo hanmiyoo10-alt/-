@@ -561,3 +561,26 @@ Verified submission protocol:
 - paste that link into the Cyber Campus assignment room.
 
 The PDF does not state a mandatory filename naming convention for submission. It also does not instruct students to download and upload the `.ipynb` file; submission is via the shared Colab link.
+
+
+## Clean submission-copy check
+
+A new Colab file was added directly under the `AI 프로그래밍입문` Drive folder:
+- title: `202431697 배지혜 2주차 과제의 사본의 사본`
+- created 2026-09-20 23:41 KST
+- modified 2026-09-20 23:43 KST
+
+Verified contents:
+- one compact notebook containing only the final Week-2 solutions;
+- Exercise 1 through Exercise 4 are all present;
+- execution counts are cleanly sequenced 1, 2, 3, 4;
+- Exercise 2 outputs 3824544.50 for the PDF example;
+- Exercise 3 source uses float for both weight and height and the executed output is `당신의 BMI= 28.68입니다.`;
+- Exercise 4 outputs `강아지가 고양이보다 172마리 더 많다`.
+
+Submission-format note:
+- the notebook begins with a Markdown cell containing `# 202431697` and `# 배지혜`;
+- the Week-1 PDF wording says to begin by entering student number and name as comments. A Markdown heading is not a Python code comment, so for strict compliance the safer form is a code cell containing `# 202431697` and `# 배지혜`.
+- Drive metadata reports the file as shared but does not expose enough permission metadata to verify `Anyone with the link / Viewer`; this must still be checked in the Colab Share dialog.
+
+The filename has an inherited copy suffix (`의 사본의 사본`). Week-1 PDF does not impose a filename rule, but renaming to a clean title would reduce submission ambiguity.

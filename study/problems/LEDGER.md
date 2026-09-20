@@ -442,3 +442,25 @@ Next-time cue: f-string은 함수가 아니라 문자열 문법이다. 먼저 `f
 Related pattern IDs: none
 Review state: QUEUED
 Later evidence / resolution: 입력과 복리 계산식은 교정 완료. 출력 f-string 한 줄 교정만 남음.
+
+
+### AI-PROG-W2-E2-R4
+
+Problem ID: AI-PROG-W2-E2-R4
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 2 재시도 4
+Source ref: current uploaded week-2 assignment Colab, execution count 16
+Result: PARTIAL
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 복리 원리금을 계산하고 f-string으로 연도와 소수 둘째 자리 결과를 출력한다.
+User interpretation / approach: 입력 자료형과 복리 계산식은 정확히 완성했다. 이후 f-string에서 변수를 중괄호에 넣어야 한다는 점까지 스스로 메모했지만, `print(f'('{year}...`처럼 문자열 시작 직후 괄호를 따로 열고, 소수점 형식도 `{total\2f}`처럼 작성했다.
+Correct reasoning summary: f-string 전체 문장은 하나의 문자열 리터럴이어야 하며 변수는 문자열 내부 중괄호에 둔다. 소수 둘째 자리 형식은 역슬래시가 아니라 콜론을 써서 `{total:.2f}`로 표현한다. 최종 형태는 `print(f'{year}년 후의 원리금은 {total:.2f}원 입니다.')`이다.
+
+Error type: KNOWLEDGE_GAP
+Error mechanism: f-string의 세 요소인 `f'...'`, 변수 삽입 `{변수}`, 형식 지정 `:{형식}`을 각각 이해하기 시작했지만 한 문장 안에서 결합하는 문법이 아직 불안정하다.
+Next-time cue: f-string은 먼저 `print(f'문장')` 뼈대를 만든 뒤, 필요한 변수 자리만 `{year}`, `{total:.2f}`로 교체한다. 소수점 형식은 `:.2f`이며 `\2f`가 아니다.
+
+Related pattern IDs: none
+Review state: QUEUED
+Later evidence / resolution: 입력과 계산식은 완료. 최종 출력 한 줄의 정확한 f-string 문법만 남음.

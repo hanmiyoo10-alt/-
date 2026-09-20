@@ -398,3 +398,25 @@ Next-time cue: 입력 전에 변수별 자료형부터 정한다: 원금=int 또
 Related pattern IDs: none
 Review state: QUEUED
 Later evidence / resolution: `print(input())` 오류는 교정됨. 이자율 형변환, 복리 공식, f-string 출력은 아직 교정 대기.
+
+
+### AI-PROG-W2-E2-R2
+
+Problem ID: AI-PROG-W2-E2-R2
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 2 재시도 2
+Source ref: current uploaded week-2 assignment Colab, execution count 9
+Result: WRONG
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 원금, 연이율, 기간을 입력받아 복리 원리금 `money * (1 + rate) ** year`를 계산하고 소수 둘째 자리까지 출력한다.
+User interpretation / approach: 원금은 int, 이자율은 float, 기간은 int로 형변환하여 세 입력을 모두 정상적으로 받았다. 계산 단계에서 `total = money(1+rate)*year`를 사용했다.
+Correct reasoning summary: 숫자 변수와 괄호 사이의 곱셈은 반드시 `*`를 써야 하며, 복리 기간 적용은 단순 곱셈 `* year`가 아니라 거듭제곱 `** year`이다. 따라서 `total = money * (1 + rate) ** year`가 맞다. 출력도 변수명을 문자열로 쓰지 말고 f-string에서 `{year}`, `{total:.2f}`로 삽입해야 한다.
+
+Error type: CALC_PROCESS
+Error mechanism: 수학 표기에서 생략 가능한 곱셈 기호를 파이썬 코드에서도 생략해 `money(...)`가 함수 호출로 해석되었다. 또한 복리의 지수 `year`를 곱셈으로 처리했다.
+Next-time cue: 수학식을 파이썬으로 옮길 때 생략된 곱셈 기호를 모두 복원하고, 거듭제곱은 `**`인지 확인한다.
+
+Related pattern IDs: none
+Review state: QUEUED
+Later evidence / resolution: 입력 형변환 단계는 모두 교정 성공. 계산식과 최종 f-string 출력 교정 대기.

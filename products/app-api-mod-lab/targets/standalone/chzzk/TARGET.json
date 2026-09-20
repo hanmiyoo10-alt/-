@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "chzzk",
+  "display_name": "NAVER CHZZK",
+  "ecosystem": "standalone",
+  "kind": "api",
+  "authority": {
+    "source_upstream": "NAVER CHZZK external service; official CHZZK Open API documentation is authoritative only for its documented supported Open API surface; internal web/app API remains unofficial evidence",
+    "release": "UNASSIGNED",
+    "deployment": "UNASSIGNED"
+  },
+  "scope": {
+    "owned_surfaces": [
+      "repository-local CHZZK public anonymous read-only playback reconnaissance",
+      "sanitized route/schema evidence and future target-local probe/client artifacts within the locked bounded scope"
+    ],
+    "preserve_surfaces": [
+      "NAVER CHZZK external runtime and service behavior",
+      "authenticated/session/account surfaces",
+      "follow/subscription/chat-write/donation/creator-control/payment/ad-mutation surfaces",
+      "deployment and release behavior"
+    ]
+  },
+  "privacy": {
+    "credentials_in_git": false
+  },
+  "validation_surfaces": [
+    "products/app-api-mod-lab/validate-targets.mjs structural contract",
+    "future sanitized anonymous route/runtime evidence when separately captured"
+  ],
+  "provenance": {
+    "issue": 2020,
+    "authority_scope_comment_id": 5747254857,
+    "runtime_status": "UNVERIFIED_RUNTIME"
+  }
+}

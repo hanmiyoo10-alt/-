@@ -277,3 +277,23 @@ Additional PDF mismatches:
 - the final output needs the actual year and total value, formatted to two decimal places.
 
 Exercise 2 state: `WRONG / CORRECTION NEEDED`.
+
+
+## Exercise 2 re-check — second attempt
+
+Latest Drive snapshot modified at 2026-09-20 22:43 KST.
+
+Progress:
+- previous `int(print(input(...)))` misuse was corrected to direct `int(input(...))`;
+- principal input 3500000 is accepted.
+
+Current blocker:
+- interest-rate variable still uses `int(input(...))`;
+- entering 0.03 raises `ValueError: invalid literal for int() with base 10: '0.03'`.
+
+Still remaining after that blocker:
+- use `float(input(...))` for the interest rate;
+- replace current arithmetic with the PDF compound-interest formula `money * (1 + rate) ** year`;
+- replace `f(print(...))` with an f-string inside `print(...)`, formatting the result with `:.2f`.
+
+Exercise 2 state: `WRONG / PROGRESS MADE`.

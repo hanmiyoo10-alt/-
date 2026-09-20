@@ -486,3 +486,25 @@ Next-time cue: 먼저 `print(f'문장')` 전체 뼈대를 쓴 뒤, 변수 위치
 Related pattern IDs: none
 Review state: QUEUED
 Later evidence / resolution: 입력/계산식/형식지정 개념은 대부분 교정됨. 최종 f-string 경계 한 줄만 남음.
+
+
+### AI-PROG-W2-E2-R6
+
+Problem ID: AI-PROG-W2-E2-R6
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 2 최종 재검증
+Source ref: current uploaded week-2 assignment Colab, execution count 24
+Result: CORRECT
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 원금, 연이율, 기간을 입력받아 복리 원리금을 계산하고 소수 둘째 자리까지 출력한다.
+User interpretation / approach: 원금은 int, 이자율은 float, 기간은 int로 입력받고 `total = money * (1 + rate) ** year`를 계산했다. 마지막 출력도 `print(f'{year}년 후의 원리금은 {total:.2f}원 입니다.')` 형태로 완성했다.
+Correct reasoning summary: PDF 예시 입력 3500000, 0.03, 3에서 `3년 후의 원리금은 3824544.50원 입니다.`가 출력되어 요구사항과 일치한다.
+
+Error type: none
+Error mechanism: none
+Next-time cue: 현재 흐름을 유지한다: `input → 자료형 변환 → 공식 그대로 계산 → f-string으로 변수/형식 지정`.
+
+Related pattern IDs: none
+Review state: REVIEWED
+Later evidence / resolution: 이전의 input/형변환/곱셈·거듭제곱/f-string 오류가 모두 교정되었고 execution count 24에서 정상 실행과 예시값 일치를 확인했다.

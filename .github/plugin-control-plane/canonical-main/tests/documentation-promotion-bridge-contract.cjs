@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const root = path.resolve(__dirname, '../../../../..');
+const root = path.resolve(__dirname, '../../../..');
 const workflow = fs.readFileSync(path.join(root, '.github/workflows/canonical-main-doc-promotion.yml'), 'utf8');
 const readme = fs.readFileSync(path.join(root, '.github/plugin-control-plane/canonical-main/documentation-stream/README.md'), 'utf8');
 

@@ -43,3 +43,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2590)
 - Event ID: `53950c973fd869c9ca5238eb41389d12962516436d2bbcd336aa9e5cc2dee4de`
 <!-- canonical-main-doc-promoted:53950c973fd869c9ca5238eb41389d12962516436d2bbcd336aa9e5cc2dee4de -->
+
+### 2026-09-20 — App API Mod Lab target taxonomy
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2597)
+- Event ID: `4c460b92e89c9074bce93d7f1317c653eee7fa0c73920ce78ebe8147f1e277a7`
+<!-- canonical-main-doc-promoted:4c460b92e89c9074bce93d7f1317c653eee7fa0c73920ce78ebe8147f1e277a7 -->

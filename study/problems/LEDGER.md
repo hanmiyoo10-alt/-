@@ -332,3 +332,25 @@ Next-time cue: 출력 예시를 맞출 때는 실행 성공 뒤 각 줄의 맨 �
 Related pattern IDs: none
 Review state: QUEUED
 Later evidence / resolution: SyntaxError는 해소되었고 escape/quote 처리도 성공했다. 정확한 출력 일치를 위한 선행 공백 1칸 제거만 남음.
+
+
+### AI-PROG-W2-E1-R2
+
+Problem ID: AI-PROG-W2-E1-R2
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 1 최종 재검증
+Source ref: current uploaded week-2 assignment Colab, execution count 4
+Result: CORRECT
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: PDF Exercise 1의 5줄 출력을 문자열·따옴표·리터럴 역슬래시·경로 표기까지 정확히 재현한다.
+User interpretation / approach: 이전 시도의 콤마를 제거해 `print()` 인자 사이 자동 공백을 없애고, 문자열 안의 실제 줄바꿈 `\n`, 리터럴 `\\n`/`\\t`, apostrophe escape, Windows 경로 역슬래시를 함께 사용했다.
+Correct reasoning summary: 최신 실행 결과가 PDF 예시의 다섯 줄과 정확히 일치한다.
+
+Error type: none
+Error mechanism: none
+Next-time cue: 출력 문제에서는 실행 성공만 보지 말고 문자열 경계, 리터럴 역슬래시, 앞뒤 공백까지 예시와 비교한다.
+
+Related pattern IDs: none
+Review state: REVIEWED
+Later evidence / resolution: 이전 SyntaxError와 선행 공백 오류가 모두 해소되었고, 실행 count 4에서 정확한 출력 일치 확인. Exercise 1 완료.

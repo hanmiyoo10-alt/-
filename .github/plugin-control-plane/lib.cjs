@@ -307,6 +307,11 @@ function validateRegistry(registry = loadRegistry()) {
       else issueValueOwners.set(value, trail);
     }
   }
+  for (const def of labelDefinitions(registry)) {
+    if (String(def.description || '').length > 100) {
+      errors.push(`label ${def.name}: description exceeds 100 characters`);
+    }
+  }
   return errors;
 }
 

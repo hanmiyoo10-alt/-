@@ -464,3 +464,25 @@ Next-time cue: f-string은 먼저 `print(f'문장')` 뼈대를 만든 뒤, 필�
 Related pattern IDs: none
 Review state: QUEUED
 Later evidence / resolution: 입력과 계산식은 완료. 최종 출력 한 줄의 정확한 f-string 문법만 남음.
+
+
+### AI-PROG-W2-E2-R5
+
+Problem ID: AI-PROG-W2-E2-R5
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 2 재시도 5
+Source ref: current uploaded week-2 assignment Colab, execution count 18
+Result: PARTIAL
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 복리 원리금을 계산하고 f-string으로 연도와 소수 둘째 자리 결과를 출력한다.
+User interpretation / approach: 입력 자료형과 복리 계산식은 정확하다. 소수점 형식 지정이 콜론 기반이라는 점도 반영해 `{total: .2f}`까지 접근했다. 다만 최종 출력이 `print(f'('{year}...` 형태라 f-string 문자열이 `f'('`에서 먼저 닫혀 SyntaxError가 발생했다.
+Correct reasoning summary: 전체 출력 문장이 하나의 f-string 문자열 안에 있어야 한다. 정확한 형태는 `print(f'{year}년 후의 원리금은 {total:.2f}원 입니다.')`이다. PDF 예시와 정확히 맞추려면 `{total: .2f}`처럼 콜론 뒤 공백을 두지 않고 `{total:.2f}`를 사용한다.
+
+Error type: KNOWLEDGE_GAP
+Error mechanism: f-string 바깥 괄호와 문자열 내부 문자 괄호의 경계를 혼동해 문자열을 조기에 닫았다.
+Next-time cue: 먼저 `print(f'문장')` 전체 뼈대를 쓴 뒤, 변수 위치만 `{year}`, `{total:.2f}`로 바꾼다. f-string 시작 직후 별도 `(`를 넣지 않는다.
+
+Related pattern IDs: none
+Review state: QUEUED
+Later evidence / resolution: 입력/계산식/형식지정 개념은 대부분 교정됨. 최종 f-string 경계 한 줄만 남음.

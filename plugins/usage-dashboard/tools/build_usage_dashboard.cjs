@@ -1,14 +1,34 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const {PARTS} = require('../src/parts.cjs');
+const {LEGACY_ROOT, normalizeRoot} = require('./release_path_profile.cjs');
 
-const ROOT = path.resolve(__dirname, '..');
+function parseArgs(argv = process.argv.slice(2)) {
+  let mode = 'stdout';
+  let sourceRoot = LEGACY_ROOT;
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--write' || arg === '--check') {
+      const nextMode = arg.slice(2);
+      if (mode !== 'stdout' && mode !== nextMode) throw new Error('USAGE_DASHBOARD_BUILD_MODE_CONFLICT');
+      mode = nextMode;
+    } else if (arg === '--root') {
+      sourceRoot = String(argv[++index] || '');
+    } else {
+      throw new Error(`USAGE_DASHBOARD_BUILD_ARGUMENT_DENIED:${arg}`);
+    }
+  }
+  return {mode, sourceRoot:normalizeRoot(sourceRoot)};
+}
+
+const {mode, sourceRoot} = parseArgs();
+const ROOT = path.resolve(sourceRoot);
 const SRC = path.join(ROOT, 'src');
 const MANIFEST = path.join(SRC, 'manifest.json');
 const LATEST = path.join(ROOT, 'latest.js');
+const {PARTS} = require(path.join(SRC, 'parts.cjs'));
 const hash = (content) => crypto.createHash('sha256').update(content).digest('hex');
-const WRITE = process.argv.includes('--write');
+const WRITE = mode === 'write';
 
 const partStates = PARTS.map((part) => {
   const file = path.join(SRC, part.file);
@@ -32,15 +52,15 @@ const generatedManifest = {
   format:1,
   plugin:'Local Usage Dashboard',
   version,
-  source:'plugins/usage-dashboard/latest.js',
+  source:`${sourceRoot}/latest.js`,
   sourceOfTruth:'modules',
-  layout:'plugins/usage-dashboard/src/parts.cjs',
+  layout:`${sourceRoot}/src/parts.cjs`,
   artifactSha256:hash(built),
   parts:partStates.map(({content, marker, ...part}) => part)
 };
 const manifestText = JSON.stringify(generatedManifest, null, 2) + '\n';
 
-if (process.argv.includes('--check')) {
+if (mode === 'check') {
   if (!fs.existsSync(MANIFEST)) throw new Error('usage-dashboard src/manifest.json is missing');
   if (!fs.existsSync(LATEST)) throw new Error('usage-dashboard latest.js is missing');
   if (fs.readFileSync(MANIFEST, 'utf8') !== manifestText) throw new Error('manifest.json differs from generated modular manifest');

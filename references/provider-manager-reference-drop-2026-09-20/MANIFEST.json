@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "status": "REFERENCE_ARCHIVE_ONLY",
+  "trackingIssue": 2583,
+  "artifacts": [
+    {
+      "id": "yumi-provider-manager-v1.16.3",
+      "file": "yumi-provider-manager-v1.16.3.js",
+      "version": "1.16.3",
+      "bytes": 1018363,
+      "sha256": "b71e2b40bc64be0e12ff7be77b0345bcd2c065fc1f567ab5ab77a8dbf3136244",
+      "provenance": "user-supplied-exact; declared upstream URL independently matched at intake"
+    },
+    {
+      "id": "cupcake-provider-manager-v1.35.11-production",
+      "file": "cupcake-provider-manager-v1.35.11-production.js",
+      "version": "1.35.11",
+      "bytes": 1195945,
+      "sha256": "00ab4d10902b9c897c34f185ce8ff76267f4ab02e7225513fe6a9745075bb7e8",
+      "provenance": "user-supplied-exact; current upstream had advanced and is not historical byte authority"
+    }
+  ]
+}

@@ -672,3 +672,16 @@ All four exercises are now content-complete and execution-verified in the cleane
 
 Remaining submission-only check:
 - Drive reports the file as shared but does not expose enough permission metadata to prove `Anyone with the link / Viewer`; confirm this in the Colab Share dialog before pasting the link into Cyber Campus.
+
+
+## Submission link permission confirmed by learner
+
+On 2026-09-20, learner confirmed they personally checked the Colab sharing setting after the final submission-copy verification.
+
+Submission preparation state:
+- assignment content: COMPLETE
+- current execution verification: COMPLETE
+- student number/name comment requirement: COMPLETE
+- clean filename: COMPLETE
+- Colab share-link permission check: COMPLETE (learner-confirmed)
+- Cyber Campus submission itself: NOT YET CONFIRMED

@@ -1781,3 +1781,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1ae1ccc60b6cabffb0ef3e0faa5caaa05744506e)
 - Event ID: `1e839c3fbe9aa102d6995f75d728d59430b68c046adb953eef6ef245182d7317`
 <!-- canonical-main-doc-promoted:1e839c3fbe9aa102d6995f75d728d59430b68c046adb953eef6ef245182d7317 -->
+
+### 2026-09-20 — feat(app-api-mod-lab): add target taxonomy contract (#2598)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `c75f45a8ec67f7c3c4577f2b65304e70d0ceffd5`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c75f45a8ec67f7c3c4577f2b65304e70d0ceffd5)
+- Event ID: `0157e1f612ee57b1ce613027e6516e0273858f77940c7252842dfec39dba18fd`
+<!-- canonical-main-doc-promoted:0157e1f612ee57b1ce613027e6516e0273858f77940c7252842dfec39dba18fd -->

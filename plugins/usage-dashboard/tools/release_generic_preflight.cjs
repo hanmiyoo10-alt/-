@@ -3,8 +3,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const e24 = require('./release_evidence_handoff_e24.cjs');
+const {LEGACY_ROOT, normalizeRoot} = require('./release_path_profile.cjs');
 
-const TEST_ROOT = 'plugins/usage-dashboard/tests';
+const TEST_ROOT = `${LEGACY_ROOT}/tests`;
+const testRootForSourceRoot = (sourceRoot = LEGACY_ROOT) => path.posix.join(normalizeRoot(sourceRoot), 'tests');
 const HISTORICAL_LOCK = 'UD_HISTORICAL_VERSION_LOCK';
 
 function walkCjs(root) {
@@ -70,6 +72,7 @@ function inspectReleaseEvidenceContext(spec, context) {
 function parseArgs(args) {
   let specPath = '';
   let contextPath = '';
+  let sourceRoot = LEGACY_ROOT;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === '--spec' && args[index + 1]) {
@@ -80,15 +83,19 @@ function parseArgs(args) {
       contextPath = args[++index];
       continue;
     }
+    if (arg === '--root' && args[index + 1]) {
+      sourceRoot = args[++index];
+      continue;
+    }
     throw new Error('usage: node release_generic_preflight.cjs --spec <release-spec> [--release-evidence-context <transaction-local-json>]');
   }
   if (!specPath) throw new Error('usage: node release_generic_preflight.cjs --spec <release-spec> [--release-evidence-context <transaction-local-json>]');
-  return {specPath,contextPath};
+  return {specPath,contextPath,sourceRoot:normalizeRoot(sourceRoot)};
 }
 
 function run(argv) {
-  const {specPath,contextPath} = parseArgs(argv.slice(2));
-  const result = inspect(specPath);
+  const {specPath,contextPath,sourceRoot} = parseArgs(argv.slice(2));
+  const result = inspect(specPath, testRootForSourceRoot(sourceRoot));
   if (result.findings.length) {
     for (const finding of result.findings) {
       console.error(`RELEASE_PREFLIGHT_STALE_PRODUCT_LITERAL:${finding.file}:${finding.line}:${finding.literal}:target=${result.targetVersion}:reason=${finding.reason}`);
@@ -115,4 +122,4 @@ if (require.main === module) {
   catch (error) { console.error(error && error.message ? error.message : String(error)); process.exitCode = 1; }
 }
 
-module.exports = {HISTORICAL_LOCK, historicalScopeVersions, staleProductAssertions, inspect, inspectReleaseEvidenceContext, parseArgs};
+module.exports = {HISTORICAL_LOCK, TEST_ROOT, testRootForSourceRoot, historicalScopeVersions, staleProductAssertions, inspect, inspectReleaseEvidenceContext, parseArgs};

@@ -204,3 +204,20 @@ Validated correction strategy:
 - use doubled backslashes in the Windows-style path.
 
 A corrected reference form was executed separately and produced the five PDF lines exactly. The user's own Colab still needs to be corrected and re-run before Exercise 1 is marked complete.
+
+
+## Exercise 1 re-check — second saved attempt
+
+Latest Drive snapshot modified at 2026-09-20 22:18 KST.
+
+Progress observed:
+- literal `\\n` / `\\t` intent is now represented inside a string;
+- Windows-style path backslashes are doubled;
+- the learner added a markdown self-note distinguishing some escape cases.
+
+Remaining blocker:
+- the code uses `\\n` outside a string literal as though it were a source-code line separator;
+- multiple output pieces are not separated by commas or separate `print()` calls;
+- `He said "What's there?"` is not enclosed as a Python string.
+
+Current result remains `SyntaxError`. Exercise 1 is not complete yet.

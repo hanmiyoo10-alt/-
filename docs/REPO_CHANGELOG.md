@@ -1789,3 +1789,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c75f45a8ec67f7c3c4577f2b65304e70d0ceffd5)
 - Event ID: `0157e1f612ee57b1ce613027e6516e0273858f77940c7252842dfec39dba18fd`
 <!-- canonical-main-doc-promoted:0157e1f612ee57b1ce613027e6516e0273858f77940c7252842dfec39dba18fd -->
+
+### 2026-09-20 — feat(app-api-mod-lab): inventory legacy target candidates (#2600)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `bda5c3ddd208e7ade8da4b463e9e71e471ca89e3`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/bda5c3ddd208e7ade8da4b463e9e71e471ca89e3)
+- Event ID: `736998a2bd2ff07d7cdc23e793df99f31548ac1dd70ff916f93faf474af419f1`
+<!-- canonical-main-doc-promoted:736998a2bd2ff07d7cdc23e793df99f31548ac1dd70ff916f93faf474af419f1 -->

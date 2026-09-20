@@ -2,14 +2,9 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const {DEFAULT_PROFILE, artifactPathsForRoot} = require('./release_path_profile.cjs');
 
-const ALLOWLIST = Object.freeze([
-  'plugins/usage-dashboard/latest.js',
-  'plugins/usage-dashboard/runtime/bridge-engine.mjs',
-  'plugins/usage-dashboard/runtime/bridge-manager.cjs',
-  'plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh',
-  'plugins/usage-dashboard/runtime/product-manifest.json',
-]);
+const ALLOWLIST = Object.freeze(artifactPathsForRoot(DEFAULT_PROFILE.sourceRoot));
 
 function parseVersion(value) {
   const match = String(value || '').match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/);

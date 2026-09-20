@@ -60,6 +60,8 @@ function classifyPaths(paths, registry = loadRegistry()) {
 
     const nonOperational = (registry.nonOperationalScopes || [])
       .filter((entry) => matchesAny(filePath, entry.paths));
+    const fixedScopes = (registry.scopes || [])
+      .filter((entry) => matchesAny(filePath, entry.paths));
     const isRepo = matchesAny(filePath, registry.repoPaths || []);
     const isShared = matchesAny(filePath, registry.sharedPaths || []);
 
@@ -72,10 +74,11 @@ function classifyPaths(paths, registry = loadRegistry()) {
     if (pluginOwners.length === 1) pluginIds.add(pluginOwners[0]);
     if (productOwners.length === 1) productIds.add(productOwners[0]);
     for (const entry of nonOperational) scopeLabels.add(entry.label);
+    for (const entry of fixedScopes) scopeLabels.add(entry.label);
     if (isRepo) scopeLabels.add('scope:repo');
     if (isShared) scopeLabels.add('scope:shared');
 
-    if (!ownerCount && !nonOperational.length && !isRepo && !isShared) {
+    if (!ownerCount && !nonOperational.length && !fixedScopes.length && !isRepo && !isShared) {
       unclassifiedPaths.push(filePath);
       scopeLabels.add('scope:unclassified');
     }
@@ -170,12 +173,17 @@ function classifyIssueBody(body, registry = loadRegistry(), options = {}) {
     .filter(([, plugin]) => (plugin.issueValues || []).includes(value));
   const productMatches = Object.entries(registry.products || {})
     .filter(([, product]) => (product.issueValues || []).includes(value));
-  const matchCount = pluginMatches.length + productMatches.length;
+  const scopeMatches = (registry.scopes || [])
+    .filter((scope) => (scope.issueValues || []).includes(value));
+  const matchCount = pluginMatches.length + productMatches.length + scopeMatches.length;
   if (matchCount === 1 && pluginMatches.length === 1) {
     return {explicit: true, labels: [`plugin:${pluginMatches[0][0]}`]};
   }
   if (matchCount === 1 && productMatches.length === 1) {
     return {explicit: true, labels: [`product:${productMatches[0][0]}`]};
+  }
+  if (matchCount === 1 && scopeMatches.length === 1) {
+    return {explicit: true, labels: [scopeMatches[0].label]};
   }
   return {explicit: true, labels: ['scope:unclassified']};
 }
@@ -216,6 +224,9 @@ function labelDefinitions(registry = loadRegistry()) {
     ['scope:test-fixture', 'c5def5', 'Repository test fixture path'],
     ['control-plane:status', '0e8a16', 'Mutable operational status issue'],
   ];
+  for (const scope of registry.scopes || []) {
+    defs.push([scope.label, 'c5def5', scope.description]);
+  }
   for (const [id, plugin] of Object.entries(registry.plugins || {})) {
     defs.push([`plugin:${id}`, '1d76db', plugin.displayName]);
   }
@@ -269,6 +280,33 @@ function validateRegistry(registry = loadRegistry()) {
   }
   validateOwners('plugins', registry.plugins || {});
   validateOwners('products', registry.products || {});
+
+  const reservedScopeIds = new Set([
+    'repo', 'shared', 'multi-plugin', 'multi-product', 'multi-owner', 'unclassified',
+    ...(registry.nonOperationalScopes || []).map((entry) => entry.id),
+  ]);
+  const seenScopeIds = new Set();
+  const seenScopeLabels = new Set();
+  for (const [index, scope] of (registry.scopes || []).entries()) {
+    const trail = `scopes.${index}`;
+    if (!scope.id || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(scope.id)) errors.push(`${trail}: invalid id`);
+    if (seenScopeIds.has(scope.id)) errors.push(`${trail}: duplicate id ${scope.id}`);
+    else seenScopeIds.add(scope.id);
+    if (reservedScopeIds.has(scope.id)) errors.push(`${trail}: reserved id ${scope.id}`);
+    if (scope.label !== `scope:${scope.id}`) errors.push(`${trail}: label must equal scope:${scope.id}`);
+    if (seenScopeLabels.has(scope.label)) errors.push(`${trail}: duplicate label ${scope.label}`);
+    else seenScopeLabels.add(scope.label);
+    if (!scope.displayName) errors.push(`${trail}: displayName missing`);
+    if (!scope.description) errors.push(`${trail}: description missing`);
+    if (!Array.isArray(scope.paths) || !scope.paths.length) errors.push(`${trail}: paths missing`);
+    if (scope.authority?.posture !== 'routing-only') errors.push(`${trail}: authority posture must be routing-only`);
+    if (scope.authority?.statusProjection !== false) errors.push(`${trail}: statusProjection must be false`);
+    for (const value of scope.issueValues || []) {
+      const previous = issueValueOwners.get(value);
+      if (previous) errors.push(`issueValues collision: ${value} owned by ${previous} and ${trail}`);
+      else issueValueOwners.set(value, trail);
+    }
+  }
   return errors;
 }
 

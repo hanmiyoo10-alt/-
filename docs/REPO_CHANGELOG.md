@@ -1845,3 +1845,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d167fa1f60294dfb3e20712ca8d8d0fe13b87d09)
 - Event ID: `e15b72e96071ebc513aaf1bfe46788378f0d98c961255a87221609a62b46e6dd`
 <!-- canonical-main-doc-promoted:e15b72e96071ebc513aaf1bfe46788378f0d98c961255a87221609a62b46e6dd -->
+
+### 2026-09-20 — refactor(devpass): relocate project root under Local (#2625)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `a07f85b6a2dc18fd64f7503d3cbd8eca30fe3144`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a07f85b6a2dc18fd64f7503d3cbd8eca30fe3144)
+- Event ID: `9788eabbed8be8b256099b9426702f45a47ac7367e46a5c6b75e292b5010ae31`
+<!-- canonical-main-doc-promoted:9788eabbed8be8b256099b9426702f45a47ac7367e46a5c6b75e292b5010ae31 -->

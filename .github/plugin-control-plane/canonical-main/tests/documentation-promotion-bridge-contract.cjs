@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '../../../..');
 const workflow = fs.readFileSync(path.join(root, '.github/workflows/canonical-main-doc-promotion.yml'), 'utf8');
@@ -31,6 +32,21 @@ assert.ok(handoff.includes('--match-head-commit $HEAD_SHA'));
 assert.ok(handoff.includes('Candidate-head workflow_dispatch proof is not merged-main push proof'));
 assert.ok(handoff.includes('PR_BASE_SHA'));
 assert.ok(handoff.includes('PR_HEAD'));
+assert.ok(handoff.includes('PR_DRAFT="$(jq -er \'if (.draft | type) == "boolean" then (.draft | tostring) else error("draft must be boolean") end\' <<<"$PR_JSON")"'));
+assert.ok(!handoff.includes("jq -er '.draft'"), 'bare jq -e boolean parser would reject valid false');
+
+const draftFalse = spawnSync('jq', ['-er', 'if (.draft | type) == "boolean" then (.draft | tostring) else error("draft must be boolean") end'], {
+  input: '{"draft":false}\n',
+  encoding: 'utf8',
+});
+assert.equal(draftFalse.status, 0, draftFalse.stderr);
+assert.equal(draftFalse.stdout.trim(), 'false');
+
+const draftMissing = spawnSync('jq', ['-er', 'if (.draft | type) == "boolean" then (.draft | tostring) else error("draft must be boolean") end'], {
+  input: '{}\n',
+  encoding: 'utf8',
+});
+assert.notEqual(draftMissing.status, 0, 'missing/non-boolean draft must still fail closed');
 assert.ok(handoff.includes('**State: STALE_MAIN**'));
 assert.ok(handoff.includes('**State: STALE_PR**'));
 assert.ok(handoff.includes('CANONICAL_MAIN_DOC_PROMOTION:MERGE_READY'));

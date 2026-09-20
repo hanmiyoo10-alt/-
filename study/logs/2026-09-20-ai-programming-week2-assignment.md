@@ -418,3 +418,23 @@ PDF comparison:
 - target output is `당신의 BMI= 28.68입니다.`.
 
 Exercise 3 state: `PARTIAL / CALCULATION CORRECT, INPUT TYPE + OUTPUT TEXT NEED FIX`.
+
+
+## Exercise 3 re-check
+
+Latest Drive snapshot modified at 2026-09-20 23:17 KST.
+
+Verified newest execution:
+- `execution_count = 30`
+- execution status: success
+- example inputs: weight 95, height 1.82
+- calculated BMI: 28.68
+- output now includes the BMI label: `(당신의 BMI=28.68입니다.)`
+
+Remaining PDF-exact differences:
+- weight still uses `int(input(...))`, while the exercise asks for real-valued height and weight input;
+- output has surrounding parentheses;
+- target example has a space after `BMI=`: `당신의 BMI= 28.68입니다.`
+
+Exercise 3 state: `PARTIAL / TWO SMALL FORMATTING-REQUIREMENT FIXES REMAIN`.
+Exercise 4 is not present in the current notebook snapshot yet.

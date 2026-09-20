@@ -552,3 +552,25 @@ Next-time cue: 실행 성공 뒤 문제에서 요구한 자료형과 예시의 �
 Related pattern IDs: none
 Review state: QUEUED
 Later evidence / resolution: 계산 및 f-string 숫자 형식은 교정됨. 몸무게 float 변환과 출력 괄호/공백만 남음.
+
+
+### AI-PROG-W2-E3-R2
+
+Problem ID: AI-PROG-W2-E3-R2
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 3 재시도 2
+Source ref: current uploaded week-2 assignment Colab, latest saved cell
+Result: PARTIAL
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 키와 몸무게를 실수형으로 입력받아 BMI를 계산하고 PDF 예시 형식으로 출력한다.
+User interpretation / approach: 출력 문자열을 `당신의 BMI= {BMI:.2f}입니다.` 형태로 수정해 괄호와 공백 문제를 고쳤다. 다만 몸무게 입력은 여전히 `int(input(...))`이고 최신 셀은 아직 실행되지 않았다.
+Correct reasoning summary: 몸무게도 `float(input(...))`로 바꾸고, 예시 입력으로 셀을 실행해 `당신의 BMI= 28.68입니다.`가 실제 출력되는지 확인해야 완료다.
+
+Error type: REQUIREMENT_GAP
+Error mechanism: 출력 형식 수정은 완료했지만 문제의 실수형 입력 요구 한 항목과 실행 검증 단계가 남았다.
+Next-time cue: 코드를 고친 뒤 반드시 실행하고, 문제의 자료형 요구까지 체크한다.
+
+Related pattern IDs: none
+Review state: QUEUED
+Later evidence / resolution: output code corrected; weight float conversion and rerun pending.

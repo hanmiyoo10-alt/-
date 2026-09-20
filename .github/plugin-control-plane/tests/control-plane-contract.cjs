@@ -46,7 +46,8 @@ assert.deepEqual(taxonomyById.get('local').sourceRefs, ['plugin:usage-dashboard'
 assert.equal(taxonomyById.get('local').risu, 'yes');
 assert.equal(registry.plugins.local.lifecycle, 'compatibility-family');
 assert.deepEqual(registry.plugins.local.paths, ['plugins/risu/local', 'plugins/risu/local/*', 'docs/LOCAL_PLUGIN_GUIDELINES.md']);
-assert.deepEqual(registry.plugins['voyage-token-check'].paths, ['voyage-token-check/**', 'plugins/risu/local/voyage/**']);
+assert.deepEqual(registry.plugins['voyage-token-check'].paths, ['plugins/risu/local/voyage/**', 'voyage-token-check/**']);
+assert.equal(registry.plugins['voyage-token-check'].authority.evidence, 'plugins/risu/local/voyage/DESIGN_STATUS.md');
 assert.equal(registry.plugins.local.statusAdapter, 'evidence');
 assert.equal(registry.plugins.local.authority.evidence, 'plugins/risu/local/README.md');
 assert.equal(taxonomyById.get('local').migration, 'consolidate');
@@ -118,7 +119,7 @@ const localParentReadme = classifyPaths(['plugins/risu/local/README.md'], regist
 assert.deepEqual(localParentReadme.labels, ['plugin:local']);
 assert.deepEqual(localParentReadme.ambiguousPaths, []);
 assert.deepEqual(classifyPaths(['docs/LOCAL_PLUGIN_GUIDELINES.md'], registry).labels, ['plugin:local']);
-const voyageBridgePath = classifyPaths(['plugins/risu/local/voyage/README.md'], registry);
+const voyageBridgePath = classifyPaths(['plugins/risu/local/voyage/DESIGN_STATUS.md'], registry);
 assert.deepEqual(voyageBridgePath.labels, ['plugin:voyage-token-check']);
 assert.deepEqual(voyageBridgePath.ambiguousPaths, []);
 assert.ok(!voyageBridgePath.labels.includes('plugin:local'));

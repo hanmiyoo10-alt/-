@@ -2,14 +2,14 @@
 
 This document is the canonical bootstrap and operating contract for Voyage Token Check in `hanmiyoo10-alt/-`.
 
-- Canonical project root: `voyage-token-check/`
+- Canonical project root: `plugins/risu/local/voyage/`
 - Current authority class: design/evidence
-- Authority evidence: `voyage-token-check/DESIGN_STATUS.md`
-- Detailed project/design memory: `voyage-token-check/PROJECT_MEMORY.md`
+- Authority evidence: `plugins/risu/local/voyage/DESIGN_STATUS.md`
+- Detailed project/design memory: `plugins/risu/local/voyage/PROJECT_MEMORY.md`
 - Durable-memory profile: `check-only`
-- Local family compatibility landing: `plugins/risu/local/voyage/README.md`
+- Legacy compatibility root: `voyage-token-check/**` (non-authoritative stubs)
 
-The compatibility landing is an additional routing/navigation path only. The canonical project root and authority evidence remain under `voyage-token-check/**` during this bridge phase.
+The canonical project root and authority evidence are now under `plugins/risu/local/voyage/**`. The legacy `voyage-token-check/**` root remains only as non-authoritative deep-link compatibility stubs.
 
 Do not infer production state, release identity, or a deployable plugin path from conversation history or from the existence of the project-memory directory. Until production authority is explicitly registered, unknown production fields remain UNKNOWN.
 
@@ -26,7 +26,7 @@ The common-rules layer does not own this project's mutable production, release, 
 <!-- PLUGIN_RELEASE_STATE_START -->
 - Product: `UNKNOWN`
 - Release branch: `UNKNOWN`
-- Source: `voyage-token-check/DESIGN_STATUS.md`
+- Source: `plugins/risu/local/voyage/DESIGN_STATUS.md`
 <!-- PLUGIN_RELEASE_STATE_END -->
 
 This block is intentionally not machine-written while the project is `check-only`.

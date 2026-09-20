@@ -60,11 +60,12 @@
       "lifecycle": "declared-update-channel",
       "issueValues": ["devpass", "DevPass"],
       "paths": [
+        "plugins/risu/local/devpass/**",
         "plugins/devpass/**"
       ],
       "statusAdapter": "devpass",
       "authority": {
-        "declaredBy": "plugins/devpass/README.md",
+        "declaredBy": "plugins/risu/local/devpass/README.md",
         "artifact": "plugins/devpass/latest.js",
         "ref": "main"
       }

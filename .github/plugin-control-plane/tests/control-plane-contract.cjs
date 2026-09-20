@@ -43,9 +43,22 @@ assert.equal(taxonomyById.get('termux').targetRoot, 'products/standalone/termux'
 assert.equal(taxonomyById.get('mobile-coder-lab').targetRoot, 'products/standalone/mobile-coder-lab');
 assert.equal(taxonomyById.get('simcore').targetRoot, 'plugins/risu/simcore');
 assert.deepEqual(taxonomyById.get('local').sourceRefs, ['plugin:usage-dashboard', 'plugin:devpass', 'plugin:voyage-token-check']);
+assert.deepEqual(taxonomyById.get('local').sourceRoots, [
+  'plugins/usage-dashboard/**',
+  'products/usage-dashboard/**',
+  'plugins/risu/local/devpass/**',
+  'plugins/devpass/**',
+  'plugins/risu/local/voyage/**',
+  'voyage-token-check/**',
+  'tools/usage-dashboard-mcp/**',
+]);
 assert.equal(taxonomyById.get('local').risu, 'yes');
 assert.equal(registry.plugins.local.lifecycle, 'compatibility-family');
 assert.deepEqual(registry.plugins.local.paths, ['plugins/risu/local', 'plugins/risu/local/*', 'docs/LOCAL_PLUGIN_GUIDELINES.md']);
+assert.deepEqual(registry.plugins.devpass.paths, ['plugins/risu/local/devpass/**', 'plugins/devpass/**']);
+assert.equal(registry.plugins.devpass.authority.declaredBy, 'plugins/risu/local/devpass/README.md');
+assert.equal(registry.plugins.devpass.authority.artifact, 'plugins/devpass/latest.js');
+assert.equal(registry.plugins.devpass.authority.ref, 'main');
 assert.deepEqual(registry.plugins['voyage-token-check'].paths, ['plugins/risu/local/voyage/**', 'voyage-token-check/**']);
 assert.equal(registry.plugins['voyage-token-check'].authority.evidence, 'plugins/risu/local/voyage/DESIGN_STATUS.md');
 assert.equal(registry.plugins.local.statusAdapter, 'evidence');
@@ -123,7 +136,14 @@ const voyageBridgePath = classifyPaths(['plugins/risu/local/voyage/DESIGN_STATUS
 assert.deepEqual(voyageBridgePath.labels, ['plugin:voyage-token-check']);
 assert.deepEqual(voyageBridgePath.ambiguousPaths, []);
 assert.ok(!voyageBridgePath.labels.includes('plugin:local'));
-assert.deepEqual(classifyPaths(['plugins/devpass/README.md'], registry).labels, ['plugin:devpass']);
+const devpassCanonicalPath = classifyPaths(['plugins/risu/local/devpass/README.md'], registry);
+assert.deepEqual(devpassCanonicalPath.labels, ['plugin:devpass']);
+assert.deepEqual(devpassCanonicalPath.ambiguousPaths, []);
+assert.ok(!devpassCanonicalPath.labels.includes('plugin:local'));
+const devpassLegacyReadme = classifyPaths(['plugins/devpass/README.md'], registry);
+assert.deepEqual(devpassLegacyReadme.labels, ['plugin:devpass']);
+assert.deepEqual(devpassLegacyReadme.ambiguousPaths, []);
+assert.deepEqual(classifyPaths(['plugins/devpass/latest.js'], registry).labels, ['plugin:devpass']);
 assert.deepEqual(classifyPaths(['plugins/termux/large-doc-editor/server.py'], registry).labels, ['plugin:termux-large-doc-editor']);
 const voyageLegacyPath = classifyPaths(['voyage-token-check/DESIGN_STATUS.md'], registry);
 assert.deepEqual(voyageLegacyPath.labels, ['plugin:voyage-token-check']);

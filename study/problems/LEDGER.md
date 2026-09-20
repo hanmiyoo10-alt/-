@@ -508,3 +508,25 @@ Next-time cue: 현재 흐름을 유지한다: `input → 자료형 변환 → �
 Related pattern IDs: none
 Review state: REVIEWED
 Later evidence / resolution: 이전의 input/형변환/곱셈·거듭제곱/f-string 오류가 모두 교정되었고 execution count 24에서 정상 실행과 예시값 일치를 확인했다.
+
+
+### AI-PROG-W2-E3
+
+Problem ID: AI-PROG-W2-E3
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 3 BMI 계산
+Source ref: 2주차 PDF Exercise 3, current uploaded week-2 assignment Colab, execution count 29
+Result: PARTIAL
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 사용자로부터 키 height와 몸무게 weight를 실수형으로 입력받아 `bmi = weight / (height**2)`로 계산하고, 예시 형식으로 BMI를 소수 둘째 자리까지 출력한다.
+User interpretation / approach: 몸무게 95를 int, 키 1.82를 float로 입력받고 `BMI = weigh / (heigh**2)`를 계산했다. 계산 결과 28.68은 정확하다. 출력은 `(당신의 28.68=입니다.)` 형태로 작성했다.
+Correct reasoning summary: 계산식은 맞다. PDF는 키와 몸무게를 모두 실수형으로 입력받으라고 하므로 몸무게도 `float(input(...))`로 받는 편이 요구에 정확하다. 출력은 `당신의 BMI= 28.68입니다.` 형식에 맞게 `print(f'당신의 BMI= {BMI:.2f}입니다.')`처럼 작성한다.
+
+Error type: OUTPUT_FORMAT
+Error mechanism: 계산값 자체는 맞았지만 출력 문자열에서 라벨 `BMI`와 등호 위치가 바뀌고 불필요한 괄호가 들어갔다. 또한 문제 요구의 '실수형 입력'을 몸무게에는 int로 적용했다.
+Next-time cue: 계산 문제는 값이 맞은 뒤 문제 예시의 라벨·기호·공백과 입력 자료형 요구까지 비교한다.
+
+Related pattern IDs: none
+Review state: QUEUED
+Later evidence / resolution: 계산 결과 28.68은 정확. 몸무게 자료형과 출력 문구 교정 후 재검증 필요.

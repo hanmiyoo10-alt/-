@@ -40,3 +40,23 @@ App API Mod Lab 자체는 범용 실험실로 유지하고, 실제 대상만 `ta
 ### 검증 계약
 
 `target-contract.json`과 `validate-targets.mjs`가 실제 target root의 구조를 검증한다. zero-target 상태는 정상이며, validator PASS는 metadata 구조만 증명하고 외부 authority나 구현 준비 완료를 증명하지 않는다.
+
+## 2026-09-20 — legacy candidate inventory
+
+### 결정
+
+기존 이슈나 별도 브랜치에 남은 app/API 개조 작업은 바로 concrete target으로 승격하지 않고 `legacy-candidates.json`에 locator-only 후보로 먼저 기록한다.
+
+현재 첫 후보는:
+- `chzzk` — issue #2020
+- `fortune-golf` — branch `fortune-golf-apk`
+
+둘 다 proposed ecosystem은 `standalone`(Risu X)이며, CHZZK는 `api`, Fortune Golf는 `app` target 후보로 분류한다.
+
+### authority 경계
+
+후보 inventory는 source/runtime/release authority를 만들지 않는다. `materialized=false` / `migration_authorized=false` 상태에서는 target root를 만들거나 기존 브랜치/이슈의 소유권을 재지정하지 않는다.
+
+### 이유
+
+새 target validator는 `targets/**` 아래에 이미 materialize된 대상만 볼 수 있다. 과거 작업이 issue-only 또는 legacy branch에 존재하면 main-tree scan만으로는 누락될 수 있으므로, 그 흔적을 evidence locator로 보존하는 별도 reconciliation layer가 필요하다.

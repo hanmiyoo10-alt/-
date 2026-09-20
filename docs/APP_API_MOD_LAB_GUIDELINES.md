@@ -60,6 +60,29 @@ A structural PASS does not prove source/upstream authority, release/deployment a
 
 Reusable target code or fixtures should move into a shared area only after at least two concrete targets prove the same reusable contract.
 
+## Legacy candidate reconciliation
+
+Historical app/API modification work may exist outside the current target namespace, such as issue-only reconnaissance or a dedicated legacy branch.
+
+Such work must first be recorded in `products/app-api-mod-lab/legacy-candidates.json` as locator-only evidence.
+
+The candidate inventory may record:
+- a proposed Risu O/X ecosystem;
+- a proposed `app / api / hybrid` kind;
+- issue/branch/path locators;
+- a proposed future target root.
+
+It must not manufacture source, runtime, deployment, production, or release authority. While a candidate is non-materialized, both `materialized` and `migration_authorized` remain false and its proposed target root must not exist.
+
+Before materialization:
+1. re-read the candidate's current evidence locator;
+2. re-establish current source/upstream authority and scope;
+3. confirm the proposed ecosystem/kind still matches;
+4. authorize migration explicitly;
+5. create the concrete `TARGET.json` under the normal target contract.
+
+Run `node products/app-api-mod-lab/validate-legacy-candidates.mjs` to validate the inventory. The validator proves only inventory structure and non-materialization boundaries.
+
 ## Automation boundary
 
 Canonical-main may classify and validate the registered product paths and bootstrap health. It does not gain mutation authority over external apps/services or create a deployment/release channel for this lab.

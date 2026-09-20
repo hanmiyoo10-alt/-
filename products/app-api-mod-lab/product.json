@@ -10,5 +10,7 @@
   "release_authority": null,
   "target_root": "products/app-api-mod-lab/targets",
   "target_contract": "products/app-api-mod-lab/target-contract.json",
-  "target_validator": "products/app-api-mod-lab/validate-targets.mjs"
+  "target_validator": "products/app-api-mod-lab/validate-targets.mjs",
+  "legacy_candidates": "products/app-api-mod-lab/legacy-candidates.json",
+  "legacy_candidate_validator": "products/app-api-mod-lab/validate-legacy-candidates.mjs"
 }

@@ -178,3 +178,29 @@ Proceed through Exercise 1 → 4 unless stronger course evidence changes the sco
 3. execute and compare with the PDF example;
 4. record any problem-specific errors;
 5. verify final submission form before marking the assignment complete.
+
+
+## Uploaded assignment review — Exercise 1
+
+The current uploaded week-2 assignment Colab was re-read on 2026-09-20.
+
+Observed state:
+- the notebook currently contains one code cell;
+- that cell is an attempt at PDF Exercise 1;
+- execution state is `SyntaxError`;
+- Exercises 2–4 are not present in the current notebook snapshot yet.
+
+The attempt shows the intended output structure but mixes:
+- line-continuation backslash,
+- argument commas,
+- quote boundaries,
+- literal `\n`/`\t`,
+- Windows-path backslashes.
+
+Validated correction strategy:
+- use one `print()` per required output line;
+- escape the apostrophe only where needed or choose a compatible outer quote;
+- use `\\n` and `\\t` when the literal characters backslash+n/backslash+t must appear;
+- use doubled backslashes in the Windows-style path.
+
+A corrected reference form was executed separately and produced the five PDF lines exactly. The user's own Colab still needs to be corrected and re-run before Exercise 1 is marked complete.

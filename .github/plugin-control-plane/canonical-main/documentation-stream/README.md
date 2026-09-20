@@ -25,9 +25,20 @@ Every event has a deterministic `eventId`. Re-observing the same event is a no-o
 - `docs/REPO_DECISION_LOG.md` — accepted repository-level decisions.
 - `docs/REPO_CHANGELOG.md` — meaningful repository/control-plane changes.
 - `docs/REPO_ARCHITECTURE_SNAPSHOT.md` — generated current canonical-main architecture snapshot.
-- `docs/REPO_PROJECT_CATALOG.md` — generated project/authority/freshness catalog.
+- `docs/REPO_PROJECT_CATALOG.md` — generated current-authority catalog plus navigation-only repository family projection.
 
 Generated snapshot documents are replaced from trusted repository evidence. Append-only decision/change documents deduplicate by provenance marker.
+
+### Project catalog projection boundary
+
+The project catalog preserves two distinct views in one generated document:
+
+1. the current authority-locator table from `.github/plugin-control-plane/registry.json` plus canonical-main descriptors;
+2. a navigation-only family projection from `.github/plugin-control-plane/taxonomy.json`.
+
+The family projection may show PRODUCT / PLUGIN / PLATFORM / STUDY, Risu placement, current source refs/roots, future target roots, and migration intent. It does not create a missing authority, convert a routing scope into production ownership, authorize path movement, collapse identities, mutate release/update state, or replace any existing project authority.
+
+Generated catalog Markdown remains derived output. Source changes belong in the renderer/taxonomy/registry owners and reach `docs/REPO_PROJECT_CATALOG.md` only through the normal documentation-promotion branch/PR path.
 
 ## Promotion rule
 

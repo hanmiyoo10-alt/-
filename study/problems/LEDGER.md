@@ -682,3 +682,25 @@ Next-time cue: 문자열 숫자 계산은 `int/float 변환 → 계산 → f-str
 Related pattern IDs: none
 Review state: REVIEWED
 Later evidence / resolution: execution count 42에서 정상 실행 및 목표 출력 일치 확인.
+
+
+### AI-PROG-W2-E3-R5
+
+Problem ID: AI-PROG-W2-E3-R5
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 3 최종 재검증
+Source ref: cleaned submission Colab, execution count 3
+Result: CORRECT
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 키와 몸무게를 모두 실수형으로 입력받아 BMI를 계산하고 소수 둘째 자리까지 출력한다.
+User interpretation / approach: `weigh = float(input(...))`, `heigh = float(input(...))`, `BMI = weigh / (heigh**2)`, f-string `{BMI:.2f}`를 사용했다.
+Correct reasoning summary: 최신 제출용 복사본에서 수정된 float 코드가 실제로 execution count 3으로 실행되었고 정상 출력되었다. 이번 실행 입력은 185kg, 1.82m로 출력은 `당신의 BMI= 55.85입니다.`였다. PDF의 95kg 예시와 입력값은 다르지만 프로그램 요구사항에는 부합한다.
+
+Error type: none
+Error mechanism: none
+Next-time cue: 입력형 계산 과제는 요구 자료형, 공식, 출력 형식, 실제 재실행 증거를 함께 확인한다.
+
+Related pattern IDs: none
+Review state: REVIEWED
+Later evidence / resolution: cleaned submission copy에서 최신 float 소스의 fresh execution 성공 확인.

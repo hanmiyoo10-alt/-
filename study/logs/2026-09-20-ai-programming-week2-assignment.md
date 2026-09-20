@@ -631,3 +631,26 @@ Verification caveat:
 - safest pre-submission action is to rerun each solution cell in the cleaned copy so current source and output are freshly paired.
 
 Share permission remains unverified from Drive metadata; check `Anyone with the link / Viewer` in the Colab Share dialog before submission.
+
+
+## Submission-copy fresh execution verification
+
+Latest snapshot modified at 2026-09-20 23:51 KST.
+
+Fresh execution evidence in the cleaned submission copy:
+- Exercise 1: execution count 1, success
+- Exercise 2: execution count 2, success; sample 3500000 / 0.03 / 3 -> 3824544.50
+- Exercise 3: execution count 3, success; latest inputs 185 / 1.82 -> `당신의 BMI= 55.85입니다.`
+- Exercise 4: execution count 4, success; output `강아지가 고양이보다 172마리 더 많다`
+
+Notes:
+- Exercise 3 code is correct; its latest output differs from the PDF's 95kg example only because a different valid input (185kg) was entered.
+- filename remains clean: `202431697 배지혜 2주차 과제`
+- first cell contains student number/name as Python comments
+- share permission `Anyone with the link / Viewer` is still not verifiable from returned Drive metadata.
+
+Verified assignment state in cleaned copy:
+- Exercise 1 COMPLETE
+- Exercise 2 COMPLETE
+- Exercise 3 COMPLETE
+- Exercise 4 COMPLETE

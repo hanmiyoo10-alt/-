@@ -2,6 +2,18 @@
   "schemaVersion": 1,
   "managedLabelPrefixes": ["plugin:", "product:", "scope:"],
   "plugins": {
+    "local": {
+      "displayName": "Local",
+      "lifecycle": "compatibility-family",
+      "issueValues": ["local", "Local", "Local plugin"],
+      "paths": [
+        "plugins/risu/local/**"
+      ],
+      "statusAdapter": "evidence",
+      "authority": {
+        "evidence": "plugins/risu/local/README.md"
+      }
+    },
     "usage-dashboard": {
       "displayName": "Local Usage Dashboard",
       "lifecycle": "production",

@@ -49,7 +49,8 @@ assert.ok(catalog.includes('| PRODUCT | X | Mobile Coder Lab | scope:research-pr
 assert.ok(catalog.includes('| PLATFORM | X | Repository Operations | — |'));
 assert.ok(catalog.includes('| STUDY | X | Study | scope:study |'));
 assert.ok(catalog.includes('plugins/risu/local'));
-assert.doesNotMatch(catalog, /^\| plugin:local \|/m);
+assert.ok(catalog.includes('| plugin:local | Local | compatibility-family | plugins/risu/local/** | evidence=plugins/risu/local/README.md | docs/LOCAL_PLUGIN_GUIDELINES.md |'));
+assert.ok(catalog.includes('| PLUGIN | O | Local | plugin:usage-dashboard<br>plugin:devpass<br>plugin:voyage-token-check |'), 'family navigation must retain child compatibility refs after parent registration');
 for (const member of taxonomy.members) assert.ok(catalog.includes(`| ${member.displayName} |`), `missing taxonomy member: ${member.id}`);
 const promoteSource = fs.readFileSync(path.join(root, '.github/plugin-control-plane/canonical-main/documentation-stream/promote.cjs'), 'utf8');
 assert.match(promoteSource, /taxonomy\.json/);

@@ -50,20 +50,26 @@ Promotion runs on a documentation branch/PR. It never writes generated Markdown 
 
 Repository policy may allow the Actions token to update branches while still forbidding it from creating pull requests. The promotion workflow must not weaken that repository setting or introduce a broader token to bypass it.
 
-When the generated documentation branch has durable changes and no open promotion PR exists, Actions updates the single operational mailbox issue `#457` (`[repo-docs:promotion-bridge]`) with a machine-readable `PENDING` handoff containing the exact base SHA, generated head SHA, source branch, and source workflow run. Actions then exits successfully without attempting `gh pr create`.
+When the generated documentation branch has durable changes and no open promotion PR exists, Actions updates the single operational mailbox issue `#457` (`[repo-docs:promotion-bridge]`) with a machine-readable `PENDING` handoff containing the exact base SHA, generated head SHA, source branch, and source workflow run. Actions then exits successfully without attempting PR creation.
 
-A connected ChatGPT GitHub bridge may consume that mailbox and create the PR using its separately authorized GitHub connector. The bridge is constrained by the same Phase L transaction rules:
+A connected ChatGPT GitHub bridge may consume that `PENDING` mailbox and create the PR using its separately authorized GitHub connector. The source branch/head and base must still match the mailbox, and the PR must target `main`.
 
-- the source branch/head must still match the handoff;
-- the candidate PR must target `main`;
-- Plugin Control Plane CI and SimCore Verify / Required must pass on the exact candidate head;
-- `main` must still equal the recorded base immediately before merge;
-- a moved base or moved PR head is stale and must not be merged;
-- no bridge path may push generated Markdown directly to `main`.
+When an exact promotion PR exists, the repository-native workflow retains ownership of candidate validation. It dispatches Plugin Control Plane CI and SimCore CI for the exact generated head, binds the exact run IDs, verifies their `workflow_dispatch` event and head identity, waits for successful completion, then re-reads the current `main` base and exact PR identity. The workflow **does not merge the PR**. If those checks remain current, it writes a `MERGE_READY` mailbox containing the exact base, head, PR number, Plugin Control Plane run ID, SimCore run ID, and source promotion run.
 
-If an open promotion PR already exists, the repository-native workflow may continue its existing explicit-check and exact-head merge path. The mailbox records `PR_OPEN`, `STALE_*`, or `MERGED` so the external bridge can converge without duplicate PRs.
+On `MERGE_READY`, the connected GitHub bridge owns only the final checked merge effect. Before merging it must fresh-read and prove:
 
-This split keeps repository policy authoritative: GitHub Actions renders and publishes the bounded generated branch; the connected bridge supplies only the PR-creation capability that the Actions token intentionally lacks.
+- current `main` still equals the mailbox base SHA;
+- #457 still names the same `MERGE_READY` transaction;
+- the PR is open, non-draft, targets `main`, and still has the exact mailbox base/head;
+- the PR changed-file set is still the generated-document candidate;
+- the bound Plugin Control Plane run is successful `workflow_dispatch` evidence for the exact head;
+- the bound SimCore run is successful `workflow_dispatch` evidence for the exact head with Verify + Required successful.
+
+Only then may the bridge squash-merge with an expected-head guard for the exact mailbox head. Any moved main, moved head, stale PR, mismatched run ID, failed check, or ambiguous evidence fails closed and must not merge.
+
+After a successful bridge merge, the bridge may update #457 to `MERGED` with the observed result-main SHA. It must then wait for the repository's normal main-push evidence to establish merged-main health. **Candidate-head `workflow_dispatch` proof is not merged-main `push` proof** and must never be relabeled as such. The canonical Required observer and protection guard remain authoritative for the resulting main.
+
+This split keeps repository policy authoritative: GitHub Actions renders, publishes, and validates the bounded generated candidate; the connected bridge supplies the PR-creation and final expected-head merge capabilities; neither path may push generated Markdown directly to `main`.
 
 ## Loop prevention
 

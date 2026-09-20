@@ -133,8 +133,17 @@ assert.deepEqual(labelDefinitions(registry).find((entry) => entry.name === 'scop
 assert.deepEqual(labelDefinitions(registry).find((entry) => entry.name === 'scope:local-runtime'), {
   name: 'scope:local-runtime',
   color: 'c5def5',
-  description: 'Repository-owned local runtime and operations root; does not replace product, device, release, or production authority',
+  description: 'Local runtime root; routing only, not product, device, release, deployment, or production authority',
 });
+for (const def of labelDefinitions(registry)) {
+  assert.ok(String(def.description || '').length <= 100, `fixed label description must fit GitHub limit: ${def.name}`);
+}
+const overlongScopeRegistry = JSON.parse(JSON.stringify(registry));
+overlongScopeRegistry.scopes[0].description = 'x'.repeat(101);
+assert.match(
+  validateRegistry(overlongScopeRegistry).join('\n'),
+  /label scope:study: description exceeds 100 characters/,
+);
 
 const fixedUnclassified = labelDefinitions(registry).find((entry) => entry.name === 'scope:unclassified');
 assert.deepEqual(fixedLabelMetadataDecision(null, fixedUnclassified), {action: 'create', body: fixedUnclassified});

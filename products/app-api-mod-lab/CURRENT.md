@@ -1,6 +1,6 @@
 # CURRENT — App API Mod Lab
 
-최종 갱신 기준: **2026-09-11**
+최종 갱신 기준: **2026-09-20**
 
 새 작업이나 새 채팅에서 이 제품 범위로 들어올 때 먼저 읽는 현재 상태 체크포인트다.
 
@@ -15,6 +15,8 @@
 - 특정 API surface: `UNASSIGNED`
 - production/runtime/deployment/release authority: `NONE DECLARED`
 - durable-memory profile: `check-only`
+- target taxonomy contract: `targets/` + `target-contract.json` + `validate-targets.mjs` 준비됨
+- concrete targets: `0` — 아직 특정 대상은 등록하지 않음
 
 이 상태에서 repository registration은 ownership locator와 작업 시작점을 제공할 뿐, 특정 앱이나 API에 대한 권한·배포 상태·릴리스 진실을 생성하지 않는다.
 
@@ -35,7 +37,7 @@
 
 ## 다음 한 단계
 
-첫 앱/API 개조 요청이 들어오면 해당 대상의 authority와 코드/API surface를 조사해서 이 루트 안에 **대상별 bounded work area**를 만든 뒤 구현 범위를 잠근다.
+첫 앱/API 개조 요청이 들어오면 대상의 Risu O/X ecosystem, authority, code/API surface를 먼저 확정한 뒤 `targets/<ecosystem>/<target-id>/TARGET.json`을 만들고 validator를 통과시켜 bounded work area를 연다.
 
 ## 아직 완료로 간주하지 않는 것
 

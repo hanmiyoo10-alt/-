@@ -87,7 +87,8 @@
       "lifecycle": "research-product-root",
       "issueValues": ["app-api-mod-lab", "App API Mod Lab", "앱 API 개조", "앱 API 개조 랩"],
       "paths": [
-        "products/app-api-mod-lab/**"
+        "products/app-api-mod-lab/**",
+        ".github/workflows/app-api-mod-lab-ci.yml"
       ],
       "statusAdapter": "prototype",
       "authority": {
@@ -110,6 +111,32 @@
       }
     }
   },
+  "scopes": [
+    {
+      "id": "study",
+      "label": "scope:study",
+      "displayName": "Study",
+      "issueValues": ["study", "Study"],
+      "paths": ["study/**"],
+      "description": "Independent study and learning root; routing metadata only",
+      "authority": {
+        "posture": "routing-only",
+        "statusProjection": false
+      }
+    },
+    {
+      "id": "local-runtime",
+      "label": "scope:local-runtime",
+      "displayName": "Local Runtime",
+      "issueValues": ["local-runtime", "Local Runtime"],
+      "paths": ["local/**"],
+      "description": "Local runtime root; routing only, not product, device, release, deployment, or production authority",
+      "authority": {
+        "posture": "routing-only",
+        "statusProjection": false
+      }
+    }
+  ],
   "nonOperationalScopes": [
     {
       "id": "research-product",

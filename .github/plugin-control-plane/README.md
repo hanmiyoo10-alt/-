@@ -36,6 +36,18 @@ The two trusted-main reconciliation invokers hold `pull-requests: write` only be
 - independently modeled product roots use `product:<id>`;
 - repository/shared/ambiguous/multi-owner conditions use `scope:<id>`.
 
+## Registered fixed scopes
+
+Repository-recognized roots that need deterministic routing but are not plugin/product authorities may be declared in `registry.scopes`.
+
+- fixed scopes use `scope:<id>` labels;
+- their descriptors may own path classification and explicit issue aliases only;
+- descriptors are `routing-only` and must declare `statusProjection: false`;
+- fixed scopes do not receive generated operational status issues and do not create runtime, device, release, deployment, or production authority;
+- current fixed roots are `scope:study` for `study/**` and `scope:local-runtime` for `local/**`.
+
+`scope:local-runtime` classifies the shared local operations root only. PocketRisu, Local Usage Dashboard, device, release, and production truth remain with their existing owners.
+
 ## Fixed managed label metadata
 
 Entries returned by `labelDefinitions(registry)` are repository-owned fixed label definitions. Trusted-main metadata writers create a missing fixed label and idempotently reconcile an existing fixed label's color and description when they drift from that definition. Matching fixed metadata produces no write, and label names are identity keys rather than rename targets.

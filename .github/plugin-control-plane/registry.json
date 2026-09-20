@@ -129,7 +129,7 @@
       "displayName": "Local Runtime",
       "issueValues": ["local-runtime", "Local Runtime"],
       "paths": ["local/**"],
-      "description": "Repository-owned local runtime and operations root; does not replace product, device, release, or production authority",
+      "description": "Local runtime root; routing only, not product, device, release, deployment, or production authority",
       "authority": {
         "posture": "routing-only",
         "statusProjection": false

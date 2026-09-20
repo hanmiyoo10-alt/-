@@ -1805,3 +1805,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8bdeac044d67e63cd80c35f17e48181ed082ada8)
 - Event ID: `6cd09b022c6eea6c234a3a3aaeacf532a138605a4c841af3eb1182c415690222`
 <!-- canonical-main-doc-promoted:6cd09b022c6eea6c234a3a3aaeacf532a138605a4c841af3eb1182c415690222 -->
+
+### 2026-09-20 — feat(control-plane): add repository family taxonomy (#2596)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `5e0877268c4058516774a2392a903bfd75126812`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/5e0877268c4058516774a2392a903bfd75126812)
+- Event ID: `54ea4261958c8a58fa691da5036adffff4f4879900b3b44122200e9aa31e674e`
+<!-- canonical-main-doc-promoted:54ea4261958c8a58fa691da5036adffff4f4879900b3b44122200e9aa31e674e -->

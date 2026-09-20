@@ -78,3 +78,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2180)
 - Event ID: `7a7d689f323aa3f3db53d29377d3006cec345aa3fb64cba37428271afa21d1d7`
 <!-- canonical-main-doc-promoted:7a7d689f323aa3f3db53d29377d3006cec345aa3fb64cba37428271afa21d1d7 -->
+
+### 2026-09-20 — Register independent Termux subprojects
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2593)
+- Event ID: `fdb5e33db79b46abb7cabbd66cf49c67df1c0658fd55ef1025e218d327f9ae2c`
+<!-- canonical-main-doc-promoted:fdb5e33db79b46abb7cabbd66cf49c67df1c0658fd55ef1025e218d327f9ae2c -->

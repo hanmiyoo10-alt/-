@@ -23,6 +23,7 @@
       "paths": [
         "plugins/usage-dashboard/**",
         "products/usage-dashboard/**",
+        "plugins/risu/local/usage-dashboard/**",
         ".github/usage-dashboard/**",
         ".github/workflows/usage-dashboard-*.yml",
         ".github/workflows/reusable-usage-dashboard-*.yml",

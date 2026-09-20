@@ -685,3 +685,17 @@ Submission preparation state:
 - clean filename: COMPLETE
 - Colab share-link permission check: COMPLETE (learner-confirmed)
 - Cyber Campus submission itself: NOT YET CONFIRMED
+
+
+## Submission-link document check
+
+A new Google Doc named `제목 없는 문서` was added directly under the `AI 프로그래밍입문` folder.
+
+Its entire content is the Colab share URL pointing to Drive file ID `1Idbrnv_SrUdvlxlV0UGsrLCA1wIBZfGx`.
+
+Verified target:
+- title: `202431697 배지혜 2주차 과제`
+- MIME type: Google Colab notebook
+- same cleaned submission copy previously verified
+
+So the pasted submission URL resolves to the intended final assignment notebook.

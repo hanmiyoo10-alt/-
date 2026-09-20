@@ -14,6 +14,8 @@ body:
         - termux-large-doc-editor
         - voyage-token-check
         - pocketrisu-helper-mod
+        - study
+        - local-runtime
         - shared
         - repo
         - custom

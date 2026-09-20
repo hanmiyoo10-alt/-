@@ -34,6 +34,14 @@ assert.deepEqual(Object.keys(registry.products).sort(), [
   'app-api-mod-lab',
   'pocketrisu-helper-mod',
 ]);
+assert.deepEqual((registry.scopes || []).map((scope) => scope.id).sort(), [
+  'local-runtime',
+  'study',
+]);
+for (const scope of registry.scopes) {
+  assert.equal(scope.authority.posture, 'routing-only');
+  assert.equal(scope.authority.statusProjection, false);
+}
 
 const statusLabel = {name: 'control-plane:status'};
 const duplicateStatusIssues = [
@@ -73,6 +81,12 @@ assert.deepEqual(mclBootstrap.unclassifiedPaths, []);
 const mclDocs = classifyPaths(['products/chatgpt-mobile-coder-lab/docs/decisions.md'], registry);
 assert.deepEqual(mclDocs.labels, ['scope:research-product']);
 assert.deepEqual(mclDocs.unclassifiedPaths, []);
+const studyRoot = classifyPaths(['study/memory/CURRENT.md'], registry);
+assert.deepEqual(studyRoot.labels, ['scope:study']);
+assert.deepEqual(studyRoot.unclassifiedPaths, []);
+const localRuntimeRoot = classifyPaths(['local/termux/10-start-local-stack'], registry);
+assert.deepEqual(localRuntimeRoot.labels, ['scope:local-runtime']);
+assert.deepEqual(localRuntimeRoot.unclassifiedPaths, []);
 assert.deepEqual(classifyPaths(['products/pocketrisu-helper-mod/CURRENT.md'], registry).labels, ['product:pocketrisu-helper-mod']);
 assert.deepEqual(classifyPaths(['.github/workflows/pocketrisu-helper-docs.yml'], registry).labels, ['product:pocketrisu-helper-mod']);
 assert.deepEqual(classifyPaths(['plugins/test-a/latest.js'], registry).labels, ['scope:test-fixture']);
@@ -111,6 +125,16 @@ assert.deepEqual(researchProductLabel, {
   color: 'c5def5',
   description: 'Repository-recognized research product path; non-production with no release or runtime authority',
 });
+assert.deepEqual(labelDefinitions(registry).find((entry) => entry.name === 'scope:study'), {
+  name: 'scope:study',
+  color: 'c5def5',
+  description: 'Independent study and learning root; routing metadata only',
+});
+assert.deepEqual(labelDefinitions(registry).find((entry) => entry.name === 'scope:local-runtime'), {
+  name: 'scope:local-runtime',
+  color: 'c5def5',
+  description: 'Repository-owned local runtime and operations root; does not replace product, device, release, or production authority',
+});
 
 const fixedUnclassified = labelDefinitions(registry).find((entry) => entry.name === 'scope:unclassified');
 assert.deepEqual(fixedLabelMetadataDecision(null, fixedUnclassified), {action: 'create', body: fixedUnclassified});
@@ -137,6 +161,8 @@ assert.deepEqual(
 assert.deepEqual(classifyIssueBody('Plugin: simcore', registry), {explicit: true, labels: ['plugin:simcore']});
 assert.deepEqual(classifyIssueBody('Scope: voyage-token-check', registry), {explicit: true, labels: ['plugin:voyage-token-check']});
 assert.deepEqual(classifyIssueBody('Scope: pocketrisu-helper-mod', registry), {explicit: true, labels: ['product:pocketrisu-helper-mod']});
+assert.deepEqual(classifyIssueBody('Scope: study', registry), {explicit: true, labels: ['scope:study']});
+assert.deepEqual(classifyIssueBody('Scope: local-runtime', registry), {explicit: true, labels: ['scope:local-runtime']});
 assert.deepEqual(classifyIssueBody('### Scope\n\nshared', registry), {explicit: true, labels: ['scope:shared']});
 assert.deepEqual(classifyIssueBody('### Scope\n\nnot-registered', registry), {explicit: true, labels: ['scope:unclassified']});
 assert.deepEqual(classifyIssueBody('just prose', registry), {explicit: false, labels: []});
@@ -156,7 +182,7 @@ for (const authorAssociation of ['OWNER', 'MEMBER', 'COLLABORATOR']) {
 }
 const maxCustomId = 'a'.repeat(44);
 assert.equal(classifyIssueBody(customIssueBody(maxCustomId), registry, {authorAssociation: 'OWNER'}).labels[0].length, 50);
-for (const invalidId of ['', 'Bad-Scope', 'bad--scope', '-bad', 'bad-', 'repo', 'research-product', 'custom', 'a'.repeat(45)]) {
+for (const invalidId of ['', 'Bad-Scope', 'bad--scope', '-bad', 'bad-', 'repo', 'research-product', 'study', 'local-runtime', 'custom', 'a'.repeat(45)]) {
   assert.deepEqual(classifyIssueBody(customIssueBody(invalidId), registry, {authorAssociation: 'OWNER'}), {explicit: true, labels: ['scope:unclassified']});
 }
 assert.deepEqual(classifyIssueBody(customIssueBody('ops-lab'), registry, {authorAssociation: 'NONE'}), {explicit: true, labels: ['scope:unclassified']});
@@ -165,6 +191,8 @@ const issueTemplate = fs.readFileSync(path.join(root, '.github/ISSUE_TEMPLATE/pl
 assert.match(issueTemplate, /label:\s*Scope/);
 assert.match(issueTemplate, /voyage-token-check/);
 assert.match(issueTemplate, /pocketrisu-helper-mod/);
+assert.match(issueTemplate, /^        - study$/m);
+assert.match(issueTemplate, /^        - local-runtime$/m);
 assert.match(issueTemplate, /^        - custom$/m);
 assert.match(issueTemplate, /label:\s*Custom scope/);
 assert.match(issueTemplate, /1-44 characters/);
@@ -258,6 +286,8 @@ assert.match(controlPlaneReadme, /`pull_request` observer remains read-only evid
 assert.match(controlPlaneReadme, /Trusted custom issue scopes/);
 assert.match(controlPlaneReadme, /scope:unclassified/);
 assert.match(controlPlaneReadme, /at most 44 characters/);
+assert.match(controlPlaneReadme, /Registered fixed scopes/);
+assert.match(controlPlaneReadme, /status projection/i);
 assert.match(controlPlaneReadme, /independent exact-title\/status-label\/generated-marker lookup/);
 assert.match(controlPlaneReadme, /overall controller exit nonzero/);
 
@@ -268,6 +298,7 @@ assert.match(controller, /PENDING —/);
 assert.match(controller, /pocketRisuHelperStatus/);
 assert.match(controller, /registry\.products/);
 assert.match(controller, /product:/);
+assert.doesNotMatch(controller, /kind:\s*['"]scope['"]/);
 assert.match(controller, /async function ensureLabel\(repo, def\)/);
 assert.match(controller, /if \(!existing\) await api\(repo, '\/labels', \{method: 'POST', body: def\}\)/);
 assert.match(controller, /async function ensureFixedLabel\(repo, def\)/);

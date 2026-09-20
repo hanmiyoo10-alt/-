@@ -240,3 +240,18 @@ Remaining exact-output difference:
 
 Exercise 1 state: `PARTIAL — ONE LEADING SPACE REMAINS`.
 Exercises 2–4 are not present in the current notebook snapshot yet.
+
+
+## Exercise 1 final verification
+
+Latest Drive snapshot modified at 2026-09-20 22:28 KST.
+
+Verified newest execution:
+- `execution_count = 4`
+- execution status: success
+- all five lines match the PDF Exercise 1 example, including the prior leading-space issue
+- literal `\\n` / `\\t`, apostrophe, quoted text, and Windows-style path are all correct
+
+Exercise 1 state: `CORRECT / COMPLETE`.
+
+Current notebook snapshot still contains Exercise 1 work only; Exercise 2–4 are not yet present.

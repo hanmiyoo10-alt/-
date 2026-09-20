@@ -46,6 +46,7 @@ assert.deepEqual(taxonomyById.get('local').sourceRefs, ['plugin:usage-dashboard'
 assert.deepEqual(taxonomyById.get('local').sourceRoots, [
   'plugins/usage-dashboard/**',
   'products/usage-dashboard/**',
+  'plugins/risu/local/usage-dashboard/**',
   'plugins/risu/local/devpass/**',
   'plugins/devpass/**',
   'plugins/risu/local/voyage/**',
@@ -55,6 +56,18 @@ assert.deepEqual(taxonomyById.get('local').sourceRoots, [
 assert.equal(taxonomyById.get('local').risu, 'yes');
 assert.equal(registry.plugins.local.lifecycle, 'compatibility-family');
 assert.deepEqual(registry.plugins.local.paths, ['plugins/risu/local', 'plugins/risu/local/*', 'docs/LOCAL_PLUGIN_GUIDELINES.md']);
+assert.deepEqual(registry.plugins['usage-dashboard'].paths, [
+  'plugins/usage-dashboard/**',
+  'products/usage-dashboard/**',
+  'plugins/risu/local/usage-dashboard/**',
+  '.github/usage-dashboard/**',
+  '.github/workflows/usage-dashboard-*.yml',
+  '.github/workflows/reusable-usage-dashboard-*.yml',
+  'docs/USAGE_DASHBOARD_*.md',
+]);
+assert.equal(registry.plugins['usage-dashboard'].authority.releaseBranch, 'release-usage-dashboard');
+assert.equal(registry.plugins['usage-dashboard'].authority.manifest, 'plugins/usage-dashboard/runtime/product-manifest.json');
+assert.equal(registry.plugins['usage-dashboard'].authority.artifact, 'plugins/usage-dashboard/latest.js');
 assert.deepEqual(registry.plugins.devpass.paths, ['plugins/risu/local/devpass/**', 'plugins/devpass/**']);
 assert.equal(registry.plugins.devpass.authority.declaredBy, 'plugins/risu/local/devpass/README.md');
 assert.equal(registry.plugins.devpass.authority.artifact, 'plugins/devpass/latest.js');
@@ -125,6 +138,12 @@ assert.deepEqual(singleRow.duplicates, []);
 assert.equal(singleRow.fresh, true, 'single canonical generated status view keeps normal freshness behavior');
 
 assert.deepEqual(classifyPaths(['plugins/usage-dashboard/src/parts.cjs'], registry).labels, ['plugin:usage-dashboard']);
+assert.deepEqual(classifyPaths(['products/usage-dashboard/README.md'], registry).labels, ['plugin:usage-dashboard']);
+const usageDashboardLanding = classifyPaths(['plugins/risu/local/usage-dashboard/README.md'], registry);
+assert.deepEqual(usageDashboardLanding.labels, ['plugin:usage-dashboard']);
+assert.deepEqual(usageDashboardLanding.ambiguousPaths, []);
+assert.deepEqual(usageDashboardLanding.unclassifiedPaths, []);
+assert.ok(!usageDashboardLanding.labels.includes('plugin:local'));
 assert.deepEqual(classifyPaths(['.github/workflows/reusable-usage-dashboard-validate.yml'], registry).labels, ['plugin:usage-dashboard']);
 assert.deepEqual(classifyPaths(['plugins/simcore/latest.js', 'product-manifest.json'], registry).labels, ['plugin:simcore']);
 assert.deepEqual(classifyPaths(['products/simcore/tooling/check.mjs'], registry).labels, ['plugin:simcore']);

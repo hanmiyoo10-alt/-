@@ -116,6 +116,7 @@
       "sourceRoots": [
         "plugins/usage-dashboard/**",
         "products/usage-dashboard/**",
+        "plugins/risu/local/usage-dashboard/**",
         "plugins/risu/local/devpass/**",
         "plugins/devpass/**",
         "plugins/risu/local/voyage/**",

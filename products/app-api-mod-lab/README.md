@@ -28,6 +28,7 @@
 
 - Risu O/X는 대상 단위 ecosystem 분류다.
 - `app / api / hybrid`는 `TARGET.json` metadata로 관리한다.
+- `game / streaming / ...` 같은 primary category도 `TARGET.json` metadata로 관리하며 path layer로 만들지 않는다.
 - 대상이 아직 확정되지 않았다면 target 디렉터리를 만들지 않는다.
 - 구조 검증은 `node products/app-api-mod-lab/validate-targets.mjs`로 수행한다.
 
@@ -35,9 +36,11 @@
 
 기존 이슈나 별도 브랜치에 남아 있는 app/API 개조 작업은 곧바로 concrete target으로 취급하지 않는다.
 
-현재 concrete target은 `targets/standalone/chzzk/`이며 issue #2020에서 이어진 Risu X / API target이다.
+현재 concrete targets:
+- `targets/standalone/chzzk/` — issue #2020에서 이어진 Risu X / API / `streaming`
+- `targets/standalone/fortune-golf/` — issue #2602와 `fortune-golf-apk` branch에서 이어진 Risu X / app / `game`
 
-현재 legacy inventory에는 `fortune-golf` 하나가 남아 있다. `fortune-golf-apk` branch 기반의 proposed Risu X / app target이며 아직 materialize되지 않았다.
+현재 legacy inventory는 비어 있다. 빈 inventory는 모든 알려진 legacy candidate가 materialize된 정상 상태다.
 
 `legacy-candidates.json`은 evidence locator와 proposed classification만 가진다. source/runtime/release authority를 새로 만들지 않으며, `materialized=false` / `migration_authorized=false` 상태에서는 target root를 만들지 않는다.
 

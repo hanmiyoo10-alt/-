@@ -118,3 +118,48 @@ targets/<ecosystem>/<target-id>/
 Legacy candidate는 `proposed_category`를 같은 vocabulary로 기록하고 `validate-legacy-candidates.mjs`가 검증한다.
 
 category는 탐색/인덱싱용 분류일 뿐 source/runtime/release/deployment authority를 생성하지 않는다. 다중 분야가 실제로 필요해질 때는 primary category를 모호하게 만들지 않고 별도의 secondary/tag contract를 검토한다.
+
+## 2026-09-20 — Fortune Golf legacy branch materialization
+
+### 결정
+
+`fortune-golf-apk` legacy branch의 target-owned corpus를 App API Mod Lab의 두 번째 concrete target으로 materialize한다.
+
+```text
+targets/standalone/fortune-golf/
+├── TARGET.json
+├── README.md
+├── android/
+├── docs/
+├── probe/
+└── tools/
+```
+
+분류:
+- ecosystem: `standalone` / Risu X
+- kind: `app`
+- category: `game`
+
+### provenance와 source 경계
+
+migration source는 `fortune-golf-apk` exact SHA `62a2e4bab3aa272e021440f05c18c237ea6c592f`다.
+
+첫 migration slice는 target-owned 25개 파일만 재배치한다:
+- Fortune Golf 전용 문서 17개
+- `fortune-probe/**` 6개
+- Android README 1개
+- Fortune analysis helper 1개
+
+원본 Com2uS game artifact는 external/private input이라 Git으로 가져오지 않는다. WIE upstream authority도 repository가 흡수하지 않는다.
+
+### workflow 경계
+
+legacy branch의 Fortune Golf GitHub Actions workflow와 generic Ghidra provisioning/transfer workflow는 이번 target materialization에 포함하지 않는다. 옛 path/ref assumptions를 그대로 main에 활성화하지 않고, target root가 안착한 뒤 별도 migration/validation work unit에서 다룬다.
+
+### runtime 의미
+
+historical handoff에서 title/menu 도달 evidence는 있지만 round/save completion은 미검증이고 graphics corruption 및 first-run memory/EventQueue 문제가 남아 있었다. 따라서 materialization은 `WORKING`, `RELEASED`, `COMPATIBLE` claim이 아니다. runtime status는 `PARTIAL_HISTORICAL_EVIDENCE`로 유지한다.
+
+### legacy inventory zero state
+
+Fortune Golf 승격 후 알려진 legacy candidate는 0개다. validator는 `candidates: []`를 정상 empty inventory로 허용해야 하며, 가짜 placeholder candidate를 요구하지 않는다.

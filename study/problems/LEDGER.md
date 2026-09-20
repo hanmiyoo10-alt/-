@@ -376,3 +376,25 @@ Next-time cue: 입력 문제에서는 먼저 각 변수의 자료형을 정한�
 Related pattern IDs: none; 단일 문제 증거이므로 패턴 승격하지 않음.
 Review state: QUEUED
 Later evidence / resolution: current execution stops at first input conversion with TypeError. corrected rerun pending.
+
+
+### AI-PROG-W2-E2-R1
+
+Problem ID: AI-PROG-W2-E2-R1
+Date: 2026-09-20
+Subject / area: AI 프로그래밍입문 / 2주차 / Exercise 2 재시도
+Source ref: current uploaded week-2 assignment Colab, execution count 7
+Result: WRONG
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 원금, 연이율, 기간을 입력받아 복리 원리금을 계산하고 소수 둘째 자리까지 출력한다.
+User interpretation / approach: 이전의 `print(input())` 구조를 제거해 `int(input(...))` 형태로 수정했다. 원금 입력 3500000은 정상 통과했으나, 이자율 0.03 입력에서 `int('0.03')` 변환이 실패했다.
+Correct reasoning summary: 이자율은 소수이므로 `float(input(...))`를 사용해야 한다. 이후 계산은 PDF 공식 `money * (1 + rate) ** year`를 그대로 사용하고, 결과 출력은 `print(f'...{total:.2f}...')` 형태로 작성한다.
+
+Error type: KNOWLEDGE_GAP
+Error mechanism: 입력값의 자료형을 값의 성격에 맞게 구분하지 않아 소수 이자율에 `int()`를 사용했다. 또한 현재 계산식 `0 + O*0.05*e`와 마지막 `f(print(...))`는 PDF 요구와 여전히 다르다.
+Next-time cue: 입력 전에 변수별 자료형부터 정한다: 원금=int 또는 float, 이자율=float, 기간=int. 그 다음 PDF 식을 변수명 그대로 옮긴다.
+
+Related pattern IDs: none
+Review state: QUEUED
+Later evidence / resolution: `print(input())` 오류는 교정됨. 이자율 형변환, 복리 공식, f-string 출력은 아직 교정 대기.

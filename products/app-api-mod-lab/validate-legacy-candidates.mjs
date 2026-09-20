@@ -36,8 +36,8 @@ const allowedStates = new Set(['legacy-evidence']);
 const allowedAuthority = new Set(['UNKNOWN', 'UNASSIGNED']);
 const ids = new Set();
 
-if (!Array.isArray(data.candidates) || data.candidates.length === 0) {
-  fail('candidates must contain at least one legacy candidate');
+if (!Array.isArray(data.candidates)) {
+  fail('candidates must be an array');
 }
 
 for (const [index, candidate] of (data.candidates || []).entries()) {

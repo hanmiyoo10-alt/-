@@ -221,3 +221,22 @@ Remaining blocker:
 - `He said "What's there?"` is not enclosed as a Python string.
 
 Current result remains `SyntaxError`. Exercise 1 is not complete yet.
+
+
+## Exercise 1 re-check — successful execution
+
+Latest Drive snapshot modified at 2026-09-20 22:24 KST.
+
+Verified:
+- newest code cell executed successfully (`execution_count = 3`);
+- quote-boundary handling is now valid;
+- literal `\\n` / `\\t` output is correct;
+- Windows-style path backslashes are correct;
+- the intended five output lines are present.
+
+Remaining exact-output difference:
+- the fourth line begins with one extra space before `Newline character...`;
+- cause: one comma separates two `print()` arguments, so Python inserts the default separator space.
+
+Exercise 1 state: `PARTIAL — ONE LEADING SPACE REMAINS`.
+Exercises 2–4 are not present in the current notebook snapshot yet.

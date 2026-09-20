@@ -361,3 +361,24 @@ Exact target:
 
 Exercise 2 state: `PARTIAL / FINAL F-STRING ONLY`.
 Exercise 3 is not present in the current notebook snapshot yet.
+
+
+## Exercise 2 re-check — sixth attempt
+
+Latest Drive snapshot modified at 2026-09-20 23:02 KST.
+
+Verified:
+- input types remain correct;
+- compound-interest calculation remains correct;
+- learner corrected the decimal-format idea toward `:.2f`.
+
+Current execution count 18 still fails:
+- code uses `print(f'('{year}년 후의 원리금은 {total: .2f}원 입니다.'))`;
+- the f-string closes immediately after `f'('`, so the following Korean text and braces are outside the string;
+- PDF-exact formatting should also use `{total:.2f}` without the extra sign-space option.
+
+Exact final line:
+- `print(f'{year}년 후의 원리금은 {total:.2f}원 입니다.')`
+
+Exercise 2 state: `PARTIAL / FINAL STRING BOUNDARY ONLY`.
+Exercise 3 is not present in the current notebook snapshot yet.

@@ -254,6 +254,26 @@ Raw logs are not copied into the default receipt. Callers retain them behind bou
 
 Every execution receipt fixes `mutationAuthorized=false`, `executionAuthorized=false`, `mergeAuthorized=false`, `releaseAuthorized=false`, `productionAuthorized=false`, `runtimeAuthorityGranted=false`, and `securityAuthorityGranted=false`. Those flags describe the receipt's non-authority boundary, not whether an already-authorized external executor previously ran. Stage, coordination, project-specific, and agent-orchestrator receipts remain separate owners; an execution receipt may only be linked as evidence into those contracts.
 
+## Repository agent decision view v1
+
+`agent-decision-view.cjs` is a pure read-only consumer projection over an already-produced **VALID v2** `REPOSITORY_EXECUTION_RECEIPT`. It does not execute work, fetch GitHub, discover authority, mutate state, infer v2 axes from a legacy v1 receipt, or strengthen a canonical result.
+
+```text
+owner report / raw bounded evidence
+→ canonical REPOSITORY_EXECUTION_RECEIPT v2
+→ REPOSITORY_AGENT_DECISION_VIEW v1
+→ normal agent decision
+→ targeted drill-down only when attention requires it
+```
+
+The projector re-projects the supplied v2 receipt through the canonical execution-receipt owner and requires exact normalized receipt identity before use. It copies `executionLifecycle`, `attentionDisposition`, `result`, `nextLegalAction`, and receipt identity rather than independently deciding them. Summary counts come only from canonical receipt step evidence.
+
+Attention items are fixed to `subject / reasonCode / severity / constraint / nextPhase / locator`. At most five are shown. Priority is deterministic: `CONFLICT → UNKNOWN → BLOCKER → FAIL → INFRA → WARN`. Truncation is explicit, including `criticalTruncated`; unresolved critical attention never becomes green by omission. A non-PASS canonical receipt with no owner-specific attention receives one generic drill-down item instead of an empty list.
+
+Owner-specialized `output` is a small validated flat object only. Unsupported nested values, oversized/control-character text, credential-like material, contradictory PASS attention, malformed locators, or a forged/mutated canonical receipt fail closed to an invalid/UNKNOWN view.
+
+This projector is presentation evidence only. It grants no stage transition, execution, mutation, merge, release, production, runtime, or security authority.
+
 ## CAS-style coordination issue-body patch
 
 `coordination-body-patch.cjs` is the Work Harness issue-only adapter for narrow packet/queue body reconciliation. It does not decide what lifecycle or proof text is true; callers must already have authority for the requested coordination edit.
@@ -329,4 +349,6 @@ node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync
 node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync-workflow-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/authoritative-handoff-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/stage-checkpoint-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/execution-receipt-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/agent-decision-view-contract.cjs
 ```

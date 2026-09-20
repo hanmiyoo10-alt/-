@@ -15,6 +15,8 @@ const MAX_INPUT_BYTES = 64 * 1024;
 const MAX_PATCH_BYTES = 64 * 1024;
 const PRIMITIVE_TIMEOUT_MS = 120000;
 const MAX_PRIMITIVE_OUTPUT_BYTES = 64 * 1024;
+const MAX_REPORT_BYTES = 16 * 1024;
+const OUTPUT_FORMATS = new Set(['receipt', 'agent-view']);
 
 const taskHandoff = require(path.join(COORDINATION, 'task-handoff.cjs'));
 const taskLease = require(path.join(COORDINATION, 'task-lease.cjs'));
@@ -24,6 +26,8 @@ const packetProjection = require(path.join(
   ROOT, '.github/plugin-control-plane/canonical-main/work-system/packet-projection.cjs'));
 const executionReceipt = require(path.join(
   ROOT, '.github/plugin-control-plane/canonical-main/work-harness/execution-receipt.cjs'));
+const agentDecisionView = require(path.join(
+  ROOT, '.github/plugin-control-plane/canonical-main/work-harness/agent-decision-view.cjs'));
 
 const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
@@ -401,23 +405,25 @@ function spawnPrimitive({phase, manifest, requestFile, patchFile, prior,
 
 function stateFor(kind, reasons) {
   if (kind === 'PASS') return {
-    attentionState: 'COMPLETE', result: 'PASS', reasonCodes: [],
-    requiredUnknowns: [], conflicts: [], blockers: [],
+    executionLifecycle: 'FINISHED', attentionDisposition: 'COMPLETE',
+    result: 'PASS', reasonCodes: [], requiredUnknowns: [], conflicts: [], blockers: [],
     nextLegalAction: 'HOLDER_CHECK_THEN_RELEASE_D013_AND_RECORD_D014_COMPLETION',
   };
   if (kind === 'CONFLICT') return {
-    attentionState: 'UNKNOWN', result: 'CONFLICT',
-    reasonCodes: ['REPOSITORY_PATCH_EVIDENCE_CONFLICT'],
+    executionLifecycle: 'FINISHED', attentionDisposition: 'CONFLICT',
+    result: 'CONFLICT', reasonCodes: ['REPOSITORY_PATCH_EVIDENCE_CONFLICT'],
     requiredUnknowns: [], conflicts: reasons, blockers: [],
     nextLegalAction: 'RESOLVE_REPOSITORY_PATCH_CONFLICT',
   };
   if (kind === 'UNKNOWN') return {
-    attentionState: 'UNKNOWN', result: 'UNKNOWN', reasonCodes: reasons,
+    executionLifecycle: 'FINISHED', attentionDisposition: 'UNKNOWN',
+    result: 'UNKNOWN', reasonCodes: reasons,
     requiredUnknowns: reasons, conflicts: [], blockers: [],
     nextLegalAction: 'RESOLVE_REPOSITORY_PATCH_UNKNOWN',
   };
   return {
-    attentionState: 'BLOCKED', result: 'BLOCKED', reasonCodes: reasons,
+    executionLifecycle: 'FINISHED', attentionDisposition: 'BLOCKED',
+    result: 'BLOCKED', reasonCodes: reasons,
     requiredUnknowns: [], conflicts: [], blockers: reasons,
     nextLegalAction: 'RESOLVE_REPOSITORY_PATCH_BLOCK',
   };
@@ -432,7 +438,7 @@ function projectGenericReceipt({manifest, request, primitiveSourceSha256, kind,
   const artifacts = [locator];
   if (SHA40_RE.test(newHead || '')) artifacts.push('commit:' + newHead);
   return executionReceipt.projectExecutionReceipt({
-    schemaVersion: 1,
+    schemaVersion: 2,
     operationId: 'mcl-repository-patch-owner:' + (manifest?.manifestId || 'unknown'),
     primitiveId: 'mcl:repository-worktree-patch',
     sourceIdentity: {
@@ -442,7 +448,8 @@ function projectGenericReceipt({manifest, request, primitiveSourceSha256, kind,
     },
     executionSurface: 'MCL:S',
     stage: 'HOST_ORCHESTRATED_REPOSITORY_PATCH',
-    attentionState: state.attentionState,
+    executionLifecycle: state.executionLifecycle,
+    attentionDisposition: state.attentionDisposition,
     result: state.result,
     proofScope: 'one bounded S worktree patch prepare/commit/non-force-push transaction only',
     steps: [
@@ -465,6 +472,121 @@ function projectGenericReceipt({manifest, request, primitiveSourceSha256, kind,
     stderrTail: null,
     nextLegalAction: state.nextLegalAction,
   });
+}
+
+function counterValue(receipt, name) {
+  const row = receipt?.counters?.find((item) => item.name === name);
+  return row?.status === 'KNOWN' ? row.value : null;
+}
+function commitLocator(receipt) {
+  return receipt?.artifactLocators?.find((item) => /^commit:[0-9a-f]{40}$/.test(item)) || null;
+}
+function ownerDecisionOutput(receipt) {
+  return {
+    owner: 'repository-patch-owner',
+    filesChanged: counterValue(receipt, 'changed_paths') ?? 0,
+    commitCreated: counterValue(receipt, 'commit_created') === 1,
+    remoteHeadExact: counterValue(receipt, 'push_verified') === 1,
+    commitLocator: commitLocator(receipt),
+    pr: null,
+  };
+}
+function ownerReport(receipt, manifest) {
+  return {
+    schemaVersion: 1,
+    mode: 'MCL_REPOSITORY_PATCH_EXECUTION_REPORT',
+    operationId: receipt.operationId,
+    manifestId: manifest.manifestId,
+    leaseId: manifest.leaseEvidence.leaseId,
+    baseSha: manifest.observedBaseSha,
+    branch: manifest.workspace.branch,
+    receiptDigest: receipt.receiptDigest,
+    result: receipt.result,
+    executionLifecycle: receipt.executionLifecycle,
+    attentionDisposition: receipt.attentionDisposition,
+    proofScope: receipt.proofScope,
+    steps: receipt.steps,
+    counters: receipt.counters,
+    affectedFiles: receipt.affectedFiles,
+    artifactLocators: receipt.artifactLocators,
+    reasonCodes: receipt.reasonCodes,
+    requiredUnknowns: receipt.requiredUnknowns,
+    conflicts: receipt.conflicts,
+    blockers: receipt.blockers,
+    nextLegalAction: receipt.nextLegalAction,
+  };
+}
+function writeJsonSidecar(filePath, value, maxBytes = MAX_REPORT_BYTES) {
+  const bytes = Buffer.from(JSON.stringify(taskHandoff.stable(value), null, 2) + '\n', 'utf8');
+  if (bytes.length > maxBytes) throw new InvocationError('UNKNOWN', ['AGENT_VIEW_SIDECAR_TOO_LARGE']);
+  const temporary = filePath + '.tmp-' + process.pid;
+  let fd = null;
+  try {
+    fd = fs.openSync(temporary, 'wx', 0o600);
+    fs.writeFileSync(fd, bytes);
+    fs.closeSync(fd);
+    fd = null;
+    fs.renameSync(temporary, filePath);
+    fs.chmodSync(filePath, 0o600);
+    const stat = fs.lstatSync(filePath);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error('sidecar not regular');
+    }
+  } catch (error) {
+    if (fd !== null) {
+      try { fs.closeSync(fd); } catch {}
+    }
+    try { fs.unlinkSync(temporary); } catch {}
+    throw new InvocationError('UNKNOWN', ['AGENT_VIEW_SIDECAR_WRITE_FAILED']);
+  }
+  return {filePath, digest: sha256Bytes(bytes)};
+}
+function persistAgentArtifacts(receipt, manifest, {
+  workspaceInspector = workspaceHolder.inspectWorkspace,
+  writer = writeJsonSidecar,
+} = {}) {
+  if (receipt?.validity !== 'VALID' || receipt.schemaVersion !== 2) {
+    throw new InvocationError('UNKNOWN', ['AGENT_VIEW_CANONICAL_RECEIPT_REQUIRED']);
+  }
+  const workspace = workspaceInspector(manifest);
+  if (!workspace?.ok || !workspace.holderPath) {
+    throw new InvocationError('UNKNOWN', [
+      'AGENT_VIEW_GIT_ADMIN_UNAVAILABLE',
+      ...(workspace?.reasonCodes || []),
+    ]);
+  }
+  const adminDir = path.dirname(workspace.holderPath);
+  const prefix = 'mcl-repository-patch-owner-' + manifest.manifestId;
+  const receiptPath = path.join(adminDir, prefix + '.receipt.json');
+  const reportPath = path.join(adminDir, prefix + '.report.json');
+  const receiptWrite = writer(receiptPath, receipt, MAX_REPORT_BYTES);
+  const reportWrite = writer(reportPath, ownerReport(receipt, manifest), MAX_REPORT_BYTES);
+  return {
+    receiptLocator: 'local-artifact:' + receiptWrite.filePath + '#sha256=' + receiptWrite.digest,
+    reportLocator: 'local-artifact:' + reportWrite.filePath + '#sha256=' + reportWrite.digest,
+  };
+}
+function projectOwnerAgentView(receipt, manifest, deps = {}) {
+  try {
+    const locators = persistAgentArtifacts(receipt, manifest, deps);
+    return agentDecisionView.projectAgentDecisionView({
+      receipt,
+      phase: 'IMPLEMENTATION_EFFECT',
+      output: ownerDecisionOutput(receipt),
+      attention: [],
+      receiptLocator: locators.receiptLocator,
+      reportLocator: locators.reportLocator,
+    });
+  } catch (error) {
+    return agentDecisionView.projectAgentDecisionView({
+      receipt,
+      phase: 'IMPLEMENTATION_EFFECT',
+      output: {},
+      attention: [],
+      receiptLocator: '',
+      reportLocator: '',
+    });
+  }
 }
 
 async function loadCurrentEvidence({repo, manifest, env = process.env, runner, fetchImpl}) {
@@ -580,7 +702,9 @@ async function invokeLive({repo, handoffText, manifestText, requestText, request
 }
 
 function parseArgs(argv = process.argv.slice(2)) {
-  const allowed = new Set(['repo', 'handoff-file', 'manifest-file', 'request-file', 'patch-file']);
+  const allowed = new Set([
+    'repo', 'handoff-file', 'manifest-file', 'request-file', 'patch-file', 'format',
+  ]);
   const values = {};
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
@@ -589,11 +713,12 @@ function parseArgs(argv = process.argv.slice(2)) {
     if (!allowed.has(key) || key in values) throw new Error('ARGUMENT_INVALID');
     values[key] = argv[++i];
   }
-  if (Object.keys(values).length !== 5 || !values.repo
-      || !values['handoff-file'] || !values['manifest-file']
+  if (!values.repo || !values['handoff-file'] || !values['manifest-file']
       || !values['request-file'] || !values['patch-file']) {
     throw new Error('ARGUMENT_INVALID');
   }
+  const format = values.format || 'receipt';
+  if (!OUTPUT_FORMATS.has(format)) throw new Error('FORMAT_INVALID');
   if (!operator.validateRepo(values.repo)) throw new Error('REPOSITORY_INVALID');
   return {
     repo: values.repo,
@@ -601,6 +726,7 @@ function parseArgs(argv = process.argv.slice(2)) {
     manifestFile: values['manifest-file'],
     requestFile: values['request-file'],
     patchFile: values['patch-file'],
+    format,
   };
 }
 async function runCli(argv = process.argv.slice(2), options = {}) {
@@ -622,7 +748,25 @@ async function runCli(argv = process.argv.slice(2), options = {}) {
     root: options.root || ROOT,
     guardImpl: options.guardImpl,
   });
-  return {text: JSON.stringify(receipt, null, 2) + '\n', code: executionReceipt.exitCodeFor(receipt)};
+  if (args.format === 'receipt') {
+    return {text: JSON.stringify(receipt, null, 2) + '\n', code: executionReceipt.exitCodeFor(receipt)};
+  }
+  let projected;
+  try {
+    const manifest = parseManifestText(manifestText);
+    const projector = options.agentViewImpl || projectOwnerAgentView;
+    projected = projector(receipt, manifest, options.agentViewDeps || {});
+  } catch (error) {
+    projected = agentDecisionView.projectAgentDecisionView({
+      receipt,
+      phase: 'IMPLEMENTATION_EFFECT',
+      output: {},
+      attention: [],
+      receiptLocator: '',
+      reportLocator: '',
+    });
+  }
+  return {text: JSON.stringify(projected, null, 2) + '\n', code: agentDecisionView.exitCodeFor(projected)};
 }
 
 if (require.main === module) {
@@ -640,6 +784,8 @@ module.exports = {
   HANDOFF_FIELDS,
   MAX_INPUT_BYTES,
   MAX_PATCH_BYTES,
+  MAX_REPORT_BYTES,
+  OUTPUT_FORMATS,
   PRIMITIVE_REF,
   PRIMITIVE_RELATIVE,
   REQUEST_FIELDS,
@@ -648,13 +794,17 @@ module.exports = {
   guardCurrent,
   invokeLive,
   loadCurrentEvidence,
+  ownerDecisionOutput,
+  ownerReport,
   parseArgs,
   parseHandoffText,
   parseManifestText,
   parsePrimitiveResult,
   parseRequestText,
+  persistAgentArtifacts,
   primitiveArgs,
   projectGenericReceipt,
+  projectOwnerAgentView,
   runCli,
   safeChildEnv,
   sha256Bytes,
@@ -662,4 +812,5 @@ module.exports = {
   validateHolder,
   validateLeaseAgainstManifest,
   validateManifestBinding,
+  writeJsonSidecar,
 };

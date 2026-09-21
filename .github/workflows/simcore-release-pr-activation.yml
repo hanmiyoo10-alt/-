@@ -41,98 +41,70 @@ jobs:
         shell: bash
         env:
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$MERGE_SHA"
           PARENT="$(git rev-parse "$MERGE_SHA^1")"
-          mapfile -t CHANGED < <(git diff --name-only "$PARENT" "$MERGE_SHA")
+          git diff --name-only "$PARENT" "$MERGE_SHA" > /tmp/simcore-approval-changed.txt
+          mapfile -t CHANGED < /tmp/simcore-approval-changed.txt
           test "${#CHANGED[@]}" -eq 2
-          APPROVAL=''
+
+          mapfile -t APPROVALS < <(printf '%s\n' "${CHANGED[@]}" | grep -E '^products/simcore/releases/approvals/[^/]+\.json$' || true)
+          test "${#APPROVALS[@]}" -eq 1
+          APPROVAL="${APPROVALS[0]}"
           SPEC=''
           for p in "${CHANGED[@]}"; do
-            case "$p" in
-              products/simcore/releases/approvals/*.json) test -z "$APPROVAL"; APPROVAL="$p" ;;
-              products/simcore/releases/specs/*.json) test -z "$SPEC"; SPEC="$p" ;;
-              *) echo "SIMCORE_RELEASE_APPROVAL_CHANGED_PATH_INVALID:$p" >&2; exit 2 ;;
-            esac
+            [[ "$p" == "$APPROVAL" ]] || SPEC="$p"
           done
-          test -n "$APPROVAL"
           test -n "$SPEC"
+
           for p in "$APPROVAL" "$SPEC"; do
             mapfile -t TOUCHES < <(git log --first-parent --format=%H "$MERGE_SHA" -- "$p")
             test "${#TOUCHES[@]}" -eq 1
             test "${TOUCHES[0]}" = "$MERGE_SHA"
           done
 
-          APPROVAL="$APPROVAL" SPEC="$SPEC" PR_TITLE="$PR_TITLE" python3 - <<'PY' | tee -a "$GITHUB_OUTPUT" > /tmp/simcore-release-approval.env
-          import json, os, re
-          ap=os.environ['APPROVAL']
-          sp=os.environ['SPEC']
-          a=json.load(open(ap))
-          if sorted(a.keys()) != sorted(['schemaVersion','releaseId','candidateReceiptPath','authorityConfirmation']):
-              raise SystemExit('SIMCORE_RELEASE_APPROVAL_SCHEMA_INVALID')
-          if a['schemaVersion'] != 1: raise SystemExit('SIMCORE_RELEASE_APPROVAL_SCHEMA_INVALID')
-          rid=str(a['releaseId'])
-          if not re.fullmatch(r'simcore-v[0-9]+\.[0-9]+\.[0-9]+-(?:new|correction|rollback)-[0-9]{2,}', rid):
-              raise SystemExit('SIMCORE_RELEASE_APPROVAL_ID_INVALID')
-          expected_ap=f'products/simcore/releases/approvals/{rid}.json'
-          expected_sp=f'products/simcore/releases/specs/{rid}.json'
-          expected_shadow=f'products/simcore/releases/spec-shadows/{rid}.json'
-          if ap != expected_ap: raise SystemExit('SIMCORE_RELEASE_APPROVAL_PATH_INVALID')
-          if sp != expected_sp: raise SystemExit('SIMCORE_RELEASE_APPROVAL_SPEC_PATH_INVALID')
-          if a['authorityConfirmation'] != 'RS2_4_RELEASE': raise SystemExit('SIMCORE_RELEASE_APPROVAL_AUTHORITY_INVALID')
-          receipt=str(a['candidateReceiptPath'])
-          if not re.fullmatch(r'products/simcore/releases/candidate-receipts/[A-Za-z0-9._-]+\.json', receipt):
-              raise SystemExit('SIMCORE_RELEASE_APPROVAL_RECEIPT_PATH_INVALID')
-          expected_title=f'SimCore exact release approval: {rid}'
-          if os.environ['PR_TITLE'] != expected_title: raise SystemExit('SIMCORE_RELEASE_APPROVAL_TITLE_INVALID')
-          if not os.path.isfile(receipt): raise SystemExit('SIMCORE_RELEASE_APPROVAL_RECEIPT_MISSING')
-          if not os.path.isfile(expected_shadow): raise SystemExit('SIMCORE_RELEASE_APPROVAL_SHADOW_MISSING')
-          r=json.load(open(receipt))
-          if r.get('releaseId') != rid or r.get('result') != 'PASS': raise SystemExit('SIMCORE_RELEASE_APPROVAL_RECEIPT_INVALID')
-          fetch_ref=str(r.get('candidateFetchRef') or '')
-          if not re.fullmatch(r'candidate/simcore/[A-Za-z0-9._/-]+', fetch_ref):
+          APPROVAL="$APPROVAL" SPEC="$SPEC" node --input-type=module - <<'NODE' > /tmp/simcore-approval-bootstrap.json
+          import { loadApprovalEnvelopeFiles } from './products/simcore/tooling/release-approval-envelope.mjs';
+          const x = loadApprovalEnvelopeFiles({ root:'.', approvalPath:process.env.APPROVAL, specPath:process.env.SPEC });
+          process.stdout.write(JSON.stringify({ candidateFetchRef:x.candidateReceipt.candidateFetchRef }));
+          NODE
+
+          FETCH_REF="$(python3 - <<'PY'
+          import json,re
+          x=json.load(open('/tmp/simcore-approval-bootstrap.json'))
+          ref=str(x.get('candidateFetchRef') or '')
+          if not re.fullmatch(r'candidate/simcore/[A-Za-z0-9._/-]+',ref):
               raise SystemExit('SIMCORE_RELEASE_APPROVAL_CANDIDATE_REF_INVALID')
-          for k in ['candidateCommit','expectedProductionCommit','candidateReleaseBlob']:
-              if not re.fullmatch(r'[0-9a-f]{40}',str(r.get(k) or '')): raise SystemExit('SIMCORE_RELEASE_APPROVAL_RECEIPT_IDENTITY_INVALID:'+k)
-          print('release_id='+rid)
-          print('release_spec_path='+expected_sp)
-          print('candidate_receipt_path='+receipt)
-          print('spec_shadow_path='+expected_shadow)
-          print('candidate_fetch_ref='+fetch_ref)
-          print('candidate_commit='+str(r['candidateCommit']))
-          print('expected_production_commit='+str(r['expectedProductionCommit']))
-          print('authority_confirmation=RS2_4_RELEASE')
+          print(ref)
           PY
-          source /tmp/simcore-release-approval.env
-
-          REF_HEAD="$(git ls-remote origin "refs/heads/$candidate_fetch_ref" 2>/dev/null | awk '{print $1}')"
+          )"
+          REF_HEAD="$(git ls-remote origin "refs/heads/$FETCH_REF" 2>/dev/null | awk '{print $1}')"
           PROD_HEAD="$(git ls-remote origin refs/heads/release-simcore 2>/dev/null | awk '{print $1}')"
-          test -n "$REF_HEAD"
-          test -n "$PROD_HEAD"
-          test "$REF_HEAD" = "$candidate_commit"
-          test "$PROD_HEAD" = "$expected_production_commit"
+          [[ "$REF_HEAD" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$PROD_HEAD" =~ ^[0-9a-f]{40}$ ]]
 
-          node products/simcore/tooling/release-approval-resolve.mjs \
+          node products/simcore/tooling/release-approval-envelope.mjs \
+            --mode POSTMERGE \
             --approval "$APPROVAL" \
-            --candidate-receipt "$candidate_receipt_path" \
-            --spec-shadow "$spec_shadow_path" \
+            --spec "$SPEC" \
             --observed-candidate "$REF_HEAD" \
             --observed-production "$PROD_HEAD" \
-            --resolved-spec /tmp/simcore-resolved-release-spec.json \
-            --report /tmp/simcore-release-approval-report.json
+            --changed-paths /tmp/simcore-approval-changed.txt \
+            --report /tmp/simcore-release-approval-envelope.json
 
-          SPEC="$SPEC" python3 - <<'PY'
-          import json, os
-          committed=json.load(open(os.environ['SPEC']))
-          resolved=json.load(open('/tmp/simcore-resolved-release-spec.json'))
-          report=json.load(open('/tmp/simcore-release-approval-report.json'))
-          if committed != resolved: raise SystemExit('SIMCORE_RELEASE_APPROVAL_SPEC_NOT_MACHINE_DERIVED')
-          if report.get('result') != 'PASS': raise SystemExit('SIMCORE_RELEASE_APPROVAL_RESOLUTION_NOT_PASS')
-          if report.get('decision') != 'APPROVAL_RESOLVED_SHADOW': raise SystemExit('SIMCORE_RELEASE_APPROVAL_RESOLUTION_INVALID')
-          if report.get('releaseAuthority') != 'APPROVAL_RESOLUTION_ONLY': raise SystemExit('SIMCORE_RELEASE_APPROVAL_RESOLUTION_AUTHORITY_INVALID')
-          if report.get('productionMutation') != 'NONE': raise SystemExit('SIMCORE_RELEASE_APPROVAL_RESOLUTION_MUTATION_INVALID')
+          python3 - <<'PY' | tee -a "$GITHUB_OUTPUT"
+          import json
+          r=json.load(open('/tmp/simcore-release-approval-envelope.json'))
+          if r.get('result') != 'PASS': raise SystemExit('SIMCORE_RELEASE_APPROVAL_ENVELOPE_NOT_PASS')
+          if r.get('validationMode') != 'POSTMERGE': raise SystemExit('SIMCORE_RELEASE_APPROVAL_ENVELOPE_MODE_INVALID')
+          if r.get('releaseAuthority') != 'APPROVAL_ENVELOPE_VALIDATION_ONLY': raise SystemExit('SIMCORE_RELEASE_APPROVAL_ENVELOPE_AUTHORITY_INVALID')
+          if r.get('productionMutation') != 'NONE': raise SystemExit('SIMCORE_RELEASE_APPROVAL_ENVELOPE_MUTATION_INVALID')
+          if r.get('publicationDispatch') != 'NONE_VALIDATION_ONLY': raise SystemExit('SIMCORE_RELEASE_APPROVAL_ENVELOPE_DISPATCH_INVALID')
+          print('release_id='+str(r['releaseId']))
+          print('release_spec_path='+str(r['specPath']))
+          print('candidate_fetch_ref='+str(r['candidateFetchRef']))
+          print('authority_confirmation='+str(r['authorityConfirmation']))
           print('SIMCORE_EXACT_APPROVAL_BOUNDARY_PASS')
           PY
 

@@ -55,6 +55,8 @@ Do not invent numeric confidence scores.
 
 A candidate-discovery provider result is always `CANDIDATE_ONLY`; it cannot directly produce `DIRECT` or `SUPPORTED_LIKELY` impact edges.
 
+A mechanical helper result is always `CANDIDATE_ONLY`; provider orchestration does not change that compatibility boundary.
+
 Evidence-document ordering is also candidate context only. Never classify a chain of files or documents as `DIRECT` merely because the files were supplied together or describe successive roadmap stages.
 
 ## Procedure

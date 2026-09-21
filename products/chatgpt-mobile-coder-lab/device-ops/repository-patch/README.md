@@ -78,6 +78,71 @@ Caller-owned request data is bounded:
 The patch is a separate bounded UTF-8 unified diff. Branch/worktree/base identity
 comes only from D-014/D-013, never from this request.
 
+## Recovery-bound prepared continuation
+
+The normal owner path remains unchanged:
+
+```text
+prepare
+→ optional fixed prepared validation
+→ commit
+→ push
+```
+
+A separately reviewed recovery-rebind manifest may instead use the literal
+`continue-prepared` entrypoint when Phase 8.6.5 preserved exact staged bytes.
+
+This path is intentionally not a generic phase selector. It accepts one strict
+`mcl-repository-prepared-continuation-request.v1` and requires the active D-014
+manifest to bind both the exact prior task manifest and exact effect-recovery
+receipt.
+
+The host classifies the physical Git state before any effect:
+
+```text
+PREPARED
+  HEAD == base
+  remote == base
+  exact staged paths + prepared digest
+  → commit only
+
+COMMITTED
+  HEAD^ == base
+  exact committed paths/digest/message/fixed bot identity
+  remote == base
+  → skip commit, push only
+
+PUSHED
+  same committed proof
+  remote == exact local HEAD
+  → skip commit and push
+```
+
+No PREPARE runs in continuation mode.
+
+The prepared digest is always the SHA-256 of the exact binary Git diff bytes.
+For lower-primitive reuse the host writes those already-proven bytes to a
+restrictive ephemeral patch file and uses the same digest as the ordinary
+primitive request patch hash. The primitive therefore receives truthful patch
+bytes/hash evidence without reapplying them.
+
+The host still requires the fresh process-local workspace-holder claim and
+re-runs current packet/D-013/D-014/holder guards before every missing later
+effect. A continued effect never gains authority from the continuation receipt
+itself.
+
+Lost acknowledgement is fail-safe:
+
+- an exact COMMITTED state suppresses a second commit;
+- an exact PUSHED state suppresses a second push;
+- a third/conflicting remote head, changed digest/path/message/identity, or
+  unresolved state fails closed;
+- missing acknowledgement is never interpreted as proof that an effect did not
+  happen.
+
+The continuation path never reset/restores/stashes/cleans/reapplies the
+workspace, never force-pushes, and never auto-retries.
+
 ## Primitive semantics
 
 ### prepare

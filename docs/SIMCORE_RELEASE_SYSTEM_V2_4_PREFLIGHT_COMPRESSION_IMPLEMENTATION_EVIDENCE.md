@@ -399,3 +399,31 @@ The first `historicalAdminSeal` compatibility projection remains #660.
 The unchanged R2.3 evaluator remains the sole close-eligibility classifier. For SUPERSEDED, the required terminal evidence input is `durableTerminalEvidence=true`; before the seal PR merges, `terminalClosurePrMerged=false` keeps #704 non-close-eligible.
 
 No runtime, publication, release-simcore, polling, chain-walk, issue-controller, or clean-path PR-count change is introduced.
+
+
+## 14. Cleanup-34 — terminal-debt WATCH retirement projection
+
+Cleanup-31, Cleanup-32, and Cleanup-33 independently sealed and post-merge reobserved the complete known historical debt set owned by #691:
+
+```text
+#660 / v0.64.9  = CLOSED / COMPLETED
+#679 / v0.64.10 = CLOSED / COMPLETED
+#704 / v0.64.11 = CLOSED / COMPLETED / SUPERSEDED
+```
+
+The append-only historical ledger remains exactly `[#660, #679, #704]`. No entry is removed or rewritten.
+
+The living R2.4-C projection now retires the active WATCH semantics:
+
+```text
+classification = STABILIZE
+status = HISTORICAL_ADMIN_SEAL_SET_COMPLETE_06409_06410_06411
+issue = 691  # historical/source locator
+openDebtItems = []
+openDebtCount = 0
+watchRetirementEligible = true
+```
+
+This is a living-status convergence only. Historical documents that correctly recorded #691 as WATCH at their original point in time remain untouched. #691 native closure remains downstream of merge and post-merge reobservation. Any future new debt requires fresh evidence and a fresh issue/packet rather than silently reopening this settled watch.
+
+No runtime, publisher, release-simcore, polling, issue-controller, clean-path PR count, or closure-evaluator authority changes.

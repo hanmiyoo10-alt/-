@@ -172,7 +172,9 @@ export async function runSuite({ fixtures }) {
   pass('r24-semantic-assertion-discipline');
 
   const unitC = status.units.find((row) => row.id === 'R2_4_C_DIRECT_PREDECESSOR_TERMINAL_DEBT_SEAL');
-  equal(unitC?.status, 'HISTORICAL_ADMIN_SEALS_PROVEN_06409_06410_06411', 'R2.4-C historical admin seal status');
+  equal(unitC?.classification, 'STABILIZE', 'R2.4-C retired watch classification');
+  equal(unitC?.status, 'HISTORICAL_ADMIN_SEAL_SET_COMPLETE_06409_06410_06411', 'R2.4-C completed historical seal set status');
+  equal(unitC?.issue, 691, 'R2.4-C historical source issue locator');
 
   const compatibility = status.terminalDebt?.historicalAdminSeal;
   equal(compatibility?.workItemIssue, 660, 'compatibility seal must remain #660');
@@ -182,6 +184,11 @@ export async function runSuite({ fixtures }) {
   const ledger = status.terminalDebt?.historicalAdminSeals;
   equal(Array.isArray(ledger), true, 'historical seal ledger missing');
   equal(ledger.length, 3, 'historical seal ledger must contain exactly three separately reviewed entries');
+  deepEqual(status.terminalDebt?.openDebtItems, [], 'resolved historical debt watch still reports open items');
+  equal(status.terminalDebt?.openDebtCount, 0, 'resolved historical debt watch count');
+  equal(status.terminalDebt?.watchRetirementEligible, true, 'resolved historical debt watch not retirement-eligible');
+  equal(status.terminalDebt?.watchIssue, 691, 'historical watch issue locator changed');
+  equal(status.terminalDebt?.watchIssueRole, 'HISTORICAL_SOURCE_LOCATOR', 'watch issue still projected as active authority');
   deepEqual(ledger[0], compatibility, 'first proven #660 seal compatibility projection changed');
 
   const seal679 = ledger[1];
@@ -320,6 +327,12 @@ export async function runSuite({ fixtures }) {
   equal(postMerge704.state, 'TERMINAL_REOBSERVED_CLOSE_ELIGIBLE', '#704 postmerge terminal state');
   equal(postMerge704.closeEligible, true, 'unchanged R2.3 evaluator rejected complete #704 SUPERSEDED seal');
   equal(postMerge704.missingEvidence.length, 0, 'complete #704 seal still missing evidence');
+
+  for (const token of [
+    'Terminal-debt watch retirement after full set convergence',
+    'openDebtItems = []',
+    'watchRetirementEligible = true',
+  ]) assert(design.includes(token) || implementationEvidence.includes(token), `R2.4-C watch retirement evidence missing: ${token}`);
 
   equal(status.objective.newPublisher, 0, 'publisher count changed');
   equal(status.objective.newCleanPathPr, 0, 'clean-path PR count changed');

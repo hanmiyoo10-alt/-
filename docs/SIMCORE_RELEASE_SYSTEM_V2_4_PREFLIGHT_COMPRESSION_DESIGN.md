@@ -390,6 +390,23 @@ The reason is specific and source-backed: v0.64.11 already proved bounded compac
 
 The prior #660 and #679 ledger entries remain semantically unchanged. The per-administrative-PR limit remains one debt item.
 
+### 5.9 Terminal-debt watch retirement after full set convergence
+
+Once every explicitly tracked historical debt item under #691 is independently sealed, post-merge reobserved, and natively closed, R2.4-C no longer needs an active WATCH projection.
+
+The living projection must then record:
+
+```text
+classification = STABILIZE
+status = HISTORICAL_ADMIN_SEAL_SET_COMPLETE_06409_06410_06411
+issue = 691  # historical/source locator only
+openDebtItems = []
+openDebtCount = 0
+watchRetirementEligible = true
+```
+
+Retirement does not delete the ledger, rewrite historical WATCH documents, or prevent a future unrelated terminal-debt finding from opening a fresh issue and packet. It only states that the known #660/#679/#704 debt set has no remaining open instance.
+
 ## 6. R2.4-D — Automation Authority Freeze
 
 Classification:
@@ -507,7 +524,7 @@ release-simcore is unchanged by R2.4 itself
 ```text
 R2.4-A Candidate-Equivalent PR1 Dry Qualification = FIX / DESIGN FROZEN
 R2.4-B Semantic Assertion Discipline = STABILIZE / DESIGN FROZEN
-R2.4-C Direct-Predecessor Terminal Debt Seal = WATCH / HISTORICAL ADMIN SEALS PROVEN FOR #660 + #679 + #704 / ONE ITEM PER TRANSACTION
+R2.4-C Direct-Predecessor Terminal Debt Seal = STABILIZE / HISTORICAL ADMIN SEAL SET COMPLETE FOR #660 + #679 + #704 / NO OPEN DEBT
 R2.4-D Automation Authority Freeze = FREEZE
 
 release engine replacement = NO

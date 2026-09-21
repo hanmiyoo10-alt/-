@@ -9,11 +9,16 @@ import re
 import subprocess
 from pathlib import Path
 
-ROOT = Path('plugins/usage-dashboard')
+LEGACY_ROOT = 'plugins/usage-dashboard'
+TARGET_ROOT = 'plugins/risu/local/usage-dashboard'
+ALLOWED_ROOTS = (LEGACY_ROOT, TARGET_ROOT)
+ACTIVE_ROOT = LEGACY_ROOT
+ROOT = Path(LEGACY_ROOT)
 TOOLS = ROOT / 'tools'
 SRC = ROOT / 'src'
 RUNTIME = ROOT / 'runtime'
 RUNTIME_SRC = ROOT / 'runtime-src'
+TESTS = ROOT / 'tests'
 ENGINE = RUNTIME / 'bridge-engine.mjs'
 MANAGER = RUNTIME / 'bridge-manager.cjs'
 BOOTSTRAP = RUNTIME / 'bootstrap-bridge-manager.sh'
@@ -26,16 +31,52 @@ TRACKED_FILES = [LATEST, GUIDELINES]
 CURRENT_RELEASE_RE = re.compile(r'^Current release implementation: `[^`]+`\.$', re.MULTILINE)
 MANAGER_ENGINE_SHA_RE = re.compile(r"const BUNDLED_ENGINE_SHA256 = '[0-9a-f]{64}';")
 MATERIALIZER_RE = re.compile(r'^plugins/usage-dashboard/tools/[A-Za-z0-9_.-]+\.py$')
-E19_STRUCTURAL_TESTS = [
-    'plugins/usage-dashboard/tests/current-release-contract.cjs',
-    'plugins/usage-dashboard/tests/p5-module-layout.cjs',
-    'plugins/usage-dashboard/tests/p49-release-notes-diagnostic-guidance.cjs',
+E19_STRUCTURAL_TEST_NAMES = [
+    'current-release-contract.cjs',
+    'p5-module-layout.cjs',
+    'p49-release-notes-diagnostic-guidance.cjs',
 ]
+E19_STRUCTURAL_TESTS = [str(TESTS / name) for name in E19_STRUCTURAL_TEST_NAMES]
 E27_FOCUSED_PREFLIGHT = TOOLS / 'release_focused_preflight_e27.cjs'
 
 
 def fail(code: str, detail: str = '') -> None:
     raise SystemExit(f'{code}:{detail}' if detail else code)
+
+
+def normalize_root(value: str) -> str:
+    if not isinstance(value, str) or not value or value.strip() != value:
+        fail('R1B_SOURCE_ROOT_INVALID', str(value or '<empty>'))
+    if '\\' in value or value.startswith('/') or value.endswith('/'):
+        fail('R1B_SOURCE_ROOT_INVALID', value)
+    if any(not part or part in ('.', '..') for part in value.split('/')):
+        fail('R1B_SOURCE_ROOT_INVALID', value)
+    if value not in ALLOWED_ROOTS:
+        fail('R1B_SOURCE_ROOT_UNKNOWN', value)
+    return value
+
+
+def configure_root(value: str) -> str:
+    global ACTIVE_ROOT, ROOT, TOOLS, SRC, RUNTIME, RUNTIME_SRC, TESTS
+    global ENGINE, MANAGER, BOOTSTRAP, MANIFEST, LATEST
+    global TRACKED_ROOTS, TRACKED_FILES, E19_STRUCTURAL_TESTS, E27_FOCUSED_PREFLIGHT
+    ACTIVE_ROOT = normalize_root(value)
+    ROOT = Path(ACTIVE_ROOT)
+    TOOLS = ROOT / 'tools'
+    SRC = ROOT / 'src'
+    RUNTIME = ROOT / 'runtime'
+    RUNTIME_SRC = ROOT / 'runtime-src'
+    TESTS = ROOT / 'tests'
+    ENGINE = RUNTIME / 'bridge-engine.mjs'
+    MANAGER = RUNTIME / 'bridge-manager.cjs'
+    BOOTSTRAP = RUNTIME / 'bootstrap-bridge-manager.sh'
+    MANIFEST = RUNTIME / 'product-manifest.json'
+    LATEST = ROOT / 'latest.js'
+    TRACKED_ROOTS = [SRC, RUNTIME, RUNTIME_SRC]
+    TRACKED_FILES = [LATEST, GUIDELINES]
+    E19_STRUCTURAL_TESTS = [str(TESTS / name) for name in E19_STRUCTURAL_TEST_NAMES]
+    E27_FOCUSED_PREFLIGHT = TOOLS / 'release_focused_preflight_e27.cjs'
+    return ACTIVE_ROOT
 
 
 def run(*args: str) -> None:
@@ -129,7 +170,7 @@ def validate_release_memory_contract(spec_path: Path) -> None:
     env = os.environ.copy()
     env['UD_RELEASE_SPEC'] = spec_path.as_posix()
     result = subprocess.run(
-        ['node', 'plugins/usage-dashboard/tests/current-release-contract.cjs'],
+        ['node', str(TESTS / 'current-release-contract.cjs'), '--root', ACTIVE_ROOT],
         env=env,
         check=False,
     )
@@ -139,16 +180,16 @@ def validate_release_memory_contract(spec_path: Path) -> None:
 
 
 def reconcile_once(spec_path: Path, spec: dict) -> None:
-    run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--write')
-    run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--check')
+    run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--write', '--root', ACTIVE_ROOT)
+    run('node', str(TOOLS / 'build_bridge_engine.cjs'), '--check', '--root', ACTIVE_ROOT)
     sync_manager_engine_hash()
     sync_manifest_hashes()
-    run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--write')
-    run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--check')
+    run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--write', '--root', ACTIVE_ROOT)
+    run('node', str(TOOLS / 'build_usage_dashboard.cjs'), '--check', '--root', ACTIVE_ROOT)
     sync_release_memory(spec)
-    run('python3', str(TOOLS / 'sync_project_guidelines.py'))
+    run('python3', str(TOOLS / 'sync_project_guidelines.py'), '--root', ACTIVE_ROOT)
     validate_identity(spec)
-    run('python3', str(TOOLS / 'validate_release_candidate.py'), '--spec', str(spec_path))
+    run('python3', str(TOOLS / 'validate_release_candidate.py'), '--spec', str(spec_path), '--root', ACTIVE_ROOT)
     validate_release_memory_contract(spec_path)
 
 
@@ -178,9 +219,9 @@ def assert_declared_materializer_second_pass(spec: dict) -> None:
     materializer_text = str(spec.get('materializer') or '')
     if not MATERIALIZER_RE.fullmatch(materializer_text):
         fail('E19_MATERIALIZER_PATH_DENIED', materializer_text or '<missing>')
-    materializer = Path(materializer_text)
+    materializer = TOOLS / Path(materializer_text).name
     if not materializer.is_file():
-        fail('E19_MATERIALIZER_MISSING', materializer_text)
+        fail('E19_MATERIALIZER_MISSING', materializer.as_posix())
 
     before_tree = candidate_tree_sha()
     before_critical = {
@@ -209,7 +250,7 @@ def run_shift_left_structural_gates(spec_path: Path) -> None:
     env['UD_RELEASE_SPEC'] = spec_path.as_posix()
     passed = []
     for test in E19_STRUCTURAL_TESTS:
-        result = subprocess.run(['node', test], env=env, check=False)
+        result = subprocess.run(['node', test, '--root', ACTIVE_ROOT], env=env, check=False)
         if result.returncode != 0:
             fail('E19_STRUCTURAL_GATE_REJECTED', test)
         passed.append(Path(test).name)
@@ -220,7 +261,7 @@ def run_e27_focused_preflight(spec_path: Path) -> None:
     if not E27_FOCUSED_PREFLIGHT.is_file():
         fail('E27_FOCUSED_PREFLIGHT_MISSING')
     result = subprocess.run(
-        ['node', str(E27_FOCUSED_PREFLIGHT), '--spec', spec_path.as_posix()],
+        ['node', str(E27_FOCUSED_PREFLIGHT), '--spec', spec_path.as_posix(), '--root', ACTIVE_ROOT],
         env=os.environ.copy(),
         check=False,
     )
@@ -232,9 +273,11 @@ def run_e27_focused_preflight(spec_path: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description='Reconcile generated Local Usage Dashboard release candidate state.')
     parser.add_argument('--spec', required=True, help='release spec path under .github/usage-dashboard/releases')
+    parser.add_argument('--root', default=LEGACY_ROOT, help='candidate source root; R1B allows only legacy or Local target roots')
     parser.add_argument('--two-pass', action='store_true', help='prove declared materializer + reconciliation are idempotent and run E19/E27 shift-left gates')
     args = parser.parse_args()
 
+    configure_root(args.root)
     spec_path = Path(args.spec)
     if not re.fullmatch(r'\.github/usage-dashboard/releases/[A-Za-z0-9._-]+\.json', spec_path.as_posix()):
         fail('RECONCILE_SPEC_PATH_DENIED', spec_path.as_posix())

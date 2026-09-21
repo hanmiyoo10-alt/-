@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 
-const {ALLOWLIST} = require('./promote_release_blobs.cjs');
+const {LEGACY_ROOT, TARGET_ROOT, artifactPathsForRoot} = require('./release_path_profile.cjs');
+const {ALLOWLIST, assertMirrorState} = require('./promote_release_blobs.cjs');
 
 async function api(repository, endpoint, token) {
   const response = await fetch(`https://api.github.com/repos/${repository}${endpoint}`, {
@@ -17,29 +18,57 @@ async function api(repository, endpoint, token) {
   return text ? JSON.parse(text) : {};
 }
 
-async function blobMap(repository, ref, token) {
+async function treeMap(repository, ref, token) {
   const commit = await api(repository, `/git/commits/${encodeURIComponent(ref)}`, token);
   const tree = await api(repository, `/git/trees/${commit.tree.sha}?recursive=1`, token);
-  const entries = new Map((tree.tree || []).map((entry) => [entry.path, entry]));
+  return new Map((tree.tree || []).map((entry) => [entry.path, entry]));
+}
+
+function blobMapFromTree(entries, root = LEGACY_ROOT, {allowMissing = false} = {}) {
   const result = {};
-  for (const path of ALLOWLIST) {
-    const entry = entries.get(path);
-    if (!entry || entry.type !== 'blob' || !entry.sha) throw new Error(`PARITY_ARTIFACT_MISSING:${ref}:${path}`);
-    result[path] = entry.sha;
+  for (const artifactPath of artifactPathsForRoot(root)) {
+    const entry = entries.get(artifactPath);
+    if (!entry || entry.type !== 'blob' || !entry.sha) {
+      if (allowMissing) continue;
+      throw new Error(`PARITY_ARTIFACT_MISSING:${artifactPath}`);
+    }
+    result[artifactPath] = entry.sha;
   }
   return result;
 }
 
+async function blobMap(repository, ref, token, root = LEGACY_ROOT, options = {}) {
+  const entries = await treeMap(repository, ref, token);
+  try {
+    return blobMapFromTree(entries, root, options);
+  } catch (error) {
+    if (String(error?.message || '').startsWith('PARITY_ARTIFACT_MISSING:')) {
+      const artifactPath = String(error.message).slice('PARITY_ARTIFACT_MISSING:'.length);
+      throw new Error(`PARITY_ARTIFACT_MISSING:${ref}:${artifactPath}`);
+    }
+    throw error;
+  }
+}
+
+function asBlobObjects(shaMap) {
+  return Object.fromEntries(Object.entries(shaMap || {}).map(([path, sha]) => [path, {sha}]));
+}
+
 async function check({repository,candidateSha,releaseBranch,token}) {
-  const candidate = await blobMap(repository, candidateSha, token);
+  const candidate = await blobMap(repository, candidateSha, token, LEGACY_ROOT);
   const branch = await api(repository, `/branches/${encodeURIComponent(releaseBranch)}`, token);
   const releaseSha = String(branch?.commit?.sha || '');
   if (!releaseSha) throw new Error('PARITY_RELEASE_REF_MISSING');
-  const release = await blobMap(repository, releaseSha, token);
-  const changed = ALLOWLIST.filter((path) => candidate[path] !== release[path]);
+
+  const releaseEntries = await treeMap(repository, releaseSha, token);
+  const release = blobMapFromTree(releaseEntries, LEGACY_ROOT);
+  const target = blobMapFromTree(releaseEntries, TARGET_ROOT, {allowMissing:true});
+  const mirror = assertMirrorState(asBlobObjects(release), asBlobObjects(target));
+
+  const changed = ALLOWLIST.filter((artifactPath) => candidate[artifactPath] !== release[artifactPath]);
   if (changed.length) throw new Error(`WOULD_PROMOTE_OR_DIVERGE:${changed.join(',')}`);
-  console.log(`WOULD_NOOP_IDENTICAL:${candidateSha}:release=${releaseSha}`);
-  return {candidateSha,releaseSha};
+  console.log(`WOULD_NOOP_IDENTICAL:${candidateSha}:release=${releaseSha}:mirror=${mirror.state}`);
+  return {candidateSha,releaseSha,mirrorState:mirror.state};
 }
 
 async function main() {
@@ -53,5 +82,5 @@ async function main() {
   await check({repository,candidateSha,releaseBranch,token});
 }
 
-module.exports = {blobMap,check};
+module.exports = {treeMap,blobMapFromTree,blobMap,asBlobObjects,check};
 if (require.main === module) main().catch((error)=>{ console.error(error?.stack || String(error)); process.exitCode=1; });

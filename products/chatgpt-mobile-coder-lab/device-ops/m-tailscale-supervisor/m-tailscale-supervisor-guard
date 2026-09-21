@@ -26,6 +26,7 @@ LOCKDIR="$STATE/guard.lock"
 PIDFILE="$STATE/guard.pid"
 EVENTS="$STATE/events.log"
 RUNSV_LOG="$STATE/runsv.log"
+LAUNCHER="$HOME_DIR/.termux/boot/32-mcl-m-tailscale-supervisor-guard"
 SUPERVISION=unknown
 DAEMON=unknown
 read_state() {
@@ -108,6 +109,10 @@ emit_check() {
 log_event() {
     mkdir -p "$STATE"
     printf '%s\n' "$1" >> "$EVENTS"
+}
+ensure_anchor() {
+    [ -f "$LAUNCHER" ] && [ ! -L "$LAUNCHER" ] && [ -x "$LAUNCHER" ] || return 1
+    "$LAUNCHER" --ensure-anchor >/dev/null 2>&1
 }
 
 restore_supervisor() {
@@ -222,6 +227,7 @@ case "${1:-}" in
         log_event 'guard=started'
         while :; do
             restore_supervisor || true
+            ensure_anchor || true
             "$SLEEP" "$INTERVAL"
         done
         ;;

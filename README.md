@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | Local Usage Dashboard | `plugins/usage-dashboard/` | `release-usage-dashboard` + `.github/usage-dashboard/releases/` | `plugin:usage-dashboard` |
 | SimCore | `plugins/simcore/` | `product-manifest.json` + `release-simcore` | `plugin:simcore` |
-| DevPass | `plugins/devpass/` | declared `plugins/devpass/latest.js` update channel; missing authority remains `UNKNOWN` | `plugin:devpass` |
+| DevPass | `plugins/risu/local/devpass/` | fixed `plugins/devpass/latest.js` update channel; artifact is currently missing and production version remains `UNKNOWN` | `plugin:devpass` |
 | Termux Large Doc Editor | `plugins/termux/large-doc-editor/` | prototype evidence only; no production authority | `plugin:termux-large-doc-editor` |
 
 `plugins/_template/`은 template scope, `plugins/test-a/`와 `plugins/test-b/`는 test-fixture scope로 분류하며 운영 플러그인으로 취급하지 않습니다.
@@ -25,7 +25,11 @@ PR은 changed path로 자동 분류하고, 이슈는 명시적인 Plugin 필드�
 
 ```text
 plugins/
-  devpass/
+  devpass/                 # fixed DevPass update-channel compatibility root
+  risu/
+    local/
+      devpass/             # DevPass canonical project/evidence
+      voyage/              # Voyage canonical design/evidence
   simcore/
     latest.js
     install.js

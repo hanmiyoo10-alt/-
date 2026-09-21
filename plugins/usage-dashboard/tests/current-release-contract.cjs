@@ -1,14 +1,18 @@
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const {spawnSync} = require('node:child_process');
-const {loadCurrentRelease, assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const path = require('node:path');
+const {normalizeSourceRoot, loadCurrentRelease, assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 
-const release = assertCurrentReleaseArtifacts();
+const rootIndex = process.argv.indexOf('--root');
+const sourceRoot = normalizeSourceRoot(rootIndex >= 0 ? process.argv[rootIndex + 1] : undefined);
+const release = loadCurrentRelease(sourceRoot);
+assertCurrentReleaseArtifacts(release, sourceRoot);
 const guidelines = fs.readFileSync('docs/USAGE_DASHBOARD_GUIDELINES.md', 'utf8');
 const caller = fs.readFileSync(release.callerWorkflow, 'utf8');
 const validator = fs.readFileSync(release.validatorWorkflow, 'utf8');
 const publisher = fs.readFileSync(release.publisherWorkflow, 'utf8');
-const resolver = fs.readFileSync('plugins/usage-dashboard/tools/resolve_release_spec.cjs', 'utf8');
+const resolver = fs.readFileSync(path.posix.join(sourceRoot, 'tools/resolve_release_spec.cjs'), 'utf8');
 
 assert.ok(guidelines.includes(release.currentMemory));
 const evidence = release.evidenceView;
@@ -50,10 +54,11 @@ assert.ok(resolver.includes('RELEASE_SPEC_NOT_FOUND'));
 assert.ok(resolver.includes('RELEASE_SPEC_MANIFEST_MISMATCH'));
 assert.ok(resolver.includes('RELEASE_SPEC_AMBIGUOUS'));
 
-const loadedAgain = loadCurrentRelease();
+const loadedAgain = loadCurrentRelease(sourceRoot);
 assert.deepEqual(loadedAgain, release);
 
-const denied = spawnSync(process.execPath, ['-e', "require('./plugins/usage-dashboard/tests/helpers/current-release.cjs').loadCurrentRelease()"], {
+const helperModule = `./${path.posix.join(sourceRoot, 'tests/helpers/current-release.cjs')}`;
+const denied = spawnSync(process.execPath, ['-e', `require(${JSON.stringify(helperModule)}).loadCurrentRelease(${JSON.stringify(sourceRoot)})`], {
   cwd:process.cwd(),
   encoding:'utf8',
   env:{...process.env,UD_RELEASE_SPEC:'../outside-release-spec.json'},

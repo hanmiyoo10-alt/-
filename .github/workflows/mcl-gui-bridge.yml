@@ -1,0 +1,53 @@
+name: MCL GUI Bridge
+
+on:
+  pull_request:
+    paths:
+      - 'products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/**'
+      - 'products/chatgpt-mobile-coder-lab/docs/device-routing.md'
+      - 'products/chatgpt-mobile-coder-lab/docs/decisions.md'
+      - '.github/workflows/mcl-gui-bridge.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/**'
+      - 'products/chatgpt-mobile-coder-lab/docs/device-routing.md'
+      - 'products/chatgpt-mobile-coder-lab/docs/decisions.md'
+      - '.github/workflows/mcl-gui-bridge.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Set up Java
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          gradle-version: '8.9'
+      - name: Python CLI and contract tests
+        run: python3 -m unittest discover -s products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/tests -v
+      - name: Android JVM unit tests
+        run: gradle -p products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/android-companion :app:testDebugUnitTest
+      - name: Build debug APK
+        run: gradle -p products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/android-companion :app:assembleDebug
+      - name: Upload debug APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mcl-gui-bridge-debug-apk
+          path: products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/android-companion/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

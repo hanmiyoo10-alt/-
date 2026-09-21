@@ -1,6 +1,6 @@
 # CURRENT — App API Mod Lab
 
-최종 갱신 기준: **2026-09-11**
+최종 갱신 기준: **2026-09-20**
 
 새 작업이나 새 채팅에서 이 제품 범위로 들어올 때 먼저 읽는 현재 상태 체크포인트다.
 
@@ -10,11 +10,16 @@
 
 - 독립 제품 루트: `products/app-api-mod-lab/`
 - 목적: 향후 앱/API 개조 작업의 격리된 설계·구현·검증 기준점
-- 특정 대상 앱: `UNASSIGNED`
-- 특정 upstream/source repository: `UNASSIGNED`
-- 특정 API surface: `UNASSIGNED`
+- active concrete target: `chzzk`
+- active target upstream/service authority: `NAVER CHZZK external service`
+- active target API surface: `public anonymous read-only playback reconnaissance`
+- active target category: `streaming`
 - production/runtime/deployment/release authority: `NONE DECLARED`
 - durable-memory profile: `check-only`
+- target taxonomy contract: `ecosystem + kind + category` metadata over stable `targets/<ecosystem>/<target-id>/` paths
+- concrete targets: `2` — `targets/standalone/chzzk/`, `targets/standalone/fortune-golf/`
+- legacy candidates: `0` — all currently inventoried legacy candidates have been materialized
+- legacy candidate inventory: `legacy-candidates.json` + `validate-legacy-candidates.mjs`
 
 이 상태에서 repository registration은 ownership locator와 작업 시작점을 제공할 뿐, 특정 앱이나 API에 대한 권한·배포 상태·릴리스 진실을 생성하지 않는다.
 
@@ -35,11 +40,12 @@
 
 ## 다음 한 단계
 
-첫 앱/API 개조 요청이 들어오면 해당 대상의 authority와 코드/API surface를 조사해서 이 루트 안에 **대상별 bounded work area**를 만든 뒤 구현 범위를 잠근다.
+CHZZK는 active research target으로 유지된다. Fortune Golf는 #2602에 따라 `targets/standalone/fortune-golf/`로 materialize되었고 legacy branch의 target-owned source/docs/tools가 target-local layout으로 보존되었다. #2606은 target-specific APK/web build workflow를 canonical target source에 연결해 build/unit/artifact evidence를 다시 세우는 패킷이다. 이 workflow 검증이 완료되어도 current game/device compatibility는 별도 user-held-input device experiment 전까지 미검증 상태다.
 
 ## 아직 완료로 간주하지 않는 것
 
-- 특정 앱/API 구현: 시작 전
-- 실제 runtime probe: 대상 미지정
-- regression/runtime validation: 대상 미지정
+- CHZZK concrete target root: materialized; endpoint/runtime implementation은 시작 전
+- Fortune Golf concrete target root: materialized; runtime status는 `PARTIAL_HISTORICAL_EVIDENCE`, current compatibility는 미검증
+- 실제 runtime probe: CHZZK `UNVERIFIED_RUNTIME`
+- regression/runtime validation: fresh sanitized anonymous CHZZK flow 필요
 - deployment/release: authority 없음

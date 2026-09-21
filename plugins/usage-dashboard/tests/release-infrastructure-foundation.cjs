@@ -2,6 +2,8 @@ const fs = require('node:fs');
 const assert = require('node:assert/strict');
 
 const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
+const promoter = require('../tools/promote_release_blobs.cjs');
+const {DEFAULT_PROFILE, artifactPathsForRoot} = require('../tools/release_path_profile.cjs');
 const currentRelease = assertCurrentReleaseArtifacts();
 const specPath = currentRelease.specPath;
 const validatorPath = currentRelease.validatorWorkflow;
@@ -66,13 +68,15 @@ for (const forbidden of ['repo-main-write.py','PAYLOAD_COMMIT','git push','git s
 for (const marker of ['force:false','RELEASE_REF_MOVED','RELEASE_BLOB_IDENTITY_MISMATCH','RELEASE_RUNTIME_SOURCE_PRESENT','UNEXPECTED_RELEASE_PATHS','SAME_VERSION_ARTIFACT_DIVERGENCE']) {
   assert.ok(promoterTool.includes(marker), `promoter must retain ${marker}`);
 }
-for (const path of [
+assert.match(promoterTool, /require\('\.\/release_path_profile\.cjs'\)/);
+assert.deepEqual(promoter.ALLOWLIST, [
   'plugins/usage-dashboard/latest.js',
   'plugins/usage-dashboard/runtime/bridge-engine.mjs',
   'plugins/usage-dashboard/runtime/bridge-manager.cjs',
   'plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh',
   'plugins/usage-dashboard/runtime/product-manifest.json',
-]) assert.ok(promoterTool.includes(`'${path}'`));
+]);
+assert.deepEqual(promoter.ALLOWLIST, artifactPathsForRoot(DEFAULT_PROFILE.sourceRoot));
 
 for (const marker of ['RELEASE_SPEC_NOT_FOUND','RELEASE_SPEC_MANIFEST_MISMATCH','RELEASE_SPEC_AMBIGUOUS']) assert.ok(resolver.includes(marker));
 assert.equal(fs.existsSync('.github/workflows/reusable-usage-dashboard-release.yml'), false, 'legacy rebuild/copy publisher must be retired');

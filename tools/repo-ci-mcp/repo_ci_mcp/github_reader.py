@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
+import re
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -16,6 +19,10 @@ DEFAULT_TIMEOUT_SECONDS = 20.0
 
 class GitHubReadError(RuntimeError):
     """Bounded read-only GitHub transport failure."""
+
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class _SafeRedirectHandler(HTTPRedirectHandler):
@@ -119,7 +126,9 @@ class GitHubReader:
         except GitHubReadError:
             raise
         except HTTPError as exc:
-            raise GitHubReadError(f"GitHub HTTP {exc.code}: {self._redact(exc.reason)}") from None
+            raise GitHubReadError(
+                f"GitHub HTTP {exc.code}: {self._redact(exc.reason)}", status_code=exc.code
+            ) from None
         except URLError as exc:
             raise GitHubReadError(f"GitHub transport error: {self._redact(exc.reason)}") from None
         except OSError as exc:
@@ -138,6 +147,19 @@ class GitHubReader:
             raise GitHubReadError("GitHub JSON response root must be an object")
         return value
 
+    def _branch_name(self, branch: str) -> str:
+        if not isinstance(branch, str) or not branch or len(branch) > 200 or any(ch in branch for ch in "\r\n\x00"):
+            raise GitHubReadError("branch must be a non-empty string <= 200 characters")
+        return branch
+
+    def get_branch(self, branch: str) -> dict[str, Any]:
+        name = self._branch_name(branch)
+        return self._get_json(f"{self._repo_api_prefix}/branches/{quote(name, safe='')}")
+
+    def get_branch_protection(self, branch: str) -> dict[str, Any]:
+        name = self._branch_name(branch)
+        return self._get_json(f"{self._repo_api_prefix}/branches/{quote(name, safe='')}/protection")
+
     def get_run(self, run_id: int) -> dict[str, Any]:
         return self._get_json(f"{self._repo_api_prefix}/actions/runs/{run_id}")
 
@@ -150,6 +172,21 @@ class GitHubReader:
         if not isinstance(runs, list):
             raise GitHubReadError("workflow_runs must be an array")
         return [item for item in runs if isinstance(item, dict)]
+
+    def list_runs_exact_sha(self, commit_sha: str) -> tuple[int, list[dict[str, Any]]]:
+        if not isinstance(commit_sha, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha):
+            raise GitHubReadError("commit_sha must be a full 40-hex SHA")
+        value = self._get_json(
+            f"{self._repo_api_prefix}/actions/runs",
+            {"head_sha": commit_sha.lower(), "per_page": 100},
+        )
+        total = value.get("total_count")
+        runs = value.get("workflow_runs")
+        if isinstance(total, bool) or not isinstance(total, int) or total < 0:
+            raise GitHubReadError("workflow_runs total_count must be a non-negative integer")
+        if not isinstance(runs, list):
+            raise GitHubReadError("workflow_runs must be an array")
+        return total, [item for item in runs if isinstance(item, dict)]
 
     def list_jobs(self, run_id: int) -> tuple[int, list[dict[str, Any]]]:
         value = self._get_json(
@@ -171,3 +208,70 @@ class GitHubReader:
             return raw.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise GitHubReadError(f"job log UTF-8 decode failed: {self._redact(exc)}") from None
+
+
+    def resolve_commit(self, ref: str) -> str:
+        if not isinstance(ref, str) or not ref or len(ref) > 200:
+            raise GitHubReadError("ref must be a non-empty string <= 200 characters")
+        value = self._get_json(f"{self._repo_api_prefix}/commits/{quote(ref, safe='')}")
+        sha = value.get("sha")
+        if not isinstance(sha, str) or len(sha) != 40:
+            raise GitHubReadError("resolved commit sha is invalid")
+        if any(ch not in "0123456789abcdef" for ch in sha.lower()):
+            raise GitHubReadError("resolved commit sha is invalid")
+        return sha
+
+    def get_repository_file(self, path: str, commit_sha: str, *, max_bytes: int) -> dict[str, Any]:
+        if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes <= 0:
+            raise ValueError("max_bytes must be a positive integer")
+        encoded_path = "/".join(quote(part, safe="") for part in path.split("/"))
+        value = self._get_json(
+            f"{self._repo_api_prefix}/contents/{encoded_path}",
+            {"ref": commit_sha},
+        )
+        if value.get("type") != "file":
+            raise GitHubReadError("repository content is not a file")
+        size = value.get("size")
+        if isinstance(size, bool) or not isinstance(size, int) or size < 0:
+            raise GitHubReadError("repository file size is invalid")
+        if size > max_bytes:
+            raise GitHubReadError(f"repository file exceeds {max_bytes} byte bound")
+        blob_sha = value.get("sha")
+        if not isinstance(blob_sha, str) or len(blob_sha) != 40:
+            raise GitHubReadError("repository blob sha is invalid")
+        if value.get("encoding") != "base64" or not isinstance(value.get("content"), str):
+            raise GitHubReadError("repository file content is not available as base64")
+        encoded = "".join(value["content"].split())
+        try:
+            raw = base64.b64decode(encoded, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise GitHubReadError(f"repository file base64 decode failed: {self._redact(exc)}") from None
+        if len(raw) > max_bytes:
+            raise GitHubReadError(f"repository file exceeds {max_bytes} byte bound")
+        if len(raw) != size:
+            raise GitHubReadError("repository file decoded size does not match metadata")
+        return {"content": raw, "blob_sha": blob_sha, "size": size}
+
+    def compare_changed_paths(self, before_sha: str, after_sha: str) -> tuple[list[str], bool]:
+        for name, value in (("before_sha", before_sha), ("after_sha", after_sha)):
+            if not isinstance(value, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", value):
+                raise GitHubReadError(f"{name} must be a full 40-hex SHA")
+        before = before_sha.lower()
+        after = after_sha.lower()
+        value = self._get_json(f"{self._repo_api_prefix}/compare/{before}...{after}")
+        base = value.get("base_commit")
+        merge_base = value.get("merge_base_commit")
+        status = value.get("status")
+        if not isinstance(base, dict) or base.get("sha") != before:
+            raise GitHubReadError("compare base identity mismatch")
+        if not isinstance(merge_base, dict) or merge_base.get("sha") != before or status not in {"ahead", "identical"}:
+            raise GitHubReadError("compare transition is not an ancestor transition")
+        files = value.get("files")
+        if not isinstance(files, list):
+            raise GitHubReadError("compare files must be an array")
+        paths: list[str] = []
+        for item in files:
+            if not isinstance(item, dict) or not isinstance(item.get("filename"), str):
+                raise GitHubReadError("compare file metadata is invalid")
+            paths.append(item["filename"])
+        return paths, len(paths) < 300

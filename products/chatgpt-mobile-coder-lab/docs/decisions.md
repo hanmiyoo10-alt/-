@@ -190,3 +190,177 @@ ChatGPT의 모바일 plugin/MCP 지원, 요금제, Codex usage 정책 등은 이
 Android 외부 앱의 arbitrary Termux command 실행 권한을 넓히는 것보다 기존 runit/RDC 실행 owner 안에 sibling endpoint를 추가하는 편이 더 좁은 권한·효과 표면이다.
 
 기존 `S` endpoint를 교체하면 이미 검증된 `/root/...` 개발 흐름을 흔들 수 있으므로 병존 구조를 사용한다.
+
+## D-012 - 실행 surface는 semantic requirement로 먼저 선택한다
+
+상태: `ACTIVE`
+
+### 결정
+
+Mobile Coder Lab의 S/M 작업은 현재 online/dirty/readiness 상태보다 먼저 작업의 semantic requirement를 분류한다. Durable v1 routing policy는 [`device-routing.md`](device-routing.md)가 소유한다.
+
+일반 device-agnostic repository 작업은 S Ubuntu PRoot를 기본 선호 surface로 사용하되, D-001/D-002에 따라 M도 합법적인 explicit target/fallback으로 유지한다. S-Termux, M PRIVATE LAB, M VM LAB, S device-local private execution처럼 문맥 자체가 필요한 작업은 그 owner로만 라우팅하며, target이 unavailable하다는 이유로 다른 semantic context로 조용히 우회하지 않는다.
+
+`sm-status`와 owner preflight는 route 선택 뒤의 현재 상태 evidence일 뿐 routing authority가 아니다. 여러 execution context가 필요한 작업은 phase별로 나누고, routing policy 자체는 dispatcher, lease, runtime truth, Git/CI/main-write/release/production authority를 소유하지 않는다.
+
+### 이유
+
+현재 S/M 구조는 두 독립 repository worker와 별도 native-Termux/lab owners를 함께 보존한다. Semantic routing과 current status를 분리해야 기존 owner를 침범하지 않으면서도 반복 가능한 device 선택 정책을 유지할 수 있다.
+
+## D-013 — S/M mutable work uses a separate coordination lease, not routing or health as ownership
+
+상태: `ACTIVE`
+
+### 결정
+
+Mobile Coder Lab에서 병렬 mutable work의 예약은 [`task-lease.md`](task-lease.md)의 MCL-only coordination lease가 소유한다.
+
+Lease는 semantic routing이나 current status를 대체하지 않는다. Repository 작업에서는 먼저 기존 canonical-main Work System의 packet/PR write-scope overlap을 `DISJOINT`로 증명한 뒤 lease를 획득하고, 실제 mutation 직전에도 기존 Git/worktree/currentness guard를 다시 적용한다.
+
+같은 S 또는 M에서도 서로 다른 packet, disjoint scope, 다른 isolated workspace라면 별도 lease로 병렬 작업할 수 있다. 물리 기기 전체를 잠그지 않는다.
+
+V1 lease는 explicit acquire/release와 generation만 사용한다. TTL, inactivity takeover, age-based supersession은 authority가 아니다.
+
+### 이유
+
+`device-routing.md`는 작업의 semantic execution surface를 선택하고 `sm-status`/device owner는 현재 상태를 관찰하지만, 어느 worker가 지금 특정 mutable scope/workspace를 예약했는지는 소유하지 않는다.
+
+이 세 축을 분리해야 routing/status evidence를 write authority로 승격하지 않으면서 두 독립 worker의 중복 claim을 막을 수 있다.
+## D-014 — S/M phase handoff uses immutable manifests and completion receipts
+
+상태: `ACTIVE`
+
+### 결정
+
+Mobile Coder Lab의 독립 S/M worker 사이 phase continuity는 [`task-handoff.md`](task-handoff.md)의 immutable `TASK_MANIFEST` + `COMPLETION_RECEIPT` contract가 소유한다.
+
+Manifest는 exact packet-body snapshot, semantic route/executor, normalized scope, workspace, bounded authority/input/output expectations, 그리고 필요한 경우 D-013 lease acquisition evidence를 기록한다. Completion receipt는 같은 manifest의 bounded phase result와 validation/output evidence를 연결하며, mutable phase에서는 matching lease release evidence 뒤에만 유효하다.
+
+이 contract는 Work System packet lifecycle/`DONE`, Work Harness Work Record/Coordination Receipt, D-012 routing, D-013 reservation, Git currentness, CI, merge, release, production authority를 대체하지 않는다. `COMPLETE`는 해당 semantic phase의 evidence disposition일 뿐 whole packet completion이 아니다.
+
+V1은 deterministic immutable envelope만 제공하며 새 workflow writer, central task DB, scheduler/dispatcher, TTL/latest-wins semantics를 추가하지 않는다. Durable GitHub transport가 필요하면 owning packet의 append-only comment를 선호하고 packet body는 lifecycle/close-sync projection으로 남긴다.
+
+### 이유
+
+두 독립 worker가 대화 기억이나 shared mutable filesystem 없이 작업을 넘기려면 exact phase context와 result provenance가 필요하지만, 이를 mutable task truth로 만들면 이미 존재하는 Work System/Harness/routing/lease authority와 충돌한다. Immutable phase evidence로 한정하면 handoff 복구성을 높이면서 기존 owner 경계를 보존할 수 있다.
+
+## D-015 — Android GUI host automation is a separate allowlisted MCL route
+
+상태: `ACTIVE`
+
+### 결정
+
+일반 ChatGPT가 물리 서버폰 S의 ChatGPT Android UI를 관찰하거나 제한적으로 조작해야 하는 작업은 `S_ANDROID_GUI` semantic route로 분리한다.
+
+기본 구성은 다음이다.
+
+```text
+ordinary ChatGPT
+→ existing S-Termux RDC transport
+→ MCL mcl-gui
+→ MCL Android GUI companion
+→ allowlisted com.openai.chatgpt UI
+```
+
+`S-Termux`는 transport일 뿐 GUI authority가 아니다. GUI effect owner는 `products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/**`이고, repository source 변경은 계속 ordinary `S` route의 isolated `server/*` worktree에서 수행한다.
+
+V1은 Android AccessibilityService의 semantic node action과 exact-window screenshot만 허용한다. 대상 package는 `com.openai.chatgpt`로 고정하며 raw-coordinate gesture, Playwright/DOM automation, MediaProjection, network-exposed GUI control, clipboard/history 수집, login/password/account automation을 추가하지 않는다.
+
+AccessibilityService는 사용자가 disclosure를 확인한 뒤 Android Settings에서 직접 활성화해야 한다. 잠금, secure window, permission 부재, stale snapshot, ambiguous node, peer identity 불일치는 성공으로 추론하지 않고 명시적으로 block한다.
+
+### 이유
+
+Repository/shell evidence로는 ChatGPT host/client UI 자체에 표시되는 상태를 증명할 수 없는 작업이 있다. 기존 RDC를 포크하거나 TaskBridge companion의 권한을 확대하는 대신, 별도의 좁은 Android GUI owner를 두면 일반 ChatGPT 중심 운영을 유지하면서도 GUI 효과와 privacy/security 경계를 독립적으로 검증할 수 있다. 이 route의 존재는 live readiness나 cloud continuation을 의미하지 않는다.
+
+## D-016 — Wireless ADB UI reading uses an M-local bounded receipt adapter
+
+상태: `ACTIVE`
+
+### 결정
+
+S의 ChatGPT Android UI를 **읽기 전용으로** 관찰해야 하고, 별도 Android companion 설치 없이 이미 사용자가 승인한 Wireless ADB 연결을 사용할 수 있는 경우 `S_ANDROID_GUI_ADB_READ` route를 사용한다.
+
+기본 구성은 다음이다.
+
+```text
+ordinary ChatGPT
+→ RDC M
+→ M Termux mcl-adb-ui
+→ already user-paired Wireless ADB
+→ S uiautomator hierarchy
+→ M-local parser
+→ bounded receipt
+```
+
+raw hierarchy는 M 내부에서만 처리하고 ordinary ChatGPT에는 고정된 bounded receipt만 전달한다. 대상은 `SM-G998N` 한 대와 `com.openai.chatgpt` package로 제한하며, ADB serial/IP/port/pairing material, 전체 UI text, conversation body, account/credential-like node는 정상 receipt에 포함하지 않는다.
+
+V1은 `status / snapshot / find-action / find-editable` read-only surface만 소유한다. click/tap/text input, arbitrary `adb shell`, caller-selected serial/path, package install/uninstall, Android settings write, backup/app-private-data read, Play Protect/security-control 변경은 허용하지 않는다.
+
+Wireless Debugging 활성화와 pairing은 사용자 승인 Android state이며 이 owner가 자동으로 만들거나 복구하지 않는다. 연결 실패, 다중 target, model mismatch, raw hierarchy 처리 실패, current tool boundary 차단은 더 강한 상태로 추론하지 않고 `offline / ambiguous / unknown / blocked`로 보존한다.
+
+### 이유
+
+#2452 capability probe에서 M→S Wireless ADB 연결, S model 확인, screenshot, `uiautomator dump` 생성은 검증됐지만 raw hierarchy 자체를 ChatGPT/RDC surface로 가져오는 단계는 platform tool boundary에 막혔다. M 안에서 hierarchy를 파싱하고 필요한 의미 정보만 receipt로 축약하면 그 boundary를 우회하지 않으면서도 read-only GUI evidence를 얻을 수 있다. Action capability는 별도 reviewed packet 전까지 증명하거나 암묵적으로 허용하지 않는다.
+
+## D-017 — Wireless ADB GUI action is a separate stale-guarded semantic route
+
+상태: `ACTIVE`
+
+### 결정
+
+이미 사용자가 승인한 M→S Wireless ADB 연결을 통해 물리 S의 ChatGPT Android UI에 제한된 GUI effect가 필요한 경우 `S_ANDROID_GUI_ADB_ACTION` route를 사용한다.
+
+기본 구성은 다음이다.
+
+```text
+ordinary ChatGPT
+→ RDC M
+→ M Termux mcl-adb-ui
+→ already user-paired Wireless ADB
+→ fresh S uiautomator hierarchy
+→ M-local semantic handle revalidation
+→ internally derived bounded input primitive
+→ bounded receipt
+```
+
+이 route는 D-016의 `S_ANDROID_GUI_ADB_READ`를 대체하지 않는다. D-016은 read-only evidence owner로 남고, action effect는 별도 reviewed command/receipt에서만 발생한다.
+
+V1 action은 다음으로 제한한다.
+
+- fixed package `com.openai.chatgpt` launch;
+- repository-owned `new_chat|send` alias lookup;
+- fresh snapshot + opaque handle 재검증 뒤 내부 bounds에서 파생한 one-point tap;
+- 1..160자의 영문/숫자/underscore/공백 ASCII만 입력;
+- 빈 editor → focus → exact post-entry text verification;
+- bounded exact visible text wait.
+
+caller가 x/y 좌표, ADB serial, remote path, package/component/action/category 또는 arbitrary shell command를 전달하는 surface는 두지 않는다. node bounds와 파생 좌표는 M-local 내부 상태이며 정상 receipt로 내보내지 않는다.
+
+stale snapshot, missing/ambiguous handle, invalid bounds, non-empty editor, focus 검증 실패, exact post-entry 검증 실패는 더 넓은 입력 방식으로 fallback하지 않고 effect를 차단한다.
+
+명시적으로 제외한다: swipe/gesture/keyevent/clipboard/paste, login/account/unlock/PIN/password/biometric automation, package install/uninstall/clear/force-stop, Android settings/permission/app-op write, backup/app-private-data access, Play Protect/security-control 변경, helper APK.
+
+### 이유
+
+#2453은 raw hierarchy를 ChatGPT/RDC 경계 밖으로 노출하지 않고 M 내부에서 bounded semantic receipt로 변환하는 read-only 경로를 LIVE_PROVEN했다. Action 단계는 ADB input primitive가 AccessibilityNode action과 동등하다고 가정할 수 없으므로, caller coordinates를 허용하지 않고 fresh semantic evidence에서 한 점을 내부 파생한 뒤 stale/ambiguity/text verification을 fail-closed gate로 두는 별도 authority가 필요하다.
+
+
+## D-018 — Central dispatch remains plan-only owner composition
+
+상태: ACTIVE
+
+### 결정
+
+Mobile Coder Lab의 첫 central dispatcher는 .agents/skills/mcl-dispatcher/ 가 소유하는 plan-only planning layer로 둔다.
+
+dispatcher는 매 호출마다 current D-012 device-routing.md를 먼저 읽고 semantic route를 고른 뒤, current route-specific preflight owner와 이후 overlap / D-013 / Git currentness / validation / D-014 guard를 계획에 남긴다. 현재 mcl-preflight가 지원하지 않는 route는 그 skill에 억지로 넣지 않고 current D-012가 지정한 owner를 직접 따른다.
+
+dispatcher receipt는 계획 증거일 뿐 work reservation, readiness, authorization, completion, runtime truth가 아니다. dispatcher 자체는 lease acquire/release, worktree lifecycle, Git/source mutation, device/runtime effect, workflow dispatch, PR merge, queue/database/scheduler를 수행하지 않는다.
+
+ordinary repository S→M fallback도 current D-012가 허용한 candidate로만 표현하며 상태가 나쁘다는 이유로 자동 전환하지 않는다. multi-context task는 semantic phase로 분리한다.
+
+Effectful or autonomous dispatch, queue consumer, background worker, or automatic task executor requires separate reviewed authority after the plan-only layer is proven useful.
+
+### 이유
+
+Routing, status, overlap, reservation, Git currentness, handoff, runtime effects already have separate owners. Centralizing only their planning order reduces operator friction without manufacturing a second authority or silently collapsing those safety boundaries.

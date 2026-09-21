@@ -1,0 +1,136 @@
+{
+  "skill_name": "mcl-soak-alert",
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "no-prior-all-good",
+      "input": "valid current receipt; no prior; all alert-bearing fields good",
+      "expected": {
+        "notify": "no",
+        "degraded_fields": "none",
+        "recovered_fields": "none",
+        "evidence_loss_fields": "none"
+      }
+    },
+    {
+      "id": "no-prior-explicit-degraded",
+      "input": "valid current; no prior; rdc_m=offline and roundtrip_s_termux=fail",
+      "expected": {
+        "notify": "yes",
+        "degraded_fields": "rdc_m,roundtrip_s_termux",
+        "recovered_fields": "none",
+        "evidence_loss_fields": "none"
+      }
+    },
+    {
+      "id": "good-to-degraded",
+      "input": "valid prior/current; rdc_s online->offline and roundtrip_m pass->fail",
+      "expected": {
+        "notify": "yes",
+        "degraded_fields": "rdc_s,roundtrip_m",
+        "recovered_fields": "none",
+        "evidence_loss_fields": "none"
+      }
+    },
+    {
+      "id": "degraded-to-good",
+      "input": "valid prior/current; rdc_m offline->online and roundtrip_s fail->pass",
+      "expected": {
+        "notify": "yes",
+        "degraded_fields": "none",
+        "recovered_fields": "rdc_m,roundtrip_s",
+        "evidence_loss_fields": "none"
+      }
+    },
+    {
+      "id": "known-to-unknown-evidence-loss",
+      "input": "valid prior/current; rdc_s_termux online->unknown and m_rdc_supervision running->unknown",
+      "expected": {
+        "notify": "yes",
+        "degraded_fields": "none",
+        "recovered_fields": "none",
+        "evidence_loss_fields": "rdc_s_termux,m_rdc_supervision"
+      }
+    },
+    {
+      "id": "unknown-to-good-is-not-recovery",
+      "input": "valid prior/current; rdc_s unknown->online and roundtrip_s unknown->pass",
+      "expected": {
+        "notify": "no",
+        "degraded_fields": "none",
+        "recovered_fields": "none",
+        "evidence_loss_fields": "none"
+      }
+    },
+    {
+      "id": "unchanged-degraded-no-repeat",
+      "input": "valid prior/current; rdc_m remains offline and roundtrip_m remains fail",
+      "expected": {
+        "notify": "no",
+        "degraded_fields": "none",
+        "recovered_fields": "none",
+        "evidence_loss_fields": "none"
+      }
+    },
+    {
+      "id": "repo-dirty-only-change",
+      "input": "valid prior/current; only s_repo_dirty and m_repo_dirty change",
+      "expected": {
+        "notify": "no",
+        "degraded_fields": "none",
+        "recovered_fields": "none",
+        "evidence_loss_fields": "none"
+      }
+    },
+    {
+      "id": "mixed-transition-categories",
+      "input": "valid prior/current; rdc_m online->offline, roundtrip_s fail->pass, m_rdc_supervision running->unknown",
+      "expected": {
+        "notify": "yes",
+        "degraded_fields": "rdc_m",
+        "recovered_fields": "roundtrip_s",
+        "evidence_loss_fields": "m_rdc_supervision"
+      }
+    },
+    {
+      "id": "malformed-current-fails-closed",
+      "input": "malformed current receipt",
+      "expected": {
+        "notify": "unknown",
+        "degraded_fields": "unknown",
+        "recovered_fields": "unknown",
+        "evidence_loss_fields": "unknown"
+      }
+    },
+    {
+      "id": "malformed-prior-with-current-degradation",
+      "input": "valid current with roundtrip_m=fail; malformed supplied prior",
+      "expected": {
+        "notify": "yes",
+        "degraded_fields": "roundtrip_m",
+        "recovered_fields": "unknown",
+        "evidence_loss_fields": "unknown"
+      }
+    },
+    {
+      "id": "malformed-prior-without-current-degradation",
+      "input": "valid current with no explicit degradation; malformed supplied prior",
+      "expected": {
+        "notify": "unknown",
+        "degraded_fields": "none",
+        "recovered_fields": "unknown",
+        "evidence_loss_fields": "unknown"
+      }
+    },
+    {
+      "id": "privacy-scheduler-causality-boundary",
+      "input": "classifier use with alert-bearing transitions",
+      "expected": {
+        "receipt_contains_private_identity": false,
+        "receipt_contains_root_cause": false,
+        "classifier_has_scheduler_or_storage": false,
+        "classifier_has_repair_action": false
+      }
+    }
+  ]
+}

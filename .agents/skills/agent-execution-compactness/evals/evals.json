@@ -406,6 +406,66 @@
       "expected_execution_effect": "PRESERVE_REQUIRED_EXECUTION"
     }
   ],
+  "shell_mutation_barrier_evals": [
+    {
+      "id": "unsafe-errexit-and-list-later-mutation",
+      "prompt": "A shell uses set -e, runs a failing currentness assertion as the non-final command of an && list, then invokes a separate mutation owner on the following statement.",
+      "facts": {
+        "set_errexit": true,
+        "guard_in_compound_and": true,
+        "mutation_is_separate_statement": true,
+        "explicit_failure_exit": false
+      },
+      "expected_guard_disposition": "UNSAFE_BARRIER",
+      "assertions": [
+        "Do not treat set -e as proof that the later mutation is unreachable.",
+        "Require an explicit checked guard branch before the mutation owner."
+      ]
+    },
+    {
+      "id": "safe-explicit-if-guard",
+      "prompt": "A fresh currentness guard is executed in an explicit if ! guard; then exit 1; fi branch immediately before the mutation owner.",
+      "facts": {
+        "set_errexit": true,
+        "explicit_guard_branch": true,
+        "failure_exits_before_mutation": true,
+        "mutation_after_proven_pass": true
+      },
+      "expected_guard_disposition": "EXPLICIT_GUARD",
+      "assertions": [
+        "Only proven PASS reaches the mutation owner.",
+        "Mismatch/failure preserves BLOCKED, UNKNOWN, or CONFLICT and exits before mutation."
+      ]
+    },
+    {
+      "id": "safe-conditional-status-capture",
+      "prompt": "A guard runs inside an if conditional; success enters the mutation path and the else branch records the failure disposition and exits before mutation.",
+      "facts": {
+        "guard_in_errexit_exempt_conditional": true,
+        "explicit_guard_branch": true,
+        "failure_exits_before_mutation": true
+      },
+      "expected_guard_disposition": "EXPLICIT_GUARD",
+      "assertions": [
+        "Status handling is explicit rather than inferred from errexit.",
+        "The failure path cannot fall through to mutation."
+      ]
+    },
+    {
+      "id": "guard-and-mutation-same-list-distinct",
+      "prompt": "A shell expression is guard && mutation_owner, with the mutation itself as the right-hand side of the same conditional list.",
+      "facts": {
+        "guard_in_compound_and": true,
+        "mutation_is_same_and_rhs": true,
+        "mutation_is_separate_statement": false
+      },
+      "expected_guard_disposition": "CONDITIONAL_MUTATION_DISTINCT",
+      "assertions": [
+        "Distinguish this from guard_one && guard_two followed by a separate later mutation.",
+        "Prefer an explicit guard branch when authority/currentness evidence or failure disposition must be preserved."
+      ]
+    }
+  ],
   "connector_response_evals": [
     {
       "id": "action-specific-pr-metadata",

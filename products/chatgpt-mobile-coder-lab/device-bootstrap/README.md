@@ -6,9 +6,10 @@ Mobile Coder Lab devices without taking ownership of role-specific runtime state
 
 ## Safety boundary
 
-The bootstrap manages only common development packages and missing Git author
-identity fields. It does not manage PocketRisu, RDC/runit services, Termux:Boot,
-device branches/worktrees, Ubuntu rootfs creation, or authentication material.
+The bootstrap manages the common development profile, missing Git author
+identity fields for that profile, and explicitly selected optional bootstrap
+profiles. It does not manage PocketRisu, RDC/runit services, Termux:Boot, device
+branches/worktrees, Ubuntu rootfs creation, or authentication material.
 
 GitHub, ChatGPT/Codex, RDC, Tailscale, SSH private keys, tokens, cookies, and
 sessions are never copied or written by this bootstrap. GitHub CLI auth is only
@@ -25,6 +26,19 @@ package|command
 
 A package may appear more than once when one package supplies multiple required
 commands, such as Termux `nodejs` providing both `node` and `npm`.
+
+## Optional Termux:API profile
+
+`--profile termux-api` is native-Termux-only and manages the Termux `termux-api`
+package plus command presence for `termux-battery-status`,
+`termux-notification`, `termux-notification-list`, and
+`termux-notification-remove`. The Android `com.termux.api` companion remains
+a check-only manual prerequisite.
+
+This profile proves package, command, and companion-app presence only. It does
+not prove that an API call succeeds, own Android permissions, or replace the
+battery/resource and notification behavior owners.
+
 ## Commands
 
 The default mode is read-only check:
@@ -38,15 +52,20 @@ Mutation is explicit:
 
 ```sh
 ./bootstrap.sh --apply --profile common
+./bootstrap.sh --check --profile termux-api --context termux
+./bootstrap.sh --apply --profile termux-api --context termux
 ```
 
-`--context auto` detects Ubuntu before Termux. For deterministic remote work or
-tests, `--context termux` and `--context ubuntu` are supported explicitly.
+The `termux-api` profile rejects Ubuntu context rather than substituting an
+Ubuntu package or runtime. `--context auto` detects Ubuntu before Termux. For
+deterministic remote work or tests, `--context termux` and `--context ubuntu`
+are supported explicitly.
 Run the bootstrap once in each managed Git context whose global Git config must
 be independently converged.
 
-`verify.sh --profile common` is a read-only wrapper around bootstrap check.
-It accepts the same optional `--context termux|ubuntu|auto` selector.
+`verify.sh --profile common` and `verify.sh --profile termux-api` are read-only
+wrappers around bootstrap check. They accept the same optional
+`--context termux|ubuntu|auto` selector; `termux-api` still requires native Termux.
 
 ## Git identity
 

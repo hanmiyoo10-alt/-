@@ -1,0 +1,177 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -u
+
+PREFIX=/data/data/com.termux/files/usr
+HOME_DIR=/data/data/com.termux/files/home
+INTERVAL=15
+if [ "${MCL_M_RDC_SUPERVISOR_TEST_MODE:-0}" = "1" ]; then
+    TEST_ROOT="${MCL_M_RDC_SUPERVISOR_TEST_ROOT:?test root required}"
+    PREFIX="$TEST_ROOT/prefix"
+    HOME_DIR="$TEST_ROOT/home"
+    INTERVAL="${MCL_M_RDC_SUPERVISOR_TEST_INTERVAL:-15}"
+fi
+
+SERVICE="$PREFIX/var/service/mcl-m-rdc-supervisor-guard"
+STATE="$HOME_DIR/.local/state/mcl-m-rdc-supervisor-guard"
+SV="$PREFIX/bin/sv"
+RUNSV="$PREFIX/bin/runsv"
+NOHUP="$PREFIX/bin/nohup"
+SLEEP="$PREFIX/bin/sleep"
+SH="$PREFIX/bin/sh"
+ENSURE_LOCKDIR="$STATE/launcher.lock"
+ENSURE_PIDFILE="$STATE/launcher.pid"
+ANCHOR_LOCKDIR="$STATE/anchor.lock"
+ANCHOR_PIDFILE="$STATE/anchor.pid"
+SUPERVISOR_LOG="$STATE/guard-supervisor.log"
+ANCHOR_LOG="$STATE/anchor.log"
+SELF="$0"
+validate_service() {
+    if [ ! -e "$SERVICE" ]; then
+        return 1
+    fi
+    [ -d "$SERVICE" ] && [ ! -L "$SERVICE" ] || return 2
+    if [ ! -e "$SERVICE/run" ]; then
+        return 1
+    fi
+    [ -f "$SERVICE/run" ] && [ ! -L "$SERVICE/run" ] && [ -x "$SERVICE/run" ] || return 2
+    return 0
+}
+
+acquire_lock() {
+    lockdir="$1"
+    pidfile="$2"
+    mkdir -p "$STATE"
+    if mkdir "$lockdir" 2>/dev/null; then
+        printf '%s\n' "$$" > "$pidfile"
+        return 0
+    fi
+    oldpid="$(cat "$pidfile" 2>/dev/null || true)"
+    if [ -n "$oldpid" ] && kill -0 "$oldpid" 2>/dev/null; then
+        return 1
+    fi
+    rm -rf "$lockdir"
+    mkdir "$lockdir" 2>/dev/null || return 1
+    printf '%s\n' "$$" > "$pidfile"
+}
+release_lock() {
+    lockdir="$1"
+    pidfile="$2"
+    current="$(cat "$pidfile" 2>/dev/null || true)"
+    [ "$current" = "$$" ] && rm -f "$pidfile"
+    rmdir "$lockdir" 2>/dev/null || true
+}
+
+anchor_pid_alive() {
+    [ -r "$ANCHOR_PIDFILE" ] || return 1
+    pid="$(cat "$ANCHOR_PIDFILE" 2>/dev/null || true)"
+    case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+    kill -0 "$pid" 2>/dev/null || return 1
+    cmdline="$(tr '\000' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+    case "$cmdline" in
+        *31-mcl-m-rdc-supervisor-guard*--anchor*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+ensure_guard_supervisor() {
+    validate_service
+    valid_rc=$?
+    [ "$valid_rc" -eq 0 ] || {
+        [ "$valid_rc" -eq 1 ] && return 0
+        return 2
+    }
+    [ ! -e "$SERVICE/down" ] || return 0
+    acquire_lock "$ENSURE_LOCKDIR" "$ENSURE_PIDFILE" || return 0
+    status="$($SV status "$SERVICE" 2>&1 || true)"
+    case "$status" in
+        run:*|down:*)
+            result=0
+            ;;
+        *"runsv not running"*|*"unable to open supervise/ok: file does not exist"*)
+            "$NOHUP" "$RUNSV" "$SERVICE" >> "$SUPERVISOR_LOG" 2>&1 &
+            result=1
+            i=0
+            while [ "$i" -lt 5 ]; do
+                "$SLEEP" 1
+                status="$($SV status "$SERVICE" 2>&1 || true)"
+                case "$status" in
+                    run:*|down:*) result=0; break ;;
+                    *"runsv not running"*|*"unable to open supervise/ok: file does not exist"*) ;;
+                    *) result=2; break ;;
+                esac
+                i=$((i + 1))
+            done
+            ;;
+        *)
+            result=2
+            ;;
+    esac
+    release_lock "$ENSURE_LOCKDIR" "$ENSURE_PIDFILE"
+    return "$result"
+}
+
+anchor_cleanup() {
+    release_lock "$ANCHOR_LOCKDIR" "$ANCHOR_PIDFILE"
+}
+anchor_terminate() {
+    anchor_cleanup
+    trap - EXIT INT TERM HUP
+    exit 0
+}
+
+anchor_loop() {
+    acquire_lock "$ANCHOR_LOCKDIR" "$ANCHOR_PIDFILE" || exit 0
+    trap anchor_cleanup EXIT
+    trap anchor_terminate INT TERM HUP
+    while :; do
+        ensure_guard_supervisor || true
+        "$SLEEP" "$INTERVAL"
+    done
+}
+
+start_anchor() {
+    anchor_pid_alive && return 0
+    mkdir -p "$STATE"
+    "$NOHUP" "$SH" "$SELF" --anchor >> "$ANCHOR_LOG" 2>&1 &
+    i=0
+    while [ "$i" -lt 5 ]; do
+        "$SLEEP" 1
+        anchor_pid_alive && return 0
+        i=$((i + 1))
+    done
+    return 1
+}
+
+case "${1:-}" in
+    "")
+        validate_service
+        valid_rc=$?
+        if [ "$valid_rc" -eq 1 ]; then
+            exit 0
+        fi
+        [ "$valid_rc" -eq 0 ] || exit 2
+        ensure_guard_supervisor
+        ensure_rc=$?
+        [ "$ensure_rc" -ne 2 ] || exit 2
+        if ! start_anchor; then
+            [ "$ensure_rc" -ne 0 ] || ensure_rc=1
+        fi
+        exit "$ensure_rc"
+        ;;
+    --anchor)
+        anchor_loop
+        ;;
+    --ensure-anchor)
+        validate_service
+        valid_rc=$?
+        [ "$valid_rc" -eq 0 ] || {
+            [ "$valid_rc" -eq 1 ] && exit 1
+            exit 2
+        }
+        start_anchor
+        ;;
+    *)
+        printf '%s\n' 'usage: 31-mcl-m-rdc-supervisor-guard [--anchor|--ensure-anchor]' >&2
+        exit 2
+        ;;
+esac

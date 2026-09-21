@@ -15,6 +15,10 @@ const historical = "const release={productVersion:'x'}; if (release.productVersi
 const wrongGuard = "const release={productVersion:'x'}; if (release.productVersion !== '3.0.0-alpha.5.72') { process.exit(0); }\n// UD_HISTORICAL_VERSION_LOCK\nassert.equal(release.productVersion, '3.0.0-alpha.5.73');\n";
 const inspectionFixture = "assert.equal(inspected.productVersion, '3.0.0-alpha.5.73');\n";
 
+assert.equal(preflight.TEST_ROOT, 'plugins/usage-dashboard/tests');
+assert.equal(preflight.testRootForSourceRoot('plugins/risu/local/usage-dashboard'), 'plugins/risu/local/usage-dashboard/tests');
+assert.throws(()=>preflight.testRootForSourceRoot('plugins/other'), /RELEASE_PATH_PROFILE_UNKNOWN_ROOT/);
+assert.deepEqual(preflight.parseArgs(['--spec','x.json','--root','plugins/risu/local/usage-dashboard']), {specPath:'x.json',contextPath:'',sourceRoot:'plugins/risu/local/usage-dashboard'});
 assert.deepEqual(preflight.staleProductAssertions(current,target),[]);
 assert.equal(preflight.staleProductAssertions(stale,target)[0].reason,'stale-current-version-assertion');
 assert.equal(preflight.staleProductAssertions(lockOnly,target)[0].reason,'historical-scope-missing');

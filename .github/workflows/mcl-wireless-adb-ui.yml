@@ -1,0 +1,30 @@
+name: MCL Wireless ADB UI Read
+
+on:
+  pull_request:
+    paths:
+      - 'products/chatgpt-mobile-coder-lab/device-ops/wireless-adb-ui/**'
+      - 'products/chatgpt-mobile-coder-lab/docs/device-routing.md'
+      - 'products/chatgpt-mobile-coder-lab/docs/decisions.md'
+      - '.github/workflows/mcl-wireless-adb-ui.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'products/chatgpt-mobile-coder-lab/device-ops/wireless-adb-ui/**'
+      - 'products/chatgpt-mobile-coder-lab/docs/device-routing.md'
+      - 'products/chatgpt-mobile-coder-lab/docs/decisions.md'
+      - '.github/workflows/mcl-wireless-adb-ui.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Run bounded adapter tests
+        run: python3 -m unittest discover -s products/chatgpt-mobile-coder-lab/device-ops/wireless-adb-ui/tests -v

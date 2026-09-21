@@ -20,12 +20,111 @@ Repository, Git, CI, release, and project authorities remain above all of these 
 `#465` is coordination only. Its normal human-facing body MUST use pointer-only live-health semantics:
 
 - `LIVE HEALTH: direct main + #485` is the only current-health pointer;
-- the queue may show active packet, next candidate, coordination blocker, latest completed packet, and stable links to durable surfaces;
+- `Queue surface: ENABLED` is the canonical modern availability label; `ENABLED` means the coordination surface is available and does not assert active-writer presence;
+- the human-facing mutable active-writer projection cardinality is `0..1`; zero projected writers is valid and does not mean disabled, idle, complete, or exhaustive;
+- when present, the queue may show at most one human-facing mutable active-writer projection, plus next candidate, coordination blocker, latest completed packet, and stable links to durable surfaces;
+- stable `## Surfaces` pointers MUST NOT repeat mutable active-writer state; #465 is not an exhaustive registry of nonterminal work;
 - it MUST NOT duplicate a current `main` SHA, Required state/run, production identity state, or native-protection state as live truth;
 - when an exact SHA is required as packet evidence, it may appear only as explicitly historical synchronization/packet evidence and must never be presented as current health;
 - if a reader needs current health, read direct current `main` and #485 rather than refreshing #465 merely to copy time-sensitive evidence.
 
 This prevents a stale coordination queue from competing with the direct repository authority and the #485 derived operator projection.
+
+### #465 pointer-only hygiene classifier
+
+`work-system/queue-hygiene.cjs` is the read-only enforcement helper for this body contract. It classifies exact body text supplied by the caller; it never fetches GitHub and never mutates #465.
+
+Its machine-readable top-level result is `PASS / WARN / FAIL / UNKNOWN`. `FAIL` means the supplied body proves a contract violation. `UNKNOWN` means the text itself exposes an active-writer claim that requires external packet/PR evidence before it can be resolved. `WARN` is reserved for non-blocking advisory findings. Absence of a finding is not a claim that #465 exhaustively lists repository work.
+
+The classifier fails on duplicated mutable current-health claims for current/live `main` SHA, Required state/run, production identity/state, native-protection state, freehand current #485 state, or more than one unambiguous active-writer projection. The canonical `LIVE HEALTH: direct main + #485` pointer and its explanatory no-duplication rule are not findings. Clearly labeled historical synchronization/packet evidence remains allowed; token presence alone does not make a SHA, run, packet, PR, or status word current authority.
+
+The exact standalone old modern label `Queue state: ACTIVE` is a non-blocking naming `WARN`: it is ambiguous between surface availability and writer activity. Use `Queue surface: ENABLED` for the modern queue. This warning does not apply to the separately owned legacy `ACTIVE|IDLE / CANONICAL-MAIN-V1.2` profile, and it never infers active-writer presence or absence.
+
+Each finding carries a stable reason code, a 1-based body line number, and a bounded excerpt. Ambiguous active-writer prose remains `UNKNOWN` rather than being converted into invented terminality. Current repository truth still comes from direct `main`, #485, packet/PR evidence, and the owning authorities named above.
+
+Module callers use `classifyQueueBody(body)`. The bounded CLI accepts either one body-text file path or stdin:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/queue-hygiene.cjs /path/to/issue-465-body.md
+cat /path/to/issue-465-body.md | node .github/plugin-control-plane/canonical-main/work-system/queue-hygiene.cjs
+```
+
+CLI exit status is `1` for `FAIL`, `2` for `UNKNOWN`, and `0` for `PASS` or `WARN`. The helper has no auto-fix mode and grants no issue-write, merge, release, production, or protection authority.
+
+### Cross-surface packet-reference hygiene classifier
+
+`work-system/coordination-reference-hygiene.cjs` is a pure read-only classifier for packet references embedded in mutable coordination prose outside the referenced packet's own body. It consumes caller-supplied prose plus caller-supplied packet evidence; it does not fetch GitHub and never mutates coordination surfaces.
+
+Its top-level result vocabulary is `PASS / STALE / UNKNOWN / CONFLICT`, with fail-closed precedence `CONFLICT > STALE > UNKNOWN > PASS`.
+
+V1 deliberately recognizes only narrow routing roles that can misdirect resumed work: `active writer`, `current owner`, `current packet`, `next candidate`, `next packet`, and an explicitly labeled coordination/current blocker. A bare `#1234` token is not promoted into a current-role claim.
+
+A terminal packet is not stale merely because it is referenced historically. Explicit `latest completed`, `completed`, `historical`, `legacy`, `prior`, or `previous` framing remains permitted, including references to terminal packets.
+
+For a supported current-role reference, caller evidence may include the native issue state and canonical packet lifecycle state. `DONE`, `CANCELLED`, and `SUPERSEDED` are terminal lifecycle states; `BLOCKED` remains nonterminal. A current-role reference to coherent terminal lifecycle evidence becomes `STALE`. Missing packet/lifecycle evidence remains `UNKNOWN`. Material disagreement between supplied native issue state and lifecycle state becomes `CONFLICT`; native closure alone is never converted into proof-taxonomy `DONE`.
+
+Each recognized reference carries a bounded issue number, 1-based line, excerpt, role, disposition, and stable reason code. Output is capped, deterministic, and explicitly denies network and mutation authority.
+
+Module callers use `classifyCoordinationReferences(input)`. The bounded CLI accepts one JSON file or stdin with this shape:
+
+```json
+{"prose":"- Next packet: #2342","packets":[{"issueNumber":2342,"nativeState":"open","lifecycleState":"IN_PROGRESS"}]}
+```
+
+CLI exit status is `0` for `PASS`, `1` for `STALE`, `2` for `UNKNOWN`, and `3` for `CONFLICT`. The helper does not repair prose, close packets, redefine #2083 packet-body close-sync, or widen #465 queue-hygiene ownership.
+
+### Write-scope overlap resolver
+
+`work-system/scope-overlap.cjs` is the pure read-only classifier for the existing `active-packets` write-scope-overlap contract. It consumes supplied packet/PR evidence only; it does not fetch GitHub, mutate issues, or grant write authority.
+
+Its top-level result vocabulary is `DISJOINT / OVERLAP / UNKNOWN / CONFLICT`, with precedence `CONFLICT > OVERLAP > UNKNOWN > DISJOINT`.
+
+Supported v1 scope forms are deliberately narrow:
+
+- `path:<repo-relative-file>` for one exact repository path;
+- `path:<repo-relative-prefix>/**` for one deterministic trailing-prefix scope;
+- `surface:<kind>:<identity>` for one exact coordination-surface identity.
+
+Absolute paths, traversal, and wildcard/pattern syntax outside the single trailing `/**` form fail closed to `UNKNOWN`. Path-prefix containment is checked deterministically in both directions; surface scopes overlap only on exact normalized identity.
+
+Repository, shared, product, or informal `repo-common` classification is routing/context metadata only. Labels such as `scope:repo` and `scope:shared` do not become implicit path/surface scopes, locks, leases, or mutation authority.
+
+For repository-byte mutation, packet authors declare the exact writable `path:` scopes first. Add `surface:<owning-domain>:<stable-owner-or-effect>` only when otherwise-disjoint paths can mutate the same logical owner or effect boundary. The semantic/effect surface supplements the path list and never authorizes another repository path. Reuse one stable owner-defined identity across packets; do not name the packet, branch, worker, account, chat, or executor. Broad umbrella identities such as `surface:repo:common`, `surface:scope:repo`, and `surface:shared:all` are invalid authoring choices because they serialize unrelated work. When the owning authority cannot establish a stable semantic/effect identity, preserve `UNKNOWN` or `CONFLICT` instead of inventing a surface or optimistic disjointness.
+
+Callers provide `requestedScopes`, a bounded discovery disposition (`COMPLETE / PARTIAL / UNKNOWN`), and concretely identified candidates. Packet candidates use current native issue state plus exact `canonical-main-work-packet:v1` body text. Open PR candidates use their supplied changed-file inventory. Packet lifecycle is consumed from the canonical `packet-projection.cjs` lifecycle parser rather than re-derived from stage/proof prose or a second local state vocabulary.
+
+Write-scope parsing accepts only exact reviewed heading names: `Bounded write scope`, `Bounded implementation write scope`, `Locked write scope`, plus compatibility aliases `Bounded IMPLEMENTATION_PR write scope`, `Repository write-scope ceiling used by IMPLEMENTATION_PR`, and `Bounded repository write ceiling`. There is no fuzzy heading/prose scan. Exactly one recognized deterministic scope section is required; multiple recognized sections are `CONFLICT`, while missing, unsupported, malformed, or invalid scope evidence remains `UNKNOWN`. Explicit preservation/non-write boundaries stop scope collection; the repository-observed exact boundary `Do not touch unless fresh evidence proves required:` is supported without widening into a fuzzy `Do not touch` scan.
+
+#465 remains seed-only and non-exhaustive. `DISJOINT` requires bounded discovery `COMPLETE`; `PARTIAL` or `UNKNOWN` discovery cannot be promoted to disjointness merely because no supplied candidate overlaps.
+
+Terminal packet states (`DONE / CANCELLED / SUPERSEDED`) and closed/merged PRs do not block solely by historical existence. An open PR with a matching observed changed file proves `OVERLAP` even if the overall file inventory is incomplete; without a match, incomplete open-PR file evidence remains `UNKNOWN`.
+
+When a packet explicitly links an open PR, an observed PR changed file outside the packet's parsed bounded write scope is `CONFLICT` scope-drift evidence. The resolver never decides that an open PR is stale or superseded from age, branch name, mergeability, or inactivity.
+
+Every non-`DISJOINT` finding carries a stable reason code, owner/source refs, the requested scope, and bounded evidence. `OVERLAP` proves only a current write-scope collision in supplied evidence; it does not choose which owner wins or claim a semantic/code defect.
+
+Module callers use `resolveScopeOverlap(input)`. The bounded CLI accepts JSON from one file or stdin:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/scope-overlap.cjs /path/to/input.json
+cat /path/to/input.json | node .github/plugin-control-plane/canonical-main/work-system/scope-overlap.cjs
+```
+
+CLI exit status is `0` for `DISJOINT`, `1` for `OVERLAP`, `2` for `UNKNOWN`, and `3` for `CONFLICT`. No current SHA, packet number, PR number, cache, network client, auto-close behavior, or repository-global active-work registry is embedded in the classifier.
+
+### Evidence-backed PR activity classification
+
+`work-system/pr-activity.cjs` is the pure read-only activity classifier for open-PR overlap evidence. It consumes caller-supplied native PR, linked packet, and optional merged-successor evidence only; it does not fetch GitHub, close PRs, mutate packets, or maintain a PR registry.
+
+Its result vocabulary is `ACTIVE_WRITER / NONBLOCKING_PROVEN / UNKNOWN / CONFLICT`. Only `NONBLOCKING_PROVEN` may suppress an otherwise-open PR from overlap consideration. `ACTIVE_WRITER` remains eligible to block by path, while `UNKNOWN` and `CONFLICT` remain fail-closed.
+
+Native closed PRs are nonblocking. An open PR linked to a current nonterminal packet remains `ACTIVE_WRITER`. A properly closed terminal linked packet may prove the open PR nonblocking. A merged successor may do so only when the caller supplies an explicit supersedes relation plus exact ancestry or patch-equivalence proof. Missing proof stays `UNKNOWN`; contradictory proof or lifecycle/native-state disagreement is `CONFLICT`.
+
+Age, inactivity, branch naming, draft state, mergeability, base drift, review age, or CI history never prove supersession. In particular, an old or currently unmergeable PR remains active when current packet evidence still owns it.
+
+`scope-overlap.cjs` accepts this activity evidence only as an optional composition for an open PR candidate. Activity evidence is optional; without it, the existing open-PR overlap behavior is unchanged. `NONBLOCKING_PROVEN` omits that candidate from overlap blocking while preserving the activity result in output; `UNKNOWN` yields overlap `UNKNOWN`, and `CONFLICT` yields overlap `CONFLICT`. This never manufactures bounded discovery completeness, so `DISJOINT` still requires caller-supplied `COMPLETE` discovery.
+
+Module callers use `classifyPrActivity(input)`. The bounded CLI accepts one JSON file or stdin. Determinate `ACTIVE_WRITER` and `NONBLOCKING_PROVEN` exit zero; `UNKNOWN` exits 2 and `CONFLICT` exits 3. The classifier embeds no timestamp threshold, current SHA, PR number, packet number, network client, mutation path, or auto-cleanup rule.
 
 ## Live issue markers
 
@@ -93,6 +192,12 @@ Packet lifecycle:
 
 Alternate states: `BLOCKED / CANCELLED / SUPERSEDED`.
 
+Lifecycle `State` and `Interaction stage` are separate packet axes. A producer MUST preserve exactly one canonical lifecycle token from `policy.json` in the State projection while stage bookkeeping changes independently. Stage-only State prose never implies `READY`, `IN_PROGRESS`, `REVIEW`, or `DONE`.
+
+`work-system/packet-projection.cjs` is the pure read-only parser/classifier for this boundary. It derives lifecycle and stage vocabularies from `policy.json`, accepts the existing `**State: ...**` and `## State` one-line forms, and returns bounded `PASS / UNKNOWN / CONFLICT` evidence. Missing lifecycle remains explicit `UNKNOWN`; duplicate State projections or multiple lifecycle tokens are `CONFLICT`. The helper never fetches GitHub, rewrites a packet, advances a stage, closes an issue, or grants mutation authority.
+
+Mutation consumers that require packet lifecycle evidence should reuse this parser rather than infer lifecycle from interaction-stage text, proof terms, or native issue state.
+
 ## Execution compactness contract
 
 Canonical-main packets make the existing repository-wide compact execution policy explicit at the packet boundary. This does not create a new compactness owner. `RCR-D14` remains the repository default and `.agents/skills/agent-execution-compactness/SKILL.md` owns the routing procedure and guardrail semantics.
@@ -154,6 +259,16 @@ Terminal close-sync must align, as applicable, the lifecycle State; completed/cu
 
 A final comment or native GitHub closure does not make a contradictory stale packet body acceptable. If terminal evidence and the packet body conflict, treat the body as a stale lifecycle projection, re-read the terminal evidence, and do not resume the stale advertised stage without fresh re-attribution.
 
+### Reserved packet self-bookkeeping surface
+
+For every canonical work packet bearing `<!-- canonical-main-work-packet:v1 -->`, the packet's own GitHub issue is a reserved self-coordination surface for faithful lifecycle bookkeeping. This reserved self surface is separate from implementation/effect write scope, so a packet does not need to list its own issue under a bounded write-scope section merely to project already-established coordination state.
+
+Reserved self-bookkeeping may update only the lifecycle `State`; completed/current/next `Interaction stage`; evidence-backed Proof / closure terms; required acceptance UNKNOWNs and explicitly permitted non-blocking pending evidence; Stop condition / Handoff / exact next legal action; and native issue closure after the body is reconciled terminal and the packet's acceptance permits `DONE`. Native GitHub closure remains downstream of evidence-backed terminal body reconciliation and never proves `DONE` by itself.
+
+Reserved self-bookkeeping MUST NOT change the primary goal, add/remove/weaken acceptance criteria, widen or reinterpret implementation/effect write scope, manufacture or erase evidence, infer `DONE` or `LIVE_PROVEN`, clear an `UNKNOWN` without evidence, or authorize mutation of another issue, PR, repository file, branch, workflow, device, runtime, release, or production surface. Any body edit beyond faithful self-projection is ordinary mutation and requires explicit bounded authority.
+
+Implementation/effect scope ceilings such as `exactly N paths/surfaces` govern declared work outputs and external coordination targets. Generic `any additional issue surface is scope expansion` wording applies to external effect surfaces unless a packet explicitly and separately forbids lifecycle bookkeeping itself. The reserved self surface is not emitted into or inferred from write-scope overlap classification and grants no implicit external issue or repository mutation authority.
+
 The existing `canonical-main-a1-standard-auto-close:v1` profile remains separately owned by deterministic closure bookkeeping. This generic close-sync contract does not broaden that opt-in automation boundary.
 
 ## Parallelism
@@ -195,7 +310,11 @@ The machine-readable routing contract lives in `work-system/policy.json` under `
 Every route starts with the same ordered base reads: `direct-main`, then `issue-485`.
 
 - `STATUS_SESSION` adds nothing. Its exact route is only `direct-main + issue-485`, and when no additional intent exists the reader stops after those two reads.
-- `EXECUTION` adds only `issue-465 + active-packet`, then escalates to the existing worker/packet bootstrap before any mutation.
+- `EXECUTION` adds only `issue-465 + active-packets`, then escalates to the existing worker/packet bootstrap before any mutation.
+
+For `EXECUTION`, `active-packets` is a bounded write-scope-overlap discovery step, not a claim that one global active packet exists. Start with the requested mutation scope and #465 hints, then inspect every concretely identified nonterminal packet or open PR whose declared or observed write scope can overlap it. #465 seeds discovery but is not exhaustive authority.
+
+If an overlap candidate cannot be resolved from current evidence, unresolved overlap remains `UNKNOWN` or `CONFLICT` and mutation stops. Disjoint nonterminal packets remain eligible to proceed in parallel; unrelated open work does not serialize the whole repository.
 - `MEMORY_CONTEXT` adds only `issue-462`.
 - `IDEA_DESIGN_CONTEXT` adds only `issue-464` when idea/design identity, lifecycle, overlap, or priority is actually needed.
 - `AUDIT_CONTEXT` adds only `issue-293`.
@@ -244,3 +363,34 @@ The next worker resumes from repository evidence, not from an assumed chat trans
 ## Authority boundary
 
 The work system coordinates work; it does not authorize production or release changes. Existing exact-head CI, main-write, protection, release, and project-specific authorities remain unchanged.
+
+## Proof-level / live-observation eligibility classifier
+
+`work-system/proof-eligibility.cjs` is a deterministic read-only classifier for caller-supplied activated acceptance facts. It projects one of:
+
+`LIVE_REQUIRED / OBSERVATIONAL_PENDING_ALLOWED / NOT_APPLICABLE / NOT_REQUIRED / BLOCKED_CAPABILITY / UNKNOWN / CONFLICT`.
+
+It does not parse arbitrary packet prose, fetch GitHub, verify runtime events, create synthetic events, mutate repository or coordination state, or claim Git/CI/release/production truth. The caller remains responsible for supplying current authority-backed acceptance facts.
+
+The input is schema version `1` with explicit `acceptance` booleans and `syntheticEventPolicy: AUTHORIZED | FORBIDDEN`. Unknown fields, missing acceptance facts, unsupported values, and ambiguous structures fail closed. Contradictory activated facts return `CONFLICT` rather than choosing the convenient disposition.
+
+Key semantics:
+
+- `LIVE_REQUIRED` requires an explicit activated live requirement that remains unsatisfied.
+- `OBSERVATIONAL_PENDING_ALLOWED` requires both explicit pending eligibility and explicit non-blocking acceptance.
+- `NOT_APPLICABLE` and `NOT_REQUIRED` require their corresponding explicit activated declarations; event absence alone proves neither.
+- `BLOCKED_CAPABILITY` requires explicit capability unavailability and preserves the activated blocking/non-blocking declaration in `closureBlocking`.
+- a required live proof cannot be retroactively weakened into non-blocking pending or another green-by-absence disposition.
+- when synthetic event creation is forbidden, `syntheticLiveEventForbidden` remains true; the classifier never recommends manufacturing an event merely to turn a packet green.
+- `UNKNOWN` and `CONFLICT` are closure-blocking and fail closed.
+
+Every result keeps `claimsLiveProven: false`, `claimsDone: false`, and `mutationAuthorized: false`. This helper classifies proof eligibility only; it never manufactures proof-taxonomy evidence or DONE authority.
+
+Invocation uses a bounded JSON request from a file or stdin:
+
+```bash
+node .github/plugin-control-plane/canonical-main/work-system/proof-eligibility.cjs /path/to/request.json
+cat /path/to/request.json | node .github/plugin-control-plane/canonical-main/work-system/proof-eligibility.cjs
+```
+
+`sourceRefs` must contain 1–16 non-empty bounded source locators, and every acceptance field is explicit rather than inferred from prose.

@@ -4,10 +4,12 @@ const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const {assertReleaseSpec} = require('../../tools/release_spec_contract_e19.cjs');
 const {resolveReleaseEvidenceView} = require('../../tools/release_evidence_view_e21.cjs');
+const {LEGACY_ROOT, normalizeRoot} = require('../../tools/release_path_profile.cjs');
 
 const ROOT = process.cwd();
 const RELEASES_ROOT = path.join(ROOT, '.github/usage-dashboard/releases');
-const PLUGIN_ROOT = path.join(ROOT, 'plugins/usage-dashboard');
+const normalizeSourceRoot = (sourceRoot = LEGACY_ROOT) => normalizeRoot(sourceRoot);
+const pluginRoot = (sourceRoot = LEGACY_ROOT) => path.join(ROOT, normalizeSourceRoot(sourceRoot));
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -22,11 +24,11 @@ function validateSpecPath(specPath) {
   return absolute;
 }
 
-function discoverSpecPath() {
+function discoverSpecPath(sourceRoot = LEGACY_ROOT) {
   const requested = String(process.env.UD_RELEASE_SPEC || '').trim();
   if (requested) return validateSpecPath(requested);
 
-  const manifest = readJson(path.join(PLUGIN_ROOT, 'runtime/product-manifest.json'));
+  const manifest = readJson(path.join(pluginRoot(sourceRoot), 'runtime/product-manifest.json'));
   const productVersion = String(manifest.productVersion || '');
   const matches = fs.readdirSync(RELEASES_ROOT)
     .filter(file => file.endsWith('.json'))
@@ -36,8 +38,9 @@ function discoverSpecPath() {
   return matches[0];
 }
 
-function loadCurrentRelease() {
-  const specPath = discoverSpecPath();
+function loadCurrentRelease(sourceRoot = LEGACY_ROOT) {
+  const normalizedRoot = normalizeSourceRoot(sourceRoot);
+  const specPath = discoverSpecPath(normalizedRoot);
   const spec = assertReleaseSpec(readJson(specPath), path.relative(ROOT, specPath));
   return Object.freeze({
     ...spec,
@@ -51,13 +54,16 @@ function sha256(file) {
   return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 }
 
-function assertCurrentReleaseArtifacts(release = loadCurrentRelease()) {
-  const latestPath = path.join(PLUGIN_ROOT, 'latest.js');
-  const corePath = path.join(PLUGIN_ROOT, 'src/00-runtime-core.part.js');
-  const enginePath = path.join(PLUGIN_ROOT, 'runtime/bridge-engine.mjs');
-  const managerPath = path.join(PLUGIN_ROOT, 'runtime/bridge-manager.cjs');
-  const manifest = readJson(path.join(PLUGIN_ROOT, 'runtime/product-manifest.json'));
-  const sourceManifest = readJson(path.join(PLUGIN_ROOT, 'src/manifest.json'));
+function assertCurrentReleaseArtifacts(release = null, sourceRoot = LEGACY_ROOT) {
+  const normalizedRoot = normalizeSourceRoot(sourceRoot);
+  const selectedRoot = pluginRoot(normalizedRoot);
+  release = release || loadCurrentRelease(normalizedRoot);
+  const latestPath = path.join(selectedRoot, 'latest.js');
+  const corePath = path.join(selectedRoot, 'src/00-runtime-core.part.js');
+  const enginePath = path.join(selectedRoot, 'runtime/bridge-engine.mjs');
+  const managerPath = path.join(selectedRoot, 'runtime/bridge-manager.cjs');
+  const manifest = readJson(path.join(selectedRoot, 'runtime/product-manifest.json'));
+  const sourceManifest = readJson(path.join(selectedRoot, 'src/manifest.json'));
   const latest = fs.readFileSync(latestPath, 'utf8');
   const core = fs.readFileSync(corePath, 'utf8');
   const engine = fs.readFileSync(enginePath, 'utf8');
@@ -90,4 +96,4 @@ function assertCurrentReleaseArtifacts(release = loadCurrentRelease()) {
   return release;
 }
 
-module.exports = {loadCurrentRelease, assertCurrentReleaseArtifacts};
+module.exports = {normalizeSourceRoot, pluginRoot, discoverSpecPath, loadCurrentRelease, assertCurrentReleaseArtifacts};

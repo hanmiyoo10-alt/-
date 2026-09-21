@@ -1,0 +1,264 @@
+{
+  "skill_name": "mcl-preflight",
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "s-owner-first-pass",
+      "prompt": "D-012 already selected route S and executor S for ordinary repository work. Run first-pass preflight.",
+      "facts": {
+        "route": "S",
+        "executor": "S",
+        "s_env_receipt_valid": true,
+        "common_ubuntu_profile": "pass",
+        "github_cli_auth": "pass",
+        "repository_access": "pass"
+      },
+      "expected": {
+        "owner": "mcl-s-env-status.v1",
+        "route_changed": false,
+        "aggregate_ready_present": false,
+        "later_guards_required": true
+      }
+    },
+    {
+      "id": "s-to-m-explicit-fallback",
+      "prompt": "D-012 explicitly selected route S with executor M as the documented ordinary-repository fallback.",
+      "facts": {
+        "route": "S",
+        "executor": "M",
+        "m_env_receipt_valid": true
+      },
+      "expected": {
+        "fallback_is_route_input": true,
+        "silent_reroute_performed": false,
+        "owner": "mcl-m-family-status.v1"
+      }
+    },
+    {
+      "id": "route-executor-conflict",
+      "prompt": "The route says M_PRIVATE_LAB but the executor is S.",
+      "facts": {
+        "route": "M_PRIVATE_LAB",
+        "executor": "S"
+      },
+      "expected": {
+        "preflight_state": "UNKNOWN",
+        "owner_invoked": false,
+        "route_guessed": false
+      }
+    },
+    {
+      "id": "s-termux-owner-only",
+      "prompt": "D-012 selected S_TERMUX and the bounded local RDC owner is available.",
+      "facts": {
+        "route": "S_TERMUX",
+        "executor": "S_TERMUX",
+        "rdc_local_receipt": "pass"
+      },
+      "expected": {
+        "owner": "mcl-rdcctl.v1",
+        "ubuntu_repo_path_assumed": false,
+        "aggregate_ready_present": false
+      }
+    },
+    {
+      "id": "private-lab-blocked-no-reroute",
+      "prompt": "D-012 selected M_PRIVATE_LAB and the first-pass M receipt says the PRIVATE LAB substrate is blocked.",
+      "facts": {
+        "route": "M_PRIVATE_LAB",
+        "executor": "M_PRIVATE_LAB",
+        "private_lab_substrate": "blocked"
+      },
+      "expected": {
+        "blocked_preserved": true,
+        "silent_reroute_performed": false,
+        "repair_performed": false
+      }
+    },
+    {
+      "id": "vm-not-ready-no-raw-recompute",
+      "prompt": "D-012 selected M_VM_LAB and mcl-env-status reports vm_admission=not_ready.",
+      "facts": {
+        "route": "M_VM_LAB",
+        "executor": "M_VM_LAB",
+        "vm_admission": "not_ready"
+      },
+      "expected": {
+        "not_ready_preserved": true,
+        "raw_host_memory_recomputed": false,
+        "vm_started": false
+      }
+    },
+    {
+      "id": "s-private-missing-receipt",
+      "prompt": "D-012 selected S_PRIVATE_LOCAL but no authorized fixed sanitized receipt is available.",
+      "facts": {
+        "route": "S_PRIVATE_LOCAL",
+        "executor": "S_PRIVATE_LOCAL",
+        "fixed_receipt_available": false
+      },
+      "expected": {
+        "preflight_state": "UNKNOWN",
+        "sensitive_command_constructed": false,
+        "private_payload_requested": false
+      }
+    },
+    {
+      "id": "mutable-work-keeps-separate-guards",
+      "prompt": "S first-pass environment fields all look usable and the next phase would edit repository source.",
+      "facts": {
+        "route": "S",
+        "executor": "S",
+        "owner_fields_nonblocking": true,
+        "repository_mutation_requested": true
+      },
+      "expected": {
+        "overlap_guard_required": true,
+        "lease_guard_required": true,
+        "git_currentness_guard_required": true,
+        "preflight_grants_mutation": false
+      }
+    },
+    {
+      "id": "host-resource-explicit-delegation",
+      "prompt": "D-012 selected S/S and this build step explicitly needs host capacity evidence before later mutation.",
+      "facts": {
+        "route": "S",
+        "executor": "S",
+        "host_resource_evidence_required": true
+      },
+      "expected": {
+        "base_owner_first": true,
+        "host_resource_owner": "mcl-host-resource-preflight",
+        "resource_floor_owner": "caller_or_packet",
+        "aggregate_ready_present": false
+      }
+    },
+    {
+      "id": "tiny-task-does-not-force-resource-check",
+      "prompt": "D-012 selected S/S for a tiny read-only repository inspection with no resource question.",
+      "facts": {
+        "route": "S",
+        "executor": "S",
+        "host_resource_evidence_required": false
+      },
+      "expected": {
+        "host_resource_invoked": false,
+        "existing_first_pass_unchanged": true
+      }
+    },
+    {
+      "id": "gui-companion-status-pass",
+      "prompt": "D-012 selected S_ANDROID_GUI with executor=not_applicable and bounded mcl-gui status is available.",
+      "facts": {
+        "route": "S_ANDROID_GUI",
+        "executor": "not_applicable",
+        "owner_command": "mcl-gui status",
+        "owner_schema": "mcl-gui.v1",
+        "owner_status": "PASS"
+      },
+      "expected": {
+        "owner": "mcl-gui status",
+        "owner_schema": "mcl-gui.v1",
+        "owner_invoked": true,
+        "gui_effect_invoked": false,
+        "snapshot_invoked": false,
+        "aggregate_ready_present": false
+      }
+    },
+    {
+      "id": "gui-companion-status-blocked",
+      "prompt": "D-012 selected S_ANDROID_GUI and mcl-gui status reports a blocked permission or locked-state disposition.",
+      "facts": {
+        "route": "S_ANDROID_GUI",
+        "executor": "not_applicable",
+        "owner_status": "BLOCKED"
+      },
+      "expected": {
+        "blocked_preserved": true,
+        "repair_performed": false,
+        "silent_reroute_performed": false,
+        "gui_effect_invoked": false
+      }
+    },
+    {
+      "id": "adb-read-status-pass",
+      "prompt": "D-012 selected S_ANDROID_GUI_ADB_READ and the bounded Wireless ADB status receipt is pass.",
+      "facts": {
+        "route": "S_ANDROID_GUI_ADB_READ",
+        "executor": "not_applicable",
+        "owner_schema": "mcl-wireless-adb-ui-status.v1",
+        "connection": "connected",
+        "model": "match",
+        "result": "pass"
+      },
+      "expected": {
+        "owner": "mcl-adb-ui status",
+        "owner_schema": "mcl-wireless-adb-ui-status.v1",
+        "snapshot_invoked": false,
+        "adb_action_invoked": false,
+        "raw_hierarchy_requested": false
+      }
+    },
+    {
+      "id": "adb-read-status-blocked",
+      "prompt": "D-012 selected S_ANDROID_GUI_ADB_READ but the status receipt is blocked.",
+      "facts": {
+        "route": "S_ANDROID_GUI_ADB_READ",
+        "executor": "not_applicable",
+        "result": "blocked"
+      },
+      "expected": {
+        "blocked_preserved": true,
+        "silent_reroute_performed": false,
+        "pairing_attempted": false,
+        "snapshot_invoked": false
+      }
+    },
+    {
+      "id": "adb-action-first-pass-only",
+      "prompt": "D-012 selected S_ANDROID_GUI_ADB_ACTION and Wireless ADB status is pass before a separately authorized action.",
+      "facts": {
+        "route": "S_ANDROID_GUI_ADB_ACTION",
+        "executor": "not_applicable",
+        "result": "pass"
+      },
+      "expected": {
+        "owner": "mcl-adb-ui status",
+        "action_ready_claimed": false,
+        "adb_action_invoked": false,
+        "snapshot_invoked": false,
+        "later_action_owner_gates_required": true
+      }
+    },
+    {
+      "id": "gui-executor-mismatch",
+      "prompt": "The GUI action route is paired with executor M instead of not_applicable.",
+      "facts": {
+        "route": "S_ANDROID_GUI_ADB_ACTION",
+        "executor": "M"
+      },
+      "expected": {
+        "preflight_state": "UNKNOWN",
+        "owner_invoked": false,
+        "route_guessed": false,
+        "transport_promoted_to_gui_executor": false
+      }
+    },
+    {
+      "id": "gui-owner-missing",
+      "prompt": "D-012 selected S_ANDROID_GUI but the bounded mcl-gui status owner cannot be invoked.",
+      "facts": {
+        "route": "S_ANDROID_GUI",
+        "executor": "not_applicable",
+        "owner_available": false
+      },
+      "expected": {
+        "preflight_state": "UNKNOWN",
+        "owner_invoked": false,
+        "raw_fallback_used": false,
+        "gui_effect_invoked": false
+      }
+    }
+  ]
+}

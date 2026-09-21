@@ -141,3 +141,43 @@ the broader vendor directory, npm cache, existing M Ubuntu content, or arbitrary
 
 These modes are repository-reviewable control surfaces only. Their live diagnostic/cleanup use is deferred until after
 merge and postmerge convergence. A later #2197 vendor retry remains separately authorized and is not performed by #2201.
+
+## Optional isolated analysis essentials
+
+The minimal PRIVATE LAB bootstrap remains intentionally limited to the Node/Git/Python substrate. Optional host-independent
+analysis tools use the separate repository-reviewed profile:
+
+```sh
+./analysis-profile.sh --check
+./analysis-profile.sh --apply
+```
+
+Version 1 owns exactly the Ubuntu packages `ripgrep`, `jq`, and `file`, providing lab-native `/usr/bin/rg`, `/usr/bin/jq`,
+and `/usr/bin/file`. Every inspection and install enters the managed lab only through `proot-distro login --isolated` and
+uses a lab-native PATH. A tool is `PRESENT` only when the fixed package is installed and its fixed `/usr/bin` executable is
+present and executable. Package/binary mismatches fail closed.
+
+This separation is deliberate: a non-isolated PRoot login may expose M Termux host binaries, so inherited `command -v`
+results are not proof of lab-native installation. `--check` is read-only. `--apply` installs only missing fixed packages with
+no-remove/no-upgrade safeguards, suppresses raw apt output, and verifies the fixed package/native-command pairs afterward.
+The profile has no arbitrary package, command, path, URL, environment, bind, shared-home, provider/session, service, Git,
+RDC, VM, or Android-setting passthrough. PRoot remains a userland/filesystem boundary, not a VM security boundary.
+## Bounded preservation profiles
+
+`mcl-preserve` is a thin PRIVATE LAB adapter over the repository-common preservation primitive. It does not own fingerprint or diff semantics and it does not prove whole-M health.
+
+```sh
+./mcl-preserve capture private-lab-layout
+./mcl-preserve capture private-lab-content
+./mcl-preserve compare before.json after.json
+```
+
+`private-lab-layout` preserves the managed marker plus only the existence/type of `vendor`, `fixtures`, `results`, and `receipts`. Use it when an authorized experiment may legitimately change tree contents but must preserve the managed substrate shape.
+
+`private-lab-content` preserves the same marker plus full bounded tree fingerprints for those four credential-free public trees. Use it only when the owning experiment declares those trees immutable neighbors.
+
+Capture reads the fixed managed rootfs and emits one path-free `repo-preservation-snapshot.v1` JSON object. The common capture tool writes through one temporary regular file under the existing app-private `$TMPDIR`; the adapter cleans that file on success or failure and never falls back to Android `/tmp`.
+
+Compare accepts only regular non-symlink snapshot basenames under `$TMPDIR` and delegates directly to the common comparison contract: `SAME` exits 0, `CHANGED` exits 1, and `BLOCKED` exits 2. No snapshot database, arbitrary source root/spec/output path, shell/eval hook, VM path, Git path, package action, or secret-bearing hash surface is added.
+
+These profiles prove only their declared filesystem baseline. Git branch/dirty state, M Termux package ownership, ordinary Ubuntu health, VM admission/disk state, sensitive private-runner material, and whole-device preservation remain outside this helper.

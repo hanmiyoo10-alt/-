@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-20",
+  "status": "REFERENCE_SELECTION_ONLY_NOT_PRODUCT_AUTHORITY",
+  "currentReferences": {
+    "yumi": {
+      "version": "1.16.3",
+      "file": "yumi-provider-manager-v1.16.3.js",
+      "bytes": 1018363,
+      "sha256": "b71e2b40bc64be0e12ff7be77b0345bcd2c065fc1f567ab5ab77a8dbf3136244",
+      "upstream": "https://update.rsyumi.workers.dev/provider-manager.js"
+    },
+    "cpm": {
+      "version": "1.62.1",
+      "file": "cupcake-provider-manager-v1.62.1-production.js",
+      "bytes": 1727902,
+      "sha256": "f71593e7821e09c7812c34f5654c29312cc80c780532e6a752ea16732411826a",
+      "upstream": "https://cpm-prod.ruyari-cupcake.workers.dev/api/main-plugin"
+    }
+  },
+  "authorityBoundary": "Latest-observed external reference selection only; not repository product/runtime/release authority."
+}

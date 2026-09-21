@@ -1,0 +1,180 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -eq 1 ] && [ "$1" = status ] || {
+  echo 'usage: mcl-env-status status' >&2
+  exit 2
+}
+
+HERE=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+OPS=$(CDPATH= cd -- "$HERE/.." && pwd)
+HOST="$OPS/m-termux-operator/bootstrap.sh"
+PRIVATE_VERIFY="$OPS/private-lab/verify.sh"
+PRIVATE_ANALYSIS="$OPS/private-lab/analysis-profile.sh"
+VM_BOOTSTRAP="$OPS/vm-lab/bootstrap.sh"
+VM_VERIFY="$OPS/vm-lab/verify.sh"
+PREFIX=${PREFIX:-/data/data/com.termux/files/usr}
+export PREFIX
+
+CAPTURE=
+RC=0
+capture() {
+  set +e
+  CAPTURE=$("$@" 2>&1)
+  RC=$?
+  set -e
+}
+line_count() {
+  [ -n "$CAPTURE" ] || { echo 0; return; }
+  printf '%s\n' "$CAPTURE" | wc -l | tr -d ' '
+}
+line_at() { printf '%s\n' "$CAPTURE" | sed -n "${1}p"; }
+
+host_triplet_valid() {
+  [ "$(line_count)" = 3 ] || return 1
+  case "$(line_at 1)" in
+    'PRESENT tool:rg package:ripgrep'|'MISSING tool:rg package:ripgrep') ;;
+    *) return 1 ;;
+  esac
+  case "$(line_at 2)" in
+    'PRESENT tool:jq package:jq'|'MISSING tool:jq package:jq') ;;
+    *) return 1 ;;
+  esac
+  case "$(line_at 3)" in
+    'PRESENT tool:file package:file'|'MISSING tool:file package:file') ;;
+    *) return 1 ;;
+  esac
+}
+host_blocked_valid() {
+  [ -n "$CAPTURE" ] || return 1
+  ! printf '%s\n' "$CAPTURE" | grep -Ev '^(PRESENT tool:(rg package:ripgrep|jq package:jq|file package:file)|MISSING tool:(rg package:ripgrep|jq package:jq|file package:file)|BLOCKED (package-query:unavailable|package-manager:unavailable|tool:(rg|jq|file) contract-mismatch))$' >/dev/null
+}
+class_host() {
+  capture "$HOST" --check
+  if [ "$RC" -eq 0 ] && host_triplet_valid \
+    && ! printf '%s\n' "$CAPTURE" | grep -Fq 'MISSING '; then
+    echo pass
+  elif [ "$RC" -eq 1 ] && host_triplet_valid \
+    && printf '%s\n' "$CAPTURE" | grep -Fq 'MISSING '; then
+    echo missing
+  elif [ "$RC" -eq 2 ] && host_blocked_valid \
+    && printf '%s\n' "$CAPTURE" | grep -Fq 'BLOCKED '; then
+    echo blocked
+  else
+    echo unknown
+  fi
+}
+
+class_ubuntu() {
+  command -v proot-distro >/dev/null 2>&1 || { echo unavailable; return; }
+  capture proot-distro login ubuntu -- true
+  if [ "$RC" -eq 0 ] && [ -z "$CAPTURE" ]; then
+    echo pass
+  elif [ "$RC" -ne 0 ] && [ -z "$CAPTURE" ]; then
+    echo unavailable
+  else
+    echo unknown
+  fi
+}
+class_private_substrate() {
+  capture "$PRIVATE_VERIFY"
+  if [ "$RC" -eq 0 ] && [ "$(line_count)" = 1 ] \
+    && printf '%s\n' "$CAPTURE" | grep -Eq '^PASS private-lab:[A-Za-z0-9][A-Za-z0-9._-]*$'; then
+    echo pass
+  elif [ "$RC" -ne 0 ] && [ -z "$CAPTURE" ]; then
+    echo fail
+  else
+    echo unknown
+  fi
+}
+
+analysis_triplet_valid() {
+  [ "$(line_count)" = 3 ] || return 1
+  case "$(line_at 1)" in
+    'PRESENT tool:rg package:ripgrep'|'MISSING tool:rg package:ripgrep') ;;
+    *) return 1 ;;
+  esac
+  case "$(line_at 2)" in
+    'PRESENT tool:jq package:jq'|'MISSING tool:jq package:jq') ;;
+    *) return 1 ;;
+  esac
+  case "$(line_at 3)" in
+    'PRESENT tool:file package:file'|'MISSING tool:file package:file') ;;
+    *) return 1 ;;
+  esac
+}
+class_private_analysis() {
+  capture "$PRIVATE_ANALYSIS" --check
+  if [ "$RC" -eq 0 ] && analysis_triplet_valid; then
+    if printf '%s\n' "$CAPTURE" | grep -Fq 'MISSING '; then echo missing; else echo pass; fi
+  elif [ "$RC" -eq 1 ] && [ "$(line_count)" = 1 ] \
+    && printf '%s\n' "$CAPTURE" | grep -Eq '^BLOCKED (invalid-lab|preserved-ubuntu|lab-unavailable|inspection-failed|package-command-mismatch)$'; then
+    echo blocked
+  else
+    echo unknown
+  fi
+}
+
+vm_six_valid() {
+  [ "$(line_count)" = 6 ] || return 1
+  case "$(line_at 1)" in 'PRESENT vm-root:mcl-vm-lab'|'MISSING vm-root:mcl-vm-lab') ;; *) return 1 ;; esac
+  case "$(line_at 2)" in 'PRESENT package:qemu-system-aarch64-headless'|'MISSING package:qemu-system-aarch64-headless') ;; *) return 1 ;; esac
+  case "$(line_at 3)" in 'PRESENT package:qemu-utils'|'MISSING package:qemu-utils') ;; *) return 1 ;; esac
+  case "$(line_at 4)" in 'PRESENT guest-image:alpine-virt-3.24.1-aarch64'|'MISSING guest-image:alpine-virt-3.24.1-aarch64') ;; *) return 1 ;; esac
+  case "$(line_at 5)" in 'PRESENT disk:mcl-vm-lab.qcow2'|'MISSING disk:mcl-vm-lab.qcow2') ;; *) return 1 ;; esac
+  case "$(line_at 6)" in 'PRESENT uefi-vars:mcl-vm-lab'|'MISSING uefi-vars:mcl-vm-lab') ;; *) return 1 ;; esac
+}
+class_vm() {
+  capture "$VM_BOOTSTRAP" --check
+  if [ "$RC" -eq 0 ] && vm_six_valid; then
+    if printf '%s\n' "$CAPTURE" | grep -Fq 'MISSING '; then echo not_prepared; else echo prepared; fi
+  elif [ "$RC" -eq 1 ] && [ "$(line_count)" = 1 ] \
+    && printf '%s\n' "$CAPTURE" | grep -Eq '^BLOCKED (ownership-conflict|guest-image-conflict|disk-conflict|uefi-vars-conflict)$'; then
+    echo blocked
+  else
+    echo unknown
+  fi
+}
+
+admission_blocked_valid() {
+  n=$(line_count)
+  [ "$n" -eq 1 ] || [ "$n" -eq 2 ] || return 1
+  if [ "$n" -eq 2 ]; then [ "$(line_at 1)" = 'PASS vm-lab-prepared' ] || return 1; fi
+  last=$(line_at "$n")
+  printf '%s\n' "$last" | grep -Eq '^BLOCKED (vm-root-unavailable|vm-state-unavailable|ownership-conflict|qemu-package-missing|qemu-toolchain-mismatch|qemu-firmware-unavailable|guest-image-missing|guest-image-checksum|guest-image-size|disk-missing|uefi-vars-missing|uefi-vars-contract|disk-inspection|disk-contract|resource-floor|resource-guard-failure)$'
+}
+class_admission() {
+  capture "$VM_VERIFY" --admission
+  if [ "$RC" -eq 0 ] && [ "$CAPTURE" = "PASS vm-lab-prepared
+PASS boot-admission" ]; then
+    echo pass
+  elif [ "$RC" -eq 2 ] && [ "$CAPTURE" = "PASS vm-lab-prepared
+UNKNOWN resource-admission" ]; then
+    echo unknown
+  elif [ "$RC" -eq 1 ] && admission_blocked_valid; then
+    echo blocked
+  else
+    echo unknown
+  fi
+}
+
+HOST_STATE=$(class_host)
+UBUNTU_STATE=$(class_ubuntu)
+PRIVATE_STATE=$(class_private_substrate)
+ANALYSIS_STATE=$(class_private_analysis)
+VM_STATE=$(class_vm)
+if [ "$VM_STATE" = prepared ]; then
+  ADMISSION_STATE=$(class_admission)
+else
+  ADMISSION_STATE=not_ready
+fi
+
+printf '%s\n' \
+  'schema=mcl-m-family-status.v1' \
+  "host_operator_profile=$HOST_STATE" \
+  "ordinary_ubuntu_login=$UBUNTU_STATE" \
+  "private_lab_substrate=$PRIVATE_STATE" \
+  "private_lab_analysis=$ANALYSIS_STATE" \
+  "vm_lab=$VM_STATE" \
+  "vm_admission=$ADMISSION_STATE" \
+  'details=withheld'

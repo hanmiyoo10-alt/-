@@ -1,0 +1,24 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -u
+
+[ "$#" -eq 0 ] || exit 2
+
+PREFIX=/data/data/com.termux/files/usr
+HOME_DIR=/data/data/com.termux/files/home
+PYTHON="$PREFIX/bin/python"
+NOHUP="$PREFIX/bin/nohup"
+CLIENT="$HOME_DIR/.local/lib/mcl-m-termux-lifeline/heartbeat-client.py"
+STATE="$HOME_DIR/.local/state/mcl-m-termux-lifeline"
+
+[ -x "$PYTHON" ] || exit 2
+[ -x "$NOHUP" ] || exit 2
+[ -f "$CLIENT" ] && [ ! -L "$CLIENT" ] || exit 2
+
+mkdir -p "$STATE" || exit 2
+"$NOHUP" "$PYTHON" "$CLIENT" >/dev/null 2>&1 &
+
+printf '%s\n' \
+    'schema=mcl-m-termux-lifeline-heartbeat.v1' \
+    'operation=arm' \
+    'status=started_or_already_running' \
+    'details=withheld'

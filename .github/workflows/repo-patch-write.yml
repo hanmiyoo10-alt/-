@@ -5,6 +5,19 @@ on:
     paths:
       - 'tools/repo-write/**'
       - '.github/workflows/repo-patch-write.yml'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/repository-patch/mcl-worktree-patch.py'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/repository-patch/mcl-repository-patch-owner-invoke.cjs'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/repository-patch/tests/test-worktree-patch.py'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/repository-patch/tests/test-owner-invoke.cjs'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/repository-patch/README.md'
+  push:
+    branches: [main]
+    paths:
+      - 'products/chatgpt-mobile-coder-lab/device-ops/repository-patch/mcl-worktree-patch.py'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/repository-patch/mcl-repository-patch-owner-invoke.cjs'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/repository-patch/tests/test-worktree-patch.py'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/repository-patch/tests/test-owner-invoke.cjs'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/repository-patch/README.md'
   issue_comment:
     types: [created]
 
@@ -17,7 +30,7 @@ concurrency:
 
 jobs:
   validate:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,6 +52,23 @@ jobs:
         run: |
           set -euo pipefail
           python -m unittest discover -s tools/repo-write/tests -p 'test_*.py' -v
+
+      - name: Compile MCL repository patch owner
+        run: |
+          set -euo pipefail
+          python -m py_compile products/chatgpt-mobile-coder-lab/device-ops/repository-patch/mcl-worktree-patch.py
+          node --check products/chatgpt-mobile-coder-lab/device-ops/repository-patch/mcl-repository-patch-owner-invoke.cjs
+          node --check products/chatgpt-mobile-coder-lab/device-ops/repository-patch/tests/test-owner-invoke.cjs
+
+      - name: Run MCL repository patch primitive contract
+        run: |
+          set -euo pipefail
+          python3 products/chatgpt-mobile-coder-lab/device-ops/repository-patch/tests/test-worktree-patch.py -v
+
+      - name: Run MCL repository patch owner-invoke contract
+        run: |
+          set -euo pipefail
+          node products/chatgpt-mobile-coder-lab/device-ops/repository-patch/tests/test-owner-invoke.cjs
 
   apply-owner-request:
     if: >-

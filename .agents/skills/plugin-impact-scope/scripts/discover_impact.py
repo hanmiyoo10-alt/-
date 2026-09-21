@@ -10,6 +10,10 @@ DEFAULT_EXTENSIONS = {
     ".yml", ".yaml", ".sh", ".html", ".css", ".txt"
 }
 SKIP_DIRS = {".git", "node_modules", "dist", "build", "coverage", "__pycache__"}
+DEFAULT_PROVIDER = "auto"
+BUILTIN_PROVIDER = "bounded_text"
+PROVIDER_SEMANTICS = "CANDIDATE_DISCOVERY_ONLY"
+SOURCE_REREAD_REQUIRED = True
 
 
 class DiscoveryError(Exception):
@@ -52,6 +56,19 @@ def _iter_files(repo_root: Path, roots: list[str], max_file_bytes: int):
             yield path
 
 
+def _select_provider(requested_provider: str) -> tuple[str, str, str | None]:
+    requested = requested_provider.strip()
+    if not requested:
+        raise DiscoveryError("provider must be non-empty")
+    if requested in {DEFAULT_PROVIDER, BUILTIN_PROVIDER}:
+        return BUILTIN_PROVIDER, "SELECTED", None
+    return (
+        BUILTIN_PROVIDER,
+        "FALLBACK_SELECTED",
+        f"provider unavailable or unsupported: {requested}",
+    )
+
+
 def discover(
     repo_root: Path,
     scope: str,
@@ -59,6 +76,7 @@ def discover(
     seeds: list[str],
     max_results: int = 100,
     max_file_bytes: int = 512_000,
+    provider: str = DEFAULT_PROVIDER,
 ) -> dict:
     repo_root = repo_root.resolve()
     if scope not in PILOT_VALIDATED_SCOPES:
@@ -73,6 +91,8 @@ def discover(
         raise DiscoveryError("max_results must be between 1 and 500")
     if max_file_bytes < 1024:
         raise DiscoveryError("max_file_bytes must be at least 1024")
+
+    selected_provider, provider_status, fallback_reason = _select_provider(provider)
 
     normalized = [(seed, seed.casefold()) for seed in seeds]
     results: list[dict] = []
@@ -134,6 +154,12 @@ def discover(
         "pilot_validated": True,
         "roots": roots,
         "seeds": seeds,
+        "requested_provider": provider,
+        "selected_provider": selected_provider,
+        "provider_status": provider_status,
+        "provider_fallback_reason": fallback_reason,
+        "provider_semantics": PROVIDER_SEMANTICS,
+        "source_reread_required": SOURCE_REREAD_REQUIRED,
         "status": "CANDIDATES_FOUND" if total_matches else "NO_MATCH",
         "truth_claim_status": "MECHANICAL_CANDIDATES_ONLY",
         "candidate_results": results,
@@ -153,6 +179,7 @@ def main() -> int:
     parser.add_argument("--seed", action="append", dest="seeds", required=True)
     parser.add_argument("--max-results", type=int, default=100)
     parser.add_argument("--max-file-bytes", type=int, default=512_000)
+    parser.add_argument("--provider", default=DEFAULT_PROVIDER)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -164,6 +191,7 @@ def main() -> int:
             args.seeds,
             args.max_results,
             args.max_file_bytes,
+            args.provider,
         )
     except DiscoveryError as exc:
         payload = {"status": "UNKNOWN", "error": str(exc), "mutation_performed": False}

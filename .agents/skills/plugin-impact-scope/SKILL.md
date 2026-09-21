@@ -29,6 +29,9 @@ It is an analysis module between authority resolution and later design/implement
 - Do not edit source, docs, issues, branches, pull requests, releases, production state, or device state.
 - Do not select a repair or implementation mechanism.
 - Do not upgrade grep/text-search/path proximity into semantic ownership.
+- Candidate-discovery providers are replaceable accelerators under this skill, not semantic owners or authority sources.
+- Provider success, structural parsing, or graph/index output never upgrades a candidate directly to `DIRECT` or `SUPPORTED_LIKELY`.
+- Provider unavailability, unsupported coverage, staleness, or partial results must remain explicit and fall back to an evidence-equivalent bounded source/search path when one exists.
 - Do not infer that an absent static reference proves no runtime/dynamic dependency exists.
 - Preserve `UNKNOWN` and `CONFLICT` rather than inventing edges.
 - Derived impact maps are context-management artifacts, not mutable project truth.
@@ -50,7 +53,7 @@ Use only these impact evidence classes:
 
 Do not invent numeric confidence scores.
 
-A mechanical helper result is always `CANDIDATE_ONLY`; it cannot directly produce `DIRECT` or `SUPPORTED_LIKELY` impact edges.
+A candidate-discovery provider result is always `CANDIDATE_ONLY`; it cannot directly produce `DIRECT` or `SUPPORTED_LIKELY` impact edges.
 
 Evidence-document ordering is also candidate context only. Never classify a chain of files or documents as `DIRECT` merely because the files were supplied together or describe successive roadmap stages.
 
@@ -107,6 +110,23 @@ Do not start with a repository-wide sweep merely because it is available.
 
 ### 4. Discover candidate references mechanically
 
+This skill owns provider orchestration for candidate discovery. The provider flow is:
+
+```text
+verified authority + bounded roots/seeds
+-> choose the narrowest available candidate-discovery provider
+-> preserve provider status/coverage/fallback explicitly
+-> CANDIDATE_ONLY results
+-> exact current source/contract reread
+-> evidence classification
+```
+
+Provider selection is capability-based rather than installation-assuming. Repository-native exact/literal/history search, structural AST search, or indexed symbol/graph lookup may be used when separately available, current for the requested ref, bounded to the declared roots, and evidence-equivalent. None is mandatory merely because this skill exists.
+
+If a preferred provider is unavailable, stale, partial, unsupported for the language/edge, or more expensive than a direct bounded read/search, fall back to the narrowest evidence-equivalent native/source path. Provider absence must not block ordinary impact scoping when another authorized path can establish the needed candidates.
+
+The bundled helper currently exposes `auto` orchestration with a built-in `bounded_text` provider. An unavailable requested provider falls back explicitly to `bounded_text` and reports that fallback; this does not claim the requested provider was installed or executed.
+
 For repeated text/reference discovery, the bundled helper may be used with the verified scope/root:
 
 ```bash
@@ -120,7 +140,9 @@ python3 .agents/skills/plugin-impact-scope/scripts/discover_impact.py \
 
 Multiple `--root` and `--seed` arguments are allowed.
 
-Treat every helper hit as `CANDIDATE_ONLY`. The helper proves only that bounded current-checkout text/path references exist. It does not prove semantic ownership, runtime execution, release impact, or absence of dynamic edges.
+Treat every provider hit as `CANDIDATE_ONLY`. Provider metadata records which provider was requested/selected and whether fallback occurred, but it never raises the semantic evidence class.
+
+The current `bounded_text` provider proves only that bounded current-checkout text/path references exist. It does not prove semantic ownership, runtime execution, release impact, or absence of dynamic edges. Exact source reread remains mandatory before any non-`UNKNOWN` semantic impact classification.
 
 ### 5. Re-read exact source at candidate boundaries
 
@@ -190,6 +212,8 @@ Only when the current project contract makes them relevant, identify whether the
 - release spec/evidence;
 - production promotion/parity checks.
 
+Provider output alone cannot establish a generated/materializer/release relationship. Follow the current project contract and owning source through canonical source -> materializer/builder -> generated artifact -> manifest/test/release evidence, preserving `UNKNOWN` when a link is not positively supported.
+
 A repository-only audit/documentation change may legitimately have no shipped-byte impact. Preserve that as a bounded conclusion only when current source/contracts support it.
 
 Treat authority exclusions as exclusions. If current evidence says a path or branch is not production/runtime/release authority, that statement cannot by itself support listing the excluded path as a generated, shipped, materialized, or release surface.
@@ -251,6 +275,7 @@ The impact scope is complete only when:
 - the normal validated-scope gate passed, or explicit isolated candidate-eval authority supplied the evaluation scope without promotion;
 - mutable/current authority inputs were freshly verified;
 - search roots/seeds stayed bounded;
+- provider selection, coverage/fallback state, and candidate-only semantics stayed explicit; unavailable/partial providers did not block an evidence-equivalent bounded fallback;
 - mechanical hits remained candidate-only until exact reread;
 - semantic owner and cross-layer edges are evidence-classified;
 - evidence/document ordering was not promoted into a semantic flow;

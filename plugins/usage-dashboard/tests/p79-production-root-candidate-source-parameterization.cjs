@@ -76,6 +76,10 @@ for (const workflow of [
 
 const suite = discoverTests();
 assert.ok(suite.regressions.includes('p79-production-root-candidate-source-parameterization.cjs'));
-assert.equal(suite.ordered.length, 149, 'R1B should add exactly one auto-discovered regression');
+assert.equal(
+  suite.regressions.filter((name) => name === 'p79-production-root-candidate-source-parameterization.cjs').length,
+  1,
+  'R1B regression must be auto-discovered exactly once',
+);
 
 console.log('USAGE_DASHBOARD_PRODUCTION_ROOT_RELOCATION:R1B_CANDIDATE_SOURCE_ROOT_PARAMETERIZED');

@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+SCHEMA = "mcl-worktree-cleanup.v1"
+MODE = "MCL_WORKTREE_CLEANUP"
+HOLDER_FILE = "mcl-workspace-holder.v1.json"
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+TARGET_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+AUTHORITY = {
+    "repositoryMutationAuthorized": False,
+    "deviceMutationAuthorized": False,
+    "mergeAuthorized": False,
+    "releaseAuthorized": False,
+    "productionAuthorized": False,
+}
+PROFILES = {
+    "S": {
+        "control": "/root/nyang-repo",
+        "worktree_root": "/root/nyang-worktrees",
+        "branch_prefix": "server/",
+        "protected_landing": None,
+    },
+    "M": {
+        "control": "/data/data/com.termux/files/home/nyang-repo",
+        "worktree_root": "/data/data/com.termux/files/home/nyang-worktrees",
+        "branch_prefix": "mainphone/",
+        "protected_landing": "/data/data/com.termux/files/home/nyang-worktrees/mainphone-work",
+    },
+}
+
+def _run(args, *, check=True):
+    result = subprocess.run(args, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, shell=False)
+    if check and result.returncode != 0:
+        raise RuntimeError("COMMAND_FAILED")
+    return result
+
+def _git(repo, *args, check=True):
+    return _run(["git", "-C", repo, *args], check=check)
+
+def _receipt(operation, status, executor, target, expected_branch, expected_head,
+             reasons=None, observed_branch=None, observed_head=None):
+    return {
+        "schema": SCHEMA,
+        "mode": MODE,
+        "operation": operation,
+        "status": status,
+        "executor": executor,
+        "target": target,
+        "expectedBranch": expected_branch,
+        "expectedHead": expected_head,
+        "observedBranch": observed_branch,
+        "observedHead": observed_head,
+        "reasonCodes": sorted(set(reasons or [])),
+        "details": "withheld",
+        "authority": dict(AUTHORITY),
+    }
+
+def _safe_target(profile, target):
+    if not TARGET_RE.fullmatch(target or "") or target in {".", ".."}:
+        return None, ["TARGET_BASENAME_INVALID"]
+    root = profile["worktree_root"]
+    if os.path.realpath(root) != os.path.normpath(root):
+        return None, ["WORKTREE_ROOT_ALIAS"]
+    candidate = os.path.normpath(os.path.join(root, target))
+    if os.path.dirname(candidate) != os.path.normpath(root):
+        return None, ["TARGET_ESCAPE"]
+    return candidate, []
+
+def _registered_worktrees(control):
+    out = _git(control, "worktree", "list", "--porcelain").stdout
+    paths = []
+    for block in out.strip().split("\n\n") if out.strip() else []:
+        for line in block.splitlines():
+            if line.startswith("worktree "):
+                paths.append(line[len("worktree "):])
+                break
+    return paths
+
+def _branch_ref_sha(profile, branch):
+    result = _git(profile["control"], "rev-parse", "--verify", f"refs/heads/{branch}", check=False)
+    return result.stdout.strip() if result.returncode == 0 else None
+
+def _repo_snapshot(path):
+    branch = _git(path, "symbolic-ref", "--short", "-q", "HEAD", check=False)
+    head = _git(path, "rev-parse", "HEAD", check=False)
+    status = _git(path, "status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching", check=False)
+    if head.returncode != 0 or status.returncode != 0:
+        raise RuntimeError("PRESERVATION_READ_FAILED")
+    return {
+        "branch": branch.stdout.strip() if branch.returncode == 0 else None,
+        "head": head.stdout.strip(),
+        "statusDigest": hashlib.sha256(status.stdout.encode()).hexdigest(),
+    }
+
+def _preservation_snapshot(profile):
+    result = {"control": _repo_snapshot(profile["control"])}
+    landing = profile.get("protected_landing")
+    if landing:
+        result["landing"] = _repo_snapshot(landing)
+    return result
+
+def _status_reasons(target):
+    result = _git(target, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching", check=False)
+    if result.returncode != 0:
+        return ["WORKTREE_STATUS_READ_FAILED"]
+    reasons = []
+    for entry in result.stdout.split("\0"):
+        if not entry:
+            continue
+        code = entry[:2]
+        if code == "??":
+            reasons.append("WORKTREE_UNTRACKED")
+        elif code == "!!":
+            reasons.append("WORKTREE_IGNORED")
+        else:
+            if len(code) >= 1 and code[0] != " ":
+                reasons.append("WORKTREE_STAGED")
+            if len(code) >= 2 and code[1] != " ":
+                reasons.append("WORKTREE_TRACKED_DIRTY")
+    return sorted(set(reasons))
+
+def inspect_target(executor, target_name, expected_branch, expected_head, *, profiles=None):
+    profiles = profiles or PROFILES
+    reasons = []
+    observed_branch = None
+    observed_head = None
+    profile = profiles.get(executor)
+    if profile is None:
+        return {"eligible": False, "reasons": ["EXECUTOR_INVALID"], "observedBranch": None, "observedHead": None, "targetPath": None}
+    target, target_reasons = _safe_target(profile, target_name)
+    reasons.extend(target_reasons)
+    if not expected_branch or not expected_branch.startswith(profile["branch_prefix"]):
+        reasons.append("EXPECTED_BRANCH_FAMILY_INVALID")
+    if expected_branch:
+        branch_check = _run(["git", "check-ref-format", "--branch", expected_branch], check=False)
+        if branch_check.returncode != 0:
+            reasons.append("EXPECTED_BRANCH_INVALID")
+    if not SHA_RE.fullmatch(expected_head or ""):
+        reasons.append("EXPECTED_HEAD_INVALID")
+    if target is None or reasons:
+        return {"eligible": False, "reasons": sorted(set(reasons)), "observedBranch": None, "observedHead": None, "targetPath": target}
+    if os.path.lexists(target) and os.path.islink(target):
+        reasons.append("TARGET_SYMLINK_OR_ALIAS")
+    if not os.path.isdir(target):
+        reasons.append("TARGET_MISSING")
+    elif os.path.realpath(target) != target:
+        reasons.append("TARGET_SYMLINK_OR_ALIAS")
+    if os.path.normpath(target) == os.path.normpath(profile["control"]):
+        reasons.append("CONTROL_REPOSITORY_TARGET")
+    if profile.get("protected_landing") and os.path.normpath(target) == os.path.normpath(profile["protected_landing"]):
+        reasons.append("PROTECTED_LANDING_TARGET")
+    if reasons:
+        return {"eligible": False, "reasons": sorted(set(reasons)), "observedBranch": None, "observedHead": None, "targetPath": target}
+    try:
+        registered = _registered_worktrees(profile["control"])
+    except Exception:
+        registered = []
+        reasons.append("WORKTREE_REGISTRATION_READ_FAILED")
+    if target not in registered:
+        reasons.append("TARGET_NOT_REGISTERED")
+    top = _git(target, "rev-parse", "--show-toplevel", check=False)
+    if top.returncode != 0 or top.stdout.strip() != target:
+        reasons.append("TARGET_TOPLEVEL_CONFLICT")
+    branch = _git(target, "symbolic-ref", "--short", "-q", "HEAD", check=False)
+    if branch.returncode != 0:
+        reasons.append("TARGET_DETACHED")
+    else:
+        observed_branch = branch.stdout.strip()
+        if observed_branch != expected_branch:
+            reasons.append("TARGET_BRANCH_CONFLICT")
+        if not observed_branch.startswith(profile["branch_prefix"]):
+            reasons.append("TARGET_BRANCH_FAMILY_CONFLICT")
+    head = _git(target, "rev-parse", "HEAD", check=False)
+    if head.returncode != 0:
+        reasons.append("TARGET_HEAD_READ_FAILED")
+    else:
+        observed_head = head.stdout.strip()
+        if observed_head != expected_head:
+            reasons.append("TARGET_HEAD_CONFLICT")
+    ref_sha = _branch_ref_sha(profile, expected_branch) if expected_branch else None
+    if ref_sha is None:
+        reasons.append("LOCAL_BRANCH_REF_MISSING")
+    elif ref_sha != expected_head:
+        reasons.append("LOCAL_BRANCH_REF_CONFLICT")
+    reasons.extend(_status_reasons(target))
+    git_dir = _git(target, "rev-parse", "--absolute-git-dir", check=False)
+    if git_dir.returncode != 0:
+        reasons.append("GIT_ADMIN_READ_FAILED")
+    else:
+        holder = os.path.join(git_dir.stdout.strip(), HOLDER_FILE)
+        if os.path.lexists(holder):
+            reasons.append("WORKSPACE_HOLDER_PRESENT")
+    return {
+        "eligible": not reasons,
+        "reasons": sorted(set(reasons)),
+        "observedBranch": observed_branch,
+        "observedHead": observed_head,
+        "targetPath": target,
+    }
+
+def apply_target(executor, target_name, expected_branch, expected_head, *, explicit_apply=False, profiles=None, before_recheck=None):
+    profiles = profiles or PROFILES
+    if not explicit_apply:
+        return _receipt("apply", "BLOCKED", executor, target_name, expected_branch, expected_head, ["EXPLICIT_APPLY_REQUIRED"])
+    profile = profiles.get(executor)
+    if profile is None:
+        return _receipt("apply", "BLOCKED", executor, target_name, expected_branch, expected_head, ["EXECUTOR_INVALID"])
+    try:
+        before = _preservation_snapshot(profile)
+    except Exception:
+        return _receipt("apply", "BLOCKED", executor, target_name, expected_branch, expected_head, ["PRESERVATION_READ_FAILED"])
+    first = inspect_target(executor, target_name, expected_branch, expected_head, profiles=profiles)
+    if not first["eligible"]:
+        return _receipt("apply", "BLOCKED", executor, target_name, expected_branch, expected_head,
+                        first["reasons"], first["observedBranch"], first["observedHead"])
+    if before_recheck is not None:
+        before_recheck()
+    second = inspect_target(executor, target_name, expected_branch, expected_head, profiles=profiles)
+    if not second["eligible"]:
+        return _receipt("apply", "BLOCKED", executor, target_name, expected_branch, expected_head,
+                        ["RECHECK_BLOCKED", *second["reasons"]], second["observedBranch"], second["observedHead"])
+    target = second["targetPath"]
+    remove = _git(profile["control"], "worktree", "remove", target, check=False)
+    if remove.returncode != 0:
+        return _receipt("apply", "BLOCKED", executor, target_name, expected_branch, expected_head,
+                        ["WORKTREE_REMOVE_FAILED"], second["observedBranch"], second["observedHead"])
+    reasons = []
+    if os.path.lexists(target):
+        reasons.append("POST_REMOVE_TARGET_PRESENT")
+    try:
+        if target in _registered_worktrees(profile["control"]):
+            reasons.append("POST_REMOVE_STILL_REGISTERED")
+    except Exception:
+        reasons.append("POST_REMOVE_REGISTRATION_UNKNOWN")
+    ref_sha = _branch_ref_sha(profile, expected_branch)
+    if ref_sha != expected_head:
+        reasons.append("POST_REMOVE_BRANCH_REF_CONFLICT")
+    try:
+        after = _preservation_snapshot(profile)
+        if after != before:
+            reasons.append("POST_REMOVE_LANDING_DRIFT")
+    except Exception:
+        reasons.append("POST_REMOVE_PRESERVATION_UNKNOWN")
+    if reasons:
+        return _receipt("apply", "BLOCKED", executor, target_name, expected_branch, expected_head,
+                        reasons, second["observedBranch"], second["observedHead"])
+    return _receipt("apply", "REMOVED", executor, target_name, expected_branch, expected_head,
+                    [], second["observedBranch"], second["observedHead"])
+
+def _parse(argv):
+    if not argv or argv[0] not in {"inspect", "apply"}:
+        raise ValueError("COMMAND_INVALID")
+    command = argv[0]
+    values = {}
+    apply_flag = False
+    i = 1
+    allowed = {"--executor", "--target", "--expected-branch", "--expected-head"}
+    while i < len(argv):
+        token = argv[i]
+        if token == "--apply":
+            if apply_flag:
+                raise ValueError("ARGUMENT_DUPLICATE")
+            apply_flag = True
+            i += 1
+            continue
+        if token not in allowed or i + 1 >= len(argv):
+            raise ValueError("ARGUMENT_INVALID")
+        if token in values:
+            raise ValueError("ARGUMENT_DUPLICATE")
+        values[token] = argv[i + 1]
+        i += 2
+    for flag in allowed:
+        if flag not in values:
+            raise ValueError("ARGUMENT_REQUIRED")
+    if command == "inspect" and apply_flag:
+        raise ValueError("APPLY_FLAG_WITH_INSPECT")
+    return command, values, apply_flag
+
+def run_cli(argv=None, *, profiles=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    try:
+        command, values, apply_flag = _parse(argv)
+        executor = values["--executor"]
+        target = values["--target"]
+        branch = values["--expected-branch"]
+        head = values["--expected-head"]
+        if command == "inspect":
+            result = inspect_target(executor, target, branch, head, profiles=profiles)
+            receipt = _receipt("inspect", "ELIGIBLE" if result["eligible"] else "BLOCKED",
+                               executor, target, branch, head, result["reasons"],
+                               result["observedBranch"], result["observedHead"])
+        else:
+            receipt = apply_target(executor, target, branch, head, explicit_apply=apply_flag, profiles=profiles)
+    except ValueError as error:
+        receipt = _receipt("unknown", "BLOCKED", "unknown", "unknown", None, None, [str(error)])
+    code = 0 if receipt["status"] in {"ELIGIBLE", "REMOVED"} else 2
+    return code, json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n"
+
+def main():
+    code, text = run_cli()
+    sys.stdout.write(text)
+    return code
+
+if __name__ == "__main__":
+    raise SystemExit(main())

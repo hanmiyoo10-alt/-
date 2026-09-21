@@ -146,7 +146,7 @@ exit 1
 EOF
 chmod +x "$MOCK_BIN/proot-distro"
 
-for command_name in node npm python tmux ssh rsync make clang curl sv python3 cc; do
+for command_name in node npm python tmux ssh rsync make clang curl sv python3 cc termux-battery-status termux-notification termux-notification-list termux-notification-remove; do
     cat > "$MOCK_BIN/$command_name" <<'EOF'
 #!/bin/sh
 exit 0
@@ -188,6 +188,7 @@ assert_file_value() {
 }
 
 TERMUX_MANIFEST="$ROOT/manifests/common.termux.txt"
+TERMUX_API_MANIFEST="$ROOT/manifests/termux-api.termux.txt"
 UBUNTU_MANIFEST="$ROOT/manifests/common.ubuntu.txt"
 printf 'TEST default-check-is-read-only\n'
 seed_manifest_packages "$TERMUX_MANIFEST"
@@ -279,5 +280,79 @@ assert_contains "$RUN_OUTPUT" 'PRESENT profile:common context:ubuntu'
 assert_not_contains "$(log_text)" 'apt-get install'
 assert_not_contains "$(log_text)" 'git-set'
 printf 'PASS verify-is-read-only-wrapper\n'
+
+printf 'TEST termux-api-check-is-read-only\n'
+seed_manifest_packages "$TERMUX_API_MANIFEST"
+seed_manual_state
+remove_installed_package termux-api
+run_cmd "$BOOTSTRAP" --check --context termux --profile termux-api
+assert_rc_nonzero
+assert_contains "$RUN_OUTPUT" 'MISSING package:termux-api'
+assert_not_contains "$(log_text)" 'pkg install'
+assert_not_contains "$(log_text)" 'git-set'
+printf 'PASS termux-api-check-is-read-only\n'
+
+printf 'TEST termux-api-apply-and-second-apply-noop\n'
+seed_manifest_packages "$TERMUX_API_MANIFEST"
+seed_manual_state
+remove_installed_package termux-api
+rm -f "$STATE/git_name" "$STATE/git_email"
+run_cmd "$BOOTSTRAP" --apply --context termux --profile termux-api
+assert_rc_zero
+assert_contains "$RUN_OUTPUT" 'INSTALLED package:termux-api'
+assert_contains "$RUN_OUTPUT" 'PRESENT command:termux-battery-status'
+assert_contains "$RUN_OUTPUT" 'PRESENT command:termux-notification'
+assert_contains "$RUN_OUTPUT" 'PRESENT command:termux-notification-list'
+assert_contains "$RUN_OUTPUT" 'PRESENT command:termux-notification-remove'
+assert_contains "$(log_text)" 'pkg install -y termux-api'
+[ ! -e "$STATE/git_name" ] || fail 'termux-api profile mutated git user.name'
+[ ! -e "$STATE/git_email" ] || fail 'termux-api profile mutated git user.email'
+lines_before=$(wc -l < "$STATE/log" | tr -d ' ')
+run_cmd "$BOOTSTRAP" --apply --context termux --profile termux-api
+assert_rc_zero
+lines_after=$(wc -l < "$STATE/log" | tr -d ' ')
+[ "$lines_before" = "$lines_after" ] || fail 'termux-api second apply performed a managed mutation'
+printf 'PASS termux-api-apply-and-second-apply-noop\n'
+
+printf 'TEST termux-api-missing-companion-blocks-convergence\n'
+seed_manifest_packages "$TERMUX_API_MANIFEST"
+seed_manual_state
+grep -Fxv com.termux.api "$STATE/android_apps" > "$STATE/android_apps.next"
+mv "$STATE/android_apps.next" "$STATE/android_apps"
+run_cmd "$BOOTSTRAP" --check --context termux --profile termux-api
+assert_rc_nonzero
+assert_contains "$RUN_OUTPUT" 'NEEDS_MANUAL android-app:termux-api'
+assert_not_contains "$RUN_OUTPUT" 'PRESENT profile:termux-api context:termux'
+printf 'PASS termux-api-missing-companion-blocks-convergence\n'
+
+printf 'TEST termux-api-command-mismatch-fails-closed\n'
+seed_manifest_packages "$TERMUX_API_MANIFEST"
+seed_manual_state
+mv "$MOCK_BIN/termux-notification-list" "$MOCK_BIN/termux-notification-list.off"
+run_cmd "$BOOTSTRAP" --check --context termux --profile termux-api
+mv "$MOCK_BIN/termux-notification-list.off" "$MOCK_BIN/termux-notification-list"
+assert_rc_nonzero
+assert_contains "$RUN_OUTPUT" 'FAILED command:termux-notification-list package:termux-api'
+printf 'PASS termux-api-command-mismatch-fails-closed\n'
+
+printf 'TEST termux-api-rejects-ubuntu-context\n'
+seed_manifest_packages "$TERMUX_API_MANIFEST"
+seed_manual_state
+run_cmd "$BOOTSTRAP" --check --context ubuntu --profile termux-api
+[ "$RUN_RC" -eq 2 ] || fail "expected rc=2, got $RUN_RC: $RUN_OUTPUT"
+assert_contains "$RUN_OUTPUT" 'BLOCKED profile-context:termux-api:ubuntu'
+assert_not_contains "$(log_text)" 'apt-get'
+assert_not_contains "$(log_text)" 'pkg install'
+printf 'PASS termux-api-rejects-ubuntu-context\n'
+
+printf 'TEST termux-api-verify-is-read-only-wrapper\n'
+seed_manifest_packages "$TERMUX_API_MANIFEST"
+seed_manual_state
+run_cmd "$VERIFY" --context termux --profile termux-api
+assert_rc_zero
+assert_contains "$RUN_OUTPUT" 'PRESENT profile:termux-api context:termux'
+assert_not_contains "$(log_text)" 'pkg install'
+assert_not_contains "$(log_text)" 'git-set'
+printf 'PASS termux-api-verify-is-read-only-wrapper\n'
 
 printf 'ALL TESTS PASS\n'

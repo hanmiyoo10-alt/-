@@ -7,7 +7,7 @@ CONTEXT=auto
 
 usage() {
     cat <<'EOF'
-usage: verify.sh [--profile common] [--context auto|termux|ubuntu]
+usage: verify.sh [--profile common|termux-api] [--context auto|termux|ubuntu]
 EOF
 }
 
@@ -34,7 +34,7 @@ while [ "$#" -gt 0 ]; do
     esac
     shift
 done
-[ "$PROFILE" = common ] || { usage >&2; exit 2; }
+case "$PROFILE" in common|termux-api) ;; *) usage >&2; exit 2 ;; esac
 case "$CONTEXT" in auto|termux|ubuntu) ;; *) usage >&2; exit 2 ;; esac
 
 exec "$SCRIPT_DIR/bootstrap.sh" --check --profile "$PROFILE" --context "$CONTEXT"

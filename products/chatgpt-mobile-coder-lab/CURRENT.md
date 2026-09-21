@@ -1,6 +1,6 @@
 # CURRENT — ChatGPT Mobile Coder Lab
 
-최종 갱신 기준: **2026-09-12**
+최종 갱신 기준: **2026-09-20**
 
 새 채팅이나 다른 ChatGPT 계정에서 이 실험을 이어갈 때 가장 먼저 읽는 현재 상태 체크포인트다. 상세 시간순 기록은 `docs/experiment-log.md`와 `docs/checkpoints/`를 본다.
 
@@ -205,8 +205,9 @@ PR: #1937
 title: test(chatgpt-mobile-coder): verify remote PR flow
 base: main
 head: server/remote-pr-smoke-20260909
-state: open
+state: closed
 merged: false
+cleanup: 2026-09-20 completed smoke artifact / intentionally non-merge
 ```
 
 GitHub-side verification:
@@ -220,7 +221,7 @@ deletions: 0
 mergeable: true
 ```
 
-PR merge는 의도적으로 수행하지 않았다.
+PR merge는 의도적으로 수행하지 않았고, 2026-09-20 완료된 smoke-proof artifact로 close했다. Remote branch/worktree는 이 변경에서 삭제하지 않았다.
 
 ## Permanent repository isolation
 
@@ -242,13 +243,21 @@ status: clean
 - 서버폰 `/root` 전체보다 coding worktree 중심으로 더 좁은 권한 범위를 적용할 수 있는지 검토.
 - 실제 feature 작업에서 repository-owned guideline/test discovery를 반복 검증하는 운영 품질 강화.
 - 필요할 때만 두 ChatGPT 로그인 계정의 동시 호출 identity를 별도 account-session checkpoint로 증명.
-- 과거 smoke PR/branch/worktree의 보존·정리 정책 확정.
+- 과거 smoke branch/worktree의 보존·정리 정책 확정. PR #1937은 2026-09-20 완료된 non-merge smoke artifact로 close했고 branch/worktree는 별도 정책 전까지 보존한다.
 
 서버폰 persistent service와 실제 Android reboot persistence는 이미 PASS이므로 미완료 항목으로 다시 취급하지 않는다.
 
 ## 현재 권장 운영
 
 새 기능을 더 붙이는 별도 필수 단계는 없다. 현재 검증된 remote execution baseline을 보존하면서 실제 repository 작업에 사용하고, 위 backlog 항목은 필요가 발생하거나 별도 목표로 승인될 때 좁게 진행한다.
+
+## M-family 영구 preflight — `mcl-env-status v1`
+
+메인폰 `M` 계열의 향후 작업에서는 작업 질문이 host operator profile, ordinary Ubuntu login, PRIVATE LAB, VM 준비/admission의 bounded 상태로 먼저 답해질 수 있을 때 `device-ops/m-family-status/mcl-env-status status`를 **영구 권장 first-pass preflight**로 사용한다. 이 경로는 반복적인 owner별 확인을 한 번의 고정 read-only receipt로 압축하는 운영 baseline이며, 새 runtime/health authority가 아니다.
+
+`schema=mcl-m-family-status.v1`의 명령·필드 순서·상태 의미는 호환 계약으로 보존한다. 출력되는 각 값은 호출 시점의 관찰일 뿐 영구 사실이 아니며, aggregate whole-family `PASS`나 readiness를 뜻하지 않는다. 필드가 non-pass/`unknown`이거나 작업에 더 구체적인 증거가 필요하면 `m-termux-operator/**`, `private-lab/**`, `vm-lab/**` 등 실제 semantic owner를 직접 확인한다.
+
+기존 v1 receipt나 의미를 호환되지 않게 바꿔야 한다면 별도 reviewed migration을 거치고, silent v1 drift보다 새 schema version을 우선한다.
 
 ## 안전 원칙
 

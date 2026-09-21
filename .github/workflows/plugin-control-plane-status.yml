@@ -9,6 +9,7 @@ on:
     paths:
       - '.github/plugin-control-plane/**'
       - '.github/usage-dashboard/releases/**'
+      - 'plugins/risu/local/**'
       - 'plugins/devpass/**'
       - 'plugins/termux/large-doc-editor/**'
       - 'voyage-token-check/**'
@@ -45,6 +46,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! node .github/plugin-control-plane/controller.cjs refresh-status; then
-            echo "::warning::Repository Control Plane status refresh failed; no release/product authority is affected."
-          fi
+          node .github/plugin-control-plane/controller.cjs refresh-status

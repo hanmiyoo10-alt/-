@@ -5,21 +5,96 @@ const fs = require('fs');
 const path = require('path');
 const {
   loadRegistry,
+  loadTaxonomy,
   classifyPaths,
   classifyIssueBody,
   validateRegistry,
+  validateTaxonomy,
   labelDefinitions,
   fixedLabelMetadataDecision,
   resolveStatusIssueIdentity,
 } = require('../lib.cjs');
 const {projectRows} = require('../canonical-main/observers/project-status.cjs');
+const {
+  findStatusIssues,
+  reconcileStatusIssue,
+  runStatusOwnerTasks,
+} = require('../controller.cjs');
 
 const root = path.resolve(__dirname, '../../..');
 const registry = loadRegistry();
+const taxonomy = loadTaxonomy();
 
 assert.deepEqual(validateRegistry(registry), [], 'registry must be valid and locator-only');
+assert.deepEqual(validateTaxonomy(taxonomy, registry), [], 'family taxonomy must be navigation-only and cross-reference registered owners safely');
+assert.equal(taxonomy.authority.posture, 'navigation-only');
+assert.equal(taxonomy.authority.pathMovesAuthorized, false);
+assert.equal(taxonomy.authority.identityCollapseAuthorized, false);
+assert.equal(taxonomy.authority.releaseMutationAuthorized, false);
+
+const taxonomyById = new Map(taxonomy.members.map((member) => [member.id, member]));
+assert.deepEqual(taxonomy.axes.family, ['product', 'plugin', 'platform', 'study']);
+assert.deepEqual(taxonomy.axes.risu, ['yes', 'no', 'bridge', 'unknown']);
+assert.equal(taxonomyById.get('pocketrisu').family, 'product');
+assert.equal(taxonomyById.get('pocketrisu').risu, 'yes');
+assert.equal(taxonomyById.get('pocketrisu').targetRoot, 'products/risu/pocketrisu');
+assert.equal(taxonomyById.get('app-api-mod-lab').risu, 'no');
+assert.equal(taxonomyById.get('termux').targetRoot, 'products/standalone/termux');
+assert.equal(taxonomyById.get('mobile-coder-lab').targetRoot, 'products/standalone/mobile-coder-lab');
+assert.equal(taxonomyById.get('simcore').targetRoot, 'plugins/risu/simcore');
+assert.deepEqual(taxonomyById.get('local').sourceRefs, ['plugin:usage-dashboard', 'plugin:devpass', 'plugin:voyage-token-check']);
+assert.deepEqual(taxonomyById.get('local').sourceRoots, [
+  'plugins/usage-dashboard/**',
+  'products/usage-dashboard/**',
+  'plugins/risu/local/usage-dashboard/**',
+  'plugins/risu/local/devpass/**',
+  'plugins/devpass/**',
+  'plugins/risu/local/voyage/**',
+  'voyage-token-check/**',
+  'tools/usage-dashboard-mcp/**',
+]);
+assert.equal(taxonomyById.get('local').risu, 'yes');
+assert.equal(registry.plugins.local.lifecycle, 'compatibility-family');
+assert.deepEqual(registry.plugins.local.paths, ['plugins/risu/local', 'plugins/risu/local/*', 'docs/LOCAL_PLUGIN_GUIDELINES.md']);
+assert.deepEqual(registry.plugins['usage-dashboard'].paths, [
+  'plugins/usage-dashboard/**',
+  'products/usage-dashboard/**',
+  'plugins/risu/local/usage-dashboard/**',
+  '.github/usage-dashboard/**',
+  '.github/workflows/usage-dashboard-*.yml',
+  '.github/workflows/reusable-usage-dashboard-*.yml',
+  'docs/USAGE_DASHBOARD_*.md',
+]);
+assert.equal(registry.plugins['usage-dashboard'].authority.releaseBranch, 'release-usage-dashboard');
+assert.equal(registry.plugins['usage-dashboard'].authority.manifest, 'plugins/usage-dashboard/runtime/product-manifest.json');
+assert.equal(registry.plugins['usage-dashboard'].authority.artifact, 'plugins/usage-dashboard/latest.js');
+assert.deepEqual(registry.plugins.devpass.paths, ['plugins/risu/local/devpass/**', 'plugins/devpass/**']);
+assert.equal(registry.plugins.devpass.authority.declaredBy, 'plugins/risu/local/devpass/README.md');
+assert.equal(registry.plugins.devpass.authority.artifact, 'plugins/devpass/latest.js');
+assert.equal(registry.plugins.devpass.authority.ref, 'main');
+assert.deepEqual(registry.plugins['voyage-token-check'].paths, ['plugins/risu/local/voyage/**', 'voyage-token-check/**']);
+assert.equal(registry.plugins['voyage-token-check'].authority.evidence, 'plugins/risu/local/voyage/DESIGN_STATUS.md');
+assert.equal(registry.plugins.local.statusAdapter, 'evidence');
+assert.equal(registry.plugins.local.authority.evidence, 'plugins/risu/local/README.md');
+assert.equal(taxonomyById.get('local').migration, 'consolidate');
+assert.equal(taxonomyById.get('local-runtime').risu, 'bridge');
+assert.equal(taxonomyById.get('study').family, 'study');
+assert.equal(taxonomyById.get('study').risu, 'no');
+
+const unknownTaxonomyRef = JSON.parse(JSON.stringify(taxonomy));
+unknownTaxonomyRef.members[0].sourceRefs = ['plugin:not-real'];
+assert.match(validateTaxonomy(unknownTaxonomyRef, registry).join('\n'), /unknown sourceRef plugin:not-real/);
+
+const duplicateTaxonomyId = JSON.parse(JSON.stringify(taxonomy));
+duplicateTaxonomyId.members[1].id = duplicateTaxonomyId.members[0].id;
+assert.match(validateTaxonomy(duplicateTaxonomyId, registry).join('\n'), /duplicate id pocketrisu/);
+
+const badRisuTarget = JSON.parse(JSON.stringify(taxonomy));
+badRisuTarget.members.find((member) => member.id === 'simcore').targetRoot = 'plugins/standalone/simcore';
+assert.match(validateTaxonomy(badRisuTarget, registry).join('\n'), /Risu O plugin targetRoot must be under plugins\/risu\//);
 assert.deepEqual(Object.keys(registry.plugins).sort(), [
   'devpass',
+  'local',
   'simcore',
   'termux-large-doc-editor',
   'usage-dashboard',
@@ -29,6 +104,14 @@ assert.deepEqual(Object.keys(registry.products).sort(), [
   'app-api-mod-lab',
   'pocketrisu-helper-mod',
 ]);
+assert.deepEqual((registry.scopes || []).map((scope) => scope.id).sort(), [
+  'local-runtime',
+  'study',
+]);
+for (const scope of registry.scopes) {
+  assert.equal(scope.authority.posture, 'routing-only');
+  assert.equal(scope.authority.statusProjection, false);
+}
 
 const statusLabel = {name: 'control-plane:status'};
 const duplicateStatusIssues = [
@@ -55,12 +138,35 @@ assert.deepEqual(singleRow.duplicates, []);
 assert.equal(singleRow.fresh, true, 'single canonical generated status view keeps normal freshness behavior');
 
 assert.deepEqual(classifyPaths(['plugins/usage-dashboard/src/parts.cjs'], registry).labels, ['plugin:usage-dashboard']);
+assert.deepEqual(classifyPaths(['products/usage-dashboard/README.md'], registry).labels, ['plugin:usage-dashboard']);
+const usageDashboardLanding = classifyPaths(['plugins/risu/local/usage-dashboard/README.md'], registry);
+assert.deepEqual(usageDashboardLanding.labels, ['plugin:usage-dashboard']);
+assert.deepEqual(usageDashboardLanding.ambiguousPaths, []);
+assert.deepEqual(usageDashboardLanding.unclassifiedPaths, []);
+assert.ok(!usageDashboardLanding.labels.includes('plugin:local'));
 assert.deepEqual(classifyPaths(['.github/workflows/reusable-usage-dashboard-validate.yml'], registry).labels, ['plugin:usage-dashboard']);
 assert.deepEqual(classifyPaths(['plugins/simcore/latest.js', 'product-manifest.json'], registry).labels, ['plugin:simcore']);
 assert.deepEqual(classifyPaths(['products/simcore/tooling/check.mjs'], registry).labels, ['plugin:simcore']);
-assert.deepEqual(classifyPaths(['plugins/devpass/README.md'], registry).labels, ['plugin:devpass']);
+const localParentReadme = classifyPaths(['plugins/risu/local/README.md'], registry);
+assert.deepEqual(localParentReadme.labels, ['plugin:local']);
+assert.deepEqual(localParentReadme.ambiguousPaths, []);
+assert.deepEqual(classifyPaths(['docs/LOCAL_PLUGIN_GUIDELINES.md'], registry).labels, ['plugin:local']);
+const voyageBridgePath = classifyPaths(['plugins/risu/local/voyage/DESIGN_STATUS.md'], registry);
+assert.deepEqual(voyageBridgePath.labels, ['plugin:voyage-token-check']);
+assert.deepEqual(voyageBridgePath.ambiguousPaths, []);
+assert.ok(!voyageBridgePath.labels.includes('plugin:local'));
+const devpassCanonicalPath = classifyPaths(['plugins/risu/local/devpass/README.md'], registry);
+assert.deepEqual(devpassCanonicalPath.labels, ['plugin:devpass']);
+assert.deepEqual(devpassCanonicalPath.ambiguousPaths, []);
+assert.ok(!devpassCanonicalPath.labels.includes('plugin:local'));
+const devpassLegacyReadme = classifyPaths(['plugins/devpass/README.md'], registry);
+assert.deepEqual(devpassLegacyReadme.labels, ['plugin:devpass']);
+assert.deepEqual(devpassLegacyReadme.ambiguousPaths, []);
+assert.deepEqual(classifyPaths(['plugins/devpass/latest.js'], registry).labels, ['plugin:devpass']);
 assert.deepEqual(classifyPaths(['plugins/termux/large-doc-editor/server.py'], registry).labels, ['plugin:termux-large-doc-editor']);
-assert.deepEqual(classifyPaths(['voyage-token-check/DESIGN_STATUS.md'], registry).labels, ['plugin:voyage-token-check']);
+const voyageLegacyPath = classifyPaths(['voyage-token-check/DESIGN_STATUS.md'], registry);
+assert.deepEqual(voyageLegacyPath.labels, ['plugin:voyage-token-check']);
+assert.deepEqual(voyageLegacyPath.ambiguousPaths, []);
 assert.deepEqual(classifyPaths(['products/app-api-mod-lab/CURRENT.md'], registry).labels, ['product:app-api-mod-lab']);
 const mclBootstrap = classifyPaths(['products/chatgpt-mobile-coder-lab/device-bootstrap/bootstrap.sh'], registry);
 assert.deepEqual(mclBootstrap.labels, ['scope:research-product']);
@@ -68,6 +174,12 @@ assert.deepEqual(mclBootstrap.unclassifiedPaths, []);
 const mclDocs = classifyPaths(['products/chatgpt-mobile-coder-lab/docs/decisions.md'], registry);
 assert.deepEqual(mclDocs.labels, ['scope:research-product']);
 assert.deepEqual(mclDocs.unclassifiedPaths, []);
+const studyRoot = classifyPaths(['study/memory/CURRENT.md'], registry);
+assert.deepEqual(studyRoot.labels, ['scope:study']);
+assert.deepEqual(studyRoot.unclassifiedPaths, []);
+const localRuntimeRoot = classifyPaths(['local/termux/10-start-local-stack'], registry);
+assert.deepEqual(localRuntimeRoot.labels, ['scope:local-runtime']);
+assert.deepEqual(localRuntimeRoot.unclassifiedPaths, []);
 assert.deepEqual(classifyPaths(['products/pocketrisu-helper-mod/CURRENT.md'], registry).labels, ['product:pocketrisu-helper-mod']);
 assert.deepEqual(classifyPaths(['.github/workflows/pocketrisu-helper-docs.yml'], registry).labels, ['product:pocketrisu-helper-mod']);
 assert.deepEqual(classifyPaths(['plugins/test-a/latest.js'], registry).labels, ['scope:test-fixture']);
@@ -106,6 +218,25 @@ assert.deepEqual(researchProductLabel, {
   color: 'c5def5',
   description: 'Repository-recognized research product path; non-production with no release or runtime authority',
 });
+assert.deepEqual(labelDefinitions(registry).find((entry) => entry.name === 'scope:study'), {
+  name: 'scope:study',
+  color: 'c5def5',
+  description: 'Independent study and learning root; routing metadata only',
+});
+assert.deepEqual(labelDefinitions(registry).find((entry) => entry.name === 'scope:local-runtime'), {
+  name: 'scope:local-runtime',
+  color: 'c5def5',
+  description: 'Local runtime root; routing only, not product, device, release, deployment, or production authority',
+});
+for (const def of labelDefinitions(registry)) {
+  assert.ok(String(def.description || '').length <= 100, `fixed label description must fit GitHub limit: ${def.name}`);
+}
+const overlongScopeRegistry = JSON.parse(JSON.stringify(registry));
+overlongScopeRegistry.scopes[0].description = 'x'.repeat(101);
+assert.match(
+  validateRegistry(overlongScopeRegistry).join('\n'),
+  /label scope:study: description exceeds 100 characters/,
+);
 
 const fixedUnclassified = labelDefinitions(registry).find((entry) => entry.name === 'scope:unclassified');
 assert.deepEqual(fixedLabelMetadataDecision(null, fixedUnclassified), {action: 'create', body: fixedUnclassified});
@@ -129,9 +260,12 @@ assert.deepEqual(
   classifyIssueBody('### Scope\n\nusage-dashboard\n\n### Summary\nwork', registry),
   {explicit: true, labels: ['plugin:usage-dashboard']},
 );
+assert.deepEqual(classifyIssueBody('Scope: local', registry), {explicit: true, labels: ['plugin:local']});
 assert.deepEqual(classifyIssueBody('Plugin: simcore', registry), {explicit: true, labels: ['plugin:simcore']});
 assert.deepEqual(classifyIssueBody('Scope: voyage-token-check', registry), {explicit: true, labels: ['plugin:voyage-token-check']});
 assert.deepEqual(classifyIssueBody('Scope: pocketrisu-helper-mod', registry), {explicit: true, labels: ['product:pocketrisu-helper-mod']});
+assert.deepEqual(classifyIssueBody('Scope: study', registry), {explicit: true, labels: ['scope:study']});
+assert.deepEqual(classifyIssueBody('Scope: local-runtime', registry), {explicit: true, labels: ['scope:local-runtime']});
 assert.deepEqual(classifyIssueBody('### Scope\n\nshared', registry), {explicit: true, labels: ['scope:shared']});
 assert.deepEqual(classifyIssueBody('### Scope\n\nnot-registered', registry), {explicit: true, labels: ['scope:unclassified']});
 assert.deepEqual(classifyIssueBody('just prose', registry), {explicit: false, labels: []});
@@ -151,15 +285,18 @@ for (const authorAssociation of ['OWNER', 'MEMBER', 'COLLABORATOR']) {
 }
 const maxCustomId = 'a'.repeat(44);
 assert.equal(classifyIssueBody(customIssueBody(maxCustomId), registry, {authorAssociation: 'OWNER'}).labels[0].length, 50);
-for (const invalidId of ['', 'Bad-Scope', 'bad--scope', '-bad', 'bad-', 'repo', 'research-product', 'custom', 'a'.repeat(45)]) {
+for (const invalidId of ['', 'Bad-Scope', 'bad--scope', '-bad', 'bad-', 'repo', 'research-product', 'study', 'local-runtime', 'custom', 'a'.repeat(45)]) {
   assert.deepEqual(classifyIssueBody(customIssueBody(invalidId), registry, {authorAssociation: 'OWNER'}), {explicit: true, labels: ['scope:unclassified']});
 }
 assert.deepEqual(classifyIssueBody(customIssueBody('ops-lab'), registry, {authorAssociation: 'NONE'}), {explicit: true, labels: ['scope:unclassified']});
 
 const issueTemplate = fs.readFileSync(path.join(root, '.github/ISSUE_TEMPLATE/plugin-work.yml'), 'utf8');
 assert.match(issueTemplate, /label:\s*Scope/);
+assert.match(issueTemplate, /^        - local$/m);
 assert.match(issueTemplate, /voyage-token-check/);
 assert.match(issueTemplate, /pocketrisu-helper-mod/);
+assert.match(issueTemplate, /^        - study$/m);
+assert.match(issueTemplate, /^        - local-runtime$/m);
 assert.match(issueTemplate, /^        - custom$/m);
 assert.match(issueTemplate, /label:\s*Custom scope/);
 assert.match(issueTemplate, /1-44 characters/);
@@ -235,6 +372,9 @@ assert.match(statusWorkflow, /schedule:/);
 assert.match(statusWorkflow, /Reconcile open PR ownership from trusted main/);
 assert.match(statusWorkflow, /pr-classifier\.cjs/);
 assert.match(statusWorkflow, /refresh-status/);
+assert.doesNotMatch(statusWorkflow, /if ! node .*refresh-status/);
+assert.match(statusWorkflow, /node \.github\/plugin-control-plane\/controller\.cjs refresh-status/);
+assert.match(statusWorkflow, /plugins\/risu\/local\/\*\*/);
 assert.match(statusWorkflow, /voyage-token-check\/\*\*/);
 assert.match(statusWorkflow, /products\/pocketrisu-helper-mod\/\*\*/);
 assert.match(statusWorkflow, /issues:\s*write/);
@@ -251,6 +391,10 @@ assert.match(controlPlaneReadme, /`pull_request` observer remains read-only evid
 assert.match(controlPlaneReadme, /Trusted custom issue scopes/);
 assert.match(controlPlaneReadme, /scope:unclassified/);
 assert.match(controlPlaneReadme, /at most 44 characters/);
+assert.match(controlPlaneReadme, /Registered fixed scopes/);
+assert.match(controlPlaneReadme, /status projection/i);
+assert.match(controlPlaneReadme, /independent exact-title\/status-label\/generated-marker lookup/);
+assert.match(controlPlaneReadme, /overall controller exit nonzero/);
 
 const controller = fs.readFileSync(path.join(root, '.github/plugin-control-plane/controller.cjs'), 'utf8');
 assert.match(controller, /DECLARED_MISSING/);
@@ -259,6 +403,7 @@ assert.match(controller, /PENDING —/);
 assert.match(controller, /pocketRisuHelperStatus/);
 assert.match(controller, /registry\.products/);
 assert.match(controller, /product:/);
+assert.doesNotMatch(controller, /kind:\s*['"]scope['"]/);
 assert.match(controller, /async function ensureLabel\(repo, def\)/);
 assert.match(controller, /if \(!existing\) await api\(repo, '\/labels', \{method: 'POST', body: def\}\)/);
 assert.match(controller, /async function ensureFixedLabel\(repo, def\)/);
@@ -271,6 +416,125 @@ assert.match(controller, /if \(bodyResult\.customLabelDefinition\) await ensureL
 assert.match(controller, /const statusLabel = encodeURIComponent\('control-plane:status'\)/);
 assert.match(controller, /resolveStatusIssueIdentity/);
 assert.match(controller, /CLOSED_STATUS_DUPLICATE/);
+assert.match(controller, /STATUS_POST_CREATE_IDENTITY_MISMATCH/);
+assert.match(controller, /STATUS_REFRESH_PARTIAL_FAILURE/);
 assert.doesNotMatch(controller, /productionVersion\s*:/);
 
-console.log('PLUGIN_CONTROL_PLANE_CONTRACTS:OK');
+async function runStatusRefreshContracts() {
+  const status = {name: 'control-plane:status'};
+  const generatedBody = 'Last refreshed: 2026-09-16T00:00:00Z\n<!-- plugin-control-plane-status -->';
+  const canonical = {number: 275, title: '[plugin-status:termux-large-doc-editor]', state: 'open', labels: [status], body: generatedBody};
+  const duplicate = {number: 2317, title: canonical.title, state: 'open', labels: [status], body: generatedBody};
+  const unrelated = Array.from({length: 100}, (_, index) => ({
+    number: 3000 + index,
+    title: `[plugin-status:unrelated-${index}]`,
+    state: 'open',
+    labels: [status],
+    body: generatedBody,
+  }));
+  const pageCalls = [];
+  const pagedIdentity = await findStatusIssues('hanmiyoo10-alt/-', 'plugin', 'termux-large-doc-editor', async (_repo, endpoint) => {
+    pageCalls.push(endpoint);
+    if (endpoint.endsWith('page=1')) return unrelated;
+    if (endpoint.endsWith('page=2')) return [duplicate, canonical];
+    throw new Error(`unexpected page: ${endpoint}`);
+  });
+  assert.equal(pageCalls.length, 2, 'status discovery must paginate until a short page');
+  assert.equal(pagedIdentity.canonical.number, 275);
+  assert.deepEqual(pagedIdentity.duplicates.map((row) => row.number), [2317]);
+
+  const registryForStatus = {plugins: {}, products: {}, managedLabelPrefixes: ['plugin:', 'product:', 'scope:']};
+  const updateCalls = [];
+  await reconcileStatusIssue('hanmiyoo10-alt/-', 'plugin', 'termux-large-doc-editor', 'plugin:termux-large-doc-editor', generatedBody, registryForStatus, {
+    api: async (_repo, endpoint, options = {}) => {
+      updateCalls.push({endpoint, method: options.method || 'GET'});
+      if (endpoint.startsWith('/issues?')) return [];
+      return {};
+    },
+    rawApi: async () => ({total_count: 1, items: [canonical]}),
+  });
+  assert.equal(updateCalls.some((call) => call.endpoint === '/issues' && call.method === 'POST'), false, 'exact lookup hit must prevent create');
+  assert.equal(updateCalls.some((call) => call.endpoint === '/issues/275' && call.method === 'PATCH'), true, 'exact lookup hit must update canonical');
+
+  const failedGuardCalls = [];
+  await assert.rejects(
+    reconcileStatusIssue('hanmiyoo10-alt/-', 'plugin', 'missing', 'plugin:missing', generatedBody, registryForStatus, {
+      api: async (_repo, endpoint, options = {}) => {
+        failedGuardCalls.push({endpoint, method: options.method || 'GET'});
+        if (endpoint.startsWith('/issues?')) return [];
+        throw new Error(`unexpected mutation: ${endpoint}`);
+      },
+      rawApi: async () => { throw new Error('HTTP 403'); },
+    }),
+    /HTTP 403/,
+  );
+  assert.equal(failedGuardCalls.some((call) => call.endpoint === '/issues' && call.method === 'POST'), false, 'failed exact lookup must not create');
+
+  let exactReads = 0;
+  const createCalls = [];
+  const created = {number: 2400, title: '[plugin-status:new-owner]', state: 'open', labels: [status], body: generatedBody};
+  const createResult = await reconcileStatusIssue('hanmiyoo10-alt/-', 'plugin', 'new-owner', 'plugin:new-owner', generatedBody, registryForStatus, {
+    api: async (_repo, endpoint, options = {}) => {
+      createCalls.push({endpoint, method: options.method || 'GET'});
+      if (endpoint.startsWith('/issues?')) return [];
+      if (endpoint === '/issues' && options.method === 'POST') return created;
+      throw new Error(`unexpected create-path call: ${endpoint}`);
+    },
+    rawApi: async () => {
+      exactReads += 1;
+      return exactReads === 1 ? {total_count: 0, items: []} : {total_count: 1, items: [created]};
+    },
+  });
+  assert.equal(createResult.action, 'created');
+  assert.equal(createCalls.filter((call) => call.endpoint === '/issues' && call.method === 'POST').length, 1);
+  assert.equal(exactReads, 2, 'create path must exact-check before and after create');
+
+  let duplicateRead = 0;
+  await assert.rejects(
+    reconcileStatusIssue('hanmiyoo10-alt/-', 'plugin', 'race-owner', 'plugin:race-owner', generatedBody, registryForStatus, {
+      api: async (_repo, endpoint, options = {}) => {
+        if (endpoint.startsWith('/issues?')) return [];
+        if (endpoint === '/issues' && options.method === 'POST') return {number: 2500};
+        throw new Error(`unexpected race-path call: ${endpoint}`);
+      },
+      rawApi: async () => {
+        duplicateRead += 1;
+        if (duplicateRead === 1) return {total_count: 0, items: []};
+        return {total_count: 2, items: [
+          {number: 2499, title: '[plugin-status:race-owner]', state: 'open', labels: [status], body: generatedBody},
+          {number: 2500, title: '[plugin-status:race-owner]', state: 'open', labels: [status], body: generatedBody},
+        ]};
+      },
+    }),
+    /STATUS_POST_CREATE_IDENTITY_MISMATCH/,
+  );
+
+  const visited = [];
+  let partialError = null;
+  try {
+    await runStatusOwnerTasks([
+      {kind: 'plugin', id: 'one'},
+      {kind: 'plugin', id: 'two'},
+      {kind: 'product', id: 'three'},
+    ], async (entry) => {
+      visited.push(entry.id);
+      if (entry.id === 'two') {
+        const error = new Error('fixture failure');
+        error.code = 'FIXTURE_FAILURE';
+        throw error;
+      }
+    });
+  } catch (error) {
+    partialError = error;
+  }
+  assert.deepEqual(visited, ['one', 'two', 'three'], 'owner failure must not prevent later safe owner processing');
+  assert.equal(partialError?.code, 'STATUS_REFRESH_PARTIAL_FAILURE');
+  assert.deepEqual(partialError?.failures, [{kind: 'plugin', id: 'two', code: 'FIXTURE_FAILURE'}]);
+}
+
+runStatusRefreshContracts()
+  .then(() => console.log('PLUGIN_CONTROL_PLANE_CONTRACTS:OK'))
+  .catch((error) => {
+    console.error(error.stack || error.message || String(error));
+    process.exitCode = 1;
+  });

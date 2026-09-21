@@ -51,6 +51,13 @@ assert.equal(current.result, 'GREEN');
 assert.equal(current.regressionPath, 'plugins/usage-dashboard/tests/p75-devpass-api-key-org-limit.cjs');
 assert.equal(current.e21, 'plugins/usage-dashboard/tests/e21-evidence-consumer-convergence-contract.cjs');
 
+assert.equal(e27.normalizeSourceRoot(), 'plugins/usage-dashboard');
+assert.equal(e27.normalizeSourceRoot('plugins/risu/local/usage-dashboard'), 'plugins/risu/local/usage-dashboard');
+assert.equal(e27.testPrefixForRoot('plugins/risu/local/usage-dashboard'), 'plugins/risu/local/usage-dashboard/tests/');
+assert.equal(e27.e21TestForRoot('plugins/risu/local/usage-dashboard'), 'plugins/risu/local/usage-dashboard/tests/e21-evidence-consumer-convergence-contract.cjs');
+assert.deepEqual(e27.ownerRootsForRoot('plugins/risu/local/usage-dashboard'), ['plugins/risu/local/usage-dashboard/src','plugins/risu/local/usage-dashboard/runtime-src']);
+assert.equal(e27.normalizeFocusedRegressionPath('plugins/usage-dashboard/tests/p75-devpass-api-key-org-limit.cjs','plugins/risu/local/usage-dashboard'), 'plugins/risu/local/usage-dashboard/tests/p75-devpass-api-key-org-limit.cjs');
+assert.throws(()=>e27.normalizeSourceRoot('plugins/other'), /RELEASE_PATH_PROFILE_UNKNOWN_ROOT/);
 assert.equal(e27.normalizeFocusedRegressionPath(undefined), null, 'maintenance transactions may omit a product-focused regression');
 assert.throws(()=>e27.normalizeFocusedRegressionPath('/tmp/p75.cjs'), (error)=>error.code === 'RED_SPEC');
 assert.throws(()=>e27.normalizeFocusedRegressionPath('../plugins/usage-dashboard/tests/p75.cjs'), (error)=>error.code === 'RED_SPEC');

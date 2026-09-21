@@ -6,12 +6,22 @@ on:
       - 'tools/repo-ci-mcp/**'
       - '.github/tooling/ci-summary/adapters/repository_read_mcp.py'
       - '.github/workflows/repository-read-mcp-ci.yml'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/mcl-notebook-read'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/mcl-notebook-live-proof'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/mcl-notebook-owner-invoke.cjs'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/tests/test-contract.py'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/tests/test-owner-invoke.cjs'
   push:
     branches: [main]
     paths:
       - 'tools/repo-ci-mcp/**'
       - '.github/tooling/ci-summary/adapters/repository_read_mcp.py'
       - '.github/workflows/repository-read-mcp-ci.yml'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/mcl-notebook-read'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/mcl-notebook-live-proof'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/mcl-notebook-owner-invoke.cjs'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/tests/test-contract.py'
+      - 'products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/tests/test-owner-invoke.cjs'
   workflow_dispatch:
 
 permissions:
@@ -51,6 +61,18 @@ jobs:
         run: |
           set -euo pipefail
           python -m unittest discover -s tools/repo-ci-mcp/tests -p 'test_*.py' -v
+
+      - name: Run MCL working-tree notebook contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/tests/test-contract.py -v
+
+      - name: Run MCL fixed notebook owner-invoke contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/tests/test-owner-invoke.cjs
 
       - name: Render compact CI summary
         if: always()

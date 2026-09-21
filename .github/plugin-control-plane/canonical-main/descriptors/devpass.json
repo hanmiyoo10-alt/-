@@ -4,11 +4,11 @@
   "kind": "plugin",
   "displayName": "DevPass",
   "lifecycle": "declared-update-channel",
-  "projectPath": "plugins/devpass",
+  "projectPath": "plugins/risu/local/devpass",
   "guidelines": "docs/DEVPASS_GUIDELINES.md",
   "authority": {
     "type": "evidence",
-    "evidence": "plugins/devpass/README.md"
+    "evidence": "plugins/risu/local/devpass/README.md"
   },
   "memory": {
     "profile": "check-only",

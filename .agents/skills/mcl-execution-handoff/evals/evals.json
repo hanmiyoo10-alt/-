@@ -1,0 +1,390 @@
+{
+  "skill_name": "mcl-execution-handoff",
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "repo-s-handoff-ready",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "mutable",
+          "overlap_guard": "required",
+          "lease_guard": "required",
+          "phase": "1/1"
+        },
+        "preflight": "sufficient",
+        "overlap": "DISJOINT",
+        "lease": "active_matching",
+        "git_currentness": "current",
+        "manifest": "matching",
+        "packet_stage": "IMPLEMENTATION_PR"
+      },
+      "expected": {
+        "status": "HANDOFF_READY",
+        "next_owner": "existing_route_owner",
+        "mutation_authorized": false,
+        "execution_authorized": false,
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "repo-m-fallback-handoff-ready",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "M",
+          "repository_effect": "mutable",
+          "overlap_guard": "required",
+          "lease_guard": "required",
+          "phase": "1/1"
+        },
+        "executor_already_selected_by_d012": true,
+        "preflight": "sufficient",
+        "overlap": "DISJOINT",
+        "lease": "active_matching",
+        "git_currentness": "current",
+        "manifest": "matching",
+        "packet_stage": "IMPLEMENTATION_PR"
+      },
+      "expected": {
+        "status": "HANDOFF_READY",
+        "executor": "M",
+        "auto_switched_executor": false,
+        "mutation_authorized": false,
+        "execution_authorized": false,
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "read-only-not-applicable",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "read_only",
+          "phase": "1/1"
+        }
+      },
+      "expected": {
+        "status": "NOT_APPLICABLE",
+        "effect_class": "none",
+        "lease_required": false,
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "s-termux-separate-owner",
+      "input": {
+        "plan": {
+          "route": "S_TERMUX",
+          "executor": "S_TERMUX",
+          "repository_effect": "none",
+          "phase": "1/1"
+        }
+      },
+      "expected": {
+        "status": "SEPARATE_OWNER_REQUIRED",
+        "effect_class": "separate_owner",
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "gui-action-separate-owner",
+      "input": {
+        "plan": {
+          "route": "S_ANDROID_GUI_ADB_ACTION",
+          "executor": "not_applicable",
+          "repository_effect": "none",
+          "phase": "1/1"
+        }
+      },
+      "expected": {
+        "status": "SEPARATE_OWNER_REQUIRED",
+        "effect_class": "separate_owner",
+        "action_authorized": false,
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "preflight-unknown",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "mutable",
+          "phase": "1/1"
+        },
+        "preflight": "UNKNOWN",
+        "overlap": "DISJOINT",
+        "lease": "active_matching",
+        "git_currentness": "current",
+        "manifest": "matching",
+        "packet_stage": "IMPLEMENTATION_PR"
+      },
+      "expected": {
+        "status": "UNKNOWN",
+        "reason_code": "PREFLIGHT_REQUIRED_EVIDENCE_UNKNOWN",
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "preflight-blocked",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "mutable",
+          "phase": "1/1"
+        },
+        "preflight": "BLOCKED"
+      },
+      "expected": {
+        "status": "BLOCKED",
+        "reason_code": "PREFLIGHT_BLOCKED",
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "overlap-conflict",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "mutable",
+          "phase": "1/1"
+        },
+        "preflight": "sufficient",
+        "overlap": "CONFLICT"
+      },
+      "expected": {
+        "status": "CONFLICT",
+        "reason_code": "OVERLAP_CONFLICT",
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "overlap-present",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "mutable",
+          "phase": "1/1"
+        },
+        "preflight": "sufficient",
+        "overlap": "OVERLAP"
+      },
+      "expected": {
+        "status": "BLOCKED",
+        "reason_code": "WRITE_SCOPE_OVERLAP",
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "lease-missing",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "mutable",
+          "phase": "1/1"
+        },
+        "preflight": "sufficient",
+        "overlap": "DISJOINT",
+        "lease": "missing"
+      },
+      "expected": {
+        "status": "BLOCKED",
+        "reason_code": "ACTIVE_LEASE_REQUIRED",
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "lease-released",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "mutable",
+          "phase": "1/1"
+        },
+        "preflight": "sufficient",
+        "overlap": "DISJOINT",
+        "lease": "released"
+      },
+      "expected": {
+        "status": "BLOCKED",
+        "reason_code": "ACTIVE_LEASE_REQUIRED",
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "packet-digest-conflict",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "mutable",
+          "phase": "1/1"
+        },
+        "preflight": "sufficient",
+        "overlap": "DISJOINT",
+        "lease": "active_packet_digest_mismatch",
+        "git_currentness": "current",
+        "manifest": "matching"
+      },
+      "expected": {
+        "status": "CONFLICT",
+        "reason_code": "PACKET_BODY_DIGEST_CONFLICT",
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "workspace-conflict",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "mutable",
+          "phase": "1/1"
+        },
+        "preflight": "sufficient",
+        "overlap": "DISJOINT",
+        "lease": "active_matching",
+        "git_currentness": "current",
+        "manifest": "workspace_mismatch"
+      },
+      "expected": {
+        "status": "CONFLICT",
+        "reason_code": "WORKSPACE_IDENTITY_CONFLICT",
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "git-currentness-unknown",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "mutable",
+          "phase": "1/1"
+        },
+        "preflight": "sufficient",
+        "overlap": "DISJOINT",
+        "lease": "active_matching",
+        "git_currentness": "UNKNOWN",
+        "manifest": "matching"
+      },
+      "expected": {
+        "status": "UNKNOWN",
+        "reason_code": "GIT_CURRENTNESS_UNKNOWN",
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "manifest-identity-conflict",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "mutable",
+          "phase": "1/1"
+        },
+        "preflight": "sufficient",
+        "overlap": "DISJOINT",
+        "lease": "active_matching",
+        "git_currentness": "current",
+        "manifest": "packet_or_phase_mismatch"
+      },
+      "expected": {
+        "status": "CONFLICT",
+        "reason_code": "MANIFEST_IDENTITY_CONFLICT",
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "terminal-packet-blocked",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "mutable",
+          "phase": "1/1"
+        },
+        "preflight": "sufficient",
+        "overlap": "DISJOINT",
+        "lease": "active_matching",
+        "git_currentness": "current",
+        "manifest": "matching",
+        "packet_stage": "DONE"
+      },
+      "expected": {
+        "status": "BLOCKED",
+        "reason_code": "PACKET_TERMINAL",
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "authority-scope-only-blocked",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "mutable",
+          "phase": "1/1"
+        },
+        "preflight": "sufficient",
+        "overlap": "DISJOINT",
+        "lease": "active_matching",
+        "git_currentness": "current",
+        "manifest": "matching",
+        "packet_stage": "AUTHORITY_SCOPE"
+      },
+      "expected": {
+        "status": "BLOCKED",
+        "reason_code": "PACKET_STAGE_NOT_MUTATION_CAPABLE",
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "selected-s-never-falls-back",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "mutable",
+          "phase": "1/1"
+        },
+        "preflight": "sufficient",
+        "overlap": "DISJOINT",
+        "lease": "missing",
+        "m_available": true
+      },
+      "expected": {
+        "status": "BLOCKED",
+        "executor": "S",
+        "auto_switched_executor": false,
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "command-payload-rejected",
+      "input": {
+        "plan": {
+          "route": "S",
+          "executor": "S",
+          "repository_effect": "mutable",
+          "phase": "1/1"
+        },
+        "command": "git commit -am x"
+      },
+      "expected": {
+        "status": "BLOCKED",
+        "reason_code": "EXECUTION_PAYLOAD_FORBIDDEN",
+        "command_executed": false,
+        "effect_performed": false
+      }
+    }
+  ]
+}

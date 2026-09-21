@@ -45,6 +45,42 @@ It is development policy, not a source of mutable product, runtime, release, or 
 - Do not claim this repository can hide or suppress ChatGPT tool-activity UI. Reduce repository-owned payload and fan-out instead.
 - If the work contains multiple independent goals, split it into bounded work units before choosing an execution route.
 
+## Fail-closed mutation-barrier shell control flow
+
+When a repository effect depends on fresh authority, currentness, CAS, or another precondition, make the failure path explicit immediately before the existing mutation owner. `set -e` and `set -euo pipefail` are auxiliary shell hygiene only; neither is proof that a failed guard makes later mutation unreachable.
+
+Required shape:
+
+```text
+fresh authority/currentness/CAS checks
+→ explicit checked guard branch
+→ only on proven PASS enter the existing mutation owner
+→ otherwise exit before mutation and preserve BLOCKED / UNKNOWN / CONFLICT
+```
+
+Prefer shell control flow such as:
+
+```sh
+if ! currentness_guard; then
+  exit 1
+fi
+mutation_owner
+```
+
+An evidence-equivalent `if guard; then ...; else exit ...; fi` or explicit status-capture form is acceptable only when the guard executes in an errexit-exempt conditional context and the failure branch exits before mutation. Do not recommend `guard; rc=$?` under `set -e` as a universal safe pattern because the shell may exit before status capture.
+
+Do not use a failed non-final `&&` assertion list as the shell-termination barrier for a later separate mutation. Bash may suppress `errexit` for commands evaluated in compound `&&`/`||` contexts, so this shape is unsafe:
+
+```sh
+set -e
+guard_one && guard_two
+mutation_owner  # separate later statement can still run after guard_one fails
+```
+
+Distinguish that historical hazard from `guard && mutation_owner`, where the mutation is itself syntactically conditional on the guard. The latter does not make `set -e` authoritative and does not replace an explicit guard branch when authority/currentness evidence or failure disposition must be preserved.
+
+A compact command is never allowed to normalize a failed or uncertain guard into success. If the guard result is mismatch, failure, `UNKNOWN`, or `CONFLICT`, stop before the effect owner and preserve that disposition.
+
 ## Pre-routing disposition gate
 
 Apply safety dispositions before selecting any of the five execution routes.
@@ -150,6 +186,30 @@ Do not narrow a read when doing so would hide or weaken any of these:
 - cross-section relationships required by the actual question.
 
 The repository can optimize selected source/result payloads, but it cannot guarantee how ChatGPT or another host renders tool cards or their height.
+
+## Execution receipt companion contract
+
+Execution receipts are a companion compactness surface for repeatable execution. They do not add a sixth execution route and they do not replace the owning command, harness, CI lane, remote bridge, validator, or project authority.
+
+Preferred shape:
+
+```text
+semantic intent
+→ existing authorized primitive / harness / CI / remote execution surface
+→ bounded execution receipt
+→ agent interpretation
+→ targeted drill-down only for NEEDS_REVIEW, failure, UNKNOWN, CONFLICT, blocker, ambiguity, or insufficient proof
+```
+
+When an existing runner can preserve the evidence needed for the next decision in a bounded receipt, prefer that receipt over pushing the complete stdout/stderr/environment transcript into the interaction. A useful receipt preserves operation/primitive identity, exact source or ref identity when applicable, execution surface and stage/substep identity, checks actually executed, bounded counters/affected files, lifecycle/attention/result evidence at the schema version actually emitted, stable reason codes, artifact/log locators, bounded failure tails when needed, and the next legal action when determinable.
+
+Repository execution receipt v1 remains a compatibility contract with legacy `attentionState` plus `result`. V2 is explicit opt-in and separates `executionLifecycle = QUEUED | RUNNING | FINISHED | UNKNOWN`, `attentionDisposition = COMPLETE | NEEDS_REVIEW | BLOCKED | UNKNOWN | CONFLICT`, and the existing result axis. Never guess v2 values from v1, and never coerce lifecycle `UNKNOWN` into RUNNING or FINISHED merely to simplify orchestration.
+
+Use `NEEDS_REVIEW` as an explicit semantic-judgment boundary. In v2 it may coexist with a nonterminal lifecycle. A deterministic runner must not silently convert an anomalous-but-successfully-executed result into a stronger PASS/FAIL conclusion merely to avoid returning control to the agent.
+
+A receipt may summarize raw detail but must not destroy it when the owning contract requires audit or diagnosis. Preserve exact locators so targeted drill-down can retrieve the smallest relevant raw segment. Do not put secrets, credentials, private payloads, unbounded environment dumps, or arbitrary full logs into the normal receipt.
+
+Receipt compactness never upgrades proof. `PASS` proves only the declared receipt scope, omission never means success, and unresolved `UNKNOWN`/`CONFLICT`/blocker evidence remains explicit. An execution receipt never grants execution, mutation, merge, release, production, runtime, security, or approval authority. Stage receipts, coordination receipts, project-specific receipts, and orchestration/eval receipts keep their own identities and owners.
 
 ## Exact immutable result read-reuse companion contract
 
@@ -273,6 +333,12 @@ existing bounded repository projection/harness
 6. **Reuse captured evidence:** do not repeat the same broad response inside one unchanged currentness window merely to recover a fact already captured with sufficient provenance.
 
 A smaller connector response is better only when the semantic authority and evidence contract remain equivalent. Action-specific or filtered surfaces are derived access paths, not new truth owners.
+
+### Detailed branch-protection read specialization
+
+When a repository question needs current detailed branch-protection state, prefer the repository-owned bounded `repo_branch_protection` read first. It must preserve the live branch summary separately from the full detail read. A protected summary plus `DETAIL_READ_BLOCKED_PERMISSION` remains permission-blocked partial evidence and must never be converted into `protected=false` or an unprotected claim.
+
+If full detail is still required and an already-authorized user-controlled `gh` read surface is available, use a bounded `gh api repos/<owner>/<repo>/branches/<branch>/protection` fallback. Otherwise preserve the permission-blocked partial result. Never ask the user to paste a GitHub token, persist token material, or treat a lower-privilege connector failure as proof that the repository is unprotected.
 
 ### Preserve connector authority and fallback exceptions
 

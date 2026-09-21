@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hierarchy rotation="0">
+  <node package="com.android.settings" class="android.widget.TextView" text="Settings" clickable="false"/>
+</hierarchy>

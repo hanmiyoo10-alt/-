@@ -1,0 +1,64 @@
+name: ChatGPT Sandbox Rust Bridge
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact repository source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Fetch exact Rust 1.98.1 distribution inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist="$RUNNER_TEMP/rust-dist"
+          mkdir -p "$dist"
+          base='https://static.rust-lang.org/dist'
+          files=(
+            'rust-1.98.1-x86_64-unknown-linux-gnu.tar.xz'
+            'rust-std-1.98.1-aarch64-linux-android.tar.xz'
+          )
+          for file in "${files[@]}"; do
+            curl --fail --location --retry 5 --retry-all-errors --proto '=https' --tlsv1.2 \
+              -o "$dist/$file" "$base/$file"
+            curl --fail --location --retry 5 --retry-all-errors --proto '=https' --tlsv1.2 \
+              -o "$dist/$file.sha256" "$base/$file.sha256"
+          done
+
+      - name: Verify and prepare deterministic Rust bridge bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh tools/sandbox-toolchain/rust/prepare.sh \
+            --input-dir "$RUNNER_TEMP/rust-dist" \
+            --output-dir "$GITHUB_WORKSPACE/rust-bridge"
+
+      - name: Pack bounded ingress parts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$GITHUB_WORKSPACE/rust-bridge/rust-1.98.1-linux-x86_64-plus-android-aarch64.tar"
+          sh tools/sandbox-ingress/pack.sh \
+            --input "$bundle" \
+            --output-dir "$GITHUB_WORKSPACE/rust-ingress" \
+            --max-part-bytes 209715200
+          rm -f "$bundle"
+
+      - name: Upload verified Rust ingress artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: sandbox-rust-1.98.1-x86_64-linux-plus-android-aarch64-ingress
+          path: |
+            rust-ingress/
+            rust-bridge/RUST_TOOLCHAIN_PROVENANCE.tsv
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1

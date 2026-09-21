@@ -80,7 +80,7 @@ assert.match(rendered, /Canonical repository: `hanmiyoo10-alt\/-`/);
 assert.match(rendered, /<!-- PLUGIN_RELEASE_STATE_START -->/);
 assert.match(rendered, /<!-- PLUGIN_RELEASE_STATE_END -->/);
 assert.match(rendered, /- Product: `UNKNOWN`/);
-assert.match(rendered, /Source: `voyage-token-check\/DESIGN_STATUS\.md`/);
+assert.match(rendered, /Source: `plugins\/risu\/local\/voyage\/DESIGN_STATUS\.md`/);
 
 const invalidDescriptor = JSON.parse(JSON.stringify(example));
 invalidDescriptor.guidelines = '../escape.md';
@@ -197,6 +197,7 @@ assert.match(workflow, /SimCore release state sync/);
 assert.match(workflow, /SimCore R2\.7 Durable Status Projection/);
 assert.match(workflow, /SimCore R2\.8 Human-Evidence Terminal Convergence/);
 assert.match(workflow, /Usage Dashboard Project Memory/);
+assert.match(workflow, /Repository Control Plane — Status views/);
 assert.match(workflow, /contents:\s*read/);
 assert.match(workflow, /actions:\s*read/);
 assert.match(workflow, /issues:\s*write/);

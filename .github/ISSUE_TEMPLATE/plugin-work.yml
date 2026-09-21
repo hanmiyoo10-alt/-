@@ -8,12 +8,15 @@ body:
       label: Scope
       description: Choose the exact operational scope. The control plane does not infer this from prose.
       options:
+        - local
         - usage-dashboard
         - simcore
         - devpass
         - termux-large-doc-editor
         - voyage-token-check
         - pocketrisu-helper-mod
+        - study
+        - local-runtime
         - shared
         - repo
         - custom

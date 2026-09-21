@@ -4,14 +4,23 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {spawnSync} = require('node:child_process');
 const {discoverTests} = require('../tests/registry.cjs');
+const {LEGACY_ROOT, normalizeRoot} = require('./release_path_profile.cjs');
 
-const TEST_PREFIX = 'plugins/usage-dashboard/tests/';
+const TEST_PREFIX = `${LEGACY_ROOT}/tests/`;
 const E21_TEST = 'plugins/usage-dashboard/tests/e21-evidence-consumer-convergence-contract.cjs';
 const ALLOWED_OWNER_ROOTS = Object.freeze([
   'plugins/usage-dashboard/src',
   'plugins/usage-dashboard/runtime-src',
 ]);
 const OWNER_EXTENSIONS = new Set(['.js', '.cjs', '.mjs', '.json', '.html', '.css']);
+
+const normalizeSourceRoot = (sourceRoot = LEGACY_ROOT) => normalizeRoot(sourceRoot);
+const testPrefixForRoot = (sourceRoot = LEGACY_ROOT) => `${normalizeSourceRoot(sourceRoot)}/tests/`;
+const e21TestForRoot = (sourceRoot = LEGACY_ROOT) => `${testPrefixForRoot(sourceRoot)}e21-evidence-consumer-convergence-contract.cjs`;
+const ownerRootsForRoot = (sourceRoot = LEGACY_ROOT) => {
+  const root = normalizeSourceRoot(sourceRoot);
+  return Object.freeze([`${root}/src`, `${root}/runtime-src`]);
+};
 
 class E27Error extends Error {
   constructor(code, detail = '') {
@@ -30,8 +39,9 @@ function fail(code, detail = '') {
   throw new E27Error(code, bounded(detail));
 }
 
-function normalizeFocusedRegressionPath(value) {
+function normalizeFocusedRegressionPath(value, sourceRoot = LEGACY_ROOT) {
   if (value === undefined || value === null || value === '') return null;
+  const selectedPrefix = testPrefixForRoot(sourceRoot);
   if (typeof value !== 'string') fail('RED_SPEC', 'newRegression-not-string');
   if (value.includes('\\') || value.includes('\0')) fail('RED_SPEC', 'newRegression-invalid-separator');
   if (path.posix.isAbsolute(value)) fail('RED_SPEC', 'newRegression-absolute');
@@ -41,7 +51,7 @@ function normalizeFocusedRegressionPath(value) {
   const leaf = value.slice(TEST_PREFIX.length);
   if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*\.cjs$/.test(leaf)) fail('RED_SPEC', 'newRegression-invalid-name');
   if (leaf.includes('/')) fail('RED_SPEC', 'newRegression-not-registry-top-level');
-  return value;
+  return `${selectedPrefix}${leaf}`;
 }
 
 function readReleaseSpec(specPath) {
@@ -59,13 +69,15 @@ function readReleaseSpec(specPath) {
   }
 }
 
-function resolveFocusedRegression(specPath) {
+function resolveFocusedRegression(specPath, sourceRoot = LEGACY_ROOT) {
+  const root = normalizeSourceRoot(sourceRoot);
   const spec = readReleaseSpec(specPath);
-  const regressionPath = normalizeFocusedRegressionPath(spec.newRegression);
+  const regressionPath = normalizeFocusedRegressionPath(spec.newRegression, root);
   if (regressionPath === null) return {spec, regressionPath:null};
 
-  const suite = discoverTests();
-  const filename = regressionPath.slice(TEST_PREFIX.length);
+  const selectedPrefix = testPrefixForRoot(root);
+  const suite = discoverTests({testDir:path.resolve(root, 'tests')});
+  const filename = regressionPath.slice(selectedPrefix.length);
   const absolute = path.resolve(regressionPath);
   const expected = path.resolve(suite.testDir, filename);
   if (absolute !== expected) fail('RED_SPEC', 'newRegression-registry-path-mismatch');
@@ -85,19 +97,21 @@ function runNodeTest(testPath, failureCode) {
   if (result.status !== 0) fail(failureCode, `${path.basename(testPath)}-exit-${result.status || 1}`);
 }
 
-function runFocusedPreflight(specPath) {
-  const {regressionPath} = resolveFocusedRegression(specPath);
+function runFocusedPreflight(specPath, sourceRoot = LEGACY_ROOT) {
+  const root = normalizeSourceRoot(sourceRoot);
+  const {regressionPath} = resolveFocusedRegression(specPath, root);
   if (regressionPath !== null) runNodeTest(regressionPath, 'RED_FOCUSED_REGRESSION');
 
-  const suite = discoverTests();
-  const e21Name = path.basename(E21_TEST);
+  const suite = discoverTests({testDir:path.resolve(root, 'tests')});
+  const e21Test = e21TestForRoot(root);
+  const e21Name = path.basename(e21Test);
   if (!suite.ordered.includes(e21Name)) fail('RED_EXECUTION', 'e21-not-discovered');
-  runNodeTest(E21_TEST, 'RED_E21_CONSUMER');
+  runNodeTest(e21Test, 'RED_E21_CONSUMER');
 
   return Object.freeze({
     result:'GREEN',
     regressionPath,
-    e21:E21_TEST,
+    e21:e21Test,
   });
 }
 
@@ -145,23 +159,25 @@ function resolveUniqueSemanticOwner(marker, roots = ALLOWED_OWNER_ROOTS) {
 function main(argv = process.argv.slice(2)) {
   const specIndex = argv.indexOf('--spec');
   const ownerIndex = argv.indexOf('--resolve-owner');
+  const rootIndex = argv.indexOf('--root');
   try {
+    const sourceRoot = rootIndex >= 0 ? normalizeSourceRoot(argv[rootIndex + 1]) : LEGACY_ROOT;
     if (specIndex >= 0) {
       const specPath = argv[specIndex + 1];
-      const result = runFocusedPreflight(specPath);
+      const result = runFocusedPreflight(specPath, sourceRoot);
       console.log(`UD_E27_FOCUSED_PREFLIGHT:GREEN:${result.regressionPath || 'none'}`);
       return;
     }
     if (ownerIndex >= 0) {
       const marker = argv[ownerIndex + 1];
-      const result = resolveUniqueSemanticOwner(marker);
+      const result = resolveUniqueSemanticOwner(marker, ownerRootsForRoot(sourceRoot));
       console.log(`UD_E27_OWNER:GREEN:${result.path}`);
       return;
     }
     fail('RED_EXECUTION', 'usage');
   } catch (error) {
     const code = error instanceof E27Error ? error.code : 'RED_EXECUTION';
-    const detail = error instanceof E27Error ? error.detail : 'unexpected';
+    const detail = error instanceof E27Error ? error.detail : (error?.message || 'unexpected');
     console.error(`UD_E27_FOCUSED_PREFLIGHT:${code}:${bounded(detail)}`);
     process.exitCode = 1;
   }
@@ -174,6 +190,10 @@ module.exports = {
   E21_TEST,
   ALLOWED_OWNER_ROOTS,
   E27Error,
+  normalizeSourceRoot,
+  testPrefixForRoot,
+  e21TestForRoot,
+  ownerRootsForRoot,
   normalizeFocusedRegressionPath,
   resolveFocusedRegression,
   runFocusedPreflight,

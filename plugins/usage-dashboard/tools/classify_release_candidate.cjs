@@ -13,6 +13,7 @@ const RELEASE_CONTROL_PATHS = Object.freeze([
   '.github/workflows/usage-dashboard-promote.yml',
   '.github/workflows/reusable-usage-dashboard-promote.yml',
   'plugins/usage-dashboard/tools/release_generic_preflight.cjs',
+  'plugins/usage-dashboard/tools/release_path_profile.cjs',
   'plugins/usage-dashboard/tools/promote_release_blobs.cjs',
   'plugins/usage-dashboard/tools/classify_release_candidate.cjs',
   'plugins/usage-dashboard/tools/check_release_blob_parity.cjs',

@@ -53,7 +53,17 @@ export async function runSuite({fixtures}){
   assert(workflow.includes('spec-shadows/'),'spec shadow path missing');
   assert(workflow.includes('repo-main-write.py'),'bounded main gateway missing');
   assert(workflow.includes('required-profile MAIN_HEALTH'),'MAIN_HEALTH gate missing');
+  assert(workflow.includes('pull-requests: write'),'candidate checked-PR permission missing');
+  assert(workflow.includes('--mode consume-candidate'),'candidate checked-PR consumer missing');
+  assert(workflow.includes('--mode cleanup-candidate'),'candidate checked-PR cleanup missing');
+  const gatewayIndex=workflow.indexOf('python3 scripts/repo-main-write.py');
+  const consumeIndex=workflow.indexOf('--mode consume-candidate');
+  const reobserveIndex=workflow.indexOf('- name: Reobserve durable machine receipt');
+  const cleanupIndex=workflow.indexOf('--mode cleanup-candidate');
+  assert(gatewayIndex>=0&&consumeIndex>gatewayIndex,'checked-PR consumption must remain downstream of direct main gateway');
+  assert(reobserveIndex>=0&&cleanupIndex>reobserveIndex,'candidate staging cleanup must follow durable semantic reobserve');
   assert(!workflow.includes('release-publish.mjs'),'receipt workflow became publisher');
   pass('C-main-write-without-production-authority');
+  pass('C-candidate-checked-pr-handoff-structure');
   return {coverage:'EXECUTABLE',status:'PASS',assertions};
 }

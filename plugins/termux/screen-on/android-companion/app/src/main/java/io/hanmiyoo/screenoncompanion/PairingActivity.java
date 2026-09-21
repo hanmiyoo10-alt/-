@@ -1,5 +1,6 @@
 package io.hanmiyoo.screenoncompanion;
 
+import android.app.ActionBar;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
@@ -20,6 +21,11 @@ public final class PairingActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        ActionBar actionBar = getActionBar();
+        if (actionBar != null) {
+            actionBar.hide();
+        }
 
         String previousPhase = StartupDiagnostics.readPhase(this);
         boolean safeMode = StartupDiagnostics.requiresSafeMode(previousPhase);
@@ -44,6 +50,14 @@ public final class PairingActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         int pad = Math.round(24 * getResources().getDisplayMetrics().density);
         root.setPadding(pad, pad, pad, pad);
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            view.setPadding(
+                    pad + insets.getSystemWindowInsetLeft(),
+                    pad + insets.getSystemWindowInsetTop(),
+                    pad + insets.getSystemWindowInsetRight(),
+                    pad + insets.getSystemWindowInsetBottom());
+            return insets;
+        });
 
         TextView title = new TextView(this);
         title.setText("Termux Screen On Companion");
@@ -55,6 +69,7 @@ public final class PairingActivity extends Activity {
         status.setText("Startup phase: UI ready");
         root.addView(status);
         setContentView(root);
+        root.requestApplyInsets();
     }
 
     private void addControls() {

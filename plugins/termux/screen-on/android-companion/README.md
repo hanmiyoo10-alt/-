@@ -10,6 +10,8 @@ The companion owns a 1 x 1 `TYPE_APPLICATION_OVERLAY` carrying `FLAG_KEEP_SCREEN
 
 The user must explicitly grant Android **Display over other apps** permission.
 
+The pairing Activity hides the framework action bar and applies system-bar insets to the repository-owned root layout so the complete pairing/status block stays inside the visible content area on modern edge-to-edge Android.
+
 ## Pairing and command boundary
 
 The first receiver design incorrectly reused `com.termux.permission.RUN_COMMAND`, which is Termux's inbound command permission and did not admit this device's Termux-originated broadcast. The replacement uses a 256-bit capability token.

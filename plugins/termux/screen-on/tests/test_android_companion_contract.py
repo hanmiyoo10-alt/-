@@ -19,6 +19,11 @@ class AndroidCompanionContractTests(unittest.TestCase):
         self.assertIn("getWindow().setHideOverlayWindows(true);", source)
         self.assertIn("buildBaseUi();", source)
         self.assertIn("runStartupSequence();", source)
+        self.assertIn("ActionBar actionBar = getActionBar();", source)
+        self.assertIn("actionBar.hide();", source)
+        self.assertIn("setOnApplyWindowInsetsListener", source)
+        self.assertIn("getSystemWindowInsetTop()", source)
+        self.assertIn("root.requestApplyInsets();", source)
         self.assertIn("PairingStore.getOrArmPairing(this)", source)
         self.assertNotIn("Generate one-time pairing code", source)
 
@@ -70,8 +75,8 @@ class AndroidCompanionContractTests(unittest.TestCase):
 
     def test_pairing_ui_repair_has_distinguishable_install_version(self):
         build = BUILD_FILE.read_text()
-        self.assertIn("versionCode 5", build)
-        self.assertIn("versionName '0.1.4'", build)
+        self.assertIn("versionCode 6", build)
+        self.assertIn("versionName '0.1.5'", build)
 
 
 if __name__ == "__main__":

@@ -175,6 +175,86 @@ The invoker itself still does not release D-013, remove the holder, create D-014
 completion evidence, open/merge a PR, touch main, or perform release/production
 effects.
 
+
+## Manifest-bound prepared-state validation interlock
+
+The owner also exposes one **in-process only** validation seam for the Phase 8.6b
+coordinator. The public CLI is unchanged and does not accept a validation
+command, profile, script, argv, path, working directory or environment.
+
+The caller supplies a strict data-only request object to `invokeLive()`:
+
+```json
+{
+  "schema": "mcl-repository-validation-request.v1",
+  "profile": "mcl:d014-completion-set:v1"
+}
+```
+
+Its exact file bytes are SHA-256 bound in the current D-014 manifest as:
+
+```text
+receipt:mcl-repository-validation-request:<sha256>
+```
+
+If that binding is missing, conflicting, ambiguous or changes during the
+invocation, the owner fails closed. A manifest that carries such a binding
+cannot silently fall back to the legacy no-validation path.
+
+V1 has one repository-owned fixed profile only:
+
+```text
+mcl:d014-completion-set:v1
+```
+
+It is admitted only for the exact reviewed completion-set patch paths. After
+`PREPARE` succeeds and before `COMMIT`, the owner runs this fixed sequence in
+the already-authorized leased worktree:
+
+```text
+node --check products/chatgpt-mobile-coder-lab/coordination/completion-receipt-set.cjs
+node --check products/chatgpt-mobile-coder-lab/coordination/tests/test-completion-receipt-set.cjs
+node --test  products/chatgpt-mobile-coder-lab/coordination/tests/test-completion-receipt-set.cjs
+node --test  products/chatgpt-mobile-coder-lab/coordination/tests/test-task-handoff.cjs
+```
+
+The executable and argv are repository source, not caller data. Children run
+with `shell=false`, a bounded timeout/output ceiling, the manifest worktree as
+cwd, and the same sanitized child environment used by the patch primitive.
+Holder claims, GitHub tokens and arbitrary caller environment values are not
+propagated.
+
+The guarded effect ordering for validation-enabled in-process calls is:
+
+```text
+currentness/holder guard
+→ PREPARE
+→ currentness/holder guard
+→ fixed prepared-state validation
+→ currentness/holder guard
+→ COMMIT with the original prepared_digest
+→ currentness/holder guard
+→ PUSH
+```
+
+The Python primitive remains unchanged. Its existing commit phase recomputes
+the exact staged paths, rejects unstaged/untracked residue, and recomputes the
+prepared digest. A validator that unexpectedly changes index/worktree/ref state
+therefore cannot gain commit authority.
+
+Validation-enabled canonical receipts add one conditional
+`prepared-validation` step between `patch-prepare` and `patch-commit`. The
+legacy no-validation receipt retains its existing three-step shape.
+
+A validator failure preserves the real prepared state, returns bounded
+BLOCKED/UNKNOWN/CONFLICT evidence, leaves commit/push skipped, and does not
+reset, stash, clean, force-push or auto-retry. Abandoned partial-state recovery
+remains owned by the existing interrupted-effect recovery contracts.
+
+Adding another validation profile is a reviewed source/authority change, not
+caller configuration.
+
+
 ## Validation
 
 ```text

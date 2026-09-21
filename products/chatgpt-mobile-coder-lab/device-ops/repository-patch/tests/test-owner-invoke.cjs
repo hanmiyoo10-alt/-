@@ -41,6 +41,14 @@ const BODY_SHA = taskLease.digest(BODY);
 const AUTHORITY = {...inv.FALSE_AUTHORITY};
 const PATHS = ['docs/demo.txt'];
 const SCOPES = PATHS.map((item) => 'path:' + item);
+const D014_PATHS = [...inv.D014_COMPLETION_SET_PATHS];
+const VALIDATION_REQUEST = {
+  schema: inv.VALIDATION_REQUEST_SCHEMA,
+  profile: inv.D014_VALIDATION_PROFILE,
+};
+const VALIDATION_TEXT = JSON.stringify(VALIDATION_REQUEST);
+const VALIDATION_HASH = crypto.createHash('sha256')
+  .update(Buffer.from(VALIDATION_TEXT, 'utf8')).digest('hex');
 const WORKSPACE = {
   kind: 'repository',
   branch: 'server/patch-proof',
@@ -172,6 +180,48 @@ function tempInputs() {
   fs.writeFileSync(handoffPath, JSON.stringify(handoff(m)), 'utf8');
   return {dir, requestPath, patchPath, manifestPath, handoffPath, manifest: m};
 }
+
+function d014Request(overrides = {}) {
+  return {
+    schema: 'mcl-repository-patch-request.v1',
+    message: 'feat: add completion receipt set',
+    expected_paths: [...D014_PATHS],
+    patch_sha256: PATCH_HASH,
+    ...overrides,
+  };
+}
+function validationManifest(overrides = {}) {
+  return manifest({
+    scopes: D014_PATHS.map((item) => 'path:' + item),
+    inputRefs: [
+      'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+      inv.PRIMITIVE_REF,
+      inv.VALIDATION_REF_PREFIX + VALIDATION_HASH,
+    ],
+    ...overrides,
+  });
+}
+function tempValidationInputs() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-repo-patch-validation-test-'));
+  const requestPath = path.join(dir, 'request.json');
+  const patchPath = path.join(dir, 'request.patch');
+  const validationPath = path.join(dir, 'validation.json');
+  const manifestPath = path.join(dir, 'manifest.json');
+  const handoffPath = path.join(dir, 'handoff.json');
+  const m = validationManifest();
+  fs.writeFileSync(requestPath, JSON.stringify(d014Request()), 'utf8');
+  fs.writeFileSync(patchPath, PATCH);
+  fs.writeFileSync(validationPath, VALIDATION_TEXT, 'utf8');
+  fs.writeFileSync(manifestPath, JSON.stringify(m), 'utf8');
+  fs.writeFileSync(handoffPath, JSON.stringify(handoff(m)), 'utf8');
+  return {
+    dir, requestPath, patchPath, validationPath, manifestPath, handoffPath, manifest: m,
+  };
+}
+function d014Primitive(phase, overrides = {}) {
+  return primitive(phase, {changed_paths: [...D014_PATHS], ...overrides});
+}
+
 function passReceipt(m = manifest()) {
   return inv.projectGenericReceipt({
     manifest: m,
@@ -678,4 +728,283 @@ test('agent-view CLI mode emits only the final decision view', async () => {
   } finally {
     fs.rmSync(inputs.dir, {recursive: true, force: true});
   }
+});
+
+
+test('validation request parser is strict and profile-bound', () => {
+  assert.deepEqual(inv.parseValidationRequestText(VALIDATION_TEXT), VALIDATION_REQUEST);
+  assert.throws(
+    () => inv.parseValidationRequestText(JSON.stringify({...VALIDATION_REQUEST, command: 'node x'})),
+    (error) => error.kind === 'UNKNOWN'
+      && error.reasonCodes.includes('VALIDATION_REQUEST_UNKNOWN_FIELD:command'),
+  );
+  assert.throws(
+    () => inv.parseValidationRequestText(JSON.stringify({
+      schema: inv.VALIDATION_REQUEST_SCHEMA,
+      profile: 'mcl:other:v1',
+    })),
+    (error) => error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('VALIDATION_PROFILE_UNSUPPORTED'),
+  );
+});
+
+test('manifest-bound fixed validation passes between prepare and commit', async () => {
+  const inputs = tempValidationInputs();
+  try {
+    let guards = 0;
+    let primitiveCalls = 0;
+    const validationCalls = [];
+    const phases = [
+      d014Primitive('PREPARE'),
+      d014Primitive('COMMIT'),
+      d014Primitive('PUSH'),
+    ];
+    const receipt = await inv.invokeLive({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(d014Request()),
+      requestFile: inputs.requestPath,
+      patchFile: inputs.patchPath,
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+      env: {
+        PATH: '/x',
+        HOME: '/h',
+        LANG: 'C',
+        MCL_WORKSPACE_HOLDER_CLAIM: HOLDER,
+        GH_TOKEN: 'must-not-propagate',
+        GITHUB_TOKEN: 'must-not-propagate',
+      },
+      guardImpl: async () => { guards += 1; },
+      spawnSyncImpl: () => ({
+        status: 0,
+        signal: null,
+        stdout: JSON.stringify(phases[primitiveCalls++]),
+        stderr: '',
+      }),
+      validationSpawnSyncImpl: (command, args, options) => {
+        validationCalls.push({command, args, options});
+        return {status: 0, signal: null, stdout: '', stderr: ''};
+      },
+      root: ROOT,
+    });
+    assert.equal(guards, 4);
+    assert.equal(primitiveCalls, 3);
+    assert.equal(validationCalls.length, inv.D014_VALIDATION_CHECKS.length);
+    for (let i = 0; i < validationCalls.length; i += 1) {
+      const call = validationCalls[i];
+      assert.equal(call.command, process.execPath);
+      assert.deepEqual(call.args, inv.D014_VALIDATION_CHECKS[i].args);
+      assert.equal(call.options.cwd, WORKSPACE.worktree);
+      assert.equal(call.options.shell, false);
+      assert.equal(call.options.env.GH_TOKEN, undefined);
+      assert.equal(call.options.env.GITHUB_TOKEN, undefined);
+      assert.equal(call.options.env.MCL_WORKSPACE_HOLDER_CLAIM, undefined);
+    }
+    assert.equal(receipt.result, 'PASS');
+    const byName = new Map(receipt.steps.map((step) => [step.name, step.result]));
+    assert.equal(byName.get('patch-prepare'), 'PASS');
+    assert.equal(byName.get('prepared-validation'), 'PASS');
+    assert.equal(byName.get('patch-commit'), 'PASS');
+    assert.equal(byName.get('patch-push-postverify'), 'PASS');
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('validation request requires exact manifest inputRef before prepare', async () => {
+  const inputs = tempValidationInputs();
+  try {
+    const m = validationManifest({
+      inputRefs: [
+        'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+        inv.PRIMITIVE_REF,
+      ],
+    });
+    let primitiveCalls = 0;
+    const receipt = await inv.invokeLive({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(m)),
+      manifestText: JSON.stringify(m),
+      requestText: JSON.stringify(d014Request()),
+      requestFile: inputs.requestPath,
+      patchFile: inputs.patchPath,
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {},
+      spawnSyncImpl: () => { primitiveCalls += 1; throw new Error('unexpected primitive'); },
+      root: ROOT,
+    });
+    assert.equal(primitiveCalls, 0);
+    assert.equal(receipt.result, 'BLOCKED');
+    assert(receipt.blockers.includes('VALIDATION_REQUEST_REF_REQUIRED'));
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('fixed profile rejects any non-reviewed patch path set', async () => {
+  const inputs = tempValidationInputs();
+  try {
+    const validationRef = inv.VALIDATION_REF_PREFIX + VALIDATION_HASH;
+    const m = manifest({
+      inputRefs: [
+        'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+        inv.PRIMITIVE_REF,
+        validationRef,
+      ],
+    });
+    fs.writeFileSync(inputs.requestPath, JSON.stringify(request()), 'utf8');
+    let primitiveCalls = 0;
+    const receipt = await inv.invokeLive({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(m)),
+      manifestText: JSON.stringify(m),
+      requestText: JSON.stringify(request()),
+      requestFile: inputs.requestPath,
+      patchFile: inputs.patchPath,
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {},
+      spawnSyncImpl: () => { primitiveCalls += 1; throw new Error('unexpected primitive'); },
+      root: ROOT,
+    });
+    assert.equal(primitiveCalls, 0);
+    assert.equal(receipt.result, 'BLOCKED');
+    assert(receipt.blockers.includes('VALIDATION_PROFILE_PATHS_UNSUPPORTED'));
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('fixed validation failure preserves prepare and skips commit push', async () => {
+  const inputs = tempValidationInputs();
+  try {
+    let primitiveCalls = 0;
+    let validationCalls = 0;
+    const receipt = await inv.invokeLive({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(d014Request()),
+      requestFile: inputs.requestPath,
+      patchFile: inputs.patchPath,
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {},
+      spawnSyncImpl: () => {
+        primitiveCalls += 1;
+        return {
+          status: 0, signal: null,
+          stdout: JSON.stringify(d014Primitive('PREPARE')), stderr: '',
+        };
+      },
+      validationSpawnSyncImpl: () => {
+        validationCalls += 1;
+        return validationCalls === 2
+          ? {status: 1, signal: null, stdout: '', stderr: 'fixture failure'}
+          : {status: 0, signal: null, stdout: '', stderr: ''};
+      },
+      root: ROOT,
+    });
+    assert.equal(primitiveCalls, 1);
+    assert.equal(validationCalls, 2);
+    assert.equal(receipt.result, 'BLOCKED');
+    assert(receipt.blockers.includes(
+      'PREPARED_VALIDATION_FAILED:completion-test-syntax'));
+    const byName = new Map(receipt.steps.map((step) => [step.name, step.result]));
+    assert.equal(byName.get('patch-prepare'), 'PASS');
+    assert.equal(byName.get('prepared-validation'), 'BLOCKED');
+    assert.equal(byName.get('patch-commit'), 'SKIPPED');
+    assert.equal(byName.get('patch-push-postverify'), 'SKIPPED');
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('validation request byte drift fails closed before commit', async () => {
+  const inputs = tempValidationInputs();
+  try {
+    let primitiveCalls = 0;
+    let validationCalls = 0;
+    const receipt = await inv.invokeLive({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(d014Request()),
+      requestFile: inputs.requestPath,
+      patchFile: inputs.patchPath,
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {},
+      spawnSyncImpl: () => {
+        primitiveCalls += 1;
+        return {
+          status: 0, signal: null,
+          stdout: JSON.stringify(d014Primitive('PREPARE')), stderr: '',
+        };
+      },
+      validationSpawnSyncImpl: () => {
+        validationCalls += 1;
+        if (validationCalls === 1) {
+          fs.writeFileSync(inputs.validationPath, VALIDATION_TEXT + '\\n', 'utf8');
+        }
+        return {status: 0, signal: null, stdout: '', stderr: ''};
+      },
+      root: ROOT,
+    });
+    assert.equal(primitiveCalls, 1);
+    assert.equal(validationCalls, inv.D014_VALIDATION_CHECKS.length);
+    assert.equal(receipt.result, 'CONFLICT');
+    assert(receipt.conflicts.includes('VALIDATION_REQUEST_CHANGED_DURING_INVOCATION'));
+    const byName = new Map(receipt.steps.map((step) => [step.name, step.result]));
+    assert.equal(byName.get('patch-prepare'), 'PASS');
+    assert.equal(byName.get('prepared-validation'), 'PASS');
+    assert.equal(byName.get('patch-commit'), 'SKIPPED');
+    assert.equal(byName.get('patch-push-postverify'), 'SKIPPED');
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('validation binding without in-process request cannot silently bypass profile', async () => {
+  const inputs = tempValidationInputs();
+  try {
+    let primitiveCalls = 0;
+    const receipt = await inv.invokeLive({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(d014Request()),
+      requestFile: inputs.requestPath,
+      patchFile: inputs.patchPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {},
+      spawnSyncImpl: () => { primitiveCalls += 1; throw new Error('unexpected primitive'); },
+      root: ROOT,
+    });
+    assert.equal(primitiveCalls, 0);
+    assert.equal(receipt.result, 'BLOCKED');
+    assert(receipt.blockers.includes('VALIDATION_REQUEST_INPUT_REQUIRED'));
+    assert(receipt.steps.some((step) => step.name === 'prepared-validation'));
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('public CLI exposes no validation command or profile selector', () => {
+  const source = fs.readFileSync(INVOKER_PATH, 'utf8');
+  for (const token of [
+    "'validation-command'",
+    "'validation-profile'",
+    "'validation-file'",
+    "'command'",
+    "'argv'",
+    "'executable'",
+  ]) assert(!source.includes(token), token);
 });

@@ -7,6 +7,7 @@ APP_DIR = SCREEN_ON_DIR / "android-companion" / "app"
 MANIFEST = APP_DIR / "src" / "main" / "AndroidManifest.xml"
 PAIRING_ACTIVITY = APP_DIR / "src" / "main" / "java" / "io" / "hanmiyoo" / "screenoncompanion" / "PairingActivity.java"
 STARTUP_DIAGNOSTICS = APP_DIR / "src" / "main" / "java" / "io" / "hanmiyoo" / "screenoncompanion" / "StartupDiagnostics.java"
+SCREEN_ON_RECEIVER = APP_DIR / "src" / "main" / "java" / "io" / "hanmiyoo" / "screenoncompanion" / "ScreenOnReceiver.java"
 BUILD_FILE = APP_DIR / "build.gradle"
 ANDROID_NS = "{http://schemas.android.com/apk/res/android}"
 
@@ -52,10 +53,25 @@ class AndroidCompanionContractTests(unittest.TestCase):
         self.assertIn("No pairing action was completed", source)
         self.assertNotIn("Log.", source)
 
+    def test_startup_diagnostic_receiver_is_read_only_sanitized_and_pre_auth(self):
+        receiver = SCREEN_ON_RECEIVER.read_text()
+        diagnostics = STARTUP_DIAGNOSTICS.read_text()
+        manifest = MANIFEST.read_text()
+        self.assertIn("action.DIAGNOSTIC", manifest)
+        self.assertLess(
+            receiver.index("ACTION_DIAGNOSTIC"),
+            receiver.index("PairingStore.isAuthorized"),
+        )
+        self.assertIn('"startup_phase=" + StartupDiagnostics.readSanitizedPhase(context)', receiver)
+        self.assertIn('"startup_phase=UNKNOWN"', receiver)
+        self.assertIn('return "FAILED_PAIRING_CODE";', diagnostics)
+        self.assertIn('return "UNKNOWN";', diagnostics)
+        self.assertNotIn("pair_code", diagnostics)
+
     def test_pairing_ui_repair_has_distinguishable_install_version(self):
         build = BUILD_FILE.read_text()
-        self.assertIn("versionCode 4", build)
-        self.assertIn("versionName '0.1.3'", build)
+        self.assertIn("versionCode 5", build)
+        self.assertIn("versionName '0.1.4'", build)
 
 
 if __name__ == "__main__":

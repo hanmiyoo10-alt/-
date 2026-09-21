@@ -13,6 +13,17 @@ public final class ScreenOnReceiver extends BroadcastReceiver {
             return;
         }
 
+        if (CommandProtocol.ACTION_DIAGNOSTIC.equals(action)) {
+            try {
+                reply(
+                        CommandProtocol.RESULT_DIAGNOSTIC,
+                        "startup_phase=" + StartupDiagnostics.readSanitizedPhase(context));
+            } catch (RuntimeException ignored) {
+                reply(CommandProtocol.RESULT_DIAGNOSTIC, "startup_phase=UNKNOWN");
+            }
+            return;
+        }
+
         String token = intent.getStringExtra(CommandProtocol.EXTRA_TOKEN);
         if (CommandProtocol.ACTION_PAIR.equals(action)) {
             String pairCode = intent.getStringExtra(CommandProtocol.EXTRA_PAIR_CODE);

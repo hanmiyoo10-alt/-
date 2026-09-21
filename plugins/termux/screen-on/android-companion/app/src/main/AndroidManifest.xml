@@ -23,6 +23,7 @@
                 <action android:name="io.hanmiyoo.screenoncompanion.action.ON" />
                 <action android:name="io.hanmiyoo.screenoncompanion.action.OFF" />
                 <action android:name="io.hanmiyoo.screenoncompanion.action.STATUS" />
+                <action android:name="io.hanmiyoo.screenoncompanion.action.DIAGNOSTIC" />
             </intent-filter>
         </receiver>
     </application>

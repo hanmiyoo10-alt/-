@@ -31,6 +31,7 @@ The repo-owned candidate remains explicit during parity testing:
 
 ```bash
 python plugins/termux/screen-on/screen_on.py --backend companion doctor
+python plugins/termux/screen-on/screen_on.py --backend companion diagnostic
 python plugins/termux/screen-on/screen_on.py --backend companion setup
 # Open the companion app; it shows the one-time pairing code automatically, then:
 python plugins/termux/screen-on/screen_on.py --backend companion --pair-code 12345678 setup
@@ -41,7 +42,7 @@ python plugins/termux/screen-on/screen_on.py --backend companion off
 
 For companion setup, run `setup` once to get the instructions, then open **Termux Screen On Companion** from the Android launcher. Opening the app is the explicit user action that arms and displays the one-time pairing code; no Generate-button tap is required. Reopening the app within the same two-minute window reuses the same still-valid pending code instead of rotating it. The pairing screen hides non-system overlays on Android 12+. The code is valid for two minutes and one pairing attempt. After pairing, tap **Open Display over other apps** in the companion and grant the Android overlay permission. The long-lived capability token is stored at `~/.config/termux-screen-on/companion-token` with mode 0600. Do not record pairing codes or capability tokens in Git. Reinstalling or clearing the companion invalidates pairing until setup is repeated.
 
-ON/OFF/STATUS use distinct ordered-broadcast result codes. An attached overlay is stronger evidence than transport success, but `keep_awake_effect` remains `UNKNOWN` until the main phone passes the same physical timeout observation used for #2194.
+`diagnostic` is intentionally available before pairing and returns only a fixed sanitized `startup_phase` receipt. It sends no capability token and cannot mutate overlay or pairing state. `doctor` includes the same startup phase before the normal status summary. PAIR/ON/OFF/STATUS keep their existing capability-token boundary. An attached overlay is stronger evidence than transport success, but `keep_awake_effect` remains `UNKNOWN` until the main phone passes the same physical timeout observation used for #2194.
 
 ## Tests
 

@@ -23,6 +23,7 @@ class FakeRunner:
             (screen_on.COMPANION_PACKAGE, screen_on.COMPANION_ON_ACTION): screen_on.COMPANION_RECEIVER,
             (screen_on.COMPANION_PACKAGE, screen_on.COMPANION_OFF_ACTION): screen_on.COMPANION_RECEIVER,
             (screen_on.COMPANION_PACKAGE, screen_on.COMPANION_STATUS_ACTION): screen_on.COMPANION_RECEIVER,
+            (screen_on.COMPANION_PACKAGE, screen_on.COMPANION_DIAGNOSTIC_ACTION): screen_on.COMPANION_RECEIVER,
         }
         self.broadcasts = {
             screen_on.ADD_ACTION: (0, ""),
@@ -31,6 +32,7 @@ class FakeRunner:
             screen_on.COMPANION_ON_ACTION: (screen_on.COMPANION_RESULT_ON, "overlay=ON"),
             screen_on.COMPANION_OFF_ACTION: (screen_on.COMPANION_RESULT_OFF, "overlay=OFF"),
             screen_on.COMPANION_STATUS_ACTION: (screen_on.COMPANION_RESULT_STATUS_OFF, "overlay=OFF"),
+            screen_on.COMPANION_DIAGNOSTIC_ACTION: (screen_on.COMPANION_RESULT_DIAGNOSTIC, "startup_phase=PAIRING_CODE"),
         }
         self.broadcast_returncode = 0
         self.start_returncode = 0
@@ -149,6 +151,23 @@ class ScreenOnTests(unittest.TestCase):
         runner.broadcasts[screen_on.COMPANION_ON_ACTION] = (screen_on.COMPANION_RESULT_PERMISSION_REQUIRED, "overlay_permission=DENIED")
         with self.assertRaises(screen_on.ScreenOnError): screen_on.command_companion_on(runner)
 
+    def test_companion_diagnostic_requires_no_pairing_token_and_returns_fixed_phase(self):
+        runner = FakeRunner()
+        lines = screen_on.command_companion_diagnostic(runner)
+        call = next(c for c in runner.calls if c[:3] == ["cmd", "activity", "broadcast"])
+        self.assertEqual(call[call.index("-a") + 1], screen_on.COMPANION_DIAGNOSTIC_ACTION)
+        self.assertNotIn("--es", call)
+        self.assertIn("startup_phase=PAIRING_CODE", lines)
+
+    def test_companion_diagnostic_rejects_nonfixed_payload(self):
+        runner = FakeRunner()
+        runner.broadcasts[screen_on.COMPANION_DIAGNOSTIC_ACTION] = (
+            screen_on.COMPANION_RESULT_DIAGNOSTIC,
+            "startup_phase=PAIRING_CODE_12345678",
+        )
+        with self.assertRaises(screen_on.ScreenOnError):
+            screen_on.command_companion_diagnostic(runner)
+
     def test_companion_status_without_token_preserves_unknown_effect(self):
         lines = screen_on.command_companion_status(FakeRunner())
         self.assertIn("pairing=NO", lines)
@@ -179,7 +198,19 @@ class ScreenOnTests(unittest.TestCase):
         self.pair_locally(); runner = FakeRunner()
         screen_on.command_companion_doctor(runner)
         queries = [c for c in runner.calls if c[:3] == ["cmd", "package", "query-receivers"]]
-        self.assertEqual({c[c.index("-a") + 1] for c in queries}, {screen_on.COMPANION_PAIR_ACTION, screen_on.COMPANION_ON_ACTION, screen_on.COMPANION_OFF_ACTION, screen_on.COMPANION_STATUS_ACTION})
+        self.assertEqual(
+            {c[c.index("-a") + 1] for c in queries},
+            {
+                screen_on.COMPANION_PAIR_ACTION,
+                screen_on.COMPANION_ON_ACTION,
+                screen_on.COMPANION_OFF_ACTION,
+                screen_on.COMPANION_STATUS_ACTION,
+                screen_on.COMPANION_DIAGNOSTIC_ACTION,
+            },
+        )
+        broadcasts = [c for c in runner.calls if c[:3] == ["cmd", "activity", "broadcast"]]
+        diagnostic = next(c for c in broadcasts if c[c.index("-a") + 1] == screen_on.COMPANION_DIAGNOSTIC_ACTION)
+        self.assertNotIn("--es", diagnostic)
 
     def test_invalid_token_file_fails_closed(self):
         screen_on.COMPANION_TOKEN_PATH.parent.mkdir(parents=True)

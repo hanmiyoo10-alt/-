@@ -31,6 +31,26 @@ final class StartupDiagnostics {
         return phase != null && !PHASE_READY.equals(phase);
     }
 
+    static String readSanitizedPhase(Context context) {
+        return sanitizePhase(readPhase(context));
+    }
+
+    static String sanitizePhase(String phase) {
+        if (phase == null) return "NONE";
+        if (PHASE_UI_BUILD.equals(phase)
+                || PHASE_OVERLAY_PROTECTION.equals(phase)
+                || PHASE_PAIRING_CODE.equals(phase)
+                || PHASE_PAIRING_CODE_VISIBLE.equals(phase)
+                || PHASE_READY.equals(phase)) {
+            return phase;
+        }
+        if (phase.startsWith("FAILED_" + PHASE_UI_BUILD + "_")) return "FAILED_UI_BUILD";
+        if (phase.startsWith("FAILED_" + PHASE_OVERLAY_PROTECTION + "_")) return "FAILED_OVERLAY_PROTECTION";
+        if (phase.startsWith("FAILED_" + PHASE_PAIRING_CODE + "_")) return "FAILED_PAIRING_CODE";
+        if (phase.startsWith("FAILED_" + PHASE_PAIRING_CODE_VISIBLE + "_")) return "FAILED_PAIRING_CODE_VISIBLE";
+        return "UNKNOWN";
+    }
+
     private static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }

@@ -80,6 +80,7 @@ function mapProfileArtifacts(profile) {
 }
 
 const DEFAULT_PROFILE = createProfile(LEGACY_ROOT, [LEGACY_ROOT]);
+const DUAL_PUBLICATION_PROFILE = createProfile(LEGACY_ROOT, [LEGACY_ROOT, TARGET_ROOT]);
 
 module.exports = {
   LEGACY_ROOT,
@@ -87,6 +88,7 @@ module.exports = {
   ALLOWED_ROOTS,
   PRODUCTION_RELATIVE_PATHS,
   DEFAULT_PROFILE,
+  DUAL_PUBLICATION_PROFILE,
   normalizeRoot,
   validateProfile,
   createProfile,

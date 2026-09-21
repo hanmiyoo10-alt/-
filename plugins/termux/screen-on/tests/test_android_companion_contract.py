@@ -75,8 +75,8 @@ class AndroidCompanionContractTests(unittest.TestCase):
 
     def test_pairing_ui_repair_has_distinguishable_install_version(self):
         build = BUILD_FILE.read_text()
-        self.assertIn("versionCode 6", build)
-        self.assertIn("versionName '0.1.5'", build)
+        self.assertIn("versionCode 7", build)
+        self.assertIn("versionName '0.1.6'", build)
 
 
 if __name__ == "__main__":

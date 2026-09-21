@@ -28,7 +28,9 @@ final class StartupDiagnostics {
     }
 
     static boolean requiresSafeMode(String phase) {
-        return phase != null && !PHASE_READY.equals(phase);
+        return phase != null
+                && !PHASE_READY.equals(phase)
+                && !PHASE_PAIRING_CODE_VISIBLE.equals(phase);
     }
 
     static String readSanitizedPhase(Context context) {

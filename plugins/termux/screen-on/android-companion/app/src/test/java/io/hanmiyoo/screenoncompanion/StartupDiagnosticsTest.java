@@ -11,10 +11,10 @@ public final class StartupDiagnosticsTest {
     public void onlyStableReadyPhaseSkipsDiagnosticSafeMode() {
         assertFalse(StartupDiagnostics.requiresSafeMode(null));
         assertFalse(StartupDiagnostics.requiresSafeMode(StartupDiagnostics.PHASE_READY));
+        assertFalse(StartupDiagnostics.requiresSafeMode(StartupDiagnostics.PHASE_PAIRING_CODE_VISIBLE));
         assertTrue(StartupDiagnostics.requiresSafeMode(StartupDiagnostics.PHASE_UI_BUILD));
         assertTrue(StartupDiagnostics.requiresSafeMode(StartupDiagnostics.PHASE_OVERLAY_PROTECTION));
         assertTrue(StartupDiagnostics.requiresSafeMode(StartupDiagnostics.PHASE_PAIRING_CODE));
-        assertTrue(StartupDiagnostics.requiresSafeMode(StartupDiagnostics.PHASE_PAIRING_CODE_VISIBLE));
         assertTrue(StartupDiagnostics.requiresSafeMode("FAILED_PAIRING_CODE_RuntimeException"));
     }
 

@@ -22,6 +22,8 @@ The receiver returns distinct ordered-broadcast result codes for authorization r
 
 During the current real-device pairing investigation, launcher startup records only a phase marker in app-private preferences. Because the Activity UI proved unreliable on device M, the preferred observation surface is now the read-only `DIAGNOSTIC` ordered-broadcast result. Stored failure values may contain an exception class internally, but the exported diagnostic maps them to fixed values such as `FAILED_PAIRING_CODE`; unknown or unreadable state becomes `UNKNOWN`. The older safe-mode UI remains as a local fallback and still exposes no pairing material.
 
+A visible pairing-code phase is recoverable, not a startup failure. If the previous phase is `PAIRING_CODE_VISIBLE`, reopening the Activity runs the normal startup sequence again so a still-valid code is reused or a consumed/expired code is freshly generated. Earlier incomplete phases and `FAILED_*` values still enter diagnostic safe mode.
+
 ## Build
 
 The repository workflow `screen-on-android-companion.yml` runs unit tests and builds a debug APK. Source merge or a debug artifact is not production deployment; Termux production/release authority remains UNKNOWN.

@@ -55,10 +55,10 @@
     },
     {
       "id": "R2_4_C_DIRECT_PREDECESSOR_TERMINAL_DEBT_SEAL",
-      "classification": "WATCH",
-      "status": "HISTORICAL_ADMIN_SEALS_PROVEN_06409_06410_06411",
+      "classification": "STABILIZE",
+      "status": "HISTORICAL_ADMIN_SEAL_SET_COMPLETE_06409_06410_06411",
       "issue": 691,
-      "goal": "Preserve separately reviewed one-item historical administrative seals as append-only evidence, including bounded direct-release-transaction successor evidence for SUPERSEDED debt, while leaving clean release authority unchanged."
+      "goal": "Preserve the completed #660/#679/#704 historical seal ledger as durable evidence with no remaining open debt, while retaining issue #691 only as a historical/source locator and leaving clean release authority unchanged."
     },
     {
       "id": "R2_4_D_AUTOMATION_AUTHORITY_FREEZE",
@@ -240,7 +240,12 @@
         "requiresPostMergeReobservation": true,
         "otherDebtItemsSealed": []
       }
-    ]
+    ],
+    "openDebtItems": [],
+    "openDebtCount": 0,
+    "watchRetirementEligible": true,
+    "watchIssue": 691,
+    "watchIssueRole": "HISTORICAL_SOURCE_LOCATOR"
   },
   "preservedSafety": {
     "singlePublisher": true,

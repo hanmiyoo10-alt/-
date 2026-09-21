@@ -356,6 +356,40 @@ direct successor #704 / v0.64.11
 
 The #660 seal remains the first ledger entry. #704 is not sealed by the #679 administrative PR.
 
+### 5.8 SUPERSEDED debt may freeze a direct release-transaction successor
+
+A historical debt item does not require a fabricated successor issue when durable evidence shows that its remaining acceptance slice was deliberately absorbed by one exact subsequent release transaction.
+
+For that bounded case, one ledger entry may use:
+
+```text
+terminalDisposition = SUPERSEDED
+durableTerminalEvidence = true
+successorRelation = DIRECT_RELEASE_TRANSACTION
+successorReleaseVersion
+successorImplementationPr
+successorReleaseId
+successorProductionCommit
+successorProductionBlob
+successorTerminalClosurePr
+```
+
+This union shape is evidence-only and must be fully enumerated by the activating packet. It does not authorize discovery, graph traversal, chain walking, or inference of successor releases.
+
+Cleanup-33 #2715 is authorized to append exactly one such record for #704 / v0.64.11:
+
+```text
+#704 / v0.64.11
+SUPERSEDED
+direct successor release = v0.65.0 / simcore-v0.65.0-new-05
+implementation PR = #721
+terminal PR3 = #755
+```
+
+The reason is specific and source-backed: v0.64.11 already proved bounded compaction and real Host-local write, while the remaining runtime-identity/reload-adoption slice was deliberately carried into v0.65.0 and then proved by Subgate A before v0.65.0 reached terminal closure.
+
+The prior #660 and #679 ledger entries remain semantically unchanged. The per-administrative-PR limit remains one debt item.
+
 ## 6. R2.4-D — Automation Authority Freeze
 
 Classification:
@@ -473,7 +507,7 @@ release-simcore is unchanged by R2.4 itself
 ```text
 R2.4-A Candidate-Equivalent PR1 Dry Qualification = FIX / DESIGN FROZEN
 R2.4-B Semantic Assertion Discipline = STABILIZE / DESIGN FROZEN
-R2.4-C Direct-Predecessor Terminal Debt Seal = WATCH / HISTORICAL ADMIN SEALS PROVEN FOR #660 + #679 / ONE ITEM PER TRANSACTION
+R2.4-C Direct-Predecessor Terminal Debt Seal = WATCH / HISTORICAL ADMIN SEALS PROVEN FOR #660 + #679 + #704 / ONE ITEM PER TRANSACTION
 R2.4-D Automation Authority Freeze = FREEZE
 
 release engine replacement = NO

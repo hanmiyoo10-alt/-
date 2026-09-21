@@ -354,3 +354,48 @@ The ledger records separate transactions, not one multi-item PR:
 The #679 seal remains non-close-eligible before merge. Merge plus protected-main reobservation, current production-authority reobservation, presence of the exact seal document, and `closeEligible=true` from the unchanged R2.3 evaluator remain mandatory before native closure.
 
 No chain walk, automatic issue closer, publisher, polling, runtime mutation, release-simcore mutation, or clean-path PR-count change is introduced.
+
+
+## 13. Cleanup-33 — third one-item historical admin seal
+
+Cleanup-33 #2715 applies the proven historical-seal mechanism to #704 / v0.64.11 with a different supported R2.3 terminal disposition:
+
+```text
+SUPERSEDED
+```
+
+This is intentionally not a failed-live handoff classification.
+
+v0.64.11 durable evidence proves:
+- `COMPACT_V2 <= 16,384`: PASS / LIVE PROVEN;
+- real `HOST_LOCAL WRITTEN`: PASS / LIVE PROVEN;
+- the remaining blocker was `06411_RUNTIME_IDENTITY_SPLIT`.
+
+The next genuine release deliberately absorbed that identity/reload slice into v0.65.0 rather than opening a separate v0.64.x repair.
+
+Frozen successor transaction:
+
+```text
+successorRelation = DIRECT_RELEASE_TRANSACTION
+successorReleaseVersion = 0.65.0
+successorImplementationPr = 721
+successorReleaseId = simcore-v0.65.0-new-05
+successorProductionCommit = c6659296c68b4322d0ed43f7d8a3339e57f1cbf1
+successorProductionBlob = 1b38e2b2874f2581edae8f1080edc39558febefa
+successorTerminalClosurePr = 755
+```
+
+The successor Subgate A evidence explicitly proves the carried identity + durable reload-handoff slice and states that the previous v0.64.11 runtime identity split is closed by the real v0.65.0 episode.
+
+The R2.4 historical ledger therefore preserves:
+- entry 0: #660 / v0.64.9;
+- entry 1: #679 / v0.64.10;
+- entry 2: #704 / v0.64.11 / SUPERSEDED.
+
+Each entry still represents one separately reviewed administrative PR with `maxDebtItems = 1`.
+
+The first `historicalAdminSeal` compatibility projection remains #660.
+
+The unchanged R2.3 evaluator remains the sole close-eligibility classifier. For SUPERSEDED, the required terminal evidence input is `durableTerminalEvidence=true`; before the seal PR merges, `terminalClosurePrMerged=false` keeps #704 non-close-eligible.
+
+No runtime, publication, release-simcore, polling, chain-walk, issue-controller, or clean-path PR-count change is introduced.

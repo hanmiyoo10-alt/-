@@ -330,6 +330,32 @@ treat labels as authority
 
 A later historical debt item requires its own fresh packet, exact evidence map, PR, merge, and post-merge reobservation.
 
+### 5.7 Repeated historical seals preserve prior proof
+
+After the first #660 historical seal proved the one-item mechanism, later debt items may reuse the same authority only as separate one-item transactions.
+
+Machine evidence must be append-only across those transactions:
+
+```text
+historicalAdminSeal
+= immutable compatibility projection of the first proven #660 seal
+
+historicalAdminSeals[]
+= ordered historical ledger of separately reviewed one-item seals
+```
+
+The compatibility projection must never be repointed to a later issue. The ledger may accumulate prior completed seals, but each new administrative PR may append at most one new debt record and must preserve all prior entries byte-for-byte in meaning.
+
+Cleanup-32 #2712 is authorized to append exactly:
+
+```text
+#679 / v0.64.10
+LIVE_FAIL_HANDOFF_TO_NEW_RELEASE
+direct successor #704 / v0.64.11
+```
+
+The #660 seal remains the first ledger entry. #704 is not sealed by the #679 administrative PR.
+
 ## 6. R2.4-D — Automation Authority Freeze
 
 Classification:
@@ -447,7 +473,7 @@ release-simcore is unchanged by R2.4 itself
 ```text
 R2.4-A Candidate-Equivalent PR1 Dry Qualification = FIX / DESIGN FROZEN
 R2.4-B Semantic Assertion Discipline = STABILIZE / DESIGN FROZEN
-R2.4-C Direct-Predecessor Terminal Debt Seal = WATCH / HISTORICAL ADMIN SEAL AUTHORIZED FOR #660 / ONE ITEM ONLY
+R2.4-C Direct-Predecessor Terminal Debt Seal = WATCH / HISTORICAL ADMIN SEALS PROVEN FOR #660 + #679 / ONE ITEM PER TRANSACTION
 R2.4-D Automation Authority Freeze = FREEZE
 
 release engine replacement = NO

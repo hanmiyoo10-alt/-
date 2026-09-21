@@ -4,7 +4,7 @@ Build workflow: .github/workflows/fortune-golf-web-probe.yml
 Initial run: https://github.com/hanmiyoo10-alt/-/actions/runs/34678172773
 Artifact name: fortune-golf-probe11-web
 
-This builds WIE commit 1ed8710956e727629e67db762ddc1e6bd6151a1f with the exact Probe 11 overlay commit cefe56950c8a31066d05dc844c493958ec752fbe. It uses the same npm production/WASM frontend build as the successful APK workflow. No new emulator behavior is introduced and no ROM is included. probe-build.json records source commits and SHA256 hashes of all output files.
+This builds WIE commit 1ed8710956e727629e67db762ddc1e6bd6151a1f with the canonical target-local overlay at `products/app-api-mod-lab/targets/standalone/fortune-golf/probe/`. At workflow-migration scope lock, all six target-local probe blobs were Git-blob-identical to historical Probe 11 commit cefe56950c8a31066d05dc844c493958ec752fbe, so the historical behavior/provenance is preserved without using that old commit as the current execution source. It uses the same npm production/WASM frontend build as the APK workflow. No new emulator behavior is introduced and no ROM is included. `probe-build.json` records the pinned WIE commit, triggering repository SHA, canonical overlay path, historical Probe 11 provenance, and SHA256 hashes of output files.
 
 ## Test sequence
 1. Download/extract the artifact and verify files against probe-build.json. Serve the directory over HTTP on a stable localhost origin; do not open index.html with file:// because WASM/module fetching and persistent storage need a proper origin.
@@ -17,4 +17,4 @@ This builds WIE commit 1ed8710956e727629e67db762ddc1e6bd6151a1f with the exact P
 
 The original official-web trial used an unversioned deployment and stalled browser control. User reports the Android build initially shows white then closes, and subsequent launches show the game. That reported sequence remains to be verified in this controlled build.
 
-At creation of this note the new web build was running; artifact integrity, browser launch, second-launch behavior and input latency were not yet verified.
+Historical browser/device observations remain historical. The migrated workflow can re-establish build/artifact integrity for the canonical target source, but browser launch, second-launch behavior, gameplay and input latency still require a separate runtime/device experiment.

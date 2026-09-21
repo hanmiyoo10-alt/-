@@ -1,11 +1,11 @@
 # 포춘골프 원본 실행용 Android 빌드
 
-이 브랜치는 WIE 오픈소스 에뮬레이터의 Android 테스트 APK를 빌드합니다.
+이 target의 GitHub Actions workflow는 WIE 오픈소스 에뮬레이터의 Android 테스트 APK를 빌드합니다.
 포춘골프 원본 ZIP은 저장소나 APK에 포함하지 않습니다. 휴대폰에서 직접 선택합니다.
 
 ## 스마트폰 설치
 1. 이 저장소 Actions에서 Fortune Golf APK 실행을 엽니다.
-2. 성공한 실행의 Artifacts에서 fortune-golf-emulator-apk를 다운로드하고 압축을 풉니다.
+2. 성공한 실행의 Artifacts에서 fortune-golf-startup-probe를 다운로드하고 압축을 풉니다.
 3. APK를 설치한 후 앱 추가에서 보유한 컴투스포춘골프3D.zip을 선택합니다.
 
 현재는 실행 호환성 검증을 위한 WIE 테스트 앱입니다.
@@ -13,7 +13,7 @@ APK 빌드 성공은 포춘골프의 3D 화면, 소리, 저장이 정상이라�
 오류가 발생하면 메시지와 화면을 기록해 주세요.
 
 ## 빌드
-전용 브랜치 fortune-golf-apk의 빌드 설정 변경 시 GitHub Actions가 실행됩니다.
+canonical target의 `probe/**`, `android/**` 또는 `.github/workflows/fortune-golf-apk.yml` 변경을 대상으로 pull request와 main push에서 GitHub Actions가 실행됩니다.
 PC나 Termux 서버는 필요하지 않습니다.
 원본 소스: https://github.com/dlunch/wie
 고정 버전: 1ed8710956e727629e67db762ddc1e6bd6151a1f

@@ -9,7 +9,7 @@ tailscaled
 mcl-m-tailscale-supervisor-guard
 ```
 
-The internal guard service exists only to keep `mcl-m-tailscale-supervisor-guard --loop` under its own dedicated `runsv` owner.
+The internal guard service exists only to keep `mcl-m-tailscale-supervisor-guard --loop` under its own dedicated `runsv` owner. The Termux:Boot launcher also starts one independent bounded anchor loop so loss of that dedicated guard-service `runsv` after boot can be repaired without depending on the already-missing shared `runsvdir`.
 
 ## Guard commands
 
@@ -61,6 +61,24 @@ The guard re-reads both supervisor and daemon state immediately before the start
 
 The guard-service launcher follows the existing M per-service pattern: it validates the fixed guard-service `run`, respects `down`, serializes its short start section, and starts one dedicated guard-service `runsv` only for recognized missing-supervisor states.
 
+
+## Guard-service anchor durability
+
+The fixed Termux:Boot launcher keeps its original bounded immediate supervisor check and additionally starts one independent anchor process. The anchor owns only the fixed `mcl-m-tailscale-supervisor-guard` service supervisor.
+
+```text
+Boot launcher
+→ immediate fixed guard-service supervision check
+→ exactly one independent anchor loop
+→ missing guard-service runsv => start one dedicated guard-service runsv
+→ running/down => preserve
+→ ambiguous or invalid identity => fail closed
+```
+
+The anchor uses fixed lock/PID state under the existing M Tailscale guard state directory. Repeated or concurrent Boot launcher invocation converges on one anchor. An explicit guard-service `down` marker is preserved. The anchor never reads network health, never inspects daemon presence, and never starts, stops, kills, or adopts `tailscaled` directly; those semantics remain exclusively in `m-tailscale-supervisor-guard`.
+
+This extra layer addresses the observed case where the shared `runsvdir` was already absent and the dedicated guard-service `runsv` later disappeared while the live `tailscaled` orphan remained healthy.
+
 ## Install contract
 
 ```sh
@@ -90,10 +108,11 @@ This owner must not:
 - expose arbitrary service/path/command/environment passthrough;
 - read credentials, Tailnet addresses, peer identifiers, session/auth material, or private logs;
 - reboot the phone or reset Android networking;
-- introduce PM2, root requirements, or Android security bypasses.
+- introduce PM2, root requirements, or Android security bypasses;
+- let the independent guard anchor inspect or mutate the target `tailscaled` service directly.
 
 ## Validation
 
-`tests/test-contract.sh` uses synthetic fixtures only. It covers the observed `pgrep -x` false-negative class, live-orphan preservation, daemon-absent recovery, ambiguous fail-closed behavior, target run identity, guard-child restart, concurrent Boot launcher idempotence, install drift, fixture cleanup, syntax, and forbidden surfaces.
+`tests/test-contract.sh` uses synthetic fixtures only. It covers the observed `pgrep -x` false-negative class, live-orphan preservation, daemon-absent recovery, ambiguous fail-closed behavior, target run identity, guard-child restart, independent-anchor idempotence, automatic guard-service supervisor restoration, concurrent Boot launcher convergence, install drift, fixture cleanup, syntax, and forbidden surfaces.
 
 No deliberate phone reboot, network toggle, top-level supervisor failure, or live M service mutation is part of `IMPLEMENTATION_PR`.

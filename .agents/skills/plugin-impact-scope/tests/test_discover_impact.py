@@ -70,6 +70,10 @@ class DiscoverImpactTests(unittest.TestCase):
         self.assertTrue(result["pilot_validated"])
         self.assertFalse(result["mutation_performed"])
         self.assertEqual(result["truth_claim_status"], "MECHANICAL_CANDIDATES_ONLY")
+        self.assertEqual(result["requested_provider"], "auto")
+        self.assertEqual(result["selected_provider"], "bounded_text")
+        self.assertEqual(result["provider_status"], "SELECTED")
+        self.assertTrue(result["source_reread_required"])
         self.assertGreaterEqual(result["returned_results"], 3)
         self.assertTrue(all(item["evidence_class"] == "CANDIDATE_ONLY" for item in result["candidate_results"]))
         self.assertTrue(all(item["semantic_claim"] == "UNPROVEN" for item in result["candidate_results"]))
@@ -116,6 +120,24 @@ class DiscoverImpactTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "NO_MATCH")
         self.assertIn("does not prove", result["absence_semantics"])
+
+    def test_unavailable_provider_falls_back_explicitly_and_stays_candidate_only(self):
+        result = discover_impact.discover(
+            self.repo.root,
+            "plugin:usage-dashboard",
+            ["plugins/usage-dashboard"],
+            ["serviceTierSelectionSource"],
+            provider="ast_graph",
+        )
+        self.assertEqual(result["requested_provider"], "ast_graph")
+        self.assertEqual(result["selected_provider"], "bounded_text")
+        self.assertEqual(result["provider_status"], "FALLBACK_SELECTED")
+        self.assertIn("unavailable or unsupported", result["provider_fallback_reason"])
+        self.assertEqual(result["provider_semantics"], "CANDIDATE_DISCOVERY_ONLY")
+        self.assertTrue(result["source_reread_required"])
+        self.assertTrue(
+            all(item["evidence_class"] == "CANDIDATE_ONLY" for item in result["candidate_results"])
+        )
 
     def test_cli_error_is_machine_readable(self):
         proc = subprocess.run(

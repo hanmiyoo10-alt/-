@@ -26,12 +26,21 @@ The original branch remains historical provenance and is not merged wholesale.
 The following remain outside this target:
 
 - original proprietary Com2uS game ZIP/JAR/APK/native payloads
-- legacy branch-only Fortune Golf GitHub Actions workflows
 - generic Ghidra provisioning/transfer workflows
 - unrelated WIE source or behavior
 - any release/deployment channel
 
-Old branch-only workflows encode path/ref assumptions and require a separate migration before they can run from this target root.
+The target-specific APK and web build workflows are migrated separately under issue #2606 and consume this target-local `probe/` source. Generic Ghidra provisioning/transfer workflows remain outside this target.
+
+## Build validation
+
+Canonical target-specific workflows:
+- `.github/workflows/fortune-golf-apk.yml`
+- `.github/workflows/fortune-golf-web-probe.yml`
+
+Both keep WIE pinned at `1ed8710956e727629e67db762ddc1e6bd6151a1f` and apply `probe/` from the triggering repository candidate. The historical Probe 11 overlay commit `cefe56950c8a31066d05dc844c493958ec752fbe` remains provenance only; all six probe blobs matched the migrated target source at #2606 scope lock.
+
+A successful workflow proves only the scoped build/unit/artifact checks. It does not prove current game/device compatibility.
 
 ## Authority boundary
 
@@ -45,4 +54,4 @@ Historical handoff evidence says the title/menu was reached after compatibility 
 
 ## Next validation
 
-Before claiming current compatibility, migrate or replace the old branch-only build/test workflow under a separately authorized packet, then re-run the strongest available build/unit/device validation against this target-local layout.
+Before claiming current compatibility, first re-establish build/unit/artifact evidence through the canonical target workflows, then run a separately bounded device experiment with the user-held original game input.

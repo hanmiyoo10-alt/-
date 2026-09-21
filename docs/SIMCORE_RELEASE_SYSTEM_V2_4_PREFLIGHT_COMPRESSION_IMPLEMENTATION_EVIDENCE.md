@@ -18,13 +18,13 @@ R2.4-B semantic assertion discipline / v0.64.10 replay regression
 R2.4-D automation authority freeze
 ```
 
-Intentionally not implemented now:
+Originally not implemented in the 2026-08-28 R2.4 activation:
 
 ```text
 R2.4-C direct-predecessor terminal debt seal
 ```
 
-R2.4-C remains held until a genuine PR3 terminal transaction exists.
+That original hold is preserved as historical evidence. A 2026-09-21 addendum now activates one explicit historical administrative seal for #660 after genuine PR3 and later terminal-convergence shapes became durable. This does not retroactively change the original implementation result.
 
 ## 2. R2.4-A implementation
 
@@ -162,18 +162,32 @@ The regression rejects a return to a whole-source Host API count as the authorit
 
 No AST/parser framework was introduced.
 
-## 5. R2.4-C hold preserved
+## 5. R2.4-C hold history and 2026-09-21 activation
 
-Machine status and permanent regression require:
+The 2026-08-28 implementation correctly held R2.4-C because a genuine PR3 shape had not yet been observed:
 
 ```text
 R2_4_C_DIRECT_PREDECESSOR_TERMINAL_DEBT_SEAL
 = DESIGN_BOUNDED_IMPLEMENTATION_HELD_FOR_REAL_PR3
 ```
 
-No predecessor auto-close, chain walk, fourth clean-path PR, successor blocker, or fabricated terminal evidence was added.
+Later repository history now contains genuine terminal/admin transactions (#755, #796/#801/#803 and later R2.8 terminal convergence). The original absence-of-PR3 rationale is therefore superseded, not erased.
 
-Issue `#691` remains WATCH / NON_BLOCKING.
+Current activation is narrower than generalized backfill:
+
+```text
+R2_4_C_DIRECT_PREDECESSOR_TERMINAL_DEBT_SEAL
+= HISTORICAL_ADMIN_SEAL_PROVEN_06409
+```
+
+The capability is authorized for exactly #660 / v0.64.9 in:
+`docs/SIMCORE_R2_4_HISTORICAL_TERMINAL_DEBT_SEAL_06409_2026-09-21.md`.
+
+The administrative PR remains non-runtime and one-item-only. It does not auto-close #660; merge plus post-merge reobservation plus the unchanged pure R2.3 closure evaluator remain mandatory.
+
+No chain walk, fourth clean-path PR, successor blocker, fabricated terminal evidence, publisher, polling, issue controller, runtime mutation, or release-simcore mutation is added.
+
+Issue `#691` remains WATCH because #679 and #704 remain separate unresolved debt instances.
 
 ## 6. Stability and simplicity
 
@@ -289,3 +303,127 @@ A/B are mechanically qualified. R2.4-C remains unimplemented by design.
 The CI evidence sync itself changes the PR head, so the final evidence-bearing head must pass the same SimCore `Verify / Required` pair again before merge.
 
 Operational proof that `GATE_PR1_DRY` catches a defect on a future genuine runtime release PR remains a later real-use feedback item under the continuous feedback loop. It is not publication authority and is not a prerequisite for R2.4 mechanical activation.
+
+## 11. Historical administrative seal activation — 2026-09-21
+
+Activation packet: `#2708`.
+
+Exact debt item:
+
+```text
+issue = 660
+release = 0.64.9
+terminalDisposition = LIVE_FAIL_HANDOFF_TO_NEW_RELEASE
+humanEvidenceAccepted = true
+humanEvidenceRef = docs/SIMCORE_LIVE_06409_SESSION_ACCESS_ERROR_2026-08-28.md
+directSuccessor = #679 / 0.64.10
+historicalProductionCommit = 1c1037e44d6b3e903b3d622b579095b1f315758e
+historicalProductionBlob = 7d2731d256b8aa18598c389fd919550cf3bbf146
+```
+
+The seal is repository-only. It changes no release intent, candidate, approval, publisher, runtime artifact, release-simcore ref, current production identity, or clean release path.
+
+The unchanged R2.3 closure evaluator remains the sole close-eligibility classifier. Before the administrative PR merges, `terminalClosurePrMerged=false` and #660 is not close-eligible. After merge, closure still requires protected-main reobservation, current production-authority reobservation, presence of the exact seal evidence ref, and an evaluator result of `closeEligible=true`.
+
+#679 and #704 are intentionally not included. Their debt remains owned by #691 and requires separate fresh authority.
+
+
+## 12. Cleanup-32 — second one-item historical admin seal
+
+Cleanup-31 #2708 proved the first historical administrative seal for #660 without changing runtime, release-simcore, publication authority, or the unchanged R2.3 closure evaluator.
+
+Cleanup-32 #2712 reuses that proven path for exactly one additional debt item:
+
+```text
+work item = #679
+release = v0.64.10
+terminal disposition = LIVE_FAIL_HANDOFF_TO_NEW_RELEASE
+HUMAN_EVIDENCE = docs/SIMCORE_LIVE_06410_HOST_LOCAL_CAPSULE_OVERSIZE_2026-08-28.md
+direct successor = #704 / v0.64.11
+seal evidence = docs/SIMCORE_R2_4_HISTORICAL_TERMINAL_DEBT_SEAL_06410_2026-09-21.md
+```
+
+The first #660 proof remains immutable. Machine status therefore preserves the existing `historicalAdminSeal` compatibility projection for #660 and introduces an append-only `historicalAdminSeals[]` ledger.
+
+The ledger records separate transactions, not one multi-item PR:
+- entry 0 = previously proven #660 seal;
+- entry 1 = #679 seal from Cleanup-32;
+- each entry retains `maxDebtItems = 1`;
+- #704 is not a seal target in this transaction.
+
+The #679 seal remains non-close-eligible before merge. Merge plus protected-main reobservation, current production-authority reobservation, presence of the exact seal document, and `closeEligible=true` from the unchanged R2.3 evaluator remain mandatory before native closure.
+
+No chain walk, automatic issue closer, publisher, polling, runtime mutation, release-simcore mutation, or clean-path PR-count change is introduced.
+
+
+## 13. Cleanup-33 — third one-item historical admin seal
+
+Cleanup-33 #2715 applies the proven historical-seal mechanism to #704 / v0.64.11 with a different supported R2.3 terminal disposition:
+
+```text
+SUPERSEDED
+```
+
+This is intentionally not a failed-live handoff classification.
+
+v0.64.11 durable evidence proves:
+- `COMPACT_V2 <= 16,384`: PASS / LIVE PROVEN;
+- real `HOST_LOCAL WRITTEN`: PASS / LIVE PROVEN;
+- the remaining blocker was `06411_RUNTIME_IDENTITY_SPLIT`.
+
+The next genuine release deliberately absorbed that identity/reload slice into v0.65.0 rather than opening a separate v0.64.x repair.
+
+Frozen successor transaction:
+
+```text
+successorRelation = DIRECT_RELEASE_TRANSACTION
+successorReleaseVersion = 0.65.0
+successorImplementationPr = 721
+successorReleaseId = simcore-v0.65.0-new-05
+successorProductionCommit = c6659296c68b4322d0ed43f7d8a3339e57f1cbf1
+successorProductionBlob = 1b38e2b2874f2581edae8f1080edc39558febefa
+successorTerminalClosurePr = 755
+```
+
+The successor Subgate A evidence explicitly proves the carried identity + durable reload-handoff slice and states that the previous v0.64.11 runtime identity split is closed by the real v0.65.0 episode.
+
+The R2.4 historical ledger therefore preserves:
+- entry 0: #660 / v0.64.9;
+- entry 1: #679 / v0.64.10;
+- entry 2: #704 / v0.64.11 / SUPERSEDED.
+
+Each entry still represents one separately reviewed administrative PR with `maxDebtItems = 1`.
+
+The first `historicalAdminSeal` compatibility projection remains #660.
+
+The unchanged R2.3 evaluator remains the sole close-eligibility classifier. For SUPERSEDED, the required terminal evidence input is `durableTerminalEvidence=true`; before the seal PR merges, `terminalClosurePrMerged=false` keeps #704 non-close-eligible.
+
+No runtime, publication, release-simcore, polling, chain-walk, issue-controller, or clean-path PR-count change is introduced.
+
+
+## 14. Cleanup-34 — terminal-debt WATCH retirement projection
+
+Cleanup-31, Cleanup-32, and Cleanup-33 independently sealed and post-merge reobserved the complete known historical debt set owned by #691:
+
+```text
+#660 / v0.64.9  = CLOSED / COMPLETED
+#679 / v0.64.10 = CLOSED / COMPLETED
+#704 / v0.64.11 = CLOSED / COMPLETED / SUPERSEDED
+```
+
+The append-only historical ledger remains exactly `[#660, #679, #704]`. No entry is removed or rewritten.
+
+The living R2.4-C projection now retires the active WATCH semantics:
+
+```text
+classification = STABILIZE
+status = HISTORICAL_ADMIN_SEAL_SET_COMPLETE_06409_06410_06411
+issue = 691  # historical/source locator
+openDebtItems = []
+openDebtCount = 0
+watchRetirementEligible = true
+```
+
+This is a living-status convergence only. Historical documents that correctly recorded #691 as WATCH at their original point in time remain untouched. #691 native closure remains downstream of merge and post-merge reobservation. Any future new debt requires fresh evidence and a fresh issue/packet rather than silently reopening this settled watch.
+
+No runtime, publisher, release-simcore, polling, issue-controller, clean-path PR count, or closure-evaluator authority changes.

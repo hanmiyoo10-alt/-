@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "r25-v06500-approval-boundary-replay",
+  "suite": "approval-boundary-convergence",
+  "input": {
+    "releaseId": "simcore-v0.65.0-new-05",
+    "intentId": "simcore-v0.65.0-intent-05",
+    "version": "0.65.0",
+    "releaseName": "M2-3 Edit Reconcile Ownership Extraction + Runtime Identity Convergence"
+  },
+  "expected": {
+    "canonicalTitle": "SimCore exact release approval: simcore-v0.65.0-new-05",
+    "validationAuthority": "APPROVAL_ENVELOPE_VALIDATION_ONLY",
+    "qualificationAuthority": "EPHEMERAL_QUALIFICATION_ONLY",
+    "productionMutation": "NONE"
+  },
+  "meta": {
+    "goldenGate": true,
+    "coverageExpectation": "EXECUTABLE"
+  }
+}

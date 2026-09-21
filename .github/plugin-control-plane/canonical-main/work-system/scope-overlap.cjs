@@ -517,4 +517,4 @@ if (require.main === module) {
   else if (result.state === 'CONFLICT') process.exitCode = 3;
 }
 
-module.exports = {REASON_CODES, normalizeScope, scopesOverlap, resolveScopeOverlap};
+module.exports = {REASON_CODES, extractPacketScopes, normalizeScope, scopesOverlap, resolveScopeOverlap};

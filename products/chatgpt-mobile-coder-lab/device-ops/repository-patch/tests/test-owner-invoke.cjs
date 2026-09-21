@@ -276,14 +276,34 @@ test('handoff rejects non-ready and authority escalation', () => {
   );
 });
 
-test('manifest binding requires S repository mutation scopes and request hash ref', () => {
+test('manifest binding matches patch paths against the manifest path subset', () => {
   const m = manifest();
   assert.doesNotThrow(() => inv.validateManifestBinding(m, handoff(m), request()));
-  const wrong = manifest({scopes: ['path:docs/other.txt']});
-  assert.throws(
-    () => inv.validateManifestBinding(wrong, handoff(wrong), request()),
-    (error) => error.kind === 'CONFLICT' && error.reasonCodes.includes('MANIFEST_SCOPE_CONFLICT'),
-  );
+
+  const withSurface = manifest({scopes: [...SCOPES, 'surface:mcl:demo']});
+  assert.doesNotThrow(() => inv.validateManifestBinding(
+    withSurface, handoff(withSurface), request(),
+  ));
+
+  const withMultipleSurfaces = manifest({
+    scopes: [...SCOPES, 'surface:mcl:demo', 'surface:mcl:other'],
+  });
+  assert.doesNotThrow(() => inv.validateManifestBinding(
+    withMultipleSurfaces, handoff(withMultipleSurfaces), request(),
+  ));
+
+  for (const scopes of [
+    ['path:docs/other.txt'],
+    [...SCOPES, 'path:docs/other.txt', 'surface:mcl:demo'],
+    ['surface:mcl:demo'],
+  ]) {
+    const wrong = manifest({scopes});
+    assert.throws(
+      () => inv.validateManifestBinding(wrong, handoff(wrong), request()),
+      (error) => error.kind === 'CONFLICT'
+        && error.reasonCodes.includes('MANIFEST_SCOPE_CONFLICT'),
+    );
+  }
 });
 
 test('current evidence passes with exact lease and injected holder validator', () => {
@@ -298,6 +318,23 @@ test('current evidence passes with exact lease and injected holder validator', (
     holderValidator: () => { holderChecks += 1; },
   }));
   assert.equal(holderChecks, 1);
+});
+
+test('current evidence keeps full lease-to-manifest scope equality with surfaces', () => {
+  const m = manifest({scopes: [...SCOPES, 'surface:mcl:demo']});
+  const current = currentEvidence(m);
+  current.context.ledgerState.activeLeases[0].scopes = [...SCOPES];
+  assert.throws(
+    () => inv.validateCurrentEvidence({
+      ...current,
+      manifest: m,
+      handoff: handoff(m),
+      holderSecret: HOLDER,
+      holderValidator: () => {},
+    }),
+    (error) => error.kind === 'CONFLICT'
+      && error.reasonCodes.includes('LEASE_SCOPES_CONFLICT'),
+  );
 });
 
 test('stage drift blocks before effect', () => {

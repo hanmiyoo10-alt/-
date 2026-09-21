@@ -44,7 +44,7 @@ Before invocation the caller must already have:
 2. exact Work System `DISJOINT` scopes for the intended repository paths;
 3. one active D-013 repository lease for the exact `server/*` branch/worktree;
 4. one D-014 `REPOSITORY_MUTATION` manifest bound to the current packet body,
-   exact lease/workspace/base and exact path scopes;
+   exact lease/workspace/base and full normalized coordination scopes;
 5. one workspace-holder claim from the existing holder owner;
 6. one `mcl-execution-handoff.v1` `HANDOFF_READY / phase=1/1` receipt.
 
@@ -53,6 +53,14 @@ The patch request hash must also appear in D-014 `inputRefs` as:
 ```text
 receipt:mcl-repository-patch-request:<patch-sha256>
 ```
+
+Repository-byte authority remains path-only. The manifest may additionally carry
+reviewed semantic `surface:` scopes for coordination/effect identity, but the
+manifest's complete `path:` subset must equal the request's `expected_paths`
+exactly. A surface never substitutes for, adds, or removes a writable path.
+
+Late-effect guards still require the active D-013 lease scopes to equal the full
+manifest scope set, including any semantic surfaces.
 
 ## Patch request
 

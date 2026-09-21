@@ -306,7 +306,10 @@ function validateManifestBinding(manifest, handoff, request) {
   }
   if (!SHA40_RE.test(manifest.observedBaseSha || '')) reasons.push('MANIFEST_BASE_SHA_INVALID');
   const expectedScopes = request.expected_paths.map((item) => 'path:' + item).sort();
-  if (!same(manifest.scopes, expectedScopes)) reasons.push('MANIFEST_SCOPE_CONFLICT');
+  const manifestPathScopes = (manifest.scopes || [])
+    .filter((item) => typeof item === 'string' && item.startsWith('path:'))
+    .sort();
+  if (!same(manifestPathScopes, expectedScopes)) reasons.push('MANIFEST_SCOPE_CONFLICT');
   const requestRef = 'receipt:mcl-repository-patch-request:' + request.patch_sha256;
   if (!(manifest.inputRefs || []).includes(requestRef)) reasons.push('MANIFEST_PATCH_REQUEST_REF_REQUIRED');
   if (!same(manifest.authority, FALSE_AUTHORITY)) reasons.push('MANIFEST_AUTHORITY_CONFLICT');

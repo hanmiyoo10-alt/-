@@ -1,19 +1,11 @@
 {
   "schemaVersion": 1,
-  "managedLabelPrefixes": [
-    "plugin:",
-    "product:",
-    "scope:"
-  ],
+  "managedLabelPrefixes": ["plugin:", "product:", "scope:"],
   "plugins": {
     "local": {
       "displayName": "Local",
       "lifecycle": "compatibility-family",
-      "issueValues": [
-        "local",
-        "Local",
-        "Local plugin"
-      ],
+      "issueValues": ["local", "Local", "Local plugin"],
       "paths": [
         "plugins/risu/local",
         "plugins/risu/local/*",
@@ -27,10 +19,7 @@
     "usage-dashboard": {
       "displayName": "Local Usage Dashboard",
       "lifecycle": "production",
-      "issueValues": [
-        "usage-dashboard",
-        "Local Usage Dashboard"
-      ],
+      "issueValues": ["usage-dashboard", "Local Usage Dashboard"],
       "paths": [
         "plugins/usage-dashboard/**",
         "products/usage-dashboard/**",
@@ -51,10 +40,7 @@
     "simcore": {
       "displayName": "SimCore",
       "lifecycle": "production",
-      "issueValues": [
-        "simcore",
-        "SimCore"
-      ],
+      "issueValues": ["simcore", "SimCore"],
       "paths": [
         "plugins/simcore/**",
         "products/simcore/**",
@@ -73,10 +59,7 @@
     "devpass": {
       "displayName": "DevPass",
       "lifecycle": "declared-update-channel",
-      "issueValues": [
-        "devpass",
-        "DevPass"
-      ],
+      "issueValues": ["devpass", "DevPass"],
       "paths": [
         "plugins/risu/local/devpass/**",
         "plugins/devpass/**"
@@ -91,10 +74,7 @@
     "termux-large-doc-editor": {
       "displayName": "Termux Large Doc Editor",
       "lifecycle": "prototype",
-      "issueValues": [
-        "termux-large-doc-editor",
-        "Termux Large Doc Editor"
-      ],
+      "issueValues": ["termux-large-doc-editor", "Termux Large Doc Editor"],
       "paths": [
         "plugins/termux/large-doc-editor/**",
         "docs/TERMUX_*.md"
@@ -107,11 +87,7 @@
     "voyage-token-check": {
       "displayName": "Voyage Token Check",
       "lifecycle": "design-evidence-validation",
-      "issueValues": [
-        "voyage-token-check",
-        "Voyage Token Check",
-        "Voyage"
-      ],
+      "issueValues": ["voyage-token-check", "Voyage Token Check", "Voyage"],
       "paths": [
         "plugins/risu/local/voyage/**",
         "voyage-token-check/**"
@@ -126,12 +102,7 @@
     "app-api-mod-lab": {
       "displayName": "App API Mod Lab",
       "lifecycle": "research-product-root",
-      "issueValues": [
-        "app-api-mod-lab",
-        "App API Mod Lab",
-        "앱 API 개조",
-        "앱 API 개조 랩"
-      ],
+      "issueValues": ["app-api-mod-lab", "App API Mod Lab", "앱 API 개조", "앱 API 개조 랩"],
       "paths": [
         "products/app-api-mod-lab/**",
         ".github/workflows/app-api-mod-lab-ci.yml"
@@ -142,34 +113,10 @@
         "manifest": "products/app-api-mod-lab/product.json"
       }
     },
-    "pocketrisu-helper-mod": {
-      "displayName": "PocketRisu Helper Mod",
-      "lifecycle": "operations-product-root",
-      "issueValues": [
-        "pocketrisu-helper-mod",
-        "PocketRisu Helper Mod",
-        "PocketRisu 개조",
-        "포켓리스 보조 개조"
-      ],
-      "paths": [
-        "products/pocketrisu-helper-mod/**",
-        ".github/workflows/pocketrisu-helper-docs.yml"
-      ],
-      "statusAdapter": "pocketrisu-helper-mod",
-      "authority": {
-        "manifest": "products/pocketrisu-helper-mod/product.json",
-        "currentState": "products/pocketrisu-helper-mod/CURRENT.md"
-      }
-    },
     "local-model-lab": {
       "displayName": "Local Model Lab",
       "lifecycle": "research-product-root",
-      "issueValues": [
-        "local-model-lab",
-        "Local Model Lab",
-        "로컬 모델",
-        "로컬모델"
-      ],
+      "issueValues": ["local-model-lab", "Local Model Lab", "로컬 모델", "로컬모델"],
       "paths": [
         "products/local-model-lab/**",
         "docs/LOCAL_MODEL_LAB_GUIDELINES.md"
@@ -179,6 +126,20 @@
         "evidence": "products/local-model-lab/CURRENT.md",
         "manifest": "products/local-model-lab/product.json"
       }
+    },
+    "pocketrisu-helper-mod": {
+      "displayName": "PocketRisu Helper Mod",
+      "lifecycle": "operations-product-root",
+      "issueValues": ["pocketrisu-helper-mod", "PocketRisu Helper Mod", "PocketRisu 개조", "포켓리스 보조 개조"],
+      "paths": [
+        "products/pocketrisu-helper-mod/**",
+        ".github/workflows/pocketrisu-helper-docs.yml"
+      ],
+      "statusAdapter": "pocketrisu-helper-mod",
+      "authority": {
+        "manifest": "products/pocketrisu-helper-mod/product.json",
+        "currentState": "products/pocketrisu-helper-mod/CURRENT.md"
+      }
     }
   },
   "scopes": [
@@ -186,13 +147,8 @@
       "id": "study",
       "label": "scope:study",
       "displayName": "Study",
-      "issueValues": [
-        "study",
-        "Study"
-      ],
-      "paths": [
-        "study/**"
-      ],
+      "issueValues": ["study", "Study"],
+      "paths": ["study/**"],
       "description": "Independent study and learning root; routing metadata only",
       "authority": {
         "posture": "routing-only",
@@ -203,13 +159,8 @@
       "id": "local-runtime",
       "label": "scope:local-runtime",
       "displayName": "Local Runtime",
-      "issueValues": [
-        "local-runtime",
-        "Local Runtime"
-      ],
-      "paths": [
-        "local/**"
-      ],
+      "issueValues": ["local-runtime", "Local Runtime"],
+      "paths": ["local/**"],
       "description": "Local runtime root; routing only, not product, device, release, deployment, or production authority",
       "authority": {
         "posture": "routing-only",
@@ -221,24 +172,17 @@
     {
       "id": "research-product",
       "label": "scope:research-product",
-      "paths": [
-        "products/chatgpt-mobile-coder-lab/**"
-      ]
+      "paths": ["products/chatgpt-mobile-coder-lab/**"]
     },
     {
       "id": "template",
       "label": "scope:template",
-      "paths": [
-        "plugins/_template/**"
-      ]
+      "paths": ["plugins/_template/**"]
     },
     {
       "id": "test-fixture",
       "label": "scope:test-fixture",
-      "paths": [
-        "plugins/test-a/**",
-        "plugins/test-b/**"
-      ]
+      "paths": ["plugins/test-a/**", "plugins/test-b/**"]
     }
   ],
   "repoPaths": [

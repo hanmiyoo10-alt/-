@@ -33,6 +33,35 @@ const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const PACKET_REF_RE = /^#[1-9][0-9]*$/;
 const REQUEST_FIELDS = new Set(['schema', 'message', 'expected_paths', 'patch_sha256']);
+const VALIDATION_REQUEST_FIELDS = new Set(['schema', 'profile']);
+const VALIDATION_REQUEST_SCHEMA = 'mcl-repository-validation-request.v1';
+const D014_VALIDATION_PROFILE = 'mcl:d014-completion-set:v1';
+const VALIDATION_REF_PREFIX = 'receipt:mcl-repository-validation-request:';
+const D014_COMPLETION_SET_PATHS = Object.freeze([
+  'products/chatgpt-mobile-coder-lab/coordination/completion-receipt-set.cjs',
+  'products/chatgpt-mobile-coder-lab/coordination/tests/test-completion-receipt-set.cjs',
+  'products/chatgpt-mobile-coder-lab/docs/task-handoff.md',
+]);
+const PREPARED_VALIDATION_TIMEOUT_MS = 120000;
+const MAX_VALIDATION_OUTPUT_BYTES = 64 * 1024;
+const D014_VALIDATION_CHECKS = Object.freeze([
+  Object.freeze({
+    name: 'completion-source-syntax',
+    args: ['--check', D014_COMPLETION_SET_PATHS[0]],
+  }),
+  Object.freeze({
+    name: 'completion-test-syntax',
+    args: ['--check', D014_COMPLETION_SET_PATHS[1]],
+  }),
+  Object.freeze({
+    name: 'completion-contract',
+    args: ['--test', D014_COMPLETION_SET_PATHS[1]],
+  }),
+  Object.freeze({
+    name: 'task-handoff-contract',
+    args: ['--test', 'products/chatgpt-mobile-coder-lab/coordination/tests/test-task-handoff.cjs'],
+  }),
+]);
 const HANDOFF_FIELDS = new Set([
   'schema', 'status', 'packet_ref', 'phase', 'route', 'executor', 'effect_class',
   'manifest_id', 'lease_id', 'next_owner', 'reason_codes',
@@ -136,6 +165,65 @@ function parseRequestText(text) {
     patch_sha256: value.patch_sha256,
   };
 }
+
+function parseValidationRequestText(text) {
+  let value;
+  try { value = JSON.parse(text); }
+  catch { throw new InvocationError('UNKNOWN', ['VALIDATION_REQUEST_JSON_INVALID']); }
+  exactKeys(value, VALIDATION_REQUEST_FIELDS, 'VALIDATION_REQUEST');
+  if (value.schema !== VALIDATION_REQUEST_SCHEMA) {
+    throw new InvocationError('UNKNOWN', ['VALIDATION_REQUEST_SCHEMA_INVALID']);
+  }
+  if (value.profile !== D014_VALIDATION_PROFILE) {
+    throw new InvocationError('BLOCKED', ['VALIDATION_PROFILE_UNSUPPORTED']);
+  }
+  return {schema: value.schema, profile: value.profile};
+}
+function manifestValidationRefs(manifest) {
+  return (manifest?.inputRefs || []).filter(
+    (item) => typeof item === 'string' && item.startsWith(VALIDATION_REF_PREFIX),
+  );
+}
+function prepareValidationBinding({
+  manifest, request, validationRequestText, validationRequestFile,
+}) {
+  const refs = manifestValidationRefs(manifest);
+  if (typeof validationRequestText !== 'string' || !validationRequestFile) {
+    throw new InvocationError('BLOCKED', ['VALIDATION_REQUEST_INPUT_REQUIRED']);
+  }
+  const fileBytes = readBoundedRegularFile(validationRequestFile, 'VALIDATION_REQUEST_FILE');
+  const textBytes = Buffer.from(validationRequestText, 'utf8');
+  if (!fileBytes.equals(textBytes)) {
+    throw new InvocationError('CONFLICT', ['VALIDATION_REQUEST_TEXT_FILE_CONFLICT']);
+  }
+  const validationRequest = parseValidationRequestText(validationRequestText);
+  if (!same(request.expected_paths, D014_COMPLETION_SET_PATHS)) {
+    throw new InvocationError('BLOCKED', ['VALIDATION_PROFILE_PATHS_UNSUPPORTED']);
+  }
+  const digest = sha256Bytes(fileBytes);
+  const expectedRef = VALIDATION_REF_PREFIX + digest;
+  if (refs.length === 0) {
+    throw new InvocationError('BLOCKED', ['VALIDATION_REQUEST_REF_REQUIRED']);
+  }
+  if (refs.length !== 1) {
+    throw new InvocationError('CONFLICT', ['VALIDATION_REQUEST_REF_AMBIGUOUS']);
+  }
+  if (refs[0] !== expectedRef) {
+    throw new InvocationError('CONFLICT', ['VALIDATION_REQUEST_REF_CONFLICT']);
+  }
+  return {
+    request: validationRequest,
+    digest,
+    filePath: path.resolve(validationRequestFile),
+  };
+}
+function assertValidationInputStable(binding) {
+  const bytes = readBoundedRegularFile(binding.filePath, 'VALIDATION_REQUEST_FILE');
+  if (sha256Bytes(bytes) !== binding.digest) {
+    throw new InvocationError('CONFLICT', ['VALIDATION_REQUEST_CHANGED_DURING_INVOCATION']);
+  }
+}
+
 function parseHandoffText(text) {
   let value;
   try { value = JSON.parse(text); }
@@ -363,6 +451,73 @@ function safeChildEnv(env = process.env) {
   }
   return out;
 }
+
+function validationEvidence(status, reasonCodes = [], checksPassed = 0) {
+  return {
+    status,
+    reason_codes: unique(reasonCodes),
+    profile: D014_VALIDATION_PROFILE,
+    checks_passed: checksPassed,
+  };
+}
+function runFixedPreparedValidation({
+  binding,
+  manifest,
+  env = process.env,
+  validationSpawnSyncImpl = childProcess.spawnSync,
+}) {
+  if (!binding || binding.request?.profile !== D014_VALIDATION_PROFILE) {
+    return {
+      kind: 'UNKNOWN',
+      reasonCodes: ['VALIDATION_BINDING_INVALID'],
+      value: validationEvidence('UNKNOWN', ['VALIDATION_BINDING_INVALID']),
+    };
+  }
+  let checksPassed = 0;
+  for (const check of D014_VALIDATION_CHECKS) {
+    let run;
+    try {
+      run = validationSpawnSyncImpl(process.execPath, [...check.args], {
+        cwd: manifest.workspace.worktree,
+        encoding: 'utf8',
+        timeout: PREPARED_VALIDATION_TIMEOUT_MS,
+        maxBuffer: MAX_VALIDATION_OUTPUT_BYTES,
+        shell: false,
+        env: safeChildEnv(env),
+      });
+    } catch {
+      const code = 'PREPARED_VALIDATION_SPAWN_THROW:' + check.name;
+      return {
+        kind: 'BLOCKED',
+        reasonCodes: [code],
+        value: validationEvidence('BLOCKED', [code], checksPassed),
+      };
+    }
+    if (run?.error || run?.status === null || run?.signal) {
+      const code = 'PREPARED_VALIDATION_INFRA_ERROR:' + check.name;
+      return {
+        kind: 'BLOCKED',
+        reasonCodes: [code],
+        value: validationEvidence('BLOCKED', [code], checksPassed),
+      };
+    }
+    if (run.status !== 0) {
+      const code = 'PREPARED_VALIDATION_FAILED:' + check.name;
+      return {
+        kind: 'BLOCKED',
+        reasonCodes: [code],
+        value: validationEvidence('BLOCKED', [code], checksPassed),
+      };
+    }
+    checksPassed += 1;
+  }
+  return {
+    kind: 'PASS',
+    reasonCodes: [],
+    value: validationEvidence('PASS', [], checksPassed),
+  };
+}
+
 function spawnPrimitive({phase, manifest, requestFile, patchFile, prior,
   spawnSyncImpl, root, env}) {
   const primitivePath = path.join(root, PRIMITIVE_RELATIVE);
@@ -429,14 +584,45 @@ function stateFor(kind, reasons) {
   };
 }
 function projectGenericReceipt({manifest, request, primitiveSourceSha256, kind,
-  reasons = [], prepare = null, commit = null, push = null, exitCode = null}) {
+  reasons = [], prepare = null, validation = null, validationEnabled = false,
+  commit = null, push = null, exitCode = null}) {
   const stableReasons = unique(reasons);
   const state = stateFor(kind, stableReasons);
   const locator = 'receipt:mcl-repository-patch-owner:' + (manifest?.manifestId || 'unknown');
   const phaseResult = (value) => value?.status === 'PASS' ? 'PASS' : value ? 'BLOCKED' : 'SKIPPED';
+  const validationResult = (value) => {
+    if (!value) return 'SKIPPED';
+    return ['PASS', 'UNKNOWN', 'CONFLICT', 'BLOCKED'].includes(value.status)
+      ? value.status : 'UNKNOWN';
+  };
   const newHead = push?.new_head || commit?.new_head || null;
   const artifacts = [locator];
   if (SHA40_RE.test(newHead || '')) artifacts.push('commit:' + newHead);
+  const steps = [
+    {name: 'patch-prepare', result: phaseResult(prepare), evidenceLocator: locator},
+  ];
+  if (validationEnabled) {
+    steps.push({
+      name: 'prepared-validation',
+      result: validationResult(validation),
+      evidenceLocator: locator,
+    });
+  }
+  steps.push(
+    {name: 'patch-commit', result: phaseResult(commit), evidenceLocator: locator},
+    {name: 'patch-push-postverify', result: phaseResult(push), evidenceLocator: locator},
+  );
+  const counters = [
+    {name: 'changed_paths', value: request?.expected_paths?.length ?? 0},
+    {name: 'commit_created', value: commit?.status === 'PASS' ? 1 : 0},
+    {name: 'push_verified', value: push?.status === 'PASS' ? 1 : 0},
+  ];
+  if (validationEnabled) {
+    counters.push({
+      name: 'prepared_validation_pass',
+      value: validation?.status === 'PASS' ? 1 : 0,
+    });
+  }
   return executionReceipt.projectExecutionReceipt({
     schemaVersion: 2,
     operationId: 'mcl-repository-patch-owner:' + (manifest?.manifestId || 'unknown'),
@@ -451,17 +637,11 @@ function projectGenericReceipt({manifest, request, primitiveSourceSha256, kind,
     executionLifecycle: state.executionLifecycle,
     attentionDisposition: state.attentionDisposition,
     result: state.result,
-    proofScope: 'one bounded S worktree patch prepare/commit/non-force-push transaction only',
-    steps: [
-      {name: 'patch-prepare', result: phaseResult(prepare), evidenceLocator: locator},
-      {name: 'patch-commit', result: phaseResult(commit), evidenceLocator: locator},
-      {name: 'patch-push-postverify', result: phaseResult(push), evidenceLocator: locator},
-    ],
-    counters: [
-      {name: 'changed_paths', value: request?.expected_paths?.length ?? 0},
-      {name: 'commit_created', value: commit?.status === 'PASS' ? 1 : 0},
-      {name: 'push_verified', value: push?.status === 'PASS' ? 1 : 0},
-    ],
+    proofScope: validationEnabled
+      ? 'one bounded S worktree patch prepare/fixed-validation/commit/non-force-push transaction only'
+      : 'one bounded S worktree patch prepare/commit/non-force-push transaction only',
+    steps,
+    counters,
     affectedFiles: request?.expected_paths || [],
     artifactLocators: artifacts,
     reasonCodes: state.reasonCodes,
@@ -473,7 +653,6 @@ function projectGenericReceipt({manifest, request, primitiveSourceSha256, kind,
     nextLegalAction: state.nextLegalAction,
   });
 }
-
 function counterValue(receipt, name) {
   const row = receipt?.counters?.find((item) => item.name === name);
   return row?.status === 'KNOWN' ? row.value : null;
@@ -614,16 +793,34 @@ async function guardCurrent({repo, manifest, handoff, holderSecret, env, runner,
   return current;
 }
 
-async function invokeLive({repo, handoffText, manifestText, requestText, requestFile, patchFile,
-  env = process.env, runner, fetchImpl, spawnSyncImpl = childProcess.spawnSync, root = ROOT, guardImpl}) {
+async function invokeLive({
+  repo,
+  handoffText,
+  manifestText,
+  requestText,
+  requestFile,
+  patchFile,
+  validationRequestText = null,
+  validationRequestFile = null,
+  env = process.env,
+  runner,
+  fetchImpl,
+  spawnSyncImpl = childProcess.spawnSync,
+  validationSpawnSyncImpl = childProcess.spawnSync,
+  root = ROOT,
+  guardImpl,
+}) {
   const primitivePath = path.join(root, PRIMITIVE_RELATIVE);
   const primitiveHash = sha256File(primitivePath);
   let manifest;
   let handoff;
   let request;
   let prepare = null;
+  let validation = null;
   let committed = null;
   let pushed = null;
+  let validationBinding = null;
+  let validationEnabled = validationRequestText !== null || validationRequestFile !== null;
   try {
     manifest = parseManifestText(manifestText);
     handoff = parseHandoffText(handoffText);
@@ -635,6 +832,18 @@ async function invokeLive({repo, handoffText, manifestText, requestText, request
     const requestDigest = sha256Bytes(Buffer.from(requestText, 'utf8'));
     assertInputStable(requestFile, patchFile, requestDigest, request.patch_sha256);
     validateManifestBinding(manifest, handoff, request);
+
+    if (manifestValidationRefs(manifest).length > 0) validationEnabled = true;
+    if (validationEnabled) {
+      validationBinding = prepareValidationBinding({
+        manifest,
+        request,
+        validationRequestText,
+        validationRequestFile,
+      });
+      assertValidationInputStable(validationBinding);
+    }
+
     const holderSecret = env[workspaceHolder.CLAIM_ENV];
     if (!SHA256_RE.test(holderSecret || '')) {
       throw new InvocationError('BLOCKED', ['HOLDER_CLAIM_REQUIRED']);
@@ -645,6 +854,7 @@ async function invokeLive({repo, handoffText, manifestText, requestText, request
     };
     await doGuard();
     assertInputStable(requestFile, patchFile, requestDigest, request.patch_sha256);
+    if (validationBinding) assertValidationInputStable(validationBinding);
 
     const preparedRun = spawnPrimitive({
       phase: 'prepare', manifest, requestFile, patchFile, prior: {},
@@ -654,12 +864,33 @@ async function invokeLive({repo, handoffText, manifestText, requestText, request
       manifest, request, primitiveSourceSha256: primitiveHash,
       kind: preparedRun.kind, reasons: preparedRun.reasonCodes,
       prepare: preparedRun.value,
+      validation,
+      validationEnabled,
       exitCode: Number.isInteger(preparedRun.run?.status) ? preparedRun.run.status : null,
     });
     prepare = preparedRun.value;
 
     await doGuard();
     assertInputStable(requestFile, patchFile, requestDigest, request.patch_sha256);
+    if (validationBinding) {
+      assertValidationInputStable(validationBinding);
+      const validationRun = runFixedPreparedValidation({
+        binding: validationBinding,
+        manifest,
+        env,
+        validationSpawnSyncImpl,
+      });
+      validation = validationRun.value;
+      if (validationRun.kind !== 'PASS') return projectGenericReceipt({
+        manifest, request, primitiveSourceSha256: primitiveHash,
+        kind: validationRun.kind, reasons: validationRun.reasonCodes,
+        prepare, validation, validationEnabled,
+      });
+      await doGuard();
+      assertInputStable(requestFile, patchFile, requestDigest, request.patch_sha256);
+      assertValidationInputStable(validationBinding);
+    }
+
     const commitRun = spawnPrimitive({
       phase: 'commit', manifest, requestFile, patchFile,
       prior: {preparedDigest: prepare.prepared_digest},
@@ -668,13 +899,14 @@ async function invokeLive({repo, handoffText, manifestText, requestText, request
     if (commitRun.kind !== 'PASS') return projectGenericReceipt({
       manifest, request, primitiveSourceSha256: primitiveHash,
       kind: commitRun.kind, reasons: commitRun.reasonCodes,
-      prepare, commit: commitRun.value,
+      prepare, validation, validationEnabled, commit: commitRun.value,
       exitCode: Number.isInteger(commitRun.run?.status) ? commitRun.run.status : null,
     });
     committed = commitRun.value;
 
     await doGuard();
     assertInputStable(requestFile, patchFile, requestDigest, request.patch_sha256);
+    if (validationBinding) assertValidationInputStable(validationBinding);
     const pushRun = spawnPrimitive({
       phase: 'push', manifest, requestFile, patchFile,
       prior: {preparedDigest: prepare.prepared_digest, newHead: committed.new_head},
@@ -683,24 +915,24 @@ async function invokeLive({repo, handoffText, manifestText, requestText, request
     if (pushRun.kind !== 'PASS') return projectGenericReceipt({
       manifest, request, primitiveSourceSha256: primitiveHash,
       kind: pushRun.kind, reasons: pushRun.reasonCodes,
-      prepare, commit: committed, push: pushRun.value,
+      prepare, validation, validationEnabled, commit: committed, push: pushRun.value,
       exitCode: Number.isInteger(pushRun.run?.status) ? pushRun.run.status : null,
     });
     pushed = pushRun.value;
     return projectGenericReceipt({
       manifest, request, primitiveSourceSha256: primitiveHash,
-      kind: 'PASS', prepare, commit: committed, push: pushed, exitCode: 0,
+      kind: 'PASS', prepare, validation, validationEnabled,
+      commit: committed, push: pushed, exitCode: 0,
     });
   } catch (error) {
     if (!(error instanceof InvocationError)) throw error;
     return projectGenericReceipt({
       manifest, request, primitiveSourceSha256: primitiveHash,
       kind: error.kind, reasons: error.reasonCodes,
-      prepare, commit: committed, push: pushed,
+      prepare, validation, validationEnabled, commit: committed, push: pushed,
     });
   }
 }
-
 function parseArgs(argv = process.argv.slice(2)) {
   const allowed = new Set([
     'repo', 'handoff-file', 'manifest-file', 'request-file', 'patch-file', 'format',
@@ -789,6 +1021,12 @@ module.exports = {
   PRIMITIVE_REF,
   PRIMITIVE_RELATIVE,
   REQUEST_FIELDS,
+  VALIDATION_REQUEST_FIELDS,
+  VALIDATION_REQUEST_SCHEMA,
+  VALIDATION_REF_PREFIX,
+  D014_VALIDATION_PROFILE,
+  D014_COMPLETION_SET_PATHS,
+  D014_VALIDATION_CHECKS,
   InvocationError,
   assertInputStable,
   guardCurrent,
@@ -801,6 +1039,11 @@ module.exports = {
   parseManifestText,
   parsePrimitiveResult,
   parseRequestText,
+  parseValidationRequestText,
+  manifestValidationRefs,
+  prepareValidationBinding,
+  assertValidationInputStable,
+  runFixedPreparedValidation,
   persistAgentArtifacts,
   primitiveArgs,
   projectGenericReceipt,

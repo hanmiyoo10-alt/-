@@ -52,14 +52,17 @@ assert.equal(p49.includes('P49 highlights count must be 1..5'), false, 'P49 must
 
 const reconcile = fs.readFileSync('plugins/usage-dashboard/tools/reconcile_release_candidate.py','utf8');
 for (const marker of [
+  "parser.add_argument('--root'",
+  'configure_root(args.root)',
+  "'--root', ACTIVE_ROOT",
   'assert_declared_materializer_second_pass(spec)',
   'E19_MATERIALIZER_NOT_IDEMPOTENT',
   'E19_MATERIALIZER_SECOND_PASS_GREEN',
   'run_shift_left_structural_gates(spec_path)',
   'E19_STRUCTURAL_GATE_REJECTED',
-  'plugins/usage-dashboard/tests/current-release-contract.cjs',
-  'plugins/usage-dashboard/tests/p5-module-layout.cjs',
-  'plugins/usage-dashboard/tests/p49-release-notes-diagnostic-guidance.cjs',
+  "'current-release-contract.cjs'",
+  "'p5-module-layout.cjs'",
+  "'p49-release-notes-diagnostic-guidance.cjs'",
 ]) assert.ok(reconcile.includes(marker), `E19 reconciliation path missing ${marker}`);
 assert.ok(reconcile.indexOf('assert_declared_materializer_second_pass(spec)') < reconcile.indexOf('reconcile_once(spec_path, spec)'), 'declared materializer second pass must precede generic reconciliation');
 assert.ok(reconcile.lastIndexOf('run_shift_left_structural_gates(spec_path)') > reconcile.lastIndexOf("MATERIALIZER_IDEMPOTENT:"), 'cheap structural gates must run after stable reconciliation');

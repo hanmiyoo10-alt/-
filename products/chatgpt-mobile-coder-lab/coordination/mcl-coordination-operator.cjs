@@ -13,6 +13,7 @@ const PACKET_RE = /^#([1-9][0-9]*)$/;
 const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const ISSUE_ENDPOINT_RE = /^\/issues\/([1-9][0-9]*)$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
+const RUN_ID_RE = /^[1-9][0-9]*$/;
 const AUTHORITY = Object.freeze({
   repositoryMutationAuthorized: false,
   deviceMutationAuthorized: false,
@@ -121,6 +122,114 @@ async function planRelease({client, packetRef, leaseId}) {
       operation: 'release', expected_generation: String(context.ledgerGeneration),
       packet_ref: packetRef, lease_id: leaseId,
     },
+  });
+}
+
+function normalizeRunId(value) {
+  const text = String(value ?? '');
+  if (!RUN_ID_RE.test(text)) return null;
+  const runId = Number(text);
+  return Number.isSafeInteger(runId) ? runId : null;
+}
+
+function readFailedReleaseEvidence({repo, failedRunId, packetRef, leaseId, runner = defaultRunner}) {
+  const runId = normalizeRunId(failedRunId);
+  if (!runId) return output('BLOCKED', ['RECOVERY_FAILED_RUN_ID_INVALID']);
+  if (!PACKET_RE.test(packetRef || '')) return output('BLOCKED', ['REQUEST_PACKET_REF_INVALID'], {recoveryOfRunId: runId});
+  if (!SHA256_RE.test(leaseId || '')) return output('BLOCKED', ['REQUEST_LEASE_ID_INVALID'], {recoveryOfRunId: runId});
+
+  const viewed = runner(['run', 'view', String(runId), '--repo', repo, '--json',
+    'databaseId,status,conclusion,event,url,workflowName']);
+  let info = null;
+  try { info = JSON.parse(viewed.stdout || '{}'); } catch { info = null; }
+  if (viewed.code !== 0 || !info) {
+    return output('UNKNOWN', ['RECOVERY_FAILED_RUN_READ_FAILED'], {recoveryOfRunId: runId, leaseId});
+  }
+  if (info.databaseId !== runId) {
+    return output('BLOCKED', ['RECOVERY_FAILED_RUN_IDENTITY_MISMATCH'], {recoveryOfRunId: runId, leaseId});
+  }
+  if (info.event !== 'workflow_dispatch') {
+    return output('BLOCKED', ['RECOVERY_FAILED_RUN_EVENT_MISMATCH'], {recoveryOfRunId: runId, leaseId});
+  }
+  if (info.workflowName !== 'MCL Task Lease') {
+    return output('BLOCKED', ['RECOVERY_FAILED_RUN_WORKFLOW_MISMATCH'], {recoveryOfRunId: runId, leaseId});
+  }
+  if (info.status !== 'completed' || info.conclusion !== 'failure') {
+    return output('BLOCKED', ['RECOVERY_FAILED_RUN_NOT_COMPLETED_FAILURE'], {recoveryOfRunId: runId, leaseId});
+  }
+
+  const logged = runner(['run', 'view', String(runId), '--repo', repo, '--log']);
+  if (logged.code !== 0) {
+    return output('UNKNOWN', ['RECOVERY_FAILED_RUN_LOG_READ_FAILED'], {recoveryOfRunId: runId, leaseId});
+  }
+  const log = logged.stdout || '';
+  if (!log.includes('MCL_LEASE_OPERATION: release')) {
+    return output('BLOCKED', ['RECOVERY_FAILED_RUN_OPERATION_MISMATCH'], {recoveryOfRunId: runId, leaseId});
+  }
+  if (!log.includes(`MCL_LEASE_PACKET_REF: ${packetRef}`)) {
+    return output('BLOCKED', ['RECOVERY_FAILED_RUN_PACKET_MISMATCH'], {recoveryOfRunId: runId, leaseId});
+  }
+  if (!log.includes(`MCL_LEASE_ID: ${leaseId}`)) {
+    return output('BLOCKED', ['RECOVERY_FAILED_RUN_LEASE_MISMATCH'], {recoveryOfRunId: runId, leaseId});
+  }
+  if (!log.includes('mcl-task-lease fatal: fetch failed')) {
+    return output('BLOCKED', ['RECOVERY_FAILURE_CLASS_NOT_ELIGIBLE'], {recoveryOfRunId: runId, leaseId});
+  }
+  return output('RECOVERY_EVIDENCE_READY', ['RECOVERY_TRANSIENT_FETCH_FAILURE_PROVEN'], {
+    recoveryOfRunId: runId, leaseId,
+  });
+}
+
+async function planReleaseRecovery({repo, client, runner = defaultRunner, packetRef, leaseId, failedRunId}) {
+  const evidence = readFailedReleaseEvidence({repo, failedRunId, packetRef, leaseId, runner});
+  if (evidence.status !== 'RECOVERY_EVIDENCE_READY') return evidence;
+
+  const context = await readContext({client, packetRef});
+  const common = {recoveryOfRunId: evidence.recoveryOfRunId,
+    ledgerGeneration: context.ledgerGeneration, leaseId};
+  if (context.status !== 'READY') return output(context.status, context.reasonCodes, common);
+
+  const plan = lease.planRelease(context.ledgerState, {
+    expectedGeneration: context.ledgerGeneration, leaseId, packetRef,
+  });
+  if (plan.status === 'RELEASE_NOOP') {
+    return output('RECOVERY_COMPLETE',
+      ['LEASE_ALREADY_RELEASED', 'RECOVERY_TRANSIENT_FETCH_FAILURE_PROVEN'], common);
+  }
+  if (plan.status !== 'RELEASE_READY') {
+    return output(plan.status, plan.reasonCodes, {
+      ...common, ledgerGeneration: plan.generation ?? context.ledgerGeneration,
+    });
+  }
+
+  const active = context.ledgerState.activeLeases.find((item) => item.leaseId === leaseId);
+  if (!active) return output('UNKNOWN', ['RECOVERY_ACTIVE_LEASE_UNPROVEN'], common);
+  if (active.packetBodySha256 !== context.packetBodySha256) {
+    return output('BLOCKED', ['RECOVERY_PACKET_DIGEST_DRIFT'], common);
+  }
+
+  return output('PLAN_READY',
+    [...plan.reasonCodes, 'RECOVERY_TRANSIENT_FETCH_FAILURE_PROVEN'], {
+      operation: 'release', recoveryOfRunId: evidence.recoveryOfRunId,
+      ledgerGeneration: context.ledgerGeneration, leaseId,
+      workflowInputs: {
+        operation: 'release', expected_generation: String(context.ledgerGeneration),
+        packet_ref: packetRef, lease_id: leaseId,
+      },
+    });
+}
+
+async function dispatchRecoveryPlan({repo, plan, client, runner = defaultRunner,
+  sleepFn = sleepMs, maxPolls = 20}) {
+  if (plan.status === 'RECOVERY_COMPLETE') return plan;
+  if (plan.status !== 'PLAN_READY') return plan;
+  const result = await dispatchPlan({repo, plan, client, runner, sleepFn, maxPolls});
+  return output(result.status, result.reasonCodes, {
+    recoveryOfRunId: plan.recoveryOfRunId,
+    recoveryRunId: result.runId ?? null,
+    runConclusion: result.runConclusion ?? null,
+    observedGeneration: result.observedGeneration ?? plan.ledgerGeneration,
+    leaseId: plan.leaseId,
   });
 }
 
@@ -314,12 +423,22 @@ async function runCli(argv = process.argv.slice(2), env = process.env, options =
     });
   } else if (command === 'lease-release') {
     plan = await planRelease({client, packetRef, leaseId: values['lease-id']});
+  } else if (command === 'lease-release-recover') {
+    plan = await planReleaseRecovery({
+      repo, client, runner, packetRef, leaseId: values['lease-id'],
+      failedRunId: values['failed-run-id'],
+    });
   } else {
     throw new Error('COMMAND_UNSUPPORTED');
   }
-  const final = values.dispatch ? await dispatchPlan({repo, plan, client, runner,
-    sleepFn: options.sleepFn, maxPolls: options.maxPolls}) : plan;
-  const code = ['PLAN_READY', 'DISPATCH_COMPLETE'].includes(final.status) ? 0 : 2;
+  const final = command === 'lease-release-recover' && values.dispatch
+    ? await dispatchRecoveryPlan({repo, plan, client, runner,
+      sleepFn: options.sleepFn, maxPolls: options.maxPolls})
+    : values.dispatch
+      ? await dispatchPlan({repo, plan, client, runner,
+        sleepFn: options.sleepFn, maxPolls: options.maxPolls})
+      : plan;
+  const code = ['PLAN_READY', 'DISPATCH_COMPLETE', 'RECOVERY_COMPLETE'].includes(final.status) ? 0 : 2;
   return {text: `${JSON.stringify(final)}\n`, code};
 }
 
@@ -339,12 +458,15 @@ module.exports = {
   createGhIssueReadClient,
   createOperatorGitHubClient,
   dispatchPlan,
+  dispatchRecoveryPlan,
   normalizeRequestedScopes,
   output,
   packetNumber,
   planAcquire,
   planRelease,
+  planReleaseRecovery,
   publicContext,
+  readFailedReleaseEvidence,
   readContext,
   runCli,
   validateRepo,

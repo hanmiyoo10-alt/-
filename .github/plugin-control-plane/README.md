@@ -36,6 +36,51 @@ The two trusted-main reconciliation invokers hold `pull-requests: write` only be
 - independently modeled product roots use `product:<id>`;
 - repository/shared/ambiguous/multi-owner conditions use `scope:<id>`.
 
+## Repository family taxonomy
+
+`taxonomy.json` is a navigation-only target-organization contract layered beside `registry.json`.
+
+It answers two questions without replacing project authority:
+
+1. family: `PRODUCT / PLUGIN / PLATFORM / STUDY`;
+2. Risu placement: `yes / no`, rendered conceptually as Risu O / Risu X.
+
+Temporary `bridge` and `unknown` values are allowed while a cross-owner runtime or migration boundary is unresolved. These values are taxonomy metadata, not release/runtime/production state.
+
+For PRODUCT and PLUGIN targets, the physical naming convention is:
+
+```text
+products/
+├── risu/
+└── standalone/
+
+plugins/
+├── risu/
+└── standalone/
+```
+
+The taxonomy currently records the intended grouping for PocketRisu, App API Mod Lab, Termux, Mobile Coder Lab, SimCore, Local, repository platform families, Study, and the cross-owner local runtime plane.
+
+`sourceRefs` and `sourceRoots` point back to current repository classification/locations. `targetRoot` describes the intended future organization only. The taxonomy explicitly sets:
+
+- `pathMovesAuthorized: false`;
+- `identityCollapseAuthorized: false`;
+- `releaseMutationAuthorized: false`.
+
+Therefore adding or editing taxonomy metadata does not move source, retire compatibility paths, merge DevPass/Voyage/Usage Dashboard authority, or change release/update URLs. Those effects require separately reviewed migration packets and their owning validation.
+
+## Registered fixed scopes
+
+Repository-recognized roots that need deterministic routing but are not plugin/product authorities may be declared in `registry.scopes`.
+
+- fixed scopes use `scope:<id>` labels;
+- their descriptors may own path classification and explicit issue aliases only;
+- descriptors are `routing-only` and must declare `statusProjection: false`;
+- fixed scopes do not receive generated operational status issues and do not create runtime, device, release, deployment, or production authority;
+- current fixed roots are `scope:study` for `study/**` and `scope:local-runtime` for `local/**`.
+
+`scope:local-runtime` classifies the shared local operations root only. PocketRisu, Local Usage Dashboard, device, release, and production truth remain with their existing owners.
+
 ## Fixed managed label metadata
 
 Entries returned by `labelDefinitions(registry)` are repository-owned fixed label definitions. Trusted-main metadata writers create a missing fixed label and idempotently reconcile an existing fixed label's color and description when they drift from that definition. Matching fixed metadata produces no write, and label names are identity keys rather than rename targets.

@@ -3,14 +3,18 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const {assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
-const {discoverTests} = require('./registry.cjs');
-const {PARTS} = require('../src/parts.cjs');
-const {assertReleaseSpec} = require('../tools/release_spec_contract_e19.cjs');
+const path = require('node:path');
+const {normalizeSourceRoot, loadCurrentRelease, assertCurrentReleaseArtifacts} = require('./helpers/current-release.cjs');
 
-const root = 'plugins/usage-dashboard';
+const rootIndex = process.argv.indexOf('--root');
+const root = normalizeSourceRoot(rootIndex >= 0 ? process.argv[rootIndex + 1] : undefined);
+const rootAbsolute = path.resolve(root);
 const src = `${root}/src`;
-const release = assertCurrentReleaseArtifacts();
+const {discoverTests} = require(path.join(rootAbsolute, 'tests/registry.cjs'));
+const {PARTS} = require(path.join(rootAbsolute, 'src/parts.cjs'));
+const {assertReleaseSpec} = require(path.join(rootAbsolute, 'tools/release_spec_contract_e19.cjs'));
+const release = loadCurrentRelease(root);
+assertCurrentReleaseArtifacts(release, root);
 const core = fs.readFileSync(`${src}/00-runtime-core.part.js`, 'utf8');
 const context = fs.readFileSync(`${src}/50-dashboard-context.part.js`, 'utf8');
 const markup = fs.readFileSync(`${src}/54-dashboard-markup.part.js`, 'utf8');
@@ -90,7 +94,7 @@ for (const existing of ['id="copy-diag"', 'id="export-json"']) {
   assert.ok(latest.includes(existing), `P49 existing Diagnostics control must remain: ${existing}`);
 }
 
-const suite = discoverTests();
+const suite = discoverTests({testDir:path.join(rootAbsolute, 'tests')});
 assert.ok(suite.regressions.includes('p48-exact-final-http-status.cjs'), 'P49 must retain P48 HTTP-status regression');
 assert.ok(suite.regressions.includes('p49-release-notes-diagnostic-guidance.cjs'), 'P49 registry must include P49');
 

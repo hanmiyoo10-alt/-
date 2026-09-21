@@ -605,6 +605,7 @@ assert.equal(resolveOverlap(['path:tools/repo-ci-mcp/server.py'], [implementatio
 for (const [heading, ref] of [
   ['Bounded IMPLEMENTATION_PR write scope', '#10c'],
   ['Repository write-scope ceiling used by IMPLEMENTATION_PR', '#10d'],
+  ['Bounded repository write ceiling', '#10d2'],
 ]) {
   const packet = {
     type: 'packet', ref, issueState: 'open',
@@ -613,6 +614,64 @@ for (const [heading, ref] of [
   assert.equal(resolveOverlap(['path:docs/README.md'], [packet]).state, 'DISJOINT');
   assert.equal(resolveOverlap(['path:tools/repo-ci-mcp/server.py'], [packet]).state, 'OVERLAP');
 }
+
+const repositoryWriteCeilingPaths = [
+  'products/chatgpt-mobile-coder-lab/device-ops/rdc-termux/runtime-env-forward-shim.cjs',
+  'products/chatgpt-mobile-coder-lab/device-ops/rdc-termux/install.sh',
+  'products/chatgpt-mobile-coder-lab/device-ops/rdc-termux/verify.sh',
+  'products/chatgpt-mobile-coder-lab/device-ops/rdc-termux/tests/test-rdc-termux-contract.sh',
+  'products/chatgpt-mobile-coder-lab/device-ops/rdc-termux/README.md',
+];
+const repositoryWriteCeilingPacket = {
+  type: 'packet', ref: '#2562-fixture', issueState: 'open',
+  body: `<!-- canonical-main-work-packet:v1 -->
+## State
+\`READY\`
+## Bounded repository write ceiling
+Maximum expected source paths:
+${repositoryWriteCeilingPaths.map((scope, index) => `${index + 1}. \`${scope}\``).join('\n')}
+Do not touch unless fresh evidence proves required:
+- \`device-name-shim.cjs\`
+- \`which-rg-shim.sh\`
+## Handoff
+fixture`,
+};
+assert.equal(resolveOverlap(['path:unrelated/example.txt'], [repositoryWriteCeilingPacket]).state, 'DISJOINT');
+for (const scope of repositoryWriteCeilingPaths) {
+  assert.equal(resolveOverlap([`path:${scope}`], [repositoryWriteCeilingPacket]).state, 'OVERLAP');
+}
+assert.equal(resolveOverlap(['path:device-name-shim.cjs'], [repositoryWriteCeilingPacket]).state, 'DISJOINT');
+
+const repositoryWriteCeilingConflict = `${repositoryWriteCeilingPacket.body}
+## Locked write scope
+1. \`tools/**\``;
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#2562-conflict', issueState: 'open', body: repositoryWriteCeilingConflict,
+}]), 'CONFLICT', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#2562-near-match', issueState: 'open',
+  body: overlapPacketBodyWithHeading('READY', 'Bounded repository write ceilings', ['docs/**']),
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#2562-invalid-scope', issueState: 'open',
+  body: overlapPacketBodyWithHeading('READY', 'Bounded repository write ceiling', ['../secret']),
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+
+expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#2562-lifecycle-unknown', issueState: 'open',
+  body: overlapPacketBodyWithHeading(
+    'AUTHORITY_SCOPE COMPLETE / IMPLEMENTATION_PR NEXT / NO LIVE DEVICE EFFECT AUTHORITY',
+    'Bounded repository write ceiling',
+    ['docs/**'],
+  ),
+}]), 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_STATE_UNRESOLVED);
+
+assert.equal(resolveOverlap(['path:docs/README.md'], [{
+  type: 'packet', ref: '#2562-terminal', issueState: 'open',
+  body: overlapPacketBodyWithHeading('DONE', 'Bounded repository write ceiling', ['docs/**']),
+}]).state, 'DISJOINT');
 
 expectOverlapFinding(resolveOverlap(['path:docs/README.md'], [{
   type: 'packet', ref: '#10e', issueState: 'open',
@@ -793,6 +852,11 @@ assert.doesNotMatch(scopeOverlapSource, /function extractPacketState/);
 assert.doesNotMatch(scopeOverlapSource, /const PACKET_STATES/);
 assert.match(readme, /`Bounded IMPLEMENTATION_PR write scope`/);
 assert.match(readme, /`Repository write-scope ceiling used by IMPLEMENTATION_PR`/);
+assert.match(readme, /`Bounded repository write ceiling`/);
+assert.match(readme, /`Do not touch unless fresh evidence proves required:`/);
+assert.match(readme, /There is no fuzzy heading\/prose scan/);
+assert.equal((scopeOverlapSource.match(/'Bounded repository write ceiling'/g) || []).length, 1);
+assert.match(scopeOverlapSource, /Do not touch unless fresh evidence proves required:/);
 assert.match(readme, /multiple recognized sections are `CONFLICT`/);
 assert.match(readme, /missing, unsupported, malformed, or invalid scope evidence remains `UNKNOWN`/);
 assert.match(readme, /classification is routing\/context metadata only/);

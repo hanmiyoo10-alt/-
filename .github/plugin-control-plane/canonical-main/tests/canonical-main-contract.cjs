@@ -80,7 +80,7 @@ assert.match(rendered, /Canonical repository: `hanmiyoo10-alt\/-`/);
 assert.match(rendered, /<!-- PLUGIN_RELEASE_STATE_START -->/);
 assert.match(rendered, /<!-- PLUGIN_RELEASE_STATE_END -->/);
 assert.match(rendered, /- Product: `UNKNOWN`/);
-assert.match(rendered, /Source: `voyage-token-check\/DESIGN_STATUS\.md`/);
+assert.match(rendered, /Source: `plugins\/risu\/local\/voyage\/DESIGN_STATUS\.md`/);
 
 const invalidDescriptor = JSON.parse(JSON.stringify(example));
 invalidDescriptor.guidelines = '../escape.md';

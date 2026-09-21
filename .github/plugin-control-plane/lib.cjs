@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const REGISTRY_PATH = path.join(__dirname, 'registry.json');
+const TAXONOMY_PATH = path.join(__dirname, 'taxonomy.json');
 const CUSTOM_SCOPE_LABEL_PREFIX = 'scope:';
 const CUSTOM_SCOPE_LABEL_NAME_BOUND = 50;
 const CUSTOM_SCOPE_ID_MAX_LENGTH = CUSTOM_SCOPE_LABEL_NAME_BOUND - CUSTOM_SCOPE_LABEL_PREFIX.length;
@@ -11,6 +12,10 @@ const TRUSTED_CUSTOM_SCOPE_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORA
 
 function loadRegistry() {
   return JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8'));
+}
+
+function loadTaxonomy() {
+  return JSON.parse(fs.readFileSync(TAXONOMY_PATH, 'utf8'));
 }
 
 function escapeRegex(text) {
@@ -60,6 +65,8 @@ function classifyPaths(paths, registry = loadRegistry()) {
 
     const nonOperational = (registry.nonOperationalScopes || [])
       .filter((entry) => matchesAny(filePath, entry.paths));
+    const fixedScopes = (registry.scopes || [])
+      .filter((entry) => matchesAny(filePath, entry.paths));
     const isRepo = matchesAny(filePath, registry.repoPaths || []);
     const isShared = matchesAny(filePath, registry.sharedPaths || []);
 
@@ -72,10 +79,11 @@ function classifyPaths(paths, registry = loadRegistry()) {
     if (pluginOwners.length === 1) pluginIds.add(pluginOwners[0]);
     if (productOwners.length === 1) productIds.add(productOwners[0]);
     for (const entry of nonOperational) scopeLabels.add(entry.label);
+    for (const entry of fixedScopes) scopeLabels.add(entry.label);
     if (isRepo) scopeLabels.add('scope:repo');
     if (isShared) scopeLabels.add('scope:shared');
 
-    if (!ownerCount && !nonOperational.length && !isRepo && !isShared) {
+    if (!ownerCount && !nonOperational.length && !fixedScopes.length && !isRepo && !isShared) {
       unclassifiedPaths.push(filePath);
       scopeLabels.add('scope:unclassified');
     }
@@ -170,12 +178,17 @@ function classifyIssueBody(body, registry = loadRegistry(), options = {}) {
     .filter(([, plugin]) => (plugin.issueValues || []).includes(value));
   const productMatches = Object.entries(registry.products || {})
     .filter(([, product]) => (product.issueValues || []).includes(value));
-  const matchCount = pluginMatches.length + productMatches.length;
+  const scopeMatches = (registry.scopes || [])
+    .filter((scope) => (scope.issueValues || []).includes(value));
+  const matchCount = pluginMatches.length + productMatches.length + scopeMatches.length;
   if (matchCount === 1 && pluginMatches.length === 1) {
     return {explicit: true, labels: [`plugin:${pluginMatches[0][0]}`]};
   }
   if (matchCount === 1 && productMatches.length === 1) {
     return {explicit: true, labels: [`product:${productMatches[0][0]}`]};
+  }
+  if (matchCount === 1 && scopeMatches.length === 1) {
+    return {explicit: true, labels: [scopeMatches[0].label]};
   }
   return {explicit: true, labels: ['scope:unclassified']};
 }
@@ -216,6 +229,9 @@ function labelDefinitions(registry = loadRegistry()) {
     ['scope:test-fixture', 'c5def5', 'Repository test fixture path'],
     ['control-plane:status', '0e8a16', 'Mutable operational status issue'],
   ];
+  for (const scope of registry.scopes || []) {
+    defs.push([scope.label, 'c5def5', scope.description]);
+  }
   for (const [id, plugin] of Object.entries(registry.plugins || {})) {
     defs.push([`plugin:${id}`, '1d76db', plugin.displayName]);
   }
@@ -269,11 +285,116 @@ function validateRegistry(registry = loadRegistry()) {
   }
   validateOwners('plugins', registry.plugins || {});
   validateOwners('products', registry.products || {});
+
+  const reservedScopeIds = new Set([
+    'repo', 'shared', 'multi-plugin', 'multi-product', 'multi-owner', 'unclassified',
+    ...(registry.nonOperationalScopes || []).map((entry) => entry.id),
+  ]);
+  const seenScopeIds = new Set();
+  const seenScopeLabels = new Set();
+  for (const [index, scope] of (registry.scopes || []).entries()) {
+    const trail = `scopes.${index}`;
+    if (!scope.id || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(scope.id)) errors.push(`${trail}: invalid id`);
+    if (seenScopeIds.has(scope.id)) errors.push(`${trail}: duplicate id ${scope.id}`);
+    else seenScopeIds.add(scope.id);
+    if (reservedScopeIds.has(scope.id)) errors.push(`${trail}: reserved id ${scope.id}`);
+    if (scope.label !== `scope:${scope.id}`) errors.push(`${trail}: label must equal scope:${scope.id}`);
+    if (seenScopeLabels.has(scope.label)) errors.push(`${trail}: duplicate label ${scope.label}`);
+    else seenScopeLabels.add(scope.label);
+    if (!scope.displayName) errors.push(`${trail}: displayName missing`);
+    if (!scope.description) errors.push(`${trail}: description missing`);
+    if (!Array.isArray(scope.paths) || !scope.paths.length) errors.push(`${trail}: paths missing`);
+    if (scope.authority?.posture !== 'routing-only') errors.push(`${trail}: authority posture must be routing-only`);
+    if (scope.authority?.statusProjection !== false) errors.push(`${trail}: statusProjection must be false`);
+    for (const value of scope.issueValues || []) {
+      const previous = issueValueOwners.get(value);
+      if (previous) errors.push(`issueValues collision: ${value} owned by ${previous} and ${trail}`);
+      else issueValueOwners.set(value, trail);
+    }
+  }
+  for (const def of labelDefinitions(registry)) {
+    if (String(def.description || '').length > 100) {
+      errors.push(`label ${def.name}: description exceeds 100 characters`);
+    }
+  }
+  return errors;
+}
+
+
+function validateTaxonomy(taxonomy = loadTaxonomy(), registry = loadRegistry()) {
+  const errors = [];
+  const allowedFamilies = new Set(['product', 'plugin', 'platform', 'study']);
+  const allowedRisu = new Set(['yes', 'no', 'bridge', 'unknown']);
+  const allowedMigrations = new Set(['preserve', 'regroup', 'consolidate', 'reclassify']);
+
+  if (taxonomy.schemaVersion !== 1) errors.push('taxonomy schemaVersion must be 1');
+  if (taxonomy.authority?.posture !== 'navigation-only') errors.push('taxonomy authority posture must be navigation-only');
+  for (const key of ['pathMovesAuthorized', 'identityCollapseAuthorized', 'releaseMutationAuthorized']) {
+    if (taxonomy.authority?.[key] !== false) errors.push(`taxonomy authority.${key} must be false`);
+  }
+
+  const familyAxis = taxonomy.axes?.family;
+  const risuAxis = taxonomy.axes?.risu;
+  if (!Array.isArray(familyAxis) || [...familyAxis].sort().join(',') !== [...allowedFamilies].sort().join(',')) {
+    errors.push('taxonomy family axis must declare product, plugin, platform, study');
+  }
+  if (!Array.isArray(risuAxis) || [...risuAxis].sort().join(',') !== [...allowedRisu].sort().join(',')) {
+    errors.push('taxonomy risu axis must declare yes, no, bridge, unknown');
+  }
+
+  if (taxonomy.directoryConventions?.product?.yes !== 'products/risu') errors.push('taxonomy product Risu O directory must be products/risu');
+  if (taxonomy.directoryConventions?.product?.no !== 'products/standalone') errors.push('taxonomy product Risu X directory must be products/standalone');
+  if (taxonomy.directoryConventions?.plugin?.yes !== 'plugins/risu') errors.push('taxonomy plugin Risu O directory must be plugins/risu');
+  if (taxonomy.directoryConventions?.plugin?.no !== 'plugins/standalone') errors.push('taxonomy plugin Risu X directory must be plugins/standalone');
+
+  const knownRefs = new Set(labelDefinitions(registry).map((def) => def.name));
+  const seenIds = new Set();
+  const seenTargets = new Set();
+
+  for (const [index, member] of (taxonomy.members || []).entries()) {
+    const trail = `taxonomy.members.${index}`;
+    if (!member.id || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(member.id)) errors.push(`${trail}: invalid id`);
+    if (seenIds.has(member.id)) errors.push(`${trail}: duplicate id ${member.id}`);
+    else seenIds.add(member.id);
+    if (!member.displayName) errors.push(`${trail}: displayName missing`);
+    if (!allowedFamilies.has(member.family)) errors.push(`${trail}: invalid family ${member.family}`);
+    if (!allowedRisu.has(member.risu)) errors.push(`${trail}: invalid risu ${member.risu}`);
+    if (!allowedMigrations.has(member.migration)) errors.push(`${trail}: invalid migration ${member.migration}`);
+    if (!Array.isArray(member.sourceRefs)) errors.push(`${trail}: sourceRefs must be an array`);
+    for (const ref of member.sourceRefs || []) {
+      if (!knownRefs.has(ref)) errors.push(`${trail}: unknown sourceRef ${ref}`);
+    }
+    if (!Array.isArray(member.sourceRoots) || !member.sourceRoots.length) errors.push(`${trail}: sourceRoots missing`);
+    for (const root of member.sourceRoots || []) {
+      if (typeof root !== 'string' || !root || root.startsWith('/') || root.includes('..')) errors.push(`${trail}: invalid sourceRoot ${root}`);
+    }
+    if (typeof member.targetRoot !== 'string' || !member.targetRoot || member.targetRoot.startsWith('/') || member.targetRoot.includes('..')) {
+      errors.push(`${trail}: invalid targetRoot`);
+    } else {
+      if (seenTargets.has(member.targetRoot)) errors.push(`${trail}: duplicate targetRoot ${member.targetRoot}`);
+      else seenTargets.add(member.targetRoot);
+      if (member.family === 'product' && member.risu === 'yes' && !member.targetRoot.startsWith('products/risu/')) {
+        errors.push(`${trail}: Risu O product targetRoot must be under products/risu/`);
+      }
+      if (member.family === 'product' && member.risu === 'no' && !member.targetRoot.startsWith('products/standalone/')) {
+        errors.push(`${trail}: Risu X product targetRoot must be under products/standalone/`);
+      }
+      if (member.family === 'plugin' && member.risu === 'yes' && !member.targetRoot.startsWith('plugins/risu/')) {
+        errors.push(`${trail}: Risu O plugin targetRoot must be under plugins/risu/`);
+      }
+      if (member.family === 'plugin' && member.risu === 'no' && !member.targetRoot.startsWith('plugins/standalone/')) {
+        errors.push(`${trail}: Risu X plugin targetRoot must be under plugins/standalone/`);
+      }
+    }
+  }
+
+  if (!Array.isArray(taxonomy.members) || !taxonomy.members.length) errors.push('taxonomy members missing');
   return errors;
 }
 
 module.exports = {
   loadRegistry,
+  loadTaxonomy,
   globToRegex,
   matchesAny,
   classifyPaths,
@@ -289,4 +410,5 @@ module.exports = {
   labelDefinitions,
   fixedLabelMetadataDecision,
   validateRegistry,
+  validateTaxonomy,
 };

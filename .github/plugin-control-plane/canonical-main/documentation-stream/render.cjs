@@ -26,7 +26,7 @@ function descriptorMap(root) {
   }
   return map;
 }
-function renderProjectCatalog({ registry, root }) {
+function renderProjectCatalog({ registry, taxonomy = {}, root }) {
   const descriptors = descriptorMap(root); const rows = [];
   for (const [id, item] of Object.entries(registry.plugins || {})) {
     const descriptor = descriptors.get(id) || {};
@@ -38,7 +38,48 @@ function renderProjectCatalog({ registry, root }) {
   }
   rows.sort((a, b) => a[0].localeCompare(b[0]));
   const table = rows.map((row) => `| ${row.map(markdownEscape).join(' | ')} |`).join('\n');
-  return ['# Repository Project Catalog', '', '> Generated from `.github/plugin-control-plane/registry.json` and canonical-main descriptors. Operational freshness remains on status issues/#305 rather than this durable catalog.', '', '| Scope | Name | Lifecycle | Primary path | Authority | Guidelines |', '| --- | --- | --- | --- | --- | --- |', table || '| — | — | — | — | — | — |', ''].join('\n');
+
+  const familyOrder = new Map([['product', 0], ['plugin', 1], ['platform', 2], ['study', 3]]);
+  const risuLabel = new Map([['yes', 'O'], ['no', 'X'], ['bridge', 'BRIDGE'], ['unknown', 'UNKNOWN']]);
+  const familyRows = [...(taxonomy.members || [])]
+    .sort((a, b) => (familyOrder.get(a.family) ?? 99) - (familyOrder.get(b.family) ?? 99) || String(a.id).localeCompare(String(b.id)))
+    .map((member) => [
+      String(member.family || 'unknown').toUpperCase(),
+      risuLabel.get(member.risu) || 'UNKNOWN',
+      member.displayName || member.id || '—',
+      (member.sourceRefs || []).join('<br>') || '—',
+      (member.sourceRoots || []).join('<br>') || '—',
+      member.targetRoot || '—',
+      member.migration || '—',
+    ]);
+  const familyTable = familyRows.map((row) => `| ${row.map(markdownEscape).join(' | ')} |`).join('\n');
+  const authority = taxonomy.authority || {};
+  const safetyFlag = (value) => value === true ? 'true' : value === false ? 'false' : 'UNKNOWN';
+  return [
+    '# Repository Project Catalog',
+    '',
+    '> Generated from `.github/plugin-control-plane/registry.json` and canonical-main descriptors. Operational freshness comes from direct current `main` + #485; this durable catalog is not a live health authority.',
+    '',
+    '| Scope | Name | Lifecycle | Primary path | Authority | Guidelines |',
+    '| --- | --- | --- | --- | --- | --- |',
+    table || '| — | — | — | — | — | — |',
+    '',
+    '## Family Navigation Projection',
+    '',
+    '> Navigation-only projection from `.github/plugin-control-plane/taxonomy.json`. It does not create or replace plugin/product release, runtime, deployment, or production authority.',
+    '',
+    `- Taxonomy authority posture: \`${authority.posture || 'unknown'}\``,
+    `- Path moves authorized: \`${safetyFlag(authority.pathMovesAuthorized)}\``,
+    `- Identity collapse authorized: \`${safetyFlag(authority.identityCollapseAuthorized)}\``,
+    `- Release mutation authorized: \`${safetyFlag(authority.releaseMutationAuthorized)}\``,
+    '- `sourceRefs` and `sourceRoots` describe current classification/location evidence; omission from the authority table above does not manufacture a new owner.',
+    '- `targetRoot` describes intended future organization only.',
+    '',
+    '| Family | Risu | Member | Current refs | Current roots | Target root | Migration |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
+    familyTable || '| — | — | — | — | — | — | — |',
+    '',
+  ].join('\n');
 }
 function renderArchitectureSnapshot({ policy, registry, config, branch }) {
   const writers = (policy.adapters?.writerInventory || []).map((item) => `- \`${item.workflow}\` — \`${item.mode}\``).join('\n');

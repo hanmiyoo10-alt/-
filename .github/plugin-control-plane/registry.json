@@ -2,6 +2,20 @@
   "schemaVersion": 1,
   "managedLabelPrefixes": ["plugin:", "product:", "scope:"],
   "plugins": {
+    "local": {
+      "displayName": "Local",
+      "lifecycle": "compatibility-family",
+      "issueValues": ["local", "Local", "Local plugin"],
+      "paths": [
+        "plugins/risu/local",
+        "plugins/risu/local/*",
+        "docs/LOCAL_PLUGIN_GUIDELINES.md"
+      ],
+      "statusAdapter": "evidence",
+      "authority": {
+        "evidence": "plugins/risu/local/README.md"
+      }
+    },
     "usage-dashboard": {
       "displayName": "Local Usage Dashboard",
       "lifecycle": "production",
@@ -9,6 +23,7 @@
       "paths": [
         "plugins/usage-dashboard/**",
         "products/usage-dashboard/**",
+        "plugins/risu/local/usage-dashboard/**",
         ".github/usage-dashboard/**",
         ".github/workflows/usage-dashboard-*.yml",
         ".github/workflows/reusable-usage-dashboard-*.yml",
@@ -46,11 +61,12 @@
       "lifecycle": "declared-update-channel",
       "issueValues": ["devpass", "DevPass"],
       "paths": [
+        "plugins/risu/local/devpass/**",
         "plugins/devpass/**"
       ],
       "statusAdapter": "devpass",
       "authority": {
-        "declaredBy": "plugins/devpass/README.md",
+        "declaredBy": "plugins/risu/local/devpass/README.md",
         "artifact": "plugins/devpass/latest.js",
         "ref": "main"
       }
@@ -73,11 +89,12 @@
       "lifecycle": "design-evidence-validation",
       "issueValues": ["voyage-token-check", "Voyage Token Check", "Voyage"],
       "paths": [
+        "plugins/risu/local/voyage/**",
         "voyage-token-check/**"
       ],
       "statusAdapter": "evidence",
       "authority": {
-        "evidence": "voyage-token-check/DESIGN_STATUS.md"
+        "evidence": "plugins/risu/local/voyage/DESIGN_STATUS.md"
       }
     }
   },
@@ -87,7 +104,8 @@
       "lifecycle": "research-product-root",
       "issueValues": ["app-api-mod-lab", "App API Mod Lab", "앱 API 개조", "앱 API 개조 랩"],
       "paths": [
-        "products/app-api-mod-lab/**"
+        "products/app-api-mod-lab/**",
+        ".github/workflows/app-api-mod-lab-ci.yml"
       ],
       "statusAdapter": "prototype",
       "authority": {
@@ -110,6 +128,32 @@
       }
     }
   },
+  "scopes": [
+    {
+      "id": "study",
+      "label": "scope:study",
+      "displayName": "Study",
+      "issueValues": ["study", "Study"],
+      "paths": ["study/**"],
+      "description": "Independent study and learning root; routing metadata only",
+      "authority": {
+        "posture": "routing-only",
+        "statusProjection": false
+      }
+    },
+    {
+      "id": "local-runtime",
+      "label": "scope:local-runtime",
+      "displayName": "Local Runtime",
+      "issueValues": ["local-runtime", "Local Runtime"],
+      "paths": ["local/**"],
+      "description": "Local runtime root; routing only, not product, device, release, deployment, or production authority",
+      "authority": {
+        "posture": "routing-only",
+        "statusProjection": false
+      }
+    }
+  ],
   "nonOperationalScopes": [
     {
       "id": "research-product",

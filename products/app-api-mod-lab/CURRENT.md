@@ -40,7 +40,7 @@
 
 ## 다음 한 단계
 
-CHZZK는 active research target으로 유지된다. Fortune Golf는 #2602에 따라 `targets/standalone/fortune-golf/`로 materialize되었고 legacy branch의 target-owned source/docs/tools가 target-local layout으로 보존되었다. 다음 Fortune Golf 단계는 옛 branch-only build/workflow를 새 경로에 맞게 별도 이관한 뒤 build/unit/device evidence를 재검증하는 것이다.
+CHZZK는 active research target으로 유지된다. Fortune Golf는 #2602에 따라 `targets/standalone/fortune-golf/`로 materialize되었고 legacy branch의 target-owned source/docs/tools가 target-local layout으로 보존되었다. #2606은 target-specific APK/web build workflow를 canonical target source에 연결해 build/unit/artifact evidence를 다시 세우는 패킷이다. 이 workflow 검증이 완료되어도 current game/device compatibility는 별도 user-held-input device experiment 전까지 미검증 상태다.
 
 ## 아직 완료로 간주하지 않는 것
 

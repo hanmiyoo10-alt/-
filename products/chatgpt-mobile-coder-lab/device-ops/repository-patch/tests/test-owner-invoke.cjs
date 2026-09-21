@@ -222,6 +222,86 @@ function d014Primitive(phase, overrides = {}) {
   return primitive(phase, {changed_paths: [...D014_PATHS], ...overrides});
 }
 
+
+const RECOVERY_DIGEST = '1'.repeat(64);
+const PRIOR_MANIFEST_ID = '2'.repeat(64);
+
+function continuationRequest(overrides = {}) {
+  return {
+    schema: inv.CONTINUATION_REQUEST_SCHEMA,
+    message: 'docs: continue prepared patch',
+    expected_paths: [...PATHS],
+    prepared_digest: PATCH_HASH,
+    recovery_receipt_digest: RECOVERY_DIGEST,
+    prior_manifest_id: PRIOR_MANIFEST_ID,
+    ...overrides,
+  };
+}
+function continuationManifest(overrides = {}) {
+  return manifest({
+    phaseId: '2520-implementation-pr-recovery-rebind',
+    inputRefs: [
+      inv.RECOVERY_REF_PREFIX + RECOVERY_DIGEST,
+      inv.PRIOR_MANIFEST_REF_PREFIX + PRIOR_MANIFEST_ID,
+      inv.PRIMITIVE_REF,
+    ],
+    ...overrides,
+  });
+}
+function tempContinuationInputs() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-repo-patch-continuation-test-'));
+  const requestPath = path.join(dir, 'request.json');
+  const manifestPath = path.join(dir, 'manifest.json');
+  const handoffPath = path.join(dir, 'handoff.json');
+  const m = continuationManifest();
+  fs.writeFileSync(requestPath, JSON.stringify(continuationRequest()), 'utf8');
+  fs.writeFileSync(manifestPath, JSON.stringify(m), 'utf8');
+  fs.writeFileSync(handoffPath, JSON.stringify(handoff(m)), 'utf8');
+  return {dir, requestPath, manifestPath, handoffPath, manifest: m};
+}
+function fakeContinuationGit(state, overrides = {}) {
+  const head = state === 'PREPARED' ? BASE : NEW_HEAD;
+  const remote = overrides.remote || (state === 'PUSHED' ? NEW_HEAD : BASE);
+  const expectedMessage = overrides.message || continuationRequest().message;
+  return (args) => {
+    const key = args.join('\0');
+    if (key === ['rev-parse', '--show-toplevel'].join('\0')) return WORKSPACE.worktree + '\n';
+    if (key === ['branch', '--show-current'].join('\0')) return WORKSPACE.branch + '\n';
+    if (key === ['rev-parse', 'HEAD'].join('\0')) return head + '\n';
+    if (key === ['diff', '--name-only', '-z', '--'].join('\0')) return '';
+    if (key === ['ls-files', '--others', '--exclude-standard', '-z'].join('\0')) return '';
+    if (key === ['ls-remote', '--heads', 'origin', 'refs/heads/' + WORKSPACE.branch].join('\0')) {
+      return remote + '\trefs/heads/' + WORKSPACE.branch + '\n';
+    }
+    if (state === 'PREPARED') {
+      if (key === ['diff', '--cached', '--name-only', '-z', '--'].join('\0')) {
+        return PATHS.join('\0') + '\0';
+      }
+      if (key === ['diff', '--cached', '--binary', '--'].join('\0')) return PATCH.toString('utf8');
+    } else {
+      if (key === ['diff', '--cached', '--name-only', '-z', '--'].join('\0')) return '';
+      if (key === ['rev-parse', 'HEAD^'].join('\0')) return BASE + '\n';
+      if (key === ['diff', '--name-only', '-z', BASE, NEW_HEAD, '--'].join('\0')) {
+        return PATHS.join('\0') + '\0';
+      }
+      if (key === ['diff', '--binary', BASE, NEW_HEAD, '--'].join('\0')) return PATCH.toString('utf8');
+      if (key === ['log', '-1', '--format=%B', 'HEAD'].join('\0')) return expectedMessage + '\n';
+      if (key === ['log', '-1', '--format=%an%x00%ae%x00%cn%x00%ce', 'HEAD'].join('\0')) {
+        return 'mcl-repository-patch[bot]\0mcl-repository-patch@users.noreply.github.com'
+          + '\0mcl-repository-patch[bot]\0mcl-repository-patch@users.noreply.github.com\n';
+      }
+    }
+    throw new Error('unexpected git read: ' + args.join(' '));
+  };
+}
+function continuationPrimitive(phase, overrides = {}) {
+  return primitive(phase, {
+    patch_sha256: PATCH_HASH,
+    prepared_digest: PATCH_HASH,
+    ...overrides,
+  });
+}
+
 function passReceipt(m = manifest()) {
   return inv.projectGenericReceipt({
     manifest: m,
@@ -766,6 +846,262 @@ test('agent-view CLI mode emits only the final decision view', async () => {
     fs.rmSync(inputs.dir, {recursive: true, force: true});
   }
 });
+
+
+test('continue-prepared CLI is literal and normal CLI remains unchanged', () => {
+  const normal = [
+    '--repo', 'owner/repo',
+    '--handoff-file', '/tmp/handoff.json',
+    '--manifest-file', '/tmp/manifest.json',
+    '--request-file', '/tmp/request.json',
+    '--patch-file', '/tmp/request.patch',
+  ];
+  assert.equal(inv.parseArgs(normal).operation, 'normal');
+  const continued = inv.parseArgs([
+    'continue-prepared',
+    '--repo', 'owner/repo',
+    '--handoff-file', '/tmp/handoff.json',
+    '--manifest-file', '/tmp/manifest.json',
+    '--request-file', '/tmp/continuation.json',
+  ]);
+  assert.equal(continued.operation, 'continue-prepared');
+  assert.equal(continued.patchFile, null);
+  assert.throws(() => inv.parseArgs([
+    'continue-prepared',
+    ...normal,
+  ]), /ARGUMENT_INVALID/);
+  assert.throws(() => inv.parseArgs(['commit', ...normal]), /ARGUMENT_INVALID/);
+});
+
+test('prepared continuation request is strict and sorted', () => {
+  const parsed = inv.parsePreparedContinuationRequestText(JSON.stringify(continuationRequest({
+    expected_paths: ['z.txt', 'a.txt'],
+  })));
+  assert.deepEqual(parsed.expected_paths, ['a.txt', 'z.txt']);
+  assert.throws(
+    () => inv.parsePreparedContinuationRequestText(JSON.stringify({
+      ...continuationRequest(), command: 'git commit',
+    })),
+    (error) => error.kind === 'UNKNOWN'
+      && error.reasonCodes.includes('CONTINUATION_REQUEST_UNKNOWN_FIELD:command'),
+  );
+});
+
+test('prepared continuation manifest requires exact recovery lineage', () => {
+  const requestValue = continuationRequest();
+  const m = continuationManifest();
+  assert.doesNotThrow(() => inv.validatePreparedContinuationManifestBinding(
+    m, handoff(m), requestValue,
+  ));
+  const missingRecovery = continuationManifest({
+    inputRefs: [inv.PRIOR_MANIFEST_REF_PREFIX + PRIOR_MANIFEST_ID, inv.PRIMITIVE_REF],
+  });
+  assert.throws(
+    () => inv.validatePreparedContinuationManifestBinding(
+      missingRecovery, handoff(missingRecovery), requestValue,
+    ),
+    (error) => error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('CONTINUATION_RECOVERY_REF_REQUIRED'),
+  );
+  const ordinary = manifest({
+    inputRefs: [
+      inv.RECOVERY_REF_PREFIX + RECOVERY_DIGEST,
+      inv.PRIOR_MANIFEST_REF_PREFIX + PRIOR_MANIFEST_ID,
+      inv.PRIMITIVE_REF,
+    ],
+  });
+  assert.throws(
+    () => inv.validatePreparedContinuationManifestBinding(
+      ordinary, handoff(ordinary), requestValue,
+    ),
+    (error) => error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('CONTINUATION_RECOVERY_REBIND_REQUIRED'),
+  );
+});
+
+test('prepared continuation state classifier recognizes PREPARED COMMITTED and PUSHED', () => {
+  const m = continuationManifest();
+  const requestValue = continuationRequest();
+  for (const state of ['PREPARED', 'COMMITTED', 'PUSHED']) {
+    const value = inv.classifyPreparedContinuationState({
+      manifest: m,
+      request: requestValue,
+      gitReadImpl: fakeContinuationGit(state),
+    });
+    assert.equal(value.state, state);
+    assert.equal(crypto.createHash('sha256').update(value.diffBytes).digest('hex'), PATCH_HASH);
+  }
+});
+
+test('prepared continuation classifier rejects staged digest or remote drift', () => {
+  const m = continuationManifest();
+  assert.throws(
+    () => inv.classifyPreparedContinuationState({
+      manifest: m,
+      request: continuationRequest({prepared_digest: '9'.repeat(64)}),
+      gitReadImpl: fakeContinuationGit('PREPARED'),
+    }),
+    (error) => error.kind === 'CONFLICT'
+      && error.reasonCodes.includes('CONTINUATION_PREPARED_DIGEST_CONFLICT'),
+  );
+  assert.throws(
+    () => inv.classifyPreparedContinuationState({
+      manifest: m,
+      request: continuationRequest(),
+      gitReadImpl: fakeContinuationGit('COMMITTED', {remote: '8'.repeat(40)}),
+    }),
+    (error) => error.kind === 'CONFLICT'
+      && error.reasonCodes.includes('CONTINUATION_REMOTE_HEAD_CONFLICT'),
+  );
+});
+
+test('PREPARED continuation invokes commit then push without prepare', async () => {
+  const inputs = tempContinuationInputs();
+  try {
+    let guards = 0;
+    const calls = [];
+    let inspectCount = 0;
+    const receipt = await inv.invokePreparedContinuation({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(continuationRequest()),
+      requestFile: inputs.requestPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => { guards += 1; },
+      inspectStateImpl: () => {
+        inspectCount += 1;
+        return inspectCount === 1
+          ? {state: 'PREPARED', newHead: null, remoteHead: BASE, diffBytes: PATCH}
+          : {state: 'COMMITTED', newHead: NEW_HEAD, remoteHead: BASE, diffBytes: PATCH};
+      },
+      spawnSyncImpl: (file, args) => {
+        const phase = args[0].toUpperCase();
+        calls.push(phase);
+        const value = phase === 'COMMIT'
+          ? continuationPrimitive('COMMIT')
+          : continuationPrimitive('PUSH');
+        return {status: 0, signal: null, stdout: JSON.stringify(value), stderr: ''};
+      },
+      root: ROOT,
+    });
+    assert.deepEqual(calls, ['COMMIT', 'PUSH']);
+    assert.equal(calls.includes('PREPARE'), false);
+    assert.equal(guards, 3);
+    assert.equal(receipt.result, 'PASS');
+    const byName = new Map(receipt.steps.map((step) => [step.name, step.result]));
+    assert.equal(byName.get('recovered-prepared-binding'), 'PASS');
+    assert.equal(byName.get('patch-commit'), 'PASS');
+    assert.equal(byName.get('patch-push-postverify'), 'PASS');
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('lost commit acknowledgement skips duplicate commit and performs push only', async () => {
+  const inputs = tempContinuationInputs();
+  try {
+    const calls = [];
+    const receipt = await inv.invokePreparedContinuation({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(continuationRequest()),
+      requestFile: inputs.requestPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {},
+      inspectStateImpl: () => ({
+        state: 'COMMITTED', newHead: NEW_HEAD, remoteHead: BASE, diffBytes: PATCH,
+      }),
+      spawnSyncImpl: (file, args) => {
+        calls.push(args[0].toUpperCase());
+        return {status: 0, signal: null,
+          stdout: JSON.stringify(continuationPrimitive('PUSH')), stderr: ''};
+      },
+      root: ROOT,
+    });
+    assert.deepEqual(calls, ['PUSH']);
+    assert.equal(receipt.result, 'PASS');
+    assert.equal(receipt.counters.find((x) => x.name === 'commit_already_proven').value, 1);
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('lost push acknowledgement skips both duplicate effects', async () => {
+  const inputs = tempContinuationInputs();
+  try {
+    let calls = 0;
+    const receipt = await inv.invokePreparedContinuation({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(continuationRequest()),
+      requestFile: inputs.requestPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {},
+      inspectStateImpl: () => ({
+        state: 'PUSHED', newHead: NEW_HEAD, remoteHead: NEW_HEAD, diffBytes: PATCH,
+      }),
+      spawnSyncImpl: () => { calls += 1; throw new Error('duplicate effect'); },
+      root: ROOT,
+    });
+    assert.equal(calls, 0);
+    assert.equal(receipt.result, 'PASS');
+    assert.equal(receipt.counters.find((x) => x.name === 'commit_already_proven').value, 1);
+    assert.equal(receipt.counters.find((x) => x.name === 'push_already_proven').value, 1);
+    assert.equal(receipt.counters.find((x) => x.name === 'push_verified').value, 1);
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('prepared continuation input drift blocks before later effect', async () => {
+  const inputs = tempContinuationInputs();
+  try {
+    let guards = 0;
+    let calls = 0;
+    const receipt = await inv.invokePreparedContinuation({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(continuationRequest()),
+      requestFile: inputs.requestPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {
+        guards += 1;
+        if (guards === 2) fs.writeFileSync(inputs.requestPath, '{}', 'utf8');
+      },
+      inspectStateImpl: () => ({
+        state: 'PREPARED', newHead: null, remoteHead: BASE, diffBytes: PATCH,
+      }),
+      spawnSyncImpl: () => {
+        calls += 1;
+        return {status: 0, signal: null,
+          stdout: JSON.stringify(continuationPrimitive('COMMIT')), stderr: ''};
+      },
+      root: ROOT,
+    });
+    assert.equal(calls, 1);
+    assert.equal(receipt.result, 'CONFLICT');
+    assert(receipt.conflicts.includes('CONTINUATION_REQUEST_CHANGED_DURING_INVOCATION'));
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('continuation source exposes no generic start phase or retry surface', () => {
+  const source = fs.readFileSync(INVOKER_PATH, 'utf8');
+  assert(source.includes("args[0] === 'continue-prepared'"));
+  assert(!source.includes("'start-phase'"));
+  assert(!source.includes("'retry-count'"));
+  assert(!source.includes('reset --hard'));
+  assert(!source.includes('git restore'));
+  assert(!source.includes('git stash'));
+  assert(!source.includes('git clean'));
+  assert(!source.includes('--force'));
+});
+
 
 
 test('validation request parser is strict and profile-bound', () => {

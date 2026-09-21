@@ -17,7 +17,7 @@ on:
         required: false
         type: string
       packet_ref:
-        description: Source packet reference
+        description: Source packet reference; required for acquire/release, omit for activate
         required: false
         type: string
       packet_body_sha256:

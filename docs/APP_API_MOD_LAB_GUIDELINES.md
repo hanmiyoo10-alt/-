@@ -38,6 +38,54 @@ A concrete target is implementation-ready only after the work record identifies,
 
 Missing facts remain `UNKNOWN` or `UNASSIGNED`; they must not be guessed for convenience.
 
+## Internal target taxonomy
+
+Concrete targets use the bounded target namespace owned by this product:
+
+```text
+products/app-api-mod-lab/targets/
+├── risu/<target-id>/
+└── standalone/<target-id>/
+```
+
+The Risu O/X classification applies to each concrete target, not permanently to the whole lab. A target's `app / api / hybrid` kind and primary product/domain `category` are metadata in its `TARGET.json`, not additional required path layers.
+
+Do not create placeholder target directories. Until a target can be named truthfully, the valid state is zero targets.
+
+Every concrete target root must satisfy `products/app-api-mod-lab/target-contract.json` and pass:
+
+`node products/app-api-mod-lab/validate-targets.mjs`
+
+A structural PASS does not prove source/upstream authority, release/deployment authority, runtime correctness, or implementation readiness. Those claims remain governed by the target onboarding contract and direct evidence.
+
+`category` is descriptive/navigation metadata only. It must use the reviewed vocabulary in `target-contract.json`; changing category must not require a path move or create source/runtime/release/deployment authority. Keep one deterministic primary category. Add secondary tags/categories only through a separate contract change if future evidence requires them.
+
+Reusable target code or fixtures should move into a shared area only after at least two concrete targets prove the same reusable contract.
+
+## Legacy candidate reconciliation
+
+Historical app/API modification work may exist outside the current target namespace, such as issue-only reconnaissance or a dedicated legacy branch.
+
+Such work must first be recorded in `products/app-api-mod-lab/legacy-candidates.json` as locator-only evidence.
+
+The candidate inventory may record:
+- a proposed Risu O/X ecosystem;
+- a proposed `app / api / hybrid` kind;
+- a proposed primary category from the same target-contract vocabulary;
+- issue/branch/path locators;
+- a proposed future target root.
+
+It must not manufacture source, runtime, deployment, production, or release authority. While a candidate is non-materialized, both `materialized` and `migration_authorized` remain false and its proposed target root must not exist.
+
+Before materialization:
+1. re-read the candidate's current evidence locator;
+2. re-establish current source/upstream authority and scope;
+3. confirm the proposed ecosystem/kind/category still matches;
+4. authorize migration explicitly;
+5. create the concrete `TARGET.json` under the normal target contract.
+
+Run `node products/app-api-mod-lab/validate-legacy-candidates.mjs` to validate the inventory. The validator proves only inventory structure and non-materialization boundaries.
+
 ## Automation boundary
 
 Canonical-main may classify and validate the registered product paths and bootstrap health. It does not gain mutation authority over external apps/services or create a deployment/release channel for this lab.

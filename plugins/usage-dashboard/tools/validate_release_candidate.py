@@ -17,11 +17,29 @@ def require_text(path: Path, needle: str) -> None:
         raise SystemExit(f'{path}: missing release marker: {needle}')
 
 
+LEGACY_ROOT = 'plugins/usage-dashboard'
+TARGET_ROOT = 'plugins/risu/local/usage-dashboard'
+ALLOWED_ROOTS = (LEGACY_ROOT, TARGET_ROOT)
+
+
+def normalize_root(value: str) -> str:
+    if not isinstance(value, str) or not value or value.strip() != value:
+        raise SystemExit(f'R1B_SOURCE_ROOT_INVALID:{value or "<empty>"}')
+    if '\\' in value or value.startswith('/') or value.endswith('/'):
+        raise SystemExit(f'R1B_SOURCE_ROOT_INVALID:{value}')
+    if any(not part or part in ('.', '..') for part in value.split('/')):
+        raise SystemExit(f'R1B_SOURCE_ROOT_INVALID:{value}')
+    if value not in ALLOWED_ROOTS:
+        raise SystemExit(f'R1B_SOURCE_ROOT_UNKNOWN:{value}')
+    return value
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--spec', required=True)
-parser.add_argument('--root', default='plugins/usage-dashboard')
+parser.add_argument('--root', default=LEGACY_ROOT)
 args = parser.parse_args()
 
+root_text = normalize_root(args.root)
 spec = json.loads(Path(args.spec).read_text())
 required = {
     'productVersion', 'engineVersion', 'managerVersion', 'snapshotContract',
@@ -36,7 +54,7 @@ for key in ('materializer', 'callerWorkflow', 'sharedWorkflow'):
     if not Path(str(spec[key])).is_file():
         raise SystemExit(f'release spec {key} does not exist: {spec[key]}')
 
-root = Path(args.root)
+root = Path(root_text)
 runtime = root / 'runtime'
 manifest = json.loads((runtime / 'product-manifest.json').read_text())
 source_manifest = json.loads((root / 'src/manifest.json').read_text())

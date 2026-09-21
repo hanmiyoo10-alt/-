@@ -15,6 +15,23 @@ canonical_main_status()
 
 `repo_ci_summary` retrieves one exact normalized `CI_SUMMARY_V1_BEGIN` / `CI_SUMMARY_V1_END` block from GitHub Actions job logs and validates that the rendered run id and commit prefix match GitHub run metadata. A valid compact `FAIL` still returns `ok: true`; `ok` means retrieval and validation succeeded, not that CI passed.
 
+### Generic execution receipt projection for CI summaries
+
+`repo_ci_mcp.execution_receipt` is a pure translator from an already-produced `repo_ci_summary()` object into facts accepted by the repository-wide `REPOSITORY_EXECUTION_RECEIPT` projector. It does not call GitHub, enumerate runs/jobs, parse raw logs, choose workflows, or mutate repository state.
+
+```text
+GitHub Actions
+→ GitHubReader
+→ repo_ci_summary()
+→ execution_receipt.project_ci_summary_facts()
+→ execution-receipt.cjs
+→ REPOSITORY_EXECUTION_RECEIPT
+```
+
+The adapter preserves the selected run ID, exact `head_sha`, and source job identity through source/artifact locators. Only `PASS` with `summary.complete=true` and internally consistent completed-run metadata can become generic `PASS`. Incomplete `PASS` and `NOOP` remain non-PASS; `FAIL` remains `FAIL`; `INFRA_ERROR` and `CANCELLED` are `BLOCKED`; `UNKNOWN` stays `UNKNOWN`; malformed or contradictory evidence cannot be promoted to green. `ok=false` Repository Read MCP error codes remain bounded reason codes and are classified fail-closed.
+
+The raw compact-summary text is deliberately omitted from the normal GPT-facing facts. Run/job locators remain available for targeted drill-down. This projection is derived evidence only and does not replace GitHub Required, protected-branch, release, production, or project-specific authority.
+
 `repo_ci_overview` accepts an explicit ordered list of 2–5 supported workflow families and projects their existing `repo_ci_summary` results into one bounded first-pass response. It preserves each workflow's CI result, completeness, run identity, source locator, and bounded errors without embedding every full compact-summary text block. `ok` means all requested summaries were retrieved and validated. Mixed `FAIL`, `INFRA_ERROR`, `CANCELLED`, `UNKNOWN`, incomplete summaries, or retrieval failures remain visible through `attention_required`, `attention_workflows`, and deterministic result counts. There is deliberately no aggregate green `PASS` label. Use `repo_ci_summary` for one workflow or targeted drill-down.
 
 The overview uses the existing latest-per-workflow ref semantics. It is not an atomic exact-current-main snapshot across independently triggered workflow families and does not substitute older green runs.

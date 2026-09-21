@@ -187,6 +187,30 @@ Do not narrow a read when doing so would hide or weaken any of these:
 
 The repository can optimize selected source/result payloads, but it cannot guarantee how ChatGPT or another host renders tool cards or their height.
 
+## Execution receipt companion contract
+
+Execution receipts are a companion compactness surface for repeatable execution. They do not add a sixth execution route and they do not replace the owning command, harness, CI lane, remote bridge, validator, or project authority.
+
+Preferred shape:
+
+```text
+semantic intent
+→ existing authorized primitive / harness / CI / remote execution surface
+→ bounded execution receipt
+→ agent interpretation
+→ targeted drill-down only for NEEDS_REVIEW, failure, UNKNOWN, CONFLICT, blocker, ambiguity, or insufficient proof
+```
+
+When an existing runner can preserve the evidence needed for the next decision in a bounded receipt, prefer that receipt over pushing the complete stdout/stderr/environment transcript into the interaction. A useful receipt preserves operation/primitive identity, exact source or ref identity when applicable, execution surface and stage/substep identity, checks actually executed, bounded counters/affected files, lifecycle/attention/result evidence at the schema version actually emitted, stable reason codes, artifact/log locators, bounded failure tails when needed, and the next legal action when determinable.
+
+Repository execution receipt v1 remains a compatibility contract with legacy `attentionState` plus `result`. V2 is explicit opt-in and separates `executionLifecycle = QUEUED | RUNNING | FINISHED | UNKNOWN`, `attentionDisposition = COMPLETE | NEEDS_REVIEW | BLOCKED | UNKNOWN | CONFLICT`, and the existing result axis. Never guess v2 values from v1, and never coerce lifecycle `UNKNOWN` into RUNNING or FINISHED merely to simplify orchestration.
+
+Use `NEEDS_REVIEW` as an explicit semantic-judgment boundary. In v2 it may coexist with a nonterminal lifecycle. A deterministic runner must not silently convert an anomalous-but-successfully-executed result into a stronger PASS/FAIL conclusion merely to avoid returning control to the agent.
+
+A receipt may summarize raw detail but must not destroy it when the owning contract requires audit or diagnosis. Preserve exact locators so targeted drill-down can retrieve the smallest relevant raw segment. Do not put secrets, credentials, private payloads, unbounded environment dumps, or arbitrary full logs into the normal receipt.
+
+Receipt compactness never upgrades proof. `PASS` proves only the declared receipt scope, omission never means success, and unresolved `UNKNOWN`/`CONFLICT`/blocker evidence remains explicit. An execution receipt never grants execution, mutation, merge, release, production, runtime, security, or approval authority. Stage receipts, coordination receipts, project-specific receipts, and orchestration/eval receipts keep their own identities and owners.
+
 ## Exact immutable result read-reuse companion contract
 
 Exact immutable result read reuse is a specialization of the read/result compactness axis. It optimizes **result reading only**. It does not add a sixth execution route and it does not introduce validation-execution reuse.

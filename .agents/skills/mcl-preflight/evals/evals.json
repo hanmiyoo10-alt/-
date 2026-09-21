@@ -146,6 +146,119 @@
         "host_resource_invoked": false,
         "existing_first_pass_unchanged": true
       }
+    },
+    {
+      "id": "gui-companion-status-pass",
+      "prompt": "D-012 selected S_ANDROID_GUI with executor=not_applicable and bounded mcl-gui status is available.",
+      "facts": {
+        "route": "S_ANDROID_GUI",
+        "executor": "not_applicable",
+        "owner_command": "mcl-gui status",
+        "owner_schema": "mcl-gui.v1",
+        "owner_status": "PASS"
+      },
+      "expected": {
+        "owner": "mcl-gui status",
+        "owner_schema": "mcl-gui.v1",
+        "owner_invoked": true,
+        "gui_effect_invoked": false,
+        "snapshot_invoked": false,
+        "aggregate_ready_present": false
+      }
+    },
+    {
+      "id": "gui-companion-status-blocked",
+      "prompt": "D-012 selected S_ANDROID_GUI and mcl-gui status reports a blocked permission or locked-state disposition.",
+      "facts": {
+        "route": "S_ANDROID_GUI",
+        "executor": "not_applicable",
+        "owner_status": "BLOCKED"
+      },
+      "expected": {
+        "blocked_preserved": true,
+        "repair_performed": false,
+        "silent_reroute_performed": false,
+        "gui_effect_invoked": false
+      }
+    },
+    {
+      "id": "adb-read-status-pass",
+      "prompt": "D-012 selected S_ANDROID_GUI_ADB_READ and the bounded Wireless ADB status receipt is pass.",
+      "facts": {
+        "route": "S_ANDROID_GUI_ADB_READ",
+        "executor": "not_applicable",
+        "owner_schema": "mcl-wireless-adb-ui-status.v1",
+        "connection": "connected",
+        "model": "match",
+        "result": "pass"
+      },
+      "expected": {
+        "owner": "mcl-adb-ui status",
+        "owner_schema": "mcl-wireless-adb-ui-status.v1",
+        "snapshot_invoked": false,
+        "adb_action_invoked": false,
+        "raw_hierarchy_requested": false
+      }
+    },
+    {
+      "id": "adb-read-status-blocked",
+      "prompt": "D-012 selected S_ANDROID_GUI_ADB_READ but the status receipt is blocked.",
+      "facts": {
+        "route": "S_ANDROID_GUI_ADB_READ",
+        "executor": "not_applicable",
+        "result": "blocked"
+      },
+      "expected": {
+        "blocked_preserved": true,
+        "silent_reroute_performed": false,
+        "pairing_attempted": false,
+        "snapshot_invoked": false
+      }
+    },
+    {
+      "id": "adb-action-first-pass-only",
+      "prompt": "D-012 selected S_ANDROID_GUI_ADB_ACTION and Wireless ADB status is pass before a separately authorized action.",
+      "facts": {
+        "route": "S_ANDROID_GUI_ADB_ACTION",
+        "executor": "not_applicable",
+        "result": "pass"
+      },
+      "expected": {
+        "owner": "mcl-adb-ui status",
+        "action_ready_claimed": false,
+        "adb_action_invoked": false,
+        "snapshot_invoked": false,
+        "later_action_owner_gates_required": true
+      }
+    },
+    {
+      "id": "gui-executor-mismatch",
+      "prompt": "The GUI action route is paired with executor M instead of not_applicable.",
+      "facts": {
+        "route": "S_ANDROID_GUI_ADB_ACTION",
+        "executor": "M"
+      },
+      "expected": {
+        "preflight_state": "UNKNOWN",
+        "owner_invoked": false,
+        "route_guessed": false,
+        "transport_promoted_to_gui_executor": false
+      }
+    },
+    {
+      "id": "gui-owner-missing",
+      "prompt": "D-012 selected S_ANDROID_GUI but the bounded mcl-gui status owner cannot be invoked.",
+      "facts": {
+        "route": "S_ANDROID_GUI",
+        "executor": "not_applicable",
+        "owner_available": false
+      },
+      "expected": {
+        "preflight_state": "UNKNOWN",
+        "owner_invoked": false,
+        "raw_fallback_used": false,
+        "gui_effect_invoked": false
+      }
     }
   ]
 }

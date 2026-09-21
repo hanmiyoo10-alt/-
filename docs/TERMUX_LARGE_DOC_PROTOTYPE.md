@@ -31,7 +31,8 @@ Properties:
 - exposes only a user-selected workspace;
 - rejects path traversal outside that workspace;
 - saves atomically;
-- fails closed when the source file changed externally;
+- fails closed when source bytes differ at either save verification boundary;
+- does not claim atomic compare-and-swap against a non-cooperating write after final verification and before replace;
 - has no Google credentials or account integration;
 - records a lightweight `input → paint` median in the client.
 
@@ -40,7 +41,7 @@ Properties:
 The chunk-store test suite was executed independently before repository promotion:
 
 ```text
-5 tests passed
+10 tests passed
 ```
 
 Covered contracts:
@@ -49,7 +50,7 @@ Covered contracts:
 - empty-document behavior;
 - workspace path escape rejection;
 - edit + atomic save;
-- fail-closed external-change handling.
+- byte-identity fail-closed external-change handling at both save verification boundaries.
 
 Repository CI must repeat syntax and unit checks on relevant changes.
 

@@ -246,7 +246,7 @@ Closed/merged PRs may be omitted from the report or marked as non-open input; th
 
 ## 8. Current examples / evidence constraints
 
-Current repository audit preserves three open legacy/control PRs:
+At the 2026-08-26 design-time repository audit, three open legacy/control PRs were preserved:
 
 ```text
 #2   Release simcore
@@ -254,7 +254,7 @@ Current repository audit preserves three open legacy/control PRs:
 #207 RS2-4 shadow release transaction
 ```
 
-They are currently `WATCH / REPO_HYGIENE / NON_RUNTIME / NON_BLOCKING` and do not override production authority.
+At that design-time audit, they were `WATCH / REPO_HYGIENE / NON_RUNTIME / NON_BLOCKING` and did not override production authority.
 
 Observed metadata supports different handling:
 
@@ -277,6 +277,10 @@ shadow/release-system implementation PR
 ```
 
 These examples are design evidence, not hard-coded PR-number rules.
+
+Post-design status note (2026-09-20): PR #109 was manually closed without merge after fresh S-11 classification returned `COMMAND_ONLY_DONE` with `BODY_NOT_INTENDED_TO_MERGE` + `KNOWN_WORK_COMPLETED`. The #109 block above remains the frozen design-time open-state specimen; it is not current PR-state authority.
+
+Post-design status note (2026-09-20): PR #207 was manually closed without merge after fresh evidence established that merged #208/#212/#221/#231 and the permanent release workflow superseded its RS2-4 shadow implementation head. S-11 returned `SUPERSEDED` with `KNOWN_SUPERSEDED_HEAD` when supplied the exact head ref `infra/simcore-rs2-4-shadow-implementation`. The #207 block above remains the frozen design-time open-state specimen; it is not current PR-state authority.
 
 ---
 

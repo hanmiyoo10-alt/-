@@ -106,3 +106,46 @@ The harness never acquires or releases D-013, creates D-014 envelopes, selects a
 route, fetches/syncs a landing workspace, commits, pushes, opens/merges a PR, or
 mutates a service/runtime/release/production surface. It proves saved filesystem
 state only and does not claim access to unsaved editor or Colab buffers.
+
+## Fixed S owner invocation bridge
+
+`mcl-notebook-owner-invoke.cjs` is the first host-orchestrated owner-invocation
+pilot layered after the reviewed `mcl-execution-handoff.v1` admission contract.
+It is intentionally fixed to route `S`, executor `S`, and the existing
+`mcl-notebook-live-proof` owner. It is not a generic shell or owner registry.
+
+The CLI accepts only repository identity plus caller-owned handoff and D-014
+manifest files:
+
+```text
+node products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/mcl-notebook-owner-invoke.cjs \
+  --repo owner/repo \
+  --handoff-file /path/to/handoff.json \
+  --manifest-file /path/to/manifest.md
+```
+
+The handoff must be `HANDOFF_READY / phase=1/1 / route=S / executor=S` with
+`mutation_authorized=false` and `execution_authorized=false`. The D-014 manifest
+must independently verify as one `EXPERIMENT` phase with a required active D-013
+repository lease. Immediately before invoking the owner, the bridge re-reads the
+source packet and #2352 through the existing coordination operator, requires the
+packet to remain at `EXPERIMENT_CLOSE`, rechecks the exact packet-body digest, and
+requires one active lease whose route/executor/scopes/workspace/base match D-014.
+
+Only then does it invoke the fixed notebook owner once with executor/base/branch/
+worktree values derived from D-014. There is no caller-provided command, arbitrary
+argv, executable path, owner selector, environment injection, retry count, fetch,
+sync, reset, clean, lease mutation, or D-014 writer surface. The child receives a
+small allowlisted environment and is spawned with `shell=false`.
+
+The bounded owner result is validated for its existing cleanup and preservation
+contract and projected through the repository-wide `REPOSITORY_EXECUTION_RECEIPT`
+projector. A PASS receipt points the caller to `RELEASE_D013_AND_RECORD_D014_COMPLETION`;
+the invoker performs neither action itself. All execution/mutation/release/production
+authority flags remain false.
+
+Validation:
+
+```text
+node products/chatgpt-mobile-coder-lab/device-ops/working-tree-notebook/tests/test-owner-invoke.cjs
+```

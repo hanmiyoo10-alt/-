@@ -1,6 +1,6 @@
 # Mobile Coder Lab task lease v1
 
-Status: `IMPLEMENTATION CANDIDATE / #2350`
+Status: `ACTIVE V1 / owner #2350 / state ledger #2352`
 
 This contract owns only short-lived coordination reservation state for Mobile Coder Lab work. It does not own repository write authority, device health, Git currentness, CI, main write, release, or production truth.
 
@@ -84,6 +84,14 @@ V1 has no TTL, renewal timer, inactivity takeover, or age-based supersession. Ti
 Release requires the current ledger generation, exact active lease id, and matching source packet ref. It removes the active reservation, advances generation, and retains only one bounded `lastRelease` identity so a current-generation retry can return an idempotent no-op.
 
 Recovery from an abandoned lease is therefore an explicit owner action against current evidence, not automatic expiration. Any future TTL design requires separate authority.
+
+The coordination operator also exposes one explicit release-only transport recovery command, `lease-release-recover`. It does not change the normal `lease-release --dispatch` path, which still fails closed without semantic auto-retry when its workflow run fails.
+
+Recovery is eligible only for a caller-supplied failed workflow run whose bounded GitHub Actions evidence proves all of the following: workflow `MCL Task Lease`, event `workflow_dispatch`, completed failure, exact `release` operation, exact source packet ref, exact lease id, and the exact transient marker `mcl-task-lease fatal: fetch failed`. The operator never returns raw workflow logs or stderr as recovery output.
+
+After proving that failure class, the operator re-reads the current packet and ledger and reuses the existing release planner. If the exact lease is already represented by current `lastRelease`, recovery completes as an idempotent no-op with no new workflow dispatch. If the exact lease remains active, its stored packet-body digest must still equal the current packet digest; only an exact current `RELEASE_READY` plan may be dispatched, using the fresh current generation. With `--dispatch`, at most one new release workflow run is created. A failed recovery run is terminal for that invocation and is not retried again.
+
+Packet terminality, packet-body drift, lease/packet mismatch, malformed or unreadable run evidence, another workflow failure class, semantic `BLOCKED`/`CONFLICT`, missing lease without matching `lastRelease`, or any recovery-dispatch failure remains fail-closed. The recovery command does not add acquire retry, generic workflow retry, TTL, backoff, a retry daemon, or shared GitHub-client retry policy.
 ## Mutation path
 
 Supported ledger mutation is only `.github/workflows/mcl-task-lease.yml` plus the fixed controller. The workflow:

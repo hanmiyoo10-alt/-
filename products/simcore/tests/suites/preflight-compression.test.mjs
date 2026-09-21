@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { assert, equal } from '../../tooling/assertions.mjs';
 import { qualifyPr1 } from '../../tooling/ci/pr1-dry-qualification.mjs';
+import { evaluateCleanReleaseWorkItemClosure } from '../../tooling/release-work-item-closure-policy.mjs';
 
 function run(cwd, command, args, allowFailure = false) {
   const result = spawnSync(command, args, {
@@ -145,6 +146,9 @@ export async function runSuite({ fixtures }) {
   const check = fs.readFileSync('products/simcore/tooling/check.mjs', 'utf8');
   const semantic = fs.readFileSync('products/simcore/tests/suites/host-local-telemetry-v06410.test.mjs', 'utf8');
   const status = JSON.parse(fs.readFileSync('products/simcore/releases/R_V2_4_PREFLIGHT_COMPRESSION_STATUS.json', 'utf8'));
+  const design = fs.readFileSync('docs/SIMCORE_RELEASE_SYSTEM_V2_4_PREFLIGHT_COMPRESSION_DESIGN.md', 'utf8');
+  const implementationEvidence = fs.readFileSync('docs/SIMCORE_RELEASE_SYSTEM_V2_4_PREFLIGHT_COMPRESSION_IMPLEMENTATION_EVIDENCE.md', 'utf8');
+  const historicalSeal = fs.readFileSync('docs/SIMCORE_R2_4_HISTORICAL_TERMINAL_DEBT_SEAL_06409_2026-09-21.md', 'utf8');
 
   for (const forbidden of ['git push', 'release-publish.mjs', 'candidate-receipt.mjs', 'repo-main-write.py', 'release-simcore']) {
     assert(!tool.includes(forbidden), `PR1 dry tool gained authority primitive: ${forbidden}`);
@@ -166,11 +170,71 @@ export async function runSuite({ fixtures }) {
   pass('r24-semantic-assertion-discipline');
 
   const unitC = status.units.find((row) => row.id === 'R2_4_C_DIRECT_PREDECESSOR_TERMINAL_DEBT_SEAL');
-  assert(unitC && String(unitC.status).includes('HELD_FOR_REAL_PR3'), 'R2.4-C implementation hold was lost');
+  equal(unitC?.status, 'HISTORICAL_ADMIN_SEAL_PROVEN_06409', 'R2.4-C historical admin seal status');
+  const historical = status.terminalDebt?.historicalAdminSeal;
+  equal(historical?.workItemIssue, 660, 'historical seal must target exactly #660');
+  equal(historical?.releaseVersion, '0.64.9', 'historical seal release');
+  equal(historical?.terminalDisposition, 'LIVE_FAIL_HANDOFF_TO_NEW_RELEASE', 'historical seal disposition');
+  equal(historical?.humanEvidenceAccepted, true, 'historical seal HUMAN_EVIDENCE acceptance');
+  equal(historical?.humanEvidenceRef, 'docs/SIMCORE_LIVE_06409_SESSION_ACCESS_ERROR_2026-08-28.md', 'historical HUMAN_EVIDENCE ref');
+  equal(historical?.directSuccessorIssue, 679, 'historical direct successor');
+  equal(historical?.directSuccessorVersion, '0.64.10', 'historical successor version');
+  equal(historical?.predecessorProductionCommit, '1c1037e44d6b3e903b3d622b579095b1f315758e', 'historical production commit');
+  equal(historical?.predecessorProductionBlob, '7d2731d256b8aa18598c389fd919550cf3bbf146', 'historical production blob');
+  equal(historical?.maxDebtItems, 1, 'historical admin seal must remain one-item-only');
+  equal(historical?.administrativePrCount, 1, 'historical admin seal PR count');
+  equal(historical?.cleanPathPr, false, 'historical admin seal must not count as clean release PR');
+  equal(historical?.sealAloneCloseEligible, false, 'seal alone must not close the work item');
+  equal(historical?.autoClosesIssue, false, 'historical admin seal must not auto-close');
+  equal(historical?.chainWalk, false, 'historical admin seal must not chain-walk');
+  equal(historical?.mutatesReleaseSimcore, false, 'historical admin seal must not mutate release-simcore');
+  equal(historical?.mutatesRuntime, false, 'historical admin seal must not mutate runtime');
+  equal(historical?.requiresMerge, true, 'historical admin seal requires merge');
+  equal(historical?.requiresPostMergeReobservation, true, 'historical admin seal requires postmerge reobservation');
+  equal(historical?.otherDebtItemsSealed?.length, 0, 'historical admin PR must not seal another debt item');
+
+  for (const token of [
+    'HISTORICAL_PREDECESSOR_DEBT_SEAL_ACTIVATION / AUTHORITY_MISSING',
+    'HISTORICAL_ADMIN_SEAL_PROVEN_06409',
+    'docs/SIMCORE_R2_4_HISTORICAL_TERMINAL_DEBT_SEAL_06409_2026-09-21.md',
+  ]) assert(design.includes(token) || implementationEvidence.includes(token), `R2.4-C authority/evidence missing: ${token}`);
+  for (const token of [
+    'workItemIssue = 660',
+    'terminalDisposition = LIVE_FAIL_HANDOFF_TO_NEW_RELEASE',
+    'directSuccessorIssue = 679',
+    'predecessorProductionCommit = 1c1037e44d6b3e903b3d622b579095b1f315758e',
+    '#679 and #704 remain unresolved separate debt items',
+  ]) assert(historicalSeal.includes(token), `historical seal evidence missing: ${token}`);
+
+  const preMerge = evaluateCleanReleaseWorkItemClosure({
+    terminalDisposition: 'LIVE_FAIL_HANDOFF_TO_NEW_RELEASE',
+    humanEvidenceAccepted: true,
+    terminalClosurePrMerged: false,
+    mainTerminalStateReobserved: false,
+    productionIdentityReobserved: false,
+    workItemClosureEvidenceRefPresent: true,
+  });
+  equal(preMerge.closeEligible, false, 'historical seal candidate must remain open before merge');
+
+  const postMergeProjection = evaluateCleanReleaseWorkItemClosure({
+    terminalDisposition: 'LIVE_FAIL_HANDOFF_TO_NEW_RELEASE',
+    humanEvidenceAccepted: true,
+    terminalClosurePrMerged: true,
+    mainTerminalStateReobserved: true,
+    productionIdentityReobserved: true,
+    workItemClosureEvidenceRefPresent: true,
+  });
+  equal(postMergeProjection.closeEligible, true, 'unchanged R2.3 evaluator must accept fully reobserved historical seal');
+
   equal(status.objective.newPublisher, 0, 'publisher count changed');
   equal(status.objective.newCleanPathPr, 0, 'clean-path PR count changed');
+  equal(status.objective.steadyStatePrsToLivePending, 2, 'LIVE_PENDING clean-path PR target changed');
+  equal(status.objective.steadyStatePrsThroughTerminalClosure, 3, 'terminal clean-path PR target changed');
   equal(status.objective.newPolling, 0, 'polling introduced');
-  pass('r24-c-held-and-cost-freeze');
+  equal(status.objective.newIssueAutomationController, 0, 'issue automation controller introduced');
+  equal(status.runtimeMutation, 'NONE', 'R2.4 historical seal mutated runtime');
+  equal(status.releaseSimcoreMutation, 'NONE', 'R2.4 historical seal mutated release-simcore');
+  pass('r24-c-historical-admin-seal-one-item-and-cost-freeze');
 
   return { coverage: 'EXECUTABLE', status: 'PASS', assertions };
 }

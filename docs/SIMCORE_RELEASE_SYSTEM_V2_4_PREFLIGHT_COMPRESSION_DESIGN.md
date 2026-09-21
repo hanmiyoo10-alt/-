@@ -266,17 +266,69 @@ Maximum carry-forward debt per PR3:
 
 If the relation is ambiguous, leave the predecessor work item open.
 
-### 5.4 Implementation hold
+### 5.4 Historical hold resolution
 
-R2.4-C is **design-bounded but implementation-held** until a genuine PR3 terminal transaction is observed.
+The original R2.4-C implementation hold was correct when written because no genuine PR3 terminal/admin transaction shape had yet been observed.
 
-Reason:
+That premise is now historical rather than current. Later durable terminal transactions, including #755, #796/#801/#803 and later R2.8 terminal convergence, prove the terminal administrative shape without requiring an invented payload.
+
+The remaining gap is narrower:
 
 ```text
-R2.3 real PR3 operational proof is still pending
+HISTORICAL_PREDECESSOR_DEBT_SEAL_ACTIVATION / AUTHORITY_MISSING
 ```
 
-Do not invent a PR3 payload shape solely to automate cleanup before the real terminal path exists.
+### 5.5 Historical administrative seal
+
+When the normal direct-successor PR3 window has already passed, one separately reviewed repository-only administrative PR may seal **exactly one explicitly named historical debt item**.
+
+This is not a clean-path release PR and does not change the frozen release cost targets.
+
+Eligibility requires all of:
+
+```text
+one explicit work-item issue
+one explicit historical release identity
+accepted terminal evidence already durable
+terminal disposition already supported by R2.3
+direct successor relation already durable and unambiguous
+historical production identity already durable
+no runtime or release-simcore mutation
+no manufactured LIVE_PASS
+```
+
+The administrative PR itself becomes the historical equivalent of `terminalClosurePrMerged` only after it is merged to protected main. Post-merge main evidence, current production authority, and the exact historical seal record must then be reobserved before the existing pure R2.3 closure evaluator may return close-eligible.
+
+The first authorized historical seal is limited to:
+
+```text
+work item = #660
+release = v0.64.9
+terminal disposition = LIVE_FAIL_HANDOFF_TO_NEW_RELEASE
+direct successor = #679 / v0.64.10
+seal evidence = docs/SIMCORE_R2_4_HISTORICAL_TERMINAL_DEBT_SEAL_06409_2026-09-21.md
+```
+
+#679 and #704 are not included in this administrative PR.
+
+### 5.6 Historical administrative seal hard limits
+
+The historical path must never:
+
+```text
+seal more than one debt item per administrative PR
+discover or walk an arbitrary predecessor chain
+close an issue automatically
+change the R2.3 pure closure evaluator
+change future/current clean-path PR3 semantics
+block successor publication
+mutate runtime/plugin bytes
+mutate or republish release-simcore
+change current production identity
+treat labels as authority
+```
+
+A later historical debt item requires its own fresh packet, exact evidence map, PR, merge, and post-merge reobservation.
 
 ## 6. R2.4-D — Automation Authority Freeze
 
@@ -363,7 +415,7 @@ If implementation is authorized, use this order:
 ```text
 A. candidate-equivalent PR1 dry qualification
 B. semantic assertion discipline + v0.64.10 replay regression
-C. keep direct-predecessor terminal debt seal held until genuine PR3 shape exists
+C. permit one explicit historical administrative seal only after genuine PR3 shapes exist; keep one-item and post-merge reobservation limits
 D. reverify authority freeze and steady-state PR cost
 ```
 
@@ -395,7 +447,7 @@ release-simcore is unchanged by R2.4 itself
 ```text
 R2.4-A Candidate-Equivalent PR1 Dry Qualification = FIX / DESIGN FROZEN
 R2.4-B Semantic Assertion Discipline = STABILIZE / DESIGN FROZEN
-R2.4-C Direct-Predecessor Terminal Debt Seal = WATCH / DESIGN BOUNDED / IMPLEMENTATION HELD FOR REAL PR3
+R2.4-C Direct-Predecessor Terminal Debt Seal = WATCH / HISTORICAL ADMIN SEAL AUTHORIZED FOR #660 / ONE ITEM ONLY
 R2.4-D Automation Authority Freeze = FREEZE
 
 release engine replacement = NO

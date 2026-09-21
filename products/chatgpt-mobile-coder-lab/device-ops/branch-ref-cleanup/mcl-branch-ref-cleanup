@@ -1,0 +1,330 @@
+#!/usr/bin/env python3
+import hashlib
+import json
+import re
+import subprocess
+import sys
+
+SCHEMA = "mcl-branch-ref-cleanup.v1"
+MODE = "MCL_REMOTE_BRANCH_REF_CLEANUP"
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+AUTHORITY = {
+    "repositoryMutationAuthorized": False,
+    "deviceMutationAuthorized": False,
+    "mergeAuthorized": False,
+    "releaseAuthorized": False,
+    "productionAuthorized": False,
+}
+PROFILES = {
+    "S": {
+        "control": "/root/nyang-repo",
+        "branch_prefix": "server/",
+        "protected_branch": "server/work",
+        "protected_landing": None,
+    },
+    "M": {
+        "control": "/data/data/com.termux/files/home/nyang-repo",
+        "branch_prefix": "mainphone/",
+        "protected_branch": "mainphone/work",
+        "protected_landing": "/data/data/com.termux/files/home/nyang-worktrees/mainphone-work",
+    },
+}
+
+def _run(args, *, check=True):
+    result = subprocess.run(
+        args,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        shell=False,
+    )
+    if check and result.returncode != 0:
+        raise RuntimeError("COMMAND_FAILED")
+    return result
+
+def _git(control, *args, check=True):
+    return _run(["git", "-C", control, *args], check=check)
+
+def _receipt(operation, status, executor, branch, expected_head, reasons=None,
+             observed_remote_head=None, local_branch_head=None):
+    return {
+        "schema": SCHEMA,
+        "mode": MODE,
+        "operation": operation,
+        "status": status,
+        "executor": executor,
+        "branch": branch,
+        "expectedHead": expected_head,
+        "observedRemoteHead": observed_remote_head,
+        "localBranchHead": local_branch_head,
+        "reasonCodes": sorted(set(reasons or [])),
+        "details": "withheld",
+        "authority": dict(AUTHORITY),
+    }
+
+def _validate_branch(profile, branch, expected_head):
+    reasons = []
+    if not isinstance(branch, str) or not branch.startswith(profile["branch_prefix"]):
+        reasons.append("BRANCH_FAMILY_INVALID")
+    elif branch == profile["protected_branch"]:
+        reasons.append("PROTECTED_BRANCH_DENIED")
+    elif _run(["git", "check-ref-format", "--branch", branch], check=False).returncode != 0:
+        reasons.append("BRANCH_INVALID")
+    if not SHA_RE.fullmatch(expected_head or ""):
+        reasons.append("EXPECTED_HEAD_INVALID")
+    return reasons
+
+def _remote_head(profile, branch):
+    ref = f"refs/heads/{branch}"
+    result = _git(profile["control"], "ls-remote", "--heads", "origin", ref, check=False)
+    if result.returncode != 0:
+        return "ERROR", None
+    rows = [line for line in result.stdout.splitlines() if line.strip()]
+    if not rows:
+        return "MISSING", None
+    if len(rows) != 1:
+        return "AMBIGUOUS", None
+    sha, sep, observed_ref = rows[0].partition("\t")
+    if sep != "\t" or observed_ref != ref or not SHA_RE.fullmatch(sha):
+        return "INVALID", None
+    return "PRESENT", sha
+
+def _local_branch_head(profile, branch):
+    result = _git(
+        profile["control"], "rev-parse", "--verify", f"refs/heads/{branch}",
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    value = result.stdout.strip()
+    return value if SHA_RE.fullmatch(value) else None
+
+def _worktree_uses_branch(profile, branch):
+    result = _git(profile["control"], "worktree", "list", "--porcelain", check=False)
+    if result.returncode != 0:
+        return None
+    needle = f"branch refs/heads/{branch}"
+    return any(line == needle for line in result.stdout.splitlines())
+
+def _repo_snapshot(path):
+    branch = _git(path, "symbolic-ref", "--short", "-q", "HEAD", check=False)
+    head = _git(path, "rev-parse", "HEAD", check=False)
+    status = _git(path, "status", "--porcelain=v1", "--untracked-files=all", check=False)
+    if head.returncode != 0 or status.returncode != 0:
+        raise RuntimeError("PRESERVATION_READ_FAILED")
+    return {
+        "branch": branch.stdout.strip() if branch.returncode == 0 else None,
+        "head": head.stdout.strip(),
+        "statusDigest": hashlib.sha256(status.stdout.encode()).hexdigest(),
+    }
+
+def _preservation_snapshot(profile):
+    result = {"control": _repo_snapshot(profile["control"])}
+    landing = profile.get("protected_landing")
+    if landing:
+        result["landing"] = _repo_snapshot(landing)
+    return result
+
+def inspect_target(executor, branch, expected_head, *, profiles=None):
+    profiles = profiles or PROFILES
+    profile = profiles.get(executor)
+    if profile is None:
+        return {
+            "eligible": False,
+            "reasons": ["EXECUTOR_INVALID"],
+            "observedRemoteHead": None,
+            "localBranchHead": None,
+        }
+    reasons = _validate_branch(profile, branch, expected_head)
+    if reasons:
+        return {
+            "eligible": False,
+            "reasons": sorted(set(reasons)),
+            "observedRemoteHead": None,
+            "localBranchHead": None,
+        }
+
+    remote_state, remote_head = _remote_head(profile, branch)
+    if remote_state == "MISSING":
+        reasons.append("REMOTE_BRANCH_MISSING")
+    elif remote_state == "ERROR":
+        reasons.append("REMOTE_HEAD_READ_FAILED")
+    elif remote_state == "AMBIGUOUS":
+        reasons.append("REMOTE_HEAD_AMBIGUOUS")
+    elif remote_state == "INVALID":
+        reasons.append("REMOTE_HEAD_INVALID")
+    elif remote_head != expected_head:
+        reasons.append("REMOTE_HEAD_MISMATCH")
+
+    local_head = _local_branch_head(profile, branch)
+    if local_head is None:
+        reasons.append("LOCAL_BRANCH_REF_MISSING")
+    elif local_head != expected_head:
+        reasons.append("LOCAL_BRANCH_REF_MISMATCH")
+    in_use = _worktree_uses_branch(profile, branch)
+    if in_use is None:
+        reasons.append("WORKTREE_REGISTRATION_READ_FAILED")
+    elif in_use:
+        reasons.append("REGISTERED_WORKTREE_PRESENT")
+
+    return {
+        "eligible": not reasons,
+        "reasons": sorted(set(reasons)),
+        "observedRemoteHead": remote_head,
+        "localBranchHead": local_head,
+    }
+
+def apply_target(executor, branch, expected_head, *, explicit_apply=False,
+                 profiles=None, before_recheck=None, before_delete=None):
+    profiles = profiles or PROFILES
+    if not explicit_apply:
+        return _receipt(
+            "apply", "BLOCKED", executor, branch, expected_head,
+            ["EXPLICIT_APPLY_REQUIRED"],
+        )
+    profile = profiles.get(executor)
+    if profile is None:
+        return _receipt(
+            "apply", "BLOCKED", executor, branch, expected_head,
+            ["EXECUTOR_INVALID"],
+        )
+    try:
+        before = _preservation_snapshot(profile)
+    except Exception:
+        return _receipt(
+            "apply", "BLOCKED", executor, branch, expected_head,
+            ["PRESERVATION_READ_FAILED"],
+        )
+
+    first = inspect_target(executor, branch, expected_head, profiles=profiles)
+    if not first["eligible"]:
+        return _receipt(
+            "apply", "BLOCKED", executor, branch, expected_head,
+            first["reasons"], first["observedRemoteHead"], first["localBranchHead"],
+        )
+    if before_recheck is not None:
+        before_recheck()
+    second = inspect_target(executor, branch, expected_head, profiles=profiles)
+    if not second["eligible"]:
+        return _receipt(
+            "apply", "BLOCKED", executor, branch, expected_head,
+            ["RECHECK_BLOCKED", *second["reasons"]],
+            second["observedRemoteHead"], second["localBranchHead"],
+        )
+    if before_delete is not None:
+        before_delete()
+
+    ref = f"refs/heads/{branch}"
+    lease = f"--force-with-lease={ref}:{expected_head}"
+    pushed = _git(
+        profile["control"], "push", lease, "origin", f":{ref}", check=False,
+    )
+    if pushed.returncode != 0:
+        reasons = ["REMOTE_DELETE_REJECTED"]
+        state, observed = _remote_head(profile, branch)
+        if state == "PRESENT" and observed != expected_head:
+            reasons.append("REMOTE_HEAD_MOVED")
+        elif state != "PRESENT":
+            reasons.append("POST_REJECT_REMOTE_READ_FAILED")
+        try:
+            if _preservation_snapshot(profile) != before:
+                reasons.append("POST_REJECT_PRESERVATION_DRIFT")
+        except Exception:
+            reasons.append("POST_REJECT_PRESERVATION_UNKNOWN")
+        return _receipt(
+            "apply", "BLOCKED", executor, branch, expected_head, reasons,
+            observed, _local_branch_head(profile, branch),
+        )
+
+    reasons = []
+    state, observed = _remote_head(profile, branch)
+    if state == "PRESENT":
+        reasons.append("POST_DELETE_REF_PRESENT")
+    elif state != "MISSING":
+        reasons.append("POST_DELETE_REMOTE_READ_FAILED")
+
+    local_head = _local_branch_head(profile, branch)
+    if local_head is None:
+        reasons.append("POST_DELETE_LOCAL_BRANCH_MISSING")
+    elif local_head != expected_head:
+        reasons.append("POST_DELETE_LOCAL_BRANCH_MOVED")
+    try:
+        if _preservation_snapshot(profile) != before:
+            reasons.append("POST_DELETE_PRESERVATION_DRIFT")
+    except Exception:
+        reasons.append("POST_DELETE_PRESERVATION_UNKNOWN")
+
+    if reasons:
+        return _receipt(
+            "apply", "BLOCKED", executor, branch, expected_head, reasons,
+            observed, local_head,
+        )
+    return _receipt(
+        "apply", "REMOVED", executor, branch, expected_head, [],
+        second["observedRemoteHead"], local_head,
+    )
+
+def _parse(argv):
+    if not argv or argv[0] not in {"inspect", "apply"}:
+        raise ValueError("COMMAND_INVALID")
+    command = argv[0]
+    values = {}
+    apply_flag = False
+    allowed = {"--executor", "--branch", "--expected-head"}
+    i = 1
+    while i < len(argv):
+        token = argv[i]
+        if token == "--apply":
+            if apply_flag:
+                raise ValueError("ARGUMENT_DUPLICATE")
+            apply_flag = True
+            i += 1
+            continue
+        if token not in allowed or i + 1 >= len(argv):
+            raise ValueError("ARGUMENT_INVALID")
+        if token in values:
+            raise ValueError("ARGUMENT_DUPLICATE")
+        values[token] = argv[i + 1]
+        i += 2
+    for flag in allowed:
+        if flag not in values:
+            raise ValueError("ARGUMENT_REQUIRED")
+    if command == "inspect" and apply_flag:
+        raise ValueError("APPLY_FLAG_WITH_INSPECT")
+    return command, values, apply_flag
+
+def run_cli(argv=None, *, profiles=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    try:
+        command, values, apply_flag = _parse(argv)
+        executor = values["--executor"]
+        branch = values["--branch"]
+        expected_head = values["--expected-head"]
+        if command == "inspect":
+            result = inspect_target(
+                executor, branch, expected_head, profiles=profiles,
+            )
+            receipt = _receipt(
+                "inspect", "ELIGIBLE" if result["eligible"] else "BLOCKED",
+                executor, branch, expected_head, result["reasons"],
+                result["observedRemoteHead"], result["localBranchHead"],
+            )
+        else:
+            receipt = apply_target(
+                executor, branch, expected_head,
+                explicit_apply=apply_flag, profiles=profiles,
+            )
+    except ValueError as error:
+        receipt = _receipt(
+            "unknown", "BLOCKED", "unknown", "unknown", None, [str(error)],
+        )
+    code = 0 if receipt["status"] in {"ELIGIBLE", "REMOVED"} else 2
+    return code, json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n"
+
+def main():
+    code, text = run_cli()
+    sys.stdout.write(text)
+    return code
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -27,7 +27,8 @@ These repository documents are the durable project memory and take precedence ov
 
 ## Current state
 
-- The route is intentionally empty except for `.gitkeep`.
+- The route is no longer empty. Current `main` contains `background-gpt/`, `large-doc-editor/`, `response-watch/`, `taskbridge/`, and `screen-on/` child roots under `plugins/termux/`.
+- These child implementations and evidence do not establish a route-wide Termux production release authority.
 - No `latest.js` or `install.js` is published yet.
 - No Termux production release branch, production manifest, or production version has been established yet; preserve these as `UNKNOWN` until repository evidence establishes them.
 - Existing plugin paths such as `plugins/simcore/`, `plugins/devpass/`, and `plugins/usage-dashboard/` are untouched.

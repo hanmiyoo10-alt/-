@@ -29,3 +29,59 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/467)
 - Event ID: `cd00586f76eddaae1e9e1e9ad1a02f4b3d729e5cb369f9656f303c771c6b38ca`
 <!-- canonical-main-doc-promoted:cd00586f76eddaae1e9e1e9ad1a02f4b3d729e5cb369f9656f303c771c6b38ca -->
+
+### 2026-09-15 — SimCore candidate receipt persistence must consume protected-main checked-PR handoff
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2026)
+- Event ID: `129d0dd1bc54a00daecceca1a202714b9fb07f07be5bcb8985ffadcb283b64d6`
+<!-- canonical-main-doc-promoted:129d0dd1bc54a00daecceca1a202714b9fb07f07be5bcb8985ffadcb283b64d6 -->
+
+### 2026-09-20 — Register independent repository root scopes
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2590)
+- Event ID: `53950c973fd869c9ca5238eb41389d12962516436d2bbcd336aa9e5cc2dee4de`
+<!-- canonical-main-doc-promoted:53950c973fd869c9ca5238eb41389d12962516436d2bbcd336aa9e5cc2dee4de -->
+
+### 2026-09-20 — App API Mod Lab target taxonomy
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2597)
+- Event ID: `4c460b92e89c9074bce93d7f1317c653eee7fa0c73920ce78ebe8147f1e277a7`
+<!-- canonical-main-doc-promoted:4c460b92e89c9074bce93d7f1317c653eee7fa0c73920ce78ebe8147f1e277a7 -->
+
+### 2026-09-20 — Reconcile legacy App API Mod Lab candidates
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2599)
+- Event ID: `61688d68233bfcc2e2f58b24dea3c7ca105f7ed34436fbc775188409b019c092`
+<!-- canonical-main-doc-promoted:61688d68233bfcc2e2f58b24dea3c7ca105f7ed34436fbc775188409b019c092 -->
+
+### 2026-09-20 — App API Mod Lab target category taxonomy
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2603)
+- Event ID: `9bbf31e5fe6dd90d0c03957c7859fed3aee3fbd100d9124b2f1877dac827387d`
+<!-- canonical-main-doc-promoted:9bbf31e5fe6dd90d0c03957c7859fed3aee3fbd100d9124b2f1877dac827387d -->
+
+### 2026-09-20 — CANONICAL-MAIN-V1.2 — ambient operations, circuit breakers, deterministic closure
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/650)
+- Event ID: `4bedb4b2e8e02acec01891d91e7fcadf3a26d4ff8eed721db5e3782b18997c11`
+<!-- canonical-main-doc-promoted:4bedb4b2e8e02acec01891d91e7fcadf3a26d4ff8eed721db5e3782b18997c11 -->
+
+### 2026-09-20 — Mobile Coder Lab: device-local execution with sanitized GPT review boundary
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2180)
+- Event ID: `7a7d689f323aa3f3db53d29377d3006cec345aa3fb64cba37428271afa21d1d7`
+<!-- canonical-main-doc-promoted:7a7d689f323aa3f3db53d29377d3006cec345aa3fb64cba37428271afa21d1d7 -->
+
+### 2026-09-20 — Register independent Termux subprojects
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2593)
+- Event ID: `fdb5e33db79b46abb7cabbd66cf49c67df1c0658fd55ef1025e218d327f9ae2c`
+<!-- canonical-main-doc-promoted:fdb5e33db79b46abb7cabbd66cf49c67df1c0658fd55ef1025e218d327f9ae2c -->

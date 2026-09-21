@@ -9,6 +9,7 @@ on:
     paths:
       - '.github/plugin-control-plane/**'
       - '.github/usage-dashboard/releases/**'
+      - 'plugins/risu/local/**'
       - 'plugins/devpass/**'
       - 'plugins/termux/large-doc-editor/**'
       - 'voyage-token-check/**'

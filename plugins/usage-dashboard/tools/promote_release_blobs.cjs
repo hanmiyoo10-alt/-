@@ -2,14 +2,19 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const {
+  LEGACY_ROOT,
+  TARGET_ROOT,
+  DEFAULT_PROFILE,
+  DUAL_PUBLICATION_PROFILE,
+  artifactPathsForRoot,
+  mapProfileArtifacts,
+} = require('./release_path_profile.cjs');
 
-const ALLOWLIST = Object.freeze([
-  'plugins/usage-dashboard/latest.js',
-  'plugins/usage-dashboard/runtime/bridge-engine.mjs',
-  'plugins/usage-dashboard/runtime/bridge-manager.cjs',
-  'plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh',
-  'plugins/usage-dashboard/runtime/product-manifest.json',
-]);
+const ALLOWLIST = Object.freeze(artifactPathsForRoot(DEFAULT_PROFILE.sourceRoot));
+const PUBLICATION_ALLOWLIST = Object.freeze(
+  DUAL_PUBLICATION_PROFILE.publicationRoots.flatMap((root) => artifactPathsForRoot(root)),
+);
 
 function parseVersion(value) {
   const match = String(value || '').match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/);
@@ -53,6 +58,44 @@ function sameBlobs(a, b) {
   return ALLOWLIST.every((path) => a?.[path]?.sha && a[path].sha === b?.[path]?.sha);
 }
 
+function sameMappedBlobs(sourceBlobs, publicationBlobs, publicationRoot) {
+  const publicationPaths = artifactPathsForRoot(publicationRoot);
+  return ALLOWLIST.every((sourcePath, index) => {
+    const publicationPath = publicationPaths[index];
+    return sourceBlobs?.[sourcePath]?.sha && sourceBlobs[sourcePath].sha === publicationBlobs?.[publicationPath]?.sha;
+  });
+}
+
+function classifyMirrorState(legacyBlobs, targetBlobs) {
+  const targetPaths = artifactPathsForRoot(TARGET_ROOT);
+  const legacyPaths = artifactPathsForRoot(LEGACY_ROOT);
+  let present = 0;
+  const divergent = [];
+  for (let index = 0; index < targetPaths.length; index += 1) {
+    const targetPath = targetPaths[index];
+    const targetSha = targetBlobs?.[targetPath]?.sha || '';
+    if (!targetSha) continue;
+    present += 1;
+    const legacySha = legacyBlobs?.[legacyPaths[index]]?.sha || '';
+    if (!legacySha || targetSha !== legacySha) divergent.push(targetPath);
+  }
+  if (present === 0) return Object.freeze({state:'ABSENT', present, divergent:Object.freeze([])});
+  if (present !== targetPaths.length) {
+    return Object.freeze({state:'PARTIAL', present, divergent:Object.freeze([...divergent])});
+  }
+  if (divergent.length) {
+    return Object.freeze({state:'DIVERGED', present, divergent:Object.freeze([...divergent])});
+  }
+  return Object.freeze({state:'COMPLETE_MATCH', present, divergent:Object.freeze([])});
+}
+
+function assertMirrorState(legacyBlobs, targetBlobs) {
+  const state = classifyMirrorState(legacyBlobs, targetBlobs);
+  if (state.state === 'PARTIAL') throw new Error(`RELEASE_MIRROR_PARTIAL:${state.present}/${ALLOWLIST.length}`);
+  if (state.state === 'DIVERGED') throw new Error(`RELEASE_MIRROR_DIVERGED:${state.divergent.join(',')}`);
+  return state;
+}
+
 function decidePromotion(candidateManifest, releaseManifest, candidateBlobs, releaseBlobs) {
   if (candidateManifest?.product !== 'Local Usage Dashboard' || releaseManifest?.product !== 'Local Usage Dashboard') {
     throw new Error('UNEXPECTED_PRODUCT');
@@ -93,6 +136,34 @@ function treeEntries(candidateBlobs) {
     if (!item || item.type !== 'blob' || !item.sha || !item.mode) throw new Error(`INVALID_CANDIDATE_TREE_ENTRY:${path}`);
     return {path, mode:item.mode, type:'blob', sha:item.sha};
   });
+}
+
+function publicationTreeEntries(candidateBlobs, profile = DUAL_PUBLICATION_PROFILE) {
+  return mapProfileArtifacts(profile).flatMap(({sourcePath, publicationPaths}) => {
+    const item = candidateBlobs[sourcePath];
+    if (!item || item.type !== 'blob' || !item.sha || !item.mode) {
+      throw new Error(`INVALID_CANDIDATE_TREE_ENTRY:${sourcePath}`);
+    }
+    return publicationPaths.map((publicationPath) => ({
+      path:publicationPath,
+      mode:item.mode,
+      type:'blob',
+      sha:item.sha,
+    }));
+  });
+}
+
+function artifactEntriesFromTree(map, root, {allowMissing = false} = {}) {
+  const result = {};
+  for (const artifactPath of artifactPathsForRoot(root)) {
+    const entry = map.get(artifactPath);
+    if (!entry || entry.type !== 'blob' || !entry.sha) {
+      if (allowMissing) continue;
+      throw new Error(`MISSING_ARTIFACT:${artifactPath}`);
+    }
+    result[artifactPath] = {sha:entry.sha, mode:entry.mode, type:entry.type};
+  }
+  return result;
 }
 
 async function api(method, repository, endpoint, token, body, allow404 = false) {
@@ -140,8 +211,17 @@ function manifestFrom(blobs) {
 }
 
 async function assertNoRuntimeSource(repository, releaseBranch, token) {
-  const found = await api('GET', repository, `/contents/plugins/usage-dashboard/runtime-src?ref=${encodeURIComponent(releaseBranch)}`, token, null, true);
-  if (found) throw new Error('RELEASE_RUNTIME_SOURCE_PRESENT');
+  for (const root of DUAL_PUBLICATION_PROFILE.publicationRoots) {
+    const found = await api(
+      'GET',
+      repository,
+      `/contents/${root}/runtime-src?ref=${encodeURIComponent(releaseBranch)}`,
+      token,
+      null,
+      true,
+    );
+    if (found) throw new Error(`RELEASE_RUNTIME_SOURCE_PRESENT:${root}`);
+  }
 }
 
 function classifyPostVerifyRef(observedSha, releaseBase, expectedSha) {
@@ -178,10 +258,13 @@ async function promote({repository, candidateSha, releaseBranch, token}) {
 
   const releaseRef = await api('GET', repository, `/branches/${encodeURIComponent(releaseBranch)}`, token);
   const releaseBase = releaseRef.commit.sha;
+  const releaseTree = await readTree(repository, releaseBase, token);
   const release = await readArtifactSet(repository, releaseBase, token);
+  const releaseTarget = artifactEntriesFromTree(releaseTree.map, TARGET_ROOT, {allowMissing:true});
+  const mirror = assertMirrorState(release, releaseTarget);
   const releaseManifest = manifestFrom(release);
   const decision = decidePromotion(candidateManifest, releaseManifest, candidate, release);
-  console.log(`${decision.reason}:${candidateManifest.productVersion}:release=${releaseManifest.productVersion}`);
+  console.log(`${decision.reason}:${candidateManifest.productVersion}:release=${releaseManifest.productVersion}:mirror=${mirror.state}`);
   if (decision.kind === 'stale') return {status:'stale', releaseBase};
   if (decision.kind === 'noop') {
     await assertNoRuntimeSource(repository, releaseBranch, token);
@@ -193,7 +276,7 @@ async function promote({repository, candidateSha, releaseBranch, token}) {
   const candidateTree = await readTree(repository, candidateSha, token);
   const candidateEntries = {};
   for (const path of ALLOWLIST) candidateEntries[path] = {...candidate[path], ...candidateTree.map.get(path)};
-  const newTree = await api('POST', repository, '/git/trees', token, {base_tree:releaseCommit.tree.sha, tree:treeEntries(candidateEntries)});
+  const newTree = await api('POST', repository, '/git/trees', token, {base_tree:releaseCommit.tree.sha, tree:publicationTreeEntries(candidateEntries)});
   const newCommit = await api('POST', repository, '/git/commits', token, {
     message:`release: promote Local Usage Dashboard ${candidateManifest.productVersion} exact artifacts`,
     tree:newTree.sha,
@@ -207,16 +290,21 @@ async function promote({repository, candidateSha, releaseBranch, token}) {
 
   await verifyReleaseRefAfterUpdate({repository, releaseBranch, token, releaseBase, expectedSha:newCommit.sha});
   const published = await readArtifactSet(repository, newCommit.sha, token);
+  const publishedTree = await readTree(repository, newCommit.sha, token);
+  const publishedTarget = artifactEntriesFromTree(publishedTree.map, TARGET_ROOT);
+  const publishedMirror = assertMirrorState(published, publishedTarget);
   if (!sameBlobs(candidate, published)) throw new Error('RELEASE_BLOB_IDENTITY_MISMATCH');
+  if (!sameMappedBlobs(candidate, publishedTarget, TARGET_ROOT)) throw new Error('RELEASE_TARGET_BLOB_IDENTITY_MISMATCH');
+  if (publishedMirror.state !== 'COMPLETE_MATCH') throw new Error(`RELEASE_MIRROR_POSTVERIFY:${publishedMirror.state}`);
   const publishedManifest = manifestFrom(published);
   if (JSON.stringify(tuple(publishedManifest)) !== JSON.stringify(tuple(candidateManifest))) throw new Error('RELEASE_TUPLE_MISMATCH');
   validateCandidate(publishedManifest, published);
   await assertNoRuntimeSource(repository, releaseBranch, token);
   const commitView = await api('GET', repository, `/commits/${newCommit.sha}`, token);
-  const unexpected = (commitView.files || []).map((file) => file.filename).filter((path) => !ALLOWLIST.includes(path));
+  const unexpected = (commitView.files || []).map((file) => file.filename).filter((path) => !PUBLICATION_ALLOWLIST.includes(path));
   if (unexpected.length) throw new Error(`UNEXPECTED_RELEASE_PATHS:${unexpected.join(',')}`);
   console.log(`DEPLOYED:${candidateManifest.productVersion}:${newCommit.sha}`);
-  return {status:'deployed', releaseBase, commitSha:newCommit.sha};
+  return {status:'deployed', releaseBase, commitSha:newCommit.sha, mirrorState:publishedMirror.state};
 }
 
 async function main() {
@@ -231,5 +319,21 @@ async function main() {
   if (result.status === 'stale') process.exitCode = 0;
 }
 
-module.exports = {ALLOWLIST, parseVersion, compareVersions, tuple, sameBlobs, decidePromotion, validateCandidate, treeEntries, classifyPostVerifyRef};
+module.exports = {
+  ALLOWLIST,
+  PUBLICATION_ALLOWLIST,
+  parseVersion,
+  compareVersions,
+  tuple,
+  sameBlobs,
+  sameMappedBlobs,
+  classifyMirrorState,
+  assertMirrorState,
+  decidePromotion,
+  validateCandidate,
+  treeEntries,
+  publicationTreeEntries,
+  artifactEntriesFromTree,
+  classifyPostVerifyRef,
+};
 if (require.main === module) main().catch((error) => { console.error(error?.stack || String(error)); process.exitCode = 1; });

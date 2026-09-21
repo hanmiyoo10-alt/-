@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import hashlib
 import os
 
 
@@ -60,6 +61,11 @@ def resolve_workspace_path(workspace: Path, relative_path: str) -> Path:
     return candidate
 
 
+def source_digest(source_bytes: bytes) -> bytes:
+    """Return the byte-level identity used for save conflict detection."""
+    return hashlib.sha256(source_bytes).digest()
+
+
 @dataclass
 class DocumentSession:
     workspace: Path
@@ -72,8 +78,9 @@ class DocumentSession:
         if not self.path.is_file():
             raise FileNotFoundError(self.relative_path)
 
-        self.original_mtime_ns = self.path.stat().st_mtime_ns
-        self.chunks = split_text(self.path.read_text(encoding="utf-8"), self.target_chars)
+        source_bytes = self.path.read_bytes()
+        self.original_source_digest = source_digest(source_bytes)
+        self.chunks = split_text(source_bytes.decode("utf-8"), self.target_chars)
         self.dirty = False
 
     @property
@@ -89,18 +96,33 @@ class DocumentSession:
         self.chunks[index] = text
         self.dirty = True
 
-    def save(self) -> None:
-        """Write atomically and fail closed if another process changed the source."""
-        if not self.path.exists():
-            raise SourceChangedError("source file disappeared")
+    def _read_source_bytes(self) -> bytes:
+        try:
+            return self.path.read_bytes()
+        except FileNotFoundError as exc:
+            raise SourceChangedError("source file disappeared") from exc
 
-        current_mtime_ns = self.path.stat().st_mtime_ns
-        if current_mtime_ns != self.original_mtime_ns:
+    def _verify_source_unchanged(self) -> None:
+        current_bytes = self._read_source_bytes()
+        if source_digest(current_bytes) != self.original_source_digest:
             raise SourceChangedError("source file changed outside this editor")
 
-        tmp_path = self.path.with_name(f".{self.path.name}.termux-editor.tmp")
-        tmp_path.write_text("".join(self.chunks), encoding="utf-8")
-        os.replace(tmp_path, self.path)
+    def save(self) -> None:
+        """Write atomically after two source-byte identity checks."""
+        self._verify_source_unchanged()
 
-        self.original_mtime_ns = self.path.stat().st_mtime_ns
+        output_bytes = "".join(self.chunks).encode("utf-8")
+        tmp_path = self.path.with_name(f".{self.path.name}.termux-editor.tmp")
+        try:
+            tmp_path.write_bytes(output_bytes)
+            self._verify_source_unchanged()
+            os.replace(tmp_path, self.path)
+        except Exception:
+            try:
+                tmp_path.unlink()
+            except FileNotFoundError:
+                pass
+            raise
+
+        self.original_source_digest = source_digest(output_bytes)
         self.dirty = False

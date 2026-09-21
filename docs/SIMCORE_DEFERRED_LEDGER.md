@@ -318,7 +318,7 @@ merge_commit_sha != null
 → NOT MERGED
 ```
 
-This is backed by a real repository specimen: PR #109 is open with `merged_at = null` while exposing a non-null `merge_commit_sha`. SYS-36 therefore keeps PR state, `merged_at`, merge identity, mutable branch refs, exact expected base/head identities, and fixed-SHA ancestry facts separate rather than promoting one convenience field into stronger truth.
+This is backed by a real repository specimen: at SYS-36 specimen capture, PR #109 was open with `merged_at = null` while exposing a non-null `merge_commit_sha`. On 2026-09-20, S-11 classified #109 as `COMMAND_ONLY_DONE` and it was manually closed without merge. The historical specimen still proves the intended rule: SYS-36 keeps PR state, `merged_at`, merge identity, mutable branch refs, exact expected base/head identities, and fixed-SHA ancestry facts separate rather than promoting one convenience field into stronger truth.
 
 Generic base movement is not an error without an explicit exact-base contract. A closed/merged historical PR may remain valid even after its head branch is deleted. Live relationship captures must re-read required mutable refs and fail closed on mixed-time/raced snapshots rather than returning a false CLEAN result.
 

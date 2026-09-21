@@ -2,13 +2,15 @@
 
 This document registers DevPass with canonical-main without replacing its existing update-channel implementation.
 
-- Canonical project root: `plugins/devpass/`
-- Declared update-channel evidence: `plugins/devpass/README.md`
-- Declared artifact locator in the repository registry: `plugins/devpass/latest.js`
+- Canonical project root: `plugins/risu/local/devpass/`
+- Declared update-channel evidence: `plugins/risu/local/devpass/README.md`
+- Fixed artifact locator in the repository registry: `plugins/devpass/latest.js`
 - Current observed artifact state: `DECLARED_MISSING`
 - Durable-memory profile: `check-only`
 
-The existing DevPass declaration remains authoritative evidence. Bootstrap registration adds locators and validation only; it does not create the currently missing artifact, a new release branch, publisher, or main writer.
+The canonical DevPass declaration now lives under the Local family. The fixed update artifact target intentionally remains at `plugins/devpass/latest.js`; moving the project/evidence root does not create the currently missing artifact, a new release branch, publisher, or main writer.
+
+The legacy `plugins/devpass/README.md` is a compatibility/update-channel pointer only. It is not a second mutable declaration body.
 
 ## Repository common-rules inheritance
 
@@ -23,14 +25,14 @@ The common-rules layer does not own this project's mutable production, release, 
 <!-- PLUGIN_RELEASE_STATE_START -->
 - Product: `UNKNOWN`
 - Release branch: `main` (declared update channel, not a separately registered release authority)
-- Source: `plugins/devpass/README.md`
+- Source: `plugins/risu/local/devpass/README.md`
 <!-- PLUGIN_RELEASE_STATE_END -->
 
 This block is intentionally not machine-written while the profile remains `check-only`.
 
 ## Operating contract
 
-1. Preserve the fixed GitHub HTTPS update-channel declaration documented in `plugins/devpass/README.md`.
+1. Preserve the fixed GitHub HTTPS update-channel declaration documented in `plugins/risu/local/devpass/README.md`; its artifact target remains `plugins/devpass/latest.js`.
 2. `plugins/devpass/latest.js` being declared does not make it present; current control-plane evidence reports `DECLARED_MISSING`.
 3. Never create a placeholder artifact merely to make bootstrap validation green.
 4. Never commit API keys, session/cookie data, bridge tokens, organization/project identifiers, or other secrets.

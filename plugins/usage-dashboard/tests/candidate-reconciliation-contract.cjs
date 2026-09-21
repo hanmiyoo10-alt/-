@@ -20,6 +20,9 @@ const CRITICAL = [
 
 const source = fs.readFileSync(TOOL, 'utf8');
 for (const marker of [
+  "parser.add_argument('--root'",
+  'configure_root(args.root)',
+  "'--root', ACTIVE_ROOT",
   "build_bridge_engine.cjs'), '--write'",
   'sync_manager_engine_hash()',
   'sync_manifest_hashes()',

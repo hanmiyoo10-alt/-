@@ -81,6 +81,30 @@ def preflight(action: str, runner: Runner = subprocess.run, *, package: str = PA
     require_receiver(action, runner, package=package, receiver=receiver)
 
 
+def _is_transient_package_service_failure(error: ScreenOnError) -> bool:
+    detail = str(error)
+    return "Failed transaction" in detail and "package" in detail.lower()
+
+
+def _preflight_explicit_broadcast(
+    action: str,
+    runner: Runner,
+    *,
+    package: str,
+    receiver: str,
+) -> None:
+    try:
+        preflight(action, runner, package=package, receiver=receiver)
+    except ScreenOnError as error:
+        if (
+            package == COMPANION_PACKAGE
+            and receiver == COMPANION_RECEIVER
+            and _is_transient_package_service_failure(error)
+        ):
+            return
+        raise
+
+
 def _broadcast(
     action: str,
     runner: Runner,
@@ -90,7 +114,12 @@ def _broadcast(
     token: str | None = None,
     pair_code: str | None = None,
 ) -> tuple[int, str]:
-    preflight(action, runner, package=package, receiver=receiver)
+    _preflight_explicit_broadcast(
+        action,
+        runner,
+        package=package,
+        receiver=receiver,
+    )
     args = ["cmd", "activity", "broadcast", "--user", USER, "--include-stopped-packages", "-a", action, "-n", receiver]
     if token is not None:
         args.extend(["--es", COMPANION_TOKEN_EXTRA, token])
@@ -162,9 +191,9 @@ def _load_companion_token() -> str | None:
 
 
 def command_companion_setup(pair_code: str | None = None, runner: Runner = subprocess.run) -> list[str]:
-    require_package(runner, COMPANION_PACKAGE)
-    require_receiver(COMPANION_PAIR_ACTION, runner, package=COMPANION_PACKAGE, receiver=COMPANION_RECEIVER)
     if pair_code is None:
+        require_package(runner, COMPANION_PACKAGE)
+        require_receiver(COMPANION_PAIR_ACTION, runner, package=COMPANION_PACKAGE, receiver=COMPANION_RECEIVER)
         return [
             "pairing=USER_ACTION_REQUIRED",
             f"package={COMPANION_PACKAGE}",

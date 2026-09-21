@@ -36,13 +36,19 @@ class FakeRunner:
         }
         self.broadcast_returncode = 0
         self.start_returncode = 0
+        self.package_path_error = None
+        self.receiver_query_error = None
 
     def __call__(self, args, **kwargs):
         self.calls.append(list(args))
         if args[:2] == ["pm", "path"]:
             package = args[-1]
+            if self.package_path_error is not None:
+                return subprocess.CompletedProcess(args, 1, "", self.package_path_error)
             return subprocess.CompletedProcess(args, 0, "package:/fake/base.apk\n", "") if package in self.packages else subprocess.CompletedProcess(args, 1, "", "missing")
         if args[:3] == ["cmd", "package", "query-receivers"]:
+            if self.receiver_query_error is not None:
+                return subprocess.CompletedProcess(args, 1, "", self.receiver_query_error)
             package = args[args.index("-p") + 1]
             action = args[args.index("-a") + 1]
             receiver = self.receivers.get((package, action))
@@ -86,6 +92,13 @@ class ScreenOnTests(unittest.TestCase):
         actions = [c[c.index("-a") + 1] for c in runner.calls if c[:3] == ["cmd", "activity", "broadcast"]]
         self.assertEqual(actions, [screen_on.ADD_ACTION, screen_on.REMOVE_ACTION])
 
+    def test_eonsoft_transient_package_service_failure_still_fails_closed(self):
+        runner = FakeRunner()
+        runner.package_path_error = "cmd: Failure calling service package: Failed transaction (2147483646)"
+        with self.assertRaises(screen_on.ScreenOnError):
+            screen_on.command_on(runner)
+        self.assertFalse(any(c[:3] == ["cmd", "activity", "broadcast"] for c in runner.calls))
+
     def test_missing_eonsoft_package_fails_closed(self):
         runner = FakeRunner(); runner.packages.remove(screen_on.PACKAGE)
         with self.assertRaises(screen_on.ScreenOnError): screen_on.command_on(runner)
@@ -116,6 +129,37 @@ class ScreenOnTests(unittest.TestCase):
         self.assertEqual(screen_on._load_companion_token(), "b" * 64)
         self.assertEqual(screen_on.COMPANION_TOKEN_PATH.stat().st_mode & 0o777, 0o600)
         self.assertIn("pairing=YES", lines)
+
+    def test_companion_pair_bypasses_only_transient_package_service_preflight_and_broadcasts_once(self):
+        runner = FakeRunner()
+        runner.package_path_error = "cmd: Failure calling service package: Failed transaction (2147483646)"
+        with mock.patch.object(screen_on.secrets, "token_hex", return_value="c" * 64):
+            lines = screen_on.command_companion_setup("12345678", runner)
+        broadcasts = [c for c in runner.calls if c[:3] == ["cmd", "activity", "broadcast"]]
+        self.assertEqual(len(broadcasts), 1)
+        self.assertEqual(
+            broadcasts[0][broadcasts[0].index("-a") + 1],
+            screen_on.COMPANION_PAIR_ACTION,
+        )
+        self.assertEqual(screen_on._load_companion_token(), "c" * 64)
+        self.assertIn("pairing=YES", lines)
+
+    def test_companion_pair_bypasses_transient_receiver_query_failure_once(self):
+        runner = FakeRunner()
+        runner.receiver_query_error = "cmd: Failure calling service package: Failed transaction (2147483646)"
+        with mock.patch.object(screen_on.secrets, "token_hex", return_value="d" * 64):
+            screen_on.command_companion_setup("12345678", runner)
+        broadcasts = [c for c in runner.calls if c[:3] == ["cmd", "activity", "broadcast"]]
+        self.assertEqual(len(broadcasts), 1)
+        self.assertEqual(screen_on._load_companion_token(), "d" * 64)
+
+    def test_companion_missing_package_still_fails_closed_without_broadcast(self):
+        runner = FakeRunner()
+        runner.packages.remove(screen_on.COMPANION_PACKAGE)
+        with self.assertRaises(screen_on.ScreenOnError):
+            screen_on.command_companion_setup("12345678", runner)
+        self.assertFalse(any(c[:3] == ["cmd", "activity", "broadcast"] for c in runner.calls))
+        self.assertIsNone(screen_on._load_companion_token())
 
     def test_companion_setup_rejection_does_not_store_token(self):
         runner = FakeRunner()

@@ -44,6 +44,8 @@ For companion setup, run `setup` once to get the instructions, then open **Termu
 
 `diagnostic` is intentionally available before pairing and returns only a fixed sanitized `startup_phase` receipt. It sends no capability token and cannot mutate overlay or pairing state. `doctor` includes the same startup phase before the normal status summary. PAIR/ON/OFF/STATUS keep their existing capability-token boundary. An attached overlay is stronger evidence than transport success, but `keep_awake_effect` remains `UNKNOWN` until the main phone passes the same physical timeout observation used for #2194.
 
+On the tested Android 16 device, `pm path` / `cmd package` can transiently fail with a Binder `Failed transaction` even while an explicit component broadcast is healthy. For the repo-owned companion only, that exact transient preflight failure may fall through to one explicit `cmd activity broadcast -n io.hanmiyoo.screenoncompanion/.ScreenOnReceiver` attempt. Real package absence and non-transient preflight failures remain fail-closed. PAIR transport itself is never retried automatically, because the one-time code is consumed by an actual pairing attempt.
+
 ## Tests
 
 ```bash

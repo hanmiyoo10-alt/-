@@ -326,3 +326,31 @@ The seal is repository-only. It changes no release intent, candidate, approval, 
 The unchanged R2.3 closure evaluator remains the sole close-eligibility classifier. Before the administrative PR merges, `terminalClosurePrMerged=false` and #660 is not close-eligible. After merge, closure still requires protected-main reobservation, current production-authority reobservation, presence of the exact seal evidence ref, and an evaluator result of `closeEligible=true`.
 
 #679 and #704 are intentionally not included. Their debt remains owned by #691 and requires separate fresh authority.
+
+
+## 12. Cleanup-32 — second one-item historical admin seal
+
+Cleanup-31 #2708 proved the first historical administrative seal for #660 without changing runtime, release-simcore, publication authority, or the unchanged R2.3 closure evaluator.
+
+Cleanup-32 #2712 reuses that proven path for exactly one additional debt item:
+
+```text
+work item = #679
+release = v0.64.10
+terminal disposition = LIVE_FAIL_HANDOFF_TO_NEW_RELEASE
+HUMAN_EVIDENCE = docs/SIMCORE_LIVE_06410_HOST_LOCAL_CAPSULE_OVERSIZE_2026-08-28.md
+direct successor = #704 / v0.64.11
+seal evidence = docs/SIMCORE_R2_4_HISTORICAL_TERMINAL_DEBT_SEAL_06410_2026-09-21.md
+```
+
+The first #660 proof remains immutable. Machine status therefore preserves the existing `historicalAdminSeal` compatibility projection for #660 and introduces an append-only `historicalAdminSeals[]` ledger.
+
+The ledger records separate transactions, not one multi-item PR:
+- entry 0 = previously proven #660 seal;
+- entry 1 = #679 seal from Cleanup-32;
+- each entry retains `maxDebtItems = 1`;
+- #704 is not a seal target in this transaction.
+
+The #679 seal remains non-close-eligible before merge. Merge plus protected-main reobservation, current production-authority reobservation, presence of the exact seal document, and `closeEligible=true` from the unchanged R2.3 evaluator remain mandatory before native closure.
+
+No chain walk, automatic issue closer, publisher, polling, runtime mutation, release-simcore mutation, or clean-path PR-count change is introduced.

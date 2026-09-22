@@ -9,6 +9,13 @@ const leaseId = 'a'.repeat(64);
 const packetHash = 'b'.repeat(64);
 const baseSha = 'c'.repeat(40);
 const observedSha = 'd'.repeat(40);
+const preservedDiffSha = 'f'.repeat(64);
+const emptyDiffSha = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+const cleanupPath = 'path:products/chatgpt-mobile-coder-lab/device-ops/repository-patch/__pycache__/mcl-worktree-patch.cpython-312.pyc';
+const preservedPaths = [
+  'path:products/chatgpt-mobile-coder-lab/coordination/repository-implementation/README.md',
+  'path:products/chatgpt-mobile-coder-lab/device-ops/repository-patch/README.md',
+];
 let passed = 0;
 function test(name, fn) {
   try { fn(); passed += 1; process.stdout.write(`PASS ${name}\n`); }
@@ -57,6 +64,38 @@ function receiptInput(overrides = {}) {
     requiredUnknownRefs: [],
     ...overrides,
   };
+}
+function cleanupManifestInput(overrides = {}) {
+  return manifestInput({
+    packetRef: '#2804',
+    phaseId: '2804-exact-one-pyc-cleanup',
+    scopes: [cleanupPath, 'surface:mcl:validation-residue-cleanup:2775'],
+    workspace: {
+      kind: 'repository', branch: 'server/mcl-packet-2775',
+      worktree: '/root/nyang-worktrees/mcl-packet-2775',
+    },
+    expectedOutputRefs: [cleanupPath],
+    ...overrides,
+  });
+}
+function preservationInput(overrides = {}) {
+  return {
+    kind: 'TRACKED_DIFF_PRESERVED',
+    beforeSha256: preservedDiffSha,
+    afterSha256: preservedDiffSha,
+    preservedPathRefs: preservedPaths,
+    evidenceRef: 'run:9',
+    ...overrides,
+  };
+}
+function preservedDirtyReceiptInput(overrides = {}) {
+  return receiptInput({
+    outputRefs: [cleanupPath],
+    validationRefs: ['run:9'],
+    workspaceResult: 'preserved_dirty',
+    workspacePreservation: preservationInput(),
+    ...overrides,
+  });
 }
 
 const manifest = handoff.buildManifest(manifestInput());
@@ -238,6 +277,91 @@ test('complete repository phase requires clean workspace result', () => expectTh
   () => handoff.buildCompletionReceipt(manifest, receiptInput({ workspaceResult: 'unknown' })),
   /RECEIPT_COMPLETE_WORKSPACE_NOT_CONVERGED/,
 ));
+test('legacy completion receipt omits optional preservation field', () => {
+  assert.equal('workspacePreservation' in receipt, false);
+  assert.doesNotMatch(handoff.renderCompletionReceipt(receipt), /workspacePreservation/);
+});
+test('reviewed cleanup accepts exact preserved-dirty completion proof', () => {
+  const m = handoff.buildManifest(cleanupManifestInput());
+  const r = handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput());
+  assert.equal(r.workspaceResult, 'preserved_dirty');
+  assert.deepEqual(r.workspacePreservation.preservedPathRefs, [...preservedPaths].sort());
+  assert.equal(handoff.validateReceiptAgainstManifest(r, m).status, 'VALID');
+});
+test('preserved-dirty proof requires equal non-empty tracked diff identity', () => {
+  const m = handoff.buildManifest(cleanupManifestInput());
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({
+      workspacePreservation: preservationInput({afterSha256: 'e'.repeat(64)}),
+    })),
+    /RECEIPT_PRESERVATION_DIFF_IDENTITY_MISMATCH/,
+  );
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({
+      workspacePreservation: preservationInput({beforeSha256: emptyDiffSha, afterSha256: emptyDiffSha}),
+    })),
+    /RECEIPT_PRESERVATION_EMPTY_DIFF_FORBIDDEN/,
+  );
+});
+test('preserved-dirty path proof is nonempty unique path-only and excludes cleanup path', () => {
+  const m = handoff.buildManifest(cleanupManifestInput());
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({
+      workspacePreservation: preservationInput({preservedPathRefs: []}),
+    })), /RECEIPT_PRESERVATION_PATH_REFS_INVALID/,
+  );
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({
+      workspacePreservation: preservationInput({preservedPathRefs: [preservedPaths[0], preservedPaths[0]]}),
+    })), /RECEIPT_PRESERVATION_PATH_REF_DUPLICATE/,
+  );
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({
+      workspacePreservation: preservationInput({preservedPathRefs: ['surface:mcl:test']}),
+    })), /RECEIPT_PRESERVATION_PATH_REF_INVALID/,
+  );
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({
+      workspacePreservation: preservationInput({preservedPathRefs: [cleanupPath]}),
+    })), /RECEIPT_PRESERVATION_CLEANUP_PATH_CONFLICT/,
+  );
+});
+test('preserved-dirty evidence must be explicit and included in validation refs', () => {
+  const m = handoff.buildManifest(cleanupManifestInput());
+  const missing = preservationInput();
+  delete missing.evidenceRef;
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({workspacePreservation: missing})),
+    /RECEIPT_PRESERVATION_FIELD_REQUIRED:evidenceRef/,
+  );
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({validationRefs: ['run:10']})),
+    /RECEIPT_PRESERVATION_EVIDENCE_NOT_VALIDATED/,
+  );
+});
+test('preserved-dirty completion is cleanup-manifest only', () => {
+  expectThrow(
+    () => handoff.buildCompletionReceipt(manifest, preservedDirtyReceiptInput()),
+    /RECEIPT_PRESERVED_DIRTY_MANIFEST_SCOPE_INVALID|RECEIPT_PRESERVED_DIRTY_EXPECTED_OUTPUT_MISSING/,
+  );
+});
+test('workspace preservation is forbidden outside complete preserved-dirty receipt', () => {
+  for (const workspaceResult of ['clean', 'not_applicable', 'unknown']) {
+    expectThrow(
+      () => handoff.buildCompletionReceipt(manifest, receiptInput({
+        workspaceResult, workspacePreservation: preservationInput(),
+      })), /RECEIPT_PRESERVATION_UNEXPECTED/,
+    );
+  }
+  const m = handoff.buildManifest(cleanupManifestInput());
+  for (const disposition of ['BLOCKED', 'PARTIAL']) {
+    expectThrow(
+      () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({
+        disposition, blockerRefs: disposition === 'BLOCKED' ? ['#2805'] : [],
+      })), /RECEIPT_PRESERVED_DIRTY_COMPLETE_REQUIRED/,
+    );
+  }
+});
 
 test('complete landing_metadata phase also requires clean workspace result after release', () => {
   const m = handoff.buildManifest(manifestInput({

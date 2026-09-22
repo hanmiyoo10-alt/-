@@ -92,3 +92,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2275)
 - Event ID: `cb8d6582e38ef445323883fe5282c031b0e3eadda2346cf420434161c9d66f72`
 <!-- canonical-main-doc-promoted:cb8d6582e38ef445323883fe5282c031b0e3eadda2346cf420434161c9d66f72 -->
+
+### 2026-09-22 — REPO-VALIDATION-CONTINUATION-V1 — Phase 8.7c exact checkpoint resume projection
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2768)
+- Event ID: `f39477d6d4735943da76baf5c411a9ad1de50115b93241d8bed0736f5c04a933`
+<!-- canonical-main-doc-promoted:f39477d6d4735943da76baf5c411a9ad1de50115b93241d8bed0736f5c04a933 -->

@@ -1925,3 +1925,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/068e08100915e1970558ef087399c8b1ceb55e44)
 - Event ID: `59623b0426c5acc9563400e08d357525c64dfc05e237cfda77cde943d5d1a9cd`
 <!-- canonical-main-doc-promoted:59623b0426c5acc9563400e08d357525c64dfc05e237cfda77cde943d5d1a9cd -->
+
+### 2026-09-22 — Merge pull request #2788 from hanmiyoo10-alt/server/mcl-packet-2770
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `d4f055765823a06e333a99f60fde0791ef6e3fca`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d4f055765823a06e333a99f60fde0791ef6e3fca)
+- Event ID: `4574d36a08c72f9f5dab5ab1c7bc548d2dae28cb5ae94ec281c452431330cdfc`
+<!-- canonical-main-doc-promoted:4574d36a08c72f9f5dab5ab1c7bc548d2dae28cb5ae94ec281c452431330cdfc -->

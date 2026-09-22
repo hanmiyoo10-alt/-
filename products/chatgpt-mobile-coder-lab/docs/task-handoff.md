@@ -154,3 +154,23 @@ products/chatgpt-mobile-coder-lab/docs/decisions.md  # D-014 pointer only
 ```
 
 Incompatible changes to identity, marker, route/workspace, lease-release, privacy, or authority semantics require reviewed versioning rather than silent v1 drift.
+
+## Completion receipt set companion
+
+The additive `completion-receipt-set.cjs` helper classifies multiple immutable D-014 `COMPLETE` receipt snapshots for one exact manifest. It reuses `task-handoff.cjs` receipt parsing and integrity checks; it does not define a second receipt schema.
+
+Input is one bounded regular JSON file containing only:
+- exact `manifestId`;
+- bounded `receiptTexts` containing complete rendered D-014 receipt envelopes.
+
+The helper collapses byte-equivalent receipt replay by `receiptId`, then compares the phase-completion core. Evidence-snapshot locators (`outputRefs`, `validationRefs`, `observedRefs`, and release `evidenceRef`) are deliberately excluded from that core.
+
+Results are:
+- `SINGLE` — one unique valid COMPLETE receipt;
+- `MULTIPLE_EQUIVALENT` — multiple unique receipts with one completion core;
+- `CONFLICT` — valid receipts disagree on completion-core semantics;
+- `UNKNOWN` — malformed/invalid/non-COMPLETE/mismatched evidence cannot be classified safely.
+
+For `SINGLE` and `MULTIPLE_EQUIVALENT`, `representativeReceiptId` is only the lexicographically smallest stable locator. It is not canonical truth, latest-wins selection, or evidence-strength ranking.
+
+The classifier has no GitHub/network lookup, clock/age semantics, comment mutation, lease/worktree authority, or receipt rewrite path. It emits only bounded IDs/digests/disposition metadata and never raw receipt bodies.

@@ -149,6 +149,34 @@ test('landing_metadata manifest rejects mismatched scope identity and missing ob
     workspace: { kind: 'landing_metadata', branch: 'server/work', worktree: '/root/nyang-repo' },
   })), /LANDING_METADATA_BASE_SHA_REQUIRED/);
 });
+test('landing_branch_repair manifest accepts only exact M/M identity and scope', () => {
+  const m = handoff.buildManifest(manifestInput({
+    phaseId: 'landing-branch-repair-m',
+    route: 'M',
+    executor: 'M',
+    scopes: ['surface:mcl-landing-branch:M'],
+    workspace: { kind: 'landing_branch_repair', branch: 'mainphone/work', worktree: '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work' },
+    observedBaseSha: baseSha,
+  }));
+  assert.equal(m.route, 'M');
+  assert.equal(m.executor, 'M');
+  assert.equal(m.workspace.kind, 'landing_branch_repair');
+});
+test('landing_branch_repair manifest rejects fallback mismatched identity scope and missing base', () => {
+  const base = {
+    phaseId: 'landing-branch-repair-m',
+    route: 'M',
+    executor: 'M',
+    scopes: ['surface:mcl-landing-branch:M'],
+    workspace: { kind: 'landing_branch_repair', branch: 'mainphone/work', worktree: '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work' },
+    observedBaseSha: baseSha,
+  };
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, route:'S'})), /LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, route:'S', executor:'S'})), /WORKSPACE_LANDING_BRANCH_REPAIR_EXECUTOR_INVALID|LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, scopes:['surface:mcl-landing-origin-main:M']})), /LANDING_BRANCH_REPAIR_SCOPE_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, observedBaseSha:null})), /LANDING_BRANCH_REPAIR_BASE_SHA_REQUIRED/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, workspace:{...base.workspace, branch:'mainphone/other'}})), /WORKSPACE_LANDING_BRANCH_REPAIR_IDENTITY_INVALID/);
+});
 test('context route supports not-applicable repo workspace', () => {
   const m = handoff.buildManifest(manifestInput({
     route: 'M_PRIVATE_LAB', executor: 'M_PRIVATE_LAB', phaseClass: 'EXPERIMENT',

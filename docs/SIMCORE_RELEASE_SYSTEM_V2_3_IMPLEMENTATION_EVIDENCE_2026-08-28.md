@@ -1,7 +1,7 @@
 # SimCore Release System v2.3 — Stability Seal Implementation Evidence
 
 Date: 2026-08-28 KST
-Status: **IMPLEMENTED · PERMANENT CI QUALIFIED · REAL PR3 TERMINAL PROOF PENDING · NON-RUNTIME**
+Status: **IMPLEMENTED · PERMANENT CI QUALIFIED · REAL TERMINAL OPERATION PROVEN · NON-RUNTIME**
 Design authority: `docs/SIMCORE_RELEASE_SYSTEM_V2_3_STABILITY_SEAL_DESIGN.md`
 Active policy: `docs/SIMCORE_RELEASE_SYSTEM_V2_3_STABILITY_SEAL_POLICY.md`
 Tracking: `#673`
@@ -202,3 +202,36 @@ real v0.64.9 terminal proof = PENDING
 runtime mutation = NONE
 release-simcore mutation = NONE
 ```
+
+
+## 9. Real terminal operational qualification — 2026-09-22 KST
+
+The prior `REAL PROOF PENDING` language remains historically correct for the 2026-08-28 implementation checkpoint. Subsequent durable evidence now closes that living qualification gap.
+
+Original target proof:
+
+```text
+work item = #660
+release = v0.64.9
+HUMAN_EVIDENCE = accepted
+terminal disposition = LIVE_FAIL_HANDOFF_TO_NEW_RELEASE
+historical terminal transaction = PR #2710
+merge = ef2b35479576024f29d1f7ff4179ad107c6be5b2
+postmerge Required = 35561845562
+evaluator state = TERMINAL_REOBSERVED_CLOSE_ELIGIBLE
+closeEligible = true
+```
+
+Independent clean-path shape proof:
+
+```text
+release = v0.65.0
+normal terminal admin/evidence PR3 = #755
+merge = 481003fefea01dc2e70b3b8dac08e81264b94250
+real HUMAN_EVIDENCE = complete
+terminal projection = LIVE_PASS
+```
+
+These are deliberately separate proof records. PR #2710 proves the real v0.64.9 explicit failed-live terminal semantics through the historical administrative path; PR #755 proves the ordinary successful clean-path PR3 shape. No v0.64.9 LIVE_PASS is asserted.
+
+R2.3 qualification is therefore `REAL_TERMINAL_OPERATION_PROVEN`. The pure closure evaluator and all clean-path cost/authority invariants remain unchanged.

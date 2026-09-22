@@ -42,6 +42,7 @@ cleanup() {
     force_stop_pid "$(read_pid "$TEST_STATE/target-runsv.pid")"
     force_stop_pid "${SECOND_PID:-}"
     force_stop_pid "${LOOP_PID:-}"
+    force_stop_pid "${AMBIG_PID:-}"
     rm -rf "$TMP"
 }
 trap cleanup EXIT INT TERM HUP
@@ -179,7 +180,7 @@ run_launcher() {
     MCL_M_TAILSCALE_SUPERVISOR_TEST_ROOT="$TEST_ROOT" \
     MCL_M_TAILSCALE_SUPERVISOR_TEST_INTERVAL=1 \
     MCL_M_TAILSCALE_TEST_STATE="$TEST_STATE" \
-    sh "$LAUNCHER"
+    sh "$LAUNCHER" "$@"
 }
 wait_for_loop_lock() {
     wait_for_file "$HOME_FIX/.local/state/mcl-m-tailscale-supervisor-guard/guard.pid"
@@ -266,9 +267,18 @@ set -e
 rm "$TARGET/run"
 mv "$TARGET/run.real" "$TARGET/run"
 
-touch "$TARGET/supervisor-up"
+rm -f "$TARGET/supervisor-up"
+target_count_before_loop="$(cat "$TEST_STATE/target-runsv.count")"
 start_guard_loop
 wait_for_loop_lock
+i=0
+target_count_after_loop="$target_count_before_loop"
+while [ "$target_count_after_loop" -eq "$target_count_before_loop" ] && [ "$i" -lt 20 ]; do
+    sleep 1
+    target_count_after_loop="$(cat "$TEST_STATE/target-runsv.count")"
+    i=$((i + 1))
+done
+[ "$target_count_after_loop" -eq $((target_count_before_loop + 1)) ] || fail "target recovery stopped when anchor launcher unavailable"
 MCL_M_TAILSCALE_SUPERVISOR_TEST_MODE=1 \
 MCL_M_TAILSCALE_SUPERVISOR_TEST_ROOT="$TEST_ROOT" \
 MCL_M_TAILSCALE_SUPERVISOR_TEST_INTERVAL=1 \
@@ -284,6 +294,8 @@ fi
 wait "$SECOND_PID"
 SECOND_PID=
 stop_loop_term
+force_stop_pid "$(read_pid "$TEST_STATE/target-runsv.pid")"
+rm -f "$TARGET/supervisor-up"
 
 rm -rf "$HOME_FIX/.local/bin" "$HOME_FIX/.termux/boot" "$GUARD_SERVICE"
 set +e
@@ -395,14 +407,49 @@ done
 new_guard_supervisor="$(cat "$TEST_STATE/guard-runsv.pid")"
 kill -0 "$new_guard_supervisor" 2>/dev/null || fail "anchor-restored guard supervisor not alive"
 
-run_launcher & launch_one=$!
-run_launcher & launch_two=$!
+run_launcher --ensure-anchor & launch_one=$!
+run_launcher --ensure-anchor & launch_two=$!
 wait "$launch_one"
 wait "$launch_two"
 sleep 1
 [ "$(cat "$TEST_STATE/guard-runsv.count")" = "$count_after" ] || fail "concurrent launch created duplicate guard supervisors"
 [ "$(cat "$HOME_FIX/.local/state/mcl-m-tailscale-supervisor-guard/anchor.pid")" = "$anchor_pid_before" ] || fail "concurrent launch changed anchor"
 kill -0 "$anchor_pid_before" 2>/dev/null || fail "anchor died after concurrent launch"
+
+sleep 2
+[ "$(cat "$HOME_FIX/.local/state/mcl-m-tailscale-supervisor-guard/anchor.pid")" = "$anchor_pid_before" ] || fail "healthy guard loop duplicated anchor"
+
+kill -KILL "$anchor_pid_before" 2>/dev/null || fail "anchor hard-loss kill"
+i=0
+anchor_pid_stale_recovered=
+while [ "$i" -lt 20 ]; do
+    sleep 1
+    candidate="$(read_pid "$HOME_FIX/.local/state/mcl-m-tailscale-supervisor-guard/anchor.pid")"
+    if [ -n "$candidate" ] && [ "$candidate" != "$anchor_pid_before" ]; then
+        anchor_pid_stale_recovered="$candidate"
+        break
+    fi
+    i=$((i + 1))
+done
+[ -n "$anchor_pid_stale_recovered" ] || fail "stale anchor recovery pid missing"
+kill -0 "$anchor_pid_stale_recovered" 2>/dev/null || fail "stale-recovered anchor not alive"
+anchor_pid_before="$anchor_pid_stale_recovered"
+
+kill -TERM "$anchor_pid_before" 2>/dev/null || fail "anchor graceful-loss TERM"
+i=0
+anchor_pid_absent_recovered=
+while [ "$i" -lt 20 ]; do
+    sleep 1
+    candidate="$(read_pid "$HOME_FIX/.local/state/mcl-m-tailscale-supervisor-guard/anchor.pid")"
+    if [ -n "$candidate" ] && [ "$candidate" != "$anchor_pid_before" ]; then
+        anchor_pid_absent_recovered="$candidate"
+        break
+    fi
+    i=$((i + 1))
+done
+[ -n "$anchor_pid_absent_recovered" ] || fail "absent anchor recovery pid missing"
+kill -0 "$anchor_pid_absent_recovered" 2>/dev/null || fail "absent-recovered anchor not alive"
+anchor_pid_before="$anchor_pid_absent_recovered"
 
 touch "$GUARD_SERVICE/down"
 force_stop_pid "$new_guard_supervisor"
@@ -424,6 +471,34 @@ force_stop_pid "$anchor_pid_before"
 sleep 1
 [ ! -e "$HOME_FIX/.local/state/mcl-m-tailscale-supervisor-guard/anchor.pid" ] || fail "anchor pidfile survived TERM"
 rm -f "$GUARD_SERVICE/ambiguous" "$TARGET/supervisor-up"
+
+sleep 30 &
+AMBIG_PID=$!
+mkdir -p "$HOME_FIX/.local/state/mcl-m-tailscale-supervisor-guard/anchor.lock"
+printf '%s\n' "$AMBIG_PID" > "$HOME_FIX/.local/state/mcl-m-tailscale-supervisor-guard/anchor.pid"
+target_count_before_ambiguous="$(cat "$TEST_STATE/target-runsv.count")"
+start_guard_loop
+wait_for_loop_lock
+i=0
+target_count_after_ambiguous="$target_count_before_ambiguous"
+while [ "$target_count_after_ambiguous" -eq "$target_count_before_ambiguous" ] && [ "$i" -lt 20 ]; do
+    sleep 1
+    target_count_after_ambiguous="$(cat "$TEST_STATE/target-runsv.count")"
+    i=$((i + 1))
+done
+[ "$target_count_after_ambiguous" -eq $((target_count_before_ambiguous + 1)) ] || fail "anchor ensure failure blocked target recovery"
+sleep 2
+kill -0 "$LOOP_PID" 2>/dev/null || fail "guard loop died on ambiguous live anchor identity"
+kill -0 "$AMBIG_PID" 2>/dev/null || fail "ambiguous live anchor identity was killed"
+[ "$(cat "$HOME_FIX/.local/state/mcl-m-tailscale-supervisor-guard/anchor.pid")" = "$AMBIG_PID" ] || fail "ambiguous live anchor identity was overwritten"
+stop_loop_term
+force_stop_pid "$(read_pid "$TEST_STATE/target-runsv.pid")"
+force_stop_pid "$AMBIG_PID"
+AMBIG_PID=
+rm -f "$HOME_FIX/.local/state/mcl-m-tailscale-supervisor-guard/anchor.pid"
+rmdir "$HOME_FIX/.local/state/mcl-m-tailscale-supervisor-guard/anchor.lock" 2>/dev/null || true
+rm -f "$TARGET/supervisor-up"
+
 for script in "$GUARD" "$INSTALL" "$LAUNCHER" "$SERVICE_RUN"; do
     sh -n "$script" || fail "syntax: $script"
     if grep -E 'service-daemon|runsvdir|termux-wake-lock|pocketrisu|desktop-commander|sshd|notification|wifi|cellular|network-health' "$script" >/dev/null; then
@@ -438,6 +513,8 @@ grep -Fq 'skip=orphan-present' "$GUARD" || fail "orphan preservation missing"
 grep -Fq 'var/service/tailscaled' "$GUARD" || fail "fixed Tailscale service path missing"
 grep -Fq 'var/service/mcl-m-tailscale-supervisor-guard' "$LAUNCHER" || fail "fixed guard service path missing"
 grep -Fq -- '--anchor' "$LAUNCHER" || fail "anchor mode missing"
+grep -Fq -- '--ensure-anchor' "$LAUNCHER" || fail "anchor ensure mode missing"
+grep -Fq -- '--ensure-anchor' "$GUARD" || fail "guard loop anchor ensure missing"
 ! grep -Fq 'var/service/tailscaled' "$LAUNCHER" || fail "anchor may not own target Tailscale service"
 grep -Fq 'var/service/mcl-m-tailscale-supervisor-guard/run' "$INSTALL" || fail "fixed installed service run missing"
 if grep -Eq 'MCL_M_TAILSCALE_.*SERVICE|SERVICE_OVERRIDE|COMMAND_OVERRIDE|PATH_OVERRIDE' "$GUARD" "$INSTALL" "$LAUNCHER" "$SERVICE_RUN"; then

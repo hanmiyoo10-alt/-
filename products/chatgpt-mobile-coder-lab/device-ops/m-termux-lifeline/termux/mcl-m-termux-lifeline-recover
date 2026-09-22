@@ -1,0 +1,62 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -u
+
+[ "$#" -eq 0 ] || exit 2
+
+PREFIX=/data/data/com.termux/files/usr
+HOME_DIR=/data/data/com.termux/files/home
+PYTHON="$PREFIX/bin/python"
+NOHUP="$PREFIX/bin/nohup"
+CLIENT="$HOME_DIR/.local/lib/mcl-m-termux-lifeline/heartbeat-client.py"
+RDC_LAUNCHER="$HOME_DIR/.termux/boot/31-mcl-m-rdc-supervisor-guard"
+TAILSCALE_LAUNCHER="$HOME_DIR/.termux/boot/32-mcl-m-tailscale-supervisor-guard"
+STATE="$HOME_DIR/.local/state/mcl-m-termux-lifeline"
+RECEIPT="$STATE/recovery.receipt"
+
+valid_file() {
+    [ -f "$1" ] && [ ! -L "$1" ]
+}
+
+[ -x "$PYTHON" ] || exit 2
+[ -x "$NOHUP" ] || exit 2
+valid_file "$CLIENT" || exit 2
+valid_file "$RDC_LAUNCHER" && [ -x "$RDC_LAUNCHER" ] || exit 2
+valid_file "$TAILSCALE_LAUNCHER" && [ -x "$TAILSCALE_LAUNCHER" ] || exit 2
+
+mkdir -p "$STATE" || exit 2
+umask 077
+
+"$NOHUP" "$PYTHON" "$CLIENT" >/dev/null 2>&1 &
+
+RDC_STATUS=fail
+TAILSCALE_STATUS=fail
+ACK_STATUS=fail
+
+if "$RDC_LAUNCHER" >/dev/null 2>&1; then
+    RDC_STATUS=pass
+fi
+if "$TAILSCALE_LAUNCHER" >/dev/null 2>&1; then
+    TAILSCALE_STATUS=pass
+fi
+if [ "$RDC_STATUS" = pass ] && [ "$TAILSCALE_STATUS" = pass ]; then
+    if "$PYTHON" "$CLIENT" --recovery-ok >/dev/null 2>&1; then
+        ACK_STATUS=pass
+    fi
+fi
+
+TMP="$RECEIPT.$$"
+{
+    printf '%s\n' \
+        'schema=mcl-m-termux-lifeline-recovery.v1' \
+        "rdc_launcher=$RDC_STATUS" \
+        "tailscale_launcher=$TAILSCALE_STATUS" \
+        "companion_ack=$ACK_STATUS" \
+        'details=withheld'
+} > "$TMP"
+mv "$TMP" "$RECEIPT"
+
+cat "$RECEIPT"
+
+[ "$RDC_STATUS" = pass ] &&
+[ "$TAILSCALE_STATUS" = pass ] &&
+[ "$ACK_STATUS" = pass ]

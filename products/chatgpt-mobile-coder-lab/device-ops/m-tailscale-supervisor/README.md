@@ -79,6 +79,23 @@ The anchor uses fixed lock/PID state under the existing M Tailscale guard state 
 
 This extra layer addresses the observed case where the shared `runsvdir` was already absent and the dedicated guard-service `runsv` later disappeared while the live `tailscaled` orphan remained healthy.
 
+### Mutual anchor self-recovery
+
+The dedicated guard loop also performs one fixed anchor-presence ensure after each target-recovery iteration. It invokes only the installed launcher internal `--ensure-anchor` mode.
+
+```text
+guard loop
+→ existing tailscaled recovery first
+→ fixed launcher --ensure-anchor
+   → live anchor          => no-op
+   → missing/stale anchor => start exactly one anchor
+   → live ambiguous PID   => fail closed
+```
+
+`--ensure-anchor` does not inspect or repair `tailscaled`, does not restart the guard-service supervisor, and does not touch the shared service tree. The existing anchor continues to own only guard-service supervisor restoration. Together they form a bounded two-member recovery ring: the anchor restores the guard-service `runsv`, while a surviving guard loop restores a missing anchor.
+
+Anchor ensure is deliberately best-effort from the guard loop. A failure to prove or restore the anchor cannot stop the existing target-recovery iteration. Stale dead anchor lock/PID state is reclaimed through the existing fixed lock identity contract; a lock/PID referring to a live non-anchor process is preserved and fails closed without kill or duplicate anchor creation.
+
 ## Install contract
 
 ```sh

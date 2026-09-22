@@ -55,6 +55,7 @@ A new child `REPOSITORY_MUTATION` manifest binds:
 - exact parent manifest and handoff comment locators;
 - repository-patch request hash;
 - fixed validation request hash;
+- repository-owned validation contract digest;
 - PR-publication request hash;
 - exact active lease/workspace/base/scopes.
 
@@ -64,16 +65,36 @@ The parent bytes are never rewritten.
 
 ## Validation binding
 
-V1 deliberately supports only the already-reviewed fixed prepared-state validation profile:
+V1 supports exactly two repository-reviewed semantic prepared-state validation profiles:
+
+```text
+mcl:d014-completion-set:v1
+repo:validation-continuation:v1
+```
+
+The coordinator derives the unique compatible profile from the exact normalized
+current packet scope. The caller-supplied validation request remains the same
+strict data-only shape:
 
 ```json
 {
   "schema": "mcl-repository-validation-request.v1",
-  "profile": "mcl:d014-completion-set:v1"
+  "profile": "<exact reviewed profile id>"
 }
 ```
 
-The profile is consumed by the existing repository patch owner between PREPARE and COMMIT. No arbitrary command, argv, executable or working directory is caller-controlled.
+That request is verification input, not profile-selection authority. Zero
+compatible profiles block as `NO_REVIEWED_VALIDATION_PROFILE`; multiple
+matches conflict as `VALIDATION_PROFILE_AMBIGUOUS`; a supplied request that
+does not match the derived profile blocks before PREPARE.
+
+The child D-014 manifest binds both the exact validation-request digest and the
+deterministic repository-owned validation-contract digest. The existing
+repository patch owner re-derives the profile contract and runs its fixed
+checks between PREPARE and COMMIT.
+
+No arbitrary command, argv, executable, test path or working directory is
+caller-controlled.
 
 ## PR publication request
 
@@ -124,8 +145,12 @@ node mcl-repository-implementation.cjs \
 
 `--apply` is mandatory. Normal stdout is one bounded `REPOSITORY_AGENT_DECISION_VIEW v1`. Raw Git, test, holder, lease and GitHub plumbing stays behind evidence locators unless targeted drill-down is required.
 
-## First live consumer
+## Live-consumer history
 
-The first natural live consumer is the already-preserved #2569 stage-entry lane after this owner is merged and postmerge-proven.
+The first natural live consumer for the fixed implementation coordinator was
+#2569 using `mcl:d014-completion-set:v1`; that Phase 8.6b proof is preserved.
 
-That live proof must use the exact preserved #2569 parent lease/manifest/handoff/worktree, the fixed `mcl:d014-completion-set:v1` validation profile, one non-closing PR, and the normal later `VALIDATION_MERGE` stage. It must not edit the #2569 packet body while its active lease is bound.
+The second profile, `repo:validation-continuation:v1`, is a reviewed semantic
+extension. Existing #2770 coordination must not be rewritten or backfilled to
+claim adoption. A later live proof requires a fresh compatible activation
+under current authority.

@@ -4,20 +4,15 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
-import android.net.Credentials;
-import android.net.LocalServerSocket;
-import android.net.LocalSocket;
 import android.os.IBinder;
 import android.os.SystemClock;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class LifelineService extends Service {
@@ -40,7 +35,13 @@ public final class LifelineService extends Service {
     private volatile boolean failedForCurrentLoss;
     private volatile long lastAttemptMs;
     private volatile String status = "WAITING_FOR_FIRST_HEARTBEAT";
-    private LocalServerSocket serverSocket;
+    private volatile boolean receiverRegistered;
+    private final BroadcastReceiver heartbeatReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            handleHeartbeatBroadcast(this, intent);
+        }
+    };
 
     @Override
     public void onCreate() {
@@ -51,10 +52,11 @@ public final class LifelineService extends Service {
             buildNotification(status),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         );
+        if (!registerHeartbeatReceiver()) {
+            stopSelf();
+            return;
+        }
         running = true;
-        Thread socketThread = new Thread(this::serveLoop, "mcl-termux-lifeline-socket");
-        socketThread.setDaemon(true);
-        socketThread.start();
         Thread watchdogThread = new Thread(this::watchdogLoop, "mcl-termux-lifeline-watchdog");
         watchdogThread.setDaemon(true);
         watchdogThread.start();
@@ -68,9 +70,12 @@ public final class LifelineService extends Service {
     @Override
     public void onDestroy() {
         running = false;
-        try {
-            if (serverSocket != null) serverSocket.close();
-        } catch (IOException ignored) {
+        if (receiverRegistered) {
+            try {
+                unregisterReceiver(heartbeatReceiver);
+            } catch (IllegalArgumentException ignored) {
+            }
+            receiverRegistered = false;
         }
         super.onDestroy();
     }
@@ -80,60 +85,50 @@ public final class LifelineService extends Service {
         return null;
     }
 
-    private void serveLoop() {
-        try (LocalServerSocket server = new LocalServerSocket(HeartbeatProtocol.SOCKET_NAME)) {
-            serverSocket = server;
-            while (running) {
-                try (LocalSocket client = server.accept()) {
-                    client.setSoTimeout(2_000);
-                    if (!peerIsTermux(client)) continue;
-                    String frame = readBoundedFrame(client.getInputStream());
-                    HeartbeatProtocol.Kind kind = HeartbeatProtocol.classify(frame);
-                    if (kind == HeartbeatProtocol.Kind.INVALID) continue;
-                    long now = SystemClock.elapsedRealtime();
-                    if (kind == HeartbeatProtocol.Kind.HEARTBEAT) {
-                        lastHeartbeatMs.set(now);
-                    } else {
-                        lastRecoveryReceiptMs.set(now);
-                        lastHeartbeatMs.set(now);
-                    }
-                    OutputStream output = client.getOutputStream();
-                    output.write(HeartbeatProtocol.ACK.getBytes(StandardCharsets.UTF_8));
-                    output.flush();
-                } catch (Exception ignored) {
-                }
-            }
-        } catch (IOException ignored) {
-            setStatus("SOCKET_UNAVAILABLE");
-        } finally {
-            serverSocket = null;
-        }
-    }
-
-    private boolean peerIsTermux(LocalSocket client) {
+    private boolean registerHeartbeatReceiver() {
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(HeartbeatProtocol.HEARTBEAT_ACTION);
+        filter.addAction(HeartbeatProtocol.RECOVERY_OK_ACTION);
         try {
-            Credentials credentials = client.getPeerCredentials();
-            ApplicationInfo app = getPackageManager().getApplicationInfo(TERMUX_PACKAGE, 0);
-            return credentials != null && credentials.getUid() == app.uid;
-        } catch (Exception error) {
+            registerReceiver(heartbeatReceiver, filter, Context.RECEIVER_EXPORTED);
+            receiverRegistered = true;
+            return true;
+        } catch (RuntimeException error) {
+            setStatus("RECEIVER_UNAVAILABLE");
             return false;
         }
     }
 
-    private String readBoundedFrame(InputStream input) throws IOException {
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        boolean terminated = false;
-        while (output.size() < HeartbeatProtocol.MAX_FRAME_BYTES) {
-            int next = input.read();
-            if (next < 0) break;
-            output.write(next);
-            if (next == '\n') {
-                terminated = true;
-                break;
-            }
+    private void handleHeartbeatBroadcast(BroadcastReceiver receiver, Intent intent) {
+        if (!broadcastIsFixedAndFromTermux(receiver, intent)) return;
+        HeartbeatProtocol.Kind kind = HeartbeatProtocol.classifyAction(intent.getAction());
+        if (kind == HeartbeatProtocol.Kind.INVALID) return;
+        long now = SystemClock.elapsedRealtime();
+        if (kind == HeartbeatProtocol.Kind.HEARTBEAT) {
+            lastHeartbeatMs.set(now);
+            if (!recoveryPending) setStatus("HEALTHY");
+            return;
         }
-        if (!terminated) throw new IOException("FRAME_INVALID");
-        return output.toString(StandardCharsets.UTF_8);
+        lastRecoveryReceiptMs.set(now);
+        lastHeartbeatMs.set(now);
+    }
+
+    private boolean broadcastIsFixedAndFromTermux(BroadcastReceiver receiver, Intent intent) {
+        if (intent == null || !getPackageName().equals(intent.getPackage())) return false;
+        if (intent.getExtras() != null
+                || intent.getData() != null
+                || intent.getClipData() != null
+                || intent.getCategories() != null
+                || intent.getComponent() != null
+                || intent.getSelector() != null) {
+            return false;
+        }
+        try {
+            ApplicationInfo app = getPackageManager().getApplicationInfo(TERMUX_PACKAGE, 0);
+            return HeartbeatProtocol.senderUidMatchesTermux(receiver.getSentFromUid(), app.uid);
+        } catch (PackageManager.NameNotFoundException error) {
+            return false;
+        }
     }
 
     private void watchdogLoop() {

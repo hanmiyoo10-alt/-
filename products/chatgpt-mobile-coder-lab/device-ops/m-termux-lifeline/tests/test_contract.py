@@ -1,6 +1,5 @@
 import importlib.util
 import pathlib
-import socket
 import subprocess
 import unittest
 import xml.etree.ElementTree as ET
@@ -41,19 +40,21 @@ class LifelineContractTest(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, text)
 
-    def test_android_service_is_local_and_peer_uid_bound(self):
+    def test_android_service_is_local_and_sender_uid_bound(self):
         root = ET.parse(MANIFEST).getroot()
         service = root.find("application/service")
         self.assertIsNotNone(service)
+        self.assertIsNone(root.find("application/receiver"))
         self.assertEqual(service.attrib[ANDROID_NS + "exported"], "false")
         self.assertEqual(service.attrib[ANDROID_NS + "foregroundServiceType"], "specialUse")
 
         source = (JAVA / "LifelineService.java").read_text()
         required = (
             'TERMUX_PACKAGE = "com.termux"',
-            "LocalServerSocket",
-            "getPeerCredentials()",
-            "credentials.getUid() == app.uid",
+            "BroadcastReceiver",
+            "Context.RECEIVER_EXPORTED",
+            "getSentFromUid()",
+            "senderUidMatchesTermux",
             "ApplicationInfo.FLAG_STOPPED",
             'RUN_COMMAND_ACTION = "com.termux.RUN_COMMAND"',
             'RUN_COMMAND_SERVICE = "com.termux.app.RunCommandService"',
@@ -65,6 +66,8 @@ class LifelineContractTest(unittest.TestCase):
             self.assertIn(needle, source)
         for forbidden in (
             "PendingIntent",
+            "LocalServerSocket",
+            "getPeerCredentials()",
             "RUN_COMMAND_STDIN",
             "RUN_COMMAND_COMMAND_LABEL",
             "ProcessBuilder",
@@ -106,6 +109,9 @@ class LifelineContractTest(unittest.TestCase):
         self.assertIn('$HOME_DIR/.termux/boot/31-mcl-m-rdc-supervisor-guard', recovery)
         self.assertIn('$HOME_DIR/.termux/boot/32-mcl-m-tailscale-supervisor-guard', recovery)
         self.assertIn('"$PYTHON" "$CLIENT" --recovery-ok', recovery)
+        self.assertIn("schema=mcl-m-termux-lifeline-recovery.v2", recovery)
+        self.assertIn("recovery_ok_dispatch=", recovery)
+        self.assertNotIn("companion_ack=", recovery)
         for forbidden in (
             "runsvdir",
             "pkill",
@@ -153,58 +159,59 @@ class LifelineContractTest(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 2)
 
-    def test_heartbeat_client_has_exact_local_protocol(self):
+    def test_heartbeat_client_has_exact_local_broadcast_surface(self):
         module_path = TERMUX / "heartbeat-client.py"
         spec = importlib.util.spec_from_file_location("mcl_lifeline_heartbeat", module_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 
-        self.assertEqual(module.SOCKET_NAME, "\0mcl-m-termux-lifeline-v1")
-        self.assertEqual(module.HEARTBEAT, b"MCL_M_TERMUX_LIFELINE_HEARTBEAT_V1\n")
-        self.assertEqual(module.RECOVERY_OK, b"MCL_M_TERMUX_LIFELINE_RECOVERY_OK_V1\n")
+        self.assertEqual(module.AM_PATH, "/data/data/com.termux/files/usr/bin/am")
+        self.assertEqual(module.COMPANION_PACKAGE, "io.hanmiyoo.mcl.termuxlifeline")
+        self.assertEqual(
+            module.HEARTBEAT_ACTION,
+            "io.hanmiyoo.mcl.termuxlifeline.action.HEARTBEAT_V1",
+        )
+        self.assertEqual(
+            module.RECOVERY_OK_ACTION,
+            "io.hanmiyoo.mcl.termuxlifeline.action.RECOVERY_OK_V1",
+        )
         self.assertEqual(module.main(["unexpected"]), 2)
 
         seen = {}
 
-        class FakeSocket:
-            def __init__(self, reply):
-                self.reply = bytearray(reply)
-                self.sent = b""
+        class Result:
+            returncode = 0
 
-            def settimeout(self, value):
-                seen["timeout"] = value
+        def good_runner(argv, **kwargs):
+            seen["argv"] = argv
+            seen["kwargs"] = kwargs
+            return Result()
 
-            def connect(self, address):
-                seen["address"] = address
+        self.assertTrue(module.dispatch(module.HEARTBEAT_ACTION, runner=good_runner))
+        self.assertEqual(
+            seen["argv"],
+            [
+                module.AM_PATH,
+                "broadcast",
+                "-a",
+                module.HEARTBEAT_ACTION,
+                "-p",
+                module.COMPANION_PACKAGE,
+            ],
+        )
+        self.assertEqual(seen["kwargs"]["timeout"], module.DISPATCH_TIMEOUT_SECONDS)
+        self.assertFalse(module.dispatch("unexpected", runner=good_runner))
 
-            def sendall(self, value):
-                self.sent += value
-                seen["sent"] = self.sent
+        class FailedResult:
+            returncode = 1
 
-            def recv(self, count):
-                if not self.reply:
-                    return b""
-                data = bytes(self.reply[:count])
-                del self.reply[:count]
-                return data
-
-            def close(self):
-                seen["closed"] = True
-
-        def good_factory(family, kind):
-            self.assertEqual(family, socket.AF_UNIX)
-            self.assertEqual(kind, socket.SOCK_STREAM)
-            return FakeSocket(module.ACK)
-
-        self.assertTrue(module.exchange(module.HEARTBEAT, socket_factory=good_factory))
-        self.assertEqual(seen["address"], module.SOCKET_NAME)
-        self.assertEqual(seen["sent"], module.HEARTBEAT)
-        self.assertTrue(seen["closed"])
-
-        def bad_factory(_family, _kind):
-            return FakeSocket(b"NO\n")
-
-        self.assertFalse(module.exchange(module.HEARTBEAT, socket_factory=bad_factory))
+        self.assertFalse(
+            module.dispatch(module.RECOVERY_OK_ACTION, runner=lambda *_a, **_k: FailedResult())
+        )
+        source = module_path.read_text()
+        self.assertNotIn("socket", source)
+        self.assertNotIn("MCL_M_TERMUX_LIFELINE_ACK_V1", source)
+        self.assertNotIn("SOCKET_NAME", source)
 
     def test_no_network_or_generic_command_surface_in_owner(self):
         all_text = "\n".join(

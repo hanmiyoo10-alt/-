@@ -4,8 +4,29 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const {spawnSync} = require('node:child_process');
+const {LEGACY_ROOT, normalizeRoot} = require('./release_path_profile.cjs');
 
-const root = path.resolve('plugins/usage-dashboard');
+function parseArgs(argv = process.argv.slice(2)) {
+  let mode = '--check';
+  let sourceRoot = LEGACY_ROOT;
+  let seenMode = false;
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--write' || arg === '--check') {
+      if (seenMode && mode !== arg) throw new Error('bridge-engine build: conflicting build modes');
+      mode = arg;
+      seenMode = true;
+    } else if (arg === '--root') {
+      sourceRoot = String(argv[++index] || '');
+    } else {
+      throw new Error('bridge-engine build: usage: node build_bridge_engine.cjs [--write|--check] [--root <source-root>]');
+    }
+  }
+  return {mode, sourceRoot:normalizeRoot(sourceRoot)};
+}
+
+const {mode, sourceRoot} = parseArgs();
+const root = path.resolve(sourceRoot);
 const sourceDir = path.join(root, 'runtime-src', 'bridge-engine');
 const manifestPath = path.join(sourceDir, 'parts.json');
 
@@ -70,8 +91,6 @@ function syntaxCheck(artifact) {
   }
 }
 
-const mode = process.argv[2] || '--check';
-if (!['--write', '--check'].includes(mode)) fail(`usage: node build_bridge_engine.cjs [--write|--check]`);
 const {manifest, artifact} = loadManifest();
 const first = buildBuffer(manifest);
 const second = buildBuffer(manifest);

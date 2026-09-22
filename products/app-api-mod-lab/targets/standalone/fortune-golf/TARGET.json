@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "id": "fortune-golf",
+  "display_name": "Fortune Golf 3D",
+  "ecosystem": "standalone",
+  "kind": "app",
+  "category": "game",
+  "authority": {
+    "source_upstream": "Original Com2uS Fortune Golf 3D game artifact is external/private input; compatibility upstream is dlunch/wie pinned at 1ed8710956e727629e67db762ddc1e6bd6151a1f; ABI reference is mirusu400/libwipi at a6633ddb9f5a4510b237b7b8059ea0dafa1e4585",
+    "release": "UNASSIGNED",
+    "deployment": "UNASSIGNED"
+  },
+  "scope": {
+    "owned_surfaces": [
+      "target-local WIE overlay/probe compatibility code and diagnostics migrated from legacy branch fortune-golf-apk",
+      "sanitized Fortune Golf reverse-engineering and device/probe notes",
+      "target-local analysis and future build/probe adaptation"
+    ],
+    "preserve_surfaces": [
+      "original proprietary Fortune Golf game artifact and user-held private inputs",
+      "unrelated WIE behavior and upstream repository authority",
+      "generic/shared Ghidra provisioning and transfer infrastructure",
+      "other App API Mod Lab targets including CHZZK",
+      "release and deployment behavior"
+    ]
+  },
+  "privacy": {
+    "credentials_in_git": false
+  },
+  "validation_surfaces": [
+    "products/app-api-mod-lab/validate-targets.mjs structural contract",
+    "preserved target-owned legacy source/docs readback from fortune-golf-apk at 62a2e4bab3aa272e021440f05c18c237ea6c592f",
+    ".github/workflows/fortune-golf-apk.yml pinned-WIE unit/frontend/Android debug APK build",
+    ".github/workflows/fortune-golf-web-probe.yml pinned-WIE web/WASM build and artifact provenance",
+    "future user-held-input device validation before current compatibility claims"
+  ],
+  "provenance": {
+    "issue": 2602,
+    "legacy_branch": "fortune-golf-apk",
+    "legacy_branch_sha": "62a2e4bab3aa272e021440f05c18c237ea6c592f",
+    "runtime_status": "PARTIAL_HISTORICAL_EVIDENCE",
+    "workflow_migration_issue": 2606,
+    "historical_probe11_commit": "cefe56950c8a31066d05dc844c493958ec752fbe"
+  }
+}

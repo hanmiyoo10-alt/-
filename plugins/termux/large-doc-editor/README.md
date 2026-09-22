@@ -11,7 +11,8 @@ This is **not** a Google Docs replacement, production release, or APK patch. It 
 - UTF-8 `.txt`, `.md`, `.log`, `.json`
 - current-chunk-only browser editing
 - explicit atomic file save
-- fail-closed save if the source changed outside the editor
+- fail-closed save when source bytes differ at either save verification boundary
+- no atomic compare-and-swap claim for a non-cooperating write after final verification and before replace
 - basic input-to-paint latency display
 - no Google account, Drive, Docs API, DOCX, rich formatting, comments, suggestions, or collaboration yet
 

@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "posture": "locator-only",
+  "target_materialization_authorized": false,
+  "authority_reassignment_authorized": false,
+  "source_move_authorized": false,
+  "candidates": []
+}

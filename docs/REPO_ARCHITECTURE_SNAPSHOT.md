@@ -5,8 +5,8 @@
 ## Canonical integration
 
 - Branch: `main`
-- Native branch protection: `NOT_ENFORCED`
-- Required status-check enforcement: `off`
+- Native branch protection: `ENFORCED/PROTECTED`
+- Required status-check enforcement: `everyone`
 - Required target: `simcore-ci.yml / Required`
 - Shared main writer: `scripts/repo-main-write.py`
 
@@ -30,7 +30,7 @@
 - Durable promotion: branch/PR + explicit CI dispatch; exact-head merge only when base main is unchanged.
 - Generated commits are filtered with `[repo-docs-generated]` to prevent recursive documentation.
 
-## Registered projects/products (6)
+## Registered projects/products (8)
 
 - Source: `.github/plugin-control-plane/registry.json`
 - Detailed durable view: `docs/REPO_PROJECT_CATALOG.md`

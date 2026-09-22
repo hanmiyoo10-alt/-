@@ -5,6 +5,7 @@ HERE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 INSTALL="$HERE/install.sh"
 VERIFY="$HERE/verify.sh"
 SHIM="$HERE/device-name-shim.cjs"
+RUNTIME_ENV_SHIM="$HERE/runtime-env-forward-shim.cjs"
 WHICH_SHIM="$HERE/which-rg-shim.sh"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
@@ -67,6 +68,77 @@ DESKTOP_COMMANDER_DEVICE_NAME=S-Termux node --require "$SHIM" --input-type=modul
 if DESKTOP_COMMANDER_DEVICE_NAME= node --require "$SHIM" -e "process.exit(0)" >/dev/null 2>&1; then fail "empty device label accepted"; fi
 ok "device-name shim reaches ESM hostname and fails closed"
 
+NODE_BIN=$(command -v node)
+env -i PATH="$PATH" HOME="$HOME" \
+  ANDROID_ROOT=parent-root ANDROID_DATA=parent-data \
+  ANDROID_ART_ROOT=parent-art ANDROID_I18N_ROOT=parent-i18n \
+  ANDROID_TZDATA_ROOT=parent-tz BOOTCLASSPATH=parent-boot \
+  DEX2OATBOOTCLASSPATH=parent-dex PREFIX=parent-prefix TMPDIR=parent-tmp \
+  MCL_UNRELATED_SECRET=do-not-forward \
+  "$NODE_BIN" --require "$RUNTIME_ENV_SHIM" --input-type=module - <<'NODE'
+import { spawn } from 'node:child_process';
+
+const selected = [
+  'ANDROID_ROOT', 'ANDROID_DATA', 'ANDROID_ART_ROOT', 'ANDROID_I18N_ROOT',
+  'ANDROID_TZDATA_ROOT', 'BOOTCLASSPATH', 'DEX2OATBOOTCLASSPATH',
+];
+const probe = `
+const selected = ${JSON.stringify(selected)};
+const result = Object.fromEntries(selected.map((name) => [name, process.env[name] ?? null]));
+result.DC_REMOTE_DEVICE = process.env.DC_REMOTE_DEVICE ?? null;
+result.PREFIX = process.env.PREFIX ?? null;
+result.TMPDIR = process.env.TMPDIR ?? null;
+result.MCL_UNRELATED_SECRET = process.env.MCL_UNRELATED_SECRET ?? null;
+process.stdout.write(JSON.stringify(result));
+`;
+function run(env) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['-e', probe], { env, stdio: ['ignore', 'pipe', 'inherit'] });
+    let output = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { output += chunk; });
+    child.on('error', reject);
+    child.on('close', (code) => code === 0 ? resolve(JSON.parse(output)) : reject(new Error('child exit')));
+  });
+}
+const marked = await run({ DC_REMOTE_DEVICE: 'true', ANDROID_ROOT: 'child-root' });
+if (marked.ANDROID_ROOT !== 'child-root') process.exit(1);
+for (const name of selected.slice(1)) if (marked[name] !== process.env[name]) process.exit(1);
+if (marked.DC_REMOTE_DEVICE !== 'true') process.exit(1);
+if (marked.PREFIX !== null || marked.TMPDIR !== null || marked.MCL_UNRELATED_SECRET !== null) process.exit(1);
+
+const unmarked = await run({});
+for (const name of selected) if (unmarked[name] !== null) process.exit(1);
+NODE
+ok "runtime-env shim forwards only missing selected keys to marked ESM spawn"
+
+env -i PATH="$PATH" HOME="$HOME" \
+  ANDROID_ROOT=parent-root ANDROID_DATA=parent-data \
+  ANDROID_ART_ROOT=parent-art ANDROID_I18N_ROOT=parent-i18n \
+  ANDROID_TZDATA_ROOT=parent-tz BOOTCLASSPATH=parent-boot \
+  "$NODE_BIN" --require "$RUNTIME_ENV_SHIM" --input-type=module - <<'NODE'
+import { spawn } from 'node:child_process';
+
+const selected = [
+  'ANDROID_ROOT', 'ANDROID_DATA', 'ANDROID_ART_ROOT', 'ANDROID_I18N_ROOT',
+  'ANDROID_TZDATA_ROOT', 'BOOTCLASSPATH', 'DEX2OATBOOTCLASSPATH',
+];
+const probe = `const names=${JSON.stringify(selected)};process.stdout.write(String(names.filter((name)=>name in process.env).length));`;
+const count = await new Promise((resolve, reject) => {
+  const child = spawn(process.execPath, ['-e', probe], {
+    env: { DC_REMOTE_DEVICE: 'true' },
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
+  let output = '';
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => { output += chunk; });
+  child.on('error', reject);
+  child.on('close', (code) => code === 0 ? resolve(output) : reject(new Error('child exit')));
+});
+if (count !== '0') process.exit(1);
+NODE
+ok "runtime-env shim refuses partial forwarding from incomplete parent"
+
 make_fixture labelblocked
 if RDC_TERMUX_DEVICE_NAME='bad label' sh "$INSTALL" --apply > "$ROOT/labelblocked.out" 2>&1; then fail "invalid device label accepted"; fi
 [ ! -s "$MOCK_LOG" ] || fail "invalid device label mutated package state"
@@ -86,11 +158,14 @@ echo ORIGINAL > "$PREFIX/var/service/desktop-commander-remote/run"
 original_sum=$(cksum "$PREFIX/var/service/desktop-commander-remote/run")
 sh "$INSTALL" --apply > "$ROOT/apply.out"
 shimfile="$HOME/.local/share/desktop-commander-remote-termux/device-name-shim.cjs"
+runtimefile="$HOME/.local/share/desktop-commander-remote-termux/runtime-env-forward-shim.cjs"
 whichfile="$HOME/.local/share/desktop-commander-remote-termux/tool-shims/which"
 [ -f "$shimfile" ] || fail "managed device-name shim missing"
+[ -f "$runtimefile" ] || fail "managed runtime-env shim missing"
 [ -x "$whichfile" ] || fail "managed ripgrep discovery shim missing"
 grep -Fq "# mcl-rdc-termux-which-rg:v1" "$whichfile" || fail "managed ripgrep discovery shim marker missing"
 grep -Fq "// mcl-rdc-termux-device-name:v1" "$shimfile" || fail "managed shim marker missing"
+grep -Fq "// mcl-rdc-termux-runtime-env-forward:v1" "$runtimefile" || fail "managed runtime-env shim marker missing"
 [ -e "$PREFIX/var/service/desktop-commander-remote-termux/down" ] || fail "new service not disabled after apply"
 [ "$(cksum "$PREFIX/var/service/desktop-commander-remote/run")" = "$original_sum" ] || fail "existing S endpoint changed"
 [ "$(grep -c '^npm$' "$MOCK_LOG")" -eq 1 ] || fail "package install count"
@@ -100,7 +175,10 @@ ok "apply creates only the sibling managed service"
 runfile="$PREFIX/var/service/desktop-commander-remote-termux/run"
 grep -Fq "DESKTOP_COMMANDER_DEVICE_NAME='S-Termux'" "$runfile" || fail "device label missing"
 grep -Fq "SHIM='$shimfile'" "$runfile" || fail "managed shim path missing"
+grep -Fq "RUNTIME_ENV_SHIM='$runtimefile'" "$runfile" || fail "managed runtime-env shim path missing"
 grep -Fq -- '--require "$SHIM"' "$runfile" || fail "managed shim preload missing"
+grep -Fq -- '--require "$RUNTIME_ENV_SHIM"' "$runfile" || fail "managed runtime-env shim preload missing"
+! grep -Fq 'NODE_OPTIONS' "$runfile" || fail "generated service uses global Node preload surface"
 grep -Fq 'bin/node' "$runfile" || fail "Termux node path missing"
 ! grep -Fq 'proot-distro' "$runfile" || fail "PRoot invocation present"
 ! grep -Fq '/root/' "$runfile" || fail "Ubuntu home present"
@@ -189,6 +267,7 @@ before_run=$(cksum "$runfile")
 before_log=$(cksum "$PREFIX/var/service/desktop-commander-remote-termux/log/run")
 before_pkg=$(cksum "$HOME/.local/share/desktop-commander-remote-termux/node_modules/@wonderwhy-er/desktop-commander/package.json")
 before_shim=$(cksum "$shimfile")
+before_runtime=$(cksum "$runtimefile")
 before_which=$(cksum "$whichfile")
 sh "$INSTALL" --apply > "$ROOT/apply2.out"
 [ "$(grep -c '^npm$' "$MOCK_LOG")" -eq 1 ] || fail "second apply reinstalled package"
@@ -196,6 +275,7 @@ sh "$INSTALL" --apply > "$ROOT/apply2.out"
 [ "$(cksum "$PREFIX/var/service/desktop-commander-remote-termux/log/run")" = "$before_log" ] || fail "second apply rewrote log"
 [ "$(cksum "$HOME/.local/share/desktop-commander-remote-termux/node_modules/@wonderwhy-er/desktop-commander/package.json")" = "$before_pkg" ] || fail "second apply rewrote package"
 [ "$(cksum "$shimfile")" = "$before_shim" ] || fail "second apply rewrote device-name shim"
+[ "$(cksum "$runtimefile")" = "$before_runtime" ] || fail "second apply rewrote runtime-env shim"
 [ "$(cksum "$whichfile")" = "$before_which" ] || fail "second apply rewrote ripgrep discovery shim"
 ok "second apply is a managed-state no-op"
 
@@ -217,6 +297,13 @@ echo UNMANAGED > "$HOME/.local/share/desktop-commander-remote-termux/device-name
 if sh "$INSTALL" --apply > "$ROOT/shimblocked.out" 2>&1; then fail "unmanaged shim accepted"; fi
 [ ! -s "$MOCK_LOG" ] || fail "unmanaged shim mutated package state"
 ok "unmanaged device-name shim fails closed before mutation"
+
+make_fixture runtimeblocked
+mkdir -p "$HOME/.local/share/desktop-commander-remote-termux"
+echo UNMANAGED > "$HOME/.local/share/desktop-commander-remote-termux/runtime-env-forward-shim.cjs"
+if sh "$INSTALL" --apply > "$ROOT/runtimeblocked.out" 2>&1; then fail "unmanaged runtime-env shim accepted"; fi
+[ ! -s "$MOCK_LOG" ] || fail "unmanaged runtime-env shim mutated package state"
+ok "unmanaged runtime-env shim fails closed before mutation"
 
 make_fixture whichblocked
 mkdir -p "$HOME/.local/share/desktop-commander-remote-termux/tool-shims"

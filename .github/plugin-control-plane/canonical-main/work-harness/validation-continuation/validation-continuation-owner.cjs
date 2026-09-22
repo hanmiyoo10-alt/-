@@ -214,12 +214,7 @@ function reduceCandidates(candidates, liveHead) {
   const keys = uniqueKeys(matching, candidateSemanticKey);
   let selected = matching;
   if (keys.length !== 1) {
-    const historicalLineages = new Set(candidates
-      .filter((row) => row.headSha !== liveHead)
-      .map(candidateLineageKey));
-    const lineageQualified = matching.filter((row) =>
-      currentizationLineageQualified(row)
-      && historicalLineages.has(candidateLineageKey(row)));
+    const lineageQualified = matching.filter(currentizationLineageQualified);
     const lineageKeys = uniqueKeys(lineageQualified, candidateSemanticKey);
     if (lineageKeys.length !== 1) {
       return {state: 'CONFLICT', candidate: null, reasonCodes: ['VALIDATION_CHECKPOINT_CONFLICT']};

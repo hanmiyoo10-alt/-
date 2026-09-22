@@ -32,7 +32,7 @@ function baseEvidence(overrides = {}) {
 }
 function implementationReceipt({
   head = HEAD_A, diff = DIFF_A, main = MAIN, paths = PATHS,
-  includeMain = true, includeWorkflow = true, extraGates = [],
+  includeMain = true, includeWorkflow = true, workflowIdentity = null, extraGates = [],
 } = {}) {
   const authorityRefs = [
     {kind: 'PR', locator: 'pr:#2464', identity: head},
@@ -41,7 +41,7 @@ function implementationReceipt({
   if (includeMain) authorityRefs.push(
     {kind: 'GIT_REF', locator: 'refs/heads/main', identity: main});
   if (includeWorkflow) authorityRefs.push(
-    {kind: 'WORKFLOW_RUN', locator: 'run:12345', identity: head});
+    {kind: 'WORKFLOW_RUN', locator: 'run:12345', identity: workflowIdentity || head});
   return stageReceipt.projectStageReceipt({
     schemaVersion: 1,
     packetNumber: 2463,
@@ -104,6 +104,14 @@ const oldReceipt = implementationReceipt({head: HEAD_A, diff: DIFF_A});
 const liveReceipt = implementationReceipt({head: HEAD_B, diff: DIFF_A});
 const oldCandidate = owner.candidateFromReceipt(oldReceipt, 2463, 2464);
 const liveCandidate = owner.candidateFromReceipt(liveReceipt, 2463, 2464);
+const productionWorkflowCandidate = owner.candidateFromReceipt(implementationReceipt({
+  head: HEAD_B, diff: DIFF_A, workflowIdentity: 'head:' + HEAD_B,
+}), 2463, 2464);
+assert.equal(productionWorkflowCandidate.ownerCiPass, true);
+const malformedWorkflowCandidate = owner.candidateFromReceipt(implementationReceipt({
+  head: HEAD_B, diff: DIFF_A, workflowIdentity: 'head:' + HEAD_B + '0',
+}), 2463, 2464);
+assert.equal(malformedWorkflowCandidate.ownerCiPass, false);
 let reduced = owner.reduceCandidates([oldCandidate, liveCandidate], HEAD_B);
 assert.equal(reduced.state, 'EXACT');
 assert.equal(reduced.candidate.headSha, HEAD_B);

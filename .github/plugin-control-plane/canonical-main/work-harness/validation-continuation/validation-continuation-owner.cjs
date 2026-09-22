@@ -98,7 +98,9 @@ function candidateFromReceipt(receipt, packetNumber, prNumber) {
   if (prRefs.length !== 1 || !SHA40_RE.test(String(prRefs[0].identity || ''))) return null;
   const gates = receipt.requiredGates || [];
   const workflowRefs = sorted((receipt.authorityRefs || [])
-    .filter((row) => row.kind === 'WORKFLOW_RUN' && row.identity === prRefs[0].identity)
+    .filter((row) => row.kind === 'WORKFLOW_RUN'
+      && (row.identity === prRefs[0].identity
+        || row.identity === 'head:' + prRefs[0].identity))
     .map((row) => row.locator));
   const workflowSet = new Set(workflowRefs);
   const ownerCiPass = gates.some((row) => row.result === 'PASS'

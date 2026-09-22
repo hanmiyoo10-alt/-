@@ -9,9 +9,9 @@ This endpoint is deliberately separate from the existing `S` endpoint, which ent
 - Existing `desktop-commander-remote` stays untouched.
 - New service name: `desktop-commander-remote-termux`.
 - New install/state/log paths are separate from the existing endpoint.
-- Desktop Commander is pinned to `0.2.50`, the current verified Termux-native baseline on the main phone.
+- Desktop Commander is pinned to `0.2.51` for the S-Termux sibling; this upstream release contains the rotated-session persistence fix used by the reboot-recovery contract.
 - The generated service uses Termux Node directly and never invokes `proot-distro`.
-- A repository-managed CommonJS preload overrides `os.hostname()` only inside the sibling RDC Node process so Desktop Commander 0.2.50 registers as `S-Termux`.
+- A repository-managed CommonJS preload overrides `os.hostname()` only inside the sibling RDC Node process so Desktop Commander 0.2.51 registers as `S-Termux`.
 - A second repository-managed CommonJS preload fills only the seven proven Android runtime/classpath variables missing from a `DC_REMOTE_DEVICE=true` local MCP child, and only when the outer RDC process has the complete bundle. Explicit child values win; unrelated environment values, `PREFIX`, and `TMPDIR` are not forwarded.
 - A repository-managed process-local `which` shim handles only `which rg` for Desktop Commander ripgrep discovery, resolving `rg` through the sibling Termux `PATH`.
 - The profile does not add `/system/bin` to RDC `PATH`, install a global `which` package, patch vendor Desktop Commander/MCP SDK code, change the Android/kernel hostname, or use global `NODE_OPTIONS`.

@@ -2,7 +2,7 @@
 set -eu
 
 MODE=check
-VERSION="${RDC_TERMUX_VERSION:-0.2.50}"
+VERSION="${RDC_TERMUX_VERSION:-0.2.51}"
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 HOME="${HOME:-/data/data/com.termux/files/home}"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)

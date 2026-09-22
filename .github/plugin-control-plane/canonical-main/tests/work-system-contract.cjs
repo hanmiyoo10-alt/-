@@ -412,7 +412,7 @@ assert.match(readme, /Disjoint nonterminal packets remain eligible to proceed in
 
 const {classifyQueueBody, REASON_CODES} = require(path.join(dir, 'queue-hygiene.cjs'));
 const {classifyCoordinationReferences, REASON_CODES: COORD_REF_REASON_CODES} = require(path.join(dir, 'coordination-reference-hygiene.cjs'));
-const {resolveScopeOverlap, REASON_CODES: OVERLAP_REASON_CODES} = require(path.join(dir, 'scope-overlap.cjs'));
+const {extractPacketScopes, resolveScopeOverlap, REASON_CODES: OVERLAP_REASON_CODES} = require(path.join(dir, 'scope-overlap.cjs'));
 const {classifyPrActivity, REASON_CODES: PR_ACTIVITY_REASON_CODES} = require(path.join(dir, 'pr-activity.cjs'));
 
 const pointerOnlyFixture = `# Canonical Main — Work Queue
@@ -614,6 +614,52 @@ for (const [heading, ref] of [
   assert.equal(resolveOverlap(['path:docs/README.md'], [packet]).state, 'DISJOINT');
   assert.equal(resolveOverlap(['path:tools/repo-ci-mcp/server.py'], [packet]).state, 'OVERLAP');
 }
+
+for (const heading of [
+  'Bounded write scope',
+  'Bounded implementation write scope',
+  'Locked write scope',
+  'Bounded IMPLEMENTATION_PR write scope',
+  'Repository write-scope ceiling used by IMPLEMENTATION_PR',
+  'Bounded repository write ceiling',
+]) {
+  const parsed = extractPacketScopes(overlapPacketBodyWithHeading(
+    'IN_PROGRESS', heading, ['path:src/demo.js', 'surface:repo:demo']));
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.scopes.map((row) => row.normalized), [
+    'path:src/demo.js',
+    'surface:repo:demo',
+  ]);
+}
+const plainScopePacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  'IN_PROGRESS',
+  '## Bounded write scope',
+  '1. path:src/plain.js',
+  '2. surface:repo:plain',
+  '## Handoff',
+  'fixture',
+].join('\n');
+assert.deepEqual(extractPacketScopes(plainScopePacket).scopes.map((row) => row.normalized), [
+  'path:src/plain.js',
+  'surface:repo:plain',
+]);
+assert.equal(extractPacketScopes(
+  overlapPacketBodyWithHeading('IN_PROGRESS', 'Bounded write scopes', ['path:src/demo.js'])).ok, false);
+const duplicateScopeSection = overlapPacketBody('IN_PROGRESS', ['path:src/a.js'])
+  + '\n## Locked write scope\n1. `path:src/b.js`';
+assert.equal(extractPacketScopes(duplicateScopeSection).conflict, true);
+const invalidExportScope = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  'IN_PROGRESS',
+  '## Bounded write scope',
+  '1. `path:../secret`',
+].join('\n');
+assert.equal(extractPacketScopes(invalidExportScope).ok, false);
+assert.match(scopeOverlapSource,
+  /module\.exports = \{REASON_CODES, extractPacketScopes, normalizeScope, scopesOverlap, resolveScopeOverlap\};/);
 
 const repositoryWriteCeilingPaths = [
   'products/chatgpt-mobile-coder-lab/device-ops/rdc-termux/runtime-env-forward-shim.cjs',

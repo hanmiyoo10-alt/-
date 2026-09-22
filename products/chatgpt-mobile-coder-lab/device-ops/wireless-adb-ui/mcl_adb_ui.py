@@ -31,6 +31,11 @@ TARGET_RESOURCE_ID_RE = re.compile(
     r"^com\.openai\.chatgpt:id/([A-Za-z0-9_]{1,80})$"
 )
 MAX_RESOLVER_BYTES = 8192
+LANDING_COMPONENT = "com.openai.chatgpt/.ChatGptDeeplinkActivity"
+LANDING_ROUTES = {
+    "root": "https://chatgpt.com/",
+    "open_app": "https://chatgpt.com/open-app",
+}
 NEW_CHAT_RESOURCE_IDS = frozenset({
     "new_chat",
     "new_chat_button",
@@ -392,6 +397,50 @@ class AdbClient:
             "-n", component,
         ], timeout=12)
 
+    def resolve_landing_component(self, serial, route):
+        uri = LANDING_ROUTES.get(route)
+        if uri is None:
+            return "blocked", None
+        code, output = self.runner.run([
+            "-s", serial, "shell", "cmd", "package", "resolve-activity", "--brief",
+            "-a", "android.intent.action.VIEW",
+            "-c", "android.intent.category.BROWSABLE",
+            "-d", uri,
+            TARGET_PACKAGE,
+        ], timeout=12, max_output=MAX_RESOLVER_BYTES)
+        if code != 0:
+            return "unknown", None
+        text = _decode(output)
+        if not text:
+            return "blocked", None
+        component_lines = []
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if COMPONENT_LINE_RE.fullmatch(line):
+                component_lines.append(line)
+            elif "/" in line:
+                return "blocked", None
+        if len(component_lines) != 1:
+            return "blocked", None
+        component = component_lines[0]
+        if component != LANDING_COMPONENT:
+            return "blocked", None
+        return "found", component
+
+    def launch_landing(self, serial, route, component):
+        uri = LANDING_ROUTES.get(route)
+        if uri is None or component != LANDING_COMPONENT:
+            return 2, b""
+        return self.runner.run([
+            "-s", serial, "shell", "am", "start",
+            "-a", "android.intent.action.VIEW",
+            "-c", "android.intent.category.BROWSABLE",
+            "-d", uri,
+            "-n", component,
+        ], timeout=12)
+
     def tap(self, serial, x, y):
         return self.runner.run(
             ["-s", serial, "shell", "input", "tap", str(x), str(y)],
@@ -504,6 +553,45 @@ def launch_receipt(client):
         f"package={TARGET_PACKAGE}",
         f"connection={connection}",
         f"model={model}",
+        f"result={result}",
+        f"details={DETAILS}",
+    ]
+
+def landing_receipt(client, route):
+    target = client.resolve()
+    connection = target["connection"]
+    model = target["model"]
+    resolution = "blocked"
+    result = "blocked"
+    if route not in LANDING_ROUTES:
+        return [
+            "schema=mcl-wireless-adb-ui-landing.v1",
+            "target=s",
+            f"route={route}",
+            f"package={TARGET_PACKAGE}",
+            f"connection={connection}",
+            f"model={model}",
+            "resolution=blocked",
+            "result=blocked",
+            f"details={DETAILS}",
+        ]
+    if connection == "connected" and model == "match":
+        resolution, component = client.resolve_landing_component(
+            target["serial"], route
+        )
+        if resolution == "unknown":
+            result = "unknown"
+        elif resolution == "found":
+            code, _ = client.launch_landing(target["serial"], route, component)
+            result = "launched" if code == 0 else "unknown"
+    return [
+        "schema=mcl-wireless-adb-ui-landing.v1",
+        "target=s",
+        f"route={route}",
+        f"package={TARGET_PACKAGE}",
+        f"connection={connection}",
+        f"model={model}",
+        f"resolution={resolution}",
         f"result={result}",
         f"details={DETAILS}",
     ]
@@ -974,6 +1062,8 @@ def parser():
     find.add_argument("--label", required=True)
     sub.add_parser("find-editable")
     sub.add_parser("launch-target")
+    landing = sub.add_parser("launch-landing")
+    landing.add_argument("--route", choices=sorted(LANDING_ROUTES), required=True)
     alias = sub.add_parser("find-alias")
     alias.add_argument("--alias", choices=sorted(ALIASES), required=True)
     sub.add_parser("probe-new-chat")
@@ -1001,6 +1091,8 @@ def main(argv=None):
         lines = find_receipt(client, "editable")
     elif args.command == "launch-target":
         lines = launch_receipt(client)
+    elif args.command == "launch-landing":
+        lines = landing_receipt(client, args.route)
     elif args.command == "find-alias":
         lines = find_alias_receipt(client, args.alias)
     elif args.command == "probe-new-chat":

@@ -1,0 +1,126 @@
+name: Fortune Golf APK
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/fortune-golf-apk.yml'
+      - 'products/app-api-mod-lab/targets/standalone/fortune-golf/probe/**'
+      - 'products/app-api-mod-lab/targets/standalone/fortune-golf/android/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fortune-golf-apk.yml'
+      - 'products/app-api-mod-lab/targets/standalone/fortune-golf/probe/**'
+      - 'products/app-api-mod-lab/targets/standalone/fortune-golf/android/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fortune-golf-apk-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout pinned WIE emulator
+        uses: actions/checkout@v4
+        with:
+          repository: dlunch/wie
+          ref: 1ed8710956e727629e67db762ddc1e6bd6151a1f
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Checkout canonical Fortune Golf overlay
+        uses: actions/checkout@v4
+        with:
+          path: .probe
+          sparse-checkout: |
+            products/app-api-mod-lab/targets/standalone/fortune-golf/probe
+          persist-credentials: false
+
+      - name: Apply startup probe
+        run: python .probe/products/app-api-mod-lab/targets/standalone/fortune-golf/probe/apply.py .
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown,aarch64-linux-android
+
+      - name: Cache Rust dependencies and build outputs
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: fortune-golf-android
+          workspaces: |
+            . -> target
+            wie-app -> target
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack,tauri-cli
+
+      - name: Select Android NDK
+        run: |
+          ndk_path=${ANDROID_NDK_LATEST_HOME:-$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)}
+          test -d "$ndk_path"
+          echo "ANDROID_NDK_HOME=$ndk_path" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$ndk_path" >> "$GITHUB_ENV"
+
+      - name: Test startup database behavior
+        run: |
+          cargo fmt --all
+          cargo test -p wie-wipi-c startup_database -- --nocapture
+          cargo test -p wie-wipi-c fortune_image_tests -- --nocapture
+          cargo test -p wie-core-arm fortune_resource_trace -- --nocapture
+          cargo test -p wie-core-arm fortune_selection -- --nocapture
+          cargo test -p wie-ktf --lib -- --nocapture
+          cargo clippy -p wie-ktf --lib -- -D warnings
+
+      - name: Build bundled emulator frontend
+        run: |
+          npm ci
+          npm run build:prod
+
+      - name: Initialize Android app
+        working-directory: wie-app
+        run: |
+          cargo tauri android init --ci
+          cargo tauri icon ../wie-web/src/assets/favicon.png
+
+      - name: Build installable debug APK
+        working-directory: wie-app
+        run: cargo tauri android build --debug --target aarch64 --apk --ci --config '{"build":{"beforeBuildCommand":""}}'
+
+      - name: Collect APK and provenance
+        run: |
+          mkdir -p apk-output
+          apk_path=$(find wie-app/gen/android/app/build/outputs/apk -name '*-debug.apk' -type f -print -quit)
+          test -n "$apk_path"
+          cp "$apk_path" apk-output/fortune-golf-startup-probe.apk
+          cp LICENSE apk-output/WIE-LICENSE.txt
+          echo 'WIE source: https://github.com/dlunch/wie/commit/1ed8710956e727629e67db762ddc1e6bd6151a1f' > apk-output/BUILD.txt
+          echo "Repository event SHA: $GITHUB_SHA" >> apk-output/BUILD.txt
+          echo "Canonical overlay: products/app-api-mod-lab/targets/standalone/fortune-golf/probe" >> apk-output/BUILD.txt
+          echo 'Historical Probe 11 overlay ref: cefe56950c8a31066d05dc844c493958ec752fbe (6/6 migrated probe blobs matched at migration scope lock)' >> apk-output/BUILD.txt
+          echo 'Probe v0.1.11: bounded selection snapshot at resource null fault; bounded resource lookup history; preserve Java exception/unwind variants in diagnostic boundaries; skip null offscreen framebuffer cleanup on first-run shutdown; retains native/timer diagnostics, RGB565 and MC_DB support. Device behavior unverified. No game ROMs included.' >> apk-output/BUILD.txt
+          sha256sum apk-output/fortune-golf-startup-probe.apk >> apk-output/BUILD.txt
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: fortune-golf-startup-probe
+          path: apk-output/
+          if-no-files-found: error

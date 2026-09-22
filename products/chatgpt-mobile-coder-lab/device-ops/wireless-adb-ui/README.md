@@ -176,9 +176,25 @@ The caller text is not echoed in receipts.
 poll count. It matches only exact text/content-description values on eligible
 non-sensitive ChatGPT nodes and never enumerates unrelated UI text.
 
+## Fixed landing routes
+
+`launch-landing --route` accepts only the repository-owned enum:
+
+```text
+root     -> https://chatgpt.com/
+open_app -> https://chatgpt.com/open-app
+```
+
+The URI is never caller input. Before any landing effect, the adapter performs
+a package-restricted VIEW/BROWSABLE resolver and requires exactly
+`com.openai.chatgpt/.ChatGptDeeplinkActivity`. Missing, malformed,
+ambiguous, other-package, or other-component resolution executes no landing
+launch. Normal receipts expose the route enum but never the URI or resolved
+component.
+
 ## Fixed effect allowlist
 
-The launch path first performs one fixed read-only resolver for
+The ordinary launch path first performs one fixed read-only resolver for
 `com.openai.chatgpt` MAIN/LAUNCHER metadata. It accepts exactly one component
 owned by that package and never emits the resolved component in a receipt.
 
@@ -190,14 +206,21 @@ adb -s <resolved-S> shell am start
   -c android.intent.category.LAUNCHER
   -n <validated-com.openai.chatgpt-component>
 
+adb -s <resolved-S> shell am start
+  -a android.intent.action.VIEW
+  -c android.intent.category.BROWSABLE
+  -d <fixed-root-or-open-app-uri>
+  -n com.openai.chatgpt/.ChatGptDeeplinkActivity
+
 adb -s <resolved-S> shell input tap <internally-derived-x> <internally-derived-y>
 
 adb -s <resolved-S> shell input text <strictly-encoded-bounded-ascii>
 ```
 
 They are constructed as argv arrays, not through a shell. A missing,
-malformed, ambiguous, or other-package launcher component blocks the launch
-without trying an alternate launcher mechanism.
+malformed, ambiguous, or disallowed resolved component blocks the corresponding
+launch without trying a browser, external package, or alternate launcher
+mechanism.
 
 ## Forbidden effects
 

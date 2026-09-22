@@ -265,9 +265,27 @@ async function prepareLiveContext({
     parentManifestComment, parentHandoffComment, workspace,
   };
 }
-function buildChildManifest(ctx, request, validationText, prText) {
+function resolveValidationProfileBinding(ctx, validationText) {
+  try {
+    const profile = patchOwner.resolveValidationProfileForScopes(ctx.requestedScopes);
+    const request = patchOwner.parseValidationRequestText(validationText);
+    if (request.profile !== profile.profileId) {
+      fail('BLOCKED', 'VALIDATION_PROFILE_REQUEST_MISMATCH');
+    }
+    return {profile, request};
+  } catch (error) {
+    if (error instanceof patchOwner.InvocationError) {
+      fail(error.kind, ...error.reasonCodes);
+    }
+    throw error;
+  }
+}
+function buildChildManifest(ctx, request, validationText, prText, selectedProfile = null) {
+  const profile = selectedProfile || resolveValidationProfileBinding(ctx, validationText).profile;
   const patchRef = 'receipt:mcl-repository-patch-request:' + request.patch_sha256;
   const validationRef = patchOwner.VALIDATION_REF_PREFIX + sha256(Buffer.from(validationText, 'utf8'));
+  const validationContractRef =
+    patchOwner.VALIDATION_CONTRACT_REF_PREFIX + profile.contractDigest;
   const prRef = 'receipt:mcl-pr-publication-request:' + sha256(Buffer.from(prText, 'utf8'));
   return taskHandoff.buildManifest({
     schemaVersion: 1,
@@ -292,7 +310,7 @@ function buildChildManifest(ctx, request, validationText, prText) {
       `commit:${ctx.parentManifest.observedBaseSha}`,
       commentUrl(ctx.packet, ctx.parentManifestComment),
       commentUrl(ctx.packet, ctx.parentHandoffComment),
-      patchRef, validationRef, prRef,
+      patchRef, validationRef, validationContractRef, prRef,
       ctx.parentManifest.leaseEvidence.acquireEvidenceRef,
     ],
     expectedOutputRefs: pathScopes(ctx.requestedScopes).map((item) => 'path:' + item),
@@ -446,7 +464,7 @@ async function executePrepared(ctx, inputs, deps = {}) {
   const patchBytes = readRegular(inputs.patchFile, 'PATCH_FILE', patchOwner.MAX_PATCH_BYTES);
   if (sha256(patchBytes) !== request.patch_sha256) fail('CONFLICT', 'PATCH_HASH_CONFLICT');
   if (!same(request.expected_paths, pathScopes(ctx.requestedScopes))) fail('CONFLICT', 'PATCH_PATH_SCOPE_CONFLICT');
-  patchOwner.parseValidationRequestText(inputs.validationRequestText);
+  const validationBinding = resolveValidationProfileBinding(ctx, inputs.validationRequestText);
   if (!readRegular(inputs.requestFile, 'REQUEST_FILE').equals(Buffer.from(inputs.requestText, 'utf8'))) {
     fail('CONFLICT', 'REQUEST_TEXT_FILE_CONFLICT');
   }
@@ -455,7 +473,8 @@ async function executePrepared(ctx, inputs, deps = {}) {
     fail('CONFLICT', 'VALIDATION_REQUEST_TEXT_FILE_CONFLICT');
   }
   const prRequest = parsePrRequestText(inputs.prRequestText, ctx.packetRef);
-  const child = buildChildManifest(ctx, request, inputs.validationRequestText, inputs.prRequestText);
+  const child = buildChildManifest(
+    ctx, request, inputs.validationRequestText, inputs.prRequestText, validationBinding.profile);
   const childText = taskHandoff.renderManifest(child);
   const childManifestComment = postComment(childText);
   const childHandoffText = renderHandoff(child);
@@ -520,7 +539,11 @@ async function executePrepared(ctx, inputs, deps = {}) {
     const childReceipt = taskHandoff.buildCompletionReceipt(child, {
       disposition: 'COMPLETE',
       outputRefs: [`commit:${commit}`, `pr:#${pr.number}`],
-      validationRefs: [`pr:#${pr.number}`, `receipt:mcl-repository-patch-owner:${child.manifestId}`],
+      validationRefs: [
+        `pr:#${pr.number}`,
+        `receipt:mcl-repository-patch-owner:${child.manifestId}`,
+        patchOwner.VALIDATION_CONTRACT_REF_PREFIX + validationBinding.profile.contractDigest,
+      ],
       observedRefs: [`commit:${ctx.mainSha}`, `commit:${commit}`, `pr:#${pr.number}`],
       leaseDisposition: 'RELEASED',
       leaseReleaseEvidence: releaseEvidence,
@@ -558,6 +581,11 @@ async function executePrepared(ctx, inputs, deps = {}) {
       commit: `commit:${commit}`,
       pr: `pr:#${pr.number}`,
       changedFiles: pr.changed,
+      stageOwnerId: patchOwner.STAGE_OWNER_ID,
+      mutationPrimitiveId: patchOwner.MUTATION_PRIMITIVE_ID,
+      validationProfile: validationBinding.profile.profileId,
+      validationProfileVersion: validationBinding.profile.profileVersion,
+      validationContractDigest: validationBinding.profile.contractDigest,
       leaseReleasedGeneration: released.state.generation,
       comments,
       result: 'PASS',
@@ -587,6 +615,9 @@ async function executePrepared(ctx, inputs, deps = {}) {
       phase: 'IMPLEMENTATION_PR',
       output: {
         changedFileCount: pr.changed.length,
+        stageOwner: patchOwner.STAGE_OWNER_ID,
+        mutationPrimitive: patchOwner.MUTATION_PRIMITIVE_ID,
+        validationProfile: validationBinding.profile.profileId,
         commit: `commit:${commit}`,
         pr: `pr:#${pr.number}`,
       },
@@ -689,6 +720,7 @@ module.exports = {
   PR_SCHEMA,
   buildChildManifest,
   buildStageReceipt,
+  resolveValidationProfileBinding,
   commentUrl,
   changedBetween,
   errorView,

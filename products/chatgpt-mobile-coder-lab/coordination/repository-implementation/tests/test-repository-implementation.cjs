@@ -23,7 +23,10 @@ const HEAD = '2'.repeat(40);
 const LEASE = 'b'.repeat(64);
 const ACQUIRE = 'run:1234';
 const PATHS = [...patchOwner.D014_COMPLETION_SET_PATHS].sort();
-const SCOPES = [...PATHS.map((item) => 'path:' + item), 'surface:mcl:d014-completion-set'].sort();
+const SCOPES = [...patchOwner.D014_VALIDATION_SCOPES];
+const D014_PROFILE = patchOwner.validationProfileById(patchOwner.D014_VALIDATION_PROFILE);
+const VC_PATHS = [...patchOwner.VALIDATION_CONTINUATION_PATHS].sort();
+const VC_SCOPES = [...patchOwner.VALIDATION_CONTINUATION_SCOPES];
 
 function makeParent() {
   return handoff.buildManifest({
@@ -186,11 +189,61 @@ test('child manifest binds parent, patch, validation, PR and lease identity', ()
     assert.ok(child.inputRefs.includes(
       patchOwner.VALIDATION_REF_PREFIX + impl.sha256(Buffer.from(files.validationText))));
     assert.ok(child.inputRefs.includes(
+      patchOwner.VALIDATION_CONTRACT_REF_PREFIX + D014_PROFILE.contractDigest));
+    assert.ok(child.inputRefs.includes(
       'receipt:mcl-pr-publication-request:' + impl.sha256(Buffer.from(files.prText))));
     assert.ok(child.inputRefs.includes(ACQUIRE));
   } finally {
     files.cleanup();
   }
+});
+
+test('coordinator derives reviewed validation profile from exact packet scope', () => {
+  const d014 = impl.resolveValidationProfileBinding(
+    makeCtx(),
+    JSON.stringify({
+      schema: patchOwner.VALIDATION_REQUEST_SCHEMA,
+      profile: patchOwner.D014_VALIDATION_PROFILE,
+    }),
+  );
+  assert.equal(d014.profile.profileId, patchOwner.D014_VALIDATION_PROFILE);
+
+  const vcCtx = {...makeCtx(), requestedScopes: [...VC_SCOPES]};
+  const vc = impl.resolveValidationProfileBinding(
+    vcCtx,
+    JSON.stringify({
+      schema: patchOwner.VALIDATION_REQUEST_SCHEMA,
+      profile: patchOwner.VALIDATION_CONTINUATION_PROFILE,
+    }),
+  );
+  assert.equal(vc.profile.profileId, patchOwner.VALIDATION_CONTINUATION_PROFILE);
+  assert.deepEqual(vc.profile.paths, VC_PATHS);
+
+  assert.throws(
+    () => impl.resolveValidationProfileBinding(
+      vcCtx,
+      JSON.stringify({
+        schema: patchOwner.VALIDATION_REQUEST_SCHEMA,
+        profile: patchOwner.D014_VALIDATION_PROFILE,
+      }),
+    ),
+    (error) => error instanceof impl.ImplementationError
+      && error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('VALIDATION_PROFILE_REQUEST_MISMATCH'),
+  );
+
+  assert.throws(
+    () => impl.resolveValidationProfileBinding(
+      {...makeCtx(), requestedScopes: ['path:docs/unreviewed.txt']},
+      JSON.stringify({
+        schema: patchOwner.VALIDATION_REQUEST_SCHEMA,
+        profile: patchOwner.D014_VALIDATION_PROFILE,
+      }),
+    ),
+    (error) => error instanceof impl.ImplementationError
+      && error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('NO_REVIEWED_VALIDATION_PROFILE'),
+  );
 });
 
 test('PR publication is fixed to exact branch main base and readback', () => {
@@ -317,6 +370,9 @@ test('successful fixed transaction keeps publication before durable release and 
     assert.equal(view.phase, 'IMPLEMENTATION_PR');
     assert.equal(view.result, 'PASS');
     assert.equal(view.nextLegalAction, 'VALIDATION_MERGE');
+    assert.equal(view.output.stageOwner, patchOwner.STAGE_OWNER_ID);
+    assert.equal(view.output.mutationPrimitive, patchOwner.MUTATION_PRIMITIVE_ID);
+    assert.equal(view.output.validationProfile, patchOwner.D014_VALIDATION_PROFILE);
     const at = (name) => events.indexOf(name);
     assert.ok(at('patch-owner') < at('pr-publish'));
     assert.ok(at('pr-publish') < at('lease-release'));

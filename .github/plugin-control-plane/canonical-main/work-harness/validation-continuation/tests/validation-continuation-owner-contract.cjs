@@ -83,6 +83,8 @@ assert.equal(decision.nextLegalAction, 'VALIDATION_MERGE_FINALIZE');
 
 decision = owner.classifyContinuationEvidence(baseEvidence({currentization: 'STALE'}));
 assert.equal(decision.resumeDisposition, 'CURRENTIZATION_REQUIRED');
+decision = owner.classifyContinuationEvidence(baseEvidence({currentization: 'REPLAY_SAFE'}));
+assert.equal(decision.resumeDisposition, 'MERGE_ADMISSION_READY');
 decision = owner.classifyContinuationEvidence(baseEvidence({required: 'MISSING'}));
 assert.equal(decision.resumeDisposition, 'VALIDATION_REFRESH_REQUIRED');
 decision = owner.classifyContinuationEvidence(baseEvidence({ownerCI: 'MISSING'}));
@@ -123,7 +125,21 @@ reduced = owner.reduceCandidates([liveCandidate, conflictingLive], HEAD_B);
 assert.equal(reduced.state, 'CONFLICT');
 assert.ok(reduced.reasonCodes.includes('VALIDATION_CHECKPOINT_CONFLICT'));
 
-assert.equal(owner.currentizationState(liveCandidate, MAIN), 'EXACT_CURRENT_MAIN');
+assert.equal(owner.currentizationState(liveCandidate, MAIN), 'STALE');
+const currentizedCandidate = owner.candidateFromReceipt(implementationReceipt({
+  head: HEAD_B,
+  extraGates: [{
+    name: 'currentization-diff-preserved',
+    result: 'PASS',
+    evidenceLocator: 'commit:' + HEAD_B,
+  }],
+}), 2463, 2464);
+const currentizedReduced = owner.reduceCandidates([currentizedCandidate], HEAD_B);
+assert.equal(currentizedReduced.state, 'EXACT');
+assert.equal(currentizedReduced.candidate.exactCurrentizationProof, true);
+assert.equal(owner.currentizationState(currentizedReduced.candidate, MAIN), 'EXACT_CURRENT_MAIN');
+assert.equal(owner.currentizationState(currentizedReduced.candidate, '5'.repeat(40)), 'STALE');
+
 const replayCandidate = owner.candidateFromReceipt(implementationReceipt({
   head: HEAD_B,
   extraGates: [{
@@ -135,7 +151,21 @@ const replayCandidate = owner.candidateFromReceipt(implementationReceipt({
 const replayReduced = owner.reduceCandidates([replayCandidate], HEAD_B);
 assert.equal(replayReduced.state, 'EXACT');
 assert.equal(owner.currentizationState(replayReduced.candidate, MAIN), 'REPLAY_SAFE');
-assert.equal(owner.currentizationState(liveCandidate, '5'.repeat(40)), 'STALE');
+assert.equal(owner.currentizationState(replayReduced.candidate, '5'.repeat(40)), 'REPLAY_SAFE');
+
+const secondMainCandidate = owner.candidateFromReceipt(implementationReceipt({
+  head: HEAD_B,
+  main: '6'.repeat(40),
+  extraGates: [{
+    name: 'currentization-diff-preserved',
+    result: 'PASS',
+    evidenceLocator: 'commit:' + HEAD_B,
+  }],
+}), 2463, 2464);
+const multipleMainReduced = owner.reduceCandidates(
+  [currentizedCandidate, secondMainCandidate], HEAD_B);
+assert.equal(multipleMainReduced.state, 'EXACT');
+assert.equal(owner.currentizationState(multipleMainReduced.candidate, MAIN), 'UNKNOWN');
 assert.equal(owner.coordinationState(liveCandidate.requiredGates), 'CONVERGED');
 assert.equal(owner.pathScopeCompatibility(PATHS, ['path:src/**'], PATHS), 'EXACT');
 assert.equal(owner.pathScopeCompatibility(PATHS, ['path:other/**'], PATHS), 'CONFLICT');

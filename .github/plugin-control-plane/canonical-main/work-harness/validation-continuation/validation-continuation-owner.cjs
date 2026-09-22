@@ -218,6 +218,9 @@ function reduceCandidates(candidates, liveHead) {
       requiredGatePass: gates.some((row) => /required/i.test(String(row.name || ''))
         && row.result === 'PASS'),
       ownerCiPass: matching.some((row) => row.ownerCiPass === true),
+      exactCurrentizationProof: gates.some((row) =>
+        ['currentization-scope-and-blob-preservation', 'currentization-diff-preserved']
+          .includes(gateName(row)) && row.result === 'PASS'),
       replaySafe: gates.some((row) =>
         ['packet-scoped-currentization-replay', 'currentization-replay-safe']
           .includes(gateName(row)) && row.result === 'PASS'),
@@ -237,10 +240,11 @@ function coordinationState(gates) {
 }
 function currentizationState(candidate, currentMain) {
   if (!candidate) return 'UNKNOWN';
-  if (candidate.mainRefs.length > 1) return 'UNKNOWN';
-  if (candidate.mainRefs.length === 0) return 'UNKNOWN';
+  if (candidate.mainRefs.length !== 1) return 'UNKNOWN';
+  if (candidate.replaySafe) return 'REPLAY_SAFE';
+  if (!candidate.exactCurrentizationProof) return 'STALE';
   if (candidate.mainRefs[0] !== currentMain) return 'STALE';
-  return candidate.replaySafe ? 'REPLAY_SAFE' : 'EXACT_CURRENT_MAIN';
+  return 'EXACT_CURRENT_MAIN';
 }
 
 async function readRequiredState(client, headSha, prNumber) {

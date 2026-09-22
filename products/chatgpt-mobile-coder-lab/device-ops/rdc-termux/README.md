@@ -12,9 +12,9 @@ This endpoint is deliberately separate from the existing `S` endpoint, which ent
 - Desktop Commander is pinned to `0.2.50`, the current verified Termux-native baseline on the main phone.
 - The generated service uses Termux Node directly and never invokes `proot-distro`.
 - A repository-managed CommonJS preload overrides `os.hostname()` only inside the sibling RDC Node process so Desktop Commander 0.2.50 registers as `S-Termux`.
+- A second repository-managed CommonJS preload fills only the seven proven Android runtime/classpath variables missing from a `DC_REMOTE_DEVICE=true` local MCP child, and only when the outer RDC process has the complete bundle. Explicit child values win; unrelated environment values, `PREFIX`, and `TMPDIR` are not forwarded.
 - A repository-managed process-local `which` shim handles only `which rg` for Desktop Commander ripgrep discovery, resolving `rg` through the sibling Termux `PATH`.
-- The profile does not add `/system/bin` to RDC `PATH`, install a global `which` package, or patch vendor ripgrep resolver code.
-- Android/kernel hostname is not changed, vendor `node_modules` are not patched, and global `NODE_OPTIONS` is not used.
+- The profile does not add `/system/bin` to RDC `PATH`, install a global `which` package, patch vendor Desktop Commander/MCP SDK code, change the Android/kernel hostname, or use global `NODE_OPTIONS`.
 - No RDC auth/session files are copied or transplanted.
 - No PocketRisu, `sshd`, Tailscale, Termux:Boot, branch/worktree, release, or production state is owned here.
 - `allow-external-apps` is not enabled or modified by this profile.
@@ -33,7 +33,7 @@ The service's first authorization, if required by Remote Desktop Commander, is a
 
 ## Verification
 
-`verify.sh` checks the pinned package, managed device-name shim, process-local ripgrep discovery shim, exact private-shim/Termux `PATH` wiring, explicit `--require` preload wiring, ownership markers, distinct service path, direct Termux Node entrypoint, absence of PRoot execution, distinct device label, and that the broader Termux external-command policy remains disabled.
+`verify.sh` checks the pinned package, managed device-name and runtime-env preloads, process-local ripgrep discovery shim, exact private-shim/Termux `PATH` wiring, explicit `--require` preload wiring, ownership markers, distinct service path, direct Termux Node entrypoint, absence of PRoot execution, distinct device label, absence of global `NODE_OPTIONS`, and that the broader Termux external-command policy remains disabled.
 
 For live proof after merge:
 

@@ -77,8 +77,21 @@ class ScreenOnTests(unittest.TestCase):
         screen_on._write_companion_token(token)
         return token
 
-    def test_cli_default_backend_preserves_eonsoft_baseline(self):
-        self.assertEqual(screen_on.build_parser().parse_args(["doctor"]).backend, "eonsoft")
+    def test_cli_default_backend_is_repo_owned_companion(self):
+        self.assertEqual(screen_on.build_parser().parse_args(["doctor"]).backend, "companion")
+        self.assertEqual(
+            screen_on.build_parser().parse_args(["--backend", "eonsoft", "doctor"]).backend,
+            "eonsoft",
+        )
+
+    def test_default_on_dispatches_companion_without_eonsoft_handler(self):
+        with (
+            mock.patch.object(screen_on, "command_companion_on", return_value=["overlay=ON"]) as companion_on,
+            mock.patch.object(screen_on, "command_on", side_effect=AssertionError("EONSOFT handler must not be called")) as eonsoft_on,
+        ):
+            self.assertEqual(screen_on.main(["on"]), 0)
+        companion_on.assert_called_once_with()
+        eonsoft_on.assert_not_called()
 
     def test_eonsoft_doctor_preserves_unknown_effect(self):
         lines = screen_on.command_doctor(FakeRunner())

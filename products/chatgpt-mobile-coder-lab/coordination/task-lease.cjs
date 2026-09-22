@@ -12,10 +12,13 @@ const OWNER_PACKET_REF = '#2350';
 const CONTROLLER_PATH = 'products/chatgpt-mobile-coder-lab/coordination/task-lease.cjs';
 const ROUTES = Object.freeze(['S_PRIVATE_LOCAL', 'M_VM_LAB', 'M_PRIVATE_LAB', 'S_TERMUX', 'M', 'S']);
 const EXECUTORS = new Set(ROUTES);
-const WORKSPACE_KINDS = Object.freeze(['repository', 'not_applicable', 'landing_metadata']);
+const WORKSPACE_KINDS = Object.freeze(['repository', 'not_applicable', 'landing_metadata', 'landing_branch_repair']);
 const LANDING_METADATA = Object.freeze({
   S: Object.freeze({branch: 'server/work', worktree: '/root/nyang-repo', scope: 'surface:mcl-landing-origin-main:S'}),
   M: Object.freeze({branch: 'mainphone/work', worktree: '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work', scope: 'surface:mcl-landing-origin-main:M'}),
+});
+const LANDING_BRANCH_REPAIR = Object.freeze({
+  M: Object.freeze({branch: 'mainphone/work', worktree: '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work', scope: 'surface:mcl-landing-branch:M'}),
 });
 const TERMINAL_PACKET_STATES = new Set(['DONE', 'CANCELLED', 'SUPERSEDED']);
 const SHA40_RE = /^[0-9a-f]{40}$/;
@@ -88,6 +91,9 @@ function renderLedger(state) {
 function landingMetadataIdentity(executor) {
   return LANDING_METADATA[executor] || null;
 }
+function landingBranchRepairIdentity(executor) {
+  return LANDING_BRANCH_REPAIR[executor] || null;
+}
 function validateWorkspace(workspace, executor) {
   if (!workspace || typeof workspace !== 'object' || Array.isArray(workspace)) return ['WORKSPACE_INVALID'];
   if (!WORKSPACE_KINDS.includes(workspace.kind)) return ['WORKSPACE_KIND_INVALID'];
@@ -99,6 +105,12 @@ function validateWorkspace(workspace, executor) {
     const identity = landingMetadataIdentity(executor);
     if (!identity) return ['WORKSPACE_LANDING_EXECUTOR_INVALID'];
     if (workspace.branch !== identity.branch || workspace.worktree !== identity.worktree) return ['WORKSPACE_LANDING_IDENTITY_INVALID'];
+    return [];
+  }
+  if (workspace.kind === 'landing_branch_repair') {
+    const identity = landingBranchRepairIdentity(executor);
+    if (!identity) return ['WORKSPACE_LANDING_BRANCH_REPAIR_EXECUTOR_INVALID'];
+    if (workspace.branch !== identity.branch || workspace.worktree !== identity.worktree) return ['WORKSPACE_LANDING_BRANCH_REPAIR_IDENTITY_INVALID'];
     return [];
   }
   if (!['S', 'M'].includes(executor)) return ['WORKSPACE_REPOSITORY_EXECUTOR_INVALID'];
@@ -121,8 +133,17 @@ function validateLandingMetadataBinding({workspace, executor, scopes, observedBa
   if (!SHA40_RE.test(observedBaseSha || '')) errors.push('LANDING_METADATA_BASE_SHA_REQUIRED');
   return errors;
 }
+function validateLandingBranchRepairBinding({workspace, route, executor, scopes, observedBaseSha}) {
+  if (workspace?.kind !== 'landing_branch_repair') return [];
+  const identity = landingBranchRepairIdentity(executor);
+  const errors = [];
+  if (route !== 'M' || executor !== 'M' || !identity) errors.push('LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID');
+  if (identity && (!Array.isArray(scopes) || scopes.length !== 1 || scopes[0] !== identity.scope)) errors.push('LANDING_BRANCH_REPAIR_SCOPE_INVALID');
+  if (!SHA40_RE.test(observedBaseSha || '')) errors.push('LANDING_BRANCH_REPAIR_BASE_SHA_REQUIRED');
+  return errors;
+}
 function isGitWorkspace(workspace) {
-  return workspace?.kind === 'repository' || workspace?.kind === 'landing_metadata';
+  return workspace?.kind === 'repository' || workspace?.kind === 'landing_metadata' || workspace?.kind === 'landing_branch_repair';
 }
 
 function validateLease(lease) {
@@ -139,6 +160,7 @@ function validateLease(lease) {
   errors.push(...validateWorkspace(lease.workspace, lease.executor));
   if (lease.observedBaseSha !== null && !SHA40_RE.test(lease.observedBaseSha || '')) errors.push('LEASE_BASE_SHA_INVALID');
   errors.push(...validateLandingMetadataBinding({workspace: lease.workspace, executor: lease.executor, scopes: lease.scopes, observedBaseSha: lease.observedBaseSha}));
+  errors.push(...validateLandingBranchRepairBinding({workspace: lease.workspace, route: lease.route, executor: lease.executor, scopes: lease.scopes, observedBaseSha: lease.observedBaseSha}));
   if (!Array.isArray(lease.sourceRefs) || lease.sourceRefs.length < 1 || lease.sourceRefs.length > 8) errors.push('LEASE_SOURCE_REFS_INVALID');
   return errors;
 }
@@ -234,6 +256,7 @@ function normalizeAcquireRequest(request) {
   const observedBaseSha = request?.observedBaseSha || null;
   if (observedBaseSha !== null && !SHA40_RE.test(observedBaseSha)) reasonCodes.push('REQUEST_BASE_SHA_INVALID');
   reasonCodes.push(...validateLandingMetadataBinding({workspace, executor: request?.executor, scopes: scopeResult.scopes, observedBaseSha}));
+  reasonCodes.push(...validateLandingBranchRepairBinding({workspace, route: request?.route, executor: request?.executor, scopes: scopeResult.scopes, observedBaseSha}));
   if (reasonCodes.length) return {ok: false, reasonCodes: uniq(reasonCodes).sort()};
 
   const profile = {
@@ -296,11 +319,11 @@ function planAcquire(state, request) {
       return result('CONFLICT', ['ACTIVE_LEASE_SCOPE_OVERLAP'], {generation: state.generation, leaseId: active.leaseId});
     }
     if (isGitWorkspace(active.workspace) && isGitWorkspace(candidate.workspace)) {
-      if (active.workspace.branch === candidate.workspace.branch) {
-        return result('CONFLICT', ['ACTIVE_LEASE_BRANCH_RESERVED'], {generation: state.generation, leaseId: active.leaseId});
-      }
       if (active.workspace.worktree === candidate.workspace.worktree) {
         return result('CONFLICT', ['ACTIVE_LEASE_WORKTREE_RESERVED'], {generation: state.generation, leaseId: active.leaseId});
+      }
+      if (active.workspace.branch === candidate.workspace.branch) {
+        return result('CONFLICT', ['ACTIVE_LEASE_BRANCH_RESERVED'], {generation: state.generation, leaseId: active.leaseId});
       }
     }
   }
@@ -478,6 +501,7 @@ if (require.main === module) {
 module.exports = {
   CONTROLLER_PATH,
   EXECUTORS,
+  LANDING_BRANCH_REPAIR,
   LANDING_METADATA,
   LEDGER_MARKER,
   MAX_ACTIVE_LEASES,
@@ -488,6 +512,7 @@ module.exports = {
   digest,
   executeOperation,
   extractPacketLifecycle,
+  landingBranchRepairIdentity,
   landingMetadataIdentity,
   normalizeAcquireRequest,
   parseLedger,
@@ -499,6 +524,7 @@ module.exports = {
   requestFromEnv,
   result,
   run,
+  validateLandingBranchRepairBinding,
   validateLandingMetadataBinding,
   validateLedger,
   validateWorkspace,

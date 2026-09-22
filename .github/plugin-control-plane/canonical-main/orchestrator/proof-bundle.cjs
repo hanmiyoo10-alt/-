@@ -2,26 +2,23 @@
 
 const fs = require('fs');
 const path = require('path');
-const {execFileSync} = require('child_process');
 const {composeProofBundle} = require('../proof-bundle.cjs');
+const {readGitHubCliJson} = require('../infra/github-cli-read.cjs');
 
 const DEFAULT_ATTEMPTS = 30;
 const DEFAULT_DELAY_MS = 5000;
 
-function ghJson(args) {
-  const output = execFileSync('gh', ['api', ...args], {
-    encoding: 'utf8',
-    maxBuffer: 4 * 1024 * 1024,
-    env: process.env,
-  });
-  return output.trim() ? JSON.parse(output) : null;
+function ghJson(args, readFailures = null) {
+  const result = readGitHubCliJson(args);
+  if (result.failure && Array.isArray(readFailures)) readFailures.push(result.failure);
+  return result.value;
 }
 
 function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function workflowRuns(repo, workflow, sha, event) {
+function workflowRuns(repo, workflow, sha, event, readFailures = null) {
   const payload = ghJson([
     '--method', 'GET',
     `repos/${repo}/actions/workflows/${workflow}/runs`,
@@ -29,7 +26,7 @@ function workflowRuns(repo, workflow, sha, event) {
     '-f', `event=${event}`,
     '-f', 'status=completed',
     '-f', 'per_page=100',
-  ]) || {};
+  ], readFailures) || {};
   return Array.isArray(payload.workflow_runs) ? payload.workflow_runs : [];
 }
 
@@ -37,12 +34,12 @@ function newestRun(rows) {
   return [...rows].sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0] || null;
 }
 
-function workflowEvidence(repo, workflow, sha, event, withJobs = false) {
-  const run = newestRun(workflowRuns(repo, workflow, sha, event));
+function workflowEvidence(repo, workflow, sha, event, withJobs = false, readFailures = null) {
+  const run = newestRun(workflowRuns(repo, workflow, sha, event, readFailures));
   if (!run) return null;
   const evidence = {runId: run.id, conclusion: String(run.conclusion || 'unknown')};
   if (!withJobs) return evidence;
-  const payload = ghJson([`repos/${repo}/actions/runs/${run.id}/jobs?per_page=100`]) || {};
+  const payload = ghJson([`repos/${repo}/actions/runs/${run.id}/jobs?per_page=100`], readFailures) || {};
   const jobs = Array.isArray(payload.jobs) ? payload.jobs : [];
   for (const name of ['Verify', 'Required']) {
     const job = jobs.find((row) => row.name === name);
@@ -51,11 +48,11 @@ function workflowEvidence(repo, workflow, sha, event, withJobs = false) {
   return evidence;
 }
 
-function associatedMergedPr(repo, targetSha) {
+function associatedMergedPr(repo, targetSha, readFailures = null) {
   const rows = ghJson([
     '-H', 'Accept: application/vnd.github+json',
     `repos/${repo}/commits/${targetSha}/pulls?per_page=100`,
-  ]) || [];
+  ], readFailures) || [];
   if (!Array.isArray(rows)) return null;
   const exact = rows.find((row) => row.merged_at && row.merge_commit_sha === targetSha && row.base?.ref === 'main');
   const candidate = exact || rows.find((row) => row.merged_at && row.base?.ref === 'main');
@@ -106,26 +103,35 @@ function parseOps(body) {
   };
 }
 
+function attachReadFailures(bundle, readFailures) {
+  if (!readFailures.length) return bundle;
+  return Object.freeze({
+    ...bundle,
+    state: 'PARTIAL',
+    acceptanceReady: false,
+    evidence: Object.freeze({...bundle.evidence, readFailures: Object.freeze([...readFailures])}),
+    missing: Object.freeze([...new Set([...bundle.missing, 'EXTERNAL_READ_FAILURE'])]),
+  });
+}
+
 function collectOnce(repo, targetSha) {
-  const pr = associatedMergedPr(repo, targetSha) || {};
-  const plugin = pr.headSha ? workflowEvidence(repo, 'plugin-control-plane-ci.yml', pr.headSha, 'pull_request', false) : null;
-  const simcoreHead = pr.headSha ? workflowEvidence(repo, 'simcore-ci.yml', pr.headSha, 'pull_request', true) : null;
-  const simcoreMain = workflowEvidence(repo, 'simcore-ci.yml', targetSha, 'push', true);
-  const opsIssue = ghJson([`repos/${repo}/issues/485`]) || {};
+  const readFailures = [];
+  const pr = associatedMergedPr(repo, targetSha, readFailures) || {};
+  const plugin = pr.headSha ? workflowEvidence(repo, 'plugin-control-plane-ci.yml', pr.headSha, 'pull_request', false, readFailures) : null;
+  const simcoreHead = pr.headSha ? workflowEvidence(repo, 'simcore-ci.yml', pr.headSha, 'pull_request', true, readFailures) : null;
+  const simcoreMain = workflowEvidence(repo, 'simcore-ci.yml', targetSha, 'push', true, readFailures);
+  const opsIssue = ghJson([`repos/${repo}/issues/485`], readFailures) || {};
   const ops = parseOps(String(opsIssue.body || ''));
-  const branch = ghJson([`repos/${repo}/branches/main`]) || {};
+  const branch = ghJson([`repos/${repo}/branches/main`], readFailures) || {};
   const protection = {
     protected: typeof branch.protected === 'boolean' ? branch.protected : undefined,
     enforcementLevel: branch.protection?.required_status_checks?.enforcement_level || 'unknown',
     requiredChecks: branch.protection?.required_status_checks?.contexts || [],
   };
-  return composeProofBundle({
+  return attachReadFailures(composeProofBundle({
     targetSha,
     pr,
-    prHead: {
-      plugin: plugin || {},
-      simcore: simcoreHead || {},
-    },
+    prHead: {plugin: plugin || {}, simcore: simcoreHead || {}},
     mergedMain: simcoreMain || {},
     ops,
     protection,
@@ -135,7 +141,7 @@ function collectOnce(repo, targetSha) {
       attentionKnown: ops.attentionKnown,
       attentionCount: ops.attentionCount,
     },
-  });
+  }), readFailures);
 }
 
 function renderSummary(bundle) {
@@ -195,9 +201,11 @@ if (require.main === module) {
 
 module.exports = {
   associatedMergedPr,
+  attachReadFailures,
   collectOnce,
   incidentProjection,
   parseOps,
   renderSummary,
   workflowEvidence,
+  writeBundle,
 };

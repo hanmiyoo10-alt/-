@@ -46,6 +46,31 @@ The guard first checks the fixed RDC service directory and explicit `down` marke
 A recognized `run:` or `down:` status means an RDC runit supervisor already exists and no action is taken. Only the exact `runsv not running` condition may start one dedicated `runsv` for the fixed RDC service. Any other status is classified `unknown` and fails closed without broader recovery.
 
 The guard service uses ordinary runit child restart semantics. If the guard child exits while its dedicated `runsv` remains alive, runit starts the guard child again. The guard's own single-instance lock remains a second boundary against duplicate active loops.
+
+## Guard-service anchor durability
+
+The fixed Termux:Boot launcher also starts one independent bounded anchor process. The anchor owns only the fixed mcl-m-rdc-supervisor-guard service supervisor.
+
+    Boot launcher
+    -> immediate fixed guard-service supervision check
+    -> exactly one independent anchor loop
+    -> missing guard-service runsv => start one dedicated guard-service runsv
+    -> running/down => preserve
+    -> ambiguous or invalid identity => fail closed
+
+The dedicated guard loop performs the reverse ensure after each existing RDC target-recovery iteration:
+
+    guard loop
+    -> existing desktop-commander-remote recovery first
+    -> fixed launcher --ensure-anchor
+       -> live anchor          => no-op
+       -> missing/stale anchor => start exactly one anchor
+       -> live ambiguous PID   => fail closed
+
+Together they form one bounded two-member recovery ring: the anchor restores the guard-service runsv, while a surviving guard loop restores a missing anchor. Anchor ensure is best-effort and cannot stop or weaken the existing RDC target-recovery loop.
+
+The anchor never inspects channel/network/auth/session state and never touches desktop-commander-remote directly. It owns only the fixed guard-service supervisor. Stale dead anchor pid/lock state is reclaimed through the fixed identity contract; a live unrelated PID/lock is preserved and fails closed.
+
 ## Install contract
 
 ```sh

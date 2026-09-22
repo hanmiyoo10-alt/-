@@ -297,7 +297,7 @@ def command_companion_doctor(runner: Runner = subprocess.run) -> list[str]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Control the Termux screen keep-awake route.")
-    parser.add_argument("--backend", choices=("eonsoft", "companion"), default="eonsoft", help="Effect backend. Default remains the real-device-verified EONSOFT route.")
+    parser.add_argument("--backend", choices=("eonsoft", "companion"), default="companion", help="Effect backend. Default is the real-device-validated repo-owned companion; use --backend eonsoft for compatibility fallback.")
     parser.add_argument("--pair-code", help="8-digit one-time code shown by the companion app; valid only with --backend companion setup.")
     parser.add_argument("command", choices=("doctor", "setup", "on", "off", "status", "diagnostic"))
     return parser

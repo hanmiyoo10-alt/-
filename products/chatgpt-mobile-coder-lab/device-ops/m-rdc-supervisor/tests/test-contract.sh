@@ -37,10 +37,12 @@ read_pid() {
     [ -r "$1" ] && cat "$1" || true
 }
 cleanup() {
+    force_stop_pid "$(read_pid "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid")"
     force_stop_pid "$(read_pid "$TEST_STATE/guard-runsv.pid")"
     force_stop_pid "$(read_pid "$TEST_STATE/target-runsv.pid")"
     force_stop_pid "${SECOND_PID:-}"
     force_stop_pid "${LOOP_PID:-}"
+    force_stop_pid "${AMBIG_PID:-}"
     rm -rf "$TMP"
 }
 trap cleanup EXIT INT TERM HUP
@@ -62,6 +64,7 @@ mkdir -p "$PREFIX/bin" "$TARGET/supervise" "$HOME_FIX" "$TEST_STATE"
 touch "$TARGET/supervise/ok"
 ln -s "$(command -v nohup)" "$PREFIX/bin/nohup"
 ln -s "$(command -v sleep)" "$PREFIX/bin/sleep"
+ln -s "$(command -v sh)" "$PREFIX/bin/sh"
 printf '#!%s\n' "$(command -v sh)" > "$PREFIX/bin/sv"
 cat >> "$PREFIX/bin/sv" <<'EOF'
 [ "${1:-}" = status ] || exit 2
@@ -160,7 +163,7 @@ run_launcher() {
     MCL_M_RDC_SUPERVISOR_TEST_ROOT="$TEST_ROOT" \
     MCL_M_RDC_SUPERVISOR_TEST_INTERVAL=1 \
     MCL_M_RDC_TEST_STATE="$TEST_STATE" \
-    sh "$LAUNCHER"
+    sh "$LAUNCHER" "$@"
 }
 wait_for_loop_lock() {
     wait_for_file "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/guard.pid"
@@ -211,9 +214,18 @@ set -e
 [ "$(cat "$TEST_STATE/target-runsv.count")" = 1 ] || fail "ambiguous RDC state started runsv"
 rm -f "$TARGET/ambiguous"
 
-touch "$TARGET/supervisor-up"
+rm -f "$TARGET/supervisor-up"
+target_count_before_loop="$(cat "$TEST_STATE/target-runsv.count")"
 start_guard_loop
 wait_for_loop_lock
+i=0
+target_count_after_loop="$target_count_before_loop"
+while [ "$target_count_after_loop" -eq "$target_count_before_loop" ] && [ "$i" -lt 20 ]; do
+    sleep 1
+    target_count_after_loop="$(cat "$TEST_STATE/target-runsv.count")"
+    i=$((i + 1))
+done
+[ "$target_count_after_loop" -eq $((target_count_before_loop + 1)) ] || fail "target recovery stopped when anchor launcher unavailable"
 MCL_M_RDC_SUPERVISOR_TEST_MODE=1 \
 MCL_M_RDC_SUPERVISOR_TEST_ROOT="$TEST_ROOT" \
 MCL_M_RDC_SUPERVISOR_TEST_INTERVAL=1 \
@@ -229,6 +241,8 @@ fi
 wait "$SECOND_PID"
 SECOND_PID=
 stop_loop_term
+force_stop_pid "$(read_pid "$TEST_STATE/target-runsv.pid")"
+rm -f "$TARGET/supervisor-up"
 
 rm -rf "$HOME_FIX/.local/bin" "$HOME_FIX/.termux/boot" "$GUARD_SERVICE"
 set +e
@@ -288,19 +302,31 @@ virgin_rc=$?
 set -e
 [ "$virgin_rc" -eq 1 ] || fail "virgin guard service status rc=$virgin_rc"
 printf "%s\n" "$virgin_status" | grep -Fq "unable to open supervise/ok: file does not exist" || fail "virgin guard service status text"
+touch "$GUARD_SERVICE/ambiguous"
+set +e
+run_launcher >/dev/null 2>&1
+pre_anchor_ambiguous_rc=$?
+set -e
+[ "$pre_anchor_ambiguous_rc" -eq 2 ] || fail "pre-anchor ambiguous guard service rc=$pre_anchor_ambiguous_rc"
+[ ! -e "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid" ] || fail "ambiguous state started anchor"
+rm -f "$GUARD_SERVICE/ambiguous"
 run_launcher
 wait_for_file "$TEST_STATE/guard-runsv.pid"
+wait_for_file "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid"
 [ -e "$GUARD_SERVICE/supervise/ok" ] || fail "guard supervisor did not materialize supervise/ok"
 wait_for_file "$TEST_STATE/guard-child.pid"
 [ "$(cat "$TEST_STATE/guard-runsv.count")" = 1 ] || fail "guard supervisor start count"
 guard_supervisor_pid="$(cat "$TEST_STATE/guard-runsv.pid")"
 guard_child_before="$(cat "$TEST_STATE/guard-child.pid")"
+anchor_pid_before="$(cat "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid")"
 kill -0 "$guard_supervisor_pid" 2>/dev/null || fail "guard supervisor not alive"
 kill -0 "$guard_child_before" 2>/dev/null || fail "guard child not alive"
+kill -0 "$anchor_pid_before" 2>/dev/null || fail "guard anchor not alive"
 
 run_launcher
 sleep 1
 [ "$(cat "$TEST_STATE/guard-runsv.count")" = 1 ] || fail "healthy guard supervisor duplicated"
+[ "$(cat "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid")" = "$anchor_pid_before" ] || fail "healthy launcher duplicated anchor"
 
 kill -KILL "$guard_child_before" 2>/dev/null || fail "guard child kill"
 i=0
@@ -315,39 +341,110 @@ done
 kill -0 "$guard_child_after" 2>/dev/null || fail "restarted guard child not alive"
 [ "$(cat "$TEST_STATE/guard-runsv.pid")" = "$guard_supervisor_pid" ] || fail "guard supervisor changed during child restart"
 kill -0 "$guard_supervisor_pid" 2>/dev/null || fail "guard supervisor died during child restart"
-force_stop_pid "$guard_supervisor_pid"
-sleep 1
-rm -f "$GUARD_SERVICE/supervisor-up"
 count_before="$(cat "$TEST_STATE/guard-runsv.count")"
-run_launcher & launch_one=$!
-run_launcher & launch_two=$!
+force_stop_pid "$guard_supervisor_pid"
+i=0
+count_after="$count_before"
+while [ "$count_after" -eq "$count_before" ] && [ "$i" -lt 20 ]; do
+    sleep 1
+    count_after="$(cat "$TEST_STATE/guard-runsv.count")"
+    i=$((i + 1))
+done
+[ "$count_after" -eq $((count_before + 1)) ] || fail "anchor did not restore missing guard supervisor"
+new_guard_supervisor="$(cat "$TEST_STATE/guard-runsv.pid")"
+kill -0 "$new_guard_supervisor" 2>/dev/null || fail "anchor-restored guard supervisor not alive"
+
+run_launcher --ensure-anchor & launch_one=$!
+run_launcher --ensure-anchor & launch_two=$!
 wait "$launch_one"
 wait "$launch_two"
-wait_for_file "$TEST_STATE/guard-runsv.pid"
 sleep 1
-count_after="$(cat "$TEST_STATE/guard-runsv.count")"
-[ "$count_after" -eq $((count_before + 1)) ] || fail "concurrent launch created duplicate guard supervisors"
-new_guard_supervisor="$(cat "$TEST_STATE/guard-runsv.pid")"
-kill -0 "$new_guard_supervisor" 2>/dev/null || fail "concurrent launch supervisor not alive"
+[ "$(cat "$TEST_STATE/guard-runsv.count")" = "$count_after" ] || fail "concurrent ensure created duplicate guard supervisors"
+[ "$(cat "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid")" = "$anchor_pid_before" ] || fail "concurrent ensure changed anchor"
+kill -0 "$anchor_pid_before" 2>/dev/null || fail "anchor died after concurrent ensure"
 
-force_stop_pid "$new_guard_supervisor"
-sleep 1
-rm -f "$GUARD_SERVICE/supervisor-up"
+sleep 2
+[ "$(cat "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid")" = "$anchor_pid_before" ] || fail "healthy guard loop duplicated anchor"
+
+kill -KILL "$anchor_pid_before" 2>/dev/null || fail "anchor hard-loss kill"
+i=0
+anchor_pid_stale_recovered=
+while [ "$i" -lt 20 ]; do
+    sleep 1
+    candidate="$(read_pid "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid")"
+    if [ -n "$candidate" ] && [ "$candidate" != "$anchor_pid_before" ]; then
+        anchor_pid_stale_recovered="$candidate"
+        break
+    fi
+    i=$((i + 1))
+done
+[ -n "$anchor_pid_stale_recovered" ] || fail "stale anchor recovery pid missing"
+kill -0 "$anchor_pid_stale_recovered" 2>/dev/null || fail "stale-recovered anchor not alive"
+anchor_pid_before="$anchor_pid_stale_recovered"
+
+kill -TERM "$anchor_pid_before" 2>/dev/null || fail "anchor graceful-loss TERM"
+i=0
+anchor_pid_absent_recovered=
+while [ "$i" -lt 20 ]; do
+    sleep 1
+    candidate="$(read_pid "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid")"
+    if [ -n "$candidate" ] && [ "$candidate" != "$anchor_pid_before" ]; then
+        anchor_pid_absent_recovered="$candidate"
+        break
+    fi
+    i=$((i + 1))
+done
+[ -n "$anchor_pid_absent_recovered" ] || fail "absent anchor recovery pid missing"
+kill -0 "$anchor_pid_absent_recovered" 2>/dev/null || fail "absent-recovered anchor not alive"
+anchor_pid_before="$anchor_pid_absent_recovered"
+
 touch "$GUARD_SERVICE/down"
-count_before="$count_after"
+force_stop_pid "$new_guard_supervisor"
+sleep 2
+[ "$(cat "$TEST_STATE/guard-runsv.count")" = "$count_after" ] || fail "anchor overrode guard service down"
+[ ! -e "$GUARD_SERVICE/supervisor-up" ] || fail "guard service started while down"
 run_launcher
 sleep 1
-[ "$(cat "$TEST_STATE/guard-runsv.count")" = "$count_before" ] || fail "guard service down overridden"
-[ ! -e "$GUARD_SERVICE/supervisor-up" ] || fail "guard service started while down"
-rm -f "$GUARD_SERVICE/down"
+[ "$(cat "$TEST_STATE/guard-runsv.count")" = "$count_after" ] || fail "launcher overrode guard service down"
+
 touch "$GUARD_SERVICE/ambiguous"
-set +e
-run_launcher >/dev/null 2>&1
-launcher_ambiguous_rc=$?
-set -e
-[ "$launcher_ambiguous_rc" -eq 2 ] || fail "ambiguous guard service rc=$launcher_ambiguous_rc"
-[ "$(cat "$TEST_STATE/guard-runsv.count")" = "$count_before" ] || fail "ambiguous guard service started supervisor"
+rm -f "$GUARD_SERVICE/down"
+run_launcher >/dev/null 2>&1 || true
+sleep 2
+[ "$(cat "$TEST_STATE/guard-runsv.count")" = "$count_after" ] || fail "ambiguous guard service started supervisor"
+kill -0 "$anchor_pid_before" 2>/dev/null || fail "anchor died on ambiguous guard state"
+
+force_stop_pid "$anchor_pid_before"
+sleep 1
+[ ! -e "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid" ] || fail "anchor pidfile survived TERM"
 rm -f "$GUARD_SERVICE/ambiguous" "$TARGET/supervisor-up"
+
+sleep 30 &
+AMBIG_PID=$!
+mkdir -p "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.lock"
+printf '%s\n' "$AMBIG_PID" > "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid"
+target_count_before_ambiguous="$(cat "$TEST_STATE/target-runsv.count")"
+start_guard_loop
+wait_for_loop_lock
+i=0
+target_count_after_ambiguous="$target_count_before_ambiguous"
+while [ "$target_count_after_ambiguous" -eq "$target_count_before_ambiguous" ] && [ "$i" -lt 20 ]; do
+    sleep 1
+    target_count_after_ambiguous="$(cat "$TEST_STATE/target-runsv.count")"
+    i=$((i + 1))
+done
+[ "$target_count_after_ambiguous" -eq $((target_count_before_ambiguous + 1)) ] || fail "anchor ensure failure blocked target recovery"
+sleep 2
+kill -0 "$LOOP_PID" 2>/dev/null || fail "guard loop died on ambiguous live anchor identity"
+kill -0 "$AMBIG_PID" 2>/dev/null || fail "ambiguous live anchor identity was killed"
+[ "$(cat "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid")" = "$AMBIG_PID" ] || fail "ambiguous live anchor identity was overwritten"
+stop_loop_term
+force_stop_pid "$(read_pid "$TEST_STATE/target-runsv.pid")"
+force_stop_pid "$AMBIG_PID"
+AMBIG_PID=
+rm -f "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid"
+rmdir "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.lock" 2>/dev/null || true
+rm -f "$TARGET/supervisor-up"
 for script in "$GUARD" "$INSTALL" "$LAUNCHER" "$SERVICE_RUN"; do
     sh -n "$script" || fail "syntax: $script"
     if grep -E 'service-daemon|runsvdir|termux-wake-lock|pocketrisu|tailscale|sshd|notification' "$script" >/dev/null; then
@@ -357,6 +454,10 @@ done
 
 grep -Fq 'var/service/desktop-commander-remote' "$GUARD" || fail "fixed RDC service path missing"
 grep -Fq 'var/service/mcl-m-rdc-supervisor-guard' "$LAUNCHER" || fail "fixed guard service path missing"
+grep -Fq -- '--anchor' "$LAUNCHER" || fail "anchor mode missing"
+grep -Fq -- '--ensure-anchor' "$LAUNCHER" || fail "anchor ensure mode missing"
+grep -Fq -- '--ensure-anchor' "$GUARD" || fail "guard loop anchor ensure missing"
+! grep -Fq 'var/service/desktop-commander-remote' "$LAUNCHER" || fail "anchor may not own RDC target service"
 grep -Fq 'var/service/mcl-m-rdc-supervisor-guard/run' "$INSTALL" || fail "fixed installed service run missing"
 if grep -Eq 'MCL_M_RDC_.*SERVICE|SERVICE_OVERRIDE|COMMAND_OVERRIDE|PATH_OVERRIDE' "$GUARD" "$INSTALL" "$LAUNCHER" "$SERVICE_RUN"; then
     fail "arbitrary production override exposed"

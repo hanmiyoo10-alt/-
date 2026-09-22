@@ -4,6 +4,7 @@
 const childProcess = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '../../../..');
@@ -33,6 +34,15 @@ const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const PACKET_REF_RE = /^#[1-9][0-9]*$/;
 const REQUEST_FIELDS = new Set(['schema', 'message', 'expected_paths', 'patch_sha256']);
+const CONTINUATION_REQUEST_FIELDS = new Set([
+  'schema', 'message', 'expected_paths', 'prepared_digest',
+  'recovery_receipt_digest', 'prior_manifest_id',
+]);
+const CONTINUATION_REQUEST_SCHEMA = 'mcl-repository-prepared-continuation-request.v1';
+const RECOVERY_REF_PREFIX = 'receipt:effect-recovery:';
+const PRIOR_MANIFEST_REF_PREFIX = 'receipt:mcl-task-manifest:';
+const FIXED_BOT_NAME = 'mcl-repository-patch[bot]';
+const FIXED_BOT_EMAIL = 'mcl-repository-patch@users.noreply.github.com';
 const VALIDATION_REQUEST_FIELDS = new Set(['schema', 'profile']);
 const VALIDATION_REQUEST_SCHEMA = 'mcl-repository-validation-request.v1';
 const D014_VALIDATION_PROFILE = 'mcl:d014-completion-set:v1';
@@ -166,6 +176,45 @@ function parseRequestText(text) {
   };
 }
 
+
+function parsePreparedContinuationRequestText(text) {
+  let value;
+  try { value = JSON.parse(text); }
+  catch { throw new InvocationError('UNKNOWN', ['CONTINUATION_REQUEST_JSON_INVALID']); }
+  exactKeys(value, CONTINUATION_REQUEST_FIELDS, 'CONTINUATION_REQUEST');
+  if (value.schema !== CONTINUATION_REQUEST_SCHEMA) {
+    throw new InvocationError('UNKNOWN', ['CONTINUATION_REQUEST_SCHEMA_INVALID']);
+  }
+  if (typeof value.message !== 'string' || value.message.length < 1
+      || value.message.length > 200 || /[\u0000-\u001f\u007f]/.test(value.message)) {
+    throw new InvocationError('UNKNOWN', ['CONTINUATION_REQUEST_MESSAGE_INVALID']);
+  }
+  if (!Array.isArray(value.expected_paths) || value.expected_paths.length < 1
+      || value.expected_paths.length > 20
+      || value.expected_paths.some((item) => typeof item !== 'string')) {
+    throw new InvocationError('UNKNOWN', ['CONTINUATION_REQUEST_PATHS_INVALID']);
+  }
+  if (new Set(value.expected_paths).size !== value.expected_paths.length) {
+    throw new InvocationError('UNKNOWN', ['CONTINUATION_REQUEST_PATHS_DUPLICATE']);
+  }
+  value.expected_paths.forEach(validateRepoPath);
+  for (const [field, reason] of [
+    ['prepared_digest', 'CONTINUATION_PREPARED_DIGEST_INVALID'],
+    ['recovery_receipt_digest', 'CONTINUATION_RECOVERY_RECEIPT_INVALID'],
+    ['prior_manifest_id', 'CONTINUATION_PRIOR_MANIFEST_INVALID'],
+  ]) {
+    if (!SHA256_RE.test(value[field] || '')) throw new InvocationError('UNKNOWN', [reason]);
+  }
+  return {
+    schema: value.schema,
+    message: value.message,
+    expected_paths: [...value.expected_paths].sort(),
+    prepared_digest: value.prepared_digest,
+    recovery_receipt_digest: value.recovery_receipt_digest,
+    prior_manifest_id: value.prior_manifest_id,
+  };
+}
+
 function parseValidationRequestText(text) {
   let value;
   try { value = JSON.parse(text); }
@@ -280,7 +329,7 @@ function parseManifestText(text) {
   }
   return envelope.value;
 }
-function validateManifestBinding(manifest, handoff, request) {
+function manifestCoreBindingReasons(manifest, handoff, expectedPaths) {
   const reasons = [];
   if (manifest.manifestId !== handoff.manifest_id) reasons.push('MANIFEST_ID_CONFLICT');
   if (manifest.packetRef !== handoff.packet_ref) reasons.push('MANIFEST_PACKET_REF_CONFLICT');
@@ -305,18 +354,43 @@ function validateManifestBinding(manifest, handoff, request) {
     reasons.push('MANIFEST_S_WORKTREE_NAMESPACE_REQUIRED');
   }
   if (!SHA40_RE.test(manifest.observedBaseSha || '')) reasons.push('MANIFEST_BASE_SHA_INVALID');
-  const expectedScopes = request.expected_paths.map((item) => 'path:' + item).sort();
+  const expectedScopes = expectedPaths.map((item) => 'path:' + item).sort();
   const manifestPathScopes = (manifest.scopes || [])
     .filter((item) => typeof item === 'string' && item.startsWith('path:'))
     .sort();
   if (!same(manifestPathScopes, expectedScopes)) reasons.push('MANIFEST_SCOPE_CONFLICT');
+  if (!same(manifest.authority, FALSE_AUTHORITY)) reasons.push('MANIFEST_AUTHORITY_CONFLICT');
+  return reasons;
+}
+function throwManifestBindingReasons(reasons) {
+  if (!reasons.length) return;
+  const conflict = reasons.some((item) => item.endsWith('_CONFLICT'));
+  throw new InvocationError(conflict ? 'CONFLICT' : 'BLOCKED', reasons);
+}
+function validateManifestBinding(manifest, handoff, request) {
+  const reasons = manifestCoreBindingReasons(manifest, handoff, request.expected_paths);
   const requestRef = 'receipt:mcl-repository-patch-request:' + request.patch_sha256;
   if (!(manifest.inputRefs || []).includes(requestRef)) reasons.push('MANIFEST_PATCH_REQUEST_REF_REQUIRED');
-  if (!same(manifest.authority, FALSE_AUTHORITY)) reasons.push('MANIFEST_AUTHORITY_CONFLICT');
-  if (reasons.length) {
-    const conflict = reasons.some((item) => item.endsWith('_CONFLICT'));
-    throw new InvocationError(conflict ? 'CONFLICT' : 'BLOCKED', reasons);
+  throwManifestBindingReasons(reasons);
+}
+function validatePreparedContinuationManifestBinding(manifest, handoff, request) {
+  const reasons = manifestCoreBindingReasons(manifest, handoff, request.expected_paths);
+  if (typeof manifest.phaseId !== 'string' || !manifest.phaseId.includes('recovery-rebind')) {
+    reasons.push('CONTINUATION_RECOVERY_REBIND_REQUIRED');
   }
+  const recoveryRefs = (manifest.inputRefs || []).filter(
+    (item) => typeof item === 'string' && item.startsWith(RECOVERY_REF_PREFIX));
+  const priorRefs = (manifest.inputRefs || []).filter(
+    (item) => typeof item === 'string' && item.startsWith(PRIOR_MANIFEST_REF_PREFIX));
+  const expectedRecovery = RECOVERY_REF_PREFIX + request.recovery_receipt_digest;
+  const expectedPrior = PRIOR_MANIFEST_REF_PREFIX + request.prior_manifest_id;
+  if (recoveryRefs.length !== 1) reasons.push(
+    recoveryRefs.length ? 'CONTINUATION_RECOVERY_REF_AMBIGUOUS' : 'CONTINUATION_RECOVERY_REF_REQUIRED');
+  else if (recoveryRefs[0] !== expectedRecovery) reasons.push('CONTINUATION_RECOVERY_REF_CONFLICT');
+  if (priorRefs.length !== 1) reasons.push(
+    priorRefs.length ? 'CONTINUATION_PRIOR_MANIFEST_REF_AMBIGUOUS' : 'CONTINUATION_PRIOR_MANIFEST_REF_REQUIRED');
+  else if (priorRefs[0] !== expectedPrior) reasons.push('CONTINUATION_PRIOR_MANIFEST_REF_CONFLICT');
+  throwManifestBindingReasons(reasons);
 }
 function validateLeaseAgainstManifest(activeLease, manifest) {
   const reasons = [];
@@ -453,6 +527,143 @@ function safeChildEnv(env = process.env) {
     if (typeof env[key] === 'string' && env[key]) out[key] = env[key];
   }
   return out;
+}
+
+
+function assertContinuationInputStable(requestFile, expectedRequestDigest) {
+  const bytes = readBoundedRegularFile(requestFile, 'CONTINUATION_REQUEST_FILE');
+  if (sha256Bytes(bytes) !== expectedRequestDigest) {
+    throw new InvocationError('CONFLICT', ['CONTINUATION_REQUEST_CHANGED_DURING_INVOCATION']);
+  }
+}
+function gitRead({worktree, args, env = process.env, spawnSyncImpl = childProcess.spawnSync}) {
+  let run;
+  try {
+    run = spawnSyncImpl('git', ['-C', worktree, ...args], {
+      encoding: 'utf8',
+      timeout: PRIMITIVE_TIMEOUT_MS,
+      maxBuffer: MAX_PRIMITIVE_OUTPUT_BYTES,
+      shell: false,
+      env: safeChildEnv(env),
+    });
+  } catch {
+    throw new InvocationError('UNKNOWN', ['CONTINUATION_GIT_READ_THROW']);
+  }
+  if (run?.error || run?.status !== 0 || run?.signal) {
+    throw new InvocationError('UNKNOWN', ['CONTINUATION_GIT_READ_FAILED']);
+  }
+  return run.stdout || '';
+}
+function nulPaths(text) {
+  return String(text || '').split('\0').filter(Boolean).sort();
+}
+function remoteBranchHead(manifest, read) {
+  const ref = 'refs/heads/' + manifest.workspace.branch;
+  const output = read(['ls-remote', '--heads', 'origin', ref]).trim();
+  const rows = output ? output.split('\n').filter(Boolean) : [];
+  if (rows.length !== 1) throw new InvocationError('CONFLICT', ['CONTINUATION_REMOTE_BRANCH_IDENTITY_CONFLICT']);
+  const [sha, name] = rows[0].split(/\s+/);
+  if (!SHA40_RE.test(sha || '') || name !== ref) {
+    throw new InvocationError('CONFLICT', ['CONTINUATION_REMOTE_BRANCH_IDENTITY_CONFLICT']);
+  }
+  return sha;
+}
+function classifyPreparedContinuationState({
+  manifest, request, env = process.env, gitSpawnSyncImpl = childProcess.spawnSync, gitReadImpl = null,
+}) {
+  const read = (args) => gitReadImpl
+    ? gitReadImpl(args)
+    : gitRead({worktree: manifest.workspace.worktree, args, env, spawnSyncImpl: gitSpawnSyncImpl});
+  const top = read(['rev-parse', '--show-toplevel']).trim();
+  const branch = read(['branch', '--show-current']).trim();
+  const head = read(['rev-parse', 'HEAD']).trim();
+  if (top !== manifest.workspace.worktree || branch !== manifest.workspace.branch || !SHA40_RE.test(head)) {
+    throw new InvocationError('CONFLICT', ['CONTINUATION_WORKSPACE_IDENTITY_CONFLICT']);
+  }
+  const unstaged = nulPaths(read(['diff', '--name-only', '-z', '--']));
+  const untracked = nulPaths(read(['ls-files', '--others', '--exclude-standard', '-z']));
+  if (unstaged.length || untracked.length) {
+    throw new InvocationError('CONFLICT', ['CONTINUATION_UNSTAGED_OR_UNTRACKED_CONFLICT']);
+  }
+  const remoteHead = remoteBranchHead(manifest, read);
+  if (head === manifest.observedBaseSha) {
+    if (remoteHead !== manifest.observedBaseSha) {
+      throw new InvocationError('CONFLICT', ['CONTINUATION_REMOTE_HEAD_CONFLICT']);
+    }
+    const stagedPaths = nulPaths(read(['diff', '--cached', '--name-only', '-z', '--']));
+    if (!same(stagedPaths, request.expected_paths)) {
+      throw new InvocationError('CONFLICT', ['CONTINUATION_STAGED_PATH_CONFLICT']);
+    }
+    const diffText = read(['diff', '--cached', '--binary', '--']);
+    const diffBytes = Buffer.from(diffText, 'utf8');
+    if (!diffBytes.length || diffBytes.length > MAX_PATCH_BYTES
+        || sha256Bytes(diffBytes) !== request.prepared_digest) {
+      throw new InvocationError('CONFLICT', ['CONTINUATION_PREPARED_DIGEST_CONFLICT']);
+    }
+    return {state: 'PREPARED', newHead: null, remoteHead, diffBytes};
+  }
+
+  const stagedPaths = nulPaths(read(['diff', '--cached', '--name-only', '-z', '--']));
+  if (stagedPaths.length) throw new InvocationError('CONFLICT', ['CONTINUATION_INDEX_NOT_CLEAN']);
+  const parent = read(['rev-parse', 'HEAD^']).trim();
+  if (parent !== manifest.observedBaseSha) {
+    throw new InvocationError('CONFLICT', ['CONTINUATION_COMMIT_PARENT_CONFLICT']);
+  }
+  const committedPaths = nulPaths(read([
+    'diff', '--name-only', '-z', manifest.observedBaseSha, head, '--',
+  ]));
+  if (!same(committedPaths, request.expected_paths)) {
+    throw new InvocationError('CONFLICT', ['CONTINUATION_COMMITTED_PATH_CONFLICT']);
+  }
+  const diffText = read(['diff', '--binary', manifest.observedBaseSha, head, '--']);
+  const diffBytes = Buffer.from(diffText, 'utf8');
+  if (!diffBytes.length || diffBytes.length > MAX_PATCH_BYTES
+      || sha256Bytes(diffBytes) !== request.prepared_digest) {
+    throw new InvocationError('CONFLICT', ['CONTINUATION_COMMITTED_DIGEST_CONFLICT']);
+  }
+  const message = read(['log', '-1', '--format=%B', 'HEAD']).replace(/\n+$/, '');
+  if (message !== request.message) throw new InvocationError('CONFLICT', ['CONTINUATION_COMMIT_MESSAGE_CONFLICT']);
+  const identity = read(['log', '-1', '--format=%an%x00%ae%x00%cn%x00%ce', 'HEAD'])
+    .replace(/\n+$/, '').split('\0');
+  if (!same(identity, [FIXED_BOT_NAME, FIXED_BOT_EMAIL, FIXED_BOT_NAME, FIXED_BOT_EMAIL])) {
+    throw new InvocationError('CONFLICT', ['CONTINUATION_COMMIT_IDENTITY_CONFLICT']);
+  }
+  if (remoteHead === manifest.observedBaseSha) {
+    return {state: 'COMMITTED', newHead: head, remoteHead, diffBytes};
+  }
+  if (remoteHead === head) {
+    return {state: 'PUSHED', newHead: head, remoteHead, diffBytes};
+  }
+  throw new InvocationError('CONFLICT', ['CONTINUATION_REMOTE_HEAD_CONFLICT']);
+}
+function writePrivateFile(filePath, bytes) {
+  const fd = fs.openSync(filePath, 'wx', 0o600);
+  try { fs.writeFileSync(fd, bytes); } finally { fs.closeSync(fd); }
+}
+function materializeContinuationPrimitiveInputs(request, state) {
+  if (!state?.diffBytes || sha256Bytes(state.diffBytes) !== request.prepared_digest) {
+    throw new InvocationError('CONFLICT', ['CONTINUATION_PREPARED_DIGEST_CONFLICT']);
+  }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-repo-prepared-continuation-'));
+  const requestFile = path.join(dir, 'request.json');
+  const patchFile = path.join(dir, 'prepared.patch');
+  const primitiveRequest = {
+    schema: 'mcl-repository-patch-request.v1',
+    message: request.message,
+    expected_paths: [...request.expected_paths],
+    patch_sha256: request.prepared_digest,
+  };
+  try {
+    writePrivateFile(requestFile, Buffer.from(JSON.stringify(primitiveRequest), 'utf8'));
+    writePrivateFile(patchFile, state.diffBytes);
+  } catch (error) {
+    try { fs.rmSync(dir, {recursive: true, force: true}); } catch {}
+    throw new InvocationError('UNKNOWN', ['CONTINUATION_TEMP_INPUT_WRITE_FAILED']);
+  }
+  return {
+    dir, requestFile, patchFile, primitiveRequest,
+    cleanup: () => { try { fs.rmSync(dir, {recursive: true, force: true}); } catch {} },
+  };
 }
 
 function validationEvidence(status, reasonCodes = [], checksPassed = 0) {
@@ -656,6 +867,66 @@ function projectGenericReceipt({manifest, request, primitiveSourceSha256, kind,
     nextLegalAction: state.nextLegalAction,
   });
 }
+
+function projectPreparedContinuationReceipt({
+  manifest, request, primitiveSourceSha256, kind, reasons = [],
+  bindingProven = false, commit = null, push = null,
+  commitAlreadyProven = false, pushAlreadyProven = false,
+  newHead = null, exitCode = null,
+}) {
+  const stableReasons = unique(reasons);
+  const state = stateFor(kind, stableReasons);
+  const locator = 'receipt:mcl-repository-patch-owner:continue-prepared:'
+    + (manifest?.manifestId || 'unknown');
+  const bindingResult = bindingProven
+    ? 'PASS'
+    : kind === 'CONFLICT' ? 'CONFLICT' : kind === 'UNKNOWN' ? 'UNKNOWN' : 'BLOCKED';
+  const commitResult = commit?.status === 'PASS' ? 'PASS' : commitAlreadyProven ? 'SKIPPED' : 'SKIPPED';
+  const pushResult = push?.status === 'PASS' ? 'PASS' : pushAlreadyProven ? 'SKIPPED' : 'SKIPPED';
+  const artifacts = [locator];
+  const finalHead = push?.new_head || commit?.new_head || newHead || null;
+  if (SHA40_RE.test(finalHead || '')) artifacts.push('commit:' + finalHead);
+  return executionReceipt.projectExecutionReceipt({
+    schemaVersion: 2,
+    operationId: 'mcl-repository-patch-owner:continue-prepared:'
+      + (manifest?.manifestId || 'unknown'),
+    primitiveId: 'mcl:repository-worktree-patch',
+    sourceIdentity: {
+      kind: 'repository-file',
+      locator: PRIMITIVE_REF,
+      identity: primitiveSourceSha256,
+    },
+    executionSurface: 'MCL:S',
+    stage: 'HOST_ORCHESTRATED_REPOSITORY_PATCH_CONTINUATION',
+    executionLifecycle: state.executionLifecycle,
+    attentionDisposition: state.attentionDisposition,
+    result: state.result,
+    proofScope: 'one recovery-bound prepared S worktree commit/non-force-push continuation only',
+    steps: [
+      {name: 'recovered-prepared-binding', result: bindingResult, evidenceLocator: locator},
+      {name: 'patch-commit', result: commitResult,
+        evidenceLocator: SHA40_RE.test(finalHead || '') ? 'commit:' + finalHead : locator},
+      {name: 'patch-push-postverify', result: pushResult, evidenceLocator: locator},
+    ],
+    counters: [
+      {name: 'changed_paths', value: request?.expected_paths?.length ?? 0},
+      {name: 'commit_created', value: commit?.status === 'PASS' ? 1 : 0},
+      {name: 'commit_already_proven', value: commitAlreadyProven ? 1 : 0},
+      {name: 'push_verified', value: push?.status === 'PASS' || pushAlreadyProven ? 1 : 0},
+      {name: 'push_already_proven', value: pushAlreadyProven ? 1 : 0},
+    ],
+    affectedFiles: request?.expected_paths || [],
+    artifactLocators: artifacts,
+    reasonCodes: state.reasonCodes,
+    requiredUnknowns: state.requiredUnknowns,
+    conflicts: state.conflicts,
+    blockers: state.blockers,
+    exitCode,
+    stderrTail: null,
+    nextLegalAction: state.nextLegalAction,
+  });
+}
+
 function counterValue(receipt, name) {
   const row = receipt?.counters?.find((item) => item.name === name);
   return row?.status === 'KNOWN' ? row.value : null;
@@ -936,31 +1207,150 @@ async function invokeLive({
     });
   }
 }
+
+async function invokePreparedContinuation({
+  repo,
+  handoffText,
+  manifestText,
+  requestText,
+  requestFile,
+  env = process.env,
+  runner,
+  fetchImpl,
+  spawnSyncImpl = childProcess.spawnSync,
+  gitSpawnSyncImpl = childProcess.spawnSync,
+  root = ROOT,
+  guardImpl,
+  inspectStateImpl = classifyPreparedContinuationState,
+}) {
+  const primitiveHash = sha256File(path.join(root, PRIMITIVE_RELATIVE));
+  let manifest;
+  let request;
+  let bindingProven = false;
+  let commit = null;
+  let push = null;
+  let commitAlreadyProven = false;
+  let pushAlreadyProven = false;
+  let currentState = null;
+  let temporary = null;
+  try {
+    manifest = parseManifestText(manifestText);
+    const handoff = parseHandoffText(handoffText);
+    request = parsePreparedContinuationRequestText(requestText);
+    const requestDigest = sha256Bytes(Buffer.from(requestText, 'utf8'));
+    assertContinuationInputStable(requestFile, requestDigest);
+    validatePreparedContinuationManifestBinding(manifest, handoff, request);
+    bindingProven = true;
+    const holderSecret = env[workspaceHolder.CLAIM_ENV];
+    if (!SHA256_RE.test(holderSecret || '')) {
+      throw new InvocationError('BLOCKED', ['HOLDER_CLAIM_REQUIRED']);
+    }
+    const doGuard = async () => {
+      if (guardImpl) return guardImpl({repo, manifest, handoff, holderSecret, env, runner, fetchImpl});
+      return guardCurrent({repo, manifest, handoff, holderSecret, env, runner, fetchImpl});
+    };
+
+    await doGuard();
+    assertContinuationInputStable(requestFile, requestDigest);
+    currentState = inspectStateImpl({manifest, request, env, gitSpawnSyncImpl});
+    temporary = materializeContinuationPrimitiveInputs(request, currentState);
+
+    if (currentState.state === 'PREPARED') {
+      const commitRun = spawnPrimitive({
+        phase: 'commit', manifest,
+        requestFile: temporary.requestFile, patchFile: temporary.patchFile,
+        prior: {preparedDigest: request.prepared_digest},
+        spawnSyncImpl, root, env,
+      });
+      if (commitRun.kind !== 'PASS') return projectPreparedContinuationReceipt({
+        manifest, request, primitiveSourceSha256: primitiveHash,
+        kind: commitRun.kind, reasons: commitRun.reasonCodes,
+        bindingProven, commit: commitRun.value,
+        exitCode: Number.isInteger(commitRun.run?.status) ? commitRun.run.status : null,
+      });
+      commit = commitRun.value;
+      await doGuard();
+      assertContinuationInputStable(requestFile, requestDigest);
+      currentState = inspectStateImpl({manifest, request, env, gitSpawnSyncImpl});
+      if (!['COMMITTED', 'PUSHED'].includes(currentState.state)
+          || currentState.newHead !== commit.new_head) {
+        throw new InvocationError('CONFLICT', ['CONTINUATION_COMMIT_READBACK_CONFLICT']);
+      }
+    } else {
+      commitAlreadyProven = ['COMMITTED', 'PUSHED'].includes(currentState.state);
+    }
+
+    if (currentState.state === 'COMMITTED') {
+      await doGuard();
+      assertContinuationInputStable(requestFile, requestDigest);
+      const pushRun = spawnPrimitive({
+        phase: 'push', manifest,
+        requestFile: temporary.requestFile, patchFile: temporary.patchFile,
+        prior: {preparedDigest: request.prepared_digest, newHead: currentState.newHead},
+        spawnSyncImpl, root, env,
+      });
+      if (pushRun.kind !== 'PASS') return projectPreparedContinuationReceipt({
+        manifest, request, primitiveSourceSha256: primitiveHash,
+        kind: pushRun.kind, reasons: pushRun.reasonCodes,
+        bindingProven, commit, commitAlreadyProven, push: pushRun.value,
+        newHead: currentState.newHead,
+        exitCode: Number.isInteger(pushRun.run?.status) ? pushRun.run.status : null,
+      });
+      push = pushRun.value;
+    } else if (currentState.state === 'PUSHED') {
+      pushAlreadyProven = true;
+    } else {
+      throw new InvocationError('CONFLICT', ['CONTINUATION_STATE_UNSUPPORTED']);
+    }
+
+    return projectPreparedContinuationReceipt({
+      manifest, request, primitiveSourceSha256: primitiveHash,
+      kind: 'PASS', bindingProven, commit, push,
+      commitAlreadyProven, pushAlreadyProven,
+      newHead: push?.new_head || currentState.newHead,
+      exitCode: 0,
+    });
+  } catch (error) {
+    if (!(error instanceof InvocationError)) throw error;
+    return projectPreparedContinuationReceipt({
+      manifest, request, primitiveSourceSha256: primitiveHash,
+      kind: error.kind, reasons: error.reasonCodes,
+      bindingProven, commit, push, commitAlreadyProven, pushAlreadyProven,
+      newHead: currentState?.newHead || null,
+    });
+  } finally {
+    if (temporary) temporary.cleanup();
+  }
+}
+
 function parseArgs(argv = process.argv.slice(2)) {
-  const allowed = new Set([
-    'repo', 'handoff-file', 'manifest-file', 'request-file', 'patch-file', 'format',
-  ]);
+  const args = [...argv];
+  const operation = args[0] === 'continue-prepared' ? args.shift() : 'normal';
+  const allowed = operation === 'continue-prepared'
+    ? new Set(['repo', 'handoff-file', 'manifest-file', 'request-file', 'format'])
+    : new Set(['repo', 'handoff-file', 'manifest-file', 'request-file', 'patch-file', 'format']);
   const values = {};
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i];
-    if (!token.startsWith('--') || i + 1 >= argv.length) throw new Error('ARGUMENT_INVALID');
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i];
+    if (!token.startsWith('--') || i + 1 >= args.length) throw new Error('ARGUMENT_INVALID');
     const key = token.slice(2);
     if (!allowed.has(key) || key in values) throw new Error('ARGUMENT_INVALID');
-    values[key] = argv[++i];
+    values[key] = args[++i];
   }
   if (!values.repo || !values['handoff-file'] || !values['manifest-file']
-      || !values['request-file'] || !values['patch-file']) {
+      || !values['request-file'] || (operation === 'normal' && !values['patch-file'])) {
     throw new Error('ARGUMENT_INVALID');
   }
   const format = values.format || 'receipt';
   if (!OUTPUT_FORMATS.has(format)) throw new Error('FORMAT_INVALID');
   if (!operator.validateRepo(values.repo)) throw new Error('REPOSITORY_INVALID');
   return {
+    operation,
     repo: values.repo,
     handoffFile: values['handoff-file'],
     manifestFile: values['manifest-file'],
     requestFile: values['request-file'],
-    patchFile: values['patch-file'],
+    patchFile: values['patch-file'] || null,
     format,
   };
 }
@@ -969,20 +1359,30 @@ async function runCli(argv = process.argv.slice(2), options = {}) {
   const handoffText = readBoundedRegularFile(args.handoffFile, 'HANDOFF_FILE').toString('utf8');
   const manifestText = readBoundedRegularFile(args.manifestFile, 'MANIFEST_FILE').toString('utf8');
   const requestText = readBoundedRegularFile(args.requestFile, 'REQUEST_FILE').toString('utf8');
-  const receipt = await invokeLive({
+  const common = {
     repo: args.repo,
     handoffText,
     manifestText,
     requestText,
     requestFile: path.resolve(args.requestFile),
-    patchFile: path.resolve(args.patchFile),
     env: options.env || process.env,
     runner: options.runner,
     fetchImpl: options.fetchImpl,
     spawnSyncImpl: options.spawnSyncImpl || childProcess.spawnSync,
     root: options.root || ROOT,
     guardImpl: options.guardImpl,
-  });
+  };
+  const receipt = args.operation === 'continue-prepared'
+    ? await invokePreparedContinuation({
+      ...common,
+      gitSpawnSyncImpl: options.gitSpawnSyncImpl || childProcess.spawnSync,
+      inspectStateImpl: options.inspectStateImpl || classifyPreparedContinuationState,
+    })
+    : await invokeLive({
+      ...common,
+      patchFile: path.resolve(args.patchFile),
+      validationSpawnSyncImpl: options.validationSpawnSyncImpl || childProcess.spawnSync,
+    });
   if (args.format === 'receipt') {
     return {text: JSON.stringify(receipt, null, 2) + '\n', code: executionReceipt.exitCodeFor(receipt)};
   }
@@ -1024,6 +1424,10 @@ module.exports = {
   PRIMITIVE_REF,
   PRIMITIVE_RELATIVE,
   REQUEST_FIELDS,
+  CONTINUATION_REQUEST_FIELDS,
+  CONTINUATION_REQUEST_SCHEMA,
+  RECOVERY_REF_PREFIX,
+  PRIOR_MANIFEST_REF_PREFIX,
   VALIDATION_REQUEST_FIELDS,
   VALIDATION_REQUEST_SCHEMA,
   VALIDATION_REF_PREFIX,
@@ -1032,8 +1436,10 @@ module.exports = {
   D014_VALIDATION_CHECKS,
   InvocationError,
   assertInputStable,
+  assertContinuationInputStable,
   guardCurrent,
   invokeLive,
+  invokePreparedContinuation,
   loadCurrentEvidence,
   ownerDecisionOutput,
   ownerReport,
@@ -1042,6 +1448,7 @@ module.exports = {
   parseManifestText,
   parsePrimitiveResult,
   parseRequestText,
+  parsePreparedContinuationRequestText,
   parseValidationRequestText,
   manifestValidationRefs,
   prepareValidationBinding,
@@ -1050,13 +1457,17 @@ module.exports = {
   persistAgentArtifacts,
   primitiveArgs,
   projectGenericReceipt,
+  projectPreparedContinuationReceipt,
   projectOwnerAgentView,
   runCli,
   safeChildEnv,
+  classifyPreparedContinuationState,
+  materializeContinuationPrimitiveInputs,
   sha256Bytes,
   validateCurrentEvidence,
   validateHolder,
   validateLeaseAgainstManifest,
   validateManifestBinding,
+  validatePreparedContinuationManifestBinding,
   writeJsonSidecar,
 };

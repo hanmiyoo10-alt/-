@@ -80,6 +80,18 @@ function candidateSemanticKey(candidate) {
 function gateName(row) {
   return String(row?.name || '').toLowerCase();
 }
+function uniqueKeys(rows, keyFn) {
+  return [...new Set(rows.map(keyFn))].sort();
+}
+function currentizationLineageQualified(candidate) {
+  const passGates = new Set((candidate?.requiredGates || [])
+    .filter((row) => row?.result === 'PASS')
+    .map(gateName));
+  const replayProven = passGates.has('packet-scoped-currentization-replay')
+    || passGates.has('currentization-replay-safe');
+  return passGates.has('currentization-scope-and-blob-preservation')
+    && replayProven;
+}
 
 function candidateFromReceipt(receipt, packetNumber, prNumber) {
   if (!receipt || receipt.mode !== 'CANONICAL_MAIN_STAGE_RECEIPT'
@@ -199,25 +211,37 @@ function reduceCandidates(candidates, liveHead) {
         : ['CANONICAL_CANDIDATE_RECEIPT_MISSING'],
     };
   }
-  const keys = sorted(matching.map(candidateSemanticKey));
+  const keys = uniqueKeys(matching, candidateSemanticKey);
+  let selected = matching;
   if (keys.length !== 1) {
-    return {state: 'CONFLICT', candidate: null, reasonCodes: ['VALIDATION_CHECKPOINT_CONFLICT']};
+    const historicalLineages = new Set(candidates
+      .filter((row) => row.headSha !== liveHead)
+      .map(candidateLineageKey));
+    const lineageQualified = matching.filter((row) =>
+      currentizationLineageQualified(row)
+      && historicalLineages.has(candidateLineageKey(row)));
+    const lineageKeys = uniqueKeys(lineageQualified, candidateSemanticKey);
+    if (lineageKeys.length !== 1) {
+      return {state: 'CONFLICT', candidate: null, reasonCodes: ['VALIDATION_CHECKPOINT_CONFLICT']};
+    }
+    selected = matching.filter(
+      (row) => candidateSemanticKey(row) === lineageKeys[0]);
   }
-  const representative = [...matching].sort(
+  const representative = [...selected].sort(
     (a, b) => a.receiptDigest.localeCompare(b.receiptDigest))[0];
-  const mainRefs = sorted(matching.flatMap((row) => row.mainRefs));
-  const workflowRefs = sorted(matching.flatMap((row) => row.workflowRefs));
-  const gates = matching.flatMap((row) => row.requiredGates);
+  const mainRefs = sorted(selected.flatMap((row) => row.mainRefs));
+  const workflowRefs = sorted(selected.flatMap((row) => row.workflowRefs));
+  const gates = selected.flatMap((row) => row.requiredGates);
   return {
     state: 'EXACT',
     candidate: {
       ...representative,
-      receiptDigests: sorted(matching.map((row) => row.receiptDigest)),
+      receiptDigests: sorted(selected.map((row) => row.receiptDigest)),
       mainRefs,
       workflowRefs,
       requiredGatePass: gates.some((row) => /required/i.test(String(row.name || ''))
         && row.result === 'PASS'),
-      ownerCiPass: matching.some((row) => row.ownerCiPass === true),
+      ownerCiPass: selected.some((row) => row.ownerCiPass === true),
       exactCurrentizationProof: gates.some((row) =>
         ['currentization-scope-and-blob-preservation', 'currentization-diff-preserved']
           .includes(gateName(row)) && row.result === 'PASS'),

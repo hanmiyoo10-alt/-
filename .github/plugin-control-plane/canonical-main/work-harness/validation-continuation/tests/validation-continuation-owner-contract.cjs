@@ -125,6 +125,60 @@ reduced = owner.reduceCandidates([liveCandidate, conflictingLive], HEAD_B);
 assert.equal(reduced.state, 'CONFLICT');
 assert.ok(reduced.reasonCodes.includes('VALIDATION_CHECKPOINT_CONFLICT'));
 
+const lineageCurrentized = owner.candidateFromReceipt(implementationReceipt({
+  head: HEAD_B,
+  diff: DIFF_A,
+  extraGates: [
+    {name: 'currentization-diff-preserved', result: 'PASS',
+      evidenceLocator: 'issue:#1'},
+    {name: 'packet-scoped-currentization-replay', result: 'PASS',
+      evidenceLocator: 'receipt:currentness:1'},
+  ],
+}), 2463, 2464);
+const alternateHashDomain = owner.candidateFromReceipt(implementationReceipt({
+  head: HEAD_B,
+  diff: DIFF_B,
+  extraGates: [
+    {name: 'currentization-scope-and-blob-preservation', result: 'PASS',
+      evidenceLocator: 'issue:#2'},
+    {name: 'packet-scoped-currentization-replay', result: 'PASS',
+      evidenceLocator: 'receipt:currentness:2'},
+  ],
+}), 2463, 2464);
+
+reduced = owner.reduceCandidates(
+  [oldCandidate, lineageCurrentized, alternateHashDomain], HEAD_B);
+assert.equal(reduced.state, 'EXACT');
+assert.equal(reduced.candidate.diffIdentity, DIFF_A);
+assert.deepEqual(reduced.candidate.receiptDigests, [lineageCurrentized.receiptDigest]);
+
+reduced = owner.reduceCandidates(
+  [lineageCurrentized, alternateHashDomain], HEAD_B);
+assert.equal(reduced.state, 'CONFLICT');
+assert.ok(reduced.reasonCodes.includes('VALIDATION_CHECKPOINT_CONFLICT'));
+
+const duplicateLineage = owner.candidateFromReceipt(implementationReceipt({
+  head: HEAD_B,
+  diff: DIFF_A,
+  extraGates: [
+    {name: 'currentization-diff-preserved', result: 'PASS',
+      evidenceLocator: 'issue:#3'},
+    {name: 'packet-scoped-currentization-replay', result: 'PASS',
+      evidenceLocator: 'receipt:currentness:3'},
+  ],
+}), 2463, 2464);
+reduced = owner.reduceCandidates(
+  [lineageCurrentized, duplicateLineage], HEAD_B);
+assert.equal(reduced.state, 'EXACT');
+assert.equal(reduced.candidate.receiptDigests.length, 2);
+
+const historicalDiffB = owner.candidateFromReceipt(
+  implementationReceipt({head: HEAD_A, diff: DIFF_B}), 2463, 2464);
+reduced = owner.reduceCandidates(
+  [oldCandidate, historicalDiffB, lineageCurrentized, alternateHashDomain], HEAD_B);
+assert.equal(reduced.state, 'CONFLICT');
+assert.ok(reduced.reasonCodes.includes('VALIDATION_CHECKPOINT_CONFLICT'));
+
 assert.equal(owner.currentizationState(liveCandidate, MAIN), 'STALE');
 const currentizedCandidate = owner.candidateFromReceipt(implementationReceipt({
   head: HEAD_B,

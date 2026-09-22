@@ -42,6 +42,13 @@ const AUTHORITY = {...inv.FALSE_AUTHORITY};
 const PATHS = ['docs/demo.txt'];
 const SCOPES = PATHS.map((item) => 'path:' + item);
 const D014_PATHS = [...inv.D014_COMPLETION_SET_PATHS];
+const D014_SCOPES = [...inv.D014_VALIDATION_SCOPES];
+const D014_PROFILE = inv.validationProfileById(inv.D014_VALIDATION_PROFILE);
+const D014_CONTRACT_REF =
+  inv.VALIDATION_CONTRACT_REF_PREFIX + D014_PROFILE.contractDigest;
+const VC_PATHS = [...inv.VALIDATION_CONTINUATION_PATHS].sort();
+const VC_SCOPES = [...inv.VALIDATION_CONTINUATION_SCOPES];
+const VC_PROFILE = inv.validationProfileById(inv.VALIDATION_CONTINUATION_PROFILE);
 const VALIDATION_REQUEST = {
   schema: inv.VALIDATION_REQUEST_SCHEMA,
   profile: inv.D014_VALIDATION_PROFILE,
@@ -192,11 +199,12 @@ function d014Request(overrides = {}) {
 }
 function validationManifest(overrides = {}) {
   return manifest({
-    scopes: D014_PATHS.map((item) => 'path:' + item),
+    scopes: [...D014_SCOPES],
     inputRefs: [
       'receipt:mcl-repository-patch-request:' + PATCH_HASH,
       inv.PRIMITIVE_REF,
       inv.VALIDATION_REF_PREFIX + VALIDATION_HASH,
+      D014_CONTRACT_REF,
     ],
     ...overrides,
   });
@@ -1121,6 +1129,141 @@ test('validation request parser is strict and profile-bound', () => {
   );
 });
 
+test('reviewed validation profile set is exact and scope-derived', () => {
+  assert.equal(inv.VALIDATION_PROFILES.length, 2);
+  assert.equal(
+    inv.resolveValidationProfileForScopes(D014_SCOPES).profileId,
+    inv.D014_VALIDATION_PROFILE,
+  );
+  assert.equal(
+    inv.resolveValidationProfileForScopes(VC_SCOPES).profileId,
+    inv.VALIDATION_CONTINUATION_PROFILE,
+  );
+  assert.throws(
+    () => inv.resolveValidationProfileForScopes(SCOPES),
+    (error) => error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('NO_REVIEWED_VALIDATION_PROFILE'),
+  );
+  const duplicate = {...VC_PROFILE, profileId: 'repo:validation-continuation:duplicate'};
+  assert.throws(
+    () => inv.resolveValidationProfileForScopes(VC_SCOPES, [VC_PROFILE, duplicate]),
+    (error) => error.kind === 'CONFLICT'
+      && error.reasonCodes.includes('VALIDATION_PROFILE_AMBIGUOUS'),
+  );
+  assert.deepEqual(
+    inv.parseValidationRequestText(JSON.stringify({
+      schema: inv.VALIDATION_REQUEST_SCHEMA,
+      profile: inv.VALIDATION_CONTINUATION_PROFILE,
+    })),
+    {
+      schema: inv.VALIDATION_REQUEST_SCHEMA,
+      profile: inv.VALIDATION_CONTINUATION_PROFILE,
+    },
+  );
+});
+
+test('validation-continuation profile binds exact contract and fixed checks', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-profile-vc-test-'));
+  try {
+    const validationRequest = {
+      schema: inv.VALIDATION_REQUEST_SCHEMA,
+      profile: inv.VALIDATION_CONTINUATION_PROFILE,
+    };
+    const text = JSON.stringify(validationRequest);
+    const bytes = Buffer.from(text, 'utf8');
+    const validationPath = path.join(dir, 'validation.json');
+    fs.writeFileSync(validationPath, bytes);
+    const validationHash = crypto.createHash('sha256').update(bytes).digest('hex');
+    const m = manifest({
+      scopes: [...VC_SCOPES],
+      inputRefs: [
+        'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+        inv.PRIMITIVE_REF,
+        inv.VALIDATION_REF_PREFIX + validationHash,
+        inv.VALIDATION_CONTRACT_REF_PREFIX + VC_PROFILE.contractDigest,
+      ],
+    });
+    const binding = inv.prepareValidationBinding({
+      manifest: m,
+      request: {expected_paths: [...VC_PATHS]},
+      validationRequestText: text,
+      validationRequestFile: validationPath,
+    });
+    assert.equal(binding.request.profile, inv.VALIDATION_CONTINUATION_PROFILE);
+    assert.equal(binding.contractDigest, VC_PROFILE.contractDigest);
+    const calls = [];
+    const result = inv.runFixedPreparedValidation({
+      binding,
+      manifest: m,
+      validationSpawnSyncImpl(command, args, options) {
+        calls.push({command, args, options});
+        return {status: 0, signal: null, stdout: '', stderr: ''};
+      },
+    });
+    assert.equal(result.kind, 'PASS');
+    assert.equal(result.value.profile, inv.VALIDATION_CONTINUATION_PROFILE);
+    assert.equal(result.value.checks_passed, inv.VALIDATION_CONTINUATION_CHECKS.length);
+    assert.deepEqual(
+      calls.map((call) => call.args),
+      inv.VALIDATION_CONTINUATION_CHECKS.map((check) => check.args),
+    );
+    assert.throws(
+      () => inv.assertValidationInputStable({...binding, contractDigest: '0'.repeat(64)}),
+      (error) => error.kind === 'CONFLICT'
+        && error.reasonCodes.includes('VALIDATION_CONTRACT_CHANGED_DURING_INVOCATION'),
+    );
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('validation contract ref is mandatory and exact', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-profile-contract-test-'));
+  try {
+    const text = VALIDATION_TEXT;
+    const validationPath = path.join(dir, 'validation.json');
+    fs.writeFileSync(validationPath, text, 'utf8');
+    const requestValue = d014Request();
+    const missing = validationManifest({
+      inputRefs: [
+        'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+        inv.PRIMITIVE_REF,
+        inv.VALIDATION_REF_PREFIX + VALIDATION_HASH,
+      ],
+    });
+    assert.throws(
+      () => inv.prepareValidationBinding({
+        manifest: missing,
+        request: requestValue,
+        validationRequestText: text,
+        validationRequestFile: validationPath,
+      }),
+      (error) => error.kind === 'BLOCKED'
+        && error.reasonCodes.includes('VALIDATION_CONTRACT_REF_REQUIRED'),
+    );
+    const wrong = validationManifest({
+      inputRefs: [
+        'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+        inv.PRIMITIVE_REF,
+        inv.VALIDATION_REF_PREFIX + VALIDATION_HASH,
+        inv.VALIDATION_CONTRACT_REF_PREFIX + '0'.repeat(64),
+      ],
+    });
+    assert.throws(
+      () => inv.prepareValidationBinding({
+        manifest: wrong,
+        request: requestValue,
+        validationRequestText: text,
+        validationRequestFile: validationPath,
+      }),
+      (error) => error.kind === 'CONFLICT'
+        && error.reasonCodes.includes('VALIDATION_CONTRACT_REF_CONFLICT'),
+    );
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+});
+
 test('manifest-bound fixed validation passes between prepare and commit', async () => {
   const inputs = tempValidationInputs();
   try {
@@ -1227,6 +1370,7 @@ test('fixed profile rejects any non-reviewed patch path set', async () => {
         'receipt:mcl-repository-patch-request:' + PATCH_HASH,
         inv.PRIMITIVE_REF,
         validationRef,
+        D014_CONTRACT_REF,
       ],
     });
     fs.writeFileSync(inputs.requestPath, JSON.stringify(request()), 'utf8');

@@ -66,6 +66,19 @@ function landingAcquireRequest(executor = 'S', overrides = {}) {
     ...overrides,
   });
 }
+function landingBranchRepairAcquireRequest(overrides = {}) {
+  const identity = lease.landingBranchRepairIdentity('M');
+  return acquireRequest({
+    route: 'M',
+    executor: 'M',
+    scopes: [identity.scope],
+    workspaceKind: 'landing_branch_repair',
+    branch: identity.branch,
+    worktree: identity.worktree,
+    observedBaseSha: 'c'.repeat(40),
+    ...overrides,
+  });
+}
 
 function stateFromPlan(plan) {
   assert.equal(plan.changed, true);
@@ -271,6 +284,34 @@ ok('landing_metadata rejects arbitrary identity scope and missing observed head'
     assert.equal(lease.normalizeAcquireRequest(request).ok, false);
   }
 });
+ok('landing_branch_repair accepts only the fixed M identity and scope', () => {
+  const exact = lease.normalizeAcquireRequest(landingBranchRepairAcquireRequest());
+  assert.equal(exact.ok, true);
+  assert.equal(exact.lease.route, 'M');
+  assert.equal(exact.lease.executor, 'M');
+  assert.equal(exact.lease.workspace.kind, 'landing_branch_repair');
+  assert.equal(exact.lease.workspace.branch, 'mainphone/work');
+  assert.equal(exact.lease.workspace.worktree, '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work');
+  assert.deepEqual(exact.lease.scopes, ['surface:mcl-landing-branch:M']);
+});
+ok('landing_branch_repair rejects route fallback arbitrary identity scope and missing observed head', () => {
+  for (const request of [
+    landingBranchRepairAcquireRequest({route:'S'}),
+    landingBranchRepairAcquireRequest({route:'S', executor:'S'}),
+    landingBranchRepairAcquireRequest({branch:'mainphone/other'}),
+    landingBranchRepairAcquireRequest({worktree:'/data/data/com.termux/files/home/nyang-worktrees/other'}),
+    landingBranchRepairAcquireRequest({scopes:['surface:mcl-landing-origin-main:M']}),
+    landingBranchRepairAcquireRequest({observedBaseSha:null}),
+  ]) {
+    assert.equal(lease.normalizeAcquireRequest(request).ok, false);
+  }
+});
+ok('landing metadata and landing branch repair serialize on the fixed M worktree', () => {
+  const first = stateFromPlan(lease.planAcquire(activeState(), landingAcquireRequest('M')));
+  const conflict = lease.planAcquire(first, landingBranchRepairAcquireRequest({expectedGeneration:2, packetRef:'#2353'}));
+  assert.equal(conflict.status, 'CONFLICT');
+  assert.ok(conflict.reasonCodes.includes('ACTIVE_LEASE_WORKTREE_RESERVED'));
+});
 ok('duplicate landing metadata reservation conflicts while S and M remain independently reservable', () => {
   const first = stateFromPlan(lease.planAcquire(activeState(), landingAcquireRequest('S')));
   const duplicate = lease.planAcquire(first, landingAcquireRequest('S', {expectedGeneration:2, packetRef:'#2353'}));
@@ -327,7 +368,7 @@ ok('workflow is one fixed owner-only serialized issue writer', () => {
   assert.ok(workflow.includes(
     'packet_ref:\n        description: Source packet reference; required for acquire/release, omit for activate\n        required: false',
   ));
-  assert.ok(workflow.includes('options: [repository, landing_metadata, not_applicable]'));
+  assert.ok(workflow.includes('options: [repository, landing_metadata, landing_branch_repair, not_applicable]'));
 });
 class FakeClient {
   constructor(state, packetBody) {

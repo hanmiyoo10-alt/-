@@ -31,6 +31,8 @@ const operator = require(path.join(
   ROOT, 'products/chatgpt-mobile-coder-lab/coordination/mcl-coordination-operator.cjs'));
 const recovery = require(path.join(
   ROOT, '.github/plugin-control-plane/canonical-main/work-harness/effect-recovery/effect-recovery.cjs'));
+const rdcSessionEvidence = require(path.join(
+  ROOT, 'products/chatgpt-mobile-coder-lab/device-ops/rdc-session-evidence/mcl-rdc-session-evidence.cjs'));
 
 class InspectError extends Error {
   constructor(reasonCodes) {
@@ -394,86 +396,22 @@ function releaseEligibilityObservation(plan) {
   return {state: 'UNKNOWN', reasons: plan.reasonCodes || ['RELEASE_PLAN_UNKNOWN']};
 }
 
-function readProcRecord(procRoot, pid) {
-  const statText = fs.readFileSync(path.join(procRoot, String(pid), 'stat'), 'utf8');
-  const end = statText.lastIndexOf(')');
-  if (end < 0) throw new Error('PROC_STAT_INVALID');
-  const fields = statText.slice(end + 2).trim().split(/\s+/);
-  const ppid = Number(fields[1]);
-  if (!Number.isSafeInteger(ppid) || ppid < 0) throw new Error('PROC_PPID_INVALID');
-  const comm = fs.readFileSync(path.join(procRoot, String(pid), 'comm'), 'utf8').trim();
-  const cmdline = fs.readFileSync(path.join(procRoot, String(pid), 'cmdline'))
-    .toString('utf8').replace(/\0/g, ' ').trim();
-  return {pid, ppid, comm, cmdline};
-}
-
-function isCommandAgent(record) {
-  const marker = 'desktop-commander-remote/node_modules/@wonderwhy-er/desktop-commander/dist/index.js';
-  if (!record.cmdline.includes(marker)) return false;
-  const tokens = record.cmdline.split(/\s+/).filter(Boolean);
-  return tokens[tokens.length - 1] !== 'remote';
-}
-
-function sessionStateFromSnapshot(snapshot) {
-  if (!snapshot || snapshot.topologyResolved !== true || snapshot.currentRootShell !== true) {
-    return {state: 'UNKNOWN', reason: 'SESSION_TOPOLOGY_UNRESOLVED'};
+function sessionStateFromEvidence(value) {
+  if (value?.sessionState === 'ABSENT') {
+    return {state: 'ABSENT', reason: 'SOLE_RDC_COMMAND_SESSION'};
   }
-  if (snapshot.otherShellCount > 0) {
+  if (value?.sessionState === 'PRESENT') {
     return {state: 'UNKNOWN', reason: 'OTHER_RDC_COMMAND_SESSION_PRESENT'};
   }
-  if (snapshot.unexpectedChildCount > 0) {
-    return {state: 'UNKNOWN', reason: 'RDC_AGENT_CHILD_TOPOLOGY_AMBIGUOUS'};
-  }
-  return {state: 'ABSENT', reason: 'SOLE_RDC_COMMAND_SESSION'};
+  return {
+    state: 'UNKNOWN',
+    reason: value?.compatibilityReason || value?.reasonCode || 'SESSION_TOPOLOGY_UNRESOLVED',
+  };
 }
 
 function scanLocalSession({procRoot = '/proc', selfPid = process.pid} = {}) {
-  try {
-    const chain = [];
-    let pid = selfPid;
-    for (let index = 0; index < 16 && pid > 1; index += 1) {
-      const record = readProcRecord(procRoot, pid);
-      chain.push(record);
-      if (isCommandAgent(record)) break;
-      pid = record.ppid;
-    }
-    const agentIndex = chain.findIndex(isCommandAgent);
-    if (agentIndex <= 0) return sessionStateFromSnapshot({topologyResolved: false});
-    const agent = chain[agentIndex];
-    const currentRoot = chain[agentIndex - 1];
-    const currentRootShell = currentRoot.ppid === agent.pid && SHELL_COMMS.has(currentRoot.comm);
-    if (!currentRootShell) return sessionStateFromSnapshot({topologyResolved: false});
-
-    let otherShellCount = 0;
-    let unexpectedChildCount = 0;
-    for (const name of fs.readdirSync(procRoot)) {
-      if (!/^[0-9]+$/.test(name)) continue;
-      const childPid = Number(name);
-      let child;
-      try {
-        child = readProcRecord(procRoot, childPid);
-      } catch (error) {
-        if (error && (error.code === 'ENOENT' || error.code === 'ESRCH')) continue;
-        return sessionStateFromSnapshot({topologyResolved: false});
-      }
-      if (child.ppid !== agent.pid || child.pid === currentRoot.pid) continue;
-      if (SHELL_COMMS.has(child.comm)) {
-        otherShellCount += 1;
-        continue;
-      }
-      const benignProbe = child.comm.startsWith('python')
-        && /python(?:3)?\s+--version\s*$/.test(child.cmdline);
-      if (!benignProbe) unexpectedChildCount += 1;
-    }
-    return sessionStateFromSnapshot({
-      topologyResolved: true,
-      currentRootShell: true,
-      otherShellCount,
-      unexpectedChildCount,
-    });
-  } catch {
-    return sessionStateFromSnapshot({topologyResolved: false});
-  }
+  const topology = rdcSessionEvidence.scanSession({procRoot, selfPid});
+  return sessionStateFromEvidence(topology);
 }
 
 function evidenceLocators(packet, activeLease, manifestRead, prRead) {
@@ -810,6 +748,6 @@ module.exports = {
   runCli,
   sanitizedReport,
   scanLocalSession,
-  sessionStateFromSnapshot,
+  sessionStateFromEvidence,
   workspaceObservation,
 };

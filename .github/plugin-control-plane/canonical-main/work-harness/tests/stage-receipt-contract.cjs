@@ -10,6 +10,7 @@ const {
   STAGES,
   exitCodeFor,
   parseArgs,
+  parseRenderedStageReceipt,
   projectStageReceipt,
   renderStageReceipt,
   run,
@@ -152,6 +153,28 @@ assert.match(rendered, /mutationAuthorized: `false`/);
 assert.match(rendered, /executionAuthorized: `false`/);
 assert.match(rendered, new RegExp(canonical.receiptDigest));
 assert.ok(Buffer.byteLength(rendered, 'utf8') <= MAX_RENDER_BYTES);
+
+assert.equal(parseRenderedStageReceipt(rendered).status, 'VALID');
+assert.equal(parseRenderedStageReceipt(rendered).value.receiptDigest, canonical.receiptDigest);
+
+const withTrailingProse = rendered + '\nCurrentization evidence:\n- preserved externally\n';
+const parsedTrailing = parseRenderedStageReceipt(withTrailingProse);
+assert.equal(parsedTrailing.status, 'VALID');
+assert.equal(parsedTrailing.value.receiptDigest, canonical.receiptDigest);
+
+assert.equal(parseRenderedStageReceipt('no canonical block').status, 'UNKNOWN');
+const duplicateRendered = rendered + '\n' + rendered;
+assert.equal(parseRenderedStageReceipt(duplicateRendered).status, 'CONFLICT');
+
+const tamperedDigest = rendered.replace(
+  canonical.receiptDigest,
+  'b'.repeat(64),
+);
+assert.equal(parseRenderedStageReceipt(tamperedDigest).status, 'CONFLICT');
+
+const malformedRendered = rendered.replace('- packet: #2338', '- packet: nope');
+assert.equal(parseRenderedStageReceipt(malformedRendered).status, 'UNKNOWN');
+
 
 assert.deepEqual(
   parseArgs(['--input-file', 'facts.json', '--format', 'markdown']),

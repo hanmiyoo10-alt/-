@@ -724,5 +724,5 @@ Error mechanism: 거듭제곱 미분에서 원래 지수 `-2`를 계수로 그�
 Next-time cue: `(x^n)' = n x^(n-1)`에서 **계수는 원래 지수 n**, 지수만 `n-1`로 바꾼다. `x^(-3)`은 마지막에 필요하면 `1/x^3`으로만 바꾼다.
 
 Related pattern IDs: AI-MATH-P1
-Review state: NONE
-Later evidence / resolution: 오류 지점을 즉시 교정했고, 사용자가 태블릿 손필기 최신본에 임계점 `x=sqrt(e)`를 다시 작성했다. `1-2 ln x=0 -> ln x=1/2 -> x=sqrt(e)`는 정확하다. 동일 cue가 다른 거듭제곱 미분 문제에 전이되는지는 아직 확인하지 않았다.
+Review state: REVIEWED
+Later evidence / resolution: 오류 지점을 즉시 교정했고, 사용자가 태블릿 손필기 최신본에 임계점 `x=sqrt(e)`를 다시 작성했다. 이어 `f(1)=0`, `f(sqrt(e))=1/(2e)`, `f(e)=1/e^2`를 계산하고 최댓값을 `1/(2e)`로 판정했다. 4.7의 수정 풀이 전체가 정확하게 완료되었다. 동일 cue가 다른 거듭제곱 미분 문제에 전이되는지는 아직 확인하지 않았다.

@@ -63,3 +63,32 @@ Version 1 has no install, apply, repair, restart, cleanup, download, package,
 path, profile, arbitrary command, service, ADB, root, or Android-setting
 passthrough. Fixture executables exist only inside the contract test's temporary
 synthetic `device-ops` tree; ordinary invocation has no fixture-root override.
+
+
+## Installed operator surface
+
+The projection command itself remains read-only and keeps the exact
+`mcl-m-family-status.v1` contract above. A separate sibling deployment helper
+materializes a fixed execution snapshot so the command does not depend on a
+fresh repository landing worktree:
+
+```sh
+sh ./install.sh --check
+sh ./install.sh --apply
+```
+
+The installed launcher is fixed at `$PREFIX/bin/mcl-env-status`. It executes a
+private bundle under `$HOME/.local/share/mcl-m-family-status/repo/` that preserves
+the repository-relative layout needed by the existing M host, PRIVATE LAB, VM LAB,
+and resource-guard owners. The installer copies only its reviewed fixed allowlist;
+there is no caller-selected source, destination, command, package, service, lab,
+Git, network, Android, or authentication surface.
+
+`--check` is read-only. `--apply` only converges the fixed bundle and launcher,
+refuses symlink/special/unmanaged conflicts, and is idempotent. It does not execute
+`mcl-env-status` during installation. Running `mcl-env-status status` afterward
+remains a separate read-only observation.
+
+The installer is deployment plumbing for the existing projection, not an
+`install` or mutation subcommand of `mcl-env-status`. The projection's mutation
+boundary and semantic-owner delegation remain unchanged.

@@ -6,12 +6,15 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const net = require('node:net');
+const {PassThrough} = require('node:stream');
 const {EventEmitter} = require('node:events');
 const test = require('node:test');
 
 const ROOT = path.resolve(__dirname, '../../../../..');
 const runtime = require('../mcl-detached-owner-runtime.cjs');
 const service = require('../mcl-detached-owner-runtime-service.cjs');
+const host = require('../mcl-detached-owner-runtime-host.cjs');
 const handoff = require(path.join(ROOT, 'products/chatgpt-mobile-coder-lab/coordination/task-handoff.cjs'));
 const impl = require(path.join(ROOT, 'products/chatgpt-mobile-coder-lab/coordination/repository-implementation/mcl-repository-implementation.cjs'));
 const patch = require(path.join(ROOT, 'products/chatgpt-mobile-coder-lab/device-ops/repository-patch/mcl-repository-patch-owner-invoke.cjs'));
@@ -413,11 +416,245 @@ test('strict public surfaces reject unsupported commands and fields', () => {
   }), /REQUEST_UNKNOWN_FIELD:command/);
 });
 
-test('service source is Unix-socket only and contains no HTTP/TCP listener', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'mcl-detached-owner-runtime-service.cjs'), 'utf8');
-  assert(source.includes('netImpl.createServer'));
-  assert(source.includes('server.listen(socketPath'));
-  for (const token of ["require('node:http')", "require('node:https')", '.listen(0,', 'host:', 'port:']) {
-    assert(!source.includes(token), token);
+test('split topology keeps pathname UDS on host and stdio-only semantics in PRoot', () => {
+  const workerSource = fs.readFileSync(
+    path.join(__dirname, '..', 'mcl-detached-owner-runtime-service.cjs'), 'utf8');
+  const hostSource = fs.readFileSync(
+    path.join(__dirname, '..', 'mcl-detached-owner-runtime-host.cjs'), 'utf8');
+  assert(!workerSource.includes("require('node:net')"));
+  assert(!workerSource.includes('.listen('));
+  assert(workerSource.includes('MCL_DETACHED_STDIO_WORKER_V1'));
+  assert(workerSource.includes('serveStdio'));
+  assert(hostSource.includes("require('node:net')"));
+  assert(hostSource.includes('allowHalfOpen: true'));
+  assert(hostSource.includes('/data/data/com.termux/files/home/.local/run/mcl-detached-owner-runtime/control.sock'));
+  for (const token of ["require('node:http')", "require('node:https')", '.listen(0,', 'port:']) {
+    assert(!hostSource.includes(token), token);
   }
+});
+
+test('prepare-only helper preserves activation identity and performs no socket request', () => {
+  const f = fixture();
+  try {
+    const dir = fs.mkdtempSync(path.join(f.root, 'prepare-'));
+    const files = {
+      manifest: path.join(dir, 'manifest.md'),
+      handoff: path.join(dir, 'handoff.md'),
+      request: path.join(dir, 'request.json'),
+      patch: path.join(dir, 'patch.diff'),
+      validation: path.join(dir, 'validation.json'),
+      pr: path.join(dir, 'pr.json'),
+    };
+    fs.writeFileSync(files.manifest, f.manifestText);
+    fs.writeFileSync(files.handoff, f.handoffText);
+    fs.writeFileSync(files.request, f.requestText);
+    fs.writeFileSync(files.patch, f.patchBytes);
+    fs.writeFileSync(files.validation, f.validationRequestText);
+    fs.writeFileSync(files.pr, f.prRequestText);
+    const argv = [
+      'start-fixed',
+      '--packet', PACKET,
+      '--parent-manifest-file', files.manifest,
+      '--parent-handoff-file', files.handoff,
+      '--request-file', files.request,
+      '--patch-file', files.patch,
+      '--validation-request-file', files.validation,
+      '--pr-request-file', files.pr,
+    ];
+    const prepared = runtime.prepareStartRequest(argv, {
+      worktree: f.worktree,
+      sourceIdentity: SOURCE_IDENTITY,
+    });
+    assert.deepEqual(prepared.request, startRequest(f.bundle));
+    assert.equal(prepared.bundle.activation.runId, f.bundle.activation.runId);
+    assert.equal(prepared.materialized.status, 'CREATED');
+  } finally {
+    f.cleanup();
+  }
+});
+
+test('host public surface stays start-fixed or inspect and semantic socket payload has no file paths', () => {
+  assert.throws(() => host.parsePublicCli(['cancel']), /COMMAND_UNSUPPORTED/);
+  assert.throws(() => host.parsePublicCli([
+    'inspect', '--packet', PACKET, '--run-id', 'run-' + 'a'.repeat(64),
+    '--command', 'rm',
+  ]), /ARGUMENT_UNSUPPORTED:command/);
+  const f = fixture();
+  const semantic = startRequest(f.bundle);
+  try {
+    const response = host.prepareStart([
+      'start-fixed',
+      '--packet', PACKET,
+      '--parent-manifest-file', '/root/a',
+      '--parent-handoff-file', '/root/b',
+      '--request-file', '/root/c',
+      '--patch-file', '/root/d',
+      '--validation-request-file', '/root/e',
+      '--pr-request-file', '/root/f',
+    ], {
+      spawnSyncImpl(command, args) {
+        assert.equal(command, host.PROOT_DISTRO);
+        assert(args.includes('MCL_DETACHED_PREPARE_ONLY_V1=1'));
+        return {status: 0, stdout: JSON.stringify(semantic) + '\n', stderr: ''};
+      },
+    });
+    assert.deepEqual(response, semantic);
+    assert.equal(JSON.stringify(response).includes('/root/'), false);
+  } finally {
+    f.cleanup();
+  }
+});
+
+function fakePersistentWorker(responseFactory) {
+  const child = new EventEmitter();
+  child.exitCode = null;
+  child.killed = false;
+  child.stdin = new PassThrough();
+  child.stdout = new PassThrough();
+  child.kill = () => {
+    child.killed = true;
+    child.exitCode = 0;
+    queueMicrotask(() => child.emit('exit', 0));
+    return true;
+  };
+  let input = '';
+  child.stdin.on('data', (chunk) => {
+    input += chunk.toString('utf8');
+    for (;;) {
+      const idx = input.indexOf('\n');
+      if (idx < 0) break;
+      const line = input.slice(0, idx);
+      input = input.slice(idx + 1);
+      if (!line.trim()) continue;
+      const request = JSON.parse(line);
+      child.stdout.write(JSON.stringify(responseFactory(request)) + '\n');
+    }
+  });
+  return child;
+}
+
+test('one fixed persistent worker serves multiple sequential host requests without respawn', async () => {
+  let spawns = 0;
+  const child = fakePersistentWorker((request) => ({
+    schema: runtime.START_RESULT_SCHEMA,
+    status: 'UNKNOWN',
+    packetRef: request.packetRef,
+    reasonCodes: ['FIXTURE'],
+    authority: {...host.FALSE_AUTHORITY},
+  }));
+  const bridge = new host.PersistentWorker({
+    spawnImpl(command, args) {
+      spawns += 1;
+      assert.equal(command, host.PROOT_DISTRO);
+      assert(args.includes('MCL_DETACHED_STDIO_WORKER_V1=1'));
+      return child;
+    },
+    timeoutMs: 1000,
+  });
+  const request = {
+    schema: runtime.INSPECT_SCHEMA,
+    operation: 'inspect',
+    packetRef: PACKET,
+    runId: 'run-' + 'a'.repeat(64),
+  };
+  await bridge.request(request);
+  await bridge.request(request);
+  assert.equal(spawns, 1);
+  assert.equal(bridge.spawnCount, 1);
+  bridge.close();
+});
+
+test('worker exit is fail-closed and never causes automatic respawn', async () => {
+  let spawns = 0;
+  const child = fakePersistentWorker(() => ({status: 'fixture'}));
+  const bridge = new host.PersistentWorker({
+    spawnImpl() { spawns += 1; return child; },
+    timeoutMs: 1000,
+  });
+  bridge.start();
+  child.exitCode = 1;
+  child.emit('exit', 1);
+  await assert.rejects(() => bridge.request({
+    schema: runtime.INSPECT_SCHEMA,
+    operation: 'inspect',
+    packetRef: PACKET,
+    runId: 'run-' + 'a'.repeat(64),
+  }), /WORKER_UNAVAILABLE/);
+  assert.equal(spawns, 1);
+});
+
+test('host UDS responds after client half-close and uses one bounded request line', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-host-uds-'));
+  const socketPath = path.join(dir, 'control.sock');
+  let seen = 0;
+  const bridge = {
+    async request(request) {
+      seen += 1;
+      return {
+        schema: runtime.START_RESULT_SCHEMA,
+        status: 'UNKNOWN',
+        packetRef: request.packetRef,
+        reasonCodes: ['FIXTURE'],
+        authority: {...host.FALSE_AUTHORITY},
+      };
+    },
+  };
+  const created = host.createHostServer({bridge, socketPath});
+  try {
+    await new Promise((resolve, reject) => {
+      created.server.once('error', reject);
+      created.server.listen(socketPath, resolve);
+    });
+    const request = {
+      schema: runtime.INSPECT_SCHEMA,
+      operation: 'inspect',
+      packetRef: PACKET,
+      runId: 'run-' + 'a'.repeat(64),
+    };
+    const response = await new Promise((resolve, reject) => {
+      const client = net.createConnection({path: socketPath});
+      let bytes = '';
+      client.on('error', reject);
+      client.on('connect', () => {
+        client.write(JSON.stringify(request) + '\n');
+        client.end();
+      });
+      client.on('data', (chunk) => { bytes += chunk.toString('utf8'); });
+      client.on('end', () => resolve(JSON.parse(bytes.trim())));
+    });
+    assert.equal(response.status, 'UNKNOWN');
+    assert.equal(seen, 1);
+  } finally {
+    await new Promise((resolve) => created.server.close(resolve));
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('stdio semantic worker serializes multiple requests through one supervisor instance', async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const responses = [];
+  let calls = 0;
+  const supervisor = {
+    async handle(value) {
+      calls += 1;
+      return {schema: 'fixture-response.v1', sequence: calls, operation: value.operation};
+    },
+  };
+  const worker = service.serveStdio({supervisor, input, output});
+  let bytes = '';
+  output.on('data', (chunk) => { bytes += chunk.toString('utf8'); });
+  const request = JSON.stringify({
+    schema: runtime.INSPECT_SCHEMA,
+    operation: 'inspect',
+    packetRef: PACKET,
+    runId: 'run-' + 'a'.repeat(64),
+  });
+  input.write(request + '\n');
+  input.write(request + '\n');
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  await worker.drain();
+  for (const line of bytes.trim().split(/\n/).filter(Boolean)) responses.push(JSON.parse(line));
+  assert.equal(calls, 2);
+  assert.deepEqual(responses.map((item) => item.sequence), [1, 2]);
 });

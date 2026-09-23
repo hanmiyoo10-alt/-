@@ -3,7 +3,6 @@
 
 const childProcess = require('node:child_process');
 const fs = require('node:fs');
-const net = require('node:net');
 const path = require('node:path');
 
 const runtime = require('./mcl-detached-owner-runtime.cjs');
@@ -333,74 +332,99 @@ class RuntimeSupervisor {
   }
 }
 
-function createServer({
+function serveStdio({
   supervisor = new RuntimeSupervisor(),
-  socketPath = runtime.SOCKET_PATH,
-  netImpl = net,
+  input = process.stdin,
+  output = process.stdout,
 } = {}) {
-  const server = netImpl.createServer((socket) => {
-    let data = '';
-    let replied = false;
-    const reply = (value) => {
-      if (replied) return;
-      replied = true;
-      socket.end(JSON.stringify(value) + '\n');
-    };
-    socket.on('data', (chunk) => {
-      data += chunk.toString('utf8');
-      if (Buffer.byteLength(data, 'utf8') > REQUEST_MAX) {
-        reply(safeError(new runtime.RuntimeError('UNKNOWN', ['REQUEST_TOO_LARGE'])));
-      }
-    });
-    socket.on('end', () => {
-      if (replied) return;
-      try {
-        const lines = data.trim().split(/\r?\n/).filter(Boolean);
-        if (lines.length !== 1) throw new runtime.RuntimeError('UNKNOWN', ['ONE_REQUEST_REQUIRED']);
-        const value = JSON.parse(lines[0]);
-        Promise.resolve(supervisor.handle(value)).then(reply).catch((error) => reply(safeError(error)));
-      } catch (error) {
-        reply(safeError(error instanceof SyntaxError
-          ? new runtime.RuntimeError('UNKNOWN', ['REQUEST_JSON_INVALID']) : error));
-      }
-    });
-  });
-  return {server, socketPath, supervisor};
-}
+  let buffer = '';
+  let chain = Promise.resolve();
+  let failed = false;
 
-function serve(options = {}) {
-  const socketPath = options.socketPath || runtime.SOCKET_PATH;
-  const dir = path.dirname(socketPath);
-  fs.mkdirSync(dir, {recursive: true, mode: 0o700});
-  try {
-    const stat = fs.lstatSync(socketPath);
-    if (!stat.isSocket()) throw new runtime.RuntimeError('CONFLICT', ['CONTROL_PATH_NOT_SOCKET']);
-    fs.unlinkSync(socketPath);
-  } catch (error) {
-    if (error.code !== 'ENOENT' && !(error instanceof runtime.RuntimeError)) throw error;
-    if (error instanceof runtime.RuntimeError) throw error;
-  }
-  const created = createServer({...options, socketPath});
-  created.server.listen(socketPath, () => {
-    fs.chmodSync(socketPath, 0o600);
-  });
-  const close = () => {
-    created.server.close(() => {
-      try { fs.unlinkSync(socketPath); } catch (_) {}
-      process.exit(0);
+  const write = (value) => {
+    const line = JSON.stringify(value) + '\n';
+    if (Buffer.byteLength(line, 'utf8') > REQUEST_MAX) {
+      output.write(JSON.stringify(safeError(new runtime.RuntimeError(
+        'UNKNOWN', ['RESPONSE_TOO_LARGE']))) + '\n');
+      return;
+    }
+    output.write(line);
+  };
+  const dispatch = (line) => {
+    chain = chain.then(async () => {
+      if (failed) return;
+      let value;
+      try {
+        value = JSON.parse(line);
+      } catch (_) {
+        write(safeError(new runtime.RuntimeError('UNKNOWN', ['REQUEST_JSON_INVALID'])));
+        return;
+      }
+      try {
+        write(await supervisor.handle(value));
+      } catch (error) {
+        write(safeError(error));
+      }
     });
   };
-  process.on('SIGTERM', close);
-  process.on('SIGINT', close);
-  return created;
+  const consume = () => {
+    for (;;) {
+      const idx = buffer.indexOf('\n');
+      if (idx < 0) break;
+      const line = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 1);
+      if (!line.trim()) {
+        write(safeError(new runtime.RuntimeError('UNKNOWN', ['ONE_REQUEST_REQUIRED'])));
+        continue;
+      }
+      if (Buffer.byteLength(line, 'utf8') > REQUEST_MAX) {
+        write(safeError(new runtime.RuntimeError('UNKNOWN', ['REQUEST_TOO_LARGE'])));
+        continue;
+      }
+      dispatch(line);
+    }
+    if (Buffer.byteLength(buffer, 'utf8') > REQUEST_MAX) {
+      failed = true;
+      buffer = '';
+      write(safeError(new runtime.RuntimeError('UNKNOWN', ['REQUEST_TOO_LARGE'])));
+    }
+  };
+
+  input.on('data', (chunk) => {
+    if (failed) return;
+    buffer += chunk.toString('utf8');
+    consume();
+  });
+  input.on('end', () => {
+    if (failed) return;
+    const line = buffer.trim();
+    buffer = '';
+    if (line) {
+      if (Buffer.byteLength(line, 'utf8') > REQUEST_MAX) {
+        write(safeError(new runtime.RuntimeError('UNKNOWN', ['REQUEST_TOO_LARGE'])));
+      } else {
+        dispatch(line);
+      }
+    }
+  });
+  input.on('error', () => {
+    failed = true;
+  });
+  return {supervisor, drain: () => chain};
 }
 
 if (require.main === module) {
-  try {
-    serve();
-  } catch (error) {
-    process.stderr.write(JSON.stringify(safeError(error)) + '\n');
+  if (process.env.MCL_DETACHED_STDIO_WORKER_V1 !== '1' || process.argv.length !== 2) {
+    process.stdout.write(JSON.stringify(safeError(new runtime.RuntimeError(
+      'UNKNOWN', ['INTERNAL_WORKER_MODE_REQUIRED']))) + '\n');
     process.exitCode = 2;
+  } else {
+    try {
+      serveStdio();
+    } catch (error) {
+      process.stdout.write(JSON.stringify(safeError(error)) + '\n');
+      process.exitCode = 2;
+    }
   }
 }
 
@@ -409,10 +433,9 @@ module.exports = {
   INSPECT_FIELDS,
   RuntimeSupervisor,
   START_FIELDS,
-  createServer,
   liveChild,
   parseRequest,
   safeError,
-  serve,
+  serveStdio,
   startResult,
 };

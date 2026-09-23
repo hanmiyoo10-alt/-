@@ -49,6 +49,9 @@ const D014_CONTRACT_REF =
 const VC_PATHS = [...inv.VALIDATION_CONTINUATION_PATHS].sort();
 const VC_SCOPES = [...inv.VALIDATION_CONTINUATION_SCOPES];
 const VC_PROFILE = inv.validationProfileById(inv.VALIDATION_CONTINUATION_PROFILE);
+const PPR_PATHS = [...inv.PUBLISHED_PROGRESS_RECOVERY_PATHS].sort();
+const PPR_SCOPES = [...inv.PUBLISHED_PROGRESS_RECOVERY_SCOPES];
+const PPR_PROFILE = inv.validationProfileById(inv.PUBLISHED_PROGRESS_RECOVERY_PROFILE);
 const VALIDATION_REQUEST = {
   schema: inv.VALIDATION_REQUEST_SCHEMA,
   profile: inv.D014_VALIDATION_PROFILE,
@@ -1130,7 +1133,9 @@ test('validation request parser is strict and profile-bound', () => {
 });
 
 test('reviewed validation profile set is exact and scope-derived', () => {
-  assert.equal(inv.VALIDATION_PROFILES.length, 2);
+  assert.equal(inv.VALIDATION_PROFILES.length, 3);
+  assert.equal(D014_PROFILE.contractDigest, '0b82f7b5ca8d6bc4f6b487653fd87451f2d6c3867a3a4dc87679587ea2fcf8bb');
+  assert.equal(VC_PROFILE.contractDigest, '692e94f9a599e6dfbd840d404635d45f906de2c5933f0e04545d22f6ecbd550c');
   assert.equal(
     inv.resolveValidationProfileForScopes(D014_SCOPES).profileId,
     inv.D014_VALIDATION_PROFILE,
@@ -1139,6 +1144,11 @@ test('reviewed validation profile set is exact and scope-derived', () => {
     inv.resolveValidationProfileForScopes(VC_SCOPES).profileId,
     inv.VALIDATION_CONTINUATION_PROFILE,
   );
+  assert.equal(
+    inv.resolveValidationProfileForScopes(PPR_SCOPES).profileId,
+    inv.PUBLISHED_PROGRESS_RECOVERY_PROFILE,
+  );
+  assert.deepEqual(PPR_PROFILE.paths, PPR_PATHS);
   assert.throws(
     () => inv.resolveValidationProfileForScopes(SCOPES),
     (error) => error.kind === 'BLOCKED'
@@ -1215,6 +1225,48 @@ test('validation-continuation profile binds exact contract and fixed checks', ()
   } finally {
     fs.rmSync(dir, {recursive: true, force: true});
   }
+});
+
+test('published-progress profile binds exact contract and fixed checks', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-profile-ppr-test-'));
+  try {
+    const validationRequest = {schema: inv.VALIDATION_REQUEST_SCHEMA, profile: inv.PUBLISHED_PROGRESS_RECOVERY_PROFILE};
+    const text = JSON.stringify(validationRequest);
+    const bytes = Buffer.from(text, 'utf8');
+    const validationPath = path.join(dir, 'validation.json');
+    fs.writeFileSync(validationPath, bytes);
+    const validationHash = crypto.createHash('sha256').update(bytes).digest('hex');
+    const m = manifest({
+      scopes: [...PPR_SCOPES],
+      inputRefs: [
+        'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+        inv.PRIMITIVE_REF,
+        inv.VALIDATION_REF_PREFIX + validationHash,
+        inv.VALIDATION_CONTRACT_REF_PREFIX + PPR_PROFILE.contractDigest,
+      ],
+    });
+    const binding = inv.prepareValidationBinding({
+      manifest: m,
+      request: {expected_paths: [...PPR_PATHS]},
+      validationRequestText: text,
+      validationRequestFile: validationPath,
+    });
+    assert.equal(binding.request.profile, inv.PUBLISHED_PROGRESS_RECOVERY_PROFILE);
+    assert.equal(binding.contractDigest, PPR_PROFILE.contractDigest);
+    const calls = [];
+    const result = inv.runFixedPreparedValidation({
+      binding,
+      manifest: m,
+      validationSpawnSyncImpl(command, args, options) {
+        calls.push({command, args, options});
+        return {status: 0, signal: null, stdout: '', stderr: ''};
+      },
+    });
+    assert.equal(result.kind, 'PASS');
+    assert.equal(result.value.profile, inv.PUBLISHED_PROGRESS_RECOVERY_PROFILE);
+    assert.equal(result.value.checks_passed, inv.PUBLISHED_PROGRESS_RECOVERY_CHECKS.length);
+    assert.deepEqual(calls.map((call) => call.args), inv.PUBLISHED_PROGRESS_RECOVERY_CHECKS.map((check) => check.args));
+  } finally { fs.rmSync(dir, {recursive: true, force: true}); }
 });
 
 test('validation contract ref is mandatory and exact', () => {

@@ -282,11 +282,12 @@ If either binding is missing, conflicting, ambiguous or changes during the
 invocation, the owner fails closed. A manifest that carries validation binding
 cannot silently fall back to the legacy no-validation path.
 
-V1 has exactly two repository-owned fixed profiles:
+V1 has exactly three repository-owned fixed profiles:
 
 ```text
 mcl:d014-completion-set:v1
 repo:validation-continuation:v1
+repo:published-progress-recovery:v1
 ```
 
 Each profile owns one exact path+surface signature, ordered fixed checks,
@@ -310,8 +311,9 @@ The `repo:validation-continuation:v1` profile is admitted only for the exact
 five validation-continuation paths plus its semantic surface. Its fixed checks
 cover stage-receipt and validation-continuation syntax/contracts plus the
 neighboring validation-merge, Work System, execution-receipt and Agent
-Decision View contracts. The caller cannot substitute another test path or
-check list.
+Decision View contracts.
+
+The `repo:published-progress-recovery:v1` profile is admitted only for the exact six published-progress-recovery paths plus `surface:repo:published-progress-recovery-projection` and `surface:mcl:published-progress-recovery-inspection`. Its fixed checks cover pure classifier syntax/contract, MCL adapter syntax/contract, reviewed RDC session-evidence, and the existing effect-recovery neighbor. The caller cannot substitute another test path or check list.
 
 The executable and argv are repository source, not caller data. Children run
 with `shell=false`, a bounded timeout/output ceiling, the manifest worktree as

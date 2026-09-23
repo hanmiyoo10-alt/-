@@ -1525,3 +1525,93 @@ test('public CLI exposes no validation command or profile selector', () => {
     "'executable'",
   ]) assert(!source.includes(token), token);
 });
+
+
+test('detached typed checkpoint sink follows proven patch boundaries only', async () => {
+  const inputs = tempValidationInputs();
+  try {
+    let primitiveCalls = 0;
+    const events = [];
+    const phases = [
+      d014Primitive('PREPARE'),
+      d014Primitive('COMMIT'),
+      d014Primitive('PUSH'),
+    ];
+    const receipt = await inv.invokeLive({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(d014Request()),
+      requestFile: inputs.requestPath,
+      patchFile: inputs.patchPath,
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {},
+      spawnSyncImpl: () => ({
+        status: 0, signal: null,
+        stdout: JSON.stringify(phases[primitiveCalls++]), stderr: '',
+      }),
+      validationSpawnSyncImpl: () => ({status: 0, signal: null, stdout: '', stderr: ''}),
+      checkpointSink: async (event) => { events.push(event); },
+      root: ROOT,
+    });
+    assert.equal(receipt.result, 'PASS');
+    assert.deepEqual(events.map((event) => event.checkpoint), [
+      'SOURCE_MUTATION_COMPLETE',
+      'VALIDATION_PASS',
+      'COMMIT_CREATED',
+      'PUSH_COMPLETE',
+    ]);
+    for (const event of events) {
+      assert.equal(event.schema, inv.DETACHED_CHECKPOINT_SCHEMA);
+      assert.equal(event.finalReceiptDigest, null);
+      assert.equal(event.finalReceiptLocator, null);
+    }
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('checkpoint persistence failure after PREPARE blocks before validation commit push', async () => {
+  const inputs = tempValidationInputs();
+  try {
+    let primitiveCalls = 0;
+    let validationCalls = 0;
+    const receipt = await inv.invokeLive({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(d014Request()),
+      requestFile: inputs.requestPath,
+      patchFile: inputs.patchPath,
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {},
+      spawnSyncImpl: () => {
+        primitiveCalls += 1;
+        return {
+          status: 0, signal: null,
+          stdout: JSON.stringify(d014Primitive('PREPARE')), stderr: '',
+        };
+      },
+      validationSpawnSyncImpl: () => {
+        validationCalls += 1;
+        return {status: 0, signal: null, stdout: '', stderr: ''};
+      },
+      checkpointSink: async () => { throw new Error('fixture persist failure'); },
+      root: ROOT,
+    });
+    assert.equal(receipt.result, 'BLOCKED');
+    assert(receipt.blockers.includes('CONTINUITY_CHECKPOINT_PERSIST_FAILED'));
+    assert.equal(primitiveCalls, 1);
+    assert.equal(validationCalls, 0);
+    const byName = new Map(receipt.steps.map((step) => [step.name, step.result]));
+    assert.equal(byName.get('patch-prepare'), 'PASS');
+    assert.equal(byName.get('patch-commit'), 'SKIPPED');
+    assert.equal(byName.get('patch-push-postverify'), 'SKIPPED');
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});

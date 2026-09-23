@@ -27,6 +27,8 @@ const SCOPES = [...patchOwner.D014_VALIDATION_SCOPES];
 const D014_PROFILE = patchOwner.validationProfileById(patchOwner.D014_VALIDATION_PROFILE);
 const VC_PATHS = [...patchOwner.VALIDATION_CONTINUATION_PATHS].sort();
 const VC_SCOPES = [...patchOwner.VALIDATION_CONTINUATION_SCOPES];
+const PPR_PATHS = [...patchOwner.PUBLISHED_PROGRESS_RECOVERY_PATHS].sort();
+const PPR_SCOPES = [...patchOwner.PUBLISHED_PROGRESS_RECOVERY_SCOPES];
 
 function makeParent() {
   return handoff.buildManifest({
@@ -218,6 +220,23 @@ test('coordinator derives reviewed validation profile from exact packet scope', 
   );
   assert.equal(vc.profile.profileId, patchOwner.VALIDATION_CONTINUATION_PROFILE);
   assert.deepEqual(vc.profile.paths, VC_PATHS);
+
+  const pprCtx = {...makeCtx(), requestedScopes: [...PPR_SCOPES]};
+  const ppr = impl.resolveValidationProfileBinding(
+    pprCtx,
+    JSON.stringify({schema: patchOwner.VALIDATION_REQUEST_SCHEMA, profile: patchOwner.PUBLISHED_PROGRESS_RECOVERY_PROFILE}),
+  );
+  assert.equal(ppr.profile.profileId, patchOwner.PUBLISHED_PROGRESS_RECOVERY_PROFILE);
+  assert.deepEqual(ppr.profile.paths, PPR_PATHS);
+  assert.throws(
+    () => impl.resolveValidationProfileBinding(
+      pprCtx,
+      JSON.stringify({schema: patchOwner.VALIDATION_REQUEST_SCHEMA, profile: patchOwner.D014_VALIDATION_PROFILE}),
+    ),
+    (error) => error instanceof impl.ImplementationError
+      && error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('VALIDATION_PROFILE_REQUEST_MISMATCH'),
+  );
 
   assert.throws(
     () => impl.resolveValidationProfileBinding(

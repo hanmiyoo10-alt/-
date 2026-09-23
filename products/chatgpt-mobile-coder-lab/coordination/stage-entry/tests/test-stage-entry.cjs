@@ -565,18 +565,32 @@ test('normalization revalidation is one-shot and requires exact convergence', ()
   }), /NORMALIZATION_NOT_CONVERGED/);
 });
 
-test('D-014 manifest builder preserves the fixed S repository workspace contract', () => {
-  const manifest = stage.buildManifest({
+test('D-014 manifest builder preserves workspace and deterministic lease evidence', () => {
+  const context = {
     packetNumber: 77,
     packetRef: '#77',
     mainSha: MAIN,
     packetBodySha256: 'c'.repeat(64),
     requestedScopes: ['path:docs/demo.md'],
     workspace: {identity: {branch: 'server/mcl-packet-77', worktree: '/root/nyang-worktrees/mcl-packet-77'}},
-  }, {leaseId: 'b'.repeat(64), observedGeneration: 9, runId: 500});
+  };
+  const lease = {leaseId: 'b'.repeat(64), observedGeneration: 9, runId: 500};
+  const manifest = stage.buildManifest(context, lease);
+  const replay = stage.buildManifest(context, {...lease, runId: 501});
+  const nextGeneration = stage.buildManifest(context, {...lease, observedGeneration: 10, runId: 502});
+  const differentLease = stage.buildManifest(context, {...lease, leaseId: 'd'.repeat(64), runId: 503});
+  const evidenceRef = `receipt:mcl-task-lease:${lease.leaseId}:generation:9`;
+
   assert.equal(manifest.workspace.branch, 'server/mcl-packet-77');
   assert.equal(manifest.workspace.worktree, '/root/nyang-worktrees/mcl-packet-77');
+  assert.equal(manifest.leaseEvidence.acquireEvidenceRef, evidenceRef);
+  assert(manifest.inputRefs.includes(evidenceRef));
+  assert.equal(manifest.inputRefs.some((ref) => ref.startsWith('run:')), false);
   assert.match(manifest.manifestId, /^[0-9a-f]{64}$/);
+  assert.equal(replay.manifestId, manifest.manifestId);
+  assert.equal(replay.payloadSha256, manifest.payloadSha256);
+  assert.notEqual(nextGeneration.manifestId, manifest.manifestId);
+  assert.notEqual(differentLease.manifestId, manifest.manifestId);
 });
 
 test('HANDOFF_READY projection is accepted by the existing strict patch-owner parser', () => {

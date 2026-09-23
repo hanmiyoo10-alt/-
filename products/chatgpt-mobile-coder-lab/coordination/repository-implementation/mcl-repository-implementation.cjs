@@ -17,6 +17,8 @@ const MAX_PR_BODY_BYTES = 12 * 1024;
 const MAX_PR_TITLE_BYTES = 240;
 const MAX_COMMENT_PAGES = 5;
 const PAGE_SIZE = 100;
+const DETACHED_CHECKPOINT_SCHEMA = 'mcl-detached-owner-checkpoint.v1';
+const DETACHED_CHECKPOINT_ACK_SCHEMA = 'mcl-detached-owner-checkpoint-ack.v1';
 const FALSE_AUTHORITY = Object.freeze({
   repositoryMutationAuthorized: false,
   deviceMutationAuthorized: false,
@@ -265,9 +267,27 @@ async function prepareLiveContext({
     parentManifestComment, parentHandoffComment, workspace,
   };
 }
-function buildChildManifest(ctx, request, validationText, prText) {
+function resolveValidationProfileBinding(ctx, validationText) {
+  try {
+    const profile = patchOwner.resolveValidationProfileForScopes(ctx.requestedScopes);
+    const request = patchOwner.parseValidationRequestText(validationText);
+    if (request.profile !== profile.profileId) {
+      fail('BLOCKED', 'VALIDATION_PROFILE_REQUEST_MISMATCH');
+    }
+    return {profile, request};
+  } catch (error) {
+    if (error instanceof patchOwner.InvocationError) {
+      fail(error.kind, ...error.reasonCodes);
+    }
+    throw error;
+  }
+}
+function buildChildManifest(ctx, request, validationText, prText, selectedProfile = null) {
+  const profile = selectedProfile || resolveValidationProfileBinding(ctx, validationText).profile;
   const patchRef = 'receipt:mcl-repository-patch-request:' + request.patch_sha256;
   const validationRef = patchOwner.VALIDATION_REF_PREFIX + sha256(Buffer.from(validationText, 'utf8'));
+  const validationContractRef =
+    patchOwner.VALIDATION_CONTRACT_REF_PREFIX + profile.contractDigest;
   const prRef = 'receipt:mcl-pr-publication-request:' + sha256(Buffer.from(prText, 'utf8'));
   return taskHandoff.buildManifest({
     schemaVersion: 1,
@@ -292,7 +312,7 @@ function buildChildManifest(ctx, request, validationText, prText) {
       `commit:${ctx.parentManifest.observedBaseSha}`,
       commentUrl(ctx.packet, ctx.parentManifestComment),
       commentUrl(ctx.packet, ctx.parentHandoffComment),
-      patchRef, validationRef, prRef,
+      patchRef, validationRef, validationContractRef, prRef,
       ctx.parentManifest.leaseEvidence.acquireEvidenceRef,
     ],
     expectedOutputRefs: pathScopes(ctx.requestedScopes).map((item) => 'path:' + item),
@@ -420,6 +440,36 @@ function buildStageReceipt({ctx, child, commit, pr, locators, comments}) {
     nextLegalAction: 'VALIDATION_MERGE',
   });
 }
+async function emitDetachedCheckpoint(checkpointSink, {
+  checkpoint,
+  primitiveId,
+  targetIdentity,
+  evidenceLocator,
+  nextPrimitive,
+  finalReceiptDigest = null,
+  finalReceiptLocator = null,
+}) {
+  if (checkpointSink === null || checkpointSink === undefined) return;
+  if (typeof checkpointSink !== 'function') {
+    fail('UNKNOWN', 'CONTINUITY_CHECKPOINT_SINK_INVALID');
+  }
+  try {
+    await checkpointSink({
+      schema: DETACHED_CHECKPOINT_SCHEMA,
+      checkpoint,
+      primitiveId,
+      targetIdentity,
+      evidenceLocator,
+      nextPrimitive,
+      finalReceiptDigest,
+      finalReceiptLocator,
+    });
+  } catch (error) {
+    if (error instanceof ImplementationError) throw error;
+    fail('BLOCKED', 'CONTINUITY_CHECKPOINT_PERSIST_FAILED');
+  }
+}
+
 async function executePrepared(ctx, inputs, deps = {}) {
   const runner = deps.runner || stageEntry.runDefault;
   const operatorRunner = (args) => runner(['gh', ...args]);
@@ -433,6 +483,7 @@ async function executePrepared(ctx, inputs, deps = {}) {
   const validateReleased = deps.validateReleased || workspaceHolder.validateEvidence;
   const headReader = deps.currentGitHead || currentGitHead;
   const persist = deps.persistArtifacts || persistArtifacts;
+  const checkpointSink = deps.checkpointSink || null;
   const readAfterRelease = deps.readAfterRelease || (async () => {
     const client = operator.createOperatorGitHubClient({
     repo: REPO, env, runner: operatorRunner, fetchImpl,
@@ -446,7 +497,7 @@ async function executePrepared(ctx, inputs, deps = {}) {
   const patchBytes = readRegular(inputs.patchFile, 'PATCH_FILE', patchOwner.MAX_PATCH_BYTES);
   if (sha256(patchBytes) !== request.patch_sha256) fail('CONFLICT', 'PATCH_HASH_CONFLICT');
   if (!same(request.expected_paths, pathScopes(ctx.requestedScopes))) fail('CONFLICT', 'PATCH_PATH_SCOPE_CONFLICT');
-  patchOwner.parseValidationRequestText(inputs.validationRequestText);
+  const validationBinding = resolveValidationProfileBinding(ctx, inputs.validationRequestText);
   if (!readRegular(inputs.requestFile, 'REQUEST_FILE').equals(Buffer.from(inputs.requestText, 'utf8'))) {
     fail('CONFLICT', 'REQUEST_TEXT_FILE_CONFLICT');
   }
@@ -455,7 +506,8 @@ async function executePrepared(ctx, inputs, deps = {}) {
     fail('CONFLICT', 'VALIDATION_REQUEST_TEXT_FILE_CONFLICT');
   }
   const prRequest = parsePrRequestText(inputs.prRequestText, ctx.packetRef);
-  const child = buildChildManifest(ctx, request, inputs.validationRequestText, inputs.prRequestText);
+  const child = buildChildManifest(
+    ctx, request, inputs.validationRequestText, inputs.prRequestText, validationBinding.profile);
   const childText = taskHandoff.renderManifest(child);
   const childManifestComment = postComment(childText);
   const childHandoffText = renderHandoff(child);
@@ -469,6 +521,13 @@ async function executePrepared(ctx, inputs, deps = {}) {
     const secret = claimed.secret;
     const check = checkHolder(evidenceFiles, secret);
     if (check.status !== 'CHECK_PASS') fail('BLOCKED', ...(check.reasonCodes || ['HOLDER_CHECK_FAILED']));
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'WORKSPACE_READY',
+      primitiveId: 'MCL_WORKSPACE_HOLDER',
+      targetIdentity: 'manifest:' + child.manifestId,
+      evidenceLocator: 'receipt:mcl-task-manifest:' + child.manifestId,
+      nextPrimitive: 'PATCH_PREPARE',
+    });
     const childHandoff = parseHandoffEnvelope(childHandoffText);
     const patchReceipt = await (deps.invokePatchOwner || patchOwner.invokeLive)({
       repo: REPO,
@@ -483,6 +542,7 @@ async function executePrepared(ctx, inputs, deps = {}) {
       runner: operatorRunner, fetchImpl, spawnSyncImpl,
       validationSpawnSyncImpl: deps.validationSpawnSyncImpl || childProcess.spawnSync,
       root: ROOT,
+      checkpointSink,
     });
     requirePatchOwnerPass(patchReceipt);
     await (deps.guardCurrent || patchOwner.guardCurrent)({
@@ -490,8 +550,22 @@ async function executePrepared(ctx, inputs, deps = {}) {
       holderSecret: secret, env, runner: operatorRunner, fetchImpl,
     });
     const commit = headReader(child, spawnSyncImpl);
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'REMOTE_HEAD_VERIFIED',
+      primitiveId: 'REPOSITORY_REMOTE_HEAD_VERIFY',
+      targetIdentity: 'commit:' + commit,
+      evidenceLocator: 'commit:' + commit,
+      nextPrimitive: 'PR_CREATE',
+    });
     const pr = (deps.publishPr || publishPr)({
       manifest: child, request: prRequest, expectedHead: commit, runner,
+    });
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'PR_CREATED',
+      primitiveId: 'REPOSITORY_PR_CREATE',
+      targetIdentity: 'pr:#' + pr.number,
+      evidenceLocator: 'pr:#' + pr.number,
+      nextPrimitive: 'COORDINATION_RELEASE',
     });
     await (deps.guardCurrent || patchOwner.guardCurrent)({
       repo: REPO, manifest: child, handoff: childHandoff,
@@ -511,6 +585,13 @@ async function executePrepared(ctx, inputs, deps = {}) {
     if (!released.ok) fail('BLOCKED', ...released.reasonCodes);
     const holderRelease = releaseHolder(evidenceFiles, secret);
     if (holderRelease.status !== 'RELEASED') fail('BLOCKED', ...holderRelease.reasonCodes);
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'COORDINATION_RELEASED',
+      primitiveId: 'MCL_COORDINATION_RELEASE',
+      targetIdentity: 'lease:' + child.leaseEvidence.leaseId,
+      evidenceLocator: 'run:' + release.value.runId,
+      nextPrimitive: 'FINALIZE_RECEIPTS',
+    });
     const releaseEvidence = {
       ledgerRef: '#2352',
       leaseId: child.leaseEvidence.leaseId,
@@ -520,7 +601,11 @@ async function executePrepared(ctx, inputs, deps = {}) {
     const childReceipt = taskHandoff.buildCompletionReceipt(child, {
       disposition: 'COMPLETE',
       outputRefs: [`commit:${commit}`, `pr:#${pr.number}`],
-      validationRefs: [`pr:#${pr.number}`, `receipt:mcl-repository-patch-owner:${child.manifestId}`],
+      validationRefs: [
+        `pr:#${pr.number}`,
+        `receipt:mcl-repository-patch-owner:${child.manifestId}`,
+        patchOwner.VALIDATION_CONTRACT_REF_PREFIX + validationBinding.profile.contractDigest,
+      ],
       observedRefs: [`commit:${ctx.mainSha}`, `commit:${commit}`, `pr:#${pr.number}`],
       leaseDisposition: 'RELEASED',
       leaseReleaseEvidence: releaseEvidence,
@@ -558,6 +643,11 @@ async function executePrepared(ctx, inputs, deps = {}) {
       commit: `commit:${commit}`,
       pr: `pr:#${pr.number}`,
       changedFiles: pr.changed,
+      stageOwnerId: patchOwner.STAGE_OWNER_ID,
+      mutationPrimitiveId: patchOwner.MUTATION_PRIMITIVE_ID,
+      validationProfile: validationBinding.profile.profileId,
+      validationProfileVersion: validationBinding.profile.profileVersion,
+      validationContractDigest: validationBinding.profile.contractDigest,
       leaseReleasedGeneration: released.state.generation,
       comments,
       result: 'PASS',
@@ -587,6 +677,9 @@ async function executePrepared(ctx, inputs, deps = {}) {
       phase: 'IMPLEMENTATION_PR',
       output: {
         changedFileCount: pr.changed.length,
+        stageOwner: patchOwner.STAGE_OWNER_ID,
+        mutationPrimitive: patchOwner.MUTATION_PRIMITIVE_ID,
+        validationProfile: validationBinding.profile.profileId,
         commit: `commit:${commit}`,
         pr: `pr:#${pr.number}`,
       },
@@ -595,6 +688,15 @@ async function executePrepared(ctx, inputs, deps = {}) {
       reportLocator: locators.reportLocator,
     });
     if (agentDecisionView.exitCodeFor(view) !== 0) fail('UNKNOWN', 'AGENT_VIEW_NOT_COMPLETE');
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'FINISHED',
+      primitiveId: 'MCL_REPOSITORY_IMPLEMENTATION_FINAL',
+      targetIdentity: 'receipt:' + receipt.receiptDigest,
+      evidenceLocator: locators.receiptLocator,
+      nextPrimitive: null,
+      finalReceiptDigest: receipt.receiptDigest,
+      finalReceiptLocator: locators.receiptLocator,
+    });
     return view;
   } finally {
     removeEvidenceFiles(evidenceFiles);
@@ -645,6 +747,37 @@ function parseArgs(argv) {
   for (const key of allowed) if (!values[key]) fail('UNKNOWN', 'ARGUMENT_REQUIRED:' + key);
   return values;
 }
+function createDetachedIpcCheckpointSink(processRef = process, timeoutMs = 15000) {
+  if (typeof processRef.send !== 'function') fail('UNKNOWN', 'DETACHED_IPC_REQUIRED');
+  let seq = 0;
+  return (event) => new Promise((resolve, reject) => {
+    const current = ++seq;
+    let settled = false;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      processRef.off('message', onMessage);
+      if (error) reject(error); else resolve();
+    };
+    const onMessage = (message) => {
+      if (!message || message.schema !== DETACHED_CHECKPOINT_ACK_SCHEMA
+          || message.seq !== current) return;
+      if (message.status === 'PASS') finish();
+      else finish(new ImplementationError('BLOCKED',
+        Array.isArray(message.reasonCodes) && message.reasonCodes.length
+          ? message.reasonCodes : ['CONTINUITY_CHECKPOINT_PERSIST_FAILED']));
+    };
+    const timer = setTimeout(() => finish(new ImplementationError(
+      'BLOCKED', ['CONTINUITY_CHECKPOINT_ACK_TIMEOUT'])), timeoutMs);
+    processRef.on('message', onMessage);
+    processRef.send({type: 'checkpoint', seq: current, event}, (error) => {
+      if (error) finish(new ImplementationError(
+        'BLOCKED', ['CONTINUITY_CHECKPOINT_IPC_FAILED']));
+    });
+  });
+}
+
 async function runCli(argv = process.argv.slice(2), deps = {}) {
   let packetRef = 'UNKNOWN';
   try {
@@ -673,7 +806,9 @@ async function runCli(argv = process.argv.slice(2), deps = {}) {
   }
 }
 if (require.main === module) {
-  runCli().then((view) => {
+  const detachedWorker = process.env.MCL_DETACHED_FIXED_WORKER_V1 === '1';
+  const deps = detachedWorker ? {checkpointSink: createDetachedIpcCheckpointSink(process)} : {};
+  runCli(process.argv.slice(2), deps).then((view) => {
     process.stdout.write(JSON.stringify(view, null, 2) + '\n');
     process.exitCode = agentDecisionView.exitCodeFor(view);
   }).catch((error) => {
@@ -689,6 +824,9 @@ module.exports = {
   PR_SCHEMA,
   buildChildManifest,
   buildStageReceipt,
+  createDetachedIpcCheckpointSink,
+  emitDetachedCheckpoint,
+  resolveValidationProfileBinding,
   commentUrl,
   changedBetween,
   errorView,

@@ -2,7 +2,7 @@
 
 const crypto = require('node:crypto');
 const { normalizeScope } = require('../../../.github/plugin-control-plane/canonical-main/work-system/scope-overlap.cjs');
-const { ROUTES, EXECUTORS, validateWorkspace: validateLeaseWorkspace, validateLandingMetadataBinding } = require('./task-lease.cjs');
+const { ROUTES, EXECUTORS, validateWorkspace: validateLeaseWorkspace, validateLandingMetadataBinding, validateLandingBranchRepairBinding } = require('./task-lease.cjs');
 
 const MANIFEST_START = '<!-- mcl-task-manifest:v1 -->';
 const MANIFEST_END = '<!-- /mcl-task-manifest:v1 -->';
@@ -17,6 +17,9 @@ const PHASE_CLASSES = new Set(['READ_ONLY', 'REPOSITORY_MUTATION', 'DEVICE_OR_LA
 const DISPOSITIONS = new Set(['COMPLETE', 'BLOCKED', 'PARTIAL']);
 const MAX_REFS = 16;
 const MAX_SCOPES = 16;
+const EMPTY_SHA256 = crypto.createHash('sha256').update('').digest('hex');
+const PRESERVED_DIRTY_SURFACE_RE =
+  /^surface:mcl:validation-residue-cleanup:[A-Za-z0-9._/-]+$/;
 const AUTHORITY_FLAGS = Object.freeze({
   repositoryMutationAuthorized: false,
   deviceMutationAuthorized: false,
@@ -81,6 +84,7 @@ function validateWorkspace(workspace, executor, route, scopes, observedBaseSha) 
   errors.push(...validateLeaseWorkspace(workspace, executor));
   if (route === 'S' && !['repository', 'landing_metadata'].includes(workspace.kind)) errors.push('WORKSPACE_S_ROUTE_REPOSITORY_REQUIRED');
   errors.push(...validateLandingMetadataBinding({workspace, executor, scopes, observedBaseSha}));
+  errors.push(...validateLandingBranchRepairBinding({workspace, route, executor, scopes, observedBaseSha}));
   return [...new Set(errors)].sort();
 }
 function normalizeLeaseEvidence(value, required) {
@@ -175,13 +179,60 @@ function normalizeReleaseEvidence(value) {
   if (!SAFE_REF_RE.test(value.evidenceRef || '')) errors.push('RECEIPT_RELEASE_EVIDENCE_REF_INVALID');
   return { errors, value: { ...value } };
 }
-const RECEIPT_CORE_KEYS = new Set([
+function normalizeWorkspacePreservation(value) {
+  if (value === undefined) return { errors: [], value: null, present: false };
+  const errors = exactKeys(
+    value,
+    new Set(['kind', 'beforeSha256', 'afterSha256', 'preservedPathRefs', 'evidenceRef']),
+    ['kind', 'beforeSha256', 'afterSha256', 'preservedPathRefs', 'evidenceRef'],
+    'RECEIPT_PRESERVATION',
+  );
+  if (errors.length) return { errors, value: null, present: true };
+  if (value.kind !== 'TRACKED_DIFF_PRESERVED') errors.push('RECEIPT_PRESERVATION_KIND_INVALID');
+  if (!SHA256_RE.test(value.beforeSha256 || '')) errors.push('RECEIPT_PRESERVATION_BEFORE_SHA_INVALID');
+  if (!SHA256_RE.test(value.afterSha256 || '')) errors.push('RECEIPT_PRESERVATION_AFTER_SHA_INVALID');
+  if (SHA256_RE.test(value.beforeSha256 || '') && SHA256_RE.test(value.afterSha256 || '')
+      && value.beforeSha256 !== value.afterSha256) {
+    errors.push('RECEIPT_PRESERVATION_DIFF_IDENTITY_MISMATCH');
+  }
+  if (value.beforeSha256 === EMPTY_SHA256 || value.afterSha256 === EMPTY_SHA256) {
+    errors.push('RECEIPT_PRESERVATION_EMPTY_DIFF_FORBIDDEN');
+  }
+  const preserved = [];
+  if (!Array.isArray(value.preservedPathRefs) || value.preservedPathRefs.length < 1
+      || value.preservedPathRefs.length > MAX_REFS) {
+    errors.push('RECEIPT_PRESERVATION_PATH_REFS_INVALID');
+  } else {
+    for (const raw of value.preservedPathRefs) {
+      const parsed = normalizeScope(raw);
+      if (!parsed.ok || !parsed.normalized.startsWith('path:')) {
+        errors.push('RECEIPT_PRESERVATION_PATH_REF_INVALID');
+        continue;
+      }
+      preserved.push(parsed.normalized);
+    }
+    const uniquePreserved = [...new Set(preserved)].sort();
+    if (uniquePreserved.length !== preserved.length) errors.push('RECEIPT_PRESERVATION_PATH_REF_DUPLICATE');
+    preserved.splice(0, preserved.length, ...uniquePreserved);
+  }
+  if (!SAFE_REF_RE.test(value.evidenceRef || '')) errors.push('RECEIPT_PRESERVATION_EVIDENCE_REF_INVALID');
+  return {
+    errors: [...new Set(errors)].sort(),
+    value: errors.length ? null : {
+      kind: 'TRACKED_DIFF_PRESERVED', beforeSha256: value.beforeSha256, afterSha256: value.afterSha256,
+      preservedPathRefs: preserved, evidenceRef: value.evidenceRef,
+    },
+    present: true,
+  };
+}
+const RECEIPT_REQUIRED_KEYS = new Set([
   'schemaVersion', 'mode', 'manifestId', 'manifestPayloadSha256', 'packetRef', 'phaseId', 'executor',
   'disposition', 'outputRefs', 'validationRefs', 'observedRefs', 'leaseDisposition',
   'leaseReleaseEvidence', 'workspaceResult', 'blockerRefs', 'requiredUnknownRefs', 'authority',
 ]);
+const RECEIPT_CORE_KEYS = new Set([...RECEIPT_REQUIRED_KEYS, 'workspacePreservation']);
 function normalizeReceiptCore(input) {
-  const errors = exactKeys(input, RECEIPT_CORE_KEYS, [...RECEIPT_CORE_KEYS], 'RECEIPT');
+  const errors = exactKeys(input, RECEIPT_CORE_KEYS, [...RECEIPT_REQUIRED_KEYS], 'RECEIPT');
   if (input?.schemaVersion !== 1) errors.push('RECEIPT_SCHEMA_INVALID');
   if (input?.mode !== 'MCL_COMPLETION_RECEIPT') errors.push('RECEIPT_MODE_INVALID');
   if (!SHA256_RE.test(input?.manifestId || '')) errors.push('RECEIPT_MANIFEST_ID_INVALID');
@@ -200,7 +251,17 @@ function normalizeReceiptCore(input) {
   let release = { errors: [], value: null };
   if (input?.leaseReleaseEvidence !== null) release = normalizeReleaseEvidence(input.leaseReleaseEvidence);
   errors.push(...release.errors);
-  if (!['clean', 'not_applicable', 'unknown'].includes(input?.workspaceResult)) errors.push('RECEIPT_WORKSPACE_RESULT_INVALID');
+  const preservation = normalizeWorkspacePreservation(input?.workspacePreservation);
+  errors.push(...preservation.errors);
+  if (!['clean', 'not_applicable', 'unknown', 'preserved_dirty'].includes(input?.workspaceResult)) {
+    errors.push('RECEIPT_WORKSPACE_RESULT_INVALID');
+  }
+  if (input?.workspaceResult === 'preserved_dirty') {
+    if (input?.disposition !== 'COMPLETE') errors.push('RECEIPT_PRESERVED_DIRTY_COMPLETE_REQUIRED');
+    if (!preservation.present) errors.push('RECEIPT_PRESERVATION_REQUIRED');
+  } else if (preservation.present) {
+    errors.push('RECEIPT_PRESERVATION_UNEXPECTED');
+  }
   if (!sameAuthorityFlags(input?.authority)) errors.push('RECEIPT_AUTHORITY_FLAGS_INVALID');
   const value = {
     schemaVersion: 1,
@@ -221,12 +282,20 @@ function normalizeReceiptCore(input) {
     requiredUnknownRefs: unknownRefs.value,
     authority: { ...AUTHORITY_FLAGS },
   };
+  if (preservation.present && preservation.value) value.workspacePreservation = preservation.value;
   return { errors: [...new Set(errors)].sort(), value };
 }
 function verifyReceiptObject(input) {
   const fullKeys = new Set([...RECEIPT_CORE_KEYS, 'receiptId', 'payloadSha256']);
-  const errors = exactKeys(input, fullKeys, [...fullKeys], 'RECEIPT');
-  const core = input && typeof input === 'object' ? Object.fromEntries([...RECEIPT_CORE_KEYS].map((key) => [key, input[key]])) : {};
+  const requiredFullKeys = new Set([...RECEIPT_REQUIRED_KEYS, 'receiptId', 'payloadSha256']);
+  const errors = exactKeys(input, fullKeys, [...requiredFullKeys], 'RECEIPT');
+  const core = input && typeof input === 'object'
+    ? Object.fromEntries([...RECEIPT_REQUIRED_KEYS].map((key) => [key, input[key]]))
+    : {};
+  if (input && typeof input === 'object'
+      && Object.prototype.hasOwnProperty.call(input, 'workspacePreservation')) {
+    core.workspacePreservation = input.workspacePreservation;
+  }
   const normalized = normalizeReceiptCore(core);
   errors.push(...normalized.errors);
   let value = null;
@@ -238,6 +307,31 @@ function verifyReceiptObject(input) {
     if (input.payloadSha256 !== payloadSha256) errors.push('RECEIPT_PAYLOAD_HASH_MISMATCH');
   }
   return { ok: errors.length === 0, errors: [...new Set(errors)].sort(), value };
+}
+function validatePreservedDirtyCompletion(manifest, receipt) {
+  const errors = [];
+  if (manifest.phaseClass !== 'REPOSITORY_MUTATION') errors.push('RECEIPT_PRESERVED_DIRTY_PHASE_CLASS_INVALID');
+  if (manifest.workspace?.kind !== 'repository') errors.push('RECEIPT_PRESERVED_DIRTY_WORKSPACE_INVALID');
+  const pathScopes = manifest.scopes.filter((item) => item.startsWith('path:'));
+  const cleanupSurfaces = manifest.scopes.filter((item) => PRESERVED_DIRTY_SURFACE_RE.test(item));
+  if (manifest.scopes.length !== 2 || pathScopes.length !== 1 || cleanupSurfaces.length !== 1) {
+    errors.push('RECEIPT_PRESERVED_DIRTY_MANIFEST_SCOPE_INVALID');
+  }
+  const cleanupPath = pathScopes.length === 1 ? pathScopes[0] : null;
+  if (cleanupPath && !manifest.expectedOutputRefs.includes(cleanupPath)) {
+    errors.push('RECEIPT_PRESERVED_DIRTY_EXPECTED_OUTPUT_MISSING');
+  }
+  const preservation = receipt.workspacePreservation;
+  if (!preservation) errors.push('RECEIPT_PRESERVATION_REQUIRED');
+  else {
+    if (cleanupPath && preservation.preservedPathRefs.includes(cleanupPath)) {
+      errors.push('RECEIPT_PRESERVATION_CLEANUP_PATH_CONFLICT');
+    }
+    if (!receipt.validationRefs.includes(preservation.evidenceRef)) {
+      errors.push('RECEIPT_PRESERVATION_EVIDENCE_NOT_VALIDATED');
+    }
+  }
+  return [...new Set(errors)].sort();
 }
 function validateReceiptAgainstManifest(receiptInput, manifestInput) {
   const manifest = verifyManifestObject(manifestInput);
@@ -265,13 +359,17 @@ function validateReceiptAgainstManifest(receiptInput, manifestInput) {
     if (r.blockerRefs.length) errors.push('RECEIPT_COMPLETE_HAS_BLOCKER');
     if (!r.outputRefs.length) errors.push('RECEIPT_COMPLETE_OUTPUT_REQUIRED');
     if (!r.validationRefs.length) errors.push('RECEIPT_COMPLETE_VALIDATION_REQUIRED');
-    const expectedWorkspace = m.workspace.kind === 'not_applicable' ? 'not_applicable' : 'clean';
-    if (r.workspaceResult !== expectedWorkspace) errors.push('RECEIPT_COMPLETE_WORKSPACE_NOT_CONVERGED');
+    if (r.workspaceResult === 'preserved_dirty') {
+      errors.push(...validatePreservedDirtyCompletion(m, r));
+    } else {
+      const expectedWorkspace = m.workspace.kind === 'not_applicable' ? 'not_applicable' : 'clean';
+      if (r.workspaceResult !== expectedWorkspace) errors.push('RECEIPT_COMPLETE_WORKSPACE_NOT_CONVERGED');
+    }
   }
   if (r.disposition === 'BLOCKED' && !r.blockerRefs.length && !r.requiredUnknownRefs.length) errors.push('RECEIPT_BLOCKED_REASON_REQUIRED');
   return { ok: errors.length === 0, status: errors.length ? 'BLOCKED' : 'VALID', errors: [...new Set(errors)].sort() };
 }
-const RECEIPT_RESULT_KEYS = new Set(['disposition', 'outputRefs', 'validationRefs', 'observedRefs', 'leaseDisposition', 'leaseReleaseEvidence', 'workspaceResult', 'blockerRefs', 'requiredUnknownRefs']);
+const RECEIPT_RESULT_KEYS = new Set(['disposition', 'outputRefs', 'validationRefs', 'observedRefs', 'leaseDisposition', 'leaseReleaseEvidence', 'workspaceResult', 'workspacePreservation', 'blockerRefs', 'requiredUnknownRefs']);
 function buildCompletionReceipt(manifestInput, input) {
   const inputErrors = exactKeys(input, RECEIPT_RESULT_KEYS, ['disposition', 'leaseDisposition', 'workspaceResult'], 'RECEIPT_INPUT');
   if (inputErrors.length) throw new Error(inputErrors.join(','));
@@ -297,6 +395,9 @@ function buildCompletionReceipt(manifestInput, input) {
     requiredUnknownRefs: input?.requiredUnknownRefs ?? [],
     authority: { ...AUTHORITY_FLAGS },
   };
+  if (input && Object.prototype.hasOwnProperty.call(input, 'workspacePreservation')) {
+    coreInput.workspacePreservation = input.workspacePreservation;
+  }
   const normalized = normalizeReceiptCore(coreInput);
   if (normalized.errors.length) throw new Error(normalized.errors.join(','));
   const payloadSha256 = digest(normalized.value);

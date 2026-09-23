@@ -23,7 +23,10 @@ const HEAD = '2'.repeat(40);
 const LEASE = 'b'.repeat(64);
 const ACQUIRE = 'run:1234';
 const PATHS = [...patchOwner.D014_COMPLETION_SET_PATHS].sort();
-const SCOPES = [...PATHS.map((item) => 'path:' + item), 'surface:mcl:d014-completion-set'].sort();
+const SCOPES = [...patchOwner.D014_VALIDATION_SCOPES];
+const D014_PROFILE = patchOwner.validationProfileById(patchOwner.D014_VALIDATION_PROFILE);
+const VC_PATHS = [...patchOwner.VALIDATION_CONTINUATION_PATHS].sort();
+const VC_SCOPES = [...patchOwner.VALIDATION_CONTINUATION_SCOPES];
 
 function makeParent() {
   return handoff.buildManifest({
@@ -186,11 +189,61 @@ test('child manifest binds parent, patch, validation, PR and lease identity', ()
     assert.ok(child.inputRefs.includes(
       patchOwner.VALIDATION_REF_PREFIX + impl.sha256(Buffer.from(files.validationText))));
     assert.ok(child.inputRefs.includes(
+      patchOwner.VALIDATION_CONTRACT_REF_PREFIX + D014_PROFILE.contractDigest));
+    assert.ok(child.inputRefs.includes(
       'receipt:mcl-pr-publication-request:' + impl.sha256(Buffer.from(files.prText))));
     assert.ok(child.inputRefs.includes(ACQUIRE));
   } finally {
     files.cleanup();
   }
+});
+
+test('coordinator derives reviewed validation profile from exact packet scope', () => {
+  const d014 = impl.resolveValidationProfileBinding(
+    makeCtx(),
+    JSON.stringify({
+      schema: patchOwner.VALIDATION_REQUEST_SCHEMA,
+      profile: patchOwner.D014_VALIDATION_PROFILE,
+    }),
+  );
+  assert.equal(d014.profile.profileId, patchOwner.D014_VALIDATION_PROFILE);
+
+  const vcCtx = {...makeCtx(), requestedScopes: [...VC_SCOPES]};
+  const vc = impl.resolveValidationProfileBinding(
+    vcCtx,
+    JSON.stringify({
+      schema: patchOwner.VALIDATION_REQUEST_SCHEMA,
+      profile: patchOwner.VALIDATION_CONTINUATION_PROFILE,
+    }),
+  );
+  assert.equal(vc.profile.profileId, patchOwner.VALIDATION_CONTINUATION_PROFILE);
+  assert.deepEqual(vc.profile.paths, VC_PATHS);
+
+  assert.throws(
+    () => impl.resolveValidationProfileBinding(
+      vcCtx,
+      JSON.stringify({
+        schema: patchOwner.VALIDATION_REQUEST_SCHEMA,
+        profile: patchOwner.D014_VALIDATION_PROFILE,
+      }),
+    ),
+    (error) => error instanceof impl.ImplementationError
+      && error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('VALIDATION_PROFILE_REQUEST_MISMATCH'),
+  );
+
+  assert.throws(
+    () => impl.resolveValidationProfileBinding(
+      {...makeCtx(), requestedScopes: ['path:docs/unreviewed.txt']},
+      JSON.stringify({
+        schema: patchOwner.VALIDATION_REQUEST_SCHEMA,
+        profile: patchOwner.D014_VALIDATION_PROFILE,
+      }),
+    ),
+    (error) => error instanceof impl.ImplementationError
+      && error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('NO_REVIEWED_VALIDATION_PROFILE'),
+  );
 });
 
 test('PR publication is fixed to exact branch main base and readback', () => {
@@ -317,6 +370,9 @@ test('successful fixed transaction keeps publication before durable release and 
     assert.equal(view.phase, 'IMPLEMENTATION_PR');
     assert.equal(view.result, 'PASS');
     assert.equal(view.nextLegalAction, 'VALIDATION_MERGE');
+    assert.equal(view.output.stageOwner, patchOwner.STAGE_OWNER_ID);
+    assert.equal(view.output.mutationPrimitive, patchOwner.MUTATION_PRIMITIVE_ID);
+    assert.equal(view.output.validationProfile, patchOwner.D014_VALIDATION_PROFILE);
     const at = (name) => events.indexOf(name);
     assert.ok(at('patch-owner') < at('pr-publish'));
     assert.ok(at('pr-publish') < at('lease-release'));
@@ -379,4 +435,129 @@ test('main drift helper reports exact changed paths and no implicit normalizatio
   assert.equal(calls.length, 1);
   assert.deepEqual(impl.changedBetween('/tmp/w', BASE, BASE, spawn), []);
   assert.equal(calls.length, 1);
+});
+
+
+test('detached coordinator checkpoint sink covers owner-stage boundaries in order', async () => {
+  const files = makeFiles();
+  const checkpoints = [];
+  let commentId = 910;
+  const receiptPath = path.join(files.dir, 'detached-receipt.json');
+  try {
+    const view = await impl.executePrepared(makeCtx(), {
+      requestText: files.requestText,
+      requestFile: files.requestFile,
+      patchFile: files.patchFile,
+      validationRequestText: files.validationText,
+      validationRequestFile: files.validationFile,
+      prRequestText: files.prText,
+    }, {
+      tempRoot: files.dir,
+      runner() { return {code: 0, stdout: '{}', stderr: ''}; },
+      postComment() { return commentId++; },
+      claimHolder() {
+        return {result: {status: 'CLAIMED', reasonCodes: []}, secret: 'e'.repeat(64)};
+      },
+      checkHolder() { return {status: 'CHECK_PASS', reasonCodes: []}; },
+      async invokePatchOwner({manifestText}) {
+        const parsed = handoff.parseManifest(manifestText);
+        return ownerPass(parsed.value.manifestId);
+      },
+      async guardCurrent() {},
+      currentGitHead() { return HEAD; },
+      publishPr() { return {number: 9101, head: HEAD, changed: PATHS}; },
+      releaseLease() { return {ok: true, value: {runId: 9102}}; },
+      async readAfterRelease() {
+        return {packetAfter: {body: 'packet-body'}, ledgerAfter: {body: 'released-ledger'}};
+      },
+      validateReleased() {
+        return {ok: true, reasonCodes: [], state: {generation: 91}};
+      },
+      releaseHolder() { return {status: 'RELEASED', reasonCodes: []}; },
+      persistArtifacts() {
+        fs.writeFileSync(receiptPath, '{}');
+        return {
+          reportLocator: 'artifact:detached:report',
+          receiptLocator: 'artifact:detached:receipt',
+          receiptPath,
+        };
+      },
+      checkpointSink: async (event) => { checkpoints.push(event); },
+    });
+    assert.equal(view.result, 'PASS');
+    assert.deepEqual(checkpoints.map((event) => event.checkpoint), [
+      'WORKSPACE_READY',
+      'REMOTE_HEAD_VERIFIED',
+      'PR_CREATED',
+      'COORDINATION_RELEASED',
+      'FINISHED',
+    ]);
+    assert.equal(checkpoints.at(-1).finalReceiptDigest.length, 64);
+    assert.equal(checkpoints.at(-1).finalReceiptLocator, 'artifact:detached:receipt');
+  } finally {
+    files.cleanup();
+  }
+});
+
+test('detached IPC checkpoint sink waits for exact ACK and fails closed', async () => {
+  const {EventEmitter} = require('node:events');
+  const good = new EventEmitter();
+  good.send = (message, callback) => {
+    callback(null);
+    queueMicrotask(() => good.emit('message', {
+      schema: 'mcl-detached-owner-checkpoint-ack.v1',
+      seq: message.seq,
+      status: 'PASS',
+      reasonCodes: [],
+    }));
+  };
+  const sink = impl.createDetachedIpcCheckpointSink(good, 1000);
+  await sink({
+    schema: 'mcl-detached-owner-checkpoint.v1',
+    checkpoint: 'WORKSPACE_READY',
+    primitiveId: 'fixture',
+    targetIdentity: 'fixture:target',
+    evidenceLocator: 'receipt:fixture',
+    nextPrimitive: 'PATCH_PREPARE',
+    finalReceiptDigest: null,
+    finalReceiptLocator: null,
+  });
+
+  const blocked = new EventEmitter();
+  blocked.send = (message, callback) => {
+    callback(null);
+    queueMicrotask(() => blocked.emit('message', {
+      schema: 'mcl-detached-owner-checkpoint-ack.v1',
+      seq: message.seq,
+      status: 'BLOCKED',
+      reasonCodes: ['FIXTURE_PERSIST_BLOCK'],
+    }));
+  };
+  const blockedSink = impl.createDetachedIpcCheckpointSink(blocked, 1000);
+  await assert.rejects(
+    () => blockedSink({
+      schema: 'mcl-detached-owner-checkpoint.v1',
+      checkpoint: 'WORKSPACE_READY',
+      primitiveId: 'fixture',
+      targetIdentity: 'fixture:target',
+      evidenceLocator: 'receipt:fixture',
+      nextPrimitive: 'PATCH_PREPARE',
+      finalReceiptDigest: null,
+      finalReceiptLocator: null,
+    }),
+    (error) => error instanceof impl.ImplementationError
+      && error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('FIXTURE_PERSIST_BLOCK'),
+  );
+});
+
+test('normal coordinator CLI remains fixed and exposes no detached control selector', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'mcl-repository-implementation.cjs'), 'utf8');
+  for (const token of [
+    "'checkpoint-sink'",
+    "'detached-command'",
+    "'runtime-command'",
+    "'retry'",
+    "'cancel'",
+  ]) assert(!source.includes(token), token);
 });

@@ -18,6 +18,7 @@ const PRIMITIVE_TIMEOUT_MS = 120000;
 const MAX_PRIMITIVE_OUTPUT_BYTES = 64 * 1024;
 const MAX_REPORT_BYTES = 16 * 1024;
 const OUTPUT_FORMATS = new Set(['receipt', 'agent-view']);
+const DETACHED_CHECKPOINT_SCHEMA = 'mcl-detached-owner-checkpoint.v1';
 
 const taskHandoff = require(path.join(COORDINATION, 'task-handoff.cjs'));
 const taskLease = require(path.join(COORDINATION, 'task-lease.cjs'));
@@ -45,13 +46,32 @@ const FIXED_BOT_NAME = 'mcl-repository-patch[bot]';
 const FIXED_BOT_EMAIL = 'mcl-repository-patch@users.noreply.github.com';
 const VALIDATION_REQUEST_FIELDS = new Set(['schema', 'profile']);
 const VALIDATION_REQUEST_SCHEMA = 'mcl-repository-validation-request.v1';
-const D014_VALIDATION_PROFILE = 'mcl:d014-completion-set:v1';
 const VALIDATION_REF_PREFIX = 'receipt:mcl-repository-validation-request:';
+const VALIDATION_CONTRACT_REF_PREFIX = 'receipt:mcl-repository-validation-contract:';
+const STAGE_OWNER_ID = 'MCL_KNOWN_OWNER_REPOSITORY_IMPLEMENTATION_V1';
+const MUTATION_PRIMITIVE_ID = 'REPOSITORY_PATCH_V1';
+const D014_VALIDATION_PROFILE = 'mcl:d014-completion-set:v1';
+const VALIDATION_CONTINUATION_PROFILE = 'repo:validation-continuation:v1';
 const D014_COMPLETION_SET_PATHS = Object.freeze([
   'products/chatgpt-mobile-coder-lab/coordination/completion-receipt-set.cjs',
   'products/chatgpt-mobile-coder-lab/coordination/tests/test-completion-receipt-set.cjs',
   'products/chatgpt-mobile-coder-lab/docs/task-handoff.md',
 ]);
+const VALIDATION_CONTINUATION_PATHS = Object.freeze([
+  '.github/plugin-control-plane/canonical-main/work-harness/stage-receipt.cjs',
+  '.github/plugin-control-plane/canonical-main/work-harness/tests/stage-receipt-contract.cjs',
+  '.github/plugin-control-plane/canonical-main/work-harness/validation-continuation/README.md',
+  '.github/plugin-control-plane/canonical-main/work-harness/validation-continuation/validation-continuation-owner.cjs',
+  '.github/plugin-control-plane/canonical-main/work-harness/validation-continuation/tests/validation-continuation-owner-contract.cjs',
+]);
+const D014_VALIDATION_SCOPES = Object.freeze([
+  ...D014_COMPLETION_SET_PATHS.map((item) => 'path:' + item),
+  'surface:mcl:d014-completion-set',
+].sort());
+const VALIDATION_CONTINUATION_SCOPES = Object.freeze([
+  ...VALIDATION_CONTINUATION_PATHS.map((item) => 'path:' + item),
+  'surface:repo:validation-continuation-projection',
+].sort());
 const PREPARED_VALIDATION_TIMEOUT_MS = 120000;
 const MAX_VALIDATION_OUTPUT_BYTES = 64 * 1024;
 const D014_VALIDATION_CHECKS = Object.freeze([
@@ -70,6 +90,76 @@ const D014_VALIDATION_CHECKS = Object.freeze([
   Object.freeze({
     name: 'task-handoff-contract',
     args: ['--test', 'products/chatgpt-mobile-coder-lab/coordination/tests/test-task-handoff.cjs'],
+  }),
+]);
+const VALIDATION_CONTINUATION_CHECKS = Object.freeze([
+  Object.freeze({
+    name: 'stage-receipt-syntax',
+    args: ['--check', VALIDATION_CONTINUATION_PATHS[0]],
+  }),
+  Object.freeze({
+    name: 'validation-continuation-syntax',
+    args: ['--check', VALIDATION_CONTINUATION_PATHS[3]],
+  }),
+  Object.freeze({
+    name: 'stage-receipt-contract',
+    args: ['--test', VALIDATION_CONTINUATION_PATHS[1]],
+  }),
+  Object.freeze({
+    name: 'validation-continuation-contract',
+    args: ['--test', VALIDATION_CONTINUATION_PATHS[4]],
+  }),
+  Object.freeze({
+    name: 'validation-merge-contract',
+    args: ['--test', '.github/plugin-control-plane/canonical-main/work-harness/validation-merge/tests/validation-merge-owner-contract.cjs'],
+  }),
+  Object.freeze({
+    name: 'work-system-contract',
+    args: ['--test', '.github/plugin-control-plane/canonical-main/tests/work-system-contract.cjs'],
+  }),
+  Object.freeze({
+    name: 'execution-receipt-contract',
+    args: ['--test', '.github/plugin-control-plane/canonical-main/work-harness/tests/execution-receipt-contract.cjs'],
+  }),
+  Object.freeze({
+    name: 'agent-decision-view-contract',
+    args: ['--test', '.github/plugin-control-plane/canonical-main/work-harness/tests/agent-decision-view-contract.cjs'],
+  }),
+]);
+
+function buildValidationProfile({profileId, paths, scopes, checks}) {
+  const core = taskHandoff.stable({
+    profileId,
+    profileVersion: 1,
+    allowedStageOwners: [STAGE_OWNER_ID],
+    mutationPrimitiveId: MUTATION_PRIMITIVE_ID,
+    scopeShape: 'EXACT_PATH_SET',
+    paths: [...paths].sort(),
+    scopes: [...scopes].sort(),
+    checks: checks.map((check) => ({
+      checkId: check.name,
+      args: [...check.args],
+      timeoutMs: PREPARED_VALIDATION_TIMEOUT_MS,
+    })),
+    resultVocabulary: ['PASS', 'FAIL', 'INFRA', 'NOT_RUN'],
+  });
+  return Object.freeze({
+    ...core,
+    contractDigest: sha256Bytes(Buffer.from(JSON.stringify(core), 'utf8')),
+  });
+}
+const VALIDATION_PROFILES = Object.freeze([
+  buildValidationProfile({
+    profileId: D014_VALIDATION_PROFILE,
+    paths: D014_COMPLETION_SET_PATHS,
+    scopes: D014_VALIDATION_SCOPES,
+    checks: D014_VALIDATION_CHECKS,
+  }),
+  buildValidationProfile({
+    profileId: VALIDATION_CONTINUATION_PROFILE,
+    paths: VALIDATION_CONTINUATION_PATHS,
+    scopes: VALIDATION_CONTINUATION_SCOPES,
+    checks: VALIDATION_CONTINUATION_CHECKS,
   }),
 ]);
 const HANDOFF_FIELDS = new Set([
@@ -215,6 +305,20 @@ function parsePreparedContinuationRequestText(text) {
   };
 }
 
+function validationProfileById(profileId, profiles = VALIDATION_PROFILES) {
+  return profiles.find((profile) => profile.profileId === profileId) || null;
+}
+function resolveValidationProfileForScopes(scopes, profiles = VALIDATION_PROFILES) {
+  const normalized = Array.isArray(scopes) ? [...scopes].sort() : [];
+  const matches = profiles.filter((profile) => same(profile.scopes, normalized));
+  if (matches.length === 0) {
+    throw new InvocationError('BLOCKED', ['NO_REVIEWED_VALIDATION_PROFILE']);
+  }
+  if (matches.length > 1) {
+    throw new InvocationError('CONFLICT', ['VALIDATION_PROFILE_AMBIGUOUS']);
+  }
+  return matches[0];
+}
 function parseValidationRequestText(text) {
   let value;
   try { value = JSON.parse(text); }
@@ -223,7 +327,7 @@ function parseValidationRequestText(text) {
   if (value.schema !== VALIDATION_REQUEST_SCHEMA) {
     throw new InvocationError('UNKNOWN', ['VALIDATION_REQUEST_SCHEMA_INVALID']);
   }
-  if (value.profile !== D014_VALIDATION_PROFILE) {
+  if (!validationProfileById(value.profile)) {
     throw new InvocationError('BLOCKED', ['VALIDATION_PROFILE_UNSUPPORTED']);
   }
   return {schema: value.schema, profile: value.profile};
@@ -233,10 +337,16 @@ function manifestValidationRefs(manifest) {
     (item) => typeof item === 'string' && item.startsWith(VALIDATION_REF_PREFIX),
   );
 }
+function manifestValidationContractRefs(manifest) {
+  return (manifest?.inputRefs || []).filter(
+    (item) => typeof item === 'string' && item.startsWith(VALIDATION_CONTRACT_REF_PREFIX),
+  );
+}
 function prepareValidationBinding({
   manifest, request, validationRequestText, validationRequestFile,
 }) {
   const refs = manifestValidationRefs(manifest);
+  const contractRefs = manifestValidationContractRefs(manifest);
   if (typeof validationRequestText !== 'string' || !validationRequestFile) {
     throw new InvocationError('BLOCKED', ['VALIDATION_REQUEST_INPUT_REQUIRED']);
   }
@@ -246,8 +356,15 @@ function prepareValidationBinding({
     throw new InvocationError('CONFLICT', ['VALIDATION_REQUEST_TEXT_FILE_CONFLICT']);
   }
   const validationRequest = parseValidationRequestText(validationRequestText);
-  if (!same(request.expected_paths, D014_COMPLETION_SET_PATHS)) {
+  const profile = validationProfileById(validationRequest.profile);
+  if (!profile) {
+    throw new InvocationError('BLOCKED', ['VALIDATION_PROFILE_UNSUPPORTED']);
+  }
+  if (!same(request.expected_paths, profile.paths)) {
     throw new InvocationError('BLOCKED', ['VALIDATION_PROFILE_PATHS_UNSUPPORTED']);
+  }
+  if (!same(manifest.scopes, profile.scopes)) {
+    throw new InvocationError('BLOCKED', ['VALIDATION_PROFILE_SCOPE_UNSUPPORTED']);
   }
   const digest = sha256Bytes(fileBytes);
   const expectedRef = VALIDATION_REF_PREFIX + digest;
@@ -260,9 +377,21 @@ function prepareValidationBinding({
   if (refs[0] !== expectedRef) {
     throw new InvocationError('CONFLICT', ['VALIDATION_REQUEST_REF_CONFLICT']);
   }
+  const expectedContractRef = VALIDATION_CONTRACT_REF_PREFIX + profile.contractDigest;
+  if (contractRefs.length === 0) {
+    throw new InvocationError('BLOCKED', ['VALIDATION_CONTRACT_REF_REQUIRED']);
+  }
+  if (contractRefs.length !== 1) {
+    throw new InvocationError('CONFLICT', ['VALIDATION_CONTRACT_REF_AMBIGUOUS']);
+  }
+  if (contractRefs[0] !== expectedContractRef) {
+    throw new InvocationError('CONFLICT', ['VALIDATION_CONTRACT_REF_CONFLICT']);
+  }
   return {
     request: validationRequest,
     digest,
+    contractDigest: profile.contractDigest,
+    profile,
     filePath: path.resolve(validationRequestFile),
   };
 }
@@ -270,6 +399,10 @@ function assertValidationInputStable(binding) {
   const bytes = readBoundedRegularFile(binding.filePath, 'VALIDATION_REQUEST_FILE');
   if (sha256Bytes(bytes) !== binding.digest) {
     throw new InvocationError('CONFLICT', ['VALIDATION_REQUEST_CHANGED_DURING_INVOCATION']);
+  }
+  const currentProfile = validationProfileById(binding.request?.profile);
+  if (!currentProfile || currentProfile.contractDigest !== binding.contractDigest) {
+    throw new InvocationError('CONFLICT', ['VALIDATION_CONTRACT_CHANGED_DURING_INVOCATION']);
   }
 }
 
@@ -666,11 +799,11 @@ function materializeContinuationPrimitiveInputs(request, state) {
   };
 }
 
-function validationEvidence(status, reasonCodes = [], checksPassed = 0) {
+function validationEvidence(profileId, status, reasonCodes = [], checksPassed = 0) {
   return {
     status,
     reason_codes: unique(reasonCodes),
-    profile: D014_VALIDATION_PROFILE,
+    profile: profileId,
     checks_passed: checksPassed,
   };
 }
@@ -680,15 +813,18 @@ function runFixedPreparedValidation({
   env = process.env,
   validationSpawnSyncImpl = childProcess.spawnSync,
 }) {
-  if (!binding || binding.request?.profile !== D014_VALIDATION_PROFILE) {
+  const profile = binding?.profile;
+  if (!binding || !profile || binding.request?.profile !== profile.profileId
+      || binding.contractDigest !== profile.contractDigest) {
     return {
       kind: 'UNKNOWN',
       reasonCodes: ['VALIDATION_BINDING_INVALID'],
-      value: validationEvidence('UNKNOWN', ['VALIDATION_BINDING_INVALID']),
+      value: validationEvidence(
+        binding?.request?.profile || 'UNKNOWN', 'UNKNOWN', ['VALIDATION_BINDING_INVALID']),
     };
   }
   let checksPassed = 0;
-  for (const check of D014_VALIDATION_CHECKS) {
+  for (const check of profile.checks) {
     let run;
     try {
       run = validationSpawnSyncImpl(process.execPath, [...check.args], {
@@ -700,27 +836,27 @@ function runFixedPreparedValidation({
         env: safeChildEnv(env),
       });
     } catch {
-      const code = 'PREPARED_VALIDATION_SPAWN_THROW:' + check.name;
+      const code = 'PREPARED_VALIDATION_SPAWN_THROW:' + check.checkId;
       return {
         kind: 'BLOCKED',
         reasonCodes: [code],
-        value: validationEvidence('BLOCKED', [code], checksPassed),
+        value: validationEvidence(profile.profileId, 'BLOCKED', [code], checksPassed),
       };
     }
     if (run?.error || run?.status === null || run?.signal) {
-      const code = 'PREPARED_VALIDATION_INFRA_ERROR:' + check.name;
+      const code = 'PREPARED_VALIDATION_INFRA_ERROR:' + check.checkId;
       return {
         kind: 'BLOCKED',
         reasonCodes: [code],
-        value: validationEvidence('BLOCKED', [code], checksPassed),
+        value: validationEvidence(profile.profileId, 'BLOCKED', [code], checksPassed),
       };
     }
     if (run.status !== 0) {
-      const code = 'PREPARED_VALIDATION_FAILED:' + check.name;
+      const code = 'PREPARED_VALIDATION_FAILED:' + check.checkId;
       return {
         kind: 'BLOCKED',
         reasonCodes: [code],
-        value: validationEvidence('BLOCKED', [code], checksPassed),
+        value: validationEvidence(profile.profileId, 'BLOCKED', [code], checksPassed),
       };
     }
     checksPassed += 1;
@@ -728,7 +864,7 @@ function runFixedPreparedValidation({
   return {
     kind: 'PASS',
     reasonCodes: [],
-    value: validationEvidence('PASS', [], checksPassed),
+    value: validationEvidence(profile.profileId, 'PASS', [], checksPassed),
   };
 }
 
@@ -1067,6 +1203,34 @@ async function guardCurrent({repo, manifest, handoff, holderSecret, env, runner,
   return current;
 }
 
+async function emitDetachedCheckpoint(checkpointSink, {
+  checkpoint,
+  primitiveId,
+  targetIdentity,
+  evidenceLocator,
+  nextPrimitive,
+}) {
+  if (checkpointSink === null || checkpointSink === undefined) return;
+  if (typeof checkpointSink !== 'function') {
+    throw new InvocationError('UNKNOWN', ['CONTINUITY_CHECKPOINT_SINK_INVALID']);
+  }
+  try {
+    await checkpointSink({
+      schema: DETACHED_CHECKPOINT_SCHEMA,
+      checkpoint,
+      primitiveId,
+      targetIdentity,
+      evidenceLocator,
+      nextPrimitive,
+      finalReceiptDigest: null,
+      finalReceiptLocator: null,
+    });
+  } catch (error) {
+    if (error instanceof InvocationError) throw error;
+    throw new InvocationError('BLOCKED', ['CONTINUITY_CHECKPOINT_PERSIST_FAILED']);
+  }
+}
+
 async function invokeLive({
   repo,
   handoffText,
@@ -1083,6 +1247,7 @@ async function invokeLive({
   validationSpawnSyncImpl = childProcess.spawnSync,
   root = ROOT,
   guardImpl,
+  checkpointSink = null,
 }) {
   const primitivePath = path.join(root, PRIMITIVE_RELATIVE);
   const primitiveHash = sha256File(primitivePath);
@@ -1143,6 +1308,13 @@ async function invokeLive({
       exitCode: Number.isInteger(preparedRun.run?.status) ? preparedRun.run.status : null,
     });
     prepare = preparedRun.value;
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'SOURCE_MUTATION_COMPLETE',
+      primitiveId: 'REPOSITORY_PATCH_PREPARE',
+      targetIdentity: 'prepared:' + prepare.prepared_digest,
+      evidenceLocator: 'receipt:mcl-repository-patch-prepare:' + manifest.manifestId,
+      nextPrimitive: validationBinding ? 'PREPARED_VALIDATION' : 'COMMIT',
+    });
 
     await doGuard();
     assertInputStable(requestFile, patchFile, requestDigest, request.patch_sha256);
@@ -1159,6 +1331,13 @@ async function invokeLive({
         manifest, request, primitiveSourceSha256: primitiveHash,
         kind: validationRun.kind, reasons: validationRun.reasonCodes,
         prepare, validation, validationEnabled,
+      });
+      await emitDetachedCheckpoint(checkpointSink, {
+        checkpoint: 'VALIDATION_PASS',
+        primitiveId: 'REPOSITORY_VALIDATION_PROFILE',
+        targetIdentity: 'validation-contract:' + validationBinding.profile.contractDigest,
+        evidenceLocator: VALIDATION_CONTRACT_REF_PREFIX + validationBinding.profile.contractDigest,
+        nextPrimitive: 'COMMIT',
       });
       await doGuard();
       assertInputStable(requestFile, patchFile, requestDigest, request.patch_sha256);
@@ -1177,6 +1356,13 @@ async function invokeLive({
       exitCode: Number.isInteger(commitRun.run?.status) ? commitRun.run.status : null,
     });
     committed = commitRun.value;
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'COMMIT_CREATED',
+      primitiveId: 'REPOSITORY_PATCH_COMMIT',
+      targetIdentity: 'commit:' + committed.new_head,
+      evidenceLocator: 'commit:' + committed.new_head,
+      nextPrimitive: 'PUSH',
+    });
 
     await doGuard();
     assertInputStable(requestFile, patchFile, requestDigest, request.patch_sha256);
@@ -1193,6 +1379,13 @@ async function invokeLive({
       exitCode: Number.isInteger(pushRun.run?.status) ? pushRun.run.status : null,
     });
     pushed = pushRun.value;
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'PUSH_COMPLETE',
+      primitiveId: 'REPOSITORY_PATCH_PUSH',
+      targetIdentity: 'remote:' + manifest.workspace.branch + '@' + committed.new_head,
+      evidenceLocator: 'commit:' + committed.new_head,
+      nextPrimitive: 'REMOTE_HEAD_VERIFY',
+    });
     return projectGenericReceipt({
       manifest, request, primitiveSourceSha256: primitiveHash,
       kind: 'PASS', prepare, validation, validationEnabled,
@@ -1431,13 +1624,24 @@ module.exports = {
   VALIDATION_REQUEST_FIELDS,
   VALIDATION_REQUEST_SCHEMA,
   VALIDATION_REF_PREFIX,
+  VALIDATION_CONTRACT_REF_PREFIX,
+  STAGE_OWNER_ID,
+  MUTATION_PRIMITIVE_ID,
   D014_VALIDATION_PROFILE,
+  VALIDATION_CONTINUATION_PROFILE,
+  DETACHED_CHECKPOINT_SCHEMA,
   D014_COMPLETION_SET_PATHS,
+  VALIDATION_CONTINUATION_PATHS,
+  D014_VALIDATION_SCOPES,
+  VALIDATION_CONTINUATION_SCOPES,
   D014_VALIDATION_CHECKS,
+  VALIDATION_CONTINUATION_CHECKS,
+  VALIDATION_PROFILES,
   InvocationError,
   assertInputStable,
   assertContinuationInputStable,
   guardCurrent,
+  emitDetachedCheckpoint,
   invokeLive,
   invokePreparedContinuation,
   loadCurrentEvidence,
@@ -1450,7 +1654,10 @@ module.exports = {
   parseRequestText,
   parsePreparedContinuationRequestText,
   parseValidationRequestText,
+  validationProfileById,
+  resolveValidationProfileForScopes,
   manifestValidationRefs,
+  manifestValidationContractRefs,
   prepareValidationBinding,
   assertValidationInputStable,
   runFixedPreparedValidation,

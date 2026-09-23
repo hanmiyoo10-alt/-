@@ -20,33 +20,73 @@ Continuity state lives only under the target worktree Git administrative directo
 
 The runtime reuses the existing checkpoint vocabulary: WORKSPACE_READY, SOURCE_MUTATION_COMPLETE, VALIDATION_PASS, COMMIT_CREATED, PUSH_COMPLETE, REMOTE_HEAD_VERIFIED, PR_CREATED, COORDINATION_RELEASED and FINISHED.
 
-The fixed owner emits these only through an internal typed IPC sink and waits for the runtime persistence acknowledgement before the next effect boundary. Stdout and stderr are never parsed to infer checkpoints.
+The fixed owner emits these only through an internal typed IPC sink and waits for runtime persistence acknowledgement before the next effect boundary. Stdout and stderr are never parsed to infer checkpoints.
 
 Inspect delegates resume disposition to the pure #2746 classifier. A supervisor-owned live child may project OWNER_STILL_RUNNING. Exact FINISHED plus final receipt may project ALREADY_FINISHED. Known child death with ambiguous effect truth routes to NEEDS_RECOVERY_INSPECT. Supervisor restart without exact child ownership preserves liveness UNKNOWN.
 
-## S placement
+## Split S control topology
 
-Termux runit service: /data/data/com.termux/files/usr/var/service/mcl-detached-owner-runtime
-Ubuntu private repository-support root: /root/.local/lib/mcl-detached-owner-runtime/repository
-Ubuntu client: /root/.local/bin/mcl-detached-owner-runtime
-Private Unix socket: /root/.local/run/mcl-detached-owner-runtime/control.sock
+The first two live #2812 activations proved two different PRoot-specific failure modes:
 
-No TCP or HTTP listener exists.
+1. #2819: a standalone installed runtime lost its repository-relative support tree;
+2. #2823: a stable PRoot-owned service could hold a socket FD without publishing a pathname Unix socket reachable by a separate client.
+
+The selected V1 repair therefore never uses a pathname Unix socket across the PRoot boundary.
+
+```text
+S-Termux public client
+  -> fixed Termux-host pathname UDS
+  -> direct Termux-host transport front
+  -> fixed persistent PRoot stdin/stdout semantic worker
+  -> existing RuntimeSupervisor
+  -> existing fixed repository implementation owner
+```
+
+Termux host owns only local transport and the exact PRoot worker process lifetime. PRoot retains semantic input parsing, activation/runId derivation, worktree and Git-admin access, immutable activation materialization, RuntimeSupervisor state, fixed owner child identity and all checkpoint/effect/final-receipt semantics.
+
+## Fixed placement
+
+- public client: /data/data/com.termux/files/home/.local/bin/mcl-detached-owner-runtime
+- host private library: /data/data/com.termux/files/home/.local/lib/mcl-detached-owner-runtime
+- host control directory: /data/data/com.termux/files/home/.local/run/mcl-detached-owner-runtime
+- host control socket: /data/data/com.termux/files/home/.local/run/mcl-detached-owner-runtime/control.sock
+- Termux runit service: /data/data/com.termux/files/usr/var/service/mcl-detached-owner-runtime
+- PRoot private repository-support root: /root/.local/lib/mcl-detached-owner-runtime/repository
+
+The host control directory is owner-only and the socket is mode 0600. No TCP, HTTP or abstract socket listener exists.
+
+## Public client and internal modes
+
+Inspect constructs only the existing bounded packet+runId request on the Termux host and sends it to the fixed host socket.
+
+Start-fixed does not read semantic source files or materialize continuity state on the Termux host. The host client launches one fixed short-lived PRoot prepare helper using the existing runtime source and the same public start-fixed arguments. That helper validates the existing manifest/handoff/request/patch/validation/PR contracts, derives the exact worktree and Git-admin identity, materializes the existing immutable activation bundle, and returns only the semantic start request.
+
+The host socket payload therefore contains no caller file paths, tokens, raw environment, holder claim, repository path or worktree path.
+
+The prepare-only mode and persistent stdio-worker mode are internal environment-owned entrypoints. They are not public commands and do not widen the public start-fixed|inspect CLI.
+
+## Persistent PRoot worker
+
+The Termux host front launches exactly one fixed proot-distro Ubuntu worker and keeps it across sequential public client connections. The worker owns one RuntimeSupervisor instance and receives one bounded JSON request line per operation over stdin, returning one bounded JSON response line over stdout.
+
+The host front uses a half-close-safe Unix server so a client may finish its request side before the asynchronous worker response arrives.
+
+Worker loss never becomes semantic retry. The host front does not respawn a failed worker inside the same process, and a future runit restart cannot infer OWNER_STILL_RUNNING for a prior nonterminal semantic run without the existing exact evidence.
 
 ## Installed private support bundle
 
-The first #2812 live activation exposed #2819: installing only the two runtime JavaScript files broke their reviewed repository-relative dependency resolution.
+The installer derives the source repository root only from its reviewed repository-relative location. It copies one fixed allowlist of twenty support files plus the runtime client/service into the private PRoot repository-support root, preserving original repository-relative paths.
 
-The repaired installer preserves the runtime source semantics instead of teaching the runtime an ambient or caller-selected repository path. It derives the source repository root only from the reviewed installer location and copies one fixed allowlist of twenty repository support files plus the runtime client and service into the private repository-support root above. The runtime and service keep their original repository-relative locations inside that private tree.
+Separately it installs the self-contained Termux host front and the fixed public host client wrapper. The runit service directly supervises the Termux host front; only that front owns the PRoot worker.
 
-The installed layout never uses ambient /root/nyang-repo, NODE_PATH, a symlink search path, a recursive repository copy, or a caller-selected source/support root. Installed bundle entries are restrictive regular non-symlink files. The launcher and runit service point only to the fixed private entrypoints.
+The installed layout never uses ambient /root/nyang-repo, NODE_PATH, a symlink search path, a recursive repository copy or a caller-selected source/support root. Installed bundle entries are restrictive regular non-symlink files.
 
-install-s-termux.sh --check verifies the complete installed bundle identity. --apply replaces only the fixed managed bundle/wrappers and leaves the service disabled. --activate first requires the installed bundle to match the reviewed source bytes, then enables exactly the fixed runit service.
+install-s-termux.sh --check validates both the host and PRoot halves. --apply replaces only the fixed managed bundle/wrappers and leaves the service disabled. --activate first requires the complete installed split identity, then enables exactly the fixed runit service.
 
-The install contract runs both installed runtime and service modules from the private test layout as an import smoke proof without starting a socket or service. This specifically guards the #2819 failure mode.
+The install contract imports the installed runtime, service and host modules without starting a socket/service. Runtime contract tests cover the host half-close path, fixed persistent worker reuse, prepare-only semantic request projection and worker-loss fail-closed behavior.
 
-The failed first live installation remains a preserved natural fixture. Repaired live activation belongs to #2821 postmerge → #2812 EXPERIMENT_CLOSE and must not be attempted from an unmerged repair candidate.
+## Failure-domain claim ceiling
 
-V1 proves only control-connection independence. It does not prove survival of Termux process loss, Android force-stop, reboot, host loss, supervisor hard loss or arbitrary process killing.
+V1 proves only control-connection independence after the split transport is live-proven. It does not prove survival of Termux process loss, Android force-stop, reboot, host loss, supervisor hard loss or arbitrary process killing.
 
-Refs #2759 #2745 #2746 #2750 #2577 #2775 #2698 #2706 #2812 #2819 #2820 #2821.
+Refs #2759 #2745 #2746 #2750 #2577 #2775 #2698 #2706 #2812 #2819 #2820 #2821 #2823 #2825 #2833 #2835 #2836.

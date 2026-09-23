@@ -632,6 +632,48 @@ function socketRequest(payload, {socketPath = SOCKET_PATH, netImpl = net, timeou
     });
   });
 }
+function prepareStartRequest(argv = process.argv.slice(2), deps = {}) {
+  const {command, values} = parseCli(argv);
+  if (command !== 'start-fixed') fail('UNKNOWN', 'PREPARE_START_ONLY');
+  const packetRef = values.packet;
+  packetNumber(packetRef);
+  const parentManifestText = readRegular(
+    values['parent-manifest-file'], 'PARENT_MANIFEST_FILE').toString('utf8');
+  const parentHandoffText = readRegular(
+    values['parent-handoff-file'], 'PARENT_HANDOFF_FILE').toString('utf8');
+  const requestText = readRegular(values['request-file'], 'REQUEST_FILE').toString('utf8');
+  const patchBytes = readRegular(values['patch-file'], 'PATCH_FILE', patchOwner.MAX_PATCH_BYTES);
+  const validationRequestText = readRegular(
+    values['validation-request-file'], 'VALIDATION_REQUEST_FILE').toString('utf8');
+  const prRequestText = readRegular(values['pr-request-file'], 'PR_REQUEST_FILE').toString('utf8');
+  const bundle = buildActivation({
+    packetRef,
+    parentManifestText,
+    parentHandoffText,
+    requestText,
+    patchBytes,
+    validationRequestText,
+    prRequestText,
+    worktree: deps.worktree || fixedWorktree(packetRef),
+    sourceIdentity: deps.sourceIdentity || null,
+  });
+  const materialized = materializeActivation(bundle, deps);
+  return {
+    request: {
+      schema: START_SCHEMA,
+      operation: 'start-fixed',
+      packetRef,
+      phase: PHASE,
+      runId: bundle.activation.runId,
+      activationDigest: bundle.activation.activationDigest,
+      expectedParentManifestId: bundle.guards.parentManifestId,
+      expectedLeaseId: bundle.guards.leaseId,
+      attemptId: 1,
+    },
+    bundle,
+    materialized,
+  };
+}
 async function runCli(argv = process.argv.slice(2), deps = {}) {
   const {command, values} = parseCli(argv);
   const packetRef = values.packet;
@@ -646,29 +688,8 @@ async function runCli(argv = process.argv.slice(2), deps = {}) {
       runId: values['run-id'],
     }, deps);
   }
-  const parentManifestText = readRegular(values['parent-manifest-file'], 'PARENT_MANIFEST_FILE').toString('utf8');
-  const parentHandoffText = readRegular(values['parent-handoff-file'], 'PARENT_HANDOFF_FILE').toString('utf8');
-  const requestText = readRegular(values['request-file'], 'REQUEST_FILE').toString('utf8');
-  const patchBytes = readRegular(values['patch-file'], 'PATCH_FILE', patchOwner.MAX_PATCH_BYTES);
-  const validationRequestText = readRegular(
-    values['validation-request-file'], 'VALIDATION_REQUEST_FILE').toString('utf8');
-  const prRequestText = readRegular(values['pr-request-file'], 'PR_REQUEST_FILE').toString('utf8');
-  const bundle = buildActivation({
-    packetRef, parentManifestText, parentHandoffText, requestText, patchBytes,
-    validationRequestText, prRequestText,
-  });
-  const materialized = materializeActivation(bundle, deps);
-  return request({
-    schema: START_SCHEMA,
-    operation: 'start-fixed',
-    packetRef,
-    phase: PHASE,
-    runId: bundle.activation.runId,
-    activationDigest: bundle.activation.activationDigest,
-    expectedParentManifestId: bundle.guards.parentManifestId,
-    expectedLeaseId: bundle.guards.leaseId,
-    attemptId: 1,
-  }, {...deps, materialized});
+  const prepared = prepareStartRequest(argv, deps);
+  return request(prepared.request, {...deps, materialized: prepared.materialized});
 }
 function errorResult(error) {
   const kind = error instanceof RuntimeError ? error.kind : 'UNKNOWN';
@@ -686,14 +707,25 @@ function errorResult(error) {
   };
 }
 if (require.main === module) {
-  runCli().then((value) => {
-    process.stdout.write(JSON.stringify(value, null, 2) + '\n');
-    process.exitCode = value?.result === 'PASS'
-      || ['RUN_ACCEPTED', 'ALREADY_FINISHED'].includes(value?.status) ? 0 : 2;
-  }).catch((error) => {
-    process.stdout.write(JSON.stringify(errorResult(error), null, 2) + '\n');
-    process.exitCode = 2;
-  });
+  if (process.env.MCL_DETACHED_PREPARE_ONLY_V1 === '1') {
+    try {
+      const prepared = prepareStartRequest();
+      process.stdout.write(JSON.stringify(prepared.request) + '\n');
+      process.exitCode = 0;
+    } catch (error) {
+      process.stdout.write(JSON.stringify(errorResult(error)) + '\n');
+      process.exitCode = 2;
+    }
+  } else {
+    runCli().then((value) => {
+      process.stdout.write(JSON.stringify(value, null, 2) + '\n');
+      process.exitCode = value?.result === 'PASS'
+        || ['RUN_ACCEPTED', 'ALREADY_FINISHED'].includes(value?.status) ? 0 : 2;
+    }).catch((error) => {
+      process.stdout.write(JSON.stringify(errorResult(error), null, 2) + '\n');
+      process.exitCode = 2;
+    });
+  }
 }
 
 module.exports = {
@@ -723,6 +755,7 @@ module.exports = {
   ownerImplementationIdentity,
   packetNumber,
   parseCli,
+  prepareStartRequest,
   persistCheckpoint,
   persistEffect,
   projectInspect,

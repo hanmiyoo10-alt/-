@@ -18,6 +18,7 @@ const PRIMITIVE_TIMEOUT_MS = 120000;
 const MAX_PRIMITIVE_OUTPUT_BYTES = 64 * 1024;
 const MAX_REPORT_BYTES = 16 * 1024;
 const OUTPUT_FORMATS = new Set(['receipt', 'agent-view']);
+const DETACHED_CHECKPOINT_SCHEMA = 'mcl-detached-owner-checkpoint.v1';
 
 const taskHandoff = require(path.join(COORDINATION, 'task-handoff.cjs'));
 const taskLease = require(path.join(COORDINATION, 'task-lease.cjs'));
@@ -1202,6 +1203,34 @@ async function guardCurrent({repo, manifest, handoff, holderSecret, env, runner,
   return current;
 }
 
+async function emitDetachedCheckpoint(checkpointSink, {
+  checkpoint,
+  primitiveId,
+  targetIdentity,
+  evidenceLocator,
+  nextPrimitive,
+}) {
+  if (checkpointSink === null || checkpointSink === undefined) return;
+  if (typeof checkpointSink !== 'function') {
+    throw new InvocationError('UNKNOWN', ['CONTINUITY_CHECKPOINT_SINK_INVALID']);
+  }
+  try {
+    await checkpointSink({
+      schema: DETACHED_CHECKPOINT_SCHEMA,
+      checkpoint,
+      primitiveId,
+      targetIdentity,
+      evidenceLocator,
+      nextPrimitive,
+      finalReceiptDigest: null,
+      finalReceiptLocator: null,
+    });
+  } catch (error) {
+    if (error instanceof InvocationError) throw error;
+    throw new InvocationError('BLOCKED', ['CONTINUITY_CHECKPOINT_PERSIST_FAILED']);
+  }
+}
+
 async function invokeLive({
   repo,
   handoffText,
@@ -1218,6 +1247,7 @@ async function invokeLive({
   validationSpawnSyncImpl = childProcess.spawnSync,
   root = ROOT,
   guardImpl,
+  checkpointSink = null,
 }) {
   const primitivePath = path.join(root, PRIMITIVE_RELATIVE);
   const primitiveHash = sha256File(primitivePath);
@@ -1278,6 +1308,13 @@ async function invokeLive({
       exitCode: Number.isInteger(preparedRun.run?.status) ? preparedRun.run.status : null,
     });
     prepare = preparedRun.value;
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'SOURCE_MUTATION_COMPLETE',
+      primitiveId: 'REPOSITORY_PATCH_PREPARE',
+      targetIdentity: 'prepared:' + prepare.prepared_digest,
+      evidenceLocator: 'receipt:mcl-repository-patch-prepare:' + manifest.manifestId,
+      nextPrimitive: validationBinding ? 'PREPARED_VALIDATION' : 'COMMIT',
+    });
 
     await doGuard();
     assertInputStable(requestFile, patchFile, requestDigest, request.patch_sha256);
@@ -1294,6 +1331,13 @@ async function invokeLive({
         manifest, request, primitiveSourceSha256: primitiveHash,
         kind: validationRun.kind, reasons: validationRun.reasonCodes,
         prepare, validation, validationEnabled,
+      });
+      await emitDetachedCheckpoint(checkpointSink, {
+        checkpoint: 'VALIDATION_PASS',
+        primitiveId: 'REPOSITORY_VALIDATION_PROFILE',
+        targetIdentity: 'validation-contract:' + validationBinding.profile.contractDigest,
+        evidenceLocator: VALIDATION_CONTRACT_REF_PREFIX + validationBinding.profile.contractDigest,
+        nextPrimitive: 'COMMIT',
       });
       await doGuard();
       assertInputStable(requestFile, patchFile, requestDigest, request.patch_sha256);
@@ -1312,6 +1356,13 @@ async function invokeLive({
       exitCode: Number.isInteger(commitRun.run?.status) ? commitRun.run.status : null,
     });
     committed = commitRun.value;
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'COMMIT_CREATED',
+      primitiveId: 'REPOSITORY_PATCH_COMMIT',
+      targetIdentity: 'commit:' + committed.new_head,
+      evidenceLocator: 'commit:' + committed.new_head,
+      nextPrimitive: 'PUSH',
+    });
 
     await doGuard();
     assertInputStable(requestFile, patchFile, requestDigest, request.patch_sha256);
@@ -1328,6 +1379,13 @@ async function invokeLive({
       exitCode: Number.isInteger(pushRun.run?.status) ? pushRun.run.status : null,
     });
     pushed = pushRun.value;
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'PUSH_COMPLETE',
+      primitiveId: 'REPOSITORY_PATCH_PUSH',
+      targetIdentity: 'remote:' + manifest.workspace.branch + '@' + committed.new_head,
+      evidenceLocator: 'commit:' + committed.new_head,
+      nextPrimitive: 'REMOTE_HEAD_VERIFY',
+    });
     return projectGenericReceipt({
       manifest, request, primitiveSourceSha256: primitiveHash,
       kind: 'PASS', prepare, validation, validationEnabled,
@@ -1571,6 +1629,7 @@ module.exports = {
   MUTATION_PRIMITIVE_ID,
   D014_VALIDATION_PROFILE,
   VALIDATION_CONTINUATION_PROFILE,
+  DETACHED_CHECKPOINT_SCHEMA,
   D014_COMPLETION_SET_PATHS,
   VALIDATION_CONTINUATION_PATHS,
   D014_VALIDATION_SCOPES,
@@ -1582,6 +1641,7 @@ module.exports = {
   assertInputStable,
   assertContinuationInputStable,
   guardCurrent,
+  emitDetachedCheckpoint,
   invokeLive,
   invokePreparedContinuation,
   loadCurrentEvidence,

@@ -52,6 +52,7 @@ const STAGE_OWNER_ID = 'MCL_KNOWN_OWNER_REPOSITORY_IMPLEMENTATION_V1';
 const MUTATION_PRIMITIVE_ID = 'REPOSITORY_PATCH_V1';
 const D014_VALIDATION_PROFILE = 'mcl:d014-completion-set:v1';
 const VALIDATION_CONTINUATION_PROFILE = 'repo:validation-continuation:v1';
+const PUBLISHED_PROGRESS_RECOVERY_PROFILE = 'repo:published-progress-recovery:v1';
 const D014_COMPLETION_SET_PATHS = Object.freeze([
   'products/chatgpt-mobile-coder-lab/coordination/completion-receipt-set.cjs',
   'products/chatgpt-mobile-coder-lab/coordination/tests/test-completion-receipt-set.cjs',
@@ -64,6 +65,14 @@ const VALIDATION_CONTINUATION_PATHS = Object.freeze([
   '.github/plugin-control-plane/canonical-main/work-harness/validation-continuation/validation-continuation-owner.cjs',
   '.github/plugin-control-plane/canonical-main/work-harness/validation-continuation/tests/validation-continuation-owner-contract.cjs',
 ]);
+const PUBLISHED_PROGRESS_RECOVERY_PATHS = Object.freeze([
+  '.github/plugin-control-plane/canonical-main/work-harness/published-progress-recovery/README.md',
+  '.github/plugin-control-plane/canonical-main/work-harness/published-progress-recovery/published-progress-recovery.cjs',
+  '.github/plugin-control-plane/canonical-main/work-harness/published-progress-recovery/tests/published-progress-recovery-contract.cjs',
+  'products/chatgpt-mobile-coder-lab/coordination/published-progress-recovery/README.md',
+  'products/chatgpt-mobile-coder-lab/coordination/published-progress-recovery/mcl-published-progress-recovery-inspect.cjs',
+  'products/chatgpt-mobile-coder-lab/coordination/published-progress-recovery/tests/test-mcl-published-progress-recovery-inspect.cjs',
+]);
 const D014_VALIDATION_SCOPES = Object.freeze([
   ...D014_COMPLETION_SET_PATHS.map((item) => 'path:' + item),
   'surface:mcl:d014-completion-set',
@@ -71,6 +80,11 @@ const D014_VALIDATION_SCOPES = Object.freeze([
 const VALIDATION_CONTINUATION_SCOPES = Object.freeze([
   ...VALIDATION_CONTINUATION_PATHS.map((item) => 'path:' + item),
   'surface:repo:validation-continuation-projection',
+].sort());
+const PUBLISHED_PROGRESS_RECOVERY_SCOPES = Object.freeze([
+  ...PUBLISHED_PROGRESS_RECOVERY_PATHS.map((item) => 'path:' + item),
+  'surface:mcl:published-progress-recovery-inspection',
+  'surface:repo:published-progress-recovery-projection',
 ].sort());
 const PREPARED_VALIDATION_TIMEOUT_MS = 120000;
 const MAX_VALIDATION_OUTPUT_BYTES = 64 * 1024;
@@ -126,6 +140,14 @@ const VALIDATION_CONTINUATION_CHECKS = Object.freeze([
     args: ['--test', '.github/plugin-control-plane/canonical-main/work-harness/tests/agent-decision-view-contract.cjs'],
   }),
 ]);
+const PUBLISHED_PROGRESS_RECOVERY_CHECKS = Object.freeze([
+  Object.freeze({name: 'published-progress-source-syntax', args: ['--check', PUBLISHED_PROGRESS_RECOVERY_PATHS[1]]}),
+  Object.freeze({name: 'published-progress-adapter-syntax', args: ['--check', PUBLISHED_PROGRESS_RECOVERY_PATHS[4]]}),
+  Object.freeze({name: 'published-progress-contract', args: ['--test', PUBLISHED_PROGRESS_RECOVERY_PATHS[2]]}),
+  Object.freeze({name: 'published-progress-adapter-contract', args: ['--test', PUBLISHED_PROGRESS_RECOVERY_PATHS[5]]}),
+  Object.freeze({name: 'rdc-session-evidence-contract', args: ['--test', 'products/chatgpt-mobile-coder-lab/device-ops/rdc-session-evidence/tests/test-mcl-rdc-session-evidence.cjs']}),
+  Object.freeze({name: 'effect-recovery-contract', args: ['--test', 'products/chatgpt-mobile-coder-lab/coordination/effect-recovery/tests/test-effect-recovery-inspect.cjs']}),
+]);
 
 function buildValidationProfile({profileId, paths, scopes, checks}) {
   const core = taskHandoff.stable({
@@ -160,6 +182,12 @@ const VALIDATION_PROFILES = Object.freeze([
     paths: VALIDATION_CONTINUATION_PATHS,
     scopes: VALIDATION_CONTINUATION_SCOPES,
     checks: VALIDATION_CONTINUATION_CHECKS,
+  }),
+  buildValidationProfile({
+    profileId: PUBLISHED_PROGRESS_RECOVERY_PROFILE,
+    paths: PUBLISHED_PROGRESS_RECOVERY_PATHS,
+    scopes: PUBLISHED_PROGRESS_RECOVERY_SCOPES,
+    checks: PUBLISHED_PROGRESS_RECOVERY_CHECKS,
   }),
 ]);
 const HANDOFF_FIELDS = new Set([
@@ -1629,13 +1657,17 @@ module.exports = {
   MUTATION_PRIMITIVE_ID,
   D014_VALIDATION_PROFILE,
   VALIDATION_CONTINUATION_PROFILE,
+  PUBLISHED_PROGRESS_RECOVERY_PROFILE,
   DETACHED_CHECKPOINT_SCHEMA,
   D014_COMPLETION_SET_PATHS,
   VALIDATION_CONTINUATION_PATHS,
+  PUBLISHED_PROGRESS_RECOVERY_PATHS,
   D014_VALIDATION_SCOPES,
   VALIDATION_CONTINUATION_SCOPES,
+  PUBLISHED_PROGRESS_RECOVERY_SCOPES,
   D014_VALIDATION_CHECKS,
   VALIDATION_CONTINUATION_CHECKS,
+  PUBLISHED_PROGRESS_RECOVERY_CHECKS,
   VALIDATION_PROFILES,
   InvocationError,
   assertInputStable,

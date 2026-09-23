@@ -725,4 +725,4 @@ Next-time cue: `(x^n)' = n x^(n-1)`에서 **계수는 원래 지수 n**, 지수�
 
 Related pattern IDs: AI-MATH-P1
 Review state: NONE
-Later evidence / resolution: 오류 지점을 즉시 교정했다. 동일 cue가 다른 거듭제곱 미분 문제에 전이되는지는 아직 확인하지 않았다.
+Later evidence / resolution: 오류 지점을 즉시 교정했고, 사용자가 태블릿 손필기 최신본에 임계점 `x=sqrt(e)`를 다시 작성했다. `1-2 ln x=0 -> ln x=1/2 -> x=sqrt(e)`는 정확하다. 동일 cue가 다른 거듭제곱 미분 문제에 전이되는지는 아직 확인하지 않았다.

@@ -717,8 +717,13 @@ function postComment(packetNumber, body, runner = runDefault) {
   return value.id;
 }
 
+function deterministicLeaseEvidenceRef(lease) {
+  return `receipt:mcl-task-lease:${lease.leaseId}:generation:${lease.observedGeneration}`;
+}
+
 function buildManifest(context, lease) {
   try {
+    const leaseEvidenceRef = deterministicLeaseEvidenceRef(lease);
     return taskHandoff.buildManifest({
     schemaVersion: 1,
     mode: 'MCL_TASK_MANIFEST',
@@ -740,7 +745,7 @@ function buildManifest(context, lease) {
       ledgerRef: '#2352',
       leaseId: lease.leaseId,
       acquiredGeneration: lease.observedGeneration,
-      acquireEvidenceRef: `run:${lease.runId}`,
+      acquireEvidenceRef: leaseEvidenceRef,
     },
     sourceAuthorityRefs: [
       context.packetRef,
@@ -751,7 +756,7 @@ function buildManifest(context, lease) {
     inputRefs: [
       `commit:${context.mainSha}`,
       'receipt:mcl-dispatch-plan:v1',
-      `run:${lease.runId}`,
+      leaseEvidenceRef,
     ],
     expectedOutputRefs: context.requestedScopes.filter((scope) => scope.startsWith('path:')),
     acceptanceRefs: [context.packetRef, 'issue:#2352'],

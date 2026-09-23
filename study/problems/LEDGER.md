@@ -704,3 +704,25 @@ Next-time cue: 입력형 계산 과제는 요구 자료형, 공식, 출력 형�
 Related pattern IDs: none
 Review state: REVIEWED
 Later evidence / resolution: cleaned submission copy에서 최신 float 소스의 fresh execution 성공 확인.
+
+
+### AI-MATH-W4-4.7
+
+Problem ID: AI-MATH-W4-4.7
+Date: 2026-09-23
+Subject / area: AI 수학 / 4주차 / 4.7 / 곱의 미분·거듭제곱·최댓값
+Source ref: `AI 수학 입문/4주차` 연습문제 4.7, 2026-09-23 태블릿 손필기 풀이 최신본
+Result: WRONG
+Confidence before check: NOT_RECORDED
+
+Problem demand summary: 닫힌 구간 `[1,e]`에서 `f(x)=ln(x)/x^2`의 최댓값을 구하기 위해 도함수를 계산하고 임계점과 끝점의 함숫값을 비교한다.
+User interpretation / approach: `f(x)=x^(-2) ln x`로 바꾸고 곱의 미분을 적용하려는 구조는 맞았다. 손필기에서 첫 항을 `-3x^(-3)ln x`로 적고, 이어 `(-3 ln x + 1)/x^(-3)` 형태로 정리했다.
+Correct reasoning summary: 거듭제곱 미분에서 `(x^(-2))'=-2x^(-3)`이고 `x^(-2)(1/x)=x^(-3)`이므로 `f'(x)=(-2 ln x + 1)x^(-3)=(1-2 ln x)/x^3`이다.
+
+Error type: CALC_PROCESS
+Error mechanism: 거듭제곱 미분에서 원래 지수 `-2`를 계수로 그대로 내리지 않고 `-3`으로 바꿨고, 공통인수 `x^(-3)`를 분수형으로 옮기는 과정에서도 음의 지수 방향이 뒤집혔다.
+Next-time cue: `(x^n)' = n x^(n-1)`에서 **계수는 원래 지수 n**, 지수만 `n-1`로 바꾼다. `x^(-3)`은 마지막에 필요하면 `1/x^3`으로만 바꾼다.
+
+Related pattern IDs: AI-MATH-P1
+Review state: NONE
+Later evidence / resolution: 오류 지점을 즉시 교정했다. 동일 cue가 다른 거듭제곱 미분 문제에 전이되는지는 아직 확인하지 않았다.

@@ -99,3 +99,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2768)
 - Event ID: `f39477d6d4735943da76baf5c411a9ad1de50115b93241d8bed0736f5c04a933`
 <!-- canonical-main-doc-promoted:f39477d6d4735943da76baf5c411a9ad1de50115b93241d8bed0736f5c04a933 -->
+
+### 2026-09-23 — MCL-DETACHED-RUNTIME-ADOPTION-CLOSE-V1 — resolve #2812 natural-consumer hold before profile evolution
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2854)
+- Event ID: `420a65445fc741a772eb9995428a4a81321359f23cd2a6f67245f1e147e9b3d5`
+<!-- canonical-main-doc-promoted:420a65445fc741a772eb9995428a4a81321359f23cd2a6f67245f1e147e9b3d5 -->

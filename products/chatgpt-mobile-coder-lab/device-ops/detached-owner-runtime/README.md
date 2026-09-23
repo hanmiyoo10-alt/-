@@ -27,14 +27,26 @@ Inspect delegates resume disposition to the pure #2746 classifier. A supervisor-
 ## S placement
 
 Termux runit service: /data/data/com.termux/files/usr/var/service/mcl-detached-owner-runtime
-Ubuntu runtime: /root/.local/lib/mcl-detached-owner-runtime
+Ubuntu private repository-support root: /root/.local/lib/mcl-detached-owner-runtime/repository
 Ubuntu client: /root/.local/bin/mcl-detached-owner-runtime
 Private Unix socket: /root/.local/run/mcl-detached-owner-runtime/control.sock
 
 No TCP or HTTP listener exists.
 
-install-s-termux.sh --check is read-only. --apply installs a disabled service. --activate enables it. #2812 IMPLEMENTATION_PR must not apply or activate the real S service. The first real install and disconnect proof belong to postmerge EXPERIMENT_CLOSE under fresh device authority.
+## Installed private support bundle
+
+The first #2812 live activation exposed #2819: installing only the two runtime JavaScript files broke their reviewed repository-relative dependency resolution.
+
+The repaired installer preserves the runtime source semantics instead of teaching the runtime an ambient or caller-selected repository path. It derives the source repository root only from the reviewed installer location and copies one fixed allowlist of twenty repository support files plus the runtime client and service into the private repository-support root above. The runtime and service keep their original repository-relative locations inside that private tree.
+
+The installed layout never uses ambient /root/nyang-repo, NODE_PATH, a symlink search path, a recursive repository copy, or a caller-selected source/support root. Installed bundle entries are restrictive regular non-symlink files. The launcher and runit service point only to the fixed private entrypoints.
+
+install-s-termux.sh --check verifies the complete installed bundle identity. --apply replaces only the fixed managed bundle/wrappers and leaves the service disabled. --activate first requires the installed bundle to match the reviewed source bytes, then enables exactly the fixed runit service.
+
+The install contract runs both installed runtime and service modules from the private test layout as an import smoke proof without starting a socket or service. This specifically guards the #2819 failure mode.
+
+The failed first live installation remains a preserved natural fixture. Repaired live activation belongs to #2821 postmerge → #2812 EXPERIMENT_CLOSE and must not be attempted from an unmerged repair candidate.
 
 V1 proves only control-connection independence. It does not prove survival of Termux process loss, Android force-stop, reboot, host loss, supervisor hard loss or arbitrary process killing.
 
-Refs #2759 #2745 #2746 #2750 #2577 #2775 #2698 #2706 #2812.
+Refs #2759 #2745 #2746 #2750 #2577 #2775 #2698 #2706 #2812 #2819 #2820 #2821.

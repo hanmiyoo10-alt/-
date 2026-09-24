@@ -129,10 +129,48 @@ completed successfully.
 
 No latest-by-time heuristic is used.
 
+## Strict up-to-date barrier
+
+The owner also reads the current main branch's required-status protection
+through the fixed `required_status_checks` endpoint.
+
+If `strict=false`, the added ancestry barrier is `NOT_APPLICABLE` and the
+existing base/head/review/overlap/Required semantics remain unchanged.
+
+If `strict=true`, merge-ready inspection additionally requires both:
+
+1. one fixed GraphQL read for the exact PR's `mergeStateStatus` and head OID;
+2. one fixed GitHub compare read for exact `currentMainSha...expectedHead`.
+
+The compare evidence must bind the current main as both the requested/base
+identity and merge base. Only `ahead` (current main is an ancestor of the
+candidate) or exact `identical` is current.
+
+For strict protection:
+
+- `mergeStateStatus=BEHIND` blocks with currentization required;
+- compare `behind`, `diverged`, or a merge-base mismatch blocks with
+  currentization required;
+- missing, malformed, inaccessible, or `UNKNOWN` strict/merge-state/compare
+  evidence remains UNKNOWN;
+- a successful old-head Required check never overrides the strict currentness
+  barrier.
+
+The owner does not currentize the branch. A strict-currentness block routes only
+to the existing currentization owner:
+
+```text
+CURRENTIZE_PR_THROUGH_EXISTING_OWNER
+```
+
+After currentization creates a new exact head that contains current main and a
+new exact-head Required succeeds, a fresh inspect may become merge-ready.
+
 ## Final currentness
 
-Before returning PASS, inspect repeats the current main/#485, packet, PR and
-review barriers and requires unchanged semantic identity.
+Before returning PASS, inspect repeats the current main/#485, packet, PR,
+strict-protection/merge-state/ancestry, review and overlap barriers and requires
+unchanged semantic identity.
 
 Inspect then reports:
 

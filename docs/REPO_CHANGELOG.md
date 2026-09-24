@@ -1973,3 +1973,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/19a1cbe8a68e33da80b8a6aef6218e5bc89fb072)
 - Event ID: `fe3e3e9a0429220f44a9b799e9552b5f465e1426754e22b3c923ba36497a785c`
 <!-- canonical-main-doc-promoted:fe3e3e9a0429220f44a9b799e9552b5f465e1426754e22b3c923ba36497a785c -->
+
+### 2026-09-25 — Merge pull request #2905 from hanmiyoo10-alt/server/repo-terminal-readme-drift-2904
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `fe8b1315e18f3aac379b9e8b5542a3fefc1b770a`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/fe8b1315e18f3aac379b9e8b5542a3fefc1b770a)
+- Event ID: `5d929c517adc21c340689f2816351b984dfceca108ef58b5c79f85c154c92b88`
+<!-- canonical-main-doc-promoted:5d929c517adc21c340689f2816351b984dfceca108ef58b5c79f85c154c92b88 -->

@@ -1,0 +1,194 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# mcl-s-rdc-channel-watchdog:v2
+set -u
+
+FIXED_PREFIX=/data/data/com.termux/files/usr
+FIXED_HOME=/data/data/com.termux/files/home
+FIXED_SERVICE="$FIXED_PREFIX/var/service/desktop-commander-remote"
+FIXED_LOG="$FIXED_HOME/.local/state/desktop-commander-remote/current"
+FIXED_STATE="$FIXED_HOME/.local/state/desktop-commander-watchdog"
+FIXED_CONFIG="$FIXED_PREFIX/var/lib/proot-distro/containers/ubuntu/rootfs/root/.desktop-commander-device/device.json"
+SELF_HEAL_BUDGET_SECONDS=120
+COOLDOWN_SECONDS=900
+
+CHECK_ONLY=0
+case "${1:-}" in
+  '') ;;
+  --check) CHECK_ONLY=1 ;;
+  *) echo 'usage: rdc-health-watchdog [--check]' >&2; exit 2 ;;
+esac
+[ "$#" -le 1 ] || { echo 'usage: rdc-health-watchdog [--check]' >&2; exit 2; }
+
+TEST_MODE=${MCL_S_RDC_WATCHDOG_TEST_MODE:-0}
+case "$TEST_MODE" in
+  0)
+    PREFIX=$FIXED_PREFIX
+    HOME_DIR=$FIXED_HOME
+    SERVICE=$FIXED_SERVICE
+    LOG=$FIXED_LOG
+    STATE=$FIXED_STATE
+    CONFIG=$FIXED_CONFIG
+    ;;
+  1)
+    TEST_ROOT=${MCL_S_RDC_WATCHDOG_TEST_ROOT:-}
+    case "$TEST_ROOT" in
+      /tmp/mcl-s-rdc-watchdog-test-*) ;;
+      *) echo 'rdc-watchdog: invalid-test-root' >&2; exit 2 ;;
+    esac
+    PREFIX="$TEST_ROOT/prefix"
+    HOME_DIR="$TEST_ROOT/home"
+    SERVICE="$TEST_ROOT/service"
+    LOG="$TEST_ROOT/log"
+    STATE="$TEST_ROOT/state"
+    CONFIG="$TEST_ROOT/config.json"
+    ;;
+  *)
+    echo 'rdc-watchdog: invalid-test-mode' >&2
+    exit 2
+    ;;
+esac
+
+SV="$PREFIX/bin/sv"
+NODE="$PREFIX/bin/node"
+COUNT_FILE="$STATE/bad-count"
+BAD_SINCE_FILE="$STATE/bad-since-epoch"
+RESTART_FILE="$STATE/last-restart-epoch"
+EVENT_LOG="$STATE/events.log"
+
+mkdir -p "$STATE"
+log_event() {
+  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >> "$EVENT_LOG"
+}
+clear_bad_since() {
+  rm -f "$BAD_SINCE_FILE"
+}
+now_epoch() {
+  if [ "$TEST_MODE" = 1 ] && [ -n "${MCL_S_RDC_WATCHDOG_TEST_NOW:-}" ]; then
+    case "$MCL_S_RDC_WATCHDOG_TEST_NOW" in
+      *[!0-9]*|'') return 1 ;;
+      *) printf '%s\n' "$MCL_S_RDC_WATCHDOG_TEST_NOW"; return 0 ;;
+    esac
+  fi
+  date +%s
+}
+
+if ! "$SV" status "$SERVICE" 2>/dev/null | grep -q '^run:'; then
+  clear_bad_since
+  echo 'rdc-watchdog: service-not-running; runit owns process recovery'
+  exit 0
+fi
+
+if [ ! -f "$LOG" ]; then
+  clear_bad_since
+  echo 'rdc-watchdog: no-log'
+  exit 0
+fi
+
+NATIVE=$(
+  tail -n 800 "$LOG" \
+    | grep -aE '^20[0-9][0-9]-[^ ]+ (❌ Channel error:|⚠️ Channel closed|🔄 Recreating channel|⏱️ Channel subscription timed out|✅ Channel self-healed|🔌 Device marked as (online|offline)|✅ Device ready:|🔧 Received tool call|🔐 Starting device authorization flow)' \
+    || true
+)
+line_of_last() {
+  printf '%s\n' "$NATIVE" | grep -nE "$1" | tail -1 | cut -d: -f1
+}
+
+BAD=$(line_of_last '❌ Channel error:|⚠️ Channel closed|🔄 Recreating channel|⏱️ Channel subscription timed out|🔌 Device marked as offline')
+GOOD=$(line_of_last '✅ Channel self-healed|🔌 Device marked as online|✅ Device ready:|🔧 Received tool call')
+AUTH=$(line_of_last '🔐 Starting device authorization flow')
+READY=$(line_of_last '✅ Device ready:')
+BAD=${BAD:-0}
+GOOD=${GOOD:-0}
+AUTH=${AUTH:-0}
+READY=${READY:-0}
+
+if [ "$AUTH" -gt "$READY" ]; then
+  clear_bad_since
+  printf '0\n' > "$COUNT_FILE"
+  echo 'rdc-watchdog: auth-required; no automatic restart'
+  exit 0
+fi
+
+if [ "$BAD" -le "$GOOD" ]; then
+  clear_bad_since
+  printf '0\n' > "$COUNT_FILE"
+  echo 'rdc-watchdog: healthy'
+  exit 0
+fi
+
+NOW=$(now_epoch) || {
+  clear_bad_since
+  echo 'rdc-watchdog: clock-unknown; no restart'
+  exit 0
+}
+
+if [ -f "$BAD_SINCE_FILE" ]; then
+  read -r SINCE < "$BAD_SINCE_FILE" || SINCE=
+else
+  SINCE=
+fi
+case "$SINCE" in
+  ''|*[!0-9]*)
+    SINCE=$NOW
+    printf '%s\n' "$SINCE" > "$BAD_SINCE_FILE"
+    ;;
+  *)
+    if [ "$SINCE" -gt "$NOW" ]; then
+      SINCE=$NOW
+      printf '%s\n' "$SINCE" > "$BAD_SINCE_FILE"
+    fi
+    ;;
+esac
+
+AGE=$((NOW - SINCE))
+printf '0\n' > "$COUNT_FILE"
+if [ "$AGE" -lt "$SELF_HEAL_BUDGET_SECONDS" ]; then
+  echo "rdc-watchdog: native-self-heal-window bad_age=$AGE"
+  exit 0
+fi
+
+LAST=0
+[ -f "$RESTART_FILE" ] && read -r LAST < "$RESTART_FILE" || true
+case "$LAST" in ''|*[!0-9]*) LAST=0 ;; esac
+if [ "$LAST" -gt "$NOW" ] || [ $((NOW - LAST)) -lt "$COOLDOWN_SECONDS" ]; then
+  echo 'rdc-watchdog: cooldown-active; no restart'
+  exit 0
+fi
+
+if ! "$NODE" - "$CONFIG" "$NOW" <<'NODE'
+const fs = require('fs');
+try {
+  const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+  const token = config?.session?.access_token;
+  const now = Number(process.argv[3]);
+  if (!token || !Number.isSafeInteger(now)) process.exit(2);
+  const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+  const exp = Number(payload.exp || 0);
+  process.exit(exp > now + 180 ? 0 : 3);
+} catch {
+  process.exit(4);
+}
+NODE
+then
+  log_event 'restart-blocked persisted-session-not-fresh'
+  echo 'rdc-watchdog: persisted-session-not-fresh; no restart'
+  exit 0
+fi
+
+if [ "$CHECK_ONLY" -eq 1 ]; then
+  echo "rdc-watchdog: would-restart bad_age=$AGE"
+  exit 10
+fi
+
+log_event "restart-attempt bad_age=$AGE"
+printf '%s\n' "$NOW" > "$RESTART_FILE"
+if "$SV" restart "$SERVICE" >/dev/null 2>&1; then
+  clear_bad_since
+  log_event "restart-triggered bad_age=$AGE"
+  echo 'rdc-watchdog: restart-requested'
+  exit 0
+fi
+
+log_event "restart-failed bad_age=$AGE"
+echo 'rdc-watchdog: restart-failed'
+exit 1

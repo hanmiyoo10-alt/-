@@ -27,8 +27,18 @@ PIDFILE="$STATE/guard.pid"
 EVENTS="$STATE/events.log"
 RUNSV_LOG="$STATE/runsv.log"
 LAUNCHER="$HOME_DIR/.termux/boot/32-mcl-m-tailscale-supervisor-guard"
+GUARD_SERVICE="$PREFIX/var/service/mcl-m-tailscale-supervisor-guard"
+TAILSCALE="$PREFIX/bin/tailscale"
+TAILSCALED_START="$PREFIX/bin/tailscaled-start"
+TARGET_LOG_DIR="$PREFIX/var/log/tailscaled"
+ANCHOR_PIDFILE="$STATE/anchor.pid"
+ADOPT_LOCKDIR="$STATE/adopt.lock"
 SUPERVISION=unknown
 DAEMON=unknown
+BACKEND=unknown
+PAIR_STATE=unknown
+ORPHAN_DAEMON_PID=
+ORPHAN_LOGGER_PID=
 read_state() {
     SUPERVISION=unknown
     if [ ! -e "$SERVICE" ]; then
@@ -55,6 +65,16 @@ read_state() {
 
 read_daemon() {
     DAEMON=unknown
+    if [ "${MCL_M_TAILSCALE_SUPERVISOR_TEST_MODE:-0}" = "1" ] && [ -e "${MCL_M_TAILSCALE_TEST_STATE:-}/adopt-fixture-active" ] && [ -r "${MCL_M_TAILSCALE_TEST_STATE:-}/adopt-daemon.pid" ]; then
+        test_pid="$(cat "${MCL_M_TAILSCALE_TEST_STATE}/adopt-daemon.pid" 2>/dev/null || true)"
+        case "$test_pid" in
+            ''|*[!0-9]*) DAEMON=unknown ;;
+            *)
+                if pid_is_live "$test_pid"; then DAEMON=present; else DAEMON=absent; fi
+                ;;
+        esac
+        return 0
+    fi
     pid_text=""
     pid_rc=127
     if [ -x "$PIDOF" ]; then
@@ -113,6 +133,288 @@ log_event() {
 ensure_anchor() {
     [ -f "$LAUNCHER" ] && [ ! -L "$LAUNCHER" ] && [ -x "$LAUNCHER" ] || return 1
     "$LAUNCHER" --ensure-anchor >/dev/null 2>&1
+}
+
+pid_is_live() {
+    live_pid="$1"
+    case "$live_pid" in ''|*[!0-9]*) return 1 ;; esac
+    kill -0 "$live_pid" 2>/dev/null || return 1
+    proc_state="$(awk '{print $3}' "/proc/$live_pid/stat" 2>/dev/null || true)"
+    [ -n "$proc_state" ] && [ "$proc_state" != Z ]
+}
+
+read_backend() {
+    BACKEND=unknown
+    if [ "${MCL_M_TAILSCALE_SUPERVISOR_TEST_MODE:-0}" = "1" ]; then
+        if [ -e "${MCL_M_TAILSCALE_TEST_STATE:-}/backend-unknown" ]; then
+            BACKEND=unknown
+        elif [ -e "${MCL_M_TAILSCALE_TEST_STATE:-}/backend-running" ]; then
+            BACKEND=running
+        else
+            BACKEND=not_running
+        fi
+        return 0
+    fi
+    [ -x "$TAILSCALE" ] || return 0
+    backend_json="$("$TAILSCALE" status --json 2>/dev/null)" || return 0
+    case "$backend_json" in
+        *'"BackendState":"Running"'*|*'"BackendState": "Running"'*) BACKEND=running ;;
+        *) BACKEND=not_running ;;
+    esac
+}
+
+guard_service_running() {
+    if [ "${MCL_M_TAILSCALE_SUPERVISOR_TEST_MODE:-0}" = "1" ]; then
+        [ -e "${MCL_M_TAILSCALE_TEST_STATE:-}/guard-service-running" ]
+        return
+    fi
+    [ -d "$GUARD_SERVICE" ] && [ ! -L "$GUARD_SERVICE" ] || return 1
+    guard_status="$("$SV" status "$GUARD_SERVICE" 2>&1 || true)"
+    case "$guard_status" in run:*) return 0 ;; *) return 1 ;; esac
+}
+
+anchor_live() {
+    if [ "${MCL_M_TAILSCALE_SUPERVISOR_TEST_MODE:-0}" = "1" ]; then
+        [ -e "${MCL_M_TAILSCALE_TEST_STATE:-}/anchor-live" ]
+        return
+    fi
+    [ -r "$ANCHOR_PIDFILE" ] || return 1
+    anchor_pid="$(cat "$ANCHOR_PIDFILE" 2>/dev/null || true)"
+    case "$anchor_pid" in ''|*[!0-9]*) return 1 ;; esac
+    kill -0 "$anchor_pid" 2>/dev/null || return 1
+    anchor_cmd="$(tr '\000' ' ' < "/proc/$anchor_pid/cmdline" 2>/dev/null || true)"
+    case "$anchor_cmd" in
+        *32-mcl-m-tailscale-supervisor-guard*--anchor*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+read_ppid() {
+    proc_pid="$1"
+    awk '/^PPid:/{print $2}' "$PROC_ROOT/$proc_pid/status" 2>/dev/null
+}
+
+find_orphan_pair() {
+    PAIR_STATE=unknown
+    ORPHAN_DAEMON_PID=
+    ORPHAN_LOGGER_PID=
+
+    if [ "${MCL_M_TAILSCALE_SUPERVISOR_TEST_MODE:-0}" = "1" ]; then
+        daemon_count="$(cat "${MCL_M_TAILSCALE_TEST_STATE:-}/adopt-daemon-count" 2>/dev/null || true)"
+        logger_count="$(cat "${MCL_M_TAILSCALE_TEST_STATE:-}/adopt-logger-count" 2>/dev/null || true)"
+        [ "$daemon_count" = 1 ] || { [ -n "$daemon_count" ] && PAIR_STATE=ambiguous; return 1; }
+        [ "$logger_count" = 1 ] || { [ -n "$logger_count" ] && PAIR_STATE=ambiguous; return 1; }
+        daemon_pid="$(cat "${MCL_M_TAILSCALE_TEST_STATE}/adopt-daemon.pid" 2>/dev/null || true)"
+        logger_pid="$(cat "${MCL_M_TAILSCALE_TEST_STATE}/adopt-logger.pid" 2>/dev/null || true)"
+        case "$daemon_pid" in ''|*[!0-9]*) PAIR_STATE=unknown; return 1 ;; esac
+        case "$logger_pid" in ''|*[!0-9]*) PAIR_STATE=unknown; return 1 ;; esac
+        pid_is_live "$daemon_pid" || { PAIR_STATE=absent; return 1; }
+        pid_is_live "$logger_pid" || { PAIR_STATE=absent; return 1; }
+        ORPHAN_DAEMON_PID="$daemon_pid"
+        ORPHAN_LOGGER_PID="$logger_pid"
+        PAIR_STATE=exact
+        return 0
+    fi
+
+    daemon_count=0
+    pid_text="$("$PIDOF" tailscaled 2>/dev/null || true)"
+    for pid in $pid_text; do
+        case "$pid" in ''|*[!0-9]*) PAIR_STATE=unknown; return 1 ;; esac
+        [ -r "$PROC_ROOT/$pid/comm" ] || continue
+        comm="$(cat "$PROC_ROOT/$pid/comm" 2>/dev/null || true)"
+        [ "$comm" = tailscaled ] || continue
+        [ "$(read_ppid "$pid")" = 1 ] || continue
+        cmdline="$(tr '\000' ' ' < "$PROC_ROOT/$pid/cmdline" 2>/dev/null || true)"
+        case "$cmdline" in *tailscaled*) ;; *) continue ;; esac
+        daemon_count=$((daemon_count + 1))
+        ORPHAN_DAEMON_PID="$pid"
+    done
+
+    logger_count=0
+    for d in "$PROC_ROOT"/[0-9]*; do
+        [ -r "$d/comm" ] || continue
+        comm="$(cat "$d/comm" 2>/dev/null || true)"
+        [ "$comm" = svlogd ] || continue
+        pid="${d##*/}"
+        [ "$(read_ppid "$pid")" = 1 ] || continue
+        cmdline="$(tr '\000' ' ' < "$d/cmdline" 2>/dev/null || true)"
+        case "$cmdline" in *"$TARGET_LOG_DIR"*) ;; *) continue ;; esac
+        logger_count=$((logger_count + 1))
+        ORPHAN_LOGGER_PID="$pid"
+    done
+
+    if [ "$daemon_count" -eq 0 ] || [ "$logger_count" -eq 0 ]; then
+        PAIR_STATE=absent
+        return 1
+    fi
+    if [ "$daemon_count" -ne 1 ] || [ "$logger_count" -ne 1 ]; then
+        PAIR_STATE=ambiguous
+        return 1
+    fi
+    PAIR_STATE=exact
+}
+
+adopt_target_state() {
+    read_state
+    case "$SUPERVISION" in
+        running) SUPERVISED_TARGET=running ;;
+        missing) SUPERVISED_TARGET=missing ;;
+        *) SUPERVISED_TARGET=unknown ;;
+    esac
+}
+
+emit_adopt() {
+    printf '%s\n' \
+        'schema=mcl-m-tailscale-orphan-adopt.v1' \
+        "prestate=$PRESTATE" \
+        "old_pair=$PAIR_STATE" \
+        "supervised_target=$SUPERVISED_TARGET" \
+        "backend=$BACKEND" \
+        "rollback=$ROLLBACK" \
+        "result=$ADOPT_RESULT" \
+        'details=withheld'
+}
+
+release_adopt_lock() {
+    [ "${ADOPT_LOCK_HELD:-0}" -eq 1 ] || return 0
+    rmdir "$ADOPT_LOCKDIR" 2>/dev/null || true
+    ADOPT_LOCK_HELD=0
+}
+
+adopt_finish() {
+    code="$1"
+    adopt_target_state
+    read_backend
+    release_adopt_lock
+    trap - INT TERM HUP 2>/dev/null || true
+    emit_adopt
+    return "$code"
+}
+
+wait_old_pair_gone() {
+    daemon_pid="$1"
+    logger_pid="$2"
+    i=0
+    while [ "$i" -lt 8 ]; do
+        daemon_live=0
+        logger_live=0
+        pid_is_live "$daemon_pid" && daemon_live=1
+        pid_is_live "$logger_pid" && logger_live=1
+        [ "$daemon_live" -eq 0 ] && [ "$logger_live" -eq 0 ] && return 0
+        "$SLEEP" 1
+        i=$((i + 1))
+    done
+    return 1
+}
+
+rollback_orphan() {
+    adopt_target_state
+    read_daemon
+    if [ "$SUPERVISION" != missing ] || [ "$DAEMON" != absent ]; then
+        ROLLBACK=blocked
+        return 1
+    fi
+    [ -x "$TAILSCALED_START" ] || { ROLLBACK=failed; return 1; }
+    "$NOHUP" "$TAILSCALED_START" --foreground >/dev/null 2>&1 &
+    i=0
+    while [ "$i" -lt 8 ]; do
+        "$SLEEP" 1
+        read_daemon
+        read_backend
+        if [ "$DAEMON" = present ] && [ "$BACKEND" = running ]; then
+            ROLLBACK=restored
+            return 0
+        fi
+        i=$((i + 1))
+    done
+    ROLLBACK=failed
+    return 1
+}
+
+adopt_orphan() {
+    PRESTATE=unknown
+    PAIR_STATE=unknown
+    SUPERVISED_TARGET=unknown
+    BACKEND=unknown
+    ROLLBACK=not_needed
+    ADOPT_RESULT=unknown
+    ADOPT_LOCK_HELD=0
+
+    read_state
+    read_daemon
+    if [ "$SUPERVISION" != missing ] || [ "$DAEMON" != present ]; then
+        PRESTATE=blocked
+        ADOPT_RESULT=blocked
+        adopt_finish 2
+        return $?
+    fi
+    PRESTATE=orphan_present
+
+    read_backend
+    if [ "$BACKEND" != running ] || ! guard_service_running || ! anchor_live; then
+        ADOPT_RESULT=blocked
+        adopt_finish 2
+        return $?
+    fi
+    if ! find_orphan_pair; then
+        ADOPT_RESULT=blocked
+        adopt_finish 2
+        return $?
+    fi
+    first_daemon="$ORPHAN_DAEMON_PID"
+    first_logger="$ORPHAN_LOGGER_PID"
+
+    mkdir -p "$STATE"
+    if ! mkdir "$ADOPT_LOCKDIR" 2>/dev/null; then
+        ADOPT_RESULT=blocked
+        adopt_finish 2
+        return $?
+    fi
+    ADOPT_LOCK_HELD=1
+    trap 'release_adopt_lock; exit 1' INT TERM HUP
+
+    read_state
+    read_daemon
+    read_backend
+    if [ "$SUPERVISION" != missing ] || [ "$DAEMON" != present ] || [ "$BACKEND" != running ] || ! guard_service_running || ! anchor_live; then
+        ADOPT_RESULT=blocked
+        adopt_finish 2
+        return $?
+    fi
+    if ! find_orphan_pair || [ "$ORPHAN_DAEMON_PID" != "$first_daemon" ] || [ "$ORPHAN_LOGGER_PID" != "$first_logger" ]; then
+        ADOPT_RESULT=blocked
+        adopt_finish 2
+        return $?
+    fi
+
+    log_event 'adopt=term-orphan-pair'
+    kill -TERM "$first_daemon" "$first_logger" 2>/dev/null || true
+    if ! wait_old_pair_gone "$first_daemon" "$first_logger"; then
+        ADOPT_RESULT=fail
+        ROLLBACK=blocked
+        adopt_finish 1
+        return $?
+    fi
+
+    restore_supervisor >/dev/null 2>&1 || true
+    i=0
+    while [ "$i" -lt 8 ]; do
+        "$SLEEP" 1
+        read_state
+        read_daemon
+        read_backend
+        if [ "$SUPERVISION" = running ] && [ "$DAEMON" = present ] && [ "$BACKEND" = running ]; then
+            ADOPT_RESULT=pass
+            ROLLBACK=not_needed
+            adopt_finish 0
+            return $?
+        fi
+        i=$((i + 1))
+    done
+
+    ADOPT_RESULT=fail
+    rollback_orphan || true
+    adopt_finish 1
 }
 
 restore_supervisor() {
@@ -231,8 +533,11 @@ case "${1:-}" in
             "$SLEEP" "$INTERVAL"
         done
         ;;
+    --adopt-orphan)
+        adopt_orphan
+        ;;
     *)
-        printf '%s\n' 'usage: m-tailscale-supervisor-guard --check|--once|--loop' >&2
+        printf '%s\n' 'usage: m-tailscale-supervisor-guard --check|--once|--loop|--adopt-orphan' >&2
         exit 2
         ;;
 esac

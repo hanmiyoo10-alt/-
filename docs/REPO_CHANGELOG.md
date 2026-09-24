@@ -1965,3 +1965,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a53657666566bec4f860f9ef1a76fb7e06d5ae1f)
 - Event ID: `c2af369b666aa762c6e0f0738d049ffc84edc282c24022ea9e8b711f0045cd64`
 <!-- canonical-main-doc-promoted:c2af369b666aa762c6e0f0738d049ffc84edc282c24022ea9e8b711f0045cd64 -->
+
+### 2026-09-24 — Merge pull request #2882 from hanmiyoo10-alt/server/repo-terminal-residue-cleanup-2881
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `19a1cbe8a68e33da80b8a6aef6218e5bc89fb072`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/19a1cbe8a68e33da80b8a6aef6218e5bc89fb072)
+- Event ID: `fe3e3e9a0429220f44a9b799e9552b5f465e1426754e22b3c923ba36497a785c`
+<!-- canonical-main-doc-promoted:fe3e3e9a0429220f44a9b799e9552b5f465e1426754e22b3c923ba36497a785c -->

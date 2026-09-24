@@ -288,6 +288,8 @@ function buildChildManifest(ctx, request, validationText, prText, selectedProfil
   const validationRef = patchOwner.VALIDATION_REF_PREFIX + sha256(Buffer.from(validationText, 'utf8'));
   const validationContractRef =
     patchOwner.VALIDATION_CONTRACT_REF_PREFIX + profile.contractDigest;
+  const validationAdapterRef = patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
+    + patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest;
   const prRef = 'receipt:mcl-pr-publication-request:' + sha256(Buffer.from(prText, 'utf8'));
   return taskHandoff.buildManifest({
     schemaVersion: 1,
@@ -312,7 +314,7 @@ function buildChildManifest(ctx, request, validationText, prText, selectedProfil
       `commit:${ctx.parentManifest.observedBaseSha}`,
       commentUrl(ctx.packet, ctx.parentManifestComment),
       commentUrl(ctx.packet, ctx.parentHandoffComment),
-      patchRef, validationRef, validationContractRef, prRef,
+      patchRef, validationRef, validationContractRef, validationAdapterRef, prRef,
       ctx.parentManifest.leaseEvidence.acquireEvidenceRef,
     ],
     expectedOutputRefs: pathScopes(ctx.requestedScopes).map((item) => 'path:' + item),
@@ -334,12 +336,115 @@ function writeEvidenceFiles(ctx, manifestText, tempRoot = null) {
 function removeEvidenceFiles(files) {
   try { fs.rmSync(files.dir, {recursive: true, force: true}); } catch (_) {}
 }
-function requirePatchOwnerPass(receipt) {
+function patchOwnerPassState(receipt) {
   if (!receipt || receipt.validity !== 'VALID' || receipt.schemaVersion !== 2
-      || receipt.executionLifecycle !== 'FINISHED'
-      || receipt.attentionDisposition !== 'COMPLETE' || receipt.result !== 'PASS') {
-    fail(receipt?.result === 'CONFLICT' ? 'CONFLICT' : 'BLOCKED', 'PATCH_OWNER_NOT_PASS');
+      || receipt.executionLifecycle !== 'FINISHED') {
+    fail(receipt?.result === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN', 'PATCH_OWNER_RECEIPT_INVALID');
   }
+  return receipt.attentionDisposition === 'COMPLETE' && receipt.result === 'PASS';
+}
+function patchOwnerCounter(receipt, name) {
+  const row = receipt?.counters?.find((item) => item.name === name);
+  return row?.status === 'KNOWN' ? row.value : null;
+}
+function patchOwnerAttention(receipt, locator) {
+  const reasonCode = receipt?.reasonCodes?.[0]
+    || receipt?.conflicts?.[0]
+    || receipt?.requiredUnknowns?.[0]
+    || receipt?.blockers?.[0]
+    || 'PATCH_OWNER_ATTENTION_REQUIRED';
+  const severity = receipt?.result === 'CONFLICT' ? 'CONFLICT'
+    : receipt?.result === 'UNKNOWN' ? 'UNKNOWN'
+      : receipt?.result === 'BLOCKED' ? 'BLOCKER'
+        : receipt?.result === 'FAIL' ? 'FAIL' : 'WARN';
+  return [{
+    subject: receipt?.primitiveId || 'mcl:repository-worktree-patch',
+    reasonCode,
+    severity,
+    constraint: 'IMPLEMENTATION_ATTENTION',
+    nextPhase: receipt?.nextLegalAction || 'NEEDS_SEMANTIC_DECISION',
+    locator,
+  }];
+}
+function projectPatchOwnerStopView({ctx, child, patchReceipt, deps = {}}) {
+  const persistChild = deps.persistPatchOwnerArtifacts || patchOwner.persistAgentArtifacts;
+  const childLocators = persistChild(patchReceipt, child, deps.patchOwnerArtifactDeps || {});
+  const childOutput = patchOwner.ownerDecisionOutput(patchReceipt);
+  const counters = [
+    {name: 'changed_file_count', value: patchOwnerCounter(patchReceipt, 'changed_paths') || 0},
+    {name: 'pr_created', value: 0},
+    {name: 'commit_created', value: patchOwnerCounter(patchReceipt, 'commit_created') || 0},
+  ];
+  for (const name of [
+    'validation_passed', 'validation_failed', 'validation_infra', 'validation_not_run',
+  ]) {
+    const value = patchOwnerCounter(patchReceipt, name);
+    if (value !== null) counters.push({name, value});
+  }
+  const receipt = executionReceipt.projectExecutionReceipt({
+    schemaVersion: 2,
+    operationId: 'mcl-repository-implementation:' + child.manifestId,
+    primitiveId: 'mcl:known-owner-repository-implementation:s',
+    sourceIdentity: {
+      kind: 'WORK_PACKET', locator: ctx.packetRef, identity: ctx.context.packetBodySha256,
+    },
+    executionSurface: 'MCL:S',
+    stage: 'IMPLEMENTATION_PR',
+    executionLifecycle: patchReceipt.executionLifecycle,
+    attentionDisposition: patchReceipt.attentionDisposition,
+    result: patchReceipt.result,
+    proofScope: 'BOUND_REPOSITORY_IMPLEMENTATION_PR_CHILD_STOP',
+    steps: [
+      {name: 'parent-stage-entry', result: 'PASS',
+        evidenceLocator: commentUrl(ctx.packet, ctx.parentHandoffComment)},
+      {name: 'repository-patch-owner', result: patchReceipt.result,
+        evidenceLocator: childLocators.reportLocator},
+    ],
+    counters,
+    affectedFiles: patchReceipt.affectedFiles || [],
+    artifactLocators: [
+      childLocators.receiptLocator,
+      childLocators.reportLocator,
+      ...(patchReceipt.artifactLocators || []),
+    ],
+    reasonCodes: patchReceipt.reasonCodes || [],
+    requiredUnknowns: patchReceipt.requiredUnknowns || [],
+    conflicts: patchReceipt.conflicts || [],
+    blockers: patchReceipt.blockers || [],
+    exitCode: patchReceipt.exitCode,
+    stderrTail: null,
+    nextLegalAction: patchReceipt.nextLegalAction,
+  });
+  const report = {
+    schemaVersion: 1,
+    mode: 'MCL_REPOSITORY_IMPLEMENTATION_REPORT',
+    packetRef: ctx.packetRef,
+    childManifestId: child.manifestId,
+    childReceiptDigest: patchReceipt.receiptDigest,
+    childReceiptLocator: childLocators.receiptLocator,
+    childReportLocator: childLocators.reportLocator,
+    result: receipt.result,
+    attentionDisposition: receipt.attentionDisposition,
+    reasonCodes: receipt.reasonCodes,
+    output: childOutput,
+    nextLegalAction: receipt.nextLegalAction,
+    authority: {...FALSE_AUTHORITY},
+  };
+  const persist = deps.persistArtifacts || persistArtifacts;
+  const locators = persist(child, report, receipt);
+  const locator = childOutput.validationArtifact || childLocators.reportLocator;
+  return agentDecisionView.projectAgentDecisionView({
+    receipt,
+    phase: 'IMPLEMENTATION_PR',
+    output: {
+      stageOwner: patchOwner.STAGE_OWNER_ID,
+      mutationPrimitive: patchOwner.MUTATION_PRIMITIVE_ID,
+      ...childOutput,
+    },
+    attention: patchOwnerAttention(patchReceipt, locator),
+    receiptLocator: locators.receiptLocator,
+    reportLocator: locators.reportLocator,
+  });
 }
 function currentGitHead(manifest, spawn = childProcess.spawnSync) {
   const local = runGit(manifest.workspace.worktree, ['rev-parse', 'HEAD'], spawn);
@@ -398,7 +503,34 @@ function persistArtifacts(manifest, report, receipt) {
     receiptPath,
   };
 }
-function buildStageReceipt({ctx, child, commit, pr, locators, comments}) {
+function validationSummaryOutput(patchReceipt) {
+  const child = patchOwner.ownerDecisionOutput(patchReceipt);
+  const output = {};
+  for (const key of [
+    'validationPassed', 'validationFailed', 'validationInfra', 'validationNotRun',
+    'validationArtifact',
+  ]) {
+    if (child[key] !== undefined) output[key] = child[key];
+  }
+  return output;
+}
+function validationSummaryCounters(patchReceipt) {
+  const child = patchOwner.ownerDecisionOutput(patchReceipt);
+  const counters = [];
+  for (const [key, name] of [
+    ['validationPassed', 'validation_passed'],
+    ['validationFailed', 'validation_failed'],
+    ['validationInfra', 'validation_infra'],
+    ['validationNotRun', 'validation_not_run'],
+  ]) {
+    if (Number.isSafeInteger(child[key]) && child[key] >= 0) {
+      counters.push({name, value: child[key]});
+    }
+  }
+  return counters;
+}
+function buildStageReceipt({ctx, child, commit, pr, locators, comments, patchReceipt}) {
+  const validationOutput = validationSummaryOutput(patchReceipt);
   return executionReceipt.projectExecutionReceipt({
     schemaVersion: 2,
     operationId: 'mcl-repository-implementation:' + child.manifestId,
@@ -423,6 +555,7 @@ function buildStageReceipt({ctx, child, commit, pr, locators, comments}) {
       {name: 'changed_file_count', value: pr.changed.length},
       {name: 'pr_created', value: 1},
       {name: 'commit_created', value: 1},
+      ...validationSummaryCounters(patchReceipt),
     ],
     affectedFiles: pr.changed,
     artifactLocators: [
@@ -430,6 +563,7 @@ function buildStageReceipt({ctx, child, commit, pr, locators, comments}) {
       commentUrl(ctx.packet, comments.childManifest), commentUrl(ctx.packet, comments.childHandoff),
       commentUrl(ctx.packet, comments.childReceipt), commentUrl(ctx.packet, comments.parentReceipt),
       locators.reportLocator,
+      ...(validationOutput.validationArtifact ? [validationOutput.validationArtifact] : []),
     ],
     reasonCodes: [],
     requiredUnknowns: [],
@@ -544,7 +678,10 @@ async function executePrepared(ctx, inputs, deps = {}) {
       root: ROOT,
       checkpointSink,
     });
-    requirePatchOwnerPass(patchReceipt);
+    if (!patchOwnerPassState(patchReceipt)) {
+      return projectPatchOwnerStopView({ctx, child, patchReceipt, deps});
+    }
+    const validationOutput = validationSummaryOutput(patchReceipt);
     await (deps.guardCurrent || patchOwner.guardCurrent)({
       repo: REPO, manifest: child, handoff: childHandoff,
       holderSecret: secret, env, runner: operatorRunner, fetchImpl,
@@ -605,6 +742,9 @@ async function executePrepared(ctx, inputs, deps = {}) {
         `pr:#${pr.number}`,
         `receipt:mcl-repository-patch-owner:${child.manifestId}`,
         patchOwner.VALIDATION_CONTRACT_REF_PREFIX + validationBinding.profile.contractDigest,
+        patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
+          + patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest,
+        ...(validationOutput.validationArtifact ? [validationOutput.validationArtifact] : []),
       ],
       observedRefs: [`commit:${ctx.mainSha}`, `commit:${commit}`, `pr:#${pr.number}`],
       leaseDisposition: 'RELEASED',

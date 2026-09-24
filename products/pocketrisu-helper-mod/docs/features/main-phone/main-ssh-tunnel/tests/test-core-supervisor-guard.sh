@@ -162,9 +162,9 @@ anchor_after="$(wait_for_new_pid "$STATE/anchor.pid" "$anchor_before")" || fail 
 [ "$anchor_after" != "$anchor_before" ] || fail "anchor pid did not change"
 
 target_before="$(cat "$TEST_STATE/runsv.count")"
+touch "$SERVICE/down"
 stop_pidfile "$TEST_STATE/runsv.pid"
 rm -f "$SERVICE/supervisor-up"
-touch "$SERVICE/down"
 sleep 3
 [ "$(cat "$TEST_STATE/runsv.count")" = "$target_before" ] || fail "ring overrode target down"
 rm -f "$SERVICE/down"

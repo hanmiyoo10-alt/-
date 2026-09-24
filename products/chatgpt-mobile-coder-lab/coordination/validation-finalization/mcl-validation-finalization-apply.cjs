@@ -28,6 +28,46 @@ const EXPECTED_EFFECTS = Object.freeze([
   'CANONICAL_VALIDATION_MERGE_RECEIPT',
   'COORDINATION_FINALIZATION',
 ]);
+const TARGET_2786 = Object.freeze({
+  packet: 2786,
+  packetRef: '#2786',
+  pr: 2878,
+  candidate: '81049faef1f4a029af42b3be4d4146341b5167da',
+  merge: '0a25b7691bf5d768aced94403b32ebdb50f12cc3',
+  workspaceManifestId: '60ecd6edd15f59ad81bcaf8bee601490c12f94734ff1111b338eaff2e5048756',
+  workspaceManifestPhaseId: '2786-implementation-pr-stage-entry',
+  workspaceLeaseId: 'd116ebcba38d2ee167a5ea5351422d93c2d39f60e4e8e53c349429165286a800',
+  workspaceAcquiredGeneration: 530,
+  workspaceBranch: 'server/mcl-packet-2786',
+  workspaceWorktree: '/root/nyang-worktrees/mcl-packet-2786',
+  implementationReceiptDigest:
+    'f56874a0c8b0a4a9c037d1e4cd490a01a6d293d1a0fe608eacc0a975e73160aa',
+  requiredCoordinationGates: Object.freeze([
+    'implementation-coordination-readback',
+    'implementation-d013-release',
+  ]),
+});
+const EXPECTED_EFFECTS_2786 = Object.freeze([
+  'CANONICAL_VALIDATION_MERGE_RECEIPT',
+]);
+const PROFILES = Object.freeze({
+  '#2463': Object.freeze({
+    target: TARGET,
+    mode: 'VALIDATION_D014',
+    expectedEffects: EXPECTED_EFFECTS,
+  }),
+  '#2786': Object.freeze({
+    target: TARGET_2786,
+    mode: 'IMPLEMENTATION_COORDINATION',
+    expectedEffects: EXPECTED_EFFECTS_2786,
+  }),
+});
+
+function profileFor(packetRef) {
+  const profile = PROFILES[packetRef];
+  if (!profile) fail('BLOCKED', 'PACKET_NOT_REVIEWED_TARGET');
+  return profile;
+}
 
 const handoff = require(path.join(ROOT,
   'products/chatgpt-mobile-coder-lab/coordination/task-handoff.cjs'));
@@ -71,12 +111,12 @@ function same(a, b) {
 function unique(values) {
   return [...new Set(values)].sort();
 }
-function output(status, extras = {}, reasonCodes = []) {
+function output(status, extras = {}, reasonCodes = [], packetRef = TARGET.packetRef) {
   return {
     schemaVersion: 1,
     mode: 'MCL_VALIDATION_FINALIZATION_APPLY',
     validity: 'VALID',
-    packetRef: TARGET.packetRef,
+    packetRef,
     status,
     reasonCodes: unique(reasonCodes),
     ...extras,
@@ -339,6 +379,162 @@ function readLedgerState(runner = defaultRunner) {
 function pathScopeDigest(paths) {
   return 'sha256:' + sha256(JSON.stringify([...paths]));
 }
+
+function coordinationGatesProven(receipt, target = TARGET_2786) {
+  const pass = new Set((receipt.requiredGates || [])
+    .filter((row) => row.result === 'PASS')
+    .map((row) => row.name));
+  const missing = target.requiredCoordinationGates.filter((name) => !pass.has(name));
+  if (missing.length) {
+    fail('BLOCKED', ...missing.map((name) =>
+      'IMPLEMENTATION_COORDINATION_GATE_NOT_PASS:' + name));
+  }
+  return true;
+}
+function select2786ImplementationReceipt(stageRows, pr, target = TARGET_2786) {
+  const matches = stageRows.filter(({receipt}) =>
+    receipt.stage === 'IMPLEMENTATION_PR'
+    && receipt.packetNumber === target.packet
+    && receipt.status === 'PASS'
+    && receipt.nextLegalAction === 'VALIDATION_MERGE'
+    && receipt.receiptDigest === target.implementationReceiptDigest
+    && receipt.authorityRefs.some((row) =>
+      row.kind === 'PR' && row.locator === 'pr:#' + target.pr
+      && row.identity === target.candidate));
+  if (matches.length !== 1) {
+    fail(matches.length ? 'CONFLICT' : 'UNKNOWN',
+      matches.length ? 'IMPLEMENTATION_RECEIPT_AMBIGUOUS'
+        : 'IMPLEMENTATION_RECEIPT_MISSING');
+  }
+  if (pr?.head?.sha !== target.candidate) fail('CONFLICT', 'PR_HEAD_CONFLICT');
+  coordinationGatesProven(matches[0].receipt, target);
+  return matches[0];
+}
+function select2786WorkspaceManifest(comments, target = TARGET_2786) {
+  const exactToken = '"manifestId": "' + target.workspaceManifestId + '"';
+  const candidates = comments.filter((comment) => {
+    const body = commentBody(comment);
+    return body.includes('mcl-task-manifest:v1') && body.includes(exactToken);
+  });
+  if (candidates.length !== 1) fail(candidates.length ? 'CONFLICT' : 'UNKNOWN',
+    candidates.length ? 'WORKSPACE_MANIFEST_AMBIGUOUS' : 'WORKSPACE_MANIFEST_MISSING');
+  const parsed = handoff.parseManifest(commentBody(candidates[0]));
+  if (parsed.status !== 'VALID') fail(
+    parsed.status === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN',
+    'WORKSPACE_MANIFEST_INVALID');
+  const manifest = parsed.value;
+  if (manifest.manifestId !== target.workspaceManifestId
+      || manifest.packetRef !== target.packetRef
+      || manifest.phaseId !== target.workspaceManifestPhaseId
+      || manifest.phaseClass !== 'REPOSITORY_MUTATION'
+      || manifest.route !== 'S'
+      || manifest.executor !== 'S'
+      || manifest.leaseRequirement !== 'REQUIRED'
+      || manifest.leaseEvidence?.leaseId !== target.workspaceLeaseId
+      || manifest.leaseEvidence?.acquiredGeneration !== target.workspaceAcquiredGeneration
+      || manifest.workspace?.kind !== 'repository'
+      || manifest.workspace?.branch !== target.workspaceBranch
+      || manifest.workspace?.worktree !== target.workspaceWorktree) {
+    fail('CONFLICT', 'WORKSPACE_MANIFEST_IDENTITY_CONFLICT');
+  }
+  return {comment: candidates[0], manifest, text: commentBody(candidates[0])};
+}
+function read2786Workspace(manifest, spawn = childProcess.spawnSync, target = TARGET_2786) {
+  const inspected = holderOwner.inspectWorkspace(manifest);
+  if (!inspected.ok || !inspected.holderPath) {
+    fail('BLOCKED', ...(inspected.reasonCodes || ['WORKSPACE_INSPECT_FAILED']));
+  }
+  const branch = runGitRead(target.workspaceWorktree, ['branch', '--show-current'], spawn);
+  const head = runGitRead(target.workspaceWorktree, ['rev-parse', 'HEAD'], spawn);
+  const dirty = runGitRead(target.workspaceWorktree,
+    ['status', '--porcelain=v1', '--untracked-files=all'], spawn);
+  if (branch !== target.workspaceBranch || head !== target.candidate) {
+    fail('CONFLICT', 'WORKSPACE_IDENTITY_CONFLICT');
+  }
+  if (dirty) fail('BLOCKED', 'WORKSPACE_NOT_CLEAN');
+  const holder = holderOwner.readHolder(inspected.holderPath);
+  if (!holder.missing) {
+    if (!holder.ok) fail('CONFLICT', 'HOLDER_STATE_CONFLICT');
+    fail('BLOCKED', '2786_HOLDER_PRESENT_NOT_AUTHORIZED');
+  }
+  return {state: 'CLEAN', holderState: 'ABSENT', holderPath: inspected.holderPath};
+}
+function read2786LedgerState(runner = defaultRunner, target = TARGET_2786) {
+  const ledger = readIssue(2352, runner);
+  const parsed = taskLease.parseLedger(ledger.body || '');
+  if (!parsed.ok || parsed.state.status !== 'ACTIVE') fail('UNKNOWN', 'LEDGER_STATE_INVALID');
+  const packetLeases = parsed.state.activeLeases
+    .filter((item) => item.packetRef === target.packetRef);
+  if (packetLeases.length) fail('BLOCKED', 'TARGET_PACKET_LEASE_STILL_ACTIVE');
+  return {
+    body: ledger.body || '',
+    generation: parsed.state.generation,
+    targetPacketLeaseAbsent: true,
+  };
+}
+function validationStageState2786(stageRows, implReceipt, pr, target = TARGET_2786) {
+  const rows = stageRows.filter(({receipt}) =>
+    receipt.stage === 'VALIDATION_MERGE' && receipt.packetNumber === target.packet);
+  if (!rows.length) return {status: 'ABSENT', receipt: null};
+  const exact = [];
+  for (const row of rows) {
+    const receipt = row.receipt;
+    const hasPr = receipt.authorityRefs.some((item) =>
+      item.kind === 'PR' && item.locator === 'pr:#' + target.pr
+      && item.identity === target.candidate);
+    const hasMerge = receipt.authorityRefs.some((item) =>
+      item.kind === 'COMMIT' && item.identity === target.merge);
+    if (receipt.status === 'PASS'
+        && receipt.nextLegalAction === 'POSTMERGE_CONVERGENCE'
+        && hasPr && hasMerge
+        && same(receipt.scope.paths, implReceipt.scope.paths)
+        && receipt.scope.diffRequired === true
+        && receipt.scope.diffIdentity === implReceipt.scope.diffIdentity) {
+      exact.push(row);
+    } else {
+      fail('CONFLICT', 'VALIDATION_STAGE_RECEIPT_CONFLICT');
+    }
+  }
+  const byDigest = new Map(exact.map((row) => [row.receipt.receiptDigest, row]));
+  if (byDigest.size !== 1) fail('CONFLICT', 'VALIDATION_STAGE_RECEIPT_AMBIGUOUS');
+  if (pr.merge_commit_sha !== target.merge) fail('CONFLICT', 'PR_MERGE_IDENTITY_CONFLICT');
+  return {status: 'PASS', receipt: [...byDigest.values()][0].receipt};
+}
+function create2786LiveContext(packetRef, deps = {}) {
+  const target = TARGET_2786;
+  if (packetRef !== target.packetRef) fail('BLOCKED', 'PACKET_NOT_2786_TARGET');
+  const runner = deps.runner || defaultRunner;
+  const spawn = deps.spawn || childProcess.spawnSync;
+  const issue = readIssue(target.packet, runner);
+  if (issue.state !== 'open') fail('BLOCKED', 'PACKET_NOT_OPEN');
+  if (!issue.body.includes('Current stage: `VALIDATION_MERGE`')) {
+    fail('BLOCKED', 'PACKET_VALIDATION_STAGE_NOT_COMPATIBLE');
+  }
+  const comments = readComments(target.packet, runner);
+  const pr = readPr(target.pr, runner);
+  if (pr.state !== 'closed' || !pr.merged_at
+      || pr.head?.sha !== target.candidate
+      || pr.merge_commit_sha !== target.merge) {
+    fail('CONFLICT', 'MERGED_PR_IDENTITY_CONFLICT');
+  }
+  const stageRows = stageReceiptsFromComments(comments);
+  const impl = select2786ImplementationReceipt(stageRows, pr, target);
+  const manifestRow = select2786WorkspaceManifest(comments, target);
+  return {
+    target,
+    packet: target.packet,
+    packetRef: target.packetRef,
+    packetBodyDigest: sha256(issue.body),
+    runner,
+    spawn,
+    pr,
+    implReceipt: impl.receipt,
+    implCommentId: impl.comment.id,
+    workspaceManifest: manifestRow.manifest,
+    workspaceManifestText: manifestRow.text,
+    coordinationProof: 'PROVEN',
+  };
+}
 function inspectorEvidence(ctx, mutable) {
   const diff = 'sha256:' + ctx.implReceipt.scope.diffIdentity;
   const scopeDigest = pathScopeDigest(ctx.implReceipt.scope.paths);
@@ -403,6 +599,98 @@ function inspectorEvidence(ctx, mutable) {
       'manifest:' + ctx.manifest.manifestId,
     ],
   };
+}
+
+function inspectorEvidence2786(ctx, mutable) {
+  const target = ctx.target;
+  const diff = 'sha256:' + ctx.implReceipt.scope.diffIdentity;
+  const scopeDigest = pathScopeDigest(ctx.implReceipt.scope.paths);
+  const completeCoordination = ctx.coordinationProof === 'PROVEN'
+    && mutable.ledger.targetPacketLeaseAbsent
+    && mutable.workspace.holderState === 'ABSENT';
+  const stage = mutable.validationStage.status === 'PASS'
+    ? {
+      state: 'PASS',
+      packetRef: target.packetRef,
+      prNumber: target.pr,
+      candidateHead: target.candidate,
+      mergeCommit: target.merge,
+      diffIdentity: diff,
+      pathScopeDigest: scopeDigest,
+      nextLegalAction: 'POSTMERGE_CONVERGENCE',
+    }
+    : {
+      state: 'ABSENT',
+      packetRef: null,
+      prNumber: null,
+      candidateHead: null,
+      mergeCommit: null,
+      diffIdentity: null,
+      pathScopeDigest: null,
+      nextLegalAction: 'UNKNOWN',
+    };
+  return {
+    schemaVersion: 1,
+    mode: 'VALIDATION_FINALIZATION_EVIDENCE',
+    subject: 'issue:' + target.packetRef,
+    packetRef: target.packetRef,
+    packetState: 'EXACT',
+    validationStageState: 'COMPATIBLE',
+    expected: {
+      prNumber: target.pr,
+      candidateHead: target.candidate,
+      diffIdentity: diff,
+      pathScopeDigest: scopeDigest,
+    },
+    mergeEvidence: {
+      state: 'MERGED',
+      prNumber: target.pr,
+      candidateHead: target.candidate,
+      mergeCommit: target.merge,
+      diffIdentity: diff,
+      pathScopeDigest: scopeDigest,
+    },
+    validationEvidence: {
+      state: 'PASS',
+      candidateHead: target.candidate,
+      diffIdentity: diff,
+    },
+    stageReceipt: stage,
+    coordinationState: completeCoordination ? 'COMPLETE' : 'UNKNOWN',
+    workspaceState: mutable.workspace.state,
+    requiredUnknownState: 'NONE',
+    sourceRefs: [
+      'issue:' + target.packetRef,
+      'pr:#' + target.pr,
+      'receipt:' + ctx.implReceipt.receiptDigest,
+      'manifest:' + ctx.workspaceManifest.manifestId,
+    ],
+  };
+}
+function read2786MutableState(ctx) {
+  const target = ctx.target;
+  const issue = readIssue(target.packet, ctx.runner);
+  if (sha256(issue.body) !== ctx.packetBodyDigest) fail('BLOCKED', 'PACKET_BODY_DRIFT');
+  const comments = readComments(target.packet, ctx.runner);
+  const stageRows = stageReceiptsFromComments(comments);
+  const ledger = read2786LedgerState(ctx.runner, target);
+  const workspace = read2786Workspace(ctx.workspaceManifest, ctx.spawn, target);
+  const validationStage = validationStageState2786(
+    stageRows, ctx.implReceipt, ctx.pr, target);
+  const mutable = {
+    comments,
+    ledger,
+    workspace,
+    completion: {
+      status: 'NOT_APPLICABLE',
+      receiptIds: [],
+      representativeReceiptId: null,
+    },
+    validationStage,
+  };
+  const evidence = inspectorEvidence2786(ctx, mutable);
+  const decision = finalization.projectValidationFinalization(evidence);
+  return {...mutable, evidence, decision};
 }
 
 function createLiveContext(packetRef, deps = {}) {
@@ -549,6 +837,53 @@ function buildValidationStageText(ctx, completion) {
   if (receipt.status !== 'PASS') fail('UNKNOWN', 'STAGE_RECEIPT_BUILD_NOT_PASS');
   return {text: stageReceipt.renderStageReceipt(receipt), receipt};
 }
+function build2786ValidationStageText(ctx) {
+  const target = ctx.target;
+  const receipt = stageReceipt.projectStageReceipt({
+    schemaVersion: 1,
+    packetNumber: target.packet,
+    stage: 'VALIDATION_MERGE',
+    authorityRefs: [
+      {kind: 'COMMIT', locator: 'candidate-head', identity: target.candidate},
+      {kind: 'COMMIT', locator: 'merge:#' + target.pr, identity: target.merge},
+      {kind: 'PR', locator: 'pr:#' + target.pr, identity: target.candidate},
+      ...ctx.implReceipt.authorityRefs
+        .filter((row) => row.kind === 'WORKFLOW_RUN'),
+    ],
+    requiredGates: [
+      {name: 'implementation-stage-receipt', result: 'PASS',
+        evidenceLocator: 'receipt:' + ctx.implReceipt.receiptDigest},
+      {name: 'implementation-coordination-converged', result: 'PASS',
+        evidenceLocator: 'receipt:' + ctx.implReceipt.receiptDigest},
+      {name: 'expected-head-merge', result: 'PASS',
+        evidenceLocator: 'commit:' + target.merge},
+      {name: 'current-packet-lease-absence', result: 'PASS',
+        evidenceLocator: 'issue:#2352'},
+      {name: 'holder-absent', result: 'PASS',
+        evidenceLocator: 'receipt:mcl-workspace-holder:absent'},
+      {name: 'workspace-clean', result: 'PASS',
+        evidenceLocator: 'receipt:mcl-workspace-clean:#2786'},
+    ],
+    scope: {
+      paths: ctx.implReceipt.scope.paths,
+      diffRequired: true,
+      diffIdentity: ctx.implReceipt.scope.diffIdentity,
+      diffEvidenceLocator: 'pr:#' + target.pr,
+    },
+    proof: [
+      {term: 'IMPLEMENTED', evidenceLocator: 'commit:' + target.candidate},
+      {term: 'CONTRACT_PROVEN',
+        evidenceLocator: 'receipt:' + ctx.implReceipt.receiptDigest},
+    ],
+    requiredUnknowns: [],
+    conflicts: [],
+    blockers: [],
+    dependencies: [],
+    nextLegalAction: 'POSTMERGE_CONVERGENCE',
+  });
+  if (receipt.status !== 'PASS') fail('UNKNOWN', 'STAGE_RECEIPT_BUILD_NOT_PASS');
+  return {text: stageReceipt.renderStageReceipt(receipt), receipt};
+}
 function cleanupHolderLive(ctx, mutable) {
   if (mutable.workspace.holderState === 'ABSENT') return {cleaned: 0};
   if (mutable.workspace.holderState !== 'PRESENT_EXACT') {
@@ -608,8 +943,15 @@ function effectPairExact(decision) {
     && same([...decision.requiredEffectClasses].sort(), [...EXPECTED_EFFECTS].sort())
     && decision.nextLegalAction === 'FIXED_FINALIZATION_EFFECT_REVIEW';
 }
+function effectPair2786Exact(decision) {
+  return decision.finalizationDisposition === 'FINALIZATION_REQUIRED'
+    && decision.result === 'PASS'
+    && decision.attentionDisposition === 'ACTION_REQUIRED'
+    && same([...decision.requiredEffectClasses].sort(), [...EXPECTED_EFFECTS_2786].sort())
+    && decision.nextLegalAction === 'FIXED_FINALIZATION_EFFECT_REVIEW';
+}
 
-function inspectPacket(packetRef, deps = {}) {
+function inspect2463Packet(packetRef, deps = {}) {
   const createContext = deps.createContext || createLiveContext;
   const readState = deps.readState || readMutableState;
   const ctx = createContext(packetRef, deps);
@@ -624,7 +966,7 @@ function inspectPacket(packetRef, deps = {}) {
     },
   });
 }
-function applyPacket(packetRef, deps = {}) {
+function apply2463Packet(packetRef, deps = {}) {
   const createContext = deps.createContext || createLiveContext;
   const readState = deps.readState || readMutableState;
   const cleanupHolder = deps.cleanupHolder || cleanupHolderLive;
@@ -712,6 +1054,108 @@ function applyPacket(packetRef, deps = {}) {
     nextLegalAction: post.nextLegalAction,
   });
 }
+
+function inspect2786Packet(packetRef, deps = {}) {
+  const createContext = deps.createContext || create2786LiveContext;
+  const readState = deps.readState || read2786MutableState;
+  const ctx = createContext(packetRef, deps);
+  const state = readState(ctx, deps);
+  return output(state.decision.result, {
+    operation: 'inspect',
+    ...decisionSummary(state.decision),
+    effects: {
+      holderCleaned: 0,
+      d014Published: 0,
+      stageReceiptPublished: 0,
+    },
+  }, [], TARGET_2786.packetRef);
+}
+function apply2786Packet(packetRef, deps = {}) {
+  const createContext = deps.createContext || create2786LiveContext;
+  const readState = deps.readState || read2786MutableState;
+  const publishExact = deps.publishExact || ((packet, body, ctx) =>
+    postExactComment(packet, body, ctx.runner));
+  const makeStage = deps.buildValidationStageText || build2786ValidationStageText;
+
+  const ctx = createContext(packetRef, deps);
+  let state = readState(ctx, deps);
+  const pre = state.decision;
+  const effects = {
+    holderCleaned: 0,
+    d014Published: 0,
+    stageReceiptPublished: 0,
+  };
+
+  if (pre.finalizationDisposition === 'ALREADY_FINALIZED'
+      && pre.result === 'PASS'
+      && pre.nextLegalAction === 'POSTMERGE_CONVERGENCE'
+      && pre.requiredEffectClasses.length === 0) {
+    return output('PASS', {
+      operation: 'apply',
+      pre: decisionSummary(pre),
+      post: decisionSummary(pre),
+      finalizationDisposition: 'ALREADY_FINALIZED',
+      result: 'PASS',
+      effects,
+      nextLegalAction: 'POSTMERGE_CONVERGENCE',
+    }, [], TARGET_2786.packetRef);
+  }
+
+  if (!effectPair2786Exact(pre)) {
+    fail(pre.result === 'CONFLICT' ? 'CONFLICT' : 'BLOCKED',
+      'PRE_EFFECT_FINALIZATION_DISPOSITION_NOT_2786_PAIR');
+  }
+  if (state.workspace.holderState !== 'ABSENT') {
+    fail('BLOCKED', '2786_HOLDER_PRESENT_NOT_AUTHORIZED');
+  }
+  if (state.workspace.state !== 'CLEAN') fail('BLOCKED', 'WORKSPACE_NOT_CLEAN');
+  if (state.completion.status !== 'NOT_APPLICABLE') {
+    fail('CONFLICT', '2786_D014_COMPLETION_MUST_BE_NOT_APPLICABLE');
+  }
+
+  if (state.validationStage.status === 'ABSENT') {
+    const built = makeStage(ctx, state, deps);
+    const posted = publishExact(TARGET_2786.packet, built.text, ctx, deps);
+    effects.stageReceiptPublished += posted.written || 0;
+    state = readState(ctx, deps);
+  }
+  if (state.validationStage.status !== 'PASS') {
+    fail('BLOCKED', 'VALIDATION_STAGE_RECEIPT_NOT_PROVEN');
+  }
+
+  const post = state.decision;
+  if (post.finalizationDisposition !== 'ALREADY_FINALIZED'
+      || post.result !== 'PASS'
+      || post.attentionDisposition !== 'COMPLETE'
+      || post.requiredEffectClasses.length !== 0
+      || post.nextLegalAction !== 'POSTMERGE_CONVERGENCE') {
+    fail(post.result === 'CONFLICT' ? 'CONFLICT' : 'BLOCKED',
+      'POST_EFFECT_REINSPECT_NOT_ALREADY_FINALIZED');
+  }
+
+  return output('PASS', {
+    operation: 'apply',
+    pre: decisionSummary(pre),
+    post: decisionSummary(post),
+    finalizationDisposition: post.finalizationDisposition,
+    result: post.result,
+    effects,
+    nextLegalAction: post.nextLegalAction,
+  }, [], TARGET_2786.packetRef);
+}
+function inspectPacket(packetRef, deps = {}) {
+  const profile = profileFor(packetRef);
+  return profile.mode === 'IMPLEMENTATION_COORDINATION'
+    ? inspect2786Packet(packetRef, deps)
+    : inspect2463Packet(packetRef, deps);
+}
+function applyPacket(packetRef, deps = {}) {
+  const profile = profileFor(packetRef);
+  return profile.mode === 'IMPLEMENTATION_COORDINATION'
+    ? apply2786Packet(packetRef, deps)
+    : apply2463Packet(packetRef, deps);
+}
+
 function parseArgs(argv = process.argv.slice(2)) {
   const command = argv[0];
   if (!['inspect', 'apply'].includes(command)) throw new Error('COMMAND_UNSUPPORTED');
@@ -725,7 +1169,7 @@ function parseArgs(argv = process.argv.slice(2)) {
     if (values[name] !== undefined) throw new Error('ARGUMENT_DUPLICATE:' + name);
     values[name] = value;
   }
-  if (values.packet !== TARGET.packetRef) throw new Error('PACKET_NOT_V1_TARGET');
+  if (!PROFILES[values.packet]) throw new Error('PACKET_NOT_REVIEWED_TARGET');
   if (!['agent-view', 'json'].includes(values.format)) throw new Error('FORMAT_UNSUPPORTED');
   return {command, packetRef: values.packet, format: values.format};
 }
@@ -760,7 +1204,7 @@ function render(result, format) {
     authority: {...FALSE_AUTHORITY},
   };
 }
-function errorResult(error) {
+function errorResult(error, packetRef = TARGET.packetRef) {
   if (error instanceof ApplyError) {
     return output(error.kind, {
       operation: null,
@@ -775,7 +1219,7 @@ function errorResult(error) {
       nextLegalAction: error.kind === 'CONFLICT'
         ? 'SEMANTIC_REVIEW_REQUIRED'
         : 'TARGETED_DRILLDOWN_REQUIRED',
-    }, error.reasonCodes);
+    }, error.reasonCodes, packetRef);
   }
   return output('UNKNOWN', {
     operation: null,
@@ -788,7 +1232,7 @@ function errorResult(error) {
       stageReceiptPublished: 0,
     },
     nextLegalAction: 'TARGETED_DRILLDOWN_REQUIRED',
-  }, ['RUNTIME_ERROR']);
+  }, ['RUNTIME_ERROR'], packetRef);
 }
 function runCli(argv = process.argv.slice(2), deps = {}) {
   let args;
@@ -799,7 +1243,7 @@ function runCli(argv = process.argv.slice(2), deps = {}) {
       ? inspectPacket(args.packetRef, deps)
       : applyPacket(args.packetRef, deps);
   } catch (error) {
-    result = errorResult(error);
+    result = errorResult(error, args?.packetRef || TARGET.packetRef);
     args = args || {format: 'json'};
   }
   const rendered = render(result, args.format || 'json');
@@ -817,27 +1261,45 @@ if (require.main === module) {
 module.exports = {
   ApplyError,
   EXPECTED_EFFECTS,
+  EXPECTED_EFFECTS_2786,
   FALSE_AUTHORITY,
+  PROFILES,
   TARGET,
+  TARGET_2786,
+  apply2463Packet,
+  apply2786Packet,
   applyPacket,
+  build2786ValidationStageText,
   buildCompletionText,
   buildValidationStageText,
   completionState,
+  coordinationGatesProven,
+  create2786LiveContext,
   createLiveContext,
   decisionSummary,
+  effectPair2786Exact,
   effectPairExact,
   errorResult,
   inspectorEvidence,
+  inspectorEvidence2786,
+  inspect2463Packet,
+  inspect2786Packet,
   inspectPacket,
   parseArgs,
   pathScopeDigest,
   postExactComment,
+  read2786LedgerState,
+  read2786MutableState,
+  read2786Workspace,
   readMutableState,
   readReleaseEvidence,
   render,
   runCli,
+  select2786ImplementationReceipt,
+  select2786WorkspaceManifest,
   selectImplementationReceipt,
   selectTargetManifest,
   stageReceiptsFromComments,
   validationStageState,
+  validationStageState2786,
 };

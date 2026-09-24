@@ -30,10 +30,16 @@ stop_pidfile() {
     sleep 1
 }
 cleanup() {
-    stop_pidfile "$STATE/guard.pid"
-    stop_pidfile "$STATE/anchor.pid"
-    stop_pidfile "$TEST_STATE/runsv.pid"
     [ -n "$AMBIG_PID" ] && kill -TERM "$AMBIG_PID" 2>/dev/null || true
+    if command -v pkill >/dev/null 2>&1; then
+        pkill -TERM -f "$TMP/" 2>/dev/null || true
+        sleep 1
+        pkill -KILL -f "$TMP/" 2>/dev/null || true
+    else
+        stop_pidfile "$STATE/guard.pid"
+        stop_pidfile "$STATE/anchor.pid"
+        stop_pidfile "$TEST_STATE/runsv.pid"
+    fi
     rm -rf "$TMP"
 }
 trap cleanup EXIT INT TERM HUP

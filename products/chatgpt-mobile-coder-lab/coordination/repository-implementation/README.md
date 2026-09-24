@@ -65,11 +65,12 @@ The parent bytes are never rewritten.
 
 ## Validation binding
 
-V1 supports exactly two repository-reviewed semantic prepared-state validation profiles:
+V1 supports exactly three repository-reviewed semantic prepared-state validation profiles:
 
 ```text
 mcl:d014-completion-set:v1
 repo:validation-continuation:v1
+repo:published-progress-recovery:v1
 ```
 
 The coordinator derives the unique compatible profile from the exact normalized
@@ -92,6 +93,8 @@ The child D-014 manifest binds both the exact validation-request digest and the
 deterministic repository-owned validation-contract digest. The existing
 repository patch owner re-derives the profile contract and runs its fixed
 checks between PREPARE and COMMIT.
+
+The `repo:published-progress-recovery:v1` profile is admitted only for the exact six published-progress-recovery paths plus its two semantic surfaces, and runs the fixed classifier/adapter/session/recovery contract matrix owned by repository source.
 
 No arbitrary command, argv, executable, test path or working directory is
 caller-controlled.

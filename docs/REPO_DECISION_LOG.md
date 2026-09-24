@@ -120,3 +120,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2891)
 - Event ID: `bdb8eb52fccac77ab4feed34866d2c907888648cdb773c0b7a598bc3eb01f82d`
 <!-- canonical-main-doc-promoted:bdb8eb52fccac77ab4feed34866d2c907888648cdb773c0b7a598bc3eb01f82d -->
+
+### 2026-09-24 — MCL-IMPLEMENTATION-ATTENTION-CLOSE-V1 — #2895 natural-adoption proof disposition
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2903)
+- Event ID: `f2d0af345e416132fcc9aabbea2b919d391588d7cdec5539d2cdd0d624d0d42d`
+<!-- canonical-main-doc-promoted:f2d0af345e416132fcc9aabbea2b919d391588d7cdec5539d2cdd0d624d0d42d -->

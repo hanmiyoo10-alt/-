@@ -1,0 +1,450 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const childProcess = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const test = require('node:test');
+
+const owner = require('../terminal-residue-cleanup-owner.cjs');
+
+const REPO = 'hanmiyoo10-alt/-';
+const PACKET = 9001;
+const PR = 9002;
+
+function git(cwd, args) {
+  const result = childProcess.spawnSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    shell: false,
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    throw new Error('git failed: ' + args.join(' ') + '\n' + result.stderr);
+  }
+  return String(result.stdout || '').trim();
+}
+function terminalBody(state = 'DONE') {
+  return [
+    '<!-- canonical-main-work-packet:v1 -->',
+    '',
+    '# fixture packet',
+    '',
+    '## State',
+    '`' + state + '`',
+    '',
+    '## Interaction stage',
+    '- Current stage: `EXPERIMENT_CLOSE`',
+    '',
+  ].join('\n');
+}
+function opsBody(main) {
+  return [
+    '- STATE: `CLEAR`',
+    '- MAIN: `' + main + '` / Required PASS — run 12345',
+    'Convergence: `STABLE`',
+    'AUTHORITY: Production MATCH',
+    '- UNKNOWN: NONE',
+  ].join('\n');
+}
+function fixtureAdapter(f, overrides = {}) {
+  return {
+    async readMainAndOps() {
+      if (overrides.mainOps) return overrides.mainOps;
+      return {branch: {commit: {sha: f.merge}}, issue: {body: opsBody(f.merge)}};
+    },
+    async readPacket() {
+      if (overrides.packet) return overrides.packet;
+      return {number: PACKET, state: 'closed', body: terminalBody()};
+    },
+    async readPr() {
+      if (overrides.pr) return overrides.pr;
+      return {
+        number: PR,
+        state: 'closed',
+        merged: true,
+        base: {ref: 'main'},
+        head: {ref: f.branch, sha: f.candidate, repo: {full_name: REPO}},
+        merge_commit_sha: f.merge,
+      };
+    },
+    async compare(base, head) {
+      if (overrides.compare) return overrides.compare;
+      return {
+        status: base === head ? 'identical' : 'ahead',
+        base_commit: {sha: base},
+        merge_base_commit: {sha: base},
+      };
+    },
+    async openPrsForBranch() {
+      return overrides.openPrs || [];
+    },
+  };
+}
+function makeFixture() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'terminal-cleanup-'));
+  const remote = path.join(root, 'remote.git');
+  const control = path.join(root, 'control');
+  const worktreeRoot = path.join(root, 'worktrees');
+  const target = path.join(worktreeRoot, 'fixture');
+  fs.mkdirSync(worktreeRoot, {recursive: true});
+
+  git(root, ['init', '--bare', remote]);
+  git(root, ['clone', remote, control]);
+  git(control, ['config', 'user.email', 'fixture@example.invalid']);
+  git(control, ['config', 'user.name', 'Fixture']);
+  fs.writeFileSync(path.join(control, 'base.txt'), 'base\n');
+  git(control, ['add', 'base.txt']);
+  git(control, ['commit', '-m', 'base']);
+  git(control, ['branch', '-M', 'main']);
+  git(control, ['push', '-u', 'origin', 'main']);
+
+  const branch = 'server/fixture';
+  git(control, ['branch', branch]);
+  git(control, ['worktree', 'add', target, branch]);
+  fs.writeFileSync(path.join(target, 'feature.txt'), 'feature\n');
+  git(target, ['add', 'feature.txt']);
+  git(target, ['commit', '-m', 'feature']);
+  const candidate = git(target, ['rev-parse', 'HEAD']);
+  git(target, ['push', '-u', 'origin', branch]);
+
+  git(control, ['merge', '--no-ff', branch, '-m', 'merge feature']);
+  const merge = git(control, ['rev-parse', 'HEAD']);
+  git(control, ['push', 'origin', 'main']);
+
+  const gitDir = git(target, ['rev-parse', '--absolute-git-dir']);
+  const rows = [
+    ['validation-attention-evidence', 'inspect.receipt.json', '{"kind":"attention-receipt"}\n'],
+    ['validation-attention-evidence', 'inspect.report.json', '{"kind":"attention-report"}\n'],
+    ['validation-continuation-evidence', 'inspect.receipt.json', '{"kind":"continuation"}\n'],
+    ['validation-merge-evidence', 'inspect.receipt.json', '{"kind":"merge-inspect"}\n'],
+    ['validation-merge-evidence', 'finalize.receipt.json', '{"kind":"merge-finalize"}\n'],
+  ];
+  for (const [dir, suffix, content] of rows) {
+    const d = path.join(gitDir, dir);
+    fs.mkdirSync(d, {recursive: true, mode: 0o700});
+    fs.chmodSync(d, 0o700);
+    const p = path.join(d, 'packet-' + PACKET + '-pr-' + PR + '.' + suffix);
+    fs.writeFileSync(p, content, {mode: 0o600});
+    fs.chmodSync(p, 0o600);
+  }
+
+  const profile = {
+    controlRepo: control,
+    worktreeRoot,
+    remote: 'origin',
+    branchPrefix: 'server/',
+    permanentBranch: 'server/work',
+  };
+  return {root, remote, control, worktreeRoot, target, branch, candidate, merge, gitDir, profile};
+}
+function cleanupFixture(f) {
+  fs.rmSync(f.root, {recursive: true, force: true});
+}
+function inspect(f, overrides = {}) {
+  return owner.inspectTransaction({
+    packetNumber: PACKET,
+    prNumber: PR,
+    adapter: fixtureAdapter(f, overrides),
+    profile: f.profile,
+    runner: owner.commandResult,
+  });
+}
+function apply(f, overrides = {}) {
+  return owner.applyTransaction({
+    packetNumber: PACKET,
+    prNumber: PR,
+    adapter: fixtureAdapter(f, overrides),
+    profile: f.profile,
+    runner: owner.commandResult,
+  });
+}
+
+test('CLI is exact packet/pr plus format and literal apply only', () => {
+  assert.equal(owner.parseArgs(['inspect', '--packet', '#9', '--pr', '10']).operation, 'inspect');
+  assert.equal(owner.parseArgs(['apply', '--packet', '9', '--pr', '10', '--apply']).operation, 'apply');
+  assert.throws(() => owner.parseArgs(['apply', '--packet', '9', '--pr', '10']), /APPLY_FLAG_REQUIRED/);
+  assert.throws(() => owner.parseArgs([
+    'inspect', '--packet', '9', '--pr', '10', '--branch', 'server/x',
+  ]), /ARGUMENT_INVALID/);
+  assert.throws(() => owner.parseArgs([
+    'inspect', '--packet', '9', '--pr', '10', '--repo', 'other/repo',
+  ]), /ARGUMENT_INVALID/);
+});
+
+test('safe branch derivation permits one server tail and denies permanent/nested/other families', () => {
+  assert.equal(owner.safeTail('server/example-1'), 'example-1');
+  assert.equal(owner.safeTail('server/work'), null);
+  assert.equal(owner.safeTail('server/nested/path'), null);
+  assert.equal(owner.safeTail('mainphone/example'), null);
+  assert.equal(owner.safeTail('main'), null);
+});
+
+test('main/#485 mismatch remains UNKNOWN', () => {
+  assert.throws(() => owner.mainOpsFacts({
+    branch: {commit: {sha: 'a'.repeat(40)}},
+    issue: {body: opsBody('b'.repeat(40))},
+  }), (error) => error.kind === 'UNKNOWN' && error.reasonCodes.includes('MAIN_OPS_SETTLING'));
+});
+
+test('nonterminal packet blocks while native/body terminal disagreement conflicts', () => {
+  assert.throws(() => owner.packetFacts(
+    {number: PACKET, state: 'open', body: terminalBody('IN_PROGRESS')}, PACKET),
+  (error) => error.kind === 'BLOCKED' && error.reasonCodes.includes('PACKET_NOT_TERMINAL'));
+  assert.throws(() => owner.packetFacts(
+    {number: PACKET, state: 'closed', body: terminalBody('IN_PROGRESS')}, PACKET),
+  (error) => error.kind === 'CONFLICT'
+    && error.reasonCodes.includes('PACKET_NATIVE_LIFECYCLE_CONFLICT'));
+});
+
+test('PR admission blocks unmerged, non-server and permanent branch targets', () => {
+  const base = {
+    number: PR, state: 'closed', merged: true, base: {ref: 'main'},
+    head: {ref: 'server/x', sha: 'a'.repeat(40), repo: {full_name: REPO}},
+    merge_commit_sha: 'b'.repeat(40),
+  };
+  assert.throws(() => owner.prFacts({...base, merged: false}, PR),
+    (e) => e.kind === 'BLOCKED' && e.reasonCodes.includes('PR_NOT_MERGED'));
+  assert.throws(() => owner.prFacts({...base, head: {...base.head, ref: 'mainphone/x'}}, PR),
+    (e) => e.kind === 'BLOCKED' && e.reasonCodes.includes('PR_HEAD_BRANCH_UNSUPPORTED'));
+  assert.throws(() => owner.prFacts({...base, head: {...base.head, ref: 'server/work'}}, PR),
+    (e) => e.kind === 'BLOCKED' && e.reasonCodes.includes('PERMANENT_BRANCH_DENIED'));
+});
+
+test('deterministic historical #2875 manifest reproduces #2879 archive digest', () => {
+  const files = [
+    ['validation-attention-evidence/packet-2875-pr-2876.finalize.receipt.json',3441,'2e1738b2af224814a5d87cf98fedcda99bb78e2b8d9bb0bd7197832a7b49e76f'],
+    ['validation-attention-evidence/packet-2875-pr-2876.finalize.report.json',9324,'ec16624e6ee6e93ca05829e52e537981b8416e7eccd9c83d303c74ebc03ef0d1'],
+    ['validation-attention-evidence/packet-2875-pr-2876.inspect.receipt.json',3704,'e47084ea61cccd54515aa17c015471232804430a275c0079dc13552dab45bbce'],
+    ['validation-attention-evidence/packet-2875-pr-2876.inspect.report.json',6369,'15715467c6e2df4084fcc4fa57b0b078833d73c7dd4a7ccec4fd084471fc29cf'],
+    ['validation-continuation-evidence/packet-2875-pr-2876.inspect.receipt.json',2438,'036a3a017af060ed7127a9cb92525ccc83d15800f5c2da91f346cd0e4610ef63'],
+    ['validation-continuation-evidence/packet-2875-pr-2876.inspect.report.json',1624,'53be9d6647c3a75dadd3fbf36d023c6a68387e4432d14abbb6fcb1dd69ad90eb'],
+    ['validation-merge-evidence/packet-2875-pr-2876.finalize.receipt.json',2187,'f4f49e757211693c5dfe438024879c891332368eb65f8ec88553f22353c7bf6d'],
+    ['validation-merge-evidence/packet-2875-pr-2876.finalize.report.json',946,'8e2baecaddbc23c9be802e8aa97bfbb28af7d79de689c4f44a61272e5022cd47'],
+    ['validation-merge-evidence/packet-2875-pr-2876.inspect.receipt.json',4222,'a7cd4ac1475e530327806e29fea7390b1008fefc7cebf42322bbe5fdeab216a1'],
+    ['validation-merge-evidence/packet-2875-pr-2876.inspect.report.json',1871,'a71dd87061a769ebf56a548d9d31a14e9cf1f00bcc837ce0143d9d13ec6574bd'],
+  ].map(([p, bytes, sha256]) => ({path:p, bytes, sha256}));
+  const manifest = owner.buildManifest(
+    2875, 2876,
+    '3f157b1cdf1a3e2330aa8d8a47d55c861bbd119a',
+    'a53657666566bec4f860f9ef1a76fb7e06d5ae1f',
+    files);
+  assert.equal(manifest.archiveDigest,
+    '91f708354abf6d86fa74239410c75f96cbe320d5b445fa41b207a5ab273e6253');
+  assert.equal(manifest.fileCount, 10);
+});
+
+test('clean terminal fixture inspects as ARCHIVE_REQUIRED with zero effects', async () => {
+  const f = makeFixture();
+  try {
+    const result = await inspect(f);
+    assert.equal(result.receipt.result, 'PASS');
+    assert.equal(result.facts.cleanupDisposition, 'ARCHIVE_REQUIRED');
+    assert.equal(result.report.output.archive, 'ABSENT');
+    assert.equal(result.report.output.worktree, 'PRESENT');
+    assert.equal(result.report.output.fileCount, 5);
+    for (const name of ['archive_writes','worktree_removals','remote_ref_deletes','local_ref_deletes']) {
+      assert.equal(result.receipt.counters.find((x) => x.name === name).value, 0);
+    }
+  } finally { cleanupFixture(f); }
+});
+
+test('candidate not retained by current main blocks before cleanup', async () => {
+  const f = makeFixture();
+  try {
+    const result = await inspect(f, {compare: {
+      status: 'diverged',
+      base_commit: {sha: f.candidate},
+      merge_base_commit: {sha: 'c'.repeat(40)},
+    }});
+    assert.equal(result.receipt.result, 'BLOCKED');
+    assert(result.receipt.blockers.includes('CANDIDATE_NOT_RETAINED_BY_MAIN'));
+  } finally { cleanupFixture(f); }
+});
+
+test('open PR on feature branch blocks before cleanup effects', async () => {
+  const f = makeFixture();
+  try {
+    const result = await inspect(f, {openPrs:[{number:9999}]});
+    assert.equal(result.receipt.result, 'BLOCKED');
+    assert(result.receipt.blockers.includes('OPEN_PR_USES_FEATURE_BRANCH'));
+  } finally { cleanupFixture(f); }
+});
+
+test('dirty worktree blocks', async () => {
+  const f = makeFixture();
+  try {
+    fs.writeFileSync(path.join(f.target, 'untracked.txt'), 'dirty\n');
+    const result = await inspect(f);
+    assert.equal(result.receipt.result, 'BLOCKED');
+    assert(result.receipt.blockers.includes('WORKTREE_DIRTY'));
+  } finally { cleanupFixture(f); }
+});
+
+test('workspace holder blocks', async () => {
+  const f = makeFixture();
+  try {
+    fs.writeFileSync(path.join(f.gitDir, 'mcl-workspace-holder.v1.json'), '{}\n');
+    const result = await inspect(f);
+    assert.equal(result.receipt.result, 'BLOCKED');
+    assert(result.receipt.blockers.includes('WORKSPACE_HOLDER_PRESENT'));
+  } finally { cleanupFixture(f); }
+});
+
+test('unrecognized packet-bound evidence directory remains UNKNOWN', async () => {
+  const f = makeFixture();
+  try {
+    const d = path.join(f.gitDir, 'future-evidence');
+    fs.mkdirSync(d, {mode:0o700});
+    const p = path.join(d, 'packet-' + PACKET + '-pr-' + PR + '.x.json');
+    fs.writeFileSync(p, '{}\n', {mode:0o600});
+    const result = await inspect(f);
+    assert.equal(result.receipt.result, 'UNKNOWN');
+    assert(result.receipt.requiredUnknowns.includes('UNRECOGNIZED_PACKET_EVIDENCE_DIRECTORY'));
+  } finally { cleanupFixture(f); }
+});
+
+test('symlink evidence remains UNKNOWN', async () => {
+  const f = makeFixture();
+  try {
+    const dir = path.join(f.gitDir, 'validation-attention-evidence');
+    const victim = path.join(dir, 'packet-' + PACKET + '-pr-' + PR + '.inspect.report.json');
+    fs.unlinkSync(victim);
+    fs.symlinkSync('/dev/null', victim);
+    const result = await inspect(f);
+    assert.equal(result.receipt.result, 'UNKNOWN');
+    assert(result.receipt.requiredUnknowns.includes('EVIDENCE_FILE_NOT_REGULAR'));
+  } finally { cleanupFixture(f); }
+});
+
+test('matching prebuilt archive moves inspect to CLEANUP_READY', async () => {
+  const f = makeFixture();
+  try {
+    const inventory = owner.inventoryEvidence(f.gitDir, PACKET, PR);
+    const common = path.join(f.control, '.git');
+    owner.publishArchive(null, common, PACKET, PR, f.candidate, f.merge, inventory);
+    const result = await inspect(f);
+    assert.equal(result.receipt.result, 'PASS');
+    assert.equal(result.facts.cleanupDisposition, 'CLEANUP_READY');
+    assert.equal(result.report.output.archive, 'VERIFIED');
+  } finally { cleanupFixture(f); }
+});
+
+test('mismatching existing archive fails closed to CONFLICT', async () => {
+  const f = makeFixture();
+  try {
+    const inventory = owner.inventoryEvidence(f.gitDir, PACKET, PR);
+    const common = path.join(f.control, '.git');
+    const archive = owner.archivePath(common, PACKET, PR);
+    owner.publishArchive(null, common, PACKET, PR, f.candidate, f.merge, inventory);
+    const manifestPath = path.join(archive, 'manifest.json');
+    const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    m.candidateHead = 'f'.repeat(40);
+    fs.writeFileSync(manifestPath, JSON.stringify(m, null, 2) + '\n', {mode:0o600});
+    fs.chmodSync(manifestPath, 0o600);
+    const result = await inspect(f);
+    assert.equal(result.receipt.result, 'CONFLICT');
+    assert(result.receipt.conflicts.length > 0);
+  } finally { cleanupFixture(f); }
+});
+
+test('absent worktree without verified archive remains UNKNOWN and preserves refs', async () => {
+  const f = makeFixture();
+  try {
+    git(f.control, ['worktree', 'remove', f.target]);
+    const result = await inspect(f);
+    assert.equal(result.receipt.result, 'UNKNOWN');
+    assert(result.receipt.requiredUnknowns.includes('ARCHIVE_REQUIRED_BUT_SOURCE_WORKTREE_ABSENT'));
+    assert.equal(git(f.control, ['show-ref', '--verify', '--hash', 'refs/heads/' + f.branch]), f.candidate);
+  } finally { cleanupFixture(f); }
+});
+
+test('synthetic apply performs archive then worktree and exact-old ref cleanup', async () => {
+  const f = makeFixture();
+  try {
+    const first = await apply(f);
+    assert.equal(first.receipt.result, 'PASS');
+    assert.equal(first.facts.cleanupDisposition, 'COMPLETE');
+    assert.equal(first.report.output.archive, 'VERIFIED');
+    assert.equal(first.report.output.worktree, 'ABSENT');
+    assert.equal(first.report.output.remoteRef, 'ABSENT');
+    assert.equal(first.report.output.localRef, 'ABSENT');
+    assert.equal(first.report.output.residue, 'NONE');
+
+    const counters = Object.fromEntries(first.receipt.counters.map((x) => [x.name,x.value]));
+    assert.equal(counters.archive_writes, 1);
+    assert.equal(counters.worktree_removals, 1);
+    assert.equal(counters.remote_ref_deletes, 1);
+    assert.equal(counters.local_ref_deletes, 1);
+
+    assert.equal(fs.existsSync(f.target), false);
+    const archive = owner.archivePath(path.join(f.control,'.git'), PACKET, PR);
+    const verified = owner.verifyArchive(archive, PACKET, PR, f.candidate, f.merge);
+    assert.equal(verified.state, 'VERIFIED');
+    assert.equal(fs.statSync(archive).mode & 0o777, 0o700);
+    assert.equal(fs.statSync(path.join(archive,'manifest.json')).mode & 0o777, 0o600);
+
+    const local = childProcess.spawnSync('git', ['-C', f.control, 'show-ref', '--verify',
+      '--hash', 'refs/heads/' + f.branch], {encoding:'utf8'});
+    assert.notEqual(local.status, 0);
+    assert.equal(git(f.control, ['ls-remote', '--heads', 'origin', 'refs/heads/' + f.branch]), '');
+  } finally { cleanupFixture(f); }
+});
+
+test('second apply is idempotent ALREADY_CLEAN with zero effects', async () => {
+  const f = makeFixture();
+  try {
+    const first = await apply(f);
+    assert.equal(first.receipt.result, 'PASS');
+    const second = await apply(f);
+    assert.equal(second.receipt.result, 'PASS');
+    assert.equal(second.facts.cleanupDisposition, 'ALREADY_CLEAN');
+    const counters = Object.fromEntries(second.receipt.counters.map((x) => [x.name,x.value]));
+    assert.equal(counters.archive_writes, 0);
+    assert.equal(counters.worktree_removals, 0);
+    assert.equal(counters.remote_ref_deletes, 0);
+    assert.equal(counters.local_ref_deletes, 0);
+  } finally { cleanupFixture(f); }
+});
+
+test('generic receipt and Agent Decision View stay authority-false', async () => {
+  const f = makeFixture();
+  try {
+    const result = await inspect(f);
+    assert.equal(result.receipt.mutationAuthorized, false);
+    assert.equal(result.receipt.executionAuthorized, false);
+    assert.equal(result.receipt.mergeAuthorized, false);
+    assert.equal(result.receipt.releaseAuthorized, false);
+    assert.equal(result.receipt.productionAuthorized, false);
+    const view = owner.projectView(result, {
+      receiptLocator:'local-artifact:/tmp/r#sha256=' + 'a'.repeat(64),
+      reportLocator:'local-artifact:/tmp/p#sha256=' + 'b'.repeat(64),
+    });
+    assert.equal(view.validity, 'VALID');
+    assert.equal(view.result, 'PASS');
+  } finally { cleanupFixture(f); }
+});
+
+test('source has fixed effect primitives and no sweeper/force-worktree/product dependency', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../terminal-residue-cleanup-owner.cjs'), 'utf8');
+  assert.doesNotMatch(source, /products\/chatgpt-mobile-coder-lab/);
+  assert.doesNotMatch(source, /worktree', 'remove', '--force|worktree remove --force/);
+  assert.doesNotMatch(source, /git\s+clean|reset\s+--hard|branch\s+-D|prune-all/);
+  assert.doesNotMatch(source, /workflow_dispatch|releaseAuthorized:\s*true|productionAuthorized:\s*true/);
+  assert.match(source, /--force-with-lease=/);
+  assert.match(source, /update-ref', '-d'/);
+  assert.match(source, /packetProjection\.classifyPacketProjection/);
+  assert.match(source, /canonical-main-evidence-archive/);
+});
+
+test('fixed evidence registry stays bounded', () => {
+  assert.deepEqual([...owner.EVIDENCE_DIRS], [
+    'validation-attention-evidence',
+    'validation-continuation-evidence',
+    'validation-merge-evidence',
+  ]);
+  assert.equal(owner.MAX_EVIDENCE_FILES, 32);
+  assert.equal(owner.MAX_EVIDENCE_FILE_BYTES, 65536);
+  assert.equal(owner.MAX_EVIDENCE_TOTAL_BYTES, 524288);
+});

@@ -1949,3 +1949,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/fd56da969513cbf9dabebe6c855f5e076b1428ba)
 - Event ID: `9637724cddbcb85543138c2ffddff8e90a07dfe877af851930e5e13cbd656640`
 <!-- canonical-main-doc-promoted:9637724cddbcb85543138c2ffddff8e90a07dfe877af851930e5e13cbd656640 -->
+
+### 2026-09-24 — Merge pull request #2870 from hanmiyoo10-alt/server/repo-validation-merge-strict-2869
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `494ae2a03a8bddb728c36a8a9398245242c8ebcb`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/494ae2a03a8bddb728c36a8a9398245242c8ebcb)
+- Event ID: `51ee9f701730761b396cdc488417e6d4e803b8d1fbcc588a0da00518b924924f`
+<!-- canonical-main-doc-promoted:51ee9f701730761b396cdc488417e6d4e803b8d1fbcc588a0da00518b924924f -->

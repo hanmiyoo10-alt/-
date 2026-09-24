@@ -118,12 +118,43 @@ function emptyThreads(nodes = []) {
   };
 }
 
+function strictCurrentness(overrides = {}) {
+  return {
+    data: {
+      repository: {
+        pullRequest: {
+          number: PR,
+          headRefOid: HEAD,
+          baseRefOid: BASE,
+          mergeStateStatus: 'CLEAN',
+          ...overrides,
+        },
+      },
+    },
+  };
+}
+
+function compareObject(overrides = {}) {
+  return {
+    status: 'ahead',
+    ahead_by: 1,
+    behind_by: 0,
+    total_commits: 1,
+    base_commit: {sha: BASE},
+    merge_base_commit: {sha: BASE},
+    ...overrides,
+  };
+}
+
 function fixtureClient(options = {}) {
   const calls = [];
   let branchReads = 0;
   let packetReads = 0;
   let prReads = 0;
   let overlapIssueReads = 0;
+  let strictProtectionReads = 0;
+  let strictGraphqlReads = 0;
+  let compareReads = 0;
   const otherPacket = {
     number: 9901,
     state: 'open',
@@ -143,6 +174,11 @@ function fixtureClient(options = {}) {
         branchReads += 1;
         const sha = options.branchSequence?.[branchReads - 1] || BASE;
         return {commit: {sha}};
+      }
+      if (endpoint === '/branches/main/protection/required_status_checks') {
+        strictProtectionReads += 1;
+        return options.strictProtectionSequence?.[strictProtectionReads - 1]
+          ?? options.strictProtection ?? {strict: true};
       }
       if (endpoint === '/issues/485') {
         return {state: 'open', body: options.opsBody || opsBody()};
@@ -173,6 +209,11 @@ function fixtureClient(options = {}) {
       }
       if (endpoint.startsWith('/pulls/' + PR + '/requested_reviewers?')) {
         return options.requested || {users: [], teams: []};
+      }
+      if (endpoint === '/compare/' + BASE + '...' + HEAD) {
+        compareReads += 1;
+        return options.compareSequence?.[compareReads - 1]
+          ?? options.compare ?? compareObject();
       }
       if (endpoint === '/actions/runs?head_sha=' + HEAD + '&per_page=100') {
         const runs = options.runs || [{
@@ -219,9 +260,15 @@ function fixtureClient(options = {}) {
       }
       throw new Error('unexpected endpoint ' + endpoint);
     },
-    async graphql() {
+    async graphql(query) {
       if (options.graphqlError) throw new Error('fixture graphql error');
-      return options.threads || emptyThreads();
+      if (query === owner.REVIEW_THREADS_QUERY) return options.threads || emptyThreads();
+      if (query === owner.STRICT_CURRENTNESS_QUERY) {
+        strictGraphqlReads += 1;
+        return options.strictGraphqlSequence?.[strictGraphqlReads - 1]
+          ?? options.strictGraphql ?? strictCurrentness();
+      }
+      throw new Error('unexpected graphql query');
     },
   };
   return client;
@@ -250,10 +297,20 @@ test('live client falls back to fixed gh read transport when token env is absent
     if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/branches/main') {
       return {code: 0, stdout: JSON.stringify({commit: {sha: BASE}}), stderr: ''};
     }
+    if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/branches/main/protection/required_status_checks') {
+      return {code: 0, stdout: JSON.stringify({strict: true}), stderr: ''};
+    }
+    if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/compare/' + BASE + '...' + HEAD) {
+      return {code: 0, stdout: JSON.stringify(compareObject()), stderr: ''};
+    }
     if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/issues/' + PR + '/comments?per_page=100&page=1') {
       return {code: 0, stdout: '[]', stderr: ''};
     }
     if (args[0] === 'api' && args[1] === 'graphql') {
+      const queryArg = args.find((value) => String(value).startsWith('query='));
+      if (queryArg === 'query=' + owner.STRICT_CURRENTNESS_QUERY) {
+        return {code: 0, stdout: JSON.stringify(strictCurrentness()), stderr: ''};
+      }
       return {code: 0, stdout: JSON.stringify(emptyThreads()), stderr: ''};
     }
     return {code: 1, stdout: '', stderr: 'fixture denied'};
@@ -262,10 +319,15 @@ test('live client falls back to fixed gh read transport when token env is absent
     throw new Error('fetch must not be used without env token');
   }});
   assert.deepEqual(await client.api('/branches/main'), {commit: {sha: BASE}});
+  assert.deepEqual(await client.api('/branches/main/protection/required_status_checks'), {strict: true});
+  assert.deepEqual(await client.api('/compare/' + BASE + '...' + HEAD), compareObject());
   assert.deepEqual(await client.api('/issues/' + PR + '/comments?per_page=100&page=1'), []);
   assert.deepEqual(await client.graphql(owner.REVIEW_THREADS_QUERY, {
     owner: 'hanmiyoo10-alt', name: '-', number: PR,
   }), emptyThreads());
+  assert.deepEqual(await client.graphql(owner.STRICT_CURRENTNESS_QUERY, {
+    owner: 'hanmiyoo10-alt', name: '-', number: PR,
+  }), strictCurrentness());
   assert.ok(calls.every((args) => args[0] === 'api'));
   assert.equal(calls.some((args) => args.includes('--method') && args.includes('POST')), false);
   assert.equal(calls.some((args) => args.join(' ').includes('token')), false);
@@ -329,6 +391,148 @@ test('inspect PASS returns canonical v2 readiness with no merge effect', async (
   assert.equal(result.receipt.counters.find((row) => row.name === 'merge_effects_performed').value, 0);
 });
 
+
+test('strict=false preserves existing merge-ready semantics without ancestry enforcement', async () => {
+  const client = fixtureClient({strictProtection: {strict: false}});
+  const result = await owner.inspectWithClient({
+    client,
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.strictProtection, false);
+  assert.equal(result.report.output.strictUpToDate, 'NOT_APPLICABLE');
+  assert.equal(client.calls.some((endpoint) => endpoint.startsWith('/compare/')), false);
+});
+
+test('strict=true exact current-main ancestry passes the new barrier', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient(),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.strictProtection, true);
+  assert.equal(result.report.mergeStateStatus, 'CLEAN');
+  assert.equal(result.report.ancestryStatus, 'ahead');
+  assert.equal(result.report.mergeBaseSha, BASE);
+  assert.equal(result.report.output.strictUpToDate, 'PASS');
+  assert.ok(result.receipt.steps.some((row) => row.name === 'strict-protection'));
+  assert.ok(result.receipt.steps.some((row) => row.name === 'strict-pr-merge-state'));
+  assert.ok(result.receipt.steps.some((row) => row.name === 'strict-main-ancestry'));
+  assert.ok(result.receipt.steps.some((row) => row.name === 'final-strict-main-ancestry'));
+});
+
+test('strict BEHIND blocks even when exact-head Required is successful', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({strictGraphql: strictCurrentness({mergeStateStatus: 'BEHIND'})}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('PR_HEAD_BEHIND_STRICT_BASE'));
+  assert.equal(result.receipt.nextLegalAction, 'CURRENTIZE_PR_THROUGH_EXISTING_OWNER');
+  assert.equal(result.receipt.counters.find((row) => row.name === 'merge_effects_performed').value, 0);
+});
+
+test('strict diverged ancestry blocks and routes to existing currentization owner', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      compare: compareObject({
+        status: 'diverged', ahead_by: 1, behind_by: 1,
+        merge_base_commit: {sha: 'e'.repeat(40)},
+      }),
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('PR_HEAD_NOT_CURRENT_MAIN_ANCESTOR'));
+  assert.equal(result.receipt.nextLegalAction, 'CURRENTIZE_PR_THROUGH_EXISTING_OWNER');
+});
+
+test('strict merge-base mismatch blocks even if compare status says ahead', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      compare: compareObject({merge_base_commit: {sha: 'e'.repeat(40)}}),
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('PR_HEAD_NOT_CURRENT_MAIN_ANCESTOR'));
+});
+
+test('strict merge-state UNKNOWN remains UNKNOWN', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({strictGraphql: strictCurrentness({mergeStateStatus: 'UNKNOWN'})}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'UNKNOWN');
+  assert.ok(result.receipt.reasonCodes.includes('PR_MERGE_STATE_UNKNOWN'));
+});
+
+test('strict protection missing or malformed remains UNKNOWN', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({strictProtection: {}}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'UNKNOWN');
+  assert.ok(result.receipt.reasonCodes.includes('STRICT_PROTECTION_UNKNOWN'));
+});
+
+test('strict compare malformed evidence remains UNKNOWN', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({compare: {status: 'ahead'}}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'UNKNOWN');
+  assert.ok(result.receipt.reasonCodes.includes('STRICT_COMPARE_UNKNOWN'));
+});
+
+test('final strict barrier catches late BEHIND movement', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      strictGraphqlSequence: [
+        strictCurrentness({mergeStateStatus: 'CLEAN'}),
+        strictCurrentness({mergeStateStatus: 'BEHIND'}),
+      ],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('PR_HEAD_BEHIND_STRICT_BASE'));
+  assert.equal(result.receipt.nextLegalAction, 'CURRENTIZE_PR_THROUGH_EXISTING_OWNER');
+  assert.ok(result.receipt.steps.some((row) => (
+    row.name === 'final-strict-pr-merge-state' && row.result === 'BLOCKED'
+  )));
+});
+
+test('final strict protection movement cannot become PASS', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      strictProtectionSequence: [{strict: true}, {strict: false}],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'UNKNOWN');
+  assert.ok(result.receipt.reasonCodes.includes('VALIDATION_STATE_CHANGED_DURING_CAPTURE'));
+});
 
 test('PR base or path drift fails closed', async () => {
   const baseDrift = await owner.inspectWithClient({
@@ -629,6 +833,10 @@ test('source contains no merge writer, PR update, auto-merge, or retry loop', ()
   assert.doesNotMatch(source, /setInterval|while\s*\(\s*true\s*\)/);
   assert.match(source, /https:\/\/api\.github\.com\/graphql/);
   assert.match(source, /extractPacketScopes/);
+  assert.match(source, /required_status_checks/);
+  assert.match(source, /mergeStateStatus/);
+  assert.match(source, /\/compare\//);
+  assert.match(source, /CURRENTIZE_PR_THROUGH_EXISTING_OWNER/);
   assert.match(source, /MERGE_PR_WITH_EXISTING_EXPECTED_HEAD_ENDPOINT/);
 });
 

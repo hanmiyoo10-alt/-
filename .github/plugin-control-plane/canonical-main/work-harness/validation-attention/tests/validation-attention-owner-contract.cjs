@@ -508,6 +508,76 @@ async function persistCleanInspect(root, deps) {
   return result;
 }
 
+async function persistAlreadyMergedInspect(root, deps) {
+  return persistCleanInspect(root, deps);
+}
+
+
+test('already merged finalize skips merge admission replay and reuses merge finalize', async () => {
+  const {deps, calls} = fixtureDeps({
+    continuation: continuationResult({
+      disposition: 'ALREADY_MERGED',
+      nextLegalAction: 'VALIDATION_MERGE_FINALIZE',
+    }),
+  });
+  const root = makeTempRoot();
+  try {
+    await persistAlreadyMergedInspect(root, deps);
+    const result = await attention.finalizeComposition({
+      client: {}, packetNumber: PACKET, prNumber: PR, root, deps,
+    });
+    assert.equal(result.receipt.result, 'PASS');
+    assert.equal(result.receipt.attentionDisposition, 'COMPLETE');
+    assert.equal(result.receipt.nextLegalAction, 'POSTMERGE_CONVERGENCE');
+    assert.equal(result.report.output.mergeAdmission, 'ALREADY_MERGED');
+    assert.equal(result.report.output.finalization, 'ALREADY_FINALIZED');
+    assert.equal(result.report.stageReceipt.status, 'PASS');
+    assert.equal(result.report.stageReceipt.requiredGates.some(
+      (row) => row.name === 'validation-merge-inspect'), false);
+    assert.equal(result.report.stageReceipt.requiredGates.some(
+      (row) => row.name === 'validation-continuation-already-merged'), true);
+    assert.equal(calls.includes('merge.inspect'), false);
+    assert.equal(calls.includes('merge.read-inspect'), false);
+    assert.equal(calls.filter((row) => row === 'merge.finalize').length, 1);
+    assert(calls.includes('merge.read-packet'));
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test('already merged product packet routes to coordination finalizer after exact merge readback', async () => {
+  const {deps, calls} = fixtureDeps({
+    continuation: continuationResult({
+      disposition: 'ALREADY_MERGED',
+      nextLegalAction: 'VALIDATION_MERGE_FINALIZE',
+    }),
+    packet: {
+      bodySha256: 'e'.repeat(64),
+      paths: PATHS,
+      scopes: [...PATHS.map((p) => 'path:' + p), 'surface:mcl:x'],
+      evidenceLocator: 'issue:#' + PACKET,
+    },
+  });
+  const root = makeTempRoot();
+  try {
+    await persistAlreadyMergedInspect(root, deps);
+    const result = await attention.finalizeComposition({
+      client: {}, packetNumber: PACKET, prNumber: PR, root, deps,
+    });
+    assert.equal(result.receipt.result, 'BLOCKED');
+    assert(result.receipt.blockers.includes('REPO_NEUTRAL_FINALIZATION_SCOPE_REQUIRED'));
+    assert.equal(result.receipt.nextLegalAction,
+      'EXISTING_COORDINATION_FINALIZATION_OWNER_REQUIRED');
+    assert.equal(result.receipt.blockers.includes(
+      'ATTENTION_INSPECT_NOT_MERGE_ADMISSION_READY'), false);
+    assert.equal(calls.includes('merge.inspect'), false);
+    assert.equal(calls.includes('merge.read-inspect'), false);
+    assert.equal(calls.filter((row) => row === 'merge.finalize').length, 1);
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
+
 test('clean finalize reuses merge finalize, stage receipt and finalization owner', async () => {
   const {deps, calls} = fixtureDeps();
   const root = makeTempRoot();

@@ -106,3 +106,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2854)
 - Event ID: `420a65445fc741a772eb9995428a4a81321359f23cd2a6f67245f1e147e9b3d5`
 <!-- canonical-main-doc-promoted:420a65445fc741a772eb9995428a4a81321359f23cd2a6f67245f1e147e9b3d5 -->
+
+### 2026-09-24 — REPO-VALIDATION-ATTENTION-PROJECTION-V1 — Phase 8.7f bounded validation attention
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2873)
+- Event ID: `dd6520ca94b4108b5125b9eeb4638e97157b0709959430b995d76f349c52abbb`
+<!-- canonical-main-doc-promoted:dd6520ca94b4108b5125b9eeb4638e97157b0709959430b995d76f349c52abbb -->

@@ -515,9 +515,48 @@ function repoNeutralPacket(packet) {
 function pathScopeDigest(paths) {
   return 'sha256:' + stableHash(sorted(paths));
 }
+function alreadyMergedFinalizeEvidence({
+  packetNumber, prNumber, inspectEvidence, packet,
+}) {
+  const locator = 'receipt:' + inspectEvidence.receipt.receiptDigest;
+  if (inspectEvidence.report.route !== 'ALREADY_MERGED'
+      || inspectEvidence.report.output?.mergeAdmission !== 'ALREADY_MERGED'
+      || inspectEvidence.receipt.nextLegalAction !== 'VALIDATION_MERGE_FINALIZE') {
+    throw new ValidationAttentionError(
+      'CONFLICT', ['ALREADY_MERGED_INSPECT_ROUTE_CONFLICT'], locator);
+  }
+  const continuation = inspectEvidence.report.children?.continuation;
+  if (!continuation?.receiptDigest || !continuation?.reportLocator) {
+    throw new ValidationAttentionError(
+      'CONFLICT', ['ALREADY_MERGED_CONTINUATION_EVIDENCE_CONFLICT'], locator);
+  }
+  if (!packet || typeof packet.bodySha256 !== 'string'
+      || JSON.stringify(sorted(packet.paths || []))
+        !== JSON.stringify(sorted(inspectEvidence.implementation.paths))) {
+    throw new ValidationAttentionError(
+      'CONFLICT', ['ALREADY_MERGED_PACKET_SCOPE_CONFLICT'], 'issue:#' + packetNumber);
+  }
+  return {
+    receipt: inspectEvidence.receipt,
+    report: {
+      schemaVersion: 1,
+      mode: 'VALIDATION_MERGE_REPORT',
+      operation: 'inspect',
+      packetNumber,
+      prNumber,
+      packetBodySha256: packet.bodySha256,
+      expectedHead: inspectEvidence.implementation.expectedHead,
+      paths: sorted(packet.paths),
+      result: 'PASS',
+      receiptDigest: inspectEvidence.receipt.receiptDigest,
+      output: {pr: '#' + prNumber, merge: 'ALREADY_MERGED'},
+    },
+  };
+}
 function buildValidationStageReceipt({
   packetNumber, prNumber, inspectEvidence, mergeInspectEvidence,
-  mergeFinalizeResult, mergeFinalizeLocators, deps = DEFAULT_DEPS,
+  mergeFinalizeResult, mergeFinalizeLocators, alreadyMerged = false,
+  deps = DEFAULT_DEPS,
 }) {
   const implementationReceipt = inspectEvidence.report.implementationReceipt;
   const candidate = inspectEvidence.implementation.expectedHead;
@@ -526,16 +565,21 @@ function buildValidationStageReceipt({
     ? 'run:' + mergeInspectEvidence.report.requiredRunId
       + '/job:' + mergeInspectEvidence.report.requiredJobId
     : mergeFinalizeLocators.reportLocator;
-  return deps.stageReceipt.projectStageReceipt({
-    schemaVersion: 1,
-    packetNumber,
-    stage: 'VALIDATION_MERGE',
-    authorityRefs: [
-      {kind: 'COMMIT', locator: 'candidate-head', identity: candidate},
-      {kind: 'PR', locator: 'pr:#' + prNumber, identity: candidate},
-      {kind: 'COMMIT', locator: 'merge:#' + prNumber, identity: mergeCommit},
-    ],
-    requiredGates: [
+  const requiredGates = alreadyMerged
+    ? [
+      {name: 'validation-attention-inspect', result: 'PASS',
+        evidenceLocator: 'receipt:' + inspectEvidence.receipt.receiptDigest},
+      {name: 'implementation-stage-receipt', result: 'PASS',
+        evidenceLocator: 'receipt:' + implementationReceipt.receiptDigest},
+      {name: 'validation-continuation-already-merged', result: 'PASS',
+        evidenceLocator: 'receipt:'
+          + inspectEvidence.report.children.continuation.receiptDigest},
+      {name: 'validation-merge-finalize', result: 'PASS',
+        evidenceLocator: 'receipt:' + mergeFinalizeResult.receipt.receiptDigest},
+      {name: 'repo-neutral-coordination', result: 'NOT_APPLICABLE',
+        evidenceLocator: 'issue:#' + packetNumber},
+    ]
+    : [
       {name: 'validation-attention-inspect', result: 'PASS',
         evidenceLocator: 'receipt:' + inspectEvidence.receipt.receiptDigest},
       {name: 'validation-merge-inspect', result: 'PASS',
@@ -545,7 +589,17 @@ function buildValidationStageReceipt({
       {name: 'exact-head-required', result: 'PASS', evidenceLocator: requiredLocator},
       {name: 'repo-neutral-coordination', result: 'NOT_APPLICABLE',
         evidenceLocator: 'issue:#' + packetNumber},
+    ];
+  return deps.stageReceipt.projectStageReceipt({
+    schemaVersion: 1,
+    packetNumber,
+    stage: 'VALIDATION_MERGE',
+    authorityRefs: [
+      {kind: 'COMMIT', locator: 'candidate-head', identity: candidate},
+      {kind: 'PR', locator: 'pr:#' + prNumber, identity: candidate},
+      {kind: 'COMMIT', locator: 'merge:#' + prNumber, identity: mergeCommit},
     ],
+    requiredGates,
     scope: implementationReceipt.scope,
     proof: implementationReceipt.proof,
     requiredUnknowns: [],
@@ -597,7 +651,8 @@ async function finalizeComposition({
       nextLegalAction: 'VALIDATION_ATTENTION_INSPECT_REQUIRED', deps,
     });
   }
-  if (inspectEvidence.report.route !== 'MERGE_ADMISSION_READY') {
+  const alreadyMerged = inspectEvidence.report.route === 'ALREADY_MERGED';
+  if (!alreadyMerged && inspectEvidence.report.route !== 'MERGE_ADMISSION_READY') {
     return aggregateError({
       operation: 'finalize', packetNumber, prNumber,
       candidateHead: inspectEvidence.implementation.expectedHead,
@@ -609,33 +664,55 @@ async function finalizeComposition({
     });
   }
 
+  let packet = null;
   let mergeInspectEvidence;
-  try {
-    mergeInspectEvidence = deps.validationMerge.readCanonicalInspectEvidence(
-      packetNumber, prNumber, root);
-  } catch (error) {
-    return aggregateError({
-      operation: 'finalize', packetNumber, prNumber,
-      candidateHead: inspectEvidence.implementation.expectedHead,
-      paths: inspectEvidence.implementation.paths,
-      error: new ValidationAttentionError(
-        error?.kind || 'UNKNOWN',
-        error?.reasonCodes || ['MERGE_INSPECT_EVIDENCE_REQUIRED'],
-        error?.locator || 'local-artifact:validation-merge-inspect'),
-      nextLegalAction: 'VALIDATION_MERGE_INSPECT_REQUIRED', deps,
-    });
-  }
-  if (inspectEvidence.report.children?.mergeAdmission?.receiptDigest
-      !== mergeInspectEvidence.receipt.receiptDigest) {
-    return aggregateError({
-      operation: 'finalize', packetNumber, prNumber,
-      candidateHead: inspectEvidence.implementation.expectedHead,
-      paths: inspectEvidence.implementation.paths,
-      error: new ValidationAttentionError(
-        'CONFLICT', ['MERGE_INSPECT_CHILD_IDENTITY_CONFLICT'],
-        inspectEvidence.report.children?.mergeAdmission?.reportLocator || 'UNKNOWN'),
-      deps,
-    });
+  if (alreadyMerged) {
+    try {
+      packet = await deps.validationMerge.readPacket(client, packetNumber);
+      mergeInspectEvidence = alreadyMergedFinalizeEvidence({
+        packetNumber, prNumber, inspectEvidence, packet,
+      });
+    } catch (error) {
+      return aggregateError({
+        operation: 'finalize', packetNumber, prNumber,
+        candidateHead: inspectEvidence.implementation.expectedHead,
+        paths: inspectEvidence.implementation.paths,
+        error: error instanceof ValidationAttentionError ? error
+          : new ValidationAttentionError(
+            error?.kind || 'UNKNOWN',
+            error?.reasonCodes || ['ALREADY_MERGED_FINALIZE_EVIDENCE_REQUIRED'],
+            error?.locator || 'issue:#' + packetNumber),
+        nextLegalAction: inspectEvidence.receipt.nextLegalAction, deps,
+      });
+    }
+  } else {
+    try {
+      mergeInspectEvidence = deps.validationMerge.readCanonicalInspectEvidence(
+        packetNumber, prNumber, root);
+    } catch (error) {
+      return aggregateError({
+        operation: 'finalize', packetNumber, prNumber,
+        candidateHead: inspectEvidence.implementation.expectedHead,
+        paths: inspectEvidence.implementation.paths,
+        error: new ValidationAttentionError(
+          error?.kind || 'UNKNOWN',
+          error?.reasonCodes || ['MERGE_INSPECT_EVIDENCE_REQUIRED'],
+          error?.locator || 'local-artifact:validation-merge-inspect'),
+        nextLegalAction: 'VALIDATION_MERGE_INSPECT_REQUIRED', deps,
+      });
+    }
+    if (inspectEvidence.report.children?.mergeAdmission?.receiptDigest
+        !== mergeInspectEvidence.receipt.receiptDigest) {
+      return aggregateError({
+        operation: 'finalize', packetNumber, prNumber,
+        candidateHead: inspectEvidence.implementation.expectedHead,
+        paths: inspectEvidence.implementation.paths,
+        error: new ValidationAttentionError(
+          'CONFLICT', ['MERGE_INSPECT_CHILD_IDENTITY_CONFLICT'],
+          inspectEvidence.report.children?.mergeAdmission?.reportLocator || 'UNKNOWN'),
+        deps,
+      });
+    }
   }
 
   const mergeFinalizeResult = await deps.validationMerge.finalizeWithClient({
@@ -682,7 +759,7 @@ async function finalizeComposition({
     };
   }
 
-  const packet = await deps.validationMerge.readPacket(client, packetNumber);
+  if (!packet) packet = await deps.validationMerge.readPacket(client, packetNumber);
   if (!repoNeutralPacket(packet)) {
     return aggregateError({
       operation: 'finalize', packetNumber, prNumber,
@@ -696,7 +773,7 @@ async function finalizeComposition({
 
   const stage = buildValidationStageReceipt({
     packetNumber, prNumber, inspectEvidence, mergeInspectEvidence,
-    mergeFinalizeResult, mergeFinalizeLocators, deps,
+    mergeFinalizeResult, mergeFinalizeLocators, alreadyMerged, deps,
   });
   if (stage.status !== 'PASS') {
     const reasons = stage.reasonCodes?.length ? stage.reasonCodes : ['DERIVED_STAGE_RECEIPT_NOT_PASS'];
@@ -713,6 +790,7 @@ async function finalizeComposition({
   }
 
   const mergeCommit = mergeFinalizeResult.report.mergeCommit;
+  const mergeAdmission = alreadyMerged ? 'ALREADY_MERGED' : 'COMPLETE';
   const finalDecision = deps.finalization.projectValidationFinalization(finalizationInput({
     packetNumber, prNumber,
     candidateHead: inspectEvidence.implementation.expectedHead,
@@ -774,7 +852,7 @@ async function finalizeComposition({
         candidateHead: inspectEvidence.implementation.expectedHead,
         stageReceipt: stage, finalizationDecision: finalDecision,
         result: receipt.result, reasonCodes: receipt.reasonCodes, attention,
-        output: {pr: '#' + prNumber, mergeAdmission: 'COMPLETE',
+        output: {pr: '#' + prNumber, mergeAdmission,
           finalization: finalDecision.finalizationDisposition},
         receiptDigest: receipt.receiptDigest,
       },
@@ -784,7 +862,7 @@ async function finalizeComposition({
   const output = {
     candidateHead: inspectEvidence.implementation.expectedHead,
     finalization: 'ALREADY_FINALIZED',
-    mergeAdmission: 'COMPLETE',
+    mergeAdmission,
     mergeCommit,
     stageReceipt: 'PASS',
   };
@@ -930,6 +1008,7 @@ module.exports = {
   MAX_REPORT_BYTES,
   ValidationAttentionError,
   aggregateError,
+  alreadyMergedFinalizeEvidence,
   buildValidationStageReceipt,
   compositionReceipt,
   continuationRouting,

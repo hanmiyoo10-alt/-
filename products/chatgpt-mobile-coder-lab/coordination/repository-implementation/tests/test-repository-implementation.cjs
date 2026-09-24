@@ -580,3 +580,110 @@ test('normal coordinator CLI remains fixed and exposes no detached control selec
     "'cancel'",
   ]) assert(!source.includes(token), token);
 });
+
+
+test('new child manifest binds one exact implementation adapter contract ref', () => {
+  const files = makeFiles();
+  try {
+    const child = impl.buildChildManifest(
+      makeCtx(), files.request, files.validationText, files.prText);
+    const refs = child.inputRefs.filter((item) =>
+      item.startsWith(patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX));
+    assert.deepEqual(refs, [
+      patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
+        + patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest,
+    ]);
+    assert(child.inputRefs.includes(
+      patchOwner.VALIDATION_CONTRACT_REF_PREFIX + D014_PROFILE.contractDigest));
+  } finally {
+    files.cleanup();
+  }
+});
+
+test('repository implementation preserves child semantic FAIL as NEEDS_REVIEW', async () => {
+  const files = makeFiles();
+  const validationLocator =
+    'local-artifact:/tmp/mcl-implementation-validation-child.json#sha256=' + 'f'.repeat(64);
+  const childReceipt = executionReceipt.projectExecutionReceipt({
+    schemaVersion: 2,
+    operationId: 'patch:semantic-fail',
+    primitiveId: 'mcl:repository-worktree-patch',
+    sourceIdentity: {kind: 'WORK_PACKET', locator: PACKET, identity: BODY_SHA},
+    executionSurface: 'MCL:S',
+    stage: 'HOST_ORCHESTRATED_REPOSITORY_PATCH',
+    executionLifecycle: 'FINISHED',
+    attentionDisposition: 'NEEDS_REVIEW',
+    result: 'FAIL',
+    proofScope: 'IMPLEMENTATION_EFFECT',
+    steps: [{name: 'prepared-validation', result: 'FAIL',
+      evidenceLocator: validationLocator}],
+    counters: [
+      {name: 'changed_paths', value: PATHS.length},
+      {name: 'commit_created', value: 0},
+      {name: 'push_verified', value: 0},
+      {name: 'validation_passed', value: 1},
+      {name: 'validation_failed', value: 1},
+      {name: 'validation_infra', value: 0},
+      {name: 'validation_not_run', value: 2},
+    ],
+    affectedFiles: PATHS,
+    artifactLocators: [validationLocator],
+    reasonCodes: ['SEMANTIC_TEST_FAILURE:completion-contract'],
+    requiredUnknowns: [],
+    conflicts: [],
+    blockers: [],
+    exitCode: 1,
+    stderrTail: null,
+    nextLegalAction: 'SEMANTIC_REVIEW',
+  });
+  const events = [];
+  const receiptPath = path.join(files.dir, 'implementation-stop.receipt.json');
+  try {
+    const view = await impl.executePrepared(makeCtx(), {
+      requestText: files.requestText,
+      requestFile: files.requestFile,
+      patchFile: files.patchFile,
+      validationRequestText: files.validationText,
+      validationRequestFile: files.validationFile,
+      prRequestText: files.prText,
+    }, {
+      tempRoot: files.dir,
+      postComment() { return 990; },
+      claimHolder() {
+        return {result: {status: 'CLAIMED', reasonCodes: []}, secret: '9'.repeat(64)};
+      },
+      checkHolder() { return {status: 'CHECK_PASS', reasonCodes: []}; },
+      async invokePatchOwner() { events.push('patch-owner'); return childReceipt; },
+      persistPatchOwnerArtifacts() {
+        return {
+          receiptLocator: 'artifact:test:child-receipt',
+          reportLocator: validationLocator,
+        };
+      },
+      persistArtifacts(_manifest, _report, receipt) {
+        fs.writeFileSync(receiptPath, JSON.stringify(receipt));
+        return {
+          reportLocator: 'artifact:test:implementation-report',
+          receiptLocator: 'artifact:test:implementation-receipt',
+          receiptPath,
+        };
+      },
+      publishPr() { events.push('pr-publish'); throw new Error('must not publish'); },
+      releaseLease() { events.push('lease-release'); throw new Error('must not release'); },
+      releaseHolder() { events.push('holder-release'); throw new Error('must not release'); },
+    });
+    assert.equal(view.result, 'FAIL');
+    assert.equal(view.attentionDisposition, 'NEEDS_REVIEW');
+    assert.equal(view.attentionCount, 1);
+    assert.equal(view.attention[0].reasonCode, 'SEMANTIC_TEST_FAILURE:completion-contract');
+    assert.equal(view.attention[0].locator, validationLocator);
+    assert.equal(view.output.validationFailed, 1);
+    assert.equal(view.output.validationNotRun, 2);
+    assert.equal(view.output.commitCreated, false);
+    assert.equal(view.output.remoteHeadExact, false);
+    assert.equal(view.nextLegalAction, 'SEMANTIC_REVIEW');
+    assert.deepEqual(events, ['patch-owner']);
+  } finally {
+    files.cleanup();
+  }
+});

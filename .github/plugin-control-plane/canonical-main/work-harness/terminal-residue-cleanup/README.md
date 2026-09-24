@@ -174,7 +174,6 @@ Those belong to later V1.1/V1.2 adoption after V1 natural proof.
 ```sh
 node --check .github/plugin-control-plane/canonical-main/work-harness/terminal-residue-cleanup/terminal-residue-cleanup-owner.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/terminal-residue-cleanup/tests/terminal-residue-cleanup-owner-contract.cjs
-node .github/plugin-control-plane/canonical-main/work-system/tests/packet-projection-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/execution-receipt-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/agent-decision-view-contract.cjs
 node .github/plugin-control-plane/canonical-main/tests/work-system-contract.cjs

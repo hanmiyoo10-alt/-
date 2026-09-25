@@ -339,6 +339,136 @@ function renderStageReceipt(receipt) {
     '',
   ].join('\n');
 }
+
+const STAGE_RECEIPT_MARKER_RE = /<!-- canonical-main-stage-receipt:v1 digest=([0-9a-f]{64}) -->/g;
+
+function parseRenderedList(value) {
+  return value === 'NONE' ? [] : value.split('; ').filter(Boolean);
+}
+function parseRenderedAuthority(value) {
+  return parseRenderedList(value).map((item) => {
+    const statusMatch = /\[(KNOWN|UNKNOWN|CONFLICT)\]$/.exec(item);
+    if (!statusMatch) throw new Error('AUTHORITY_STATUS_INVALID');
+    const core = item.slice(0, statusMatch.index);
+    const colon = core.indexOf(':');
+    const at = core.lastIndexOf('@');
+    if (colon < 1 || at <= colon + 1 || at === core.length - 1) {
+      throw new Error('AUTHORITY_FORMAT_INVALID');
+    }
+    return {
+      kind: core.slice(0, colon),
+      locator: core.slice(colon + 1, at),
+      identity: core.slice(at + 1),
+    };
+  });
+}
+function parseRenderedGates(value) {
+  const resultPattern = GATE_RESULTS.join('|');
+  return parseRenderedList(value).map((item) => {
+    const match = new RegExp(`^(.+)=(${resultPattern})@(.+)$`).exec(item);
+    if (!match) throw new Error('GATE_FORMAT_INVALID');
+    return {name: match[1], result: match[2], evidenceLocator: match[3]};
+  });
+}
+function parseRenderedProof(value) {
+  return parseRenderedList(value).map((item) => {
+    const at = item.indexOf('@');
+    if (at < 1 || at === item.length - 1) throw new Error('PROOF_FORMAT_INVALID');
+    return {term: item.slice(0, at), evidenceLocator: item.slice(at + 1)};
+  });
+}
+function parseRenderedStageReceipt(input) {
+  if (typeof input !== 'string') {
+    return {status: 'UNKNOWN', reasonCodes: ['STAGE_RECEIPT_TEXT_REQUIRED'], value: null};
+  }
+  const text = input.replace(/\r\n/g, '\n');
+  if (Buffer.byteLength(text, 'utf8') > MAX_RENDER_BYTES * 4) {
+    return {status: 'UNKNOWN', reasonCodes: ['STAGE_RECEIPT_TEXT_TOO_LARGE'], value: null};
+  }
+  const markers = [...text.matchAll(new RegExp(STAGE_RECEIPT_MARKER_RE.source, 'g'))];
+  if (!markers.length) {
+    return {status: 'UNKNOWN', reasonCodes: ['STAGE_RECEIPT_MARKER_MISSING'], value: null};
+  }
+  if (markers.length !== 1) {
+    return {status: 'CONFLICT', reasonCodes: ['STAGE_RECEIPT_MARKER_DUPLICATE'], value: null};
+  }
+  const digest = markers[0][1];
+  const lines = text.slice(markers[0].index).split('\n');
+  const digestLine = `- receipt digest: \`${digest}\``;
+  const end = lines.indexOf(digestLine);
+  if (end < 0) {
+    const anyDigestLine = lines.some((line) => /^- receipt digest: \`[0-9a-f]{64}\`$/.test(line));
+    return anyDigestLine
+      ? {status: 'CONFLICT', reasonCodes: ['STAGE_RECEIPT_DIGEST_CONFLICT'], value: null}
+      : {status: 'UNKNOWN', reasonCodes: ['STAGE_RECEIPT_DIGEST_LINE_MISSING'], value: null};
+  }
+  const blockLines = lines.slice(0, end + 1);
+  const block = blockLines.join('\n');
+  try {
+    if (blockLines.length !== 18 || blockLines[2] !== '') throw new Error('BLOCK_SHAPE_INVALID');
+    const heading = /^## Canonical-main stage receipt — (.+)$/.exec(blockLines[1]);
+    const packet = /^- packet: #([1-9][0-9]*)$/.exec(blockLines[3]);
+    const status = /^- evidence status: \`(PASS|FAIL|UNKNOWN|CONFLICT|BLOCKED)\`$/.exec(blockLines[4]);
+    if (!heading || !packet || !status) throw new Error('HEADER_INVALID');
+    const field = (index, prefix) => {
+      if (!blockLines[index].startsWith(prefix)) throw new Error('FIELD_INVALID');
+      return blockLines[index].slice(prefix.length);
+    };
+    const authorityRefs = parseRenderedAuthority(field(5, '- authority refs: '));
+    const requiredGates = parseRenderedGates(field(6, '- required gates: '));
+    const scopePaths = parseRenderedList(field(7, '- scope paths: '));
+    const diffText = field(8, '- diff identity: ');
+    const proof = parseRenderedProof(field(9, '- proof: '));
+    const requiredUnknowns = parseRenderedList(field(10, '- required UNKNOWNs: '));
+    const conflicts = parseRenderedList(field(11, '- conflicts: '));
+    const blockers = parseRenderedList(field(12, '- blockers: '));
+    const dependencies = parseRenderedList(field(13, '- dependencies: '));
+    const next = /^- next legal action: \`(.+)\`$/.exec(blockLines[14]);
+    if (!next || blockLines[15] !== '- mutationAuthorized: \`false\`'
+        || blockLines[16] !== '- executionAuthorized: \`false\`') {
+      throw new Error('AUTHORITY_OR_NEXT_INVALID');
+    }
+    let scope;
+    if (diffText === 'NOT_APPLICABLE') {
+      scope = {paths: scopePaths, diffRequired: false};
+    } else if (diffText === 'UNKNOWN') {
+      scope = {paths: scopePaths, diffRequired: null};
+    } else {
+      const diff = /^([0-9a-f]{64})@(.+)$/.exec(diffText);
+      if (!diff) throw new Error('DIFF_FORMAT_INVALID');
+      scope = {
+        paths: scopePaths, diffRequired: true,
+        diffIdentity: diff[1], diffEvidenceLocator: diff[2],
+      };
+    }
+    const facts = {
+      schemaVersion: 1,
+      packetNumber: Number(packet[1]),
+      stage: heading[1],
+      authorityRefs,
+      requiredGates,
+      scope,
+      proof,
+      requiredUnknowns,
+      conflicts,
+      blockers,
+      dependencies,
+      nextLegalAction: next[1],
+    };
+    const receipt = projectStageReceipt(facts);
+    if (receipt.status === 'INVALID') throw new Error('REPROJECT_INVALID');
+    if (receipt.receiptDigest !== digest) {
+      return {status: 'CONFLICT', reasonCodes: ['STAGE_RECEIPT_DIGEST_CONFLICT'], value: null};
+    }
+    if (receipt.status !== status[1] || renderStageReceipt(receipt).trimEnd() !== block.trimEnd()) {
+      return {status: 'CONFLICT', reasonCodes: ['STAGE_RECEIPT_CANONICAL_IDENTITY_CONFLICT'], value: null};
+    }
+    return {status: 'VALID', reasonCodes: [], value: receipt};
+  } catch {
+    return {status: 'UNKNOWN', reasonCodes: ['STAGE_RECEIPT_FORMAT_INVALID'], value: null};
+  }
+}
+
 function parseArgs(argv = process.argv.slice(2)) {
   const parsed = { format: 'json' };
   let formatSeen = false;
@@ -410,6 +540,7 @@ module.exports = {
   exitCodeFor,
   invalidResult,
   parseArgs,
+  parseRenderedStageReceipt,
   projectStageReceipt,
   readInputFile,
   renderStageReceipt,

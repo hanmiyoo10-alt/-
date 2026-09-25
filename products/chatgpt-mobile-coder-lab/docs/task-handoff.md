@@ -39,7 +39,7 @@ A manifest binds one phase to:
 - caller-stable `phaseId` and bounded `phaseClass`;
 - D-012 route plus one exact executor, never `either`;
 - normalized Work System `path:` / `surface:` scopes;
-- D-013 workspace identity: isolated `repository`, fixed `landing_metadata`, or explicit non-repository `not_applicable`;
+- D-013 workspace identity: isolated `repository`, fixed `landing_metadata`, fixed M-only `landing_branch_repair`, or explicit non-repository `not_applicable`;
 - optional observed base SHA as historical evidence only;
 - whether D-013 lease evidence is required and, when required, the exact lease identity/acquisition generation;
 - bounded source-authority, input, expected-output, and acceptance locators;
@@ -65,7 +65,11 @@ Allowed phase dispositions are:
 - `PARTIAL` — bounded progress exists but the phase is not complete;
 - `BLOCKED` — current evidence prevents phase completion.
 
-For `COMPLETE`, `repository` and `landing_metadata` workspaces must be `clean`; non-repository contexts must be `not_applicable`. At least one output locator and one validation locator are required.
+For ordinary `COMPLETE`, `repository` and `landing_metadata` workspaces must be `clean`; non-repository contexts must be `not_applicable`. At least one output locator and one validation locator are required.
+
+One narrow additive exception exists for reviewed validation-residue cleanup manifests. A `REPOSITORY_MUTATION` manifest whose exact scope is one cleanup `path:` plus one `surface:mcl:validation-residue-cleanup:<reviewed-id>` may complete with `workspaceResult=preserved_dirty` only when the receipt carries `workspacePreservation.kind=TRACKED_DIFF_PRESERVED`, equal non-empty SHA-256 identities for the exact tracked `git diff --binary` bytes before and after cleanup, non-empty normalized preserved path refs that exclude the cleanup path, and a durable preservation evidence locator that is also present in `validationRefs`. This proves the independently authorized cleanup finished without erasing the parent's pre-existing tracked dirty state; it does not make that parent workspace clean.
+
+`workspacePreservation` is optional and is omitted entirely from legacy receipt normalization and rendering when absent. It is forbidden for ordinary `clean`, `not_applicable`, or `unknown` workspace results and for `BLOCKED` or `PARTIAL` receipts. The preserved-dirty exception does not weaken ordinary `COMPLETE => clean` semantics, grant commit/push/merge/release/runtime/device authority, or authorize cleanup outside the manifest's exact path.
 
 None of these dispositions prove Work System `DONE`, `CONTRACT_PROVEN`, `LIVE_PROVEN`, merge authority, release readiness, or production state. Consumers must re-read those owners directly.
 
@@ -85,6 +89,7 @@ The implementation reuses Work System scope normalization and the public D-013 r
 - repository-backed S work uses `server/*` under `/root/nyang-worktrees/`;
 - repository-backed M work uses `mainphone/*` under `/data/data/com.termux/files/home/nyang-worktrees/`;
 - fixed landing Git-metadata phases use the exact D-013 `landing_metadata` identity and matching `surface:mcl-landing-origin-main:<executor>` scope; arbitrary landing paths remain invalid;
+- fixed landing branch-repair phases use only route/executor `M / M`, workspace kind `landing_branch_repair`, branch `mainphone/work`, worktree `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work`, and scope `surface:mcl-landing-branch:M`;
 - route `S` requires `repository` or `landing_metadata`, with the documented exact executor `M` fallback remaining valid;
 - non-repository semantic contexts use explicit `not_applicable` repository identity.
 

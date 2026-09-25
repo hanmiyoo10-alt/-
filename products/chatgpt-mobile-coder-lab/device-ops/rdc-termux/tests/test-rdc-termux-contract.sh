@@ -42,7 +42,7 @@ done
 [ -n "$out" ] || exit 2
 pkg="$out/node_modules/@wonderwhy-er/desktop-commander"
 mkdir -p "$pkg/dist"
-printf '%s\n' '{' '  "name": "@wonderwhy-er/desktop-commander",' '  "version": "0.2.50"' '}' > "$pkg/package.json"
+printf '%s\n' '{' '  "name": "@wonderwhy-er/desktop-commander",' '  "version": "0.2.51"' '}' > "$pkg/package.json"
 printf '%s\n' '#!/bin/sh' 'exit 0' > "$pkg/dist/index.js"
 chmod 755 "$pkg/dist/index.js"
 MOCK
@@ -149,7 +149,7 @@ make_fixture check
 out=$(sh "$INSTALL" --check)
 [ ! -e "$HOME/.local/share/desktop-commander-remote-termux" ] || fail "check mutated install path"
 [ ! -e "$PREFIX/var/service/desktop-commander-remote-termux" ] || fail "check mutated service path"
-printf '%s' "$out" | grep -Fq 'MISSING package:0.2.50' || fail "check package state"
+printf '%s' "$out" | grep -Fq 'MISSING package:0.2.51' || fail "check package state"
 ok "default check is read-only"
 
 make_fixture apply

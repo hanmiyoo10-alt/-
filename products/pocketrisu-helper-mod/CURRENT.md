@@ -1,6 +1,6 @@
 # CURRENT — 포켓리스 보조 개조
 
-최종 갱신 기준: **2026-09-12**
+최종 갱신 기준: **2026-09-25**
 
 새 채팅이나 작업 재개 시 가장 먼저 읽는 현재 상태 체크포인트.
 
@@ -24,17 +24,21 @@
 - 서버폰 Android 알림 금지.
 
 
-## main-ssh-tunnel supervisor hardening — DEPLOY_READY
+## main-ssh-tunnel supervisor hardening — LIVE_PROVEN
 
 - 2026-09-12 중앙 Termux `runsvdir` 소실 뒤 core tunnel supervisor가 사라져 연결이 끊기는 실장애를 확인했다.
 - 서버폰 PocketRisu/sshd와 메인→서버 SSH 도달성은 정상이라 메인폰 service-supervision 축으로 격리했다.
-- 중앙 `runsvdir` 사망 원인은 `UNKNOWN` 유지.
-- core-only supervisor guard + Termux:Boot launcher가 PR #2060으로 merge됨: `d9e93115f943138ad7c675fcc675e4a0460714b9`.
-- merged-main Required/helper-docs 및 fresh detached-main 회귀 검증 PASS.
-- 현재 메인폰은 localhost health가 ready지만 중앙 `runsvdir`는 여전히 없고 guard/Boot launcher는 아직 미설치다.
+- 중앙 `runsvdir` 사망 원인은 계속 `UNKNOWN`이다.
+- base core-only supervisor guard + Termux:Boot launcher는 PR #2060으로 merge됐다: `d9e93115f943138ad7c675fcc675e4a0460714b9`.
+- guard-owner durability follow-up #2786은 PR #2878로 merge됐다: `0a25b7691bf5d768aced94403b32ebdb50f12cc3`.
+- 2026-09-25 exact merged guard + independent anchor launcher를 M에 backup-first로 배포했고 deployed hashes가 merged/current source와 일치함을 확인했다.
+- controlled guard hard loss는 anchor가 복구했고, controlled anchor hard loss는 guard가 복구했다.
+- 최종 guard/anchor는 정확히 1개씩 수렴했고 `pocketrisu-ssh-tunnel` supervision과 localhost health는 유지됐다.
+- shared top-level `runsvdir`는 여전히 없으며, guard-anchor 성공을 그 root-cause 해결로 확대 해석하지 않는다.
+- network toggle/reset, reboot, whole-Termux loss, broad service-tree restart, server PocketRisu/sshd mutation 없이 live proof를 완료했다.
 
 다음 한 단계:
-- 📱 메인폰에서 두 guard 파일을 backup-first로 설치하고 기존 서비스 broad restart 없이 실기기 post-deploy verify.
+- 이 Feature-ID는 추가 배포 없이 자연 운용을 관찰한다. shared `runsvdir` 원인/whole-Termux 복구는 별도 incident/control-plane owner에서 계속 추적한다.
 
 ## 레거시 upstream rebuild 준비 — DONE
 

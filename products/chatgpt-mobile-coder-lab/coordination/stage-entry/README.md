@@ -133,6 +133,25 @@ On PASS it:
 
 Success intentionally leaves the D-013 lease active for the next fixed owner.
 
+### Deterministic normal-stage manifest identity
+
+For the normal repository stage-entry path, D-014 binds lease acquisition through
+one semantic locator derived only from the exact active lease identity and its
+acquired ledger generation:
+
+```text
+receipt:mcl-task-lease:<leaseId>:generation:<acquiredGeneration>
+```
+
+The same locator is used in both `leaseEvidence.acquireEvidenceRef` and
+`inputRefs`. Exact replay of the same lease/generation therefore produces the
+same manifest identity even when the caller-side acquire workflow run differs.
+A different leaseId or acquired generation remains a different manifest identity.
+
+Caller-specific workflow-run identity remains execution provenance in the
+stage-entry receipt/report. It is not part of the normal stage-entry semantic
+D-014 identity. This does not change D-013 or D-014 schema or authority.
+
 Expected next action:
 
 ```text

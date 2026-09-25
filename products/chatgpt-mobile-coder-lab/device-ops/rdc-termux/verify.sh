@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-VERSION="${RDC_TERMUX_VERSION:-0.2.50}"
+VERSION="${RDC_TERMUX_VERSION:-0.2.51}"
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 HOME="${HOME:-/data/data/com.termux/files/home}"
 SERVICE_NAME="${RDC_TERMUX_SERVICE_NAME:-desktop-commander-remote-termux}"

@@ -17,6 +17,8 @@ const MAX_PR_BODY_BYTES = 12 * 1024;
 const MAX_PR_TITLE_BYTES = 240;
 const MAX_COMMENT_PAGES = 5;
 const PAGE_SIZE = 100;
+const DETACHED_CHECKPOINT_SCHEMA = 'mcl-detached-owner-checkpoint.v1';
+const DETACHED_CHECKPOINT_ACK_SCHEMA = 'mcl-detached-owner-checkpoint-ack.v1';
 const FALSE_AUTHORITY = Object.freeze({
   repositoryMutationAuthorized: false,
   deviceMutationAuthorized: false,
@@ -106,9 +108,11 @@ function parsePrRequestText(text, packetRef) {
       || /\u0000/.test(value.body)) fail('UNKNOWN', 'PR_REQUEST_BODY_INVALID');
   const n = packetNumber(packetRef);
   const refs = new RegExp('(^|\\s)Refs\\s+#' + n + '\\b', 'i');
-  const closes = new RegExp('\\b(Fixes|Closes|Resolves|Fixed|Closed|Resolved)\\s*:?[ ]*#' + n + '\\b', 'i');
+  const closes = /\b(?:close(?:s|d)?|fix(?:es|ed)?|resolve(?:s|d)?)\s*:?[ \t]*#\d+\b/i;
   if (!refs.test(value.body)) fail('BLOCKED', 'PR_REQUEST_NON_CLOSING_REF_REQUIRED');
-  if (closes.test(value.body)) fail('BLOCKED', 'PR_REQUEST_CLOSING_LINK_FORBIDDEN');
+  if (closes.test(value.title) || closes.test(value.body)) {
+    fail('BLOCKED', 'PR_REQUEST_CLOSING_LINK_FORBIDDEN');
+  }
   return {schema: PR_SCHEMA, title: value.title.trim(), body: value.body};
 }
 function parseHandoffEnvelope(text) {
@@ -265,9 +269,29 @@ async function prepareLiveContext({
     parentManifestComment, parentHandoffComment, workspace,
   };
 }
-function buildChildManifest(ctx, request, validationText, prText) {
+function resolveValidationProfileBinding(ctx, validationText) {
+  try {
+    const profile = patchOwner.resolveValidationProfileForScopes(ctx.requestedScopes);
+    const request = patchOwner.parseValidationRequestText(validationText);
+    if (request.profile !== profile.profileId) {
+      fail('BLOCKED', 'VALIDATION_PROFILE_REQUEST_MISMATCH');
+    }
+    return {profile, request};
+  } catch (error) {
+    if (error instanceof patchOwner.InvocationError) {
+      fail(error.kind, ...error.reasonCodes);
+    }
+    throw error;
+  }
+}
+function buildChildManifest(ctx, request, validationText, prText, selectedProfile = null) {
+  const profile = selectedProfile || resolveValidationProfileBinding(ctx, validationText).profile;
   const patchRef = 'receipt:mcl-repository-patch-request:' + request.patch_sha256;
   const validationRef = patchOwner.VALIDATION_REF_PREFIX + sha256(Buffer.from(validationText, 'utf8'));
+  const validationContractRef =
+    patchOwner.VALIDATION_CONTRACT_REF_PREFIX + profile.contractDigest;
+  const validationAdapterRef = patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
+    + patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest;
   const prRef = 'receipt:mcl-pr-publication-request:' + sha256(Buffer.from(prText, 'utf8'));
   return taskHandoff.buildManifest({
     schemaVersion: 1,
@@ -292,7 +316,7 @@ function buildChildManifest(ctx, request, validationText, prText) {
       `commit:${ctx.parentManifest.observedBaseSha}`,
       commentUrl(ctx.packet, ctx.parentManifestComment),
       commentUrl(ctx.packet, ctx.parentHandoffComment),
-      patchRef, validationRef, prRef,
+      patchRef, validationRef, validationContractRef, validationAdapterRef, prRef,
       ctx.parentManifest.leaseEvidence.acquireEvidenceRef,
     ],
     expectedOutputRefs: pathScopes(ctx.requestedScopes).map((item) => 'path:' + item),
@@ -314,12 +338,115 @@ function writeEvidenceFiles(ctx, manifestText, tempRoot = null) {
 function removeEvidenceFiles(files) {
   try { fs.rmSync(files.dir, {recursive: true, force: true}); } catch (_) {}
 }
-function requirePatchOwnerPass(receipt) {
+function patchOwnerPassState(receipt) {
   if (!receipt || receipt.validity !== 'VALID' || receipt.schemaVersion !== 2
-      || receipt.executionLifecycle !== 'FINISHED'
-      || receipt.attentionDisposition !== 'COMPLETE' || receipt.result !== 'PASS') {
-    fail(receipt?.result === 'CONFLICT' ? 'CONFLICT' : 'BLOCKED', 'PATCH_OWNER_NOT_PASS');
+      || receipt.executionLifecycle !== 'FINISHED') {
+    fail(receipt?.result === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN', 'PATCH_OWNER_RECEIPT_INVALID');
   }
+  return receipt.attentionDisposition === 'COMPLETE' && receipt.result === 'PASS';
+}
+function patchOwnerCounter(receipt, name) {
+  const row = receipt?.counters?.find((item) => item.name === name);
+  return row?.status === 'KNOWN' ? row.value : null;
+}
+function patchOwnerAttention(receipt, locator) {
+  const reasonCode = receipt?.reasonCodes?.[0]
+    || receipt?.conflicts?.[0]
+    || receipt?.requiredUnknowns?.[0]
+    || receipt?.blockers?.[0]
+    || 'PATCH_OWNER_ATTENTION_REQUIRED';
+  const severity = receipt?.result === 'CONFLICT' ? 'CONFLICT'
+    : receipt?.result === 'UNKNOWN' ? 'UNKNOWN'
+      : receipt?.result === 'BLOCKED' ? 'BLOCKER'
+        : receipt?.result === 'FAIL' ? 'FAIL' : 'WARN';
+  return [{
+    subject: receipt?.primitiveId || 'mcl:repository-worktree-patch',
+    reasonCode,
+    severity,
+    constraint: 'IMPLEMENTATION_ATTENTION',
+    nextPhase: receipt?.nextLegalAction || 'NEEDS_SEMANTIC_DECISION',
+    locator,
+  }];
+}
+function projectPatchOwnerStopView({ctx, child, patchReceipt, deps = {}}) {
+  const persistChild = deps.persistPatchOwnerArtifacts || patchOwner.persistAgentArtifacts;
+  const childLocators = persistChild(patchReceipt, child, deps.patchOwnerArtifactDeps || {});
+  const childOutput = patchOwner.ownerDecisionOutput(patchReceipt);
+  const counters = [
+    {name: 'changed_file_count', value: patchOwnerCounter(patchReceipt, 'changed_paths') || 0},
+    {name: 'pr_created', value: 0},
+    {name: 'commit_created', value: patchOwnerCounter(patchReceipt, 'commit_created') || 0},
+  ];
+  for (const name of [
+    'validation_passed', 'validation_failed', 'validation_infra', 'validation_not_run',
+  ]) {
+    const value = patchOwnerCounter(patchReceipt, name);
+    if (value !== null) counters.push({name, value});
+  }
+  const receipt = executionReceipt.projectExecutionReceipt({
+    schemaVersion: 2,
+    operationId: 'mcl-repository-implementation:' + child.manifestId,
+    primitiveId: 'mcl:known-owner-repository-implementation:s',
+    sourceIdentity: {
+      kind: 'WORK_PACKET', locator: ctx.packetRef, identity: ctx.context.packetBodySha256,
+    },
+    executionSurface: 'MCL:S',
+    stage: 'IMPLEMENTATION_PR',
+    executionLifecycle: patchReceipt.executionLifecycle,
+    attentionDisposition: patchReceipt.attentionDisposition,
+    result: patchReceipt.result,
+    proofScope: 'BOUND_REPOSITORY_IMPLEMENTATION_PR_CHILD_STOP',
+    steps: [
+      {name: 'parent-stage-entry', result: 'PASS',
+        evidenceLocator: commentUrl(ctx.packet, ctx.parentHandoffComment)},
+      {name: 'repository-patch-owner', result: patchReceipt.result,
+        evidenceLocator: childLocators.reportLocator},
+    ],
+    counters,
+    affectedFiles: patchReceipt.affectedFiles || [],
+    artifactLocators: [
+      childLocators.receiptLocator,
+      childLocators.reportLocator,
+      ...(patchReceipt.artifactLocators || []),
+    ],
+    reasonCodes: patchReceipt.reasonCodes || [],
+    requiredUnknowns: patchReceipt.requiredUnknowns || [],
+    conflicts: patchReceipt.conflicts || [],
+    blockers: patchReceipt.blockers || [],
+    exitCode: patchReceipt.exitCode,
+    stderrTail: null,
+    nextLegalAction: patchReceipt.nextLegalAction,
+  });
+  const report = {
+    schemaVersion: 1,
+    mode: 'MCL_REPOSITORY_IMPLEMENTATION_REPORT',
+    packetRef: ctx.packetRef,
+    childManifestId: child.manifestId,
+    childReceiptDigest: patchReceipt.receiptDigest,
+    childReceiptLocator: childLocators.receiptLocator,
+    childReportLocator: childLocators.reportLocator,
+    result: receipt.result,
+    attentionDisposition: receipt.attentionDisposition,
+    reasonCodes: receipt.reasonCodes,
+    output: childOutput,
+    nextLegalAction: receipt.nextLegalAction,
+    authority: {...FALSE_AUTHORITY},
+  };
+  const persist = deps.persistArtifacts || persistArtifacts;
+  const locators = persist(child, report, receipt);
+  const locator = childOutput.validationArtifact || childLocators.reportLocator;
+  return agentDecisionView.projectAgentDecisionView({
+    receipt,
+    phase: 'IMPLEMENTATION_PR',
+    output: {
+      stageOwner: patchOwner.STAGE_OWNER_ID,
+      mutationPrimitive: patchOwner.MUTATION_PRIMITIVE_ID,
+      ...childOutput,
+    },
+    attention: patchOwnerAttention(patchReceipt, locator),
+    receiptLocator: locators.receiptLocator,
+    reportLocator: locators.reportLocator,
+  });
 }
 function currentGitHead(manifest, spawn = childProcess.spawnSync) {
   const local = runGit(manifest.workspace.worktree, ['rev-parse', 'HEAD'], spawn);
@@ -378,7 +505,34 @@ function persistArtifacts(manifest, report, receipt) {
     receiptPath,
   };
 }
-function buildStageReceipt({ctx, child, commit, pr, locators, comments}) {
+function validationSummaryOutput(patchReceipt) {
+  const child = patchOwner.ownerDecisionOutput(patchReceipt);
+  const output = {};
+  for (const key of [
+    'validationPassed', 'validationFailed', 'validationInfra', 'validationNotRun',
+    'validationArtifact',
+  ]) {
+    if (child[key] !== undefined) output[key] = child[key];
+  }
+  return output;
+}
+function validationSummaryCounters(patchReceipt) {
+  const child = patchOwner.ownerDecisionOutput(patchReceipt);
+  const counters = [];
+  for (const [key, name] of [
+    ['validationPassed', 'validation_passed'],
+    ['validationFailed', 'validation_failed'],
+    ['validationInfra', 'validation_infra'],
+    ['validationNotRun', 'validation_not_run'],
+  ]) {
+    if (Number.isSafeInteger(child[key]) && child[key] >= 0) {
+      counters.push({name, value: child[key]});
+    }
+  }
+  return counters;
+}
+function buildStageReceipt({ctx, child, commit, pr, locators, comments, patchReceipt}) {
+  const validationOutput = validationSummaryOutput(patchReceipt);
   return executionReceipt.projectExecutionReceipt({
     schemaVersion: 2,
     operationId: 'mcl-repository-implementation:' + child.manifestId,
@@ -403,6 +557,7 @@ function buildStageReceipt({ctx, child, commit, pr, locators, comments}) {
       {name: 'changed_file_count', value: pr.changed.length},
       {name: 'pr_created', value: 1},
       {name: 'commit_created', value: 1},
+      ...validationSummaryCounters(patchReceipt),
     ],
     affectedFiles: pr.changed,
     artifactLocators: [
@@ -410,6 +565,7 @@ function buildStageReceipt({ctx, child, commit, pr, locators, comments}) {
       commentUrl(ctx.packet, comments.childManifest), commentUrl(ctx.packet, comments.childHandoff),
       commentUrl(ctx.packet, comments.childReceipt), commentUrl(ctx.packet, comments.parentReceipt),
       locators.reportLocator,
+      ...(validationOutput.validationArtifact ? [validationOutput.validationArtifact] : []),
     ],
     reasonCodes: [],
     requiredUnknowns: [],
@@ -420,6 +576,36 @@ function buildStageReceipt({ctx, child, commit, pr, locators, comments}) {
     nextLegalAction: 'VALIDATION_MERGE',
   });
 }
+async function emitDetachedCheckpoint(checkpointSink, {
+  checkpoint,
+  primitiveId,
+  targetIdentity,
+  evidenceLocator,
+  nextPrimitive,
+  finalReceiptDigest = null,
+  finalReceiptLocator = null,
+}) {
+  if (checkpointSink === null || checkpointSink === undefined) return;
+  if (typeof checkpointSink !== 'function') {
+    fail('UNKNOWN', 'CONTINUITY_CHECKPOINT_SINK_INVALID');
+  }
+  try {
+    await checkpointSink({
+      schema: DETACHED_CHECKPOINT_SCHEMA,
+      checkpoint,
+      primitiveId,
+      targetIdentity,
+      evidenceLocator,
+      nextPrimitive,
+      finalReceiptDigest,
+      finalReceiptLocator,
+    });
+  } catch (error) {
+    if (error instanceof ImplementationError) throw error;
+    fail('BLOCKED', 'CONTINUITY_CHECKPOINT_PERSIST_FAILED');
+  }
+}
+
 async function executePrepared(ctx, inputs, deps = {}) {
   const runner = deps.runner || stageEntry.runDefault;
   const operatorRunner = (args) => runner(['gh', ...args]);
@@ -433,6 +619,7 @@ async function executePrepared(ctx, inputs, deps = {}) {
   const validateReleased = deps.validateReleased || workspaceHolder.validateEvidence;
   const headReader = deps.currentGitHead || currentGitHead;
   const persist = deps.persistArtifacts || persistArtifacts;
+  const checkpointSink = deps.checkpointSink || null;
   const readAfterRelease = deps.readAfterRelease || (async () => {
     const client = operator.createOperatorGitHubClient({
     repo: REPO, env, runner: operatorRunner, fetchImpl,
@@ -446,7 +633,7 @@ async function executePrepared(ctx, inputs, deps = {}) {
   const patchBytes = readRegular(inputs.patchFile, 'PATCH_FILE', patchOwner.MAX_PATCH_BYTES);
   if (sha256(patchBytes) !== request.patch_sha256) fail('CONFLICT', 'PATCH_HASH_CONFLICT');
   if (!same(request.expected_paths, pathScopes(ctx.requestedScopes))) fail('CONFLICT', 'PATCH_PATH_SCOPE_CONFLICT');
-  patchOwner.parseValidationRequestText(inputs.validationRequestText);
+  const validationBinding = resolveValidationProfileBinding(ctx, inputs.validationRequestText);
   if (!readRegular(inputs.requestFile, 'REQUEST_FILE').equals(Buffer.from(inputs.requestText, 'utf8'))) {
     fail('CONFLICT', 'REQUEST_TEXT_FILE_CONFLICT');
   }
@@ -455,7 +642,8 @@ async function executePrepared(ctx, inputs, deps = {}) {
     fail('CONFLICT', 'VALIDATION_REQUEST_TEXT_FILE_CONFLICT');
   }
   const prRequest = parsePrRequestText(inputs.prRequestText, ctx.packetRef);
-  const child = buildChildManifest(ctx, request, inputs.validationRequestText, inputs.prRequestText);
+  const child = buildChildManifest(
+    ctx, request, inputs.validationRequestText, inputs.prRequestText, validationBinding.profile);
   const childText = taskHandoff.renderManifest(child);
   const childManifestComment = postComment(childText);
   const childHandoffText = renderHandoff(child);
@@ -469,6 +657,13 @@ async function executePrepared(ctx, inputs, deps = {}) {
     const secret = claimed.secret;
     const check = checkHolder(evidenceFiles, secret);
     if (check.status !== 'CHECK_PASS') fail('BLOCKED', ...(check.reasonCodes || ['HOLDER_CHECK_FAILED']));
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'WORKSPACE_READY',
+      primitiveId: 'MCL_WORKSPACE_HOLDER',
+      targetIdentity: 'manifest:' + child.manifestId,
+      evidenceLocator: 'receipt:mcl-task-manifest:' + child.manifestId,
+      nextPrimitive: 'PATCH_PREPARE',
+    });
     const childHandoff = parseHandoffEnvelope(childHandoffText);
     const patchReceipt = await (deps.invokePatchOwner || patchOwner.invokeLive)({
       repo: REPO,
@@ -483,15 +678,33 @@ async function executePrepared(ctx, inputs, deps = {}) {
       runner: operatorRunner, fetchImpl, spawnSyncImpl,
       validationSpawnSyncImpl: deps.validationSpawnSyncImpl || childProcess.spawnSync,
       root: ROOT,
+      checkpointSink,
     });
-    requirePatchOwnerPass(patchReceipt);
+    if (!patchOwnerPassState(patchReceipt)) {
+      return projectPatchOwnerStopView({ctx, child, patchReceipt, deps});
+    }
+    const validationOutput = validationSummaryOutput(patchReceipt);
     await (deps.guardCurrent || patchOwner.guardCurrent)({
       repo: REPO, manifest: child, handoff: childHandoff,
       holderSecret: secret, env, runner: operatorRunner, fetchImpl,
     });
     const commit = headReader(child, spawnSyncImpl);
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'REMOTE_HEAD_VERIFIED',
+      primitiveId: 'REPOSITORY_REMOTE_HEAD_VERIFY',
+      targetIdentity: 'commit:' + commit,
+      evidenceLocator: 'commit:' + commit,
+      nextPrimitive: 'PR_CREATE',
+    });
     const pr = (deps.publishPr || publishPr)({
       manifest: child, request: prRequest, expectedHead: commit, runner,
+    });
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'PR_CREATED',
+      primitiveId: 'REPOSITORY_PR_CREATE',
+      targetIdentity: 'pr:#' + pr.number,
+      evidenceLocator: 'pr:#' + pr.number,
+      nextPrimitive: 'COORDINATION_RELEASE',
     });
     await (deps.guardCurrent || patchOwner.guardCurrent)({
       repo: REPO, manifest: child, handoff: childHandoff,
@@ -511,6 +724,13 @@ async function executePrepared(ctx, inputs, deps = {}) {
     if (!released.ok) fail('BLOCKED', ...released.reasonCodes);
     const holderRelease = releaseHolder(evidenceFiles, secret);
     if (holderRelease.status !== 'RELEASED') fail('BLOCKED', ...holderRelease.reasonCodes);
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'COORDINATION_RELEASED',
+      primitiveId: 'MCL_COORDINATION_RELEASE',
+      targetIdentity: 'lease:' + child.leaseEvidence.leaseId,
+      evidenceLocator: 'run:' + release.value.runId,
+      nextPrimitive: 'FINALIZE_RECEIPTS',
+    });
     const releaseEvidence = {
       ledgerRef: '#2352',
       leaseId: child.leaseEvidence.leaseId,
@@ -520,7 +740,14 @@ async function executePrepared(ctx, inputs, deps = {}) {
     const childReceipt = taskHandoff.buildCompletionReceipt(child, {
       disposition: 'COMPLETE',
       outputRefs: [`commit:${commit}`, `pr:#${pr.number}`],
-      validationRefs: [`pr:#${pr.number}`, `receipt:mcl-repository-patch-owner:${child.manifestId}`],
+      validationRefs: [
+        `pr:#${pr.number}`,
+        `receipt:mcl-repository-patch-owner:${child.manifestId}`,
+        patchOwner.VALIDATION_CONTRACT_REF_PREFIX + validationBinding.profile.contractDigest,
+        patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
+          + patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest,
+        ...(validationOutput.validationArtifact ? [validationOutput.validationArtifact] : []),
+      ],
       observedRefs: [`commit:${ctx.mainSha}`, `commit:${commit}`, `pr:#${pr.number}`],
       leaseDisposition: 'RELEASED',
       leaseReleaseEvidence: releaseEvidence,
@@ -558,6 +785,11 @@ async function executePrepared(ctx, inputs, deps = {}) {
       commit: `commit:${commit}`,
       pr: `pr:#${pr.number}`,
       changedFiles: pr.changed,
+      stageOwnerId: patchOwner.STAGE_OWNER_ID,
+      mutationPrimitiveId: patchOwner.MUTATION_PRIMITIVE_ID,
+      validationProfile: validationBinding.profile.profileId,
+      validationProfileVersion: validationBinding.profile.profileVersion,
+      validationContractDigest: validationBinding.profile.contractDigest,
       leaseReleasedGeneration: released.state.generation,
       comments,
       result: 'PASS',
@@ -587,6 +819,9 @@ async function executePrepared(ctx, inputs, deps = {}) {
       phase: 'IMPLEMENTATION_PR',
       output: {
         changedFileCount: pr.changed.length,
+        stageOwner: patchOwner.STAGE_OWNER_ID,
+        mutationPrimitive: patchOwner.MUTATION_PRIMITIVE_ID,
+        validationProfile: validationBinding.profile.profileId,
         commit: `commit:${commit}`,
         pr: `pr:#${pr.number}`,
       },
@@ -595,6 +830,15 @@ async function executePrepared(ctx, inputs, deps = {}) {
       reportLocator: locators.reportLocator,
     });
     if (agentDecisionView.exitCodeFor(view) !== 0) fail('UNKNOWN', 'AGENT_VIEW_NOT_COMPLETE');
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'FINISHED',
+      primitiveId: 'MCL_REPOSITORY_IMPLEMENTATION_FINAL',
+      targetIdentity: 'receipt:' + receipt.receiptDigest,
+      evidenceLocator: locators.receiptLocator,
+      nextPrimitive: null,
+      finalReceiptDigest: receipt.receiptDigest,
+      finalReceiptLocator: locators.receiptLocator,
+    });
     return view;
   } finally {
     removeEvidenceFiles(evidenceFiles);
@@ -645,6 +889,37 @@ function parseArgs(argv) {
   for (const key of allowed) if (!values[key]) fail('UNKNOWN', 'ARGUMENT_REQUIRED:' + key);
   return values;
 }
+function createDetachedIpcCheckpointSink(processRef = process, timeoutMs = 15000) {
+  if (typeof processRef.send !== 'function') fail('UNKNOWN', 'DETACHED_IPC_REQUIRED');
+  let seq = 0;
+  return (event) => new Promise((resolve, reject) => {
+    const current = ++seq;
+    let settled = false;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      processRef.off('message', onMessage);
+      if (error) reject(error); else resolve();
+    };
+    const onMessage = (message) => {
+      if (!message || message.schema !== DETACHED_CHECKPOINT_ACK_SCHEMA
+          || message.seq !== current) return;
+      if (message.status === 'PASS') finish();
+      else finish(new ImplementationError('BLOCKED',
+        Array.isArray(message.reasonCodes) && message.reasonCodes.length
+          ? message.reasonCodes : ['CONTINUITY_CHECKPOINT_PERSIST_FAILED']));
+    };
+    const timer = setTimeout(() => finish(new ImplementationError(
+      'BLOCKED', ['CONTINUITY_CHECKPOINT_ACK_TIMEOUT'])), timeoutMs);
+    processRef.on('message', onMessage);
+    processRef.send({type: 'checkpoint', seq: current, event}, (error) => {
+      if (error) finish(new ImplementationError(
+        'BLOCKED', ['CONTINUITY_CHECKPOINT_IPC_FAILED']));
+    });
+  });
+}
+
 async function runCli(argv = process.argv.slice(2), deps = {}) {
   let packetRef = 'UNKNOWN';
   try {
@@ -673,7 +948,9 @@ async function runCli(argv = process.argv.slice(2), deps = {}) {
   }
 }
 if (require.main === module) {
-  runCli().then((view) => {
+  const detachedWorker = process.env.MCL_DETACHED_FIXED_WORKER_V1 === '1';
+  const deps = detachedWorker ? {checkpointSink: createDetachedIpcCheckpointSink(process)} : {};
+  runCli(process.argv.slice(2), deps).then((view) => {
     process.stdout.write(JSON.stringify(view, null, 2) + '\n');
     process.exitCode = agentDecisionView.exitCodeFor(view);
   }).catch((error) => {
@@ -689,6 +966,9 @@ module.exports = {
   PR_SCHEMA,
   buildChildManifest,
   buildStageReceipt,
+  createDetachedIpcCheckpointSink,
+  emitDetachedCheckpoint,
+  resolveValidationProfileBinding,
   commentUrl,
   changedBetween,
   errorView,

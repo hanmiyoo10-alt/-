@@ -255,12 +255,14 @@ The owner also exposes one **in-process only** validation seam for the Phase 8.6
 coordinator. The public CLI is unchanged and does not accept a validation
 command, profile, script, argv, path, working directory or environment.
 
-The caller supplies a strict data-only request object to `invokeLive()`:
+The in-process stage coordinator supplies a strict data-only request object to
+`invokeLive()`, but the request is verification input rather than profile
+selection authority:
 
 ```json
 {
   "schema": "mcl-repository-validation-request.v1",
-  "profile": "mcl:d014-completion-set:v1"
+  "profile": "<exact reviewed profile id>"
 }
 ```
 
@@ -270,18 +272,32 @@ Its exact file bytes are SHA-256 bound in the current D-014 manifest as:
 receipt:mcl-repository-validation-request:<sha256>
 ```
 
-If that binding is missing, conflicting, ambiguous or changes during the
-invocation, the owner fails closed. A manifest that carries such a binding
+The same manifest also binds the repository-owned semantic contract digest:
+
+```text
+receipt:mcl-repository-validation-contract:<sha256>
+```
+
+If either binding is missing, conflicting, ambiguous or changes during the
+invocation, the owner fails closed. A manifest that carries validation binding
 cannot silently fall back to the legacy no-validation path.
 
-V1 has one repository-owned fixed profile only:
+V1 has exactly three repository-owned fixed profiles:
 
 ```text
 mcl:d014-completion-set:v1
+repo:validation-continuation:v1
+repo:published-progress-recovery:v1
 ```
 
-It is admitted only for the exact reviewed completion-set patch paths. After
-`PREPARE` succeeds and before `COMMIT`, the owner runs this fixed sequence in
+Each profile owns one exact path+surface signature, ordered fixed checks,
+profile version, compatible fixed stage owner, mutation primitive identity and
+deterministic contract digest. Profile-to-check mapping is repository source,
+not caller data.
+
+The completion-set profile remains admitted only for the exact reviewed
+completion-set scope. After `PREPARE` succeeds and before `COMMIT`, the owner
+runs this fixed sequence in
 the already-authorized leased worktree:
 
 ```text
@@ -290,6 +306,14 @@ node --check products/chatgpt-mobile-coder-lab/coordination/tests/test-completio
 node --test  products/chatgpt-mobile-coder-lab/coordination/tests/test-completion-receipt-set.cjs
 node --test  products/chatgpt-mobile-coder-lab/coordination/tests/test-task-handoff.cjs
 ```
+
+The `repo:validation-continuation:v1` profile is admitted only for the exact
+five validation-continuation paths plus its semantic surface. Its fixed checks
+cover stage-receipt and validation-continuation syntax/contracts plus the
+neighboring validation-merge, Work System, execution-receipt and Agent
+Decision View contracts.
+
+The `repo:published-progress-recovery:v1` profile is admitted only for the exact six published-progress-recovery paths plus `surface:repo:published-progress-recovery-projection` and `surface:mcl:published-progress-recovery-inspection`. Its fixed checks cover pure classifier syntax/contract, MCL adapter syntax/contract, reviewed RDC session-evidence, and the existing effect-recovery neighbor. The caller cannot substitute another test path or check list.
 
 The executable and argv are repository source, not caller data. Children run
 with `shell=false`, a bounded timeout/output ceiling, the manifest worktree as

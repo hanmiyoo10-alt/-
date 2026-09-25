@@ -292,6 +292,18 @@ const REVIEW_THREADS_QUERY = [
   '}',
 ].join('\n');
 
+const STRICT_CURRENTNESS_QUERY = [
+  'query($owner:String!,$name:String!,$number:Int!){',
+  ' repository(owner:$owner,name:$name){',
+  '  pullRequest(number:$number){number headRefOid baseRefOid mergeStateStatus}',
+  ' }',
+  '}',
+].join('\n');
+
+const REVIEWED_MERGE_STATES = new Set([
+  'BEHIND', 'BLOCKED', 'CLEAN', 'DIRTY', 'DRAFT', 'HAS_HOOKS', 'UNKNOWN', 'UNSTABLE',
+]);
+
 async function readReviewBarrier(client, prNumber) {
   const reviews = await fetchPagedArray(client,
     (page) => '/pulls/' + prNumber + '/reviews?per_page=100&page=' + page, 'REVIEWS');
@@ -360,6 +372,122 @@ async function readReviewBarrier(client, prNumber) {
     pendingReviewerCount: pending,
     evidenceLocator: 'pr:#' + prNumber,
   };
+}
+
+async function readStrictProtection(client) {
+  const value = await api(client,
+    '/branches/main/protection/required_status_checks', 'STRICT_PROTECTION');
+  if (!value || typeof value.strict !== 'boolean') {
+    throw new OwnerError('UNKNOWN', ['STRICT_PROTECTION_UNKNOWN'],
+      'branch-protection:main:required_status_checks');
+  }
+  return {
+    strict: value.strict,
+    evidenceLocator: 'branch-protection:main:required_status_checks',
+  };
+}
+
+async function readStrictPrMergeState(client, prNumber, expectedHead) {
+  let value;
+  try {
+    value = await client.graphql(STRICT_CURRENTNESS_QUERY, {
+      owner: 'hanmiyoo10-alt', name: '-', number: prNumber,
+    });
+  } catch {
+    throw new OwnerError('UNKNOWN', ['PR_MERGE_STATE_READ_FAILED'], 'pr:#' + prNumber);
+  }
+  const pr = value?.data?.repository?.pullRequest;
+  if (!pr || Number(pr.number) !== prNumber
+      || typeof pr.headRefOid !== 'string' || typeof pr.mergeStateStatus !== 'string') {
+    throw new OwnerError('UNKNOWN', ['PR_MERGE_STATE_UNKNOWN'], 'pr:#' + prNumber);
+  }
+  if (pr.headRefOid !== expectedHead) {
+    throw new OwnerError('CONFLICT', ['PR_MERGE_STATE_HEAD_CONFLICT'], 'pr:#' + prNumber);
+  }
+  const mergeStateStatus = pr.mergeStateStatus.toUpperCase();
+  if (!REVIEWED_MERGE_STATES.has(mergeStateStatus) || mergeStateStatus === 'UNKNOWN') {
+    throw new OwnerError('UNKNOWN', ['PR_MERGE_STATE_UNKNOWN'], 'pr:#' + prNumber);
+  }
+  if (mergeStateStatus === 'BEHIND') {
+    throw new OwnerError('BLOCKED', ['PR_HEAD_BEHIND_STRICT_BASE'], 'pr:#' + prNumber);
+  }
+  return {
+    mergeStateStatus,
+    evidenceLocator: 'pr:#' + prNumber,
+  };
+}
+
+async function readStrictAncestry(client, mainSha, expectedHead) {
+  const locator = 'compare:' + mainSha + '...' + expectedHead;
+  const value = await api(client,
+    '/compare/' + mainSha + '...' + expectedHead, 'STRICT_COMPARE');
+  if (!value || typeof value.status !== 'string'
+      || !Number.isInteger(value.ahead_by) || !Number.isInteger(value.behind_by)) {
+    throw new OwnerError('UNKNOWN', ['STRICT_COMPARE_UNKNOWN'], locator);
+  }
+  const baseSha = value?.base_commit?.sha;
+  const mergeBaseSha = value?.merge_base_commit?.sha;
+  if (!SHA40_RE.test(String(baseSha || '')) || !SHA40_RE.test(String(mergeBaseSha || ''))) {
+    throw new OwnerError('UNKNOWN', ['STRICT_COMPARE_IDENTITY_UNKNOWN'], locator);
+  }
+  if (baseSha !== mainSha) {
+    throw new OwnerError('CONFLICT', ['STRICT_COMPARE_BASE_CONFLICT'], locator);
+  }
+  const status = value.status.toLowerCase();
+  if (status === 'behind' || status === 'diverged' || mergeBaseSha !== mainSha) {
+    throw new OwnerError('BLOCKED', ['PR_HEAD_NOT_CURRENT_MAIN_ANCESTOR'], locator);
+  }
+  if (status === 'identical') {
+    if (expectedHead !== mainSha || value.ahead_by !== 0 || value.behind_by !== 0) {
+      throw new OwnerError('CONFLICT', ['STRICT_COMPARE_HEAD_CONFLICT'], locator);
+    }
+  } else if (status === 'ahead') {
+    if (value.ahead_by < 1 || value.behind_by !== 0) {
+      throw new OwnerError('CONFLICT', ['STRICT_COMPARE_COUNTS_CONFLICT'], locator);
+    }
+  } else {
+    throw new OwnerError('UNKNOWN', ['STRICT_COMPARE_STATUS_UNKNOWN'], locator);
+  }
+  return {
+    status,
+    mergeBaseSha,
+    evidenceLocator: locator,
+  };
+}
+
+async function readStrictCurrentness({client, prNumber, mainSha, expectedHead, perform, prefix = ''}) {
+  const protection = await perform(prefix + 'strict-protection',
+    'branch-protection:main:required_status_checks',
+    () => readStrictProtection(client));
+  if (!protection.strict) {
+    return {
+      strict: false,
+      status: 'NOT_APPLICABLE',
+      mergeStateStatus: 'NOT_APPLICABLE',
+      ancestryStatus: 'NOT_APPLICABLE',
+      mergeBaseSha: null,
+    };
+  }
+  const mergeState = await perform(prefix + 'strict-pr-merge-state', 'pr:#' + prNumber,
+    () => readStrictPrMergeState(client, prNumber, expectedHead));
+  const ancestry = await perform(prefix + 'strict-main-ancestry',
+    'compare:' + mainSha + '...' + expectedHead,
+    () => readStrictAncestry(client, mainSha, expectedHead));
+  return {
+    strict: true,
+    status: 'PASS',
+    mergeStateStatus: mergeState.mergeStateStatus,
+    ancestryStatus: ancestry.status,
+    mergeBaseSha: ancestry.mergeBaseSha,
+  };
+}
+
+function strictCurrentnessBlocked(error) {
+  return error instanceof OwnerError && error.kind === 'BLOCKED'
+    && error.reasonCodes.some((code) => (
+      code === 'PR_HEAD_BEHIND_STRICT_BASE'
+      || code === 'PR_HEAD_NOT_CURRENT_MAIN_ANCESTOR'
+    ));
 }
 
 async function readRequiredEvidence(client, headSha, prNumber) {
@@ -558,6 +686,10 @@ async function inspectWithClient({client, packetNumber, prNumber, implementation
     }
     const pr = await perform('pr-identity-files', 'pr:#' + prNumber,
       () => readOpenPr(client, prNumber, current.mainSha, implementation.expectedHead, packet.paths));
+    const strictCurrentness = await readStrictCurrentness({
+      client, prNumber, mainSha: current.mainSha,
+      expectedHead: implementation.expectedHead, perform,
+    });
     const reviews = await perform('review-barrier', 'pr:#' + prNumber,
       () => readReviewBarrier(client, prNumber));
     const required = await perform('exact-head-required', 'commit:' + implementation.expectedHead,
@@ -571,19 +703,26 @@ async function inspectWithClient({client, packetNumber, prNumber, implementation
       () => readPacket(client, packetNumber));
     const finalPr = await perform('final-pr-currentness', 'pr:#' + prNumber,
       () => readOpenPr(client, prNumber, finalCurrent.mainSha, implementation.expectedHead, packet.paths));
+    const finalStrictCurrentness = await readStrictCurrentness({
+      client, prNumber, mainSha: finalCurrent.mainSha,
+      expectedHead: implementation.expectedHead, perform, prefix: 'final-',
+    });
     await perform('final-review-currentness', 'pr:#' + prNumber,
       () => readReviewBarrier(client, prNumber));
     await perform('final-overlap-currentness', 'owner:work-system-scope-overlap',
       () => discoverOverlap(client, packetNumber, prNumber, packet.scopes));
     if (finalCurrent.mainSha !== current.mainSha
         || finalPacket.bodySha256 !== packet.bodySha256
-        || finalPr.headSha !== pr.headSha || finalPr.baseSha !== pr.baseSha) {
+        || finalPr.headSha !== pr.headSha || finalPr.baseSha !== pr.baseSha
+        || !stableEqual(finalStrictCurrentness, strictCurrentness)) {
       throw new OwnerError('UNKNOWN', ['VALIDATION_STATE_CHANGED_DURING_CAPTURE']);
     }
     state.output = {
       pr: '#' + prNumber,
       headExact: true,
       baseExact: true,
+      strictUpToDate: strictCurrentness.status,
+      strictProtection: strictCurrentness.strict ? 'STRICT' : 'NON_STRICT',
       reviewClear: true,
       overlap: 'DISJOINT',
       required: 'PASS',
@@ -619,6 +758,10 @@ async function inspectWithClient({client, packetNumber, prNumber, implementation
         reviewCount: reviews.reviewCount,
         issueCommentCount: reviews.issueCommentCount,
         reviewCommentCount: reviews.reviewCommentCount,
+        strictProtection: strictCurrentness.strict,
+        mergeStateStatus: strictCurrentness.mergeStateStatus,
+        ancestryStatus: strictCurrentness.ancestryStatus,
+        mergeBaseSha: strictCurrentness.mergeBaseSha,
         result: 'PASS',
         receiptDigest: receipt.receiptDigest,
         output: state.output,
@@ -635,7 +778,9 @@ async function inspectWithClient({client, packetNumber, prNumber, implementation
       error,
       nextLegalAction: error?.kind === 'NEEDS_REVIEW'
         ? 'RESOLVE_PENDING_REVIEW'
-        : 'TARGETED_DRILLDOWN_REQUIRED',
+        : strictCurrentnessBlocked(error)
+          ? 'CURRENTIZE_PR_THROUGH_EXISTING_OWNER'
+          : 'TARGETED_DRILLDOWN_REQUIRED',
       artifactLocators: artifacts,
     });
     return {
@@ -848,6 +993,8 @@ async function finalizeWithClient({client, packetNumber, prNumber, inspectEviden
 
 const GH_READ_ENDPOINTS = Object.freeze([
   /^\/branches\/main$/,
+  /^\/branches\/main\/protection\/required_status_checks$/,
+  /^\/compare\/[0-9a-f]{40}\.\.\.[0-9a-f]{40}$/,
   /^\/issues\/(?:485|[1-9][0-9]*)$/,
   /^\/issues\/[1-9][0-9]*\/comments\?per_page=100&page=[1-9][0-9]*$/,
   /^\/pulls\/[1-9][0-9]*$/,
@@ -884,7 +1031,7 @@ function createGhCliReadClient({runner = defaultGhRunner} = {}) {
       ]), 'gh REST read failed');
     },
     async graphql(query, variables) {
-      if (query !== REVIEW_THREADS_QUERY
+      if (![REVIEW_THREADS_QUERY, STRICT_CURRENTNESS_QUERY].includes(query)
           || !variables || variables.owner !== 'hanmiyoo10-alt' || variables.name !== '-'
           || !Number.isInteger(variables.number) || variables.number < 1) {
         throw new Error('gh GraphQL query forbidden');
@@ -1079,6 +1226,7 @@ module.exports = {
   OPS_ISSUE,
   REPO,
   REVIEW_THREADS_QUERY,
+  STRICT_CURRENTNESS_QUERY,
   OwnerError,
   createGhCliReadClient,
   createLiveClient,
@@ -1099,6 +1247,10 @@ module.exports = {
   readOpenPr,
   readPacket,
   readRequiredEvidence,
+  readStrictAncestry,
+  readStrictCurrentness,
+  readStrictPrMergeState,
+  readStrictProtection,
   readReviewBarrier,
   runCli,
   validateImplementationReceipt,

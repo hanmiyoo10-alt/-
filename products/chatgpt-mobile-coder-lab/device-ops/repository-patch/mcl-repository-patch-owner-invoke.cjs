@@ -18,6 +18,7 @@ const PRIMITIVE_TIMEOUT_MS = 120000;
 const MAX_PRIMITIVE_OUTPUT_BYTES = 64 * 1024;
 const MAX_REPORT_BYTES = 16 * 1024;
 const OUTPUT_FORMATS = new Set(['receipt', 'agent-view']);
+const DETACHED_CHECKPOINT_SCHEMA = 'mcl-detached-owner-checkpoint.v1';
 
 const taskHandoff = require(path.join(COORDINATION, 'task-handoff.cjs'));
 const taskLease = require(path.join(COORDINATION, 'task-lease.cjs'));
@@ -45,13 +46,53 @@ const FIXED_BOT_NAME = 'mcl-repository-patch[bot]';
 const FIXED_BOT_EMAIL = 'mcl-repository-patch@users.noreply.github.com';
 const VALIDATION_REQUEST_FIELDS = new Set(['schema', 'profile']);
 const VALIDATION_REQUEST_SCHEMA = 'mcl-repository-validation-request.v1';
-const D014_VALIDATION_PROFILE = 'mcl:d014-completion-set:v1';
 const VALIDATION_REF_PREFIX = 'receipt:mcl-repository-validation-request:';
+const VALIDATION_CONTRACT_REF_PREFIX = 'receipt:mcl-repository-validation-contract:';
+const IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX =
+  'receipt:mcl-implementation-validation-adapters:';
+const IMPLEMENTATION_VALIDATION_ADAPTER_SCHEMA =
+  'mcl-implementation-validation-adapters.v1';
+const IMPLEMENTATION_VALIDATION_ARTIFACT_SCHEMA =
+  'mcl-implementation-validation-artifact.v1';
+const MAX_VALIDATION_ARTIFACT_BYTES = 32 * 1024;
+const STAGE_OWNER_ID = 'MCL_KNOWN_OWNER_REPOSITORY_IMPLEMENTATION_V1';
+const MUTATION_PRIMITIVE_ID = 'REPOSITORY_PATCH_V1';
+const D014_VALIDATION_PROFILE = 'mcl:d014-completion-set:v1';
+const VALIDATION_CONTINUATION_PROFILE = 'repo:validation-continuation:v1';
+const PUBLISHED_PROGRESS_RECOVERY_PROFILE = 'repo:published-progress-recovery:v1';
 const D014_COMPLETION_SET_PATHS = Object.freeze([
   'products/chatgpt-mobile-coder-lab/coordination/completion-receipt-set.cjs',
   'products/chatgpt-mobile-coder-lab/coordination/tests/test-completion-receipt-set.cjs',
   'products/chatgpt-mobile-coder-lab/docs/task-handoff.md',
 ]);
+const VALIDATION_CONTINUATION_PATHS = Object.freeze([
+  '.github/plugin-control-plane/canonical-main/work-harness/stage-receipt.cjs',
+  '.github/plugin-control-plane/canonical-main/work-harness/tests/stage-receipt-contract.cjs',
+  '.github/plugin-control-plane/canonical-main/work-harness/validation-continuation/README.md',
+  '.github/plugin-control-plane/canonical-main/work-harness/validation-continuation/validation-continuation-owner.cjs',
+  '.github/plugin-control-plane/canonical-main/work-harness/validation-continuation/tests/validation-continuation-owner-contract.cjs',
+]);
+const PUBLISHED_PROGRESS_RECOVERY_PATHS = Object.freeze([
+  '.github/plugin-control-plane/canonical-main/work-harness/published-progress-recovery/README.md',
+  '.github/plugin-control-plane/canonical-main/work-harness/published-progress-recovery/published-progress-recovery.cjs',
+  '.github/plugin-control-plane/canonical-main/work-harness/published-progress-recovery/tests/published-progress-recovery-contract.cjs',
+  'products/chatgpt-mobile-coder-lab/coordination/published-progress-recovery/README.md',
+  'products/chatgpt-mobile-coder-lab/coordination/published-progress-recovery/mcl-published-progress-recovery-inspect.cjs',
+  'products/chatgpt-mobile-coder-lab/coordination/published-progress-recovery/tests/test-mcl-published-progress-recovery-inspect.cjs',
+]);
+const D014_VALIDATION_SCOPES = Object.freeze([
+  ...D014_COMPLETION_SET_PATHS.map((item) => 'path:' + item),
+  'surface:mcl:d014-completion-set',
+].sort());
+const VALIDATION_CONTINUATION_SCOPES = Object.freeze([
+  ...VALIDATION_CONTINUATION_PATHS.map((item) => 'path:' + item),
+  'surface:repo:validation-continuation-projection',
+].sort());
+const PUBLISHED_PROGRESS_RECOVERY_SCOPES = Object.freeze([
+  ...PUBLISHED_PROGRESS_RECOVERY_PATHS.map((item) => 'path:' + item),
+  'surface:mcl:published-progress-recovery-inspection',
+  'surface:repo:published-progress-recovery-projection',
+].sort());
 const PREPARED_VALIDATION_TIMEOUT_MS = 120000;
 const MAX_VALIDATION_OUTPUT_BYTES = 64 * 1024;
 const D014_VALIDATION_CHECKS = Object.freeze([
@@ -72,6 +113,124 @@ const D014_VALIDATION_CHECKS = Object.freeze([
     args: ['--test', 'products/chatgpt-mobile-coder-lab/coordination/tests/test-task-handoff.cjs'],
   }),
 ]);
+const VALIDATION_CONTINUATION_CHECKS = Object.freeze([
+  Object.freeze({
+    name: 'stage-receipt-syntax',
+    args: ['--check', VALIDATION_CONTINUATION_PATHS[0]],
+  }),
+  Object.freeze({
+    name: 'validation-continuation-syntax',
+    args: ['--check', VALIDATION_CONTINUATION_PATHS[3]],
+  }),
+  Object.freeze({
+    name: 'stage-receipt-contract',
+    args: ['--test', VALIDATION_CONTINUATION_PATHS[1]],
+  }),
+  Object.freeze({
+    name: 'validation-continuation-contract',
+    args: ['--test', VALIDATION_CONTINUATION_PATHS[4]],
+  }),
+  Object.freeze({
+    name: 'validation-merge-contract',
+    args: ['--test', '.github/plugin-control-plane/canonical-main/work-harness/validation-merge/tests/validation-merge-owner-contract.cjs'],
+  }),
+  Object.freeze({
+    name: 'work-system-contract',
+    args: ['--test', '.github/plugin-control-plane/canonical-main/tests/work-system-contract.cjs'],
+  }),
+  Object.freeze({
+    name: 'execution-receipt-contract',
+    args: ['--test', '.github/plugin-control-plane/canonical-main/work-harness/tests/execution-receipt-contract.cjs'],
+  }),
+  Object.freeze({
+    name: 'agent-decision-view-contract',
+    args: ['--test', '.github/plugin-control-plane/canonical-main/work-harness/tests/agent-decision-view-contract.cjs'],
+  }),
+]);
+const PUBLISHED_PROGRESS_RECOVERY_CHECKS = Object.freeze([
+  Object.freeze({name: 'published-progress-source-syntax', args: ['--check', PUBLISHED_PROGRESS_RECOVERY_PATHS[1]]}),
+  Object.freeze({name: 'published-progress-adapter-syntax', args: ['--check', PUBLISHED_PROGRESS_RECOVERY_PATHS[4]]}),
+  Object.freeze({name: 'published-progress-contract', args: ['--test', PUBLISHED_PROGRESS_RECOVERY_PATHS[2]]}),
+  Object.freeze({name: 'published-progress-adapter-contract', args: ['--test', PUBLISHED_PROGRESS_RECOVERY_PATHS[5]]}),
+  Object.freeze({name: 'rdc-session-evidence-contract', args: ['--test', 'products/chatgpt-mobile-coder-lab/device-ops/rdc-session-evidence/tests/test-mcl-rdc-session-evidence.cjs']}),
+  Object.freeze({name: 'effect-recovery-contract', args: ['--test', 'products/chatgpt-mobile-coder-lab/coordination/effect-recovery/tests/test-effect-recovery-inspect.cjs']}),
+]);
+
+function buildValidationProfile({profileId, paths, scopes, checks}) {
+  const core = taskHandoff.stable({
+    profileId,
+    profileVersion: 1,
+    allowedStageOwners: [STAGE_OWNER_ID],
+    mutationPrimitiveId: MUTATION_PRIMITIVE_ID,
+    scopeShape: 'EXACT_PATH_SET',
+    paths: [...paths].sort(),
+    scopes: [...scopes].sort(),
+    checks: checks.map((check) => ({
+      checkId: check.name,
+      args: [...check.args],
+      timeoutMs: PREPARED_VALIDATION_TIMEOUT_MS,
+    })),
+    resultVocabulary: ['PASS', 'FAIL', 'INFRA', 'NOT_RUN'],
+  });
+  return Object.freeze({
+    ...core,
+    contractDigest: sha256Bytes(Buffer.from(JSON.stringify(core), 'utf8')),
+  });
+}
+const VALIDATION_PROFILES = Object.freeze([
+  buildValidationProfile({
+    profileId: D014_VALIDATION_PROFILE,
+    paths: D014_COMPLETION_SET_PATHS,
+    scopes: D014_VALIDATION_SCOPES,
+    checks: D014_VALIDATION_CHECKS,
+  }),
+  buildValidationProfile({
+    profileId: VALIDATION_CONTINUATION_PROFILE,
+    paths: VALIDATION_CONTINUATION_PATHS,
+    scopes: VALIDATION_CONTINUATION_SCOPES,
+    checks: VALIDATION_CONTINUATION_CHECKS,
+  }),
+  buildValidationProfile({
+    profileId: PUBLISHED_PROGRESS_RECOVERY_PROFILE,
+    paths: PUBLISHED_PROGRESS_RECOVERY_PATHS,
+    scopes: PUBLISHED_PROGRESS_RECOVERY_SCOPES,
+    checks: PUBLISHED_PROGRESS_RECOVERY_CHECKS,
+  }),
+]);
+function buildImplementationValidationAdapterContract(profiles = VALIDATION_PROFILES) {
+  const adapters = [];
+  for (const profile of profiles) {
+    for (const check of profile.checks) {
+      if (!Array.isArray(check.args) || check.args.length !== 2
+          || !['--check', '--test'].includes(check.args[0])) {
+        throw new Error('IMPLEMENTATION_VALIDATION_CHECK_SHAPE_UNSUPPORTED:' + check.checkId);
+      }
+      validateRepoPath(check.args[1]);
+      adapters.push({
+        profileId: profile.profileId,
+        checkId: check.checkId,
+        launcher: 'node',
+        cwdPolicy: 'manifest-worktree',
+        pathArgIndex: 1,
+        canonicalPath: check.args[1],
+        aliases: [],
+        timeoutMs: check.timeoutMs,
+        resultParser: 'node-exit-v1',
+      });
+    }
+  }
+  const core = taskHandoff.stable({
+    schema: IMPLEMENTATION_VALIDATION_ADAPTER_SCHEMA,
+    adapterVersion: 1,
+    adapters,
+  });
+  return Object.freeze({
+    ...core,
+    contractDigest: sha256Bytes(Buffer.from(JSON.stringify(core), 'utf8')),
+  });
+}
+const IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT =
+  buildImplementationValidationAdapterContract();
 const HANDOFF_FIELDS = new Set([
   'schema', 'status', 'packet_ref', 'phase', 'route', 'executor', 'effect_class',
   'manifest_id', 'lease_id', 'next_owner', 'reason_codes',
@@ -215,6 +374,20 @@ function parsePreparedContinuationRequestText(text) {
   };
 }
 
+function validationProfileById(profileId, profiles = VALIDATION_PROFILES) {
+  return profiles.find((profile) => profile.profileId === profileId) || null;
+}
+function resolveValidationProfileForScopes(scopes, profiles = VALIDATION_PROFILES) {
+  const normalized = Array.isArray(scopes) ? [...scopes].sort() : [];
+  const matches = profiles.filter((profile) => same(profile.scopes, normalized));
+  if (matches.length === 0) {
+    throw new InvocationError('BLOCKED', ['NO_REVIEWED_VALIDATION_PROFILE']);
+  }
+  if (matches.length > 1) {
+    throw new InvocationError('CONFLICT', ['VALIDATION_PROFILE_AMBIGUOUS']);
+  }
+  return matches[0];
+}
 function parseValidationRequestText(text) {
   let value;
   try { value = JSON.parse(text); }
@@ -223,7 +396,7 @@ function parseValidationRequestText(text) {
   if (value.schema !== VALIDATION_REQUEST_SCHEMA) {
     throw new InvocationError('UNKNOWN', ['VALIDATION_REQUEST_SCHEMA_INVALID']);
   }
-  if (value.profile !== D014_VALIDATION_PROFILE) {
+  if (!validationProfileById(value.profile)) {
     throw new InvocationError('BLOCKED', ['VALIDATION_PROFILE_UNSUPPORTED']);
   }
   return {schema: value.schema, profile: value.profile};
@@ -233,10 +406,23 @@ function manifestValidationRefs(manifest) {
     (item) => typeof item === 'string' && item.startsWith(VALIDATION_REF_PREFIX),
   );
 }
+function manifestValidationContractRefs(manifest) {
+  return (manifest?.inputRefs || []).filter(
+    (item) => typeof item === 'string' && item.startsWith(VALIDATION_CONTRACT_REF_PREFIX),
+  );
+}
+function manifestImplementationValidationAdapterRefs(manifest) {
+  return (manifest?.inputRefs || []).filter(
+    (item) => typeof item === 'string'
+      && item.startsWith(IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX),
+  );
+}
 function prepareValidationBinding({
   manifest, request, validationRequestText, validationRequestFile,
 }) {
   const refs = manifestValidationRefs(manifest);
+  const contractRefs = manifestValidationContractRefs(manifest);
+  const adapterRefs = manifestImplementationValidationAdapterRefs(manifest);
   if (typeof validationRequestText !== 'string' || !validationRequestFile) {
     throw new InvocationError('BLOCKED', ['VALIDATION_REQUEST_INPUT_REQUIRED']);
   }
@@ -246,8 +432,15 @@ function prepareValidationBinding({
     throw new InvocationError('CONFLICT', ['VALIDATION_REQUEST_TEXT_FILE_CONFLICT']);
   }
   const validationRequest = parseValidationRequestText(validationRequestText);
-  if (!same(request.expected_paths, D014_COMPLETION_SET_PATHS)) {
+  const profile = validationProfileById(validationRequest.profile);
+  if (!profile) {
+    throw new InvocationError('BLOCKED', ['VALIDATION_PROFILE_UNSUPPORTED']);
+  }
+  if (!same(request.expected_paths, profile.paths)) {
     throw new InvocationError('BLOCKED', ['VALIDATION_PROFILE_PATHS_UNSUPPORTED']);
+  }
+  if (!same(manifest.scopes, profile.scopes)) {
+    throw new InvocationError('BLOCKED', ['VALIDATION_PROFILE_SCOPE_UNSUPPORTED']);
   }
   const digest = sha256Bytes(fileBytes);
   const expectedRef = VALIDATION_REF_PREFIX + digest;
@@ -260,9 +453,37 @@ function prepareValidationBinding({
   if (refs[0] !== expectedRef) {
     throw new InvocationError('CONFLICT', ['VALIDATION_REQUEST_REF_CONFLICT']);
   }
+  const expectedContractRef = VALIDATION_CONTRACT_REF_PREFIX + profile.contractDigest;
+  if (contractRefs.length === 0) {
+    throw new InvocationError('BLOCKED', ['VALIDATION_CONTRACT_REF_REQUIRED']);
+  }
+  if (contractRefs.length !== 1) {
+    throw new InvocationError('CONFLICT', ['VALIDATION_CONTRACT_REF_AMBIGUOUS']);
+  }
+  if (contractRefs[0] !== expectedContractRef) {
+    throw new InvocationError('CONFLICT', ['VALIDATION_CONTRACT_REF_CONFLICT']);
+  }
+  let adapterMode = 'LEGACY';
+  let adapterContractDigest = null;
+  if (adapterRefs.length > 1) {
+    throw new InvocationError('CONFLICT', ['IMPLEMENTATION_VALIDATION_ADAPTER_REF_AMBIGUOUS']);
+  }
+  if (adapterRefs.length === 1) {
+    const expectedAdapterRef = IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
+      + IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest;
+    if (adapterRefs[0] !== expectedAdapterRef) {
+      throw new InvocationError('CONFLICT', ['IMPLEMENTATION_VALIDATION_ADAPTER_REF_CONFLICT']);
+    }
+    adapterMode = 'V1';
+    adapterContractDigest = IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest;
+  }
   return {
     request: validationRequest,
     digest,
+    contractDigest: profile.contractDigest,
+    profile,
+    adapterMode,
+    adapterContractDigest,
     filePath: path.resolve(validationRequestFile),
   };
 }
@@ -270,6 +491,14 @@ function assertValidationInputStable(binding) {
   const bytes = readBoundedRegularFile(binding.filePath, 'VALIDATION_REQUEST_FILE');
   if (sha256Bytes(bytes) !== binding.digest) {
     throw new InvocationError('CONFLICT', ['VALIDATION_REQUEST_CHANGED_DURING_INVOCATION']);
+  }
+  const currentProfile = validationProfileById(binding.request?.profile);
+  if (!currentProfile || currentProfile.contractDigest !== binding.contractDigest) {
+    throw new InvocationError('CONFLICT', ['VALIDATION_CONTRACT_CHANGED_DURING_INVOCATION']);
+  }
+  if (binding.adapterMode === 'V1'
+      && binding.adapterContractDigest !== IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest) {
+    throw new InvocationError('CONFLICT', ['IMPLEMENTATION_VALIDATION_ADAPTER_CHANGED_DURING_INVOCATION']);
   }
 }
 
@@ -666,29 +895,181 @@ function materializeContinuationPrimitiveInputs(request, state) {
   };
 }
 
-function validationEvidence(status, reasonCodes = [], checksPassed = 0) {
-  return {
+function validationEvidence(
+  profileId, status, reasonCodes = [], checksPassed = 0, summary = null,
+  adapterContractDigest = null,
+) {
+  const value = {
     status,
     reason_codes: unique(reasonCodes),
-    profile: D014_VALIDATION_PROFILE,
+    profile: profileId,
     checks_passed: checksPassed,
   };
+  if (summary) {
+    value.checks_failed = summary.failed;
+    value.checks_infra = summary.infra;
+    value.checks_not_run = summary.notRun;
+    value.adapter_contract_digest = adapterContractDigest;
+  }
+  return value;
 }
-function runFixedPreparedValidation({
+function validationStreamEvidence(text) {
+  const value = String(text || '');
+  return {
+    bytes: Buffer.byteLength(value, 'utf8'),
+    sha256: sha256Bytes(Buffer.from(value, 'utf8')),
+  };
+}
+function adapterForValidationCheck(binding, check, adapterContract) {
+  const matches = (adapterContract?.adapters || []).filter(
+    (row) => row.profileId === binding.profile.profileId && row.checkId === check.checkId,
+  );
+  if (matches.length === 0) {
+    return {kind: 'UNKNOWN', reasonCodes: ['CHECK_ADAPTER_MISSING:' + check.checkId]};
+  }
+  if (matches.length !== 1) {
+    return {kind: 'CONFLICT', reasonCodes: ['CHECK_ADAPTER_AMBIGUOUS:' + check.checkId]};
+  }
+  return {kind: 'PASS', reasonCodes: [], value: matches[0]};
+}
+function defaultValidationCandidateStat(filePath) {
+  try {
+    return fs.lstatSync(filePath);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+function resolveImplementationValidationInvocation({
+  binding,
+  check,
+  manifest,
+  adapterContract = IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT,
+  candidateStatImpl = defaultValidationCandidateStat,
+}) {
+  if (adapterContract?.schema !== IMPLEMENTATION_VALIDATION_ADAPTER_SCHEMA
+      || !SHA256_RE.test(adapterContract?.contractDigest || '')) {
+    return {kind: 'UNKNOWN', reasonCodes: ['IMPLEMENTATION_VALIDATION_ADAPTER_INVALID']};
+  }
+  const found = adapterForValidationCheck(binding, check, adapterContract);
+  if (found.kind !== 'PASS') return found;
+  const adapter = found.value;
+  if (adapter.launcher !== 'node' || adapter.cwdPolicy !== 'manifest-worktree'
+      || adapter.resultParser !== 'node-exit-v1'
+      || adapter.pathArgIndex !== 1 || adapter.timeoutMs !== check.timeoutMs
+      || !Array.isArray(adapter.aliases)) {
+    return {kind: 'CONFLICT', reasonCodes: ['CHECK_ADAPTER_CONTRACT_CONFLICT:' + check.checkId]};
+  }
+  const candidates = [adapter.canonicalPath, ...adapter.aliases];
+  const present = [];
+  for (const candidate of candidates) {
+    try {
+      validateRepoPath(candidate);
+      const stat = candidateStatImpl(path.join(manifest.workspace.worktree, candidate));
+      if (!stat) continue;
+      if (!stat.isFile() || stat.isSymbolicLink()) {
+        return {kind: 'CONFLICT', reasonCodes: ['CHECK_ADAPTER_PATH_UNSAFE:' + check.checkId]};
+      }
+      present.push(candidate);
+    } catch (error) {
+      if (error instanceof InvocationError) {
+        return {kind: error.kind, reasonCodes: error.reasonCodes};
+      }
+      return {kind: 'UNKNOWN', reasonCodes: ['CHECK_ADAPTER_PATH_READ_FAILED:' + check.checkId]};
+    }
+  }
+  if (present.length === 0) {
+    return {kind: 'UNKNOWN', reasonCodes: ['CHECK_ADAPTER_STALE:' + check.checkId]};
+  }
+  if (present.length !== 1) {
+    return {kind: 'CONFLICT', reasonCodes: ['CHECK_ADAPTER_PATH_CONFLICT:' + check.checkId]};
+  }
+  const selected = present[0];
+  const args = [...check.args];
+  args[adapter.pathArgIndex] = selected;
+  return {
+    kind: 'PASS',
+    reasonCodes: [],
+    value: {
+      launcher: adapter.launcher,
+      command: process.execPath,
+      args,
+      cwd: manifest.workspace.worktree,
+      path: selected,
+      resolution: selected === adapter.canonicalPath ? 'CANONICAL' : 'ALIAS',
+      timeoutMs: adapter.timeoutMs,
+    },
+  };
+}
+function validationArtifactSummary(rows) {
+  return {
+    passed: rows.filter((row) => row.result === 'PASS').length,
+    failed: rows.filter((row) => row.result === 'FAIL').length,
+    infra: rows.filter((row) => row.result === 'INFRA').length,
+    notRun: rows.filter((row) => row.result === 'NOT_RUN').length,
+  };
+}
+function notRunValidationRow(check) {
+  return {
+    checkId: check.checkId,
+    launcher: 'node',
+    argv: [...check.args],
+    path: null,
+    resolution: 'NOT_RUN',
+    result: 'NOT_RUN',
+    reasonCodes: [],
+    exitCode: null,
+    signal: null,
+    stdout: validationStreamEvidence(''),
+    stderr: validationStreamEvidence(''),
+  };
+}
+function buildImplementationValidationArtifact({binding, manifest, rows}) {
+  const summary = validationArtifactSummary(rows);
+  const core = taskHandoff.stable({
+    schemaVersion: 1,
+    mode: IMPLEMENTATION_VALIDATION_ARTIFACT_SCHEMA,
+    manifestId: manifest.manifestId,
+    profileId: binding.profile.profileId,
+    profileVersion: binding.profile.profileVersion,
+    profileContractDigest: binding.profile.contractDigest,
+    adapterContractDigest: binding.adapterContractDigest,
+    orderedChecks: rows,
+    summary,
+  });
+  return {
+    ...core,
+    artifactIdentityDigest: sha256Bytes(Buffer.from(JSON.stringify(core), 'utf8')),
+  };
+}
+function persistImplementationValidationArtifact(
+  manifest,
+  artifact,
+  {workspaceInspector = workspaceHolder.inspectWorkspace, writer = writeJsonSidecar} = {},
+) {
+  const workspace = workspaceInspector(manifest);
+  if (!workspace?.ok || !workspace.holderPath) {
+    throw new InvocationError('UNKNOWN', ['VALIDATION_ARTIFACT_GIT_ADMIN_UNAVAILABLE']);
+  }
+  const adminDir = path.dirname(workspace.holderPath);
+  const filePath = path.join(
+    adminDir, 'mcl-implementation-validation-' + manifest.manifestId + '.json');
+  const write = writer(filePath, artifact, MAX_VALIDATION_ARTIFACT_BYTES);
+  return {
+    filePath: write.filePath,
+    digest: write.digest,
+    locator: 'local-artifact:' + write.filePath + '#sha256=' + write.digest,
+  };
+}
+function runLegacyPreparedValidation({
   binding,
   manifest,
   env = process.env,
   validationSpawnSyncImpl = childProcess.spawnSync,
 }) {
-  if (!binding || binding.request?.profile !== D014_VALIDATION_PROFILE) {
-    return {
-      kind: 'UNKNOWN',
-      reasonCodes: ['VALIDATION_BINDING_INVALID'],
-      value: validationEvidence('UNKNOWN', ['VALIDATION_BINDING_INVALID']),
-    };
-  }
+  const profile = binding.profile;
   let checksPassed = 0;
-  for (const check of D014_VALIDATION_CHECKS) {
+  for (const check of profile.checks) {
     let run;
     try {
       run = validationSpawnSyncImpl(process.execPath, [...check.args], {
@@ -700,27 +1081,27 @@ function runFixedPreparedValidation({
         env: safeChildEnv(env),
       });
     } catch {
-      const code = 'PREPARED_VALIDATION_SPAWN_THROW:' + check.name;
+      const code = 'PREPARED_VALIDATION_SPAWN_THROW:' + check.checkId;
       return {
         kind: 'BLOCKED',
         reasonCodes: [code],
-        value: validationEvidence('BLOCKED', [code], checksPassed),
+        value: validationEvidence(profile.profileId, 'BLOCKED', [code], checksPassed),
       };
     }
     if (run?.error || run?.status === null || run?.signal) {
-      const code = 'PREPARED_VALIDATION_INFRA_ERROR:' + check.name;
+      const code = 'PREPARED_VALIDATION_INFRA_ERROR:' + check.checkId;
       return {
         kind: 'BLOCKED',
         reasonCodes: [code],
-        value: validationEvidence('BLOCKED', [code], checksPassed),
+        value: validationEvidence(profile.profileId, 'BLOCKED', [code], checksPassed),
       };
     }
     if (run.status !== 0) {
-      const code = 'PREPARED_VALIDATION_FAILED:' + check.name;
+      const code = 'PREPARED_VALIDATION_FAILED:' + check.checkId;
       return {
         kind: 'BLOCKED',
         reasonCodes: [code],
-        value: validationEvidence('BLOCKED', [code], checksPassed),
+        value: validationEvidence(profile.profileId, 'BLOCKED', [code], checksPassed),
       };
     }
     checksPassed += 1;
@@ -728,8 +1109,154 @@ function runFixedPreparedValidation({
   return {
     kind: 'PASS',
     reasonCodes: [],
-    value: validationEvidence('PASS', [], checksPassed),
+    value: validationEvidence(profile.profileId, 'PASS', [], checksPassed),
   };
+}
+function runAdapterPreparedValidation({
+  binding,
+  manifest,
+  env = process.env,
+  validationSpawnSyncImpl = childProcess.spawnSync,
+  validationAdapterResolverImpl = resolveImplementationValidationInvocation,
+  persistValidationArtifactImpl = persistImplementationValidationArtifact,
+}) {
+  const profile = binding.profile;
+  const rows = [];
+  const finish = (kind, reasonCodes) => {
+    while (rows.length < profile.checks.length) {
+      rows.push(notRunValidationRow(profile.checks[rows.length]));
+    }
+    const artifact = buildImplementationValidationArtifact({binding, manifest, rows});
+    let persisted;
+    try {
+      persisted = persistValidationArtifactImpl(manifest, artifact);
+    } catch {
+      return {
+        kind: 'CONFLICT',
+        reasonCodes: unique([...reasonCodes, 'VALIDATION_ARTIFACT_WRITE_FAILED']),
+        value: validationEvidence(
+          profile.profileId, 'CONFLICT',
+          unique([...reasonCodes, 'VALIDATION_ARTIFACT_WRITE_FAILED']),
+          artifact.summary.passed, artifact.summary, binding.adapterContractDigest),
+        artifact: null,
+        artifactLocator: null,
+      };
+    }
+    return {
+      kind,
+      reasonCodes: unique(reasonCodes),
+      value: validationEvidence(
+        profile.profileId, kind, reasonCodes, artifact.summary.passed,
+        artifact.summary, binding.adapterContractDigest),
+      artifact,
+      artifactLocator: persisted.locator,
+    };
+  };
+
+  for (const check of profile.checks) {
+    const resolved = validationAdapterResolverImpl({binding, check, manifest});
+    if (resolved.kind !== 'PASS') {
+      rows.push({
+        ...notRunValidationRow(check),
+        result: 'INFRA',
+        resolution: 'UNRESOLVED',
+        reasonCodes: unique(resolved.reasonCodes || []),
+      });
+      return finish(resolved.kind, resolved.reasonCodes || []);
+    }
+    const invocation = resolved.value;
+    let run;
+    try {
+      run = validationSpawnSyncImpl(invocation.command, [...invocation.args], {
+        cwd: invocation.cwd,
+        encoding: 'utf8',
+        timeout: invocation.timeoutMs,
+        maxBuffer: MAX_VALIDATION_OUTPUT_BYTES,
+        shell: false,
+        env: safeChildEnv(env),
+      });
+    } catch {
+      const code = 'PREPARED_VALIDATION_SPAWN_THROW:' + check.checkId;
+      rows.push({
+        checkId: check.checkId,
+        launcher: invocation.launcher,
+        argv: [...invocation.args],
+        path: invocation.path,
+        resolution: invocation.resolution,
+        result: 'INFRA',
+        reasonCodes: [code],
+        exitCode: null,
+        signal: null,
+        stdout: validationStreamEvidence(''),
+        stderr: validationStreamEvidence(''),
+      });
+      return finish('BLOCKED', [code]);
+    }
+    const baseRow = {
+      checkId: check.checkId,
+      launcher: invocation.launcher,
+      argv: [...invocation.args],
+      path: invocation.path,
+      resolution: invocation.resolution,
+      exitCode: Number.isInteger(run?.status) ? run.status : null,
+      signal: run?.signal || null,
+      stdout: validationStreamEvidence(run?.stdout || ''),
+      stderr: validationStreamEvidence(run?.stderr || ''),
+    };
+    if (run?.error || run?.status === null || run?.signal) {
+      const code = 'PREPARED_VALIDATION_INFRA_ERROR:' + check.checkId;
+      rows.push({...baseRow, result: 'INFRA', reasonCodes: [code]});
+      return finish('BLOCKED', [code]);
+    }
+    if (run.status !== 0) {
+      const code = 'SEMANTIC_TEST_FAILURE:' + check.checkId;
+      rows.push({...baseRow, result: 'FAIL', reasonCodes: [code]});
+      return finish('FAIL', [code]);
+    }
+    rows.push({...baseRow, result: 'PASS', reasonCodes: []});
+  }
+  return finish('PASS', []);
+}
+function runFixedPreparedValidation({
+  binding,
+  manifest,
+  env = process.env,
+  validationSpawnSyncImpl = childProcess.spawnSync,
+  validationAdapterResolverImpl = resolveImplementationValidationInvocation,
+  persistValidationArtifactImpl = persistImplementationValidationArtifact,
+}) {
+  const profile = binding?.profile;
+  if (!binding || !profile || binding.request?.profile !== profile.profileId
+      || binding.contractDigest !== profile.contractDigest) {
+    return {
+      kind: 'UNKNOWN',
+      reasonCodes: ['VALIDATION_BINDING_INVALID'],
+      value: validationEvidence(
+        binding?.request?.profile || 'UNKNOWN', 'UNKNOWN', ['VALIDATION_BINDING_INVALID']),
+    };
+  }
+  if (binding.adapterMode !== 'V1') {
+    return runLegacyPreparedValidation({
+      binding, manifest, env, validationSpawnSyncImpl,
+    });
+  }
+  if (binding.adapterContractDigest !== IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest) {
+    return {
+      kind: 'CONFLICT',
+      reasonCodes: ['IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT_CONFLICT'],
+      value: validationEvidence(
+        profile.profileId, 'CONFLICT',
+        ['IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT_CONFLICT'], 0),
+    };
+  }
+  return runAdapterPreparedValidation({
+    binding,
+    manifest,
+    env,
+    validationSpawnSyncImpl,
+    validationAdapterResolverImpl,
+    persistValidationArtifactImpl,
+  });
 }
 
 function spawnPrimitive({phase, manifest, requestFile, patchFile, prior,
@@ -778,6 +1305,11 @@ function stateFor(kind, reasons) {
     result: 'PASS', reasonCodes: [], requiredUnknowns: [], conflicts: [], blockers: [],
     nextLegalAction: 'HOLDER_CHECK_THEN_RELEASE_D013_AND_RECORD_D014_COMPLETION',
   };
+  if (kind === 'FAIL') return {
+    executionLifecycle: 'FINISHED', attentionDisposition: 'NEEDS_REVIEW',
+    result: 'FAIL', reasonCodes: reasons, requiredUnknowns: [], conflicts: [], blockers: [],
+    nextLegalAction: 'SEMANTIC_REVIEW',
+  };
   if (kind === 'CONFLICT') return {
     executionLifecycle: 'FINISHED', attentionDisposition: 'CONFLICT',
     result: 'CONFLICT', reasonCodes: ['REPOSITORY_PATCH_EVIDENCE_CONFLICT'],
@@ -799,6 +1331,7 @@ function stateFor(kind, reasons) {
 }
 function projectGenericReceipt({manifest, request, primitiveSourceSha256, kind,
   reasons = [], prepare = null, validation = null, validationEnabled = false,
+  validationArtifactLocator = null,
   commit = null, push = null, exitCode = null}) {
   const stableReasons = unique(reasons);
   const state = stateFor(kind, stableReasons);
@@ -806,12 +1339,13 @@ function projectGenericReceipt({manifest, request, primitiveSourceSha256, kind,
   const phaseResult = (value) => value?.status === 'PASS' ? 'PASS' : value ? 'BLOCKED' : 'SKIPPED';
   const validationResult = (value) => {
     if (!value) return 'SKIPPED';
-    return ['PASS', 'UNKNOWN', 'CONFLICT', 'BLOCKED'].includes(value.status)
+    return ['PASS', 'FAIL', 'UNKNOWN', 'CONFLICT', 'BLOCKED'].includes(value.status)
       ? value.status : 'UNKNOWN';
   };
   const newHead = push?.new_head || commit?.new_head || null;
   const artifacts = [locator];
   if (SHA40_RE.test(newHead || '')) artifacts.push('commit:' + newHead);
+  if (validationArtifactLocator) artifacts.push(validationArtifactLocator);
   const steps = [
     {name: 'patch-prepare', result: phaseResult(prepare), evidenceLocator: locator},
   ];
@@ -819,7 +1353,7 @@ function projectGenericReceipt({manifest, request, primitiveSourceSha256, kind,
     steps.push({
       name: 'prepared-validation',
       result: validationResult(validation),
-      evidenceLocator: locator,
+      evidenceLocator: validationArtifactLocator || locator,
     });
   }
   steps.push(
@@ -836,6 +1370,16 @@ function projectGenericReceipt({manifest, request, primitiveSourceSha256, kind,
       name: 'prepared_validation_pass',
       value: validation?.status === 'PASS' ? 1 : 0,
     });
+    for (const [name, field] of [
+      ['validation_passed', 'checks_passed'],
+      ['validation_failed', 'checks_failed'],
+      ['validation_infra', 'checks_infra'],
+      ['validation_not_run', 'checks_not_run'],
+    ]) {
+      if (Number.isSafeInteger(validation?.[field]) && validation[field] >= 0) {
+        counters.push({name, value: validation[field]});
+      }
+    }
   }
   return executionReceipt.projectExecutionReceipt({
     schemaVersion: 2,
@@ -934,8 +1478,15 @@ function counterValue(receipt, name) {
 function commitLocator(receipt) {
   return receipt?.artifactLocators?.find((item) => /^commit:[0-9a-f]{40}$/.test(item)) || null;
 }
+function validationArtifactLocator(receipt) {
+  return receipt?.artifactLocators?.find(
+    (item) => typeof item === 'string'
+      && item.startsWith('local-artifact:')
+      && item.includes('mcl-implementation-validation-'),
+  ) || null;
+}
 function ownerDecisionOutput(receipt) {
-  return {
+  const output = {
     owner: 'repository-patch-owner',
     filesChanged: counterValue(receipt, 'changed_paths') ?? 0,
     commitCreated: counterValue(receipt, 'commit_created') === 1,
@@ -943,6 +1494,38 @@ function ownerDecisionOutput(receipt) {
     commitLocator: commitLocator(receipt),
     pr: null,
   };
+  for (const [key, counter] of [
+    ['validationPassed', 'validation_passed'],
+    ['validationFailed', 'validation_failed'],
+    ['validationInfra', 'validation_infra'],
+    ['validationNotRun', 'validation_not_run'],
+  ]) {
+    const value = counterValue(receipt, counter);
+    if (value !== null) output[key] = value;
+  }
+  const artifact = validationArtifactLocator(receipt);
+  if (artifact) output.validationArtifact = artifact;
+  return output;
+}
+function ownerAttention(receipt, locator) {
+  if (receipt?.result === 'PASS' && receipt?.attentionDisposition === 'COMPLETE') return [];
+  const reasonCode = receipt?.reasonCodes?.[0]
+    || receipt?.conflicts?.[0]
+    || receipt?.requiredUnknowns?.[0]
+    || receipt?.blockers?.[0]
+    || 'IMPLEMENTATION_VALIDATION_ATTENTION';
+  const severity = receipt?.result === 'CONFLICT' ? 'CONFLICT'
+    : receipt?.result === 'UNKNOWN' ? 'UNKNOWN'
+      : receipt?.result === 'BLOCKED' ? 'BLOCKER'
+        : receipt?.result === 'FAIL' ? 'FAIL' : 'WARN';
+  return [{
+    subject: receipt?.primitiveId || 'mcl:repository-worktree-patch',
+    reasonCode,
+    severity,
+    constraint: 'IMPLEMENTATION_VALIDATION_ATTENTION',
+    nextPhase: receipt?.nextLegalAction || 'NEEDS_SEMANTIC_DECISION',
+    locator: validationArtifactLocator(receipt) || locator,
+  }];
 }
 function ownerReport(receipt, manifest) {
   return {
@@ -1026,7 +1609,7 @@ function projectOwnerAgentView(receipt, manifest, deps = {}) {
       receipt,
       phase: 'IMPLEMENTATION_EFFECT',
       output: ownerDecisionOutput(receipt),
-      attention: [],
+      attention: ownerAttention(receipt, locators.reportLocator),
       receiptLocator: locators.receiptLocator,
       reportLocator: locators.reportLocator,
     });
@@ -1067,6 +1650,34 @@ async function guardCurrent({repo, manifest, handoff, holderSecret, env, runner,
   return current;
 }
 
+async function emitDetachedCheckpoint(checkpointSink, {
+  checkpoint,
+  primitiveId,
+  targetIdentity,
+  evidenceLocator,
+  nextPrimitive,
+}) {
+  if (checkpointSink === null || checkpointSink === undefined) return;
+  if (typeof checkpointSink !== 'function') {
+    throw new InvocationError('UNKNOWN', ['CONTINUITY_CHECKPOINT_SINK_INVALID']);
+  }
+  try {
+    await checkpointSink({
+      schema: DETACHED_CHECKPOINT_SCHEMA,
+      checkpoint,
+      primitiveId,
+      targetIdentity,
+      evidenceLocator,
+      nextPrimitive,
+      finalReceiptDigest: null,
+      finalReceiptLocator: null,
+    });
+  } catch (error) {
+    if (error instanceof InvocationError) throw error;
+    throw new InvocationError('BLOCKED', ['CONTINUITY_CHECKPOINT_PERSIST_FAILED']);
+  }
+}
+
 async function invokeLive({
   repo,
   handoffText,
@@ -1081,8 +1692,11 @@ async function invokeLive({
   fetchImpl,
   spawnSyncImpl = childProcess.spawnSync,
   validationSpawnSyncImpl = childProcess.spawnSync,
+  validationAdapterResolverImpl = resolveImplementationValidationInvocation,
+  persistValidationArtifactImpl = persistImplementationValidationArtifact,
   root = ROOT,
   guardImpl,
+  checkpointSink = null,
 }) {
   const primitivePath = path.join(root, PRIMITIVE_RELATIVE);
   const primitiveHash = sha256File(primitivePath);
@@ -1091,6 +1705,7 @@ async function invokeLive({
   let request;
   let prepare = null;
   let validation = null;
+  let validationArtifactLocator = null;
   let committed = null;
   let pushed = null;
   let validationBinding = null;
@@ -1143,6 +1758,13 @@ async function invokeLive({
       exitCode: Number.isInteger(preparedRun.run?.status) ? preparedRun.run.status : null,
     });
     prepare = preparedRun.value;
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'SOURCE_MUTATION_COMPLETE',
+      primitiveId: 'REPOSITORY_PATCH_PREPARE',
+      targetIdentity: 'prepared:' + prepare.prepared_digest,
+      evidenceLocator: 'receipt:mcl-repository-patch-prepare:' + manifest.manifestId,
+      nextPrimitive: validationBinding ? 'PREPARED_VALIDATION' : 'COMMIT',
+    });
 
     await doGuard();
     assertInputStable(requestFile, patchFile, requestDigest, request.patch_sha256);
@@ -1153,12 +1775,22 @@ async function invokeLive({
         manifest,
         env,
         validationSpawnSyncImpl,
+        validationAdapterResolverImpl,
+        persistValidationArtifactImpl,
       });
       validation = validationRun.value;
+      validationArtifactLocator = validationRun.artifactLocator || null;
       if (validationRun.kind !== 'PASS') return projectGenericReceipt({
         manifest, request, primitiveSourceSha256: primitiveHash,
         kind: validationRun.kind, reasons: validationRun.reasonCodes,
-        prepare, validation, validationEnabled,
+        prepare, validation, validationEnabled, validationArtifactLocator,
+      });
+      await emitDetachedCheckpoint(checkpointSink, {
+        checkpoint: 'VALIDATION_PASS',
+        primitiveId: 'REPOSITORY_VALIDATION_PROFILE',
+        targetIdentity: 'validation-contract:' + validationBinding.profile.contractDigest,
+        evidenceLocator: VALIDATION_CONTRACT_REF_PREFIX + validationBinding.profile.contractDigest,
+        nextPrimitive: 'COMMIT',
       });
       await doGuard();
       assertInputStable(requestFile, patchFile, requestDigest, request.patch_sha256);
@@ -1173,10 +1805,17 @@ async function invokeLive({
     if (commitRun.kind !== 'PASS') return projectGenericReceipt({
       manifest, request, primitiveSourceSha256: primitiveHash,
       kind: commitRun.kind, reasons: commitRun.reasonCodes,
-      prepare, validation, validationEnabled, commit: commitRun.value,
+      prepare, validation, validationEnabled, validationArtifactLocator, commit: commitRun.value,
       exitCode: Number.isInteger(commitRun.run?.status) ? commitRun.run.status : null,
     });
     committed = commitRun.value;
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'COMMIT_CREATED',
+      primitiveId: 'REPOSITORY_PATCH_COMMIT',
+      targetIdentity: 'commit:' + committed.new_head,
+      evidenceLocator: 'commit:' + committed.new_head,
+      nextPrimitive: 'PUSH',
+    });
 
     await doGuard();
     assertInputStable(requestFile, patchFile, requestDigest, request.patch_sha256);
@@ -1189,13 +1828,21 @@ async function invokeLive({
     if (pushRun.kind !== 'PASS') return projectGenericReceipt({
       manifest, request, primitiveSourceSha256: primitiveHash,
       kind: pushRun.kind, reasons: pushRun.reasonCodes,
-      prepare, validation, validationEnabled, commit: committed, push: pushRun.value,
+      prepare, validation, validationEnabled, validationArtifactLocator,
+      commit: committed, push: pushRun.value,
       exitCode: Number.isInteger(pushRun.run?.status) ? pushRun.run.status : null,
     });
     pushed = pushRun.value;
+    await emitDetachedCheckpoint(checkpointSink, {
+      checkpoint: 'PUSH_COMPLETE',
+      primitiveId: 'REPOSITORY_PATCH_PUSH',
+      targetIdentity: 'remote:' + manifest.workspace.branch + '@' + committed.new_head,
+      evidenceLocator: 'commit:' + committed.new_head,
+      nextPrimitive: 'REMOTE_HEAD_VERIFY',
+    });
     return projectGenericReceipt({
       manifest, request, primitiveSourceSha256: primitiveHash,
-      kind: 'PASS', prepare, validation, validationEnabled,
+      kind: 'PASS', prepare, validation, validationEnabled, validationArtifactLocator,
       commit: committed, push: pushed, exitCode: 0,
     });
   } catch (error) {
@@ -1203,7 +1850,8 @@ async function invokeLive({
     return projectGenericReceipt({
       manifest, request, primitiveSourceSha256: primitiveHash,
       kind: error.kind, reasons: error.reasonCodes,
-      prepare, validation, validationEnabled, commit: committed, push: pushed,
+      prepare, validation, validationEnabled, validationArtifactLocator,
+      commit: committed, push: pushed,
     });
   }
 }
@@ -1431,13 +2079,33 @@ module.exports = {
   VALIDATION_REQUEST_FIELDS,
   VALIDATION_REQUEST_SCHEMA,
   VALIDATION_REF_PREFIX,
+  VALIDATION_CONTRACT_REF_PREFIX,
+  IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX,
+  IMPLEMENTATION_VALIDATION_ADAPTER_SCHEMA,
+  IMPLEMENTATION_VALIDATION_ARTIFACT_SCHEMA,
+  STAGE_OWNER_ID,
+  MUTATION_PRIMITIVE_ID,
   D014_VALIDATION_PROFILE,
+  VALIDATION_CONTINUATION_PROFILE,
+  PUBLISHED_PROGRESS_RECOVERY_PROFILE,
+  DETACHED_CHECKPOINT_SCHEMA,
   D014_COMPLETION_SET_PATHS,
+  VALIDATION_CONTINUATION_PATHS,
+  PUBLISHED_PROGRESS_RECOVERY_PATHS,
+  D014_VALIDATION_SCOPES,
+  VALIDATION_CONTINUATION_SCOPES,
+  PUBLISHED_PROGRESS_RECOVERY_SCOPES,
   D014_VALIDATION_CHECKS,
+  VALIDATION_CONTINUATION_CHECKS,
+  PUBLISHED_PROGRESS_RECOVERY_CHECKS,
+  VALIDATION_PROFILES,
+  IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT,
+  buildImplementationValidationAdapterContract,
   InvocationError,
   assertInputStable,
   assertContinuationInputStable,
   guardCurrent,
+  emitDetachedCheckpoint,
   invokeLive,
   invokePreparedContinuation,
   loadCurrentEvidence,
@@ -1450,10 +2118,17 @@ module.exports = {
   parseRequestText,
   parsePreparedContinuationRequestText,
   parseValidationRequestText,
+  validationProfileById,
+  resolveValidationProfileForScopes,
   manifestValidationRefs,
+  manifestValidationContractRefs,
+  manifestImplementationValidationAdapterRefs,
   prepareValidationBinding,
   assertValidationInputStable,
   runFixedPreparedValidation,
+  resolveImplementationValidationInvocation,
+  buildImplementationValidationArtifact,
+  persistImplementationValidationArtifact,
   persistAgentArtifacts,
   primitiveArgs,
   projectGenericReceipt,

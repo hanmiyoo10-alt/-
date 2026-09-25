@@ -46,11 +46,11 @@ on:
         type: choice
         options: [DISJOINT, OVERLAP, UNKNOWN, CONFLICT]
       workspace_kind:
-        description: Reservation workspace kind (isolated repository, fixed landing metadata, or non-repository)
+        description: Reservation workspace kind (isolated repository, fixed landing metadata, fixed M landing branch repair, or non-repository)
         required: false
         default: not_applicable
         type: choice
-        options: [repository, landing_metadata, not_applicable]
+        options: [repository, landing_metadata, landing_branch_repair, not_applicable]
       branch:
         description: Exact reviewed branch identity or not_applicable
         required: false

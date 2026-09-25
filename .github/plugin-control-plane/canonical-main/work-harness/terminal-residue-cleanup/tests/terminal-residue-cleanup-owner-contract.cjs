@@ -139,6 +139,36 @@ function makeFixture() {
   };
   return {root, remote, control, worktreeRoot, target, branch, candidate, merge, gitDir, profile};
 }
+function packetEvidenceFiles(gitDir) {
+  const prefix = 'packet-' + PACKET + '-pr-' + PR + '.';
+  const rows = [];
+  for (const dir of owner.EVIDENCE_DIRS) {
+    const root = path.join(gitDir, dir);
+    if (!fs.existsSync(root)) continue;
+    for (const name of fs.readdirSync(root)) {
+      if (name.startsWith(prefix)) rows.push({dir, name, path: path.join(root, name)});
+    }
+  }
+  return rows.sort((left, right) => left.path.localeCompare(right.path));
+}
+function addDetachedEvidenceCheckout(f, {removeFeatureSources = false, conflictFirst = false} = {}) {
+  const target = path.join(f.worktreeRoot, 'validation-fixture');
+  git(f.control, ['worktree', 'add', '--detach', target, f.merge]);
+  const gitDir = git(target, ['rev-parse', '--absolute-git-dir']);
+  const rows = packetEvidenceFiles(f.gitDir);
+  assert(rows.length > 0);
+  rows.forEach((row, index) => {
+    const dir = path.join(gitDir, row.dir);
+    fs.mkdirSync(dir, {recursive: true, mode: 0o700});
+    fs.chmodSync(dir, 0o700);
+    const out = path.join(dir, row.name);
+    fs.copyFileSync(row.path, out);
+    if (conflictFirst && index === 0) fs.appendFileSync(out, 'conflict\n');
+    fs.chmodSync(out, 0o600);
+    if (removeFeatureSources) fs.unlinkSync(row.path);
+  });
+  return {target, gitDir};
+}
 function cleanupFixture(f) {
   fs.rmSync(f.root, {recursive: true, force: true});
 }
@@ -355,8 +385,163 @@ test('absent worktree without verified archive remains UNKNOWN and preserves ref
     git(f.control, ['worktree', 'remove', f.target]);
     const result = await inspect(f);
     assert.equal(result.receipt.result, 'UNKNOWN');
-    assert(result.receipt.requiredUnknowns.includes('ARCHIVE_REQUIRED_BUT_SOURCE_WORKTREE_ABSENT'));
+    assert(result.receipt.requiredUnknowns.includes('PACKET_EVIDENCE_MISSING'));
     assert.equal(git(f.control, ['show-ref', '--verify', '--hash', 'refs/heads/' + f.branch]), f.candidate);
+  } finally { cleanupFixture(f); }
+});
+
+test('detached registered checkout supplies exact packet evidence', async () => {
+  const f = makeFixture();
+  try {
+    const validation = addDetachedEvidenceCheckout(f, {removeFeatureSources: true});
+    const result = await inspect(f);
+    assert.equal(result.receipt.result, 'PASS');
+    assert.equal(result.facts.cleanupDisposition, 'ARCHIVE_REQUIRED');
+    assert.equal(result.report.output.fileCount, 5);
+    assert.equal(result.report.output.sourceCount, 5);
+    const inventory = owner.locateEvidence(f.profile, owner.commandResult, PACKET, PR);
+    assert.equal(inventory.files.length, 5);
+    assert.equal(inventory.sourceCount, 5);
+    assert(inventory.files.every((row) => row.sourcePaths.every(
+      (source) => source.startsWith(validation.gitDir + path.sep))));
+  } finally { cleanupFixture(f); }
+});
+
+test('feature worktree may be absent when exact evidence exists in another registered checkout', async () => {
+  const f = makeFixture();
+  try {
+    const validation = addDetachedEvidenceCheckout(f, {removeFeatureSources: true});
+    git(f.control, ['worktree', 'remove', f.target]);
+
+    const inspected = await inspect(f);
+    assert.equal(inspected.receipt.result, 'PASS');
+    assert.equal(inspected.facts.cleanupDisposition, 'ARCHIVE_REQUIRED');
+    assert.equal(inspected.report.output.worktree, 'ABSENT');
+    assert.equal(inspected.report.output.fileCount, 5);
+    assert.equal(inspected.report.output.sourceCount, 5);
+
+    const first = await apply(f);
+    assert.equal(first.receipt.result, 'PASS');
+    assert.equal(first.facts.cleanupDisposition, 'COMPLETE');
+    const counters = Object.fromEntries(first.receipt.counters.map((x) => [x.name,x.value]));
+    assert.equal(counters.archive_writes, 1);
+    assert.equal(counters.evidence_source_deletes, 5);
+    assert.equal(counters.worktree_removals, 0);
+    assert.equal(counters.remote_ref_deletes, 1);
+    assert.equal(counters.local_ref_deletes, 1);
+    assert.equal(packetEvidenceFiles(validation.gitDir).length, 0);
+
+    const second = await apply(f);
+    assert.equal(second.receipt.result, 'PASS');
+    assert.equal(second.facts.cleanupDisposition, 'ALREADY_CLEAN');
+    const secondCounters = Object.fromEntries(second.receipt.counters.map((x) => [x.name,x.value]));
+    assert.equal(secondCounters.evidence_source_deletes, 0);
+  } finally { cleanupFixture(f); }
+});
+
+test('conflicting duplicate logical evidence across registered checkouts is CONFLICT', async () => {
+  const f = makeFixture();
+  try {
+    addDetachedEvidenceCheckout(f, {conflictFirst: true});
+    const result = await inspect(f);
+    assert.equal(result.receipt.result, 'CONFLICT');
+    assert(result.receipt.conflicts.includes('EVIDENCE_DUPLICATE_IDENTITY_CONFLICT'));
+  } finally { cleanupFixture(f); }
+});
+
+test('identical duplicate logical evidence coalesces while all exact sources are cleaned', async () => {
+  const f = makeFixture();
+  try {
+    const validation = addDetachedEvidenceCheckout(f);
+    const inspected = await inspect(f);
+    assert.equal(inspected.receipt.result, 'PASS');
+    assert.equal(inspected.report.output.fileCount, 5);
+    assert.equal(inspected.report.output.sourceCount, 10);
+
+    const first = await apply(f);
+    assert.equal(first.receipt.result, 'PASS');
+    const counters = Object.fromEntries(first.receipt.counters.map((x) => [x.name,x.value]));
+    assert.equal(counters.archive_writes, 1);
+    assert.equal(counters.evidence_source_deletes, 10);
+    assert.equal(counters.worktree_removals, 1);
+    assert.equal(first.facts.archive.manifest.fileCount, 5);
+    assert.equal(packetEvidenceFiles(validation.gitDir).length, 0);
+  } finally { cleanupFixture(f); }
+});
+
+test('verified archive permits recovery after a subset of evidence sources was already removed', async () => {
+  const f = makeFixture();
+  try {
+    const inventory = owner.locateEvidence(f.profile, owner.commandResult, PACKET, PR);
+    const common = path.join(f.control, '.git');
+    const archive = owner.publishArchive(
+      null, common, PACKET, PR, f.candidate, f.merge, inventory);
+    assert.equal(archive.state, 'VERIFIED');
+
+    const removed = inventory.files[0].sourcePaths[0];
+    fs.unlinkSync(removed);
+
+    const inspected = await inspect(f);
+    assert.equal(inspected.receipt.result, 'PASS');
+    assert.equal(inspected.report.output.archive, 'VERIFIED');
+    assert.equal(inspected.report.output.fileCount, 5);
+    assert.equal(inspected.report.output.sourceCount, 4);
+
+    const result = await apply(f);
+    assert.equal(result.receipt.result, 'PASS');
+    const counters = Object.fromEntries(result.receipt.counters.map((x) => [x.name,x.value]));
+    assert.equal(counters.archive_writes, 0);
+    assert.equal(counters.evidence_source_deletes, 4);
+    assert.equal(result.report.output.residue, 'NONE');
+  } finally { cleanupFixture(f); }
+});
+
+test('source identity movement after archive fails closed before evidence deletion', () => {
+  const f = makeFixture();
+  try {
+    const inventory = owner.locateEvidence(f.profile, owner.commandResult, PACKET, PR);
+    const common = path.join(f.control, '.git');
+    const archive = owner.publishArchive(
+      null, common, PACKET, PR, f.candidate, f.merge, inventory);
+    fs.appendFileSync(inventory.files[0].sourcePaths[0], 'changed\n');
+    assert.throws(
+      () => owner.removeEvidenceSources(inventory, archive),
+      (error) => error.kind === 'CONFLICT'
+        && error.reasonCodes.includes('EVIDENCE_SOURCE_IDENTITY_CONFLICT'));
+  } finally { cleanupFixture(f); }
+});
+
+test('registered worktree outside the fixed root is not admitted or scanned', async () => {
+  const f = makeFixture();
+  try {
+    const outside = path.join(f.root, 'outside-validation');
+    git(f.control, ['worktree', 'add', '--detach', outside, f.merge]);
+    const result = await inspect(f);
+    assert.equal(result.receipt.result, 'PASS');
+    assert.equal(result.facts.cleanupDisposition, 'ARCHIVE_REQUIRED');
+    const roots = owner.registeredEvidenceRoots(f.profile, owner.commandResult);
+    assert.equal(roots.some((row) => row.worktree === fs.realpathSync(outside)), false);
+  } finally { cleanupFixture(f); }
+});
+
+test('registered worktree discovery has a fixed count bound', () => {
+  const f = makeFixture();
+  try {
+    const blocks = [];
+    for (let index = 0; index < owner.MAX_REGISTERED_WORKTREES + 1; index += 1) {
+      blocks.push('worktree ' + path.join(f.worktreeRoot, 'fake-' + index) + '\nHEAD '
+        + 'a'.repeat(40) + '\ndetached');
+    }
+    const runner = (_executable, args) => {
+      if (args.join(' ') === 'worktree list --porcelain') {
+        return {code: 0, stdout: blocks.join('\n\n') + '\n', stderr: ''};
+      }
+      throw new Error('unexpected runner call: ' + args.join(' '));
+    };
+    assert.throws(
+      () => owner.registeredEvidenceRoots(f.profile, runner),
+      (error) => error.kind === 'UNKNOWN'
+        && error.reasonCodes.includes('REGISTERED_WORKTREE_COUNT_INVALID'));
   } finally { cleanupFixture(f); }
 });
 
@@ -374,6 +559,7 @@ test('synthetic apply performs archive then worktree and exact-old ref cleanup',
 
     const counters = Object.fromEntries(first.receipt.counters.map((x) => [x.name,x.value]));
     assert.equal(counters.archive_writes, 1);
+    assert.equal(counters.evidence_source_deletes, 5);
     assert.equal(counters.worktree_removals, 1);
     assert.equal(counters.remote_ref_deletes, 1);
     assert.equal(counters.local_ref_deletes, 1);

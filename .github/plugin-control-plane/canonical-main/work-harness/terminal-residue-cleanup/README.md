@@ -50,7 +50,21 @@ Packet lifecycle is parsed only by the existing Work System packet projection.
 
 ## Evidence registry
 
-V1 recognizes packet/PR-bound sidecars only under:
+V1.1 resolves packet/PR-bound sidecars across one bounded fixed checkout set:
+
+```text
+fixed control repo /root/nyang-repo
++ Git-registered direct children of /root/nyang-worktrees
+→ each exact checkout Git-admin directory
+→ fixed evidence directories only
+```
+
+Registered worktrees outside that fixed root are not admitted or scanned. A registered
+candidate inside the fixed root must resolve to a real non-symlink directory with a
+Git-admin directory directly under the fixed common Git `worktrees/` area. Discovery is
+count-bounded and has no caller-selected checkout/path/registry surface.
+
+V1.1 recognizes packet/PR-bound sidecars only under:
 
 ```text
 validation-attention-evidence
@@ -65,7 +79,13 @@ registered evidence directory, bounded in size, and named with the exact prefix:
 packet-<packet>-pr-<pr>.
 ```
 
-An unrecognized packet-bound `*-evidence` directory remains UNKNOWN.
+The archive uses one logical relative evidence identity. Identical copies of that
+logical file in more than one admitted checkout may coalesce only when size and SHA-256
+are exact; every exact source location remains bound for post-archive cleanup. A
+conflicting duplicate is CONFLICT. There is no timestamp/latest-wins choice.
+
+An unrecognized packet-bound `*-evidence` directory in an admitted checkout remains
+UNKNOWN. Zero exact evidence with no verified archive remains UNKNOWN.
 
 ## Archive
 
@@ -96,9 +116,14 @@ This is repository-local retention. It is not off-host backup or clone portabili
 ## Apply ordering
 
 ```text
-archive + verify
+locate exact packet/PR evidence sources
+→ archive unique logical evidence + verify
+→ re-prove exact source path/size/SHA-256
+→ delete only the exact archived sidecar source files
+→ prove exact evidence sources absent
+→ archive reverify
 → fresh admission
-→ exact clean worktree remove
+→ exact clean feature-worktree remove when present
 → archive reverify
 → fresh candidate reachability + open-PR proof
 → remote expected-old CAS delete
@@ -107,7 +132,10 @@ archive + verify
 → final archive verification
 ```
 
-No deletion happens before the archive is verified.
+No sidecar, worktree or ref deletion happens before the archive is verified. Evidence
+source cleanup never removes evidence directories and a source identity change fails
+closed before deletion. Failure to clear the exact archived source sidecars prevents
+later worktree/ref effects.
 
 Worktree removal never uses force.
 

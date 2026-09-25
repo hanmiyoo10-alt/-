@@ -1997,3 +1997,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1e68b59a7501c7ca2e48f57d3b1b9afba3120989)
 - Event ID: `f319084348418b396a2309337936e80dfaa016dbb32ed0795c1578707f2aced1`
 <!-- canonical-main-doc-promoted:f319084348418b396a2309337936e80dfaa016dbb32ed0795c1578707f2aced1 -->
+
+### 2026-09-25 — Merge pull request #2934 from hanmiyoo10-alt/server/repo-terminal-cleanup-evidence-locator-2930
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `cf5acf23d9caa4b20c0e2a6c27b5b8130d7ef784`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/cf5acf23d9caa4b20c0e2a6c27b5b8130d7ef784)
+- Event ID: `9899416d513a0558d985670735b876c7e454560d2cd52dcf544f051092e095d7`
+<!-- canonical-main-doc-promoted:9899416d513a0558d985670735b876c7e454560d2cd52dcf544f051092e095d7 -->

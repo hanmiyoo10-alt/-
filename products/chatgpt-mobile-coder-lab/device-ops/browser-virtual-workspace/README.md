@@ -59,6 +59,8 @@ The only start URI is the fixed Colab root:
 https://colab.research.google.com/
 ```
 
+CDP target binding remains fail-closed. A single newly observed Colab page preserves the existing binding behavior. If Chrome restores additional Colab pages during a repeated start, the owner binds only when exactly one new candidate has a URL equal to the fixed Colab root above. It never chooses by target ordering, title, target id, or an arbitrary restored notebook path. Multiple candidates without one unique exact-root target remain `target-ambiguous`.
+
 There is no caller-selected package, display, URL, ADB serial, port, scrcpy argument, activity component, or Chrome flag.
 
 ## State boundary
@@ -137,6 +139,7 @@ Important blocked conditions include:
 - scrcpy exits before direct display admission;
 - no new display before timeout, physical display 0 loss, or multiple newly-created displays;
 - Chrome task missing on the virtual display;
+- multiple new Colab page targets without exactly one uniquely justified fixed-root candidate;
 - persisted state malformed;
 - persisted PID no longer matches the fixed scrcpy shape.
 

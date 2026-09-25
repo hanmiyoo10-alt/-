@@ -185,6 +185,34 @@ def chrome_task_present(output: str, display_id: int) -> bool:
     return "com.android.chrome/" in section and "ChromeTabbedActivity" in section
 
 
+def select_new_colab_target(
+    targets: list[dict[str, Any]],
+    before_target_ids: set[Any],
+) -> str | None:
+    candidates = [
+        item
+        for item in targets
+        if item.get("id") not in before_target_ids
+        and isinstance(item.get("url"), str)
+        and item["url"].startswith(COLAB_ROOT)
+        and isinstance(item.get("id"), str)
+        and TARGET_ID_RE.fullmatch(item["id"])
+    ]
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]["id"]
+
+    exact_root = [
+        item["id"]
+        for item in candidates
+        if item["url"] == COLAB_ROOT
+    ]
+    if len(exact_root) == 1:
+        return exact_root[0]
+    raise WorkspaceError("target-ambiguous")
+
+
 def validate_state(value: dict[str, Any]) -> dict[str, Any]:
     required = {
         "marker",
@@ -492,20 +520,9 @@ def run_start(runtime: RealRuntime) -> str:
             except WorkspaceError:
                 time.sleep(0.25)
                 continue
-            new_colab = [
-                item.get("id")
-                for item in targets
-                if item.get("id") not in before_targets
-                and isinstance(item.get("url"), str)
-                and item["url"].startswith(COLAB_ROOT)
-                and isinstance(item.get("id"), str)
-                and TARGET_ID_RE.fullmatch(item["id"])
-            ]
-            if len(new_colab) == 1:
-                target_id = new_colab[0]
+            target_id = select_new_colab_target(targets, before_targets)
+            if target_id is not None:
                 break
-            if len(new_colab) > 1:
-                raise WorkspaceError("target-ambiguous")
             time.sleep(0.25)
 
         activities = runtime.activities(serial)

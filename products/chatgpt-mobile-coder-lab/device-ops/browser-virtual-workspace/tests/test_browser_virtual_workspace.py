@@ -301,6 +301,86 @@ serial-1 device product:x model:NOT_AUTHORITY transport_id:1
                     sleep_fn=lambda _: None,
                 )
 
+    def test_target_selector_preserves_single_candidate_behavior(self):
+        targets = [
+            {"id": "AAAA", "type": "page", "url": "https://chatgpt.com/"},
+            {
+                "id": "BEEF",
+                "type": "page",
+                "url": mod.COLAB_ROOT + "github/example/repo/blob/sha/notebook.ipynb",
+            },
+        ]
+        self.assertEqual(
+            mod.select_new_colab_target(targets, {"AAAA"}),
+            "BEEF",
+        )
+
+    def test_target_selector_prefers_unique_fixed_root_among_multiple_colab_pages(self):
+        targets = [
+            {
+                "id": "BEEF",
+                "type": "page",
+                "url": mod.COLAB_ROOT + "github/example/repo/blob/sha/notebook.ipynb",
+            },
+            {"id": "CAFE", "type": "page", "url": mod.COLAB_ROOT},
+        ]
+        self.assertEqual(
+            mod.select_new_colab_target(targets, set()),
+            "CAFE",
+        )
+
+    def test_target_selector_rejects_unresolved_multiple_colab_pages(self):
+        targets = [
+            {
+                "id": "BEEF",
+                "type": "page",
+                "url": mod.COLAB_ROOT + "github/example/a.ipynb",
+            },
+            {
+                "id": "CAFE",
+                "type": "page",
+                "url": mod.COLAB_ROOT + "github/example/b.ipynb",
+            },
+        ]
+        with self.assertRaisesRegex(mod.WorkspaceError, "target-ambiguous"):
+            mod.select_new_colab_target(targets, set())
+
+        duplicate_root = [
+            {"id": "BEEF", "type": "page", "url": mod.COLAB_ROOT},
+            {"id": "CAFE", "type": "page", "url": mod.COLAB_ROOT},
+        ]
+        with self.assertRaisesRegex(mod.WorkspaceError, "target-ambiguous"):
+            mod.select_new_colab_target(duplicate_root, set())
+
+    def test_repeated_start_binds_fixed_root_when_prior_notebook_is_restored(self):
+        runtime = FakeRuntime()
+
+        def list_targets():
+            runtime.targets_calls += 1
+            existing = {
+                "id": "AAAA",
+                "type": "page",
+                "url": "https://chatgpt.com/",
+            }
+            if runtime.targets_calls == 1:
+                return [existing]
+            return [
+                existing,
+                {
+                    "id": "BEEF",
+                    "type": "page",
+                    "url": mod.COLAB_ROOT
+                    + "github/example/repo/blob/sha/notebook.ipynb",
+                },
+                {"id": "CAFE", "type": "page", "url": mod.COLAB_ROOT},
+            ]
+
+        runtime.list_targets = list_targets
+        receipt = mod.run_start(runtime)
+        self.assertIn("state=running", receipt)
+        self.assertEqual(runtime.saved["target_id"], "CAFE")
+        self.assertIn("bound_target=present", receipt)
+
     def test_start_refuses_preexisting_nonzero_display(self):
         runtime = FakeRuntime()
         runtime.initial_displays = {0, 9}

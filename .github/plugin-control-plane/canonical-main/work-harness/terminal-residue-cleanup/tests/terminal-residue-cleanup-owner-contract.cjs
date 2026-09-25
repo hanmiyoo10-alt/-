@@ -184,10 +184,14 @@ function addDetachedEvidenceCheckout(f, {removeFeatureSources = false, conflictF
   return {target, gitDir};
 }
 function terminalCheckpointFixture(f, overrides = {}) {
+  const mergeLabel = overrides.mergeLabel || 'merged main';
+  const requiredStateLabel = overrides.requiredStateLabel
+    || 'required EXPERIMENT_CLOSE UNKNOWN / conflict / blocker';
+  const requiredStateValue = overrides.requiredStateValue || 'NONE';
   const payload = overrides.payload || [
     'State reached: EXPERIMENT_CLOSE',
-    '- merged main: ' + (overrides.merge || f.merge),
-    '- required EXPERIMENT_CLOSE UNKNOWN / conflict / blocker: NONE',
+    '- ' + mergeLabel + ': ' + (overrides.merge || f.merge),
+    '- ' + requiredStateLabel + ': ' + requiredStateValue,
   ].join('\n');
   const digest = overrides.digest || stageCheckpoint.checkpointDigest(
     PACKET, 'EXPERIMENT_CLOSE', payload);
@@ -615,6 +619,118 @@ test('zero-sidecar terminal checkpoint profile inspects as ARCHIVE_REQUIRED', as
     assert.equal(result.report.output.fileCount, 2);
     assert.equal(result.report.output.sourceCount, 0);
     assert.equal(result.facts.checkpointEvidence.checkpointId, checkpoint.digest);
+  } finally { cleanupFixture(f); }
+});
+
+test('zero-sidecar exact merged/current main alias inspects as ARCHIVE_REQUIRED', async () => {
+  const f = makeFixture({withEvidence: false});
+  try {
+    const checkpoint = terminalCheckpointFixture(f, {
+      mergeLabel: 'merged/current main',
+      requiredStateLabel: 'required UNKNOWN / conflict / blocker',
+    });
+    const result = await inspect(f, checkpoint);
+    assert.equal(result.receipt.result, 'PASS');
+    assert.equal(result.facts.cleanupDisposition, 'ARCHIVE_REQUIRED');
+    assert.equal(result.report.output.evidenceProfile, 'DURABLE_TERMINAL_CHECKPOINT');
+    assert.equal(result.facts.checkpointEvidence.checkpointId, checkpoint.digest);
+  } finally { cleanupFixture(f); }
+});
+
+test('zero-sidecar multiple recognized required-state lines remain CONFLICT', async () => {
+  const f = makeFixture({withEvidence: false});
+  try {
+    for (const payload of [
+      [
+        'State reached: EXPERIMENT_CLOSE',
+        '- merged main: ' + f.merge,
+        '- required EXPERIMENT_CLOSE UNKNOWN / conflict / blocker: NONE',
+        '- required UNKNOWN / conflict / blocker: NONE',
+      ].join('\n'),
+      [
+        'State reached: EXPERIMENT_CLOSE',
+        '- merged main: ' + f.merge,
+        '- required UNKNOWN / conflict / blocker: NONE',
+        '- required UNKNOWN / conflict / blocker: NONE',
+      ].join('\n'),
+    ]) {
+      const checkpoint = terminalCheckpointFixture(f, {payload});
+      const result = await inspect(f, checkpoint);
+      assert.equal(result.receipt.result, 'CONFLICT');
+      assert(result.receipt.conflicts.includes('TERMINAL_CHECKPOINT_REQUIRED_STATE_CONFLICT'));
+    }
+  } finally { cleanupFixture(f); }
+});
+
+test('zero-sidecar required-state near-match or non-NONE remains UNKNOWN', async () => {
+  const f = makeFixture({withEvidence: false});
+  try {
+    for (const options of [
+      {requiredStateLabel: 'required experiment_close UNKNOWN / conflict / blocker'},
+      {requiredStateLabel: 'required UNKNOWN/conflict/blocker'},
+      {requiredStateLabel: 'required UNKNOWN / conflict / blocker extra'},
+      {requiredStateLabel: 'required UNKNOWN / conflict / blocker', requiredStateValue: 'PENDING'},
+    ]) {
+      const checkpoint = terminalCheckpointFixture(f, options);
+      const result = await inspect(f, checkpoint);
+      assert.equal(result.receipt.result, 'UNKNOWN');
+      assert(result.receipt.requiredUnknowns.includes('TERMINAL_CHECKPOINT_REQUIRED_STATE_MISSING'));
+    }
+  } finally { cleanupFixture(f); }
+});
+
+test('zero-sidecar multiple recognized merge identity lines remain CONFLICT', async () => {
+  const f = makeFixture({withEvidence: false});
+  try {
+    for (const payload of [
+      [
+        'State reached: EXPERIMENT_CLOSE',
+        '- merged main: ' + f.merge,
+        '- merged/current main: ' + f.merge,
+        '- required EXPERIMENT_CLOSE UNKNOWN / conflict / blocker: NONE',
+      ].join('\n'),
+      [
+        'State reached: EXPERIMENT_CLOSE',
+        '- merged main: ' + f.merge,
+        '- merged main: ' + f.merge,
+        '- required EXPERIMENT_CLOSE UNKNOWN / conflict / blocker: NONE',
+      ].join('\n'),
+    ]) {
+      const checkpoint = terminalCheckpointFixture(f, {payload});
+      const result = await inspect(f, checkpoint);
+      assert.equal(result.receipt.result, 'CONFLICT');
+      assert(result.receipt.conflicts.includes('TERMINAL_CHECKPOINT_MERGE_IDENTITY_CONFLICT'));
+    }
+  } finally { cleanupFixture(f); }
+});
+
+test('zero-sidecar near-match merge identity fields remain unrecognized', async () => {
+  const f = makeFixture({withEvidence: false});
+  try {
+    for (const options of [
+      {mergeLabel: 'current/merged main'},
+      {mergeLabel: 'merged current main'},
+      {mergeLabel: 'merged/current main extra'},
+      {mergeLabel: 'merged/current main', merge: 'not-a-40-hex-sha'},
+    ]) {
+      const checkpoint = terminalCheckpointFixture(f, options);
+      const result = await inspect(f, checkpoint);
+      assert.equal(result.receipt.result, 'UNKNOWN');
+      assert(result.receipt.requiredUnknowns.includes('TERMINAL_CHECKPOINT_MERGE_IDENTITY_MISSING'));
+    }
+  } finally { cleanupFixture(f); }
+});
+
+test('zero-sidecar merged/current main wrong SHA remains CONFLICT', async () => {
+  const f = makeFixture({withEvidence: false});
+  try {
+    const checkpoint = terminalCheckpointFixture(f, {
+      mergeLabel: 'merged/current main',
+      merge: 'd'.repeat(40),
+    });
+    const result = await inspect(f, checkpoint);
+    assert.equal(result.receipt.result, 'CONFLICT');
+    assert(result.receipt.conflicts.includes('TERMINAL_CHECKPOINT_MERGE_IDENTITY_CONFLICT'));
   } finally { cleanupFixture(f); }
 });
 

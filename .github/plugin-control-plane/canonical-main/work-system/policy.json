@@ -81,7 +81,60 @@
     "explicitUserBroaderRunAllowed": true,
     "preserveRequiredGates": true,
     "productionTruthOwner": false,
-    "hostUiPerformanceGuarantee": false
+    "hostUiPerformanceGuarantee": false,
+    "intraStageContinuation": {
+      "version": 1,
+      "completedStageDiscoveryConsumesBudget": false,
+      "preserveProvenPrefix": true,
+      "reconvergeInvalidatedSuffixOnly": true,
+      "requiredSelfCloseSyncIsStageLocal": true,
+      "preEffectDriftRevalidatesAdmissionOnly": true,
+      "postEffectDriftRequiresPreservationProof": true,
+      "duplicateCompletedEffectForbidden": true,
+      "transientReadRetry": {
+        "sameIdentityRequired": true,
+        "ownerPermissionRequired": true,
+        "bounded": true,
+        "untilPassForbidden": true
+      },
+      "sameScopeRefinementExactIdentityAxes": [
+        "writeScopes",
+        "semanticEffectSurfaces",
+        "primaryGoal",
+        "effectOwner"
+      ],
+      "transactionClosure": {
+        "immediateEffectReadback": true,
+        "requiredEffectValidation": true,
+        "idempotenceOrCasConfirmation": true,
+        "requiredEvidencePublication": true,
+        "requiredSelfCloseSync": true,
+        "mayEnterNextSubstantialStage": false
+      },
+      "continueDispositions": [
+        "CONTINUE_STAGE_LOCAL",
+        "CONTINUE_TRANSACTION_CLOSURE",
+        "CONTINUE_BOUNDED_WAIT",
+        "CONTINUE_TARGETED_DRILLDOWN",
+        "CONTINUE_REUSE_EXISTING_EFFECT",
+        "CONTINUE_RECONVERGE_CURRENTNESS"
+      ],
+      "stopDispositions": [
+        "STOP_MAJOR_STAGE",
+        "STOP_OWNER_HANDOFF",
+        "STOP_SCOPE_EXPANSION",
+        "STOP_AUTHORITY_EXPANSION",
+        "STOP_USER_INPUT",
+        "STOP_BLOCKED",
+        "STOP_UNKNOWN",
+        "STOP_CONFLICT",
+        "STOP_UNBOUNDED_EXTERNAL_WAIT",
+        "STOP_TERMINAL"
+      ],
+      "unresolvedStatesStop": ["BLOCKED", "UNKNOWN", "CONFLICT"],
+      "noNewEffectAuthority": true,
+      "noStageCollapse": true
+    }
   },
   "packetRequiredFields": [
     "packetId",

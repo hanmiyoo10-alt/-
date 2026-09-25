@@ -139,15 +139,28 @@ function ownerPass(manifestId) {
 test('PR request accepts only bounded non-closing linkage', () => {
   const value = impl.parsePrRequestText(JSON.stringify({
     schema: impl.PR_SCHEMA,
-    title: 'feat: bounded',
+    title: 'feat: bounded fixed profile',
     body: 'Body.\n\nRefs #9001',
   }), PACKET);
   assert.equal(value.schema, impl.PR_SCHEMA);
-  assert.throws(() => impl.parsePrRequestText(JSON.stringify({
-    schema: impl.PR_SCHEMA,
-    title: 'feat: bounded',
-    body: 'Fixes #9001',
-  }), PACKET), /PR_REQUEST_NON_CLOSING_REF_REQUIRED|PR_REQUEST_CLOSING_LINK_FORBIDDEN/);
+
+  for (const closing of [
+    'close #9001', 'closes: #9001', 'closed   #9001',
+    'fix #9001', 'fixes: #9001', 'fixed   #2786',
+    'resolve #9001', 'resolves: #9001', 'resolved   #9001',
+  ]) {
+    assert.throws(() => impl.parsePrRequestText(JSON.stringify({
+      schema: impl.PR_SCHEMA,
+      title: 'feat: ' + closing,
+      body: 'Refs #9001',
+    }), PACKET), /PR_REQUEST_CLOSING_LINK_FORBIDDEN/);
+    assert.throws(() => impl.parsePrRequestText(JSON.stringify({
+      schema: impl.PR_SCHEMA,
+      title: 'feat: bounded',
+      body: closing + '\n\nRefs #9001',
+    }), PACKET), /PR_REQUEST_CLOSING_LINK_FORBIDDEN/);
+  }
+
   assert.throws(() => impl.parsePrRequestText(JSON.stringify({
     schema: impl.PR_SCHEMA,
     title: 'feat: bounded',

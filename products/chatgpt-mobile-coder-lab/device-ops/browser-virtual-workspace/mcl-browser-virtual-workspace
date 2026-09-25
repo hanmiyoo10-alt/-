@@ -14,7 +14,7 @@ case "${1:-}" in
     ;;
 esac
 
-HERE=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+HERE=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
 CONTROLLER="$HERE/mcl_browser_virtual_workspace.py"
 
 [ -f "$CONTROLLER" ] || {

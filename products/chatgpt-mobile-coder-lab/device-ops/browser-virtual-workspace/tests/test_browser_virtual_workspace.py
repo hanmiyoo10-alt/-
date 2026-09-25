@@ -211,6 +211,8 @@ serial-1 device product:x model:SM-S938N device:y transport_id:1
             "started_at": "2026-09-25T00:00:00Z",
             "forward_port": mod.FORWARD_PORT,
         }
+        runtime.display_calls = 1
+        runtime.targets_calls = 1
         receipt = mod.run_status(runtime)
         self.assertIn("state=running", receipt)
         self.assertEqual(runtime.mutations, 0)

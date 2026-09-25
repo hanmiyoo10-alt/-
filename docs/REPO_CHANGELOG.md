@@ -2037,3 +2037,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2dcc393de437750191932fc4186d3901e57d88dd)
 - Event ID: `618d487efdc610da91d320027065d75aa919d13f0ce2b982135169d966fa1224`
 <!-- canonical-main-doc-promoted:618d487efdc610da91d320027065d75aa919d13f0ce2b982135169d966fa1224 -->
+
+### 2026-09-26 — Merge pull request #2966 from hanmiyoo10-alt/server/repo-validation-gh-read-timeout-2964
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `736ef1e300ab0ab0ab4355547727074145657b26`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/736ef1e300ab0ab0ab4355547727074145657b26)
+- Event ID: `ad324909395968286409f1719bbbc316de3f8c8aa76918142dcfedb93b4a5ed2`
+<!-- canonical-main-doc-promoted:ad324909395968286409f1719bbbc316de3f8c8aa76918142dcfedb93b4a5ed2 -->

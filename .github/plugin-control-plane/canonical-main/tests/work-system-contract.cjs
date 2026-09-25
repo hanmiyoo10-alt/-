@@ -386,6 +386,11 @@ assert.match(template, /They never authorize entry into the next declared substa
 assert.match(template, /retry-until-PASS is forbidden/);
 assert.match(template, /exact equality of writable path\/prefix set, semantic\/effect surface set, primary goal, and effect owner/);
 assert.match(template, /unresolved `BLOCKED \/ UNKNOWN \/ CONFLICT` stops the continuation/);
+assert.match(template, /Finalization routing is declared at AUTHORITY_SCOPE rather than repaired after merge/);
+assert.match(template, /generic repository-neutral validation finalizer must declare one specific stable `surface:repo:<owner-or-effect>`/);
+assert.match(template, /intentionally path-only packet may instead use a separately reviewed finalization owner/);
+assert.match(template, /`validation-finalization-external-owner-reviewed=PASS` with a real evidence locator/);
+assert.match(template, /do not invent a fake surface/);
 assert.match(sharedInteraction, /## Intra-stage continuation \(Phase 8\.7g\)/);
 assert.match(sharedInteraction, /Already-completed stages discovered during that rebind consume zero current substantial-stage budget/);
 assert.match(sharedInteraction, /preserve every still-valid proven prefix and completed effect/);

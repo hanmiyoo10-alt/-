@@ -8,6 +8,7 @@ const ROOT = path.resolve(__dirname, '../../../../..');
 const MAX_INPUT_BYTES = 16 * 1024;
 const MAX_REPORT_BYTES = 32 * 1024;
 const REPO_PREFIX = '.github/plugin-control-plane/canonical-main/';
+const EXTERNAL_FINALIZATION_GATE = 'validation-finalization-external-owner-reviewed';
 
 const continuation = require('../validation-continuation/validation-continuation-owner.cjs');
 const validationMerge = require('../validation-merge/validation-merge-owner.cjs');
@@ -277,6 +278,30 @@ function inspectOutput(implementation, continuationResult, mergeResult) {
     threads: mergeReport.output.reviewClear ? 'CLEAR' : 'UNKNOWN',
   };
 }
+function exactPassGate(receipt, name) {
+  return (receipt?.requiredGates || []).some((row) =>
+    row?.name === name && row.result === 'PASS'
+      && typeof row.evidenceLocator === 'string' && row.evidenceLocator.length > 0);
+}
+function finalizationAdmission({implementation, continuationResult, mergeResult}) {
+  const report = mergeResult?.report || {};
+  const paths = Array.isArray(report.paths) ? report.paths : [];
+  const priorCoordination = continuationResult?.report?.output?.priorCoordination;
+  const canonicalMainPaths = paths.length > 0
+    && paths.every((repoPath) => String(repoPath).startsWith(REPO_PREFIX));
+  if (priorCoordination !== 'NOT_APPLICABLE' || !canonicalMainPaths) {
+    return {result: 'PASS', route: 'UNCHANGED'};
+  }
+  if (repoNeutralPacket(report)) return {result: 'PASS', route: 'REPO_NEUTRAL'};
+  if (exactPassGate(implementation?.receipt, EXTERNAL_FINALIZATION_GATE)) {
+    return {result: 'PASS', route: 'EXTERNAL_REVIEWED'};
+  }
+  return {
+    result: 'BLOCKED',
+    reasonCode: 'REPO_NEUTRAL_FINALIZATION_SCOPE_REQUIRED',
+    nextLegalAction: 'DECLARE_REPO_FINALIZATION_ROUTE_AT_AUTHORITY_SCOPE',
+  };
+}
 async function inspectComposition({
   client, packetNumber, prNumber, implementationReceipt,
   root = ROOT, deps = DEFAULT_DEPS,
@@ -405,6 +430,69 @@ async function inspectComposition({
         result: receipt.result, reasonCodes: receipt.reasonCodes,
         attention: mergeRoute.attention, output: {pr: '#' + prNumber, ...mergeRoute.output},
         receiptDigest: receipt.receiptDigest,
+      },
+    };
+  }
+
+  const finalizationRoute = finalizationAdmission({
+    implementation, continuationResult, mergeResult,
+  });
+  if (finalizationRoute.result !== 'PASS') {
+    const reason = finalizationRoute.reasonCode;
+    const attention = [{
+      subject: 'repo:validation-finalization-admission',
+      reasonCode: reason,
+      severity: 'BLOCKER',
+      constraint: 'VALIDATION_FINALIZATION_ROUTE',
+      nextPhase: finalizationRoute.nextLegalAction,
+      locator: mergeLocators.reportLocator,
+    }];
+    const output = {
+      ...inspectOutput(implementation, continuationResult, mergeResult),
+      mergeAdmission: 'BLOCKED',
+    };
+    const receipt = compositionReceipt({
+      operation: 'inspect', packetNumber, prNumber,
+      candidateHead: implementation.expectedHead, paths: implementation.paths,
+      steps: [
+        {name: 'validation-continuation', result: 'PASS',
+          evidenceLocator: continuationLocators.reportLocator},
+        {name: 'validation-merge-admission', result: 'PASS',
+          evidenceLocator: mergeLocators.reportLocator},
+        {name: 'validation-finalization-route', result: 'BLOCKED',
+          evidenceLocator: mergeLocators.reportLocator},
+      ],
+      result: 'BLOCKED', attentionDisposition: 'BLOCKED',
+      reasonCodes: [reason], blockers: [reason],
+      nextLegalAction: finalizationRoute.nextLegalAction,
+      artifacts: [
+        continuationLocators.receiptLocator, continuationLocators.reportLocator,
+        mergeLocators.receiptLocator, mergeLocators.reportLocator,
+      ],
+      attentionCount: 1, deps,
+    });
+    return {
+      receipt,
+      report: {
+        schemaVersion: 1, mode: 'VALIDATION_ATTENTION_REPORT', operation: 'inspect',
+        packetNumber, prNumber, route: 'FINALIZATION_ROUTE_BLOCKED',
+        candidateHead: implementation.expectedHead, implementationReceipt,
+        packetBodySha256: mergeResult.report.packetBodySha256,
+        children: {
+          continuation: {
+            receiptDigest: continuationResult.receipt.receiptDigest,
+            receiptLocator: continuationLocators.receiptLocator,
+            reportLocator: continuationLocators.reportLocator,
+          },
+          mergeAdmission: {
+            receiptDigest: mergeResult.receipt.receiptDigest,
+            receiptLocator: mergeLocators.receiptLocator,
+            reportLocator: mergeLocators.reportLocator,
+          },
+        },
+        semanticSurfaceBudget: 3, targetedDrilldowns: 0, rawTranscriptExposed: 0,
+        result: receipt.result, reasonCodes: receipt.reasonCodes,
+        attention, output, receiptDigest: receipt.receiptDigest,
       },
     };
   }

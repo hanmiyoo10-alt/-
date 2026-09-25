@@ -134,3 +134,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2883)
 - Event ID: `3e2b798acf37fa9d5d54ae4a020fcb93d88b647d64dd4fa38fdcb7682c546121`
 <!-- canonical-main-doc-promoted:3e2b798acf37fa9d5d54ae4a020fcb93d88b647d64dd4fa38fdcb7682c546121 -->
+
+### 2026-09-25 — REPO-FIXED-EFFECT-STAGE-COMPRESSION-V1 — one-call IMPLEMENTATION_PR outcome
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2717)
+- Event ID: `d5b53e1aa9dadc7b770bb2758975c7d3e1c4f6acc0fbd05efe65af39dc59bbc4`
+<!-- canonical-main-doc-promoted:d5b53e1aa9dadc7b770bb2758975c7d3e1c4f6acc0fbd05efe65af39dc59bbc4 -->

@@ -1,13 +1,16 @@
 'use strict';
 
+const childProcess = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createGitHubClient } = require('../infra/github-client.cjs');
 
+const FIXED_REPO = 'hanmiyoo10-alt/-';
 const AUDIT_ISSUE = 293;
 const PACKET_MARKER = '<!-- canonical-main-work-packet:v1 -->';
 const MAX_BODY_BYTES = 8192;
+const MAX_COMMENT_BODY_BYTES = MAX_BODY_BYTES + 1024;
 const MAX_COMMENT_PAGES = 20;
 const STAGES = Object.freeze([
   'AUTHORITY_SCOPE',
@@ -16,6 +19,108 @@ const STAGES = Object.freeze([
   'POSTMERGE_CONVERGENCE',
   'EXPERIMENT_CLOSE',
 ]);
+
+const ISSUE_GET_RE = /^\/issues\/([1-9][0-9]*)$/;
+const COMMENTS_GET_RE = /^\/issues\/([1-9][0-9]*)\/comments\?per_page=100&page=([1-9][0-9]*)$/;
+const COMMENTS_POST_RE = /^\/issues\/([1-9][0-9]*)\/comments$/;
+
+function validRepo(repo) {
+  return /^[^/\s]+\/[^/\s]+$/.test(String(repo || '').trim());
+}
+
+function defaultGhRunner(args, options = {}) {
+  const result = childProcess.spawnSync('gh', args, {
+    encoding: 'utf8',
+    shell: false,
+    input: options.input,
+  });
+  return {code: result.status ?? 1, stdout: result.stdout || '', stderr: result.stderr || ''};
+}
+
+function parseGhJson(result, expectedShape) {
+  if (!result || result.code !== 0) throw new Error('GH_API_REQUEST_FAILED');
+  let value;
+  try {
+    value = JSON.parse(result.stdout || '');
+  } catch {
+    throw new Error('GH_API_RESPONSE_INVALID');
+  }
+  if (expectedShape === 'array' && !Array.isArray(value)) throw new Error('GH_API_RESPONSE_INVALID');
+  if (expectedShape === 'object' && (!value || typeof value !== 'object' || Array.isArray(value))) {
+    throw new Error('GH_API_RESPONSE_INVALID');
+  }
+  return value;
+}
+
+function createGhCheckpointClient({
+  repo = FIXED_REPO,
+  packetNumber,
+  runner = defaultGhRunner,
+} = {}) {
+  if (repo !== FIXED_REPO) throw new Error('GH_API_REPOSITORY_INVALID');
+  if (!Number.isInteger(packetNumber) || packetNumber <= 0 || packetNumber === AUDIT_ISSUE) {
+    throw new Error('GH_API_PACKET_INVALID');
+  }
+  const allowedCommentIssues = new Set([packetNumber, AUDIT_ISSUE]);
+  const baseArgs = (endpoint, method) => [
+    'api', `repos/${repo}${endpoint}`, '--method', method,
+    '--header', 'Accept: application/vnd.github+json',
+  ];
+  return {
+    repo,
+    async api(endpoint, options = {}) {
+      const issueGet = String(endpoint || '').match(ISSUE_GET_RE);
+      const commentsGet = String(endpoint || '').match(COMMENTS_GET_RE);
+      const commentsPost = String(endpoint || '').match(COMMENTS_POST_RE);
+
+      if (issueGet) {
+        if (Number(issueGet[1]) !== packetNumber) throw new Error('GH_API_ENDPOINT_INVALID');
+        if (options && Object.keys(options).length > 0) throw new Error('GH_API_OPTIONS_INVALID');
+        return parseGhJson(runner(baseArgs(endpoint, 'GET')), 'object');
+      }
+
+      if (commentsGet) {
+        if (!allowedCommentIssues.has(Number(commentsGet[1]))) throw new Error('GH_API_ENDPOINT_INVALID');
+        if (options && Object.keys(options).length > 0) throw new Error('GH_API_OPTIONS_INVALID');
+        if (Number(commentsGet[2]) > MAX_COMMENT_PAGES) throw new Error('GH_API_COMMENT_PAGE_INVALID');
+        return parseGhJson(runner(baseArgs(endpoint, 'GET')), 'array');
+      }
+
+      if (commentsPost) {
+        if (!allowedCommentIssues.has(Number(commentsPost[1]))) throw new Error('GH_API_ENDPOINT_INVALID');
+        const keys = Object.keys(options || {}).sort();
+        if (keys.length !== 2 || keys[0] !== 'body' || keys[1] !== 'method' || options.method !== 'POST') {
+          throw new Error('GH_API_OPTIONS_INVALID');
+        }
+        const body = options.body;
+        if (!body || typeof body !== 'object' || Array.isArray(body)
+            || Object.keys(body).length !== 1 || typeof body.body !== 'string'
+            || body.body.length === 0 || body.body.includes('\u0000')
+            || Buffer.byteLength(body.body, 'utf8') > MAX_COMMENT_BODY_BYTES) {
+          throw new Error('GH_API_COMMENT_BODY_INVALID');
+        }
+        const result = runner([...baseArgs(endpoint, 'POST'), '--input', '-'], {
+          input: JSON.stringify(body),
+        });
+        return parseGhJson(result, 'object');
+      }
+
+      throw new Error('GH_API_ENDPOINT_INVALID');
+    },
+  };
+}
+
+function createStageCheckpointClient({repo, token, fetchImpl, runner, packetNumber} = {}) {
+  if (token) {
+    return createGitHubClient({
+      token,
+      repo,
+      fetchImpl,
+      userAgent: 'canonical-main-stage-checkpoint',
+    });
+  }
+  return createGhCheckpointClient({repo, runner, packetNumber});
+}
 
 function checkpointDigest(packetNumber, stage, body) {
   return crypto.createHash('sha256').update(`${packetNumber}\n${stage}\n${body}`, 'utf8').digest('hex');
@@ -193,19 +298,28 @@ function exitCodeFor(result) {
   return 2;
 }
 
-async function run({ argv = process.argv.slice(2), token, repo, fetchImpl } = {}) {
+async function run({
+  argv = process.argv.slice(2),
+  token,
+  repo,
+  fetchImpl,
+  env = process.env,
+  runner = defaultGhRunner,
+} = {}) {
   const args = parseArgs(argv);
   const body = readBodyFile(args.bodyFile);
-  const resolvedRepo = String(repo || process.env.GITHUB_REPOSITORY || '').trim();
-  if (!/^[^/\s]+\/[^/\s]+$/.test(resolvedRepo)) {
+  const resolvedToken = token || env.GH_TOKEN || env.GITHUB_TOKEN;
+  const resolvedRepo = String(repo || env.GITHUB_REPOSITORY || (!resolvedToken ? FIXED_REPO : '')).trim();
+  if (!validRepo(resolvedRepo) || (!resolvedToken && resolvedRepo !== FIXED_REPO)) {
     return resultBase(args.packetNumber, args.stage, null,
       destination(args.packetNumber), destination(AUDIT_ISSUE), ['REPOSITORY_IDENTITY_INVALID'], 'FAILED');
   }
-  const client = createGitHubClient({
-    token: token || process.env.GH_TOKEN || process.env.GITHUB_TOKEN,
+  const client = createStageCheckpointClient({
+    token: resolvedToken,
     repo: resolvedRepo,
     fetchImpl,
-    userAgent: 'canonical-main-stage-checkpoint',
+    runner,
+    packetNumber: args.packetNumber,
   });
   return recordCheckpoint({ client, packetNumber: args.packetNumber, stage: args.stage, body });
 }
@@ -230,17 +344,23 @@ async function main() {
 if (require.main === module) main();
 
 module.exports = {
+  FIXED_REPO,
   AUDIT_ISSUE,
   MAX_BODY_BYTES,
+  MAX_COMMENT_BODY_BYTES,
   PACKET_MARKER,
   STAGES,
   checkpointDigest,
   checkpointMarker,
+  createGhCheckpointClient,
+  createStageCheckpointClient,
+  defaultGhRunner,
   exitCodeFor,
   findMarkerComments,
   parseArgs,
   recordCheckpoint,
   renderComment,
+  run,
   validateInput,
   validatePacketIssue,
 };

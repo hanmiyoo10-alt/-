@@ -4,15 +4,20 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {
+  FIXED_REPO,
   AUDIT_ISSUE,
   MAX_BODY_BYTES,
+  MAX_COMMENT_BODY_BYTES,
   STAGES,
   checkpointDigest,
   checkpointMarker,
+  createGhCheckpointClient,
+  createStageCheckpointClient,
   exitCodeFor,
   parseArgs,
   recordCheckpoint,
   renderComment,
+  run,
   validateInput,
 } = require('../stage-checkpoint.cjs');
 
@@ -157,12 +162,151 @@ assert.throws(() => parseArgs(['--packet', '0', '--stage', STAGE, '--body-file',
   assert.equal(invalidInput.status, 'FAILED');
   assert.ok(invalidInput.reasonCodes.includes('AUDIT_ISSUE_CANNOT_BE_PACKET'));
 
+  const ghCalls = [];
+  const ghComments = new Map([[PACKET, []], [AUDIT_ISSUE, []]]);
+  let ghNextId = 12000;
+  const ghRunner = (args, options = {}) => {
+    ghCalls.push({args: [...args], input: options.input || null});
+    assert.equal(args[0], 'api');
+    assert.equal(args[2], '--method');
+    assert.equal(args[4], '--header');
+    const target = args[1];
+    const issue = target.match(new RegExp(`^repos/${FIXED_REPO}/issues/([1-9][0-9]*)$`));
+    if (issue && args[3] === 'GET') {
+      return {code: 0, stdout: JSON.stringify({
+        number: Number(issue[1]), state: 'open', body: PACKET_BODY,
+      }), stderr: ''};
+    }
+    const list = target.match(new RegExp(
+      `^repos/${FIXED_REPO}/issues/([1-9][0-9]*)/comments\\?per_page=100&page=([1-9][0-9]*)$`,
+    ));
+    if (list && args[3] === 'GET') {
+      const rows = ghComments.get(Number(list[1])) || [];
+      const page = Number(list[2]);
+      return {code: 0, stdout: JSON.stringify(rows.slice((page - 1) * 100, page * 100)), stderr: ''};
+    }
+    const post = target.match(new RegExp(`^repos/${FIXED_REPO}/issues/([1-9][0-9]*)/comments$`));
+    if (post && args[3] === 'POST' && args.at(-2) === '--input' && args.at(-1) === '-') {
+      const issueNumber = Number(post[1]);
+      const payload = JSON.parse(options.input);
+      const row = {id: ghNextId++, body: payload.body};
+      if (!ghComments.has(issueNumber)) ghComments.set(issueNumber, []);
+      ghComments.get(issueNumber).push(row);
+      return {code: 0, stdout: JSON.stringify(row), stderr: ''};
+    }
+    return {code: 1, stdout: '', stderr: 'unexpected fake gh request'};
+  };
+
+  const ghClient = createGhCheckpointClient({packetNumber: PACKET, runner: ghRunner});
+  assert.throws(
+    () => createGhCheckpointClient({repo: 'other/repo', packetNumber: PACKET, runner: ghRunner}),
+    /GH_API_REPOSITORY_INVALID/,
+  );
+  await assert.rejects(ghClient.api('/pulls/1'), /GH_API_ENDPOINT_INVALID/);
+  await assert.rejects(ghClient.api('/issues/1'), /GH_API_ENDPOINT_INVALID/);
+  await assert.rejects(
+    ghClient.api(`/issues/${PACKET}`, {method: 'POST', body: {body: 'x'}}),
+    /GH_API_OPTIONS_INVALID/,
+  );
+  await assert.rejects(
+    ghClient.api(`/issues/${PACKET}/comments?per_page=100&page=21`),
+    /GH_API_COMMENT_PAGE_INVALID/,
+  );
+  await assert.rejects(
+    ghClient.api(`/issues/${PACKET}/comments`, {
+      method: 'POST', body: {body: 'x', extra: true},
+    }),
+    /GH_API_COMMENT_BODY_INVALID/,
+  );
+  await assert.rejects(
+    ghClient.api(`/issues/${PACKET}/comments`, {
+      method: 'POST', body: {body: 'x'.repeat(MAX_COMMENT_BODY_BYTES + 1)},
+    }),
+    /GH_API_COMMENT_BODY_INVALID/,
+  );
+
+  const privateMarker = 'private-stderr-marker';
+  const failedGh = createGhCheckpointClient({
+    packetNumber: PACKET,
+    runner: () => ({code: 1, stdout: '', stderr: privateMarker}),
+  });
+  await assert.rejects(
+    failedGh.api(`/issues/${PACKET}`),
+    (error) => error.message === 'GH_API_REQUEST_FAILED' && !String(error).includes(privateMarker),
+  );
+  const malformedGh = createGhCheckpointClient({
+    packetNumber: PACKET,
+    runner: () => ({code: 0, stdout: '{bad-json', stderr: privateMarker}),
+  });
+  await assert.rejects(
+    malformedGh.api(`/issues/${PACKET}`),
+    (error) => error.message === 'GH_API_RESPONSE_INVALID' && !String(error).includes(privateMarker),
+  );
+
+  let fallbackCalls = 0;
+  const fetchImpl = async (_url, options) => ({
+    ok: true,
+    status: 200,
+    async json() {
+      assert.match(options.headers.Authorization, /^Bearer /);
+      return {number: PACKET, state: 'open', body: PACKET_BODY};
+    },
+  });
+  const envClient = createStageCheckpointClient({
+    repo: FIXED_REPO,
+    token: 'fixture-auth-value',
+    fetchImpl,
+    runner: () => {
+      fallbackCalls += 1;
+      throw new Error('fallback must not run');
+    },
+  });
+  const envIssue = await envClient.api(`/issues/${PACKET}`);
+  assert.equal(envIssue.number, PACKET);
+  assert.equal(fallbackCalls, 0);
+
+  const tempDir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'stage-checkpoint-'));
+  const bodyFile = path.join(tempDir, 'checkpoint.md');
+  fs.writeFileSync(bodyFile, BODY);
+  try {
+    const firstGhRun = await run({
+      argv: ['--packet', String(PACKET), '--stage', STAGE, '--body-file', bodyFile],
+      env: {},
+      runner: ghRunner,
+    });
+    assert.equal(firstGhRun.status, 'COMPLETE');
+    assert.equal(firstGhRun.packet.state, 'WRITTEN');
+    assert.equal(firstGhRun.audit.state, 'WRITTEN');
+    const writesAfterFirst = ghCalls.filter((call) => call.args[3] === 'POST').length;
+    assert.equal(writesAfterFirst, 2);
+
+    const retryGhRun = await run({
+      argv: ['--packet', String(PACKET), '--stage', STAGE, '--body-file', bodyFile],
+      env: {},
+      runner: ghRunner,
+    });
+    assert.equal(retryGhRun.status, 'COMPLETE');
+    assert.equal(retryGhRun.packet.state, 'EXISTING');
+    assert.equal(retryGhRun.audit.state, 'EXISTING');
+    assert.equal(ghCalls.filter((call) => call.args[3] === 'POST').length, writesAfterFirst);
+  } finally {
+    fs.rmSync(tempDir, {recursive: true, force: true});
+  }
+
   const root = path.resolve(__dirname, '../../../../..');
   const source = fs.readFileSync(path.join(root, '.github/plugin-control-plane/canonical-main/work-harness/stage-checkpoint.cjs'), 'utf8');
   assert.match(source, /REPOSITORY_IDENTITY_INVALID/);
   assert.match(source, /MAX_COMMENT_PAGES = 20/);
+  assert.match(source, /shell: false/);
+  assert.doesNotMatch(source, /--repo/);
   assert.doesNotMatch(source, /issue_comment:/);
   assert.doesNotMatch(source, /tools\/repo-ci-mcp/);
+  for (const forbidden of [
+    "'auth', 'token'",
+    "'auth', 'login'",
+    "'auth', 'refresh'",
+    "'auth', 'logout'",
+  ]) assert(!source.includes(forbidden), forbidden);
 
   const manifest = JSON.parse(fs.readFileSync(path.join(root, '.github/tooling/ci-summary/manifests/plugin-control-plane.json'), 'utf8'));
   const commands = manifest.checks.map((check) => check.command.join(' '));

@@ -40,6 +40,7 @@ class FakeRuntime:
         self.launch_count = 0
         self.mutations = 0
         self.display_calls = 0
+        self.initial_displays = {0}
         self.targets_calls = 0
         self.proc_cmdline = ["scrcpy", "-s", "opaque-device", *mod.SCRCPY_ARGS]
 
@@ -60,7 +61,7 @@ class FakeRuntime:
         if self.signal_count:
             return {0}
         if self.display_calls == 1:
-            return {0}
+            return set(self.initial_displays)
         return {0, 6}
 
     def forward_in_use(self):
@@ -91,7 +92,7 @@ class FakeRuntime:
             return [{"id": "AAAAAAAA", "type": "page", "url": "https://chatgpt.com/"}]
         return [
             {"id": "AAAAAAAA", "type": "page", "url": "https://chatgpt.com/"},
-            {"id": "ABCDEF12", "type": "page", "url": mod.COLAB_ROOT},
+            {"id": "6585", "type": "page", "url": mod.COLAB_ROOT},
         ]
 
     def launch_chrome(self, serial, display_id):
@@ -174,16 +175,28 @@ serial-1 device product:x model:SM-S938N device:y transport_id:1
                 "New display: x (id=6)\nNew display: y (id=7)\n"
             )
 
+    def test_start_refuses_preexisting_nonzero_display(self):
+        runtime = FakeRuntime()
+        runtime.initial_displays = {0, 9}
+        with self.assertRaisesRegex(mod.WorkspaceError, "display-baseline-conflict"):
+            mod.run_start(runtime)
+        self.assertEqual(runtime.mutations, 0)
+
+    def test_pid_ownership_binds_current_device(self):
+        good = ["scrcpy", "-s", "opaque-device", *mod.SCRCPY_ARGS]
+        self.assertTrue(mod.is_owned_scrcpy_cmdline(good, "opaque-device"))
+        self.assertFalse(mod.is_owned_scrcpy_cmdline(good, "different-device"))
+
     def test_start_materializes_only_virtual_workspace(self):
         runtime = FakeRuntime()
         receipt = mod.run_start(runtime)
         self.assertIn("state=running", receipt)
         self.assertIn("display_id=6", receipt)
-        self.assertIn("target=present", receipt)
+        self.assertIn("bound_target=present", receipt)
         self.assertTrue(runtime.forward_created)
         self.assertEqual(runtime.launch_count, 1)
         self.assertEqual(runtime.saved["marker"], mod.MARKER)
-        self.assertEqual(runtime.saved["target_id"], "ABCDEF12")
+        self.assertEqual(runtime.saved["target_id"], "6585")
         self.assertNotIn("opaque-device", receipt)
         self.assertNotIn("colab.research.google.com", receipt)
 
@@ -193,7 +206,7 @@ serial-1 device product:x model:SM-S938N device:y transport_id:1
             "marker": mod.MARKER,
             "pid": 4242,
             "display_id": 6,
-            "target_id": "ABCDEF12",
+            "target_id": "6585",
             "started_at": "2026-09-25T00:00:00Z",
             "forward_port": mod.FORWARD_PORT,
         }
@@ -207,7 +220,7 @@ serial-1 device product:x model:SM-S938N device:y transport_id:1
             "marker": mod.MARKER,
             "pid": 4242,
             "display_id": 6,
-            "target_id": "ABCDEF12",
+            "target_id": "6585",
             "started_at": "2026-09-25T00:00:00Z",
             "forward_port": mod.FORWARD_PORT,
         }
@@ -229,7 +242,7 @@ serial-1 device product:x model:SM-S938N device:y transport_id:1
             "marker": mod.MARKER,
             "pid": 4242,
             "display_id": 6,
-            "target_id": "ABCDEF12",
+            "target_id": "6585",
             "started_at": "2026-09-25T00:00:00Z",
             "forward_port": mod.FORWARD_PORT,
         }
@@ -245,7 +258,7 @@ serial-1 device product:x model:SM-S938N device:y transport_id:1
             "marker": mod.MARKER,
             "pid": 4242,
             "display_id": 6,
-            "target_id": "ABCDEF12",
+            "target_id": "6585",
             "started_at": "2026-09-25T00:00:00Z",
             "forward_port": mod.FORWARD_PORT,
         }
@@ -264,7 +277,7 @@ serial-1 device product:x model:SM-S938N device:y transport_id:1
             virtual_display="unknown",
             chrome_task="unknown",
             cdp="unknown",
-            target="unknown",
+            bound_target="unknown",
         )
         lines = receipt.splitlines()
         self.assertEqual(len(lines), 10)

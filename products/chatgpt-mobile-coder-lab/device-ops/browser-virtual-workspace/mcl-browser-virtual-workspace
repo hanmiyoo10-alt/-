@@ -2,29 +2,29 @@
 set -eu
 
 case "${1:-}" in
-  start|status|stop)
-    [ "$#" -eq 1 ] || {
-      echo 'usage: mcl-browser-virtual-workspace start|status|stop' >&2
-      exit 2
-    }
-    ;;
-  *)
-    echo 'usage: mcl-browser-virtual-workspace start|status|stop' >&2
-    exit 2
-    ;;
+start | status | stop)
+	[ "$#" -eq 1 ] || {
+		echo 'usage: mcl-browser-virtual-workspace start|status|stop' >&2
+		exit 2
+	}
+	;;
+*)
+	echo 'usage: mcl-browser-virtual-workspace start|status|stop' >&2
+	exit 2
+	;;
 esac
 
 HERE=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
 CONTROLLER="$HERE/mcl_browser_virtual_workspace.py"
 
 [ -f "$CONTROLLER" ] || {
-  echo 'BLOCKED controller-unavailable' >&2
-  exit 1
+	echo 'BLOCKED controller-unavailable' >&2
+	exit 1
 }
 
 command -v python3 >/dev/null 2>&1 || {
-  echo 'BLOCKED python-unavailable' >&2
-  exit 1
+	echo 'BLOCKED python-unavailable' >&2
+	exit 1
 }
 
 exec python3 "$CONTROLLER" "$1"

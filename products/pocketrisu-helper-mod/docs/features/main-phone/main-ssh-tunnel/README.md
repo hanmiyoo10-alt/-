@@ -1,6 +1,6 @@
 # 메인폰 SSH core tunnel
 
-상태: **ACTIVE / GUARD-ANCHOR HARDENING IMPLEMENTATION_PR**
+상태: **ACTIVE / GUARD-ANCHOR DEPLOYED / LIVE-PROVEN**
 
 ## 목적
 메인폰 Firefox의 localhost 접속을 서버폰 PocketRisu/bridge 서비스로 전달.
@@ -57,10 +57,13 @@ Feature-ID `main-ssh-tunnel` 안에서 core tunnel supervisor와 그 fixed guard
 ## Merge / deployment state
 
 - base hardening PR #2060 merged to `main` as `d9e93115f943138ad7c675fcc675e4a0460714b9`.
-- 2026-09-24 natural evidence confirms the #2060 guard + Boot launcher are installed on M and can still perform bounded manual recovery.
-- follow-up #2786 is currently `IMPLEMENTATION_PR`: guard↔anchor durability source and synthetic regression are prepared only.
-- the #2786 guard-anchor bytes are **not merged or deployed** on M yet.
-- no global `runsvdir`/service-daemon restart, health-triggered tunnel restart, network toggle, or server restart is part of this follow-up.
+- follow-up PR #2878 for #2786 merged as `0a25b7691bf5d768aced94403b32ebdb50f12cc3`; the five feature paths remained byte-identical through the postmerge/current-main convergence proof.
+- 2026-09-25 the exact merged guard + Boot launcher were deployed on M with backup-first rollback material preserved.
+- deployed guard and launcher bytes match the merged/current source exactly.
+- controlled guard hard loss was recovered by the preserved anchor, and controlled anchor hard loss was recovered by the preserved guard.
+- final runtime converged to exactly one guard and one anchor while `pocketrisu-ssh-tunnel` supervision and localhost HTTP 200/ready remained healthy.
+- the shared top-level `runsvdir` remained absent throughout; its initiating/root cause remains `UNKNOWN`.
+- no global `runsvdir`/service-daemon restart, health-triggered tunnel restart, network toggle/reset, phone reboot, whole-Termux loss, or server restart was used to manufacture proof.
 
 다음 한 단계:
-- #2786 exact candidate를 non-closing PR로 게시하고 `VALIDATION_MERGE`로 넘긴다. 실제 M 설치/guard-owner loss proof는 merge + postmerge 이후 별도 live acceptance에서만 수행한다.
+- 추가 배포 조작 없이 자연 운용을 관찰한다. shared `runsvdir` root-cause work remains separate from this Feature-ID and must not be inferred from guard-anchor success.

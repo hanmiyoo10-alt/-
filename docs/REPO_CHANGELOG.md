@@ -1989,3 +1989,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/0e8842774b1e6ade430eb1fb0749594e4c37d236)
 - Event ID: `b456e0a99a023d4e2533e1b928481dfe2dbe2fb6f152c6844bfb6ac8f956273e`
 <!-- canonical-main-doc-promoted:b456e0a99a023d4e2533e1b928481dfe2dbe2fb6f152c6844bfb6ac8f956273e -->
+
+### 2026-09-25 — Merge pull request #2929 from hanmiyoo10-alt/server/mcl-packet-2927
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `1e68b59a7501c7ca2e48f57d3b1b9afba3120989`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1e68b59a7501c7ca2e48f57d3b1b9afba3120989)
+- Event ID: `f319084348418b396a2309337936e80dfaa016dbb32ed0795c1578707f2aced1`
+<!-- canonical-main-doc-promoted:f319084348418b396a2309337936e80dfaa016dbb32ed0795c1578707f2aced1 -->

@@ -21,7 +21,6 @@ STATE_FILE_NAME = "state.json"
 LOG_FILE_NAME = "scrcpy.log"
 COLAB_ROOT = "https://colab.research.google.com/"
 DISPLAY_SPEC = "720x1280/240"
-DISPLAY_RE = re.compile(r"New display: .*\(id=(\d+)\)")
 TARGET_ID_RE = re.compile(r"^[A-Fa-f0-9]{1,64}$")
 
 SCRCPY_ARGS = [

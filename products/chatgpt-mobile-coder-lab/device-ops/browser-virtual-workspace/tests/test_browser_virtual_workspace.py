@@ -149,19 +149,36 @@ class BrowserVirtualWorkspaceTest(unittest.TestCase):
         self.assertEqual(chrome[chrome.index("-f") + 1], "0x18080000")
         self.assertNotIn("force-stop", " ".join(chrome))
 
-    def test_adb_model_must_be_unique_and_exact(self):
-        good = """List of devices attached
-serial-1 device product:x model:SM-S938N device:y transport_id:1
+    def test_adb_transport_selection_ignores_noncanonical_model_token(self):
+        live_shape = """List of devices attached
+serial-1 device product:pa3qksx model:SM_S938N device:pa3q transport_id:1
 """
-        self.assertEqual(mod.parse_adb_devices(good), "serial-1")
+        self.assertEqual(mod.parse_adb_devices(live_shape), "serial-1")
+        other_token = """List of devices attached
+serial-1 device product:x model:NOT_AUTHORITY transport_id:1
+"""
+        self.assertEqual(mod.parse_adb_devices(other_token), "serial-1")
+
+    def test_adb_transport_selection_requires_one_connected_device(self):
+        with self.assertRaises(mod.WorkspaceError):
+            mod.parse_adb_devices("List of devices attached\n")
         with self.assertRaises(mod.WorkspaceError):
             mod.parse_adb_devices(
-                "List of devices attached\nserial-1 device model:OTHER transport_id:1\n"
+                "List of devices attached\nserial-1 offline product:x model:SM_S938N\n"
             )
         with self.assertRaises(mod.WorkspaceError):
-            mod.parse_adb_devices(good + "serial-2 device model:SM-S938N transport_id:2\n")
-        with self.assertRaises(mod.WorkspaceError):
-            mod.parse_adb_devices(good + "other device model:OTHER transport_id:2\n")
+            mod.parse_adb_devices(
+                "List of devices attached\n"
+                "serial-1 device product:x model:SM_S938N\n"
+                "serial-2 device product:y model:SM_S938N\n"
+            )
+
+    def test_canonical_product_model_must_match_exactly(self):
+        mod.validate_product_model("SM-S938N\n")
+        for value in ("", "SM_S938N\n", "SM-S938N\nextra\n", "SM-S938N extra\n"):
+            with self.subTest(value=value):
+                with self.assertRaises(mod.WorkspaceError):
+                    mod.validate_product_model(value)
 
     def test_display_parser_rejects_missing_or_ambiguous(self):
         self.assertEqual(

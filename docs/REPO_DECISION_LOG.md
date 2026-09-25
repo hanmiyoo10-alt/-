@@ -148,3 +148,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2774)
 - Event ID: `85e8a123df18691f9630186059b0a266cc2926ed5757e6dfd52aee960037e988`
 <!-- canonical-main-doc-promoted:85e8a123df18691f9630186059b0a266cc2926ed5757e6dfd52aee960037e988 -->
+
+### 2026-09-25 — REPO-TERMINAL-RESIDUE-CLEANUP-V1 — archive-first bounded terminal cleanup owner
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2880)
+- Event ID: `2feec578c6362e98d01a4fa738f1766c85a744faf59b611a809a4afeafb363f6`
+<!-- canonical-main-doc-promoted:2feec578c6362e98d01a4fa738f1766c85a744faf59b611a809a4afeafb363f6 -->

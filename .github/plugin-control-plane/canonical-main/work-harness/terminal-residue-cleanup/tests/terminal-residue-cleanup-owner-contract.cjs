@@ -8,6 +8,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const owner = require('../terminal-residue-cleanup-owner.cjs');
+const stageCheckpoint = require('../../stage-checkpoint.cjs');
 
 const REPO = 'hanmiyoo10-alt/-';
 const PACKET = 9001;
@@ -56,7 +57,18 @@ function fixtureAdapter(f, overrides = {}) {
     },
     async readPacket() {
       if (overrides.packet) return overrides.packet;
-      return {number: PACKET, state: 'closed', body: terminalBody()};
+      return {
+        number: PACKET,
+        state: 'closed',
+        closed_at: '2026-09-25T00:10:00Z',
+        body: terminalBody(),
+      };
+    },
+    async readPacketComments() {
+      return overrides.packetComments || [];
+    },
+    async readAuditComments() {
+      return overrides.auditComments || [];
     },
     async readPr() {
       if (overrides.pr) return overrides.pr;
@@ -82,7 +94,7 @@ function fixtureAdapter(f, overrides = {}) {
     },
   };
 }
-function makeFixture() {
+function makeFixture({withEvidence = true} = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'terminal-cleanup-'));
   const remote = path.join(root, 'remote.git');
   const control = path.join(root, 'control');
@@ -121,13 +133,15 @@ function makeFixture() {
     ['validation-merge-evidence', 'inspect.receipt.json', '{"kind":"merge-inspect"}\n'],
     ['validation-merge-evidence', 'finalize.receipt.json', '{"kind":"merge-finalize"}\n'],
   ];
-  for (const [dir, suffix, content] of rows) {
-    const d = path.join(gitDir, dir);
-    fs.mkdirSync(d, {recursive: true, mode: 0o700});
-    fs.chmodSync(d, 0o700);
-    const p = path.join(d, 'packet-' + PACKET + '-pr-' + PR + '.' + suffix);
-    fs.writeFileSync(p, content, {mode: 0o600});
-    fs.chmodSync(p, 0o600);
+  if (withEvidence) {
+    for (const [dir, suffix, content] of rows) {
+      const d = path.join(gitDir, dir);
+      fs.mkdirSync(d, {recursive: true, mode: 0o700});
+      fs.chmodSync(d, 0o700);
+      const p = path.join(d, 'packet-' + PACKET + '-pr-' + PR + '.' + suffix);
+      fs.writeFileSync(p, content, {mode: 0o600});
+      fs.chmodSync(p, 0o600);
+    }
   }
 
   const profile = {
@@ -168,6 +182,51 @@ function addDetachedEvidenceCheckout(f, {removeFeatureSources = false, conflictF
     if (removeFeatureSources) fs.unlinkSync(row.path);
   });
   return {target, gitDir};
+}
+function terminalCheckpointFixture(f, overrides = {}) {
+  const payload = overrides.payload || [
+    'State reached: EXPERIMENT_CLOSE',
+    '- merged main: ' + (overrides.merge || f.merge),
+    '- required EXPERIMENT_CLOSE UNKNOWN / conflict / blocker: NONE',
+  ].join('\n');
+  const digest = overrides.digest || stageCheckpoint.checkpointDigest(
+    PACKET, 'EXPERIMENT_CLOSE', payload);
+  const createdAt = overrides.createdAt || '2026-09-25T00:05:00Z';
+  const packetId = overrides.packetId || 91001;
+  const auditId = overrides.auditId || 91002;
+  const base = (surface, id) => ({
+    id,
+    body: stageCheckpoint.renderComment({
+      packetNumber: PACKET,
+      stage: 'EXPERIMENT_CLOSE',
+      body: payload,
+      digest,
+      surface,
+    }),
+    user: {login: overrides.author || 'hanmiyoo10-alt'},
+    author_association: overrides.association || 'OWNER',
+    created_at: createdAt,
+    updated_at: overrides.updatedAt || createdAt,
+  });
+  const packetComment = base('packet', packetId);
+  const auditComment = base('audit', auditId);
+  if (overrides.packetBody) packetComment.body = overrides.packetBody;
+  if (overrides.auditBody) auditComment.body = overrides.auditBody;
+  if (overrides.auditDigest && !overrides.auditBody) {
+    auditComment.body = stageCheckpoint.renderComment({
+      packetNumber: PACKET,
+      stage: 'EXPERIMENT_CLOSE',
+      body: payload,
+      digest: overrides.auditDigest,
+      surface: 'audit',
+    });
+  }
+  return {
+    digest,
+    payload,
+    packetComments: overrides.packetComments || [packetComment],
+    auditComments: overrides.auditComments || [auditComment],
+  };
 }
 function cleanupFixture(f) {
   fs.rmSync(f.root, {recursive: true, force: true});
@@ -385,7 +444,7 @@ test('absent worktree without verified archive remains UNKNOWN and preserves ref
     git(f.control, ['worktree', 'remove', f.target]);
     const result = await inspect(f);
     assert.equal(result.receipt.result, 'UNKNOWN');
-    assert(result.receipt.requiredUnknowns.includes('PACKET_EVIDENCE_MISSING'));
+    assert(result.receipt.requiredUnknowns.includes('TERMINAL_CHECKPOINT_MISSING'));
     assert.equal(git(f.control, ['show-ref', '--verify', '--hash', 'refs/heads/' + f.branch]), f.candidate);
   } finally { cleanupFixture(f); }
 });
@@ -542,6 +601,149 @@ test('registered worktree discovery has a fixed count bound', () => {
       () => owner.registeredEvidenceRoots(f.profile, runner),
       (error) => error.kind === 'UNKNOWN'
         && error.reasonCodes.includes('REGISTERED_WORKTREE_COUNT_INVALID'));
+  } finally { cleanupFixture(f); }
+});
+
+test('zero-sidecar terminal checkpoint profile inspects as ARCHIVE_REQUIRED', async () => {
+  const f = makeFixture({withEvidence: false});
+  try {
+    const checkpoint = terminalCheckpointFixture(f);
+    const result = await inspect(f, checkpoint);
+    assert.equal(result.receipt.result, 'PASS');
+    assert.equal(result.facts.cleanupDisposition, 'ARCHIVE_REQUIRED');
+    assert.equal(result.report.output.evidenceProfile, 'DURABLE_TERMINAL_CHECKPOINT');
+    assert.equal(result.report.output.fileCount, 2);
+    assert.equal(result.report.output.sourceCount, 0);
+    assert.equal(result.facts.checkpointEvidence.checkpointId, checkpoint.digest);
+  } finally { cleanupFixture(f); }
+});
+
+test('zero-sidecar without terminal checkpoint remains UNKNOWN with zero effects', async () => {
+  const f = makeFixture({withEvidence: false});
+  try {
+    const result = await inspect(f);
+    assert.equal(result.receipt.result, 'UNKNOWN');
+    assert(result.receipt.requiredUnknowns.includes('TERMINAL_CHECKPOINT_MISSING'));
+    assert.equal(git(f.control, ['show-ref', '--verify', '--hash', 'refs/heads/' + f.branch]), f.candidate);
+    assert.equal(git(f.control, ['ls-remote', '--heads', 'origin', 'refs/heads/' + f.branch])
+      .split(/\s+/)[0], f.candidate);
+  } finally { cleanupFixture(f); }
+});
+
+test('zero-sidecar one-sided or duplicate checkpoint fails closed', async () => {
+  const f = makeFixture({withEvidence: false});
+  try {
+    const checkpoint = terminalCheckpointFixture(f);
+    const oneSided = await inspect(f, {
+      packetComments: checkpoint.packetComments,
+      auditComments: [],
+    });
+    assert.equal(oneSided.receipt.result, 'UNKNOWN');
+    assert(oneSided.receipt.requiredUnknowns.includes('TERMINAL_CHECKPOINT_MISSING'));
+
+    const duplicate = await inspect(f, {
+      packetComments: [...checkpoint.packetComments, {...checkpoint.packetComments[0], id: 91003}],
+      auditComments: checkpoint.auditComments,
+    });
+    assert.equal(duplicate.receipt.result, 'CONFLICT');
+    assert(duplicate.receipt.conflicts.includes('TERMINAL_CHECKPOINT_DUPLICATE'));
+  } finally { cleanupFixture(f); }
+});
+
+test('zero-sidecar checkpoint author edit and post-close identities fail closed', async () => {
+  const f = makeFixture({withEvidence: false});
+  try {
+    const wrongAuthor = terminalCheckpointFixture(f, {author: 'someone-else'});
+    const authorResult = await inspect(f, wrongAuthor);
+    assert.equal(authorResult.receipt.result, 'CONFLICT');
+    assert(authorResult.receipt.conflicts.includes('TERMINAL_CHECKPOINT_AUTHOR_CONFLICT'));
+
+    const edited = terminalCheckpointFixture(f, {updatedAt: '2026-09-25T00:06:00Z'});
+    const editedResult = await inspect(f, edited);
+    assert.equal(editedResult.receipt.result, 'CONFLICT');
+    assert(editedResult.receipt.conflicts.includes('TERMINAL_CHECKPOINT_EDITED'));
+
+    const late = terminalCheckpointFixture(f, {createdAt: '2026-09-25T00:11:00Z'});
+    const lateResult = await inspect(f, late);
+    assert.equal(lateResult.receipt.result, 'CONFLICT');
+    assert(lateResult.receipt.conflicts.includes('TERMINAL_CHECKPOINT_AFTER_PACKET_CLOSE'));
+  } finally { cleanupFixture(f); }
+});
+
+test('zero-sidecar checkpoint digest and payload identities fail closed', async () => {
+  const f = makeFixture({withEvidence: false});
+  try {
+    const digestMismatch = terminalCheckpointFixture(f, {auditDigest: 'f'.repeat(64)});
+    const mismatchResult = await inspect(f, digestMismatch);
+    assert.equal(mismatchResult.receipt.result, 'CONFLICT');
+    assert(mismatchResult.receipt.conflicts.includes('TERMINAL_CHECKPOINT_DIGEST_CONFLICT'));
+
+    const forgedDigest = terminalCheckpointFixture(f, {digest: 'e'.repeat(64)});
+    const forgedResult = await inspect(f, forgedDigest);
+    assert.equal(forgedResult.receipt.result, 'CONFLICT');
+    assert(forgedResult.receipt.conflicts.includes('TERMINAL_CHECKPOINT_DIGEST_RECOMPUTE_CONFLICT'));
+
+    const wrongMerge = terminalCheckpointFixture(f, {merge: 'd'.repeat(40)});
+    const mergeResult = await inspect(f, wrongMerge);
+    assert.equal(mergeResult.receipt.result, 'CONFLICT');
+    assert(mergeResult.receipt.conflicts.includes('TERMINAL_CHECKPOINT_MERGE_IDENTITY_CONFLICT'));
+  } finally { cleanupFixture(f); }
+});
+
+test('zero-sidecar first apply snapshots checkpoint pair then cleans exact Git residue', async () => {
+  const f = makeFixture({withEvidence: false});
+  try {
+    const checkpoint = terminalCheckpointFixture(f);
+    const first = await apply(f, checkpoint);
+    assert.equal(first.receipt.result, 'PASS');
+    assert.equal(first.facts.cleanupDisposition, 'COMPLETE');
+    assert.equal(first.report.output.archive, 'VERIFIED');
+    assert.equal(first.report.output.evidenceProfile, 'DURABLE_TERMINAL_CHECKPOINT');
+    assert.equal(first.report.output.fileCount, 2);
+    assert.equal(first.report.output.worktree, 'ABSENT');
+    assert.equal(first.report.output.localRef, 'ABSENT');
+    assert.equal(first.report.output.remoteRef, 'ABSENT');
+    assert.equal(first.report.output.residue, 'NONE');
+
+    const counters = Object.fromEntries(first.receipt.counters.map((row) => [row.name, row.value]));
+    assert.equal(counters.archive_writes, 1);
+    assert.equal(counters.evidence_source_deletes, 0);
+    assert.equal(counters.worktree_removals, 1);
+    assert.equal(counters.remote_ref_deletes, 1);
+    assert.equal(counters.local_ref_deletes, 1);
+
+    const archiveRoot = owner.archivePath(path.join(f.control, '.git'), PACKET, PR);
+    const verified = owner.verifyArchive(archiveRoot, PACKET, PR, f.candidate, f.merge);
+    assert.equal(verified.state, 'VERIFIED');
+    assert.equal(verified.manifest.schemaVersion, 2);
+    assert.equal(verified.manifest.evidenceProfile, 'DURABLE_TERMINAL_CHECKPOINT');
+    assert.equal(verified.manifest.checkpointId, checkpoint.digest);
+    assert.equal(verified.manifest.fileCount, 2);
+    assert.equal(fs.statSync(archiveRoot).mode & 0o777, 0o700);
+    assert.equal(fs.statSync(path.join(archiveRoot, 'manifest.json')).mode & 0o777, 0o600);
+    for (const row of verified.manifest.files) {
+      assert.equal(fs.statSync(path.join(archiveRoot, row.path)).mode & 0o777, 0o600);
+    }
+
+    const second = await apply(f, {});
+    assert.equal(second.receipt.result, 'PASS');
+    assert.equal(second.facts.cleanupDisposition, 'ALREADY_CLEAN');
+    const secondCounters = Object.fromEntries(
+      second.receipt.counters.map((row) => [row.name, row.value]));
+    for (const name of [
+      'archive_writes', 'evidence_source_deletes', 'worktree_removals',
+      'remote_ref_deletes', 'local_ref_deletes',
+    ]) assert.equal(secondCounters[name], 0);
+  } finally { cleanupFixture(f); }
+});
+
+test('ordinary local sidecars remain primary even without checkpoint comments', async () => {
+  const f = makeFixture();
+  try {
+    const result = await inspect(f, {packetComments: [], auditComments: []});
+    assert.equal(result.receipt.result, 'PASS');
+    assert.equal(result.report.output.evidenceProfile, 'LOCAL_VALIDATION_SIDECARS');
+    assert.equal(result.report.output.fileCount, 5);
   } finally { cleanupFixture(f); }
 });
 

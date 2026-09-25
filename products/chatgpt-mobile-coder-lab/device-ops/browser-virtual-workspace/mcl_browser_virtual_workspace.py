@@ -22,7 +22,7 @@ LOG_FILE_NAME = "scrcpy.log"
 COLAB_ROOT = "https://colab.research.google.com/"
 DISPLAY_SPEC = "720x1280/240"
 DISPLAY_RE = re.compile(r"New display: .*\(id=(\d+)\)")
-TARGET_ID_RE = re.compile(r"^[A-F0-9]{8,64}$")
+TARGET_ID_RE = re.compile(r"^[A-Fa-f0-9]{1,64}$")
 
 SCRCPY_ARGS = [
     "--new-display=" + DISPLAY_SPEC,
@@ -55,7 +55,7 @@ def bounded_receipt(
     virtual_display: str = "unknown",
     chrome_task: str = "unknown",
     cdp: str = "unknown",
-    target: str = "unknown",
+    bound_target: str = "unknown",
 ) -> str:
     fields = [
         ("schema", SCHEMA),
@@ -66,7 +66,7 @@ def bounded_receipt(
         ("virtual_display", virtual_display),
         ("chrome_task", chrome_task),
         ("cdp", cdp),
-        ("target", target),
+        ("bound_target", bound_target),
         ("details", "withheld"),
     ]
     return "\n".join(f"{key}={value}" for key, value in fields)
@@ -127,14 +127,14 @@ def build_chrome_command(serial: str, display_id: int) -> list[str]:
     ]
 
 
-def is_owned_scrcpy_cmdline(tokens: list[str]) -> bool:
+def is_owned_scrcpy_cmdline(tokens: list[str], expected_serial: str) -> bool:
     if len(tokens) != 3 + len(SCRCPY_ARGS):
         return False
     if Path(tokens[0]).name != "scrcpy":
         return False
     if tokens[1] != "-s":
         return False
-    if not tokens[2]:
+    if tokens[2] != expected_serial:
         return False
     return tokens[3:] == SCRCPY_ARGS
 
@@ -365,7 +365,7 @@ def classify(runtime: RealRuntime, state: dict[str, Any] | None) -> dict[str, st
             "virtual_display": "absent",
             "chrome_task": "absent",
             "cdp": "unknown",
-            "target": "absent",
+            "bound_target": "absent",
         }
 
     try:
@@ -380,13 +380,13 @@ def classify(runtime: RealRuntime, state: dict[str, Any] | None) -> dict[str, st
             "virtual_display": "unknown",
             "chrome_task": "unknown",
             "cdp": "unknown",
-            "target": "unknown",
+            "bound_target": "unknown",
         }
 
     cmdline = runtime.process_cmdline(state["pid"])
     owner_process = (
         "running"
-        if cmdline is not None and is_owned_scrcpy_cmdline(cmdline)
+        if cmdline is not None and is_owned_scrcpy_cmdline(cmdline, serial)
         else "absent"
         if cmdline is None
         else "mismatch"
@@ -400,9 +400,9 @@ def classify(runtime: RealRuntime, state: dict[str, Any] | None) -> dict[str, st
         targets = runtime.list_targets()
         cdp = "reachable"
         if state["target_id"] is None:
-            target = "unknown"
+            bound_target = "unknown"
         elif any(item.get("id") == state["target_id"] for item in targets):
-            target = "present"
+            bound_target = "present"
     except WorkspaceError:
         pass
 
@@ -426,7 +426,7 @@ def classify(runtime: RealRuntime, state: dict[str, Any] | None) -> dict[str, st
         "virtual_display": virtual_display,
         "chrome_task": chrome_task,
         "cdp": cdp,
-        "target": target,
+        "bound_target": bound_target,
     }
 
 
@@ -441,6 +441,8 @@ def run_start(runtime: RealRuntime) -> str:
     before_displays = runtime.displays(serial)
     if 0 not in before_displays:
         raise WorkspaceError("physical-display-missing")
+    if before_displays != {0}:
+        raise WorkspaceError("display-baseline-conflict")
     if runtime.forward_in_use():
         raise WorkspaceError("cdp-port-in-use")
 
@@ -527,12 +529,12 @@ def run_stop(runtime: RealRuntime) -> str:
             virtual_display="absent",
             chrome_task="absent",
             cdp="unknown",
-            target="absent",
+            bound_target="absent",
         )
 
     serial = runtime.resolve_serial()
     cmdline = runtime.process_cmdline(state["pid"])
-    if cmdline is not None and not is_owned_scrcpy_cmdline(cmdline):
+    if cmdline is not None and not is_owned_scrcpy_cmdline(cmdline, serial):
         raise WorkspaceError("pid-command-mismatch")
 
     if cmdline is not None:
@@ -558,7 +560,7 @@ def run_stop(runtime: RealRuntime) -> str:
         virtual_display="absent",
         chrome_task="absent",
         cdp="unreachable",
-        target="absent",
+        bound_target="absent",
     )
 
 
@@ -588,7 +590,7 @@ def main(argv: list[str] | None = None) -> int:
                 virtual_display="unknown",
                 chrome_task="unknown",
                 cdp="unknown",
-                target="unknown",
+                bound_target="unknown",
             ),
             file=sys.stderr,
         )

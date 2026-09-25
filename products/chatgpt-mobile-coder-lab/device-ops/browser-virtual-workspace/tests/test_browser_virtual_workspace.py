@@ -173,6 +173,50 @@ serial-1 device product:x model:NOT_AUTHORITY transport_id:1
                 "serial-2 device product:y model:SM_S938N\n"
             )
 
+    def test_real_runtime_resolves_model_from_fixed_getprop_command(self):
+        runtime = mod.RealRuntime()
+        calls = []
+
+        def fake_run(argv, timeout=15):
+            calls.append(list(argv))
+            if argv == ["adb", "devices", "-l"]:
+                return mod.subprocess.CompletedProcess(
+                    argv,
+                    0,
+                    stdout=(
+                        "List of devices attached\n"
+                        "serial-1 device product:pa3qksx model:SM_S938N "
+                        "device:pa3q transport_id:1\n"
+                    ),
+                    stderr="",
+                )
+            if argv == [
+                "adb",
+                "-s",
+                "serial-1",
+                "shell",
+                "getprop",
+                "ro.product.model",
+            ]:
+                return mod.subprocess.CompletedProcess(
+                    argv, 0, stdout="SM-S938N\n", stderr=""
+                )
+            raise AssertionError(argv)
+
+        runtime.run = fake_run
+        self.assertEqual(runtime.resolve_serial(), "serial-1")
+        self.assertEqual(
+            calls[1],
+            [
+                "adb",
+                "-s",
+                "serial-1",
+                "shell",
+                "getprop",
+                "ro.product.model",
+            ],
+        )
+
     def test_canonical_product_model_must_match_exactly(self):
         mod.validate_product_model("SM-S938N\n")
         for value in ("", "SM_S938N\n", "SM-S938N\nextra\n", "SM-S938N extra\n"):

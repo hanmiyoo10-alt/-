@@ -18,9 +18,31 @@ const {
 } = require('../coordination-body-patch.cjs');
 
 const PACKET = 2287;
-const PACKET_BODY = `${PACKET_MARKER}\n# Packet\n\nState: READY\nToken: old`;
+const PACKET_BODY = [
+  PACKET_MARKER,
+  '# Packet',
+  '',
+  '## State',
+  '`IN_PROGRESS`',
+  '',
+  '## Interaction stage',
+  '- Current stage: `AUTHORITY_SCOPE`',
+  '',
+  'Token: old',
+].join('\n');
 const QUEUE_BODY = `# Queue\n${QUEUE_MARKER}\n\nToken: old`;
-const DOCUMENTED_PACKET_BODY = `${PACKET_MARKER}\n# Packet\n\nEligibility: \`${PACKET_MARKER}\`\nToken: old`;
+const DOCUMENTED_PACKET_BODY = [
+  PACKET_MARKER,
+  '# Packet',
+  '',
+  '**State: IN_PROGRESS**',
+  '',
+  '## Interaction stage',
+  '- Current stage: `AUTHORITY_SCOPE`',
+  '',
+  `Eligibility: \`${PACKET_MARKER}\``,
+  'Token: old',
+].join('\n');
 const DOCUMENTED_QUEUE_BODY = `# Queue\n${QUEUE_MARKER}\n\nEligibility: \`${QUEUE_MARKER}\`\nToken: old`;
 const EXACT_OPERATION = Object.freeze({ type: 'replaceExact', oldText: 'Token: old', newText: 'Token: new' });
 
@@ -121,6 +143,7 @@ assert.throws(() => parseArgs([]), /usage:/);
 assert.equal(bodyDigest(PACKET_BODY).length, 64);
 assert.equal(exitCodeFor({ status: 'UPDATED' }), 0);
 assert.equal(exitCodeFor({ status: 'BLOCKED' }), 2);
+assert.equal(exitCodeFor({ status: 'CONFLICT' }), 2);
 assert.equal(exitCodeFor({ status: 'UNKNOWN' }), 3);
 assert.equal(MAX_REQUEST_BYTES, 32768);
 
@@ -137,6 +160,56 @@ assert.equal(MAX_REQUEST_BYTES, 32768);
   assert.equal(success.issueStateMutationAuthorized, false);
   assert.equal(success.commentMutationAuthorized, false);
   assert.equal(success.repositoryMutationAuthorized, false);
+
+  const invalidLifecycleRequest = requestFor(PACKET_BODY, {
+    operation: {
+      type: 'replaceExact',
+      oldText: '`IN_PROGRESS`',
+      newText: '`ACTIVE / AUTHORITY_SCOPE`',
+    },
+  });
+  const invalidLifecycleClient = fakeClient();
+  const invalidLifecycle = await executeCoordinationBodyPatch({
+    client: invalidLifecycleClient,
+    request: invalidLifecycleRequest,
+  });
+  assert.equal(invalidLifecycle.status, 'UNKNOWN');
+  assert.ok(invalidLifecycle.reasonCodes.includes('PACKET_LIFECYCLE_UNKNOWN'));
+  assert.equal(invalidLifecycleClient.patchCalls.length, 0);
+
+  const conflictingLifecycleRequest = requestFor(PACKET_BODY, {
+    operation: {
+      type: 'replaceExact',
+      oldText: '`IN_PROGRESS`',
+      newText: '`IN_PROGRESS / READY`',
+    },
+  });
+  const conflictingLifecycleClient = fakeClient();
+  const conflictingLifecycle = await executeCoordinationBodyPatch({
+    client: conflictingLifecycleClient,
+    request: conflictingLifecycleRequest,
+  });
+  assert.equal(conflictingLifecycle.status, 'CONFLICT');
+  assert.ok(conflictingLifecycle.reasonCodes.includes('PACKET_LIFECYCLE_CONFLICT'));
+  assert.equal(conflictingLifecycleClient.patchCalls.length, 0);
+
+  const malformedCurrentBody = PACKET_BODY.replace(
+    '`IN_PROGRESS`', '`ACTIVE / AUTHORITY_SCOPE`');
+  const repairRequest = requestFor(malformedCurrentBody, {
+    operation: {
+      type: 'replaceExact',
+      oldText: '`ACTIVE / AUTHORITY_SCOPE`',
+      newText: '`IN_PROGRESS`',
+    },
+  });
+  const repairClient = fakeClient({body: malformedCurrentBody});
+  const repaired = await executeCoordinationBodyPatch({
+    client: repairClient,
+    request: repairRequest,
+  });
+  assert.equal(repaired.status, 'UPDATED');
+  assert.equal(repairClient.patchCalls.length, 1);
+  assert.equal(repairClient.current.body, PACKET_BODY);
 
   const staleClient = fakeClient();
   const stale = await executeCoordinationBodyPatch({
@@ -212,6 +285,7 @@ assert.equal(MAX_REQUEST_BYTES, 32768);
   const helperPath = path.join(root, '.github/plugin-control-plane/canonical-main/work-harness/coordination-body-patch.cjs');
   const helperSource = fs.readFileSync(helperPath, 'utf8');
   assert.match(helperSource, /body: \{ body: patch\.body \}/);
+  assert.match(helperSource, /packetProjection\.classifyPacketProjection\(patch\.body\)/);
   assert.match(helperSource, /BODY_CHANGED_BEFORE_WRITE/);
   assert.match(helperSource, /POSTWRITE_READBACK_VERIFIED/);
   assert.match(helperSource, /mutationMayHaveOccurred/);

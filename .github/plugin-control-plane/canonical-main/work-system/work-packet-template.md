@@ -6,6 +6,13 @@
 
 Keep `State` as the packet lifecycle projection. Preserve exactly one canonical lifecycle token (`READY / CLAIMED / IN_PROGRESS / REVIEW / DONE / BLOCKED / CANCELLED / SUPERSEDED`) here when updating stage bookkeeping. Do not replace lifecycle State with stage-only prose; update `Interaction stage` separately.
 
+Before creating a canonical work-packet issue or publishing a packet-body update, materialize the exact candidate body and require this read-only preflight to return `PASS`:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/packet-projection.cjs --body-file /path/to/candidate-packet.md
+```
+
+Do not bypass a non-PASS result by substituting `ACTIVE`, guessing lifecycle from stage prose, or adding another canonical lifecycle word to descriptive State text. The repository does not claim to intercept every external GitHub issue-creation surface; the packet producer owns this prepublication check.
 
 ## Primary goal
 

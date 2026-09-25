@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const {spawnSync} = require('node:child_process');
 
 const root = path.resolve(__dirname, '../../../..');
 const dir = path.join(root, '.github/plugin-control-plane/canonical-main/work-system');
@@ -121,15 +123,62 @@ packetProjection = classifyPacketProjection(`<!-- canonical-main-work-packet:v1 
 assert.equal(packetProjection.disposition, 'CONFLICT');
 assert.ok(packetProjection.reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.PACKET_MARKER_DUPLICATE));
 
+const packetProjectionPath = path.join(dir, 'packet-projection.cjs');
+function runPacketProjectionCli(body) {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'packet-projection-cli-'));
+  const bodyFile = path.join(temp, 'packet.md');
+  try {
+    fs.writeFileSync(bodyFile, body, 'utf8');
+    const child = spawnSync(process.execPath, [
+      packetProjectionPath, '--body-file', bodyFile,
+    ], {encoding: 'utf8'});
+    return {status: child.status, output: JSON.parse(child.stdout)};
+  } finally {
+    fs.rmSync(temp, {recursive: true, force: true});
+  }
+}
+let cliProjection = runPacketProjectionCli(packetFixture('**State: READY**'));
+assert.equal(cliProjection.status, 0);
+assert.equal(cliProjection.output.disposition, 'PASS');
+assert.equal(cliProjection.output.lifecycle, 'READY');
+
+cliProjection = runPacketProjectionCli(packetFixture('**State: ACTIVE / AUTHORITY_SCOPE**'));
+assert.equal(cliProjection.status, 3);
+assert.equal(cliProjection.output.disposition, 'UNKNOWN');
+assert.ok(cliProjection.output.reasonCodes.includes(
+  PACKET_PROJECTION_REASON_CODES.PACKET_LIFECYCLE_UNKNOWN));
+
+cliProjection = runPacketProjectionCli(packetFixture('**State: IN_PROGRESS / READY**'));
+assert.equal(cliProjection.status, 2);
+assert.equal(cliProjection.output.disposition, 'CONFLICT');
+assert.ok(cliProjection.output.reasonCodes.includes(
+  PACKET_PROJECTION_REASON_CODES.PACKET_LIFECYCLE_CONFLICT));
+
+cliProjection = runPacketProjectionCli(stageOnly);
+assert.equal(cliProjection.status, 3);
+assert.equal(cliProjection.output.disposition, 'UNKNOWN');
+assert.ok(cliProjection.output.reasonCodes.includes(
+  PACKET_PROJECTION_REASON_CODES.PACKET_LIFECYCLE_UNKNOWN));
 
 assert.match(packetProjectionSource, /require\('\.\/policy\.json'\)/);
+assert.match(packetProjectionSource, /--body-file/);
+assert.match(packetProjectionSource, /MAX_BODY_BYTES/);
 assert.doesNotMatch(packetProjectionSource, /child_process|https?:\/\/|gh\s+api|fetch\s*\(/);
 assert.doesNotMatch(packetProjectionSource, /issueState|nativeState/);
+assert.doesNotMatch(packetProjectionSource, /writeFile|appendFile|createWriteStream/);
 assert.match(readme, /Lifecycle `State` and `Interaction stage` are separate packet axes/);
 assert.match(readme, /Stage-only State prose never implies/);
 assert.match(readme, /packet-projection\.cjs/);
+assert.match(readme, /Packet producers must run this same projection before creating a canonical work-packet issue or publishing a packet-body update/);
+assert.match(readme, /does not intercept every GitHub issue-creation surface/);
+assert.match(readme, /coordination-body-patch\.cjs/);
+assert.match(readme, /post-patch candidate body/);
+assert.match(readme, /malformed packet can still be repaired/);
 assert.match(template, /Preserve exactly one canonical lifecycle token/);
 assert.match(template, /Do not replace lifecycle State with stage-only prose/);
+assert.match(template, /Before creating a canonical work-packet issue or publishing a packet-body update/);
+assert.match(template, /packet-projection\.cjs --body-file/);
+assert.match(template, /does not claim to intercept every external GitHub issue-creation surface/);
 assert.equal(policy.parallelism.requireDisjointWriteScopes, true);
 assert.equal(policy.parallelism.oneActiveOwnerPerPacket, true);
 assert.equal(policy.parallelism.splitOnScopeExpansion, true);

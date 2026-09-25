@@ -196,6 +196,16 @@ Lifecycle `State` and `Interaction stage` are separate packet axes. A producer M
 
 `work-system/packet-projection.cjs` is the pure read-only parser/classifier for this boundary. It derives lifecycle and stage vocabularies from `policy.json`, accepts the existing `**State: ...**` and `## State` one-line forms, and returns bounded `PASS / UNKNOWN / CONFLICT` evidence. Missing lifecycle remains explicit `UNKNOWN`; duplicate State projections or multiple lifecycle tokens are `CONFLICT`. The helper never fetches GitHub, rewrites a packet, advances a stage, closes an issue, or grants mutation authority.
 
+Packet producers must run this same projection before creating a canonical work-packet issue or publishing a packet-body update, and require `PASS` before the external write effect. The repository does not intercept every GitHub issue-creation surface; this is a producer contract, not a platform hook or second writer. Materialize the candidate body and run:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/packet-projection.cjs --body-file /path/to/candidate-packet.md
+```
+
+The CLI is a bounded read-only adapter over `classifyPacketProjection()`. It performs no normalization, lifecycle inference, autofix, network request, issue creation, or issue update. `PASS` exits 0; `UNKNOWN` and `CONFLICT` remain nonzero with the classifier's exact reason codes.
+
+The existing generic `coordination-body-patch.cjs` applies the same rule to the post-patch candidate body for `WORK_PACKET` updates before PATCH. It intentionally does not require the current body to be valid first, so a malformed packet can still be repaired into a classifier-`PASS` body. A patch that would produce `UNKNOWN` or `CONFLICT` performs zero PATCH effects. `WORK_QUEUE` behavior is unchanged.
+
 Mutation consumers that require packet lifecycle evidence should reuse this parser rather than infer lifecycle from interaction-stage text, proof terms, or native issue state.
 
 ## Execution compactness contract

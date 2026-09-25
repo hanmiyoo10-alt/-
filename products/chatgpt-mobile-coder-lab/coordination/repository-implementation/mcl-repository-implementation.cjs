@@ -108,9 +108,11 @@ function parsePrRequestText(text, packetRef) {
       || /\u0000/.test(value.body)) fail('UNKNOWN', 'PR_REQUEST_BODY_INVALID');
   const n = packetNumber(packetRef);
   const refs = new RegExp('(^|\\s)Refs\\s+#' + n + '\\b', 'i');
-  const closes = new RegExp('\\b(Fixes|Closes|Resolves|Fixed|Closed|Resolved)\\s*:?[ ]*#' + n + '\\b', 'i');
+  const closes = /\\b(?:close(?:s|d)?|fix(?:es|ed)?|resolve(?:s|d)?)\\s*:?[ \\t]*#\\d+\\b/i;
   if (!refs.test(value.body)) fail('BLOCKED', 'PR_REQUEST_NON_CLOSING_REF_REQUIRED');
-  if (closes.test(value.body)) fail('BLOCKED', 'PR_REQUEST_CLOSING_LINK_FORBIDDEN');
+  if (closes.test(value.title) || closes.test(value.body)) {
+    fail('BLOCKED', 'PR_REQUEST_CLOSING_LINK_FORBIDDEN');
+  }
   return {schema: PR_SCHEMA, title: value.title.trim(), body: value.body};
 }
 function parseHandoffEnvelope(text) {

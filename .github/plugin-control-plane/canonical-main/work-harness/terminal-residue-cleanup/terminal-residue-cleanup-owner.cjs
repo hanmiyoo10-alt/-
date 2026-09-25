@@ -25,7 +25,10 @@ const EVIDENCE_DIRS = Object.freeze([
   'validation-continuation-evidence',
   'validation-merge-evidence',
 ]);
+const IGNORED_EVIDENCE_DIRS = Object.freeze(['terminal-residue-cleanup-evidence']);
+const MAX_REGISTERED_WORKTREES = 256;
 const MAX_EVIDENCE_FILES = 32;
+const MAX_EVIDENCE_SOURCES = 64;
 const MAX_EVIDENCE_FILE_BYTES = 64 * 1024;
 const MAX_EVIDENCE_TOTAL_BYTES = 512 * 1024;
 const MAX_REPORT_BYTES = 32 * 1024;
@@ -310,17 +313,67 @@ function worktreeState(profile, runner, branch, expectedHead) {
   }
   return {state: 'PRESENT', tail, target, gitDir};
 }
-function inventoryEvidence(gitDir, packetNumber, prNumber) {
-  if (!gitDir) return null;
+function registeredEvidenceRoots(profile, runner) {
+  const listed = parseWorktreeList(gitRead(profile, runner, ['worktree', 'list', '--porcelain']));
+  if (!listed.length || listed.length > MAX_REGISTERED_WORKTREES) {
+    throw new CleanupError('UNKNOWN', ['REGISTERED_WORKTREE_COUNT_INVALID']);
+  }
+  const controlPath = path.resolve(profile.controlRepo);
+  const rootPath = path.resolve(profile.worktreeRoot);
+  const control = fs.realpathSync(controlPath);
+  const root = fs.realpathSync(rootPath);
+  const common = fs.realpathSync(commonGitDir(profile, runner));
+  const linkedAdminRoot = path.join(common, 'worktrees');
+  const roots = [];
+  const seen = new Set();
+  for (const row of listed) {
+    if (!row.worktree) {
+      throw new CleanupError('CONFLICT', ['REGISTERED_WORKTREE_PATH_INVALID']);
+    }
+    const worktree = path.resolve(row.worktree);
+    if (worktree !== controlPath && path.dirname(worktree) !== rootPath) continue;
+    if (!fs.existsSync(worktree)) {
+      throw new CleanupError('CONFLICT', ['REGISTERED_WORKTREE_PATH_INVALID']);
+    }
+    const st = fs.lstatSync(worktree);
+    if (st.isSymbolicLink() || !st.isDirectory()) {
+      throw new CleanupError('CONFLICT', ['REGISTERED_WORKTREE_PATH_INVALID']);
+    }
+    const real = fs.realpathSync(worktree);
+    if (real !== control && path.dirname(real) !== root) {
+      throw new CleanupError('CONFLICT', ['REGISTERED_WORKTREE_PATH_ESCAPE']);
+    }
+    const gitDir = fs.realpathSync(gitRead(
+      profile, runner, ['rev-parse', '--absolute-git-dir'], real, 'GIT_ADMIN_UNAVAILABLE'));
+    const gitStat = fs.lstatSync(gitDir);
+    if (gitStat.isSymbolicLink() || !gitStat.isDirectory()
+        || (gitDir !== common && path.dirname(gitDir) !== linkedAdminRoot)) {
+      throw new CleanupError('CONFLICT', ['REGISTERED_GIT_ADMIN_INVALID']);
+    }
+    if (!seen.has(gitDir)) {
+      seen.add(gitDir);
+      roots.push({worktree: real, gitDir});
+    }
+  }
+  roots.sort((a, b) => a.gitDir.localeCompare(b.gitDir));
+  return roots;
+}
+function evidenceRowsFromGitDir(gitDir, packetNumber, prNumber) {
   const prefix = 'packet-' + packetNumber + '-pr-' + prNumber + '.';
-  const files = [];
+  const rows = [];
   const unknownDirs = [];
   for (const entry of fs.readdirSync(gitDir, {withFileTypes: true})) {
-    if (!entry.isDirectory() || !entry.name.endsWith('-evidence')) continue;
+    if (!entry.name.endsWith('-evidence')) continue;
+    if (entry.isSymbolicLink()) {
+      throw new CleanupError('UNKNOWN', ['EVIDENCE_DIRECTORY_INVALID'],
+        'evidence-dir:' + entry.name);
+    }
+    if (!entry.isDirectory()) continue;
     const dir = path.join(gitDir, entry.name);
     const packetFiles = fs.readdirSync(dir, {withFileTypes: true})
       .filter((item) => item.name.startsWith(prefix));
     if (!packetFiles.length) continue;
+    if (IGNORED_EVIDENCE_DIRS.includes(entry.name)) continue;
     if (!EVIDENCE_DIRS.includes(entry.name)) {
       unknownDirs.push(entry.name);
       continue;
@@ -340,7 +393,7 @@ function inventoryEvidence(gitDir, packetNumber, prNumber) {
         throw new CleanupError('UNKNOWN', ['EVIDENCE_FILE_TOO_LARGE'],
           'evidence:' + entry.name + '/' + item.name);
       }
-      files.push({
+      rows.push({
         path: entry.name + '/' + item.name,
         bytes: st.size,
         sha256: sha256File(filePath),
@@ -352,23 +405,100 @@ function inventoryEvidence(gitDir, packetNumber, prNumber) {
     throw new CleanupError('UNKNOWN', ['UNRECOGNIZED_PACKET_EVIDENCE_DIRECTORY'],
       'evidence-dir:' + unknownDirs.sort()[0]);
   }
-  files.sort((a, b) => a.path.localeCompare(b.path));
+  return rows;
+}
+function inventoryEvidenceRoots(roots, packetNumber, prNumber, {allowMissing = false} = {}) {
+  const logical = new Map();
+  let sourceCount = 0;
+  let sourceBytes = 0;
+  for (const root of roots) {
+    for (const row of evidenceRowsFromGitDir(root.gitDir, packetNumber, prNumber)) {
+      sourceCount += 1;
+      sourceBytes += row.bytes;
+      if (sourceCount > MAX_EVIDENCE_SOURCES) {
+        throw new CleanupError('UNKNOWN', ['EVIDENCE_SOURCE_COUNT_EXCEEDED']);
+      }
+      if (sourceBytes > MAX_EVIDENCE_TOTAL_BYTES) {
+        throw new CleanupError('UNKNOWN', ['EVIDENCE_TOTAL_TOO_LARGE']);
+      }
+      const current = logical.get(row.path);
+      if (!current) {
+        logical.set(row.path, {...row, sourcePaths: [row.sourcePath]});
+      } else if (current.bytes !== row.bytes || current.sha256 !== row.sha256) {
+        throw new CleanupError('CONFLICT', ['EVIDENCE_DUPLICATE_IDENTITY_CONFLICT'],
+          'evidence:' + row.path);
+      } else if (!current.sourcePaths.includes(row.sourcePath)) {
+        current.sourcePaths.push(row.sourcePath);
+        current.sourcePaths.sort();
+      }
+    }
+  }
+  const files = [...logical.values()].sort((a, b) => a.path.localeCompare(b.path));
   if (!files.length) {
+    if (allowMissing) return null;
     throw new CleanupError('UNKNOWN', ['PACKET_EVIDENCE_MISSING']);
   }
   if (files.length > MAX_EVIDENCE_FILES) {
     throw new CleanupError('UNKNOWN', ['EVIDENCE_FILE_COUNT_EXCEEDED']);
   }
   const totalBytes = files.reduce((sum, row) => sum + row.bytes, 0);
-  if (totalBytes > MAX_EVIDENCE_TOTAL_BYTES) {
-    throw new CleanupError('UNKNOWN', ['EVIDENCE_TOTAL_TOO_LARGE']);
+  return {files, totalBytes, sourceCount, sourceBytes};
+}
+function inventoryEvidence(gitDir, packetNumber, prNumber) {
+  if (!gitDir) return null;
+  return inventoryEvidenceRoots([{gitDir}], packetNumber, prNumber);
+}
+function locateEvidence(profile, runner, packetNumber, prNumber, options = {}) {
+  return inventoryEvidenceRoots(
+    registeredEvidenceRoots(profile, runner), packetNumber, prNumber, options);
+}
+function verifyInventoryAgainstArchive(inventory, archive) {
+  if (!inventory) return;
+  if (archive.state !== 'VERIFIED') {
+    throw new CleanupError('UNKNOWN', ['ARCHIVE_VERIFY_REQUIRED']);
   }
-  const seen = new Set();
-  for (const row of files) {
-    if (seen.has(row.path)) throw new CleanupError('CONFLICT', ['EVIDENCE_DUPLICATE_PATH']);
-    seen.add(row.path);
+  const archived = new Map(archive.manifest.files.map((row) => [row.path, row]));
+  for (const row of inventory.files) {
+    const match = archived.get(row.path);
+    if (!match || match.bytes !== row.bytes || match.sha256 !== row.sha256) {
+      throw new CleanupError('CONFLICT', ['ARCHIVE_SOURCE_IDENTITY_CONFLICT'],
+        'evidence:' + row.path);
+    }
   }
-  return {files, totalBytes};
+}
+function verifyEvidenceSource(sourcePath, row) {
+  if (!fs.existsSync(sourcePath)) {
+    throw new CleanupError('CONFLICT', ['EVIDENCE_SOURCE_IDENTITY_CONFLICT'],
+      'evidence:' + row.path);
+  }
+  const parent = path.dirname(sourcePath);
+  const parentStat = fs.lstatSync(parent);
+  const parentName = path.basename(parent);
+  const st = fs.lstatSync(sourcePath);
+  if (parentStat.isSymbolicLink() || !parentStat.isDirectory()
+      || !EVIDENCE_DIRS.includes(parentName)
+      || st.isSymbolicLink() || !st.isFile() || modeOf(st) !== 0o600
+      || st.size !== row.bytes || sha256File(sourcePath) !== row.sha256) {
+    throw new CleanupError('CONFLICT', ['EVIDENCE_SOURCE_IDENTITY_CONFLICT'],
+      'evidence:' + row.path);
+  }
+}
+function removeEvidenceSources(inventory, archive) {
+  if (!inventory) return 0;
+  verifyInventoryAgainstArchive(inventory, archive);
+  let removed = 0;
+  for (const row of inventory.files) {
+    for (const sourcePath of row.sourcePaths || [row.sourcePath]) {
+      verifyEvidenceSource(sourcePath, row);
+      fs.unlinkSync(sourcePath);
+      if (fs.existsSync(sourcePath)) {
+        throw new CleanupError('CONFLICT', ['EVIDENCE_SOURCE_DELETE_READBACK_FAILED'],
+          'evidence:' + row.path);
+      }
+      removed += 1;
+    }
+  }
+  return removed;
 }
 function archivePath(commonDir, packetNumber, prNumber) {
   return path.join(commonDir, 'canonical-main-evidence-archive',
@@ -480,8 +610,11 @@ function* walkFiles(root) {
 }
 function publishArchive(root, commonDir, packetNumber, prNumber, candidateHead, mergeCommit, inventory) {
   const finalPath = archivePath(commonDir, packetNumber, prNumber);
-  const existing = verifyArchive(finalPath, packetNumber, prNumber, candidateHead, mergeCommit, inventory);
-  if (existing.state === 'VERIFIED') return existing;
+  const existing = verifyArchive(finalPath, packetNumber, prNumber, candidateHead, mergeCommit);
+  if (existing.state === 'VERIFIED') {
+    verifyInventoryAgainstArchive(inventory, existing);
+    return existing;
+  }
 
   const archiveParent = path.dirname(finalPath);
   ensureDirMode(archiveParent, 0o700);
@@ -556,6 +689,7 @@ function makeReceipt({
     steps: steps.length ? steps : [{name: 'terminal-residue', result, evidenceLocator: 'issue:#' + packetNumber}],
     counters: [
       {name: 'archive_writes', value: counters.archiveWrites || 0},
+      {name: 'evidence_source_deletes', value: counters.evidenceSourceDeletes || 0},
       {name: 'worktree_removals', value: counters.worktreeRemovals || 0},
       {name: 'remote_ref_deletes', value: counters.remoteRefDeletes || 0},
       {name: 'local_ref_deletes', value: counters.localRefDeletes || 0},
@@ -585,9 +719,10 @@ function reportFromFacts(operation, packetNumber, prNumber, facts, receipt, effe
     cleanupDisposition: facts?.cleanupDisposition || 'UNKNOWN',
     archiveDigest: facts?.archive?.manifest?.archiveDigest || null,
     manifestSha256: facts?.archive?.manifestSha256 || null,
-    evidenceFileCount: facts?.inventory?.files?.length || facts?.archive?.manifest?.fileCount || 0,
+    evidenceFileCount: facts?.archive?.manifest?.fileCount || facts?.inventory?.files?.length || 0,
     effects: {
       archiveWrites: effects.archiveWrites || 0,
+      evidenceSourceDeletes: effects.evidenceSourceDeletes || 0,
       worktreeRemovals: effects.worktreeRemovals || 0,
       remoteRefDeletes: effects.remoteRefDeletes || 0,
       localRefDeletes: effects.localRefDeletes || 0,
@@ -604,21 +739,23 @@ function outputFor(facts) {
   return {
     archive: facts.archive.state === 'VERIFIED' ? 'VERIFIED'
       : facts.archive.state === 'ABSENT' ? 'ABSENT' : 'UNKNOWN',
+    evidenceSources: facts.inventory ? 'PRESENT' : 'ABSENT',
     worktree: facts.worktree.state === 'PRESENT' ? 'PRESENT' : 'ABSENT',
     remoteRef: facts.remoteRef.state,
     localRef: facts.localRef.state,
     residue: facts.cleanupDisposition === 'ALREADY_CLEAN' ? 'NONE'
       : facts.cleanupDisposition === 'COMPLETE' ? 'NONE' : 'PRESENT',
     disposition: facts.cleanupDisposition,
-    fileCount: facts.inventory?.files?.length || facts.archive?.manifest?.fileCount || 0,
+    fileCount: facts.archive?.manifest?.fileCount || facts.inventory?.files?.length || 0,
+    sourceCount: facts.inventory?.sourceCount || 0,
   };
 }
-function classifyDisposition(worktree, archive, localRef, remoteRef) {
+function classifyDisposition(worktree, archive, localRef, remoteRef, inventory) {
   if (archive.state !== 'VERIFIED') {
-    if (worktree.state === 'PRESENT') return 'ARCHIVE_REQUIRED';
-    throw new CleanupError('UNKNOWN', ['ARCHIVE_REQUIRED_BUT_SOURCE_WORKTREE_ABSENT']);
+    if (inventory) return 'ARCHIVE_REQUIRED';
+    throw new CleanupError('UNKNOWN', ['PACKET_EVIDENCE_MISSING']);
   }
-  if (worktree.state === 'PRESENT') return 'CLEANUP_READY';
+  if (inventory || worktree.state === 'PRESENT') return 'CLEANUP_READY';
   if (localRef.state === 'ABSENT' && remoteRef.state === 'ABSENT') return 'ALREADY_CLEAN';
   return 'PARTIAL_CLEANUP_RECOVERY';
 }
@@ -648,12 +785,18 @@ async function collectFacts({
   }
 
   const commonDir = commonGitDir(profile, runner);
-  const inventory = worktree.state === 'PRESENT'
-    ? inventoryEvidence(worktree.gitDir, packetNumber, prNumber) : null;
   const archiveRoot = archivePath(commonDir, packetNumber, prNumber);
   const archive = verifyArchive(
-    archiveRoot, packetNumber, prNumber, prInfo.candidateHead, prInfo.mergeCommit, inventory);
-  const cleanupDisposition = classifyDisposition(worktree, archive, localRef, remoteRef);
+    archiveRoot, packetNumber, prNumber, prInfo.candidateHead, prInfo.mergeCommit);
+  const inventory = locateEvidence(
+    profile, runner, packetNumber, prNumber, {allowMissing: true});
+  if (archive.state === 'VERIFIED') {
+    verifyInventoryAgainstArchive(inventory, archive);
+  } else if (!inventory) {
+    throw new CleanupError('UNKNOWN', ['PACKET_EVIDENCE_MISSING']);
+  }
+  const cleanupDisposition = classifyDisposition(
+    worktree, archive, localRef, remoteRef, inventory);
   const facts = {
     ...current,
     ...prInfo,
@@ -762,7 +905,13 @@ function deleteLocalRef(profile, runner, branch, candidateHead) {
 async function applyTransaction({
   packetNumber, prNumber, adapter, profile = PROFILE, runner = commandResult,
 }) {
-  const effects = {archiveWrites: 0, worktreeRemovals: 0, remoteRefDeletes: 0, localRefDeletes: 0};
+  const effects = {
+    archiveWrites: 0,
+    evidenceSourceDeletes: 0,
+    worktreeRemovals: 0,
+    remoteRefDeletes: 0,
+    localRefDeletes: 0,
+  };
   try {
     let initial = await collectFacts({packetNumber, prNumber, adapter, profile, runner});
     if (initial.cleanupDisposition === 'ALREADY_CLEAN') {
@@ -780,7 +929,7 @@ async function applyTransaction({
     }
 
     if (initial.archive.state !== 'VERIFIED') {
-      if (initial.worktree.state !== 'PRESENT' || !initial.inventory) {
+      if (!initial.inventory) {
         throw new CleanupError('UNKNOWN', ['ARCHIVE_SOURCE_UNAVAILABLE']);
       }
       const archived = publishArchive(initial.archiveRoot, initial.commonDir,
@@ -794,11 +943,24 @@ async function applyTransaction({
       throw new CleanupError('UNKNOWN', ['ARCHIVE_VERIFY_FAILED']);
     }
 
-    if (afterArchive.worktree.state === 'PRESENT') {
-      if (afterArchive.cleanupDisposition !== 'CLEANUP_READY') {
+    if (afterArchive.inventory) {
+      effects.evidenceSourceDeletes = removeEvidenceSources(
+        afterArchive.inventory, afterArchive.archive);
+    }
+
+    let afterSources = await collectFacts({packetNumber, prNumber, adapter, profile, runner});
+    if (afterSources.archive.state !== 'VERIFIED') {
+      throw new CleanupError('CONFLICT', ['ARCHIVE_LOST_AFTER_EVIDENCE_SOURCE_DELETE']);
+    }
+    if (afterSources.inventory) {
+      throw new CleanupError('CONFLICT', ['EVIDENCE_SOURCE_DELETE_READBACK_FAILED']);
+    }
+
+    if (afterSources.worktree.state === 'PRESENT') {
+      if (afterSources.cleanupDisposition !== 'CLEANUP_READY') {
         throw new CleanupError('BLOCKED', ['WORKTREE_CLEANUP_NOT_READY']);
       }
-      removeWorktree(profile, runner, afterArchive);
+      removeWorktree(profile, runner, afterSources);
       effects.worktreeRemovals = 1;
     }
 
@@ -853,6 +1015,8 @@ async function applyTransaction({
       counters: effects,
       steps: [
         {name: 'archive-verified', result: 'PASS',
+          evidenceLocator: 'archive:' + finalFacts.archive.manifest.archiveDigest},
+        {name: 'evidence-sources-absent', result: 'PASS',
           evidenceLocator: 'archive:' + finalFacts.archive.manifest.archiveDigest},
         {name: 'worktree-absent', result: 'PASS', evidenceLocator: 'worktree:' + finalFacts.worktree.tail},
         {name: 'remote-ref-absent', result: 'PASS', evidenceLocator: 'remote-ref:' + finalFacts.branch},
@@ -979,8 +1143,11 @@ if (require.main === module) {
 
 module.exports = {
   EVIDENCE_DIRS,
+  IGNORED_EVIDENCE_DIRS,
+  MAX_REGISTERED_WORKTREES,
   MAX_EVIDENCE_FILE_BYTES,
   MAX_EVIDENCE_FILES,
+  MAX_EVIDENCE_SOURCES,
   MAX_EVIDENCE_TOTAL_BYTES,
   PROFILE,
   CleanupError,
@@ -992,6 +1159,11 @@ module.exports = {
   createLiveAdapter,
   inspectTransaction,
   inventoryEvidence,
+  inventoryEvidenceRoots,
+  locateEvidence,
+  registeredEvidenceRoots,
+  removeEvidenceSources,
+  verifyInventoryAgainstArchive,
   localRefState,
   mainOpsFacts,
   packetFacts,

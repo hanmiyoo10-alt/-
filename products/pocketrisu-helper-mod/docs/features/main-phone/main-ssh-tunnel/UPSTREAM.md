@@ -2,9 +2,9 @@
 
 Feature-ID: `main-ssh-tunnel`
 Area: `main-phone`
-PR status: `MERGED BASE (#2060) / FOLLOW-UP #2786 IMPLEMENTATION_PR`
+PR status: `MERGED BASE (#2060) / FOLLOW-UP #2878 MERGED`
 Isolation status: `ISOLATED`
-Deployment status: `BASE DEPLOYED / GUARD-ANCHOR FOLLOW-UP NOT DEPLOYED`
+Deployment status: `BASE DEPLOYED / GUARD-ANCHOR DEPLOYED / LIVE-PROVEN`
 
 ## Problem / motivation
 On 2026-09-12 the main phone lost its central Termux `runsvdir`. The PocketRisu server and server sshd remained healthy and reachable, but once the core tunnel supervisor disappeared the localhost PocketRisu path was no longer respawned. Root cause of the `runsvdir` death remains `UNKNOWN`; the repair must not claim otherwise.
@@ -51,7 +51,7 @@ Base #2060 validation:
 - no application/network-health trigger is introduced;
 - helper-docs and exact diff validation remain required before PR publication.
 
-Real-device guard-owner loss proof is deferred until merge/postmerge deployment. No phone reboot, whole-Termux loss, network toggle, server kill, or server sshd kill belongs to IMPLEMENTATION_PR.
+Real-device guard-owner proof completed on 2026-09-25 after merge/postmerge convergence. Exact merged guard + launcher bytes were backup-first deployed on M; guard-only hard loss was recovered by the anchor and anchor-only hard loss was recovered by the guard. Target tunnel supervision, localhost health, Tailscale, and the absence of the shared top-level runsvdir were preserved. No phone reboot, whole-Termux loss, network toggle, server kill, server sshd kill, or broad service-tree restart was used.
 
 ## Upstream pitch
 Keep the existing runit-owned SSH tunnel behavior and its narrow supervisor guard. Add one independent anchor inside the existing Boot launcher so the guard owner can recover after its own process loss, while a surviving guard can recreate a missing anchor. Respect explicit `down`, fail closed on ambiguous identity, avoid health-based process churn, and do not broaden into a general watchdog or shared service supervisor.
@@ -59,10 +59,15 @@ Keep the existing runit-owned SSH tunnel behavior and its narrow supervisor guar
 ## Review / PR state
 - base incident evidence: repository issue #2048.
 - base PR #2060: MERGED as `d9e93115f943138ad7c675fcc675e4a0460714b9`.
-- 2026-09-24 natural guard-owner recurrence: #2786 comment evidence; old deployed guard + launcher recovered the live path, but the guard had previously disappeared.
-- follow-up owner: #2786, current stage `IMPLEMENTATION_PR`.
-- follow-up source uses the existing two files plus the existing feature regression test and docs; no new service/runtime owner file is needed.
+- 2026-09-24 natural guard-owner recurrence: #2786 comment evidence; the prior guard + launcher recovered the live path, but guard-owner durability remained incomplete.
+- follow-up owner: #2786.
+- follow-up PR #2878: MERGED as `0a25b7691bf5d768aced94403b32ebdb50f12cc3`.
+- exact follow-up guard + launcher: DEPLOYED on M.
 - follow-up synthetic guard↔anchor contract: PASS.
-- follow-up is not merged and not deployed on M.
-- root cause of central `runsvdir` death and initiating cause of the later guard-owner loss both remain `UNKNOWN`.
-- next action: publish one non-closing #2786 PR after helper-docs/diff validation; do not live-apply until merge + postmerge convergence.
+- real-device guard hard-loss → anchor recovery: PASS.
+- real-device anchor hard-loss → guard recovery: PASS.
+- final guard/anchor cardinality: exactly 1 / 1.
+- tunnel supervision and localhost health: preserved.
+- root cause of central `runsvdir` death and initiating cause of the historical guard-owner loss both remain `UNKNOWN`.
+- follow-up state: `MERGED / DEPLOYED / LIVE-PROVEN`.
+- no further deployment is pending for #2786; future shared-runsvdir diagnosis remains a separate owner.

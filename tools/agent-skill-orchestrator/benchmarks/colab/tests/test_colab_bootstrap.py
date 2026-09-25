@@ -5,7 +5,9 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[3]
 if str(PACKAGE_ROOT) not in sys.path:
@@ -43,6 +45,7 @@ class ColabBootstrapContractTest(unittest.TestCase):
             target.write_text(f"sentinel-{index}\\n", encoding="utf-8")
         self._git("add", ".")
         self._git("commit", "-m", "fixture")
+        self._git("branch", "-M", "main")
         self.sha = self._git("rev-parse", "HEAD").strip()
         self.drive = self.root / "drive"
 
@@ -58,6 +61,32 @@ class ColabBootstrapContractTest(unittest.TestCase):
             text=True,
         )
         return proc.stdout
+
+    def test_one_tap_identity_binds_main_and_generates_bounded_request_id(self) -> None:
+        self.assertEqual(resolve_checked_out_main_sha(self.repo), self.sha)
+        request_id = make_runtime_request_id(
+            datetime(2026, 9, 25, 5, 30, 45, tzinfo=timezone.utc),
+            "a1b2",
+        )
+        self.assertEqual(request_id, "cagb1-20260925t053045z-a1b2")
+        request = make_request(request_id, self.sha)
+        self.assertEqual(request["repository_sha"], self.sha)
+        self.assertNotIn("@", request_id)
+
+    def test_one_tap_identity_fails_closed_on_branch_or_sha_drift(self) -> None:
+        with patch.object(request_module, "_git", side_effect=["other\n"]):
+            with self.assertRaisesRegex(ColabBootstrapRequestError, "checkout branch"):
+                resolve_checked_out_main_sha(self.repo)
+        with patch.object(request_module, "_git", side_effect=["main\n", "not-a-sha\n"]):
+            with self.assertRaisesRegex(ColabBootstrapRequestError, "40-hex"):
+                resolve_checked_out_main_sha(self.repo)
+        with self.assertRaises(ColabBootstrapRequestError):
+            make_runtime_request_id(datetime(2026, 9, 25, 5, 30, 45), "a1b2")
+        with self.assertRaises(ColabBootstrapRequestError):
+            make_runtime_request_id(
+                datetime(2026, 9, 25, 5, 30, 45, tzinfo=timezone.utc),
+                "zzzz",
+            )
 
     def test_request_is_deterministic_and_rejects_scope_expansion(self) -> None:
         first = make_request("cagb1-test", self.sha)

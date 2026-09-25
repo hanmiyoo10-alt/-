@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -297,6 +298,12 @@ test('live client falls back to fixed gh read transport when token env is absent
     if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/branches/main') {
       return {code: 0, stdout: JSON.stringify({commit: {sha: BASE}}), stderr: ''};
     }
+    if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/issues/' + PACKET) {
+      return {code: 0, stdout: JSON.stringify({number: PACKET, state: 'open', body: packetBody()}), stderr: ''};
+    }
+    if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/pulls/' + PR + '/files?per_page=100&page=1') {
+      return {code: 0, stdout: JSON.stringify(PATHS.map((filename) => ({filename}))), stderr: ''};
+    }
     if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/branches/main/protection/required_status_checks') {
       return {code: 0, stdout: JSON.stringify({strict: true}), stderr: ''};
     }
@@ -319,6 +326,11 @@ test('live client falls back to fixed gh read transport when token env is absent
     throw new Error('fetch must not be used without env token');
   }});
   assert.deepEqual(await client.api('/branches/main'), {commit: {sha: BASE}});
+  assert.deepEqual(await client.api('/issues/' + PACKET), {
+    number: PACKET, state: 'open', body: packetBody(),
+  });
+  assert.deepEqual(await client.api('/pulls/' + PR + '/files?per_page=100&page=1'),
+    PATHS.map((filename) => ({filename})));
   assert.deepEqual(await client.api('/branches/main/protection/required_status_checks'), {strict: true});
   assert.deepEqual(await client.api('/compare/' + BASE + '...' + HEAD), compareObject());
   assert.deepEqual(await client.api('/issues/' + PR + '/comments?per_page=100&page=1'), []);
@@ -336,6 +348,40 @@ test('live client falls back to fixed gh read transport when token env is absent
   await assert.rejects(client.graphql('query{viewer{login}}', {
     owner: 'hanmiyoo10-alt', name: '-', number: PR,
   }), /gh GraphQL query forbidden/);
+});
+
+test('default gh fallback terminates a real stalled child at the fixed read lifetime', () => {
+  const originalSpawnSync = childProcess.spawnSync;
+  childProcess.spawnSync = (_command, _args, options) => originalSpawnSync(
+    process.execPath,
+    ['-e', 'setInterval(() => {}, ' + String(owner.GH_READ_TIMEOUT_MS * 4) + ')'],
+    options,
+  );
+  try {
+    const started = Date.now();
+    const result = owner.defaultGhRunner(['api', 'repos/' + owner.REPO + '/issues/' + PACKET]);
+    const elapsed = Date.now() - started;
+    assert.notEqual(result.code, 0);
+    assert(elapsed >= owner.GH_READ_TIMEOUT_MS - 1500, String(elapsed));
+    assert(elapsed < owner.GH_READ_TIMEOUT_MS + 5000, String(elapsed));
+  } finally {
+    childProcess.spawnSync = originalSpawnSync;
+  }
+});
+
+test('gh fallback read failure stays bounded for both fixed REST and GraphQL reads', async () => {
+  const marker = 'PRIVATE_AUTH_MATERIAL';
+  const client = owner.createGhCliReadClient({
+    runner: () => ({code: 1, stdout: '', stderr: marker}),
+  });
+  await assert.rejects(client.api('/issues/' + PACKET), (error) => (
+    error.message === 'gh REST read failed' && !String(error).includes(marker)
+  ));
+  await assert.rejects(client.graphql(owner.REVIEW_THREADS_QUERY, {
+    owner: 'hanmiyoo10-alt', name: '-', number: PR,
+  }), (error) => (
+    error.message === 'gh GraphQL read failed' && !String(error).includes(marker)
+  ));
 });
 
 test('explicit env token keeps fixed fetch transport and does not call gh runner', async () => {

@@ -7,6 +7,7 @@ const dir = path.join(root, '.github/plugin-control-plane/canonical-main/work-sy
 const policy = JSON.parse(fs.readFileSync(path.join(dir, 'policy.json'), 'utf8'));
 const readme = fs.readFileSync(path.join(dir, 'README.md'), 'utf8');
 const template = fs.readFileSync(path.join(dir, 'work-packet-template.md'), 'utf8');
+const sharedInteraction = fs.readFileSync(path.join(root, '.github/plugin-control-plane/canonical-main/shared-interaction-contract.md'), 'utf8');
 const packetProjectionSource = fs.readFileSync(path.join(dir, 'packet-projection.cjs'), 'utf8');
 const scopeOverlapSource = fs.readFileSync(path.join(dir, 'scope-overlap.cjs'), 'utf8');
 const commonRules = fs.readFileSync(path.join(root, 'docs/REPOSITORY_COMMON_RULES.md'), 'utf8');
@@ -211,6 +212,60 @@ assert.equal(policy.stagedInteraction.explicitUserBroaderRunAllowed, true);
 assert.equal(policy.stagedInteraction.preserveRequiredGates, true);
 assert.equal(policy.stagedInteraction.productionTruthOwner, false);
 assert.equal(policy.stagedInteraction.hostUiPerformanceGuarantee, false);
+const intraStage = policy.stagedInteraction.intraStageContinuation;
+assert.equal(intraStage.version, 1);
+assert.equal(intraStage.completedStageDiscoveryConsumesBudget, false);
+assert.equal(intraStage.preserveProvenPrefix, true);
+assert.equal(intraStage.reconvergeInvalidatedSuffixOnly, true);
+assert.equal(intraStage.requiredSelfCloseSyncIsStageLocal, true);
+assert.equal(intraStage.preEffectDriftRevalidatesAdmissionOnly, true);
+assert.equal(intraStage.postEffectDriftRequiresPreservationProof, true);
+assert.equal(intraStage.duplicateCompletedEffectForbidden, true);
+assert.deepEqual(intraStage.transientReadRetry, {
+  sameIdentityRequired: true,
+  ownerPermissionRequired: true,
+  bounded: true,
+  untilPassForbidden: true,
+});
+assert.deepEqual(intraStage.sameScopeRefinementExactIdentityAxes, [
+  'writeScopes',
+  'semanticEffectSurfaces',
+  'primaryGoal',
+  'effectOwner',
+]);
+assert.deepEqual(intraStage.transactionClosure, {
+  immediateEffectReadback: true,
+  requiredEffectValidation: true,
+  idempotenceOrCasConfirmation: true,
+  requiredEvidencePublication: true,
+  requiredSelfCloseSync: true,
+  mayEnterNextSubstantialStage: false,
+});
+assert.deepEqual(intraStage.continueDispositions, [
+  'CONTINUE_STAGE_LOCAL',
+  'CONTINUE_TRANSACTION_CLOSURE',
+  'CONTINUE_BOUNDED_WAIT',
+  'CONTINUE_TARGETED_DRILLDOWN',
+  'CONTINUE_REUSE_EXISTING_EFFECT',
+  'CONTINUE_RECONVERGE_CURRENTNESS',
+]);
+assert.deepEqual(intraStage.stopDispositions, [
+  'STOP_MAJOR_STAGE',
+  'STOP_OWNER_HANDOFF',
+  'STOP_SCOPE_EXPANSION',
+  'STOP_AUTHORITY_EXPANSION',
+  'STOP_USER_INPUT',
+  'STOP_BLOCKED',
+  'STOP_UNKNOWN',
+  'STOP_CONFLICT',
+  'STOP_UNBOUNDED_EXTERNAL_WAIT',
+  'STOP_TERMINAL',
+]);
+assert.equal(new Set(intraStage.continueDispositions).size, intraStage.continueDispositions.length);
+assert.equal(new Set(intraStage.stopDispositions).size, intraStage.stopDispositions.length);
+assert.deepEqual(intraStage.unresolvedStatesStop, ['BLOCKED', 'UNKNOWN', 'CONFLICT']);
+assert.equal(intraStage.noNewEffectAuthority, true);
+assert.equal(intraStage.noStageCollapse, true);
 assert.ok(policy.packetRequiredFields.includes('interactionStage'));
 
 assert.deepEqual(policy.queueProjection.liveHealthAuthorities, ['direct-main', 'issue-485']);
@@ -323,6 +378,28 @@ assert.match(template, /tiny read-only task may collapse stages only when it gen
 assert.match(template, /safety-critical recovery may continue only to the nearest safe stop/);
 assert.match(template, /Explicit user instruction may authorize a broader run/);
 assert.match(template, /Staging never removes required Git, CI, release, production, authority, validation, uncertainty, or evidence checks/);
+assert.match(template, /Phase 8\.7g intra-stage continuation interprets that ordinary budget as the one substantial stage actually performed after fresh durable rebind/);
+assert.match(template, /Discovering that an advertised earlier stage is already complete consumes zero current stage budget/);
+assert.match(template, /reconverge only the stale or incomplete suffix/);
+assert.match(template, /Required immediate effect readback, current-stage validation, idempotence\/CAS confirmation, evidence publication, and required current-packet self close-sync may remain one stage-local transaction closure/);
+assert.match(template, /They never authorize entry into the next declared substantial stage/);
+assert.match(template, /retry-until-PASS is forbidden/);
+assert.match(template, /exact equality of writable path\/prefix set, semantic\/effect surface set, primary goal, and effect owner/);
+assert.match(template, /unresolved `BLOCKED \/ UNKNOWN \/ CONFLICT` stops the continuation/);
+assert.match(sharedInteraction, /## Intra-stage continuation \(Phase 8\.7g\)/);
+assert.match(sharedInteraction, /Already-completed stages discovered during that rebind consume zero current substantial-stage budget/);
+assert.match(sharedInteraction, /preserve every still-valid proven prefix and completed effect/);
+assert.match(sharedInteraction, /Before an effect, drift reconverges admission\. After an effect, drift proves preservation/);
+assert.match(sharedInteraction, /Retry-until-PASS is forbidden/);
+assert.match(sharedInteraction, /writable path\/prefix set, semantic\/effect surface set, primary-goal identity, and effect-owner identity are all exactly unchanged/);
+assert.match(sharedInteraction, /Transaction closure may not enter the next declared substantial stage/);
+assert.match(sharedInteraction, /`VALIDATION_MERGE` may include expected-head merge plus immediate merge attribution\/readback and its stage checkpoint, but merged-main convergence\/Required\/postmerge acceptance belongs to `POSTMERGE_CONVERGENCE`/);
+assert.match(sharedInteraction, /Cross-packet terminal projection, cleanup, or convergence is outside Phase 8\.7g/);
+for (const disposition of [...intraStage.continueDispositions, ...intraStage.stopDispositions]) {
+  assert.ok(sharedInteraction.includes(`${disposition}`), disposition);
+}
+assert.match(sharedInteraction, /These dispositions describe interaction pacing only/);
+assert.match(sharedInteraction, /Existing effect\/recovery owners and every existing authority\/gate remain unchanged/);
 assert.match(template, /current interaction stage, completed stages, and exact next stage/);
 assert.match(commonRules, /### RCR-D15 — Stage substantial interactive repository work at bounded checkpoints/);
 assert.match(commonRules, /\*\*Class:\*\* `DEFAULT`/);

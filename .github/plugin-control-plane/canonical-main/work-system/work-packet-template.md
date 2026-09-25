@@ -57,6 +57,14 @@ Ordered stages:
 
 An ordinary continuation advances at most one substantial stage. A tiny read-only task may collapse stages only when it genuinely completes in at most two bounded reads. A safety-critical recovery may continue only to the nearest safe stop when delaying would create material risk, and that exception must be recorded. Explicit user instruction may authorize a broader run. Staging never removes required Git, CI, release, production, authority, validation, uncertainty, or evidence checks.
 
+Phase 8.7g intra-stage continuation interprets that ordinary budget as the one substantial stage actually performed after fresh durable rebind. Discovering that an advertised earlier stage is already complete consumes zero current stage budget and never reopens that completed stage.
+
+Inside the actual current stage, preserve every still-valid proven prefix and completed effect, then reconverge only the stale or incomplete suffix. Required immediate effect readback, current-stage validation, idempotence/CAS confirmation, evidence publication, and required current-packet self close-sync may remain one stage-local transaction closure. They never authorize entry into the next declared substantial stage.
+
+Transient read-only `UNKNOWN` retry must remain bounded, same-identity, and explicitly permitted by the owning read-only contract; retry-until-PASS is forbidden. Same-scope acceptance refinement requires exact equality of writable path/prefix set, semantic/effect surface set, primary goal, and effect owner. Any owner/scope/authority expansion or unresolved `BLOCKED / UNKNOWN / CONFLICT` stops the continuation.
+
+Use only the finite interaction dispositions owned by `policy.json::stagedInteraction.intraStageContinuation`. Those dispositions grant no effect authority and do not change the existing five-stage sequence or the numeric ordinary continuation budget.
+
 This packet body is a current lifecycle projection, not an immutable activation snapshot. Before or atomically with native issue closure, reconcile State; completed/current/next stage; evidence-backed Proof / closure terms; required acceptance UNKNOWNs; and Handoff / exact next action so the body does not advertise already-completed work. Native closure or a final comment alone does not override a contradictory stale body. If terminal evidence conflicts with this body, classify the body projection as stale, re-read terminal evidence, and do not resume the stale advertised stage without fresh re-attribution.
 
 ## Bounded write scope

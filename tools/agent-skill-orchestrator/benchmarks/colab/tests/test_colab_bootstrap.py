@@ -18,9 +18,12 @@ from benchmarks.colab.bootstrap import (
     run_bootstrap,
     validate_bundle,
 )
+from benchmarks.colab import request as request_module
 from benchmarks.colab.request import (
     ColabBootstrapRequestError,
     make_request,
+    make_runtime_request_id,
+    resolve_checked_out_main_sha,
     validate_request,
 )
 
@@ -123,9 +126,15 @@ class ColabBootstrapContractTest(unittest.TestCase):
         )
         self.assertIn("run_bootstrap", code)
         self.assertIn("drive.mount", code)
+        self.assertIn("resolve_checked_out_main_sha", code)
+        self.assertIn("make_runtime_request_id", code)
+        self.assertIn("--branch", code)
+        self.assertIn('"main"', code)
+        self.assertNotIn('REPOSITORY_SHA = ""', code)
+        self.assertNotIn('REQUEST_ID = ""', code)
         self.assertNotIn("access_token", code)
         self.assertNotIn("github_pat_", code)
-        self.assertLessEqual(sum(cell.get("cell_type") == "code" for cell in notebook["cells"]), 3)
+        self.assertLessEqual(sum(cell.get("cell_type") == "code" for cell in notebook["cells"]), 2)
 
     def test_bundle_tamper_is_detected(self) -> None:
         request = make_request("cagb1-tamper", self.sha)

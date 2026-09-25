@@ -141,3 +141,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2717)
 - Event ID: `d5b53e1aa9dadc7b770bb2758975c7d3e1c4f6acc0fbd05efe65af39dc59bbc4`
 <!-- canonical-main-doc-promoted:d5b53e1aa9dadc7b770bb2758975c7d3e1c4f6acc0fbd05efe65af39dc59bbc4 -->
+
+### 2026-09-25 — REPO-VALIDATION-STAGE-FINALIZATION-V1 — Phase 8.7e merge-to-stage-close projection
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2774)
+- Event ID: `85e8a123df18691f9630186059b0a266cc2926ed5757e6dfd52aee960037e988`
+<!-- canonical-main-doc-promoted:85e8a123df18691f9630186059b0a266cc2926ed5757e6dfd52aee960037e988 -->

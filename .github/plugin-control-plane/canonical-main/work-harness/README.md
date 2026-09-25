@@ -217,7 +217,9 @@ Retries are idempotent within the bounded comment scan. Existing matching packet
 
 The machine result is compact JSON with `COMPLETE`, `PARTIAL`, `UNKNOWN`, or `FAILED`, the checkpoint identity, and both destination issue/comment identities. One side failing never becomes green by absence. `PARTIAL`/`UNKNOWN` use a nonzero exit so an agent cannot silently treat incomplete audit synchronization as complete.
 
-This surface uses only the existing GitHub issue API through the canonical-main GitHub client. It adds no workflow-wide `issue_comment` listener, no contents/ref/PR/release/production authority, no new mutable truth owner, no mutation capability to `tools/repo-ci-mcp/**`, and no claim that repository code can suppress host UI activity cards. Its compactness benefit is narrower: when this harness is available, one visible repository command can preserve the two required durable issue comments internally.
+When Actions-style repository/auth environment is present, this surface preserves the existing canonical-main GitHub client path. In an approved ordinary remote shell without that environment, the CLI fixes repository identity to `hanmiyoo10-alt/-` and may reuse the already-authenticated `gh api` transport through a stage-checkpoint-local adapter limited to the exact issue/comment GET and comment-POST shapes already required by `recordCheckpoint()`. The fallback accepts no caller repository, arbitrary endpoint/method/body, credential command, or credential extraction/storage path; both transports feed the same digest/marker/idempotency and packet + #293 dual-write owner.
+
+This surface adds no workflow-wide `issue_comment` listener, no contents/ref/PR/release/production authority, no new mutable truth owner, no mutation capability to `tools/repo-ci-mcp/**`, and no claim that repository code can suppress host UI activity cards. Its compactness benefit is narrower: when this harness is available, one visible repository command can preserve the two required durable issue comments internally.
 
 ## Derived canonical-main stage receipt
 

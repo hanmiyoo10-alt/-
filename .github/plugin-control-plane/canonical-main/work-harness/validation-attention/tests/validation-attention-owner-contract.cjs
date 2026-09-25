@@ -26,7 +26,7 @@ const PATHS = [
   '.github/plugin-control-plane/canonical-main/work-harness/validation-attention/validation-attention-owner.cjs',
 ].sort();
 
-function implementationReceipt() {
+function implementationReceipt({paths = PATHS, extraGates = []} = {}) {
   return stageReceipt.projectStageReceipt({
     schemaVersion: 1,
     packetNumber: PACKET,
@@ -40,9 +40,10 @@ function implementationReceipt() {
       {name: 'composition-contract', result: 'PASS', evidenceLocator: 'local:test'},
       {name: 'coordination-not-applicable', result: 'NOT_APPLICABLE',
         evidenceLocator: 'issue:#' + PACKET},
+      ...extraGates,
     ],
     scope: {
-      paths: PATHS,
+      paths,
       diffRequired: true,
       diffIdentity: DIFF,
       diffEvidenceLocator: 'commit:' + HEAD,
@@ -103,6 +104,7 @@ function continuationResult({
   nextLegalAction = 'VALIDATION_MERGE_ADMIT',
   currentization = 'EXACT_CURRENT_MAIN',
   required = 'PASS',
+  priorCoordination = 'NOT_APPLICABLE',
 } = {}) {
   const conflicts = result === 'CONFLICT' ? reasonCodes : [];
   const unknowns = result === 'UNKNOWN' ? reasonCodes : [];
@@ -125,7 +127,7 @@ function continuationResult({
         currentization,
         required,
         ownerCI: 'PASS',
-        priorCoordination: 'NOT_APPLICABLE',
+        priorCoordination,
         mergeEffect: disposition === 'ALREADY_MERGED' ? 'COMPLETE' : 'ABSENT',
       },
     },
@@ -137,6 +139,8 @@ function mergeInspectResult({
   attentionDisposition = 'COMPLETE',
   reasonCodes = [],
   nextLegalAction = 'MERGE_PR_WITH_EXISTING_EXPECTED_HEAD_ENDPOINT',
+  paths = PATHS,
+  scopes = [...paths.map((p) => 'path:' + p), 'surface:repo:validation-attention-projection'],
 } = {}) {
   const conflicts = result === 'CONFLICT' ? reasonCodes : [];
   const unknowns = result === 'UNKNOWN' ? reasonCodes : [];
@@ -157,8 +161,8 @@ function mergeInspectResult({
       packetBodySha256: 'e'.repeat(64),
       currentMainSha: BASE,
       expectedHead: HEAD,
-      paths: PATHS,
-      scopes: [...PATHS.map((p) => 'path:' + p), 'surface:repo:validation-attention-projection'],
+      paths,
+      scopes,
       requiredRunId: 501,
       requiredJobId: 601,
       strictProtection: true,
@@ -323,6 +327,89 @@ test('clean inspect composes continuation then merge admission into zero-attenti
   assert.equal(projected.attentionCount, 0);
   assert.equal(projected.shown, 0);
   assert.equal(projected.truncated, false);
+});
+
+test('path-only canonical-main packet blocks finalization routing before merge', async () => {
+  const {deps, calls} = fixtureDeps({
+    mergeInspect: mergeInspectResult({scopes: PATHS.map((p) => 'path:' + p)}),
+  });
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: implementationReceipt(), deps,
+  });
+  assert(calls.includes('merge.inspect'));
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.equal(result.receipt.nextLegalAction,
+    'DECLARE_REPO_FINALIZATION_ROUTE_AT_AUTHORITY_SCOPE');
+  assert(result.receipt.blockers.includes('REPO_NEUTRAL_FINALIZATION_SCOPE_REQUIRED'));
+  assert.equal(result.report.output.mergeAdmission, 'BLOCKED');
+  assert.equal(result.report.attention[0].reasonCode,
+    'REPO_NEUTRAL_FINALIZATION_SCOPE_REQUIRED');
+  assert.equal(result.receipt.counters.find(
+    (row) => row.name === 'merge_effects_performed').value, 0);
+});
+
+test('reviewed external finalizer gate preserves intentional path-only repo packet', async () => {
+  const {deps} = fixtureDeps({
+    mergeInspect: mergeInspectResult({scopes: PATHS.map((p) => 'path:' + p)}),
+  });
+  const receipt = implementationReceipt({extraGates: [{
+    name: 'validation-finalization-external-owner-reviewed',
+    result: 'PASS',
+    evidenceLocator: 'issue:#9999',
+  }]});
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: receipt, deps,
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.output.mergeAdmission, 'READY');
+});
+
+test('non-PASS external finalizer gate cannot bypass repo-neutral admission', async () => {
+  const {deps} = fixtureDeps({
+    mergeInspect: mergeInspectResult({scopes: PATHS.map((p) => 'path:' + p)}),
+  });
+  const receipt = implementationReceipt({extraGates: [{
+    name: 'validation-finalization-external-owner-reviewed',
+    result: 'NOT_APPLICABLE',
+    evidenceLocator: 'issue:#9999',
+  }]});
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: receipt, deps,
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert(result.receipt.blockers.includes('REPO_NEUTRAL_FINALIZATION_SCOPE_REQUIRED'));
+});
+
+test('coordination-converged packet keeps existing merge admission semantics', async () => {
+  const {deps} = fixtureDeps({
+    continuation: continuationResult({priorCoordination: 'CONVERGED'}),
+    mergeInspect: mergeInspectResult({scopes: PATHS.map((p) => 'path:' + p)}),
+  });
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: implementationReceipt(), deps,
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.output.mergeAdmission, 'READY');
+});
+
+test('non-canonical-main path-only packet is not relabeled repo-neutral', async () => {
+  const productPaths = ['products/example/README.md'];
+  const {deps} = fixtureDeps({
+    mergeInspect: mergeInspectResult({
+      paths: productPaths,
+      scopes: productPaths.map((p) => 'path:' + p),
+    }),
+  });
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: implementationReceipt({paths: productPaths}), deps,
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.output.mergeAdmission, 'READY');
 });
 
 test('CURRENTIZATION_REQUIRED blocks before merge admission and preserves locator', async () => {

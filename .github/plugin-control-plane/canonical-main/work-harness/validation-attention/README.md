@@ -65,6 +65,28 @@ Important routes:
 - `UNKNOWN` / `CONFLICT` / `BLOCKED` remain explicit;
 - `ALREADY_MERGED` never causes merge admission or a merge retry.
 
+### Pre-merge finalization-route admission
+
+After a clean validation-merge inspect and before returning merge admission READY, the
+composition reuses that child's already-captured exact packet paths/scopes plus the
+continuation owner's `priorCoordination` result.
+
+For canonical-main infrastructure paths with `priorCoordination=NOT_APPLICABLE`:
+- generic repository-neutral finalization requires the existing
+  `repoNeutralPacket()` predicate to pass, including a specific stable
+  `surface:repo:*` declaration;
+- an intentionally path-only packet may instead present the exact canonical
+  IMPLEMENTATION_PR gate
+  `validation-finalization-external-owner-reviewed=PASS` with an evidence locator,
+  proving a separately reviewed finalization owner exists.
+
+Without either route, inspect returns
+`BLOCKED / REPO_NEUTRAL_FINALIZATION_SCOPE_REQUIRED` before any merge effect.
+The gate is routing evidence only. It grants no finalization or mutation authority.
+Product/MCL coordination-converged flows and non-canonical-main paths retain their
+existing admission semantics. No semantic owner is inferred from a path prefix, and no
+extra GitHub/API read is introduced.
+
 ## Finalize graph
 
 Finalize requires a canonical PASS validation-attention inspect sidecar for the same

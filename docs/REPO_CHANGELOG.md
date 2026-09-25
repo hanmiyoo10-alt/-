@@ -2013,3 +2013,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/491a69a76bcc6e08c975c1d8a857f1e3cf51021f)
 - Event ID: `c8523e9ab4dc8450b3a99eca7d0d8e84dfef241fb435ff2e123b216347bf1669`
 <!-- canonical-main-doc-promoted:c8523e9ab4dc8450b3a99eca7d0d8e84dfef241fb435ff2e123b216347bf1669 -->
+
+### 2026-09-25 — Merge pull request #2953 from hanmiyoo10-alt/server/repo-terminal-cleanup-merge-field-alias-2951
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `1a08ee91d92e82756040cdb540fe93f4b8522589`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1a08ee91d92e82756040cdb540fe93f4b8522589)
+- Event ID: `58f1efa6667a2710f10d17e1756a0ffe727320036dbc53bbc8c215a1388427c5`
+<!-- canonical-main-doc-promoted:58f1efa6667a2710f10d17e1756a0ffe727320036dbc53bbc8c215a1388427c5 -->

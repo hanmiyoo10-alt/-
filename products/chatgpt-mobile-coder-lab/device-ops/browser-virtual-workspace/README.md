@@ -27,7 +27,7 @@ The owner does not create Git, CI, merge, release, production, account, or brows
 
 ## Fixed start contract
 
-`start` requires exactly one ADB device whose model is `SM-S938N`, plus `scrcpy` and Python 3.
+`start` first requires exactly one connected ADB device in `device` state, plus `scrcpy` and Python 3. The transport-list `model:` token is not model authority. After selecting the one internal ADB serial, the owner queries only `adb -s <internal> shell getprop ro.product.model` and requires the trimmed result to be exactly `SM-S938N`.
 
 The scrcpy process shape is fixed:
 
@@ -127,8 +127,8 @@ Stopping an already absent workspace is idempotent.
 ## Fail-closed behavior
 
 Important blocked conditions include:
-- zero or multiple eligible ADB devices;
-- model mismatch;
+- zero or multiple connected ADB devices;
+- unavailable, malformed, multi-line, or non-exact canonical `ro.product.model`;
 - missing adb/scrcpy/python3;
 - display 0 missing;
 - any pre-existing nonzero Android display before owner start;

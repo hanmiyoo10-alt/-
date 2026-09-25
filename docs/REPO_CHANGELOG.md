@@ -2005,3 +2005,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/cf5acf23d9caa4b20c0e2a6c27b5b8130d7ef784)
 - Event ID: `9899416d513a0558d985670735b876c7e454560d2cd52dcf544f051092e095d7`
 <!-- canonical-main-doc-promoted:9899416d513a0558d985670735b876c7e454560d2cd52dcf544f051092e095d7 -->
+
+### 2026-09-25 — Merge pull request #2949 from hanmiyoo10-alt/server/repo-canonical-receipt-attention-2948
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `491a69a76bcc6e08c975c1d8a857f1e3cf51021f`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/491a69a76bcc6e08c975c1d8a857f1e3cf51021f)
+- Event ID: `c8523e9ab4dc8450b3a99eca7d0d8e84dfef241fb435ff2e123b216347bf1669`
+<!-- canonical-main-doc-promoted:c8523e9ab4dc8450b3a99eca7d0d8e84dfef241fb435ff2e123b216347bf1669 -->

@@ -155,3 +155,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2880)
 - Event ID: `2feec578c6362e98d01a4fa738f1766c85a744faf59b611a809a4afeafb363f6`
 <!-- canonical-main-doc-promoted:2feec578c6362e98d01a4fa738f1766c85a744faf59b611a809a4afeafb363f6 -->
+
+### 2026-09-25 — REPO-CANONICAL-RECEIPT-ATTENTION-ADAPTER-V1 — Phase 8.7f.1 receipt-consumption seam
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2886)
+- Event ID: `521180c767f67c1c719b5f615f207b7f78581df0d630133d3d0c38d778af55f8`
+<!-- canonical-main-doc-promoted:521180c767f67c1c719b5f615f207b7f78581df0d630133d3d0c38d778af55f8 -->

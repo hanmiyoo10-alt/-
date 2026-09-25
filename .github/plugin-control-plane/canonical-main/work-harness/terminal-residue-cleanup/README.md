@@ -85,7 +85,29 @@ are exact; every exact source location remains bound for post-archive cleanup. A
 conflicting duplicate is CONFLICT. There is no timestamp/latest-wins choice.
 
 An unrecognized packet-bound `*-evidence` directory in an admitted checkout remains
-UNKNOWN. Zero exact evidence with no verified archive remains UNKNOWN.
+UNKNOWN.
+
+When the bounded registered-worktree scan proves **zero** recognized local validation
+sidecars, cleanup does not treat zero as validation success. It enters one alternate
+provenance profile and requires an exact canonical `EXPERIMENT_CLOSE` checkpoint pair:
+
+```text
+packet issue exact v1 checkpoint comment
++ fixed audit issue #293 exact v1 checkpoint comment
+→ same packet / stage / digest
+→ fixed owner + OWNER association
+→ unedited and created before packet native close
+→ byte-equal payload after fixed packet/audit envelopes
+→ digest recomputed by stage-checkpoint.cjs
+→ payload merged-main == exact PR merge
+→ required EXPERIMENT_CLOSE UNKNOWN/conflict/blocker = NONE
+```
+
+The pair is discovered from bounded packet/#293 comments. The caller cannot supply
+comment ids, audit issue, digest, author, payload, zero-evidence flag, or alternate
+location. Missing, duplicate, edited, post-close, mismatching, malformed, or
+pagination-unknown checkpoint evidence fails closed. The checkpoint is cleanup
+provenance only; it does not grant validation, merge, release, or production authority.
 
 ## Archive
 
@@ -105,7 +127,20 @@ The timestamp-free manifest binds:
 - file count;
 - aggregate archive digest.
 
-Directories are 0700. Evidence and manifest files are 0600.
+Normal local-sidecar archives remain schema v1 and byte/digest compatible.
+
+For the zero-local-sidecar profile only, schema v2 additionally binds:
+- `evidenceProfile = DURABLE_TERMINAL_CHECKPOINT`;
+- exact canonical checkpoint digest;
+- exact packet and #293 comment ids;
+- exactly two archived comment snapshots under
+  `terminal-stage-checkpoint-evidence/`.
+
+Those two files are the exact GitHub checkpoint comment bodies, not synthetic
+validation sidecars. They are hashed and retained locally so later cleanup recovery
+does not depend on refetching the remote comments after archive publication.
+
+Directories are 0700. Evidence, checkpoint snapshots, and manifest files are 0600.
 
 Archive publication is temp-write → full verification → atomic rename. A matching
 existing archive is reused. A mismatching existing archive is CONFLICT and is never
@@ -116,11 +151,16 @@ This is repository-local retention. It is not off-host backup or clone portabili
 ## Apply ordering
 
 ```text
-locate exact packet/PR evidence sources
-→ archive unique logical evidence + verify
-→ re-prove exact source path/size/SHA-256
-→ delete only the exact archived sidecar source files
-→ prove exact evidence sources absent
+locate exact packet/PR local evidence sources
+→ if local evidence exists:
+     archive unique logical sidecars + verify
+     → re-prove exact source path/size/SHA-256
+     → delete only exact archived sidecar source files
+     → prove exact evidence sources absent
+   else:
+     prove exact dual EXPERIMENT_CLOSE checkpoint pair
+     → snapshot both exact comment bodies into schema-v2 archive
+     → verify checkpoint archive
 → archive reverify
 → fresh admission
 → exact clean feature-worktree remove when present

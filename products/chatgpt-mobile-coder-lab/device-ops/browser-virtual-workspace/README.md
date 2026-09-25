@@ -101,7 +101,7 @@ owner_process=<running|absent|mismatch|unknown>
 virtual_display=<present|absent|unknown>
 chrome_task=<present|absent|unknown>
 cdp=<reachable|unreachable|unknown>
-target=<present|absent|unknown>
+bound_target=<present|absent|unknown>
 details=withheld
 ```
 
@@ -111,7 +111,7 @@ A successfully formed `status` receipt is read-only. It does not activate tabs, 
 
 `stop` acts only when the persisted state carries the exact v1 marker.
 
-Before signaling a live PID, it verifies that `/proc/<pid>/cmdline` still matches the fixed scrcpy/new-display argument shape. A PID mismatch is `blocked` and executes no signal.
+Before signaling a live PID, it verifies that `/proc/<pid>/cmdline` still matches the fixed scrcpy/new-display argument shape **and the currently resolved fixed-model ADB device**. A PID mismatch is `blocked` and executes no signal.
 
 The stop path:
 1. sends SIGINT only to the verified owner scrcpy PID;
@@ -131,6 +131,7 @@ Important blocked conditions include:
 - model mismatch;
 - missing adb/scrcpy/python3;
 - display 0 missing;
+- any pre-existing nonzero Android display before owner start;
 - tcp:9223 already occupied;
 - existing owner state;
 - scrcpy exits before display creation;

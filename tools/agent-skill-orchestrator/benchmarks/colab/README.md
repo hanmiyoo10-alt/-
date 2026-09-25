@@ -89,7 +89,29 @@ Drive fact. If captured for the experiment, record only the bounded observation 
 #2925, with its observation time. Do not commit account email, billing identifiers,
 payment details, or unrelated screenshots.
 
-## Next boundary
+## CAGB-2 GPU admission/runtime smoke
 
-CAGB-2 GPU/CUDA work is explicitly outside this directory's current V1 proof. It requires
-a separate packet after #2925 completes its CPU + Drive round trip.
+Packet #2952 adds a separate `gpu/` adapter without changing the frozen CPU registry,
+generation policy, CPU prebuilt artifact, or existing CPU receipt contracts.
+
+The CAGB-2 request is fixed to `GPU_REQUIRED`, `max_model_calls = 0`, and the
+`COLAB_GPU_RUNTIME_SMOKE` operation. GPU absence returns `BLOCKED_NO_ACCELERATOR` and
+never falls back to a CPU runtime. When a GPU is present, the adapter fetches only the
+pinned llama.cpp `b10516` tag, verifies commit `b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9`,
+builds one reviewed CUDA profile, hashes `llama-server` and `libggml-cuda.so`, and runs
+only a bounded `--version` smoke. No model is downloaded or loaded.
+
+The thin launcher is `gpu/colab-agent-gpu-admission.ipynb`. Its result bundle uses:
+
+```text
+nyang-colab/agent-bench/gpu-admission/<request-id>/
+```
+
+Local contract checks remain model-free:
+
+```text
+python -m unittest discover -s benchmarks/colab/gpu/tests -v
+```
+
+CAGB-3 Scout inference remains a separate packet after CAGB-2 merge, postmerge
+convergence, and one bounded live Colab GPU admission/runtime attempt.

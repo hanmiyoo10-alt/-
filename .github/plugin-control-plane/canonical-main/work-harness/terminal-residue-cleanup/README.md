@@ -99,14 +99,23 @@ packet issue exact v1 checkpoint comment
 → unedited and created before packet native close
 → byte-equal payload after fixed packet/audit envelopes
 → digest recomputed by stage-checkpoint.cjs
-→ payload merged-main == exact PR merge
-→ required EXPERIMENT_CLOSE UNKNOWN/conflict/blocker = NONE
+→ payload has exactly one source-owned merge identity line:
+   `merged main` or `merged/current main`
+→ recognized merge SHA == exact PR merge
+→ payload has exactly one source-owned required-state line with value NONE:
+   `required EXPERIMENT_CLOSE UNKNOWN / conflict / blocker`
+   or `required UNKNOWN / conflict / blocker`
 ```
 
 The pair is discovered from bounded packet/#293 comments. The caller cannot supply
-comment ids, audit issue, digest, author, payload, zero-evidence flag, or alternate
-location. Missing, duplicate, edited, post-close, mismatching, malformed, or
-pagination-unknown checkpoint evidence fails closed. The checkpoint is cleanup
+comment ids, audit issue, digest, author, payload, zero-evidence flag, merge-field label,
+or alternate location. The merge identity parser recognizes only the two exact
+repository-emitted merge labels above. The required-state parser likewise recognizes
+only the two exact repository-emitted labels above and requires value `NONE`. For each
+field family, zero recognized lines remains UNKNOWN; more than one recognized line is
+CONFLICT even when semantically identical; near-match/fuzzy wording is not accepted.
+Missing, duplicate, edited, post-close, mismatching, malformed, or pagination-unknown
+checkpoint evidence fails closed. The checkpoint is cleanup
 provenance only; it does not grant validation, merge, release, or production authority.
 
 ## Archive

@@ -610,20 +610,30 @@ async function readTerminalCheckpointEvidence({
     (line) => line.trim() === 'State reached: ' + TERMINAL_CHECKPOINT_STAGE)) {
     throw new CleanupError('UNKNOWN', ['TERMINAL_CHECKPOINT_STATE_MISSING']);
   }
-  const mergeLines = packetComment.payload.split(/\r?\n/).filter(
-    (line) => /^- merged main: [0-9a-f]{40}$/.test(line.trim()));
-  if (mergeLines.length !== 1) {
+  const mergeLinePattern = /^- (merged main|merged\/current main): ([0-9a-f]{40})$/;
+  const mergeLines = packetComment.payload.split(/\r?\n/)
+    .map((line) => mergeLinePattern.exec(line.trim()))
+    .filter(Boolean);
+  if (!mergeLines.length) {
     throw new CleanupError('UNKNOWN', ['TERMINAL_CHECKPOINT_MERGE_IDENTITY_MISSING']);
   }
-  const recordedMerge = mergeLines[0].trim().slice('- merged main: '.length);
+  if (mergeLines.length !== 1) {
+    throw new CleanupError('CONFLICT', ['TERMINAL_CHECKPOINT_MERGE_IDENTITY_CONFLICT']);
+  }
+  const recordedMerge = mergeLines[0][2];
   if (recordedMerge !== mergeCommit) {
     throw new CleanupError('CONFLICT', ['TERMINAL_CHECKPOINT_MERGE_IDENTITY_CONFLICT']);
   }
-  const terminalNone = packetComment.payload.split(/\r?\n/).some((line) => (
-    line.trim() === '- required EXPERIMENT_CLOSE UNKNOWN / conflict / blocker: NONE'
-  ));
-  if (!terminalNone) {
+  const terminalStateLines = packetComment.payload.split(/\r?\n/).filter((line) => {
+    const text = line.trim();
+    return text === '- required EXPERIMENT_CLOSE UNKNOWN / conflict / blocker: NONE'
+      || text === '- required UNKNOWN / conflict / blocker: NONE';
+  });
+  if (!terminalStateLines.length) {
     throw new CleanupError('UNKNOWN', ['TERMINAL_CHECKPOINT_REQUIRED_STATE_MISSING']);
+  }
+  if (terminalStateLines.length !== 1) {
+    throw new CleanupError('CONFLICT', ['TERMINAL_CHECKPOINT_REQUIRED_STATE_CONFLICT']);
   }
 
   const files = [

@@ -13,6 +13,7 @@ const PAGE_SIZE = 100;
 const MAX_PAGES = 20;
 const MAX_INPUT_BYTES = 16 * 1024;
 const MAX_REPORT_BYTES = 32 * 1024;
+const GH_READ_TIMEOUT_MS = 20_000;
 const SHA40_RE = /^[0-9a-f]{40}$/;
 const PACKET_MARKER = '<!-- canonical-main-work-packet:v1 -->';
 
@@ -1011,7 +1012,11 @@ function ghReadEndpointAllowed(endpoint) {
 }
 function defaultGhRunner(args) {
   const result = childProcess.spawnSync('gh', args, {
-    encoding: 'utf8', shell: false, maxBuffer: 8 * 1024 * 1024,
+    encoding: 'utf8',
+    shell: false,
+    maxBuffer: 8 * 1024 * 1024,
+    timeout: GH_READ_TIMEOUT_MS,
+    killSignal: 'SIGKILL',
   });
   return {code: result.status ?? 1, stdout: result.stdout || '', stderr: result.stderr || ''};
 }
@@ -1220,6 +1225,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  GH_READ_TIMEOUT_MS,
   MAX_INPUT_BYTES,
   MAX_PAGES,
   MAX_REPORT_BYTES,

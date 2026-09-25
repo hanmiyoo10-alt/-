@@ -53,12 +53,16 @@ present, the existing fixed REST client is used. If neither environment variable
 present, V1 falls back to the already-authenticated `gh api` credential store with:
 
 - an exact read-only REST endpoint allowlist owned by this module;
-- the one fixed review-thread GraphQL query only;
-- no caller-selected endpoint, method, command or query;
+- the fixed reviewed GraphQL queries only;
+- a repository-owned 20-second lifetime for each individual `gh` read, terminated with a hard child-process kill when the bound is exceeded;
+- no caller-selected timeout, endpoint, method, command or query;
 - no token extraction, token printing, mutation request, retry loop or merge authority.
 
-A missing/broken authorized transport remains UNKNOWN. The fallback changes transport
-only and does not weaken the currentness, review, overlap or Required barriers.
+A missing, broken, or timed-out authorized transport remains UNKNOWN through the
+existing read-failure path. Timeout never converts a missing page, issue, PR file,
+review, Required, currentness, or overlap observation into complete evidence. The
+fallback changes transport lifetime only and does not weaken the currentness, review,
+overlap or Required barriers.
 
 ## Inspect prerequisites
 

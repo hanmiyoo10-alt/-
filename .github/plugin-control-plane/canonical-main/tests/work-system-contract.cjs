@@ -658,6 +658,162 @@ const invalidExportScope = [
   '1. `path:../secret`',
 ].join('\n');
 assert.equal(extractPacketScopes(invalidExportScope).ok, false);
+
+const labeledScopePacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  '`IN_PROGRESS`',
+  '## Bounded IMPLEMENTATION_PR write scope',
+  'Maximum expected paths:',
+  '1. `src/one.js` (new)',
+  '- `src/two.js` only when required',
+  'Scope ceiling: `path:src/**`',
+  'Semantic/effect surface: `surface:repo:labeled`',
+  '## Handoff',
+  'fixture',
+].join('\n');
+assert.deepEqual(extractPacketScopes(labeledScopePacket).scopes.map((row) => row.normalized), [
+  'path:src/one.js',
+  'path:src/two.js',
+  'path:src/**',
+  'surface:repo:labeled',
+]);
+
+const nonEffectBoundaryPacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  '`IN_PROGRESS`',
+  '## Bounded write scope',
+  '- `path:src/write.js`',
+  '### Explicit non-write / non-effect scope',
+  '- `path:src/read-only.js`',
+  '## Handoff',
+  'fixture',
+].join('\n');
+assert.deepEqual(extractPacketScopes(nonEffectBoundaryPacket).scopes.map((row) => row.normalized), [
+  'path:src/write.js',
+]);
+
+const forbiddenLabelPacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  '`IN_PROGRESS`',
+  '## Bounded write scope',
+  '- `surface:issue:2215` — coordination only',
+  'Forbidden:',
+  '- `tsconfig.json`',
+  '## Handoff',
+  'fixture',
+].join('\n');
+assert.deepEqual(extractPacketScopes(forbiddenLabelPacket).scopes.map((row) => row.normalized), [
+  'surface:issue:2215',
+]);
+
+
+const explicitNonWritePacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  '`IN_PROGRESS`',
+  '## Bounded implementation write scope',
+  '1. `path:src/write.js`',
+  '### Explicit non-write / preservation scope',
+  'Do not modify:',
+  '- `path:src/read-only.js`',
+  '## Handoff',
+  'fixture',
+].join('\n');
+assert.deepEqual(extractPacketScopes(explicitNonWritePacket).scopes.map((row) => row.normalized), [
+  'path:src/write.js',
+]);
+
+const doNotModifyPacket = overlapPacketBody('IN_PROGRESS', ['path:src/write.js'])
+  .replace('## Handoff', 'Do not modify:\n- `path:src/read-only.js`\n## Handoff');
+assert.deepEqual(extractPacketScopes(doNotModifyPacket).scopes.map((row) => row.normalized), [
+  'path:src/write.js',
+]);
+
+const proseTokenPacket = overlapPacketBody('IN_PROGRESS', ['path:src/write.js'])
+  .replace('## Handoff',
+    'Existing `path:src/read-only.js` is validation-only / out of scope.\n## Handoff');
+assert.deepEqual(extractPacketScopes(proseTokenPacket).scopes.map((row) => row.normalized), [
+  'path:src/write.js',
+]);
+
+const describedListPacket = overlapPacketBodyWithHeading('IN_PROGRESS', 'Bounded write scope', [])
+  .replace('## Handoff', '1. `path:src/described.js` — primary file\n## Handoff');
+assert.deepEqual(extractPacketScopes(describedListPacket).scopes.map((row) => row.normalized), [
+  'path:src/described.js',
+]);
+
+for (const fence of ['```', '~~~']) {
+  const fencedHeadingPacket = [
+    '<!-- canonical-main-work-packet:v1 -->',
+    '## State',
+    '`IN_PROGRESS`',
+    '## Bounded write scope',
+    '1. `path:src/live.js`',
+    `${fence}md`,
+    '## Locked write scope',
+    '1. `path:src/example.js`',
+    fence,
+    '## Handoff',
+    'fixture',
+  ].join('\n');
+  assert.deepEqual(extractPacketScopes(fencedHeadingPacket).scopes.map((row) => row.normalized), [
+    'path:src/live.js',
+  ]);
+}
+
+const fencedNonWritePacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  '`IN_PROGRESS`',
+  '## Bounded write scope',
+  '1. `path:src/first.js`',
+  '```md',
+  '### Explicit non-write / preservation scope',
+  'Do not modify:',
+  '- `path:src/example.js`',
+  '```',
+  '2. `path:src/second.js`',
+  '## Handoff',
+  'fixture',
+].join('\n');
+assert.deepEqual(extractPacketScopes(fencedNonWritePacket).scopes.map((row) => row.normalized), [
+  'path:src/first.js',
+  'path:src/second.js',
+]);
+
+const unclosedFencePacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  '`IN_PROGRESS`',
+  '## Bounded write scope',
+  '1. `path:src/live.js`',
+  '```md',
+  '## Locked write scope',
+  '1. `path:src/example.js`',
+].join('\n');
+const unclosedFenceResult = extractPacketScopes(unclosedFencePacket);
+assert.equal(unclosedFenceResult.ok, false);
+assert.equal(unclosedFenceResult.conflict, false);
+assert.match(unclosedFenceResult.reason, /unclosed Markdown fence/);
+
+const standaloneScopePacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  '`IN_PROGRESS`',
+  '## Bounded write scope',
+  '`path:src/standalone.js`',
+  'surface:repo:standalone',
+  '## Handoff',
+  'fixture',
+].join('\n');
+assert.deepEqual(extractPacketScopes(standaloneScopePacket).scopes.map((row) => row.normalized), [
+  'path:src/standalone.js',
+  'surface:repo:standalone',
+]);
+
 assert.match(scopeOverlapSource,
   /module\.exports = \{REASON_CODES, extractPacketScopes, normalizeScope, scopesOverlap, resolveScopeOverlap\};/);
 

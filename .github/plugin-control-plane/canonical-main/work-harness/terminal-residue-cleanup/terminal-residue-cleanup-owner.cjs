@@ -9,6 +9,7 @@ const path = require('node:path');
 const packetProjection = require('../../work-system/packet-projection.cjs');
 const executionReceipt = require('../execution-receipt.cjs');
 const agentDecisionView = require('../agent-decision-view.cjs');
+const stageCheckpoint = require('../stage-checkpoint.cjs');
 const {canonicalize, stableHash} = require('../handoff.cjs');
 
 const REPO = 'hanmiyoo10-alt/-';
@@ -26,6 +27,11 @@ const EVIDENCE_DIRS = Object.freeze([
   'validation-merge-evidence',
 ]);
 const IGNORED_EVIDENCE_DIRS = Object.freeze(['terminal-residue-cleanup-evidence']);
+const CHECKPOINT_EVIDENCE_DIR = 'terminal-stage-checkpoint-evidence';
+const AUDIT_ISSUE = 293;
+const TERMINAL_CHECKPOINT_STAGE = 'EXPERIMENT_CLOSE';
+const CHECKPOINT_OWNER = 'hanmiyoo10-alt';
+const MAX_COMMENT_PAGES = 20;
 const MAX_REGISTERED_WORKTREES = 256;
 const MAX_EVIDENCE_FILES = 32;
 const MAX_EVIDENCE_SOURCES = 64;
@@ -116,6 +122,20 @@ function ghJson(runner, endpoint, fields = []) {
   }
   return parseJson(result.stdout, 'GITHUB_JSON_INVALID');
 }
+function readIssueComments(runner, issueNumber) {
+  const rows = [];
+  for (let page = 1; page <= MAX_COMMENT_PAGES; page += 1) {
+    const batch = ghJson(runner, 'repos/' + REPO + '/issues/' + issueNumber + '/comments', [
+      ['per_page', '100'],
+      ['page', String(page)],
+    ]);
+    if (!Array.isArray(batch)) throw new CleanupError('UNKNOWN', ['CHECKPOINT_COMMENTS_INVALID']);
+    rows.push(...batch);
+    if (batch.length < 100) return rows;
+  }
+  throw new CleanupError('UNKNOWN', ['CHECKPOINT_COMMENT_PAGINATION_EXCEEDED'],
+    'issue:#' + issueNumber);
+}
 function createLiveAdapter({runner = commandResult} = {}) {
   return {
     async readMainAndOps() {
@@ -125,6 +145,12 @@ function createLiveAdapter({runner = commandResult} = {}) {
     },
     async readPacket(packetNumber) {
       return ghJson(runner, 'repos/' + REPO + '/issues/' + packetNumber);
+    },
+    async readPacketComments(packetNumber) {
+      return readIssueComments(runner, packetNumber);
+    },
+    async readAuditComments() {
+      return readIssueComments(runner, AUDIT_ISSUE);
     },
     async readPr(prNumber) {
       return ghJson(runner, 'repos/' + REPO + '/pulls/' + prNumber);
@@ -452,6 +478,172 @@ function locateEvidence(profile, runner, packetNumber, prNumber, options = {}) {
   return inventoryEvidenceRoots(
     registeredEvidenceRoots(profile, runner), packetNumber, prNumber, options);
 }
+function terminalCheckpointMarkerRe(packetNumber, surface) {
+  return new RegExp('^<!-- canonical-main-stage-checkpoint:v1 packet=' + packetNumber
+    + ' stage=' + TERMINAL_CHECKPOINT_STAGE
+    + ' digest=([0-9a-f]{64}) surface=' + surface + ' -->$');
+}
+function parseTimestamp(value, reasonCode) {
+  const timestamp = Date.parse(String(value || ''));
+  if (!Number.isFinite(timestamp)) throw new CleanupError('UNKNOWN', [reasonCode]);
+  return timestamp;
+}
+function parseTerminalCheckpointComment(comment, packetNumber, surface, closedAt) {
+  const body = String(comment?.body || '');
+  const lineEnd = body.indexOf('\n');
+  const markerLine = lineEnd === -1 ? body : body.slice(0, lineEnd);
+  const match = terminalCheckpointMarkerRe(packetNumber, surface).exec(markerLine);
+  if (!match) return null;
+
+  if (!Number.isSafeInteger(Number(comment?.id)) || Number(comment.id) <= 0) {
+    throw new CleanupError('UNKNOWN', ['TERMINAL_CHECKPOINT_COMMENT_ID_INVALID']);
+  }
+  if (comment?.user?.login !== CHECKPOINT_OWNER || comment?.author_association !== 'OWNER') {
+    throw new CleanupError('CONFLICT', ['TERMINAL_CHECKPOINT_AUTHOR_CONFLICT'],
+      'comment:' + comment.id);
+  }
+  if (String(comment?.created_at || '') !== String(comment?.updated_at || '')) {
+    throw new CleanupError('CONFLICT', ['TERMINAL_CHECKPOINT_EDITED'],
+      'comment:' + comment.id);
+  }
+  const created = parseTimestamp(comment.created_at, 'TERMINAL_CHECKPOINT_TIME_INVALID');
+  const closed = parseTimestamp(closedAt, 'PACKET_CLOSED_AT_UNKNOWN');
+  if (created > closed) {
+    throw new CleanupError('CONFLICT', ['TERMINAL_CHECKPOINT_AFTER_PACKET_CLOSE'],
+      'comment:' + comment.id);
+  }
+
+  const digest = match[1];
+  const marker = stageCheckpoint.checkpointMarker(
+    packetNumber, TERMINAL_CHECKPOINT_STAGE, digest, surface);
+  const heading = surface === 'packet'
+    ? 'Canonical-main stage checkpoint — ' + TERMINAL_CHECKPOINT_STAGE
+    : 'Canonical-main stage checkpoint audit — #' + packetNumber + ' / ' + TERMINAL_CHECKPOINT_STAGE;
+  const prefix = marker + '\n## ' + heading + '\n\n';
+  if (!body.startsWith(prefix) || !body.endsWith('\n')) {
+    throw new CleanupError('CONFLICT', ['TERMINAL_CHECKPOINT_ENVELOPE_CONFLICT'],
+      'comment:' + comment.id);
+  }
+  const payload = body.slice(prefix.length, -1);
+  if (!payload || payload !== payload.trim()) {
+    throw new CleanupError('CONFLICT', ['TERMINAL_CHECKPOINT_PAYLOAD_INVALID'],
+      'comment:' + comment.id);
+  }
+  return {
+    id: Number(comment.id),
+    digest,
+    body,
+    payload,
+    createdAt: String(comment.created_at),
+  };
+}
+function findTerminalCheckpointComment(comments, packetNumber, surface, closedAt) {
+  if (!Array.isArray(comments)) {
+    throw new CleanupError('UNKNOWN', ['TERMINAL_CHECKPOINT_COMMENTS_UNKNOWN']);
+  }
+  const candidates = [];
+  for (const comment of comments) {
+    const parsed = parseTerminalCheckpointComment(comment, packetNumber, surface, closedAt);
+    if (parsed) candidates.push(parsed);
+  }
+  if (!candidates.length) {
+    throw new CleanupError('UNKNOWN', ['TERMINAL_CHECKPOINT_MISSING'],
+      'issue:#' + (surface === 'packet' ? packetNumber : AUDIT_ISSUE));
+  }
+  if (candidates.length !== 1) {
+    throw new CleanupError('CONFLICT', ['TERMINAL_CHECKPOINT_DUPLICATE'],
+      'issue:#' + (surface === 'packet' ? packetNumber : AUDIT_ISSUE));
+  }
+  return candidates[0];
+}
+function checkpointSnapshotPath(packetNumber, prNumber, surface, commentId) {
+  return CHECKPOINT_EVIDENCE_DIR + '/packet-' + packetNumber + '-pr-' + prNumber
+    + '.' + TERMINAL_CHECKPOINT_STAGE + '.' + surface + '-comment-' + commentId + '.md';
+}
+function checkpointSnapshotRow(packetNumber, prNumber, surface, comment) {
+  const bytesContent = Buffer.from(comment.body, 'utf8');
+  if (bytesContent.length > MAX_EVIDENCE_FILE_BYTES) {
+    throw new CleanupError('UNKNOWN', ['TERMINAL_CHECKPOINT_COMMENT_TOO_LARGE']);
+  }
+  return {
+    path: checkpointSnapshotPath(packetNumber, prNumber, surface, comment.id),
+    bytes: bytesContent.length,
+    sha256: sha256Bytes(bytesContent),
+    bytesContent,
+  };
+}
+async function readTerminalCheckpointEvidence({
+  adapter, packet, packetNumber, prNumber, mergeCommit,
+}) {
+  if (typeof adapter?.readPacketComments !== 'function'
+      || typeof adapter?.readAuditComments !== 'function') {
+    throw new CleanupError('UNKNOWN', ['TERMINAL_CHECKPOINT_READ_UNAVAILABLE']);
+  }
+  let packetComments;
+  let auditComments;
+  try {
+    [packetComments, auditComments] = await Promise.all([
+      adapter.readPacketComments(packetNumber),
+      adapter.readAuditComments(),
+    ]);
+  } catch (error) {
+    if (error instanceof CleanupError) throw error;
+    throw new CleanupError('UNKNOWN', ['TERMINAL_CHECKPOINT_READ_FAILED']);
+  }
+  const packetComment = findTerminalCheckpointComment(
+    packetComments, packetNumber, 'packet', packet?.closed_at);
+  const auditComment = findTerminalCheckpointComment(
+    auditComments, packetNumber, 'audit', packet?.closed_at);
+
+  if (packetComment.digest !== auditComment.digest) {
+    throw new CleanupError('CONFLICT', ['TERMINAL_CHECKPOINT_DIGEST_CONFLICT']);
+  }
+  if (packetComment.payload !== auditComment.payload) {
+    throw new CleanupError('CONFLICT', ['TERMINAL_CHECKPOINT_PAYLOAD_CONFLICT']);
+  }
+  const recomputed = stageCheckpoint.checkpointDigest(
+    packetNumber, TERMINAL_CHECKPOINT_STAGE, packetComment.payload.trim());
+  if (recomputed !== packetComment.digest) {
+    throw new CleanupError('CONFLICT', ['TERMINAL_CHECKPOINT_DIGEST_RECOMPUTE_CONFLICT']);
+  }
+  if (!packetComment.payload.split(/\r?\n/).some(
+    (line) => line.trim() === 'State reached: ' + TERMINAL_CHECKPOINT_STAGE)) {
+    throw new CleanupError('UNKNOWN', ['TERMINAL_CHECKPOINT_STATE_MISSING']);
+  }
+  const mergeLines = packetComment.payload.split(/\r?\n/).filter(
+    (line) => /^- merged main: [0-9a-f]{40}$/.test(line.trim()));
+  if (mergeLines.length !== 1) {
+    throw new CleanupError('UNKNOWN', ['TERMINAL_CHECKPOINT_MERGE_IDENTITY_MISSING']);
+  }
+  const recordedMerge = mergeLines[0].trim().slice('- merged main: '.length);
+  if (recordedMerge !== mergeCommit) {
+    throw new CleanupError('CONFLICT', ['TERMINAL_CHECKPOINT_MERGE_IDENTITY_CONFLICT']);
+  }
+  const terminalNone = packetComment.payload.split(/\r?\n/).some((line) => (
+    line.trim() === '- required EXPERIMENT_CLOSE UNKNOWN / conflict / blocker: NONE'
+  ));
+  if (!terminalNone) {
+    throw new CleanupError('UNKNOWN', ['TERMINAL_CHECKPOINT_REQUIRED_STATE_MISSING']);
+  }
+
+  const files = [
+    checkpointSnapshotRow(packetNumber, prNumber, 'packet', packetComment),
+    checkpointSnapshotRow(packetNumber, prNumber, 'audit', auditComment),
+  ].sort((a, b) => a.path.localeCompare(b.path));
+  const totalBytes = files.reduce((sum, row) => sum + row.bytes, 0);
+  if (totalBytes > MAX_EVIDENCE_TOTAL_BYTES) {
+    throw new CleanupError('UNKNOWN', ['EVIDENCE_TOTAL_TOO_LARGE']);
+  }
+  return {
+    evidenceProfile: 'DURABLE_TERMINAL_CHECKPOINT',
+    checkpointId: packetComment.digest,
+    packetCommentId: packetComment.id,
+    auditCommentId: auditComment.id,
+    files,
+    totalBytes,
+    sourceCount: 0,
+  };
+}
 function verifyInventoryAgainstArchive(inventory, archive) {
   if (!inventory) return;
   if (archive.state !== 'VERIFIED') {
@@ -520,24 +712,98 @@ function buildManifest(packetNumber, prNumber, candidateHead, mergeCommit, files
   const base = manifestBase(packetNumber, prNumber, candidateHead, mergeCommit, files);
   return {...base, archiveDigest: stableHash(base)};
 }
+function checkpointManifestBase(
+  packetNumber, prNumber, candidateHead, mergeCommit, checkpointEvidence,
+) {
+  return {
+    schemaVersion: 2,
+    mode: 'CANONICAL_MAIN_TERMINAL_EVIDENCE_ARCHIVE',
+    evidenceProfile: checkpointEvidence.evidenceProfile,
+    packetRef: '#' + packetNumber,
+    prRef: '#' + prNumber,
+    candidateHead,
+    mergeCommit,
+    checkpointId: checkpointEvidence.checkpointId,
+    packetCommentId: checkpointEvidence.packetCommentId,
+    auditCommentId: checkpointEvidence.auditCommentId,
+    fileCount: checkpointEvidence.files.length,
+    files: checkpointEvidence.files.map(
+      ({path: rel, bytes, sha256}) => ({path: rel, bytes, sha256})),
+  };
+}
+function buildCheckpointManifest(
+  packetNumber, prNumber, candidateHead, mergeCommit, checkpointEvidence,
+) {
+  const base = checkpointManifestBase(
+    packetNumber, prNumber, candidateHead, mergeCommit, checkpointEvidence);
+  return {...base, archiveDigest: stableHash(base)};
+}
 function validateManifestShape(value, packetNumber, prNumber, candidateHead, mergeCommit) {
-  const keys = Object.keys(value || {}).sort();
-  const expectedKeys = [
-    'archiveDigest', 'candidateHead', 'fileCount', 'files', 'mergeCommit',
-    'mode', 'packetRef', 'prRef', 'schemaVersion',
-  ].sort();
-  if (!same(keys, expectedKeys)) throw new CleanupError('CONFLICT', ['ARCHIVE_MANIFEST_SHAPE_CONFLICT']);
-  if (value.schemaVersion !== 1 || value.mode !== 'CANONICAL_MAIN_TERMINAL_EVIDENCE_ARCHIVE'
-      || value.packetRef !== '#' + packetNumber || value.prRef !== '#' + prNumber
-      || value.candidateHead !== candidateHead || value.mergeCommit !== mergeCommit
-      || !Array.isArray(value.files) || value.fileCount !== value.files.length
-      || typeof value.archiveDigest !== 'string') {
+  const commonIdentity = value?.mode === 'CANONICAL_MAIN_TERMINAL_EVIDENCE_ARCHIVE'
+    && value?.packetRef === '#' + packetNumber
+    && value?.prRef === '#' + prNumber
+    && value?.candidateHead === candidateHead
+    && value?.mergeCommit === mergeCommit
+    && Array.isArray(value?.files)
+    && value?.fileCount === value.files.length
+    && typeof value?.archiveDigest === 'string';
+  if (!commonIdentity) {
     throw new CleanupError('CONFLICT', ['ARCHIVE_MANIFEST_IDENTITY_CONFLICT']);
   }
-  if (value.archiveDigest !== stableHash(manifestBase(
-    packetNumber, prNumber, candidateHead, mergeCommit, value.files))) {
-    throw new CleanupError('CONFLICT', ['ARCHIVE_DIGEST_CONFLICT']);
+
+  if (value.schemaVersion === 1) {
+    const expectedKeys = [
+      'archiveDigest', 'candidateHead', 'fileCount', 'files', 'mergeCommit',
+      'mode', 'packetRef', 'prRef', 'schemaVersion',
+    ].sort();
+    if (!same(Object.keys(value).sort(), expectedKeys)) {
+      throw new CleanupError('CONFLICT', ['ARCHIVE_MANIFEST_SHAPE_CONFLICT']);
+    }
+    if (value.archiveDigest !== stableHash(manifestBase(
+      packetNumber, prNumber, candidateHead, mergeCommit, value.files))) {
+      throw new CleanupError('CONFLICT', ['ARCHIVE_DIGEST_CONFLICT']);
+    }
+    return;
   }
+
+  if (value.schemaVersion === 2) {
+    const expectedKeys = [
+      'archiveDigest', 'auditCommentId', 'candidateHead', 'checkpointId',
+      'evidenceProfile', 'fileCount', 'files', 'mergeCommit', 'mode',
+      'packetCommentId', 'packetRef', 'prRef', 'schemaVersion',
+    ].sort();
+    if (!same(Object.keys(value).sort(), expectedKeys)) {
+      throw new CleanupError('CONFLICT', ['ARCHIVE_MANIFEST_SHAPE_CONFLICT']);
+    }
+    if (value.evidenceProfile !== 'DURABLE_TERMINAL_CHECKPOINT'
+        || !/^[0-9a-f]{64}$/.test(String(value.checkpointId || ''))
+        || !Number.isSafeInteger(value.packetCommentId) || value.packetCommentId <= 0
+        || !Number.isSafeInteger(value.auditCommentId) || value.auditCommentId <= 0
+        || value.fileCount !== 2) {
+      throw new CleanupError('CONFLICT', ['ARCHIVE_MANIFEST_IDENTITY_CONFLICT']);
+    }
+    const expectedPaths = [
+      checkpointSnapshotPath(packetNumber, prNumber, 'packet', value.packetCommentId),
+      checkpointSnapshotPath(packetNumber, prNumber, 'audit', value.auditCommentId),
+    ].sort();
+    if (!same(value.files.map((row) => row?.path).sort(), expectedPaths)) {
+      throw new CleanupError('CONFLICT', ['ARCHIVE_CHECKPOINT_PATH_CONFLICT']);
+    }
+    const checkpointEvidence = {
+      evidenceProfile: value.evidenceProfile,
+      checkpointId: value.checkpointId,
+      packetCommentId: value.packetCommentId,
+      auditCommentId: value.auditCommentId,
+      files: value.files,
+    };
+    if (value.archiveDigest !== stableHash(checkpointManifestBase(
+      packetNumber, prNumber, candidateHead, mergeCommit, checkpointEvidence))) {
+      throw new CleanupError('CONFLICT', ['ARCHIVE_DIGEST_CONFLICT']);
+    }
+    return;
+  }
+
+  throw new CleanupError('CONFLICT', ['ARCHIVE_MANIFEST_SCHEMA_UNSUPPORTED']);
 }
 function verifyArchive(root, packetNumber, prNumber, candidateHead, mergeCommit, expectedInventory = null) {
   if (!fs.existsSync(root)) return {state: 'ABSENT'};
@@ -557,8 +823,12 @@ function verifyArchive(root, packetNumber, prNumber, candidateHead, mergeCommit,
   validateManifestShape(manifest, packetNumber, prNumber, candidateHead, mergeCommit);
   const rows = [];
   for (const row of manifest.files) {
+    const evidenceDir = String(row?.path || '').split('/')[0];
+    const directoryAllowed = manifest.schemaVersion === 2
+      ? evidenceDir === CHECKPOINT_EVIDENCE_DIR
+      : EVIDENCE_DIRS.includes(evidenceDir);
     if (!row || typeof row.path !== 'string' || path.isAbsolute(row.path)
-        || row.path.includes('..') || !EVIDENCE_DIRS.includes(row.path.split('/')[0])
+        || row.path.includes('..') || !directoryAllowed
         || !Number.isSafeInteger(row.bytes) || row.bytes < 0
         || !/^[0-9a-f]{64}$/.test(String(row.sha256 || ''))) {
       throw new CleanupError('CONFLICT', ['ARCHIVE_FILE_RECORD_INVALID']);
@@ -592,10 +862,34 @@ function verifyArchive(root, packetNumber, prNumber, candidateHead, mergeCommit,
   }
   return {
     state: 'VERIFIED',
+    evidenceProfile: manifest.schemaVersion === 2
+      ? manifest.evidenceProfile : 'LOCAL_VALIDATION_SIDECARS',
     manifest,
     manifestSha256: sha256File(manifestPath),
     totalBytes: rows.reduce((sum, row) => sum + row.bytes, 0),
   };
+}
+function verifyCheckpointArchiveAgainstEvidence(archive, checkpointEvidence) {
+  if (!checkpointEvidence) return;
+  if (archive?.state !== 'VERIFIED' || archive?.manifest?.schemaVersion !== 2
+      || archive.evidenceProfile !== 'DURABLE_TERMINAL_CHECKPOINT') {
+    throw new CleanupError('CONFLICT', ['ARCHIVE_EVIDENCE_PROFILE_CONFLICT']);
+  }
+  const manifest = archive.manifest;
+  if (manifest.checkpointId !== checkpointEvidence.checkpointId
+      || manifest.packetCommentId !== checkpointEvidence.packetCommentId
+      || manifest.auditCommentId !== checkpointEvidence.auditCommentId) {
+    throw new CleanupError('CONFLICT', ['ARCHIVE_CHECKPOINT_IDENTITY_CONFLICT']);
+  }
+  const actual = manifest.files.map(
+    ({path: rel, bytes, sha256}) => ({path: rel, bytes, sha256})).sort(
+      (a, b) => a.path.localeCompare(b.path));
+  const expected = checkpointEvidence.files.map(
+    ({path: rel, bytes, sha256}) => ({path: rel, bytes, sha256})).sort(
+      (a, b) => a.path.localeCompare(b.path));
+  if (!same(actual, expected)) {
+    throw new CleanupError('CONFLICT', ['ARCHIVE_CHECKPOINT_SOURCE_IDENTITY_CONFLICT']);
+  }
 }
 function* walkFiles(root) {
   for (const entry of fs.readdirSync(root, {withFileTypes: true})) {
@@ -642,6 +936,55 @@ function publishArchive(root, commonDir, packetNumber, prNumber, candidateHead, 
     }
     fs.renameSync(tmp, finalPath);
     return verifyArchive(finalPath, packetNumber, prNumber, candidateHead, mergeCommit, inventory);
+  } catch (error) {
+    if (fs.existsSync(tmp)) fs.rmSync(tmp, {recursive: true, force: true});
+    throw error;
+  }
+}
+function publishCheckpointArchive(
+  commonDir, packetNumber, prNumber, candidateHead, mergeCommit, checkpointEvidence,
+) {
+  const finalPath = archivePath(commonDir, packetNumber, prNumber);
+  const existing = verifyArchive(finalPath, packetNumber, prNumber, candidateHead, mergeCommit);
+  if (existing.state === 'VERIFIED') {
+    verifyCheckpointArchiveAgainstEvidence(existing, checkpointEvidence);
+    return existing;
+  }
+
+  const archiveParent = path.dirname(finalPath);
+  ensureDirMode(archiveParent, 0o700);
+  const tmp = finalPath + '.tmp-' + process.pid;
+  if (fs.existsSync(tmp)) fs.rmSync(tmp, {recursive: true, force: true});
+  fs.mkdirSync(tmp, {mode: 0o700});
+  fs.chmodSync(tmp, 0o700);
+  try {
+    for (const row of checkpointEvidence.files) {
+      const out = path.join(tmp, row.path);
+      ensureDirMode(path.dirname(out), 0o700);
+      fs.writeFileSync(out, row.bytesContent, {mode: 0o600});
+      fs.chmodSync(out, 0o600);
+    }
+    const manifest = buildCheckpointManifest(
+      packetNumber, prNumber, candidateHead, mergeCommit, checkpointEvidence);
+    const manifestPath = path.join(tmp, 'manifest.json');
+    fs.writeFileSync(manifestPath, JSON.stringify(canonicalize(manifest), null, 2) + '\n',
+      {encoding: 'utf8', mode: 0o600});
+    fs.chmodSync(manifestPath, 0o600);
+    const verifiedTmp = verifyArchive(
+      tmp, packetNumber, prNumber, candidateHead, mergeCommit);
+    verifyCheckpointArchiveAgainstEvidence(verifiedTmp, checkpointEvidence);
+    if (fs.existsSync(finalPath)) {
+      const raced = verifyArchive(
+        finalPath, packetNumber, prNumber, candidateHead, mergeCommit);
+      verifyCheckpointArchiveAgainstEvidence(raced, checkpointEvidence);
+      fs.rmSync(tmp, {recursive: true, force: true});
+      return raced;
+    }
+    fs.renameSync(tmp, finalPath);
+    const verified = verifyArchive(
+      finalPath, packetNumber, prNumber, candidateHead, mergeCommit);
+    verifyCheckpointArchiveAgainstEvidence(verified, checkpointEvidence);
+    return verified;
   } catch (error) {
     if (fs.existsSync(tmp)) fs.rmSync(tmp, {recursive: true, force: true});
     throw error;
@@ -719,7 +1062,11 @@ function reportFromFacts(operation, packetNumber, prNumber, facts, receipt, effe
     cleanupDisposition: facts?.cleanupDisposition || 'UNKNOWN',
     archiveDigest: facts?.archive?.manifest?.archiveDigest || null,
     manifestSha256: facts?.archive?.manifestSha256 || null,
-    evidenceFileCount: facts?.archive?.manifest?.fileCount || facts?.inventory?.files?.length || 0,
+    evidenceProfile: facts?.archive?.evidenceProfile
+      || (facts?.inventory ? 'LOCAL_VALIDATION_SIDECARS'
+        : facts?.checkpointEvidence?.evidenceProfile || 'UNKNOWN'),
+    evidenceFileCount: facts?.archive?.manifest?.fileCount
+      || facts?.inventory?.files?.length || facts?.checkpointEvidence?.files?.length || 0,
     effects: {
       archiveWrites: effects.archiveWrites || 0,
       evidenceSourceDeletes: effects.evidenceSourceDeletes || 0,
@@ -736,9 +1083,14 @@ function reportFromFacts(operation, packetNumber, prNumber, facts, receipt, effe
   };
 }
 function outputFor(facts) {
+  const evidenceProfile = facts.archive?.state === 'VERIFIED'
+    ? facts.archive.evidenceProfile
+    : facts.inventory ? 'LOCAL_VALIDATION_SIDECARS'
+      : facts.checkpointEvidence ? facts.checkpointEvidence.evidenceProfile : 'UNKNOWN';
   return {
     archive: facts.archive.state === 'VERIFIED' ? 'VERIFIED'
       : facts.archive.state === 'ABSENT' ? 'ABSENT' : 'UNKNOWN',
+    evidenceProfile,
     evidenceSources: facts.inventory ? 'PRESENT' : 'ABSENT',
     worktree: facts.worktree.state === 'PRESENT' ? 'PRESENT' : 'ABSENT',
     remoteRef: facts.remoteRef.state,
@@ -746,13 +1098,14 @@ function outputFor(facts) {
     residue: facts.cleanupDisposition === 'ALREADY_CLEAN' ? 'NONE'
       : facts.cleanupDisposition === 'COMPLETE' ? 'NONE' : 'PRESENT',
     disposition: facts.cleanupDisposition,
-    fileCount: facts.archive?.manifest?.fileCount || facts.inventory?.files?.length || 0,
+    fileCount: facts.archive?.manifest?.fileCount
+      || facts.inventory?.files?.length || facts.checkpointEvidence?.files?.length || 0,
     sourceCount: facts.inventory?.sourceCount || 0,
   };
 }
-function classifyDisposition(worktree, archive, localRef, remoteRef, inventory) {
+function classifyDisposition(worktree, archive, localRef, remoteRef, inventory, checkpointEvidence) {
   if (archive.state !== 'VERIFIED') {
-    if (inventory) return 'ARCHIVE_REQUIRED';
+    if (inventory || checkpointEvidence) return 'ARCHIVE_REQUIRED';
     throw new CleanupError('UNKNOWN', ['PACKET_EVIDENCE_MISSING']);
   }
   if (inventory || worktree.state === 'PRESENT') return 'CLEANUP_READY';
@@ -790,13 +1143,16 @@ async function collectFacts({
     archiveRoot, packetNumber, prNumber, prInfo.candidateHead, prInfo.mergeCommit);
   const inventory = locateEvidence(
     profile, runner, packetNumber, prNumber, {allowMissing: true});
+  let checkpointEvidence = null;
   if (archive.state === 'VERIFIED') {
     verifyInventoryAgainstArchive(inventory, archive);
   } else if (!inventory) {
-    throw new CleanupError('UNKNOWN', ['PACKET_EVIDENCE_MISSING']);
+    checkpointEvidence = await readTerminalCheckpointEvidence({
+      adapter, packet, packetNumber, prNumber, mergeCommit: prInfo.mergeCommit,
+    });
   }
   const cleanupDisposition = classifyDisposition(
-    worktree, archive, localRef, remoteRef, inventory);
+    worktree, archive, localRef, remoteRef, inventory, checkpointEvidence);
   const facts = {
     ...current,
     ...prInfo,
@@ -806,6 +1162,7 @@ async function collectFacts({
     localRef,
     remoteRef,
     inventory,
+    checkpointEvidence,
     archive,
     archiveRoot,
     commonDir,
@@ -929,11 +1286,17 @@ async function applyTransaction({
     }
 
     if (initial.archive.state !== 'VERIFIED') {
-      if (!initial.inventory) {
+      let archived;
+      if (initial.inventory) {
+        archived = publishArchive(initial.archiveRoot, initial.commonDir,
+          packetNumber, prNumber, initial.candidateHead, initial.mergeCommit, initial.inventory);
+      } else if (initial.checkpointEvidence) {
+        archived = publishCheckpointArchive(initial.commonDir,
+          packetNumber, prNumber, initial.candidateHead, initial.mergeCommit,
+          initial.checkpointEvidence);
+      } else {
         throw new CleanupError('UNKNOWN', ['ARCHIVE_SOURCE_UNAVAILABLE']);
       }
-      const archived = publishArchive(initial.archiveRoot, initial.commonDir,
-        packetNumber, prNumber, initial.candidateHead, initial.mergeCommit, initial.inventory);
       effects.archiveWrites = 1;
       if (archived.state !== 'VERIFIED') throw new CleanupError('UNKNOWN', ['ARCHIVE_VERIFY_FAILED']);
     }

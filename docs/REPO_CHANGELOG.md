@@ -2045,3 +2045,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/736ef1e300ab0ab0ab4355547727074145657b26)
 - Event ID: `ad324909395968286409f1719bbbc316de3f8c8aa76918142dcfedb93b4a5ed2`
 <!-- canonical-main-doc-promoted:ad324909395968286409f1719bbbc316de3f8c8aa76918142dcfedb93b4a5ed2 -->
+
+### 2026-09-26 — Merge pull request #2971 from hanmiyoo10-alt/server/repo-neutral-admission-2970
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `435fe2c3ff3ba57f127a85b569271110877249da`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/435fe2c3ff3ba57f127a85b569271110877249da)
+- Event ID: `9d857298f2eb184fb42cd10201154dcd6c8c6f5cdb7f6ced788c3446d5d4a3b9`
+<!-- canonical-main-doc-promoted:9d857298f2eb184fb42cd10201154dcd6c8c6f5cdb7f6ced788c3446d5d4a3b9 -->

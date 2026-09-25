@@ -312,6 +312,80 @@ test('#2786 stage receipt contains no synthetic D014 gate', () => {
   assert(gateNames.includes('implementation-coordination-converged'));
   assert.equal(gateNames.includes('d014-complete'), false);
 });
+test('#2786 parsed authority refs are adapted before stage projection', () => {
+  const target = owner.TARGET_2786;
+  const implementation = stageReceipt.projectStageReceipt({
+    schemaVersion: 1,
+    packetNumber: 2786,
+    stage: 'IMPLEMENTATION_PR',
+    authorityRefs: [
+      {kind: 'COMMIT', locator: 'commit:' + target.candidate, identity: target.candidate},
+      {kind: 'GIT_REF', locator: 'refs/heads/main', identity: 'a53657666566bec4f860f9ef1a76fb7e06d5ae1f'},
+      {kind: 'PR', locator: 'pr:#2878', identity: target.candidate},
+      {kind: 'WORKFLOW_RUN', locator: 'run:35980921245', identity: 'head:' + target.candidate},
+      {kind: 'WORKFLOW_RUN', locator: 'run:35980921358', identity: 'head:' + target.candidate},
+    ],
+    requiredGates: [
+      {name: 'candidate-pr-readback', result: 'PASS', evidenceLocator: 'pr:#2878'},
+      {name: 'currentization-scope-and-blob-preservation', result: 'PASS', evidenceLocator: 'issue-comment:5812570628'},
+      {name: 'exact-five-path-diff', result: 'PASS', evidenceLocator: 'issue-comment:5811466841'},
+      {name: 'exact-head-Required', result: 'PASS', evidenceLocator: 'run:35980921245/job:107572429402'},
+      {name: 'exact-head-Verify', result: 'PASS', evidenceLocator: 'run:35980921245/job:107572339322'},
+      {name: 'git-diff-check', result: 'PASS', evidenceLocator: 'issue-comment:5811466841'},
+      {name: 'guard-anchor-regression', result: 'PASS', evidenceLocator: 'issue-comment:5811466841'},
+      {name: 'implementation-coordination-readback', result: 'PASS', evidenceLocator: 'issue-comment:5811466841'},
+      {name: 'implementation-d013-release', result: 'PASS', evidenceLocator: 'issue:#2352'},
+      {name: 'pocketrisu-helper-docs', result: 'PASS', evidenceLocator: 'run:35980921358'},
+      {name: 'shell-syntax', result: 'PASS', evidenceLocator: 'issue-comment:5811466841'},
+    ],
+    scope: {
+      paths: [
+        'products/pocketrisu-helper-mod/docs/features/main-phone/main-ssh-tunnel/README.md',
+        'products/pocketrisu-helper-mod/docs/features/main-phone/main-ssh-tunnel/UPSTREAM.md',
+        'products/pocketrisu-helper-mod/docs/features/main-phone/main-ssh-tunnel/files/21-pocketrisu-core-supervisor-guard',
+        'products/pocketrisu-helper-mod/docs/features/main-phone/main-ssh-tunnel/files/pocketrisu-core-supervisor-guard.sh',
+        'products/pocketrisu-helper-mod/docs/features/main-phone/main-ssh-tunnel/tests/test-core-supervisor-guard.sh',
+      ],
+      diffRequired: true,
+      diffIdentity: '9bc6c230391527b90c098b61f792ea503e10aeaeb7aa63862d261347bd7ed4ac',
+      diffEvidenceLocator: 'pr:#2878',
+    },
+    proof: [
+      {term: 'IMPLEMENTED', evidenceLocator: 'commit:' + target.candidate},
+      {term: 'CONTRACT_PROVEN', evidenceLocator: 'issue-comment:5811466841'},
+    ],
+    requiredUnknowns: [],
+    conflicts: [],
+    blockers: [],
+    dependencies: [],
+    nextLegalAction: 'VALIDATION_MERGE',
+  });
+  assert.equal(implementation.status, 'PASS');
+  assert.equal(implementation.receiptDigest, target.implementationReceiptDigest);
+  const parsed = stageReceipt.parseRenderedStageReceipt(
+    stageReceipt.renderStageReceipt(implementation));
+  assert.equal(parsed.status, 'VALID');
+  const parsedRuns = parsed.value.authorityRefs.filter((row) => row.kind === 'WORKFLOW_RUN');
+  assert.equal(parsedRuns.length, 2);
+  assert(parsedRuns.every((row) => row.status === 'KNOWN'));
+  assert.deepEqual(owner.stageReceiptAuthorityInput(parsedRuns[0]), {
+    kind: parsedRuns[0].kind,
+    locator: parsedRuns[0].locator,
+    identity: parsedRuns[0].identity,
+  });
+  const context = fake2786Context();
+  context.implReceipt = parsed.value;
+  const built = owner.build2786ValidationStageText(context);
+  assert.equal(built.receipt.status, 'PASS');
+  assert.equal(built.receipt.receiptDigest,
+    'e7653e074ecdc65f58119cb37116fa3d5e18846b43d69abd1ce234a600d166f1');
+  const finalParsed = stageReceipt.parseRenderedStageReceipt(built.text);
+  assert.equal(finalParsed.status, 'VALID');
+  assert.equal(finalParsed.value.packetNumber, 2786);
+  assert.equal(finalParsed.value.stage, 'VALIDATION_MERGE');
+  assert.equal(finalParsed.value.nextLegalAction, 'POSTMERGE_CONVERGENCE');
+});
+
 test('#2786 coordination proof fails closed when one gate is missing', () => {
   assert.equal(owner.coordinationGatesProven({
     requiredGates: [

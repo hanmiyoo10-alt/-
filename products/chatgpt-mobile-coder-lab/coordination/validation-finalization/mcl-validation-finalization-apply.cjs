@@ -837,6 +837,9 @@ function buildValidationStageText(ctx, completion) {
   if (receipt.status !== 'PASS') fail('UNKNOWN', 'STAGE_RECEIPT_BUILD_NOT_PASS');
   return {text: stageReceipt.renderStageReceipt(receipt), receipt};
 }
+function stageReceiptAuthorityInput(row) {
+  return {kind: row.kind, locator: row.locator, identity: row.identity};
+}
 function build2786ValidationStageText(ctx) {
   const target = ctx.target;
   const receipt = stageReceipt.projectStageReceipt({
@@ -848,7 +851,8 @@ function build2786ValidationStageText(ctx) {
       {kind: 'COMMIT', locator: 'merge:#' + target.pr, identity: target.merge},
       {kind: 'PR', locator: 'pr:#' + target.pr, identity: target.candidate},
       ...ctx.implReceipt.authorityRefs
-        .filter((row) => row.kind === 'WORKFLOW_RUN'),
+        .filter((row) => row.kind === 'WORKFLOW_RUN')
+        .map(stageReceiptAuthorityInput),
     ],
     requiredGates: [
       {name: 'implementation-stage-receipt', result: 'PASS',
@@ -1299,6 +1303,7 @@ module.exports = {
   select2786WorkspaceManifest,
   selectImplementationReceipt,
   selectTargetManifest,
+  stageReceiptAuthorityInput,
   stageReceiptsFromComments,
   validationStageState,
   validationStageState2786,

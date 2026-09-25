@@ -65,15 +65,19 @@ python benchmarks/colab/bootstrap.py validate --bundle-dir <bundle-directory>
 
 ## Colab pilot
 
-Open `colab-agent-bootstrap.ipynb` in the intended Colab account. Fill only:
+Open `colab-agent-bootstrap.ipynb` in the intended Colab account and use **Run all**.
+There are no repository-SHA or request-id fields to fill.
 
-- `REPOSITORY_SHA` with the exact merged commit to test;
-- `REQUEST_ID` with a new bounded slug.
+The notebook clones only the public `main` branch without credentials. Immediately
+after clone it validates that the checkout is `main`, binds that checkout's exact
+40-hex HEAD once, generates a bounded UTC request id with a short random suffix, then
+switches to detached HEAD at the already-bound SHA. It never re-resolves `main` later
+in the run.
 
-The notebook clones the public repository without credentials, checks out the exact
-commit detached, asks Google Colab to mount Drive through the ordinary interactive
-authorization flow, and delegates request/build/run logic to the repository-owned Python
-modules in this directory.
+Google Drive authorization remains an explicit user-controlled trust boundary. After
+Drive is mounted, the notebook delegates request/build/run logic to the repository-owned
+Python modules in this directory and prints only bounded execution identity/validation
+data.
 
 Do not paste tokens, cookies, account identifiers, billing details, or private device
 material into the notebook.

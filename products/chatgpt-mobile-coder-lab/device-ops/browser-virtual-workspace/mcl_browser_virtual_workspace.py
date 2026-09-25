@@ -73,20 +73,24 @@ def bounded_receipt(
 
 
 def parse_adb_devices(output: str) -> str:
-    matches: list[str] = []
+    rows: list[list[str]] = []
     for raw in output.splitlines():
         line = raw.strip()
-        if not line or line.startswith("List of devices attached"):
+        if (
+            not line
+            or line.startswith("List of devices attached")
+            or line.startswith("*")
+        ):
             continue
         parts = line.split()
-        if len(parts) < 2 or parts[1] != "device":
-            continue
-        if f"model:{MODEL}" not in parts[2:]:
-            continue
-        matches.append(parts[0])
-    if len(matches) != 1:
+        if len(parts) >= 2:
+            rows.append(parts)
+    if len(rows) != 1:
         raise WorkspaceError("adb-device-not-unique")
-    return matches[0]
+    parts = rows[0]
+    if parts[1] != "device" or f"model:{MODEL}" not in parts[2:]:
+        raise WorkspaceError("adb-device-not-eligible")
+    return parts[0]
 
 
 def parse_display_ids(output: str) -> set[int]:
@@ -395,7 +399,7 @@ def classify(runtime: RealRuntime, state: dict[str, Any] | None) -> dict[str, st
     chrome_task = "present" if chrome_task_present(activities, state["display_id"]) else "absent"
 
     cdp = "unreachable"
-    target = "absent"
+    bound_target = "absent"
     try:
         targets = runtime.list_targets()
         cdp = "reachable"
@@ -453,7 +457,12 @@ def run_start(runtime: RealRuntime) -> str:
         proc = runtime.start_scrcpy(serial)
         display_id = runtime.wait_display_id(proc)
         after_displays = runtime.displays(serial)
-        if 0 not in after_displays or display_id not in after_displays:
+        created_displays = {
+            observed
+            for observed in after_displays - before_displays
+            if observed != 0
+        }
+        if 0 not in after_displays or created_displays != {display_id}:
             raise WorkspaceError("display-admission-failed")
 
         runtime.create_forward(serial)

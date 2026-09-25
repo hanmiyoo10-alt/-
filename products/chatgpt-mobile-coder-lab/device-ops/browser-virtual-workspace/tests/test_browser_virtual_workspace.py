@@ -160,6 +160,8 @@ serial-1 device product:x model:SM-S938N device:y transport_id:1
             )
         with self.assertRaises(mod.WorkspaceError):
             mod.parse_adb_devices(good + "serial-2 device model:SM-S938N transport_id:2\n")
+        with self.assertRaises(mod.WorkspaceError):
+            mod.parse_adb_devices(good + "other device model:OTHER transport_id:2\n")
 
     def test_display_parser_rejects_missing_or_ambiguous(self):
         self.assertEqual(
@@ -181,6 +183,20 @@ serial-1 device product:x model:SM-S938N device:y transport_id:1
         with self.assertRaisesRegex(mod.WorkspaceError, "display-baseline-conflict"):
             mod.run_start(runtime)
         self.assertEqual(runtime.mutations, 0)
+
+    def test_start_rejects_multiple_new_displays(self):
+        runtime = FakeRuntime()
+        calls = {"count": 0}
+
+        def displays(serial):
+            assert serial == "opaque-device"
+            calls["count"] += 1
+            return {0} if calls["count"] == 1 else {0, 6, 7}
+
+        runtime.displays = displays
+        with self.assertRaisesRegex(mod.WorkspaceError, "display-admission-failed"):
+            mod.run_start(runtime)
+        self.assertGreaterEqual(runtime.signal_count, 1)
 
     def test_pid_ownership_binds_current_device(self):
         good = ["scrcpy", "-s", "opaque-device", *mod.SCRCPY_ARGS]
@@ -229,6 +245,22 @@ serial-1 device product:x model:SM-S938N device:y transport_id:1
         receipt = mod.run_status(runtime)
         self.assertIn("state=running", receipt)
         self.assertEqual(runtime.mutations, 0)
+
+    def test_status_missing_bound_target_is_absent_not_exception(self):
+        runtime = FakeRuntime()
+        runtime.state = {
+            "marker": mod.MARKER,
+            "pid": 4242,
+            "display_id": 6,
+            "target_id": "BEEF",
+            "started_at": "2026-09-25T00:00:00Z",
+            "forward_port": mod.FORWARD_PORT,
+        }
+        runtime.display_calls = 1
+        runtime.targets_calls = 1
+        receipt = mod.run_status(runtime)
+        self.assertIn("state=running", receipt)
+        self.assertIn("bound_target=absent", receipt)
 
     def test_stop_is_idempotent_when_absent(self):
         runtime = FakeRuntime()

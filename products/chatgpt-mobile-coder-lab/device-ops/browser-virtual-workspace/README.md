@@ -47,7 +47,7 @@ scrcpy -s <internally resolved device> \
 
 The `/dev/null` video sink is deliberate: current scrcpy requires a video pipeline for `--new-display`, while `--no-window` keeps the Termux host headless without accumulating a recording file.
 
-After scrcpy reports exactly one nonzero new display id, the controller verifies both display 0 and the new display still exist. It then creates only the dedicated local CDP forward `tcp:9223 -> localabstract:chrome_devtools_remote` and launches one separate Chrome task on the new display using fixed Android activity flags:
+Before scrcpy starts, the controller snapshots the direct Android display-manager state. After scrcpy starts, it polls `dumpsys display` and computes the new display set as `after - before - {0}`. Success requires display 0 to remain present and exactly one newly-created nonzero display. Scrcpy stdout/log text is not used as display identity authority. The controller then creates only the dedicated local CDP forward `tcp:9223 -> localabstract:chrome_devtools_remote` and launches one separate Chrome task on the admitted virtual display using fixed Android activity flags:
 
 ```text
 NEW_TASK | MULTIPLE_TASK | NEW_DOCUMENT
@@ -86,7 +86,7 @@ It does not store or emit:
 - authentication prompts or credentials;
 - raw scrcpy/ADB/CDP output in normal receipts.
 
-The scrcpy log is owner-private lifecycle material used only to parse the created display id. Normal receipts never forward it.
+The scrcpy log remains owner-private diagnostic lifecycle material only. It does not determine display identity or admission, and normal receipts never forward it.
 
 ## Bounded receipts
 
@@ -134,8 +134,8 @@ Important blocked conditions include:
 - any pre-existing nonzero Android display before owner start;
 - tcp:9223 already occupied;
 - existing owner state;
-- scrcpy exits before display creation;
-- missing/ambiguous display id;
+- scrcpy exits before direct display admission;
+- no new display before timeout, physical display 0 loss, or multiple newly-created displays;
 - Chrome task missing on the virtual display;
 - persisted state malformed;
 - persisted PID no longer matches the fixed scrcpy shape.

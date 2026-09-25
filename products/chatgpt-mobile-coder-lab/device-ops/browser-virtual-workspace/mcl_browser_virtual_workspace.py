@@ -21,7 +21,6 @@ STATE_FILE_NAME = "state.json"
 LOG_FILE_NAME = "scrcpy.log"
 COLAB_ROOT = "https://colab.research.google.com/"
 DISPLAY_SPEC = "720x1280/240"
-DISPLAY_RE = re.compile(r"New display: .*\(id=(\d+)\)")
 TARGET_ID_RE = re.compile(r"^[A-Fa-f0-9]{1,64}$")
 
 SCRCPY_ARGS = [
@@ -103,11 +102,33 @@ def parse_display_ids(output: str) -> set[int]:
     return {int(value) for value in re.findall(r"mDisplayId=(\d+)", output)}
 
 
-def parse_created_display_id(log_text: str) -> int:
-    matches = [int(m.group(1)) for m in DISPLAY_RE.finditer(log_text)]
-    if len(matches) != 1 or matches[0] == 0:
-        raise WorkspaceError("display-id-unavailable")
-    return matches[0]
+def wait_created_display(
+    runtime: Any,
+    serial: str,
+    proc: subprocess.Popen[str],
+    before_displays: set[int],
+    *,
+    timeout_seconds: float = 12,
+    sleep_fn: Any = time.sleep,
+) -> int:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            raise WorkspaceError("scrcpy-exited")
+        after_displays = runtime.displays(serial)
+        if 0 not in after_displays:
+            raise WorkspaceError("physical-display-lost")
+        created_displays = {
+            observed
+            for observed in after_displays - before_displays
+            if observed != 0
+        }
+        if len(created_displays) == 1:
+            return next(iter(created_displays))
+        if len(created_displays) > 1:
+            raise WorkspaceError("display-admission-ambiguous")
+        sleep_fn(0.25)
+    raise WorkspaceError("display-id-timeout")
 
 
 def build_scrcpy_command(serial: str) -> list[str]:
@@ -291,24 +312,6 @@ class RealRuntime:
         log.close()
         return proc
 
-    def read_log(self) -> str:
-        try:
-            return self.log_file.read_text(encoding="utf-8", errors="replace")
-        except OSError as exc:
-            raise WorkspaceError("scrcpy-log-unavailable") from exc
-
-    def wait_display_id(self, proc: subprocess.Popen[str]) -> int:
-        deadline = time.monotonic() + 12
-        while time.monotonic() < deadline:
-            if proc.poll() is not None:
-                raise WorkspaceError("scrcpy-exited")
-            text = self.read_log()
-            try:
-                return parse_created_display_id(text)
-            except WorkspaceError:
-                time.sleep(0.25)
-        raise WorkspaceError("display-id-timeout")
-
     def launch_chrome(self, serial: str, display_id: int) -> None:
         proc = self.run(build_chrome_command(serial, display_id))
         if proc.returncode != 0:
@@ -466,7 +469,7 @@ def run_start(runtime: RealRuntime) -> str:
     forward_created = False
     try:
         proc = runtime.start_scrcpy(serial)
-        display_id = runtime.wait_display_id(proc)
+        display_id = wait_created_display(runtime, serial, proc, before_displays)
         after_displays = runtime.displays(serial)
         created_displays = {
             observed

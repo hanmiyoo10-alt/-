@@ -73,7 +73,7 @@ def bounded_receipt(
 
 
 def parse_adb_devices(output: str) -> str:
-    rows: list[list[str]] = []
+    connected: list[str] = []
     for raw in output.splitlines():
         line = raw.strip()
         if (
@@ -83,14 +83,20 @@ def parse_adb_devices(output: str) -> str:
         ):
             continue
         parts = line.split()
-        if len(parts) >= 2:
-            rows.append(parts)
-    if len(rows) != 1:
+        if len(parts) < 2:
+            raise WorkspaceError("adb-device-list-invalid")
+        if parts[1] == "device":
+            connected.append(parts[0])
+    if len(connected) != 1:
         raise WorkspaceError("adb-device-not-unique")
-    parts = rows[0]
-    if parts[1] != "device" or f"model:{MODEL}" not in parts[2:]:
+    return connected[0]
+
+
+def validate_product_model(output: str) -> None:
+    stripped = output.strip()
+    lines = stripped.splitlines()
+    if len(lines) != 1 or lines[0] != MODEL:
         raise WorkspaceError("adb-device-not-eligible")
-    return parts[0]
 
 
 def parse_display_ids(output: str) -> set[int]:
@@ -213,7 +219,12 @@ class RealRuntime:
         proc = self.run(["adb", "devices", "-l"])
         if proc.returncode != 0:
             raise WorkspaceError("adb-unavailable")
-        return parse_adb_devices(proc.stdout)
+        serial = parse_adb_devices(proc.stdout)
+        model = self.run(["adb", "-s", serial, "shell", "getprop", "ro.product.model"])
+        if model.returncode != 0:
+            raise WorkspaceError("adb-model-unavailable")
+        validate_product_model(model.stdout)
+        return serial
 
     def displays(self, serial: str) -> set[int]:
         proc = self.run(["adb", "-s", serial, "shell", "dumpsys", "display"])

@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parents[1]
 MODULE_PATH = HERE / "mcl_browser_virtual_workspace.py"
@@ -71,10 +72,6 @@ class FakeRuntime:
         assert serial == "opaque-device"
         self.mutations += 1
         return FakeProc()
-
-    def wait_display_id(self, proc):
-        assert proc.pid == 4242
-        return 6
 
     def create_forward(self, serial):
         assert serial == "opaque-device"
@@ -224,19 +221,85 @@ serial-1 device product:x model:NOT_AUTHORITY transport_id:1
                 with self.assertRaises(mod.WorkspaceError):
                     mod.validate_product_model(value)
 
-    def test_display_parser_rejects_missing_or_ambiguous(self):
-        self.assertEqual(
-            mod.parse_created_display_id(
-                "[server] INFO: New display: 720x1280/240 (id=6)\n"
-            ),
-            6,
+    def test_display_identity_no_longer_depends_on_scrcpy_log(self):
+        self.assertFalse(hasattr(mod, "DISPLAY_RE"))
+        self.assertFalse(hasattr(mod, "parse_created_display_id"))
+        runtime = FakeRuntime()
+        runtime.display_calls = 1
+        display_id = mod.wait_created_display(
+            runtime,
+            "opaque-device",
+            FakeProc(),
+            {0},
+            sleep_fn=lambda _: None,
         )
-        with self.assertRaises(mod.WorkspaceError):
-            mod.parse_created_display_id("no display here")
-        with self.assertRaises(mod.WorkspaceError):
-            mod.parse_created_display_id(
-                "New display: x (id=6)\nNew display: y (id=7)\n"
+        self.assertEqual(display_id, 6)
+
+    def test_display_delta_rejects_multiple_new_displays(self):
+        class Runtime:
+            def displays(self, serial):
+                self.assertion = serial
+                return {0, 6, 7}
+
+        runtime = Runtime()
+        with self.assertRaisesRegex(
+            mod.WorkspaceError, "display-admission-ambiguous"
+        ):
+            mod.wait_created_display(
+                runtime,
+                "opaque-device",
+                FakeProc(),
+                {0},
+                sleep_fn=lambda _: None,
             )
+
+    def test_display_delta_rejects_physical_display_loss(self):
+        class Runtime:
+            def displays(self, serial):
+                return {6}
+
+        with self.assertRaisesRegex(mod.WorkspaceError, "physical-display-lost"):
+            mod.wait_created_display(
+                Runtime(),
+                "opaque-device",
+                FakeProc(),
+                {0},
+                sleep_fn=lambda _: None,
+            )
+
+    def test_display_delta_rejects_scrcpy_early_exit(self):
+        class ExitedProc:
+            def poll(self):
+                return 1
+
+        class Runtime:
+            def displays(self, serial):
+                raise AssertionError("display query must not follow exited scrcpy")
+
+        with self.assertRaisesRegex(mod.WorkspaceError, "scrcpy-exited"):
+            mod.wait_created_display(
+                Runtime(),
+                "opaque-device",
+                ExitedProc(),
+                {0},
+                sleep_fn=lambda _: None,
+            )
+
+    def test_display_delta_times_out_when_no_new_display_appears(self):
+        class Runtime:
+            def displays(self, serial):
+                return {0}
+
+        with patch.object(mod.time, "monotonic", side_effect=[0.0, 0.0, 2.0]):
+            with self.assertRaisesRegex(mod.WorkspaceError, "display-id-timeout"):
+                mod.wait_created_display(
+                    Runtime(),
+                    "opaque-device",
+                    FakeProc(),
+                    {0},
+                    timeout_seconds=1,
+                    sleep_fn=lambda _: None,
+                )
 
     def test_start_refuses_preexisting_nonzero_display(self):
         runtime = FakeRuntime()
@@ -255,7 +318,7 @@ serial-1 device product:x model:NOT_AUTHORITY transport_id:1
             return {0} if calls["count"] == 1 else {0, 6, 7}
 
         runtime.displays = displays
-        with self.assertRaisesRegex(mod.WorkspaceError, "display-admission-failed"):
+        with self.assertRaisesRegex(mod.WorkspaceError, "display-admission-ambiguous"):
             mod.run_start(runtime)
         self.assertGreaterEqual(runtime.signal_count, 1)
 

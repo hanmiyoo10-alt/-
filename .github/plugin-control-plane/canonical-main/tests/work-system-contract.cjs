@@ -177,7 +177,7 @@ assert.match(readme, /malformed packet can still be repaired/);
 assert.match(template, /Preserve exactly one canonical lifecycle token/);
 assert.match(template, /Do not replace lifecycle State with stage-only prose/);
 assert.match(template, /Before creating a canonical work-packet issue or publishing a packet-body update/);
-assert.match(template, /packet-projection\.cjs --body-file/);
+assert.match(template, /packet-authoring-preflight\.cjs --body-file/);
 assert.match(template, /does not claim to intercept every external GitHub issue-creation surface/);
 assert.equal(policy.parallelism.requireDisjointWriteScopes, true);
 assert.equal(policy.parallelism.oneActiveOwnerPerPacket, true);

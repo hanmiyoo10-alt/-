@@ -15,6 +15,8 @@ const {
   renderStageReceipt,
   run,
 } = require('../stage-receipt.cjs');
+const validationStageReceiptSet = require(
+  '../validation-finalization/validation-stage-receipt-set.cjs');
 
 const MAIN = '3e9e1138f7ef7e886e17ebeadce727bd2ea2c66f';
 const DIFF = 'a'.repeat(64);
@@ -181,6 +183,179 @@ assert.deepEqual(
   { format: 'markdown', inputFile: 'facts.json' },
 );
 assert.throws(() => parseArgs(['--format', 'yaml', '--input-file', 'facts.json']), /json or markdown/);
+
+
+const SET_CANDIDATE = 'c'.repeat(40);
+const SET_MERGE = 'd'.repeat(40);
+const SET_DIFF = 'e'.repeat(64);
+function validationSetFixture({
+  packetNumber = 3008,
+  prNumber = 3009,
+  candidateHead = SET_CANDIDATE,
+  mergeCommit = SET_MERGE,
+  mainIdentity = SET_MERGE,
+  scopePaths = ['products/example-a', 'products/example-b'],
+  diffIdentity = SET_DIFF,
+  gateName = 'gate-a',
+  gateEvidence = 'issue:#3008',
+  proofTerms = ['IMPLEMENTED', 'CONTRACT_PROVEN'],
+  proofEvidenceSuffix = 'a',
+  extraWorkflow = false,
+  stage = 'VALIDATION_MERGE',
+  nextLegalAction = 'POSTMERGE_CONVERGENCE',
+  diffRequired = true,
+  requiredUnknowns = [],
+  conflicts = [],
+  blockers = [],
+  dependencies = [],
+} = {}) {
+  const authorityRefs = [
+    {kind: 'COMMIT', locator: 'candidate-head', identity: candidateHead},
+    {kind: 'COMMIT', locator: 'merge:#' + prNumber, identity: mergeCommit},
+    {kind: 'PR', locator: 'pr:#' + prNumber, identity: candidateHead},
+  ];
+  if (mainIdentity !== null) {
+    authorityRefs.push({kind: 'GIT_REF', locator: 'refs/heads/main', identity: mainIdentity});
+  }
+  if (extraWorkflow) {
+    authorityRefs.push({kind: 'WORKFLOW_RUN', locator: 'run:12345', identity: candidateHead});
+  }
+  return projectStageReceipt({
+    schemaVersion: 1,
+    packetNumber,
+    stage,
+    authorityRefs,
+    requiredGates: [{name: gateName, result: 'PASS', evidenceLocator: gateEvidence}],
+    scope: {
+      paths: scopePaths,
+      diffRequired,
+      ...(diffRequired ? {
+        diffIdentity,
+        diffEvidenceLocator: 'pr:#' + prNumber,
+      } : {}),
+    },
+    proof: proofTerms.map((term, index) => ({
+      term,
+      evidenceLocator: term === 'IMPLEMENTED'
+        ? 'commit:' + candidateHead
+        : 'issue:#' + (3008 + index) + '-' + proofEvidenceSuffix,
+    })),
+    requiredUnknowns,
+    conflicts,
+    blockers,
+    dependencies,
+    nextLegalAction,
+  });
+}
+
+const setReceiptA = validationSetFixture();
+const setReceiptB = validationSetFixture({
+  gateName: 'gate-b',
+  gateEvidence: 'run:67890',
+  proofEvidenceSuffix: 'b',
+  extraWorkflow: true,
+});
+assert.equal(setReceiptA.status, 'PASS');
+assert.equal(setReceiptB.status, 'PASS');
+assert.notEqual(setReceiptA.receiptDigest, setReceiptB.receiptDigest);
+const setTextA = renderStageReceipt(setReceiptA);
+const setTextB = renderStageReceipt(setReceiptB);
+
+let setResult = validationStageReceiptSet.classify([setTextA]);
+assert.equal(setResult.status, 'SINGLE');
+assert.equal(setResult.uniqueReceiptCount, 1);
+assert.equal(setResult.representativeReceiptDigest, setReceiptA.receiptDigest);
+assert.equal(setResult.mutationAuthorized, false);
+assert.equal(setResult.executionAuthorized, false);
+assert.equal(setResult.authority.repositoryMutationAuthorized, false);
+
+setResult = validationStageReceiptSet.classify([setTextA, setTextA]);
+assert.equal(setResult.status, 'SINGLE');
+assert.equal(setResult.uniqueReceiptCount, 1);
+
+setResult = validationStageReceiptSet.classify([setTextB, setTextA]);
+assert.equal(setResult.status, 'MULTIPLE_EQUIVALENT');
+assert.equal(setResult.uniqueReceiptCount, 2);
+assert.equal(setResult.evidenceVariants, true);
+assert.equal(setResult.representativeReceiptDigest,
+  [setReceiptA.receiptDigest, setReceiptB.receiptDigest].sort()[0]);
+assert.match(setResult.validationCoreDigest, /^sha256:[0-9a-f]{64}$/);
+assert.equal(setResult.validationCore.packetNumber, 3008);
+assert.equal(setResult.validationCore.prNumber, 3009);
+assert.equal(setResult.validationCore.candidateHead, SET_CANDIDATE);
+assert.equal(setResult.validationCore.mergeCommit, SET_MERGE);
+assert.deepEqual(setResult.validationCore.proofTerms, ['CONTRACT_PROVEN', 'IMPLEMENTED']);
+
+const setPacketConflict = validationSetFixture({packetNumber: 3009});
+assert.equal(validationStageReceiptSet.classify([
+  setTextA, renderStageReceipt(setPacketConflict),
+]).status, 'CONFLICT');
+const setPrConflict = validationSetFixture({prNumber: 3010});
+assert.equal(validationStageReceiptSet.classify([
+  setTextA, renderStageReceipt(setPrConflict),
+]).status, 'CONFLICT');
+const setCandidateConflict = validationSetFixture({candidateHead: 'f'.repeat(40)});
+assert.equal(validationStageReceiptSet.classify([
+  setTextA, renderStageReceipt(setCandidateConflict),
+]).status, 'CONFLICT');
+const setMergeConflict = validationSetFixture({
+  mergeCommit: 'a'.repeat(40), mainIdentity: 'a'.repeat(40),
+});
+assert.equal(validationStageReceiptSet.classify([
+  setTextA, renderStageReceipt(setMergeConflict),
+]).status, 'CONFLICT');
+const setMainConflict = validationSetFixture({mainIdentity: 'a'.repeat(40)});
+setResult = validationStageReceiptSet.classify([renderStageReceipt(setMainConflict)]);
+assert.equal(setResult.status, 'CONFLICT');
+assert.ok(setResult.reasonCodes.includes('MAIN_MERGE_IDENTITY_CONFLICT'));
+const setPathConflict = validationSetFixture({scopePaths: ['products/example-a']});
+assert.equal(validationStageReceiptSet.classify([
+  setTextA, renderStageReceipt(setPathConflict),
+]).status, 'CONFLICT');
+const setDiffConflict = validationSetFixture({diffIdentity: 'f'.repeat(64)});
+assert.equal(validationStageReceiptSet.classify([
+  setTextA, renderStageReceipt(setDiffConflict),
+]).status, 'CONFLICT');
+const setProofConflict = validationSetFixture({
+  proofTerms: ['IMPLEMENTED', 'CONTRACT_PROVEN', 'LIVE_PROVEN'],
+});
+assert.equal(validationStageReceiptSet.classify([
+  setTextA, renderStageReceipt(setProofConflict),
+]).status, 'CONFLICT');
+const setNextConflict = validationSetFixture({nextLegalAction: 'EXPERIMENT_CLOSE'});
+assert.equal(validationStageReceiptSet.classify([renderStageReceipt(setNextConflict)]).status,
+  'CONFLICT');
+const setNoDiff = validationSetFixture({diffRequired: false});
+assert.equal(validationStageReceiptSet.classify([renderStageReceipt(setNoDiff)]).status,
+  'CONFLICT');
+for (const unresolved of [
+  {requiredUnknowns: ['fixture:unknown']},
+  {conflicts: ['fixture:conflict']},
+  {blockers: ['fixture:blocker']},
+  {dependencies: ['issue:#9999']},
+]) {
+  const changedCore = validationSetFixture(unresolved);
+  assert.equal(validationStageReceiptSet.classify([
+    setTextA, renderStageReceipt(changedCore),
+  ]).status, 'CONFLICT');
+}
+const setStageConflict = validationSetFixture({
+  stage: 'IMPLEMENTATION_PR', nextLegalAction: 'VALIDATION_MERGE',
+});
+assert.equal(validationStageReceiptSet.classify([renderStageReceipt(setStageConflict)]).status,
+  'CONFLICT');
+assert.equal(validationStageReceiptSet.classify(['no canonical receipt']).status, 'UNKNOWN');
+const setTampered = setTextA.replace(setReceiptA.receiptDigest, '0'.repeat(64));
+assert.equal(validationStageReceiptSet.classify([setTampered]).status, 'CONFLICT');
+
+const setSource = fs.readFileSync(path.join(path.resolve(__dirname, '../../../../..'),
+  '.github/plugin-control-plane/canonical-main/work-harness/validation-finalization/validation-stage-receipt-set.cjs'), 'utf8');
+for (const forbidden of [
+  'child_process', 'http://', 'https://', 'gh api', 'fetch(',
+  'writeFile', 'appendFile', 'createWriteStream', 'process.env',
+]) assert.equal(setSource.includes(forbidden), false, forbidden);
+assert.match(setSource, /parseRenderedStageReceipt/);
+assert.doesNotMatch(setSource, /Date\.|timestamp|createdAt|updatedAt|latest/i);
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-receipt-'));
 const inputPath = path.join(tempDir, 'facts.json');

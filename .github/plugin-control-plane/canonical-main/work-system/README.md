@@ -208,6 +208,20 @@ The existing generic `coordination-body-patch.cjs` applies the same rule to the 
 
 Mutation consumers that require packet lifecycle evidence should reuse this parser rather than infer lifecycle from interaction-stage text, proof terms, or native issue state.
 
+### Packet authoring preflight
+
+`work-system/packet-authoring-preflight.cjs` is the bounded read-only producer check for a complete candidate packet body. It composes, rather than replaces, the existing lifecycle/stage projection and the existing `scope-overlap.cjs::extractPacketScopes()` semantic scope parser.
+
+A packet producer must require this preflight to return `PASS` before creating a canonical work-packet issue or publishing a packet-body update. The preflight keeps the semantic parser fail-closed and adds one authoring-only guard: preservation, exclusion, `do not modify`, non-write, or forbidden path/surface lists must begin under a separate level-two boundary such as `## Preservation boundary`. Keeping those cues inside the deterministic write-scope section and then listing more `path:` or `surface:` entries is `CONFLICT / PACKET_SCOPE_PRESERVATION_BOUNDARY_REQUIRED`.
+
+This rule does not guess whether prose means writable or non-writable scope and does not change scope-overlap semantics. It prevents an ambiguous authoring shape from being published. Exact writable entries stay inside the one deterministic write-scope section; preservation/exclusion entries move to a separate level-two section.
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/packet-authoring-preflight.cjs --body-file /path/to/candidate-packet.md
+```
+
+The CLI is local/read-only, performs no GitHub access or mutation, has no auto-fix mode, and grants no repository, merge, release, runtime, or production authority. `PASS` exits 0, `CONFLICT` exits 2, and `UNKNOWN` exits 3.
+
 ## Execution compactness contract
 
 Canonical-main packets make the existing repository-wide compact execution policy explicit at the packet boundary. This does not create a new compactness owner. `RCR-D14` remains the repository default and `.agents/skills/agent-execution-compactness/SKILL.md` owns the routing procedure and guardrail semantics.

@@ -39,7 +39,7 @@ A manifest binds one phase to:
 - caller-stable `phaseId` and bounded `phaseClass`;
 - D-012 route plus one exact executor, never `either`;
 - normalized Work System `path:` / `surface:` scopes;
-- D-013 workspace identity: isolated `repository`, fixed `landing_metadata`, fixed M-only `landing_branch_repair`, or explicit non-repository `not_applicable`;
+- D-013 workspace identity: isolated `repository`, fixed `landing_metadata`, fixed exact S/M `landing_branch_repair`, or explicit non-repository `not_applicable`;
 - optional observed base SHA as historical evidence only;
 - whether D-013 lease evidence is required and, when required, the exact lease identity/acquisition generation;
 - bounded source-authority, input, expected-output, and acceptance locators;
@@ -89,8 +89,8 @@ The implementation reuses Work System scope normalization and the public D-013 r
 - repository-backed S work uses `server/*` under `/root/nyang-worktrees/`;
 - repository-backed M work uses `mainphone/*` under `/data/data/com.termux/files/home/nyang-worktrees/`;
 - fixed landing Git-metadata phases use the exact D-013 `landing_metadata` identity and matching `surface:mcl-landing-origin-main:<executor>` scope; arbitrary landing paths remain invalid;
-- fixed landing branch-repair phases use only route/executor `M / M`, workspace kind `landing_branch_repair`, branch `mainphone/work`, worktree `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work`, and scope `surface:mcl-landing-branch:M`;
-- route `S` requires `repository` or `landing_metadata`, with the documented exact executor `M` fallback remaining valid;
+- fixed landing branch-repair phases use exact route/executor identity only: `S / S` with `server/work` + `/root/nyang-repo` + `surface:mcl-landing-branch:S`, or `M / M` with `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + `surface:mcl-landing-branch:M`;
+- route `S` requires `repository`, `landing_metadata`, or exact S/S `landing_branch_repair`; the documented executor `M` fallback remains valid only for existing repository/landing-metadata cases and is not branch-repair authority;
 - non-repository semantic contexts use explicit `not_applicable` repository identity.
 
 A valid manifest does not prove the workspace currently exists, is clean, or is current. Those remain execution-time owner checks.

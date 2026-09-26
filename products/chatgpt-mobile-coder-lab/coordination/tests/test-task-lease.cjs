@@ -79,6 +79,12 @@ function landingBranchRepairAcquireRequest(overrides = {}) {
     ...overrides,
   });
 }
+function landingBranchRepairAcquireRequestS(overrides = {}) {
+  const identity = lease.landingBranchRepairIdentity('S');
+  return acquireRequest({ route:'S', executor:'S', scopes:[identity.scope],
+    workspaceKind:'landing_branch_repair', branch:identity.branch,
+    worktree:identity.worktree, observedBaseSha:'c'.repeat(40), ...overrides });
+}
 
 function stateFromPlan(plan) {
   assert.equal(plan.changed, true);
@@ -293,6 +299,15 @@ ok('landing_branch_repair accepts only the fixed M identity and scope', () => {
   assert.equal(exact.lease.workspace.branch, 'mainphone/work');
   assert.equal(exact.lease.workspace.worktree, '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work');
   assert.deepEqual(exact.lease.scopes, ['surface:mcl-landing-branch:M']);
+});
+ok('landing_branch_repair accepts the fixed S identity and scope', () => {
+  const exact = lease.normalizeAcquireRequest(landingBranchRepairAcquireRequestS());
+  assert.equal(exact.ok, true); assert.equal(exact.lease.route, 'S');
+  assert.equal(exact.lease.executor, 'S');
+  assert.equal(exact.lease.workspace.kind, 'landing_branch_repair');
+  assert.equal(exact.lease.workspace.branch, 'server/work');
+  assert.equal(exact.lease.workspace.worktree, '/root/nyang-repo');
+  assert.deepEqual(exact.lease.scopes, ['surface:mcl-landing-branch:S']);
 });
 ok('landing_branch_repair rejects route fallback arbitrary identity scope and missing observed head', () => {
   for (const request of [

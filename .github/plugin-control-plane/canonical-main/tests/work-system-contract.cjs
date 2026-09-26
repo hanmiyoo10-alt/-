@@ -767,6 +767,38 @@ assert.equal(resolveOverlap(['path:src/demo.js'], [{
   body: overlapPacketBody('BLOCKED', ['path:src/**']),
 }]).state, 'OVERLAP');
 
+const validationDiscoveryPacketActivity = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: 'issue:#20', issueState: 'open',
+    body: overlapPacketBody('BLOCKED', ['path:src/**']),
+    packetActivityEvidence: packetActivityEvidence('PARENT_WAITING_ON_SUCCESSOR'),
+  }],
+});
+assert.equal(validationDiscoveryPacketActivity.state, 'DISJOINT');
+assert.equal(validationDiscoveryPacketActivity.candidateActivity[0].state, 'NONBLOCKING_PROVEN');
+assert.equal(validationDiscoveryPacketActivity.candidateActivity[0].candidateRef, '#20');
+
+for (const malformedRef of ['issue:20', 'issue:#0', 'issue:#x', 'issue:issue:#20']) {
+  const malformedActivityRef = resolveScopeOverlap({
+    requesterRef: '#21',
+    requestedScopes: ['path:src/demo.js'],
+    discovery: 'COMPLETE',
+    candidates: [{
+      type: 'packet', ref: malformedRef, issueState: 'open',
+      body: overlapPacketBody('BLOCKED', ['path:src/**']),
+      packetActivityEvidence: packetActivityEvidence('PARENT_WAITING_ON_SUCCESSOR'),
+    }],
+  });
+  expectOverlapFinding(
+    malformedActivityRef, 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_ACTIVITY_UNKNOWN);
+  assert.equal(malformedActivityRef.findings[0].ownerRef, malformedRef);
+  assert.equal(malformedActivityRef.candidateActivity[0].reasonCode,
+    PACKET_ACTIVITY_REASON_CODES.INPUT_INVALID);
+}
+
 for (const [overrides, expectedReason, expectedState] of [
   [{candidateRef: '#22'}, PACKET_ACTIVITY_REASON_CODES.CANDIDATE_IDENTITY_CONFLICT, 'CONFLICT'],
   [{requesterRef: '#22'}, PACKET_ACTIVITY_REASON_CODES.REQUESTER_IDENTITY_CONFLICT, 'CONFLICT'],

@@ -2077,3 +2077,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a6c90927ea09942281803b97641945947d285a4f)
 - Event ID: `0fa0ec1ff8886cdb300e556a25a7cf7adc9ef1419ca01468d494fcdc8e991ca6`
 <!-- canonical-main-doc-promoted:0fa0ec1ff8886cdb300e556a25a7cf7adc9ef1419ca01468d494fcdc8e991ca6 -->
+
+### 2026-09-26 — Merge pull request #3011 from hanmiyoo10-alt/server/simcore-doc-currentness-2987
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `c5167fb86d3466f9c06bc355581c2ffd810d93b9`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c5167fb86d3466f9c06bc355581c2ffd810d93b9)
+- Event ID: `3d021da81b94a06ae5802b4dd863030c380a2a23588c26b1c64ceb02f7a3e7ed`
+<!-- canonical-main-doc-promoted:3d021da81b94a06ae5802b4dd863030c380a2a23588c26b1c64ceb02f7a3e7ed -->

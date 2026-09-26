@@ -64,6 +64,8 @@ repository_effect=mutable
 overlap_guard=required
 lease_guard=required
 handoff_guard=required
+fallback=none
+next_gate=owner_effect
 details=withheld
 ```
 

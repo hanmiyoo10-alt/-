@@ -1526,4 +1526,65 @@ assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.INPUT_UNKNOW
 assert.match(readme, /proof-eligibility\.cjs \/path\/to\/request\.json/);
 assert.match(readme, /`sourceRefs` must contain 1–16 non-empty bounded source locators/);
 
+
+const {
+  classifyPacketAuthoring,
+  REASON_CODES: PACKET_AUTHORING_REASON_CODES,
+} = require(path.join(dir, 'packet-authoring-preflight.cjs'));
+const packetAuthoringSource = fs.readFileSync(path.join(dir, 'packet-authoring-preflight.cjs'), 'utf8');
+
+const authoringPacket = (scopeSection) => `<!-- canonical-main-work-packet:v1 -->
+## State
+\`IN_PROGRESS\`
+## Interaction stage
+- Current stage: \`IMPLEMENTATION_PR\`
+## Bounded write scope
+${scopeSection}
+## Acceptance
+1. fixture
+`;
+
+let authoringResult = classifyPacketAuthoring(authoringPacket(
+  '- \`path:src/a.js\`\\n- \`surface:repo:fixture-owner\`',
+));
+assert.equal(authoringResult.disposition, 'PASS');
+assert.deepEqual(authoringResult.normalizedScopes, ['path:src/a.js', 'surface:repo:fixture-owner']);
+
+authoringResult = classifyPacketAuthoring(`${authoringPacket('- \`path:src/a.js\`')}
+## Preservation boundary
+- \`path:src/neighbor.js\`
+`);
+assert.equal(authoringResult.disposition, 'PASS');
+assert.deepEqual(authoringResult.normalizedScopes, ['path:src/a.js']);
+
+authoringResult = classifyPacketAuthoring(authoringPacket(
+  '- \`path:src/a.js\`\\nPreserve unchanged:\\n- \`path:src/neighbor.js\`',
+));
+assert.equal(authoringResult.disposition, 'CONFLICT');
+assert.deepEqual(authoringResult.reasonCodes, [
+  PACKET_AUTHORING_REASON_CODES.PACKET_SCOPE_PRESERVATION_BOUNDARY_REQUIRED,
+]);
+assert.equal(authoringResult.finding.scopeExcerpt, '- \`path:src/neighbor.js\`');
+
+authoringResult = classifyPacketAuthoring(authoringPacket(
+  '- \`path:src/a.js\`\\nDo not modify\\n- \`surface:repo:neighbor-owner\`',
+));
+assert.equal(authoringResult.disposition, 'CONFLICT');
+
+const unsupportedAuthoringPacket = authoringPacket('- \`path:src/a.js\`')
+  .replace('## Bounded write scope', '## Exact bounded write scope');
+authoringResult = classifyPacketAuthoring(unsupportedAuthoringPacket);
+assert.equal(authoringResult.disposition, 'UNKNOWN');
+assert.deepEqual(authoringResult.reasonCodes, [PACKET_AUTHORING_REASON_CODES.PACKET_SCOPE_UNRESOLVED]);
+
+assert.match(readme, /### Packet authoring preflight/);
+assert.match(readme, /PACKET_SCOPE_PRESERVATION_BOUNDARY_REQUIRED/);
+assert.match(readme, /separate level-two boundary/);
+assert.match(template, /packet-authoring-preflight\.cjs --body-file/);
+assert.match(template, /start a separate level-two section such as \`## Preservation boundary\`/);
+assert.doesNotMatch(packetAuthoringSource, /https?:\\/\\/|gh\\s+api|fetch\\s*\\(|child_process|execSync|spawnSync/);
+assert.match(packetAuthoringSource, /require\('\.\/packet-projection\.cjs'\)/);
+assert.match(packetAuthoringSource, /require\('\.\/scope-overlap\.cjs'\)/);
+assert.doesNotMatch(packetAuthoringSource, /PACKET_SCOPE_HEADINGS/);
+
 console.log('work-system-contract: ok');

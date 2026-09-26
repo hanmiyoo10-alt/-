@@ -54,7 +54,9 @@ When the generated documentation branch has durable changes and no open promotio
 
 A connected ChatGPT GitHub bridge may consume that `PENDING` mailbox and create the PR using its separately authorized GitHub connector. The source branch/head and base must still match the mailbox, and the PR must target `main`.
 
-When an exact promotion PR exists, the repository-native workflow retains ownership of candidate validation. It dispatches Plugin Control Plane CI and SimCore CI for the exact generated head, binds the exact run IDs, verifies their `workflow_dispatch` event and head identity, waits for successful completion, then re-reads the current `main` base and exact PR identity. The workflow **does not merge the PR**. If those checks remain current, it writes a `MERGE_READY` mailbox containing the exact base, head, PR number, Plugin Control Plane run ID, SimCore run ID, and source promotion run.
+When an exact promotion PR exists, the repository-native workflow first binds the PR to the exact generated head and requires that head to resolve to one unambiguous open `main`-targeting promotion PR. It then discovers the expected Plugin Control Plane CI and SimCore CI `pull_request` runs only through their exact workflow identities and exact head, re-verifies event/head/branch/path identity on the selected run IDs, and waits on those same IDs. A native run that is already successful is a no-op. Only an exact `action_required` run is eligible for one approval attempt through GitHub's official exact-run approval endpoint. Ambiguous run discovery, mismatched identity, an unavailable approval capability, or non-successful native validation fails closed to a bounded `NATIVE_PR_CHECK_UNKNOWN` or `NATIVE_PR_APPROVAL_BLOCKED` mailbox; the workflow does not close/reopen the PR, fabricate a status, weaken Required, or substitute `workflow_dispatch` proof.
+
+After the exact native Plugin Control Plane contract and SimCore Verify + Required jobs succeed, the repository-native workflow dispatches the existing Plugin Control Plane CI and SimCore CI candidate checks for the exact generated head. Those bound `workflow_dispatch` runs remain candidate-validation evidence and are not a substitute for native PR Required. The workflow **does not merge the PR**. If both native PR validation and candidate validation remain current, it writes a `MERGE_READY` mailbox containing the exact base, head, PR number, native Plugin Control Plane and SimCore run IDs, candidate Plugin Control Plane and SimCore run IDs, and source promotion run.
 
 On `MERGE_READY`, the connected GitHub bridge owns only the final checked merge effect. Before merging it must fresh-read and prove:
 
@@ -62,8 +64,10 @@ On `MERGE_READY`, the connected GitHub bridge owns only the final checked merge 
 - #457 still names the same `MERGE_READY` transaction;
 - the PR is open, non-draft, targets `main`, and still has the exact mailbox base/head;
 - the PR changed-file set is still the generated-document candidate;
-- the bound Plugin Control Plane run is successful `workflow_dispatch` evidence for the exact head;
-- the bound SimCore run is successful `workflow_dispatch` evidence for the exact head with Verify + Required successful.
+- the bound native Plugin Control Plane `pull_request` run is successful for the exact head and its contract job succeeded;
+- the bound native SimCore `pull_request` run is successful for the exact head with Verify + Required successful;
+- the bound candidate Plugin Control Plane run is successful `workflow_dispatch` evidence for the exact head;
+- the bound candidate SimCore run is successful `workflow_dispatch` evidence for the exact head with Verify + Required successful.
 
 Only then may the bridge squash-merge with an expected-head guard for the exact mailbox head. Any moved main, moved head, stale PR, mismatched run ID, failed check, or ambiguous evidence fails closed and must not merge.
 

@@ -2069,3 +2069,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/876aec499717a999bc7d800957600e65fec69493)
 - Event ID: `bd2da5801e1762a8567354f30cd649aaaa4e5eed6a6ee34ac2df868a9105db5e`
 <!-- canonical-main-doc-promoted:bd2da5801e1762a8567354f30cd649aaaa4e5eed6a6ee34ac2df868a9105db5e -->
+
+### 2026-09-26 — Merge pull request #3000 from hanmiyoo10-alt/server/repo-validation-scope-containment-2999
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `a6c90927ea09942281803b97641945947d285a4f`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a6c90927ea09942281803b97641945947d285a4f)
+- Event ID: `0fa0ec1ff8886cdb300e556a25a7cf7adc9ef1419ca01468d494fcdc8e991ca6`
+<!-- canonical-main-doc-promoted:0fa0ec1ff8886cdb300e556a25a7cf7adc9ef1419ca01468d494fcdc8e991ca6 -->

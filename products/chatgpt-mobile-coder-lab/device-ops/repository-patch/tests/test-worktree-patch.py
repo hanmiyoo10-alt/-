@@ -15,10 +15,20 @@ SCRIPT = Path(__file__).resolve()
 ROOT = SCRIPT.parents[5]
 MODULE_PATH = ROOT / "products/chatgpt-mobile-coder-lab/device-ops/repository-patch/mcl-worktree-patch.py"
 
-spec = importlib.util.spec_from_file_location("mcl_worktree_patch", MODULE_PATH)
-assert spec and spec.loader
-m = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(m)
+def load_primitive_without_bytecode(module_path: Path):
+    previous_setting = sys.dont_write_bytecode
+    try:
+        sys.dont_write_bytecode = True
+        spec = importlib.util.spec_from_file_location("mcl_worktree_patch", module_path)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.dont_write_bytecode = previous_setting
+
+
+m = load_primitive_without_bytecode(MODULE_PATH)
 
 
 def run(cwd: Path, *args: str) -> str:
@@ -81,6 +91,24 @@ class WorktreePatchTests(unittest.TestCase):
     def tearDown(self):
         m.WORKTREE_ROOT = self.old_root
         shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_test_loader_does_not_write_source_bytecode_and_restores_setting(self):
+        source_root = self.tmp / "loader-source"
+        primitive = source_root / MODULE_PATH.relative_to(ROOT)
+        primitive.parent.mkdir(parents=True)
+        shutil.copy2(MODULE_PATH, primitive)
+        before = sorted(path.relative_to(source_root) for path in source_root.rglob("*.pyc"))
+        self.assertEqual(before, [])
+        previous_setting = sys.dont_write_bytecode
+        try:
+            sys.dont_write_bytecode = False
+            loaded = load_primitive_without_bytecode(primitive)
+            self.assertEqual(loaded.__file__, str(primitive))
+            self.assertFalse(sys.dont_write_bytecode)
+        finally:
+            sys.dont_write_bytecode = previous_setting
+        after = sorted(path.relative_to(source_root) for path in source_root.rglob("*.pyc"))
+        self.assertEqual(after, before)
 
     def test_helper_import_does_not_write_source_bytecode(self):
         source_root = self.tmp / "source"

@@ -42,14 +42,6 @@ const PLAN_FIELDS = new Set([
   'schema', 'phase', 'route', 'executor', 'preflight_owner', 'repository_effect',
   'overlap_guard', 'lease_guard', 'handoff_guard', 'fallback', 'next_gate', 'details',
 ]);
-const SCOPE_HEADINGS = new Set([
-  'Bounded write scope',
-  'Bounded implementation write scope',
-  'Locked write scope',
-  'Bounded IMPLEMENTATION_PR write scope',
-  'Repository write-scope ceiling used by IMPLEMENTATION_PR',
-]);
-
 class StageError extends Error {
   constructor(kind, reasonCodes, extra = {}) {
     super(reasonCodes[0] || kind);
@@ -226,39 +218,18 @@ function parseOpsCapsule(body, expectedMain) {
   return fields;
 }
 
-function sections(text) {
-  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
-  const found = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const match = /^##\s+(.+?)\s*$/.exec(lines[index]);
-    if (!match || !SCOPE_HEADINGS.has(match[1])) continue;
-    const body = [];
-    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
-      if (/^##\s+/.test(lines[cursor])) break;
-      body.push(lines[cursor]);
-    }
-    found.push({heading: match[1], lines: body});
-  }
-  return found;
-}
-
 function extractPacketScopes(body) {
-  const found = sections(body);
-  if (found.length === 0) throw new StageError('UNKNOWN', ['PACKET_SCOPE_SECTION_MISSING']);
-  if (found.length !== 1) throw new StageError('CONFLICT', ['PACKET_SCOPE_SECTION_DUPLICATE']);
-  const raw = [];
-  for (const line of found[0].lines) {
-    const matches = [...line.matchAll(/`((?:path|surface):[^`]+)`/g)].map((item) => item[1]);
-    raw.push(...matches);
+  const parsed = scopeOverlap.extractPacketScopes(body);
+  if (!parsed.ok) {
+    throw new StageError(
+      parsed.conflict ? 'CONFLICT' : 'UNKNOWN',
+      [parsed.conflict ? 'PACKET_SCOPE_CONFLICT' : 'PACKET_SCOPE_UNRESOLVED'],
+    );
   }
-  if (!raw.length) throw new StageError('UNKNOWN', ['PACKET_SCOPE_EMPTY']);
-  const normalized = [];
-  for (const item of raw) {
-    const parsed = scopeOverlap.normalizeScope(item);
-    if (!parsed.ok) throw new StageError('UNKNOWN', ['PACKET_SCOPE_INVALID']);
-    normalized.push(parsed.normalized);
+  const normalized = parsed.scopes.map((item) => item.normalized);
+  if (new Set(normalized).size !== normalized.length) {
+    throw new StageError('CONFLICT', ['PACKET_SCOPE_DUPLICATE']);
   }
-  if (new Set(normalized).size !== normalized.length) throw new StageError('CONFLICT', ['PACKET_SCOPE_DUPLICATE']);
   return normalized.sort();
 }
 
@@ -1140,7 +1111,6 @@ module.exports = {
   PAGE_SIZE,
   PLAN_FIELDS,
   REPO,
-  SCOPE_HEADINGS,
   StageError,
   acquireLandingLease,
   acquireLease,

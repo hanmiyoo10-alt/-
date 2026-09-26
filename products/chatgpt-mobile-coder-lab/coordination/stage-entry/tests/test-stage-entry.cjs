@@ -177,12 +177,46 @@ test('plan parser accepts only the reviewed S/S mutable shape', () => {
   assert.throws(() => stage.parsePlan({...plan(), command: 'git status'}), /PLAN_UNKNOWN_FIELD/);
 });
 
-test('packet scope parser accepts one exact Work System heading and rejects drift', () => {
+test('target scope parsing delegates exact Work System grammar and preserves stage-entry guards', () => {
   assert.deepEqual(stage.extractPacketScopes(PACKET_BODY), ['path:docs/demo.md']);
-  assert.throws(() => stage.extractPacketScopes(PACKET_BODY.replace('Bounded write scope', 'Implementation write scope')),
-    /PACKET_SCOPE_SECTION_MISSING/);
-  assert.throws(() => stage.extractPacketScopes(`${PACKET_BODY}\n## Locked write scope\n1. \`path:src/**\``),
-    /PACKET_SCOPE_SECTION_DUPLICATE/);
+
+  for (const heading of [
+    'Bounded write scope',
+    'Bounded implementation write scope',
+    'Locked write scope',
+    'Bounded IMPLEMENTATION_PR write scope',
+    'Repository write-scope ceiling used by IMPLEMENTATION_PR',
+    'Bounded repository write ceiling',
+  ]) {
+    const body = PACKET_BODY.replace('Bounded write scope', heading)
+      .replace('1. \`path:docs/demo.md\`', '1. path:src/**\n2. surface:mcl:demo');
+    assert.deepEqual(stage.extractPacketScopes(body), ['path:src/**', 'surface:mcl:demo']);
+  }
+
+  const preserved = PACKET_BODY.replace(
+    '1. \`path:docs/demo.md\`',
+    '1. path:src/**\nPreservation: \`path:docs/preserve.md\`',
+  );
+  assert.deepEqual(stage.extractPacketScopes(preserved), ['path:src/**']);
+
+  const fenced = PACKET_BODY.replace(
+    '1. \`path:docs/demo.md\`',
+    '1. path:src/**\n~~~text\n## Locked write scope\n1. path:ignored/**\n~~~',
+  );
+  assert.deepEqual(stage.extractPacketScopes(fenced), ['path:src/**']);
+
+  assert.throws(() => stage.extractPacketScopes(
+    PACKET_BODY.replace('Bounded write scope', 'Implementation write scope')),
+  /PACKET_SCOPE_UNRESOLVED/);
+  assert.throws(() => stage.extractPacketScopes(
+    `${PACKET_BODY}\n## Locked write scope\n1. \`path:src/**\``),
+  /PACKET_SCOPE_CONFLICT/);
+  assert.throws(() => stage.extractPacketScopes(
+    PACKET_BODY.replace('1. \`path:docs/demo.md\`', '1. path:../src/**')),
+  /PACKET_SCOPE_UNRESOLVED/);
+  assert.throws(() => stage.extractPacketScopes(
+    PACKET_BODY.replace('1. \`path:docs/demo.md\`', '1. path:docs/demo.md\n2. path:docs/demo.md')),
+  /PACKET_SCOPE_DUPLICATE/);
 });
 
 test('ops capsule requires exact main, Required PASS, CLEAR and UNKNOWN NONE', () => {
@@ -885,8 +919,11 @@ test('successful one-shot normalization composes into existing repository stage 
   } finally { f.close(); }
 });
 
-test('source contains no holder invocation, generic retry loop, or destructive Git repair', () => {
+test('source delegates target scope grammar and contains no broader effect machinery', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'mcl-stage-entry.cjs'), 'utf8');
+  assert.match(source, /scopeOverlap\.extractPacketScopes\(body\)/);
+  assert.doesNotMatch(source, /SCOPE_HEADINGS/);
+  assert.doesNotMatch(source, /function sections\(/);
   assert.doesNotMatch(source, /mcl-workspace-holder/);
   assert.doesNotMatch(source, /\bsetInterval\b|\bsetTimeout\b/);
   assert.doesNotMatch(source, /['"](?:reset|stash|rebase|merge|checkout|switch)['"]/);

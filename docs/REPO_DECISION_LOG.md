@@ -183,3 +183,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2957)
 - Event ID: `b2018eb6805c4e985113c27e5fa03cc6e96c14e1043b68c2963a39a9f073bcee`
 <!-- canonical-main-doc-promoted:b2018eb6805c4e985113c27e5fa03cc6e96c14e1043b68c2963a39a9f073bcee -->
+
+### 2026-09-26 — REPO-AGENT-DECISION-VIEW-ADOPTION-CLOSE-V1 — resolve #2578 experiment hold before owner evolution
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2721)
+- Event ID: `46eb6f820404663d5338aebe17e6af98e8af63cc0662e414fb1659800395272d`
+<!-- canonical-main-doc-promoted:46eb6f820404663d5338aebe17e6af98e8af63cc0662e414fb1659800395272d -->

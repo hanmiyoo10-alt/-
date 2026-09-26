@@ -9,7 +9,7 @@ Keep `State` as the packet lifecycle projection. Preserve exactly one canonical 
 Before creating a canonical work-packet issue or publishing a packet-body update, materialize the exact candidate body and require this read-only preflight to return `PASS`:
 
 ```text
-node .github/plugin-control-plane/canonical-main/work-system/packet-projection.cjs --body-file /path/to/candidate-packet.md
+node .github/plugin-control-plane/canonical-main/work-system/packet-authoring-preflight.cjs --body-file /path/to/candidate-packet.md
 ```
 
 Do not bypass a non-PASS result by substituting `ACTIVE`, guessing lifecycle from stage prose, or adding another canonical lifecycle word to descriptive State text. The repository does not claim to intercept every external GitHub issue-creation surface; the packet producer owns this prepublication check.
@@ -80,6 +80,8 @@ This packet body is a current lifecycle projection, not an immutable activation 
 - `<OPTIONAL surface:<owning-domain>:<stable-owner-or-effect> ONLY WHEN A REAL CROSS-PATH COLLISION BOUNDARY EXISTS>`
 
 Repository/shared/product classification is context only and never an implicit lock. For repository-byte mutation, list every writable `path:` scope. Add a semantic/effect `surface:` only when otherwise-disjoint paths can mutate the same logical owner or effect boundary; it supplements the path list and grants no additional path authority. Reuse the existing owner/effect identity rather than naming the packet, branch, worker, account, chat, or executor. Do not use broad umbrella identities such as `surface:repo:common`, `surface:scope:repo`, or `surface:shared:all`. If a stable owner/effect identity cannot be established from current authority, preserve `UNKNOWN` or `CONFLICT` instead of inventing one.
+
+Keep only writable `path:` / required semantic `surface:` entries inside this deterministic write-scope section. Before listing preservation, exclusion, comparison, neighboring-owner, `do not modify`, non-write, or forbidden paths/surfaces, start a separate level-two section such as `## Preservation boundary`. Do not leave those entries in this section and rely on descriptive prose to make them non-writable. The producer-side packet authoring preflight rejects that mixed-section shape before publication; the semantic scope parser itself remains exact and fail-closed.
 
 Finalization routing is declared at AUTHORITY_SCOPE rather than repaired after merge. A canonical-main infrastructure packet that intends to use the generic repository-neutral validation finalizer must declare one specific stable `surface:repo:<owner-or-effect>` here. An intentionally path-only packet may instead use a separately reviewed finalization owner; do not invent a fake surface for that case. Before merge admission, its canonical IMPLEMENTATION_PR receipt must carry the exact gate `validation-finalization-external-owner-reviewed=PASS` with a real evidence locator. That gate records reviewed routing only and grants no finalization, mutation, merge, coordination, release, runtime, or production authority.
 

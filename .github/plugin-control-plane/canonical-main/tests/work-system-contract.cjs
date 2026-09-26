@@ -177,7 +177,7 @@ assert.match(readme, /malformed packet can still be repaired/);
 assert.match(template, /Preserve exactly one canonical lifecycle token/);
 assert.match(template, /Do not replace lifecycle State with stage-only prose/);
 assert.match(template, /Before creating a canonical work-packet issue or publishing a packet-body update/);
-assert.match(template, /packet-projection\.cjs --body-file/);
+assert.match(template, /packet-authoring-preflight\.cjs --body-file/);
 assert.match(template, /does not claim to intercept every external GitHub issue-creation surface/);
 assert.equal(policy.parallelism.requireDisjointWriteScopes, true);
 assert.equal(policy.parallelism.oneActiveOwnerPerPacket, true);
@@ -1525,5 +1525,68 @@ assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.INPUT_UNKNOW
 
 assert.match(readme, /proof-eligibility\.cjs \/path\/to\/request\.json/);
 assert.match(readme, /`sourceRefs` must contain 1–16 non-empty bounded source locators/);
+
+
+const {
+  classifyPacketAuthoring,
+  REASON_CODES: PACKET_AUTHORING_REASON_CODES,
+} = require(path.join(dir, 'packet-authoring-preflight.cjs'));
+const packetAuthoringSource = fs.readFileSync(path.join(dir, 'packet-authoring-preflight.cjs'), 'utf8');
+
+const authoringPacket = (scopeSection) => `<!-- canonical-main-work-packet:v1 -->
+## State
+\`IN_PROGRESS\`
+## Interaction stage
+- Current stage: \`IMPLEMENTATION_PR\`
+## Bounded write scope
+${scopeSection}
+## Acceptance
+1. fixture
+`;
+
+let authoringResult = classifyPacketAuthoring(authoringPacket(
+  ['- `path:src/a.js`', '- `surface:repo:fixture-owner`'].join('\n'),
+));
+assert.equal(authoringResult.disposition, 'PASS');
+assert.deepEqual(authoringResult.normalizedScopes, ['path:src/a.js', 'surface:repo:fixture-owner']);
+
+authoringResult = classifyPacketAuthoring(`${authoringPacket('- \`path:src/a.js\`')}
+## Preservation boundary
+- \`path:src/neighbor.js\`
+`);
+assert.equal(authoringResult.disposition, 'PASS');
+assert.deepEqual(authoringResult.normalizedScopes, ['path:src/a.js']);
+
+authoringResult = classifyPacketAuthoring(authoringPacket(
+  ['- `path:src/a.js`', 'Preserve unchanged:', '- `path:src/neighbor.js`'].join('\n'),
+));
+assert.equal(authoringResult.disposition, 'CONFLICT');
+assert.deepEqual(authoringResult.reasonCodes, [
+  PACKET_AUTHORING_REASON_CODES.PACKET_SCOPE_PRESERVATION_BOUNDARY_REQUIRED,
+]);
+assert.equal(authoringResult.finding.scopeExcerpt, '- \`path:src/neighbor.js\`');
+
+authoringResult = classifyPacketAuthoring(authoringPacket(
+  ['- `path:src/a.js`', 'Do not modify', '- `surface:repo:neighbor-owner`'].join('\n'),
+));
+assert.equal(authoringResult.disposition, 'CONFLICT');
+
+const unsupportedAuthoringPacket = authoringPacket('- \`path:src/a.js\`')
+  .replace('## Bounded write scope', '## Exact bounded write scope');
+authoringResult = classifyPacketAuthoring(unsupportedAuthoringPacket);
+assert.equal(authoringResult.disposition, 'UNKNOWN');
+assert.deepEqual(authoringResult.reasonCodes, [PACKET_AUTHORING_REASON_CODES.PACKET_SCOPE_UNRESOLVED]);
+
+assert.match(readme, /### Packet authoring preflight/);
+assert.match(readme, /PACKET_SCOPE_PRESERVATION_BOUNDARY_REQUIRED/);
+assert.match(readme, /separate level-two boundary/);
+assert.match(template, /packet-authoring-preflight\.cjs --body-file/);
+assert.match(template, /start a separate level-two section such as \`## Preservation boundary\`/);
+for (const forbidden of ['http://', 'https://', 'gh api', 'fetch(', 'child_process', 'execSync', 'spawnSync']) {
+  assert.equal(packetAuthoringSource.includes(forbidden), false, `packet authoring preflight must not contain ${forbidden}`);
+}
+assert.match(packetAuthoringSource, /require\('\.\/packet-projection\.cjs'\)/);
+assert.match(packetAuthoringSource, /require\('\.\/scope-overlap\.cjs'\)/);
+assert.doesNotMatch(packetAuthoringSource, /PACKET_SCOPE_HEADINGS/);
 
 console.log('work-system-contract: ok');

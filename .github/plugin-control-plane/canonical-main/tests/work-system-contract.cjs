@@ -545,6 +545,7 @@ const {classifyQueueBody, REASON_CODES} = require(path.join(dir, 'queue-hygiene.
 const {classifyCoordinationReferences, REASON_CODES: COORD_REF_REASON_CODES} = require(path.join(dir, 'coordination-reference-hygiene.cjs'));
 const {extractPacketScopes, resolveScopeOverlap, REASON_CODES: OVERLAP_REASON_CODES} = require(path.join(dir, 'scope-overlap.cjs'));
 const {classifyPrActivity, REASON_CODES: PR_ACTIVITY_REASON_CODES} = require(path.join(dir, 'pr-activity.cjs'));
+const {classifyPacketActivity, REASON_CODES: PACKET_ACTIVITY_REASON_CODES} = require(path.join(dir, 'packet-activity.cjs'));
 
 const pointerOnlyFixture = `# Canonical Main — Work Queue
 **Queue surface: ENABLED**
@@ -717,6 +718,159 @@ const disjointPacket = {
   body: overlapPacketBody('IN_PROGRESS', ['path:docs/**']),
 };
 assert.equal(resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [disjointPacket]).state, 'DISJOINT');
+
+const packetActivityEvidence = (relationship, overrides = {}) => ({
+  schemaVersion: 1,
+  mode: 'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE',
+  candidateRef: '#20',
+  requesterRef: '#21',
+  relationship,
+  repositoryMutationActive: false,
+  activeLease: false,
+  overlappingOpenPr: false,
+  sequencingExplicit: true,
+  sourceRefs: ['issue:#20', 'issue:#21'],
+  ...overrides,
+});
+
+for (const relationship of [
+  'DEFERRED_OWNER',
+  'BLOCKED_PREDECESSOR',
+  'PARENT_WAITING_ON_SUCCESSOR',
+]) {
+  const activity = classifyPacketActivity({
+    candidateRef: '#20',
+    requesterRef: '#21',
+    evidence: packetActivityEvidence(relationship),
+  });
+  assert.equal(activity.state, 'NONBLOCKING_PROVEN');
+  assert.equal(activity.reasonCode, PACKET_ACTIVITY_REASON_CODES.NONCOMPETING_RELATION_PROVEN);
+
+  const composed = resolveScopeOverlap({
+    requesterRef: '#21',
+    requestedScopes: ['path:src/demo.js'],
+    discovery: 'COMPLETE',
+    candidates: [{
+      type: 'packet',
+      ref: '#20',
+      issueState: 'open',
+      body: overlapPacketBody('BLOCKED', ['path:src/**']),
+      packetActivityEvidence: packetActivityEvidence(relationship),
+    }],
+  });
+  assert.equal(composed.state, 'DISJOINT');
+  assert.equal(composed.candidateActivity[0].state, 'NONBLOCKING_PROVEN');
+}
+
+assert.equal(resolveOverlap(['path:src/demo.js'], [{
+  type: 'packet', ref: '#20', issueState: 'open',
+  body: overlapPacketBody('BLOCKED', ['path:src/**']),
+}]).state, 'OVERLAP');
+
+for (const [overrides, expectedReason, expectedState] of [
+  [{candidateRef: '#22'}, PACKET_ACTIVITY_REASON_CODES.CANDIDATE_IDENTITY_CONFLICT, 'CONFLICT'],
+  [{requesterRef: '#22'}, PACKET_ACTIVITY_REASON_CODES.REQUESTER_IDENTITY_CONFLICT, 'CONFLICT'],
+  [{relationship: 'ARBITRARY_PROSE'}, PACKET_ACTIVITY_REASON_CODES.RELATIONSHIP_UNSUPPORTED, 'UNKNOWN'],
+  [{sequencingExplicit: false}, PACKET_ACTIVITY_REASON_CODES.EXPLICIT_SEQUENCING_UNPROVEN, 'UNKNOWN'],
+]) {
+  const activity = classifyPacketActivity({
+    candidateRef: '#20', requesterRef: '#21',
+    evidence: packetActivityEvidence('DEFERRED_OWNER', overrides),
+  });
+  assert.equal(activity.state, expectedState);
+  assert.equal(activity.reasonCode, expectedReason);
+}
+
+for (const [field, reason] of [
+  ['repositoryMutationActive', PACKET_ACTIVITY_REASON_CODES.REPOSITORY_MUTATION_ACTIVE],
+  ['activeLease', PACKET_ACTIVITY_REASON_CODES.ACTIVE_LEASE_PRESENT],
+  ['overlappingOpenPr', PACKET_ACTIVITY_REASON_CODES.OVERLAPPING_OPEN_PR_PRESENT],
+]) {
+  const activity = classifyPacketActivity({
+    candidateRef: '#20', requesterRef: '#21',
+    evidence: packetActivityEvidence('DEFERRED_OWNER', {[field]: true}),
+  });
+  assert.equal(activity.state, 'ACTIVE_WRITER');
+  assert.equal(activity.reasonCode, reason);
+}
+
+const missingRefs = classifyPacketActivity({
+  candidateRef: '#20', requesterRef: '#21',
+  evidence: packetActivityEvidence('DEFERRED_OWNER', {sourceRefs: []}),
+});
+assert.equal(missingRefs.state, 'UNKNOWN');
+assert.equal(missingRefs.reasonCode, PACKET_ACTIVITY_REASON_CODES.SOURCE_REFS_MISSING);
+
+const activityUnknownOverlap = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: '#20', issueState: 'open',
+    body: overlapPacketBody('BLOCKED', ['path:src/**']),
+    packetActivityEvidence: packetActivityEvidence('DEFERRED_OWNER', {sequencingExplicit: false}),
+  }],
+});
+expectOverlapFinding(activityUnknownOverlap, 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_ACTIVITY_UNKNOWN);
+
+const activityConflictOverlap = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: '#20', issueState: 'open',
+    body: overlapPacketBody('BLOCKED', ['path:src/**']),
+    packetActivityEvidence: packetActivityEvidence('DEFERRED_OWNER', {candidateRef: '#22'}),
+  }],
+});
+expectOverlapFinding(activityConflictOverlap, 'CONFLICT', OVERLAP_REASON_CODES.PACKET_ACTIVITY_CONFLICT);
+
+const packetEvidenceDoesNotSuppressPr = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [
+    {
+      type: 'packet', ref: '#20', issueState: 'open',
+      body: overlapPacketBody('BLOCKED', ['path:src/**']),
+      packetActivityEvidence: packetActivityEvidence('BLOCKED_PREDECESSOR'),
+    },
+    {
+      type: 'pr', ref: 'pr:#20', state: 'open', merged: false,
+      headSha: 'a'.repeat(40), changedFiles: ['src/demo.js'], filesComplete: true,
+    },
+  ],
+});
+expectOverlapFinding(packetEvidenceDoesNotSuppressPr, 'OVERLAP', OVERLAP_REASON_CODES.WRITE_SCOPE_OVERLAP);
+
+const onePacketProofDoesNotSuppressAnother = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [
+    {
+      type: 'packet', ref: '#20', issueState: 'open',
+      body: overlapPacketBody('BLOCKED', ['path:src/**']),
+      packetActivityEvidence: packetActivityEvidence('PARENT_WAITING_ON_SUCCESSOR'),
+    },
+    {
+      type: 'packet', ref: '#22', issueState: 'open',
+      body: overlapPacketBody('BLOCKED', ['path:src/**']),
+    },
+  ],
+});
+expectOverlapFinding(onePacketProofDoesNotSuppressAnother, 'OVERLAP', OVERLAP_REASON_CODES.WRITE_SCOPE_OVERLAP);
+
+const requesterMissing = resolveScopeOverlap({
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: '#20', issueState: 'open',
+    body: overlapPacketBody('BLOCKED', ['path:src/**']),
+    packetActivityEvidence: packetActivityEvidence('DEFERRED_OWNER'),
+  }],
+});
+expectOverlapFinding(requesterMissing, 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_ACTIVITY_UNKNOWN);
 
 const implementationHeadingPacket = {
   type: 'packet', ref: '#10b', issueState: 'open',

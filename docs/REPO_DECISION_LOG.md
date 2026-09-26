@@ -162,3 +162,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2886)
 - Event ID: `521180c767f67c1c719b5f615f207b7f78581df0d630133d3d0c38d778af55f8`
 <!-- canonical-main-doc-promoted:521180c767f67c1c719b5f615f207b7f78581df0d630133d3d0c38d778af55f8 -->
+
+### 2026-09-26 — REPO-INTERRUPTED-EFFECT-RECOVERY-COMPRESSION-V1 — bounded recovery decision projection
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2697)
+- Event ID: `2dcaa068aa43edd7dfc4dcf9b75a646acfb3ae0d154d8ceae914a00cd6292b86`
+<!-- canonical-main-doc-promoted:2dcaa068aa43edd7dfc4dcf9b75a646acfb3ae0d154d8ceae914a00cd6292b86 -->

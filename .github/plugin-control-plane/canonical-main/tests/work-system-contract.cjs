@@ -1582,7 +1582,9 @@ assert.match(readme, /PACKET_SCOPE_PRESERVATION_BOUNDARY_REQUIRED/);
 assert.match(readme, /separate level-two boundary/);
 assert.match(template, /packet-authoring-preflight\.cjs --body-file/);
 assert.match(template, /start a separate level-two section such as \`## Preservation boundary\`/);
-assert.doesNotMatch(packetAuthoringSource, new RegExp('https?://|gh\\\\s+api|fetch\\\\s*\\\\(|child_process|execSync|spawnSync'));
+for (const forbidden of ['http://', 'https://', 'gh api', 'fetch(', 'child_process', 'execSync', 'spawnSync']) {
+  assert.equal(packetAuthoringSource.includes(forbidden), false, `packet authoring preflight must not contain ${forbidden}`);
+}
 assert.match(packetAuthoringSource, /require\('\.\/packet-projection\.cjs'\)/);
 assert.match(packetAuthoringSource, /require\('\.\/scope-overlap\.cjs'\)/);
 assert.doesNotMatch(packetAuthoringSource, /PACKET_SCOPE_HEADINGS/);

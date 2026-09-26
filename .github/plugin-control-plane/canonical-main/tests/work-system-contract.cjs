@@ -1545,7 +1545,7 @@ ${scopeSection}
 `;
 
 let authoringResult = classifyPacketAuthoring(authoringPacket(
-  '- \`path:src/a.js\`\\n- \`surface:repo:fixture-owner\`',
+  ['- `path:src/a.js`', '- `surface:repo:fixture-owner`'].join('\n'),
 ));
 assert.equal(authoringResult.disposition, 'PASS');
 assert.deepEqual(authoringResult.normalizedScopes, ['path:src/a.js', 'surface:repo:fixture-owner']);
@@ -1558,7 +1558,7 @@ assert.equal(authoringResult.disposition, 'PASS');
 assert.deepEqual(authoringResult.normalizedScopes, ['path:src/a.js']);
 
 authoringResult = classifyPacketAuthoring(authoringPacket(
-  '- \`path:src/a.js\`\\nPreserve unchanged:\\n- \`path:src/neighbor.js\`',
+  ['- `path:src/a.js`', 'Preserve unchanged:', '- `path:src/neighbor.js`'].join('\n'),
 ));
 assert.equal(authoringResult.disposition, 'CONFLICT');
 assert.deepEqual(authoringResult.reasonCodes, [
@@ -1567,7 +1567,7 @@ assert.deepEqual(authoringResult.reasonCodes, [
 assert.equal(authoringResult.finding.scopeExcerpt, '- \`path:src/neighbor.js\`');
 
 authoringResult = classifyPacketAuthoring(authoringPacket(
-  '- \`path:src/a.js\`\\nDo not modify\\n- \`surface:repo:neighbor-owner\`',
+  ['- `path:src/a.js`', 'Do not modify', '- `surface:repo:neighbor-owner`'].join('\n'),
 ));
 assert.equal(authoringResult.disposition, 'CONFLICT');
 

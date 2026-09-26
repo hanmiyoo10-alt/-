@@ -177,6 +177,18 @@ test('plan parser accepts only the reviewed S/S mutable shape', () => {
   assert.throws(() => stage.parsePlan({...plan(), command: 'git status'}), /PLAN_UNKNOWN_FIELD/);
 });
 
+test('source-main binding is optional, strict, and launcher-owned', () => {
+  const direct = stage.parseArgs(['inspect', '--packet', '#77', '--plan', '/tmp/plan.json']);
+  assert.equal(direct.sourceMain, null);
+  const bound = stage.parseArgs([
+    'inspect', '--packet', '#77', '--plan', '/tmp/plan.json', '--source-main', MAIN,
+  ]);
+  assert.equal(bound.sourceMain, MAIN);
+  assert.throws(() => stage.parseArgs([
+    'inspect', '--packet', '#77', '--plan', '/tmp/plan.json', '--source-main', 'main',
+  ]), /SOURCE_MAIN_INVALID/);
+});
+
 test('target scope parsing delegates exact Work System grammar and preserves stage-entry guards', () => {
   assert.deepEqual(stage.extractPacketScopes(PACKET_BODY), ['path:docs/demo.md']);
 
@@ -290,6 +302,29 @@ test('discovery truncation remains UNKNOWN rather than optimistic DISJOINT', () 
   const value = stage.discoverOverlap({packetNumber: 77, requestedScopes: ['path:docs/demo.md'], runner});
   assert.equal(value.state, 'UNKNOWN');
   assert.equal(value.discovery, 'PARTIAL');
+});
+
+test('source-main mismatch fails before overlap, landing, lease, or workspace reads', () => {
+  const t = tempProfile();
+  let calls = 0;
+  const runner = (args) => {
+    calls += 1;
+    if (args[0] === 'gh' && args[1] === 'api'
+        && args[2] === `repos/${stage.REPO}/branches/main`) {
+      return response(0, {commit: {sha: MAIN}});
+    }
+    throw new Error(`unexpected read after source mismatch: ${args.join(' ')}`);
+  };
+  try {
+    assert.throws(() => stage.inspectContext({
+      packetNumber: 77,
+      plan: plan(),
+      sourceMain: 'b'.repeat(40),
+      runner,
+      profile: t.profile,
+    }), /SOURCE_MAIN_CURRENT_MAIN_CONFLICT/);
+    assert.equal(calls, 1);
+  } finally { t.close(); }
 });
 
 test('inspect detects main movement before mutation', () => {

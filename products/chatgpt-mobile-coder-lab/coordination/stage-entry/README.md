@@ -37,6 +37,23 @@ Existing owners remain authoritative:
 
 A PASS from this harness proves preparation only. All authority flags remain false.
 
+## Current-source bootstrap
+
+A fixed S Ubuntu launcher may load stage-entry from an exact current-main disposable
+source snapshot when the fixed landing predates this owner. The installed launcher
+is `/usr/local/bin/mcl-stage-entry-current`, sourced from
+`device-bootstrap/mcl-stage-entry-current`.
+
+The launcher owns source acquisition only. It reads canonical remote `main`,
+captures that exact tree outside `/root/nyang-repo`, verifies remote main stayed
+stable during capture, and invokes only the snapshotted `mcl-stage-entry.cjs`.
+It never fetches, switches, resets, or writes the fixed landing.
+
+The launcher passes `--source-main <sha>`. When supplied, stage-entry requires
+that SHA to equal its fresh direct protected-main read before packet overlap,
+landing observation, D-013, workspace, or repository effects. Direct invocation
+without `--source-main` preserves the existing behavior.
+
 ## Commands
 
 ```text

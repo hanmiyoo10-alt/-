@@ -95,8 +95,11 @@ class WorktreePatchTests(unittest.TestCase):
     def test_test_loader_does_not_write_source_bytecode_and_restores_setting(self):
         source_root = self.tmp / "loader-source"
         primitive = source_root / MODULE_PATH.relative_to(ROOT)
+        helper = source_root / "tools/repo-write/patch_branch.py"
         primitive.parent.mkdir(parents=True)
+        helper.parent.mkdir(parents=True)
         shutil.copy2(MODULE_PATH, primitive)
+        shutil.copy2(ROOT / "tools/repo-write/patch_branch.py", helper)
         before = sorted(path.relative_to(source_root) for path in source_root.rglob("*.pyc"))
         self.assertEqual(before, [])
         previous_setting = sys.dont_write_bytecode

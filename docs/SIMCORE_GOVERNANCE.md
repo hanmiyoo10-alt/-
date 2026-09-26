@@ -181,6 +181,8 @@ Confirm that:
 
 ## Current Milestone Context
 
-At the current long-chat scale, the project has crossed the `2.0M` token milestone, which corresponds to a **Major Update Review** under this cadence.
+The project has crossed the `2.0M` token milestone and completed/frozen the M2 architecture through **M2-6**. M2-7 is not implicitly authorized.
 
-The current production release remains `v0.63.55 — Representation Fast Reconcile`; its real long-chat validation remains a checkpoint while the 2.0M major architecture review is prepared.
+Mutable production identity, validation state, and immediate operational priority are deliberately not duplicated here. Read them from `product-manifest.json` and `docs/CURRENT_DEVELOPMENT.md` under the current SimCore authority chain.
+
+The former `v0.63.55` live-validation wording is historical M2 development context, not the current product state.

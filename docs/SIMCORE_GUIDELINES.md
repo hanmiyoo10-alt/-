@@ -921,9 +921,9 @@ Focus first on the earliest request-prefix break and preserve the distinction be
 
 The exact current diagnostic or repair stage must be read from `docs/CURRENT_DEVELOPMENT.md`, not inferred from an older version-specific section in this file.
 
-## 47. Current Hard Freeze
+## 47. Current Architecture Preservation Boundary
 
-Unless new evidence directly requires otherwise, keep these areas frozen during the current M2-2 live-validation checkpoint and any parallel cache observation:
+M2 architecture is frozen through **M2-6**. Unless a separately authorized architecture transaction and current evidence explicitly supersede a boundary below, preserve these areas while current work proceeds. This section does not imply that the current operational phase is M2-2; current production and priority come from `product-manifest.json` and `docs/CURRENT_DEVELOPMENT.md`.
 
 ```text
 Broadcast End Authority

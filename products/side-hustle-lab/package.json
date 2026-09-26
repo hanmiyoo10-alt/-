@@ -1,0 +1,15 @@
+{
+  "name": "@nyangnyang/side-hustle-lab",
+  "version": "0.0.0-research",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check": "node scripts/check.mjs",
+    "sync:rss": "node scripts/sync-rss.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
+

@@ -248,6 +248,35 @@ The packet records its selected route, command/file surface, required validation
 
 Compactness never removes required tests, authority reads, freshness barriers, uncertainty, failure provenance, or project-owned Git/CI/release/security/production gates. The repository can reduce repository-owned execution payloads and fan-out, but it does not claim it can hide, merge, or suppress ChatGPT host UI/activity cards.
 
+### Non-closing PR authoring preflight
+
+When a packet still has required acceptance after merge, its existing non-closing
+linkage rule is producer-owned before publication as well as reviewer-visible
+after publication. Before using `gh pr create`, a connector, or another external
+PR creation surface, materialize the exact proposed title and body and require:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/pr-authoring-preflight.cjs \
+  --packet '#<N>' \
+  --title-file /path/to/pr-title.txt \
+  --body-file /path/to/pr-body.md
+```
+
+The guard is read-only and accepts no repository, URL, ref, branch, command,
+executable, credential, publisher, or GitHub effect input. It requires an exact
+`Refs #<packet>` body line and rejects GitHub closing-keyword issue references in
+either title or body, including cross-issue references. `PASS` grants no PR
+publication, mutation, merge, release, runtime, device, or production authority.
+
+This is a producer prepublication check, not a second PR publisher and not a
+claim that external GitHub creation surfaces are globally intercepted. A
+non-PASS result must not be bypassed by selecting another external publisher.
+
+Applicability remains packet-owned. When merge itself satisfies every required
+acceptance item and no required postmerge proof remains, the packet may use
+GitHub's normal intentional closing semantics and this non-closing preflight is
+not required.
+
 ## Proof / closure taxonomy
 
 Packet lifecycle and proof/evidence disposition are separate axes. A packet can be `IN_PROGRESS` while some behavior is already `CONTRACT_PROVEN`, or can be `DONE` while explicitly non-blocking rare evidence remains `OBSERVATIONAL_PENDING`. Do not collapse these into one generic `PROVEN` label.

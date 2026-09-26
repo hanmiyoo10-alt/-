@@ -112,6 +112,17 @@ Use only evidence-backed terms from the Work System taxonomy:
 
 PR linkage is fail closed: if required acceptance remains after merge, especially blocking `POSTMERGE_CONVERGENCE` or `LIVE_PROVEN` evidence, use `Refs #<packet>` and do not use `Fixes` or `Closes`. A closing keyword is allowed only when merge itself satisfies every required acceptance item and no required postmerge proof remains. Native GitHub issue closure alone is not proof-taxonomy `DONE` evidence.
 
+When that non-closing rule applies, the packet producer must materialize the exact proposed PR title/body before any external creation surface and require this read-only preflight to return `PASS`:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/pr-authoring-preflight.cjs \
+  --packet '#<N>' \
+  --title-file /path/to/pr-title.txt \
+  --body-file /path/to/pr-body.md
+```
+
+The preflight requires an exact `Refs #<packet>` body line and rejects closing-keyword issue references in title or body for any issue number. Do not bypass a non-PASS result by calling `gh pr create`, a connector, or another external publisher directly. The repository does not claim to intercept every external GitHub PR-creation surface; the producer owns this prepublication check. `PASS` grants no publication or other effect authority. Intentionally terminal PRs whose merge satisfies every required acceptance item keep GitHub's normal closing semantics and do not require the non-closing preflight.
+
 ## Stop condition
 
 <EXACT_STOP_CONDITION>

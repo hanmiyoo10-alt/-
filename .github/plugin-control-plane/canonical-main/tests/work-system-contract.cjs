@@ -1775,4 +1775,92 @@ assert.match(packetAuthoringSource, /require\('\.\/packet-projection\.cjs'\)/);
 assert.match(packetAuthoringSource, /require\('\.\/scope-overlap\.cjs'\)/);
 assert.doesNotMatch(packetAuthoringSource, /PACKET_SCOPE_HEADINGS/);
 
+
+const {
+  classifyNonClosingPrAuthoring,
+  REASON_CODES: PR_AUTHORING_REASON_CODES,
+} = require(path.join(dir, 'pr-authoring-preflight.cjs'));
+const prAuthoringSource = fs.readFileSync(path.join(dir, 'pr-authoring-preflight.cjs'), 'utf8');
+
+const prFixture = (title = 'fix(repo): safe guarded change', body = 'Summary\n\nRefs #9001\n') => ({
+  packetRef: '#9001', title, body,
+});
+let prAuthoring = classifyNonClosingPrAuthoring(prFixture());
+assert.equal(prAuthoring.disposition, 'PASS');
+assert.equal(prAuthoring.mutationAuthorized, false);
+assert.equal(prAuthoring.publicationAuthorized, false);
+
+for (const closing of [
+  'close #9001', 'closes #9001', 'closed #9001',
+  'fix #9001', 'fixes #9001', 'fixed #9001',
+  'resolve #9001', 'resolves #9001', 'resolved #9001',
+  'FiXeD:   #2786',
+]) {
+  prAuthoring = classifyNonClosingPrAuthoring(prFixture(`chore: ${closing}`));
+  assert.equal(prAuthoring.disposition, 'BLOCKED', closing);
+  assert.deepEqual(prAuthoring.reasonCodes, [PR_AUTHORING_REASON_CODES.CLOSING_LINK_FORBIDDEN]);
+  assert.equal(prAuthoring.finding.field, 'title');
+  prAuthoring = classifyNonClosingPrAuthoring(prFixture('chore: safe title', `${closing}\n\nRefs #9001\n`));
+  assert.equal(prAuthoring.disposition, 'BLOCKED', closing);
+  assert.equal(prAuthoring.finding.field, 'body');
+}
+
+prAuthoring = classifyNonClosingPrAuthoring(prFixture('chore: fixed profile'));
+assert.equal(prAuthoring.disposition, 'PASS');
+prAuthoring = classifyNonClosingPrAuthoring(prFixture('chore: safe', 'Summary only'));
+assert.equal(prAuthoring.disposition, 'BLOCKED');
+assert.deepEqual(prAuthoring.reasonCodes, [PR_AUTHORING_REASON_CODES.NON_CLOSING_REF_REQUIRED]);
+prAuthoring = classifyNonClosingPrAuthoring({...prFixture(), packetRef: 'issue:#9001'});
+assert.equal(prAuthoring.disposition, 'UNKNOWN');
+assert.deepEqual(prAuthoring.reasonCodes, [PR_AUTHORING_REASON_CODES.INPUT_PACKET_REF_INVALID]);
+prAuthoring = classifyNonClosingPrAuthoring(prFixture('bad\ntitle'));
+assert.equal(prAuthoring.disposition, 'UNKNOWN');
+prAuthoring = classifyNonClosingPrAuthoring(prFixture('safe', 'Refs #9001\n\u0000'));
+assert.equal(prAuthoring.disposition, 'UNKNOWN');
+prAuthoring = classifyNonClosingPrAuthoring(prFixture('x'.repeat(257)));
+assert.equal(prAuthoring.disposition, 'UNKNOWN');
+assert.deepEqual(prAuthoring.reasonCodes, [PR_AUTHORING_REASON_CODES.INPUT_TEXT_TOO_LARGE]);
+
+assert.match(readme, /### Non-closing PR authoring preflight/);
+assert.match(readme, /pr-authoring-preflight\.cjs/);
+assert.match(readme, /not a second PR publisher/);
+assert.match(readme, /normal intentional closing semantics/);
+assert.match(template, /pr-authoring-preflight\.cjs/);
+assert.match(template, /Do not bypass a non-PASS result by calling `gh pr create`/);
+assert.match(template, /does not claim to intercept every external GitHub PR-creation surface/);
+assert.match(template, /Intentionally terminal PRs/);
+for (const forbidden of ['http://', 'https://', 'gh api', 'fetch(', 'child_process', 'execSync', 'spawnSync', 'writeFile', 'appendFile', 'createWriteStream', 'process.env']) {
+  assert.equal(prAuthoringSource.includes(forbidden), false, `PR authoring preflight must not contain ${forbidden}`);
+}
+assert.doesNotMatch(prAuthoringSource, /pr\s+create|pulls\//i);
+
+
+const prCliDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pr-authoring-preflight-'));
+const prCliTitle = path.join(prCliDir, 'title.txt');
+const prCliBody = path.join(prCliDir, 'body.md');
+const runPrAuthoringCli = (packetRef) => {
+  const result = spawnSync(process.execPath, [
+    path.join(dir, 'pr-authoring-preflight.cjs'),
+    '--packet', packetRef,
+    '--title-file', prCliTitle,
+    '--body-file', prCliBody,
+  ], {encoding: 'utf8'});
+  return {status: result.status, output: JSON.parse(result.stdout)};
+};
+fs.writeFileSync(prCliTitle, 'fix(repo): safe title\n');
+fs.writeFileSync(prCliBody, 'Summary\n\nRefs #9001\n');
+let prCli = runPrAuthoringCli('#9001');
+assert.equal(prCli.status, 0);
+assert.equal(prCli.output.disposition, 'PASS');
+fs.writeFileSync(prCliTitle, 'fix(repo): fixed #2786\n');
+prCli = runPrAuthoringCli('#9001');
+assert.equal(prCli.status, 2);
+assert.equal(prCli.output.disposition, 'BLOCKED');
+assert.deepEqual(prCli.output.reasonCodes, [PR_AUTHORING_REASON_CODES.CLOSING_LINK_FORBIDDEN]);
+fs.writeFileSync(prCliTitle, 'fix(repo): safe title\n');
+prCli = runPrAuthoringCli('issue:#9001');
+assert.equal(prCli.status, 3);
+assert.equal(prCli.output.disposition, 'UNKNOWN');
+fs.rmSync(prCliDir, {recursive: true, force: true});
+
 console.log('work-system-contract: ok');

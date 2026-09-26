@@ -79,6 +79,8 @@ const completionSet = require(path.join(ROOT,
   'products/chatgpt-mobile-coder-lab/coordination/completion-receipt-set.cjs'));
 const stageReceipt = require(path.join(ROOT,
   '.github/plugin-control-plane/canonical-main/work-harness/stage-receipt.cjs'));
+const validationStageSet = require(path.join(ROOT,
+  '.github/plugin-control-plane/canonical-main/work-harness/validation-finalization/validation-stage-receipt-set.cjs'));
 const finalization = require(path.join(ROOT,
   '.github/plugin-control-plane/canonical-main/work-harness/validation-finalization/validation-finalization-owner.cjs'));
 
@@ -230,7 +232,7 @@ function stageReceiptsFromComments(comments) {
     if (parsed.status !== 'VALID') fail(
       parsed.status === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN',
       'CANONICAL_STAGE_RECEIPT_INVALID_PRESENT');
-    rows.push({comment, receipt: parsed.value});
+    rows.push({comment, receipt: parsed.value, text: body});
   }
   return rows;
 }
@@ -315,33 +317,41 @@ function completionState(comments, manifest) {
     representativeReceiptId: classified.representativeReceiptId,
   };
 }
-function validationStageState(stageRows, implReceipt, pr) {
+function selectValidationStageReceiptSet(stageRows, packetNumber) {
   const rows = stageRows.filter(({receipt}) =>
-    receipt.stage === 'VALIDATION_MERGE' && receipt.packetNumber === TARGET.packet);
-  if (!rows.length) return {status: 'ABSENT', receipt: null};
-  const exact = [];
-  for (const row of rows) {
-    const receipt = row.receipt;
-    const hasPr = receipt.authorityRefs.some((item) =>
-      item.kind === 'PR' && item.locator === 'pr:#' + TARGET.pr
-      && item.identity === TARGET.candidate);
-    const hasMerge = receipt.authorityRefs.some((item) =>
-      item.kind === 'COMMIT' && item.identity === TARGET.merge);
-    if (receipt.status === 'PASS'
-        && receipt.nextLegalAction === 'POSTMERGE_CONVERGENCE'
-        && hasPr && hasMerge
-        && same(receipt.scope.paths, implReceipt.scope.paths)
-        && receipt.scope.diffRequired === true
-        && receipt.scope.diffIdentity === implReceipt.scope.diffIdentity) {
-      exact.push(row);
-    } else {
-      fail('CONFLICT', 'VALIDATION_STAGE_RECEIPT_CONFLICT');
-    }
+    receipt.stage === 'VALIDATION_MERGE' && receipt.packetNumber === packetNumber);
+  if (!rows.length) return {status: 'ABSENT', receipt: null, set: null};
+  const classified = validationStageSet.classify(rows.map((row) => row.text));
+  if (classified.status === 'CONFLICT') {
+    fail('CONFLICT', 'VALIDATION_STAGE_RECEIPT_CONFLICT');
   }
-  const byDigest = new Map(exact.map((row) => [row.receipt.receiptDigest, row]));
-  if (byDigest.size !== 1) fail('CONFLICT', 'VALIDATION_STAGE_RECEIPT_AMBIGUOUS');
+  if (!['SINGLE', 'MULTIPLE_EQUIVALENT'].includes(classified.status)) {
+    fail('UNKNOWN', 'VALIDATION_STAGE_RECEIPT_UNRESOLVED');
+  }
+  const selected = rows.find((row) =>
+    row.receipt.receiptDigest === classified.representativeReceiptDigest);
+  if (!selected) fail('UNKNOWN', 'VALIDATION_STAGE_RECEIPT_REPRESENTATIVE_MISSING');
+  return {status: 'PASS', receipt: selected.receipt, set: classified};
+}
+function validationStageState(stageRows, implReceipt, pr) {
+  const selected = selectValidationStageReceiptSet(stageRows, TARGET.packet);
+  if (selected.status === 'ABSENT') return {status: 'ABSENT', receipt: null};
+  const receipt = selected.receipt;
+  const hasPr = receipt.authorityRefs.some((item) =>
+    item.kind === 'PR' && item.locator === 'pr:#' + TARGET.pr
+    && item.identity === TARGET.candidate);
+  const hasMerge = receipt.authorityRefs.some((item) =>
+    item.kind === 'COMMIT' && item.identity === TARGET.merge);
+  if (receipt.status !== 'PASS'
+      || receipt.nextLegalAction !== 'POSTMERGE_CONVERGENCE'
+      || !hasPr || !hasMerge
+      || !same(receipt.scope.paths, implReceipt.scope.paths)
+      || receipt.scope.diffRequired !== true
+      || receipt.scope.diffIdentity !== implReceipt.scope.diffIdentity) {
+    fail('CONFLICT', 'VALIDATION_STAGE_RECEIPT_CONFLICT');
+  }
   if (pr.merge_commit_sha !== TARGET.merge) fail('CONFLICT', 'PR_MERGE_IDENTITY_CONFLICT');
-  return {status: 'PASS', receipt: [...byDigest.values()][0].receipt};
+  return {status: 'PASS', receipt, receiptSetStatus: selected.set.status};
 }
 function readWorkspace(manifest, spawn = childProcess.spawnSync) {
   const inspected = holderOwner.inspectWorkspace(manifest);
@@ -473,32 +483,24 @@ function read2786LedgerState(runner = defaultRunner, target = TARGET_2786) {
   };
 }
 function validationStageState2786(stageRows, implReceipt, pr, target = TARGET_2786) {
-  const rows = stageRows.filter(({receipt}) =>
-    receipt.stage === 'VALIDATION_MERGE' && receipt.packetNumber === target.packet);
-  if (!rows.length) return {status: 'ABSENT', receipt: null};
-  const exact = [];
-  for (const row of rows) {
-    const receipt = row.receipt;
-    const hasPr = receipt.authorityRefs.some((item) =>
-      item.kind === 'PR' && item.locator === 'pr:#' + target.pr
-      && item.identity === target.candidate);
-    const hasMerge = receipt.authorityRefs.some((item) =>
-      item.kind === 'COMMIT' && item.identity === target.merge);
-    if (receipt.status === 'PASS'
-        && receipt.nextLegalAction === 'POSTMERGE_CONVERGENCE'
-        && hasPr && hasMerge
-        && same(receipt.scope.paths, implReceipt.scope.paths)
-        && receipt.scope.diffRequired === true
-        && receipt.scope.diffIdentity === implReceipt.scope.diffIdentity) {
-      exact.push(row);
-    } else {
-      fail('CONFLICT', 'VALIDATION_STAGE_RECEIPT_CONFLICT');
-    }
+  const selected = selectValidationStageReceiptSet(stageRows, target.packet);
+  if (selected.status === 'ABSENT') return {status: 'ABSENT', receipt: null};
+  const receipt = selected.receipt;
+  const hasPr = receipt.authorityRefs.some((item) =>
+    item.kind === 'PR' && item.locator === 'pr:#' + target.pr
+    && item.identity === target.candidate);
+  const hasMerge = receipt.authorityRefs.some((item) =>
+    item.kind === 'COMMIT' && item.identity === target.merge);
+  if (receipt.status !== 'PASS'
+      || receipt.nextLegalAction !== 'POSTMERGE_CONVERGENCE'
+      || !hasPr || !hasMerge
+      || !same(receipt.scope.paths, implReceipt.scope.paths)
+      || receipt.scope.diffRequired !== true
+      || receipt.scope.diffIdentity !== implReceipt.scope.diffIdentity) {
+    fail('CONFLICT', 'VALIDATION_STAGE_RECEIPT_CONFLICT');
   }
-  const byDigest = new Map(exact.map((row) => [row.receipt.receiptDigest, row]));
-  if (byDigest.size !== 1) fail('CONFLICT', 'VALIDATION_STAGE_RECEIPT_AMBIGUOUS');
   if (pr.merge_commit_sha !== target.merge) fail('CONFLICT', 'PR_MERGE_IDENTITY_CONFLICT');
-  return {status: 'PASS', receipt: [...byDigest.values()][0].receipt};
+  return {status: 'PASS', receipt, receiptSetStatus: selected.set.status};
 }
 function create2786LiveContext(packetRef, deps = {}) {
   const target = TARGET_2786;
@@ -1303,6 +1305,7 @@ module.exports = {
   select2786WorkspaceManifest,
   selectImplementationReceipt,
   selectTargetManifest,
+  selectValidationStageReceiptSet,
   stageReceiptAuthorityInput,
   stageReceiptsFromComments,
   validationStageState,

@@ -169,3 +169,17 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2697)
 - Event ID: `2dcaa068aa43edd7dfc4dcf9b75a646acfb3ae0d154d8ceae914a00cd6292b86`
 <!-- canonical-main-doc-promoted:2dcaa068aa43edd7dfc4dcf9b75a646acfb3ae0d154d8ceae914a00cd6292b86 -->
+
+### 2026-09-26 — CONNECTION-INDEPENDENT-EXECUTION-CONTINUITY-V1 — durable run/checkpoint spine across fixed owners
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2745)
+- Event ID: `4f58fe98aa2515ed86e51b240d28530c46f09659958cf4e326b9216c11c2795e`
+<!-- canonical-main-doc-promoted:4f58fe98aa2515ed86e51b240d28530c46f09659958cf4e326b9216c11c2795e -->
+
+### 2026-09-26 — REPO-INTRA-STAGE-CONTINUATION-V1 — Phase 8.7g evidence-preserving bounded continuation
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2957)
+- Event ID: `b2018eb6805c4e985113c27e5fa03cc6e96c14e1043b68c2963a39a9f073bcee`
+<!-- canonical-main-doc-promoted:b2018eb6805c4e985113c27e5fa03cc6e96c14e1043b68c2963a39a9f073bcee -->

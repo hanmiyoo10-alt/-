@@ -663,6 +663,119 @@ function commentRunner({initial = [], postCode = 0, writeOnFailure = false} = {}
   return {runner, comments, posts: () => posts};
 }
 
+
+function validationSetRow(target, {
+  gateName = 'gate-a',
+  gateEvidence = 'issue:#2463',
+  extraWorkflow = false,
+  mergeCommit = target.merge,
+} = {}) {
+  const authorityRefs = [
+    {kind: 'COMMIT', locator: 'candidate-head', identity: target.candidate},
+    {kind: 'COMMIT', locator: 'merge:#' + target.pr, identity: mergeCommit},
+    {kind: 'PR', locator: 'pr:#' + target.pr, identity: target.candidate},
+    {kind: 'GIT_REF', locator: 'refs/heads/main', identity: mergeCommit},
+  ];
+  if (extraWorkflow) {
+    authorityRefs.push({kind: 'WORKFLOW_RUN', locator: 'run:12345', identity: target.candidate});
+  }
+  const receipt = stageReceipt.projectStageReceipt({
+    schemaVersion: 1,
+    packetNumber: target.packet,
+    stage: 'VALIDATION_MERGE',
+    authorityRefs,
+    requiredGates: [{name: gateName, result: 'PASS', evidenceLocator: gateEvidence}],
+    scope: {
+      paths: ['products/example.txt'],
+      diffRequired: true,
+      diffIdentity: '1'.repeat(64),
+      diffEvidenceLocator: 'pr:#' + target.pr,
+    },
+    proof: [
+      {term: 'IMPLEMENTED', evidenceLocator: 'commit:' + target.candidate},
+      {term: 'CONTRACT_PROVEN', evidenceLocator: gateEvidence},
+    ],
+    requiredUnknowns: [], conflicts: [], blockers: [], dependencies: [],
+    nextLegalAction: 'POSTMERGE_CONVERGENCE',
+  });
+  assert.equal(receipt.status, 'PASS');
+  return {comment: {id: Number(gateName.length)}, receipt,
+    text: stageReceipt.renderStageReceipt(receipt)};
+}
+
+test('validation stage accepts multiple equivalent immutable canonical receipts', () => {
+  const target = owner.TARGET;
+  const first = validationSetRow(target);
+  const second = validationSetRow(target, {
+    gateName: 'gate-b', gateEvidence: 'run:67890', extraWorkflow: true,
+  });
+  assert.notEqual(first.receipt.receiptDigest, second.receipt.receiptDigest);
+  const selected = owner.validationStageState(
+    [second, first],
+    {scope: {paths: ['products/example.txt'], diffIdentity: '1'.repeat(64)}},
+    {merge_commit_sha: target.merge},
+  );
+  assert.equal(selected.status, 'PASS');
+  assert.equal(selected.receiptSetStatus, 'MULTIPLE_EQUIVALENT');
+  assert.equal(selected.receipt.receiptDigest,
+    [first.receipt.receiptDigest, second.receipt.receiptDigest].sort()[0]);
+});
+
+test('equivalent validation receipt set composes with zero-effect ALREADY_FINALIZED retry', () => {
+  const target = owner.TARGET;
+  const first = validationSetRow(target);
+  const second = validationSetRow(target, {
+    gateName: 'gate-b', gateEvidence: 'run:67890', extraWorkflow: true,
+  });
+  const selected = owner.validationStageState(
+    [first, second],
+    {scope: {paths: ['products/example.txt'], diffIdentity: '1'.repeat(64)}},
+    {merge_commit_sha: target.merge},
+  );
+  let effects = 0;
+  const terminal = fakeState({
+    disposition: 'ALREADY_FINALIZED', holderState: 'ABSENT',
+    completion: 'COMPLETE', stage: 'PASS',
+  });
+  terminal.validationStage = selected;
+  const result = owner.applyPacket('#2463', {
+    createContext: () => fakeContext(),
+    readState: () => terminal,
+    cleanupHolder: () => { effects += 1; },
+    publishExact: () => { effects += 1; },
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.finalizationDisposition, 'ALREADY_FINALIZED');
+  assert.equal(effects, 0);
+});
+
+test('validation stage still fails closed on semantic receipt-set conflict', () => {
+  const target = owner.TARGET;
+  const first = validationSetRow(target);
+  const conflicting = validationSetRow(target, {mergeCommit: 'a'.repeat(40)});
+  assert.throws(() => owner.validationStageState(
+    [first, conflicting],
+    {scope: {paths: ['products/example.txt'], diffIdentity: '1'.repeat(64)}},
+    {merge_commit_sha: target.merge},
+  ), (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('VALIDATION_STAGE_RECEIPT_CONFLICT'));
+});
+
+test('#2786 validation stage shares equivalent receipt-set semantics', () => {
+  const target = owner.TARGET_2786;
+  const first = validationSetRow(target);
+  const second = validationSetRow(target, {
+    gateName: 'gate-b', gateEvidence: 'run:67890', extraWorkflow: true,
+  });
+  const selected = owner.validationStageState2786(
+    [first, second],
+    {scope: {paths: ['products/example.txt'], diffIdentity: '1'.repeat(64)}},
+    {merge_commit_sha: target.merge}, target,
+  );
+  assert.equal(selected.status, 'PASS');
+  assert.equal(selected.receiptSetStatus, 'MULTIPLE_EQUIVALENT');
+});
+
 test('exact comment publication reuses existing body with zero duplicate writes', () => {
   const fake = commentRunner({initial: ['EXACT']});
   const out = owner.postExactComment(2463, 'EXACT', fake.runner);

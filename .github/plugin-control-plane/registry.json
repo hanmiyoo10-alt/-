@@ -113,6 +113,20 @@
         "manifest": "products/app-api-mod-lab/product.json"
       }
     },
+    "local-model-lab": {
+      "displayName": "Local Model Lab",
+      "lifecycle": "research-product-root",
+      "issueValues": ["local-model-lab", "Local Model Lab", "로컬 모델", "로컬모델"],
+      "paths": [
+        "products/local-model-lab/**",
+        "docs/LOCAL_MODEL_LAB_GUIDELINES.md"
+      ],
+      "statusAdapter": "prototype",
+      "authority": {
+        "evidence": "products/local-model-lab/CURRENT.md",
+        "manifest": "products/local-model-lab/product.json"
+      }
+    },
     "pocketrisu-helper-mod": {
       "displayName": "PocketRisu Helper Mod",
       "lifecycle": "operations-product-root",

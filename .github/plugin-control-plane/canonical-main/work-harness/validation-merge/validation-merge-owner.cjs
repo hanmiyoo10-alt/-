@@ -228,13 +228,30 @@ async function readPacket(client, packetNumber) {
       'issue:#' + packetNumber);
   }
   const scopes = parsed.scopes.map((row) => row.normalized).sort();
+  const pathScopes = parsed.scopes
+    .filter((row) => row.kind === 'path')
+    .map((row) => row.normalized)
+    .sort();
   const paths = parsed.scopes.filter((row) => row.kind === 'path').map((row) => row.value).sort();
   return {
     bodySha256: sha256(String(issue.body || '')),
     scopes,
+    pathScopes,
     paths,
     evidenceLocator: 'issue:#' + packetNumber,
   };
+}
+
+function exactPathsWithinPacketScopes(exactPaths, packetPathScopes) {
+  if (!Array.isArray(exactPaths) || !exactPaths.length
+      || !Array.isArray(packetPathScopes) || !packetPathScopes.length) return false;
+  const ceilings = packetPathScopes.map((value) => scopeOverlap.normalizeScope(value));
+  if (ceilings.some((row) => !row.ok || row.kind !== 'path')) return false;
+  return exactPaths.every((value) => {
+    const exact = scopeOverlap.normalizeScope('path:' + value);
+    return exact.ok && exact.kind === 'path' && exact.mode === 'exact'
+      && ceilings.some((ceiling) => scopeOverlap.scopesOverlap(ceiling, exact));
+  });
 }
 
 async function readPrHeader(client, prNumber) {
@@ -681,12 +698,13 @@ async function inspectWithClient({client, packetNumber, prNumber, implementation
       () => readCurrentMain(client));
     const packet = await perform('packet-stage-scope', 'issue:#' + packetNumber,
       () => readPacket(client, packetNumber));
-    if (JSON.stringify(packet.paths) !== JSON.stringify(implementation.paths)) {
+    if (!exactPathsWithinPacketScopes(implementation.paths, packet.pathScopes)) {
       throw new OwnerError('CONFLICT', ['IMPLEMENTATION_PACKET_SCOPE_MISMATCH'],
         'issue:#' + packetNumber);
     }
     const pr = await perform('pr-identity-files', 'pr:#' + prNumber,
-      () => readOpenPr(client, prNumber, current.mainSha, implementation.expectedHead, packet.paths));
+      () => readOpenPr(client, prNumber, current.mainSha, implementation.expectedHead,
+        implementation.paths));
     const strictCurrentness = await readStrictCurrentness({
       client, prNumber, mainSha: current.mainSha,
       expectedHead: implementation.expectedHead, perform,
@@ -703,7 +721,8 @@ async function inspectWithClient({client, packetNumber, prNumber, implementation
     const finalPacket = await perform('final-packet-currentness', 'issue:#' + packetNumber,
       () => readPacket(client, packetNumber));
     const finalPr = await perform('final-pr-currentness', 'pr:#' + prNumber,
-      () => readOpenPr(client, prNumber, finalCurrent.mainSha, implementation.expectedHead, packet.paths));
+      () => readOpenPr(client, prNumber, finalCurrent.mainSha, implementation.expectedHead,
+        implementation.paths));
     const finalStrictCurrentness = await readStrictCurrentness({
       client, prNumber, mainSha: finalCurrent.mainSha,
       expectedHead: implementation.expectedHead, perform, prefix: 'final-',

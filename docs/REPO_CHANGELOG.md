@@ -2101,3 +2101,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/19b801b675f2f83a7e2108ce839731dc726062d0)
 - Event ID: `ad20202993bfa220f869c9a9d6e375bd06dc0d68005af77385cda568f5f8cc8f`
 <!-- canonical-main-doc-promoted:ad20202993bfa220f869c9a9d6e375bd06dc0d68005af77385cda568f5f8cc8f -->
+
+### 2026-09-27 — Merge pull request #3024 from hanmiyoo10-alt/server/repo-packet-3023
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `97d472130d1eea7db929a001208be75405149a24`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/97d472130d1eea7db929a001208be75405149a24)
+- Event ID: `ad7c1d52cce2616b10cca2fb918b473fb9dbefae58524899927bc3df14c5420d`
+<!-- canonical-main-doc-promoted:ad7c1d52cce2616b10cca2fb918b473fb9dbefae58524899927bc3df14c5420d -->

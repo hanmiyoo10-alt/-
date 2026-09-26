@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {classifyPrActivity} = require('./pr-activity.cjs');
+const {classifyPacketActivity} = require('./packet-activity.cjs');
 const {parseLifecycle} = require('./packet-projection.cjs');
 
 const PACKET_MARKER = '<!-- canonical-main-work-packet:v1 -->';
@@ -28,6 +29,8 @@ const REASON_CODES = Object.freeze({
   PR_CHANGED_FILES_INCOMPLETE: 'PR_CHANGED_FILES_INCOMPLETE',
   PR_ACTIVITY_UNKNOWN: 'PR_ACTIVITY_UNKNOWN',
   PR_ACTIVITY_CONFLICT: 'PR_ACTIVITY_CONFLICT',
+  PACKET_ACTIVITY_UNKNOWN: 'PACKET_ACTIVITY_UNKNOWN',
+  PACKET_ACTIVITY_CONFLICT: 'PACKET_ACTIVITY_CONFLICT',
   LINKED_PR_EVIDENCE_MISSING: 'LINKED_PR_EVIDENCE_MISSING',
   PACKET_PR_SCOPE_DRIFT: 'PACKET_PR_SCOPE_DRIFT',
   WRITE_SCOPE_OVERLAP: 'WRITE_SCOPE_OVERLAP',
@@ -376,6 +379,38 @@ function resolveScopeOverlap(input) {
           [ref],
         ));
         return;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(candidate, 'packetActivityEvidence')) {
+        const activity = classifyPacketActivity({
+          candidateRef: ref,
+          requesterRef: typeof input?.requesterRef === 'string' ? input.requesterRef.trim() : '',
+          evidence: candidate.packetActivityEvidence,
+        });
+        candidateActivity.push(activity);
+        if (activity.state === 'NONBLOCKING_PROVEN') {
+          packetRecords.push({
+            ref,
+            active: false,
+            scopes: parsedScopes.scopes,
+            linkedPrRef: typeof candidate.linkedPrRef === 'string' ? candidate.linkedPrRef.trim() : null,
+          });
+          return;
+        }
+        if (activity.state === 'UNKNOWN' || activity.state === 'CONFLICT') {
+          findings.push(makeFinding(
+            activity.state === 'CONFLICT'
+              ? REASON_CODES.PACKET_ACTIVITY_CONFLICT
+              : REASON_CODES.PACKET_ACTIVITY_UNKNOWN,
+            activity.state,
+            ref,
+            requested[0]?.normalized || '<unresolved>',
+            activity.reasonCode,
+            activity.sourceRefs,
+            {candidateType: 'packet', activityReasonCode: activity.reasonCode},
+          ));
+          return;
+        }
       }
 
       packetRecords.push({

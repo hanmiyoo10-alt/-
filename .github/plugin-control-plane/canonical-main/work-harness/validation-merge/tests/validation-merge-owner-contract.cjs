@@ -600,7 +600,7 @@ test('PR base or path drift fails closed', async () => {
   assert.ok(pathDrift.receipt.reasonCodes.includes('PR_CHANGED_FILES_SCOPE_MISMATCH'));
 });
 
-test('packet and implementation receipt scopes must agree exactly', async () => {
+test('implementation receipt and live PR changed files still agree exactly', async () => {
   const narrowed = implementationReceipt({
     scope: {
       paths: PATHS.slice(0, 4),
@@ -614,6 +614,59 @@ test('packet and implementation receipt scopes must agree exactly', async () => 
     packetNumber: PACKET,
     prNumber: PR,
     implementationReceipt: narrowed,
+  });
+  assert.equal(result.receipt.result, 'CONFLICT');
+  assert.ok(result.receipt.reasonCodes.includes('PR_CHANGED_FILES_SCOPE_MISMATCH'));
+});
+
+test('packet trailing-prefix ceiling admits narrower exact receipt and PR files', async () => {
+  const exact = PATHS.filter((value) => value.includes('/work-harness/validation-merge/'));
+  const receipt = implementationReceipt({
+    scope: {
+      paths: exact,
+      diffRequired: true,
+      diffIdentity: 'd'.repeat(64),
+      diffEvidenceLocator: 'commit:' + HEAD,
+    },
+  });
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      packetBody: packetBody([
+        '.github/plugin-control-plane/canonical-main/work-harness/validation-merge/**',
+      ]),
+      prFiles: exact,
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: receipt,
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.receipt.reasonCodes.length, 0);
+});
+
+test('exact changed file outside packet prefix ceiling remains CONFLICT', async () => {
+  const exact = [
+    ...PATHS.filter((value) => value.includes('/work-harness/validation-merge/')),
+    'docs/outside.md',
+  ].sort();
+  const receipt = implementationReceipt({
+    scope: {
+      paths: exact,
+      diffRequired: true,
+      diffIdentity: 'd'.repeat(64),
+      diffEvidenceLocator: 'commit:' + HEAD,
+    },
+  });
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      packetBody: packetBody([
+        '.github/plugin-control-plane/canonical-main/work-harness/validation-merge/**',
+      ]),
+      prFiles: exact,
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: receipt,
   });
   assert.equal(result.receipt.result, 'CONFLICT');
   assert.ok(result.receipt.reasonCodes.includes('IMPLEMENTATION_PACKET_SCOPE_MISMATCH'));

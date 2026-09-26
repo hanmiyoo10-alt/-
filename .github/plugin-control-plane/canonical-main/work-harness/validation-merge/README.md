@@ -90,8 +90,14 @@ Scope parsing is delegated to the existing Work System
 `extractPacketScopes()`. This module does not maintain another heading/token
 grammar.
 
-The implementation receipt path set, current packet path set and live PR changed
-file set must agree exactly.
+The implementation receipt path set and live PR changed-file set must agree
+exactly. The current packet path scopes are an authorization ceiling instead:
+every exact receipt/PR path must be contained by at least one parsed packet path
+scope using only the Work System's existing exact-path or trailing-`/**` semantics.
+An exact packet path contains only that file; a trailing prefix may contain narrower
+descendant files. Any exact changed file outside the packet ceiling is CONFLICT.
+Unsupported or unresolved scope syntax remains UNKNOWN/CONFLICT through the
+existing Work System parser; this owner adds no wildcard grammar.
 
 ## Current-main barrier
 
@@ -107,7 +113,8 @@ A settling/stale or uncertain state cannot become merge-ready.
 
 The PR must be open, non-draft, same-repository, based on main/current main,
 exactly at the implementation receipt head, explicitly mergeable and contain
-only the packet's exact path set.
+exactly the implementation receipt's changed-file set, with every such file already
+proven inside the packet authorization ceiling.
 
 Review inspection includes:
 - REST reviews;

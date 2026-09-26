@@ -236,6 +236,11 @@ function candidateRef(candidate, index) {
     : `candidate:${index}`;
 }
 
+function canonicalPacketActivityRef(ref) {
+  const issueRef = /^issue:(#[1-9][0-9]*)$/.exec(ref);
+  return issueRef ? issueRef[1] : ref;
+}
+
 function resolveScopeOverlap(input) {
   const findings = [];
   const candidateActivity = [];
@@ -383,7 +388,7 @@ function resolveScopeOverlap(input) {
 
       if (Object.prototype.hasOwnProperty.call(candidate, 'packetActivityEvidence')) {
         const activity = classifyPacketActivity({
-          candidateRef: ref,
+          candidateRef: canonicalPacketActivityRef(ref),
           requesterRef: typeof input?.requesterRef === 'string' ? input.requesterRef.trim() : '',
           evidence: candidate.packetActivityEvidence,
         });

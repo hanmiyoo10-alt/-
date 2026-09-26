@@ -1,0 +1,218 @@
+#!/bin/sh
+set -u
+
+SCHEMA='mcl-s-landing-branch-repair.v1'
+CANONICAL_ORIGIN='https://github.com/hanmiyoo10-alt/-.git'
+REPO='/root/nyang-repo'
+TARGET_BRANCH='server/work'
+
+operation=${1-}
+expected=${2-}
+if [ "$#" -ne 2 ] || { [ "$operation" != inspect ] && [ "$operation" != apply ]; } || ! printf '%s\n' "$expected" | grep -Eq '^[0-9a-f]{40}$'; then
+  printf '%s\n' 'mcl-s-landing-branch-repair: invalid invocation' >&2
+  exit 64
+fi
+
+is_sha() { printf '%s\n' "$1" | grep -Eq '^[0-9a-f]{40}$'; }
+valid_origin_url() {
+  case "$1" in
+    "$CANONICAL_ORIGIN"|'https://github.com/hanmiyoo10-alt/-'|'git@github.com:hanmiyoo10-alt/-.git'|'ssh://git@github.com/hanmiyoo10-alt/-.git') return 0 ;;
+    *) return 1 ;;
+  esac
+}
+safe_branch() {
+  case "$1" in
+    ''|*[!A-Za-z0-9._/-]*) printf '%s' unknown ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+read_remote_ref() {
+  ref=$1
+  raw=$(git -C "$REPO" ls-remote origin "$ref" 2>/dev/null) || return 2
+  if [ -z "$raw" ]; then printf '%s' missing; return 0; fi
+  set -- $raw
+  [ "$#" -eq 2 ] && is_sha "$1" && [ "$2" = "$ref" ] || return 2
+  printf '%s' "$1"
+}
+other_refs_snapshot() {
+  git -C "$REPO" for-each-ref --format='%(refname)%09%(objectname)' 2>/dev/null |
+    awk -F '\t' -v target="refs/heads/$TARGET_BRANCH" '$1 != target' | LC_ALL=C sort
+}
+target_checked_elsewhere() {
+  target_ref="refs/heads/$TARGET_BRANCH"
+  git -C "$REPO" worktree list --porcelain 2>/dev/null |
+    awk -v repo="$REPO" -v target="$target_ref" '
+      $1=="worktree" { wt=$2 }
+      $1=="branch" && $2==target && wt!=repo { found=1 }
+      END { exit found ? 0 : 1 }
+    '
+}
+ancestor() {
+  git -C "$REPO" cat-file -e "$1^{commit}" 2>/dev/null &&
+    git -C "$REPO" cat-file -e "$2^{commit}" 2>/dev/null &&
+    git -C "$REPO" merge-base --is-ancestor "$1" "$2" 2>/dev/null
+}
+
+ACTUAL_BRANCH=unknown
+HEAD_SHA=unknown
+TARGET_LOCAL=unknown
+REMOTE_MAIN=unknown
+REMOTE_TARGET=unknown
+WORKTREE=unknown
+GUARDS=blocked
+EFFECT=not_run
+TARGET_AFTER=unknown
+BRANCH_AFTER=unknown
+HEAD_AFTER=unknown
+REMOTE_TARGET_PRESERVED=unknown
+OTHER_REFS_PRESERVED=unknown
+ORIGIN_MAIN_PRESERVED=unknown
+STATE=blocked
+
+emit() {
+  printf '%s\n' \
+    "schema=$SCHEMA" \
+    "operation=$operation" \
+    "expected_main=$expected" \
+    "actual_branch=$ACTUAL_BRANCH" \
+    "head=$HEAD_SHA" \
+    "target_local=$TARGET_LOCAL" \
+    "remote_main=$REMOTE_MAIN" \
+    "remote_target=$REMOTE_TARGET" \
+    "worktree=$WORKTREE" \
+    "guards=$GUARDS" \
+    "state=$STATE" \
+    "effect=$EFFECT" \
+    "branch_after=$BRANCH_AFTER" \
+    "head_after=$HEAD_AFTER" \
+    "target_after=$TARGET_AFTER" \
+    "remote_target_preserved=$REMOTE_TARGET_PRESERVED" \
+    "other_refs_preserved=$OTHER_REFS_PRESERVED" \
+    "origin_main_preserved=$ORIGIN_MAIN_PRESERVED" \
+    'details=withheld'
+}
+blocked() { GUARDS=blocked; STATE=blocked; EFFECT=not_run; emit; exit 3; }
+unknown() { STATE=unknown; EFFECT=unknown; emit; exit 5; }
+
+collect() {
+  [ -d "$REPO" ] || return 1
+  top=$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null) || return 1
+  [ "$top" = "$REPO" ] || return 1
+  origin_url=$(git -C "$REPO" config --get remote.origin.url 2>/dev/null) || return 1
+  effective_origin=$(git -C "$REPO" remote get-url origin 2>/dev/null) || return 1
+  valid_origin_url "$origin_url" && valid_origin_url "$effective_origin" || return 1
+  git -C "$REPO" config --get remote.origin.uploadpack >/dev/null 2>&1 && return 1
+  git -C "$REPO" config --get remote.origin.proxy >/dev/null 2>&1 && return 1
+
+  status=$(git -C "$REPO" status --porcelain 2>/dev/null) || return 1
+  if [ -z "$status" ]; then WORKTREE=clean; else WORKTREE=dirty; return 1; fi
+
+  raw_branch=$(git -C "$REPO" branch --show-current 2>/dev/null) || return 1
+  ACTUAL_BRANCH=$(safe_branch "$raw_branch")
+  case "$ACTUAL_BRANCH" in
+    "$TARGET_BRANCH") ;;
+    server/*) ;;
+    *) return 1 ;;
+  esac
+
+  HEAD_SHA=$(git -C "$REPO" rev-parse --verify HEAD 2>/dev/null) || return 1
+  is_sha "$HEAD_SHA" || return 1
+  TARGET_LOCAL=$(git -C "$REPO" rev-parse --verify "refs/heads/$TARGET_BRANCH" 2>/dev/null) || return 1
+  is_sha "$TARGET_LOCAL" || return 1
+
+  REMOTE_MAIN=$(read_remote_ref refs/heads/main) || return 1
+  [ "$REMOTE_MAIN" = "$expected" ] || return 1
+  git -C "$REPO" cat-file -e "$expected^{commit}" 2>/dev/null || return 1
+
+  REMOTE_TARGET=$(read_remote_ref "refs/heads/$TARGET_BRANCH") || return 1
+  ancestor "$HEAD_SHA" "$expected" || return 1
+  ancestor "$TARGET_LOCAL" "$expected" || return 1
+  if [ "$REMOTE_TARGET" != missing ]; then
+    ancestor "$REMOTE_TARGET" "$expected" || return 1
+  fi
+  target_checked_elsewhere && return 1
+
+  if [ "$ACTUAL_BRANCH" = "$TARGET_BRANCH" ]; then
+    [ "$HEAD_SHA" = "$expected" ] && [ "$TARGET_LOCAL" = "$expected" ] || return 1
+    STATE=already_converged
+  else
+    source_ref=$(git -C "$REPO" rev-parse --verify "refs/heads/$ACTUAL_BRANCH" 2>/dev/null) || return 1
+    [ "$source_ref" = "$HEAD_SHA" ] || return 1
+    STATE=ready
+  fi
+  GUARDS=pass
+  return 0
+}
+
+collect || blocked
+
+if [ "$operation" = inspect ]; then
+  EFFECT=not_run
+  BRANCH_AFTER=$ACTUAL_BRANCH
+  HEAD_AFTER=$HEAD_SHA
+  TARGET_AFTER=$TARGET_LOCAL
+  emit
+  exit 0
+fi
+
+if [ "$STATE" = already_converged ]; then
+  EFFECT=already_converged
+  BRANCH_AFTER=$ACTUAL_BRANCH
+  HEAD_AFTER=$HEAD_SHA
+  TARGET_AFTER=$TARGET_LOCAL
+  REMOTE_TARGET_PRESERVED=yes
+  OTHER_REFS_PRESERVED=yes
+  ORIGIN_MAIN_PRESERVED=yes
+  emit
+  exit 0
+fi
+
+source_branch_before=$ACTUAL_BRANCH
+source_ref_before=$(git -C "$REPO" rev-parse --verify "refs/heads/$source_branch_before" 2>/dev/null) || unknown
+origin_main_before=$(git -C "$REPO" rev-parse --verify refs/remotes/origin/main 2>/dev/null || printf '%s' missing)
+other_refs_before=$(other_refs_snapshot) || unknown
+remote_target_before=$REMOTE_TARGET
+target_before=$TARGET_LOCAL
+guard_branch=$ACTUAL_BRANCH
+guard_head=$HEAD_SHA
+
+collect || blocked
+[ "$STATE" = ready ] || blocked
+[ "$ACTUAL_BRANCH" = "$guard_branch" ] || blocked
+[ "$HEAD_SHA" = "$guard_head" ] || blocked
+[ "$TARGET_LOCAL" = "$target_before" ] || blocked
+[ "$REMOTE_TARGET" = "$remote_target_before" ] || blocked
+
+git -C "$REPO" update-ref "refs/heads/$TARGET_BRANCH" "$expected" "$target_before" || { EFFECT=failed; emit; exit 4; }
+git -C "$REPO" switch --quiet "$TARGET_BRANCH" || unknown
+
+BRANCH_AFTER=$(safe_branch "$(git -C "$REPO" branch --show-current 2>/dev/null || printf '')")
+HEAD_AFTER=$(git -C "$REPO" rev-parse --verify HEAD 2>/dev/null || printf unknown)
+TARGET_AFTER=$(git -C "$REPO" rev-parse --verify "refs/heads/$TARGET_BRANCH" 2>/dev/null || printf unknown)
+status_after=$(git -C "$REPO" status --porcelain 2>/dev/null || printf __unknown__)
+source_ref_after=$(git -C "$REPO" rev-parse --verify "refs/heads/$source_branch_before" 2>/dev/null || printf unknown)
+origin_main_after=$(git -C "$REPO" rev-parse --verify refs/remotes/origin/main 2>/dev/null || printf missing)
+other_refs_after=$(other_refs_snapshot 2>/dev/null || printf __unknown__)
+remote_target_after=$(read_remote_ref "refs/heads/$TARGET_BRANCH" || printf unknown)
+remote_main_after=$(read_remote_ref refs/heads/main || printf unknown)
+
+[ "$remote_target_after" = "$remote_target_before" ] && REMOTE_TARGET_PRESERVED=yes || REMOTE_TARGET_PRESERVED=no
+[ "$other_refs_after" = "$other_refs_before" ] && OTHER_REFS_PRESERVED=yes || OTHER_REFS_PRESERVED=no
+[ "$origin_main_after" = "$origin_main_before" ] && ORIGIN_MAIN_PRESERVED=yes || ORIGIN_MAIN_PRESERVED=no
+
+if [ "$BRANCH_AFTER" = "$TARGET_BRANCH" ] &&
+   [ "$HEAD_AFTER" = "$expected" ] &&
+   [ "$TARGET_AFTER" = "$expected" ] &&
+   [ -z "$status_after" ] &&
+   [ "$source_ref_after" = "$source_ref_before" ] &&
+   [ "$remote_main_after" = "$expected" ] &&
+   [ "$REMOTE_TARGET_PRESERVED" = yes ] &&
+   [ "$OTHER_REFS_PRESERVED" = yes ] &&
+   [ "$ORIGIN_MAIN_PRESERVED" = yes ]; then
+  WORKTREE=clean
+  STATE=converged
+  EFFECT=applied
+  emit
+  exit 0
+fi
+unknown

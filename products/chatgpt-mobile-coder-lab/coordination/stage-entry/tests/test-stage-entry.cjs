@@ -233,14 +233,16 @@ test('unparseable nonterminal packet keeps overlap UNKNOWN', () => {
         {number: 20, state: 'open', body: `<!-- canonical-main-work-packet:v1 -->
 ## State
 \`IN_PROGRESS\`
-## Bounded repository write ceiling
-1. \`path:src/**\``},
+## Bounded write scope
+1. \`path:../src/**\``},
       ]);
     }
     throw new Error(endpoint);
   };
   const value = stage.discoverOverlap({packetNumber: 10, requestedScopes: ['path:docs/demo.md'], runner});
   assert.equal(value.state, 'UNKNOWN');
+  assert.equal(value.discovery, 'COMPLETE');
+  assert(value.findings.some((finding) => finding.code === 'PACKET_SCOPE_UNRESOLVED'));
 });
 
 test('discovery truncation remains UNKNOWN rather than optimistic DISJOINT', () => {
@@ -309,8 +311,8 @@ test('source overlap resolves before landing observation or normalization', () =
       {number: 88, state: 'open', body: `<!-- canonical-main-work-packet:v1 -->
 ## State
 \`IN_PROGRESS\`
-## Bounded repository write ceiling
-1. \`path:src/**\``},
+## Bounded write scope
+1. \`path:../src/**\``},
     ],
   });
   const runner = (args, options) => {

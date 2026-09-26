@@ -9,7 +9,7 @@ TARGET_BRANCH='server/work'
 operation=${1-}
 expected=${2-}
 if [ "$#" -ne 2 ] || { [ "$operation" != inspect ] && [ "$operation" != apply ]; } || ! printf '%s\n' "$expected" | grep -Eq '^[0-9a-f]{40}$'; then
-  printf '%s\n' 'mcl-m-landing-branch-repair: invalid invocation' >&2
+  printf '%s\n' 'mcl-s-landing-branch-repair: invalid invocation' >&2
   exit 64
 fi
 

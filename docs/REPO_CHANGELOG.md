@@ -2181,3 +2181,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/7d641616955797ba6df67f87c91b7be6c5c9c4ea)
 - Event ID: `a8ea9a745310ae26944cdf7c34964a5e8761078e189df9b9630f89653ad79519`
 <!-- canonical-main-doc-promoted:a8ea9a745310ae26944cdf7c34964a5e8761078e189df9b9630f89653ad79519 -->
+
+### 2026-09-28 — Merge pull request #3070 from hanmiyoo10-alt/server/repo-validation-activity-adapter-3067
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `45a5e54a65415ee9c89718ff36ac3a91747a2c50`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/45a5e54a65415ee9c89718ff36ac3a91747a2c50)
+- Event ID: `548e3440e2187d60d356235474661f84cd6722f795c50404d06fe3fadb061fdb`
+<!-- canonical-main-doc-promoted:548e3440e2187d60d356235474661f84cd6722f795c50404d06fe3fadb061fdb -->

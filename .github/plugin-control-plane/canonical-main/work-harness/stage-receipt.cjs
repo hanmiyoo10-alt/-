@@ -81,7 +81,7 @@ function stringList(value, field, reasons) {
   }
   return uniqueSorted(rows);
 }
-function normalizeAuthorityRefs(value, reasons, unknowns, conflicts) {
+function normalizeAuthorityRefs(value, reasons, unknowns, conflicts, {allowLegacyPrAuthority = false} = {}) {
   const byKey = new Map();
   for (const [index, row] of list(value, 'authorityRefs', reasons).entries()) {
     const field = `authorityRefs[${index}]`;
@@ -92,6 +92,23 @@ function normalizeAuthorityRefs(value, reasons, unknowns, conflicts) {
     if (kind && !AUTHORITY_KINDS.includes(kind)) reasons.push(`INPUT_AUTHORITY_KIND_INVALID:${kind}`);
     if (kind === 'GIT_REF' || kind === 'COMMIT') {
       if (identity && !/^[0-9a-f]{40}$/i.test(identity)) reasons.push(`INPUT_AUTHORITY_SHA_INVALID:${field}`);
+    }
+    if (kind === 'PR') {
+      const canonicalLocator = Boolean(locator && /^pr:#[1-9][0-9]*$/.test(locator));
+      const canonicalIdentity = Boolean(identity && /^[0-9a-f]{40}$/i.test(identity));
+      const legacyLocator = Boolean(locator && /^#[1-9][0-9]*$/.test(locator));
+      const legacyIdentity = Boolean(identity && /^head:[0-9a-f]{40}$/i.test(identity));
+      const canonicalShape = canonicalLocator && canonicalIdentity;
+      const legacyShape = allowLegacyPrAuthority && legacyLocator && legacyIdentity;
+      if (!canonicalShape && !legacyShape) {
+        const locatorAccepted = canonicalLocator || (allowLegacyPrAuthority && legacyLocator);
+        const identityAccepted = canonicalIdentity || (allowLegacyPrAuthority && legacyIdentity);
+        if (!locatorAccepted) reasons.push(`INPUT_AUTHORITY_PR_LOCATOR_INVALID:${field}`);
+        if (!identityAccepted) reasons.push(`INPUT_AUTHORITY_PR_IDENTITY_INVALID:${field}`);
+        if (locatorAccepted && identityAccepted) {
+          reasons.push(`INPUT_AUTHORITY_PR_SHAPE_INVALID:${field}`);
+        }
+      }
     }
     if (!kind || !locator) continue;
     if (!identity) {
@@ -221,7 +238,7 @@ function invalidResult(reasons) {
     reasonCodes: uniqueSorted(reasons.length ? reasons : ['INPUT_INVALID']),
   };
 }
-function projectStageReceipt(input) {
+function projectStageReceiptInternal(input, {allowLegacyPrAuthority = false} = {}) {
   const reasons = [];
   if (!objectKeys(input, TOP_FIELDS, 'input', reasons)) return invalidResult(reasons);
   if (input.schemaVersion !== 1) reasons.push('INPUT_SCHEMA_UNSUPPORTED');
@@ -237,7 +254,8 @@ function projectStageReceipt(input) {
     if (!Object.prototype.hasOwnProperty.call(input, field)) unknowns.push(`INPUT_FIELD_OMITTED:${field}`);
   }
   const reasonCodes = [];
-  const authorityRefs = normalizeAuthorityRefs(input.authorityRefs, reasons, unknowns, conflicts);
+  const authorityRefs = normalizeAuthorityRefs(
+    input.authorityRefs, reasons, unknowns, conflicts, {allowLegacyPrAuthority});
   const requiredGates = normalizeGates(input.requiredGates, reasons, unknowns, conflicts, blockers, reasonCodes);
   const scope = normalizeScope(input.scope, reasons, unknowns, conflicts);
   let proof = normalizeProof(input.proof, reasons, unknowns);
@@ -299,6 +317,10 @@ function projectStageReceipt(input) {
     return invalidResult(['RECEIPT_RENDER_INVALID']);
   }
   return receipt;
+}
+
+function projectStageReceipt(input) {
+  return projectStageReceiptInternal(input);
 }
 
 function renderList(values) {
@@ -455,7 +477,7 @@ function parseRenderedStageReceipt(input) {
       dependencies,
       nextLegalAction: next[1],
     };
-    const receipt = projectStageReceipt(facts);
+    const receipt = projectStageReceiptInternal(facts, {allowLegacyPrAuthority: true});
     if (receipt.status === 'INVALID') throw new Error('REPROJECT_INVALID');
     if (receipt.receiptDigest !== digest) {
       return {status: 'CONFLICT', reasonCodes: ['STAGE_RECEIPT_DIGEST_CONFLICT'], value: null};

@@ -2173,3 +2173,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ad2b84255a9c0ed2d7a4eabac0307a481c79edb8)
 - Event ID: `a8e8a8d2170dcf57d09e59a4078e4c6483ad037896677aad55c2fbbb7e966875`
 <!-- canonical-main-doc-promoted:a8e8a8d2170dcf57d09e59a4078e4c6483ad037896677aad55c2fbbb7e966875 -->
+
+### 2026-09-27 — Merge pull request #3061 from hanmiyoo10-alt/server/repo-reviewed-external-gh-blob-3059
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `7d641616955797ba6df67f87c91b7be6c5c9c4ea`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/7d641616955797ba6df67f87c91b7be6c5c9c4ea)
+- Event ID: `a8ea9a745310ae26944cdf7c34964a5e8761078e189df9b9630f89653ad79519`
+<!-- canonical-main-doc-promoted:a8ea9a745310ae26944cdf7c34964a5e8761078e189df9b9630f89653ad79519 -->

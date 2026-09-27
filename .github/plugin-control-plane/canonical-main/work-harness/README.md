@@ -221,6 +221,18 @@ When Actions-style repository/auth environment is present, this surface preserve
 
 This surface adds no workflow-wide `issue_comment` listener, no contents/ref/PR/release/production authority, no new mutable truth owner, no mutation capability to `tools/repo-ci-mcp/**`, and no claim that repository code can suppress host UI activity cards. Its compactness benefit is narrower: when this harness is available, one visible repository command can preserve the two required durable issue comments internally.
 
+Before any continuation that may perform or re-project a substantial canonical-main stage, run the read-only checkpoint inspection first:
+
+```sh
+node .github/plugin-control-plane/canonical-main/work-harness/stage-checkpoint.cjs inspect --packet <canonical-main-packet-issue>
+```
+
+Inspection reads only the target packet, its comments, and #293 comments. It pairs exact packet/audit checkpoint digests, projects the ordered durable stage prefix through the existing packet lifecycle/stage parser, and reports whether the continuation must reuse a completed stage, continue the current stage, finish transaction close-sync, or stop as terminal. Multiple paired checkpoint variants for one stage are preserved as variants rather than resolved by timestamp or latest-comment selection.
+
+`REUSE_COMPLETED_STAGE` forbids re-running or re-projecting that completed substantial stage and consumes zero current substantial-stage budget. Inspection does not select receipt/candidate/merge/effect evidence, so a later stage that needs exact evidence identity must still perform its targeted owning-authority readback. Variant presence likewise triggers targeted drill-down only when exact evidence identity matters; it never grants latest-comment-wins semantics.
+
+The inspect result always fixes `mutationAuthorized=false` and `executionAuthorized=false`. It performs no comment POST and adds no stage/effect authority; it operationalizes the existing Phase 8.7g fresh durable rebind contract at the checkpoint owner.
+
 ## Derived canonical-main stage receipt
 
 `stage-receipt.cjs` is a read-only projector for #2275 item 10. It accepts bounded structured stage facts already established by owning authority/evidence and emits one deterministic `CANONICAL_MAIN_STAGE_RECEIPT` plus a compact Markdown projection. It does not read GitHub, discover truth, parse arbitrary packet prose, or write repository/issue state.

@@ -2149,3 +2149,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/5ff1e48d670a83c4c6897f65822597d781ec69d6)
 - Event ID: `3faf0f0247a3d2a2036659a861496575af24f6d44272937bb000a8b21106508d`
 <!-- canonical-main-doc-promoted:3faf0f0247a3d2a2036659a861496575af24f6d44272937bb000a8b21106508d -->
+
+### 2026-09-27 — Merge pull request #3042 from hanmiyoo10-alt/packet/3041-stage-receipt-pr-identity
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `111baef4ce6cf2be419c3ff026b09bb0b1e68b78`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/111baef4ce6cf2be419c3ff026b09bb0b1e68b78)
+- Event ID: `542ebbd2c9a271e0bdfbf6397166a4d4d06c37e76a05b60ad69e61d0e0c8ff85`
+<!-- canonical-main-doc-promoted:542ebbd2c9a271e0bdfbf6397166a4d4d06c37e76a05b60ad69e61d0e0c8ff85 -->

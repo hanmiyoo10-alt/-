@@ -70,6 +70,29 @@
       "EXPERIMENT_CLOSE"
     ],
     "ordinaryContinuationMaxSubstantialStages": 1,
+    "coupledStageContinuation": {
+      "version": 1,
+      "fromStage": "VALIDATION_MERGE",
+      "toStage": "POSTMERGE_CONVERGENCE",
+      "defaultWithinOneUserContinuation": true,
+      "requiresSourceStageDurableCompletion": true,
+      "requiresExactMergeAttributionAndFinalize": true,
+      "requiresSamePacket": true,
+      "requiresSamePrimaryGoal": true,
+      "requiresSameDeclaredScope": true,
+      "requiresExactMergedIdentity": true,
+      "requiresExistingAuthority": true,
+      "requiresDeterministicSuffix": true,
+      "requiresNoUserInput": true,
+      "boundedSettlingOnly": true,
+      "separateStageReceiptsRequired": true,
+      "separateStageCheckpointsRequired": true,
+      "stopConditions": ["MERGE_ABSENT_FAILED_OR_AMBIGUOUS", "MAIN_ATTRIBUTION_DRIFT", "IDENTITY_SCOPE_OWNER_OR_AUTHORITY_EXPANSION", "FAIL_BLOCKED_OR_CONFLICT", "UNRESOLVED_UNKNOWN", "UNBOUNDED_EXTERNAL_WAIT", "USER_INPUT_REQUIRED", "PROJECT_BOUNDARY_REQUIRED"],
+      "postmergeFailureRemainsPostmergeFailure": true,
+      "stopAfterStage": "POSTMERGE_CONVERGENCE",
+      "autoEnterExperimentClose": false,
+      "noNewEffectAuthority": true
+    },
     "tinyReadOnlyCollapse": {
       "allowed": true,
       "maxBoundedReads": 2

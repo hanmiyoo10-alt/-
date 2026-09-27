@@ -300,6 +300,43 @@ test('CLI exposes no packet or PR selector and apply requires literal flag', () 
   });
 });
 
+test('no-token client reads only fixed reviewed blobs through exact gh GET', async () => {
+  const calls = [];
+  const ref = '7'.repeat(40);
+  const repoPath = owner.TARGET.paths[0];
+  const endpoint = owner.fixedContentsEndpoint(repoPath, ref);
+  const client = owner.createReviewedLiveClient({
+    env: {},
+    runner: (args) => {
+      calls.push(args);
+      return {
+        code: 0,
+        stdout: JSON.stringify({type: 'file', sha: owner.TARGET.blobs[repoPath]}),
+        stderr: '',
+      };
+    },
+  });
+  const value = await client.api(endpoint);
+  assert.equal(value.type, 'file');
+  assert.equal(value.sha, owner.TARGET.blobs[repoPath]);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], [
+    'api', 'repos/hanmiyoo10-alt/-' + endpoint, '--method', 'GET',
+    '--header', 'Accept: application/vnd.github+json',
+  ]);
+  assert.equal(owner.reviewedContentEndpointAllowed(endpoint), true);
+  await assert.rejects(() => client.api('/contents/README.md?ref=' + ref));
+  await assert.rejects(() => client.api(owner.fixedContentsEndpoint(repoPath, 'not-a-sha')));
+  assert.equal(calls.length, 1);
+});
+
+test('token-backed client selection remains the existing validation-merge path', () => {
+  const source = fs.readFileSync(path.join(__dirname,
+    '../reviewed-external-finalizer.cjs'), 'utf8');
+  assert.match(source, /const base = validationMerge\.createLiveClient\(options\)/);
+  assert.match(source, /if \(env\.GH_TOKEN \|\| env\.GITHUB_TOKEN\) return base/);
+});
+
 test('source preserves pure/product owners and has no direct merge/git effect primitive', () => {
   const source = fs.readFileSync(path.join(__dirname,
     '../reviewed-external-finalizer.cjs'), 'utf8');

@@ -281,6 +281,37 @@ assert.deepEqual(policy.stagedInteraction.coupledStageContinuation, {
   autoEnterExperimentClose: false,
   noNewEffectAuthority: true,
 });
+assert.deepEqual(policy.stagedInteraction.terminalStageContinuation, {
+  version: 1,
+  fromStage: 'POSTMERGE_CONVERGENCE',
+  toStage: 'EXPERIMENT_CLOSE',
+  conditionalWithinSameUserContinuation: true,
+  requiresSourceStageDurableCompletion: true,
+  requiresSamePacket: true,
+  requiresSamePrimaryGoal: true,
+  requiresSameDeclaredScope: true,
+  requiresCurrentAuthority: true,
+  eligibilityOwner: '.github/plugin-control-plane/canonical-main/work-system/proof-eligibility.cjs',
+  eligibleDispositions: [
+    'NOT_REQUIRED',
+    'NOT_APPLICABLE',
+    'OBSERVATIONAL_PENDING_ALLOWED',
+    'BLOCKED_CAPABILITY',
+  ],
+  requiresClosureBlockingFalse: true,
+  stopDispositions: ['LIVE_REQUIRED', 'UNKNOWN', 'CONFLICT'],
+  stopOnAlreadySatisfiedLiveEvidence: true,
+  requiresNoRealExperiment: true,
+  requiresNoUserInput: true,
+  requiresNoDeviceOrExternalEvent: true,
+  syntheticLiveEventForbidden: true,
+  inferLiveProven: false,
+  separateExperimentCloseReceiptRequired: true,
+  separateExperimentCloseCheckpointRequired: true,
+  terminalBodyReconcileBeforeNativeClose: true,
+  cascadeAfterCoupledValidationPostmergeAllowed: true,
+  noNewEffectAuthority: true,
+});
 assert.deepEqual(policy.stagedInteraction.tinyReadOnlyCollapse, {
   allowed: true,
   maxBoundedReads: 2,
@@ -464,7 +495,7 @@ assert.match(template, /Discovering that an advertised earlier stage is already 
 assert.match(template, /reconverge only the stale or incomplete suffix/);
 assert.match(template, /Required immediate effect readback, current-stage validation, idempotence\/CAS confirmation, evidence publication, and required current-packet self close-sync may remain one stage-local transaction closure/);
 assert.match(template, /Those stage-local rules never authorize entry into the next declared substantial stage/);
-assert.match(template, /cross-stage entry is limited to the named coupled validation\/postmerge specialization above/);
+assert.match(template, /cross-stage entry is limited to the named validation\/postmerge and conditional terminal-suffix pacing specializations above/);
 assert.match(template, /retry-until-PASS is forbidden/);
 assert.match(template, /exact equality of writable path\/prefix set, semantic\/effect surface set, primary goal, and effect owner/);
 assert.match(template, /unresolved `BLOCKED \/ UNKNOWN \/ CONFLICT` stops the continuation/);
@@ -494,10 +525,30 @@ assert.match(sharedInteraction, /VALIDATION_MERGE.*POSTMERGE_CONVERGENCE/s);
 assert.match(sharedInteraction, /separate canonical receipts, checkpoints, failure states/);
 assert.match(sharedInteraction, /successful merge never implies successful postmerge convergence/);
 assert.match(sharedInteraction, /never auto-enters .*EXPERIMENT_CLOSE/);
+assert.match(sharedInteraction, /### Conditional terminal-stage continuation/);
+assert.match(sharedInteraction, /POSTMERGE_CONVERGENCE.*EXPERIMENT_CLOSE/s);
+assert.match(sharedInteraction, /proof-eligibility\.cjs/);
+assert.match(sharedInteraction, /NOT_REQUIRED.*NOT_APPLICABLE.*OBSERVATIONAL_PENDING_ALLOWED.*BLOCKED_CAPABILITY/s);
+assert.match(sharedInteraction, /closureBlocking=false/);
+assert.match(sharedInteraction, /LIVE_REQUIRED.*UNKNOWN.*CONFLICT/s);
+assert.match(sharedInteraction, /never creates a synthetic live event/);
+assert.match(sharedInteraction, /never infers .*LIVE_PROVEN/);
+assert.match(sharedInteraction, /terminal packet-body reconciliation must complete before native issue closure/);
+assert.match(sharedInteraction, /same user continuation may immediately begin terminal-only .*EXPERIMENT_CLOSE/);
+assert.match(sharedInteraction, /does not make the validation\/postmerge coupling itself auto-enter the experiment stage/);
 assert.match(template, /Canonical-main has one named cross-stage pacing specialization/);
 assert.match(template, /ordinary numeric budget remains .*1 substantial stage/);
 assert.match(template, /separate receipts\/checkpoints and failure semantics/);
 assert.match(template, /never auto-enter .*EXPERIMENT_CLOSE/);
+assert.match(template, /conditional terminal-suffix specialization/);
+assert.match(template, /proof-eligibility\.cjs/);
+assert.match(template, /NOT_REQUIRED.*NOT_APPLICABLE.*OBSERVATIONAL_PENDING_ALLOWED.*BLOCKED_CAPABILITY/);
+assert.match(template, /closureBlocking=false/);
+assert.match(template, /LIVE_REQUIRED \/ UNKNOWN \/ CONFLICT/);
+assert.match(template, /Never synthesize a live event or infer .*LIVE_PROVEN/);
+assert.match(template, /separate EXPERIMENT_CLOSE receipt\/checkpoint/);
+assert.match(template, /reconcile the terminal body before native issue closure/);
+assert.match(template, /may cascade into this terminal suffix/);
 assert.match(template, /current interaction stage, completed stages, and exact next stage/);
 assert.match(commonRules, /### RCR-D15 — Stage substantial interactive repository work at bounded checkpoints/);
 assert.match(commonRules, /\*\*Class:\*\* `DEFAULT`/);
@@ -1724,6 +1775,48 @@ assert.equal(proofResult.claimsLiveProven, false);
 proofResult = classifyProofEligibility(proofFixture());
 assert.equal(proofResult.disposition, 'UNKNOWN');
 assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.ACTIVATED_ACCEPTANCE_UNRESOLVED);
+
+const terminalStage = policy.stagedInteraction.terminalStageContinuation;
+for (const fixture of [
+  proofFixture({liveNotRequired: true}),
+  proofFixture({liveApplies: false, notApplicable: true}),
+  proofFixture({
+    observationalPendingAllowed: true,
+    observationalPendingNonBlocking: true,
+  }),
+  proofFixture({
+    capabilityUnavailable: true,
+    capabilityBlockNonBlocking: true,
+  }),
+]) {
+  const result = classifyProofEligibility(fixture);
+  assert.ok(terminalStage.eligibleDispositions.includes(result.disposition));
+  assert.equal(result.closureBlocking, false);
+}
+for (const fixture of [
+  proofFixture({liveRequired: true}),
+  proofFixture(),
+  proofFixture({liveRequired: true, liveNotRequired: true}),
+]) {
+  const result = classifyProofEligibility(fixture);
+  assert.ok(terminalStage.stopDispositions.includes(result.disposition));
+}
+const terminalBlockingCapability = classifyProofEligibility(proofFixture({
+  capabilityUnavailable: true,
+}));
+assert.equal(terminalBlockingCapability.disposition, 'BLOCKED_CAPABILITY');
+assert.equal(terminalBlockingCapability.closureBlocking, true);
+assert.equal(terminalStage.requiresClosureBlockingFalse, true);
+const terminalAlreadySatisfiedLive = classifyProofEligibility(proofFixture({
+  liveRequired: true,
+  liveSatisfied: true,
+}));
+assert.equal(terminalAlreadySatisfiedLive.disposition, 'UNKNOWN');
+assert.equal(
+  terminalAlreadySatisfiedLive.reasonCode,
+  PROOF_ELIGIBILITY_REASON_CODES.LIVE_ALREADY_SATISFIED_OUTSIDE_ELIGIBILITY,
+);
+assert.equal(terminalStage.stopOnAlreadySatisfiedLiveEvidence, true);
 
 assert.doesNotMatch(proofEligibilitySource, /child_process|https?:\/\/|gh\s+api|fetch\s*\(/);
 assert.match(readme, /## Proof-level \/ live-observation eligibility classifier/);

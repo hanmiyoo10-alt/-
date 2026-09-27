@@ -67,3 +67,21 @@ Feature-ID `main-ssh-tunnel` 안에서 core tunnel supervisor와 그 fixed guard
 
 다음 한 단계:
 - 추가 배포 조작 없이 자연 운용을 관찰한다. shared `runsvdir` root-cause work remains separate from this Feature-ID and must not be inferred from guard-anchor success.
+
+## 2026-09-27 natural link/handoff flap — bounded SSH liveness follow-up
+
+#2680 natural evidence separated a new failure mode from the completed guard-owner repair.
+
+Observed on M:
+- a short PocketRisu path flap lasted about 16 seconds while the underlying usable network path disappeared and returned;
+- a later flap lasted about 99 seconds during repeated link/handoff churn;
+- tailscaled, PocketRisu guard, anchor, server PocketRisu and server sshd stayed alive;
+- the stale SSH child exited about 89 seconds after the second DOWN observation, after which existing runit started the next child and localhost health recovered.
+
+The deployed tunnel used ServerAliveInterval=30 + ServerAliveCountMax=3, which is consistent with an approximately 90-second stale-session liveness window. This correlation does not identify the initiating Android/network cause, which remains UNKNOWN.
+
+Follow-up #3043 brings the previously device-only tunnel run contract into this Feature-ID without committing private endpoint material. The tracked run file reads one fixed device-local private target token from $HOME/.config/pocketrisu-main-ssh-tunnel/target; it does not source/eval that file and exposes no caller-selected host/path/command surface.
+
+The reviewed candidate liveness policy is ServerAliveInterval=15 + ServerAliveCountMax=3, approximately 45 seconds. It remains above the observed ~16-second short flap while materially reducing the old ~90-second stale-child window.
+
+This is repository candidate state only until normal merge, postmerge convergence and a separately bounded M deployment complete. Network, Tailscale, RDC and localhost health remain observation-only and are never restart triggers.

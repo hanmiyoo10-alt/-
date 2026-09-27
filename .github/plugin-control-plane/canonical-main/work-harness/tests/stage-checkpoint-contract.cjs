@@ -14,7 +14,9 @@ const {
   createGhCheckpointClient,
   createStageCheckpointClient,
   exitCodeFor,
+  inspectCheckpoint,
   parseArgs,
+  parseInspectArgs,
   recordCheckpoint,
   renderComment,
   run,
@@ -26,19 +28,41 @@ const STAGE = 'IMPLEMENTATION_PR';
 const BODY = 'checkpoint evidence\n- exact scope: four files';
 const PACKET_BODY = '<!-- canonical-main-work-packet:v1 -->\n# packet';
 
-function fakeClient({ packetComments = [], auditComments = [], failWrites = [] } = {}) {
+function inspectPacketBody(lifecycle, currentStage) {
+  return [
+    '<!-- canonical-main-work-packet:v1 -->',
+    '# packet',
+    '',
+    '## State',
+    `\`${lifecycle}\``,
+    '',
+    '## Interaction stage',
+    '- Completed stage(s): `NONE`',
+    `- Current stage: \`${currentStage}\``,
+    '- Next stage: `NONE`',
+  ].join('\n');
+}
+
+function checkpointComment(stage, digest, surface, id) {
+  return {id, body: checkpointMarker(PACKET, stage, digest, surface)};
+}
+
+function fakeClient({ packetComments = [], auditComments = [], failWrites = [], packetIssue = null } = {}) {
   const comments = new Map([
     [PACKET, structuredClone(packetComments)],
     [AUDIT_ISSUE, structuredClone(auditComments)],
   ]);
   const writes = [];
+  const calls = [];
   let nextId = 9000;
   return {
     writes,
+    calls,
     comments,
     async api(endpoint, options = {}) {
+      calls.push({endpoint, method: options.method || 'GET'});
       if (endpoint === `/issues/${PACKET}` && (!options.method || options.method === 'GET')) {
-        return { number: PACKET, state: 'open', body: PACKET_BODY };
+        return packetIssue || { number: PACKET, state: 'open', body: PACKET_BODY };
       }
       const list = endpoint.match(/^\/issues\/(\d+)\/comments\?per_page=100&page=(\d+)$/);
       if (list && (!options.method || options.method === 'GET')) {
@@ -90,8 +114,236 @@ assert.deepEqual(
 );
 assert.throws(() => parseArgs(['--packet', String(PACKET), '--stage', STAGE]), /required/);
 assert.throws(() => parseArgs(['--packet', '0', '--stage', STAGE, '--body-file', 'x']), /positive integer/);
+assert.deepEqual(parseInspectArgs(['inspect', '--packet', String(PACKET)]), {packetNumber: PACKET});
+assert.throws(() => parseInspectArgs(['inspect', '--packet', '0']), /usage/);
+assert.throws(() => parseInspectArgs(['inspect', '--packet', String(PACKET), '--stage', STAGE]), /usage/);
 
 (async () => {
+  const inspectNone = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: inspectPacketBody('IN_PROGRESS', 'AUTHORITY_SCOPE'),
+    },
+  });
+  const noDurable = await inspectCheckpoint({client: inspectNone, packetNumber: PACKET});
+  assert.equal(noDurable.disposition, 'PASS');
+  assert.equal(noDurable.rebindDisposition, 'CONTINUE_CURRENT_STAGE');
+  assert.equal(noDurable.nextStage, 'AUTHORITY_SCOPE');
+  assert.deepEqual(noDurable.completedStages, []);
+  assert.equal(noDurable.mutationAuthorized, false);
+  assert.equal(noDurable.executionAuthorized, false);
+  assert.equal(inspectNone.writes.length, 0);
+  assert.deepEqual(
+    inspectNone.calls.map((call) => call.method),
+    ['GET', 'GET', 'GET'],
+    'inspect must use reads only',
+  );
+
+  const authDigest = 'a'.repeat(64);
+  const authPair = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: inspectPacketBody('IN_PROGRESS', 'IMPLEMENTATION_PR'),
+    },
+    packetComments: [checkpointComment('AUTHORITY_SCOPE', authDigest, 'packet', 1)],
+    auditComments: [checkpointComment('AUTHORITY_SCOPE', authDigest, 'audit', 2)],
+  });
+  const continueImplementation = await inspectCheckpoint({client: authPair, packetNumber: PACKET});
+  assert.equal(continueImplementation.disposition, 'PASS');
+  assert.equal(continueImplementation.rebindDisposition, 'CONTINUE_CURRENT_STAGE');
+  assert.equal(continueImplementation.nextStage, 'IMPLEMENTATION_PR');
+  assert.deepEqual(continueImplementation.completedStages, ['AUTHORITY_SCOPE']);
+
+  const staleAuthority = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: inspectPacketBody('IN_PROGRESS', 'AUTHORITY_SCOPE'),
+    },
+    packetComments: [checkpointComment('AUTHORITY_SCOPE', authDigest, 'packet', 3)],
+    auditComments: [checkpointComment('AUTHORITY_SCOPE', authDigest, 'audit', 4)],
+  });
+  const reuseAuthority = await inspectCheckpoint({client: staleAuthority, packetNumber: PACKET});
+  assert.equal(reuseAuthority.disposition, 'PASS');
+  assert.equal(reuseAuthority.rebindDisposition, 'REUSE_COMPLETED_STAGE');
+  assert.equal(reuseAuthority.nextStage, 'IMPLEMENTATION_PR');
+  assert.equal(reuseAuthority.nextLegalAction, 'ADVANCE_TO_IMPLEMENTATION_PR');
+
+  const implDigestA = 'b'.repeat(64);
+  const implDigestB = 'c'.repeat(64);
+  const variants = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: inspectPacketBody('IN_PROGRESS', 'VALIDATION_MERGE'),
+    },
+    packetComments: [
+      checkpointComment('AUTHORITY_SCOPE', authDigest, 'packet', 5),
+      checkpointComment('IMPLEMENTATION_PR', implDigestA, 'packet', 6),
+      checkpointComment('IMPLEMENTATION_PR', implDigestB, 'packet', 7),
+    ],
+    auditComments: [
+      checkpointComment('AUTHORITY_SCOPE', authDigest, 'audit', 8),
+      checkpointComment('IMPLEMENTATION_PR', implDigestA, 'audit', 9),
+      checkpointComment('IMPLEMENTATION_PR', implDigestB, 'audit', 10),
+    ],
+  });
+  const variantResult = await inspectCheckpoint({client: variants, packetNumber: PACKET});
+  assert.equal(variantResult.disposition, 'PASS');
+  assert.equal(variantResult.rebindDisposition, 'CONTINUE_CURRENT_STAGE');
+  assert.equal(variantResult.nextStage, 'VALIDATION_MERGE');
+  const implStage = variantResult.stages.find((row) => row.stage === 'IMPLEMENTATION_PR');
+  assert.equal(implStage.variantCount, 2);
+  assert.deepEqual(implStage.pairedDigests, [implDigestA, implDigestB]);
+  assert.equal(variants.writes.length, 0);
+
+  const incompletePair = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: inspectPacketBody('IN_PROGRESS', 'IMPLEMENTATION_PR'),
+    },
+    packetComments: [checkpointComment('AUTHORITY_SCOPE', authDigest, 'packet', 11)],
+  });
+  const incomplete = await inspectCheckpoint({client: incompletePair, packetNumber: PACKET});
+  assert.equal(incomplete.disposition, 'UNKNOWN');
+  assert.ok(incomplete.reasonCodes.includes('CHECKPOINT_PAIR_INCOMPLETE'));
+  assert.equal(incomplete.rebindDisposition, null);
+
+  const duplicateMarker = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: inspectPacketBody('IN_PROGRESS', 'IMPLEMENTATION_PR'),
+    },
+    packetComments: [
+      checkpointComment('AUTHORITY_SCOPE', authDigest, 'packet', 12),
+      checkpointComment('AUTHORITY_SCOPE', authDigest, 'packet', 13),
+    ],
+    auditComments: [checkpointComment('AUTHORITY_SCOPE', authDigest, 'audit', 14)],
+  });
+  const duplicateInspect = await inspectCheckpoint({client: duplicateMarker, packetNumber: PACKET});
+  assert.equal(duplicateInspect.disposition, 'CONFLICT');
+  assert.ok(duplicateInspect.reasonCodes.includes('CHECKPOINT_MARKER_DUPLICATE'));
+
+  const malformedMarker = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: inspectPacketBody('IN_PROGRESS', 'IMPLEMENTATION_PR'),
+    },
+    packetComments: [{
+      id: 140,
+      body: `${checkpointMarker(PACKET, 'AUTHORITY_SCOPE', authDigest, 'packet')} trailing`,
+    }],
+    auditComments: [checkpointComment('AUTHORITY_SCOPE', authDigest, 'audit', 141)],
+  });
+  const malformedResult = await inspectCheckpoint({client: malformedMarker, packetNumber: PACKET});
+  assert.equal(malformedResult.disposition, 'CONFLICT');
+  assert.ok(malformedResult.reasonCodes.includes('CHECKPOINT_MARKER_MALFORMED'));
+
+  const wrongSurface = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: inspectPacketBody('IN_PROGRESS', 'IMPLEMENTATION_PR'),
+    },
+    packetComments: [checkpointComment('AUTHORITY_SCOPE', authDigest, 'audit', 142)],
+    auditComments: [checkpointComment('AUTHORITY_SCOPE', authDigest, 'audit', 143)],
+  });
+  const wrongSurfaceResult = await inspectCheckpoint({client: wrongSurface, packetNumber: PACKET});
+  assert.equal(wrongSurfaceResult.disposition, 'CONFLICT');
+  assert.ok(wrongSurfaceResult.reasonCodes.includes('CHECKPOINT_SURFACE_MISMATCH'));
+
+  const validationDigest = 'd'.repeat(64);
+  const prefixGap = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: inspectPacketBody('IN_PROGRESS', 'VALIDATION_MERGE'),
+    },
+    packetComments: [
+      checkpointComment('AUTHORITY_SCOPE', authDigest, 'packet', 15),
+      checkpointComment('VALIDATION_MERGE', validationDigest, 'packet', 16),
+    ],
+    auditComments: [
+      checkpointComment('AUTHORITY_SCOPE', authDigest, 'audit', 17),
+      checkpointComment('VALIDATION_MERGE', validationDigest, 'audit', 18),
+    ],
+  });
+  const gapResult = await inspectCheckpoint({client: prefixGap, packetNumber: PACKET});
+  assert.equal(gapResult.disposition, 'CONFLICT');
+  assert.ok(gapResult.reasonCodes.includes('CHECKPOINT_STAGE_PREFIX_CONFLICT'));
+
+  const stageAhead = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: inspectPacketBody('IN_PROGRESS', 'IMPLEMENTATION_PR'),
+    },
+  });
+  const aheadResult = await inspectCheckpoint({client: stageAhead, packetNumber: PACKET});
+  assert.equal(aheadResult.disposition, 'CONFLICT');
+  assert.ok(aheadResult.reasonCodes.includes('PACKET_STAGE_AHEAD_OF_DURABLE_PREFIX'));
+
+  const allDigests = ['1', '2', '3', '4', '5'].map((digit) => digit.repeat(64));
+  const packetAll = STAGES.map((stage, index) => checkpointComment(stage, allDigests[index], 'packet', 20 + index));
+  const auditAll = STAGES.map((stage, index) => checkpointComment(stage, allDigests[index], 'audit', 30 + index));
+  const experimentDurable = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: inspectPacketBody('IN_PROGRESS', 'EXPERIMENT_CLOSE'),
+    },
+    packetComments: packetAll,
+    auditComments: auditAll,
+  });
+  const transactionClose = await inspectCheckpoint({client: experimentDurable, packetNumber: PACKET});
+  assert.equal(transactionClose.disposition, 'PASS');
+  assert.equal(transactionClose.rebindDisposition, 'CONTINUE_TRANSACTION_CLOSURE');
+  assert.equal(transactionClose.nextLegalAction, 'SELF_CLOSE_SYNC_CURRENT_PACKET');
+
+  const openDone = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: inspectPacketBody('DONE', 'EXPERIMENT_CLOSE'),
+    },
+    packetComments: packetAll,
+    auditComments: auditAll,
+  });
+  const openDoneResult = await inspectCheckpoint({client: openDone, packetNumber: PACKET});
+  assert.equal(openDoneResult.disposition, 'PASS');
+  assert.equal(openDoneResult.rebindDisposition, 'CONTINUE_TRANSACTION_CLOSURE');
+
+  const closedDone = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'closed',
+      body: inspectPacketBody('DONE', 'EXPERIMENT_CLOSE'),
+    },
+    packetComments: packetAll,
+    auditComments: auditAll,
+  });
+  const closedDoneResult = await inspectCheckpoint({client: closedDone, packetNumber: PACKET});
+  assert.equal(closedDoneResult.disposition, 'PASS');
+  assert.equal(closedDoneResult.rebindDisposition, 'STOP_TERMINAL');
+
+  const closedActive = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'closed',
+      body: inspectPacketBody('IN_PROGRESS', 'EXPERIMENT_CLOSE'),
+    },
+    packetComments: packetAll,
+    auditComments: auditAll,
+  });
+  const closedActiveResult = await inspectCheckpoint({client: closedActive, packetNumber: PACKET});
+  assert.equal(closedActiveResult.disposition, 'CONFLICT');
+  assert.ok(closedActiveResult.reasonCodes.includes('PACKET_LIFECYCLE_NATIVE_CONFLICT'));
+
   const first = fakeClient();
   const complete = await recordCheckpoint({ client: first, packetNumber: PACKET, stage: STAGE, body: BODY });
   assert.equal(complete.status, 'COMPLETE');

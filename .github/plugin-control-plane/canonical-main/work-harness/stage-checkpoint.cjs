@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createGitHubClient } = require('../infra/github-client.cjs');
+const { classifyPacketProjection } = require('../work-system/packet-projection.cjs');
 
 const FIXED_REPO = 'hanmiyoo10-alt/-';
 const AUDIT_ISSUE = 293;
@@ -19,6 +20,9 @@ const STAGES = Object.freeze([
   'POSTMERGE_CONVERGENCE',
   'EXPERIMENT_CLOSE',
 ]);
+const INSPECT_MODE = 'CANONICAL_MAIN_STAGE_CHECKPOINT_INSPECT';
+const CHECKPOINT_MARKER_TOKEN = 'canonical-main-stage-checkpoint:v1';
+const CHECKPOINT_MARKER_RE = /^<!-- canonical-main-stage-checkpoint:v1 packet=([1-9][0-9]*) stage=(AUTHORITY_SCOPE|IMPLEMENTATION_PR|VALIDATION_MERGE|POSTMERGE_CONVERGENCE|EXPERIMENT_CLOSE) digest=([0-9a-f]{64}) surface=(packet|audit) -->$/;
 
 const ISSUE_GET_RE = /^\/issues\/([1-9][0-9]*)$/;
 const COMMENTS_GET_RE = /^\/issues\/([1-9][0-9]*)\/comments\?per_page=100&page=([1-9][0-9]*)$/;
@@ -152,6 +156,221 @@ async function listIssueComments(client, issueNumber, maxPages = MAX_COMMENT_PAG
   throw new Error(`issue #${issueNumber} comment pagination exceeded safety bound`);
 }
 
+function uniqueSorted(values) {
+  return [...new Set(values)].sort();
+}
+
+function inspectionResult({
+  packetNumber,
+  disposition,
+  nativeState = null,
+  lifecycle = null,
+  currentStage = null,
+  stageDigests = new Map(),
+  rebindDisposition = null,
+  nextStage = null,
+  nextLegalAction = null,
+  reasonCodes = [],
+}) {
+  const stages = STAGES.map((stage) => {
+    const pairedDigests = [...(stageDigests.get(stage) || [])].sort();
+    return {
+      stage,
+      completed: pairedDigests.length > 0,
+      variantCount: pairedDigests.length,
+      pairedDigests,
+    };
+  });
+  const completedStages = stages.filter((row) => row.completed).map((row) => row.stage);
+  return {
+    schemaVersion: 1,
+    mode: INSPECT_MODE,
+    disposition,
+    packetNumber,
+    nativeState,
+    lifecycle,
+    currentStage,
+    completedStages,
+    furthestCompletedStage: completedStages.at(-1) || null,
+    stages,
+    rebindDisposition,
+    nextStage,
+    nextLegalAction,
+    reasonCodes: uniqueSorted(reasonCodes),
+    mutationAuthorized: false,
+    executionAuthorized: false,
+  };
+}
+
+function parseCheckpointSurface(comments, packetNumber, expectedSurface) {
+  const counts = new Map();
+  const reasonCodes = [];
+  for (const comment of comments) {
+    const lines = String(comment?.body || '').replace(/\r\n/g, '\n').split('\n');
+    for (const line of lines) {
+      if (!line.includes(CHECKPOINT_MARKER_TOKEN)) continue;
+      const match = line.match(CHECKPOINT_MARKER_RE);
+      if (!match) {
+        if (line.includes(`packet=${packetNumber}`)) reasonCodes.push('CHECKPOINT_MARKER_MALFORMED');
+        continue;
+      }
+      const markerPacket = Number(match[1]);
+      const stage = match[2];
+      const digest = match[3];
+      const surface = match[4];
+      if (markerPacket !== packetNumber) continue;
+      if (surface !== expectedSurface) {
+        reasonCodes.push('CHECKPOINT_SURFACE_MISMATCH');
+        continue;
+      }
+      const key = `${stage}:${digest}`;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+  }
+  return { counts, reasonCodes };
+}
+
+async function inspectCheckpoint({ client, packetNumber }) {
+  if (!Number.isInteger(packetNumber) || packetNumber <= 0 || packetNumber === AUDIT_ISSUE) {
+    return inspectionResult({
+      packetNumber,
+      disposition: 'UNKNOWN',
+      reasonCodes: ['PACKET_NUMBER_INVALID'],
+    });
+  }
+
+  let issue;
+  let packetComments;
+  let auditComments;
+  try {
+    [issue, packetComments, auditComments] = await Promise.all([
+      client.api(`/issues/${packetNumber}`),
+      listIssueComments(client, packetNumber),
+      listIssueComments(client, AUDIT_ISSUE),
+    ]);
+  } catch {
+    return inspectionResult({
+      packetNumber,
+      disposition: 'UNKNOWN',
+      reasonCodes: ['CHECKPOINT_INSPECT_READ_FAILED'],
+    });
+  }
+
+  const reasonCodes = [];
+  let conflict = false;
+  let unknown = false;
+  if (!issue || issue.pull_request) {
+    conflict = true;
+    reasonCodes.push('PACKET_TARGET_NOT_ISSUE');
+  }
+
+  const nativeState = issue?.state || null;
+  if (!['open', 'closed'].includes(nativeState)) {
+    conflict = true;
+    reasonCodes.push('PACKET_NATIVE_STATE_INVALID');
+  }
+
+  const projection = classifyPacketProjection(String(issue?.body || ''));
+  if (projection.disposition === 'CONFLICT') conflict = true;
+  if (projection.disposition === 'UNKNOWN') unknown = true;
+  reasonCodes.push(...projection.reasonCodes);
+
+  const packetMarkers = parseCheckpointSurface(packetComments, packetNumber, 'packet');
+  const auditMarkers = parseCheckpointSurface(auditComments, packetNumber, 'audit');
+  if (packetMarkers.reasonCodes.length || auditMarkers.reasonCodes.length) conflict = true;
+  reasonCodes.push(...packetMarkers.reasonCodes, ...auditMarkers.reasonCodes);
+
+  const stageDigests = new Map(STAGES.map((stage) => [stage, new Set()]));
+  const keys = new Set([...packetMarkers.counts.keys(), ...auditMarkers.counts.keys()]);
+  for (const key of keys) {
+    const packetCount = packetMarkers.counts.get(key) || 0;
+    const auditCount = auditMarkers.counts.get(key) || 0;
+    if (packetCount > 1 || auditCount > 1) {
+      conflict = true;
+      reasonCodes.push('CHECKPOINT_MARKER_DUPLICATE');
+      continue;
+    }
+    if (packetCount !== 1 || auditCount !== 1) {
+      unknown = true;
+      reasonCodes.push('CHECKPOINT_PAIR_INCOMPLETE');
+      continue;
+    }
+    const separator = key.indexOf(':');
+    const stage = key.slice(0, separator);
+    const digest = key.slice(separator + 1);
+    stageDigests.get(stage).add(digest);
+  }
+
+  let prefixLength = 0;
+  while (prefixLength < STAGES.length && stageDigests.get(STAGES[prefixLength]).size > 0) {
+    prefixLength += 1;
+  }
+  for (let index = prefixLength + 1; index < STAGES.length; index += 1) {
+    if (stageDigests.get(STAGES[index]).size > 0) {
+      conflict = true;
+      reasonCodes.push('CHECKPOINT_STAGE_PREFIX_CONFLICT');
+      break;
+    }
+  }
+
+  let rebindDisposition = null;
+  let nextStage = null;
+  let nextLegalAction = null;
+  const lifecycle = projection.lifecycle;
+  const currentStage = projection.interactionStage;
+
+  if (!conflict && !unknown) {
+    if (nativeState === 'closed') {
+      if (lifecycle === 'DONE') {
+        rebindDisposition = 'STOP_TERMINAL';
+        nextLegalAction = 'NONE_TERMINAL_PACKET_COMPLETE';
+      } else {
+        conflict = true;
+        reasonCodes.push('PACKET_LIFECYCLE_NATIVE_CONFLICT');
+      }
+    } else if (lifecycle === 'DONE') {
+      rebindDisposition = 'CONTINUE_TRANSACTION_CLOSURE';
+      nextLegalAction = 'SELF_CLOSE_SYNC_CURRENT_PACKET';
+    } else if (lifecycle !== 'IN_PROGRESS') {
+      unknown = true;
+      reasonCodes.push('PACKET_LIFECYCLE_NOT_IN_PROGRESS');
+    } else if (prefixLength === STAGES.length) {
+      rebindDisposition = 'CONTINUE_TRANSACTION_CLOSURE';
+      nextLegalAction = 'SELF_CLOSE_SYNC_CURRENT_PACKET';
+    } else {
+      const currentIndex = STAGES.indexOf(currentStage);
+      if (currentIndex < 0) {
+        unknown = true;
+        reasonCodes.push('PACKET_CURRENT_STAGE_UNKNOWN');
+      } else if (currentIndex < prefixLength) {
+        rebindDisposition = 'REUSE_COMPLETED_STAGE';
+        nextStage = STAGES[prefixLength];
+        nextLegalAction = `ADVANCE_TO_${nextStage}`;
+      } else if (currentIndex === prefixLength) {
+        rebindDisposition = 'CONTINUE_CURRENT_STAGE';
+        nextStage = currentStage;
+        nextLegalAction = `CONTINUE_${currentStage}`;
+      } else {
+        conflict = true;
+        reasonCodes.push('PACKET_STAGE_AHEAD_OF_DURABLE_PREFIX');
+      }
+    }
+  }
+
+  return inspectionResult({
+    packetNumber,
+    disposition: conflict ? 'CONFLICT' : unknown ? 'UNKNOWN' : 'PASS',
+    nativeState,
+    lifecycle,
+    currentStage,
+    stageDigests,
+    rebindDisposition,
+    nextStage,
+    nextLegalAction,
+    reasonCodes,
+  });
+}
+
 function findMarkerComments(comments, marker) {
   return comments.filter((comment) => String(comment?.body || '').includes(marker));
 }
@@ -264,6 +483,13 @@ async function recordCheckpoint({ client, packetNumber, stage, body }) {
   return resultBase(packetNumber, stage, digest, packet, audit, reasonCodes);
 }
 
+function parseInspectArgs(argv = process.argv.slice(2)) {
+  if (argv.length !== 3 || argv[0] !== 'inspect' || argv[1] !== '--packet' || !/^[1-9]\d*$/.test(argv[2])) {
+    throw new Error('usage: node stage-checkpoint.cjs inspect --packet <number>');
+  }
+  return { packetNumber: Number(argv[2]) };
+}
+
 function parseArgs(argv = process.argv.slice(2)) {
   const parsed = {};
   for (let i = 0; i < argv.length; i += 2) {
@@ -293,6 +519,11 @@ function readBodyFile(bodyFile) {
 }
 
 function exitCodeFor(result) {
+  if (result?.mode === INSPECT_MODE) {
+    if (result?.disposition === 'PASS') return 0;
+    if (result?.disposition === 'UNKNOWN') return 3;
+    return 2;
+  }
   if (result?.status === 'COMPLETE') return 0;
   if (result?.status === 'PARTIAL' || result?.status === 'UNKNOWN') return 3;
   return 2;
@@ -306,11 +537,19 @@ async function run({
   env = process.env,
   runner = defaultGhRunner,
 } = {}) {
-  const args = parseArgs(argv);
-  const body = readBodyFile(args.bodyFile);
+  const inspectMode = argv[0] === 'inspect';
+  const args = inspectMode ? parseInspectArgs(argv) : parseArgs(argv);
+  const body = inspectMode ? null : readBodyFile(args.bodyFile);
   const resolvedToken = token || env.GH_TOKEN || env.GITHUB_TOKEN;
   const resolvedRepo = String(repo || env.GITHUB_REPOSITORY || (!resolvedToken ? FIXED_REPO : '')).trim();
   if (!validRepo(resolvedRepo) || (!resolvedToken && resolvedRepo !== FIXED_REPO)) {
+    if (inspectMode) {
+      return inspectionResult({
+        packetNumber: args.packetNumber,
+        disposition: 'UNKNOWN',
+        reasonCodes: ['REPOSITORY_IDENTITY_INVALID'],
+      });
+    }
     return resultBase(args.packetNumber, args.stage, null,
       destination(args.packetNumber), destination(AUDIT_ISSUE), ['REPOSITORY_IDENTITY_INVALID'], 'FAILED');
   }
@@ -321,6 +560,7 @@ async function run({
     runner,
     packetNumber: args.packetNumber,
   });
+  if (inspectMode) return inspectCheckpoint({ client, packetNumber: args.packetNumber });
   return recordCheckpoint({ client, packetNumber: args.packetNumber, stage: args.stage, body });
 }
 
@@ -330,10 +570,11 @@ async function main() {
     process.stdout.write(`${JSON.stringify(result)}\n`);
     process.exitCode = exitCodeFor(result);
   } catch (error) {
+    const inspectMode = process.argv.slice(2)[0] === 'inspect';
     process.stdout.write(`${JSON.stringify({
       schemaVersion: 1,
-      mode: 'CANONICAL_MAIN_STAGE_CHECKPOINT',
-      status: 'FAILED',
+      mode: inspectMode ? INSPECT_MODE : 'CANONICAL_MAIN_STAGE_CHECKPOINT',
+      ...(inspectMode ? { disposition: 'UNKNOWN' } : { status: 'FAILED' }),
       reasonCodes: ['RUNTIME_ERROR'],
       error: String(error?.message || error).slice(0, 300),
     })}\n`);
@@ -353,11 +594,15 @@ module.exports = {
   checkpointDigest,
   checkpointMarker,
   createGhCheckpointClient,
+  inspectCheckpoint,
+  inspectionResult,
   createStageCheckpointClient,
   defaultGhRunner,
   exitCodeFor,
   findMarkerComments,
   parseArgs,
+  parseCheckpointSurface,
+  parseInspectArgs,
   recordCheckpoint,
   renderComment,
   run,

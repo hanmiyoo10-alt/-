@@ -163,8 +163,217 @@ jobs:
           echo "published=true" >> "$GITHUB_OUTPUT"
           echo "handoff=false" >> "$GITHUB_OUTPUT"
           echo "CANONICAL_MAIN_DOC_PROMOTION:PR:#$PR:$HEAD_SHA"
-      - name: Dispatch exact documentation candidate checks
+      - name: Activate exact native PR checks
         if: steps.publish.outputs.published == 'true'
+        id: native_pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEAD_SHA='${{ steps.publish.outputs.head_sha }}'
+          PR='${{ steps.publish.outputs.pr }}'
+          API_VERSION='2026-03-10'
+          PLUGIN_NATIVE_RUN_ID=''
+          SIMCORE_NATIVE_RUN_ID=''
+
+          write_native_handoff() {
+            local state="$1"
+            local reason="$2"
+            cat > /tmp/doc-promotion-handoff.md <<EOF
+          # Canonical Main — Documentation Promotion Bridge
+
+          > Single mutable handoff mailbox between GitHub Actions durable-document rendering and the connected ChatGPT GitHub bridge.
+
+          <!-- canonical-main-doc-promotion-handoff:v1 -->
+
+          **State: $state**
+
+          - Repository: $GITHUB_REPOSITORY
+          - Source branch: $DOC_BRANCH
+          - Base SHA: ${{ steps.render.outputs.base_sha }}
+          - Head SHA: $HEAD_SHA
+          - PR: #$PR
+          - Plugin Control Plane native PR run: ${PLUGIN_NATIVE_RUN_ID:-unknown}
+          - SimCore native PR run: ${SIMCORE_NATIVE_RUN_ID:-unknown}
+          - Source run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          - Native PR activation reason: $reason
+          - Native PR rule: exact PR + exact head + pull_request event + expected workflow identity; action_required may be approved once for the exact run
+          - Close/reopen fallback: forbidden
+          - Workflow-dispatch substitution for native Required: forbidden
+          - Direct generated-doc writes to main: forbidden
+          EOF
+            gh issue edit "$HANDOFF_ISSUE" --body-file /tmp/doc-promotion-handoff.md
+          }
+
+          block_native() {
+            local state="$1"
+            local reason="$2"
+            write_native_handoff "$state" "$reason"
+            {
+              echo "ready=false"
+              echo "plugin_native_run_id=${PLUGIN_NATIVE_RUN_ID:-}"
+              echo "simcore_native_run_id=${SIMCORE_NATIVE_RUN_ID:-}"
+            } >> "$GITHUB_OUTPUT"
+            echo "CANONICAL_MAIN_DOC_PROMOTION:NATIVE_PR_BLOCKED:$state:$reason:#$PR:$HEAD_SHA:${PLUGIN_NATIVE_RUN_ID:-unknown}:${SIMCORE_NATIVE_RUN_ID:-unknown}"
+            exit 0
+          }
+
+          PR_JSON="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            -H "X-GitHub-Api-Version: $API_VERSION" \
+            "repos/$GITHUB_REPOSITORY/pulls/$PR")"
+          PR_STATE="$(jq -er '.state' <<<"$PR_JSON")"
+          PR_BASE_REF="$(jq -er '.base.ref' <<<"$PR_JSON")"
+          PR_HEAD_REF="$(jq -er '.head.ref' <<<"$PR_JSON")"
+          PR_HEAD_SHA="$(jq -er '.head.sha' <<<"$PR_JSON")"
+          if [[ "$PR_STATE" != 'open' || "$PR_BASE_REF" != 'main' || "$PR_HEAD_REF" != "$DOC_BRANCH" || "$PR_HEAD_SHA" != "$HEAD_SHA" ]]; then
+            block_native NATIVE_PR_CHECK_UNKNOWN PR_IDENTITY_MISMATCH
+          fi
+
+          ASSOCIATED_PRS="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            -H "X-GitHub-Api-Version: $API_VERSION" \
+            "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/pulls")"
+          OPEN_ASSOCIATED="$(jq -c \
+            --arg head "$HEAD_SHA" \
+            --arg branch "$DOC_BRANCH" \
+            '[.[] | select(.state == "open" and .base.ref == "main" and .head.ref == $branch and .head.sha == $head) | .number]' \
+            <<<"$ASSOCIATED_PRS")"
+          if [[ "$(jq -r 'length' <<<"$OPEN_ASSOCIATED")" != '1' || "$(jq -r '.[0]' <<<"$OPEN_ASSOCIATED")" != "$PR" ]]; then
+            block_native NATIVE_PR_CHECK_UNKNOWN PR_ASSOCIATION_AMBIGUOUS
+          fi
+
+          discover_native_run() {
+            local workflow="$1"
+            local expected_path=".github/workflows/$workflow"
+            local response matches count
+            if ! response="$(gh api --method GET \
+              -H 'Accept: application/vnd.github+json' \
+              -H "X-GitHub-Api-Version: $API_VERSION" \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" \
+              -f event=pull_request \
+              -f head_sha="$HEAD_SHA" \
+              -f per_page=100)"; then
+              printf 'unknown\n'
+              return 0
+            fi
+            matches="$(jq -c \
+              --arg head "$HEAD_SHA" \
+              --arg branch "$DOC_BRANCH" \
+              --arg path "$expected_path" \
+              '[.workflow_runs[] | select(.event == "pull_request" and .head_sha == $head and .head_branch == $branch and .path == $path) | .id]' \
+              <<<"$response")"
+            count="$(jq -r 'length' <<<"$matches")"
+            if [[ "$count" != '1' ]]; then
+              printf 'ambiguous:%s\n' "$count"
+              return 0
+            fi
+            jq -r '.[0]' <<<"$matches"
+          }
+
+          PLUGIN_NATIVE_RUN_ID="$(discover_native_run plugin-control-plane-ci.yml)"
+          SIMCORE_NATIVE_RUN_ID="$(discover_native_run simcore-ci.yml)"
+          [[ "$PLUGIN_NATIVE_RUN_ID" =~ ^[0-9]+$ ]] || block_native NATIVE_PR_CHECK_UNKNOWN PLUGIN_RUN_DISCOVERY_AMBIGUOUS
+          [[ "$SIMCORE_NATIVE_RUN_ID" =~ ^[0-9]+$ ]] || block_native NATIVE_PR_CHECK_UNKNOWN SIMCORE_RUN_DISCOVERY_AMBIGUOUS
+
+          prepare_native_run() {
+            local run_id="$1"
+            local expected_path="$2"
+            local label="$3"
+            local metadata event head_sha head_branch path status conclusion
+            metadata="$(gh api \
+              -H 'Accept: application/vnd.github+json' \
+              -H "X-GitHub-Api-Version: $API_VERSION" \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+            event="$(jq -er '.event' <<<"$metadata")"
+            head_sha="$(jq -er '.head_sha' <<<"$metadata")"
+            head_branch="$(jq -er '.head_branch' <<<"$metadata")"
+            path="$(jq -er '.path' <<<"$metadata")"
+            status="$(jq -er '.status' <<<"$metadata")"
+            conclusion="$(jq -r '.conclusion // ""' <<<"$metadata")"
+
+            [[ "$event" == 'pull_request' && "$head_sha" == "$HEAD_SHA" && "$head_branch" == "$DOC_BRANCH" && "$path" == "$expected_path" ]] || return 20
+
+            if [[ "$status" == 'completed' && "$conclusion" == 'success' ]]; then
+              return 0
+            fi
+
+            if [[ "$status" == 'completed' && "$conclusion" == 'action_required' ]]; then
+              if ! gh api --method POST \
+                -H 'Accept: application/vnd.github+json' \
+                -H "X-GitHub-Api-Version: $API_VERSION" \
+                "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/approve" \
+                >/tmp/doc-promotion-native-approve-"$run_id".out 2>/tmp/doc-promotion-native-approve-"$run_id".err; then
+                return 30
+              fi
+              echo "CANONICAL_MAIN_DOC_PROMOTION:NATIVE_PR_APPROVED:$label:$run_id:$HEAD_SHA"
+            elif [[ "$status" =~ ^(queued|in_progress|requested|waiting|pending)$ ]]; then
+              echo "CANONICAL_MAIN_DOC_PROMOTION:NATIVE_PR_WAIT_EXISTING:$label:$run_id:$status"
+            else
+              return 40
+            fi
+
+            if ! gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status; then
+              return 40
+            fi
+
+            metadata="$(gh api \
+              -H 'Accept: application/vnd.github+json' \
+              -H "X-GitHub-Api-Version: $API_VERSION" \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+            [[ "$(jq -er '.event' <<<"$metadata")" == 'pull_request' ]] || return 20
+            [[ "$(jq -er '.head_sha' <<<"$metadata")" == "$HEAD_SHA" ]] || return 20
+            [[ "$(jq -er '.head_branch' <<<"$metadata")" == "$DOC_BRANCH" ]] || return 20
+            [[ "$(jq -er '.path' <<<"$metadata")" == "$expected_path" ]] || return 20
+            [[ "$(jq -er '.status' <<<"$metadata")" == 'completed' ]] || return 40
+            [[ "$(jq -er '.conclusion' <<<"$metadata")" == 'success' ]] || return 40
+          }
+
+          if prepare_native_run "$PLUGIN_NATIVE_RUN_ID" '.github/workflows/plugin-control-plane-ci.yml' plugin-control-plane; then
+            :
+          else
+            rc=$?
+            if [[ "$rc" == '30' ]]; then
+              block_native NATIVE_PR_APPROVAL_BLOCKED PLUGIN_APPROVAL_FORBIDDEN
+            fi
+            block_native NATIVE_PR_CHECK_UNKNOWN "PLUGIN_NATIVE_RUN_INVALID_$rc"
+          fi
+          if prepare_native_run "$SIMCORE_NATIVE_RUN_ID" '.github/workflows/simcore-ci.yml' simcore; then
+            :
+          else
+            rc=$?
+            if [[ "$rc" == '30' ]]; then
+              block_native NATIVE_PR_APPROVAL_BLOCKED SIMCORE_APPROVAL_FORBIDDEN
+            fi
+            block_native NATIVE_PR_CHECK_UNKNOWN "SIMCORE_NATIVE_RUN_INVALID_$rc"
+          fi
+
+          PLUGIN_JOBS="$(gh api --method GET \
+            -H 'Accept: application/vnd.github+json' \
+            -H "X-GitHub-Api-Version: $API_VERSION" \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$PLUGIN_NATIVE_RUN_ID/jobs" \
+            -f filter=latest)"
+          SIMCORE_JOBS="$(gh api --method GET \
+            -H 'Accept: application/vnd.github+json' \
+            -H "X-GitHub-Api-Version: $API_VERSION" \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$SIMCORE_NATIVE_RUN_ID/jobs" \
+            -f filter=latest)"
+          jq -e '[.jobs[] | select(.name == "contract" and .status == "completed" and .conclusion == "success")] | length == 1' <<<"$PLUGIN_JOBS" >/dev/null \
+            || block_native NATIVE_PR_CHECK_UNKNOWN PLUGIN_CONTRACT_NOT_PROVEN
+          jq -e '[.jobs[] | select(.name == "Verify" and .status == "completed" and .conclusion == "success")] | length == 1' <<<"$SIMCORE_JOBS" >/dev/null \
+            || block_native NATIVE_PR_CHECK_UNKNOWN SIMCORE_VERIFY_NOT_PROVEN
+          jq -e '[.jobs[] | select(.name == "Required" and .status == "completed" and .conclusion == "success")] | length == 1' <<<"$SIMCORE_JOBS" >/dev/null \
+            || block_native NATIVE_PR_CHECK_UNKNOWN SIMCORE_REQUIRED_NOT_PROVEN
+
+          {
+            echo "plugin_native_run_id=$PLUGIN_NATIVE_RUN_ID"
+            echo "simcore_native_run_id=$SIMCORE_NATIVE_RUN_ID"
+            echo "ready=true"
+          } >> "$GITHUB_OUTPUT"
+          echo "CANONICAL_MAIN_DOC_PROMOTION:NATIVE_PR_PASS:#$PR:$HEAD_SHA:$PLUGIN_NATIVE_RUN_ID:$SIMCORE_NATIVE_RUN_ID"
+      - name: Dispatch exact documentation candidate checks
+        if: steps.publish.outputs.published == 'true' && steps.native_pr.outputs.ready == 'true'
         id: dispatch
         env:
           GH_TOKEN: ${{ github.token }}
@@ -198,7 +407,7 @@ jobs:
           echo "simcore_run_id=$SIMCORE_RUN_ID" >> "$GITHUB_OUTPUT"
           echo "CANONICAL_MAIN_DOC_PROMOTION:CHECKS_DISPATCHED:$HEAD_SHA:$PLUGIN_RUN_ID:$SIMCORE_RUN_ID"
       - name: Wait for exact candidate checks
-        if: steps.publish.outputs.published == 'true'
+        if: steps.publish.outputs.published == 'true' && steps.native_pr.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -231,7 +440,7 @@ jobs:
           gh run watch "$SIMCORE_RUN_ID" --exit-status
           echo "CANONICAL_MAIN_DOC_PROMOTION:CHECKS_PASS:$HEAD_SHA:$PLUGIN_RUN_ID:$SIMCORE_RUN_ID"
       - name: Exact-base / exact-head merge handoff
-        if: steps.publish.outputs.published == 'true'
+        if: steps.publish.outputs.published == 'true' && steps.native_pr.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -240,9 +449,12 @@ jobs:
           BASE_SHA='${{ steps.render.outputs.base_sha }}'
           HEAD_SHA='${{ steps.publish.outputs.head_sha }}'
           PR='${{ steps.publish.outputs.pr }}'
+          PLUGIN_NATIVE_RUN_ID='${{ steps.native_pr.outputs.plugin_native_run_id }}'
+          SIMCORE_NATIVE_RUN_ID='${{ steps.native_pr.outputs.simcore_native_run_id }}'
           PLUGIN_RUN_ID='${{ steps.dispatch.outputs.plugin_run_id }}'
           SIMCORE_RUN_ID='${{ steps.dispatch.outputs.simcore_run_id }}'
           API_VERSION='2026-03-10'
+          MATCH_HEAD_TOKEN="$(printf '%b--match-head-commit %s%b' '\x60' "$HEAD_SHA" '\x60')"
 
           git fetch origin main
           CURRENT_MAIN="$(git rev-parse origin/main)"
@@ -329,14 +541,16 @@ jobs:
           - Base SHA: $BASE_SHA
           - Head SHA: $HEAD_SHA
           - PR: #$PR
-          - Plugin Control Plane run: $PLUGIN_RUN_ID
-          - SimCore run: $SIMCORE_RUN_ID
+          - Plugin Control Plane native PR run: $PLUGIN_NATIVE_RUN_ID
+          - SimCore native PR run: $SIMCORE_NATIVE_RUN_ID
+          - Plugin Control Plane candidate run: $PLUGIN_RUN_ID
+          - SimCore candidate run: $SIMCORE_RUN_ID
           - Source run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
           - Bridge authority: connected ChatGPT GitHub connector
-          - Bridge merge effect: squash + expected-head guard equivalent to `--match-head-commit $HEAD_SHA`
+          - Bridge merge effect: squash + expected-head guard equivalent to $MATCH_HEAD_TOKEN
           - Merge rule: fresh current main == exact base; exact open non-draft PR head; exact successful bound check runs; expected-head guarded bridge merge
           - Direct generated-doc writes to main: forbidden
           - Candidate-head workflow_dispatch proof is not merged-main push proof
           EOF
           gh issue edit "$HANDOFF_ISSUE" --body-file /tmp/doc-promotion-handoff.md
-          echo "CANONICAL_MAIN_DOC_PROMOTION:MERGE_READY:#$PR:$BASE_SHA:$HEAD_SHA:$PLUGIN_RUN_ID:$SIMCORE_RUN_ID"
+          echo "CANONICAL_MAIN_DOC_PROMOTION:MERGE_READY:#$PR:$BASE_SHA:$HEAD_SHA:$PLUGIN_NATIVE_RUN_ID:$SIMCORE_NATIVE_RUN_ID:$PLUGIN_RUN_ID:$SIMCORE_RUN_ID"

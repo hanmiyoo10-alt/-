@@ -2133,3 +2133,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/bc292273c8e8d8fd263b3a1bc82d75420d5688f8)
 - Event ID: `48c2793ac9ae6490b2b266a8e91706350f9fc3d9a6815a7983c7e450014f5a25`
 <!-- canonical-main-doc-promoted:48c2793ac9ae6490b2b266a8e91706350f9fc3d9a6815a7983c7e450014f5a25 -->
+
+### 2026-09-27 — Merge pull request #3036 from hanmiyoo10-alt/packet/3035-postmerge-terminal-coupling
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `833da66ebea2617d7e0619be02be682235240ef9`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/833da66ebea2617d7e0619be02be682235240ef9)
+- Event ID: `11d94ec2feaeccd84901c728eeb15cafb60b67a693146829682e5db6902b4638`
+<!-- canonical-main-doc-promoted:11d94ec2feaeccd84901c728eeb15cafb60b67a693146829682e5db6902b4638 -->

@@ -82,6 +82,28 @@ Transaction closure may not enter the next declared substantial stage. In partic
 
 Current-packet self close-sync may be stage-local. Cross-packet terminal projection, cleanup, or convergence is outside Phase 8.7g and remains a later composition boundary.
 
+### Conditional authority/implementation continuation
+
+Canonical-main has one conditional prefix pacing specialization:
+
+`AUTHORITY_SCOPE → IMPLEMENTATION_PR`.
+
+This is coupled interaction with separate proof, not stage collapse. `AUTHORITY_SCOPE` must first durably complete its own checkpoint. The same user continuation may then enter `IMPLEMENTATION_PR` only when packet identity, primary goal, declared write scope, semantic/effect surface, and owner identity remain exact; overlap discovery is complete and noncompeting; required UNKNOWN/conflict/blocker evidence is clear; packet authoring preflight passes; the implementation route is deterministic; existing authority is sufficient; and no additional design choice, user input, or owner approval is required.
+
+The prefix fast path is source/branch/commit/push/non-closing-PR pacing only. It must stop instead of continuing when merge, release, production, runtime, device, security, or other forbidden effect authority would be required. `IMPLEMENTATION_PR` retains its own canonical receipt/checkpoint and failure state.
+
+When `IMPLEMENTATION_PR` reaches its durable checkpoint, this prefix continuation stops. It never auto-enters `VALIDATION_MERGE`.
+
+### Preserved implementation/validation boundary
+
+Canonical-main explicitly preserves the default boundary:
+
+`IMPLEMENTATION_PR → VALIDATION_MERGE`.
+
+This transition crosses from candidate/PR evidence into protected-main mutation. The default continuation therefore stops after durable `IMPLEMENTATION_PR` and requires fresh exact-head CI, review state, currentness, overlap admission, and merge admission before `VALIDATION_MERGE`.
+
+RCR-D15's existing explicit-user broader-run rule remains available, but this prefix specialization itself never supplies that broader authorization and grants no merge authority.
+
 ### Coupled validation/postmerge continuation
 
 Canonical-main specializes the repository-wide one-stage ordinary pacing default at exactly one cross-stage boundary:

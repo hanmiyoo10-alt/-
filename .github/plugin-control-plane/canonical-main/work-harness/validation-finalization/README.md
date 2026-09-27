@@ -46,4 +46,25 @@ Ambiguous effect truth routes to `RECOVERY_INSPECT`. A missing merge routes only
 
 The V1 contract is implemented in `validation-finalization-owner.cjs` and covered by `tests/validation-finalization-owner-contract.cjs`.
 
-This directory owns classification only. A future effectful apply composition, if justified by natural evidence, requires a separate reviewed packet and must compose existing fixed owners rather than adding a generic finalizer.
+The pure V1 classifier remains classification-only. Natural self-host evidence from #3055 adds one separately reviewed effectful sibling, `reviewed-external-finalizer.cjs`, without changing that classifier.
+
+The reviewed external finalizer is not a generic finalization API. V1 is compile-time fixed to packet #3050 / PR #3052 and its reviewed three-path semantic contract. Its two-step boundary is:
+
+```text
+admit --implementation-receipt-file <canonical receipt>
+→ validate current dynamic candidate + reviewed semantic blobs + clean validation-attention merge admission
+→ publish/reuse one digest-bound admission marker
+
+external expected-head merge
+
+apply --apply
+→ require the exact admitted head was merged
+→ read the actual merge SHA
+→ require receipt-only finalization
+→ publish/reuse exactly one canonical VALIDATION_MERGE receipt
+→ re-read ALREADY_FINALIZED
+```
+
+`admit` never merges. `apply` never merges or currentizes and has no Git/ref, D-013/D-014, holder, device/runtime, release, or production effect. Its only issue-write effects are the fixed target admission marker and, after the separately owned merge, the exact canonical validation-stage receipt. Unknown, conflicting, duplicate, or drifted evidence fails closed; there is no latest-comment-wins selection.
+
+The reviewed target intentionally binds semantic paths/blob identities and diff identity while reading the currentized candidate dynamically. It does not guess a future merge SHA. Any additional target or broader effect requires a separate reviewed change.

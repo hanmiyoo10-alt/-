@@ -89,6 +89,38 @@ function fixedContentsEndpoint(repoPath, ref) {
   return '/contents/' + repoPath.split('/').map(encodeURIComponent).join('/')
     + '?ref=' + encodeURIComponent(ref);
 }
+const FIXED_CONTENT_PATHS = new Set(TARGET.paths.map((repoPath) =>
+  '/contents/' + repoPath.split('/').map(encodeURIComponent).join('/')));
+function reviewedContentEndpointAllowed(endpoint) {
+  const match = /^(\/contents\/[^?]+)\?ref=([0-9a-f]{40})$/.exec(String(endpoint || ''));
+  return Boolean(match && FIXED_CONTENT_PATHS.has(match[1]));
+}
+function parseGhContentRead(result) {
+  if (!result || result.code !== 0) throw new Error('reviewed content read failed');
+  try { return JSON.parse(result.stdout || ''); }
+  catch { throw new Error('reviewed content read failed'); }
+}
+function createReviewedLiveClient(options = {}) {
+  const env = options.env || process.env;
+  const runner = options.runner || validationMerge.defaultGhRunner;
+  const base = validationMerge.createLiveClient(options);
+  if (env.GH_TOKEN || env.GITHUB_TOKEN) return base;
+  return {
+    ...base,
+    async api(endpoint, requestOptions = {}) {
+      if (!reviewedContentEndpointAllowed(endpoint)) {
+        return base.api(endpoint, requestOptions);
+      }
+      if (requestOptions && Object.keys(requestOptions).length) {
+        throw new Error('reviewed content read options forbidden');
+      }
+      return parseGhContentRead(runner([
+        'api', 'repos/' + REPO + endpoint, '--method', 'GET',
+        '--header', 'Accept: application/vnd.github+json',
+      ]));
+    },
+  };
+}
 async function api(client, endpoint, label) {
   try { return await client.api(endpoint); }
   catch { fail('UNKNOWN', 'GITHUB_READ_FAILED_' + label); }
@@ -591,7 +623,7 @@ async function runCli(argv = process.argv.slice(2), options = {}) {
   let result;
   try {
     const args = parseArgs(argv);
-    const client = options.client || validationMerge.createLiveClient(options);
+    const client = options.client || createReviewedLiveClient(options);
     result = args.command === 'admit'
       ? await admit({
         client,
@@ -635,14 +667,17 @@ module.exports = {
   buildValidationStageReceipt,
   captureAdmissionFacts,
   captureApplyFacts,
+  createReviewedLiveClient,
   errorResult,
   finalizationEvidence,
+  fixedContentsEndpoint,
   implementationFromComments,
   noCurrentPacketLease,
   parseAdmission,
   parseArgs,
   publishExactComment,
   renderAdmission,
+  reviewedContentEndpointAllowed,
   runCli,
   selectAdmission,
   validateAdmissionPayload,

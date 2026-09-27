@@ -75,6 +75,47 @@ for (const stage of STAGES.slice(0, 4)) {
 }
 
 const canonical = projectStageReceipt(fixture());
+
+const canonicalPrInput = fixture();
+canonicalPrInput.authorityRefs.push({
+  kind: 'PR',
+  locator: 'pr:#2816',
+  identity: '07a4ebc173360113f4ee3779ecbcd3e503208d6e',
+});
+const canonicalPrReceipt = projectStageReceipt(canonicalPrInput);
+assert.equal(canonicalPrReceipt.status, 'PASS');
+assert.deepEqual(
+  canonicalPrReceipt.authorityRefs.find((row) => row.kind === 'PR'),
+  {
+    kind: 'PR',
+    locator: 'pr:#2816',
+    identity: '07a4ebc173360113f4ee3779ecbcd3e503208d6e',
+    status: 'KNOWN',
+  },
+);
+
+const legacyPrLocatorInput = fixture();
+legacyPrLocatorInput.authorityRefs.push({
+  kind: 'PR',
+  locator: '#2816',
+  identity: '07a4ebc173360113f4ee3779ecbcd3e503208d6e',
+});
+const legacyPrLocatorResult = projectStageReceipt(legacyPrLocatorInput);
+assert.equal(legacyPrLocatorResult.status, 'INVALID');
+assert.ok(legacyPrLocatorResult.reasonCodes.includes(
+  'INPUT_AUTHORITY_PR_LOCATOR_INVALID:authorityRefs[2]'));
+
+const legacyPrIdentityInput = fixture();
+legacyPrIdentityInput.authorityRefs.push({
+  kind: 'PR',
+  locator: 'pr:#2816',
+  identity: 'head:07a4ebc173360113f4ee3779ecbcd3e503208d6e',
+});
+const legacyPrIdentityResult = projectStageReceipt(legacyPrIdentityInput);
+assert.equal(legacyPrIdentityResult.status, 'INVALID');
+assert.ok(legacyPrIdentityResult.reasonCodes.includes(
+  'INPUT_AUTHORITY_PR_IDENTITY_INVALID:authorityRefs[2]'));
+
 const reordered = fixture();
 reordered.authorityRefs.reverse();
 reordered.requiredGates.reverse();
@@ -163,6 +204,23 @@ const withTrailingProse = rendered + '\nCurrentization evidence:\n- preserved ex
 const parsedTrailing = parseRenderedStageReceipt(withTrailingProse);
 assert.equal(parsedTrailing.status, 'VALID');
 assert.equal(parsedTrailing.value.receiptDigest, canonical.receiptDigest);
+
+const historical2812LegacyReceipt = "<!-- canonical-main-stage-receipt:v1 digest=45fd2f1f97baa9cbc732e30d3604da598f35d3b56cc9690a0e0e599acace45b0 -->\n## Canonical-main stage receipt — IMPLEMENTATION_PR\n\n- packet: #2812\n- evidence status: `PASS`\n- authority refs: COMMIT:candidate@07a4ebc173360113f4ee3779ecbcd3e503208d6e[KNOWN]; GIT_REF:refs/heads/main@98bb4d9cc78d3f6d4099b23444b6ee823fae7cc7[KNOWN]; ISSUE:#2812@publication-receipt:326178d6e423944a4df63c18895c33e7e92169e1c79daeec791d20ee0e8b529b[KNOWN]; PR:#2816@head:07a4ebc173360113f4ee3779ecbcd3e503208d6e[KNOWN]; WORKFLOW_RUN:35815689915@success[KNOWN]\n- required gates: bootstrap-validation=PASS@issue-comment:5783121765; candidate-local-remote-exact=PASS@commit:07a4ebc173360113f4ee3779ecbcd3e503208d6e; coordination-converged=PASS@receipt:326178d6e423944a4df63c18895c33e7e92169e1c79daeec791d20ee0e8b529b; exact-head-required=PASS@run:35815689915; exact-ten-path-diff=PASS@pr:#2816; pr-publication=PASS@pr:#2816; runtime-install=EXPECTED_NO_RUN@issue:#2812\n- scope paths: products/chatgpt-mobile-coder-lab/coordination/repository-implementation/mcl-repository-implementation.cjs; products/chatgpt-mobile-coder-lab/coordination/repository-implementation/tests/test-repository-implementation.cjs; products/chatgpt-mobile-coder-lab/device-ops/detached-owner-runtime/README.md; products/chatgpt-mobile-coder-lab/device-ops/detached-owner-runtime/install-s-termux.sh; products/chatgpt-mobile-coder-lab/device-ops/detached-owner-runtime/mcl-detached-owner-runtime-service.cjs; products/chatgpt-mobile-coder-lab/device-ops/detached-owner-runtime/mcl-detached-owner-runtime.cjs; products/chatgpt-mobile-coder-lab/device-ops/detached-owner-runtime/tests/test-detached-owner-runtime.cjs; products/chatgpt-mobile-coder-lab/device-ops/detached-owner-runtime/tests/test-install-contract.sh; products/chatgpt-mobile-coder-lab/device-ops/repository-patch/mcl-repository-patch-owner-invoke.cjs; products/chatgpt-mobile-coder-lab/device-ops/repository-patch/tests/test-owner-invoke.cjs\n- diff identity: e33c1dae6b19d5ca80695bd96e55926331254475e156b2f667314a9698505f9d@pr:#2816\n- proof: IMPLEMENTED@commit:07a4ebc173360113f4ee3779ecbcd3e503208d6e; CONTRACT_PROVEN@run:35815689915\n- required UNKNOWNs: NONE\n- conflicts: NONE\n- blockers: NONE\n- dependencies: NONE\n- next legal action: `VALIDATION_MERGE`\n- mutationAuthorized: `false`\n- executionAuthorized: `false`\n- receipt digest: `45fd2f1f97baa9cbc732e30d3604da598f35d3b56cc9690a0e0e599acace45b0`\n";
+const historical2812Parsed = parseRenderedStageReceipt(historical2812LegacyReceipt);
+assert.equal(historical2812Parsed.status, 'VALID');
+assert.equal(
+  historical2812Parsed.value.receiptDigest,
+  '45fd2f1f97baa9cbc732e30d3604da598f35d3b56cc9690a0e0e599acace45b0',
+);
+assert.deepEqual(
+  historical2812Parsed.value.authorityRefs.find((row) => row.kind === 'PR'),
+  {
+    kind: 'PR',
+    locator: '#2816',
+    identity: 'head:07a4ebc173360113f4ee3779ecbcd3e503208d6e',
+    status: 'KNOWN',
+  },
+);
 
 assert.equal(parseRenderedStageReceipt('no canonical block').status, 'UNKNOWN');
 const duplicateRendered = rendered + '\n' + rendered;

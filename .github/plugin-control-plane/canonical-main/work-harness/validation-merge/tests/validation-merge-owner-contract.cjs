@@ -403,10 +403,41 @@ test('canonical IMPLEMENTATION_PR receipt is reprojected and bound to PR head', 
   const value = owner.validateImplementationReceipt(receipt, PACKET, PR);
   assert.equal(value.expectedHead, HEAD);
   assert.deepEqual(value.paths, PATHS);
+  assert.ok(receipt.authorityRefs.some((row) => (
+    row.kind === 'PR' && row.locator === 'pr:#' + PR && row.identity === HEAD
+  )));
   const forged = structuredClone(receipt);
   forged.nextLegalAction = 'DONE';
   assert.throws(() => owner.validateImplementationReceipt(forged, PACKET, PR),
     /IMPLEMENTATION_STAGE_RECEIPT_IDENTITY_CONFLICT/);
+});
+
+test('legacy PR authority shape cannot cross the producer/validation boundary', () => {
+  const legacyProjected = implementationReceipt({
+    authorityRefs: [
+      {kind: 'GIT_REF', locator: 'refs/heads/main', identity: BASE},
+      {kind: 'PR', locator: '#' + PR, identity: 'head:' + HEAD},
+      {kind: 'COMMIT', locator: 'commit:' + HEAD, identity: HEAD},
+    ],
+  });
+  assert.equal(legacyProjected.status, 'INVALID');
+  assert.ok(legacyProjected.reasonCodes.some((code) => (
+    code.startsWith('INPUT_AUTHORITY_PR_LOCATOR_INVALID:')
+  )));
+  assert.ok(legacyProjected.reasonCodes.some((code) => (
+    code.startsWith('INPUT_AUTHORITY_PR_IDENTITY_INVALID:')
+  )));
+
+  const legacyHistoricalShape = structuredClone(implementationReceipt());
+  legacyHistoricalShape.authorityRefs = legacyHistoricalShape.authorityRefs.map((row) => (
+    row.kind === 'PR'
+      ? {...row, locator: '#' + PR, identity: 'head:' + HEAD}
+      : row
+  ));
+  assert.throws(
+    () => owner.validateImplementationReceipt(legacyHistoricalShape, PACKET, PR),
+    /IMPLEMENTATION_STAGE_RECEIPT_IDENTITY_CONFLICT/,
+  );
 });
 
 test('current main capture requires exact CLEAR PASS and UNKNOWN NONE', async () => {

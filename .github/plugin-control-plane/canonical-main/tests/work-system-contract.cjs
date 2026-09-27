@@ -249,6 +249,38 @@ assert.deepEqual(policy.stagedInteraction.stages, [
   'EXPERIMENT_CLOSE',
 ]);
 assert.equal(policy.stagedInteraction.ordinaryContinuationMaxSubstantialStages, 1);
+assert.deepEqual(policy.stagedInteraction.coupledStageContinuation, {
+  version: 1,
+  fromStage: 'VALIDATION_MERGE',
+  toStage: 'POSTMERGE_CONVERGENCE',
+  defaultWithinOneUserContinuation: true,
+  requiresSourceStageDurableCompletion: true,
+  requiresExactMergeAttributionAndFinalize: true,
+  requiresSamePacket: true,
+  requiresSamePrimaryGoal: true,
+  requiresSameDeclaredScope: true,
+  requiresExactMergedIdentity: true,
+  requiresExistingAuthority: true,
+  requiresDeterministicSuffix: true,
+  requiresNoUserInput: true,
+  boundedSettlingOnly: true,
+  separateStageReceiptsRequired: true,
+  separateStageCheckpointsRequired: true,
+  stopConditions: [
+    'MERGE_ABSENT_FAILED_OR_AMBIGUOUS',
+    'MAIN_ATTRIBUTION_DRIFT',
+    'IDENTITY_SCOPE_OWNER_OR_AUTHORITY_EXPANSION',
+    'FAIL_BLOCKED_OR_CONFLICT',
+    'UNRESOLVED_UNKNOWN',
+    'UNBOUNDED_EXTERNAL_WAIT',
+    'USER_INPUT_REQUIRED',
+    'PROJECT_BOUNDARY_REQUIRED',
+  ],
+  postmergeFailureRemainsPostmergeFailure: true,
+  stopAfterStage: 'POSTMERGE_CONVERGENCE',
+  autoEnterExperimentClose: false,
+  noNewEffectAuthority: true,
+});
 assert.deepEqual(policy.stagedInteraction.tinyReadOnlyCollapse, {
   allowed: true,
   maxBoundedReads: 2,
@@ -431,7 +463,8 @@ assert.match(template, /Phase 8\.7g intra-stage continuation interprets that ord
 assert.match(template, /Discovering that an advertised earlier stage is already complete consumes zero current stage budget/);
 assert.match(template, /reconverge only the stale or incomplete suffix/);
 assert.match(template, /Required immediate effect readback, current-stage validation, idempotence\/CAS confirmation, evidence publication, and required current-packet self close-sync may remain one stage-local transaction closure/);
-assert.match(template, /They never authorize entry into the next declared substantial stage/);
+assert.match(template, /Those stage-local rules never authorize entry into the next declared substantial stage/);
+assert.match(template, /cross-stage entry is limited to the named coupled validation\/postmerge specialization above/);
 assert.match(template, /retry-until-PASS is forbidden/);
 assert.match(template, /exact equality of writable path\/prefix set, semantic\/effect surface set, primary goal, and effect owner/);
 assert.match(template, /unresolved `BLOCKED \/ UNKNOWN \/ CONFLICT` stops the continuation/);
@@ -454,6 +487,17 @@ for (const disposition of [...intraStage.continueDispositions, ...intraStage.sto
 }
 assert.match(sharedInteraction, /These dispositions describe interaction pacing only/);
 assert.match(sharedInteraction, /Existing effect\/recovery owners and every existing authority\/gate remain unchanged/);
+assert.match(sharedInteraction, /### Coupled validation\/postmerge continuation/);
+assert.match(sharedInteraction, /coupled execution with separate proof/);
+assert.match(sharedInteraction, /ordinary numeric budget remains one substantial stage/);
+assert.match(sharedInteraction, /VALIDATION_MERGE.*POSTMERGE_CONVERGENCE/s);
+assert.match(sharedInteraction, /separate canonical receipts, checkpoints, failure states/);
+assert.match(sharedInteraction, /successful merge never implies successful postmerge convergence/);
+assert.match(sharedInteraction, /never auto-enters .*EXPERIMENT_CLOSE/);
+assert.match(template, /Canonical-main has one named cross-stage pacing specialization/);
+assert.match(template, /ordinary numeric budget remains .*1 substantial stage/);
+assert.match(template, /separate receipts\/checkpoints and failure semantics/);
+assert.match(template, /never auto-enter .*EXPERIMENT_CLOSE/);
 assert.match(template, /current interaction stage, completed stages, and exact next stage/);
 assert.match(commonRules, /### RCR-D15 — Stage substantial interactive repository work at bounded checkpoints/);
 assert.match(commonRules, /\*\*Class:\*\* `DEFAULT`/);

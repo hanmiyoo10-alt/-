@@ -82,6 +82,32 @@ Transaction closure may not enter the next declared substantial stage. In partic
 
 Current-packet self close-sync may be stage-local. Cross-packet terminal projection, cleanup, or convergence is outside Phase 8.7g and remains a later composition boundary.
 
+### Coupled validation/postmerge continuation
+
+Canonical-main specializes the repository-wide one-stage ordinary pacing default at exactly one cross-stage boundary:
+
+`VALIDATION_MERGE → POSTMERGE_CONVERGENCE`.
+
+This is coupled execution with separate proof, not stage collapse. The ordinary numeric budget remains one substantial stage and the fixed five-stage model remains unchanged. After `VALIDATION_MERGE` has durably completed its own canonical receipt/checkpoint and exact merge attribution/finalize, the same user continuation should proceed directly into `POSTMERGE_CONVERGENCE` by default only when all of these remain true:
+
+- packet identity and primary goal are unchanged;
+- declared write scope and semantic/effect surfaces are unchanged;
+- exact merged PR/head/merge identity is known;
+- existing authority is sufficient and no new owner/authority is required;
+- the postmerge suffix is deterministic;
+- no user input is required;
+- ordinary identity-bound settling can be resolved with bounded wait/retry under the owning read contracts.
+
+The two substantial stages retain separate canonical receipts, checkpoints, failure states, and evidence scopes. A successful merge never implies successful postmerge convergence.
+
+Stop instead of continuing or stop inside postmerge when the merge is absent, failed, or ambiguous; unexpected main movement breaks attribution; identity/scope/owner/authority expands; required evidence is `FAIL`, `BLOCKED`, or `CONFLICT`; an `UNKNOWN` cannot be resolved by bounded owner-permitted retry; external settling becomes unbounded; user input is required; or an applicable project/domain contract requires a distinct boundary.
+
+A postmerge failure after a successful merge remains a real `POSTMERGE_CONVERGENCE` failure. It must not be relabeled as a successful combined transaction and grants no rollback or recovery authority beyond existing owners.
+
+When `POSTMERGE_CONVERGENCE` reaches its own durable checkpoint, this coupled user continuation stops. It never auto-enters `EXPERIMENT_CLOSE`.
+
+This specialization changes interaction pacing only. It grants no new merge, currentization, recovery, release, production, runtime, device, security, or other effect authority.
+
 ### Interaction dispositions
 
 The finite continuation vocabulary is:

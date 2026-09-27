@@ -108,6 +108,24 @@ When `POSTMERGE_CONVERGENCE` reaches its own durable checkpoint, this coupled us
 
 This specialization changes interaction pacing only. It grants no new merge, currentization, recovery, release, production, runtime, device, security, or other effect authority.
 
+### Conditional terminal-stage continuation
+
+Canonical-main has one separate terminal-suffix pacing specialization:
+
+`POSTMERGE_CONVERGENCE → EXPERIMENT_CLOSE`.
+
+This specialization is conditional terminal bookkeeping, not a universal automatic experiment stage. It may begin only after `POSTMERGE_CONVERGENCE` durably completes its own canonical receipt/checkpoint and packet identity, primary goal, declared scope, and current authority remain exact.
+
+Before entering `EXPERIMENT_CLOSE`, evaluate the packet's activated acceptance through the existing read-only `work-system/proof-eligibility.cjs` owner. V1 may continue only when the returned disposition is `NOT_REQUIRED`, `NOT_APPLICABLE`, `OBSERVATIONAL_PENDING_ALLOWED`, or `BLOCKED_CAPABILITY` and `closureBlocking=false`, with no real live/device/user/external experiment still required for terminal completion.
+
+Stop at the owning boundary when the disposition is `LIVE_REQUIRED`, `UNKNOWN`, or `CONFLICT`; when `closureBlocking=true`; when already-satisfied live evidence remains outside this classifier's promotion authority; when user/device/external input is required; when scope/owner/authority expands; or when an applicable project/domain contract requires a distinct experiment boundary.
+
+The terminal continuation never creates a synthetic live event, never infers `LIVE_PROVEN`, and never weakens activated acceptance. `EXPERIMENT_CLOSE` keeps its own canonical receipt/checkpoint, and terminal packet-body reconciliation must complete before native issue closure.
+
+The existing validation/postmerge coupling still completes at its durable `POSTMERGE_CONVERGENCE` checkpoint. If this separate terminal guard then passes, the same user continuation may immediately begin terminal-only `EXPERIMENT_CLOSE`; this cascade does not make the validation/postmerge coupling itself auto-enter the experiment stage.
+
+This specialization changes interaction pacing only. It grants no new merge, currentization, recovery, release, production, runtime, device, security, live-proof, or other effect authority.
+
 ### Interaction dispositions
 
 The finite continuation vocabulary is:

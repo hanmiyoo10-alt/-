@@ -365,6 +365,16 @@ Temporary fallback layers are candidates for removal rather than permanent secon
 
 Before replacement, verify affected callers and compatibility, required validation, neighboring baseline preservation, and owning authority. Retire or clearly deprecate redundant superseded paths where practical rather than leaving hidden dual ownership merely because both implementations exist. Simplification must not weaken acceptance, erase failure provenance, or convert project-specific authority into repository-wide authority.
 
+### RCR-D20 — Prefer isolated virtual workspaces over the user's foreground display
+
+**Class:** `DEFAULT`
+
+When an authorized isolated virtual workspace, cloud browser, remote execution surface, background process, or other non-foreground environment can complete agent-operated repository, tooling, browser, or experiment work with evidence equivalent to foreground interaction, prefer that isolated surface by default. The user's active physical display should remain available for the user's own concurrent work rather than becoming an unnecessary agent execution surface.
+
+Do not steal focus, move the user's foreground cursor, type into foreground applications, change active windows, or otherwise occupy the user's visible interactive workspace when an evidence-equivalent isolated path is available. Foreground or physical-screen interaction remains appropriate when the physical device/display is itself required evidence, the owning project contract requires that interaction, or the user explicitly requests work on that foreground surface.
+
+Virtualization or isolation changes only the execution/workspace surface; it does not grant new repository, credential, device, network, CI, release, production, safety, or approval authority. Compose this preference with RCR-D17 and the narrowest authorized execution path. If no authorized isolated surface can satisfy a required step, preserve the blocker or request the required foreground/manual boundary rather than silently taking over the user's screen.
+
 ## 6. Conditional common rules
 
 ### RCR-C01 — Generated artifacts remain derived

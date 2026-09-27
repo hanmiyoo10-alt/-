@@ -42,14 +42,6 @@ const PLAN_FIELDS = new Set([
   'schema', 'phase', 'route', 'executor', 'preflight_owner', 'repository_effect',
   'overlap_guard', 'lease_guard', 'handoff_guard', 'fallback', 'next_gate', 'details',
 ]);
-const SCOPE_HEADINGS = new Set([
-  'Bounded write scope',
-  'Bounded implementation write scope',
-  'Locked write scope',
-  'Bounded IMPLEMENTATION_PR write scope',
-  'Repository write-scope ceiling used by IMPLEMENTATION_PR',
-]);
-
 class StageError extends Error {
   constructor(kind, reasonCodes, extra = {}) {
     super(reasonCodes[0] || kind);
@@ -153,14 +145,23 @@ function parseArgs(argv) {
     if (values[name] !== undefined) throw new StageError('UNKNOWN', [`ARGUMENT_DUPLICATE:${name}`]);
     values[name] = value;
   }
-  const allowed = new Set(['packet', 'plan', 'apply']);
+  const allowed = new Set(['packet', 'plan', 'source-main', 'apply']);
   const extras = Object.keys(values).filter((key) => !allowed.has(key));
   if (extras.length) throw new StageError('UNKNOWN', extras.map((key) => `ARGUMENT_UNSUPPORTED:${key}`));
   if (!PACKET_REF_RE.test(values.packet || '')) throw new StageError('UNKNOWN', ['PACKET_REF_INVALID']);
   if (!values.plan) throw new StageError('UNKNOWN', ['PLAN_FILE_REQUIRED']);
+  if (values['source-main'] !== undefined && !SHA40_RE.test(values['source-main'])) {
+    throw new StageError('UNKNOWN', ['SOURCE_MAIN_INVALID']);
+  }
   if (command === 'apply' && values.apply !== true) throw new StageError('BLOCKED', ['EXPLICIT_APPLY_REQUIRED']);
   if (command === 'inspect' && values.apply) throw new StageError('UNKNOWN', ['INSPECT_APPLY_FORBIDDEN']);
-  return {command, packetRef: values.packet, packetNumber: Number(values.packet.slice(1)), planFile: values.plan};
+  return {
+    command,
+    packetRef: values.packet,
+    packetNumber: Number(values.packet.slice(1)),
+    planFile: values.plan,
+    sourceMain: values['source-main'] || null,
+  };
 }
 
 function parseKeyValueReceipt(text) {
@@ -226,39 +227,18 @@ function parseOpsCapsule(body, expectedMain) {
   return fields;
 }
 
-function sections(text) {
-  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
-  const found = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const match = /^##\s+(.+?)\s*$/.exec(lines[index]);
-    if (!match || !SCOPE_HEADINGS.has(match[1])) continue;
-    const body = [];
-    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
-      if (/^##\s+/.test(lines[cursor])) break;
-      body.push(lines[cursor]);
-    }
-    found.push({heading: match[1], lines: body});
-  }
-  return found;
-}
-
 function extractPacketScopes(body) {
-  const found = sections(body);
-  if (found.length === 0) throw new StageError('UNKNOWN', ['PACKET_SCOPE_SECTION_MISSING']);
-  if (found.length !== 1) throw new StageError('CONFLICT', ['PACKET_SCOPE_SECTION_DUPLICATE']);
-  const raw = [];
-  for (const line of found[0].lines) {
-    const matches = [...line.matchAll(/`((?:path|surface):[^`]+)`/g)].map((item) => item[1]);
-    raw.push(...matches);
+  const parsed = scopeOverlap.extractPacketScopes(body);
+  if (!parsed.ok) {
+    throw new StageError(
+      parsed.conflict ? 'CONFLICT' : 'UNKNOWN',
+      [parsed.conflict ? 'PACKET_SCOPE_CONFLICT' : 'PACKET_SCOPE_UNRESOLVED'],
+    );
   }
-  if (!raw.length) throw new StageError('UNKNOWN', ['PACKET_SCOPE_EMPTY']);
-  const normalized = [];
-  for (const item of raw) {
-    const parsed = scopeOverlap.normalizeScope(item);
-    if (!parsed.ok) throw new StageError('UNKNOWN', ['PACKET_SCOPE_INVALID']);
-    normalized.push(parsed.normalized);
+  const normalized = parsed.scopes.map((item) => item.normalized);
+  if (new Set(normalized).size !== normalized.length) {
+    throw new StageError('CONFLICT', ['PACKET_SCOPE_DUPLICATE']);
   }
-  if (new Set(normalized).size !== normalized.length) throw new StageError('CONFLICT', ['PACKET_SCOPE_DUPLICATE']);
   return normalized.sort();
 }
 
@@ -369,8 +349,11 @@ function inspectLanding(mainSha, runner = runDefault) {
   return {landing, ...classification};
 }
 
-function inspectContext({packetNumber, plan, runner = runDefault, profile}) {
+function inspectContext({packetNumber, plan, sourceMain = null, runner = runDefault, profile}) {
   const firstMain = readMainSha(runner);
+  if (sourceMain !== null && sourceMain !== firstMain) {
+    throw new StageError('CONFLICT', ['SOURCE_MAIN_CURRENT_MAIN_CONFLICT']);
+  }
   const ops = ghJson(`repos/${REPO}/issues/${OPS_ISSUE}`, runner);
   const secondMain = readMainSha(runner);
   if (firstMain !== secondMain) throw new StageError('UNKNOWN', ['MAIN_CHANGED_DURING_CAPTURE']);
@@ -412,6 +395,7 @@ function inspectContext({packetNumber, plan, runner = runDefault, profile}) {
     packetRef: `#${packetNumber}`,
     plan,
     mainSha: firstMain,
+    sourceMain,
     packetBody: issue.body,
     packetBodySha256: sha256(issue.body),
     requestedScopes,
@@ -513,6 +497,7 @@ function revalidateBeforeLandingRefresh(context, lease, {
   const fresh = inspector({
     packetNumber: context.packetNumber,
     plan: context.plan,
+    sourceMain: context.sourceMain,
     runner,
     profile,
   });
@@ -649,6 +634,7 @@ function revalidateAfterNormalization(context, {
   const fresh = inspector({
     packetNumber: context.packetNumber,
     plan: context.plan,
+    sourceMain: context.sourceMain,
     runner,
     profile,
   });
@@ -888,6 +874,7 @@ function revalidateAfterAcquire(context, lease, {
   const fresh = inspector({
     packetNumber: context.packetNumber,
     plan: context.plan,
+    sourceMain: context.sourceMain,
     runner,
     profile,
   });
@@ -1096,6 +1083,7 @@ function run(argv = process.argv.slice(2), deps = {}) {
     const context = inspectContext({
       packetNumber: parsed.packetNumber,
       plan,
+      sourceMain: parsed.sourceMain,
       runner: deps.runner || runDefault,
       profile: deps.profile,
     });
@@ -1140,7 +1128,6 @@ module.exports = {
   PAGE_SIZE,
   PLAN_FIELDS,
   REPO,
-  SCOPE_HEADINGS,
   StageError,
   acquireLandingLease,
   acquireLease,

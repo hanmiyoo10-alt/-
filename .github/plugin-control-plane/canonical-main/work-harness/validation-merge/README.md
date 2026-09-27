@@ -53,12 +53,16 @@ present, the existing fixed REST client is used. If neither environment variable
 present, V1 falls back to the already-authenticated `gh api` credential store with:
 
 - an exact read-only REST endpoint allowlist owned by this module;
-- the one fixed review-thread GraphQL query only;
-- no caller-selected endpoint, method, command or query;
+- the fixed reviewed GraphQL queries only;
+- a repository-owned 20-second lifetime for each individual `gh` read, terminated with a hard child-process kill when the bound is exceeded;
+- no caller-selected timeout, endpoint, method, command or query;
 - no token extraction, token printing, mutation request, retry loop or merge authority.
 
-A missing/broken authorized transport remains UNKNOWN. The fallback changes transport
-only and does not weaken the currentness, review, overlap or Required barriers.
+A missing, broken, or timed-out authorized transport remains UNKNOWN through the
+existing read-failure path. Timeout never converts a missing page, issue, PR file,
+review, Required, currentness, or overlap observation into complete evidence. The
+fallback changes transport lifetime only and does not weaken the currentness, review,
+overlap or Required barriers.
 
 ## Inspect prerequisites
 
@@ -86,8 +90,14 @@ Scope parsing is delegated to the existing Work System
 `extractPacketScopes()`. This module does not maintain another heading/token
 grammar.
 
-The implementation receipt path set, current packet path set and live PR changed
-file set must agree exactly.
+The implementation receipt path set and live PR changed-file set must agree
+exactly. The current packet path scopes are an authorization ceiling instead:
+every exact receipt/PR path must be contained by at least one parsed packet path
+scope using only the Work System's existing exact-path or trailing-`/**` semantics.
+An exact packet path contains only that file; a trailing prefix may contain narrower
+descendant files. Any exact changed file outside the packet ceiling is CONFLICT.
+Unsupported or unresolved scope syntax remains UNKNOWN/CONFLICT through the
+existing Work System parser; this owner adds no wildcard grammar.
 
 ## Current-main barrier
 
@@ -103,7 +113,8 @@ A settling/stale or uncertain state cannot become merge-ready.
 
 The PR must be open, non-draft, same-repository, based on main/current main,
 exactly at the implementation receipt head, explicitly mergeable and contain
-only the packet's exact path set.
+exactly the implementation receipt's changed-file set, with every such file already
+proven inside the packet authorization ceiling.
 
 Review inspection includes:
 - REST reviews;

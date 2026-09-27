@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -9,6 +10,7 @@ const test = require('node:test');
 const ROOT = path.resolve(__dirname, '../../../../../..');
 const owner = require('../validation-merge-owner.cjs');
 const stageReceipt = require('../../stage-receipt.cjs');
+const {stableHash} = require('../../handoff.cjs');
 const agentView = require('../../agent-decision-view.cjs');
 const scopeOverlap = require('../../../work-system/scope-overlap.cjs');
 
@@ -297,6 +299,12 @@ test('live client falls back to fixed gh read transport when token env is absent
     if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/branches/main') {
       return {code: 0, stdout: JSON.stringify({commit: {sha: BASE}}), stderr: ''};
     }
+    if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/issues/' + PACKET) {
+      return {code: 0, stdout: JSON.stringify({number: PACKET, state: 'open', body: packetBody()}), stderr: ''};
+    }
+    if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/pulls/' + PR + '/files?per_page=100&page=1') {
+      return {code: 0, stdout: JSON.stringify(PATHS.map((filename) => ({filename}))), stderr: ''};
+    }
     if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/branches/main/protection/required_status_checks') {
       return {code: 0, stdout: JSON.stringify({strict: true}), stderr: ''};
     }
@@ -319,6 +327,11 @@ test('live client falls back to fixed gh read transport when token env is absent
     throw new Error('fetch must not be used without env token');
   }});
   assert.deepEqual(await client.api('/branches/main'), {commit: {sha: BASE}});
+  assert.deepEqual(await client.api('/issues/' + PACKET), {
+    number: PACKET, state: 'open', body: packetBody(),
+  });
+  assert.deepEqual(await client.api('/pulls/' + PR + '/files?per_page=100&page=1'),
+    PATHS.map((filename) => ({filename})));
   assert.deepEqual(await client.api('/branches/main/protection/required_status_checks'), {strict: true});
   assert.deepEqual(await client.api('/compare/' + BASE + '...' + HEAD), compareObject());
   assert.deepEqual(await client.api('/issues/' + PR + '/comments?per_page=100&page=1'), []);
@@ -336,6 +349,40 @@ test('live client falls back to fixed gh read transport when token env is absent
   await assert.rejects(client.graphql('query{viewer{login}}', {
     owner: 'hanmiyoo10-alt', name: '-', number: PR,
   }), /gh GraphQL query forbidden/);
+});
+
+test('default gh fallback terminates a real stalled child at the fixed read lifetime', () => {
+  const originalSpawnSync = childProcess.spawnSync;
+  childProcess.spawnSync = (_command, _args, options) => originalSpawnSync(
+    process.execPath,
+    ['-e', 'setInterval(() => {}, ' + String(owner.GH_READ_TIMEOUT_MS * 4) + ')'],
+    options,
+  );
+  try {
+    const started = Date.now();
+    const result = owner.defaultGhRunner(['api', 'repos/' + owner.REPO + '/issues/' + PACKET]);
+    const elapsed = Date.now() - started;
+    assert.notEqual(result.code, 0);
+    assert(elapsed >= owner.GH_READ_TIMEOUT_MS - 1500, String(elapsed));
+    assert(elapsed < owner.GH_READ_TIMEOUT_MS + 5000, String(elapsed));
+  } finally {
+    childProcess.spawnSync = originalSpawnSync;
+  }
+});
+
+test('gh fallback read failure stays bounded for both fixed REST and GraphQL reads', async () => {
+  const marker = 'PRIVATE_AUTH_MATERIAL';
+  const client = owner.createGhCliReadClient({
+    runner: () => ({code: 1, stdout: '', stderr: marker}),
+  });
+  await assert.rejects(client.api('/issues/' + PACKET), (error) => (
+    error.message === 'gh REST read failed' && !String(error).includes(marker)
+  ));
+  await assert.rejects(client.graphql(owner.REVIEW_THREADS_QUERY, {
+    owner: 'hanmiyoo10-alt', name: '-', number: PR,
+  }), (error) => (
+    error.message === 'gh GraphQL read failed' && !String(error).includes(marker)
+  ));
 });
 
 test('explicit env token keeps fixed fetch transport and does not call gh runner', async () => {
@@ -357,10 +404,50 @@ test('canonical IMPLEMENTATION_PR receipt is reprojected and bound to PR head', 
   const value = owner.validateImplementationReceipt(receipt, PACKET, PR);
   assert.equal(value.expectedHead, HEAD);
   assert.deepEqual(value.paths, PATHS);
+  assert.ok(receipt.authorityRefs.some((row) => (
+    row.kind === 'PR' && row.locator === 'pr:#' + PR && row.identity === HEAD
+  )));
   const forged = structuredClone(receipt);
   forged.nextLegalAction = 'DONE';
   assert.throws(() => owner.validateImplementationReceipt(forged, PACKET, PR),
     /IMPLEMENTATION_STAGE_RECEIPT_IDENTITY_CONFLICT/);
+});
+
+test('legacy PR authority shape cannot cross the producer/validation boundary', () => {
+  const legacyProjected = implementationReceipt({
+    authorityRefs: [
+      {kind: 'GIT_REF', locator: 'refs/heads/main', identity: BASE},
+      {kind: 'PR', locator: '#' + PR, identity: 'head:' + HEAD},
+      {kind: 'COMMIT', locator: 'commit:' + HEAD, identity: HEAD},
+    ],
+  });
+  assert.equal(legacyProjected.status, 'INVALID');
+  assert.ok(legacyProjected.reasonCodes.some((code) => (
+    code.startsWith('INPUT_AUTHORITY_PR_LOCATOR_INVALID:')
+  )));
+  assert.ok(legacyProjected.reasonCodes.some((code) => (
+    code.startsWith('INPUT_AUTHORITY_PR_IDENTITY_INVALID:')
+  )));
+
+  const legacyHistoricalShape = structuredClone(implementationReceipt());
+  legacyHistoricalShape.authorityRefs = legacyHistoricalShape.authorityRefs.map((row) => (
+    row.kind === 'PR'
+      ? {...row, locator: '#' + PR, identity: 'head:' + HEAD}
+      : row
+  ));
+  const {receiptDigest: _legacyDigest, ...legacyHistoricalDraft} = legacyHistoricalShape;
+  legacyHistoricalShape.receiptDigest = stableHash(legacyHistoricalDraft);
+  const legacyHistoricalText = stageReceipt.renderStageReceipt(legacyHistoricalShape);
+  const legacyHistoricalParsed = stageReceipt.parseRenderedStageReceipt(legacyHistoricalText);
+  assert.equal(legacyHistoricalParsed.status, 'VALID');
+  assert.equal(
+    legacyHistoricalParsed.value.authorityRefs.find((row) => row.kind === 'PR').locator,
+    '#' + PR,
+  );
+  assert.throws(
+    () => owner.validateImplementationReceipt(legacyHistoricalParsed.value, PACKET, PR),
+    /IMPLEMENTATION_STAGE_RECEIPT_IDENTITY_CONFLICT/,
+  );
 });
 
 test('current main capture requires exact CLEAR PASS and UNKNOWN NONE', async () => {
@@ -554,7 +641,7 @@ test('PR base or path drift fails closed', async () => {
   assert.ok(pathDrift.receipt.reasonCodes.includes('PR_CHANGED_FILES_SCOPE_MISMATCH'));
 });
 
-test('packet and implementation receipt scopes must agree exactly', async () => {
+test('implementation receipt and live PR changed files still agree exactly', async () => {
   const narrowed = implementationReceipt({
     scope: {
       paths: PATHS.slice(0, 4),
@@ -568,6 +655,59 @@ test('packet and implementation receipt scopes must agree exactly', async () => 
     packetNumber: PACKET,
     prNumber: PR,
     implementationReceipt: narrowed,
+  });
+  assert.equal(result.receipt.result, 'CONFLICT');
+  assert.ok(result.receipt.reasonCodes.includes('PR_CHANGED_FILES_SCOPE_MISMATCH'));
+});
+
+test('packet trailing-prefix ceiling admits narrower exact receipt and PR files', async () => {
+  const exact = PATHS.filter((value) => value.includes('/work-harness/validation-merge/'));
+  const receipt = implementationReceipt({
+    scope: {
+      paths: exact,
+      diffRequired: true,
+      diffIdentity: 'd'.repeat(64),
+      diffEvidenceLocator: 'commit:' + HEAD,
+    },
+  });
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      packetBody: packetBody([
+        '.github/plugin-control-plane/canonical-main/work-harness/validation-merge/**',
+      ]),
+      prFiles: exact,
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: receipt,
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.receipt.reasonCodes.length, 0);
+});
+
+test('exact changed file outside packet prefix ceiling remains CONFLICT', async () => {
+  const exact = [
+    ...PATHS.filter((value) => value.includes('/work-harness/validation-merge/')),
+    'docs/outside.md',
+  ].sort();
+  const receipt = implementationReceipt({
+    scope: {
+      paths: exact,
+      diffRequired: true,
+      diffIdentity: 'd'.repeat(64),
+      diffEvidenceLocator: 'commit:' + HEAD,
+    },
+  });
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      packetBody: packetBody([
+        '.github/plugin-control-plane/canonical-main/work-harness/validation-merge/**',
+      ]),
+      prFiles: exact,
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: receipt,
   });
   assert.equal(result.receipt.result, 'CONFLICT');
   assert.ok(result.receipt.reasonCodes.includes('IMPLEMENTATION_PACKET_SCOPE_MISMATCH'));

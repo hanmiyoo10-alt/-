@@ -6,6 +6,13 @@
 
 Keep `State` as the packet lifecycle projection. Preserve exactly one canonical lifecycle token (`READY / CLAIMED / IN_PROGRESS / REVIEW / DONE / BLOCKED / CANCELLED / SUPERSEDED`) here when updating stage bookkeeping. Do not replace lifecycle State with stage-only prose; update `Interaction stage` separately.
 
+Before creating a canonical work-packet issue or publishing a packet-body update, materialize the exact candidate body and require this read-only preflight to return `PASS`:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/packet-authoring-preflight.cjs --body-file /path/to/candidate-packet.md
+```
+
+Do not bypass a non-PASS result by substituting `ACTIVE`, guessing lifecycle from stage prose, or adding another canonical lifecycle word to descriptive State text. The repository does not claim to intercept every external GitHub issue-creation surface; the packet producer owns this prepublication check.
 
 ## Primary goal
 
@@ -57,6 +64,22 @@ Ordered stages:
 
 An ordinary continuation advances at most one substantial stage. A tiny read-only task may collapse stages only when it genuinely completes in at most two bounded reads. A safety-critical recovery may continue only to the nearest safe stop when delaying would create material risk, and that exception must be recorded. Explicit user instruction may authorize a broader run. Staging never removes required Git, CI, release, production, authority, validation, uncertainty, or evidence checks.
 
+Canonical-main has one conditional prefix fast path: after `AUTHORITY_SCOPE` durably completes its own checkpoint, continue into `IMPLEMENTATION_PR` in the same user continuation only when packet/goal/scope/surface/owner identity is exact, overlap is completely proven noncompeting, required evidence is clear, packet preflight passes, the implementation route is deterministic, existing authority is sufficient, and no additional design choice/user input/owner approval is needed. Keep separate A/I receipts/checkpoints. Stop after durable `IMPLEMENTATION_PR`; never auto-enter `VALIDATION_MERGE`, and stop immediately if merge/release/production/runtime/device/security authority would be required.
+
+The `IMPLEMENTATION_PR → VALIDATION_MERGE` boundary remains preserved by default because it crosses from candidate/PR evidence into protected-main mutation. Fresh exact-head CI, review state, currentness, overlap admission, and merge admission remain independently required. Explicit user instruction may still authorize a broader run under RCR-D15, but the A→I fast path itself grants no merge authority.
+
+Canonical-main has one named cross-stage pacing specialization: after `VALIDATION_MERGE` durably completes its own receipt/checkpoint and exact merge attribution/finalize, continue directly into `POSTMERGE_CONVERGENCE` in the same user continuation by default when the exact packet/goal/scope/merged identity and existing authority remain unchanged and the postmerge suffix is deterministic. The ordinary numeric budget remains `1 substantial stage`; this named specialization does not collapse the two stages. They keep separate receipts/checkpoints and failure semantics. Stop on merge ambiguity/failure, attribution drift, scope/owner/authority expansion, required `FAIL / BLOCKED / CONFLICT`, unresolved `UNKNOWN`, unbounded external wait, required user input, or an explicit project boundary. Stop after the durable `POSTMERGE_CONVERGENCE` checkpoint and never auto-enter `EXPERIMENT_CLOSE`.
+
+Canonical-main also has one conditional terminal-suffix specialization: after `POSTMERGE_CONVERGENCE` durably completes its own receipt/checkpoint, reuse the existing `proof-eligibility.cjs` owner and continue into terminal-only `EXPERIMENT_CLOSE` in the same user continuation only for explicit nonblocking terminal outcomes. V1 permits `NOT_REQUIRED`, `NOT_APPLICABLE`, `OBSERVATIONAL_PENDING_ALLOWED`, or `BLOCKED_CAPABILITY` only when `closureBlocking=false`. Stop on `LIVE_REQUIRED / UNKNOWN / CONFLICT`, any blocking result, already-satisfied live evidence outside the classifier's promotion authority, a required real experiment/user/device/external event, scope/owner/authority expansion, or an explicit project experiment boundary. Never synthesize a live event or infer `LIVE_PROVEN`; keep a separate EXPERIMENT_CLOSE receipt/checkpoint and reconcile the terminal body before native issue closure. A completed validation/postmerge coupling may cascade into this terminal suffix only after its durable POSTMERGE_CONVERGENCE checkpoint and only when every terminal guard passes.
+
+Phase 8.7g intra-stage continuation interprets that ordinary budget as the one substantial stage actually performed after fresh durable rebind. Discovering that an advertised earlier stage is already complete consumes zero current stage budget and never reopens that completed stage.
+
+Inside the actual current stage, preserve every still-valid proven prefix and completed effect, then reconverge only the stale or incomplete suffix. Required immediate effect readback, current-stage validation, idempotence/CAS confirmation, evidence publication, and required current-packet self close-sync may remain one stage-local transaction closure. Those stage-local rules never authorize entry into the next declared substantial stage; cross-stage entry is limited to the conditional authority/implementation, named validation/postmerge, and conditional terminal-suffix pacing specializations above.
+
+Transient read-only `UNKNOWN` retry must remain bounded, same-identity, and explicitly permitted by the owning read-only contract; retry-until-PASS is forbidden. Same-scope acceptance refinement requires exact equality of writable path/prefix set, semantic/effect surface set, primary goal, and effect owner. Any owner/scope/authority expansion or unresolved `BLOCKED / UNKNOWN / CONFLICT` stops the continuation.
+
+Use only the finite interaction dispositions owned by `policy.json::stagedInteraction.intraStageContinuation`. Those dispositions grant no effect authority and do not change the existing five-stage sequence or the numeric ordinary continuation budget.
+
 This packet body is a current lifecycle projection, not an immutable activation snapshot. Before or atomically with native issue closure, reconcile State; completed/current/next stage; evidence-backed Proof / closure terms; required acceptance UNKNOWNs; and Handoff / exact next action so the body does not advertise already-completed work. Native closure or a final comment alone does not override a contradictory stale body. If terminal evidence conflicts with this body, classify the body projection as stale, re-read terminal evidence, and do not resume the stale advertised stage without fresh re-attribution.
 
 ## Bounded write scope
@@ -65,6 +88,10 @@ This packet body is a current lifecycle projection, not an immutable activation 
 - `<OPTIONAL surface:<owning-domain>:<stable-owner-or-effect> ONLY WHEN A REAL CROSS-PATH COLLISION BOUNDARY EXISTS>`
 
 Repository/shared/product classification is context only and never an implicit lock. For repository-byte mutation, list every writable `path:` scope. Add a semantic/effect `surface:` only when otherwise-disjoint paths can mutate the same logical owner or effect boundary; it supplements the path list and grants no additional path authority. Reuse the existing owner/effect identity rather than naming the packet, branch, worker, account, chat, or executor. Do not use broad umbrella identities such as `surface:repo:common`, `surface:scope:repo`, or `surface:shared:all`. If a stable owner/effect identity cannot be established from current authority, preserve `UNKNOWN` or `CONFLICT` instead of inventing one.
+
+Keep only writable `path:` / required semantic `surface:` entries inside this deterministic write-scope section. Before listing preservation, exclusion, comparison, neighboring-owner, `do not modify`, non-write, or forbidden paths/surfaces, start a separate level-two section such as `## Preservation boundary`. Do not leave those entries in this section and rely on descriptive prose to make them non-writable. The producer-side packet authoring preflight rejects that mixed-section shape before publication; the semantic scope parser itself remains exact and fail-closed.
+
+Finalization routing is declared at AUTHORITY_SCOPE rather than repaired after merge. A canonical-main infrastructure packet that intends to use the generic repository-neutral validation finalizer must declare one specific stable `surface:repo:<owner-or-effect>` here. An intentionally path-only packet may instead use a separately reviewed finalization owner; do not invent a fake surface for that case. Before merge admission, its canonical IMPLEMENTATION_PR receipt must carry the exact gate `validation-finalization-external-owner-reviewed=PASS` with a real evidence locator. That gate records reviewed routing only and grants no finalization, mutation, merge, coordination, release, runtime, or production authority.
 
 The entries above are implementation/effect outputs and external coordination targets. The packet's own GitHub issue is a reserved self-bookkeeping surface for faithful lifecycle State, interaction-stage, evidence-backed proof/UNKNOWN, Handoff, and terminal close-sync projection; do not add the packet's own issue here solely for that bookkeeping. Reserved self-bookkeeping cannot change the primary goal, acceptance, external write scope, or evidence to manufacture completion, and it grants no authority over any other issue or repository/runtime surface. Overlap classification considers only explicitly declared implementation/effect scopes and does not gain an implicit self-issue token.
 
@@ -92,6 +119,17 @@ Use only evidence-backed terms from the Work System taxonomy:
 `DONE` belongs in the packet lifecycle State only after every declared required acceptance item is satisfied at its required proof level and required UNKNOWN evidence is `NONE`. `OBSERVATIONAL_PENDING` or `BLOCKED_CAPABILITY` may coexist with `DONE` only when the affected evidence was explicitly declared non-blocking by this packet's acceptance. Do not infer `LIVE_PROVEN` from `CONTRACT_PROVEN`.
 
 PR linkage is fail closed: if required acceptance remains after merge, especially blocking `POSTMERGE_CONVERGENCE` or `LIVE_PROVEN` evidence, use `Refs #<packet>` and do not use `Fixes` or `Closes`. A closing keyword is allowed only when merge itself satisfies every required acceptance item and no required postmerge proof remains. Native GitHub issue closure alone is not proof-taxonomy `DONE` evidence.
+
+When that non-closing rule applies, the packet producer must materialize the exact proposed PR title/body before any external creation surface and require this read-only preflight to return `PASS`:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/pr-authoring-preflight.cjs \
+  --packet '#<N>' \
+  --title-file /path/to/pr-title.txt \
+  --body-file /path/to/pr-body.md
+```
+
+The preflight requires an exact `Refs #<packet>` body line and rejects closing-keyword issue references in title or body for any issue number. Do not bypass a non-PASS result by calling `gh pr create`, a connector, or another external publisher directly. The repository does not claim to intercept every external GitHub PR-creation surface; the producer owns this prepublication check. `PASS` grants no publication or other effect authority. Intentionally terminal PRs whose merge satisfies every required acceptance item keep GitHub's normal closing semantics and do not require the non-closing preflight.
 
 ## Stop condition
 

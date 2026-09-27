@@ -177,12 +177,58 @@ test('plan parser accepts only the reviewed S/S mutable shape', () => {
   assert.throws(() => stage.parsePlan({...plan(), command: 'git status'}), /PLAN_UNKNOWN_FIELD/);
 });
 
-test('packet scope parser accepts one exact Work System heading and rejects drift', () => {
+test('source-main binding is optional, strict, and launcher-owned', () => {
+  const direct = stage.parseArgs(['inspect', '--packet', '#77', '--plan', '/tmp/plan.json']);
+  assert.equal(direct.sourceMain, null);
+  const bound = stage.parseArgs([
+    'inspect', '--packet', '#77', '--plan', '/tmp/plan.json', '--source-main', MAIN,
+  ]);
+  assert.equal(bound.sourceMain, MAIN);
+  assert.throws(() => stage.parseArgs([
+    'inspect', '--packet', '#77', '--plan', '/tmp/plan.json', '--source-main', 'main',
+  ]), /SOURCE_MAIN_INVALID/);
+});
+
+test('target scope parsing delegates exact Work System grammar and preserves stage-entry guards', () => {
   assert.deepEqual(stage.extractPacketScopes(PACKET_BODY), ['path:docs/demo.md']);
-  assert.throws(() => stage.extractPacketScopes(PACKET_BODY.replace('Bounded write scope', 'Implementation write scope')),
-    /PACKET_SCOPE_SECTION_MISSING/);
-  assert.throws(() => stage.extractPacketScopes(`${PACKET_BODY}\n## Locked write scope\n1. \`path:src/**\``),
-    /PACKET_SCOPE_SECTION_DUPLICATE/);
+
+  for (const heading of [
+    'Bounded write scope',
+    'Bounded implementation write scope',
+    'Locked write scope',
+    'Bounded IMPLEMENTATION_PR write scope',
+    'Repository write-scope ceiling used by IMPLEMENTATION_PR',
+    'Bounded repository write ceiling',
+  ]) {
+    const body = PACKET_BODY.replace('Bounded write scope', heading)
+      .replace('1. \`path:docs/demo.md\`', '1. path:src/**\n2. surface:mcl:demo');
+    assert.deepEqual(stage.extractPacketScopes(body), ['path:src/**', 'surface:mcl:demo']);
+  }
+
+  const preserved = PACKET_BODY.replace(
+    '1. \`path:docs/demo.md\`',
+    '1. path:src/**\nPreservation: \`path:docs/preserve.md\`',
+  );
+  assert.deepEqual(stage.extractPacketScopes(preserved), ['path:src/**']);
+
+  const fenced = PACKET_BODY.replace(
+    '1. \`path:docs/demo.md\`',
+    '1. path:src/**\n~~~text\n## Locked write scope\n1. path:ignored/**\n~~~',
+  );
+  assert.deepEqual(stage.extractPacketScopes(fenced), ['path:src/**']);
+
+  assert.throws(() => stage.extractPacketScopes(
+    PACKET_BODY.replace('Bounded write scope', 'Implementation write scope')),
+  /PACKET_SCOPE_UNRESOLVED/);
+  assert.throws(() => stage.extractPacketScopes(
+    `${PACKET_BODY}\n## Locked write scope\n1. \`path:src/**\``),
+  /PACKET_SCOPE_CONFLICT/);
+  assert.throws(() => stage.extractPacketScopes(
+    PACKET_BODY.replace('1. \`path:docs/demo.md\`', '1. path:../src/**')),
+  /PACKET_SCOPE_UNRESOLVED/);
+  assert.throws(() => stage.extractPacketScopes(
+    PACKET_BODY.replace('1. \`path:docs/demo.md\`', '1. path:docs/demo.md\n2. path:docs/demo.md')),
+  /PACKET_SCOPE_DUPLICATE/);
 });
 
 test('ops capsule requires exact main, Required PASS, CLEAR and UNKNOWN NONE', () => {
@@ -233,14 +279,16 @@ test('unparseable nonterminal packet keeps overlap UNKNOWN', () => {
         {number: 20, state: 'open', body: `<!-- canonical-main-work-packet:v1 -->
 ## State
 \`IN_PROGRESS\`
-## Bounded repository write ceiling
-1. \`path:src/**\``},
+## Bounded write scope
+1. \`path:../src/**\``},
       ]);
     }
     throw new Error(endpoint);
   };
   const value = stage.discoverOverlap({packetNumber: 10, requestedScopes: ['path:docs/demo.md'], runner});
   assert.equal(value.state, 'UNKNOWN');
+  assert.equal(value.discovery, 'COMPLETE');
+  assert(value.findings.some((finding) => finding.code === 'PACKET_SCOPE_UNRESOLVED'));
 });
 
 test('discovery truncation remains UNKNOWN rather than optimistic DISJOINT', () => {
@@ -254,6 +302,29 @@ test('discovery truncation remains UNKNOWN rather than optimistic DISJOINT', () 
   const value = stage.discoverOverlap({packetNumber: 77, requestedScopes: ['path:docs/demo.md'], runner});
   assert.equal(value.state, 'UNKNOWN');
   assert.equal(value.discovery, 'PARTIAL');
+});
+
+test('source-main mismatch fails before overlap, landing, lease, or workspace reads', () => {
+  const t = tempProfile();
+  let calls = 0;
+  const runner = (args) => {
+    calls += 1;
+    if (args[0] === 'gh' && args[1] === 'api'
+        && args[2] === `repos/${stage.REPO}/branches/main`) {
+      return response(0, {commit: {sha: MAIN}});
+    }
+    throw new Error(`unexpected read after source mismatch: ${args.join(' ')}`);
+  };
+  try {
+    assert.throws(() => stage.inspectContext({
+      packetNumber: 77,
+      plan: plan(),
+      sourceMain: 'b'.repeat(40),
+      runner,
+      profile: t.profile,
+    }), /SOURCE_MAIN_CURRENT_MAIN_CONFLICT/);
+    assert.equal(calls, 1);
+  } finally { t.close(); }
 });
 
 test('inspect detects main movement before mutation', () => {
@@ -309,8 +380,8 @@ test('source overlap resolves before landing observation or normalization', () =
       {number: 88, state: 'open', body: `<!-- canonical-main-work-packet:v1 -->
 ## State
 \`IN_PROGRESS\`
-## Bounded repository write ceiling
-1. \`path:src/**\``},
+## Bounded write scope
+1. \`path:../src/**\``},
     ],
   });
   const runner = (args, options) => {
@@ -883,8 +954,11 @@ test('successful one-shot normalization composes into existing repository stage 
   } finally { f.close(); }
 });
 
-test('source contains no holder invocation, generic retry loop, or destructive Git repair', () => {
+test('source delegates target scope grammar and contains no broader effect machinery', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'mcl-stage-entry.cjs'), 'utf8');
+  assert.match(source, /scopeOverlap\.extractPacketScopes\(body\)/);
+  assert.doesNotMatch(source, /SCOPE_HEADINGS/);
+  assert.doesNotMatch(source, /function sections\(/);
   assert.doesNotMatch(source, /mcl-workspace-holder/);
   assert.doesNotMatch(source, /\bsetInterval\b|\bsetTimeout\b/);
   assert.doesNotMatch(source, /['"](?:reset|stash|rebase|merge|checkout|switch)['"]/);

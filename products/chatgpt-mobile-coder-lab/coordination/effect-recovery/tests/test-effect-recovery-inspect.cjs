@@ -47,13 +47,13 @@ function packet() {
   };
 }
 
-function manifest() {
+function manifest({phaseId = '2693-implementation-pr-stage-entry'} = {}) {
   return handoff.buildManifest({
     schemaVersion: 1,
     mode: 'MCL_TASK_MANIFEST',
     packetRef: '#2693',
     packetBodySha256: PACKET_HASH,
-    phaseId: '2693-implementation-pr-stage-entry',
+    phaseId,
     phaseClass: 'REPOSITORY_MUTATION',
     route: 'S',
     executor: 'S',
@@ -277,7 +277,7 @@ test('holder mismatch fails closed', async () => {
   assert.equal(out.view.result, 'CONFLICT');
 });
 
-test('manifest candidate selection rejects duplicate matching envelopes', () => {
+test('manifest candidate selection collapses exact replay rows', () => {
   const m = manifest();
   const rendered = handoff.renderManifest(m);
   const result = owner.manifestCandidates(
@@ -285,6 +285,24 @@ test('manifest candidate selection rejects duplicate matching envelopes', () => 
     packet(),
     activeLease(),
     {record: {manifestId: m.manifestId, leaseId: LEASE}},
+  );
+  assert.equal(result.state, 'EXACT');
+  assert.equal(result.manifest.manifestId, m.manifestId);
+  assert.deepEqual(result.reasons, []);
+});
+
+test('manifest candidate selection rejects distinct matching identities', () => {
+  const first = manifest();
+  const second = manifest({phaseId: '2693-implementation-pr-replay'});
+  assert.notEqual(first.manifestId, second.manifestId);
+  const result = owner.manifestCandidates(
+    {complete: true, rows: [
+      {body: handoff.renderManifest(first)},
+      {body: handoff.renderManifest(second)},
+    ]},
+    packet(),
+    activeLease(),
+    {record: null},
   );
   assert.equal(result.state, 'CONFLICT');
   assert.ok(result.reasons.includes('MANIFEST_MATCH_DUPLICATE'));

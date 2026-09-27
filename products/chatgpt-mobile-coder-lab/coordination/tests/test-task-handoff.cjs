@@ -188,7 +188,7 @@ test('landing_metadata manifest rejects mismatched scope identity and missing ob
     workspace: { kind: 'landing_metadata', branch: 'server/work', worktree: '/root/nyang-repo' },
   })), /LANDING_METADATA_BASE_SHA_REQUIRED/);
 });
-test('landing_branch_repair manifest accepts only exact M/M identity and scope', () => {
+test('landing_branch_repair manifest accepts exact M/M identity and scope', () => {
   const m = handoff.buildManifest(manifestInput({
     phaseId: 'landing-branch-repair-m',
     route: 'M',
@@ -201,6 +201,16 @@ test('landing_branch_repair manifest accepts only exact M/M identity and scope',
   assert.equal(m.executor, 'M');
   assert.equal(m.workspace.kind, 'landing_branch_repair');
 });
+test('landing_branch_repair manifest accepts exact S/S identity and scope', () => {
+  const m = handoff.buildManifest(manifestInput({
+    phaseId:'landing-branch-repair-s', route:'S', executor:'S',
+    scopes:['surface:mcl-landing-branch:S'],
+    workspace:{kind:'landing_branch_repair',branch:'server/work',worktree:'/root/nyang-repo'},
+    observedBaseSha:baseSha,
+  }));
+  assert.equal(m.route,'S'); assert.equal(m.executor,'S');
+  assert.equal(m.workspace.kind,'landing_branch_repair');
+});
 test('landing_branch_repair manifest rejects fallback mismatched identity scope and missing base', () => {
   const base = {
     phaseId: 'landing-branch-repair-m',
@@ -211,7 +221,7 @@ test('landing_branch_repair manifest rejects fallback mismatched identity scope 
     observedBaseSha: baseSha,
   };
   expectThrow(() => handoff.buildManifest(manifestInput({...base, route:'S'})), /LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID/);
-  expectThrow(() => handoff.buildManifest(manifestInput({...base, route:'S', executor:'S'})), /WORKSPACE_LANDING_BRANCH_REPAIR_EXECUTOR_INVALID|LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, route:'S', executor:'S'})), /WORKSPACE_LANDING_BRANCH_REPAIR_EXECUTOR_INVALID|WORKSPACE_LANDING_BRANCH_REPAIR_IDENTITY_INVALID|LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID|LANDING_BRANCH_REPAIR_SCOPE_INVALID/);
   expectThrow(() => handoff.buildManifest(manifestInput({...base, scopes:['surface:mcl-landing-origin-main:M']})), /LANDING_BRANCH_REPAIR_SCOPE_INVALID/);
   expectThrow(() => handoff.buildManifest(manifestInput({...base, observedBaseSha:null})), /LANDING_BRANCH_REPAIR_BASE_SHA_REQUIRED/);
   expectThrow(() => handoff.buildManifest(manifestInput({...base, workspace:{...base.workspace, branch:'mainphone/other'}})), /WORKSPACE_LANDING_BRANCH_REPAIR_IDENTITY_INVALID/);

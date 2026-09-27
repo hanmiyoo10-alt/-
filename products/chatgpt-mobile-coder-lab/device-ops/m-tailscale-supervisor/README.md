@@ -133,3 +133,48 @@ This owner must not:
 `tests/test-contract.sh` uses synthetic fixtures only. It covers the observed `pgrep -x` false-negative class, live-orphan preservation, daemon-absent recovery, ambiguous fail-closed behavior, target run identity, guard-child restart, independent-anchor idempotence, automatic guard-service supervisor restoration, concurrent Boot launcher convergence, install drift, fixture cleanup, syntax, and forbidden surfaces.
 
 No deliberate phone reboot, network toggle, top-level supervisor failure, or live M service mutation is part of `IMPLEMENTATION_PR`.
+
+## Explicit healthy-orphan adoption
+
+The ordinary guard deliberately preserves `missing supervisor + live daemon` as
+`recovery=orphan_present`. It never kills that daemon automatically.
+
+Packet #2868 adds one explicit operator-only transition:
+
+```text
+mcl-m-tailscale-supervisor-guard --adopt-orphan
+```
+
+This mode is not invoked by `--once`, `--loop`, Termux:Boot, or the independent
+anchor. It requires the fixed service identity, no `down` marker,
+`orphan_present`, local backend `Running`, a running dedicated guard-service,
+the existing anchor identity, and exactly one init-orphaned `tailscaled` plus
+exactly one init-orphaned `svlogd` bound to the fixed tailscaled log directory.
+
+Only after all preconditions are rechecked under a fixed adoption lock does the
+mode send TERM to that exact pair. It waits for both old candidates to disappear,
+then reuses the existing daemon-absent target-supervisor recovery path. Success
+requires target supervision `running`, daemon `present`, and backend `Running`.
+
+If the old pair is gone but supervised recovery fails, at most one fixed
+`tailscaled-start --foreground` rollback is allowed, and only when both target
+supervision and daemon state are absent. A restored rollback reports adoption
+failure rather than adoption success. If a supervisor or daemon is present in an
+incomplete or ambiguous postcondition, rollback is blocked to avoid duplicates.
+
+The adoption receipt is fixed and sanitized:
+
+```text
+schema=mcl-m-tailscale-orphan-adopt.v1
+prestate=<orphan_present|blocked|unknown>
+old_pair=<exact|ambiguous|absent|unknown>
+supervised_target=<running|missing|unknown>
+backend=<running|not_running|unknown>
+rollback=<not_needed|restored|blocked|failed|unknown>
+result=<pass|blocked|fail|unknown>
+details=withheld
+```
+
+No PID, Tailnet address, peer or account identity, socket path, raw log, credential,
+or command line is emitted. The initiating cause of target or shared supervisor
+loss remains outside this owner and stays `UNKNOWN`.

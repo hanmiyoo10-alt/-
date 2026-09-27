@@ -1,0 +1,105 @@
+#!/bin/sh
+set -u
+
+SCHEMA='mcl-stage-entry-current-source.v1'
+CANONICAL_ORIGIN='https://github.com/hanmiyoo10-alt/-.git'
+TMP_ROOT='/tmp'
+STAGE_REL='products/chatgpt-mobile-coder-lab/coordination/stage-entry/mcl-stage-entry.cjs'
+
+usage() {
+  printf '%s\n' \
+    'usage: mcl-stage-entry-current source-status' \
+    '       mcl-stage-entry-current inspect --packet #N --plan FILE' \
+    '       mcl-stage-entry-current apply --packet #N --plan FILE --apply'
+}
+
+fail_usage() { usage >&2; exit 64; }
+is_sha() { printf '%s\n' "$1" | grep -Eq '^[0-9a-f]{40}$'; }
+is_packet() { printf '%s\n' "$1" | grep -Eq '^#[1-9][0-9]*$'; }
+
+read_remote_main() {
+  raw=$(git ls-remote --exit-code "$CANONICAL_ORIGIN" refs/heads/main 2>/dev/null) || return 1
+  set -- $raw
+  [ "$#" -eq 2 ] && is_sha "$1" && [ "$2" = refs/heads/main ] || return 1
+  printf '%s' "$1"
+}
+operation=${1-}
+[ "$#" -ge 1 ] || fail_usage
+shift
+packet=
+plan=
+case "$operation" in
+  source-status)
+    [ "$#" -eq 0 ] || fail_usage
+    ;;
+  inspect)
+    [ "$#" -eq 4 ] || fail_usage
+    [ "$1" = --packet ] && is_packet "$2" && [ "$3" = --plan ] || fail_usage
+    packet=$2
+    plan=$4
+    ;;
+  apply)
+    [ "$#" -eq 5 ] || fail_usage
+    [ "$1" = --packet ] && is_packet "$2" && [ "$3" = --plan ] && [ "$5" = --apply ] || fail_usage
+    packet=$2
+    plan=$4
+    ;;
+  *) fail_usage ;;
+esac
+
+if [ -n "$plan" ]; then
+  [ -f "$plan" ] && [ ! -L "$plan" ] || {
+    printf '%s\n' 'mcl-stage-entry-current: plan must be a regular non-symlink file' >&2
+    exit 64
+  }
+fi
+for required in git tar node; do
+  command -v "$required" >/dev/null 2>&1 || {
+    printf 'mcl-stage-entry-current: missing command %s\n' "$required" >&2
+    exit 2
+  }
+done
+
+tmp=$(mktemp -d "$TMP_ROOT/mcl-stage-entry-current.XXXXXX") || exit 2
+cleanup() { rm -rf "$tmp"; }
+trap cleanup EXIT HUP INT TERM
+bare=$tmp/source.git
+snapshot=$tmp/source
+archive=$tmp/source.tar
+mkdir -p "$snapshot" || exit 2
+git init --bare -q "$bare" >/dev/null 2>&1 || exit 3
+
+remote_before=$(read_remote_main) || exit 3
+git -C "$bare" fetch --quiet --no-tags "$CANONICAL_ORIGIN" refs/heads/main >/dev/null 2>&1 || exit 3
+fetched=$(git -C "$bare" rev-parse --verify FETCH_HEAD 2>/dev/null) || exit 3
+remote_after=$(read_remote_main) || exit 3
+[ "$fetched" = "$remote_before" ] && [ "$remote_after" = "$remote_before" ] || {
+  printf '%s\n' 'mcl-stage-entry-current: remote main changed during capture' >&2
+  exit 3
+}
+git -C "$bare" archive --format=tar --output="$archive" "$remote_before" >/dev/null 2>&1 || exit 4
+tar -xf "$archive" -C "$snapshot" >/dev/null 2>&1 || exit 4
+stage=$snapshot/$STAGE_REL
+[ -f "$stage" ] && [ ! -L "$stage" ] || exit 4
+node --check "$stage" >/dev/null 2>&1 || exit 4
+
+if [ "$operation" = source-status ]; then
+  printf '%s\n' \
+    "schema=$SCHEMA" \
+    'operation=source-status' \
+    "source_main=$remote_before" \
+    "remote_main_before=$remote_before" \
+    "remote_main_after=$remote_after" \
+    'snapshot=verified' \
+    'stage_entry=present' \
+    'details=withheld'
+  exit 0
+fi
+
+if [ "$operation" = inspect ]; then
+  node "$stage" inspect --packet "$packet" --plan "$plan" --source-main "$remote_before"
+  exit $?
+fi
+
+node "$stage" apply --packet "$packet" --plan "$plan" --source-main "$remote_before" --apply
+exit $?

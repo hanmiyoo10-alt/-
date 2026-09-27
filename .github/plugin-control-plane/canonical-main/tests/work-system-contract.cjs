@@ -1,12 +1,15 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const {spawnSync} = require('node:child_process');
 
 const root = path.resolve(__dirname, '../../../..');
 const dir = path.join(root, '.github/plugin-control-plane/canonical-main/work-system');
 const policy = JSON.parse(fs.readFileSync(path.join(dir, 'policy.json'), 'utf8'));
 const readme = fs.readFileSync(path.join(dir, 'README.md'), 'utf8');
 const template = fs.readFileSync(path.join(dir, 'work-packet-template.md'), 'utf8');
+const sharedInteraction = fs.readFileSync(path.join(root, '.github/plugin-control-plane/canonical-main/shared-interaction-contract.md'), 'utf8');
 const packetProjectionSource = fs.readFileSync(path.join(dir, 'packet-projection.cjs'), 'utf8');
 const scopeOverlapSource = fs.readFileSync(path.join(dir, 'scope-overlap.cjs'), 'utf8');
 const commonRules = fs.readFileSync(path.join(root, 'docs/REPOSITORY_COMMON_RULES.md'), 'utf8');
@@ -120,15 +123,62 @@ packetProjection = classifyPacketProjection(`<!-- canonical-main-work-packet:v1 
 assert.equal(packetProjection.disposition, 'CONFLICT');
 assert.ok(packetProjection.reasonCodes.includes(PACKET_PROJECTION_REASON_CODES.PACKET_MARKER_DUPLICATE));
 
+const packetProjectionPath = path.join(dir, 'packet-projection.cjs');
+function runPacketProjectionCli(body) {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'packet-projection-cli-'));
+  const bodyFile = path.join(temp, 'packet.md');
+  try {
+    fs.writeFileSync(bodyFile, body, 'utf8');
+    const child = spawnSync(process.execPath, [
+      packetProjectionPath, '--body-file', bodyFile,
+    ], {encoding: 'utf8'});
+    return {status: child.status, output: JSON.parse(child.stdout)};
+  } finally {
+    fs.rmSync(temp, {recursive: true, force: true});
+  }
+}
+let cliProjection = runPacketProjectionCli(packetFixture('**State: READY**'));
+assert.equal(cliProjection.status, 0);
+assert.equal(cliProjection.output.disposition, 'PASS');
+assert.equal(cliProjection.output.lifecycle, 'READY');
+
+cliProjection = runPacketProjectionCli(packetFixture('**State: ACTIVE / AUTHORITY_SCOPE**'));
+assert.equal(cliProjection.status, 3);
+assert.equal(cliProjection.output.disposition, 'UNKNOWN');
+assert.ok(cliProjection.output.reasonCodes.includes(
+  PACKET_PROJECTION_REASON_CODES.PACKET_LIFECYCLE_UNKNOWN));
+
+cliProjection = runPacketProjectionCli(packetFixture('**State: IN_PROGRESS / READY**'));
+assert.equal(cliProjection.status, 2);
+assert.equal(cliProjection.output.disposition, 'CONFLICT');
+assert.ok(cliProjection.output.reasonCodes.includes(
+  PACKET_PROJECTION_REASON_CODES.PACKET_LIFECYCLE_CONFLICT));
+
+cliProjection = runPacketProjectionCli(stageOnly);
+assert.equal(cliProjection.status, 3);
+assert.equal(cliProjection.output.disposition, 'UNKNOWN');
+assert.ok(cliProjection.output.reasonCodes.includes(
+  PACKET_PROJECTION_REASON_CODES.PACKET_LIFECYCLE_UNKNOWN));
 
 assert.match(packetProjectionSource, /require\('\.\/policy\.json'\)/);
+assert.match(packetProjectionSource, /--body-file/);
+assert.match(packetProjectionSource, /MAX_BODY_BYTES/);
 assert.doesNotMatch(packetProjectionSource, /child_process|https?:\/\/|gh\s+api|fetch\s*\(/);
 assert.doesNotMatch(packetProjectionSource, /issueState|nativeState/);
+assert.doesNotMatch(packetProjectionSource, /writeFile|appendFile|createWriteStream/);
 assert.match(readme, /Lifecycle `State` and `Interaction stage` are separate packet axes/);
 assert.match(readme, /Stage-only State prose never implies/);
 assert.match(readme, /packet-projection\.cjs/);
+assert.match(readme, /Packet producers must run this same projection before creating a canonical work-packet issue or publishing a packet-body update/);
+assert.match(readme, /does not intercept every GitHub issue-creation surface/);
+assert.match(readme, /coordination-body-patch\.cjs/);
+assert.match(readme, /post-patch candidate body/);
+assert.match(readme, /malformed packet can still be repaired/);
 assert.match(template, /Preserve exactly one canonical lifecycle token/);
 assert.match(template, /Do not replace lifecycle State with stage-only prose/);
+assert.match(template, /Before creating a canonical work-packet issue or publishing a packet-body update/);
+assert.match(template, /packet-authoring-preflight\.cjs --body-file/);
+assert.match(template, /does not claim to intercept every external GitHub issue-creation surface/);
 assert.equal(policy.parallelism.requireDisjointWriteScopes, true);
 assert.equal(policy.parallelism.oneActiveOwnerPerPacket, true);
 assert.equal(policy.parallelism.splitOnScopeExpansion, true);
@@ -199,6 +249,124 @@ assert.deepEqual(policy.stagedInteraction.stages, [
   'EXPERIMENT_CLOSE',
 ]);
 assert.equal(policy.stagedInteraction.ordinaryContinuationMaxSubstantialStages, 1);
+assert.deepEqual(policy.stagedInteraction.prefixStageContinuation, {
+  version: 1,
+  fromStage: 'AUTHORITY_SCOPE',
+  toStage: 'IMPLEMENTATION_PR',
+  conditionalWithinSameUserContinuation: true,
+  requiresSourceStageDurableCompletion: true,
+  requiresSamePacket: true,
+  requiresSamePrimaryGoal: true,
+  requiresSameDeclaredScope: true,
+  requiresSameSemanticEffectSurface: true,
+  requiresSameOwnerIdentity: true,
+  requiresCompleteNoncompetingOverlapProof: true,
+  requiresRequiredEvidenceClear: true,
+  requiresPacketAuthoringPreflightPass: true,
+  requiresDeterministicImplementationRoute: true,
+  requiresExistingAuthority: true,
+  requiresNoAdditionalDesignChoice: true,
+  requiresNoUserInput: true,
+  requiresNoOwnerApproval: true,
+  forbiddenEffectDomains: ['MERGE', 'RELEASE', 'PRODUCTION', 'RUNTIME', 'DEVICE', 'SECURITY'],
+  separateStageReceiptsRequired: true,
+  separateStageCheckpointsRequired: true,
+  stopConditions: [
+    'SOURCE_STAGE_NOT_DURABLE',
+    'IDENTITY_SCOPE_SURFACE_OR_OWNER_DRIFT',
+    'OVERLAP_NOT_PROVEN_NONCOMPETING',
+    'REQUIRED_EVIDENCE_UNRESOLVED',
+    'PACKET_PREFLIGHT_NOT_PASS',
+    'IMPLEMENTATION_ROUTE_NONDETERMINISTIC',
+    'AUTHORITY_INSUFFICIENT',
+    'DESIGN_CHOICE_REQUIRED',
+    'USER_INPUT_REQUIRED',
+    'OWNER_APPROVAL_REQUIRED',
+    'FORBIDDEN_EFFECT_DOMAIN_REQUIRED',
+  ],
+  stopAfterStage: 'IMPLEMENTATION_PR',
+  autoEnterValidationMerge: false,
+  noNewEffectAuthority: true,
+});
+assert.deepEqual(policy.stagedInteraction.implementationValidationBoundary, {
+  version: 1,
+  fromStage: 'IMPLEMENTATION_PR',
+  toStage: 'VALIDATION_MERGE',
+  preservedByDefault: true,
+  defaultWithinOneUserContinuation: false,
+  protectedMainMutationBoundary: true,
+  reasonCode: 'CANDIDATE_TO_PROTECTED_MAIN_MUTATION_BOUNDARY',
+  requiresFreshExactHeadCi: true,
+  requiresFreshReviewState: true,
+  requiresFreshCurrentness: true,
+  requiresFreshOverlapAdmission: true,
+  requiresFreshMergeAdmission: true,
+  explicitUserBroaderRunStillAllowed: true,
+  noMergeAuthorityGranted: true,
+});
+assert.deepEqual(policy.stagedInteraction.coupledStageContinuation, {
+  version: 1,
+  fromStage: 'VALIDATION_MERGE',
+  toStage: 'POSTMERGE_CONVERGENCE',
+  defaultWithinOneUserContinuation: true,
+  requiresSourceStageDurableCompletion: true,
+  requiresExactMergeAttributionAndFinalize: true,
+  requiresSamePacket: true,
+  requiresSamePrimaryGoal: true,
+  requiresSameDeclaredScope: true,
+  requiresExactMergedIdentity: true,
+  requiresExistingAuthority: true,
+  requiresDeterministicSuffix: true,
+  requiresNoUserInput: true,
+  boundedSettlingOnly: true,
+  separateStageReceiptsRequired: true,
+  separateStageCheckpointsRequired: true,
+  stopConditions: [
+    'MERGE_ABSENT_FAILED_OR_AMBIGUOUS',
+    'MAIN_ATTRIBUTION_DRIFT',
+    'IDENTITY_SCOPE_OWNER_OR_AUTHORITY_EXPANSION',
+    'FAIL_BLOCKED_OR_CONFLICT',
+    'UNRESOLVED_UNKNOWN',
+    'UNBOUNDED_EXTERNAL_WAIT',
+    'USER_INPUT_REQUIRED',
+    'PROJECT_BOUNDARY_REQUIRED',
+  ],
+  postmergeFailureRemainsPostmergeFailure: true,
+  stopAfterStage: 'POSTMERGE_CONVERGENCE',
+  autoEnterExperimentClose: false,
+  noNewEffectAuthority: true,
+});
+assert.deepEqual(policy.stagedInteraction.terminalStageContinuation, {
+  version: 1,
+  fromStage: 'POSTMERGE_CONVERGENCE',
+  toStage: 'EXPERIMENT_CLOSE',
+  conditionalWithinSameUserContinuation: true,
+  requiresSourceStageDurableCompletion: true,
+  requiresSamePacket: true,
+  requiresSamePrimaryGoal: true,
+  requiresSameDeclaredScope: true,
+  requiresCurrentAuthority: true,
+  eligibilityOwner: '.github/plugin-control-plane/canonical-main/work-system/proof-eligibility.cjs',
+  eligibleDispositions: [
+    'NOT_REQUIRED',
+    'NOT_APPLICABLE',
+    'OBSERVATIONAL_PENDING_ALLOWED',
+    'BLOCKED_CAPABILITY',
+  ],
+  requiresClosureBlockingFalse: true,
+  stopDispositions: ['LIVE_REQUIRED', 'UNKNOWN', 'CONFLICT'],
+  stopOnAlreadySatisfiedLiveEvidence: true,
+  requiresNoRealExperiment: true,
+  requiresNoUserInput: true,
+  requiresNoDeviceOrExternalEvent: true,
+  syntheticLiveEventForbidden: true,
+  inferLiveProven: false,
+  separateExperimentCloseReceiptRequired: true,
+  separateExperimentCloseCheckpointRequired: true,
+  terminalBodyReconcileBeforeNativeClose: true,
+  cascadeAfterCoupledValidationPostmergeAllowed: true,
+  noNewEffectAuthority: true,
+});
 assert.deepEqual(policy.stagedInteraction.tinyReadOnlyCollapse, {
   allowed: true,
   maxBoundedReads: 2,
@@ -211,6 +379,60 @@ assert.equal(policy.stagedInteraction.explicitUserBroaderRunAllowed, true);
 assert.equal(policy.stagedInteraction.preserveRequiredGates, true);
 assert.equal(policy.stagedInteraction.productionTruthOwner, false);
 assert.equal(policy.stagedInteraction.hostUiPerformanceGuarantee, false);
+const intraStage = policy.stagedInteraction.intraStageContinuation;
+assert.equal(intraStage.version, 1);
+assert.equal(intraStage.completedStageDiscoveryConsumesBudget, false);
+assert.equal(intraStage.preserveProvenPrefix, true);
+assert.equal(intraStage.reconvergeInvalidatedSuffixOnly, true);
+assert.equal(intraStage.requiredSelfCloseSyncIsStageLocal, true);
+assert.equal(intraStage.preEffectDriftRevalidatesAdmissionOnly, true);
+assert.equal(intraStage.postEffectDriftRequiresPreservationProof, true);
+assert.equal(intraStage.duplicateCompletedEffectForbidden, true);
+assert.deepEqual(intraStage.transientReadRetry, {
+  sameIdentityRequired: true,
+  ownerPermissionRequired: true,
+  bounded: true,
+  untilPassForbidden: true,
+});
+assert.deepEqual(intraStage.sameScopeRefinementExactIdentityAxes, [
+  'writeScopes',
+  'semanticEffectSurfaces',
+  'primaryGoal',
+  'effectOwner',
+]);
+assert.deepEqual(intraStage.transactionClosure, {
+  immediateEffectReadback: true,
+  requiredEffectValidation: true,
+  idempotenceOrCasConfirmation: true,
+  requiredEvidencePublication: true,
+  requiredSelfCloseSync: true,
+  mayEnterNextSubstantialStage: false,
+});
+assert.deepEqual(intraStage.continueDispositions, [
+  'CONTINUE_STAGE_LOCAL',
+  'CONTINUE_TRANSACTION_CLOSURE',
+  'CONTINUE_BOUNDED_WAIT',
+  'CONTINUE_TARGETED_DRILLDOWN',
+  'CONTINUE_REUSE_EXISTING_EFFECT',
+  'CONTINUE_RECONVERGE_CURRENTNESS',
+]);
+assert.deepEqual(intraStage.stopDispositions, [
+  'STOP_MAJOR_STAGE',
+  'STOP_OWNER_HANDOFF',
+  'STOP_SCOPE_EXPANSION',
+  'STOP_AUTHORITY_EXPANSION',
+  'STOP_USER_INPUT',
+  'STOP_BLOCKED',
+  'STOP_UNKNOWN',
+  'STOP_CONFLICT',
+  'STOP_UNBOUNDED_EXTERNAL_WAIT',
+  'STOP_TERMINAL',
+]);
+assert.equal(new Set(intraStage.continueDispositions).size, intraStage.continueDispositions.length);
+assert.equal(new Set(intraStage.stopDispositions).size, intraStage.stopDispositions.length);
+assert.deepEqual(intraStage.unresolvedStatesStop, ['BLOCKED', 'UNKNOWN', 'CONFLICT']);
+assert.equal(intraStage.noNewEffectAuthority, true);
+assert.equal(intraStage.noStageCollapse, true);
 assert.ok(policy.packetRequiredFields.includes('interactionStage'));
 
 assert.deepEqual(policy.queueProjection.liveHealthAuthorities, ['direct-main', 'issue-485']);
@@ -323,6 +545,85 @@ assert.match(template, /tiny read-only task may collapse stages only when it gen
 assert.match(template, /safety-critical recovery may continue only to the nearest safe stop/);
 assert.match(template, /Explicit user instruction may authorize a broader run/);
 assert.match(template, /Staging never removes required Git, CI, release, production, authority, validation, uncertainty, or evidence checks/);
+assert.match(template, /Phase 8\.7g intra-stage continuation interprets that ordinary budget as the one substantial stage actually performed after fresh durable rebind/);
+assert.match(template, /Discovering that an advertised earlier stage is already complete consumes zero current stage budget/);
+assert.match(template, /reconverge only the stale or incomplete suffix/);
+assert.match(template, /Required immediate effect readback, current-stage validation, idempotence\/CAS confirmation, evidence publication, and required current-packet self close-sync may remain one stage-local transaction closure/);
+assert.match(template, /Those stage-local rules never authorize entry into the next declared substantial stage/);
+assert.match(template, /cross-stage entry is limited to the conditional authority\/implementation, named validation\/postmerge, and conditional terminal-suffix pacing specializations above/);
+assert.match(template, /retry-until-PASS is forbidden/);
+assert.match(template, /exact equality of writable path\/prefix set, semantic\/effect surface set, primary goal, and effect owner/);
+assert.match(template, /unresolved `BLOCKED \/ UNKNOWN \/ CONFLICT` stops the continuation/);
+assert.match(template, /Finalization routing is declared at AUTHORITY_SCOPE rather than repaired after merge/);
+assert.match(template, /generic repository-neutral validation finalizer must declare one specific stable `surface:repo:<owner-or-effect>`/);
+assert.match(template, /intentionally path-only packet may instead use a separately reviewed finalization owner/);
+assert.match(template, /`validation-finalization-external-owner-reviewed=PASS` with a real evidence locator/);
+assert.match(template, /do not invent a fake surface/);
+assert.match(sharedInteraction, /## Intra-stage continuation \(Phase 8\.7g\)/);
+assert.match(sharedInteraction, /Already-completed stages discovered during that rebind consume zero current substantial-stage budget/);
+assert.match(sharedInteraction, /preserve every still-valid proven prefix and completed effect/);
+assert.match(sharedInteraction, /Before an effect, drift reconverges admission\. After an effect, drift proves preservation/);
+assert.match(sharedInteraction, /Retry-until-PASS is forbidden/);
+assert.match(sharedInteraction, /writable path\/prefix set, semantic\/effect surface set, primary-goal identity, and effect-owner identity are all exactly unchanged/);
+assert.match(sharedInteraction, /Transaction closure may not enter the next declared substantial stage/);
+assert.match(sharedInteraction, /`VALIDATION_MERGE` may include expected-head merge plus immediate merge attribution\/readback and its stage checkpoint, but merged-main convergence\/Required\/postmerge acceptance belongs to `POSTMERGE_CONVERGENCE`/);
+assert.match(sharedInteraction, /Cross-packet terminal projection, cleanup, or convergence is outside Phase 8\.7g/);
+for (const disposition of [...intraStage.continueDispositions, ...intraStage.stopDispositions]) {
+  assert.ok(sharedInteraction.includes(`${disposition}`), disposition);
+}
+assert.match(sharedInteraction, /These dispositions describe interaction pacing only/);
+assert.match(sharedInteraction, /Existing effect\/recovery owners and every existing authority\/gate remain unchanged/);
+assert.match(sharedInteraction, /### Conditional authority\/implementation continuation/);
+assert.match(sharedInteraction, /AUTHORITY_SCOPE.*IMPLEMENTATION_PR/s);
+assert.match(sharedInteraction, /overlap discovery is complete and noncompeting/);
+assert.match(sharedInteraction, /packet authoring preflight passes/);
+assert.match(sharedInteraction, /implementation route is deterministic/);
+assert.match(sharedInteraction, /no additional design choice, user input, or owner approval is required/);
+assert.match(sharedInteraction, /source\/branch\/commit\/push\/non-closing-PR pacing only/);
+assert.match(sharedInteraction, /never auto-enters .*VALIDATION_MERGE/);
+assert.match(sharedInteraction, /### Preserved implementation\/validation boundary/);
+assert.match(sharedInteraction, /IMPLEMENTATION_PR.*VALIDATION_MERGE/s);
+assert.match(sharedInteraction, /protected-main mutation/);
+assert.match(sharedInteraction, /fresh exact-head CI, review state, currentness, overlap admission, and merge admission/);
+assert.match(sharedInteraction, /prefix specialization itself never supplies that broader authorization and grants no merge authority/);
+assert.match(sharedInteraction, /### Coupled validation\/postmerge continuation/);
+assert.match(sharedInteraction, /coupled execution with separate proof/);
+assert.match(sharedInteraction, /ordinary numeric budget remains one substantial stage/);
+assert.match(sharedInteraction, /VALIDATION_MERGE.*POSTMERGE_CONVERGENCE/s);
+assert.match(sharedInteraction, /separate canonical receipts, checkpoints, failure states/);
+assert.match(sharedInteraction, /successful merge never implies successful postmerge convergence/);
+assert.match(sharedInteraction, /never auto-enters .*EXPERIMENT_CLOSE/);
+assert.match(sharedInteraction, /### Conditional terminal-stage continuation/);
+assert.match(sharedInteraction, /POSTMERGE_CONVERGENCE.*EXPERIMENT_CLOSE/s);
+assert.match(sharedInteraction, /proof-eligibility\.cjs/);
+assert.match(sharedInteraction, /NOT_REQUIRED.*NOT_APPLICABLE.*OBSERVATIONAL_PENDING_ALLOWED.*BLOCKED_CAPABILITY/s);
+assert.match(sharedInteraction, /closureBlocking=false/);
+assert.match(sharedInteraction, /LIVE_REQUIRED.*UNKNOWN.*CONFLICT/s);
+assert.match(sharedInteraction, /never creates a synthetic live event/);
+assert.match(sharedInteraction, /never infers .*LIVE_PROVEN/);
+assert.match(sharedInteraction, /terminal packet-body reconciliation must complete before native issue closure/);
+assert.match(sharedInteraction, /same user continuation may immediately begin terminal-only .*EXPERIMENT_CLOSE/);
+assert.match(sharedInteraction, /does not make the validation\/postmerge coupling itself auto-enter the experiment stage/);
+assert.match(template, /conditional prefix fast path/);
+assert.match(template, /AUTHORITY_SCOPE.*IMPLEMENTATION_PR/s);
+assert.match(template, /separate A\/I receipts\/checkpoints/);
+assert.match(template, /never auto-enter .*VALIDATION_MERGE/);
+assert.match(template, /IMPLEMENTATION_PR.*VALIDATION_MERGE.*boundary remains preserved by default/s);
+assert.match(template, /Fresh exact-head CI, review state, currentness, overlap admission, and merge admission remain independently required/);
+assert.match(template, /A→I fast path itself grants no merge authority/);
+assert.match(template, /Canonical-main has one named cross-stage pacing specialization/);
+assert.match(template, /ordinary numeric budget remains .*1 substantial stage/);
+assert.match(template, /separate receipts\/checkpoints and failure semantics/);
+assert.match(template, /never auto-enter .*EXPERIMENT_CLOSE/);
+assert.match(template, /conditional terminal-suffix specialization/);
+assert.match(template, /proof-eligibility\.cjs/);
+assert.match(template, /NOT_REQUIRED.*NOT_APPLICABLE.*OBSERVATIONAL_PENDING_ALLOWED.*BLOCKED_CAPABILITY/);
+assert.match(template, /closureBlocking=false/);
+assert.match(template, /LIVE_REQUIRED \/ UNKNOWN \/ CONFLICT/);
+assert.match(template, /Never synthesize a live event or infer .*LIVE_PROVEN/);
+assert.match(template, /separate EXPERIMENT_CLOSE receipt\/checkpoint/);
+assert.match(template, /reconcile the terminal body before native issue closure/);
+assert.match(template, /may cascade into this terminal suffix/);
 assert.match(template, /current interaction stage, completed stages, and exact next stage/);
 assert.match(commonRules, /### RCR-D15 — Stage substantial interactive repository work at bounded checkpoints/);
 assert.match(commonRules, /\*\*Class:\*\* `DEFAULT`/);
@@ -414,6 +715,7 @@ const {classifyQueueBody, REASON_CODES} = require(path.join(dir, 'queue-hygiene.
 const {classifyCoordinationReferences, REASON_CODES: COORD_REF_REASON_CODES} = require(path.join(dir, 'coordination-reference-hygiene.cjs'));
 const {extractPacketScopes, resolveScopeOverlap, REASON_CODES: OVERLAP_REASON_CODES} = require(path.join(dir, 'scope-overlap.cjs'));
 const {classifyPrActivity, REASON_CODES: PR_ACTIVITY_REASON_CODES} = require(path.join(dir, 'pr-activity.cjs'));
+const {classifyPacketActivity, REASON_CODES: PACKET_ACTIVITY_REASON_CODES} = require(path.join(dir, 'packet-activity.cjs'));
 
 const pointerOnlyFixture = `# Canonical Main — Work Queue
 **Queue surface: ENABLED**
@@ -587,6 +889,191 @@ const disjointPacket = {
 };
 assert.equal(resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [disjointPacket]).state, 'DISJOINT');
 
+const packetActivityEvidence = (relationship, overrides = {}) => ({
+  schemaVersion: 1,
+  mode: 'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE',
+  candidateRef: '#20',
+  requesterRef: '#21',
+  relationship,
+  repositoryMutationActive: false,
+  activeLease: false,
+  overlappingOpenPr: false,
+  sequencingExplicit: true,
+  sourceRefs: ['issue:#20', 'issue:#21'],
+  ...overrides,
+});
+
+for (const relationship of [
+  'DEFERRED_OWNER',
+  'BLOCKED_PREDECESSOR',
+  'PARENT_WAITING_ON_SUCCESSOR',
+]) {
+  const activity = classifyPacketActivity({
+    candidateRef: '#20',
+    requesterRef: '#21',
+    evidence: packetActivityEvidence(relationship),
+  });
+  assert.equal(activity.state, 'NONBLOCKING_PROVEN');
+  assert.equal(activity.reasonCode, PACKET_ACTIVITY_REASON_CODES.NONCOMPETING_RELATION_PROVEN);
+
+  const composed = resolveScopeOverlap({
+    requesterRef: '#21',
+    requestedScopes: ['path:src/demo.js'],
+    discovery: 'COMPLETE',
+    candidates: [{
+      type: 'packet',
+      ref: '#20',
+      issueState: 'open',
+      body: overlapPacketBody('BLOCKED', ['path:src/**']),
+      packetActivityEvidence: packetActivityEvidence(relationship),
+    }],
+  });
+  assert.equal(composed.state, 'DISJOINT');
+  assert.equal(composed.candidateActivity[0].state, 'NONBLOCKING_PROVEN');
+}
+
+assert.equal(resolveOverlap(['path:src/demo.js'], [{
+  type: 'packet', ref: '#20', issueState: 'open',
+  body: overlapPacketBody('BLOCKED', ['path:src/**']),
+}]).state, 'OVERLAP');
+
+const validationDiscoveryPacketActivity = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: 'issue:#20', issueState: 'open',
+    body: overlapPacketBody('BLOCKED', ['path:src/**']),
+    packetActivityEvidence: packetActivityEvidence('PARENT_WAITING_ON_SUCCESSOR'),
+  }],
+});
+assert.equal(validationDiscoveryPacketActivity.state, 'DISJOINT');
+assert.equal(validationDiscoveryPacketActivity.candidateActivity[0].state, 'NONBLOCKING_PROVEN');
+assert.equal(validationDiscoveryPacketActivity.candidateActivity[0].candidateRef, '#20');
+
+for (const malformedRef of ['issue:20', 'issue:#0', 'issue:#x', 'issue:issue:#20']) {
+  const malformedActivityRef = resolveScopeOverlap({
+    requesterRef: '#21',
+    requestedScopes: ['path:src/demo.js'],
+    discovery: 'COMPLETE',
+    candidates: [{
+      type: 'packet', ref: malformedRef, issueState: 'open',
+      body: overlapPacketBody('BLOCKED', ['path:src/**']),
+      packetActivityEvidence: packetActivityEvidence('PARENT_WAITING_ON_SUCCESSOR'),
+    }],
+  });
+  expectOverlapFinding(
+    malformedActivityRef, 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_ACTIVITY_UNKNOWN);
+  assert.equal(malformedActivityRef.findings[0].ownerRef, malformedRef);
+  assert.equal(malformedActivityRef.candidateActivity[0].reasonCode,
+    PACKET_ACTIVITY_REASON_CODES.INPUT_INVALID);
+}
+
+for (const [overrides, expectedReason, expectedState] of [
+  [{candidateRef: '#22'}, PACKET_ACTIVITY_REASON_CODES.CANDIDATE_IDENTITY_CONFLICT, 'CONFLICT'],
+  [{requesterRef: '#22'}, PACKET_ACTIVITY_REASON_CODES.REQUESTER_IDENTITY_CONFLICT, 'CONFLICT'],
+  [{relationship: 'ARBITRARY_PROSE'}, PACKET_ACTIVITY_REASON_CODES.RELATIONSHIP_UNSUPPORTED, 'UNKNOWN'],
+  [{sequencingExplicit: false}, PACKET_ACTIVITY_REASON_CODES.EXPLICIT_SEQUENCING_UNPROVEN, 'UNKNOWN'],
+]) {
+  const activity = classifyPacketActivity({
+    candidateRef: '#20', requesterRef: '#21',
+    evidence: packetActivityEvidence('DEFERRED_OWNER', overrides),
+  });
+  assert.equal(activity.state, expectedState);
+  assert.equal(activity.reasonCode, expectedReason);
+}
+
+for (const [field, reason] of [
+  ['repositoryMutationActive', PACKET_ACTIVITY_REASON_CODES.REPOSITORY_MUTATION_ACTIVE],
+  ['activeLease', PACKET_ACTIVITY_REASON_CODES.ACTIVE_LEASE_PRESENT],
+  ['overlappingOpenPr', PACKET_ACTIVITY_REASON_CODES.OVERLAPPING_OPEN_PR_PRESENT],
+]) {
+  const activity = classifyPacketActivity({
+    candidateRef: '#20', requesterRef: '#21',
+    evidence: packetActivityEvidence('DEFERRED_OWNER', {[field]: true}),
+  });
+  assert.equal(activity.state, 'ACTIVE_WRITER');
+  assert.equal(activity.reasonCode, reason);
+}
+
+const missingRefs = classifyPacketActivity({
+  candidateRef: '#20', requesterRef: '#21',
+  evidence: packetActivityEvidence('DEFERRED_OWNER', {sourceRefs: []}),
+});
+assert.equal(missingRefs.state, 'UNKNOWN');
+assert.equal(missingRefs.reasonCode, PACKET_ACTIVITY_REASON_CODES.SOURCE_REFS_MISSING);
+
+const activityUnknownOverlap = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: '#20', issueState: 'open',
+    body: overlapPacketBody('BLOCKED', ['path:src/**']),
+    packetActivityEvidence: packetActivityEvidence('DEFERRED_OWNER', {sequencingExplicit: false}),
+  }],
+});
+expectOverlapFinding(activityUnknownOverlap, 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_ACTIVITY_UNKNOWN);
+
+const activityConflictOverlap = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: '#20', issueState: 'open',
+    body: overlapPacketBody('BLOCKED', ['path:src/**']),
+    packetActivityEvidence: packetActivityEvidence('DEFERRED_OWNER', {candidateRef: '#22'}),
+  }],
+});
+expectOverlapFinding(activityConflictOverlap, 'CONFLICT', OVERLAP_REASON_CODES.PACKET_ACTIVITY_CONFLICT);
+
+const packetEvidenceDoesNotSuppressPr = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [
+    {
+      type: 'packet', ref: '#20', issueState: 'open',
+      body: overlapPacketBody('BLOCKED', ['path:src/**']),
+      packetActivityEvidence: packetActivityEvidence('BLOCKED_PREDECESSOR'),
+    },
+    {
+      type: 'pr', ref: 'pr:#20', state: 'open', merged: false,
+      headSha: 'a'.repeat(40), changedFiles: ['src/demo.js'], filesComplete: true,
+    },
+  ],
+});
+expectOverlapFinding(packetEvidenceDoesNotSuppressPr, 'OVERLAP', OVERLAP_REASON_CODES.WRITE_SCOPE_OVERLAP);
+
+const onePacketProofDoesNotSuppressAnother = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [
+    {
+      type: 'packet', ref: '#20', issueState: 'open',
+      body: overlapPacketBody('BLOCKED', ['path:src/**']),
+      packetActivityEvidence: packetActivityEvidence('PARENT_WAITING_ON_SUCCESSOR'),
+    },
+    {
+      type: 'packet', ref: '#22', issueState: 'open',
+      body: overlapPacketBody('BLOCKED', ['path:src/**']),
+    },
+  ],
+});
+expectOverlapFinding(onePacketProofDoesNotSuppressAnother, 'OVERLAP', OVERLAP_REASON_CODES.WRITE_SCOPE_OVERLAP);
+
+const requesterMissing = resolveScopeOverlap({
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: '#20', issueState: 'open',
+    body: overlapPacketBody('BLOCKED', ['path:src/**']),
+    packetActivityEvidence: packetActivityEvidence('DEFERRED_OWNER'),
+  }],
+});
+expectOverlapFinding(requesterMissing, 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_ACTIVITY_UNKNOWN);
+
 const implementationHeadingPacket = {
   type: 'packet', ref: '#10b', issueState: 'open',
   body: `<!-- canonical-main-work-packet:v1 -->
@@ -658,6 +1145,162 @@ const invalidExportScope = [
   '1. `path:../secret`',
 ].join('\n');
 assert.equal(extractPacketScopes(invalidExportScope).ok, false);
+
+const labeledScopePacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  '`IN_PROGRESS`',
+  '## Bounded IMPLEMENTATION_PR write scope',
+  'Maximum expected paths:',
+  '1. `src/one.js` (new)',
+  '- `src/two.js` only when required',
+  'Scope ceiling: `path:src/**`',
+  'Semantic/effect surface: `surface:repo:labeled`',
+  '## Handoff',
+  'fixture',
+].join('\n');
+assert.deepEqual(extractPacketScopes(labeledScopePacket).scopes.map((row) => row.normalized), [
+  'path:src/one.js',
+  'path:src/two.js',
+  'path:src/**',
+  'surface:repo:labeled',
+]);
+
+const nonEffectBoundaryPacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  '`IN_PROGRESS`',
+  '## Bounded write scope',
+  '- `path:src/write.js`',
+  '### Explicit non-write / non-effect scope',
+  '- `path:src/read-only.js`',
+  '## Handoff',
+  'fixture',
+].join('\n');
+assert.deepEqual(extractPacketScopes(nonEffectBoundaryPacket).scopes.map((row) => row.normalized), [
+  'path:src/write.js',
+]);
+
+const forbiddenLabelPacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  '`IN_PROGRESS`',
+  '## Bounded write scope',
+  '- `surface:issue:2215` — coordination only',
+  'Forbidden:',
+  '- `tsconfig.json`',
+  '## Handoff',
+  'fixture',
+].join('\n');
+assert.deepEqual(extractPacketScopes(forbiddenLabelPacket).scopes.map((row) => row.normalized), [
+  'surface:issue:2215',
+]);
+
+
+const explicitNonWritePacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  '`IN_PROGRESS`',
+  '## Bounded implementation write scope',
+  '1. `path:src/write.js`',
+  '### Explicit non-write / preservation scope',
+  'Do not modify:',
+  '- `path:src/read-only.js`',
+  '## Handoff',
+  'fixture',
+].join('\n');
+assert.deepEqual(extractPacketScopes(explicitNonWritePacket).scopes.map((row) => row.normalized), [
+  'path:src/write.js',
+]);
+
+const doNotModifyPacket = overlapPacketBody('IN_PROGRESS', ['path:src/write.js'])
+  .replace('## Handoff', 'Do not modify:\n- `path:src/read-only.js`\n## Handoff');
+assert.deepEqual(extractPacketScopes(doNotModifyPacket).scopes.map((row) => row.normalized), [
+  'path:src/write.js',
+]);
+
+const proseTokenPacket = overlapPacketBody('IN_PROGRESS', ['path:src/write.js'])
+  .replace('## Handoff',
+    'Existing `path:src/read-only.js` is validation-only / out of scope.\n## Handoff');
+assert.deepEqual(extractPacketScopes(proseTokenPacket).scopes.map((row) => row.normalized), [
+  'path:src/write.js',
+]);
+
+const describedListPacket = overlapPacketBodyWithHeading('IN_PROGRESS', 'Bounded write scope', [])
+  .replace('## Handoff', '1. `path:src/described.js` — primary file\n## Handoff');
+assert.deepEqual(extractPacketScopes(describedListPacket).scopes.map((row) => row.normalized), [
+  'path:src/described.js',
+]);
+
+for (const fence of ['```', '~~~']) {
+  const fencedHeadingPacket = [
+    '<!-- canonical-main-work-packet:v1 -->',
+    '## State',
+    '`IN_PROGRESS`',
+    '## Bounded write scope',
+    '1. `path:src/live.js`',
+    `${fence}md`,
+    '## Locked write scope',
+    '1. `path:src/example.js`',
+    fence,
+    '## Handoff',
+    'fixture',
+  ].join('\n');
+  assert.deepEqual(extractPacketScopes(fencedHeadingPacket).scopes.map((row) => row.normalized), [
+    'path:src/live.js',
+  ]);
+}
+
+const fencedNonWritePacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  '`IN_PROGRESS`',
+  '## Bounded write scope',
+  '1. `path:src/first.js`',
+  '```md',
+  '### Explicit non-write / preservation scope',
+  'Do not modify:',
+  '- `path:src/example.js`',
+  '```',
+  '2. `path:src/second.js`',
+  '## Handoff',
+  'fixture',
+].join('\n');
+assert.deepEqual(extractPacketScopes(fencedNonWritePacket).scopes.map((row) => row.normalized), [
+  'path:src/first.js',
+  'path:src/second.js',
+]);
+
+const unclosedFencePacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  '`IN_PROGRESS`',
+  '## Bounded write scope',
+  '1. `path:src/live.js`',
+  '```md',
+  '## Locked write scope',
+  '1. `path:src/example.js`',
+].join('\n');
+const unclosedFenceResult = extractPacketScopes(unclosedFencePacket);
+assert.equal(unclosedFenceResult.ok, false);
+assert.equal(unclosedFenceResult.conflict, false);
+assert.match(unclosedFenceResult.reason, /unclosed Markdown fence/);
+
+const standaloneScopePacket = [
+  '<!-- canonical-main-work-packet:v1 -->',
+  '## State',
+  '`IN_PROGRESS`',
+  '## Bounded write scope',
+  '`path:src/standalone.js`',
+  'surface:repo:standalone',
+  '## Handoff',
+  'fixture',
+].join('\n');
+assert.deepEqual(extractPacketScopes(standaloneScopePacket).scopes.map((row) => row.normalized), [
+  'path:src/standalone.js',
+  'surface:repo:standalone',
+]);
+
 assert.match(scopeOverlapSource,
   /module\.exports = \{REASON_CODES, extractPacketScopes, normalizeScope, scopesOverlap, resolveScopeOverlap\};/);
 
@@ -1208,6 +1851,48 @@ proofResult = classifyProofEligibility(proofFixture());
 assert.equal(proofResult.disposition, 'UNKNOWN');
 assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.ACTIVATED_ACCEPTANCE_UNRESOLVED);
 
+const terminalStage = policy.stagedInteraction.terminalStageContinuation;
+for (const fixture of [
+  proofFixture({liveNotRequired: true}),
+  proofFixture({liveApplies: false, notApplicable: true}),
+  proofFixture({
+    observationalPendingAllowed: true,
+    observationalPendingNonBlocking: true,
+  }),
+  proofFixture({
+    capabilityUnavailable: true,
+    capabilityBlockNonBlocking: true,
+  }),
+]) {
+  const result = classifyProofEligibility(fixture);
+  assert.ok(terminalStage.eligibleDispositions.includes(result.disposition));
+  assert.equal(result.closureBlocking, false);
+}
+for (const fixture of [
+  proofFixture({liveRequired: true}),
+  proofFixture(),
+  proofFixture({liveRequired: true, liveNotRequired: true}),
+]) {
+  const result = classifyProofEligibility(fixture);
+  assert.ok(terminalStage.stopDispositions.includes(result.disposition));
+}
+const terminalBlockingCapability = classifyProofEligibility(proofFixture({
+  capabilityUnavailable: true,
+}));
+assert.equal(terminalBlockingCapability.disposition, 'BLOCKED_CAPABILITY');
+assert.equal(terminalBlockingCapability.closureBlocking, true);
+assert.equal(terminalStage.requiresClosureBlockingFalse, true);
+const terminalAlreadySatisfiedLive = classifyProofEligibility(proofFixture({
+  liveRequired: true,
+  liveSatisfied: true,
+}));
+assert.equal(terminalAlreadySatisfiedLive.disposition, 'UNKNOWN');
+assert.equal(
+  terminalAlreadySatisfiedLive.reasonCode,
+  PROOF_ELIGIBILITY_REASON_CODES.LIVE_ALREADY_SATISFIED_OUTSIDE_ELIGIBILITY,
+);
+assert.equal(terminalStage.stopOnAlreadySatisfiedLiveEvidence, true);
+
 assert.doesNotMatch(proofEligibilitySource, /child_process|https?:\/\/|gh\s+api|fetch\s*\(/);
 assert.match(readme, /## Proof-level \/ live-observation eligibility classifier/);
 assert.match(readme, /`LIVE_REQUIRED \/ OBSERVATIONAL_PENDING_ALLOWED \/ NOT_APPLICABLE \/ NOT_REQUIRED \/ BLOCKED_CAPABILITY \/ UNKNOWN \/ CONFLICT`/);
@@ -1238,5 +1923,156 @@ assert.equal(proofResult.reasonCode, PROOF_ELIGIBILITY_REASON_CODES.INPUT_UNKNOW
 
 assert.match(readme, /proof-eligibility\.cjs \/path\/to\/request\.json/);
 assert.match(readme, /`sourceRefs` must contain 1–16 non-empty bounded source locators/);
+
+
+const {
+  classifyPacketAuthoring,
+  REASON_CODES: PACKET_AUTHORING_REASON_CODES,
+} = require(path.join(dir, 'packet-authoring-preflight.cjs'));
+const packetAuthoringSource = fs.readFileSync(path.join(dir, 'packet-authoring-preflight.cjs'), 'utf8');
+
+const authoringPacket = (scopeSection) => `<!-- canonical-main-work-packet:v1 -->
+## State
+\`IN_PROGRESS\`
+## Interaction stage
+- Current stage: \`IMPLEMENTATION_PR\`
+## Bounded write scope
+${scopeSection}
+## Acceptance
+1. fixture
+`;
+
+let authoringResult = classifyPacketAuthoring(authoringPacket(
+  ['- `path:src/a.js`', '- `surface:repo:fixture-owner`'].join('\n'),
+));
+assert.equal(authoringResult.disposition, 'PASS');
+assert.deepEqual(authoringResult.normalizedScopes, ['path:src/a.js', 'surface:repo:fixture-owner']);
+
+authoringResult = classifyPacketAuthoring(`${authoringPacket('- \`path:src/a.js\`')}
+## Preservation boundary
+- \`path:src/neighbor.js\`
+`);
+assert.equal(authoringResult.disposition, 'PASS');
+assert.deepEqual(authoringResult.normalizedScopes, ['path:src/a.js']);
+
+authoringResult = classifyPacketAuthoring(authoringPacket(
+  ['- `path:src/a.js`', 'Preserve unchanged:', '- `path:src/neighbor.js`'].join('\n'),
+));
+assert.equal(authoringResult.disposition, 'CONFLICT');
+assert.deepEqual(authoringResult.reasonCodes, [
+  PACKET_AUTHORING_REASON_CODES.PACKET_SCOPE_PRESERVATION_BOUNDARY_REQUIRED,
+]);
+assert.equal(authoringResult.finding.scopeExcerpt, '- \`path:src/neighbor.js\`');
+
+authoringResult = classifyPacketAuthoring(authoringPacket(
+  ['- `path:src/a.js`', 'Do not modify', '- `surface:repo:neighbor-owner`'].join('\n'),
+));
+assert.equal(authoringResult.disposition, 'CONFLICT');
+
+const unsupportedAuthoringPacket = authoringPacket('- \`path:src/a.js\`')
+  .replace('## Bounded write scope', '## Exact bounded write scope');
+authoringResult = classifyPacketAuthoring(unsupportedAuthoringPacket);
+assert.equal(authoringResult.disposition, 'UNKNOWN');
+assert.deepEqual(authoringResult.reasonCodes, [PACKET_AUTHORING_REASON_CODES.PACKET_SCOPE_UNRESOLVED]);
+
+assert.match(readme, /### Packet authoring preflight/);
+assert.match(readme, /PACKET_SCOPE_PRESERVATION_BOUNDARY_REQUIRED/);
+assert.match(readme, /separate level-two boundary/);
+assert.match(template, /packet-authoring-preflight\.cjs --body-file/);
+assert.match(template, /start a separate level-two section such as \`## Preservation boundary\`/);
+for (const forbidden of ['http://', 'https://', 'gh api', 'fetch(', 'child_process', 'execSync', 'spawnSync']) {
+  assert.equal(packetAuthoringSource.includes(forbidden), false, `packet authoring preflight must not contain ${forbidden}`);
+}
+assert.match(packetAuthoringSource, /require\('\.\/packet-projection\.cjs'\)/);
+assert.match(packetAuthoringSource, /require\('\.\/scope-overlap\.cjs'\)/);
+assert.doesNotMatch(packetAuthoringSource, /PACKET_SCOPE_HEADINGS/);
+
+
+const {
+  classifyNonClosingPrAuthoring,
+  REASON_CODES: PR_AUTHORING_REASON_CODES,
+} = require(path.join(dir, 'pr-authoring-preflight.cjs'));
+const prAuthoringSource = fs.readFileSync(path.join(dir, 'pr-authoring-preflight.cjs'), 'utf8');
+
+const prFixture = (title = 'fix(repo): safe guarded change', body = 'Summary\n\nRefs #9001\n') => ({
+  packetRef: '#9001', title, body,
+});
+let prAuthoring = classifyNonClosingPrAuthoring(prFixture());
+assert.equal(prAuthoring.disposition, 'PASS');
+assert.equal(prAuthoring.mutationAuthorized, false);
+assert.equal(prAuthoring.publicationAuthorized, false);
+
+for (const closing of [
+  'close #9001', 'closes #9001', 'closed #9001',
+  'fix #9001', 'fixes #9001', 'fixed #9001',
+  'resolve #9001', 'resolves #9001', 'resolved #9001',
+  'FiXeD:   #2786',
+]) {
+  prAuthoring = classifyNonClosingPrAuthoring(prFixture(`chore: ${closing}`));
+  assert.equal(prAuthoring.disposition, 'BLOCKED', closing);
+  assert.deepEqual(prAuthoring.reasonCodes, [PR_AUTHORING_REASON_CODES.CLOSING_LINK_FORBIDDEN]);
+  assert.equal(prAuthoring.finding.field, 'title');
+  prAuthoring = classifyNonClosingPrAuthoring(prFixture('chore: safe title', `${closing}\n\nRefs #9001\n`));
+  assert.equal(prAuthoring.disposition, 'BLOCKED', closing);
+  assert.equal(prAuthoring.finding.field, 'body');
+}
+
+prAuthoring = classifyNonClosingPrAuthoring(prFixture('chore: fixed profile'));
+assert.equal(prAuthoring.disposition, 'PASS');
+prAuthoring = classifyNonClosingPrAuthoring(prFixture('chore: safe', 'Summary only'));
+assert.equal(prAuthoring.disposition, 'BLOCKED');
+assert.deepEqual(prAuthoring.reasonCodes, [PR_AUTHORING_REASON_CODES.NON_CLOSING_REF_REQUIRED]);
+prAuthoring = classifyNonClosingPrAuthoring({...prFixture(), packetRef: 'issue:#9001'});
+assert.equal(prAuthoring.disposition, 'UNKNOWN');
+assert.deepEqual(prAuthoring.reasonCodes, [PR_AUTHORING_REASON_CODES.INPUT_PACKET_REF_INVALID]);
+prAuthoring = classifyNonClosingPrAuthoring(prFixture('bad\ntitle'));
+assert.equal(prAuthoring.disposition, 'UNKNOWN');
+prAuthoring = classifyNonClosingPrAuthoring(prFixture('safe', 'Refs #9001\n\u0000'));
+assert.equal(prAuthoring.disposition, 'UNKNOWN');
+prAuthoring = classifyNonClosingPrAuthoring(prFixture('x'.repeat(257)));
+assert.equal(prAuthoring.disposition, 'UNKNOWN');
+assert.deepEqual(prAuthoring.reasonCodes, [PR_AUTHORING_REASON_CODES.INPUT_TEXT_TOO_LARGE]);
+
+assert.match(readme, /### Non-closing PR authoring preflight/);
+assert.match(readme, /pr-authoring-preflight\.cjs/);
+assert.match(readme, /not a second PR publisher/);
+assert.match(readme, /normal intentional closing semantics/);
+assert.match(template, /pr-authoring-preflight\.cjs/);
+assert.match(template, /Do not bypass a non-PASS result by calling `gh pr create`/);
+assert.match(template, /does not claim to intercept every external GitHub PR-creation surface/);
+assert.match(template, /Intentionally terminal PRs/);
+for (const forbidden of ['http://', 'https://', 'gh api', 'fetch(', 'child_process', 'execSync', 'spawnSync', 'writeFile', 'appendFile', 'createWriteStream', 'process.env']) {
+  assert.equal(prAuthoringSource.includes(forbidden), false, `PR authoring preflight must not contain ${forbidden}`);
+}
+assert.doesNotMatch(prAuthoringSource, /pr\s+create|pulls\//i);
+
+
+const prCliDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pr-authoring-preflight-'));
+const prCliTitle = path.join(prCliDir, 'title.txt');
+const prCliBody = path.join(prCliDir, 'body.md');
+const runPrAuthoringCli = (packetRef) => {
+  const result = spawnSync(process.execPath, [
+    path.join(dir, 'pr-authoring-preflight.cjs'),
+    '--packet', packetRef,
+    '--title-file', prCliTitle,
+    '--body-file', prCliBody,
+  ], {encoding: 'utf8'});
+  return {status: result.status, output: JSON.parse(result.stdout)};
+};
+fs.writeFileSync(prCliTitle, 'fix(repo): safe title\n');
+fs.writeFileSync(prCliBody, 'Summary\n\nRefs #9001\n');
+let prCli = runPrAuthoringCli('#9001');
+assert.equal(prCli.status, 0);
+assert.equal(prCli.output.disposition, 'PASS');
+fs.writeFileSync(prCliTitle, 'fix(repo): fixed #2786\n');
+prCli = runPrAuthoringCli('#9001');
+assert.equal(prCli.status, 2);
+assert.equal(prCli.output.disposition, 'BLOCKED');
+assert.deepEqual(prCli.output.reasonCodes, [PR_AUTHORING_REASON_CODES.CLOSING_LINK_FORBIDDEN]);
+fs.writeFileSync(prCliTitle, 'fix(repo): safe title\n');
+prCli = runPrAuthoringCli('issue:#9001');
+assert.equal(prCli.status, 3);
+assert.equal(prCli.output.disposition, 'UNKNOWN');
+fs.rmSync(prCliDir, {recursive: true, force: true});
 
 console.log('work-system-contract: ok');

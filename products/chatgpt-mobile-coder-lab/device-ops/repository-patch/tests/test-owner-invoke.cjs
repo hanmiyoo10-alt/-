@@ -1667,3 +1667,272 @@ test('checkpoint persistence failure after PREPARE blocks before validation comm
     fs.rmSync(inputs.dir, {recursive: true, force: true});
   }
 });
+
+
+test('implementation adapter contract is separate from stable profile digests', () => {
+  assert.equal(D014_PROFILE.contractDigest,
+    '0b82f7b5ca8d6bc4f6b487653fd87451f2d6c3867a3a4dc87679587ea2fcf8bb');
+  assert.equal(VC_PROFILE.contractDigest,
+    '692e94f9a599e6dfbd840d404635d45f906de2c5933f0e04545d22f6ecbd550c');
+  assert.equal(PPR_PROFILE.contractDigest,
+    '2659556be26cc3d14bae828a4fb591d5e145b6cfe55a1afafacdbb352aef650c');
+  const adapter = inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT;
+  assert.equal(adapter.schema, inv.IMPLEMENTATION_VALIDATION_ADAPTER_SCHEMA);
+  assert.match(adapter.contractDigest, /^[0-9a-f]{64}$/);
+  assert.equal(inv.buildImplementationValidationAdapterContract().contractDigest,
+    adapter.contractDigest);
+  assert.equal(adapter.adapters.length,
+    inv.D014_VALIDATION_CHECKS.length
+    + inv.VALIDATION_CONTINUATION_CHECKS.length
+    + inv.PUBLISHED_PROGRESS_RECOVERY_CHECKS.length);
+});
+
+test('adapter binding is opt-in exact while historical manifests stay legacy', () => {
+  const inputs = tempValidationInputs();
+  try {
+    const legacy = inv.prepareValidationBinding({
+      manifest: inputs.manifest,
+      request: d014Request(),
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+    });
+    assert.equal(legacy.adapterMode, 'LEGACY');
+    assert.equal(legacy.adapterContractDigest, null);
+
+    const exactRef = inv.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
+      + inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest;
+    const boundManifest = validationManifest({
+      inputRefs: [...inputs.manifest.inputRefs, exactRef],
+    });
+    const bound = inv.prepareValidationBinding({
+      manifest: boundManifest,
+      request: d014Request(),
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+    });
+    assert.equal(bound.adapterMode, 'V1');
+    assert.equal(bound.adapterContractDigest,
+      inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest);
+
+    assert.throws(() => inv.prepareValidationBinding({
+      manifest: {...boundManifest, inputRefs: [...boundManifest.inputRefs, exactRef]},
+      request: d014Request(),
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+    }), (error) => error.kind === 'CONFLICT'
+      && error.reasonCodes.includes('IMPLEMENTATION_VALIDATION_ADAPTER_REF_AMBIGUOUS'));
+
+    const wrongRef = inv.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX + '0'.repeat(64);
+    assert.throws(() => inv.prepareValidationBinding({
+      manifest: {...boundManifest,
+        inputRefs: boundManifest.inputRefs.map((item) =>
+          item === exactRef ? wrongRef : item)},
+      request: d014Request(),
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+    }), (error) => error.kind === 'CONFLICT'
+      && error.reasonCodes.includes('IMPLEMENTATION_VALIDATION_ADAPTER_REF_CONFLICT'));
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('fixed adapter resolver permits exactly one reviewed path candidate', () => {
+  const check = {checkId: 'fixture-check', args: ['--test', 'old/path.cjs'], timeoutMs: 123};
+  const binding = {profile: {profileId: 'fixture-profile'}};
+  const manifestValue = {workspace: {worktree: '/tmp/fixture-worktree'}};
+  const stat = {isFile: () => true, isSymbolicLink: () => false};
+  const adapterContract = {
+    schema: inv.IMPLEMENTATION_VALIDATION_ADAPTER_SCHEMA,
+    contractDigest: 'a'.repeat(64),
+    adapters: [{
+      profileId: 'fixture-profile',
+      checkId: 'fixture-check',
+      launcher: 'node',
+      cwdPolicy: 'manifest-worktree',
+      pathArgIndex: 1,
+      canonicalPath: 'old/path.cjs',
+      aliases: ['new/path.cjs'],
+      timeoutMs: 123,
+      resultParser: 'node-exit-v1',
+    }],
+  };
+  const alias = inv.resolveImplementationValidationInvocation({
+    binding, check, manifest: manifestValue, adapterContract,
+    candidateStatImpl: (file) => file.endsWith('/new/path.cjs') ? stat : null,
+  });
+  assert.equal(alias.kind, 'PASS');
+  assert.equal(alias.value.resolution, 'ALIAS');
+  assert.equal(alias.value.args[1], 'new/path.cjs');
+
+  const missing = inv.resolveImplementationValidationInvocation({
+    binding, check, manifest: manifestValue, adapterContract,
+    candidateStatImpl: () => null,
+  });
+  assert.equal(missing.kind, 'UNKNOWN');
+  assert(missing.reasonCodes.includes('CHECK_ADAPTER_STALE:fixture-check'));
+
+  const ambiguous = inv.resolveImplementationValidationInvocation({
+    binding, check, manifest: manifestValue, adapterContract,
+    candidateStatImpl: () => stat,
+  });
+  assert.equal(ambiguous.kind, 'CONFLICT');
+  assert(ambiguous.reasonCodes.includes('CHECK_ADAPTER_PATH_CONFLICT:fixture-check'));
+});
+
+test('adapter semantic failure is FAIL with remaining checks NOT_RUN and stable artifact', () => {
+  const inputs = tempValidationInputs();
+  try {
+    const exactRef = inv.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
+      + inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest;
+    const m = validationManifest({inputRefs: [...inputs.manifest.inputRefs, exactRef]});
+    const binding = inv.prepareValidationBinding({
+      manifest: m,
+      request: d014Request(),
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+    });
+    let calls = 0;
+    const locator = 'local-artifact:/tmp/mcl-implementation-validation-fixture.json#sha256='
+      + 'b'.repeat(64);
+    const result = inv.runFixedPreparedValidation({
+      binding,
+      manifest: m,
+      validationAdapterResolverImpl({check, manifest}) {
+        return {kind: 'PASS', reasonCodes: [], value: {
+          launcher: 'node', command: process.execPath, args: [...check.args],
+          cwd: manifest.workspace.worktree, path: check.args[1],
+          resolution: 'CANONICAL', timeoutMs: check.timeoutMs,
+        }};
+      },
+      validationSpawnSyncImpl() {
+        calls += 1;
+        return calls === 2
+          ? {status: 1, signal: null, stdout: 'assertion mismatch', stderr: ''}
+          : {status: 0, signal: null, stdout: '', stderr: ''};
+      },
+      persistValidationArtifactImpl: () => ({locator}),
+    });
+    assert.equal(calls, 2);
+    assert.equal(result.kind, 'FAIL');
+    assert.equal(result.value.status, 'FAIL');
+    assert.equal(result.value.checks_passed, 1);
+    assert.equal(result.value.checks_failed, 1);
+    assert.equal(result.value.checks_infra, 0);
+    assert.equal(result.value.checks_not_run, inv.D014_VALIDATION_CHECKS.length - 2);
+    assert.equal(result.artifactLocator, locator);
+    assert.equal(result.artifact.orderedChecks[0].result, 'PASS');
+    assert.equal(result.artifact.orderedChecks[1].result, 'FAIL');
+    assert(result.artifact.orderedChecks.slice(2).every((row) => row.result === 'NOT_RUN'));
+    assert(result.reasonCodes.includes('SEMANTIC_TEST_FAILURE:completion-test-syntax'));
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('adapter infrastructure failure never becomes semantic FAIL', () => {
+  const inputs = tempValidationInputs();
+  try {
+    const exactRef = inv.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
+      + inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest;
+    const m = validationManifest({inputRefs: [...inputs.manifest.inputRefs, exactRef]});
+    const binding = inv.prepareValidationBinding({
+      manifest: m,
+      request: d014Request(),
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+    });
+    const result = inv.runFixedPreparedValidation({
+      binding,
+      manifest: m,
+      validationAdapterResolverImpl({check, manifest}) {
+        return {kind: 'PASS', reasonCodes: [], value: {
+          launcher: 'node', command: process.execPath, args: [...check.args],
+          cwd: manifest.workspace.worktree, path: check.args[1],
+          resolution: 'CANONICAL', timeoutMs: check.timeoutMs,
+        }};
+      },
+      validationSpawnSyncImpl() {
+        return {status: null, signal: 'SIGTERM', stdout: '', stderr: ''};
+      },
+      persistValidationArtifactImpl: () => ({
+        locator: 'local-artifact:/tmp/infra.json#sha256=' + 'c'.repeat(64),
+      }),
+    });
+    assert.equal(result.kind, 'BLOCKED');
+    assert.equal(result.value.checks_failed, 0);
+    assert.equal(result.value.checks_infra, 1);
+    assert(result.reasonCodes[0].startsWith('PREPARED_VALIDATION_INFRA_ERROR:'));
+    assert(!result.reasonCodes[0].startsWith('SEMANTIC_TEST_FAILURE:'));
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('semantic FAIL projects one bounded validation attention item', () => {
+  const locator = 'local-artifact:/tmp/mcl-implementation-validation-fixture.json#sha256='
+    + 'd'.repeat(64);
+  const receipt = inv.projectGenericReceipt({
+    manifest: validationManifest(),
+    request: d014Request(),
+    primitiveSourceSha256: '1'.repeat(64),
+    kind: 'FAIL',
+    reasons: ['SEMANTIC_TEST_FAILURE:completion-contract'],
+    prepare: d014Primitive('PREPARE'),
+    validation: {
+      status: 'FAIL', checks_passed: 1, checks_failed: 1,
+      checks_infra: 0, checks_not_run: 2,
+    },
+    validationEnabled: true,
+    validationArtifactLocator: locator,
+  });
+  assert.equal(receipt.result, 'FAIL');
+  assert.equal(receipt.attentionDisposition, 'NEEDS_REVIEW');
+  const view = inv.projectOwnerAgentView(receipt, validationManifest(), {
+    workspaceInspector: () => ({ok: true, holderPath: '/tmp/fake-git-admin/holder.json'}),
+    writer: (filePath) => ({filePath, digest: 'e'.repeat(64)}),
+  });
+  assert.equal(view.result, 'FAIL');
+  assert.equal(view.attentionDisposition, 'NEEDS_REVIEW');
+  assert.equal(view.attentionCount, 1);
+  assert.equal(view.attention[0].reasonCode, 'SEMANTIC_TEST_FAILURE:completion-contract');
+  assert.equal(view.attention[0].locator, locator);
+  assert.equal(view.output.validationFailed, 1);
+  assert.equal(view.output.validationNotRun, 2);
+});
+
+test('validation artifact persistence is bounded private regular-file evidence', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-validation-artifact-'));
+  try {
+    const rows = inv.D014_VALIDATION_CHECKS.map((check) => ({
+      checkId: check.checkId, launcher: 'node', argv: [...check.args],
+      path: check.args[1], resolution: 'CANONICAL', result: 'PASS',
+      reasonCodes: [], exitCode: 0, signal: null,
+      stdout: {bytes: 0, sha256: crypto.createHash('sha256').update('').digest('hex')},
+      stderr: {bytes: 0, sha256: crypto.createHash('sha256').update('').digest('hex')},
+    }));
+    const binding = {
+      profile: D014_PROFILE,
+      adapterContractDigest: inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest,
+    };
+    const m = validationManifest();
+    const artifact = inv.buildImplementationValidationArtifact({binding, manifest: m, rows});
+    const persisted = inv.persistImplementationValidationArtifact(m, artifact, {
+      workspaceInspector: () => ({ok: true, holderPath: path.join(dir, 'holder.json')}),
+    });
+    const stat = fs.lstatSync(persisted.filePath);
+    assert.equal(stat.isFile(), true);
+    assert.equal(stat.isSymbolicLink(), false);
+    assert.equal(stat.mode & 0o777, 0o600);
+    assert(stat.size < 32 * 1024);
+    assert(persisted.locator.startsWith('local-artifact:' + persisted.filePath + '#sha256='));
+    const parsed = JSON.parse(fs.readFileSync(persisted.filePath, 'utf8'));
+    assert.equal(parsed.profileContractDigest, D014_PROFILE.contractDigest);
+    assert.equal(parsed.adapterContractDigest,
+      inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest);
+    assert.equal(parsed.summary.passed, inv.D014_VALIDATION_CHECKS.length);
+    assert.equal(Object.prototype.hasOwnProperty.call(parsed, 'env'), false);
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+});

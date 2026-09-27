@@ -40,6 +40,8 @@ cleanup() {
     force_stop_pid "$(read_pid "$HOME_FIX/.local/state/mcl-m-tailscale-supervisor-guard/anchor.pid")"
     force_stop_pid "$(read_pid "$TEST_STATE/guard-runsv.pid")"
     force_stop_pid "$(read_pid "$TEST_STATE/target-runsv.pid")"
+    force_stop_pid "$(read_pid "$TEST_STATE/adopt-daemon.pid")"
+    force_stop_pid "$(read_pid "$TEST_STATE/adopt-logger.pid")"
     force_stop_pid "${SECOND_PID:-}"
     force_stop_pid "${LOOP_PID:-}"
     force_stop_pid "${AMBIG_PID:-}"
@@ -82,6 +84,27 @@ fi
 exit 1
 EOF
 chmod +x "$PREFIX/bin/pidof"
+printf '#!%s\n' "$(command -v sh)" > "$PREFIX/bin/tailscale"
+cat >> "$PREFIX/bin/tailscale" <<'EOF'
+[ "${1:-}" = status ] && [ "${2:-}" = --json ] || exit 2
+if [ -e "$MCL_M_TAILSCALE_TEST_STATE/backend-running" ]; then
+    printf '%s\n' '{"BackendState":"Running"}'
+else
+    printf '%s\n' '{"BackendState":"Stopped"}'
+fi
+EOF
+chmod +x "$PREFIX/bin/tailscale"
+printf '#!%s\n' "$(command -v sh)" > "$PREFIX/bin/tailscaled-start"
+cat >> "$PREFIX/bin/tailscaled-start" <<'EOF'
+[ "${1:-}" = --foreground ] || exit 2
+count=0
+[ ! -r "$MCL_M_TAILSCALE_TEST_STATE/rollback.count" ] || count="$(cat "$MCL_M_TAILSCALE_TEST_STATE/rollback.count")"
+count=$((count + 1))
+printf '%s\n' "$count" > "$MCL_M_TAILSCALE_TEST_STATE/rollback.count"
+printf '%s\n' "$$" > "$MCL_M_TAILSCALE_TEST_STATE/adopt-daemon.pid"
+while :; do sleep 1; done
+EOF
+chmod +x "$PREFIX/bin/tailscaled-start"
 printf '#!%s\n' "$(command -v sh)" > "$PREFIX/bin/sv"
 cat >> "$PREFIX/bin/sv" <<'EOF'
 [ "${1:-}" = status ] || exit 2
@@ -131,6 +154,16 @@ case "$name" in
         count=$((count + 1))
         printf '%s\n' "$count" > "$count_file"
         printf '%s\n' "$$" > "$MCL_M_TAILSCALE_TEST_STATE/target-runsv.pid"
+        if [ -e "$MCL_M_TAILSCALE_TEST_STATE/target-runsv-fail" ]; then
+            rm -f "$service/supervisor-up"
+            rmdir "$lock" 2>/dev/null || true
+            exit 1
+        fi
+        if [ ! -e "$MCL_M_TAILSCALE_TEST_STATE/target-runsv-no-daemon" ]; then
+            sleep 60 &
+            child=$!
+            printf '%s\n' "$child" > "$MCL_M_TAILSCALE_TEST_STATE/adopt-daemon.pid"
+        fi
         while :; do sleep 1; done
         ;;
     mcl-m-tailscale-supervisor-guard)
@@ -499,6 +532,168 @@ rm -f "$HOME_FIX/.local/state/mcl-m-tailscale-supervisor-guard/anchor.pid"
 rmdir "$HOME_FIX/.local/state/mcl-m-tailscale-supervisor-guard/anchor.lock" 2>/dev/null || true
 rm -f "$TARGET/supervisor-up"
 
+# Explicit healthy-orphan adoption fixtures. These disposable children live only
+# inside the synthetic contract and never touch the live M runtime.
+rm -f "$TEST_STATE/target-runsv.count" "$TEST_STATE/target-runsv.pid" \
+    "$TEST_STATE/adopt-daemon.pid" "$TEST_STATE/adopt-logger.pid" \
+    "$TEST_STATE/target-runsv-fail" "$TEST_STATE/target-runsv-no-daemon" "$TEST_STATE/rollback.count"
+touch "$TEST_STATE/adopt-fixture-active" "$TEST_STATE/backend-running" "$TEST_STATE/guard-service-running" "$TEST_STATE/anchor-live"
+
+start_adopt_pair() {
+    sleep 60 &
+    ADOPT_DAEMON_PID=$!
+    sleep 60 &
+    ADOPT_LOGGER_PID=$!
+    printf '%s\n' "$ADOPT_DAEMON_PID" > "$TEST_STATE/adopt-daemon.pid"
+    printf '%s\n' "$ADOPT_LOGGER_PID" > "$TEST_STATE/adopt-logger.pid"
+    printf '1\n' > "$TEST_STATE/adopt-daemon-count"
+    printf '1\n' > "$TEST_STATE/adopt-logger-count"
+}
+stop_adopt_pair() {
+    force_stop_pid "${ADOPT_DAEMON_PID:-}"
+    force_stop_pid "${ADOPT_LOGGER_PID:-}"
+    ADOPT_DAEMON_PID=
+    ADOPT_LOGGER_PID=
+    rm -f "$TEST_STATE/adopt-daemon.pid" "$TEST_STATE/adopt-logger.pid"
+}
+
+start_adopt_pair
+set +e
+adopt_out="$(run_guard --adopt-orphan 2>&1)"
+adopt_rc=$?
+set -e
+
+[ "$adopt_rc" -eq 0 ] || fail "orphan adoption rc=$adopt_rc"
+printf '%s\n' "$adopt_out" | grep -Fxq 'schema=mcl-m-tailscale-orphan-adopt.v1' || fail "adopt schema"
+printf '%s\n' "$adopt_out" | grep -Fxq 'prestate=orphan_present' || fail "adopt prestate"
+printf '%s\n' "$adopt_out" | grep -Fxq 'old_pair=exact' || fail "adopt pair"
+printf '%s\n' "$adopt_out" | grep -Fxq 'supervised_target=running' || fail "adopt supervised"
+printf '%s\n' "$adopt_out" | grep -Fxq 'backend=running' || fail "adopt backend"
+printf '%s\n' "$adopt_out" | grep -Fxq 'rollback=not_needed' || fail "adopt rollback"
+printf '%s\n' "$adopt_out" | grep -Fxq 'result=pass' || fail "adopt result"
+[ "$(printf '%s\n' "$adopt_out" | wc -l | tr -d ' ')" = 8 ] || fail "adopt receipt line count"
+! printf '%s\n' "$adopt_out" | grep -Eq 'pid=|nodekey:|tailnet|/proc/|cmdline' || fail "adopt receipt leaked raw identity"
+[ ! -e "$TEST_STATE/rollback.count" ] || fail "successful adoption invoked rollback"
+[ "$(cat "$TEST_STATE/target-runsv.count")" = 1 ] || fail "adopt target runsv count"
+kill -0 "$(read_pid "$TEST_STATE/adopt-daemon.pid")" 2>/dev/null || fail "adopt target daemon absent"
+[ ! -d "$HOME_FIX/.local/state/mcl-m-tailscale-supervisor-guard/adopt.lock" ] || fail "adopt lock survived"
+force_stop_pid "$(read_pid "$TEST_STATE/target-runsv.pid")"
+rm -f "$TARGET/supervisor-up" "$TEST_STATE/adopt-daemon.pid"
+ADOPT_DAEMON_PID=
+ADOPT_LOGGER_PID=
+
+# Already-supervised target blocks without touching the orphan pair.
+start_adopt_pair
+touch "$TARGET/supervisor-up"
+count_before="$(cat "$TEST_STATE/target-runsv.count")"
+set +e
+blocked_out="$(run_guard --adopt-orphan 2>&1)"
+blocked_rc=$?
+set -e
+[ "$blocked_rc" -eq 2 ] || fail "supervised adopt block rc=$blocked_rc"
+printf '%s\n' "$blocked_out" | grep -Fxq 'result=blocked' || fail "supervised adopt block result"
+kill -0 "$ADOPT_DAEMON_PID" 2>/dev/null || fail "blocked adopt killed daemon"
+kill -0 "$ADOPT_LOGGER_PID" 2>/dev/null || fail "blocked adopt killed logger"
+[ "$(cat "$TEST_STATE/target-runsv.count")" = "$count_before" ] || fail "blocked adopt started target"
+rm -f "$TARGET/supervisor-up"
+stop_adopt_pair
+
+# Operator-down and daemon-absent states are not adoption candidates.
+start_adopt_pair
+touch "$TARGET/down"
+set +e
+down_out="$(run_guard --adopt-orphan 2>&1)"
+down_rc=$?
+set -e
+[ "$down_rc" -eq 2 ] || fail "operator-down adopt block rc=$down_rc"
+printf '%s\n' "$down_out" | grep -Fxq 'result=blocked' || fail "operator-down adopt result"
+kill -0 "$ADOPT_DAEMON_PID" 2>/dev/null || fail "operator-down killed daemon"
+rm -f "$TARGET/down"
+stop_adopt_pair
+
+rm -f "$TEST_STATE/adopt-daemon.pid" "$TEST_STATE/adopt-logger.pid"
+printf '1\n' > "$TEST_STATE/adopt-daemon-count"
+printf '1\n' > "$TEST_STATE/adopt-logger-count"
+set +e
+absent_adopt_out="$(run_guard --adopt-orphan 2>&1)"
+absent_adopt_rc=$?
+set -e
+[ "$absent_adopt_rc" -eq 2 ] || fail "daemon-absent adopt block rc=$absent_adopt_rc"
+printf '%s\n' "$absent_adopt_out" | grep -Fxq 'result=blocked' || fail "daemon-absent adopt result"
+
+# Backend, guard-service, anchor and candidate ambiguity are zero-effect blockers.
+for gate in backend guard anchor daemon_zero daemon_pair logger_zero logger_pair; do
+    start_adopt_pair
+    touch "$TEST_STATE/backend-running" "$TEST_STATE/guard-service-running" "$TEST_STATE/anchor-live"
+    case "$gate" in
+        backend) rm -f "$TEST_STATE/backend-running" ;;
+        guard) rm -f "$TEST_STATE/guard-service-running" ;;
+        anchor) rm -f "$TEST_STATE/anchor-live" ;;
+        daemon_zero) printf '0\n' > "$TEST_STATE/adopt-daemon-count" ;;
+        daemon_pair) printf '2\n' > "$TEST_STATE/adopt-daemon-count" ;;
+        logger_zero) printf '0\n' > "$TEST_STATE/adopt-logger-count" ;;
+        logger_pair) printf '2\n' > "$TEST_STATE/adopt-logger-count" ;;
+    esac
+    count_before="$(cat "$TEST_STATE/target-runsv.count")"
+    set +e
+    gate_out="$(run_guard --adopt-orphan 2>&1)"
+    gate_rc=$?
+    set -e
+    [ "$gate_rc" -eq 2 ] || fail "$gate adoption block rc=$gate_rc"
+    printf '%s\n' "$gate_out" | grep -Fxq 'result=blocked' || fail "$gate adoption result"
+    kill -0 "$ADOPT_DAEMON_PID" 2>/dev/null || fail "$gate block killed daemon"
+    kill -0 "$ADOPT_LOGGER_PID" 2>/dev/null || fail "$gate block killed logger"
+    [ "$(cat "$TEST_STATE/target-runsv.count")" = "$count_before" ] || fail "$gate block started target"
+    stop_adopt_pair
+    printf '1\n' > "$TEST_STATE/adopt-daemon-count"
+    printf '1\n' > "$TEST_STATE/adopt-logger-count"
+done
+touch "$TEST_STATE/backend-running" "$TEST_STATE/guard-service-running" "$TEST_STATE/anchor-live"
+
+# Failed supervised start gets at most one functional orphan rollback.
+start_adopt_pair
+touch "$TEST_STATE/target-runsv-fail"
+count_before="$(cat "$TEST_STATE/target-runsv.count")"
+set +e
+rollback_out="$(run_guard --adopt-orphan 2>&1)"
+rollback_rc=$?
+set -e
+[ "$rollback_rc" -eq 1 ] || fail "rollback-restored adoption rc=$rollback_rc"
+printf '%s\n' "$rollback_out" | grep -Fxq 'rollback=restored' || fail "rollback restored receipt"
+printf '%s\n' "$rollback_out" | grep -Fxq 'result=fail' || fail "rollback restored result"
+[ "$(cat "$TEST_STATE/target-runsv.count")" -eq $((count_before + 1)) ] || fail "failed adoption target start count"
+[ "$(cat "$TEST_STATE/rollback.count")" = 1 ] || fail "rollback invocation count"
+rollback_pid="$(read_pid "$TEST_STATE/adopt-daemon.pid")"
+kill -0 "$rollback_pid" 2>/dev/null || fail "rollback daemon absent"
+force_stop_pid "$rollback_pid"
+rm -f "$TEST_STATE/adopt-daemon.pid" "$TEST_STATE/target-runsv-fail"
+ADOPT_DAEMON_PID=
+ADOPT_LOGGER_PID=
+
+# If a supervisor exists but its daemon postcondition is incomplete, rollback
+# is blocked rather than creating a duplicate orphan.
+start_adopt_pair
+touch "$TEST_STATE/target-runsv-no-daemon"
+count_before="$(cat "$TEST_STATE/target-runsv.count")"
+set +e
+rollback_blocked_out="$(run_guard --adopt-orphan 2>&1)"
+rollback_blocked_rc=$?
+set -e
+[ "$rollback_blocked_rc" -eq 1 ] || fail "rollback-blocked adoption rc=$rollback_blocked_rc"
+printf '%s\n' "$rollback_blocked_out" | grep -Fxq 'rollback=blocked' || fail "rollback blocked receipt"
+printf '%s\n' "$rollback_blocked_out" | grep -Fxq 'result=fail' || fail "rollback blocked result"
+[ "$(cat "$TEST_STATE/target-runsv.count")" -eq $((count_before + 1)) ] || fail "rollback-blocked start count"
+[ "$(cat "$TEST_STATE/rollback.count")" = 1 ] || fail "rollback-blocked launched duplicate rollback"
+stale_daemon_pid="$(read_pid "$TEST_STATE/adopt-daemon.pid")"
+if [ -n "$stale_daemon_pid" ]; then
+    stale_daemon_state="$(awk '{print $3}' "/proc/$stale_daemon_pid/stat" 2>/dev/null || true)"
+    [ -z "$stale_daemon_state" ] || [ "$stale_daemon_state" = Z ] || fail "rollback-blocked duplicate daemon"
+fi
+force_stop_pid "$(read_pid "$TEST_STATE/target-runsv.pid")"
+rm -f "$TARGET/supervisor-up" "$TEST_STATE/target-runsv-no-daemon" "$TEST_STATE/adopt-daemon.pid" "$TEST_STATE/adopt-logger.pid"
+ADOPT_DAEMON_PID=
+ADOPT_LOGGER_PID=
+
 for script in "$GUARD" "$INSTALL" "$LAUNCHER" "$SERVICE_RUN"; do
     sh -n "$script" || fail "syntax: $script"
     if grep -E 'service-daemon|runsvdir|termux-wake-lock|pocketrisu|desktop-commander|sshd|notification|wifi|cellular|network-health' "$script" >/dev/null; then
@@ -510,6 +705,10 @@ done
 grep -Fq 'pidof' "$GUARD" || fail "fixed pidof evidence missing"
 grep -Fq '/proc' "$GUARD" || fail "proc corroboration missing"
 grep -Fq 'skip=orphan-present' "$GUARD" || fail "orphan preservation missing"
+grep -Fq -- '--adopt-orphan' "$GUARD" || fail "explicit orphan adoption mode missing"
+[ "$(grep -Fc -- '--adopt-orphan)' "$GUARD")" -eq 1 ] || fail "orphan adoption dispatch count"
+grep -Fq 'mcl-m-tailscale-orphan-adopt.v1' "$GUARD" || fail "adoption receipt schema missing"
+! grep -Eq 'kill -KILL|pkill|killall|tailscale (up|down)|service-daemon|runsvdir' "$GUARD" || fail "forbidden adoption effect surface"
 grep -Fq 'var/service/tailscaled' "$GUARD" || fail "fixed Tailscale service path missing"
 grep -Fq 'var/service/mcl-m-tailscale-supervisor-guard' "$LAUNCHER" || fail "fixed guard service path missing"
 grep -Fq -- '--anchor' "$LAUNCHER" || fail "anchor mode missing"

@@ -196,7 +196,31 @@ Lifecycle `State` and `Interaction stage` are separate packet axes. A producer M
 
 `work-system/packet-projection.cjs` is the pure read-only parser/classifier for this boundary. It derives lifecycle and stage vocabularies from `policy.json`, accepts the existing `**State: ...**` and `## State` one-line forms, and returns bounded `PASS / UNKNOWN / CONFLICT` evidence. Missing lifecycle remains explicit `UNKNOWN`; duplicate State projections or multiple lifecycle tokens are `CONFLICT`. The helper never fetches GitHub, rewrites a packet, advances a stage, closes an issue, or grants mutation authority.
 
+Packet producers must run this same projection before creating a canonical work-packet issue or publishing a packet-body update, and require `PASS` before the external write effect. The repository does not intercept every GitHub issue-creation surface; this is a producer contract, not a platform hook or second writer. Materialize the candidate body and run:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/packet-projection.cjs --body-file /path/to/candidate-packet.md
+```
+
+The CLI is a bounded read-only adapter over `classifyPacketProjection()`. It performs no normalization, lifecycle inference, autofix, network request, issue creation, or issue update. `PASS` exits 0; `UNKNOWN` and `CONFLICT` remain nonzero with the classifier's exact reason codes.
+
+The existing generic `coordination-body-patch.cjs` applies the same rule to the post-patch candidate body for `WORK_PACKET` updates before PATCH. It intentionally does not require the current body to be valid first, so a malformed packet can still be repaired into a classifier-`PASS` body. A patch that would produce `UNKNOWN` or `CONFLICT` performs zero PATCH effects. `WORK_QUEUE` behavior is unchanged.
+
 Mutation consumers that require packet lifecycle evidence should reuse this parser rather than infer lifecycle from interaction-stage text, proof terms, or native issue state.
+
+### Packet authoring preflight
+
+`work-system/packet-authoring-preflight.cjs` is the bounded read-only producer check for a complete candidate packet body. It composes, rather than replaces, the existing lifecycle/stage projection and the existing `scope-overlap.cjs::extractPacketScopes()` semantic scope parser.
+
+A packet producer must require this preflight to return `PASS` before creating a canonical work-packet issue or publishing a packet-body update. The preflight keeps the semantic parser fail-closed and adds one authoring-only guard: preservation, exclusion, `do not modify`, non-write, or forbidden path/surface lists must begin under a separate level-two boundary such as `## Preservation boundary`. Keeping those cues inside the deterministic write-scope section and then listing more `path:` or `surface:` entries is `CONFLICT / PACKET_SCOPE_PRESERVATION_BOUNDARY_REQUIRED`.
+
+This rule does not guess whether prose means writable or non-writable scope and does not change scope-overlap semantics. It prevents an ambiguous authoring shape from being published. Exact writable entries stay inside the one deterministic write-scope section; preservation/exclusion entries move to a separate level-two section.
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/packet-authoring-preflight.cjs --body-file /path/to/candidate-packet.md
+```
+
+The CLI is local/read-only, performs no GitHub access or mutation, has no auto-fix mode, and grants no repository, merge, release, runtime, or production authority. `PASS` exits 0, `CONFLICT` exits 2, and `UNKNOWN` exits 3.
 
 ## Execution compactness contract
 
@@ -223,6 +247,35 @@ Crossing any normal guardrail routes to `MATERIALIZE` unless an evidence-equival
 The packet records its selected route, command/file surface, required validation preserved, guardrail accounting, and any exception reason before non-trivial execution. `EXCEPTION` without an explicit reason is invalid.
 
 Compactness never removes required tests, authority reads, freshness barriers, uncertainty, failure provenance, or project-owned Git/CI/release/security/production gates. The repository can reduce repository-owned execution payloads and fan-out, but it does not claim it can hide, merge, or suppress ChatGPT host UI/activity cards.
+
+### Non-closing PR authoring preflight
+
+When a packet still has required acceptance after merge, its existing non-closing
+linkage rule is producer-owned before publication as well as reviewer-visible
+after publication. Before using `gh pr create`, a connector, or another external
+PR creation surface, materialize the exact proposed title and body and require:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/pr-authoring-preflight.cjs \
+  --packet '#<N>' \
+  --title-file /path/to/pr-title.txt \
+  --body-file /path/to/pr-body.md
+```
+
+The guard is read-only and accepts no repository, URL, ref, branch, command,
+executable, credential, publisher, or GitHub effect input. It requires an exact
+`Refs #<packet>` body line and rejects GitHub closing-keyword issue references in
+either title or body, including cross-issue references. `PASS` grants no PR
+publication, mutation, merge, release, runtime, device, or production authority.
+
+This is a producer prepublication check, not a second PR publisher and not a
+claim that external GitHub creation surfaces are globally intercepted. A
+non-PASS result must not be bypassed by selecting another external publisher.
+
+Applicability remains packet-owned. When merge itself satisfies every required
+acceptance item and no required postmerge proof remains, the packet may use
+GitHub's normal intentional closing semantics and this non-closing preflight is
+not required.
 
 ## Proof / closure taxonomy
 

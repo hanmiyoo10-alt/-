@@ -2157,3 +2157,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/111baef4ce6cf2be419c3ff026b09bb0b1e68b78)
 - Event ID: `542ebbd2c9a271e0bdfbf6397166a4d4d06c37e76a05b60ad69e61d0e0c8ff85`
 <!-- canonical-main-doc-promoted:542ebbd2c9a271e0bdfbf6397166a4d4d06c37e76a05b60ad69e61d0e0c8ff85 -->
+
+### 2026-09-27 — fix(repo): harden documentation promotion native checks (#2872)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `db9adf1fba0df95834b18296b642c8b4dd0172a3`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/db9adf1fba0df95834b18296b642c8b4dd0172a3)
+- Event ID: `43eb66ac8b68155f939aca138ac56db978f3d26d6db67e084c67ab3d388819e6`
+<!-- canonical-main-doc-promoted:43eb66ac8b68155f939aca138ac56db978f3d26d6db67e084c67ab3d388819e6 -->

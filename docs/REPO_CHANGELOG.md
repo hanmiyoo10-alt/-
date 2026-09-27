@@ -2117,3 +2117,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/614af34b078bb021ecce7b66c4a6cd2a38efa906)
 - Event ID: `7a7b59e492acf69efcb04cfc8383adfec78e9f4e09fafefef92fd75919cffa60`
 <!-- canonical-main-doc-promoted:7a7b59e492acf69efcb04cfc8383adfec78e9f4e09fafefef92fd75919cffa60 -->
+
+### 2026-09-27 — Merge pull request #3030 from hanmiyoo10-alt/packet/3029-stage-rebind-inspect
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `2a357616fb7d38a2b7543faf3a147cc0bf901ac0`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2a357616fb7d38a2b7543faf3a147cc0bf901ac0)
+- Event ID: `624ecc5bd872fbbef0736f82e6141c95041a91ab779b1bb2035899b0daa266dc`
+<!-- canonical-main-doc-promoted:624ecc5bd872fbbef0736f82e6141c95041a91ab779b1bb2035899b0daa266dc -->

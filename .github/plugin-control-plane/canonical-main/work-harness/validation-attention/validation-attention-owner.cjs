@@ -303,7 +303,7 @@ function finalizationAdmission({implementation, continuationResult, mergeResult}
   };
 }
 async function inspectComposition({
-  client, packetNumber, prNumber, implementationReceipt,
+  client, packetNumber, prNumber, implementationReceipt, packetActivityEvidence = null,
   root = ROOT, deps = DEFAULT_DEPS,
 }) {
   let implementation;
@@ -378,7 +378,7 @@ async function inspectComposition({
   }
 
   const mergeResult = await deps.validationMerge.inspectWithClient({
-    client, packetNumber, prNumber, implementationReceipt,
+    client, packetNumber, prNumber, implementationReceipt, packetActivityEvidence,
   });
   const mergeLocators = persistChild(
     deps.validationMerge, mergeResult, packetNumber, prNumber, root, 'inspect');
@@ -1004,7 +1004,9 @@ function parseNumber(value, field) {
 function parseArgs(argv = process.argv.slice(2)) {
   if (!['inspect', 'finalize'].includes(argv[0])) throw new Error('COMMAND_INVALID');
   const command = argv[0];
-  const allowed = new Set(['packet', 'pr', 'implementation-receipt-file', 'format']);
+  const allowed = new Set([
+    'packet', 'pr', 'implementation-receipt-file', 'packet-activity-evidence-file', 'format',
+  ]);
   const values = {};
   for (let index = 1; index < argv.length; index += 2) {
     const token = argv[index];
@@ -1021,11 +1023,14 @@ function parseArgs(argv = process.argv.slice(2)) {
   if (command === 'inspect' && !values['implementation-receipt-file']) {
     throw new Error('IMPLEMENTATION_RECEIPT_REQUIRED');
   }
-  if (command === 'finalize' && values['implementation-receipt-file']) {
+  if (command === 'finalize'
+      && (values['implementation-receipt-file'] || values['packet-activity-evidence-file'])) {
     throw new Error('ARGUMENT_INVALID');
   }
   return {command, packetNumber, prNumber,
-    implementationReceiptFile: values['implementation-receipt-file'] || null, format};
+    implementationReceiptFile: values['implementation-receipt-file'] || null,
+    packetActivityEvidenceFile: values['packet-activity-evidence-file'] || null,
+    format};
 }
 async function runCli(argv = process.argv.slice(2), options = {}) {
   const args = parseArgs(argv);
@@ -1034,9 +1039,13 @@ async function runCli(argv = process.argv.slice(2), options = {}) {
   let result;
   if (args.command === 'inspect') {
     const implementationReceipt = readRegularJson(args.implementationReceiptFile);
+    const packetActivityEvidence = args.packetActivityEvidenceFile
+      ? deps.validationMerge.normalizePacketActivityEvidenceSet(
+        readRegularJson(args.packetActivityEvidenceFile), args.packetNumber)
+      : null;
     result = await inspectComposition({
       client, packetNumber: args.packetNumber, prNumber: args.prNumber,
-      implementationReceipt, root: options.root || ROOT, deps,
+      implementationReceipt, packetActivityEvidence, root: options.root || ROOT, deps,
     });
   } else {
     result = await finalizeComposition({

@@ -16,6 +16,9 @@ const MAX_REPORT_BYTES = 32 * 1024;
 const GH_READ_TIMEOUT_MS = 20_000;
 const SHA40_RE = /^[0-9a-f]{40}$/;
 const PACKET_MARKER = '<!-- canonical-main-work-packet:v1 -->';
+const PACKET_ACTIVITY_EVIDENCE_MODE = 'VALIDATION_MERGE_PACKET_ACTIVITY_EVIDENCE_SET';
+const PACKET_REF_RE = /^#[1-9][0-9]*$/;
+const MAX_PACKET_ACTIVITY_CANDIDATES = 12;
 
 const {createGitHubClient} = require(path.join(ROOT,
   '.github/plugin-control-plane/canonical-main/infra/github-client.cjs'));
@@ -65,6 +68,56 @@ function readRegularJson(filePath, maxBytes = MAX_INPUT_BYTES) {
   } catch {
     throw new OwnerError('UNKNOWN', ['INPUT_JSON_INVALID']);
   }
+}
+function exactObjectKeys(value, expected) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const actual = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  return actual.length === wanted.length
+    && actual.every((key, index) => key === wanted[index]);
+}
+function normalizePacketActivityEvidenceSet(input, packetNumber) {
+  if (!exactObjectKeys(input, ['schemaVersion', 'mode', 'requesterRef', 'candidates'])
+      || input.schemaVersion !== 1
+      || input.mode !== PACKET_ACTIVITY_EVIDENCE_MODE
+      || !Array.isArray(input.candidates)
+      || input.candidates.length > MAX_PACKET_ACTIVITY_CANDIDATES) {
+    throw new OwnerError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_SET_INVALID']);
+  }
+  const requesterRef = '#' + packetNumber;
+  if (input.requesterRef !== requesterRef) {
+    throw new OwnerError('CONFLICT', ['PACKET_ACTIVITY_EVIDENCE_REQUESTER_CONFLICT']);
+  }
+  const seen = new Set();
+  const candidates = input.candidates.map((row) => {
+    if (!exactObjectKeys(row, ['candidateRef', 'evidence'])
+        || !PACKET_REF_RE.test(String(row.candidateRef || ''))
+        || seen.has(row.candidateRef)) {
+      throw new OwnerError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_CANDIDATE_INVALID']);
+    }
+    seen.add(row.candidateRef);
+    const evidence = row.evidence;
+    if (!exactObjectKeys(evidence, [
+      'schemaVersion', 'mode', 'candidateRef', 'requesterRef', 'relationship',
+      'repositoryMutationActive', 'activeLease', 'overlappingOpenPr',
+      'sequencingExplicit', 'sourceRefs',
+    ])
+        || evidence.schemaVersion !== 1
+        || evidence.mode !== 'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE'
+        || evidence.candidateRef !== row.candidateRef
+        || evidence.requesterRef !== requesterRef
+        || !Array.isArray(evidence.sourceRefs)) {
+      throw new OwnerError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_PAYLOAD_INVALID']);
+    }
+    return {candidateRef: row.candidateRef, evidence};
+  });
+  candidates.sort((left, right) => left.candidateRef.localeCompare(right.candidateRef));
+  return canonicalize({
+    schemaVersion: 1,
+    mode: PACKET_ACTIVITY_EVIDENCE_MODE,
+    requesterRef,
+    candidates,
+  });
 }
 
 function stageReceiptFacts(receipt) {
@@ -562,18 +615,38 @@ async function readRequiredEvidence(client, headSha, prNumber) {
   };
 }
 
-async function discoverOverlap(client, packetNumber, prNumber, requestedScopes) {
+async function discoverOverlap(
+  client, packetNumber, prNumber, requestedScopes, packetActivityEvidence = null,
+) {
   const issueInventory = await fetchPagedArray(client,
     (page) => '/issues?state=open&per_page=100&page=' + page, 'OPEN_ISSUES');
   const prInventory = await fetchPagedArray(client,
     (page) => '/pulls?state=open&per_page=100&page=' + page, 'OPEN_PRS');
   let discovery = issueInventory.complete && prInventory.complete ? 'COMPLETE' : 'PARTIAL';
+  const evidenceRows = packetActivityEvidence?.candidates || [];
+  const evidenceByCandidate = new Map(evidenceRows.map((row) => [row.candidateRef, row.evidence]));
+  const seenEvidence = new Set();
   const candidates = issueInventory.rows
     .filter((row) => !row?.pull_request && Number(row?.number) !== packetNumber
       && String(row?.body || '').includes(PACKET_MARKER))
-    .map((row) => ({
-      type: 'packet', ref: 'issue:#' + row.number, issueState: row.state, body: row.body,
-    }));
+    .map((row) => {
+      const canonicalRef = '#' + row.number;
+      const evidence = evidenceByCandidate.get(canonicalRef);
+      if (evidence) seenEvidence.add(canonicalRef);
+      return {
+        type: 'packet',
+        ref: 'issue:#' + row.number,
+        issueState: row.state,
+        body: row.body,
+        ...(evidence ? {packetActivityEvidence: evidence} : {}),
+      };
+    });
+  const staleEvidence = [...evidenceByCandidate.keys()]
+    .filter((candidateRef) => !seenEvidence.has(candidateRef));
+  if (staleEvidence.length) {
+    throw new OwnerError('CONFLICT', ['PACKET_ACTIVITY_EVIDENCE_CANDIDATE_NOT_CURRENT'],
+      'issue:' + staleEvidence[0]);
+  }
   for (const pr of prInventory.rows) {
     if (Number(pr?.number) === prNumber) continue;
     const files = await fetchPagedArray(client,
@@ -588,7 +661,12 @@ async function discoverOverlap(client, packetNumber, prNumber, requestedScopes) 
       filesComplete: files.complete,
     });
   }
-  const result = scopeOverlap.resolveScopeOverlap({requestedScopes, discovery, candidates});
+  const result = scopeOverlap.resolveScopeOverlap({
+    requesterRef: '#' + packetNumber,
+    requestedScopes,
+    discovery,
+    candidates,
+  });
   if (result.discovery !== 'COMPLETE') {
     throw new OwnerError('UNKNOWN', ['OVERLAP_DISCOVERY_INCOMPLETE'],
       'owner:work-system-scope-overlap');
@@ -602,7 +680,12 @@ async function discoverOverlap(client, packetNumber, prNumber, requestedScopes) 
   if (result.state === 'OVERLAP' || result.findings.length) {
     throw new OwnerError('BLOCKED', ['OVERLAP_PRESENT'], 'owner:work-system-scope-overlap');
   }
-  return {candidateCount: result.candidateCount, evidenceLocator: 'owner:work-system-scope-overlap'};
+  return {
+    candidateCount: result.candidateCount,
+    candidateActivity: result.candidateActivity || [],
+    packetActivityEvidenceCandidateRefs: [...evidenceByCandidate.keys()].sort(),
+    evidenceLocator: 'owner:work-system-scope-overlap',
+  };
 }
 
 function errorDisposition(error) {
@@ -670,10 +753,13 @@ function makeReceipt({
   });
 }
 
-async function inspectWithClient({client, packetNumber, prNumber, implementationReceipt}) {
+async function inspectWithClient({
+  client, packetNumber, prNumber, implementationReceipt, packetActivityEvidence = null,
+}) {
   const steps = [];
   const artifacts = [];
   const state = {headSha: null, paths: [], output: {pr: '#' + prNumber, merge: 'NOT_RUN'}};
+  let normalizedPacketActivityEvidence = null;
   async function perform(name, locator, fn) {
     try {
       const value = await fn();
@@ -689,6 +775,13 @@ async function inspectWithClient({client, packetNumber, prNumber, implementation
     }
   }
   try {
+    if (packetActivityEvidence) {
+      normalizedPacketActivityEvidence = await perform(
+        'packet-activity-evidence',
+        'caller:packet-activity-evidence',
+        async () => normalizePacketActivityEvidenceSet(packetActivityEvidence, packetNumber),
+      );
+    }
     const implementation = await perform('implementation-stage-receipt',
       'receipt:canonical-main-stage:IMPLEMENTATION_PR',
       async () => validateImplementationReceipt(implementationReceipt, packetNumber, prNumber));
@@ -715,7 +808,8 @@ async function inspectWithClient({client, packetNumber, prNumber, implementation
       () => readRequiredEvidence(client, implementation.expectedHead, prNumber));
     artifacts.push(required.evidenceLocator);
     const overlap = await perform('fresh-overlap', 'owner:work-system-scope-overlap',
-      () => discoverOverlap(client, packetNumber, prNumber, packet.scopes));
+      () => discoverOverlap(
+        client, packetNumber, prNumber, packet.scopes, normalizedPacketActivityEvidence));
     const finalCurrent = await perform('final-main-ops-currentness', 'issue:#485',
       () => readCurrentMain(client));
     const finalPacket = await perform('final-packet-currentness', 'issue:#' + packetNumber,
@@ -729,8 +823,12 @@ async function inspectWithClient({client, packetNumber, prNumber, implementation
     });
     await perform('final-review-currentness', 'pr:#' + prNumber,
       () => readReviewBarrier(client, prNumber));
-    await perform('final-overlap-currentness', 'owner:work-system-scope-overlap',
-      () => discoverOverlap(client, packetNumber, prNumber, packet.scopes));
+    const finalOverlap = await perform(
+      'final-overlap-currentness',
+      'owner:work-system-scope-overlap',
+      () => discoverOverlap(
+        client, packetNumber, prNumber, packet.scopes, normalizedPacketActivityEvidence),
+    );
     if (finalCurrent.mainSha !== current.mainSha
         || finalPacket.bodySha256 !== packet.bodySha256
         || finalPr.headSha !== pr.headSha || finalPr.baseSha !== pr.baseSha
@@ -775,6 +873,9 @@ async function inspectWithClient({client, packetNumber, prNumber, implementation
         requiredRunId: required.runId,
         requiredJobId: required.jobId,
         overlapCandidateCount: overlap.candidateCount,
+        packetActivityEvidenceCandidateRefs: overlap.packetActivityEvidenceCandidateRefs,
+        packetActivityDecisions: overlap.candidateActivity,
+        finalPacketActivityEvidenceCandidateRefs: finalOverlap.packetActivityEvidenceCandidateRefs,
         reviewCount: reviews.reviewCount,
         issueCommentCount: reviews.issueCommentCount,
         reviewCommentCount: reviews.reviewCommentCount,
@@ -1103,7 +1204,9 @@ function parseNumber(value, label) {
 function parseArgs(argv = process.argv.slice(2)) {
   if (!['inspect', 'finalize'].includes(argv[0])) throw new Error('COMMAND_INVALID');
   const command = argv[0];
-  const allowed = new Set(['packet', 'pr', 'implementation-receipt-file', 'format']);
+  const allowed = new Set([
+    'packet', 'pr', 'implementation-receipt-file', 'packet-activity-evidence-file', 'format',
+  ]);
   const values = {};
   for (let index = 1; index < argv.length; index += 2) {
     const token = argv[index];
@@ -1120,12 +1223,14 @@ function parseArgs(argv = process.argv.slice(2)) {
   if (command === 'inspect' && !values['implementation-receipt-file']) {
     throw new Error('IMPLEMENTATION_RECEIPT_REQUIRED');
   }
-  if (command === 'finalize' && values['implementation-receipt-file']) {
+  if (command === 'finalize'
+      && (values['implementation-receipt-file'] || values['packet-activity-evidence-file'])) {
     throw new Error('ARGUMENT_INVALID');
   }
   return {
     command, packetNumber, prNumber,
     implementationReceiptFile: values['implementation-receipt-file'] || null,
+    packetActivityEvidenceFile: values['packet-activity-evidence-file'] || null,
     format,
   };
 }
@@ -1164,11 +1269,16 @@ async function runCli(argv = process.argv.slice(2), options = {}) {
   const client = options.client || createLiveClient(options);
   let result;
   if (args.command === 'inspect') {
+    const packetActivityEvidence = args.packetActivityEvidenceFile
+      ? normalizePacketActivityEvidenceSet(
+        readRegularJson(args.packetActivityEvidenceFile), args.packetNumber)
+      : null;
     result = await inspectWithClient({
       client,
       packetNumber: args.packetNumber,
       prNumber: args.prNumber,
       implementationReceipt: readRegularJson(args.implementationReceiptFile),
+      packetActivityEvidence,
     });
   } else {
     let inspectEvidence;
@@ -1248,7 +1358,9 @@ module.exports = {
   MAX_INPUT_BYTES,
   MAX_PAGES,
   MAX_REPORT_BYTES,
+  MAX_PACKET_ACTIVITY_CANDIDATES,
   OPS_ISSUE,
+  PACKET_ACTIVITY_EVIDENCE_MODE,
   REPO,
   REVIEW_THREADS_QUERY,
   STRICT_CURRENTNESS_QUERY,
@@ -1263,6 +1375,7 @@ module.exports = {
   gitAdminDir,
   inspectWithClient,
   makeReceipt,
+  normalizePacketActivityEvidenceSet,
   parseArgs,
   parseOpsCapsule,
   persistResult,

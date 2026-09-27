@@ -250,8 +250,9 @@ function fixtureDeps(options = {}) {
     },
     validationMerge: {
       ...realMerge,
-      async inspectWithClient() {
+      async inspectWithClient(args) {
         calls.push('merge.inspect');
+        if (options.onMergeInspect) options.onMergeInspect(args);
         return mergeInspect;
       },
       async finalizeWithClient() {
@@ -283,10 +284,13 @@ function viewFor(result) {
 }
 
 test('CLI exposes only inspect/finalize and fixed packet/pr/receipt/format arguments', () => {
-  assert.equal(attention.parseArgs([
+  const inspectArgs = attention.parseArgs([
     'inspect', '--packet', '#2875', '--pr', '4000',
     '--implementation-receipt-file', '/tmp/r.json',
-  ]).command, 'inspect');
+    '--packet-activity-evidence-file', '/tmp/activity.json',
+  ]);
+  assert.equal(inspectArgs.command, 'inspect');
+  assert.equal(inspectArgs.packetActivityEvidenceFile, '/tmp/activity.json');
   assert.equal(attention.parseArgs(['finalize', '--packet', '2875', '--pr', '4000']).command,
     'finalize');
   assert.throws(() => attention.parseArgs([
@@ -296,6 +300,10 @@ test('CLI exposes only inspect/finalize and fixed packet/pr/receipt/format argum
   assert.throws(() => attention.parseArgs([
     'finalize', '--packet', '2875', '--pr', '4000',
     '--implementation-receipt-file', '/tmp/r.json',
+  ]), /ARGUMENT_INVALID/);
+  assert.throws(() => attention.parseArgs([
+    'finalize', '--packet', '2875', '--pr', '4000',
+    '--packet-activity-evidence-file', '/tmp/activity.json',
   ]), /ARGUMENT_INVALID/);
 });
 
@@ -327,6 +335,41 @@ test('clean inspect composes continuation then merge admission into zero-attenti
   assert.equal(projected.attentionCount, 0);
   assert.equal(projected.shown, 0);
   assert.equal(projected.truncated, false);
+});
+
+test('inspect forwards normalized packet activity evidence only to merge admission child', async () => {
+  const evidence = realMerge.normalizePacketActivityEvidenceSet({
+    schemaVersion: 1,
+    mode: realMerge.PACKET_ACTIVITY_EVIDENCE_MODE,
+    requesterRef: '#' + PACKET,
+    candidates: [{
+      candidateRef: '#9999',
+      evidence: {
+        schemaVersion: 1,
+        mode: 'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE',
+        candidateRef: '#9999',
+        requesterRef: '#' + PACKET,
+        relationship: 'PARENT_WAITING_ON_SUCCESSOR',
+        repositoryMutationActive: false,
+        activeLease: false,
+        overlappingOpenPr: false,
+        sequencingExplicit: true,
+        sourceRefs: ['#9999', '#' + PACKET],
+      },
+    }],
+  }, PACKET);
+  let observed = null;
+  const {deps} = fixtureDeps({onMergeInspect: (args) => {
+    observed = args.packetActivityEvidence;
+  }});
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+    packetActivityEvidence: evidence,
+    deps,
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.deepEqual(observed, evidence);
 });
 
 test('path-only canonical-main packet blocks finalization routing before merge', async () => {

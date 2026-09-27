@@ -41,6 +41,47 @@ function packetBody(paths = PATHS, state = 'IN_PROGRESS', stage = 'VALIDATION_ME
     '- Current stage: ' + TICK + stage + TICK,
   ].join('\n');
 }
+function packetActivityEvidenceSet({
+  candidateRef = '#9901',
+  requesterRef = '#' + PACKET,
+  relationship = 'PARENT_WAITING_ON_SUCCESSOR',
+  evidenceOverrides = {},
+} = {}) {
+  return {
+    schemaVersion: 1,
+    mode: owner.PACKET_ACTIVITY_EVIDENCE_MODE,
+    requesterRef,
+    candidates: [{
+      candidateRef,
+      evidence: {
+        schemaVersion: 1,
+        mode: 'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE',
+        candidateRef,
+        requesterRef,
+        relationship,
+        repositoryMutationActive: false,
+        activeLease: false,
+        overlappingOpenPr: false,
+        sequencingExplicit: true,
+        sourceRefs: [candidateRef, requesterRef],
+        ...evidenceOverrides,
+      },
+    }],
+  };
+}
+function overlappingPacket(number = 9901) {
+  return {
+    number,
+    state: 'open',
+    body: [
+      '<!-- canonical-main-work-packet:v1 -->',
+      '## State',
+      TICK + 'IN_PROGRESS' + TICK,
+      '## Bounded write scope',
+      '1. ' + TICK + 'path:' + PATHS[0] + TICK,
+    ].join('\n'),
+  };
+}
 
 function opsBody(main = BASE, overrides = {}) {
   const state = overrides.state || 'CLEAR';
@@ -275,12 +316,32 @@ function fixtureClient(options = {}) {
   };
   return client;
 }
+function fixtureClientWithOverlap({packets = [], otherPrFiles = ['docs/unrelated.md']} = {}) {
+  const client = fixtureClient();
+  const originalApi = client.api.bind(client);
+  client.api = async (endpoint) => {
+    if (endpoint.startsWith('/issues?state=open&per_page=100&page=')) {
+      const page = Number(new URL('https://x' + endpoint).searchParams.get('page'));
+      return page === 1
+        ? [{number: PACKET, state: 'open', body: packetBody()}, ...packets]
+        : [];
+    }
+    if (endpoint.startsWith('/pulls/9902/files?')) {
+      return otherPrFiles.map((filename) => ({filename}));
+    }
+    return originalApi(endpoint);
+  };
+  return client;
+}
 
 test('CLI exposes only inspect/finalize and bounded fixed arguments', () => {
-  assert.equal(owner.parseArgs([
+  const inspectArgs = owner.parseArgs([
     'inspect', '--packet', '#2586', '--pr', '3000',
     '--implementation-receipt-file', '/tmp/receipt.json',
-  ]).command, 'inspect');
+    '--packet-activity-evidence-file', '/tmp/activity.json',
+  ]);
+  assert.equal(inspectArgs.command, 'inspect');
+  assert.equal(inspectArgs.packetActivityEvidenceFile, '/tmp/activity.json');
   assert.equal(owner.parseArgs(['finalize', '--packet', '2586', '--pr', '3000']).command,
     'finalize');
   assert.throws(() => owner.parseArgs([
@@ -827,6 +888,21 @@ test('fresh overlap blocks competing writer', async () => {
   assert.ok(result.receipt.reasonCodes.includes('OVERLAP_PRESENT'));
 });
 
+test('exact packet activity evidence can prove one overlapping parent nonblocking', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({packets: [overlappingPacket()]}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+    packetActivityEvidence: packetActivityEvidenceSet(),
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.deepEqual(result.report.packetActivityEvidenceCandidateRefs, ['#9901']);
+  assert.equal(result.report.packetActivityDecisions.length, 1);
+  assert.equal(result.report.packetActivityDecisions[0].state, 'NONBLOCKING_PROVEN');
+  assert.equal(result.report.output.overlap, 'DISJOINT');
+});
+
 test('late competing packet is caught by final overlap barrier', async () => {
   const latePacket = {
     number: 9903,
@@ -850,6 +926,79 @@ test('late competing packet is caught by final overlap barrier', async () => {
   assert.ok(result.receipt.steps.some((row) => (
     row.name === 'final-overlap-currentness' && row.result === 'BLOCKED'
   )));
+});
+
+test('packet activity evidence requester mismatch fails closed', () => {
+  assert.throws(
+    () => owner.normalizePacketActivityEvidenceSet(
+      packetActivityEvidenceSet({requesterRef: '#9999'}), PACKET),
+    /PACKET_ACTIVITY_EVIDENCE_REQUESTER_CONFLICT/,
+  );
+});
+
+test('packet activity evidence for a non-current candidate is conflict', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({packets: [overlappingPacket()]}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+    packetActivityEvidence: packetActivityEvidenceSet({candidateRef: '#9999'}),
+  });
+  assert.equal(result.receipt.result, 'CONFLICT');
+  assert.ok(result.receipt.reasonCodes.includes('PACKET_ACTIVITY_EVIDENCE_CANDIDATE_NOT_CURRENT'));
+});
+
+test('mutation-active packet evidence remains blocking', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({packets: [overlappingPacket()]}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+    packetActivityEvidence: packetActivityEvidenceSet({
+      evidenceOverrides: {repositoryMutationActive: true},
+    }),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('OVERLAP_PRESENT'));
+});
+
+test('unsupported packet relationship stays unknown', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({packets: [overlappingPacket()]}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+    packetActivityEvidence: packetActivityEvidenceSet({relationship: 'UNREVIEWED_RELATION'}),
+  });
+  assert.equal(result.receipt.result, 'UNKNOWN');
+  assert.ok(result.receipt.reasonCodes.includes('OVERLAP_UNKNOWN'));
+});
+
+test('one proven packet cannot suppress another unproven overlapping packet', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({packets: [overlappingPacket(), overlappingPacket(9903)]}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+    packetActivityEvidence: packetActivityEvidenceSet(),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('OVERLAP_PRESENT'));
+});
+
+test('packet activity evidence cannot suppress an overlapping open PR', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({
+      packets: [overlappingPacket()],
+      otherPrFiles: [PATHS[0]],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+    packetActivityEvidence: packetActivityEvidenceSet(),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('OVERLAP_PRESENT'));
 });
 
 test('late main movement is preserved as UNKNOWN', async () => {

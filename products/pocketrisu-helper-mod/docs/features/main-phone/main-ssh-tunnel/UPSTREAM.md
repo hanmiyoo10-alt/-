@@ -71,3 +71,30 @@ Keep the existing runit-owned SSH tunnel behavior and its narrow supervisor guar
 - root cause of central `runsvdir` death and initiating cause of the historical guard-owner loss both remain `UNKNOWN`.
 - follow-up state: `MERGED / DEPLOYED / LIVE-PROVEN`.
 - no further deployment is pending for #2786; future shared-runsvdir diagnosis remains a separate owner.
+
+## 2026-09-27 liveness follow-up candidate
+
+Packet #3043 owns one additional main-ssh-tunnel hardening slice after the guard↔anchor work completed.
+
+Motivation:
+- natural M link loss/handoff evidence produced a ~16-second flap and a later ~99-second flap;
+- the later stale SSH child exited after roughly 89 seconds;
+- deployed OpenSSH liveness was 30 × 3, consistent with an approximately 90-second no-response window;
+- server PocketRisu/sshd and the M Tailscale daemon remained alive.
+
+Minimal source scope:
+- materialize the fixed runit service run contract as files/pocketrisu-ssh-tunnel.run;
+- keep private user@host material device-local in one fixed file;
+- preserve BatchMode, strict host-key checking, forward-failure handling, connect timeout, fixed port and the four fixed localhost forwards;
+- change only SSH keepalive liveness to 15 × 3 (~45 seconds);
+- add one static contract test.
+
+Explicitly excluded:
+- Android/network root-cause claims;
+- Wi-Fi/mobile-data reset or switching;
+- Tailscale/RDC/health-triggered SSH restarts;
+- broad watchdog or service-daemon changes;
+- guard↔anchor semantic changes;
+- server PocketRisu/sshd changes.
+
+PR/deployment status: implementation candidate under #3043; not yet merged or deployed.

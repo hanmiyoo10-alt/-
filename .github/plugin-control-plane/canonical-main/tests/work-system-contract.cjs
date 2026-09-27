@@ -249,6 +249,61 @@ assert.deepEqual(policy.stagedInteraction.stages, [
   'EXPERIMENT_CLOSE',
 ]);
 assert.equal(policy.stagedInteraction.ordinaryContinuationMaxSubstantialStages, 1);
+assert.deepEqual(policy.stagedInteraction.prefixStageContinuation, {
+  version: 1,
+  fromStage: 'AUTHORITY_SCOPE',
+  toStage: 'IMPLEMENTATION_PR',
+  conditionalWithinSameUserContinuation: true,
+  requiresSourceStageDurableCompletion: true,
+  requiresSamePacket: true,
+  requiresSamePrimaryGoal: true,
+  requiresSameDeclaredScope: true,
+  requiresSameSemanticEffectSurface: true,
+  requiresSameOwnerIdentity: true,
+  requiresCompleteNoncompetingOverlapProof: true,
+  requiresRequiredEvidenceClear: true,
+  requiresPacketAuthoringPreflightPass: true,
+  requiresDeterministicImplementationRoute: true,
+  requiresExistingAuthority: true,
+  requiresNoAdditionalDesignChoice: true,
+  requiresNoUserInput: true,
+  requiresNoOwnerApproval: true,
+  forbiddenEffectDomains: ['MERGE', 'RELEASE', 'PRODUCTION', 'RUNTIME', 'DEVICE', 'SECURITY'],
+  separateStageReceiptsRequired: true,
+  separateStageCheckpointsRequired: true,
+  stopConditions: [
+    'SOURCE_STAGE_NOT_DURABLE',
+    'IDENTITY_SCOPE_SURFACE_OR_OWNER_DRIFT',
+    'OVERLAP_NOT_PROVEN_NONCOMPETING',
+    'REQUIRED_EVIDENCE_UNRESOLVED',
+    'PACKET_PREFLIGHT_NOT_PASS',
+    'IMPLEMENTATION_ROUTE_NONDETERMINISTIC',
+    'AUTHORITY_INSUFFICIENT',
+    'DESIGN_CHOICE_REQUIRED',
+    'USER_INPUT_REQUIRED',
+    'OWNER_APPROVAL_REQUIRED',
+    'FORBIDDEN_EFFECT_DOMAIN_REQUIRED',
+  ],
+  stopAfterStage: 'IMPLEMENTATION_PR',
+  autoEnterValidationMerge: false,
+  noNewEffectAuthority: true,
+});
+assert.deepEqual(policy.stagedInteraction.implementationValidationBoundary, {
+  version: 1,
+  fromStage: 'IMPLEMENTATION_PR',
+  toStage: 'VALIDATION_MERGE',
+  preservedByDefault: true,
+  defaultWithinOneUserContinuation: false,
+  protectedMainMutationBoundary: true,
+  reasonCode: 'CANDIDATE_TO_PROTECTED_MAIN_MUTATION_BOUNDARY',
+  requiresFreshExactHeadCi: true,
+  requiresFreshReviewState: true,
+  requiresFreshCurrentness: true,
+  requiresFreshOverlapAdmission: true,
+  requiresFreshMergeAdmission: true,
+  explicitUserBroaderRunStillAllowed: true,
+  noMergeAuthorityGranted: true,
+});
 assert.deepEqual(policy.stagedInteraction.coupledStageContinuation, {
   version: 1,
   fromStage: 'VALIDATION_MERGE',
@@ -495,7 +550,7 @@ assert.match(template, /Discovering that an advertised earlier stage is already 
 assert.match(template, /reconverge only the stale or incomplete suffix/);
 assert.match(template, /Required immediate effect readback, current-stage validation, idempotence\/CAS confirmation, evidence publication, and required current-packet self close-sync may remain one stage-local transaction closure/);
 assert.match(template, /Those stage-local rules never authorize entry into the next declared substantial stage/);
-assert.match(template, /cross-stage entry is limited to the named validation\/postmerge and conditional terminal-suffix pacing specializations above/);
+assert.match(template, /cross-stage entry is limited to the conditional authority\/implementation, named validation\/postmerge, and conditional terminal-suffix pacing specializations above/);
 assert.match(template, /retry-until-PASS is forbidden/);
 assert.match(template, /exact equality of writable path\/prefix set, semantic\/effect surface set, primary goal, and effect owner/);
 assert.match(template, /unresolved `BLOCKED \/ UNKNOWN \/ CONFLICT` stops the continuation/);
@@ -518,6 +573,19 @@ for (const disposition of [...intraStage.continueDispositions, ...intraStage.sto
 }
 assert.match(sharedInteraction, /These dispositions describe interaction pacing only/);
 assert.match(sharedInteraction, /Existing effect\/recovery owners and every existing authority\/gate remain unchanged/);
+assert.match(sharedInteraction, /### Conditional authority\/implementation continuation/);
+assert.match(sharedInteraction, /AUTHORITY_SCOPE.*IMPLEMENTATION_PR/s);
+assert.match(sharedInteraction, /overlap discovery is complete and noncompeting/);
+assert.match(sharedInteraction, /packet authoring preflight passes/);
+assert.match(sharedInteraction, /implementation route is deterministic/);
+assert.match(sharedInteraction, /no additional design choice, user input, or owner approval is required/);
+assert.match(sharedInteraction, /source\/branch\/commit\/push\/non-closing-PR pacing only/);
+assert.match(sharedInteraction, /never auto-enters .*VALIDATION_MERGE/);
+assert.match(sharedInteraction, /### Preserved implementation\/validation boundary/);
+assert.match(sharedInteraction, /IMPLEMENTATION_PR.*VALIDATION_MERGE/s);
+assert.match(sharedInteraction, /protected-main mutation/);
+assert.match(sharedInteraction, /fresh exact-head CI, review state, currentness, overlap admission, and merge admission/);
+assert.match(sharedInteraction, /prefix specialization itself never supplies that broader authorization and grants no merge authority/);
 assert.match(sharedInteraction, /### Coupled validation\/postmerge continuation/);
 assert.match(sharedInteraction, /coupled execution with separate proof/);
 assert.match(sharedInteraction, /ordinary numeric budget remains one substantial stage/);
@@ -536,6 +604,13 @@ assert.match(sharedInteraction, /never infers .*LIVE_PROVEN/);
 assert.match(sharedInteraction, /terminal packet-body reconciliation must complete before native issue closure/);
 assert.match(sharedInteraction, /same user continuation may immediately begin terminal-only .*EXPERIMENT_CLOSE/);
 assert.match(sharedInteraction, /does not make the validation\/postmerge coupling itself auto-enter the experiment stage/);
+assert.match(template, /conditional prefix fast path/);
+assert.match(template, /AUTHORITY_SCOPE.*IMPLEMENTATION_PR/s);
+assert.match(template, /separate A\/I receipts\/checkpoints/);
+assert.match(template, /never auto-enter .*VALIDATION_MERGE/);
+assert.match(template, /IMPLEMENTATION_PR.*VALIDATION_MERGE.*boundary remains preserved by default/s);
+assert.match(template, /Fresh exact-head CI, review state, currentness, overlap admission, and merge admission remain independently required/);
+assert.match(template, /A→I fast path itself grants no merge authority/);
 assert.match(template, /Canonical-main has one named cross-stage pacing specialization/);
 assert.match(template, /ordinary numeric budget remains .*1 substantial stage/);
 assert.match(template, /separate receipts\/checkpoints and failure semantics/);

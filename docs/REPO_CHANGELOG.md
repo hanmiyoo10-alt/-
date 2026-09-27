@@ -2141,3 +2141,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/833da66ebea2617d7e0619be02be682235240ef9)
 - Event ID: `11d94ec2feaeccd84901c728eeb15cafb60b67a693146829682e5db6902b4638`
 <!-- canonical-main-doc-promoted:11d94ec2feaeccd84901c728eeb15cafb60b67a693146829682e5db6902b4638 -->
+
+### 2026-09-27 — Merge pull request #3040 from hanmiyoo10-alt/packet/3039-authority-implementation-coupling
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `5ff1e48d670a83c4c6897f65822597d781ec69d6`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/5ff1e48d670a83c4c6897f65822597d781ec69d6)
+- Event ID: `3faf0f0247a3d2a2036659a861496575af24f6d44272937bb000a8b21106508d`
+<!-- canonical-main-doc-promoted:3faf0f0247a3d2a2036659a861496575af24f6d44272937bb000a8b21106508d -->

@@ -93,12 +93,21 @@ function normalizeAuthorityRefs(value, reasons, unknowns, conflicts, {allowLegac
     if (kind === 'GIT_REF' || kind === 'COMMIT') {
       if (identity && !/^[0-9a-f]{40}$/i.test(identity)) reasons.push(`INPUT_AUTHORITY_SHA_INVALID:${field}`);
     }
-    if (kind === 'PR' && !allowLegacyPrAuthority) {
-      if (locator && !/^pr:#[1-9][0-9]*$/.test(locator)) {
-        reasons.push(`INPUT_AUTHORITY_PR_LOCATOR_INVALID:${field}`);
-      }
-      if (identity && !/^[0-9a-f]{40}$/i.test(identity)) {
-        reasons.push(`INPUT_AUTHORITY_PR_IDENTITY_INVALID:${field}`);
+    if (kind === 'PR') {
+      const canonicalLocator = Boolean(locator && /^pr:#[1-9][0-9]*$/.test(locator));
+      const canonicalIdentity = Boolean(identity && /^[0-9a-f]{40}$/i.test(identity));
+      const legacyLocator = Boolean(locator && /^#[1-9][0-9]*$/.test(locator));
+      const legacyIdentity = Boolean(identity && /^head:[0-9a-f]{40}$/i.test(identity));
+      const canonicalShape = canonicalLocator && canonicalIdentity;
+      const legacyShape = allowLegacyPrAuthority && legacyLocator && legacyIdentity;
+      if (!canonicalShape && !legacyShape) {
+        const locatorAccepted = canonicalLocator || (allowLegacyPrAuthority && legacyLocator);
+        const identityAccepted = canonicalIdentity || (allowLegacyPrAuthority && legacyIdentity);
+        if (!locatorAccepted) reasons.push(`INPUT_AUTHORITY_PR_LOCATOR_INVALID:${field}`);
+        if (!identityAccepted) reasons.push(`INPUT_AUTHORITY_PR_IDENTITY_INVALID:${field}`);
+        if (locatorAccepted && identityAccepted) {
+          reasons.push(`INPUT_AUTHORITY_PR_SHAPE_INVALID:${field}`);
+        }
       }
     }
     if (!kind || !locator) continue;

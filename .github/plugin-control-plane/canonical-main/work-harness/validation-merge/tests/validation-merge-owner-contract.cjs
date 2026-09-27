@@ -10,6 +10,7 @@ const test = require('node:test');
 const ROOT = path.resolve(__dirname, '../../../../../..');
 const owner = require('../validation-merge-owner.cjs');
 const stageReceipt = require('../../stage-receipt.cjs');
+const {stableHash} = require('../../handoff.cjs');
 const agentView = require('../../agent-decision-view.cjs');
 const scopeOverlap = require('../../../work-system/scope-overlap.cjs');
 
@@ -434,8 +435,17 @@ test('legacy PR authority shape cannot cross the producer/validation boundary', 
       ? {...row, locator: '#' + PR, identity: 'head:' + HEAD}
       : row
   ));
+  const {receiptDigest: _legacyDigest, ...legacyHistoricalDraft} = legacyHistoricalShape;
+  legacyHistoricalShape.receiptDigest = stableHash(legacyHistoricalDraft);
+  const legacyHistoricalText = stageReceipt.renderStageReceipt(legacyHistoricalShape);
+  const legacyHistoricalParsed = stageReceipt.parseRenderedStageReceipt(legacyHistoricalText);
+  assert.equal(legacyHistoricalParsed.status, 'VALID');
+  assert.equal(
+    legacyHistoricalParsed.value.authorityRefs.find((row) => row.kind === 'PR').locator,
+    '#' + PR,
+  );
   assert.throws(
-    () => owner.validateImplementationReceipt(legacyHistoricalShape, PACKET, PR),
+    () => owner.validateImplementationReceipt(legacyHistoricalParsed.value, PACKET, PR),
     /IMPLEMENTATION_STAGE_RECEIPT_IDENTITY_CONFLICT/,
   );
 });

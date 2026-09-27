@@ -17,6 +17,7 @@ const {
 } = require('../stage-receipt.cjs');
 const validationStageReceiptSet = require(
   '../validation-finalization/validation-stage-receipt-set.cjs');
+const {stableHash} = require('../handoff.cjs');
 
 const MAIN = '3e9e1138f7ef7e886e17ebeadce727bd2ea2c66f';
 const DIFF = 'a'.repeat(64);
@@ -114,6 +115,16 @@ legacyPrIdentityInput.authorityRefs.push({
 const legacyPrIdentityResult = projectStageReceipt(legacyPrIdentityInput);
 assert.equal(legacyPrIdentityResult.status, 'INVALID');
 assert.ok(legacyPrIdentityResult.reasonCodes.includes(
+  'INPUT_AUTHORITY_PR_IDENTITY_INVALID:authorityRefs[2]'));
+
+const missingPrIdentityInput = fixture();
+missingPrIdentityInput.authorityRefs.push({
+  kind: 'PR',
+  locator: 'pr:#2816',
+});
+const missingPrIdentityResult = projectStageReceipt(missingPrIdentityInput);
+assert.equal(missingPrIdentityResult.status, 'INVALID');
+assert.ok(missingPrIdentityResult.reasonCodes.includes(
   'INPUT_AUTHORITY_PR_IDENTITY_INVALID:authorityRefs[2]'));
 
 const reordered = fixture();
@@ -221,6 +232,16 @@ assert.deepEqual(
     status: 'KNOWN',
   },
 );
+
+const mixedHistoricalShape = structuredClone(historical2812Parsed.value);
+mixedHistoricalShape.authorityRefs = mixedHistoricalShape.authorityRefs.map((row) => (
+  row.kind === 'PR' ? {...row, locator: 'pr:#2816'} : row
+));
+const {receiptDigest: _mixedDigest, ...mixedHistoricalDraft} = mixedHistoricalShape;
+mixedHistoricalShape.receiptDigest = stableHash(mixedHistoricalDraft);
+const mixedHistoricalParsed = parseRenderedStageReceipt(renderStageReceipt(mixedHistoricalShape));
+assert.equal(mixedHistoricalParsed.status, 'UNKNOWN');
+assert.ok(mixedHistoricalParsed.reasonCodes.includes('STAGE_RECEIPT_FORMAT_INVALID'));
 
 assert.equal(parseRenderedStageReceipt('no canonical block').status, 'UNKNOWN');
 const duplicateRendered = rendered + '\n' + rendered;

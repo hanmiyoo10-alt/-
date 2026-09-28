@@ -151,3 +151,19 @@ Interpretation:
 - output spelling still uses `programing` instead of the PDF's `programming`.
 
 Exercise 1 remains `PARTIAL / CONTROL-FLOW ORDERING REMAINS`.
+
+
+## Live Exercise 1 verification — 2026-09-28 16:24 KST
+
+Latest Colab save was re-read.
+
+Verified current structure:
+- the combined 3-and-5 condition is checked first;
+- the single-divisor cases are now chained with `elif`;
+- the final fallback is a single `else`;
+- input 15 produces only one line, confirming the duplicate-output control-flow bug is fixed.
+
+Remaining source-exact issue:
+- output text still uses `programing` instead of the PDF's `programming` in both the 5-only and combined branches.
+
+Exercise 1 state: `LOGIC COMPLETE / OUTPUT SPELLING FIX REMAINS`.

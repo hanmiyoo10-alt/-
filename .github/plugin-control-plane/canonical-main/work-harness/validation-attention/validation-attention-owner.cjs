@@ -7,7 +7,10 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '../../../../..');
 const MAX_INPUT_BYTES = 16 * 1024;
 const MAX_REPORT_BYTES = 32 * 1024;
-const REPO_PREFIX = '.github/plugin-control-plane/canonical-main/';
+const REPO_NEUTRAL_PATH_PREFIXES = Object.freeze([
+  '.github/plugin-control-plane/canonical-main/',
+  'tools/repo-env/',
+]);
 const EXTERNAL_FINALIZATION_GATE = 'validation-finalization-external-owner-reviewed';
 
 const continuation = require('../validation-continuation/validation-continuation-owner.cjs');
@@ -286,11 +289,8 @@ function exactPassGate(receipt, name) {
 }
 function finalizationAdmission({implementation, continuationResult, mergeResult}) {
   const report = mergeResult?.report || {};
-  const paths = Array.isArray(report.paths) ? report.paths : [];
   const priorCoordination = continuationResult?.report?.output?.priorCoordination;
-  const canonicalMainPaths = paths.length > 0
-    && paths.every((repoPath) => String(repoPath).startsWith(REPO_PREFIX));
-  if (priorCoordination !== 'NOT_APPLICABLE' || !canonicalMainPaths) {
+  if (priorCoordination !== 'NOT_APPLICABLE') {
     return {result: 'PASS', route: 'UNCHANGED'};
   }
   if (repoNeutralPacket(report)) return {result: 'PASS', route: 'REPO_NEUTRAL'};
@@ -597,7 +597,8 @@ function repoNeutralPacket(packet) {
   const paths = packet?.paths || [];
   const surfaces = scopes.filter((row) => row.startsWith('surface:'));
   return paths.length > 0
-    && paths.every((repoPath) => repoPath.startsWith(REPO_PREFIX))
+    && paths.every((repoPath) => REPO_NEUTRAL_PATH_PREFIXES.some(
+      (prefix) => String(repoPath).startsWith(prefix)))
     && surfaces.length > 0
     && surfaces.every((row) => row.startsWith('surface:repo:'));
 }

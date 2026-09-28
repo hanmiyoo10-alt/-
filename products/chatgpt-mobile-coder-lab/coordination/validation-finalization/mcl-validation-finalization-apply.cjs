@@ -47,6 +47,29 @@ const TARGET_2786 = Object.freeze({
     'implementation-d013-release',
   ]),
 });
+const TARGET_3043 = Object.freeze({
+  packet: 3043,
+  packetRef: '#3043',
+  pr: 3046,
+  candidate: 'a2c0e07b591d501c1142e160e035f470e8eee99b',
+  merge: 'c12f904cf8c322c3431e4689e85554e645df77be',
+  workspaceManifestId: '7e48be16b513b7ec9404171573c1f4199e40a00766f62a02eff221997e5e7d4a',
+  workspaceManifestPhaseId: '3043-validation-merge-currentization-r2',
+  workspaceLeaseId: '5558a606390eb906bac9ad4aa410fca461b5d223d68585edb56ce9488966f6c4',
+  workspaceAcquiredGeneration: 592,
+  workspaceBranch: 'server/mcl-packet-3043',
+  workspaceWorktree: '/root/nyang-worktrees/mcl-packet-3043',
+  implementationReceiptDigest:
+    '705334f84db38572a6ef5e63097c695605b15e347da90cd5c354090e0d3a8da2',
+  requiredCoordinationGates: Object.freeze([
+    'd013-release',
+    'd014-completion',
+    'currentization-coordination-released',
+    'currentization-d014-complete',
+    'currentization-scope-and-blob-preservation',
+    'currentization-replay-safe',
+  ]),
+});
 const EXPECTED_EFFECTS_2786 = Object.freeze([
   'CANONICAL_VALIDATION_MERGE_RECEIPT',
 ]);
@@ -58,6 +81,11 @@ const PROFILES = Object.freeze({
   }),
   '#2786': Object.freeze({
     target: TARGET_2786,
+    mode: 'IMPLEMENTATION_COORDINATION',
+    expectedEffects: EXPECTED_EFFECTS_2786,
+  }),
+  '#3043': Object.freeze({
+    target: TARGET_3043,
     mode: 'IMPLEMENTATION_COORDINATION',
     expectedEffects: EXPECTED_EFFECTS_2786,
   }),
@@ -503,8 +531,11 @@ function validationStageState2786(stageRows, implReceipt, pr, target = TARGET_27
   return {status: 'PASS', receipt, receiptSetStatus: selected.set.status};
 }
 function create2786LiveContext(packetRef, deps = {}) {
-  const target = TARGET_2786;
-  if (packetRef !== target.packetRef) fail('BLOCKED', 'PACKET_NOT_2786_TARGET');
+  const profile = profileFor(packetRef);
+  if (profile.mode !== 'IMPLEMENTATION_COORDINATION') {
+    fail('BLOCKED', 'PACKET_NOT_IMPLEMENTATION_COORDINATION_TARGET');
+  }
+  const target = profile.target;
   const runner = deps.runner || defaultRunner;
   const spawn = deps.spawn || childProcess.spawnSync;
   const issue = readIssue(target.packet, runner);
@@ -868,7 +899,7 @@ function build2786ValidationStageText(ctx) {
       {name: 'holder-absent', result: 'PASS',
         evidenceLocator: 'receipt:mcl-workspace-holder:absent'},
       {name: 'workspace-clean', result: 'PASS',
-        evidenceLocator: 'receipt:mcl-workspace-clean:#2786'},
+        evidenceLocator: 'receipt:mcl-workspace-clean:' + target.packetRef},
     ],
     scope: {
       paths: ctx.implReceipt.scope.paths,
@@ -1062,6 +1093,11 @@ function apply2463Packet(packetRef, deps = {}) {
 }
 
 function inspect2786Packet(packetRef, deps = {}) {
+  const profile = profileFor(packetRef);
+  if (profile.mode !== 'IMPLEMENTATION_COORDINATION') {
+    fail('BLOCKED', 'PACKET_NOT_IMPLEMENTATION_COORDINATION_TARGET');
+  }
+  const target = profile.target;
   const createContext = deps.createContext || create2786LiveContext;
   const readState = deps.readState || read2786MutableState;
   const ctx = createContext(packetRef, deps);
@@ -1074,9 +1110,14 @@ function inspect2786Packet(packetRef, deps = {}) {
       d014Published: 0,
       stageReceiptPublished: 0,
     },
-  }, [], TARGET_2786.packetRef);
+  }, [], target.packetRef);
 }
 function apply2786Packet(packetRef, deps = {}) {
+  const profile = profileFor(packetRef);
+  if (profile.mode !== 'IMPLEMENTATION_COORDINATION') {
+    fail('BLOCKED', 'PACKET_NOT_IMPLEMENTATION_COORDINATION_TARGET');
+  }
+  const target = profile.target;
   const createContext = deps.createContext || create2786LiveContext;
   const readState = deps.readState || read2786MutableState;
   const publishExact = deps.publishExact || ((packet, body, ctx) =>
@@ -1104,7 +1145,7 @@ function apply2786Packet(packetRef, deps = {}) {
       result: 'PASS',
       effects,
       nextLegalAction: 'POSTMERGE_CONVERGENCE',
-    }, [], TARGET_2786.packetRef);
+    }, [], target.packetRef);
   }
 
   if (!effectPair2786Exact(pre)) {
@@ -1121,7 +1162,7 @@ function apply2786Packet(packetRef, deps = {}) {
 
   if (state.validationStage.status === 'ABSENT') {
     const built = makeStage(ctx, state, deps);
-    const posted = publishExact(TARGET_2786.packet, built.text, ctx, deps);
+    const posted = publishExact(target.packet, built.text, ctx, deps);
     effects.stageReceiptPublished += posted.written || 0;
     state = readState(ctx, deps);
   }
@@ -1147,7 +1188,7 @@ function apply2786Packet(packetRef, deps = {}) {
     result: post.result,
     effects,
     nextLegalAction: post.nextLegalAction,
-  }, [], TARGET_2786.packetRef);
+  }, [], target.packetRef);
 }
 function inspectPacket(packetRef, deps = {}) {
   const profile = profileFor(packetRef);
@@ -1272,6 +1313,7 @@ module.exports = {
   PROFILES,
   TARGET,
   TARGET_2786,
+  TARGET_3043,
   apply2463Packet,
   apply2786Packet,
   applyPacket,

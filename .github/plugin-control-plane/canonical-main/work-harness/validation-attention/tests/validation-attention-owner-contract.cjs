@@ -230,6 +230,7 @@ function fixtureDeps(options = {}) {
   const packet = options.packet || {
     bodySha256: 'e'.repeat(64),
     paths: PATHS,
+    pathScopes: PATHS.map((p) => 'path:' + p),
     scopes: [...PATHS.map((p) => 'path:' + p), 'surface:repo:validation-attention-projection'],
     evidenceLocator: 'issue:#' + PACKET,
   };
@@ -675,6 +676,94 @@ test('already merged finalize skips merge admission replay and reuses merge fina
   }
 });
 
+test('already merged wildcard packet scope contains exact implementation paths', async () => {
+  const prefix = '.github/plugin-control-plane/canonical-main/work-harness/validation-attention';
+  const packet = {
+    bodySha256: 'e'.repeat(64),
+    paths: [prefix],
+    pathScopes: ['path:' + prefix + '/**'],
+    scopes: ['path:' + prefix + '/**', 'surface:repo:validation-attention-projection'],
+    evidenceLocator: 'issue:#' + PACKET,
+  };
+  const {deps, calls} = fixtureDeps({
+    continuation: continuationResult({
+      disposition: 'ALREADY_MERGED', nextLegalAction: 'VALIDATION_MERGE_FINALIZE',
+    }),
+    packet,
+  });
+  const root = makeTempRoot();
+  try {
+    await persistAlreadyMergedInspect(root, deps);
+    const inspectEvidence = attention.readCanonicalInspectEvidence(PACKET, PR, root, deps);
+    const recovered = attention.alreadyMergedFinalizeEvidence({
+      packetNumber: PACKET, prNumber: PR, inspectEvidence, packet,
+    });
+    assert.deepEqual(recovered.report.paths, PATHS);
+    const result = await attention.finalizeComposition({
+      client: {}, packetNumber: PACKET, prNumber: PR, root, deps,
+    });
+    assert.equal(result.receipt.result, 'PASS');
+    assert.equal(calls.includes('merge.inspect'), false);
+    assert.equal(calls.includes('merge.read-inspect'), false);
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test('already merged packet scope rejects exact implementation path outside ceiling', async () => {
+  const {deps, calls} = fixtureDeps({
+    continuation: continuationResult({
+      disposition: 'ALREADY_MERGED', nextLegalAction: 'VALIDATION_MERGE_FINALIZE',
+    }),
+    packet: {
+      bodySha256: 'e'.repeat(64),
+      paths: [PATHS[0]],
+      pathScopes: ['path:' + PATHS[0]],
+      scopes: ['path:' + PATHS[0], 'surface:repo:validation-attention-projection'],
+      evidenceLocator: 'issue:#' + PACKET,
+    },
+  });
+  const root = makeTempRoot();
+  try {
+    await persistAlreadyMergedInspect(root, deps);
+    const result = await attention.finalizeComposition({
+      client: {}, packetNumber: PACKET, prNumber: PR, root, deps,
+    });
+    assert.equal(result.receipt.result, 'CONFLICT');
+    assert(result.receipt.conflicts.includes('ALREADY_MERGED_PACKET_SCOPE_CONFLICT'));
+    assert.equal(calls.includes('merge.finalize'), false);
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test('already merged packet scope rejects malformed or non-path ceilings', async () => {
+  for (const pathScopes of [['path:../escape/**'], ['surface:repo:not-a-path']]) {
+    const {deps, calls} = fixtureDeps({
+      continuation: continuationResult({
+        disposition: 'ALREADY_MERGED', nextLegalAction: 'VALIDATION_MERGE_FINALIZE',
+      }),
+      packet: {
+        bodySha256: 'e'.repeat(64), paths: PATHS, pathScopes,
+        scopes: [...pathScopes, 'surface:repo:validation-attention-projection'],
+        evidenceLocator: 'issue:#' + PACKET,
+      },
+    });
+    const root = makeTempRoot();
+    try {
+      await persistAlreadyMergedInspect(root, deps);
+      const result = await attention.finalizeComposition({
+        client: {}, packetNumber: PACKET, prNumber: PR, root, deps,
+      });
+      assert.equal(result.receipt.result, 'CONFLICT');
+      assert(result.receipt.conflicts.includes('ALREADY_MERGED_PACKET_SCOPE_CONFLICT'));
+      assert.equal(calls.includes('merge.finalize'), false);
+    } finally {
+      fs.rmSync(root, {recursive: true, force: true});
+    }
+  }
+});
+
 test('already merged product packet routes to coordination finalizer after exact merge readback', async () => {
   const {deps, calls} = fixtureDeps({
     continuation: continuationResult({
@@ -684,6 +773,7 @@ test('already merged product packet routes to coordination finalizer after exact
     packet: {
       bodySha256: 'e'.repeat(64),
       paths: PATHS,
+      pathScopes: PATHS.map((p) => 'path:' + p),
       scopes: [...PATHS.map((p) => 'path:' + p), 'surface:mcl:x'],
       evidenceLocator: 'issue:#' + PACKET,
     },
@@ -738,6 +828,7 @@ test('product/non-repo coordination cannot be relabeled NOT_APPLICABLE', async (
     packet: {
       bodySha256: 'e'.repeat(64),
       paths: ['products/chatgpt-mobile-coder-lab/x.js'],
+      pathScopes: ['path:products/chatgpt-mobile-coder-lab/x.js'],
       scopes: ['path:products/chatgpt-mobile-coder-lab/x.js', 'surface:mcl:x'],
       evidenceLocator: 'issue:#' + PACKET,
     },

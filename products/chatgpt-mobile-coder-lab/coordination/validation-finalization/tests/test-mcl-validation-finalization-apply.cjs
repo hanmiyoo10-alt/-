@@ -124,6 +124,10 @@ test('public parser accepts only inspect/apply packet+format', () => {
     owner.parseArgs(['inspect', '--packet', '#2786', '--format', 'agent-view']),
     {command: 'inspect', packetRef: '#2786', format: 'agent-view'},
   );
+  assert.deepEqual(
+    owner.parseArgs(['inspect', '--packet', '#3043', '--format', 'agent-view']),
+    {command: 'inspect', packetRef: '#3043', format: 'agent-view'},
+  );
   for (const argv of [
     ['apply', '--packet', '#1', '--format', 'json'],
     ['apply', '--packet', '#2463', '--format', 'json', '--repo', 'x/y'],
@@ -143,8 +147,8 @@ test('exact V1 effect pair is required', () => {
   assert.equal(owner.effectPairExact(decision('ALREADY_FINALIZED')), false);
 });
 
-test('compile-time profiles are exactly #2463 and #2786', () => {
-  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786']);
+test('compile-time profiles are exactly #2463, #2786 and #3043', () => {
+  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#3043']);
   assert.equal(owner.TARGET_2786.packet, 2786);
   assert.equal(owner.TARGET_2786.pr, 2878);
   assert.equal(owner.TARGET_2786.candidate,
@@ -155,6 +159,22 @@ test('compile-time profiles are exactly #2463 and #2786', () => {
     '60ecd6edd15f59ad81bcaf8bee601490c12f94734ff1111b338eaff2e5048756');
   assert.equal(owner.TARGET_2786.workspaceManifestPhaseId,
     '2786-implementation-pr-stage-entry');
+  assert.equal(owner.TARGET_3043.packet, 3043);
+  assert.equal(owner.TARGET_3043.pr, 3046);
+  assert.equal(owner.TARGET_3043.candidate,
+    'a2c0e07b591d501c1142e160e035f470e8eee99b');
+  assert.equal(owner.TARGET_3043.merge,
+    'c12f904cf8c322c3431e4689e85554e645df77be');
+  assert.equal(owner.TARGET_3043.implementationReceiptDigest,
+    '705334f84db38572a6ef5e63097c695605b15e347da90cd5c354090e0d3a8da2');
+  assert.deepEqual(owner.TARGET_3043.requiredCoordinationGates, [
+    'd013-release',
+    'd014-completion',
+    'currentization-coordination-released',
+    'currentization-d014-complete',
+    'currentization-scope-and-blob-preservation',
+    'currentization-replay-safe',
+  ]);
 });
 test('#2786 exact effect pair is stage-receipt only', () => {
   assert.equal(owner.effectPair2786Exact(decision2786('FINALIZATION_REQUIRED')), true);
@@ -267,6 +287,71 @@ test('#2786 apply publishes only canonical stage receipt', () => {
     holderCleaned: 0, d014Published: 0, stageReceiptPublished: 1,
   });
   assert.deepEqual(calls, [[2786, 'STAGE2786']]);
+});
+test('#3043 fixed profile reuses stage-receipt-only implementation coordination path', () => {
+  let phase = 0;
+  const calls = [];
+  const ctx = {
+    ...fake2786Context(),
+    target: owner.TARGET_3043,
+    packet: 3043,
+    packetRef: '#3043',
+  };
+  const result = owner.applyPacket('#3043', {
+    createContext: () => ctx,
+    readState: () => phase === 0
+      ? fake2786State()
+      : fake2786State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+    buildValidationStageText: () => ({text: 'STAGE3043'}),
+    publishExact: (packet, body) => {
+      calls.push([packet, body]);
+      phase = 1;
+      return {written: 1, reused: 0, lostAckRecovered: false};
+    },
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.packetRef, '#3043');
+  assert.deepEqual(result.effects, {
+    holderCleaned: 0, d014Published: 0, stageReceiptPublished: 1,
+  });
+  assert.deepEqual(calls, [[3043, 'STAGE3043']]);
+});
+
+test('#3043 receipt selection requires all fixed currentization coordination gates', () => {
+  const target = owner.TARGET_3043;
+  const row = {
+    comment: {id: 1},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 3043,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: target.implementationReceiptDigest,
+      authorityRefs: [
+        {kind: 'PR', locator: 'pr:#3046', identity: target.candidate},
+      ],
+      requiredGates: target.requiredCoordinationGates.map((name) => ({
+        name, result: 'PASS',
+      })),
+    },
+  };
+  assert.equal(owner.select2786ImplementationReceipt(
+    [row], {head: {sha: target.candidate}}, target), row);
+  assert.throws(() => owner.select2786ImplementationReceipt(
+    [{...row, receipt: {...row.receipt,
+      requiredGates: row.receipt.requiredGates.slice(1)}}],
+    {head: {sha: target.candidate}}, target), owner.ApplyError);
+});
+
+test('arbitrary packet remains outside reviewed finalization targets', () => {
+  assert.throws(
+    () => owner.inspectPacket('#9999', {
+      createContext: () => fake2786Context(),
+      readState: () => fake2786State(),
+    }),
+    (error) => error instanceof owner.ApplyError
+      && error.reasonCodes.includes('PACKET_NOT_REVIEWED_TARGET'),
+  );
 });
 test('#2786 already-finalized retry is zero-effect', () => {
   let writes = 0;
@@ -865,12 +950,14 @@ test('source owns only the fixed packet comment write endpoint', () => {
   assert.equal(source.includes('/merges'), false);
 });
 
-test('#2786 profile cannot synthesize a validation manifest', () => {
+test('implementation-coordination profiles cannot synthesize a validation manifest', () => {
   const source = fs.readFileSync(path.join(__dirname,
     '../mcl-validation-finalization-apply.cjs'), 'utf8');
   assert.equal(source.includes('handoff.buildManifest'), false);
   assert.equal(source.includes('buildManifest('), false);
   assert.match(source, /2786_D014_COMPLETION_MUST_BE_NOT_APPLICABLE/);
+  assert.equal(source.includes('const target = TARGET_2786;'), false);
+  assert.equal(source.includes('publishExact(TARGET_2786.packet'), false);
 });
 
 test('runCli rejects unsupported selectors before any live owner call', () => {

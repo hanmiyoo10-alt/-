@@ -239,3 +239,31 @@ Latest execution:
 - execution succeeded.
 
 Exercise 3 current state: `CALCULATION + TWO-DECIMAL OUTPUT COMPLETE / CLASSIFICATION CONDITIONS REMAIN`.
+
+
+## Live Exercise 3 classification review — 2026-09-28 16:51 KST
+
+Latest Colab save was re-read.
+
+Verified current execution:
+- weight: 95
+- height: 1.5
+- BMI: 42.22
+- output: `당신은 비만입니다.`
+- execution succeeded.
+
+Current classification source:
+- `if BMI >= 20 and BMI <= 24.9` → 정상
+- `elif BMI <= 29.9` → 과체중
+- `elif BMI >= 30` → 비만
+- `else` → 저체중
+
+Current issue:
+- because the second branch checks only `BMI <= 29.9`, any BMI below 20 also enters the 과체중 branch;
+- therefore the added `else` 저체중 branch is effectively bypassed for low BMI values.
+
+Source-boundary note:
+- the PDF explicitly lists only 20–24.9 정상, 25–29.9 과체중, and 30 이상 비만;
+- it does not explicitly provide a below-20 classification label, so `저체중` is learner-added rather than source-stated.
+
+Exercise 3 state: `PARTIAL / HIGH-BMI CASE WORKS, LOW-RANGE CONDITION NEEDS REPAIR`.

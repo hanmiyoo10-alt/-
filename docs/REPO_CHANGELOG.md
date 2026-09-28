@@ -2221,3 +2221,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/52d96718712c179509e3f99d546b8a4f8c099894)
 - Event ID: `aa557bad33603b40d7ca0d87b79be6187d75bd7e0f3bcf662a2bab8edc213dc7`
 <!-- canonical-main-doc-promoted:aa557bad33603b40d7ca0d87b79be6187d75bd7e0f3bcf662a2bab8edc213dc7 -->
+
+### 2026-09-28 — Merge pull request #3082 from hanmiyoo10-alt/server/reviewed-finalizer-admission-variant-3081
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `c8713975acdaa11faba50b67eec1e899bd072185`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c8713975acdaa11faba50b67eec1e899bd072185)
+- Event ID: `4e595537e59d87377c69a7379463760997942079726f9ba676018bf73f01b3fb`
+<!-- canonical-main-doc-promoted:4e595537e59d87377c69a7379463760997942079726f9ba676018bf73f01b3fb -->

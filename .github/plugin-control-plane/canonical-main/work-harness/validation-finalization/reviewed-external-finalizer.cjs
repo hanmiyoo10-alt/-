@@ -267,8 +267,8 @@ async function publishExactComment(client, body, runner = validationMerge.defaul
     'api', 'repos/' + REPO + '/issues/' + TARGET.packet + '/comments',
     '--method', 'POST',
     '--header', 'Accept: application/vnd.github+json',
-    '--input', '-',
-  ], {input: JSON.stringify({body})});
+    '-f', 'body=' + body,
+  ]);
   const after = (await readComments(client)).filter((row) => commentBody(row) === body);
   if (after.length > 1) fail('CONFLICT', 'EXACT_COMMENT_DUPLICATE');
   if (after.length === 1) {

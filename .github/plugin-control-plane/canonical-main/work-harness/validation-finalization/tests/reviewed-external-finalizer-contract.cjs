@@ -244,6 +244,37 @@ test('admit validates dynamic head and publishes exactly one admission marker', 
   assert.equal(owner.parseAdmission(published).conflict, false);
 });
 
+test('admit transports exact admission body through fixed runner argv', async () => {
+  const impl = implementationReceipt();
+  const comments = [];
+  let published = null;
+  const runner = function (args) {
+    assert.equal(arguments.length, 1);
+    assert.deepEqual(args.slice(0, 5), [
+      'api',
+      'repos/hanmiyoo10-alt/-/issues/' + owner.TARGET.packet + '/comments',
+      '--method', 'POST',
+      '--header',
+    ]);
+    assert.equal(args[5], 'Accept: application/vnd.github+json');
+    assert.equal(args[6], '-f');
+    assert.match(args[7], /^body=<!-- canonical-main-reviewed-external-finalizer-admission:v1 digest=/);
+    published = args[7].slice('body='.length);
+    comments.push({body: published});
+    return {code: 0, stdout: '{}', stderr: ''};
+  };
+  const result = await owner.admit({
+    client: baseClient({comments}),
+    implementationReceipt: impl,
+    runner,
+    deps: {attentionResult: attentionResult()},
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.effects.admissionComments, 1);
+  assert.equal(comments.length, 1);
+  assert.equal(owner.parseAdmission(published).conflict, false);
+});
+
 test('absent validation receipt projects receipt-only finalization', () => {
   const impl = implementationReceipt();
   const {payload} = admissionText(impl);

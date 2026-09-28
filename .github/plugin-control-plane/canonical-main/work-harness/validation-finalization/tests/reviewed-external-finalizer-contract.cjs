@@ -43,7 +43,7 @@ function packetBody() {
     'Do not modify other paths.',
   ].join('\n');
 }
-function implementationReceipt({omitGate = null} = {}) {
+function implementationReceipt({omitGate = null, candidate = CANDIDATE, main = MAIN} = {}) {
   const gates = [
     'currentization-scope-and-blob-preservation',
     'd013-release',
@@ -59,11 +59,11 @@ function implementationReceipt({omitGate = null} = {}) {
     packetNumber: owner.TARGET.packet,
     stage: 'IMPLEMENTATION_PR',
     authorityRefs: [
-      {kind: 'COMMIT', locator: 'candidate-head', identity: CANDIDATE},
-      {kind: 'GIT_REF', locator: 'refs/heads/main', identity: MAIN},
-      {kind: 'PR', locator: 'pr:#' + owner.TARGET.pr, identity: CANDIDATE},
-      {kind: 'WORKFLOW_RUN', locator: REQUIRED_RUN, identity: CANDIDATE},
-      {kind: 'WORKFLOW_RUN', locator: PLUGIN_RUN, identity: CANDIDATE},
+      {kind: 'COMMIT', locator: 'candidate-head', identity: candidate},
+      {kind: 'GIT_REF', locator: 'refs/heads/main', identity: main},
+      {kind: 'PR', locator: 'pr:#' + owner.TARGET.pr, identity: candidate},
+      {kind: 'WORKFLOW_RUN', locator: REQUIRED_RUN, identity: candidate},
+      {kind: 'WORKFLOW_RUN', locator: PLUGIN_RUN, identity: candidate},
     ],
     requiredGates: gates,
     scope: {
@@ -73,7 +73,7 @@ function implementationReceipt({omitGate = null} = {}) {
       diffEvidenceLocator: 'pr:#' + owner.TARGET.pr,
     },
     proof: [
-      {term: 'IMPLEMENTED', evidenceLocator: 'commit:' + CANDIDATE},
+      {term: 'IMPLEMENTED', evidenceLocator: 'commit:' + candidate},
       {term: 'CONTRACT_PROVEN', evidenceLocator: REQUIRED_RUN},
     ],
     requiredUnknowns: [],
@@ -130,12 +130,12 @@ function contentPath(endpoint) {
   if (!endpoint.startsWith(prefix) || query < 0) return null;
   return endpoint.slice(prefix.length, query).split('/').map(decodeURIComponent).join('/');
 }
-function baseClient({comments, merged = false}) {
+function baseClient({comments, merged = false, candidate = CANDIDATE, main = MAIN}) {
   const body = packetBody();
   return {
     api: async (endpoint) => {
-      if (endpoint === '/branches/main') return {commit: {sha: MAIN}};
-      if (endpoint === '/issues/485') return {state: 'open', body: opsBody(), pull_request: null};
+      if (endpoint === '/branches/main') return {commit: {sha: main}};
+      if (endpoint === '/issues/485') return {state: 'open', body: opsBody(main), pull_request: null};
       if (endpoint === '/issues/' + owner.TARGET.packet) {
         return {state: 'open', body, pull_request: null};
       }
@@ -148,8 +148,8 @@ function baseClient({comments, merged = false}) {
           draft: false,
           merged_at: merged ? 'fixture' : null,
           merge_commit_sha: merged ? MERGE : null,
-          head: {sha: CANDIDATE},
-          base: {sha: MAIN},
+          head: {sha: candidate},
+          base: {sha: main},
         };
       }
       const repoPath = contentPath(endpoint);
@@ -158,11 +158,11 @@ function baseClient({comments, merged = false}) {
     },
   };
 }
-function admissionText(impl) {
+function admissionText(impl, {candidate = CANDIDATE, main = MAIN} = {}) {
   const payload = owner.buildAdmissionPayload({
     packetBodySha256: digest(packetBody()),
-    currentMain: MAIN,
-    candidateHead: CANDIDATE,
+    currentMain: main,
+    candidateHead: candidate,
     implementationReceiptDigest: impl.receiptDigest,
     validationAttentionReceiptDigest: 'a'.repeat(64),
     semanticBlobs: owner.TARGET.blobs,
@@ -416,6 +416,93 @@ test('apply accepts equivalent proof-refresh variants and remains receipt-only',
   assert.equal(result.status, 'PASS');
   assert.equal(result.effects.stageReceiptComments, 1);
   assert.equal(result.nextLegalAction, 'POSTMERGE_CONVERGENCE');
+});
+
+test('historical candidate generation does not block fresh generation selection', () => {
+  const oldImpl = implementationReceipt();
+  const oldAdmission = admissionText(oldImpl);
+  const candidate = '7'.repeat(40);
+  const main = '8'.repeat(40);
+  const freshImpl = implementationReceipt({candidate, main});
+  const freshAdmission = admissionText(freshImpl, {candidate, main});
+  const comments = [{body: oldAdmission.text}, {body: freshAdmission.text}];
+  const selected = owner.selectAdmission(comments, candidate);
+  assert.equal(selected.value.candidateHead, candidate);
+  assert.equal(selected.value.currentMain, main);
+  assert.deepEqual(selected.variantDigests, [owner.parseAdmission(freshAdmission.text).digest]);
+});
+
+test('fresh candidate generation publishes once then reuses only that generation', async () => {
+  const oldImpl = implementationReceipt();
+  const oldAdmission = admissionText(oldImpl);
+  const candidate = '7'.repeat(40);
+  const main = '8'.repeat(40);
+  const freshImpl = implementationReceipt({candidate, main});
+  const comments = [{body: oldAdmission.text}];
+  let writes = 0;
+  const publishExact = async (text) => {
+    writes += 1;
+    comments.push({body: text});
+    return {written: 1};
+  };
+  const first = await owner.admit({
+    client: baseClient({comments, candidate, main}),
+    implementationReceipt: freshImpl,
+    deps: {attentionResult: attentionResult('d'.repeat(64)), publishExact},
+  });
+  assert.equal(first.status, 'PASS');
+  assert.equal(first.effects.admissionComments, 1);
+  assert.equal(writes, 1);
+  const second = await owner.admit({
+    client: baseClient({comments, candidate, main}),
+    implementationReceipt: freshImpl,
+    deps: {attentionResult: attentionResult('e'.repeat(64)), publishExact},
+  });
+  assert.equal(second.status, 'PASS');
+  assert.equal(second.effects.admissionComments, 0);
+  assert.equal(writes, 1);
+});
+
+test('apply selects only the exact merged-head admission generation', async () => {
+  const oldImpl = implementationReceipt();
+  const oldAdmission = admissionText(oldImpl);
+  const candidate = '7'.repeat(40);
+  const main = '8'.repeat(40);
+  const freshImpl = implementationReceipt({candidate, main});
+  const freshAdmission = admissionText(freshImpl, {candidate, main});
+  const comments = [
+    {body: oldAdmission.text},
+    {body: freshAdmission.text},
+    {body: stageReceipt.renderStageReceipt(freshImpl)},
+  ];
+  const publishExact = async (text) => {
+    if (!comments.some((row) => row.body === text)) {
+      comments.push({body: text});
+      return {written: 1};
+    }
+    return {written: 0, reused: 1};
+  };
+  const result = await owner.apply({
+    client: baseClient({comments, merged: true, candidate, main}),
+    deps: {publishExact},
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.effects.stageReceiptComments, 1);
+  assert.equal(result.nextLegalAction, 'POSTMERGE_CONVERGENCE');
+});
+
+test('apply fails closed when merged head has no admission generation', async () => {
+  const oldImpl = implementationReceipt();
+  const comments = [
+    {body: admissionText(oldImpl).text},
+    {body: stageReceipt.renderStageReceipt(oldImpl)},
+  ];
+  const candidate = '7'.repeat(40);
+  await assert.rejects(
+    owner.apply({client: baseClient({comments, merged: true, candidate})}),
+    (error) => error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('ADMISSION_GENERATION_MISSING'),
+  );
 });
 
 test('CLI exposes no packet or PR selector and apply requires literal flag', () => {

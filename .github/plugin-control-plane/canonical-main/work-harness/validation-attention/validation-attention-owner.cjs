@@ -7,7 +7,10 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '../../../../..');
 const MAX_INPUT_BYTES = 16 * 1024;
 const MAX_REPORT_BYTES = 32 * 1024;
-const REPO_PREFIX = '.github/plugin-control-plane/canonical-main/';
+const REPO_NEUTRAL_PATH_PREFIXES = Object.freeze([
+  '.github/plugin-control-plane/canonical-main/',
+  'tools/repo-env/',
+]);
 const EXTERNAL_FINALIZATION_GATE = 'validation-finalization-external-owner-reviewed';
 
 const continuation = require('../validation-continuation/validation-continuation-owner.cjs');
@@ -16,6 +19,7 @@ const finalization = require('../validation-finalization/validation-finalization
 const stageReceipt = require('../stage-receipt.cjs');
 const executionReceipt = require('../execution-receipt.cjs');
 const agentDecisionView = require('../agent-decision-view.cjs');
+const scopeOverlap = require('../../work-system/scope-overlap.cjs');
 const {canonicalize, stableHash} = require('../handoff.cjs');
 
 const DEFAULT_DEPS = Object.freeze({
@@ -285,11 +289,8 @@ function exactPassGate(receipt, name) {
 }
 function finalizationAdmission({implementation, continuationResult, mergeResult}) {
   const report = mergeResult?.report || {};
-  const paths = Array.isArray(report.paths) ? report.paths : [];
   const priorCoordination = continuationResult?.report?.output?.priorCoordination;
-  const canonicalMainPaths = paths.length > 0
-    && paths.every((repoPath) => String(repoPath).startsWith(REPO_PREFIX));
-  if (priorCoordination !== 'NOT_APPLICABLE' || !canonicalMainPaths) {
+  if (priorCoordination !== 'NOT_APPLICABLE') {
     return {result: 'PASS', route: 'UNCHANGED'};
   }
   if (repoNeutralPacket(report)) return {result: 'PASS', route: 'REPO_NEUTRAL'};
@@ -303,7 +304,7 @@ function finalizationAdmission({implementation, continuationResult, mergeResult}
   };
 }
 async function inspectComposition({
-  client, packetNumber, prNumber, implementationReceipt,
+  client, packetNumber, prNumber, implementationReceipt, packetActivityEvidence = null,
   root = ROOT, deps = DEFAULT_DEPS,
 }) {
   let implementation;
@@ -378,7 +379,7 @@ async function inspectComposition({
   }
 
   const mergeResult = await deps.validationMerge.inspectWithClient({
-    client, packetNumber, prNumber, implementationReceipt,
+    client, packetNumber, prNumber, implementationReceipt, packetActivityEvidence,
   });
   const mergeLocators = persistChild(
     deps.validationMerge, mergeResult, packetNumber, prNumber, root, 'inspect');
@@ -596,12 +597,24 @@ function repoNeutralPacket(packet) {
   const paths = packet?.paths || [];
   const surfaces = scopes.filter((row) => row.startsWith('surface:'));
   return paths.length > 0
-    && paths.every((repoPath) => repoPath.startsWith(REPO_PREFIX))
+    && paths.every((repoPath) => REPO_NEUTRAL_PATH_PREFIXES.some(
+      (prefix) => String(repoPath).startsWith(prefix)))
     && surfaces.length > 0
     && surfaces.every((row) => row.startsWith('surface:repo:'));
 }
 function pathScopeDigest(paths) {
   return 'sha256:' + stableHash(sorted(paths));
+}
+function implementationPathsWithinPacketScopes(packet, implementationPaths) {
+  if (!Array.isArray(packet?.pathScopes) || !packet.pathScopes.length
+      || !Array.isArray(implementationPaths) || !implementationPaths.length) return false;
+  const ceilings = packet.pathScopes.map((value) => scopeOverlap.normalizeScope(value));
+  if (ceilings.some((row) => !row.ok || row.kind !== 'path')) return false;
+  return implementationPaths.every((value) => {
+    const exact = scopeOverlap.normalizeScope('path:' + value);
+    return exact.ok && exact.kind === 'path' && exact.mode === 'exact'
+      && ceilings.some((ceiling) => scopeOverlap.scopesOverlap(ceiling, exact));
+  });
 }
 function alreadyMergedFinalizeEvidence({
   packetNumber, prNumber, inspectEvidence, packet,
@@ -619,8 +632,8 @@ function alreadyMergedFinalizeEvidence({
       'CONFLICT', ['ALREADY_MERGED_CONTINUATION_EVIDENCE_CONFLICT'], locator);
   }
   if (!packet || typeof packet.bodySha256 !== 'string'
-      || JSON.stringify(sorted(packet.paths || []))
-        !== JSON.stringify(sorted(inspectEvidence.implementation.paths))) {
+      || !implementationPathsWithinPacketScopes(
+        packet, inspectEvidence.implementation.paths)) {
     throw new ValidationAttentionError(
       'CONFLICT', ['ALREADY_MERGED_PACKET_SCOPE_CONFLICT'], 'issue:#' + packetNumber);
   }
@@ -634,7 +647,7 @@ function alreadyMergedFinalizeEvidence({
       prNumber,
       packetBodySha256: packet.bodySha256,
       expectedHead: inspectEvidence.implementation.expectedHead,
-      paths: sorted(packet.paths),
+      paths: sorted(inspectEvidence.implementation.paths),
       result: 'PASS',
       receiptDigest: inspectEvidence.receipt.receiptDigest,
       output: {pr: '#' + prNumber, merge: 'ALREADY_MERGED'},
@@ -1004,7 +1017,9 @@ function parseNumber(value, field) {
 function parseArgs(argv = process.argv.slice(2)) {
   if (!['inspect', 'finalize'].includes(argv[0])) throw new Error('COMMAND_INVALID');
   const command = argv[0];
-  const allowed = new Set(['packet', 'pr', 'implementation-receipt-file', 'format']);
+  const allowed = new Set([
+    'packet', 'pr', 'implementation-receipt-file', 'packet-activity-evidence-file', 'format',
+  ]);
   const values = {};
   for (let index = 1; index < argv.length; index += 2) {
     const token = argv[index];
@@ -1021,11 +1036,14 @@ function parseArgs(argv = process.argv.slice(2)) {
   if (command === 'inspect' && !values['implementation-receipt-file']) {
     throw new Error('IMPLEMENTATION_RECEIPT_REQUIRED');
   }
-  if (command === 'finalize' && values['implementation-receipt-file']) {
+  if (command === 'finalize'
+      && (values['implementation-receipt-file'] || values['packet-activity-evidence-file'])) {
     throw new Error('ARGUMENT_INVALID');
   }
   return {command, packetNumber, prNumber,
-    implementationReceiptFile: values['implementation-receipt-file'] || null, format};
+    implementationReceiptFile: values['implementation-receipt-file'] || null,
+    packetActivityEvidenceFile: values['packet-activity-evidence-file'] || null,
+    format};
 }
 async function runCli(argv = process.argv.slice(2), options = {}) {
   const args = parseArgs(argv);
@@ -1034,9 +1052,13 @@ async function runCli(argv = process.argv.slice(2), options = {}) {
   let result;
   if (args.command === 'inspect') {
     const implementationReceipt = readRegularJson(args.implementationReceiptFile);
+    const packetActivityEvidence = args.packetActivityEvidenceFile
+      ? deps.validationMerge.normalizePacketActivityEvidenceSet(
+        readRegularJson(args.packetActivityEvidenceFile), args.packetNumber)
+      : null;
     result = await inspectComposition({
       client, packetNumber: args.packetNumber, prNumber: args.prNumber,
-      implementationReceipt, root: options.root || ROOT, deps,
+      implementationReceipt, packetActivityEvidence, root: options.root || ROOT, deps,
     });
   } else {
     result = await finalizeComposition({

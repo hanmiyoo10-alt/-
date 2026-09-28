@@ -52,6 +52,9 @@ const VC_PROFILE = inv.validationProfileById(inv.VALIDATION_CONTINUATION_PROFILE
 const PPR_PATHS = [...inv.PUBLISHED_PROGRESS_RECOVERY_PATHS].sort();
 const PPR_SCOPES = [...inv.PUBLISHED_PROGRESS_RECOVERY_SCOPES];
 const PPR_PROFILE = inv.validationProfileById(inv.PUBLISHED_PROGRESS_RECOVERY_PROFILE);
+const VF_PATHS = [...inv.VALIDATION_FINALIZATION_PATHS].sort();
+const VF_SCOPES = [...inv.VALIDATION_FINALIZATION_SCOPES];
+const VF_PROFILE = inv.validationProfileById(inv.VALIDATION_FINALIZATION_PROFILE);
 const VALIDATION_REQUEST = {
   schema: inv.VALIDATION_REQUEST_SCHEMA,
   profile: inv.D014_VALIDATION_PROFILE,
@@ -1133,7 +1136,7 @@ test('validation request parser is strict and profile-bound', () => {
 });
 
 test('reviewed validation profile set is exact and scope-derived', () => {
-  assert.equal(inv.VALIDATION_PROFILES.length, 3);
+  assert.equal(inv.VALIDATION_PROFILES.length, 4);
   assert.equal(D014_PROFILE.contractDigest, '0b82f7b5ca8d6bc4f6b487653fd87451f2d6c3867a3a4dc87679587ea2fcf8bb');
   assert.equal(VC_PROFILE.contractDigest, '692e94f9a599e6dfbd840d404635d45f906de2c5933f0e04545d22f6ecbd550c');
   assert.equal(
@@ -1149,6 +1152,16 @@ test('reviewed validation profile set is exact and scope-derived', () => {
     inv.PUBLISHED_PROGRESS_RECOVERY_PROFILE,
   );
   assert.deepEqual(PPR_PROFILE.paths, PPR_PATHS);
+  assert.equal(
+    inv.resolveValidationProfileForScopes(VF_SCOPES).profileId,
+    inv.VALIDATION_FINALIZATION_PROFILE,
+  );
+  assert.deepEqual(VF_PROFILE.paths, VF_PATHS);
+  assert.throws(
+    () => inv.resolveValidationProfileForScopes(VF_SCOPES.slice(0, -1)),
+    (error) => error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('NO_REVIEWED_VALIDATION_PROFILE'),
+  );
   assert.throws(
     () => inv.resolveValidationProfileForScopes(SCOPES),
     (error) => error.kind === 'BLOCKED'
@@ -1266,6 +1279,40 @@ test('published-progress profile binds exact contract and fixed checks', () => {
     assert.equal(result.value.profile, inv.PUBLISHED_PROGRESS_RECOVERY_PROFILE);
     assert.equal(result.value.checks_passed, inv.PUBLISHED_PROGRESS_RECOVERY_CHECKS.length);
     assert.deepEqual(calls.map((call) => call.args), inv.PUBLISHED_PROGRESS_RECOVERY_CHECKS.map((check) => check.args));
+  } finally { fs.rmSync(dir, {recursive: true, force: true}); }
+});
+
+test('validation-finalization profile binds exact contract and fixed checks', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-profile-vf-test-'));
+  try {
+    const request = {schema: inv.VALIDATION_REQUEST_SCHEMA, profile: inv.VALIDATION_FINALIZATION_PROFILE};
+    const text = JSON.stringify(request);
+    const bytes = Buffer.from(text, 'utf8');
+    const validationPath = path.join(dir, 'validation.json');
+    fs.writeFileSync(validationPath, bytes);
+    const hash = crypto.createHash('sha256').update(bytes).digest('hex');
+    const m = manifest({scopes: [...VF_SCOPES], inputRefs: [
+      'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+      inv.PRIMITIVE_REF,
+      inv.VALIDATION_REF_PREFIX + hash,
+      inv.VALIDATION_CONTRACT_REF_PREFIX + VF_PROFILE.contractDigest,
+    ]});
+    const binding = inv.prepareValidationBinding({
+      manifest: m, request: {expected_paths: [...VF_PATHS]},
+      validationRequestText: text, validationRequestFile: validationPath,
+    });
+    assert.equal(binding.request.profile, inv.VALIDATION_FINALIZATION_PROFILE);
+    assert.equal(binding.contractDigest, VF_PROFILE.contractDigest);
+    const calls = [];
+    const result = inv.runFixedPreparedValidation({binding, manifest: m,
+      validationSpawnSyncImpl(command, args, options) {
+        calls.push({command, args, options});
+        return {status: 0, signal: null, stdout: '', stderr: ''};
+      }});
+    assert.equal(result.kind, 'PASS');
+    assert.equal(result.value.checks_passed, inv.VALIDATION_FINALIZATION_CHECKS.length);
+    assert.deepEqual(calls.map((call) => call.args),
+      inv.VALIDATION_FINALIZATION_CHECKS.map((check) => check.args));
   } finally { fs.rmSync(dir, {recursive: true, force: true}); }
 });
 
@@ -1684,7 +1731,8 @@ test('implementation adapter contract is separate from stable profile digests', 
   assert.equal(adapter.adapters.length,
     inv.D014_VALIDATION_CHECKS.length
     + inv.VALIDATION_CONTINUATION_CHECKS.length
-    + inv.PUBLISHED_PROGRESS_RECOVERY_CHECKS.length);
+    + inv.PUBLISHED_PROGRESS_RECOVERY_CHECKS.length
+    + inv.VALIDATION_FINALIZATION_CHECKS.length);
 });
 
 test('adapter binding is opt-in exact while historical manifests stay legacy', () => {

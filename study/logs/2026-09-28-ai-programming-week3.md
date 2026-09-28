@@ -167,3 +167,26 @@ Remaining source-exact issue:
 - output text still uses `programing` instead of the PDF's `programming` in both the 5-only and combined branches.
 
 Exercise 1 state: `LOGIC COMPLETE / OUTPUT SPELLING FIX REMAINS`.
+
+
+## Live Exercise 2 first verification — 2026-09-28 16:31 KST
+
+Latest Colab save was re-read.
+
+Current source:
+- `age = int(input(...))`
+- `if age <= 7` → 5000
+- `elif age <= 18` → 8000
+- `elif age <= 64` → 12000
+- `else` → 6000
+
+Current execution:
+- input: 65
+- output price: 6000
+- execution succeeded.
+
+Interpretation:
+- the branch ordering correctly partitions the PDF ranges for integer ages because each later `elif` is reached only after the earlier upper bound failed;
+- one successful 65-year-old run confirms the final branch, but boundary execution evidence for 7/8, 18/19, and 64/65 is not yet complete.
+
+Exercise 2 state: `LOGIC CORRECT / BOUNDARY EXECUTION CHECK REMAINS`.

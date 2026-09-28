@@ -282,3 +282,15 @@ Course-source rule to preserve:
 - leap year when divisible by 4 and not divisible by 100, or divisible by 400.
 
 Exercise 4 state: `PARTIAL / CENTURY EXCEPTION REMAINS`.
+
+
+## Live Exercise 4 re-check — 2026-09-28
+
+Latest Colab save was re-read.
+
+Verified current issue:
+- the second branch uses `year % 4 == 0 or year % 100 != 0`;
+- this makes 2100 classify as a leap year, even though the course rule says a century year must also be divisible by 400;
+- the phrase “divisible by 4 and not divisible by 100” must use `and`, not `or`.
+
+Exercise 4 state: `PARTIAL / BOOLEAN CONNECTOR FIX REMAINS`.

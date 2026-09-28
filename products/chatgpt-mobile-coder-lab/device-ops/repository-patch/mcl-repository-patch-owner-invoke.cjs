@@ -60,6 +60,7 @@ const MUTATION_PRIMITIVE_ID = 'REPOSITORY_PATCH_V1';
 const D014_VALIDATION_PROFILE = 'mcl:d014-completion-set:v1';
 const VALIDATION_CONTINUATION_PROFILE = 'repo:validation-continuation:v1';
 const PUBLISHED_PROGRESS_RECOVERY_PROFILE = 'repo:published-progress-recovery:v1';
+const VALIDATION_FINALIZATION_PROFILE = 'mcl:validation-finalization-owner:v1';
 const D014_COMPLETION_SET_PATHS = Object.freeze([
   'products/chatgpt-mobile-coder-lab/coordination/completion-receipt-set.cjs',
   'products/chatgpt-mobile-coder-lab/coordination/tests/test-completion-receipt-set.cjs',
@@ -80,6 +81,11 @@ const PUBLISHED_PROGRESS_RECOVERY_PATHS = Object.freeze([
   'products/chatgpt-mobile-coder-lab/coordination/published-progress-recovery/mcl-published-progress-recovery-inspect.cjs',
   'products/chatgpt-mobile-coder-lab/coordination/published-progress-recovery/tests/test-mcl-published-progress-recovery-inspect.cjs',
 ]);
+const VALIDATION_FINALIZATION_PATHS = Object.freeze([
+  'products/chatgpt-mobile-coder-lab/coordination/validation-finalization/README.md',
+  'products/chatgpt-mobile-coder-lab/coordination/validation-finalization/mcl-validation-finalization-apply.cjs',
+  'products/chatgpt-mobile-coder-lab/coordination/validation-finalization/tests/test-mcl-validation-finalization-apply.cjs',
+]);
 const D014_VALIDATION_SCOPES = Object.freeze([
   ...D014_COMPLETION_SET_PATHS.map((item) => 'path:' + item),
   'surface:mcl:d014-completion-set',
@@ -92,6 +98,10 @@ const PUBLISHED_PROGRESS_RECOVERY_SCOPES = Object.freeze([
   ...PUBLISHED_PROGRESS_RECOVERY_PATHS.map((item) => 'path:' + item),
   'surface:mcl:published-progress-recovery-inspection',
   'surface:repo:published-progress-recovery-projection',
+].sort());
+const VALIDATION_FINALIZATION_SCOPES = Object.freeze([
+  ...VALIDATION_FINALIZATION_PATHS.map((item) => 'path:' + item),
+  'surface:mcl:validation-finalization-effect',
 ].sort());
 const PREPARED_VALIDATION_TIMEOUT_MS = 120000;
 const MAX_VALIDATION_OUTPUT_BYTES = 64 * 1024;
@@ -156,6 +166,15 @@ const PUBLISHED_PROGRESS_RECOVERY_CHECKS = Object.freeze([
   Object.freeze({name: 'effect-recovery-contract', args: ['--test', 'products/chatgpt-mobile-coder-lab/coordination/effect-recovery/tests/test-effect-recovery-inspect.cjs']}),
 ]);
 
+const VALIDATION_FINALIZATION_CHECKS = Object.freeze([
+  Object.freeze({name: 'mcl-finalizer-source-syntax', args: ['--check', VALIDATION_FINALIZATION_PATHS[1]]}),
+  Object.freeze({name: 'mcl-finalizer-test-syntax', args: ['--check', VALIDATION_FINALIZATION_PATHS[2]]}),
+  Object.freeze({name: 'mcl-finalizer-contract', args: ['--test', VALIDATION_FINALIZATION_PATHS[2]]}),
+  Object.freeze({name: 'generic-validation-finalization-contract', args: ['--test', '.github/plugin-control-plane/canonical-main/work-harness/validation-finalization/tests/validation-finalization-owner-contract.cjs']}),
+  Object.freeze({name: 'stage-receipt-contract', args: ['--test', '.github/plugin-control-plane/canonical-main/work-harness/tests/stage-receipt-contract.cjs']}),
+  Object.freeze({name: 'validation-continuation-contract', args: ['--test', '.github/plugin-control-plane/canonical-main/work-harness/validation-continuation/tests/validation-continuation-owner-contract.cjs']}),
+]);
+
 function buildValidationProfile({profileId, paths, scopes, checks}) {
   const core = taskHandoff.stable({
     profileId,
@@ -195,6 +214,12 @@ const VALIDATION_PROFILES = Object.freeze([
     paths: PUBLISHED_PROGRESS_RECOVERY_PATHS,
     scopes: PUBLISHED_PROGRESS_RECOVERY_SCOPES,
     checks: PUBLISHED_PROGRESS_RECOVERY_CHECKS,
+  }),
+  buildValidationProfile({
+    profileId: VALIDATION_FINALIZATION_PROFILE,
+    paths: VALIDATION_FINALIZATION_PATHS,
+    scopes: VALIDATION_FINALIZATION_SCOPES,
+    checks: VALIDATION_FINALIZATION_CHECKS,
   }),
 ]);
 function buildImplementationValidationAdapterContract(profiles = VALIDATION_PROFILES) {
@@ -2088,16 +2113,20 @@ module.exports = {
   D014_VALIDATION_PROFILE,
   VALIDATION_CONTINUATION_PROFILE,
   PUBLISHED_PROGRESS_RECOVERY_PROFILE,
+  VALIDATION_FINALIZATION_PROFILE,
   DETACHED_CHECKPOINT_SCHEMA,
   D014_COMPLETION_SET_PATHS,
   VALIDATION_CONTINUATION_PATHS,
   PUBLISHED_PROGRESS_RECOVERY_PATHS,
+  VALIDATION_FINALIZATION_PATHS,
   D014_VALIDATION_SCOPES,
   VALIDATION_CONTINUATION_SCOPES,
   PUBLISHED_PROGRESS_RECOVERY_SCOPES,
+  VALIDATION_FINALIZATION_SCOPES,
   D014_VALIDATION_CHECKS,
   VALIDATION_CONTINUATION_CHECKS,
   PUBLISHED_PROGRESS_RECOVERY_CHECKS,
+  VALIDATION_FINALIZATION_CHECKS,
   VALIDATION_PROFILES,
   IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT,
   buildImplementationValidationAdapterContract,

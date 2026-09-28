@@ -250,13 +250,30 @@ function parseAdmission(text) {
     return {conflict: true};
   }
 }
-function selectAdmission(comments) {
+function admissionSemanticCore(value) {
+  const normalized = validateAdmissionPayload(value);
+  const core = {...normalized};
+  delete core.validationAttentionReceiptDigest;
+  return canonicalize(core);
+}
+function parsedAdmissions(comments) {
   const parsed = comments.map((row) => parseAdmission(commentBody(row))).filter(Boolean);
   if (parsed.some((row) => row.conflict)) fail('CONFLICT', 'ADMISSION_FORMAT_CONFLICT');
-  const byDigest = new Map(parsed.map((row) => [row.digest, row.value]));
-  if (byDigest.size === 0) fail('BLOCKED', 'ADMISSION_MISSING');
-  if (byDigest.size !== 1 || parsed.length !== 1) fail('CONFLICT', 'ADMISSION_MULTIPLE');
-  return {digest: [...byDigest.keys()][0], value: [...byDigest.values()][0]};
+  return parsed;
+}
+function selectAdmission(comments) {
+  const parsed = parsedAdmissions(comments);
+  if (parsed.length === 0) fail('BLOCKED', 'ADMISSION_MISSING');
+  const digests = parsed.map((row) => row.digest);
+  if (new Set(digests).size !== parsed.length) fail('CONFLICT', 'ADMISSION_MULTIPLE');
+  const coreDigests = new Set(parsed.map((row) => stableHash(admissionSemanticCore(row.value))));
+  if (coreDigests.size !== 1) fail('CONFLICT', 'ADMISSION_MULTIPLE');
+  const selected = [...parsed].sort((a, b) => a.digest.localeCompare(b.digest))[0];
+  return {
+    digest: selected.digest,
+    value: selected.value,
+    variantDigests: [...digests].sort(),
+  };
 }
 
 async function publishExactComment(client, body, runner = validationMerge.defaultGhRunner) {
@@ -330,12 +347,25 @@ async function admit({client, implementationReceipt, runner, deps = {}}) {
     requiredObservation: String(facts.attention.report.output.required || 'PASS'),
   });
   const text = renderAdmission(payload);
-  const effect = deps.publishExact
-    ? await deps.publishExact(text)
-    : await publishExactComment(client, text, runner);
+  const comments = await readComments(client);
+  const existing = parsedAdmissions(comments);
+  let effect;
+  let admissionDigest = stableHash(payload);
+  if (existing.length > 0) {
+    const selected = selectAdmission(comments);
+    if (!same(admissionSemanticCore(selected.value), admissionSemanticCore(payload))) {
+      fail('CONFLICT', 'ADMISSION_MULTIPLE');
+    }
+    effect = {written: 0, reused: 1};
+    admissionDigest = selected.digest;
+  } else {
+    effect = deps.publishExact
+      ? await deps.publishExact(text)
+      : await publishExactComment(client, text, runner);
+  }
   return output('PASS', {
     operation: 'admit',
-    admissionDigest: stableHash(payload),
+    admissionDigest,
     candidateHead: facts.implementation.expectedHead,
     effects: {admissionComments: effect.written || 0, stageReceiptComments: 0},
     nextLegalAction: 'MERGE_PR_WITH_EXISTING_EXPECTED_HEAD_ENDPOINT',

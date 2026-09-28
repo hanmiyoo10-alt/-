@@ -83,12 +83,12 @@ function implementationReceipt({omitGate = null} = {}) {
     nextLegalAction: 'VALIDATION_MERGE',
   });
 }
-function attentionResult() {
+function attentionResult(receiptDigest = 'a'.repeat(64)) {
   return {
     receipt: {
       result: 'PASS',
       attentionDisposition: 'COMPLETE',
-      receiptDigest: 'a'.repeat(64),
+      receiptDigest,
     },
     report: {
       output: {mergeAdmission: 'READY', required: 'PASS'},
@@ -331,15 +331,91 @@ test('apply writes only missing stage receipt and second apply is effect-free', 
   assert.equal(second.effects.stageReceiptComments, 0);
 });
 
-test('multiple admissions fail closed instead of latest-wins', () => {
+test('equivalent proof-refresh admission variants select deterministically without latest-wins', () => {
+  const impl = implementationReceipt();
+  const first = admissionText(impl);
+  const otherPayload = {...first.payload, validationAttentionReceiptDigest: 'b'.repeat(64)};
+  const secondText = owner.renderAdmission(otherPayload);
+  const firstParsed = owner.parseAdmission(first.text);
+  const secondParsed = owner.parseAdmission(secondText);
+  const expected = [firstParsed.digest, secondParsed.digest].sort()[0];
+  const forward = owner.selectAdmission([{body: first.text}, {body: secondText}]);
+  const reverse = owner.selectAdmission([{body: secondText}, {body: first.text}]);
+  assert.equal(forward.digest, expected);
+  assert.equal(reverse.digest, expected);
+  assert.deepEqual(forward.variantDigests, reverse.variantDigests);
+  assert.equal(forward.value.validationAttentionReceiptDigest,
+    expected === firstParsed.digest ? 'a'.repeat(64) : 'b'.repeat(64));
+});
+
+test('exact duplicate admission comments remain conflict', () => {
+  const first = admissionText(implementationReceipt());
+  assert.throws(
+    () => owner.selectAdmission([{body: first.text}, {body: first.text}]),
+    (error) => error.kind === 'CONFLICT' && error.reasonCodes.includes('ADMISSION_MULTIPLE'),
+  );
+});
+
+test('semantic admission drift still fails closed instead of latest-wins', () => {
   const impl = implementationReceipt();
   const first = admissionText(impl);
   const otherPayload = {...first.payload, currentMain: '8'.repeat(40)};
   const comments = [{body: first.text}, {body: owner.renderAdmission(otherPayload)}];
   assert.throws(
     () => owner.selectAdmission(comments),
-    (error) => error.kind === 'CONFLICT',
+    (error) => error.kind === 'CONFLICT' && error.reasonCodes.includes('ADMISSION_MULTIPLE'),
   );
+});
+
+test('fresh re-admit reuses equivalent proof-refresh variants without another comment', async () => {
+  const impl = implementationReceipt();
+  const first = admissionText(impl);
+  const secondText = owner.renderAdmission({
+    ...first.payload,
+    validationAttentionReceiptDigest: 'b'.repeat(64),
+  });
+  const comments = [{body: first.text}, {body: secondText}];
+  let writes = 0;
+  const result = await owner.admit({
+    client: baseClient({comments}),
+    implementationReceipt: impl,
+    deps: {
+      attentionResult: attentionResult('c'.repeat(64)),
+      publishExact: async () => { writes += 1; return {written: 1}; },
+    },
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.effects.admissionComments, 0);
+  assert.equal(writes, 0);
+  assert.equal(comments.length, 2);
+});
+
+test('apply accepts equivalent proof-refresh variants and remains receipt-only', async () => {
+  const impl = implementationReceipt();
+  const first = admissionText(impl);
+  const secondText = owner.renderAdmission({
+    ...first.payload,
+    validationAttentionReceiptDigest: 'b'.repeat(64),
+  });
+  const comments = [
+    {body: first.text},
+    {body: secondText},
+    {body: stageReceipt.renderStageReceipt(impl)},
+  ];
+  const publishExact = async (text) => {
+    if (!comments.some((row) => row.body === text)) {
+      comments.push({body: text});
+      return {written: 1};
+    }
+    return {written: 0, reused: 1};
+  };
+  const result = await owner.apply({
+    client: baseClient({comments, merged: true}),
+    deps: {publishExact},
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.effects.stageReceiptComments, 1);
+  assert.equal(result.nextLegalAction, 'POSTMERGE_CONVERGENCE');
 });
 
 test('CLI exposes no packet or PR selector and apply requires literal flag', () => {

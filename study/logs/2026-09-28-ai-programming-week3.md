@@ -294,3 +294,10 @@ Verified current issue:
 - the phrase “divisible by 4 and not divisible by 100” must use `and`, not `or`.
 
 Exercise 4 state: `PARTIAL / BOOLEAN CONNECTOR FIX REMAINS`.
+
+
+## Learner self-report — lecture-following felt easier
+
+The learner reported that following the Week 3 lecture pace felt noticeably easier than in prior AI Programming sessions.
+
+This is recorded as current-session evidence only, not as a durable learning-profile conclusion. It is consistent with the observed session pattern: most corrections were narrow condition-expression or control-flow fixes rather than repeated uncertainty about basic Python syntax.

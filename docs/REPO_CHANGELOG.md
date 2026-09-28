@@ -2205,3 +2205,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ac0c7f0b991bf30f042da2ad368856ac783aa91e)
 - Event ID: `bb267e285a6d0045d9d6a8ca0039e8dc562c145dfe59db341fc9050b96ccc974`
 <!-- canonical-main-doc-promoted:bb267e285a6d0045d9d6a8ca0039e8dc562c145dfe59db341fc9050b96ccc974 -->
+
+### 2026-09-28 — Merge pull request #3065 from hanmiyoo10-alt/server/repo-reviewed-external-attention-root-3064
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `7bb9df4ddde6a4f59c1d25b327ef00a5e9f08139`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/7bb9df4ddde6a4f59c1d25b327ef00a5e9f08139)
+- Event ID: `a37031367d05201dc6089c28e89a38bbbaa23f5b74285f08272d42d2cea3d8e7`
+<!-- canonical-main-doc-promoted:a37031367d05201dc6089c28e89a38bbbaa23f5b74285f08272d42d2cea3d8e7 -->

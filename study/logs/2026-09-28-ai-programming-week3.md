@@ -220,3 +220,22 @@ Current blocker:
 - the learner needs to interpolate the BMI variable itself and apply the `:.2f` format specifier to that variable.
 
 Exercise 3 state: `PARTIAL / CALCULATION CORRECT, F-STRING FORMAT REMAINS`.
+
+
+## Live Exercise 3 re-check — 2026-09-28 16:44 KST
+
+Latest Colab save was re-read.
+
+Verified current source:
+- weight input uses `float`;
+- height input uses `float`;
+- BMI formula is `weight / height**2`;
+- output uses `{BMI:.2f}`.
+
+Latest execution:
+- weight: 95
+- height: 1.85
+- output BMI: 27.76
+- execution succeeded.
+
+Exercise 3 current state: `CALCULATION + TWO-DECIMAL OUTPUT COMPLETE / CLASSIFICATION CONDITIONS REMAIN`.

@@ -267,3 +267,18 @@ Source-boundary note:
 - it does not explicitly provide a below-20 classification label, so `저체중` is learner-added rather than source-stated.
 
 Exercise 3 state: `PARTIAL / HIGH-BMI CASE WORKS, LOW-RANGE CONDITION NEEDS REPAIR`.
+
+
+## Live Exercise 4 first review — 2026-09-28
+
+Latest Colab save was re-read.
+
+Current progress:
+- year input and remainder checks are in place;
+- 2000 is classified as a leap year;
+- current structure still treats every multiple of 4 as a leap year, so century exceptions such as 1900 are not yet handled.
+
+Course-source rule to preserve:
+- leap year when divisible by 4 and not divisible by 100, or divisible by 400.
+
+Exercise 4 state: `PARTIAL / CENTURY EXCEPTION REMAINS`.

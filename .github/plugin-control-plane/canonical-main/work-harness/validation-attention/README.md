@@ -65,6 +65,14 @@ Important routes:
 - `UNKNOWN` / `CONFLICT` / `BLOCKED` remain explicit;
 - `ALREADY_MERGED` never causes merge admission or a merge retry.
 
+For `ALREADY_MERGED` finalization, the packet is re-read and every exact
+IMPLEMENTATION_PR path must remain inside at least one normalized packet path scope.
+The check reuses Work System `normalizeScope()` / `scopesOverlap()` semantics, so an
+exact path or deterministic trailing `/**` ceiling is valid while malformed or
+non-path ceilings fail closed. Reconstructed merge-inspect evidence always keeps the
+exact implementation paths; a wildcard packet ceiling is never reported as a changed
+file.
+
 ### Pre-merge finalization-route admission
 
 After a clean validation-merge inspect and before returning merge admission READY, the

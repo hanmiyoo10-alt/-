@@ -16,6 +16,7 @@ const finalization = require('../validation-finalization/validation-finalization
 const stageReceipt = require('../stage-receipt.cjs');
 const executionReceipt = require('../execution-receipt.cjs');
 const agentDecisionView = require('../agent-decision-view.cjs');
+const scopeOverlap = require('../../work-system/scope-overlap.cjs');
 const {canonicalize, stableHash} = require('../handoff.cjs');
 
 const DEFAULT_DEPS = Object.freeze({
@@ -603,6 +604,17 @@ function repoNeutralPacket(packet) {
 function pathScopeDigest(paths) {
   return 'sha256:' + stableHash(sorted(paths));
 }
+function implementationPathsWithinPacketScopes(packet, implementationPaths) {
+  if (!Array.isArray(packet?.pathScopes) || !packet.pathScopes.length
+      || !Array.isArray(implementationPaths) || !implementationPaths.length) return false;
+  const ceilings = packet.pathScopes.map((value) => scopeOverlap.normalizeScope(value));
+  if (ceilings.some((row) => !row.ok || row.kind !== 'path')) return false;
+  return implementationPaths.every((value) => {
+    const exact = scopeOverlap.normalizeScope('path:' + value);
+    return exact.ok && exact.kind === 'path' && exact.mode === 'exact'
+      && ceilings.some((ceiling) => scopeOverlap.scopesOverlap(ceiling, exact));
+  });
+}
 function alreadyMergedFinalizeEvidence({
   packetNumber, prNumber, inspectEvidence, packet,
 }) {
@@ -619,8 +631,8 @@ function alreadyMergedFinalizeEvidence({
       'CONFLICT', ['ALREADY_MERGED_CONTINUATION_EVIDENCE_CONFLICT'], locator);
   }
   if (!packet || typeof packet.bodySha256 !== 'string'
-      || JSON.stringify(sorted(packet.paths || []))
-        !== JSON.stringify(sorted(inspectEvidence.implementation.paths))) {
+      || !implementationPathsWithinPacketScopes(
+        packet, inspectEvidence.implementation.paths)) {
     throw new ValidationAttentionError(
       'CONFLICT', ['ALREADY_MERGED_PACKET_SCOPE_CONFLICT'], 'issue:#' + packetNumber);
   }
@@ -634,7 +646,7 @@ function alreadyMergedFinalizeEvidence({
       prNumber,
       packetBodySha256: packet.bodySha256,
       expectedHead: inspectEvidence.implementation.expectedHead,
-      paths: sorted(packet.paths),
+      paths: sorted(inspectEvidence.implementation.paths),
       result: 'PASS',
       receiptDigest: inspectEvidence.receipt.receiptDigest,
       output: {pr: '#' + prNumber, merge: 'ALREADY_MERGED'},

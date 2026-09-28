@@ -113,3 +113,24 @@ Preferred sequence:
 5. then move through Exercises 2 → 4 with fresh execution verification.
 
 Problem-memory entries should be added only after the learner makes a current attempt in this session, so old notebook errors are not mistaken for new evidence.
+
+
+## Live Exercise 1 update — 2026-09-28 16:19 KST
+
+Latest Colab save was re-read after the learner's current-session edit.
+
+Verified improvement:
+- divisibility checks were corrected from division to modulo: `num % 3 == 0`, `num % 5 == 0`;
+- the combined condition was correctly written as `num % 3 == 0 and num % 5 == 0`.
+
+Current remaining bug:
+- the notebook uses one `if/elif` chain for the single-divisor cases and then starts a second independent `if/else` for the combined case;
+- with input 12, the saved output is `python` followed by `꽝임`, proving the second `else` is attached only to the second `if`;
+- with a common multiple such as 15, the current structure would also allow duplicate output because the first chain can print before the combined condition is checked.
+
+Next cue:
+- keep the cases in one mutually exclusive chain;
+- place the most specific combined case before the single-divisor cases;
+- also correct the literal output spelling from `programing` to the PDF's `programming`.
+
+Do not promote this to a durable learner weakness; this is a current Exercise 1 control-flow correction in progress.

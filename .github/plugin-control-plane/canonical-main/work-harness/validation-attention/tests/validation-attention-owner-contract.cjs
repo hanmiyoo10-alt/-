@@ -427,22 +427,54 @@ test('non-PASS external finalizer gate cannot bypass repo-neutral admission', as
   assert(result.receipt.blockers.includes('REPO_NEUTRAL_FINALIZATION_SCOPE_REQUIRED'));
 });
 
-test('coordination-converged packet keeps existing merge admission semantics', async () => {
+test('repo-common tools/repo-env packet uses repository-neutral pre-merge route', async () => {
+  const repoPaths = [
+    'tools/repo-env/wsl/README.md',
+    'tools/repo-env/wsl/bootstrap.ps1',
+    'tools/repo-env/wsl/tests/test_bootstrap_contract.py',
+  ];
   const {deps} = fixtureDeps({
-    continuation: continuationResult({priorCoordination: 'CONVERGED'}),
-    mergeInspect: mergeInspectResult({scopes: PATHS.map((p) => 'path:' + p)}),
+    mergeInspect: mergeInspectResult({
+      paths: repoPaths,
+      scopes: [...repoPaths.map((p) => 'path:' + p), 'surface:repo:host-tooling-wsl'],
+    }),
   });
   const result = await attention.inspectComposition({
     client: {}, packetNumber: PACKET, prNumber: PR,
-    implementationReceipt: implementationReceipt(), deps,
+    implementationReceipt: implementationReceipt({paths: repoPaths}), deps,
   });
   assert.equal(result.receipt.result, 'PASS');
   assert.equal(result.report.output.mergeAdmission, 'READY');
 });
 
-test('non-canonical-main path-only packet is not relabeled repo-neutral', async () => {
+test('reviewed external route can admit a non-neutral NOT_APPLICABLE packet', async () => {
+  const otherPaths = ['docs/example.md'];
+  const {deps} = fixtureDeps({
+    mergeInspect: mergeInspectResult({
+      paths: otherPaths,
+      scopes: otherPaths.map((p) => 'path:' + p),
+    }),
+  });
+  const receipt = implementationReceipt({
+    paths: otherPaths,
+    extraGates: [{
+      name: 'validation-finalization-external-owner-reviewed',
+      result: 'PASS',
+      evidenceLocator: 'issue:#9999',
+    }],
+  });
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: receipt, deps,
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.output.mergeAdmission, 'READY');
+});
+
+test('coordination-converged product packet keeps existing merge admission semantics', async () => {
   const productPaths = ['products/example/README.md'];
   const {deps} = fixtureDeps({
+    continuation: continuationResult({priorCoordination: 'CONVERGED'}),
     mergeInspect: mergeInspectResult({
       paths: productPaths,
       scopes: productPaths.map((p) => 'path:' + p),
@@ -454,6 +486,23 @@ test('non-canonical-main path-only packet is not relabeled repo-neutral', async 
   });
   assert.equal(result.receipt.result, 'PASS');
   assert.equal(result.report.output.mergeAdmission, 'READY');
+});
+
+test('non-neutral NOT_APPLICABLE packet blocks before merge without a reviewed route', async () => {
+  const productPaths = ['products/example/README.md'];
+  const {deps} = fixtureDeps({
+    mergeInspect: mergeInspectResult({
+      paths: productPaths,
+      scopes: productPaths.map((p) => 'path:' + p),
+    }),
+  });
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: implementationReceipt({paths: productPaths}), deps,
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.equal(result.report.output.mergeAdmission, 'BLOCKED');
+  assert(result.receipt.blockers.includes('REPO_NEUTRAL_FINALIZATION_SCOPE_REQUIRED'));
 });
 
 test('CURRENTIZATION_REQUIRED blocks before merge admission and preserves locator', async () => {
@@ -916,14 +965,22 @@ test('aggregate sidecars are restrictive, bounded and outside tracked bytes', as
   }
 });
 
-test('repo-neutral predicate is narrow and explicit', () => {
+test('repo-neutral predicate is narrow, explicit and reviewed-prefix bounded', () => {
   assert.equal(attention.repoNeutralPacket({
     paths: PATHS,
     scopes: [...PATHS.map((p) => 'path:' + p), 'surface:repo:validation-attention-projection'],
   }), true);
   assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/repo-env/wsl'],
+    scopes: ['path:tools/repo-env/wsl/**', 'surface:repo:host-tooling-wsl'],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
     paths: ['products/x/a.js'],
     scopes: ['path:products/x/a.js', 'surface:repo:x'],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/repo-env/wsl'],
+    scopes: ['path:tools/repo-env/wsl/**', 'surface:mcl:x'],
   }), false);
   assert.equal(attention.repoNeutralPacket({
     paths: PATHS,

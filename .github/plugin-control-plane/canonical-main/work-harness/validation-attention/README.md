@@ -65,27 +65,40 @@ Important routes:
 - `UNKNOWN` / `CONFLICT` / `BLOCKED` remain explicit;
 - `ALREADY_MERGED` never causes merge admission or a merge retry.
 
+For `ALREADY_MERGED` finalization, the packet is re-read and every exact
+IMPLEMENTATION_PR path must remain inside at least one normalized packet path scope.
+The check reuses Work System `normalizeScope()` / `scopesOverlap()` semantics, so an
+exact path or deterministic trailing `/**` ceiling is valid while malformed or
+non-path ceilings fail closed. Reconstructed merge-inspect evidence always keeps the
+exact implementation paths; a wildcard packet ceiling is never reported as a changed
+file.
+
 ### Pre-merge finalization-route admission
 
 After a clean validation-merge inspect and before returning merge admission READY, the
 composition reuses that child's already-captured exact packet paths/scopes plus the
 continuation owner's `priorCoordination` result.
 
-For canonical-main infrastructure paths with `priorCoordination=NOT_APPLICABLE`:
-- generic repository-neutral finalization requires the existing
-  `repoNeutralPacket()` predicate to pass, including a specific stable
-  `surface:repo:*` declaration;
-- an intentionally path-only packet may instead present the exact canonical
-  IMPLEMENTATION_PR gate
-  `validation-finalization-external-owner-reviewed=PASS` with an evidence locator,
-  proving a separately reviewed finalization owner exists.
+For any packet whose prior coordination is explicitly `NOT_APPLICABLE`, merge admission
+must already prove a validation-finalization route. Generic repository-neutral
+finalization requires `repoNeutralPacket()` to pass:
+- every exact/declared path must stay under a compile-time reviewed neutral prefix;
+- the reviewed prefixes are `.github/plugin-control-plane/canonical-main/` and
+  `tools/repo-env/`;
+- at least one semantic surface must be declared and every semantic surface must be
+  `surface:repo:*`.
+
+A non-neutral packet may instead present the exact canonical IMPLEMENTATION_PR gate
+`validation-finalization-external-owner-reviewed=PASS` with an evidence locator,
+proving a separately reviewed finalization owner exists.
 
 Without either route, inspect returns
 `BLOCKED / REPO_NEUTRAL_FINALIZATION_SCOPE_REQUIRED` before any merge effect.
 The gate is routing evidence only. It grants no finalization or mutation authority.
-Product/MCL coordination-converged flows and non-canonical-main paths retain their
-existing admission semantics. No semantic owner is inferred from a path prefix, and no
-extra GitHub/API read is introduced.
+Coordination-converged product/MCL flows retain their existing admission semantics.
+`products/**` is never made repository-neutral by a repo-looking semantic surface, and
+no semantic owner is inferred from an unreviewed path prefix. No extra GitHub/API read
+is introduced.
 
 ## Finalize graph
 
@@ -104,8 +117,10 @@ validation-attention inspect evidence
 ```
 
 V1 finalization is deliberately repository-neutral only. The packet must positively
-prove that every path is under canonical-main repository infrastructure and every
-semantic surface is `surface:repo:*`.
+prove that every path stays under one reviewed repository-neutral prefix and every
+semantic surface is `surface:repo:*`. The current reviewed path classes are
+canonical-main infrastructure and repository-common environment tooling under
+`tools/repo-env/`; arbitrary repository paths are not admitted by this rule.
 
 Product/MCL coordination is never silently mapped to `NOT_APPLICABLE`.
 

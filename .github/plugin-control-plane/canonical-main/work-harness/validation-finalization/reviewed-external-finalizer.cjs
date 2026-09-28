@@ -281,6 +281,9 @@ async function publishExactComment(client, body, runner = validationMerge.defaul
 async function runAttentionInspect({client, implementationReceipt, deps = {}}) {
   if (deps.attentionResult) return deps.attentionResult;
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'reviewed-external-finalizer-'));
+  const gitAdmin = path.join(temp, '.git');
+  fs.mkdirSync(gitAdmin, {mode: 0o700});
+  fs.chmodSync(gitAdmin, 0o700);
   try {
     return await validationAttention.inspectComposition({
       client,

@@ -230,6 +230,7 @@ function fixtureDeps(options = {}) {
   const packet = options.packet || {
     bodySha256: 'e'.repeat(64),
     paths: PATHS,
+    pathScopes: PATHS.map((p) => 'path:' + p),
     scopes: [...PATHS.map((p) => 'path:' + p), 'surface:repo:validation-attention-projection'],
     evidenceLocator: 'issue:#' + PACKET,
   };
@@ -250,8 +251,9 @@ function fixtureDeps(options = {}) {
     },
     validationMerge: {
       ...realMerge,
-      async inspectWithClient() {
+      async inspectWithClient(args) {
         calls.push('merge.inspect');
+        if (options.onMergeInspect) options.onMergeInspect(args);
         return mergeInspect;
       },
       async finalizeWithClient() {
@@ -283,10 +285,13 @@ function viewFor(result) {
 }
 
 test('CLI exposes only inspect/finalize and fixed packet/pr/receipt/format arguments', () => {
-  assert.equal(attention.parseArgs([
+  const inspectArgs = attention.parseArgs([
     'inspect', '--packet', '#2875', '--pr', '4000',
     '--implementation-receipt-file', '/tmp/r.json',
-  ]).command, 'inspect');
+    '--packet-activity-evidence-file', '/tmp/activity.json',
+  ]);
+  assert.equal(inspectArgs.command, 'inspect');
+  assert.equal(inspectArgs.packetActivityEvidenceFile, '/tmp/activity.json');
   assert.equal(attention.parseArgs(['finalize', '--packet', '2875', '--pr', '4000']).command,
     'finalize');
   assert.throws(() => attention.parseArgs([
@@ -296,6 +301,10 @@ test('CLI exposes only inspect/finalize and fixed packet/pr/receipt/format argum
   assert.throws(() => attention.parseArgs([
     'finalize', '--packet', '2875', '--pr', '4000',
     '--implementation-receipt-file', '/tmp/r.json',
+  ]), /ARGUMENT_INVALID/);
+  assert.throws(() => attention.parseArgs([
+    'finalize', '--packet', '2875', '--pr', '4000',
+    '--packet-activity-evidence-file', '/tmp/activity.json',
   ]), /ARGUMENT_INVALID/);
 });
 
@@ -327,6 +336,41 @@ test('clean inspect composes continuation then merge admission into zero-attenti
   assert.equal(projected.attentionCount, 0);
   assert.equal(projected.shown, 0);
   assert.equal(projected.truncated, false);
+});
+
+test('inspect forwards normalized packet activity evidence only to merge admission child', async () => {
+  const evidence = realMerge.normalizePacketActivityEvidenceSet({
+    schemaVersion: 1,
+    mode: realMerge.PACKET_ACTIVITY_EVIDENCE_MODE,
+    requesterRef: '#' + PACKET,
+    candidates: [{
+      candidateRef: '#9999',
+      evidence: {
+        schemaVersion: 1,
+        mode: 'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE',
+        candidateRef: '#9999',
+        requesterRef: '#' + PACKET,
+        relationship: 'PARENT_WAITING_ON_SUCCESSOR',
+        repositoryMutationActive: false,
+        activeLease: false,
+        overlappingOpenPr: false,
+        sequencingExplicit: true,
+        sourceRefs: ['#9999', '#' + PACKET],
+      },
+    }],
+  }, PACKET);
+  let observed = null;
+  const {deps} = fixtureDeps({onMergeInspect: (args) => {
+    observed = args.packetActivityEvidence;
+  }});
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+    packetActivityEvidence: evidence,
+    deps,
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.deepEqual(observed, evidence);
 });
 
 test('path-only canonical-main packet blocks finalization routing before merge', async () => {
@@ -383,22 +427,54 @@ test('non-PASS external finalizer gate cannot bypass repo-neutral admission', as
   assert(result.receipt.blockers.includes('REPO_NEUTRAL_FINALIZATION_SCOPE_REQUIRED'));
 });
 
-test('coordination-converged packet keeps existing merge admission semantics', async () => {
+test('repo-common tools/repo-env packet uses repository-neutral pre-merge route', async () => {
+  const repoPaths = [
+    'tools/repo-env/wsl/README.md',
+    'tools/repo-env/wsl/bootstrap.ps1',
+    'tools/repo-env/wsl/tests/test_bootstrap_contract.py',
+  ];
   const {deps} = fixtureDeps({
-    continuation: continuationResult({priorCoordination: 'CONVERGED'}),
-    mergeInspect: mergeInspectResult({scopes: PATHS.map((p) => 'path:' + p)}),
+    mergeInspect: mergeInspectResult({
+      paths: repoPaths,
+      scopes: [...repoPaths.map((p) => 'path:' + p), 'surface:repo:host-tooling-wsl'],
+    }),
   });
   const result = await attention.inspectComposition({
     client: {}, packetNumber: PACKET, prNumber: PR,
-    implementationReceipt: implementationReceipt(), deps,
+    implementationReceipt: implementationReceipt({paths: repoPaths}), deps,
   });
   assert.equal(result.receipt.result, 'PASS');
   assert.equal(result.report.output.mergeAdmission, 'READY');
 });
 
-test('non-canonical-main path-only packet is not relabeled repo-neutral', async () => {
+test('reviewed external route can admit a non-neutral NOT_APPLICABLE packet', async () => {
+  const otherPaths = ['docs/example.md'];
+  const {deps} = fixtureDeps({
+    mergeInspect: mergeInspectResult({
+      paths: otherPaths,
+      scopes: otherPaths.map((p) => 'path:' + p),
+    }),
+  });
+  const receipt = implementationReceipt({
+    paths: otherPaths,
+    extraGates: [{
+      name: 'validation-finalization-external-owner-reviewed',
+      result: 'PASS',
+      evidenceLocator: 'issue:#9999',
+    }],
+  });
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: receipt, deps,
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.output.mergeAdmission, 'READY');
+});
+
+test('coordination-converged product packet keeps existing merge admission semantics', async () => {
   const productPaths = ['products/example/README.md'];
   const {deps} = fixtureDeps({
+    continuation: continuationResult({priorCoordination: 'CONVERGED'}),
     mergeInspect: mergeInspectResult({
       paths: productPaths,
       scopes: productPaths.map((p) => 'path:' + p),
@@ -410,6 +486,23 @@ test('non-canonical-main path-only packet is not relabeled repo-neutral', async 
   });
   assert.equal(result.receipt.result, 'PASS');
   assert.equal(result.report.output.mergeAdmission, 'READY');
+});
+
+test('non-neutral NOT_APPLICABLE packet blocks before merge without a reviewed route', async () => {
+  const productPaths = ['products/example/README.md'];
+  const {deps} = fixtureDeps({
+    mergeInspect: mergeInspectResult({
+      paths: productPaths,
+      scopes: productPaths.map((p) => 'path:' + p),
+    }),
+  });
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: implementationReceipt({paths: productPaths}), deps,
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.equal(result.report.output.mergeAdmission, 'BLOCKED');
+  assert(result.receipt.blockers.includes('REPO_NEUTRAL_FINALIZATION_SCOPE_REQUIRED'));
 });
 
 test('CURRENTIZATION_REQUIRED blocks before merge admission and preserves locator', async () => {
@@ -632,6 +725,94 @@ test('already merged finalize skips merge admission replay and reuses merge fina
   }
 });
 
+test('already merged wildcard packet scope contains exact implementation paths', async () => {
+  const prefix = '.github/plugin-control-plane/canonical-main/work-harness/validation-attention';
+  const packet = {
+    bodySha256: 'e'.repeat(64),
+    paths: [prefix],
+    pathScopes: ['path:' + prefix + '/**'],
+    scopes: ['path:' + prefix + '/**', 'surface:repo:validation-attention-projection'],
+    evidenceLocator: 'issue:#' + PACKET,
+  };
+  const {deps, calls} = fixtureDeps({
+    continuation: continuationResult({
+      disposition: 'ALREADY_MERGED', nextLegalAction: 'VALIDATION_MERGE_FINALIZE',
+    }),
+    packet,
+  });
+  const root = makeTempRoot();
+  try {
+    await persistAlreadyMergedInspect(root, deps);
+    const inspectEvidence = attention.readCanonicalInspectEvidence(PACKET, PR, root, deps);
+    const recovered = attention.alreadyMergedFinalizeEvidence({
+      packetNumber: PACKET, prNumber: PR, inspectEvidence, packet,
+    });
+    assert.deepEqual(recovered.report.paths, PATHS);
+    const result = await attention.finalizeComposition({
+      client: {}, packetNumber: PACKET, prNumber: PR, root, deps,
+    });
+    assert.equal(result.receipt.result, 'PASS');
+    assert.equal(calls.includes('merge.inspect'), false);
+    assert.equal(calls.includes('merge.read-inspect'), false);
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test('already merged packet scope rejects exact implementation path outside ceiling', async () => {
+  const {deps, calls} = fixtureDeps({
+    continuation: continuationResult({
+      disposition: 'ALREADY_MERGED', nextLegalAction: 'VALIDATION_MERGE_FINALIZE',
+    }),
+    packet: {
+      bodySha256: 'e'.repeat(64),
+      paths: [PATHS[0]],
+      pathScopes: ['path:' + PATHS[0]],
+      scopes: ['path:' + PATHS[0], 'surface:repo:validation-attention-projection'],
+      evidenceLocator: 'issue:#' + PACKET,
+    },
+  });
+  const root = makeTempRoot();
+  try {
+    await persistAlreadyMergedInspect(root, deps);
+    const result = await attention.finalizeComposition({
+      client: {}, packetNumber: PACKET, prNumber: PR, root, deps,
+    });
+    assert.equal(result.receipt.result, 'CONFLICT');
+    assert(result.receipt.conflicts.includes('ALREADY_MERGED_PACKET_SCOPE_CONFLICT'));
+    assert.equal(calls.includes('merge.finalize'), false);
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test('already merged packet scope rejects malformed or non-path ceilings', async () => {
+  for (const pathScopes of [['path:../escape/**'], ['surface:repo:not-a-path']]) {
+    const {deps, calls} = fixtureDeps({
+      continuation: continuationResult({
+        disposition: 'ALREADY_MERGED', nextLegalAction: 'VALIDATION_MERGE_FINALIZE',
+      }),
+      packet: {
+        bodySha256: 'e'.repeat(64), paths: PATHS, pathScopes,
+        scopes: [...pathScopes, 'surface:repo:validation-attention-projection'],
+        evidenceLocator: 'issue:#' + PACKET,
+      },
+    });
+    const root = makeTempRoot();
+    try {
+      await persistAlreadyMergedInspect(root, deps);
+      const result = await attention.finalizeComposition({
+        client: {}, packetNumber: PACKET, prNumber: PR, root, deps,
+      });
+      assert.equal(result.receipt.result, 'CONFLICT');
+      assert(result.receipt.conflicts.includes('ALREADY_MERGED_PACKET_SCOPE_CONFLICT'));
+      assert.equal(calls.includes('merge.finalize'), false);
+    } finally {
+      fs.rmSync(root, {recursive: true, force: true});
+    }
+  }
+});
+
 test('already merged product packet routes to coordination finalizer after exact merge readback', async () => {
   const {deps, calls} = fixtureDeps({
     continuation: continuationResult({
@@ -641,6 +822,7 @@ test('already merged product packet routes to coordination finalizer after exact
     packet: {
       bodySha256: 'e'.repeat(64),
       paths: PATHS,
+      pathScopes: PATHS.map((p) => 'path:' + p),
       scopes: [...PATHS.map((p) => 'path:' + p), 'surface:mcl:x'],
       evidenceLocator: 'issue:#' + PACKET,
     },
@@ -695,6 +877,7 @@ test('product/non-repo coordination cannot be relabeled NOT_APPLICABLE', async (
     packet: {
       bodySha256: 'e'.repeat(64),
       paths: ['products/chatgpt-mobile-coder-lab/x.js'],
+      pathScopes: ['path:products/chatgpt-mobile-coder-lab/x.js'],
       scopes: ['path:products/chatgpt-mobile-coder-lab/x.js', 'surface:mcl:x'],
       evidenceLocator: 'issue:#' + PACKET,
     },
@@ -782,14 +965,22 @@ test('aggregate sidecars are restrictive, bounded and outside tracked bytes', as
   }
 });
 
-test('repo-neutral predicate is narrow and explicit', () => {
+test('repo-neutral predicate is narrow, explicit and reviewed-prefix bounded', () => {
   assert.equal(attention.repoNeutralPacket({
     paths: PATHS,
     scopes: [...PATHS.map((p) => 'path:' + p), 'surface:repo:validation-attention-projection'],
   }), true);
   assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/repo-env/wsl'],
+    scopes: ['path:tools/repo-env/wsl/**', 'surface:repo:host-tooling-wsl'],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
     paths: ['products/x/a.js'],
     scopes: ['path:products/x/a.js', 'surface:repo:x'],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/repo-env/wsl'],
+    scopes: ['path:tools/repo-env/wsl/**', 'surface:mcl:x'],
   }), false);
   assert.equal(attention.repoNeutralPacket({
     paths: PATHS,

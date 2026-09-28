@@ -8,6 +8,7 @@ const test = require('node:test');
 
 const owner = require('../reviewed-external-finalizer.cjs');
 const finalization = require('../validation-finalization-owner.cjs');
+const validationAttention = require('../../validation-attention/validation-attention-owner.cjs');
 const stageReceipt = require('../../stage-receipt.cjs');
 const validationStageSet = require('../validation-stage-receipt-set.cjs');
 const taskLease = require(path.resolve(__dirname,
@@ -194,6 +195,31 @@ test('admission marker round-trips and tamper is conflict', () => {
   assert.equal(parsed.value.candidateHead, CANDIDATE);
   const tampered = text.replace(CANDIDATE, '9'.repeat(40));
   assert.equal(owner.parseAdmission(tampered).conflict, true);
+});
+
+test('natural attention composition receives a private temporary git admin root', async () => {
+  const impl = implementationReceipt();
+  const originalInspect = validationAttention.inspectComposition;
+  let observedRoot = null;
+  try {
+    validationAttention.inspectComposition = async ({root}) => {
+      observedRoot = root;
+      const stat = fs.statSync(path.join(root, '.git'));
+      assert.equal(stat.isDirectory(), true);
+      assert.equal(stat.mode & 0o777, 0o700);
+      return attentionResult();
+    };
+    const facts = await owner.captureAdmissionFacts({
+      client: baseClient({comments: []}),
+      implementationReceipt: impl,
+    });
+    assert.equal(facts.attention.receipt.result, 'PASS');
+    assert.ok(observedRoot);
+    assert.equal(fs.existsSync(observedRoot), false);
+  } finally {
+    validationAttention.inspectComposition = originalInspect;
+    if (observedRoot) fs.rmSync(observedRoot, {recursive: true, force: true});
+  }
 });
 
 test('admit validates dynamic head and publishes exactly one admission marker', async () => {

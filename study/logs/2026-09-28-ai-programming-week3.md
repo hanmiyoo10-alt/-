@@ -190,3 +190,14 @@ Interpretation:
 - one successful 65-year-old run confirms the final branch, but boundary execution evidence for 7/8, 18/19, and 64/65 is not yet complete.
 
 Exercise 2 state: `LOGIC CORRECT / BOUNDARY EXECUTION CHECK REMAINS`.
+
+
+## Live Exercise 2 completion — learner-confirmed boundary checks
+
+The learner reported that the Exercise 2 boundary cases were all executed and produced the expected admission prices.
+
+Given the already-verified branch structure and the learner-confirmed boundary runs, Exercise 2 is now classified as:
+
+`CORRECT / COMPLETE`
+
+This completion claim is scoped to the current Exercise 2 logic and its executed boundary checks.

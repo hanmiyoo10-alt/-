@@ -261,18 +261,23 @@ function parsedAdmissions(comments) {
   if (parsed.some((row) => row.conflict)) fail('CONFLICT', 'ADMISSION_FORMAT_CONFLICT');
   return parsed;
 }
-function selectAdmission(comments) {
+function selectAdmission(comments, candidateHead = null) {
   const parsed = parsedAdmissions(comments);
   if (parsed.length === 0) fail('BLOCKED', 'ADMISSION_MISSING');
-  const digests = parsed.map((row) => row.digest);
-  if (new Set(digests).size !== parsed.length) fail('CONFLICT', 'ADMISSION_MULTIPLE');
-  const coreDigests = new Set(parsed.map((row) => stableHash(admissionSemanticCore(row.value))));
+  const allDigests = parsed.map((row) => row.digest);
+  if (new Set(allDigests).size !== parsed.length) fail('CONFLICT', 'ADMISSION_MULTIPLE');
+  const generation = candidateHead === null
+    ? parsed
+    : parsed.filter((row) => row.value.candidateHead === candidateHead);
+  if (generation.length === 0) fail('BLOCKED', 'ADMISSION_GENERATION_MISSING');
+  const coreDigests = new Set(generation.map(
+    (row) => stableHash(admissionSemanticCore(row.value))));
   if (coreDigests.size !== 1) fail('CONFLICT', 'ADMISSION_MULTIPLE');
-  const selected = [...parsed].sort((a, b) => a.digest.localeCompare(b.digest))[0];
+  const selected = [...generation].sort((a, b) => a.digest.localeCompare(b.digest))[0];
   return {
     digest: selected.digest,
     value: selected.value,
-    variantDigests: [...digests].sort(),
+    variantDigests: generation.map((row) => row.digest).sort(),
   };
 }
 
@@ -349,10 +354,12 @@ async function admit({client, implementationReceipt, runner, deps = {}}) {
   const text = renderAdmission(payload);
   const comments = await readComments(client);
   const existing = parsedAdmissions(comments);
+  const generation = existing.filter(
+    (row) => row.value.candidateHead === facts.implementation.expectedHead);
   let effect;
   let admissionDigest = stableHash(payload);
-  if (existing.length > 0) {
-    const selected = selectAdmission(comments);
+  if (generation.length > 0) {
+    const selected = selectAdmission(comments, facts.implementation.expectedHead);
     if (!same(admissionSemanticCore(selected.value), admissionSemanticCore(payload))) {
       fail('CONFLICT', 'ADMISSION_MULTIPLE');
     }
@@ -535,17 +542,20 @@ function buildValidationStageReceipt({implementationReceipt, admission, mergeCom
 
 async function captureApplyFacts({client}) {
   const comments = await readComments(client);
-  const selected = selectAdmission(comments);
-  const admission = selected.value;
   const packet = await validationMerge.readPacket(client, TARGET.packet);
+  const pr = await api(client, '/pulls/' + TARGET.pr, 'PR');
+  if (!pr || pr.state !== 'closed' || !pr.merged_at
+      || !/^[0-9a-f]{40}$/.test(pr.head?.sha || '')
+      || !/^[0-9a-f]{40}$/.test(pr.merge_commit_sha || '')) {
+    fail('BLOCKED', 'PR_NOT_MERGED_AS_ADMITTED');
+  }
+  const selected = selectAdmission(comments, pr.head.sha);
+  const admission = selected.value;
   if (packet.bodySha256 !== admission.packetBodySha256) {
     fail('BLOCKED', 'PACKET_BODY_DRIFT');
   }
-  const pr = await api(client, '/pulls/' + TARGET.pr, 'PR');
-  if (!pr || pr.state !== 'closed' || !pr.merged_at
-      || pr.head?.sha !== admission.candidateHead
-      || !/^[0-9a-f]{40}$/.test(pr.merge_commit_sha || '')) {
-    fail('BLOCKED', 'PR_NOT_MERGED_AS_ADMITTED');
+  if (pr.head.sha !== admission.candidateHead) {
+    fail('CONFLICT', 'ADMISSION_GENERATION_HEAD_CONFLICT');
   }
   await noCurrentPacketLease(client);
   const implementationReceipt = implementationFromComments(

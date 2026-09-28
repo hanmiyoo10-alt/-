@@ -50,7 +50,9 @@ sed \
   -e "s|^TMP_ROOT=.*|TMP_ROOT='$RUNTIME'|" \
   "$LAUNCHER" > "$TEST_LAUNCHER"
 PLAN=$TMP/plan.json
+ACTIVITY=$TMP/activity.json
 printf '%s\n' '{}' > "$PLAN"
+printf '%s\n' '{"schemaVersion":1}' > "$ACTIVITY"
 
 printf 'TEST source-status-binds-exact-main\n'
 run_cmd sh "$TEST_LAUNCHER" source-status
@@ -72,6 +74,16 @@ assert_zero
 assert_contains "$RUN_OUTPUT" '"apply"'
 assert_contains "$RUN_OUTPUT" '"--source-main"'
 assert_contains "$RUN_OUTPUT" '"--apply"'
+run_cmd sh "$TEST_LAUNCHER" inspect --packet '#77' --plan "$PLAN" \
+  --packet-activity-evidence-file "$ACTIVITY"
+assert_zero
+assert_contains "$RUN_OUTPUT" '"--packet-activity-evidence-file"'
+assert_contains "$RUN_OUTPUT" "$ACTIVITY"
+run_cmd sh "$TEST_LAUNCHER" apply --packet '#77' --plan "$PLAN" \
+  --packet-activity-evidence-file "$ACTIVITY" --apply
+assert_zero
+assert_contains "$RUN_OUTPUT" '"--packet-activity-evidence-file"'
+assert_contains "$RUN_OUTPUT" '"--apply"'
 printf 'PASS inspect-and-apply-forward-only-fixed-owner\n'
 
 printf 'TEST unsupported-shapes-fail-closed\n'
@@ -79,6 +91,11 @@ run_cmd sh "$TEST_LAUNCHER" inspect --packet '#77' --plan "$PLAN" --source-main 
 [ "$RUN_RC" -eq 64 ] || fail "caller source-main was not rejected: $RUN_OUTPUT"
 run_cmd sh "$TEST_LAUNCHER" shell --packet '#77' --plan "$PLAN"
 [ "$RUN_RC" -eq 64 ] || fail "arbitrary command was not rejected: $RUN_OUTPUT"
+ACTIVITY_LINK=$TMP/activity-link.json
+ln -s "$ACTIVITY" "$ACTIVITY_LINK"
+run_cmd sh "$TEST_LAUNCHER" inspect --packet '#77' --plan "$PLAN" \
+  --packet-activity-evidence-file "$ACTIVITY_LINK"
+[ "$RUN_RC" -eq 64 ] || fail "activity symlink was not rejected: $RUN_OUTPUT"
 printf 'PASS unsupported-shapes-fail-closed\n'
 printf 'TEST remote-main-move-fails-capture\n'
 MOCK_BIN=$TMP/mock-bin

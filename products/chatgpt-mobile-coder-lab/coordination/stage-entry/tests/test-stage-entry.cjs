@@ -60,6 +60,37 @@ function response(code, value) {
   return {code, stdout: typeof value === 'string' ? value : JSON.stringify(value), stderr: ''};
 }
 
+function packetActivityEvidenceSet({
+  requesterRef = '#10',
+  candidateRef = '#20',
+  relationship = 'PARENT_WAITING_ON_SUCCESSOR',
+  repositoryMutationActive = false,
+  activeLease = false,
+  overlappingOpenPr = false,
+  sequencingExplicit = true,
+} = {}) {
+  return {
+    schemaVersion: 1,
+    mode: stage.PACKET_ACTIVITY_EVIDENCE_MODE,
+    requesterRef,
+    candidates: [{
+      candidateRef,
+      evidence: {
+        schemaVersion: 1,
+        mode: 'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE',
+        candidateRef,
+        requesterRef,
+        relationship,
+        repositoryMutationActive,
+        activeLease,
+        overlappingOpenPr,
+        sequencingExplicit,
+        sourceRefs: ['issue:' + candidateRef, 'issue:' + requesterRef],
+      },
+    }],
+  };
+}
+
 function inspectRunner({mainSequence = [MAIN, MAIN], preflight = 'pass', landingMain = MAIN, landingRemoteMain = MAIN, issueRows = null} = {}) {
   let mainRead = 0;
   return (args) => {
@@ -177,13 +208,16 @@ test('plan parser accepts only the reviewed S/S mutable shape', () => {
   assert.throws(() => stage.parsePlan({...plan(), command: 'git status'}), /PLAN_UNKNOWN_FIELD/);
 });
 
-test('source-main binding is optional, strict, and launcher-owned', () => {
+test('source-main and packet-activity sidecar bindings are optional and strict', () => {
   const direct = stage.parseArgs(['inspect', '--packet', '#77', '--plan', '/tmp/plan.json']);
   assert.equal(direct.sourceMain, null);
+  assert.equal(direct.packetActivityEvidenceFile, null);
   const bound = stage.parseArgs([
-    'inspect', '--packet', '#77', '--plan', '/tmp/plan.json', '--source-main', MAIN,
+    'inspect', '--packet', '#77', '--plan', '/tmp/plan.json',
+    '--packet-activity-evidence-file', '/tmp/activity.json', '--source-main', MAIN,
   ]);
   assert.equal(bound.sourceMain, MAIN);
+  assert.equal(bound.packetActivityEvidenceFile, '/tmp/activity.json');
   assert.throws(() => stage.parseArgs([
     'inspect', '--packet', '#77', '--plan', '/tmp/plan.json', '--source-main', 'main',
   ]), /SOURCE_MAIN_INVALID/);
@@ -268,6 +302,69 @@ fixture`},
   const value = stage.discoverOverlap({packetNumber: 10, requestedScopes: ['path:docs/demo.md'], runner});
   assert.equal(value.state, 'DISJOINT');
   assert.equal(value.discovery, 'COMPLETE');
+});
+
+test('packet-activity evidence suppresses only exact proven noncompeting packet overlap', () => {
+  const rows = [
+    {number: 10, state: 'open', body: PACKET_BODY},
+    {number: 20, state: 'open', body: PACKET_BODY},
+  ];
+  const runner = (args) => {
+    const endpoint = args[2];
+    if (endpoint.startsWith(`repos/${stage.REPO}/issues?`)) return response(0, rows);
+    throw new Error(endpoint);
+  };
+  const requestedScopes = ['path:docs/demo.md'];
+  const withoutEvidence = stage.discoverOverlap({
+    packetNumber: 10, requestedScopes, runner,
+  });
+  assert.equal(withoutEvidence.state, 'OVERLAP');
+
+  const evidence = stage.normalizePacketActivityEvidenceSet(
+    packetActivityEvidenceSet(), 10);
+  const withEvidence = stage.discoverOverlap({
+    packetNumber: 10, requestedScopes, packetActivityEvidence: evidence, runner,
+  });
+  assert.equal(withEvidence.state, 'DISJOINT');
+  assert.equal(withEvidence.candidateActivity.length, 1);
+  assert.equal(withEvidence.candidateActivity[0].state, 'NONBLOCKING_PROVEN');
+
+  const activeEvidence = stage.normalizePacketActivityEvidenceSet(
+    packetActivityEvidenceSet({activeLease: true}), 10);
+  const active = stage.discoverOverlap({
+    packetNumber: 10, requestedScopes, packetActivityEvidence: activeEvidence, runner,
+  });
+  assert.equal(active.state, 'OVERLAP');
+  assert.equal(active.candidateActivity[0].state, 'ACTIVE_WRITER');
+});
+
+test('packet-activity evidence set rejects requester mismatch, duplicates and stale candidates', () => {
+  assert.throws(() => stage.normalizePacketActivityEvidenceSet(
+    packetActivityEvidenceSet({requesterRef: '#99'}), 10),
+  /PACKET_ACTIVITY_EVIDENCE_REQUESTER_CONFLICT/);
+
+  const duplicate = packetActivityEvidenceSet();
+  duplicate.candidates.push(structuredClone(duplicate.candidates[0]));
+  assert.throws(() => stage.normalizePacketActivityEvidenceSet(duplicate, 10),
+    /PACKET_ACTIVITY_EVIDENCE_CANDIDATE_INVALID/);
+
+  const rows = [
+    {number: 10, state: 'open', body: PACKET_BODY},
+    {number: 20, state: 'open', body: PACKET_BODY},
+  ];
+  const runner = (args) => {
+    const endpoint = args[2];
+    if (endpoint.startsWith(`repos/${stage.REPO}/issues?`)) return response(0, rows);
+    throw new Error(endpoint);
+  };
+  const stale = stage.normalizePacketActivityEvidenceSet(
+    packetActivityEvidenceSet({candidateRef: '#30'}), 10);
+  assert.throws(() => stage.discoverOverlap({
+    packetNumber: 10,
+    requestedScopes: ['path:docs/demo.md'],
+    packetActivityEvidence: stale,
+    runner,
+  }), /PACKET_ACTIVITY_EVIDENCE_CANDIDATE_NOT_CURRENT/);
 });
 
 test('unparseable nonterminal packet keeps overlap UNKNOWN', () => {
@@ -689,12 +786,16 @@ test('generic stage-entry PASS receipt uses v2 axes and grants no authority', ()
   assert.equal(receipt.executionAuthorized, false);
 });
 
-test('late barrier accepts exact fresh context and exact active lease', () => {
+test('late barrier accepts exact fresh context and reuses packet-activity evidence', () => {
+  const packetActivityEvidence = stage.normalizePacketActivityEvidenceSet(
+    packetActivityEvidenceSet({requesterRef: '#77'}), 77);
   const context = {
     packetNumber: 77,
     packetRef: '#77',
     plan: plan(),
     mainSha: MAIN,
+    sourceMain: null,
+    packetActivityEvidence,
     packetBodySha256: 'a'.repeat(64),
     requestedScopes: ['path:docs/demo.md'],
     workspace: {identity: {branch: 'server/mcl-packet-77', worktree: '/root/nyang-worktrees/mcl-packet-77'}},
@@ -711,11 +812,16 @@ test('late barrier accepts exact fresh context and exact active lease', () => {
     }
     throw new Error(args.join(' '));
   };
+  let seenEvidence = null;
   const fresh = stage.revalidateAfterAcquire(context, lease, {
     runner,
-    inspector: () => ({...context}),
+    inspector: (input) => {
+      seenEvidence = input.packetActivityEvidence;
+      return {...context};
+    },
   });
   assert.equal(fresh.mainSha, MAIN);
+  assert.equal(seenEvidence, packetActivityEvidence);
 });
 
 test('late barrier rejects main drift before workspace effect', () => {

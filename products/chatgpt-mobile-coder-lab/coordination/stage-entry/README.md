@@ -57,7 +57,8 @@ without `--source-main` preserves the existing behavior.
 ## Commands
 
 ```text
-node mcl-stage-entry.cjs inspect --packet '#N' --plan <regular-json-file>
+node mcl-stage-entry.cjs inspect --packet '#N' --plan <regular-json-file> \
+  [--packet-activity-evidence-file <regular-json-file>]
 
 node mcl-stage-entry.cjs apply \
   --packet '#N' \
@@ -68,6 +69,23 @@ node mcl-stage-entry.cjs apply \
 The repository is fixed to `hanmiyoo10-alt/-`. V1 accepts no caller repository,
 remote, branch, worktree path, workflow, command, argv fragment, environment map,
 owner selector, retry count, or fallback executor.
+
+### Optional packet-activity evidence
+
+Both stage-entry operations may consume one optional regular, non-symlink
+`MCL_STAGE_ENTRY_PACKET_ACTIVITY_EVIDENCE_SET` file. The set is bound to the
+exact requester packet, contains at most 12 candidate rows, and carries only
+existing `WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE` objects.
+
+Evidence is attached only to the matching current open packet candidate and is
+then interpreted by the existing Work System scope-overlap owner. A stale
+candidate, duplicate row, requester mismatch, malformed payload, or unresolved
+activity fails closed. Active-writer evidence remains blocking.
+
+Without this file, overlap behavior is unchanged. The same normalized evidence
+is retained across normalization and late pre-effect revalidation. The
+current-source launcher forwards the file only; it does not create or infer
+packet-activity evidence.
 
 The supplied plan must be exactly the reviewed S/S mutable single-phase shape:
 

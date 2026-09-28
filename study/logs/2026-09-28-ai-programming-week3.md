@@ -134,3 +134,20 @@ Next cue:
 - also correct the literal output spelling from `programing` to the PDF's `programming`.
 
 Do not promote this to a durable learner weakness; this is a current Exercise 1 control-flow correction in progress.
+
+
+## Live Exercise 1 re-check — 2026-09-28 16:22 KST
+
+Latest Colab save was re-read.
+
+Current execution:
+- input: 15
+- output: `python` followed by `python programing`
+
+Interpretation:
+- modulo checks and the combined `and` condition are now present and functioning;
+- the combined case is still implemented as a second independent `if` after the first `if/elif/else` chain, so a common multiple can produce duplicate output;
+- the next repair is still to make one mutually exclusive chain with the combined case first;
+- output spelling still uses `programing` instead of the PDF's `programming`.
+
+Exercise 1 remains `PARTIAL / CONTROL-FLOW ORDERING REMAINS`.

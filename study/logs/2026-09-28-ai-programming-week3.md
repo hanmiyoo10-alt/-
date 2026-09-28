@@ -201,3 +201,22 @@ Given the already-verified branch structure and the learner-confirmed boundary r
 `CORRECT / COMPLETE`
 
 This completion claim is scoped to the current Exercise 2 logic and its executed boundary checks.
+
+
+## Live Exercise 3 first review — 2026-09-28 16:41 KST
+
+Latest Colab save was re-read.
+
+Verified current source:
+- `weight = float(input(...))`
+- `height = float(input(...))`
+- `BMI = float(weight / height**2)`
+
+The input types and BMI calculation are correct for the exercise.
+
+Current blocker:
+- the output line uses malformed f-string content similar to `str:.2{float}`;
+- latest execution with 15 and 1.8 prints `str:.2<class 'float'>` rather than the numeric BMI;
+- the learner needs to interpolate the BMI variable itself and apply the `:.2f` format specifier to that variable.
+
+Exercise 3 state: `PARTIAL / CALCULATION CORRECT, F-STRING FORMAT REMAINS`.

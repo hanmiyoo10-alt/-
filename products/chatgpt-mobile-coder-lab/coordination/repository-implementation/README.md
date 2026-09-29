@@ -184,7 +184,7 @@ Admission is derived from current repository evidence only. The owner requires:
     aggregate exhaustion fails closed instead of proving release;
   - missing, ambiguous or lifetime-exhausted historical evidence fails closed;
 - holder absent and workspace clean;
-- current main still equal to the effect base.
+- current main either equals the effect base, or one fixed read-only compare proves the effect base is the exact merge base/ancestor of current protected main; divergence, behind state, identity mismatch, or malformed comparison evidence fails closed.
 
 The only writable effect is append-only publication of a missing exact child
 completion receipt and then a missing exact parent completion receipt. Existing

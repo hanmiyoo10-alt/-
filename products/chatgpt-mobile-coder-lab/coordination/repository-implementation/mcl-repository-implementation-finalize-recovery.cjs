@@ -271,7 +271,59 @@ function validateReleasedLease(ctx, runner = stageEntry.runDefault) {
       evidenceRef,
     },
   };
-}function validateWorkspace(ctx, spawn = childProcess.spawnSync) {
+}
+function validateEffectBaseLineage(ctx, runner = stageEntry.runDefault) {
+  const effectBase = ctx.child.value.observedBaseSha;
+  const currentMain = ctx.mainSha;
+  if (currentMain === effectBase) {
+    return {status: 'IDENTICAL', effectBase, currentMain, mergeBaseSha: effectBase};
+  }
+  let value;
+  try {
+    value = stageEntry.ghJson(
+      `repos/${REPO}/compare/${effectBase}...${currentMain}`, runner);
+  } catch {
+    fail('UNKNOWN', 'MAIN_LINEAGE_COMPARE_FAILED');
+  }
+  if (!value || typeof value.status !== 'string'
+      || !Number.isInteger(value.ahead_by) || !Number.isInteger(value.behind_by)
+      || !SHA40_RE.test(String(value?.base_commit?.sha || ''))
+      || !SHA40_RE.test(String(value?.merge_base_commit?.sha || ''))
+      || !Array.isArray(value.commits)) {
+    fail('UNKNOWN', 'MAIN_LINEAGE_COMPARE_INVALID');
+  }
+  if (value.base_commit.sha !== effectBase) {
+    fail('CONFLICT', 'MAIN_LINEAGE_BASE_CONFLICT');
+  }
+  if (value.merge_base_commit.sha !== effectBase) {
+    fail('CONFLICT', 'MAIN_LINEAGE_MERGE_BASE_CONFLICT');
+  }
+  const lastCommit = value.commits.length ? value.commits[value.commits.length - 1] : null;
+  if (!lastCommit || lastCommit.sha !== currentMain) {
+    fail('CONFLICT', 'MAIN_LINEAGE_HEAD_CONFLICT');
+  }
+  const status = value.status.toLowerCase();
+  if (status === 'ahead') {
+    if (value.ahead_by < 1 || value.behind_by !== 0) {
+      fail('CONFLICT', 'MAIN_LINEAGE_COUNTS_CONFLICT');
+    }
+  } else if (status === 'identical') {
+    if (value.ahead_by !== 0 || value.behind_by !== 0 || currentMain !== effectBase) {
+      fail('CONFLICT', 'MAIN_LINEAGE_IDENTICAL_CONFLICT');
+    }
+  } else if (status === 'behind' || status === 'diverged') {
+    fail('CONFLICT', 'MAIN_LINEAGE_NOT_DESCENDANT');
+  } else {
+    fail('UNKNOWN', 'MAIN_LINEAGE_STATUS_UNKNOWN');
+  }
+  return {
+    status: status.toUpperCase(),
+    effectBase,
+    currentMain,
+    mergeBaseSha: value.merge_base_commit.sha,
+  };
+}
+function validateWorkspace(ctx, spawn = childProcess.spawnSync) {
   const manifest = ctx.child.value;
   const inspected = workspaceHolder.inspectWorkspace(manifest);
   if (!inspected.ok) fail('BLOCKED', ...(inspected.reasonCodes || []));
@@ -401,7 +453,7 @@ function classifyReceipt(comments, manifest, expected) {
     parent: pair.parent, child: pair.child, handoffs,
   };
   validateManifestPair(ctx);
-  if (mainSha !== ctx.child.value.observedBaseSha) fail('CONFLICT', 'MAIN_MOVED_FROM_EFFECT_BASE');
+  ctx.mainLineage = validateEffectBaseLineage(ctx, runner);
   ctx.workspace = validateWorkspace(ctx, spawn);
   ctx.pr = (deps.readPrState || readPrState)(ctx, runner);
   ctx.release = validateReleasedLease(ctx);
@@ -568,6 +620,7 @@ if (require.main === module) {
   selectHandoffPair,
   selectManifestPair,
   sha256,
+  validateEffectBaseLineage,
   validateManifestPair,
   historicalCommand,
   historicalReleaseEvidence,

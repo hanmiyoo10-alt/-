@@ -547,8 +547,47 @@ function selectSelfOwnerImplementationReceipt(stageRows, packet) {
     left.row.receipt.receiptDigest.localeCompare(right.row.receipt.receiptDigest));
   return identities[0];
 }
-function selectSelfOwnerWorkspaceManifest(comments, packet, packetRef) {
+function selectSelfOwnerCompletionReceipt(comments, packet, packetRef, impl) {
+  const gates = (impl?.row?.receipt?.requiredGates || [])
+    .filter((row) => row.name === 'd014-completion');
+  if (gates.length !== 1 || gates[0].result !== 'PASS') {
+    fail(gates.length ? 'CONFLICT' : 'UNKNOWN',
+      gates.length ? 'SELF_OWNER_D014_COMPLETION_GATE_CONFLICT'
+        : 'SELF_OWNER_D014_COMPLETION_GATE_MISSING');
+  }
+  const locator = /^issue-comment:([1-9][0-9]*)$/.exec(gates[0].evidenceLocator || '');
+  if (!locator) fail('CONFLICT', 'SELF_OWNER_D014_COMPLETION_LOCATOR_INVALID');
+  const commentId = Number(locator[1]);
+  const matches = comments.filter((comment) => Number(comment?.id) === commentId);
+  if (matches.length !== 1) {
+    fail(matches.length ? 'CONFLICT' : 'UNKNOWN',
+      matches.length ? 'SELF_OWNER_D014_COMPLETION_COMMENT_AMBIGUOUS'
+        : 'SELF_OWNER_D014_COMPLETION_COMMENT_MISSING');
+  }
+  const body = commentBody(matches[0]);
+  const parsed = handoff.parseCompletionReceipt(body);
+  if (parsed.status !== 'VALID') {
+    fail(parsed.status === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN',
+      'SELF_OWNER_D014_COMPLETION_INVALID');
+  }
+  const receipt = parsed.value;
   const phaseId = String(packet) + '-implementation-pr-stage-entry';
+  if (receipt.packetRef !== packetRef
+      || receipt.phaseId !== phaseId
+      || receipt.executor !== 'S'
+      || receipt.disposition !== 'COMPLETE'
+      || receipt.workspaceResult !== 'clean'
+      || (receipt.blockerRefs || []).length
+      || (receipt.requiredUnknownRefs || []).length
+      || !(receipt.outputRefs || []).includes('pr:#' + impl.pr)) {
+    fail('CONFLICT', 'SELF_OWNER_D014_COMPLETION_IDENTITY_CONFLICT');
+  }
+  return {comment: matches[0], receipt, text: body};
+}
+
+function selectSelfOwnerWorkspaceManifest(comments, packet, packetRef, impl) {
+  const completionRow = selectSelfOwnerCompletionReceipt(comments, packet, packetRef, impl);
+  const completion = completionRow.receipt;
   const candidates = [];
   for (const comment of comments) {
     const body = commentBody(comment);
@@ -556,7 +595,7 @@ function selectSelfOwnerWorkspaceManifest(comments, packet, packetRef) {
     const parsed = handoff.parseManifest(body);
     if (parsed.status !== 'VALID') continue;
     const manifest = parsed.value;
-    if (manifest.packetRef !== packetRef || manifest.phaseId !== phaseId) continue;
+    if (manifest.manifestId !== completion.manifestId) continue;
     candidates.push({comment, manifest, text: body});
   }
   if (candidates.length !== 1) {
@@ -566,7 +605,10 @@ function selectSelfOwnerWorkspaceManifest(comments, packet, packetRef) {
   }
   const selected = candidates[0];
   const manifest = selected.manifest;
-  if (manifest.phaseClass !== 'REPOSITORY_MUTATION'
+  if (manifest.payloadSha256 !== completion.manifestPayloadSha256
+      || manifest.packetRef !== packetRef
+      || manifest.phaseId !== String(packet) + '-implementation-pr-stage-entry'
+      || manifest.phaseClass !== 'REPOSITORY_MUTATION'
       || manifest.route !== 'S'
       || manifest.executor !== 'S'
       || manifest.leaseRequirement !== 'REQUIRED'
@@ -578,7 +620,7 @@ function selectSelfOwnerWorkspaceManifest(comments, packet, packetRef) {
       || manifest.workspace?.worktree !== '/root/nyang-worktrees/mcl-packet-' + packet) {
     fail('CONFLICT', 'SELF_OWNER_WORKSPACE_MANIFEST_IDENTITY_CONFLICT');
   }
-  return selected;
+  return {...selected, completionReceipt: completion, completionText: completionRow.text};
 }
 
 function createSelfOwnerLiveContext(packetRef, deps = {}) {
@@ -611,7 +653,7 @@ function createSelfOwnerLiveContext(packetRef, deps = {}) {
       || !/^[0-9a-f]{40}$/.test(pr.merge_commit_sha || '')) {
     fail('CONFLICT', 'SELF_OWNER_MERGED_PR_IDENTITY_CONFLICT');
   }
-  const manifestRow = selectSelfOwnerWorkspaceManifest(comments, packet, packetRef);
+  const manifestRow = selectSelfOwnerWorkspaceManifest(comments, packet, packetRef, impl);
   const manifest = manifestRow.manifest;
   const target = Object.freeze({
     packet,

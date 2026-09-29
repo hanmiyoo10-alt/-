@@ -4,6 +4,7 @@
 const childProcess = require('node:child_process');
 const crypto = require('node:crypto');
 const path = require('node:path');
+const {performance} = require('node:perf_hooks');
 
 const ROOT = path.resolve(__dirname, '../../../..');
 const REPO = 'hanmiyoo10-alt/-';
@@ -14,6 +15,7 @@ const LEASE_WORKFLOW = 'mcl-task-lease.yml';
 const MAX_LEASE_RUNS = 100;
 const LEASE_RUN_LIST_TIMEOUT_MS = 10000;
 const LEASE_RUN_LOG_TIMEOUT_MS = 5000;
+const LEASE_RUN_SCAN_TIMEOUT_MS = 20000;
 const PACKET_RE = /^#[1-9][0-9]*$/;
 const SHA40_RE = /^[0-9a-f]{40}$/;
 
@@ -76,7 +78,12 @@ function parseManifestRows(comments) {
       fail(parsed.status === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN',
         ...(parsed.reasonCodes || ['MANIFEST_INVALID']));
     }
-    return {id: row.id, body: row.body, value: parsed.value};
+    return {
+      id: row.id,
+      body: row.body,
+      createdAt: typeof row.created_at === 'string' ? row.created_at : null,
+      value: parsed.value,
+    };
   });
 }
 function parseReceiptRows(comments) {
@@ -176,10 +183,27 @@ function historicalCommand(args, runner, timeoutMs) {
     stderr: result.stderr || '',
   };
 }
-function historicalReleaseEvidence(leaseId, acquiredGeneration, runner = stageEntry.runDefault) {
-  const listed = historicalCommand(['gh', 'run', 'list', '--repo', REPO, '--workflow', LEASE_WORKFLOW,
-    '--event', 'workflow_dispatch', '--limit', String(MAX_LEASE_RUNS), '--json',
-    'databaseId,status,conclusion'], runner, LEASE_RUN_LIST_TIMEOUT_MS);
+function historicalReleaseEvidence(
+  leaseId, acquiredGeneration, runner = stageEntry.runDefault, now = () => performance.now(),
+  createdAfter = null, effectBase = null) {
+  const deadline = now() + LEASE_RUN_SCAN_TIMEOUT_MS;
+  const remaining = () => Math.max(0, Math.floor(deadline - now()));
+  const listBudget = Math.min(LEASE_RUN_LIST_TIMEOUT_MS, remaining());
+  if (listBudget <= 0) fail('UNKNOWN', 'LEASE_RUN_SCAN_TIMEOUT');
+  if (createdAfter !== null
+      && (typeof createdAfter !== 'string'
+        || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(createdAfter))) {
+    fail('UNKNOWN', 'LEASE_RUN_WINDOW_INVALID');
+  }
+  if (effectBase !== null && !SHA40_RE.test(effectBase)) {
+    fail('UNKNOWN', 'LEASE_RUN_BASE_INVALID');
+  }
+  const listArgs = ['gh', 'run', 'list', '--repo', REPO, '--workflow', LEASE_WORKFLOW,
+    '--event', 'workflow_dispatch'];
+  if (createdAfter !== null) listArgs.push('--created', '>=' + createdAfter);
+  if (effectBase !== null) listArgs.push('--commit', effectBase);
+  listArgs.push('--limit', String(MAX_LEASE_RUNS), '--json', 'databaseId,status,conclusion');
+  const listed = historicalCommand(listArgs, runner, listBudget);
   if (listed.code !== 0) fail('UNKNOWN', 'LEASE_RUN_LIST_FAILED');
   let runs;
   try { runs = JSON.parse(listed.stdout || '[]'); }
@@ -188,10 +212,15 @@ function historicalReleaseEvidence(leaseId, acquiredGeneration, runner = stageEn
   for (const run of runs) {
     if (!Number.isSafeInteger(run.databaseId)
         || run.status !== 'completed' || run.conclusion !== 'success') continue;
+    const logBudget = Math.min(LEASE_RUN_LOG_TIMEOUT_MS, remaining());
+    if (logBudget <= 0) fail('UNKNOWN', 'LEASE_RUN_SCAN_TIMEOUT');
     const logs = historicalCommand(
       ['gh', 'run', 'view', String(run.databaseId), '--repo', REPO, '--log'],
-      runner, LEASE_RUN_LOG_TIMEOUT_MS);
-    if (logs.code !== 0) continue;
+      runner, logBudget);
+    if (logs.code !== 0) {
+      if (remaining() <= 0) fail('UNKNOWN', 'LEASE_RUN_SCAN_TIMEOUT');
+      continue;
+    }
     for (const line of String(logs.stdout || '').split(/\r?\n/)) {
       const start = line.indexOf('{');
       const end = line.lastIndexOf('}');
@@ -226,7 +255,10 @@ function validateReleasedLease(ctx, runner = stageEntry.runDefault) {
     releasedGeneration = parsed.state.lastRelease.releasedAtGeneration;
     evidenceRef = 'issue:#2352';
   } else {
-    const historical = historicalReleaseEvidence(leaseId, acquiredGeneration, runner);
+    if (!ctx.pr?.createdAt) fail('UNKNOWN', 'LEASE_RUN_WINDOW_MISSING');
+    const historical = historicalReleaseEvidence(
+      leaseId, acquiredGeneration, runner, () => performance.now(),
+      ctx.pr.createdAt, ctx.child.value.observedBaseSha);
     releasedGeneration = historical.generation;
     evidenceRef = 'run:' + historical.runId;
   }
@@ -282,7 +314,11 @@ function readPrState(ctx, runner = stageEntry.runDefault) {
   if (!same(changed, pathScopes(ctx.requestedScopes))) {
     fail('CONFLICT', 'PR_CHANGED_PATHS_CONFLICT');
   }
-  return {number: pr.number, head: pr.head.sha, changed};
+  if (typeof pr.created_at !== 'string'
+      || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(pr.created_at)) {
+    fail('UNKNOWN', 'PR_CREATED_AT_INVALID');
+  }
+  return {number: pr.number, head: pr.head.sha, changed, createdAt: pr.created_at};
 }
 function uniqueInputRef(child, prefix, code) {
   const rows = child.inputRefs.filter((ref) => ref.startsWith(prefix));
@@ -366,9 +402,9 @@ function classifyReceipt(comments, manifest, expected) {
   };
   validateManifestPair(ctx);
   if (mainSha !== ctx.child.value.observedBaseSha) fail('CONFLICT', 'MAIN_MOVED_FROM_EFFECT_BASE');
-  ctx.release = validateReleasedLease(ctx);
   ctx.workspace = validateWorkspace(ctx, spawn);
   ctx.pr = (deps.readPrState || readPrState)(ctx, runner);
+  ctx.release = validateReleasedLease(ctx);
   return ctx;
 }function resultView(ctx, written, childRow, parentRow) {
   const receipt = executionReceipt.projectExecutionReceipt({

@@ -104,7 +104,7 @@ function handoffText(manifest) {
     {id: 1, body: handoff.renderManifest(historical)},
     {id: 11, body: handoff.renderManifest(parent)},
     {id: 12, body: handoffText(parent)},
-    {id: 13, body: handoff.renderManifest(child)},
+    {id: 13, created_at: '2026-01-01T00:00:00Z', body: handoff.renderManifest(child)},
     {id: 14, body: handoffText(child)},
   ];
   const pair = recovery.selectManifestPair({
@@ -136,6 +136,7 @@ function handoffText(manifest) {
       number: 77,
       head: HEAD,
       changed: SCOPES.filter((x) => x.startsWith('path:')).map((x) => x.slice(5)),
+      createdAt: '2026-01-01T00:00:00Z',
     },
   };
   recovery.validateManifestPair(ctx);
@@ -330,6 +331,105 @@ test('historical run reads carry fixed bounded timeout options', () => {
   assert.equal(seen.length, 2);
   assert.equal(seen[0].options.timeout, 10000);
   assert.equal(seen[1].options.timeout, 5000);
+});
+
+
+
+
+test('historical release scan also narrows candidates by exact effect base', () => {
+  const seen = [];
+  const runner = (args) => {
+    seen.push(args);
+    if (args[1] === 'run' && args[2] === 'list') {
+      return {code: 0, stdout: JSON.stringify([
+        {databaseId: 123, status: 'completed', conclusion: 'success'},
+      ])};
+    }
+    return {code: 0, stdout: 'step\t' + JSON.stringify({
+      leaseId: LEASE, status: 'RELEASE_UPDATED', generation: 11,
+    }) + '\n'};
+  };
+  const result = recovery.historicalReleaseEvidence(
+    LEASE, 10, runner, () => 0, '2026-01-01T00:00:00Z', BASE);
+  assert.equal(result.runId, 123);
+  const commitIndex = seen[0].indexOf('--commit');
+  assert.notEqual(commitIndex, -1);
+  assert.equal(seen[0][commitIndex + 1], BASE);
+});
+
+test('invalid historical release effect base fails closed before GitHub read', () => {
+  let calls = 0;
+  assert.throws(() => recovery.historicalReleaseEvidence(
+    LEASE, 10, () => { calls += 1; return {code: 0, stdout: '[]'}; },
+    () => 0, '2026-01-01T00:00:00Z', 'not-a-sha'), /LEASE_RUN_BASE_INVALID/);
+  assert.equal(calls, 0);
+});
+
+test('historical release scan uses exact PR creation time only as a fixed candidate lower bound', () => {
+  const seen = [];
+  const runner = (args) => {
+    seen.push(args);
+    if (args[1] === 'run' && args[2] === 'list') {
+      return {code: 0, stdout: JSON.stringify([
+        {databaseId: 123, status: 'completed', conclusion: 'success'},
+      ])};
+    }
+    return {code: 0, stdout: 'step\t' + JSON.stringify({
+      leaseId: LEASE, status: 'RELEASE_UPDATED', generation: 11,
+    }) + '\n'};
+  };
+  const result = recovery.historicalReleaseEvidence(
+    LEASE, 10, runner, () => 0, '2026-01-01T00:00:00Z');
+  assert.equal(result.runId, 123);
+  const createdIndex = seen[0].indexOf('--created');
+  assert.notEqual(createdIndex, -1);
+  assert.equal(seen[0][createdIndex + 1], '>=2026-01-01T00:00:00Z');
+});
+
+test('invalid historical release candidate window fails closed before GitHub read', () => {
+  let calls = 0;
+  assert.throws(() => recovery.historicalReleaseEvidence(
+    LEASE, 10, () => { calls += 1; return {code: 0, stdout: '[]'}; },
+    () => 0, 'not-a-time'), /LEASE_RUN_WINDOW_INVALID/);
+  assert.equal(calls, 0);
+});
+
+test('historical release scan clamps log reads to remaining aggregate budget', () => {
+  const times = [0, 0, 16000, 16000, 16000];
+  const now = () => times.length ? times.shift() : 16000;
+  const seen = [];
+  const runner = (args, options) => {
+    seen.push({args, options});
+    if (args[1] === 'run' && args[2] === 'list') {
+      return {code: 0, stdout: JSON.stringify([
+        {databaseId: 123, status: 'completed', conclusion: 'success'},
+      ])};
+    }
+    return {code: 0, stdout: 'step\\t' + JSON.stringify({
+      leaseId: LEASE, status: 'RELEASE_UPDATED', generation: 11,
+    }) + '\\n'};
+  };
+  const result = recovery.historicalReleaseEvidence(LEASE, 10, runner, now);
+  assert.equal(result.runId, 123);
+  assert.equal(seen[0].options.timeout, 10000);
+  assert.equal(seen[1].options.timeout, 4000);
+});
+
+test('historical release scan aggregate exhaustion fails closed before another log read', () => {
+  const times = [0, 0, 20000, 20000];
+  const now = () => times.length ? times.shift() : 20000;
+  let calls = 0;
+  assert.throws(() => recovery.historicalReleaseEvidence(LEASE, 10, (args, options) => {
+    calls += 1;
+    assert.ok(options.timeout > 0);
+    if (args[1] === 'run' && args[2] === 'list') {
+      return {code: 0, stdout: JSON.stringify([
+        {databaseId: 123, status: 'completed', conclusion: 'success'},
+      ])};
+    }
+    return {code: 0, stdout: ''};
+  }, now), /LEASE_RUN_SCAN_TIMEOUT/);
+  assert.equal(calls, 1);
 });
 
 test('historical release proof rejects wrong lease status and stale generation', () => {

@@ -136,8 +136,12 @@ test('public parser accepts only inspect/apply packet+format', () => {
     owner.parseArgs(['inspect', '--packet', '#3092', '--format', 'agent-view']),
     {command: 'inspect', packetRef: '#3092', format: 'agent-view'},
   );
+  assert.deepEqual(
+    owner.parseArgs(['inspect', '--packet', '#3149', '--format', 'agent-view']),
+    {command: 'inspect', packetRef: '#3149', format: 'agent-view'},
+  );
   for (const argv of [
-    ['apply', '--packet', '#1', '--format', 'json'],
+    ['apply', '--packet', '#0', '--format', 'json'],
     ['apply', '--packet', '#2463', '--format', 'json', '--repo', 'x/y'],
     ['apply', '--packet', '#2463', '--format', 'json', '--pr', '2464'],
     ['apply', '--packet', '#2463', '--format', 'json', '--manifest', 'x'],
@@ -497,12 +501,146 @@ test('#3043 receipt selection requires all fixed currentization coordination gat
 test('arbitrary packet remains outside reviewed finalization targets', () => {
   assert.throws(
     () => owner.inspectPacket('#9999', {
-      createContext: () => fake2786Context(),
+      createSelfOwnerContext: () => {
+        throw new owner.ApplyError('BLOCKED', ['PACKET_NOT_REVIEWED_TARGET']);
+      },
       readState: () => fake2786State(),
     }),
     (error) => error instanceof owner.ApplyError
       && error.reasonCodes.includes('PACKET_NOT_REVIEWED_TARGET'),
   );
+});
+test('self-owner class reuses receipt-only implementation coordination path', () => {
+  let phase = 0;
+  const calls = [];
+  const target = {
+    ...owner.TARGET_3092,
+    packet: 3149,
+    packetRef: '#3149',
+    pr: 3152,
+    candidate: 'a'.repeat(40),
+    merge: 'b'.repeat(40),
+  };
+  const ctx = {
+    ...fake2786Context(),
+    target,
+    packet: 3149,
+    packetRef: '#3149',
+  };
+  const result = owner.applyPacket('#3149', {
+    createSelfOwnerContext: () => ctx,
+    readState: () => phase === 0
+      ? fake2786State()
+      : fake2786State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+    buildValidationStageText: () => ({text: 'SELF-STAGE'}),
+    publishExact: (packet, body) => {
+      calls.push([packet, body]);
+      phase = 1;
+      return {written: 1, reused: 0, lostAckRecovered: false};
+    },
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.packetRef, '#3149');
+  assert.deepEqual(result.effects, {
+    holderCleaned: 0, d014Published: 0, stageReceiptPublished: 1,
+  });
+  assert.deepEqual(calls, [[3149, 'SELF-STAGE']]);
+});
+test('self-owner implementation receipt requires exact scope and fixed gates', () => {
+  const gates = owner.SELF_OWNER_REQUIRED_GATES.map((name) => ({name, result: 'PASS'}));
+  const row = {
+    comment: {id: 1},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 3149,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: 'a'.repeat(64),
+      authorityRefs: [
+        {kind: 'COMMIT', locator: 'candidate-head', identity: 'b'.repeat(40)},
+        {kind: 'PR', locator: 'pr:#3152', identity: 'b'.repeat(40)},
+      ],
+      requiredGates: gates,
+      scope: {
+        paths: owner.SELF_OWNER_PATHS,
+        diffRequired: true,
+        diffIdentity: 'c'.repeat(64),
+      },
+    },
+  };
+  const selected = owner.selectSelfOwnerImplementationReceipt([row], 3149);
+  assert.equal(selected.pr, 3152);
+  assert.equal(selected.candidate, 'b'.repeat(40));
+  assert.equal(selected.row, row);
+  assert.throws(() => owner.selectSelfOwnerImplementationReceipt([{
+    ...row,
+    receipt: {...row.receipt, requiredGates: gates.slice(1)},
+  }], 3149), owner.ApplyError);
+  assert.throws(() => owner.selectSelfOwnerImplementationReceipt([{
+    ...row,
+    receipt: {...row.receipt, scope: {
+      ...row.receipt.scope,
+      paths: [...owner.SELF_OWNER_PATHS, 'products/near-match.txt'].sort(),
+    }},
+  }], 3149), owner.ApplyError);
+});
+test('self-owner implementation receipt conflicts on semantic merged generation drift', () => {
+  const gates = owner.SELF_OWNER_REQUIRED_GATES.map((name) => ({name, result: 'PASS'}));
+  const make = (id, pr, sha) => ({
+    comment: {id},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 3149,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: String(id).repeat(64).slice(0, 64),
+      authorityRefs: [
+        {kind: 'COMMIT', locator: 'candidate-head', identity: sha},
+        {kind: 'PR', locator: 'pr:#' + pr, identity: sha},
+      ],
+      requiredGates: gates,
+      scope: {paths: owner.SELF_OWNER_PATHS, diffRequired: true, diffIdentity: 'd'.repeat(64)},
+    },
+  });
+  assert.throws(() => owner.selectSelfOwnerImplementationReceipt([
+    make(1, 3152, 'b'.repeat(40)),
+    make(2, 3153, 'e'.repeat(40)),
+  ], 3149), owner.ApplyError);
+});
+test('self-owner workspace manifest requires exact owner scope and deterministic workspace', () => {
+  const manifest = handoff.buildManifest({
+    schemaVersion: 1,
+    mode: 'MCL_TASK_MANIFEST',
+    packetRef: '#3149',
+    packetBodySha256: 'a'.repeat(64),
+    phaseId: '3149-implementation-pr-stage-entry',
+    phaseClass: 'REPOSITORY_MUTATION',
+    route: 'S',
+    executor: 'S',
+    scopes: owner.SELF_OWNER_SCOPES,
+    workspace: {
+      kind: 'repository',
+      branch: 'server/mcl-packet-3149',
+      worktree: '/root/nyang-worktrees/mcl-packet-3149',
+    },
+    observedBaseSha: 'b'.repeat(40),
+    leaseRequirement: 'REQUIRED',
+    leaseEvidence: {
+      ledgerRef: '#2352',
+      leaseId: 'c'.repeat(64),
+      acquiredGeneration: 10,
+      acquireEvidenceRef: 'receipt:mcl-task-lease:' + 'c'.repeat(64) + ':generation:10',
+    },
+    sourceAuthorityRefs: ['#3149', 'issue:#2352'],
+    inputRefs: ['commit:' + 'b'.repeat(40)],
+    expectedOutputRefs: owner.SELF_OWNER_PATHS.map((repoPath) => 'path:' + repoPath),
+    acceptanceRefs: ['#3149'],
+    stopCondition: 'Test stable self-owner manifest selection.',
+    authority: {...handoff.AUTHORITY_FLAGS},
+  });
+  const selected = owner.selectSelfOwnerWorkspaceManifest(
+    [{id: 1, body: handoff.renderManifest(manifest)}], 3149, '#3149');
+  assert.equal(selected.manifest.manifestId, manifest.manifestId);
 });
 test('#2786 already-finalized retry is zero-effect', () => {
   let writes = 0;

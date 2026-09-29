@@ -10,6 +10,10 @@ const REPO = 'hanmiyoo10-alt/-';
 const REPO_OWNER = 'hanmiyoo10-alt';
 const MAX_PAGES = 5;
 const PAGE_SIZE = 100;
+const LEASE_WORKFLOW = 'mcl-task-lease.yml';
+const MAX_LEASE_RUNS = 100;
+const LEASE_RUN_LIST_TIMEOUT_MS = 10000;
+const LEASE_RUN_LOG_TIMEOUT_MS = 5000;
 const PACKET_RE = /^#[1-9][0-9]*$/;
 const SHA40_RE = /^[0-9a-f]{40}$/;
 
@@ -161,25 +165,78 @@ function validateManifestPair(ctx) {
     fail('CONFLICT', 'HANDOFF_BINDING_CONFLICT');
   }
 }
-function validateReleasedLease(ctx) {
+function historicalCommand(args, runner, timeoutMs) {
+  if (runner !== stageEntry.runDefault) return runner(args, {timeout: timeoutMs});
+  const result = childProcess.spawnSync(args[0], args.slice(1), {
+    encoding: 'utf8', shell: false, timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024,
+  });
+  return {
+    code: Number.isInteger(result.status) ? result.status : 127,
+    stdout: result.stdout || '',
+    stderr: result.stderr || '',
+  };
+}
+function historicalReleaseEvidence(leaseId, acquiredGeneration, runner = stageEntry.runDefault) {
+  const listed = historicalCommand(['gh', 'run', 'list', '--repo', REPO, '--workflow', LEASE_WORKFLOW,
+    '--event', 'workflow_dispatch', '--limit', String(MAX_LEASE_RUNS), '--json',
+    'databaseId,status,conclusion'], runner, LEASE_RUN_LIST_TIMEOUT_MS);
+  if (listed.code !== 0) fail('UNKNOWN', 'LEASE_RUN_LIST_FAILED');
+  let runs;
+  try { runs = JSON.parse(listed.stdout || '[]'); }
+  catch { fail('UNKNOWN', 'LEASE_RUN_LIST_INVALID'); }
+  const matches = [];
+  for (const run of runs) {
+    if (!Number.isSafeInteger(run.databaseId)
+        || run.status !== 'completed' || run.conclusion !== 'success') continue;
+    const logs = historicalCommand(
+      ['gh', 'run', 'view', String(run.databaseId), '--repo', REPO, '--log'],
+      runner, LEASE_RUN_LOG_TIMEOUT_MS);
+    if (logs.code !== 0) continue;
+    for (const line of String(logs.stdout || '').split(/\r?\n/)) {
+      const start = line.indexOf('{');
+      const end = line.lastIndexOf('}');
+      if (start < 0 || end <= start) continue;
+      let value;
+      try { value = JSON.parse(line.slice(start, end + 1)); } catch { continue; }
+      if (value.leaseId !== leaseId || value.status !== 'RELEASE_UPDATED') continue;
+      if (!Number.isSafeInteger(value.generation)) {
+        fail('UNKNOWN', 'LEASE_RUN_GENERATION_INVALID');
+      }
+      if (value.generation <= acquiredGeneration) continue;
+      matches.push({runId: run.databaseId, generation: value.generation});
+    }
+  }
+  const byRun = new Map(matches.map((item) => [item.runId, item]));
+  if (byRun.size === 0) fail('BLOCKED', 'D013_RELEASE_NOT_PROVEN');
+  if (byRun.size > 1) fail('CONFLICT', 'D013_RELEASE_PROOF_AMBIGUOUS');
+  return [...byRun.values()][0];
+}
+function validateReleasedLease(ctx, runner = stageEntry.runDefault) {
   const parsed = taskLease.parseLedger(ctx.ledger.body || '');
   if (!parsed.ok) fail('UNKNOWN', 'LEDGER_INVALID', ...(parsed.reasonCodes || []));
   const leaseId = ctx.child.value.leaseEvidence.leaseId;
+  const acquiredGeneration = ctx.child.value.leaseEvidence.acquiredGeneration;
   if (parsed.state.activeLeases.some((row) => row.leaseId === leaseId)) {
     fail('BLOCKED', 'D013_LEASE_STILL_ACTIVE');
   }
-  if (parsed.state.lastRelease?.leaseId !== leaseId
-      || parsed.state.lastRelease.releasedAtGeneration
-        <= ctx.child.value.leaseEvidence.acquiredGeneration) {
-    fail('BLOCKED', 'D013_RELEASE_NOT_PROVEN');
+  let releasedGeneration;
+  let evidenceRef;
+  if (parsed.state.lastRelease?.leaseId === leaseId
+      && parsed.state.lastRelease.releasedAtGeneration > acquiredGeneration) {
+    releasedGeneration = parsed.state.lastRelease.releasedAtGeneration;
+    evidenceRef = 'issue:#2352';
+  } else {
+    const historical = historicalReleaseEvidence(leaseId, acquiredGeneration, runner);
+    releasedGeneration = historical.generation;
+    evidenceRef = 'run:' + historical.runId;
   }
   return {
     state: parsed.state,
     evidence: {
       ledgerRef: '#2352',
       leaseId,
-      releasedGeneration: parsed.state.lastRelease.releasedAtGeneration,
-      evidenceRef: 'issue:#2352',
+      releasedGeneration,
+      evidenceRef,
     },
   };
 }function validateWorkspace(ctx, spawn = childProcess.spawnSync) {
@@ -476,6 +533,8 @@ if (require.main === module) {
   selectManifestPair,
   sha256,
   validateManifestPair,
+  historicalCommand,
+  historicalReleaseEvidence,
   validateReleasedLease,
   validateWorkspace,
 };

@@ -277,3 +277,27 @@ Natural finalization apply for any newly reviewed profile is forbidden during
 IMPLEMENTATION_PR, VALIDATION_MERGE and POSTMERGE_CONVERGENCE of this coordinator
 change. Existing #2463/#2786/#3043 proof remains historical. The first #3051 apply belongs
 only after this implementation is merged and postmerge-proven.
+
+## Stable self-owner finalization class
+
+Fixed packet profiles remain authoritative and take precedence. A packet outside that
+map may enter the self-owner class only when current repository evidence proves its
+deterministic packet scope is exactly the three MCL validation-finalization owner files
+plus `surface:mcl:validation-finalization-effect`.
+
+Class membership is never granted by packet number alone. The owner derives the
+candidate and PR from a qualifying canonical `IMPLEMENTATION_PR` receipt, requires the
+fixed self-owner gate set, derives deterministic repository workspace/lease lineage
+from the exact stage-entry D-014 manifest, requires the PR to be merged at that exact
+candidate, and reuses the existing lease-absence, holder-absence, clean-workspace,
+immutable validation-receipt-set and receipt-only finalization checks.
+
+The class can publish only the canonical `VALIDATION_MERGE` stage receipt. It cannot
+publish validation-stage D-014 completion, mutate Git/refs/PRs, currentize, acquire or
+release D-013, mutate the holder, touch devices/runtime, or grant release/production
+authority. A second exact apply is zero-effect. Near-match scopes, missing fixed gates,
+ambiguous semantic receipt generations, invalid manifests, active leases, holder
+presence, dirty/non-exact workspaces, and unmerged/mismatched PRs remain fail-closed.
+
+This stable class exists so an implementation packet that changes this owner can
+finalize itself after merge instead of creating another packet-specific finalizer debt.

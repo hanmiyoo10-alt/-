@@ -50,6 +50,8 @@ The existing stage-entry manifest and `HANDOFF_READY` are immutable parent prepa
 
 Before effect, the coordinator requires the exact parent envelopes to exist as unique durable packet comments, verifies the current packet-body digest and active lease, and re-runs complete Work System overlap discovery.
 
+When an open historical packet overlaps only because its source scope is still present in a later lifecycle stage, the caller may provide one optional `--packet-activity-evidence-file`. The file uses the existing stage-entry packet-activity evidence-set schema and is normalized by the stage-entry owner before discovery. Only an exact `NONBLOCKING_PROVEN` packet classification may suppress that packet candidate. Missing evidence for an overlapping packet remains blocking; `ACTIVE_WRITER`, `UNKNOWN`, `CONFLICT`, stale-candidate evidence, malformed evidence, requester mismatch and every open-PR overlap remain fail-closed. Omitting the file preserves the historical raw-overlap behavior.
+
 A new child `REPOSITORY_MUTATION` manifest binds:
 
 - exact parent manifest and handoff comment locators;
@@ -143,10 +145,11 @@ node mcl-repository-implementation.cjs \
   --patch-file <regular file> \
   --validation-request-file <regular file> \
   --pr-request-file <regular file> \
+  [--packet-activity-evidence-file <regular JSON file>] \
   --apply
 ```
 
-`--apply` is mandatory. Normal stdout is one bounded `REPOSITORY_AGENT_DECISION_VIEW v1`. Raw Git, test, holder, lease and GitHub plumbing stays behind evidence locators unless targeted drill-down is required.
+`--apply` is mandatory. The packet-activity file is optional and cannot select a repository, packet relationship, PR, scope, effect owner or validation profile outside the existing exact schema/current discovery; it only supplies bounded evidence for packet candidates already present in the fresh complete overlap scan. Normal stdout is one bounded `REPOSITORY_AGENT_DECISION_VIEW v1`. Raw Git, test, holder, lease and GitHub plumbing stays behind evidence locators unless targeted drill-down is required.
 
 ## Live-consumer history
 

@@ -95,6 +95,34 @@ function commentUrl(packet, id) {
 function pathScopes(scopes) {
   return [...scopes].filter((scope) => scope.startsWith('path:')).map((scope) => scope.slice(5)).sort();
 }
+function readPacketActivityEvidence(filePath, packetRef) {
+  if (!filePath) return null;
+  let value;
+  try {
+    value = JSON.parse(readRegular(filePath, 'PACKET_ACTIVITY_EVIDENCE_FILE').toString('utf8'));
+  } catch (error) {
+    if (error instanceof ImplementationError) throw error;
+    fail('UNKNOWN', 'PACKET_ACTIVITY_EVIDENCE_JSON_INVALID');
+  }
+  try {
+    return stageEntry.normalizePacketActivityEvidenceSet(value, packetNumber(packetRef));
+  } catch (error) {
+    if (error instanceof stageEntry.StageError) fail(error.kind, ...error.reasonCodes);
+    throw error;
+  }
+}
+function requireCurrentOverlap({
+  packet, requestedScopes, packetActivityEvidence = null, runner,
+  discoverOverlap = stageEntry.discoverOverlap,
+}) {
+  const overlap = discoverOverlap({
+    packetNumber: packet, requestedScopes, packetActivityEvidence, runner,
+  });
+  if (overlap.state !== 'DISJOINT' || overlap.discovery !== 'COMPLETE') {
+    fail(overlap.state === 'CONFLICT' ? 'CONFLICT' : 'BLOCKED', 'CURRENT_SCOPE_NOT_DISJOINT');
+  }
+  return overlap;
+}
 function parsePrRequestText(text, packetRef) {
   let value;
   try { value = JSON.parse(text); } catch (_) { fail('UNKNOWN', 'PR_REQUEST_JSON_INVALID'); }
@@ -206,7 +234,8 @@ function mainHealth(runner) {
   return first;
 }
 async function prepareLiveContext({
-  packetRef, parentManifestText, parentHandoffText, env, runner, fetchImpl, spawnSyncImpl,
+  packetRef, parentManifestText, parentHandoffText, packetActivityEvidence = null,
+  env, runner, fetchImpl, spawnSyncImpl,
 }) {
   const packet = packetNumber(packetRef);
   const manifestParsed = taskHandoff.parseManifest(parentManifestText);
@@ -230,10 +259,9 @@ async function prepareLiveContext({
   const requestedScopes = stageEntry.extractPacketScopes(issue.body);
   const context = await operator.readContext({client, packetRef, scopes: requestedScopes});
   if (context.status !== 'READY') fail('BLOCKED', ...context.reasonCodes);
-  const overlap = stageEntry.discoverOverlap({packetNumber: packet, requestedScopes, runner});
-  if (overlap.state !== 'DISJOINT' || overlap.discovery !== 'COMPLETE') {
-    fail(overlap.state === 'CONFLICT' ? 'CONFLICT' : 'BLOCKED', 'CURRENT_SCOPE_NOT_DISJOINT');
-  }
+  const overlap = requireCurrentOverlap({
+    packet, requestedScopes, packetActivityEvidence, runner,
+  });
   const mainSha = mainHealth(runner);
   const comments = readComments(packet, runner);
   const parentManifestComment = exactComment(comments, parentManifestText, 'PARENT_MANIFEST');
@@ -871,10 +899,11 @@ function errorView(error, packetRef = 'UNKNOWN') {
   });
 }
 function parseArgs(argv) {
-  const allowed = new Set([
+  const required = new Set([
     'packet', 'parent-manifest-file', 'parent-handoff-file', 'request-file', 'patch-file',
     'validation-request-file', 'pr-request-file',
   ]);
+  const allowed = new Set([...required, 'packet-activity-evidence-file']);
   const values = {};
   let apply = false;
   for (let i = 0; i < argv.length; i += 1) {
@@ -886,7 +915,7 @@ function parseArgs(argv) {
     values[key] = argv[++i];
   }
   if (!apply) fail('BLOCKED', 'EXPLICIT_APPLY_REQUIRED');
-  for (const key of allowed) if (!values[key]) fail('UNKNOWN', 'ARGUMENT_REQUIRED:' + key);
+  for (const key of required) if (!values[key]) fail('UNKNOWN', 'ARGUMENT_REQUIRED:' + key);
   return values;
 }
 function createDetachedIpcCheckpointSink(processRef = process, timeoutMs = 15000) {
@@ -925,6 +954,9 @@ async function runCli(argv = process.argv.slice(2), deps = {}) {
   try {
     const args = parseArgs(argv);
     packetRef = args.packet;
+    const packetActivityEvidence = args['packet-activity-evidence-file']
+      ? readPacketActivityEvidence(args['packet-activity-evidence-file'], packetRef)
+      : null;
     const parentManifestText = readRegular(args['parent-manifest-file'], 'PARENT_MANIFEST_FILE').toString('utf8');
     const parentHandoffText = readRegular(args['parent-handoff-file'], 'PARENT_HANDOFF_FILE').toString('utf8');
     const requestText = readRegular(args['request-file'], 'REQUEST_FILE').toString('utf8');
@@ -932,7 +964,7 @@ async function runCli(argv = process.argv.slice(2), deps = {}) {
       readRegular(args['validation-request-file'], 'VALIDATION_REQUEST_FILE').toString('utf8');
     const prRequestText = readRegular(args['pr-request-file'], 'PR_REQUEST_FILE').toString('utf8');
     const ctx = await (deps.prepareLiveContext || prepareLiveContext)({
-      packetRef, parentManifestText, parentHandoffText,
+      packetRef, parentManifestText, parentHandoffText, packetActivityEvidence,
       env: deps.env || process.env,
       runner: deps.runner || stageEntry.runDefault,
       fetchImpl: deps.fetchImpl,
@@ -980,6 +1012,8 @@ module.exports = {
   parseHandoffEnvelope,
   parsePrRequestText,
   pathScopes,
+  readPacketActivityEvidence,
+  requireCurrentOverlap,
   prepareLiveContext,
   publishPr,
   readComments,

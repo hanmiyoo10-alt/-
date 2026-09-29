@@ -181,8 +181,122 @@ test('CLI is explicit apply and has no owner/repo/base/head override', () => {
     '--apply',
   ];
   assert.equal(impl.parseArgs(valid).packet, PACKET);
+  const withActivity = [
+    ...valid.slice(0, -1),
+    '--packet-activity-evidence-file', '/tmp/activity.json',
+    '--apply',
+  ];
+  assert.equal(
+    impl.parseArgs(withActivity)['packet-activity-evidence-file'],
+    '/tmp/activity.json',
+  );
   assert.throws(() => impl.parseArgs(valid.filter((item) => item !== '--apply')), /EXPLICIT_APPLY_REQUIRED/);
   assert.throws(() => impl.parseArgs([...valid, '--base', 'main']), /ARGUMENT_UNSUPPORTED/);
+});
+
+test('packet activity evidence reuses stage-entry schema and requester binding', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'repo-impl-activity-'));
+  const file = path.join(dir, 'activity.json');
+  const evidence = {
+    schemaVersion: 1,
+    mode: 'MCL_STAGE_ENTRY_PACKET_ACTIVITY_EVIDENCE_SET',
+    requesterRef: PACKET,
+    candidates: [{
+      candidateRef: '#8001',
+      evidence: {
+        schemaVersion: 1,
+        mode: 'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE',
+        candidateRef: '#8001',
+        requesterRef: PACKET,
+        relationship: 'DEFERRED_OWNER',
+        repositoryMutationActive: false,
+        activeLease: false,
+        overlappingOpenPr: false,
+        sequencingExplicit: true,
+        sourceRefs: ['issue:#8001'],
+      },
+    }],
+  };
+  try {
+    fs.writeFileSync(file, JSON.stringify(evidence));
+    const parsed = impl.readPacketActivityEvidence(file, PACKET);
+    assert.equal(parsed.requesterRef, PACKET);
+    assert.equal(parsed.candidates.length, 1);
+    assert.equal(parsed.candidates[0].candidateRef, '#8001');
+    assert.equal(parsed.candidates[0].evidence.relationship, 'DEFERRED_OWNER');
+
+    fs.writeFileSync(file, JSON.stringify({...evidence, requesterRef: '#9002'}));
+    assert.throws(
+      () => impl.readPacketActivityEvidence(file, PACKET),
+      (error) => error instanceof impl.ImplementationError
+        && error.kind === 'CONFLICT'
+        && error.reasonCodes.includes('PACKET_ACTIVITY_EVIDENCE_REQUESTER_CONFLICT'),
+    );
+
+    fs.writeFileSync(file, '{not-json');
+    assert.throws(
+      () => impl.readPacketActivityEvidence(file, PACKET),
+      /PACKET_ACTIVITY_EVIDENCE_JSON_INVALID/,
+    );
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('current overlap forwards bounded activity evidence and preserves fail-closed results', () => {
+  const activity = {schemaVersion: 1, candidates: []};
+  let observed = null;
+  const pass = impl.requireCurrentOverlap({
+    packet: 9001,
+    requestedScopes: SCOPES,
+    packetActivityEvidence: activity,
+    runner: () => ({code: 0}),
+    discoverOverlap: (input) => {
+      observed = input;
+      return {state: 'DISJOINT', discovery: 'COMPLETE'};
+    },
+  });
+  assert.equal(pass.state, 'DISJOINT');
+  assert.equal(observed.packetNumber, 9001);
+  assert.deepEqual(observed.requestedScopes, SCOPES);
+  assert.equal(observed.packetActivityEvidence, activity);
+
+  observed = null;
+  impl.requireCurrentOverlap({
+    packet: 9001,
+    requestedScopes: SCOPES,
+    runner: () => ({code: 0}),
+    discoverOverlap: (input) => {
+      observed = input;
+      return {state: 'DISJOINT', discovery: 'COMPLETE'};
+    },
+  });
+  assert.equal(observed.packetActivityEvidence, null);
+
+  assert.throws(
+    () => impl.requireCurrentOverlap({
+      packet: 9001,
+      requestedScopes: SCOPES,
+      packetActivityEvidence: activity,
+      runner: () => ({code: 0}),
+      discoverOverlap: () => ({state: 'OVERLAP', discovery: 'COMPLETE'}),
+    }),
+    (error) => error instanceof impl.ImplementationError
+      && error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('CURRENT_SCOPE_NOT_DISJOINT'),
+  );
+  assert.throws(
+    () => impl.requireCurrentOverlap({
+      packet: 9001,
+      requestedScopes: SCOPES,
+      packetActivityEvidence: activity,
+      runner: () => ({code: 0}),
+      discoverOverlap: () => ({state: 'CONFLICT', discovery: 'COMPLETE'}),
+    }),
+    (error) => error instanceof impl.ImplementationError
+      && error.kind === 'CONFLICT'
+      && error.reasonCodes.includes('CURRENT_SCOPE_NOT_DISJOINT'),
+  );
 });
 
 test('child manifest binds parent, patch, validation, PR and lease identity', () => {

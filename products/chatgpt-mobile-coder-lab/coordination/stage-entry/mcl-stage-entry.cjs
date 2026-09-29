@@ -13,6 +13,8 @@ const LEDGER_ISSUE = 2352;
 const PAGE_SIZE = 100;
 const MAX_PAGES = 5;
 const MAX_PLAN_BYTES = 16 * 1024;
+const MAX_PACKET_ACTIVITY_CANDIDATES = 12;
+const PACKET_ACTIVITY_EVIDENCE_MODE = 'MCL_STAGE_ENTRY_PACKET_ACTIVITY_EVIDENCE_SET';
 const PACKET_REF_RE = /^#[1-9][0-9]*$/;
 const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
@@ -100,6 +102,44 @@ function exactKeys(value, allowed, prefix) {
   }
 }
 
+function normalizePacketActivityEvidenceSet(input, packetNumber) {
+  exactKeys(input, new Set(['schemaVersion', 'mode', 'requesterRef', 'candidates']),
+    'PACKET_ACTIVITY_EVIDENCE_SET');
+  if (input.schemaVersion !== 1 || input.mode !== PACKET_ACTIVITY_EVIDENCE_MODE
+      || !Array.isArray(input.candidates)
+      || input.candidates.length > MAX_PACKET_ACTIVITY_CANDIDATES) {
+    throw new StageError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_SET_INVALID']);
+  }
+  const requesterRef = '#' + packetNumber;
+  if (input.requesterRef !== requesterRef) {
+    throw new StageError('CONFLICT', ['PACKET_ACTIVITY_EVIDENCE_REQUESTER_CONFLICT']);
+  }
+  const seen = new Set();
+  const candidates = input.candidates.map((row) => {
+    exactKeys(row, new Set(['candidateRef', 'evidence']), 'PACKET_ACTIVITY_EVIDENCE_CANDIDATE');
+    if (!PACKET_REF_RE.test(String(row.candidateRef || '')) || seen.has(row.candidateRef)) {
+      throw new StageError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_CANDIDATE_INVALID']);
+    }
+    seen.add(row.candidateRef);
+    const evidence = row.evidence;
+    exactKeys(evidence, new Set([
+      'schemaVersion', 'mode', 'candidateRef', 'requesterRef', 'relationship',
+      'repositoryMutationActive', 'activeLease', 'overlappingOpenPr',
+      'sequencingExplicit', 'sourceRefs',
+    ]), 'PACKET_ACTIVITY_EVIDENCE');
+    if (evidence.schemaVersion !== 1
+        || evidence.mode !== 'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE'
+        || evidence.candidateRef !== row.candidateRef
+        || evidence.requesterRef !== requesterRef
+        || !Array.isArray(evidence.sourceRefs)) {
+      throw new StageError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_PAYLOAD_INVALID']);
+    }
+    return {candidateRef: row.candidateRef, evidence};
+  });
+  candidates.sort((a, b) => a.candidateRef.localeCompare(b.candidateRef));
+  return {schemaVersion: 1, mode: PACKET_ACTIVITY_EVIDENCE_MODE, requesterRef, candidates};
+}
+
 function parsePlan(value) {
   exactKeys(value, PLAN_FIELDS, 'PLAN');
   const expected = {
@@ -145,7 +185,7 @@ function parseArgs(argv) {
     if (values[name] !== undefined) throw new StageError('UNKNOWN', [`ARGUMENT_DUPLICATE:${name}`]);
     values[name] = value;
   }
-  const allowed = new Set(['packet', 'plan', 'source-main', 'apply']);
+  const allowed = new Set(['packet', 'plan', 'source-main', 'packet-activity-evidence-file', 'apply']);
   const extras = Object.keys(values).filter((key) => !allowed.has(key));
   if (extras.length) throw new StageError('UNKNOWN', extras.map((key) => `ARGUMENT_UNSUPPORTED:${key}`));
   if (!PACKET_REF_RE.test(values.packet || '')) throw new StageError('UNKNOWN', ['PACKET_REF_INVALID']);
@@ -161,6 +201,7 @@ function parseArgs(argv) {
     packetNumber: Number(values.packet.slice(1)),
     planFile: values.plan,
     sourceMain: values['source-main'] || null,
+    packetActivityEvidenceFile: values['packet-activity-evidence-file'] || null,
   };
 }
 
@@ -253,17 +294,29 @@ function fetchPaged(endpointBuilder, runner = runDefault) {
   return {complete: false, rows};
 }
 
-function discoverOverlap({packetNumber, requestedScopes, runner = runDefault}) {
+function discoverOverlap({
+  packetNumber, requestedScopes, packetActivityEvidence = null, runner = runDefault,
+}) {
+  const requesterRef = '#' + packetNumber;
   const issues = fetchPaged(
     (page) => `repos/${REPO}/issues?state=open&per_page=${PAGE_SIZE}&page=${page}`, runner);
   if (!issues.complete) {
-    return scopeOverlap.resolveScopeOverlap({requestedScopes, discovery: 'PARTIAL', candidates: []});
+    return scopeOverlap.resolveScopeOverlap({
+      requesterRef, requestedScopes, discovery: 'PARTIAL', candidates: [],
+    });
   }
+  const evidenceRows = packetActivityEvidence?.candidates || [];
+  const evidenceByCandidate = new Map(
+    evidenceRows.map((row) => [row.candidateRef, row.evidence]),
+  );
+  const seenEvidence = new Set();
   const candidates = [];
   const prIssues = [];
   for (const item of issues.rows) {
     if (!Number.isSafeInteger(item?.number) || typeof item?.state !== 'string') {
-      return scopeOverlap.resolveScopeOverlap({requestedScopes, discovery: 'UNKNOWN', candidates});
+      return scopeOverlap.resolveScopeOverlap({
+        requesterRef, requestedScopes, discovery: 'UNKNOWN', candidates,
+      });
     }
     if (item.pull_request) {
       prIssues.push(item);
@@ -271,8 +324,22 @@ function discoverOverlap({packetNumber, requestedScopes, runner = runDefault}) {
     }
     if (item.number === packetNumber) continue;
     if (typeof item.body === 'string' && item.body.includes(PACKET_MARKER)) {
-      candidates.push({type: 'packet', ref: `#${item.number}`, issueState: item.state, body: item.body});
+      const canonicalRef = '#' + item.number;
+      const evidence = evidenceByCandidate.get(canonicalRef);
+      if (evidence) seenEvidence.add(canonicalRef);
+      candidates.push({
+        type: 'packet',
+        ref: canonicalRef,
+        issueState: item.state,
+        body: item.body,
+        ...(evidence ? {packetActivityEvidence: evidence} : {}),
+      });
     }
+  }
+  const staleEvidence = [...evidenceByCandidate.keys()]
+    .filter((candidateRef) => !seenEvidence.has(candidateRef));
+  if (staleEvidence.length) {
+    throw new StageError('CONFLICT', ['PACKET_ACTIVITY_EVIDENCE_CANDIDATE_NOT_CURRENT']);
   }
   for (const pr of prIssues) {
     const files = fetchPaged(
@@ -287,6 +354,7 @@ function discoverOverlap({packetNumber, requestedScopes, runner = runDefault}) {
     });
   }
   return scopeOverlap.resolveScopeOverlap({
+    requesterRef,
     requestedScopes,
     discovery: 'COMPLETE',
     candidates,
@@ -349,7 +417,10 @@ function inspectLanding(mainSha, runner = runDefault) {
   return {landing, ...classification};
 }
 
-function inspectContext({packetNumber, plan, sourceMain = null, runner = runDefault, profile}) {
+function inspectContext({
+  packetNumber, plan, sourceMain = null, packetActivityEvidence = null,
+  runner = runDefault, profile,
+}) {
   const firstMain = readMainSha(runner);
   if (sourceMain !== null && sourceMain !== firstMain) {
     throw new StageError('CONFLICT', ['SOURCE_MAIN_CURRENT_MAIN_CONFLICT']);
@@ -369,7 +440,7 @@ function inspectContext({packetNumber, plan, sourceMain = null, runner = runDefa
   }
 
   const requestedScopes = extractPacketScopes(issue.body);
-  const overlap = discoverOverlap({packetNumber, requestedScopes, runner});
+  const overlap = discoverOverlap({packetNumber, requestedScopes, packetActivityEvidence, runner});
   if (overlap.state === 'CONFLICT') throw new StageError('CONFLICT', ['OVERLAP_CONFLICT']);
   if (overlap.state === 'UNKNOWN') throw new StageError('UNKNOWN', ['OVERLAP_UNKNOWN']);
   if (overlap.state === 'OVERLAP') throw new StageError('BLOCKED', ['OVERLAP_PRESENT']);
@@ -396,6 +467,7 @@ function inspectContext({packetNumber, plan, sourceMain = null, runner = runDefa
     plan,
     mainSha: firstMain,
     sourceMain,
+    packetActivityEvidence,
     packetBody: issue.body,
     packetBodySha256: sha256(issue.body),
     requestedScopes,
@@ -498,6 +570,7 @@ function revalidateBeforeLandingRefresh(context, lease, {
     packetNumber: context.packetNumber,
     plan: context.plan,
     sourceMain: context.sourceMain,
+    packetActivityEvidence: context.packetActivityEvidence,
     runner,
     profile,
   });
@@ -635,6 +708,7 @@ function revalidateAfterNormalization(context, {
     packetNumber: context.packetNumber,
     plan: context.plan,
     sourceMain: context.sourceMain,
+    packetActivityEvidence: context.packetActivityEvidence,
     runner,
     profile,
   });
@@ -875,6 +949,7 @@ function revalidateAfterAcquire(context, lease, {
     packetNumber: context.packetNumber,
     plan: context.plan,
     sourceMain: context.sourceMain,
+    packetActivityEvidence: context.packetActivityEvidence,
     runner,
     profile,
   });
@@ -1080,10 +1155,15 @@ function run(argv = process.argv.slice(2), deps = {}) {
   try {
     parsed = parseArgs(argv);
     const plan = parsePlan(readRegularJson(parsed.planFile));
+    const packetActivityEvidence = parsed.packetActivityEvidenceFile
+      ? normalizePacketActivityEvidenceSet(
+        readRegularJson(parsed.packetActivityEvidenceFile), parsed.packetNumber)
+      : null;
     const context = inspectContext({
       packetNumber: parsed.packetNumber,
       plan,
       sourceMain: parsed.sourceMain,
+      packetActivityEvidence,
       runner: deps.runner || runDefault,
       profile: deps.profile,
     });
@@ -1126,6 +1206,8 @@ module.exports = {
   LANDING_WORKTREE,
   MAX_PAGES,
   PAGE_SIZE,
+  MAX_PACKET_ACTIVITY_CANDIDATES,
+  PACKET_ACTIVITY_EVIDENCE_MODE,
   PLAN_FIELDS,
   REPO,
   StageError,
@@ -1146,6 +1228,7 @@ module.exports = {
   inspectLanding,
   inspectPreflight,
   normalizeLandingCurrentness,
+  normalizePacketActivityEvidenceSet,
   parseArgs,
   parseKeyValueReceipt,
   parseOpsCapsule,

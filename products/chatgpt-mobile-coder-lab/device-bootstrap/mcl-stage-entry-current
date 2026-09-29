@@ -9,8 +9,8 @@ STAGE_REL='products/chatgpt-mobile-coder-lab/coordination/stage-entry/mcl-stage-
 usage() {
   printf '%s\n' \
     'usage: mcl-stage-entry-current source-status' \
-    '       mcl-stage-entry-current inspect --packet #N --plan FILE' \
-    '       mcl-stage-entry-current apply --packet #N --plan FILE --apply'
+    '       mcl-stage-entry-current inspect --packet #N --plan FILE [--packet-activity-evidence-file FILE]' \
+    '       mcl-stage-entry-current apply --packet #N --plan FILE [--packet-activity-evidence-file FILE] --apply'
 }
 
 fail_usage() { usage >&2; exit 64; }
@@ -28,21 +28,32 @@ operation=${1-}
 shift
 packet=
 plan=
+activity=
 case "$operation" in
   source-status)
     [ "$#" -eq 0 ] || fail_usage
     ;;
   inspect)
-    [ "$#" -eq 4 ] || fail_usage
+    { [ "$#" -eq 4 ] || [ "$#" -eq 6 ]; } || fail_usage
     [ "$1" = --packet ] && is_packet "$2" && [ "$3" = --plan ] || fail_usage
     packet=$2
     plan=$4
+    if [ "$#" -eq 6 ]; then
+      [ "$5" = --packet-activity-evidence-file ] || fail_usage
+      activity=$6
+    fi
     ;;
   apply)
-    [ "$#" -eq 5 ] || fail_usage
-    [ "$1" = --packet ] && is_packet "$2" && [ "$3" = --plan ] && [ "$5" = --apply ] || fail_usage
+    { [ "$#" -eq 5 ] || [ "$#" -eq 7 ]; } || fail_usage
+    [ "$1" = --packet ] && is_packet "$2" && [ "$3" = --plan ] || fail_usage
     packet=$2
     plan=$4
+    if [ "$#" -eq 5 ]; then
+      [ "$5" = --apply ] || fail_usage
+    else
+      [ "$5" = --packet-activity-evidence-file ] && [ "$7" = --apply ] || fail_usage
+      activity=$6
+    fi
     ;;
   *) fail_usage ;;
 esac
@@ -50,6 +61,12 @@ esac
 if [ -n "$plan" ]; then
   [ -f "$plan" ] && [ ! -L "$plan" ] || {
     printf '%s\n' 'mcl-stage-entry-current: plan must be a regular non-symlink file' >&2
+    exit 64
+  }
+fi
+if [ -n "$activity" ]; then
+  [ -f "$activity" ] && [ ! -L "$activity" ] || {
+    printf '%s\n' 'mcl-stage-entry-current: packet activity evidence must be a regular non-symlink file' >&2
     exit 64
   }
 fi
@@ -97,9 +114,19 @@ if [ "$operation" = source-status ]; then
 fi
 
 if [ "$operation" = inspect ]; then
-  node "$stage" inspect --packet "$packet" --plan "$plan" --source-main "$remote_before"
+  if [ -n "$activity" ]; then
+    node "$stage" inspect --packet "$packet" --plan "$plan" \
+      --packet-activity-evidence-file "$activity" --source-main "$remote_before"
+  else
+    node "$stage" inspect --packet "$packet" --plan "$plan" --source-main "$remote_before"
+  fi
   exit $?
 fi
 
-node "$stage" apply --packet "$packet" --plan "$plan" --source-main "$remote_before" --apply
+if [ -n "$activity" ]; then
+  node "$stage" apply --packet "$packet" --plan "$plan" \
+    --packet-activity-evidence-file "$activity" --source-main "$remote_before" --apply
+else
+  node "$stage" apply --packet "$packet" --plan "$plan" --source-main "$remote_before" --apply
+fi
 exit $?

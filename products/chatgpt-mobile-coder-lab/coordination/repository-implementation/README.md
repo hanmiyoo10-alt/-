@@ -157,3 +157,42 @@ The second profile, `repo:validation-continuation:v1`, is a reviewed semantic
 extension. Existing #2770 coordination must not be rewritten or backfilled to
 claim adoption. A later live proof requires a fresh compatible activation
 under current authority.
+
+
+## Finalize-only recovery sibling
+
+`mcl-repository-implementation-finalize-recovery.cjs` owns one narrow replay-safe
+suffix for an IMPLEMENTATION_PR transaction whose source, commit, push, PR and
+D-013 release already completed but whose child/parent D-014 COMPLETE receipts
+did not durably converge.
+
+Admission is derived from current repository evidence only. The owner requires:
+- current nonterminal packet at `IMPLEMENTATION_PR`;
+- one current linked stage-entry parent manifest and one exact child effect manifest;
+- matching parent/child HANDOFF_READY evidence;
+- exact local = remote = one open PR head and exact changed-file set;
+- the exact D-013 lease already released;
+  - current exact `lastRelease` remains the fast-path proof;
+  - after natural `lastRelease` rotation, a bounded read-only scan of completed successful
+    `mcl-task-lease.yml` runs may prove the exact historical `RELEASE_UPDATED` lease
+    identity and generation;
+  - the historical scan reuses the exact validated open PR creation timestamp and the
+    exact effect-base SHA only to narrow candidate workflow-run discovery; release proof
+    still requires exact lease/status/generation evidence from a successful run log;
+  - the historical scan has both fixed per-read limits and one compile-time aggregate
+    lifetime ceiling; the remaining aggregate budget clamps each run-log read, and
+    aggregate exhaustion fails closed instead of proving release;
+  - missing, ambiguous or lifetime-exhausted historical evidence fails closed;
+- holder absent and workspace clean;
+- current main either equals the effect base, or one fixed read-only compare proves the effect base is the exact merge base/ancestor of current protected main; divergence, behind state, identity mismatch, or malformed comparison evidence fails closed.
+
+The only writable effect is append-only publication of a missing exact child
+completion receipt and then a missing exact parent completion receipt. Existing
+semantically exact receipts are reused. Distinct receipt variants fail closed.
+A second exact apply is zero-effect.
+
+This owner never edits source, commits, pushes, creates or updates a PR, merges,
+currentizes, acquires/releases a lease, claims/releases/cleans a holder, or
+changes runtime/device/release/production state. Its successful result proves
+only the recovered `IMPLEMENTATION_PR` suffix and returns
+`nextLegalAction=VALIDATION_MERGE`.

@@ -10,6 +10,8 @@ const handoff = require(path.join(ROOT,
   'products/chatgpt-mobile-coder-lab/coordination/task-handoff.cjs'));
 const stageEntry = require(path.join(ROOT,
   'products/chatgpt-mobile-coder-lab/coordination/stage-entry/mcl-stage-entry.cjs'));
+const taskLease = require(path.join(ROOT,
+  'products/chatgpt-mobile-coder-lab/coordination/task-lease.cjs'));
 const recovery = require('../mcl-repository-implementation-finalize-recovery.cjs');
 
 const PACKET = 9001;
@@ -202,7 +204,153 @@ test('exact duplicate receipt replay is idempotent but distinct variant conflict
   const rows = [...exact, {id: 22, body: handoff.renderCompletionReceipt(variant)}];
   assert.throws(() => recovery.classifyReceipt(rows, ctx.child.value, expected),
     /COMPLETION_RECEIPT_VARIANT_CONFLICT/);
-});test('source contains no source/commit/push/merge or lease-holder mutation calls', () => {
+});
+test('released lease fast path uses current exact lastRelease without historical scan', () => {
+  const ctx = fixture();
+  ctx.ledger = {body: taskLease.renderLedger({
+    schemaVersion: 1,
+    scope: 'chatgpt-mobile-coder-lab',
+    mode: 'MCL_TASK_LEASE_LEDGER',
+    status: 'ACTIVE',
+    generation: 11,
+    controllerPath: 'products/chatgpt-mobile-coder-lab/coordination/task-lease.cjs',
+    controllerCommit: '1'.repeat(40),
+    packetRef: '#2350',
+    activeLeases: [],
+    lastRelease: {leaseId: LEASE, releasedAtGeneration: 11},
+  })};
+  let calls = 0;
+  const result = recovery.validateReleasedLease(ctx, () => { calls += 1; return {code: 1}; });
+  assert.equal(calls, 0);
+  assert.equal(result.evidence.releasedGeneration, 11);
+  assert.equal(result.evidence.evidenceRef, 'issue:#2352');
+});
+
+test('rotated lastRelease accepts one exact historical successful release run', () => {
+  const ctx = fixture();
+  ctx.ledger = {body: taskLease.renderLedger({
+    schemaVersion: 1,
+    scope: 'chatgpt-mobile-coder-lab',
+    mode: 'MCL_TASK_LEASE_LEDGER',
+    status: 'ACTIVE',
+    generation: 20,
+    controllerPath: 'products/chatgpt-mobile-coder-lab/coordination/task-lease.cjs',
+    controllerCommit: '1'.repeat(40),
+    packetRef: '#2350',
+    activeLeases: [],
+    lastRelease: {leaseId: 'c'.repeat(64), releasedAtGeneration: 20},
+  })};
+  const runner = (args) => {
+    if (args[1] === 'run' && args[2] === 'list') {
+      return {code: 0, stdout: JSON.stringify([
+        {databaseId: 123, status: 'completed', conclusion: 'success'},
+      ])};
+    }
+    if (args[1] === 'run' && args[2] === 'view') {
+      return {code: 0, stdout: 'step\\t' + JSON.stringify({
+        leaseId: LEASE, status: 'RELEASE_UPDATED', generation: 11,
+      }) + '\\n'};
+    }
+    return {code: 1, stdout: ''};
+  };
+  const result = recovery.validateReleasedLease(ctx, runner);
+  assert.equal(result.evidence.releasedGeneration, 11);
+  assert.equal(result.evidence.evidenceRef, 'run:123');
+});
+
+test('active old lease blocks before historical release lookup', () => {
+  const ctx = fixture();
+  ctx.ledger = {body: taskLease.renderLedger({
+    schemaVersion: 1,
+    scope: 'chatgpt-mobile-coder-lab',
+    mode: 'MCL_TASK_LEASE_LEDGER',
+    status: 'ACTIVE',
+    generation: 10,
+    controllerPath: 'products/chatgpt-mobile-coder-lab/coordination/task-lease.cjs',
+    controllerCommit: '1'.repeat(40),
+    packetRef: '#2350',
+    activeLeases: [{
+      leaseId: LEASE,
+      packetRef: PACKET_REF,
+      packetBodySha256: BODY_SHA,
+      route: 'S',
+      executor: 'S',
+      scopes: SCOPES,
+      scopeFingerprint: 'd'.repeat(64),
+      scopeDisposition: 'DISJOINT',
+      workspace: WORKSPACE,
+      observedBaseSha: BASE,
+      sourceRefs: [PACKET_REF],
+    }],
+    lastRelease: null,
+  })};
+  let calls = 0;
+  assert.throws(() => recovery.validateReleasedLease(ctx, () => {
+    calls += 1;
+    return {code: 0, stdout: '[]'};
+  }), /D013_LEASE_STILL_ACTIVE/);
+  assert.equal(calls, 0);
+});
+
+test('missing or ambiguous historical release proof fails closed', () => {
+  assert.throws(() => recovery.historicalReleaseEvidence(LEASE, 10, (args) => {
+    if (args[1] === 'run' && args[2] === 'list') {
+      return {code: 0, stdout: JSON.stringify([
+        {databaseId: 123, status: 'completed', conclusion: 'success'},
+      ])};
+    }
+    return {code: 0, stdout: 'no matching release\n'};
+  }), /D013_RELEASE_NOT_PROVEN/);
+
+  assert.throws(() => recovery.historicalReleaseEvidence(LEASE, 10, (args) => {
+    if (args[1] === 'run' && args[2] === 'list') {
+      return {code: 0, stdout: JSON.stringify([
+        {databaseId: 123, status: 'completed', conclusion: 'success'},
+        {databaseId: 124, status: 'completed', conclusion: 'success'},
+      ])};
+    }
+    const runId = Number(args[3]);
+    return {code: 0, stdout: JSON.stringify({
+      leaseId: LEASE, status: 'RELEASE_UPDATED', generation: runId === 123 ? 11 : 12,
+    }) + '\\n'};
+  }), /D013_RELEASE_PROOF_AMBIGUOUS/);
+});
+
+test('historical run reads carry fixed bounded timeout options', () => {
+  const seen = [];
+  assert.throws(() => recovery.historicalReleaseEvidence(LEASE, 10, (args, options) => {
+    seen.push({args, options});
+    if (args[1] === 'run' && args[2] === 'list') {
+      return {code: 0, stdout: JSON.stringify([
+        {databaseId: 123, status: 'completed', conclusion: 'success'},
+      ])};
+    }
+    return {code: 124, stdout: '', stderr: 'timeout'};
+  }), /D013_RELEASE_NOT_PROVEN/);
+  assert.equal(seen.length, 2);
+  assert.equal(seen[0].options.timeout, 10000);
+  assert.equal(seen[1].options.timeout, 5000);
+});
+
+test('historical release proof rejects wrong lease status and stale generation', () => {
+  const cases = [
+    {leaseId: 'c'.repeat(64), status: 'RELEASE_UPDATED', generation: 11},
+    {leaseId: LEASE, status: 'ACQUIRE_UPDATED', generation: 11},
+    {leaseId: LEASE, status: 'RELEASE_UPDATED', generation: 10},
+  ];
+  for (const row of cases) {
+    assert.throws(() => recovery.historicalReleaseEvidence(LEASE, 10, (args) => {
+      if (args[1] === 'run' && args[2] === 'list') {
+        return {code: 0, stdout: JSON.stringify([
+          {databaseId: 123, status: 'completed', conclusion: 'success'},
+        ])};
+      }
+      return {code: 0, stdout: JSON.stringify(row) + '\\n'};
+    }), /D013_RELEASE_NOT_PROVEN/);
+  }
+});
+
+test('source contains no source/commit/push/merge or lease-holder mutation calls', () => {
   const source = fs.readFileSync(
     path.join(__dirname, '../mcl-repository-implementation-finalize-recovery.cjs'), 'utf8');
   for (const forbidden of [

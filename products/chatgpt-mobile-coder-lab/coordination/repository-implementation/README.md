@@ -172,6 +172,10 @@ Admission is derived from current repository evidence only. The owner requires:
 - matching parent/child HANDOFF_READY evidence;
 - exact local = remote = one open PR head and exact changed-file set;
 - the exact D-013 lease already released;
+  - current exact `lastRelease`" remains the fast-path proof;
+  - after natural `lastRelease` rotation, a bounded read-only scan of completed successful
+    `mcl-task-lease.yml` runs may prove the exact historical `RELEASE_UPDATED` lease
+    identity and generation; missing or ambiguous historical evidence fails closed;
 - holder absent and workspace clean;
 - current main still equal to the effect base.
 

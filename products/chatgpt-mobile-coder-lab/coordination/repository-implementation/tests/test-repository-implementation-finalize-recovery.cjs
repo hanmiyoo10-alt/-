@@ -206,6 +206,69 @@ test('exact duplicate receipt replay is idempotent but distinct variant conflict
   assert.throws(() => recovery.classifyReceipt(rows, ctx.child.value, expected),
     /COMPLETION_RECEIPT_VARIANT_CONFLICT/);
 });
+test('same-main lineage fast path does not call compare', () => {
+  const ctx = fixture();
+  ctx.mainSha = ctx.child.value.observedBaseSha;
+  let calls = 0;
+  const result = recovery.validateEffectBaseLineage(ctx, () => {
+    calls += 1;
+    return {code: 1};
+  });
+  assert.equal(calls, 0);
+  assert.equal(result.status, 'IDENTICAL');
+  assert.equal(result.mergeBaseSha, ctx.mainSha);
+});
+
+test('moved-main lineage admits exact descendant compare only', () => {
+  const ctx = fixture();
+  const current = '9'.repeat(40);
+  ctx.mainSha = current;
+  const runner = (args) => {
+    assert.deepEqual(args.slice(0, 2), ['gh', 'api']);
+    assert.equal(args[2], 'repos/hanmiyoo10-alt/-/compare/' + BASE + '...' + current);
+    return {code: 0, stdout: JSON.stringify({
+      status: 'ahead',
+      ahead_by: 2,
+      behind_by: 0,
+      base_commit: {sha: BASE},
+      merge_base_commit: {sha: BASE},
+      commits: [{sha: '8'.repeat(40)}, {sha: current}],
+    })};
+  };
+  const result = recovery.validateEffectBaseLineage(ctx, runner);
+  assert.equal(result.status, 'AHEAD');
+  assert.equal(result.mergeBaseSha, BASE);
+});
+
+test('moved-main lineage rejects merge-base mismatch, behind/diverged and malformed evidence', () => {
+  const current = '9'.repeat(40);
+  const make = () => {
+    const ctx = fixture();
+    ctx.mainSha = current;
+    return ctx;
+  };
+  const row = (overrides = {}) => ({
+    status: 'ahead',
+    ahead_by: 1,
+    behind_by: 0,
+    base_commit: {sha: BASE},
+    merge_base_commit: {sha: BASE},
+    commits: [{sha: current}],
+    ...overrides,
+  });
+  const runnerFor = (value) => () => ({code: 0, stdout: JSON.stringify(value)});
+  assert.throws(() => recovery.validateEffectBaseLineage(make(),
+    runnerFor(row({merge_base_commit: {sha: '7'.repeat(40)}}))),
+  /MAIN_LINEAGE_MERGE_BASE_CONFLICT/);
+  for (const status of ['behind', 'diverged']) {
+    assert.throws(() => recovery.validateEffectBaseLineage(make(),
+      runnerFor(row({status, ahead_by: 0, behind_by: 1}))),
+    /MAIN_LINEAGE_NOT_DESCENDANT/);
+  }
+  assert.throws(() => recovery.validateEffectBaseLineage(make(),
+    runnerFor({status: 'ahead'})), /MAIN_LINEAGE_COMPARE_INVALID/);
+});
+
 test('released lease fast path uses current exact lastRelease without historical scan', () => {
   const ctx = fixture();
   ctx.ledger = {body: taskLease.renderLedger({

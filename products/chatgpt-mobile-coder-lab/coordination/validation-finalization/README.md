@@ -287,10 +287,14 @@ plus `surface:mcl:validation-finalization-effect`.
 
 Class membership is never granted by packet number alone. The owner derives the
 candidate and PR from a qualifying canonical `IMPLEMENTATION_PR` receipt, requires the
-fixed self-owner gate set, derives deterministic repository workspace/lease lineage
-from the exact stage-entry D-014 manifest, requires the PR to be merged at that exact
-candidate, and reuses the existing lease-absence, holder-absence, clean-workspace,
-immutable validation-receipt-set and receipt-only finalization checks.
+fixed self-owner gate set, then follows that selected receipt's exact
+`d014-completion` evidence locator to one valid implementation-stage completion receipt.
+That completion receipt binds the exact stage-entry D-014 manifest ID and payload hash,
+which derives deterministic repository workspace/lease lineage without choosing among
+historical manifests by chronology or comment order. The owner then requires the PR to
+be merged at the selected candidate and reuses the existing lease-absence,
+holder-absence, clean-workspace, immutable validation-receipt-set and receipt-only
+finalization checks.
 
 The class can publish only the canonical `VALIDATION_MERGE` stage receipt. It cannot
 publish validation-stage D-014 completion, mutate Git/refs/PRs, currentize, acquire or

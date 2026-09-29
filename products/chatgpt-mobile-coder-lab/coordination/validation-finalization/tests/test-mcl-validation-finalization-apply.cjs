@@ -607,8 +607,8 @@ test('self-owner implementation receipt conflicts on semantic merged generation 
     make(2, 3153, 'e'.repeat(40)),
   ], 3149), owner.ApplyError);
 });
-test('self-owner workspace manifest requires exact owner scope and deterministic workspace', () => {
-  const manifest = handoff.buildManifest({
+test('self-owner workspace manifest follows selected D014 completion lineage', () => {
+  const makeManifest = (leaseId, generation, base) => handoff.buildManifest({
     schemaVersion: 1,
     mode: 'MCL_TASK_MANIFEST',
     packetRef: '#3149',
@@ -623,24 +623,63 @@ test('self-owner workspace manifest requires exact owner scope and deterministic
       branch: 'server/mcl-packet-3149',
       worktree: '/root/nyang-worktrees/mcl-packet-3149',
     },
-    observedBaseSha: 'b'.repeat(40),
+    observedBaseSha: base,
     leaseRequirement: 'REQUIRED',
     leaseEvidence: {
       ledgerRef: '#2352',
-      leaseId: 'c'.repeat(64),
-      acquiredGeneration: 10,
-      acquireEvidenceRef: 'receipt:mcl-task-lease:' + 'c'.repeat(64) + ':generation:10',
+      leaseId,
+      acquiredGeneration: generation,
+      acquireEvidenceRef: 'receipt:mcl-task-lease:' + leaseId + ':generation:' + generation,
     },
     sourceAuthorityRefs: ['#3149', 'issue:#2352'],
-    inputRefs: ['commit:' + 'b'.repeat(40)],
+    inputRefs: ['commit:' + base],
     expectedOutputRefs: owner.SELF_OWNER_PATHS.map((repoPath) => 'path:' + repoPath),
     acceptanceRefs: ['#3149'],
     stopCondition: 'Test stable self-owner manifest selection.',
     authority: {...handoff.AUTHORITY_FLAGS},
   });
+  const historical = makeManifest('b'.repeat(64), 8, 'e'.repeat(40));
+  const selectedManifest = makeManifest('c'.repeat(64), 10, 'f'.repeat(40));
+  const completion = handoff.buildCompletionReceipt(selectedManifest, {
+    disposition: 'COMPLETE',
+    outputRefs: ['commit:' + 'd'.repeat(40), 'pr:#3152'],
+    validationRefs: ['issue:#3149'],
+    observedRefs: ['commit:' + 'd'.repeat(40)],
+    leaseDisposition: 'RELEASED',
+    leaseReleaseEvidence: {
+      ledgerRef: '#2352',
+      leaseId: 'c'.repeat(64),
+      releasedGeneration: 11,
+      evidenceRef: 'run:123',
+    },
+    workspaceResult: 'clean',
+    blockerRefs: [],
+    requiredUnknownRefs: [],
+  });
+  const gates = owner.SELF_OWNER_REQUIRED_GATES.map((name) => ({
+    name,
+    result: 'PASS',
+    evidenceLocator: name === 'd014-completion' ? 'issue-comment:2' : 'issue-comment:1',
+  }));
+  const impl = {pr: 3152, row: {receipt: {requiredGates: gates}}};
+  const comments = [
+    {id: 1, body: handoff.renderManifest(historical)},
+    {id: 3, body: handoff.renderManifest(selectedManifest)},
+    {id: 2, body: handoff.renderCompletionReceipt(completion)},
+  ];
   const selected = owner.selectSelfOwnerWorkspaceManifest(
-    [{id: 1, body: handoff.renderManifest(manifest)}], 3149, '#3149');
-  assert.equal(selected.manifest.manifestId, manifest.manifestId);
+    comments, 3149, '#3149', impl);
+  assert.equal(selected.manifest.manifestId, selectedManifest.manifestId);
+  assert.equal(selected.manifest.leaseEvidence.acquiredGeneration, 10);
+  assert.notEqual(selected.manifest.manifestId, historical.manifestId);
+
+  const missingLocator = {pr: 3152, row: {receipt: {requiredGates: gates.map((gate) =>
+    gate.name === 'd014-completion' ? {...gate, evidenceLocator: 'UNKNOWN'} : gate)}}};
+  assert.throws(() => owner.selectSelfOwnerWorkspaceManifest(
+    comments, 3149, '#3149', missingLocator), owner.ApplyError);
+
+  assert.throws(() => owner.selectSelfOwnerWorkspaceManifest(
+    comments.filter((comment) => comment.id !== 3), 3149, '#3149', impl), owner.ApplyError);
 });
 test('#2786 already-finalized retry is zero-effect', () => {
   let writes = 0;

@@ -29,6 +29,9 @@ const VC_PATHS = [...patchOwner.VALIDATION_CONTINUATION_PATHS].sort();
 const VC_SCOPES = [...patchOwner.VALIDATION_CONTINUATION_SCOPES];
 const PPR_PATHS = [...patchOwner.PUBLISHED_PROGRESS_RECOVERY_PATHS].sort();
 const PPR_SCOPES = [...patchOwner.PUBLISHED_PROGRESS_RECOVERY_SCOPES];
+const VF_PATHS = [...patchOwner.VALIDATION_FINALIZATION_PATHS].sort();
+const VF_SCOPES = [...patchOwner.VALIDATION_FINALIZATION_SCOPES];
+const LOCAL_VALIDATION_ARTIFACT = 'local-artifact:/tmp/mcl-implementation-validation-fixture.json#sha256=' + 'f'.repeat(64);
 
 function makeParent() {
   return handoff.buildManifest({
@@ -110,7 +113,55 @@ function makeFiles() {
     cleanup() { fs.rmSync(dir, {recursive: true, force: true}); },
   };
 }
-function ownerPass(manifestId) {
+function makeVfParent() {
+  const parent = makeParent();
+  return handoff.buildManifest({
+    schemaVersion: 1,
+    mode: 'MCL_TASK_MANIFEST',
+    packetRef: parent.packetRef,
+    packetBodySha256: parent.packetBodySha256,
+    phaseId: parent.phaseId,
+    phaseClass: parent.phaseClass,
+    route: parent.route,
+    executor: parent.executor,
+    scopes: VF_SCOPES,
+    workspace: parent.workspace,
+    observedBaseSha: parent.observedBaseSha,
+    leaseRequirement: parent.leaseRequirement,
+    leaseEvidence: parent.leaseEvidence,
+    sourceAuthorityRefs: parent.sourceAuthorityRefs,
+    inputRefs: parent.inputRefs,
+    expectedOutputRefs: VF_PATHS.map((item) => 'path:' + item),
+    acceptanceRefs: parent.acceptanceRefs,
+    stopCondition: parent.stopCondition,
+    authority: parent.authority,
+  });
+}
+function makeVfCtx() {
+  return {...makeCtx(), requestedScopes: VF_SCOPES, parentManifest: makeVfParent()};
+}
+function makeVfFiles() {
+  const files = makeFiles();
+  files.request = {...files.request, expected_paths: VF_PATHS};
+  files.requestText = JSON.stringify(files.request);
+  fs.writeFileSync(files.requestFile, files.requestText);
+  files.validationText = JSON.stringify({
+    schema: patchOwner.VALIDATION_REQUEST_SCHEMA,
+    profile: patchOwner.VALIDATION_FINALIZATION_PROFILE,
+  });
+  fs.writeFileSync(files.validationFile, files.validationText);
+  return files;
+}
+function ownerPass(manifestId, {
+  affectedFiles = PATHS,
+  validationArtifact = null,
+} = {}) {
+  const validationCounters = validationArtifact ? [
+    {name: 'validation_passed', value: 4},
+    {name: 'validation_failed', value: 0},
+    {name: 'validation_infra', value: 0},
+    {name: 'validation_not_run', value: 0},
+  ] : [];
   return executionReceipt.projectExecutionReceipt({
     schemaVersion: 2,
     operationId: 'patch:' + manifestId,
@@ -123,9 +174,9 @@ function ownerPass(manifestId) {
     result: 'PASS',
     proofScope: 'IMPLEMENTATION_EFFECT',
     steps: [{name: 'push', result: 'PASS', evidenceLocator: 'commit:' + HEAD}],
-    counters: [{name: 'push_verified', value: 1}],
-    affectedFiles: PATHS,
-    artifactLocators: ['commit:' + HEAD],
+    counters: [{name: 'push_verified', value: 1}, ...validationCounters],
+    affectedFiles,
+    artifactLocators: ['commit:' + HEAD, ...(validationArtifact ? [validationArtifact] : [])],
     reasonCodes: [],
     requiredUnknowns: [],
     conflicts: [],
@@ -528,6 +579,74 @@ test('successful fixed transaction keeps publication before durable release and 
     assert.equal(events.filter((item) => item === 'lease-release').length, 1);
     assert.equal(events.filter((item) => item === 'holder-release').length, 1);
     assert.ok(stageRunnerCalls.some((args) => args[0] === 'gh' && args[1] === 'api'));
+  } finally {
+    files.cleanup();
+  }
+});
+
+test('validation-finalization local artifact stays execution-local while D014 converges', async () => {
+  const files = makeVfFiles();
+  const ctx = makeVfCtx();
+  const completionBodies = [];
+  const receiptPath = path.join(files.dir, 'vf-receipt.json');
+  let commentId = 710;
+  try {
+    const view = await impl.executePrepared(ctx, {
+      requestText: files.requestText,
+      requestFile: files.requestFile,
+      patchFile: files.patchFile,
+      validationRequestText: files.validationText,
+      validationRequestFile: files.validationFile,
+      prRequestText: files.prText,
+    }, {
+      tempRoot: files.dir,
+      postComment(body) {
+        if (body.includes('mcl-task-completion-receipt')) completionBodies.push(body);
+        return commentId++;
+      },
+      claimHolder() {
+        return {result: {status: 'CLAIMED', reasonCodes: []}, secret: 'e'.repeat(64)};
+      },
+      checkHolder() { return {status: 'CHECK_PASS', reasonCodes: []}; },
+      async invokePatchOwner({manifestText}) {
+        const parsed = handoff.parseManifest(manifestText);
+        assert.equal(parsed.status, 'VALID');
+        return ownerPass(parsed.value.manifestId, {
+          affectedFiles: VF_PATHS,
+          validationArtifact: LOCAL_VALIDATION_ARTIFACT,
+        });
+      },
+      async guardCurrent() {},
+      currentGitHead() { return HEAD; },
+      publishPr() { return {number: 7002, head: HEAD, changed: VF_PATHS}; },
+      releaseLease() { return {ok: true, value: {runId: 7011}}; },
+      async readAfterRelease() {
+        return {packetAfter: {body: 'packet-body'}, ledgerAfter: {body: 'released-ledger'}};
+      },
+      validateReleased() {
+        return {ok: true, reasonCodes: [], state: {generation: 88}};
+      },
+      releaseHolder() { return {status: 'RELEASED', reasonCodes: []}; },
+      persistArtifacts() {
+        fs.writeFileSync(receiptPath, '{}');
+        return {
+          reportLocator: 'artifact:test:vf-report',
+          receiptLocator: 'artifact:test:vf-receipt',
+          receiptPath,
+        };
+      },
+    });
+    assert.equal(view.result, 'PASS');
+    assert.equal(view.output.validationProfile, patchOwner.VALIDATION_FINALIZATION_PROFILE);
+    assert.equal(completionBodies.length, 2);
+    for (const body of completionBodies) {
+      const parsed = handoff.parseCompletionReceipt(body);
+      assert.equal(parsed.status, 'VALID');
+      assert.equal(parsed.value.validationRefs.some((ref) => ref.startsWith('local-artifact:')), false);
+    }
+    const receipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
+    assert.ok(receipt.artifactLocators.includes(LOCAL_VALIDATION_ARTIFACT));
+    assert.equal(receipt.counters.find((row) => row.name === 'validation_passed')?.value, 4);
   } finally {
     files.cleanup();
   }

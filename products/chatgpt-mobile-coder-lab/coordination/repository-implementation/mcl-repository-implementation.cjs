@@ -774,7 +774,6 @@ async function executePrepared(ctx, inputs, deps = {}) {
         patchOwner.VALIDATION_CONTRACT_REF_PREFIX + validationBinding.profile.contractDigest,
         patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
           + patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest,
-        ...(validationOutput.validationArtifact ? [validationOutput.validationArtifact] : []),
       ],
       observedRefs: [`commit:${ctx.mainSha}`, `commit:${commit}`, `pr:#${pr.number}`],
       leaseDisposition: 'RELEASED',
@@ -840,7 +839,7 @@ async function executePrepared(ctx, inputs, deps = {}) {
       exitCode: 0, stderrTail: null, nextLegalAction: 'VALIDATION_MERGE',
     });
     const locators = persist(child, report, preReceipt);
-    const receipt = buildStageReceipt({ctx, child, commit, pr, locators, comments});
+    const receipt = buildStageReceipt({ctx, child, commit, pr, locators, comments, patchReceipt});
     fs.writeFileSync(locators.receiptPath, JSON.stringify(receipt, null, 2) + '\n', {mode: 0o600});
     const view = agentDecisionView.projectAgentDecisionView({
       receipt,

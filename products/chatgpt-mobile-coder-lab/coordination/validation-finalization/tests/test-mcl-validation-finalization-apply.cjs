@@ -775,6 +775,38 @@ test('self-owner implementation receipt conflicts on semantic merged generation 
     make(2, 3153, 'e'.repeat(40)),
   ], 3149), owner.ApplyError);
 });
+test('self-owner currentized lineage selects the semantic generation bound to merged PR head', () => {
+  const normalGates = owner.SELF_OWNER_REQUIRED_GATES.map((name) => ({name, result: 'PASS'}));
+  const currentizedGates = owner.SELF_OWNER_CURRENTIZED_REQUIRED_GATES
+    .map((name) => ({name, result: 'PASS'}));
+  const make = (id, sha, gates) => ({
+    comment: {id},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 3168,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: String(id).repeat(64).slice(0, 64),
+      authorityRefs: [
+        {kind: 'COMMIT', locator: 'candidate-head', identity: sha},
+        {kind: 'PR', locator: 'pr:#3169', identity: sha},
+      ],
+      requiredGates: gates,
+      scope: {paths: owner.SELF_OWNER_PATHS, diffRequired: true, diffIdentity: 'd'.repeat(64)},
+    },
+  });
+  const historical = make(1, 'a'.repeat(40), normalGates);
+  const currentized = make(2, 'b'.repeat(40), currentizedGates);
+  const selected = owner.selectSelfOwnerImplementationReceipt(
+    [historical, currentized], 3168, {number: 3169, head: {sha: 'b'.repeat(40)}});
+  assert.equal(selected.row, currentized);
+  assert.equal(selected.lineage.kind, 'VALIDATION_MERGE_CURRENTIZATION');
+  assert.equal(selected.lineage.completionGate, 'currentization-d014-completion');
+  assert.throws(() => owner.selectSelfOwnerImplementationReceipt(
+    [historical, currentized], 3168, {number: 3169, head: {sha: 'c'.repeat(40)}}),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('SELF_OWNER_IMPLEMENTATION_LIVE_HEAD_GENERATION_MISSING'));
+});
 test('self-owner workspace manifest follows selected D014 completion lineage', () => {
   const makeManifest = (leaseId, generation, base) => handoff.buildManifest({
     schemaVersion: 1,
@@ -848,6 +880,146 @@ test('self-owner workspace manifest follows selected D014 completion lineage', (
 
   assert.throws(() => owner.selectSelfOwnerWorkspaceManifest(
     comments.filter((comment) => comment.id !== 3), 3149, '#3149', impl), owner.ApplyError);
+});
+test('self-owner currentized workspace manifest follows currentization completion lineage', () => {
+  const manifest = handoff.buildManifest({
+    schemaVersion: 1,
+    mode: 'MCL_TASK_MANIFEST',
+    packetRef: '#3168',
+    packetBodySha256: 'a'.repeat(64),
+    phaseId: '3168-validation-merge-currentization',
+    phaseClass: 'REPOSITORY_MUTATION',
+    route: 'S',
+    executor: 'S',
+    scopes: owner.SELF_OWNER_SCOPES,
+    workspace: {
+      kind: 'repository',
+      branch: 'server/mcl-packet-3168',
+      worktree: '/root/nyang-worktrees/mcl-packet-3168',
+    },
+    observedBaseSha: 'b'.repeat(40),
+    leaseRequirement: 'REQUIRED',
+    leaseEvidence: {
+      ledgerRef: '#2352',
+      leaseId: 'c'.repeat(64),
+      acquiredGeneration: 20,
+      acquireEvidenceRef: 'receipt:mcl-task-lease:' + 'c'.repeat(64) + ':generation:20',
+    },
+    sourceAuthorityRefs: ['#3168', 'issue:#2352'],
+    inputRefs: ['commit:' + 'b'.repeat(40)],
+    expectedOutputRefs: owner.SELF_OWNER_PATHS.map((repoPath) => 'path:' + repoPath),
+    acceptanceRefs: ['#3168'],
+    stopCondition: 'Test currentized self-owner manifest selection.',
+    authority: {...handoff.AUTHORITY_FLAGS},
+  });
+  const completion = handoff.buildCompletionReceipt(manifest, {
+    disposition: 'COMPLETE',
+    outputRefs: ['commit:' + 'd'.repeat(40), 'pr:#3169'],
+    validationRefs: ['issue:#3168'],
+    observedRefs: ['commit:' + 'd'.repeat(40)],
+    leaseDisposition: 'RELEASED',
+    leaseReleaseEvidence: {
+      ledgerRef: '#2352',
+      leaseId: 'c'.repeat(64),
+      releasedGeneration: 21,
+      evidenceRef: 'run:456',
+    },
+    workspaceResult: 'clean',
+    blockerRefs: [],
+    requiredUnknownRefs: [],
+  });
+  const gates = owner.SELF_OWNER_CURRENTIZED_REQUIRED_GATES.map((name) => ({
+    name,
+    result: 'PASS',
+    evidenceLocator: name === 'currentization-d014-completion'
+      ? 'issue-comment:2' : 'issue-comment:1',
+  }));
+  const impl = {
+    pr: 3169,
+    lineage: {
+      kind: 'VALIDATION_MERGE_CURRENTIZATION',
+      completionGate: 'currentization-d014-completion',
+      phaseId: '3168-validation-merge-currentization',
+      requiredGates: owner.SELF_OWNER_CURRENTIZED_REQUIRED_GATES,
+    },
+    row: {receipt: {requiredGates: gates}},
+  };
+  const selected = owner.selectSelfOwnerWorkspaceManifest([
+    {id: 1, body: handoff.renderManifest(manifest)},
+    {id: 2, body: handoff.renderCompletionReceipt(completion)},
+  ], 3168, '#3168', impl);
+  assert.equal(selected.manifest.manifestId, manifest.manifestId);
+  assert.equal(selected.lineage.kind, 'VALIDATION_MERGE_CURRENTIZATION');
+});
+test('late self-owner recognition is zero-effect for inspect and apply', () => {
+  let writes = 0;
+  const target = {
+    ...owner.TARGET_3092,
+    packet: 3168,
+    packetRef: '#3168',
+    pr: 3169,
+    candidate: 'a'.repeat(40),
+    merge: 'b'.repeat(40),
+  };
+  const ctx = {...fake2786Context(), target, packet: 3168, packetRef: '#3168',
+    lateRecognition: true};
+  const state = fake2786State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'});
+  const inspected = owner.inspectPacket('#3168', {
+    createSelfOwnerContext: () => ctx,
+    readState: () => state,
+  });
+  assert.equal(inspected.status, 'PASS');
+  assert.equal(inspected.selfOwnerMode, 'LATE_ZERO_EFFECT_RECOGNITION');
+  const applied = owner.applyPacket('#3168', {
+    createSelfOwnerContext: () => ctx,
+    readState: () => state,
+    publishExact: () => { writes += 1; return {written: 1}; },
+  });
+  assert.equal(applied.status, 'PASS');
+  assert.equal(applied.selfOwnerMode, 'LATE_ZERO_EFFECT_RECOGNITION');
+  assert.equal(writes, 0);
+  assert.deepEqual(applied.effects, {
+    holderCleaned: 0, d014Published: 0, stageReceiptPublished: 0,
+  });
+});
+test('late self-owner recognition blocks a missing V before every write', () => {
+  let writes = 0;
+  const target = {
+    ...owner.TARGET_3092,
+    packet: 3168,
+    packetRef: '#3168',
+    pr: 3169,
+    candidate: 'a'.repeat(40),
+    merge: 'b'.repeat(40),
+  };
+  const ctx = {...fake2786Context(), target, packet: 3168, packetRef: '#3168',
+    lateRecognition: true};
+  assert.throws(() => owner.applyPacket('#3168', {
+    createSelfOwnerContext: () => ctx,
+    readState: () => fake2786State(),
+    publishExact: () => { writes += 1; return {written: 1}; },
+  }), (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('LATE_SELF_OWNER_EXISTING_VALIDATION_STAGE_REQUIRED'));
+  assert.equal(writes, 0);
+});
+test('late self-owner recognition preserves conflicting V as conflict with zero writes', () => {
+  let writes = 0;
+  const target = {
+    ...owner.TARGET_3092,
+    packet: 3168,
+    packetRef: '#3168',
+    pr: 3169,
+    candidate: 'a'.repeat(40),
+    merge: 'b'.repeat(40),
+  };
+  const ctx = {...fake2786Context(), target, packet: 3168, packetRef: '#3168',
+    lateRecognition: true};
+  assert.throws(() => owner.applyPacket('#3168', {
+    createSelfOwnerContext: () => ctx,
+    readState: () => { throw new owner.ApplyError('CONFLICT', ['VALIDATION_STAGE_RECEIPT_CONFLICT']); },
+    publishExact: () => { writes += 1; return {written: 1}; },
+  }), (error) => error instanceof owner.ApplyError && error.kind === 'CONFLICT');
+  assert.equal(writes, 0);
 });
 test('#2786 already-finalized retry is zero-effect', () => {
   let writes = 0;
@@ -1414,6 +1586,30 @@ test('inspect is read-only and exposes bounded decision only', () => {
   assert.equal(result.authority.repositoryMutationAuthorized, false);
 });
 
+test('agent-view distinguishes late self-owner recognition from publication', () => {
+  const target = {
+    ...owner.TARGET_3092,
+    packet: 3149,
+    packetRef: '#3149',
+    pr: 3152,
+    candidate: 'a'.repeat(40),
+    merge: 'b'.repeat(40),
+  };
+  const out = owner.runCli(['inspect', '--packet', '#3149', '--format', 'agent-view'], {
+    createSelfOwnerContext: () => ({
+      ...fake2786Context(),
+      target,
+      packet: 3149,
+      packetRef: '#3149',
+      lateRecognition: true,
+    }),
+    readState: () => fake2786State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+  });
+  assert.equal(out.code, 0);
+  const view = JSON.parse(out.text);
+  assert.equal(view.selfOwnerMode, 'LATE_ZERO_EFFECT_RECOGNITION');
+  assert.equal(view.effects.stageReceiptPublished, 0);
+});
 test('agent-view output contains no holder capability or raw execution material', () => {
   const result = owner.inspectPacket('#2463', {
     createContext: () => fakeContext(),

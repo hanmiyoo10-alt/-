@@ -159,6 +159,31 @@ test('S route supports documented M repository fallback', () => {
   }));
   assert.equal(m.executor, 'M');
 });
+test('L route accepts exact L repository identity and rejects fallback or invalid workspace', () => {
+  const l = handoff.buildManifest(manifestInput({
+    route: 'L',
+    executor: 'L',
+    workspace: { kind: 'repository', branch: 'laptop/task-handoff-2359', worktree: '/home/alsl0/nyang-worktrees/task-handoff-2359' },
+  }));
+  assert.equal(l.route, 'L');
+  assert.equal(l.executor, 'L');
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    route: 'L', executor: 'S',
+    workspace: { kind: 'repository', branch: 'server/task-handoff-2359', worktree: '/root/nyang-worktrees/task-handoff-2359' },
+  })), /MANIFEST_ROUTE_EXECUTOR_CONFLICT/);
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    route: 'L', executor: 'L',
+    workspace: { kind: 'not_applicable', branch: 'not_applicable', worktree: 'not_applicable' },
+  })), /WORKSPACE_L_ROUTE_REPOSITORY_REQUIRED/);
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    route: 'L', executor: 'L',
+    workspace: { kind: 'repository', branch: 'main', worktree: '/home/alsl0/nyang-worktrees/task-handoff-2359' },
+  })), /WORKSPACE_BRANCH_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    route: 'L', executor: 'L',
+    workspace: { kind: 'repository', branch: 'laptop/task-handoff-2359', worktree: '/home/alsl0/nyang-repo' },
+  })), /WORKTREE_LANDING_RESERVED/);
+});
 
 test('landing_metadata manifest reuses exact D-013 S identity', () => {
   const m = handoff.buildManifest(manifestInput({
@@ -178,6 +203,20 @@ test('landing_metadata manifest supports documented S route fallback to exact M 
   }));
   assert.equal(m.executor, 'M');
 });
+test('landing_metadata manifest supports exact L identity', () => {
+  const m = handoff.buildManifest(manifestInput({
+    phaseId: 'landing-refresh-l',
+    route: 'L',
+    executor: 'L',
+    scopes: ['surface:mcl-landing-origin-main:L'],
+    workspace: { kind: 'landing_metadata', branch: 'main', worktree: '/home/alsl0/nyang-repo' },
+    observedBaseSha: baseSha,
+  }));
+  assert.equal(m.route, 'L');
+  assert.equal(m.executor, 'L');
+  assert.equal(m.workspace.kind, 'landing_metadata');
+});
+
 test('landing_metadata manifest rejects mismatched scope identity and missing observed head', () => {
   expectThrow(() => handoff.buildManifest(manifestInput({
     scopes: ['surface:mcl-landing-origin-main:M'],
@@ -211,6 +250,17 @@ test('landing_branch_repair manifest accepts exact S/S identity and scope', () =
   assert.equal(m.route,'S'); assert.equal(m.executor,'S');
   assert.equal(m.workspace.kind,'landing_branch_repair');
 });
+test('landing_branch_repair manifest rejects L because Step A does not admit an L repair owner', () => {
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    phaseId: 'landing-branch-repair-l',
+    route: 'L',
+    executor: 'L',
+    scopes: ['surface:mcl-landing-branch:L'],
+    workspace: { kind: 'landing_branch_repair', branch: 'main', worktree: '/home/alsl0/nyang-repo' },
+    observedBaseSha: baseSha,
+  })), /WORKSPACE_LANDING_BRANCH_REPAIR_EXECUTOR_INVALID|LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID/);
+});
+
 test('landing_branch_repair manifest rejects fallback mismatched identity scope and missing base', () => {
   const base = {
     phaseId: 'landing-branch-repair-m',

@@ -43,10 +43,15 @@ PocketRisu는 서버폰에서 별도 runtime으로 운영되지만 이 실험의
 서버폰
   repository: /root/nyang-repo
   landing branch: server/work
+
+L-Gram (coordination identity admitted; mutable owner not yet proven)
+  landing/read clone: /home/alsl0/nyang-repo on main
+  future feature namespace: laptop/*
+  future isolated worktrees: /home/alsl0/nyang-worktrees/*
 ```
 
 실제 기능 변경은 각 landing branch/worktree를 직접 수정하는 대신 current `origin/main`에서 기기별 feature branch와 독립 worktree를 만든다. 원격 호출은 대상 기기와 absolute repository/worktree path를 명시해 다른 기기의 작업공간과 섞이지 않게 한다.
-기기 소유권을 눈에 보이게 유지하기 위해 feature branch도 `mainphone/*`와 `server/*` prefix로 분리하는 것을 기본 형태로 둔다.
+기기 소유권을 눈에 보이게 유지하기 위해 feature branch도 `mainphone/*`, `server/*`, 그리고 계약상 L에 예약된 `laptop/*` prefix로 분리한다. 다만 L은 현재 coordination contract만 입장한 상태이므로 `laptop/*` mutation은 별도 operational owner와 live proof 전까지 실행 authority가 아니다.
 Landing worktree 동기화는 기존 원칙대로 clean 상태와 fast-forward 가능성이 확인될 때만 수행하며, dirty 상태에서는 자동 진행하지 않는다.
 
 ## 작업공간 원칙
@@ -55,8 +60,9 @@ Landing worktree 동기화는 기존 원칙대로 clean 상태와 fast-forward �
 
 - 메인폰 기본 branch intent: `mainphone/work`.
 - 서버폰 확인된 기본 branch: `server/work`.
+- L landing/read branch identity: `main` at `/home/alsl0/nyang-repo`; it is not a feature branch.
 
-이 branch들은 기기별 기본 착륙 지점이다. 실제 기능 구현은 가능하면 여기서 다시 feature branch 또는 worktree로 분리한다.
+이 branch들은 기기별 기본 착륙 지점 또는 read baseline이다. 실제 기능 구현은 가능하면 여기서 다시 feature branch 또는 worktree로 분리한다. L은 별도 operational owner가 검증되기 전까지 `laptop/*` mutation을 실행하지 않는다.
 
 예:
 
@@ -66,6 +72,9 @@ mainphone/work
 
 server/work
   └─ server/feature-b
+
+L main (landing/read only)
+  └─ laptop/feature-c  # reserved contract shape; mutation waits for operational owner
 ```
 
 또는 한 서버폰에 여러 작업 디렉터리가 필요하면 `git worktree`를 사용한다.

@@ -39,7 +39,7 @@ A manifest binds one phase to:
 - caller-stable `phaseId` and bounded `phaseClass`;
 - D-012 route plus one exact executor, never `either`;
 - normalized Work System `path:` / `surface:` scopes;
-- D-013 workspace identity: isolated `repository`, fixed `landing_metadata`, fixed exact S/M `landing_branch_repair`, or explicit non-repository `not_applicable`;
+- D-013 workspace identity: isolated `repository`, fixed S/M/L `landing_metadata`, fixed exact S/M-only `landing_branch_repair`, or explicit non-repository `not_applicable`;
 - optional observed base SHA as historical evidence only;
 - whether D-013 lease evidence is required and, when required, the exact lease identity/acquisition generation;
 - bounded source-authority, input, expected-output, and acceptance locators;
@@ -88,9 +88,11 @@ The implementation reuses Work System scope normalization and the public D-013 r
 - every context-specific route must use the same exact executor context;
 - repository-backed S work uses `server/*` under `/root/nyang-worktrees/`;
 - repository-backed M work uses `mainphone/*` under `/data/data/com.termux/files/home/nyang-worktrees/`;
-- fixed landing Git-metadata phases use the exact D-013 `landing_metadata` identity and matching `surface:mcl-landing-origin-main:<executor>` scope; arbitrary landing paths remain invalid;
-- fixed landing branch-repair phases use exact route/executor identity only: `S / S` with `server/work` + `/root/nyang-repo` + `surface:mcl-landing-branch:S`, or `M / M` with `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + `surface:mcl-landing-branch:M`;
+- repository-backed L work uses exact `L / L`, `laptop/*`, and an absolute normalized worktree strictly below `/home/alsl0/nyang-worktrees/`; the `main` landing branch and `/home/alsl0/nyang-repo` landing/read clone are not feature workspaces;
+- fixed landing Git-metadata phases use the exact D-013 `landing_metadata` identity and matching `surface:mcl-landing-origin-main:<executor>` scope, including exact L identity `main` + `/home/alsl0/nyang-repo` + `surface:mcl-landing-origin-main:L`; arbitrary landing paths remain invalid;
+- fixed landing branch-repair phases remain S/M-only and use exact route/executor identity: `S / S` with `server/work` + `/root/nyang-repo` + `surface:mcl-landing-branch:S`, or `M / M` with `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + `surface:mcl-landing-branch:M`; L has no `landing_branch_repair` admission;
 - route `S` requires `repository`, `landing_metadata`, or exact S/S `landing_branch_repair`; the documented executor `M` fallback remains valid only for existing repository/landing-metadata cases and is not branch-repair authority;
+- route `L` requires exact executor `L` and either `repository` or exact L `landing_metadata`; it has no S/M fallback and no branch-repair authority;
 - non-repository semantic contexts use explicit `not_applicable` repository identity.
 
 A valid manifest does not prove the workspace currently exists, is clean, or is current. Those remain execution-time owner checks.
@@ -145,7 +147,7 @@ Time passage has no semantic effect. V1 has no TTL, latest-wins rule, implicit s
 
 No automatic routing or dispatcher is introduced. No task database, mutable registry, new lease ledger, worktree creator/cleaner, device health owner, CI gate, Git writer, merge writer, release publisher, or production authority is introduced.
 
-The Work System packet remains the resumable whole-task owner. Work Harness Work Record/Executor Handoff/Coordination Receipt remain generic repository coordination owners. This MCL contract is the smaller product-local phase continuity layer between independent S/M workers.
+The Work System packet remains the resumable whole-task owner. Work Harness Work Record/Executor Handoff/Coordination Receipt remain generic repository coordination owners. This MCL contract is the smaller product-local phase continuity layer between independent S/M/L workers; L contract admission remains coordination-only until a separate operational L effect owner is reviewed.
 
 ## Implementation surface
 

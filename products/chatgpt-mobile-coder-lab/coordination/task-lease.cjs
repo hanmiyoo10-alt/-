@@ -10,12 +10,18 @@ const LEDGER_MARKER = '<!-- mcl-task-lease-state:v1 -->';
 const STATE_ISSUE_NUMBER = 2352;
 const OWNER_PACKET_REF = '#2350';
 const CONTROLLER_PATH = 'products/chatgpt-mobile-coder-lab/coordination/task-lease.cjs';
-const ROUTES = Object.freeze(['S_PRIVATE_LOCAL', 'M_VM_LAB', 'M_PRIVATE_LAB', 'S_TERMUX', 'M', 'S']);
+const ROUTES = Object.freeze(['S_PRIVATE_LOCAL', 'M_VM_LAB', 'M_PRIVATE_LAB', 'S_TERMUX', 'L', 'M', 'S']);
 const EXECUTORS = new Set(ROUTES);
 const WORKSPACE_KINDS = Object.freeze(['repository', 'not_applicable', 'landing_metadata', 'landing_branch_repair']);
 const LANDING_METADATA = Object.freeze({
   S: Object.freeze({branch: 'server/work', worktree: '/root/nyang-repo', scope: 'surface:mcl-landing-origin-main:S'}),
   M: Object.freeze({branch: 'mainphone/work', worktree: '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work', scope: 'surface:mcl-landing-origin-main:M'}),
+  L: Object.freeze({branch: 'main', worktree: '/home/alsl0/nyang-repo', scope: 'surface:mcl-landing-origin-main:L'}),
+});
+const REPOSITORY_WORKSPACE = Object.freeze({
+  S: Object.freeze({branchPrefix: 'server/', reservedBranch: 'server/work', worktreeRoot: '/root/nyang-worktrees/'}),
+  M: Object.freeze({branchPrefix: 'mainphone/', reservedBranch: 'mainphone/work', worktreeRoot: '/data/data/com.termux/files/home/nyang-worktrees/'}),
+  L: Object.freeze({branchPrefix: 'laptop/', reservedBranch: 'main', worktreeRoot: '/home/alsl0/nyang-worktrees/'}),
 });
 const LANDING_BRANCH_REPAIR = Object.freeze({
   S: Object.freeze({branch: 'server/work', worktree: '/root/nyang-repo', scope: 'surface:mcl-landing-branch:S'}),
@@ -114,14 +120,14 @@ function validateWorkspace(workspace, executor) {
     if (workspace.branch !== identity.branch || workspace.worktree !== identity.worktree) return ['WORKSPACE_LANDING_BRANCH_REPAIR_IDENTITY_INVALID'];
     return [];
   }
-  if (!['S', 'M'].includes(executor)) return ['WORKSPACE_REPOSITORY_EXECUTOR_INVALID'];
+  const profile = REPOSITORY_WORKSPACE[executor];
+  if (!profile) return ['WORKSPACE_REPOSITORY_EXECUTOR_INVALID'];
   if (typeof workspace.branch !== 'string' || typeof workspace.worktree !== 'string') return ['WORKSPACE_FIELDS_INVALID'];
-  const prefix = executor === 'S' ? 'server/' : 'mainphone/';
-  if (!workspace.branch.startsWith(prefix) || workspace.branch === `${prefix}work`) return ['WORKSPACE_BRANCH_INVALID'];
+  if (!workspace.branch.startsWith(profile.branchPrefix) || workspace.branch === profile.reservedBranch) return ['WORKSPACE_BRANCH_INVALID'];
   if (!path.posix.isAbsolute(workspace.worktree) || path.posix.normalize(workspace.worktree) !== workspace.worktree) return ['WORKTREE_PATH_INVALID'];
   const landing = landingMetadataIdentity(executor);
   if (landing && workspace.worktree === landing.worktree) return ['WORKTREE_LANDING_RESERVED'];
-  const root = executor === 'S' ? '/root/nyang-worktrees/' : '/data/data/com.termux/files/home/nyang-worktrees/';
+  const root = profile.worktreeRoot;
   if (!workspace.worktree.startsWith(root) || workspace.worktree === root.slice(0, -1)) return ['WORKTREE_ROOT_INVALID'];
   return [];
 }
@@ -254,6 +260,7 @@ function normalizeAcquireRequest(request) {
   };
   reasonCodes.push(...validateWorkspace(workspace, request?.executor));
   if (request?.route === 'S' && !['repository', 'landing_metadata', 'landing_branch_repair'].includes(workspace.kind)) reasonCodes.push('REQUEST_S_ROUTE_REPOSITORY_REQUIRED');
+  if (request?.route === 'L' && !['repository', 'landing_metadata'].includes(workspace.kind)) reasonCodes.push('REQUEST_L_ROUTE_REPOSITORY_REQUIRED');
   const observedBaseSha = request?.observedBaseSha || null;
   if (observedBaseSha !== null && !SHA40_RE.test(observedBaseSha)) reasonCodes.push('REQUEST_BASE_SHA_INVALID');
   reasonCodes.push(...validateLandingMetadataBinding({workspace, executor: request?.executor, scopes: scopeResult.scopes, observedBaseSha}));

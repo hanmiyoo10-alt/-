@@ -156,7 +156,7 @@ Profile D requires `currentization-scope-and-blob-preservation`,
 `d013-d014-holder-convergence`, `d013-release` and `d014-completion`.
 Profile E requires `currentization-scope-and-blob-preservation`,
 `d013-release` and `d014-completion`.
-Profile F requires `currentization-scope-and-blob-preservation',
+Profile F requires `currentization-scope-and-blob-preservation`,
 `d013-release` and `d014-completion`.
 Profile G requires `currentization-scope-and-blob-preservation`,
 `d013-release` and `d014-completion`.

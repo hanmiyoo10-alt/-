@@ -338,12 +338,20 @@ This is the operational analogue of canonical-main's module split rule: oversize
 
 ## Normal canonical-main startup
 
-Routine read-only canonical-main orientation uses exactly two required reads:
+Routine read-only canonical-main orientation has one semantic evidence contract with two evidence-equivalent access paths.
+
+Preferred composition path: when the current host/session exposes a verified read-only composition that returns direct current `main` plus `#485` while preserving both source identities, source agreement, uncertainty, conflict, and failure provenance, prefer that composition over reconstructing the same orientation through avoidable manual fan-out. The currently reviewed external adapter names this operation `repo_snapshot`; the operation name and adapter are convenience surfaces only and never become repository truth owners.
+
+Routing eligibility is keyed to the stable read-only `repo_snapshot` compatibility contract, not to the adapter's semantic version. A later loaded compatible release is automatically eligible without a repository-policy edit when it preserves the same source identity, agreement, uncertainty, conflict, failure, and no-mutation semantics. An incompatible or unverifiable contract falls back to the direct path until separately reviewed.
+
+Fallback direct path: when that composition is unavailable or reports `BLOCKED_CAPABILITY`, automatically use the existing exactly two required reads without requiring user intervention:
 
 1. read direct current `main` authority and capture the exact SHA;
 2. read `#485` and its Canonical Operator Capsule.
 
-The second read is a derived projection, not a replacement authority. If direct current `main` does not match the `MAIN` SHA rendered by `#485`, treat the view as settling or stale and refresh/wait for current evidence; never infer green state from the older capsule.
+If a composition returns `SETTLING_OR_STALE`, `UNKNOWN`, `CONFLICT`, or another failure disposition, preserve that disposition. Direct reads may be used for evidence-equivalent drill-down, but they must not erase the disagreement or manufacture `PASS`.
+
+The second direct read is a derived projection, not a replacement authority. If direct current `main` does not match the `MAIN` SHA rendered by `#485`, treat the view as settling or stale and refresh/wait for current evidence; never infer green state from the older capsule.
 
 Deeper coordination surfaces are conditional rather than routine startup reads:
 
@@ -360,9 +368,9 @@ This fast path ends as soon as repository work is requested. Execution still fol
 
 The machine-readable routing contract lives in `work-system/policy.json` under `readRouting`. It is a deterministic read plan, not a new truth owner.
 
-Every route starts with the same ordered base reads: `direct-main`, then `issue-485`.
+Every route starts from the same ordered semantic base sources: `direct-main`, then `issue-485`. This defines required evidence, not a minimum connector-call count. A verified read-only composition may satisfy both base sources in one call only when it exposes their identities/agreement and preserves the same uncertainty, conflict, currentness, and failure semantics; otherwise use the ordered direct reads.
 
-- `STATUS_SESSION` adds nothing. Its exact route is only `direct-main + issue-485`, and when no additional intent exists the reader stops after those two reads.
+- `STATUS_SESSION` adds nothing. Its exact evidence set is only `direct-main + issue-485`, and when no additional intent exists the reader stops after those base sources are satisfied.
 - `EXECUTION` adds only `issue-465 + active-packets`, then escalates to the existing worker/packet bootstrap before any mutation.
 
 For `EXECUTION`, `active-packets` is a bounded write-scope-overlap discovery step, not a claim that one global active packet exists. Start with the requested mutation scope and #465 hints, then inspect every concretely identified nonterminal packet or open PR whose declared or observed write scope can overlap it. #465 seeds discovery but is not exhaustive authority.

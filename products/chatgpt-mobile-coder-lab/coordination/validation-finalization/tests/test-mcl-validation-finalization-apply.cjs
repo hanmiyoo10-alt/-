@@ -141,6 +141,10 @@ test('public parser accepts only inspect/apply packet+format', () => {
     {command: 'inspect', packetRef: '#3099', format: 'agent-view'},
   );
   assert.deepEqual(
+    owner.parseArgs(['inspect', '--packet', '#3144', '--format', 'agent-view']),
+    {command: 'inspect', packetRef: '#3144', format: 'agent-view'},
+  );
+  assert.deepEqual(
     owner.parseArgs(['inspect', '--packet', '#3149', '--format', 'agent-view']),
     {command: 'inspect', packetRef: '#3149', format: 'agent-view'},
   );
@@ -163,8 +167,8 @@ test('exact V1 effect pair is required', () => {
   assert.equal(owner.effectPairExact(decision('ALREADY_FINALIZED')), false);
 });
 
-test('compile-time profiles are exactly #2463, #2786, #3043, #3051, #3092 and #3099', () => {
-  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#3043', '#3051', '#3092', '#3099']);
+test('compile-time profiles are exactly #2463, #2786, #3043, #3051, #3092, #3099, #3110, #3118, #3126 and #3144', () => {
+  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#3043', '#3051', '#3092', '#3099', '#3110', '#3118', '#3126', '#3144']);
   assert.equal(owner.TARGET_2786.packet, 2786);
   assert.equal(owner.TARGET_2786.pr, 2878);
   assert.equal(owner.TARGET_2786.candidate,
@@ -236,6 +240,94 @@ test('compile-time profiles are exactly #2463, #2786, #3043, #3051, #3092 and #3
   assert.equal(owner.TARGET_3099.implementationReceiptDigest,
     'd11741c406b8786fb9365dc107fd63fcad04bd1f427b31aa7608aa700a0e5896');
   assert.deepEqual(owner.TARGET_3099.requiredCoordinationGates, [
+    'currentization-scope-and-blob-preservation',
+    'd013-release',
+    'd014-completion',
+  ]);
+  assert.equal(owner.TARGET_3110.packet, 3110);
+  assert.equal(owner.TARGET_3110.pr, 3113);
+  assert.equal(owner.TARGET_3110.candidate,
+    '4bc3c66f3519927a2bb827ddd49ef02ffc0162e6');
+  assert.equal(owner.TARGET_3110.merge,
+    'f45b9e5a32644179f2c9d00b4dced73ef5840cbe');
+  assert.equal(owner.TARGET_3110.workspaceManifestId,
+    '1c848f29285a8455bb0830a27cbf0ae1796742c0cfbd13426d8cfd100110f775');
+  assert.equal(owner.TARGET_3110.workspaceManifestPhaseId,
+    '3110-implementation-pr-stage-entry');
+  assert.equal(owner.TARGET_3110.workspaceLeaseId,
+    '834a17137086bde80fd3a6f3a0b1a51e2853aa1e28a20f81a0f7e5a8534c055c');
+  assert.equal(owner.TARGET_3110.workspaceAcquiredGeneration, 630);
+  assert.equal(owner.TARGET_3110.workspaceBranch, 'server/mcl-packet-3110');
+  assert.equal(owner.TARGET_3110.workspaceWorktree, '/root/nyang-worktrees/mcl-packet-3110');
+  assert.equal(owner.TARGET_3110.implementationReceiptDigest,
+    '9afd4d7b4a1ebbb57e1e1931d348cfeee17ebae561cada0f8158a7926e0901c3');
+  assert.deepEqual(owner.TARGET_3110.requiredCoordinationGates, [
+    'currentization-scope-and-blob-preservation',
+    'd013-release',
+    'd014-completion',
+  ]);
+  assert.equal(owner.TARGET_3118.packet, 3118);
+  assert.equal(owner.TARGET_3118.pr, 3122);
+  assert.equal(owner.TARGET_3118.candidate,
+    '256b858a270dcc38e15d6dd7b4d6d263b0cbfb1b');
+  assert.equal(owner.TARGET_3118.merge,
+    '45d699b7a4c2377283cfe434472ad12498088602');
+  assert.equal(owner.TARGET_3118.workspaceManifestId,
+    'bfa86f26e286aacadcddfbd128dbd65ad391d5db7e4cbffa4c52c3ae8fccf475');
+  assert.equal(owner.TARGET_3118.workspaceManifestPhaseId,
+    '3118-implementation-pr-recovery-rebind-3121');
+  assert.equal(owner.TARGET_3118.workspaceLeaseId,
+    'cb3c98b20e38423baffe4fdd5ca7cf162282d37143d2115a4d96541727aa45da');
+  assert.equal(owner.TARGET_3118.workspaceAcquiredGeneration, 638);
+  assert.equal(owner.TARGET_3118.workspaceBranch, 'server/mcl-packet-3118');
+  assert.equal(owner.TARGET_3118.workspaceWorktree, '/root/nyang-worktrees/mcl-packet-3118');
+  assert.equal(owner.TARGET_3118.implementationReceiptDigest,
+    '70e62921e17aef683a566381083144e9acdf6946405e6b39b1b5c879e0cd82c2');
+  assert.deepEqual(owner.TARGET_3118.requiredCoordinationGates, [
+    'currentization-scope-and-blob-preservation',
+    'd013-release',
+    'd014-completion',
+  ]);
+  assert.equal(owner.TARGET_3126.packet, 3126);
+  assert.equal(owner.TARGET_3126.pr, 3129);
+  assert.equal(owner.TARGET_3126.candidate,
+    '435d2714551745ad2e5eb587a6f95d545abbcbe3');
+  assert.equal(owner.TARGET_3126.merge,
+    'a2c68cffd695fd837282a67f79bbca662500d11d');
+  assert.equal(owner.TARGET_3126.workspaceManifestId,
+    '25771eff86e80d0660d8c4db17e5c84ff1cd75670bb66a8b4c317bda05d1ba6e');
+  assert.equal(owner.TARGET_3126.workspaceManifestPhaseId,
+    '3126-implementation-pr-stage-entry');
+  assert.equal(owner.TARGET_3126.workspaceLeaseId,
+    '1adc0b00ee8a92faa4923960d23d1bcc397dad4940602094f1356c1157dbca85');
+  assert.equal(owner.TARGET_3126.workspaceAcquiredGeneration, 646);
+  assert.equal(owner.TARGET_3126.workspaceBranch, 'server/mcl-packet-3126');
+  assert.equal(owner.TARGET_3126.workspaceWorktree, '/root/nyang-worktrees/mcl-packet-3126');
+  assert.equal(owner.TARGET_3126.implementationReceiptDigest,
+    'f47aefb72827e49a9e72d10354d9b3cd67070016c820bc69e7fff5a5895a96bb');
+  assert.deepEqual(owner.TARGET_3126.requiredCoordinationGates, [
+    'currentization-scope-and-blob-preservation',
+    'd013-release',
+    'd014-completion',
+  ]);
+  assert.equal(owner.TARGET_3144.packet, 3144);
+  assert.equal(owner.TARGET_3144.pr, 3147);
+  assert.equal(owner.TARGET_3144.candidate,
+    '900d3c67d9ff0f831b6efaec0dee69f1ebba4ee7');
+  assert.equal(owner.TARGET_3144.merge,
+    '2db2e75187c67a39e6b1b012a704f871982ba930');
+  assert.equal(owner.TARGET_3144.workspaceManifestId,
+    '9a4f4d2b279942ffbb462e9fa135dca89a3de1a02c3650b284817d44bc1da89c');
+  assert.equal(owner.TARGET_3144.workspaceManifestPhaseId,
+    '3144-implementation-pr-stage-entry');
+  assert.equal(owner.TARGET_3144.workspaceLeaseId,
+    'f83f3788990ce9567a804f0e08b8886cc0cdddb596ccaf9e88046088d2ad29c5');
+  assert.equal(owner.TARGET_3144.workspaceAcquiredGeneration, 664);
+  assert.equal(owner.TARGET_3144.workspaceBranch, 'server/mcl-packet-3144');
+  assert.equal(owner.TARGET_3144.workspaceWorktree, '/root/nyang-worktrees/mcl-packet-3144');
+  assert.equal(owner.TARGET_3144.implementationReceiptDigest,
+    '5ab640da43f4b8ced263ada4b021d6760249535ac5959c7a3a054425b74fb78d');
+  assert.deepEqual(owner.TARGET_3144.requiredCoordinationGates, [
     'currentization-scope-and-blob-preservation',
     'd013-release',
     'd014-completion',
@@ -469,6 +561,122 @@ test('#3099 fixed profile reuses stage-receipt-only implementation coordination 
   assert.deepEqual(calls, [[3099, 'STAGE3099']]);
 });
 
+test('#3110 fixed profile reuses stage-receipt-only implementation coordination path', () => {
+  let phase = 0;
+  const calls = [];
+  const ctx = {
+    ...fake2786Context(),
+    target: owner.TARGET_3110,
+    packet: 3110,
+    packetRef: '#3110',
+  };
+  const result = owner.applyPacket('#3110', {
+    createContext: () => ctx,
+    readState: () => phase === 0
+      ? fake2786State()
+      : fake2786State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+    buildValidationStageText: () => ({text: 'STAGE3110'}),
+    publishExact: (packet, body) => {
+      calls.push([packet, body]);
+      phase = 1;
+      return {written: 1, reused: 0, lostAckRecovered: false};
+    },
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.packetRef, '#3110');
+  assert.deepEqual(result.effects, {
+    holderCleaned: 0, d014Published: 0, stageReceiptPublished: 1,
+  });
+  assert.deepEqual(calls, [[3110, 'STAGE3110']]);
+});
+
+test('#3118 fixed profile reuses stage-receipt-only implementation coordination path', () => {
+  let phase = 0;
+  const calls = [];
+  const ctx = {
+    ...fake2786Context(),
+    target: owner.TARGET_3118,
+    packet: 3118,
+    packetRef: '#3118',
+  };
+  const result = owner.applyPacket('#3118', {
+    createContext: () => ctx,
+    readState: () => phase === 0
+      ? fake2786State()
+      : fake2786State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+    buildValidationStageText: () => ({text: 'STAGE3118'}),
+    publishExact: (packet, body) => {
+      calls.push([packet, body]);
+      phase = 1;
+      return {written: 1, reused: 0, lostAckRecovered: false};
+    },
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.packetRef, '#3118');
+  assert.deepEqual(result.effects, {
+    holderCleaned: 0, d014Published: 0, stageReceiptPublished: 1,
+  });
+  assert.deepEqual(calls, [[3118, 'STAGE3118']]);
+});
+
+test('#3126 fixed profile reuses stage-receipt-only implementation coordination path', () => {
+  let phase = 0;
+  const calls = [];
+  const ctx = {
+    ...fake2786Context(),
+    target: owner.TARGET_3126,
+    packet: 3126,
+    packetRef: '#3126',
+  };
+  const result = owner.applyPacket('#3126', {
+    createContext: () => ctx,
+    readState: () => phase === 0
+      ? fake2786State()
+      : fake2786State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+    buildValidationStageText: () => ({text: 'STAGE3126'}),
+    publishExact: (packet, body) => {
+      calls.push([packet, body]);
+      phase = 1;
+      return {written: 1, reused: 0, lostAckRecovered: false};
+    },
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.packetRef, '#3126');
+  assert.deepEqual(result.effects, {
+    holderCleaned: 0, d014Published: 0, stageReceiptPublished: 1,
+  });
+  assert.deepEqual(calls, [[3126, 'STAGE3126']]);
+});
+
+test('#3144 fixed profile reuses stage-receipt-only implementation coordination path', () => {
+  let phase = 0;
+  const calls = [];
+  const ctx = {
+    ...fake2786Context(),
+    target: owner.TARGET_3144,
+    packet: 3144,
+    packetRef: '#3144',
+  };
+  const result = owner.applyPacket('#3144', {
+    createContext: () => ctx,
+    readState: () => phase === 0
+      ? fake2786State()
+      : fake2786State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+    buildValidationStageText: () => ({text: 'STAGE3144'}),
+    publishExact: (packet, body) => {
+      calls.push([packet, body]);
+      phase = 1;
+      return {written: 1, reused: 0, lostAckRecovered: false};
+    },
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.packetRef, '#3144');
+  assert.deepEqual(result.effects, {
+    holderCleaned: 0, d014Published: 0, stageReceiptPublished: 1,
+  });
+  assert.deepEqual(calls, [[3144, 'STAGE3144']]);
+});
+
 test('#3092 receipt selection requires exact digest and all fixed coordination gates', () => {
   const target = owner.TARGET_3092;
   const row = {
@@ -510,6 +718,122 @@ test('#3099 receipt selection requires exact digest and all fixed coordination g
       receiptDigest: target.implementationReceiptDigest,
       authorityRefs: [
         {kind: 'PR', locator: 'pr:#3102', identity: target.candidate},
+      ],
+      requiredGates: target.requiredCoordinationGates.map((name) => ({
+        name, result: 'PASS',
+      })),
+    },
+  };
+  assert.equal(owner.select2786ImplementationReceipt(
+    [row], {head: {sha: target.candidate}}, target), row);
+  assert.throws(() => owner.select2786ImplementationReceipt(
+    [{...row, receipt: {...row.receipt,
+      requiredGates: row.receipt.requiredGates.slice(1)}}],
+    {head: {sha: target.candidate}}, target), owner.ApplyError);
+  assert.throws(() => owner.select2786ImplementationReceipt(
+    [{...row, receipt: {...row.receipt, receiptDigest: 'a'.repeat(64)}}],
+    {head: {sha: target.candidate}}, target), owner.ApplyError);
+});
+
+test('#3110 receipt selection requires exact digest and all fixed coordination gates', () => {
+  const target = owner.TARGET_3110;
+  const row = {
+    comment: {id: 1},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 3110,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: target.implementationReceiptDigest,
+      authorityRefs: [
+        {kind: 'PR', locator: 'pr:#3113', identity: target.candidate},
+      ],
+      requiredGates: target.requiredCoordinationGates.map((name) => ({
+        name, result: 'PASS',
+      })),
+    },
+  };
+  assert.equal(owner.select2786ImplementationReceipt(
+    [row], {head: {sha: target.candidate}}, target), row);
+  assert.throws(() => owner.select2786ImplementationReceipt(
+    [{...row, receipt: {...row.receipt,
+      requiredGates: row.receipt.requiredGates.slice(1)}}],
+    {head: {sha: target.candidate}}, target), owner.ApplyError);
+  assert.throws(() => owner.select2786ImplementationReceipt(
+    [{...row, receipt: {...row.receipt, receiptDigest: 'a'.repeat(64)}}],
+    {head: {sha: target.candidate}}, target), owner.ApplyError);
+});
+
+test('#3118 receipt selection requires exact digest and all fixed coordination gates', () => {
+  const target = owner.TARGET_3118;
+  const row = {
+    comment: {id: 1},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 3118,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: target.implementationReceiptDigest,
+      authorityRefs: [
+        {kind: 'PR', locator: 'pr:#3122', identity: target.candidate},
+      ],
+      requiredGates: target.requiredCoordinationGates.map((name) => ({
+        name, result: 'PASS',
+      })),
+    },
+  };
+  assert.equal(owner.select2786ImplementationReceipt(
+    [row], {head: {sha: target.candidate}}, target), row);
+  assert.throws(() => owner.select2786ImplementationReceipt(
+    [{...row, receipt: {...row.receipt,
+      requiredGates: row.receipt.requiredGates.slice(1)}}],
+    {head: {sha: target.candidate}}, target), owner.ApplyError);
+  assert.throws(() => owner.select2786ImplementationReceipt(
+    [{...row, receipt: {...row.receipt, receiptDigest: 'a'.repeat(64)}}],
+    {head: {sha: target.candidate}}, target), owner.ApplyError);
+});
+
+test('#3126 receipt selection requires exact digest and all fixed coordination gates', () => {
+  const target = owner.TARGET_3126;
+  const row = {
+    comment: {id: 1},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 3126,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: target.implementationReceiptDigest,
+      authorityRefs: [
+        {kind: 'PR', locator: 'pr:#3129', identity: target.candidate},
+      ],
+      requiredGates: target.requiredCoordinationGates.map((name) => ({
+        name, result: 'PASS',
+      })),
+    },
+  };
+  assert.equal(owner.select2786ImplementationReceipt(
+    [row], {head: {sha: target.candidate}}, target), row);
+  assert.throws(() => owner.select2786ImplementationReceipt(
+    [{...row, receipt: {...row.receipt,
+      requiredGates: row.receipt.requiredGates.slice(1)}}],
+    {head: {sha: target.candidate}}, target), owner.ApplyError);
+  assert.throws(() => owner.select2786ImplementationReceipt(
+    [{...row, receipt: {...row.receipt, receiptDigest: 'a'.repeat(64)}}],
+    {head: {sha: target.candidate}}, target), owner.ApplyError);
+});
+
+test('#3144 receipt selection requires exact digest and all fixed coordination gates', () => {
+  const target = owner.TARGET_3144;
+  const row = {
+    comment: {id: 1},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 3144,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: target.implementationReceiptDigest,
+      authorityRefs: [
+        {kind: 'PR', locator: 'pr:#3147', identity: target.candidate},
       ],
       requiredGates: target.requiredCoordinationGates.map((name) => ({
         name, result: 'PASS',
@@ -691,6 +1015,38 @@ test('self-owner implementation receipt conflicts on semantic merged generation 
     make(2, 3153, 'e'.repeat(40)),
   ], 3149), owner.ApplyError);
 });
+test('self-owner currentized lineage selects the semantic generation bound to merged PR head', () => {
+  const normalGates = owner.SELF_OWNER_REQUIRED_GATES.map((name) => ({name, result: 'PASS'}));
+  const currentizedGates = owner.SELF_OWNER_CURRENTIZED_REQUIRED_GATES
+    .map((name) => ({name, result: 'PASS'}));
+  const make = (id, sha, gates) => ({
+    comment: {id},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 3168,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: String(id).repeat(64).slice(0, 64),
+      authorityRefs: [
+        {kind: 'COMMIT', locator: 'candidate-head', identity: sha},
+        {kind: 'PR', locator: 'pr:#3169', identity: sha},
+      ],
+      requiredGates: gates,
+      scope: {paths: owner.SELF_OWNER_PATHS, diffRequired: true, diffIdentity: 'd'.repeat(64)},
+    },
+  });
+  const historical = make(1, 'a'.repeat(40), normalGates);
+  const currentized = make(2, 'b'.repeat(40), currentizedGates);
+  const selected = owner.selectSelfOwnerImplementationReceipt(
+    [historical, currentized], 3168, {number: 3169, head: {sha: 'b'.repeat(40)}});
+  assert.equal(selected.row, currentized);
+  assert.equal(selected.lineage.kind, 'VALIDATION_MERGE_CURRENTIZATION');
+  assert.equal(selected.lineage.completionGate, 'currentization-d014-completion');
+  assert.throws(() => owner.selectSelfOwnerImplementationReceipt(
+    [historical, currentized], 3168, {number: 3169, head: {sha: 'c'.repeat(40)}}),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('SELF_OWNER_IMPLEMENTATION_LIVE_HEAD_GENERATION_MISSING'));
+});
 test('self-owner workspace manifest follows selected D014 completion lineage', () => {
   const makeManifest = (leaseId, generation, base) => handoff.buildManifest({
     schemaVersion: 1,
@@ -764,6 +1120,146 @@ test('self-owner workspace manifest follows selected D014 completion lineage', (
 
   assert.throws(() => owner.selectSelfOwnerWorkspaceManifest(
     comments.filter((comment) => comment.id !== 3), 3149, '#3149', impl), owner.ApplyError);
+});
+test('self-owner currentized workspace manifest follows currentization completion lineage', () => {
+  const manifest = handoff.buildManifest({
+    schemaVersion: 1,
+    mode: 'MCL_TASK_MANIFEST',
+    packetRef: '#3168',
+    packetBodySha256: 'a'.repeat(64),
+    phaseId: '3168-validation-merge-currentization',
+    phaseClass: 'REPOSITORY_MUTATION',
+    route: 'S',
+    executor: 'S',
+    scopes: owner.SELF_OWNER_SCOPES,
+    workspace: {
+      kind: 'repository',
+      branch: 'server/mcl-packet-3168',
+      worktree: '/root/nyang-worktrees/mcl-packet-3168',
+    },
+    observedBaseSha: 'b'.repeat(40),
+    leaseRequirement: 'REQUIRED',
+    leaseEvidence: {
+      ledgerRef: '#2352',
+      leaseId: 'c'.repeat(64),
+      acquiredGeneration: 20,
+      acquireEvidenceRef: 'receipt:mcl-task-lease:' + 'c'.repeat(64) + ':generation:20',
+    },
+    sourceAuthorityRefs: ['#3168', 'issue:#2352'],
+    inputRefs: ['commit:' + 'b'.repeat(40)],
+    expectedOutputRefs: owner.SELF_OWNER_PATHS.map((repoPath) => 'path:' + repoPath),
+    acceptanceRefs: ['#3168'],
+    stopCondition: 'Test currentized self-owner manifest selection.',
+    authority: {...handoff.AUTHORITY_FLAGS},
+  });
+  const completion = handoff.buildCompletionReceipt(manifest, {
+    disposition: 'COMPLETE',
+    outputRefs: ['commit:' + 'd'.repeat(40), 'pr:#3169'],
+    validationRefs: ['issue:#3168'],
+    observedRefs: ['commit:' + 'd'.repeat(40)],
+    leaseDisposition: 'RELEASED',
+    leaseReleaseEvidence: {
+      ledgerRef: '#2352',
+      leaseId: 'c'.repeat(64),
+      releasedGeneration: 21,
+      evidenceRef: 'run:456',
+    },
+    workspaceResult: 'clean',
+    blockerRefs: [],
+    requiredUnknownRefs: [],
+  });
+  const gates = owner.SELF_OWNER_CURRENTIZED_REQUIRED_GATES.map((name) => ({
+    name,
+    result: 'PASS',
+    evidenceLocator: name === 'currentization-d014-completion'
+      ? 'issue-comment:2' : 'issue-comment:1',
+  }));
+  const impl = {
+    pr: 3169,
+    lineage: {
+      kind: 'VALIDATION_MERGE_CURRENTIZATION',
+      completionGate: 'currentization-d014-completion',
+      phaseId: '3168-validation-merge-currentization',
+      requiredGates: owner.SELF_OWNER_CURRENTIZED_REQUIRED_GATES,
+    },
+    row: {receipt: {requiredGates: gates}},
+  };
+  const selected = owner.selectSelfOwnerWorkspaceManifest([
+    {id: 1, body: handoff.renderManifest(manifest)},
+    {id: 2, body: handoff.renderCompletionReceipt(completion)},
+  ], 3168, '#3168', impl);
+  assert.equal(selected.manifest.manifestId, manifest.manifestId);
+  assert.equal(selected.lineage.kind, 'VALIDATION_MERGE_CURRENTIZATION');
+});
+test('late self-owner recognition is zero-effect for inspect and apply', () => {
+  let writes = 0;
+  const target = {
+    ...owner.TARGET_3092,
+    packet: 3168,
+    packetRef: '#3168',
+    pr: 3169,
+    candidate: 'a'.repeat(40),
+    merge: 'b'.repeat(40),
+  };
+  const ctx = {...fake2786Context(), target, packet: 3168, packetRef: '#3168',
+    lateRecognition: true};
+  const state = fake2786State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'});
+  const inspected = owner.inspectPacket('#3168', {
+    createSelfOwnerContext: () => ctx,
+    readState: () => state,
+  });
+  assert.equal(inspected.status, 'PASS');
+  assert.equal(inspected.selfOwnerMode, 'LATE_ZERO_EFFECT_RECOGNITION');
+  const applied = owner.applyPacket('#3168', {
+    createSelfOwnerContext: () => ctx,
+    readState: () => state,
+    publishExact: () => { writes += 1; return {written: 1}; },
+  });
+  assert.equal(applied.status, 'PASS');
+  assert.equal(applied.selfOwnerMode, 'LATE_ZERO_EFFECT_RECOGNITION');
+  assert.equal(writes, 0);
+  assert.deepEqual(applied.effects, {
+    holderCleaned: 0, d014Published: 0, stageReceiptPublished: 0,
+  });
+});
+test('late self-owner recognition blocks a missing V before every write', () => {
+  let writes = 0;
+  const target = {
+    ...owner.TARGET_3092,
+    packet: 3168,
+    packetRef: '#3168',
+    pr: 3169,
+    candidate: 'a'.repeat(40),
+    merge: 'b'.repeat(40),
+  };
+  const ctx = {...fake2786Context(), target, packet: 3168, packetRef: '#3168',
+    lateRecognition: true};
+  assert.throws(() => owner.applyPacket('#3168', {
+    createSelfOwnerContext: () => ctx,
+    readState: () => fake2786State(),
+    publishExact: () => { writes += 1; return {written: 1}; },
+  }), (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('LATE_SELF_OWNER_EXISTING_VALIDATION_STAGE_REQUIRED'));
+  assert.equal(writes, 0);
+});
+test('late self-owner recognition preserves conflicting V as conflict with zero writes', () => {
+  let writes = 0;
+  const target = {
+    ...owner.TARGET_3092,
+    packet: 3168,
+    packetRef: '#3168',
+    pr: 3169,
+    candidate: 'a'.repeat(40),
+    merge: 'b'.repeat(40),
+  };
+  const ctx = {...fake2786Context(), target, packet: 3168, packetRef: '#3168',
+    lateRecognition: true};
+  assert.throws(() => owner.applyPacket('#3168', {
+    createSelfOwnerContext: () => ctx,
+    readState: () => { throw new owner.ApplyError('CONFLICT', ['VALIDATION_STAGE_RECEIPT_CONFLICT']); },
+    publishExact: () => { writes += 1; return {written: 1}; },
+  }), (error) => error instanceof owner.ApplyError && error.kind === 'CONFLICT');
+  assert.equal(writes, 0);
 });
 test('#2786 already-finalized retry is zero-effect', () => {
   let writes = 0;
@@ -1330,6 +1826,30 @@ test('inspect is read-only and exposes bounded decision only', () => {
   assert.equal(result.authority.repositoryMutationAuthorized, false);
 });
 
+test('agent-view distinguishes late self-owner recognition from publication', () => {
+  const target = {
+    ...owner.TARGET_3092,
+    packet: 3149,
+    packetRef: '#3149',
+    pr: 3152,
+    candidate: 'a'.repeat(40),
+    merge: 'b'.repeat(40),
+  };
+  const out = owner.runCli(['inspect', '--packet', '#3149', '--format', 'agent-view'], {
+    createSelfOwnerContext: () => ({
+      ...fake2786Context(),
+      target,
+      packet: 3149,
+      packetRef: '#3149',
+      lateRecognition: true,
+    }),
+    readState: () => fake2786State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+  });
+  assert.equal(out.code, 0);
+  const view = JSON.parse(out.text);
+  assert.equal(view.selfOwnerMode, 'LATE_ZERO_EFFECT_RECOGNITION');
+  assert.equal(view.effects.stageReceiptPublished, 0);
+});
 test('agent-view output contains no holder capability or raw execution material', () => {
   const result = owner.inspectPacket('#2463', {
     createContext: () => fakeContext(),

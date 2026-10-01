@@ -141,6 +141,10 @@ test('public parser accepts only inspect/apply packet+format', () => {
     {command: 'inspect', packetRef: '#3099', format: 'agent-view'},
   );
   assert.deepEqual(
+    owner.parseArgs(['inspect', '--packet', '#3144', '--format', 'agent-view']),
+    {command: 'inspect', packetRef: '#3144', format: 'agent-view'},
+  );
+  assert.deepEqual(
     owner.parseArgs(['inspect', '--packet', '#3149', '--format', 'agent-view']),
     {command: 'inspect', packetRef: '#3149', format: 'agent-view'},
   );
@@ -163,8 +167,8 @@ test('exact V1 effect pair is required', () => {
   assert.equal(owner.effectPairExact(decision('ALREADY_FINALIZED')), false);
 });
 
-test('compile-time profiles are exactly #2463, #2786, #3043, #3051, #3092 and #3099', () => {
-  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#3043', '#3051', '#3092', '#3099']);
+test('compile-time profiles are exactly #2463, #2786, #3043, #3051, #3092, #3099 and #3144', () => {
+  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#3043', '#3051', '#3092', '#3099', '#3144']);
   assert.equal(owner.TARGET_2786.packet, 2786);
   assert.equal(owner.TARGET_2786.pr, 2878);
   assert.equal(owner.TARGET_2786.candidate,
@@ -236,6 +240,28 @@ test('compile-time profiles are exactly #2463, #2786, #3043, #3051, #3092 and #3
   assert.equal(owner.TARGET_3099.implementationReceiptDigest,
     'd11741c406b8786fb9365dc107fd63fcad04bd1f427b31aa7608aa700a0e5896');
   assert.deepEqual(owner.TARGET_3099.requiredCoordinationGates, [
+    'currentization-scope-and-blob-preservation',
+    'd013-release',
+    'd014-completion',
+  ]);
+  assert.equal(owner.TARGET_3144.packet, 3144);
+  assert.equal(owner.TARGET_3144.pr, 3147);
+  assert.equal(owner.TARGET_3144.candidate,
+    '900d3c67d9ff0f831b6efaec0dee69f1ebba4ee7');
+  assert.equal(owner.TARGET_3144.merge,
+    '2db2e75187c67a39e6b1b012a704f871982ba930');
+  assert.equal(owner.TARGET_3144.workspaceManifestId,
+    '9a4f4d2b279942ffbb462e9fa135dca89a3de1a02c3650b284817d44bc1da89c');
+  assert.equal(owner.TARGET_3144.workspaceManifestPhaseId,
+    '3144-implementation-pr-stage-entry');
+  assert.equal(owner.TARGET_3144.workspaceLeaseId,
+    'f83f3788990ce9567a804f0e08b8886cc0cdddb596ccaf9e88046088d2ad29c5');
+  assert.equal(owner.TARGET_3144.workspaceAcquiredGeneration, 664);
+  assert.equal(owner.TARGET_3144.workspaceBranch, 'server/mcl-packet-3144');
+  assert.equal(owner.TARGET_3144.workspaceWorktree, '/root/nyang-worktrees/mcl-packet-3144');
+  assert.equal(owner.TARGET_3144.implementationReceiptDigest,
+    '5ab640da43f4b8ced263ada4b021d6760249535ac5959c7a3a054425b74fb78d');
+  assert.deepEqual(owner.TARGET_3144.requiredCoordinationGates, [
     'currentization-scope-and-blob-preservation',
     'd013-release',
     'd014-completion',
@@ -469,6 +495,35 @@ test('#3099 fixed profile reuses stage-receipt-only implementation coordination 
   assert.deepEqual(calls, [[3099, 'STAGE3099']]);
 });
 
+test('#3144 fixed profile reuses stage-receipt-only implementation coordination path', () => {
+  let phase = 0;
+  const calls = [];
+  const ctx = {
+    ...fake2786Context(),
+    target: owner.TARGET_3144,
+    packet: 3144,
+    packetRef: '#3144',
+  };
+  const result = owner.applyPacket('#3144', {
+    createContext: () => ctx,
+    readState: () => phase === 0
+      ? fake2786State()
+      : fake2786State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+    buildValidationStageText: () => ({text: 'STAGE3144'}),
+    publishExact: (packet, body) => {
+      calls.push([packet, body]);
+      phase = 1;
+      return {written: 1, reused: 0, lostAckRecovered: false};
+    },
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.packetRef, '#3144');
+  assert.deepEqual(result.effects, {
+    holderCleaned: 0, d014Published: 0, stageReceiptPublished: 1,
+  });
+  assert.deepEqual(calls, [[3144, 'STAGE3144']]);
+});
+
 test('#3092 receipt selection requires exact digest and all fixed coordination gates', () => {
   const target = owner.TARGET_3092;
   const row = {
@@ -510,6 +565,35 @@ test('#3099 receipt selection requires exact digest and all fixed coordination g
       receiptDigest: target.implementationReceiptDigest,
       authorityRefs: [
         {kind: 'PR', locator: 'pr:#3102', identity: target.candidate},
+      ],
+      requiredGates: target.requiredCoordinationGates.map((name) => ({
+        name, result: 'PASS',
+      })),
+    },
+  };
+  assert.equal(owner.select2786ImplementationReceipt(
+    [row], {head: {sha: target.candidate}}, target), row);
+  assert.throws(() => owner.select2786ImplementationReceipt(
+    [{...row, receipt: {...row.receipt,
+      requiredGates: row.receipt.requiredGates.slice(1)}}],
+    {head: {sha: target.candidate}}, target), owner.ApplyError);
+  assert.throws(() => owner.select2786ImplementationReceipt(
+    [{...row, receipt: {...row.receipt, receiptDigest: 'a'.repeat(64)}}],
+    {head: {sha: target.candidate}}, target), owner.ApplyError);
+});
+
+test('#3144 receipt selection requires exact digest and all fixed coordination gates', () => {
+  const target = owner.TARGET_3144;
+  const row = {
+    comment: {id: 1},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 3144,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: target.implementationReceiptDigest,
+      authorityRefs: [
+        {kind: 'PR', locator: 'pr:#3147', identity: target.candidate},
       ],
       requiredGates: target.requiredCoordinationGates.map((name) => ({
         name, result: 'PASS',

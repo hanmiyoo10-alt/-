@@ -167,8 +167,8 @@ test('exact V1 effect pair is required', () => {
   assert.equal(owner.effectPairExact(decision('ALREADY_FINALIZED')), false);
 });
 
-test('compile-time profiles are exactly #2463, #2786, #3043, #3051, #3092, #3099, #3110 and #3144', () => {
-  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#3043', '#3051', '#3092', '#3099', '#3110', '#3144']);
+test('compile-time profiles are exactly #2463, #2786, #3043, #3051, #3092, #3099, #3110, #3118 and #3144', () => {
+  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#3043', '#3051', '#3092', '#3099', '#3110', '#3118', '#3144']);
   assert.equal(owner.TARGET_2786.packet, 2786);
   assert.equal(owner.TARGET_2786.pr, 2878);
   assert.equal(owner.TARGET_2786.candidate,
@@ -262,6 +262,28 @@ test('compile-time profiles are exactly #2463, #2786, #3043, #3051, #3092, #3099
   assert.equal(owner.TARGET_3110.implementationReceiptDigest,
     '9afd4d7b4a1ebbb57e1e1931d348cfeee17ebae561cada0f8158a7926e0901c3');
   assert.deepEqual(owner.TARGET_3110.requiredCoordinationGates, [
+    'currentization-scope-and-blob-preservation',
+    'd013-release',
+    'd014-completion',
+  ]);
+  assert.equal(owner.TARGET_3118.packet, 3118);
+  assert.equal(owner.TARGET_3118.pr, 3122);
+  assert.equal(owner.TARGET_3118.candidate,
+    '256b858a270dcc38e15d6dd7b4d6d263b0cbfb1b');
+  assert.equal(owner.TARGET_3118.merge,
+    '45d699b7a4c2377283cfe434472ad12498088602');
+  assert.equal(owner.TARGET_3118.workspaceManifestId,
+    'bfa86f26e286aacadcddfbd128dbd65ad391d5db7e4cbffa4c52c3ae8fccf475');
+  assert.equal(owner.TARGET_3118.workspaceManifestPhaseId,
+    '3118-implementation-pr-recovery-rebind-3121');
+  assert.equal(owner.TARGET_3118.workspaceLeaseId,
+    'cb3c98b20e38423baffe4fdd5ca7cf162282d37143d2115a4d96541727aa45da');
+  assert.equal(owner.TARGET_3118.workspaceAcquiredGeneration, 638);
+  assert.equal(owner.TARGET_3118.workspaceBranch, 'server/mcl-packet-3118');
+  assert.equal(owner.TARGET_3118.workspaceWorktree, '/root/nyang-worktrees/mcl-packet-3118');
+  assert.equal(owner.TARGET_3118.implementationReceiptDigest,
+    '70e62921e17aef683a566381083144e9acdf6946405e6b39b1b5c879e0cd82c2');
+  assert.deepEqual(owner.TARGET_3118.requiredCoordinationGates, [
     'currentization-scope-and-blob-preservation',
     'd013-release',
     'd014-completion',
@@ -546,6 +568,35 @@ test('#3110 fixed profile reuses stage-receipt-only implementation coordination 
   assert.deepEqual(calls, [[3110, 'STAGE3110']]);
 });
 
+test('#3118 fixed profile reuses stage-receipt-only implementation coordination path', () => {
+  let phase = 0;
+  const calls = [];
+  const ctx = {
+    ...fake2786Context(),
+    target: owner.TARGET_3118,
+    packet: 3118,
+    packetRef: '#3118',
+  };
+  const result = owner.applyPacket('#3118', {
+    createContext: () => ctx,
+    readState: () => phase === 0
+      ? fake2786State()
+      : fake2786State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+    buildValidationStageText: () => ({text: 'STAGE3118'}),
+    publishExact: (packet, body) => {
+      calls.push([packet, body]);
+      phase = 1;
+      return {written: 1, reused: 0, lostAckRecovered: false};
+    },
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.packetRef, '#3118');
+  assert.deepEqual(result.effects, {
+    holderCleaned: 0, d014Published: 0, stageReceiptPublished: 1,
+  });
+  assert.deepEqual(calls, [[3118, 'STAGE3118']]);
+});
+
 test('#3144 fixed profile reuses stage-receipt-only implementation coordination path', () => {
   let phase = 0;
   const calls = [];
@@ -645,6 +696,35 @@ test('#3110 receipt selection requires exact digest and all fixed coordination g
       receiptDigest: target.implementationReceiptDigest,
       authorityRefs: [
         {kind: 'PR', locator: 'pr:#3113', identity: target.candidate},
+      ],
+      requiredGates: target.requiredCoordinationGates.map((name) => ({
+        name, result: 'PASS',
+      })),
+    },
+  };
+  assert.equal(owner.select2786ImplementationReceipt(
+    [row], {head: {sha: target.candidate}}, target), row);
+  assert.throws(() => owner.select2786ImplementationReceipt(
+    [{...row, receipt: {...row.receipt,
+      requiredGates: row.receipt.requiredGates.slice(1)}}],
+    {head: {sha: target.candidate}}, target), owner.ApplyError);
+  assert.throws(() => owner.select2786ImplementationReceipt(
+    [{...row, receipt: {...row.receipt, receiptDigest: 'a'.repeat(64)}}],
+    {head: {sha: target.candidate}}, target), owner.ApplyError);
+});
+
+test('#3118 receipt selection requires exact digest and all fixed coordination gates', () => {
+  const target = owner.TARGET_3118;
+  const row = {
+    comment: {id: 1},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 3118,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: target.implementationReceiptDigest,
+      authorityRefs: [
+        {kind: 'PR', locator: 'pr:#3122', identity: target.candidate},
       ],
       requiredGates: target.requiredCoordinationGates.map((name) => ({
         name, result: 'PASS',

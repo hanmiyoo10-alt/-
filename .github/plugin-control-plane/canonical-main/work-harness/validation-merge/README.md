@@ -134,9 +134,39 @@ Inspect performs complete Work System discovery over every other current
 canonical packet and open PR changed-file inventory. Only
 COMPLETE / DISJOINT / zero findings is merge-ready.
 
-Exact-head Required evidence is bound to the exact PR head and SimCore CI
-pull_request run. The selected run and its single Required job must both be
-completed successfully.
+Exact-head Required evidence is bound to the exact PR head and SimCore CI.
+
+The preferred evidence is the unique natural `pull_request` run. A completed
+natural failure remains authoritative failure and is never overridden by fallback
+evidence. A completed natural success continues to use its single successful
+`Required` job exactly as before.
+
+Only when natural `pull_request` evidence is missing or nonterminal may the owner
+consider the already-reviewed SimCore `PR_RECOVERY` transport. The fallback is
+fail-closed and requires all of the following from fresh GitHub evidence:
+
+- one unique completed-success SimCore CI `workflow_dispatch` run on the exact PR
+  head and exact current PR head ref;
+- one unique completed-success `Verify` job and one unique completed-success
+  `Required` job;
+- bounded `Verify` job logs proving `INPUT_PROFILE: PR_RECOVERY` plus the exact
+  current PR base and exact candidate head;
+- bounded `Required` job logs proving `PROFILE: PR_RECOVERY` and a successful
+  `profile=PR_RECOVERY ... verify=success` result;
+- no second qualifying recovery run.
+
+Wrong profile/base/head evidence is non-qualifying. Missing, unreadable or oversized
+logs remain UNKNOWN/BLOCKED rather than PASS. Multiple qualifying recovery runs are
+ambiguous. Raw job logs are used only for bounded verification and are never copied
+into normal receipts, reports or issue evidence.
+
+The token-backed client reuses the existing GitHub client request transport with
+the default GitHub media type, then applies the same local text-size bound. The
+authenticated-`gh` fallback exposes only the fixed
+`/actions/jobs/<id>/logs` text endpoint, uses `--allow-escape-sequences` only to
+permit GitHub's own ANSI-bearing job log bytes, and preserves the same
+repository-owned 20-second read lifetime. This adds no workflow-dispatch or retry
+authority.
 
 No latest-by-time heuristic is used.
 

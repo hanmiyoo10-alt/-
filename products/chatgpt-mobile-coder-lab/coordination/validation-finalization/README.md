@@ -349,3 +349,29 @@ presence, dirty/non-exact workspaces, and unmerged/mismatched PRs remain fail-cl
 
 This stable class exists so an implementation packet that changes this owner can
 finalize itself after merge instead of creating another packet-specific finalizer debt.
+
+### Late-stage zero-effect self-owner recognition
+
+The normal self-owner publication path remains `VALIDATION_MERGE` only. A packet
+that reaches `POSTMERGE_CONVERGENCE` or `EXPERIMENT_CLOSE` before the self-owner
+proof is observed may use one narrower recognition path only when an exact
+canonical `VALIDATION_MERGE` receipt is already present for the same live merged
+PR head, candidate, merge commit, exact owner scope and diff identity.
+
+Late recognition never publishes or rebuilds a missing V receipt. It returns only
+`ALREADY_FINALIZED` with zero effects, and a missing exact V receipt blocks before
+the comment writer. Conflicting V evidence remains conflict.
+
+Self-owner implementation lineage selection is also generation-aware. Immutable
+historical I receipts are preserved, but the owner reads the one merged PR and
+selects only the qualifying semantic generation whose candidate equals that PR's
+actual merged head. Both reviewed lineages are supported:
+
+- normal implementation-stage entry via `d014-completion` and
+  `<packet>-implementation-pr-stage-entry`;
+- packet-scoped currentization via `currentization-d014-completion` and
+  `<packet>-validation-merge-currentization`.
+
+Distinct PR generations, missing live-head generations, bad lineage, active lease,
+holder presence, dirty/non-exact workspace, near-match scope or missing required
+gates remain fail-closed.

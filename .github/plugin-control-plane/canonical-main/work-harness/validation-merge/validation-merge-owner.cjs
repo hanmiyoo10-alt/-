@@ -14,6 +14,8 @@ const MAX_PAGES = 20;
 const MAX_INPUT_BYTES = 16 * 1024;
 const MAX_REPORT_BYTES = 32 * 1024;
 const GH_READ_TIMEOUT_MS = 20_000;
+const MAX_JOB_LOG_BYTES = 1024 * 1024;
+const MAX_PR_RECOVERY_RUNS = 16;
 const SHA40_RE = /^[0-9a-f]{40}$/;
 const PACKET_MARKER = '<!-- canonical-main-work-packet:v1 -->';
 const PACKET_ACTIVITY_EVIDENCE_MODE = 'VALIDATION_MERGE_PACKET_ACTIVITY_EVIDENCE_SET';
@@ -561,6 +563,107 @@ function strictCurrentnessBlocked(error) {
     ));
 }
 
+function simcoreWorkflowRun(run) {
+  return run?.name === 'SimCore CI'
+    || String(run?.path || '').endsWith('.github/workflows/simcore-ci.yml');
+}
+function logContainsToken(text, token) {
+  return String(text || '').split(/\r?\n/).some((line) => line.includes(token));
+}
+async function readBoundedJobLog(client, jobId) {
+  if (!client || typeof client.fetchText !== 'function') {
+    throw new OwnerError('UNKNOWN', ['PR_RECOVERY_LOG_TRANSPORT_UNAVAILABLE'],
+      'job:' + jobId);
+  }
+  let text;
+  try {
+    text = await client.fetchText('/actions/jobs/' + jobId + '/logs');
+  } catch {
+    throw new OwnerError('UNKNOWN', ['PR_RECOVERY_JOB_LOG_UNREADABLE'],
+      'job:' + jobId);
+  }
+  if (typeof text !== 'string' || Buffer.byteLength(text, 'utf8') > MAX_JOB_LOG_BYTES) {
+    throw new OwnerError('UNKNOWN', ['PR_RECOVERY_JOB_LOG_INVALID_OR_TOO_LARGE'],
+      'job:' + jobId);
+  }
+  return text;
+}
+async function readRunJobInventory(client, runId, reasonCode) {
+  const jobs = await api(client,
+    '/actions/runs/' + runId + '/jobs?per_page=100', 'ACTIONS_JOBS');
+  if (!jobs || !Array.isArray(jobs.jobs) || !Number.isInteger(jobs.total_count)
+      || jobs.total_count > 100 || jobs.jobs.length !== jobs.total_count) {
+    throw new OwnerError('UNKNOWN', [reasonCode], 'run:' + runId);
+  }
+  return jobs.jobs;
+}
+
+async function readPrRecoveryEvidence(
+  client, runInventory, headSha, prNumber, naturalError,
+) {
+  const pr = await api(client, '/pulls/' + prNumber, 'PR_RECOVERY_PR');
+  const prHeadSha = assertSha(pr?.head?.sha, 'PR_RECOVERY_PR_HEAD_INVALID');
+  const prBaseSha = assertSha(pr?.base?.sha, 'PR_RECOVERY_PR_BASE_INVALID');
+  const prHeadRef = String(pr?.head?.ref || '');
+  if (prHeadSha !== headSha) {
+    throw new OwnerError('CONFLICT', ['PR_RECOVERY_PR_HEAD_MISMATCH'], 'pr:#' + prNumber);
+  }
+  if (!prHeadRef) {
+    throw new OwnerError('UNKNOWN', ['PR_RECOVERY_PR_HEAD_REF_MISSING'], 'pr:#' + prNumber);
+  }
+  const candidates = runInventory.filter((run) => (
+    run?.event === 'workflow_dispatch'
+    && simcoreWorkflowRun(run)
+    && run?.head_sha === headSha
+    && run?.head_branch === prHeadRef
+  ));
+  if (candidates.length > MAX_PR_RECOVERY_RUNS) {
+    throw new OwnerError('UNKNOWN', ['PR_RECOVERY_RUN_INVENTORY_TOO_LARGE']);
+  }
+  const qualified = [];
+  for (const run of candidates) {
+    if (run?.status !== 'completed' || run?.conclusion !== 'success') continue;
+    const jobs = await readRunJobInventory(
+      client, run.id, 'PR_RECOVERY_JOB_INVENTORY_INCOMPLETE');
+    const verify = jobs.filter((job) => job?.name === 'Verify');
+    const required = jobs.filter((job) => job?.name === 'Required');
+    if (verify.length !== 1 || required.length !== 1) {
+      throw new OwnerError('UNKNOWN', ['PR_RECOVERY_JOB_AMBIGUOUS'], 'run:' + run.id);
+    }
+    if (verify[0].status !== 'completed' || required[0].status !== 'completed') {
+      throw new OwnerError('BLOCKED', ['PR_RECOVERY_JOB_NOT_COMPLETED'], 'run:' + run.id);
+    }
+    if (verify[0].conclusion !== 'success' || required[0].conclusion !== 'success') {
+      throw new OwnerError('CONFLICT', ['PR_RECOVERY_RUN_JOB_CONFLICT'], 'run:' + run.id);
+    }
+    const verifyLog = await readBoundedJobLog(client, verify[0].id);
+    const requiredLog = await readBoundedJobLog(client, required[0].id);
+    const verifyQualified = logContainsToken(verifyLog, 'INPUT_PROFILE: PR_RECOVERY')
+      && logContainsToken(verifyLog, 'INPUT_PR_BASE: ' + prBaseSha)
+      && logContainsToken(verifyLog, 'INPUT_PR_HEAD: ' + headSha);
+    const requiredQualified = logContainsToken(requiredLog, 'PROFILE: PR_RECOVERY')
+      && /profile=PR_RECOVERY conclusion=(?:PASS|NOOP) verify=success/.test(requiredLog);
+    if (!verifyQualified || !requiredQualified) continue;
+    qualified.push({
+      runId: Number(run.id),
+      verifyJobId: Number(verify[0].id),
+      jobId: Number(required[0].id),
+    });
+  }
+  if (qualified.length > 1) {
+    throw new OwnerError('UNKNOWN', ['PR_RECOVERY_RUN_AMBIGUOUS']);
+  }
+  if (qualified.length === 1) {
+    const value = qualified[0];
+    return {
+      runId: value.runId,
+      jobId: value.jobId,
+      evidenceLocator: 'run:' + value.runId + '/job:' + value.jobId,
+    };
+  }
+  throw naturalError;
+}
+
 async function readRequiredEvidence(client, headSha, prNumber) {
   const data = await api(client,
     '/actions/runs?head_sha=' + headSha + '&per_page=100', 'ACTIONS_RUNS');
@@ -572,47 +675,48 @@ async function readRequiredEvidence(client, headSha, prNumber) {
     throw new OwnerError('CONFLICT', ['REQUIRED_RUN_SHA_MISMATCH']);
   }
   const matches = data.workflow_runs.filter((run) => {
-    if (run?.event !== 'pull_request') return false;
-    const workflowMatch = run?.name === 'SimCore CI'
-      || String(run?.path || '').endsWith('.github/workflows/simcore-ci.yml');
-    if (!workflowMatch) return false;
+    if (run?.event !== 'pull_request' || !simcoreWorkflowRun(run)) return false;
     if (Array.isArray(run.pull_requests) && run.pull_requests.length) {
       return run.pull_requests.some((row) => Number(row?.number) === prNumber);
     }
     return true;
   });
-  if (matches.length !== 1) {
-    throw new OwnerError('UNKNOWN',
-      [matches.length ? 'REQUIRED_RUN_AMBIGUOUS' : 'REQUIRED_RUN_MISSING']);
+  if (matches.length > 1) {
+    throw new OwnerError('UNKNOWN', ['REQUIRED_RUN_AMBIGUOUS']);
   }
-  const run = matches[0];
-  if (run.status !== 'completed') {
-    throw new OwnerError('BLOCKED', ['REQUIRED_RUN_NOT_COMPLETED'], 'run:' + run.id);
+  if (matches.length === 1) {
+    const run = matches[0];
+    if (run.status === 'completed') {
+      if (run.conclusion !== 'success') {
+        throw new OwnerError('FAIL', ['REQUIRED_RUN_FAILED'], 'run:' + run.id);
+      }
+      const jobs = await readRunJobInventory(
+        client, run.id, 'REQUIRED_JOB_INVENTORY_INCOMPLETE');
+      const required = jobs.filter((job) => job?.name === 'Required');
+      if (required.length !== 1) {
+        throw new OwnerError('UNKNOWN', ['REQUIRED_JOB_AMBIGUOUS'], 'run:' + run.id);
+      }
+      if (required[0].status !== 'completed') {
+        throw new OwnerError('BLOCKED', ['REQUIRED_JOB_NOT_COMPLETED'], 'run:' + run.id);
+      }
+      if (required[0].conclusion !== 'success') {
+        throw new OwnerError('FAIL', ['REQUIRED_JOB_FAILED'], 'run:' + run.id);
+      }
+      return {
+        runId: Number(run.id),
+        jobId: Number(required[0].id),
+        evidenceLocator: 'run:' + run.id + '/job:' + required[0].id,
+      };
+    }
+    return readPrRecoveryEvidence(
+      client, data.workflow_runs, headSha, prNumber,
+      new OwnerError('BLOCKED', ['REQUIRED_RUN_NOT_COMPLETED'], 'run:' + run.id),
+    );
   }
-  if (run.conclusion !== 'success') {
-    throw new OwnerError('FAIL', ['REQUIRED_RUN_FAILED'], 'run:' + run.id);
-  }
-  const jobs = await api(client,
-    '/actions/runs/' + run.id + '/jobs?per_page=100', 'ACTIONS_JOBS');
-  if (!jobs || !Array.isArray(jobs.jobs) || !Number.isInteger(jobs.total_count)
-      || jobs.total_count > 100 || jobs.jobs.length !== jobs.total_count) {
-    throw new OwnerError('UNKNOWN', ['REQUIRED_JOB_INVENTORY_INCOMPLETE'], 'run:' + run.id);
-  }
-  const required = jobs.jobs.filter((job) => job?.name === 'Required');
-  if (required.length !== 1) {
-    throw new OwnerError('UNKNOWN', ['REQUIRED_JOB_AMBIGUOUS'], 'run:' + run.id);
-  }
-  if (required[0].status !== 'completed') {
-    throw new OwnerError('BLOCKED', ['REQUIRED_JOB_NOT_COMPLETED'], 'run:' + run.id);
-  }
-  if (required[0].conclusion !== 'success') {
-    throw new OwnerError('FAIL', ['REQUIRED_JOB_FAILED'], 'run:' + run.id);
-  }
-  return {
-    runId: Number(run.id),
-    jobId: Number(required[0].id),
-    evidenceLocator: 'run:' + run.id + '/job:' + required[0].id,
-  };
+  return readPrRecoveryEvidence(
+    client, data.workflow_runs, headSha, prNumber,
+    new OwnerError('UNKNOWN', ['REQUIRED_RUN_MISSING']),
+  );
 }
 
 async function discoverOverlap(
@@ -1126,9 +1230,15 @@ const GH_READ_ENDPOINTS = Object.freeze([
   /^\/issues\?state=open&per_page=100&page=[1-9][0-9]*$/,
   /^\/pulls\?state=open&per_page=100&page=[1-9][0-9]*$/,
 ]);
+const GH_TEXT_ENDPOINTS = Object.freeze([
+  /^\/actions\/jobs\/[1-9][0-9]*\/logs$/,
+]);
 
 function ghReadEndpointAllowed(endpoint) {
   return GH_READ_ENDPOINTS.some((pattern) => pattern.test(String(endpoint || '')));
+}
+function ghTextEndpointAllowed(endpoint) {
+  return GH_TEXT_ENDPOINTS.some((pattern) => pattern.test(String(endpoint || '')));
 }
 function defaultGhRunner(args) {
   const result = childProcess.spawnSync('gh', args, {
@@ -1144,6 +1254,12 @@ function parseGhJson(result, reason) {
   if (!result || result.code !== 0) throw new Error(reason);
   try { return JSON.parse(result.stdout || ''); } catch { throw new Error(reason); }
 }
+function parseGhText(result, reason) {
+  if (!result || result.code !== 0) throw new Error(reason);
+  const text = String(result.stdout || '');
+  if (Buffer.byteLength(text, 'utf8') > MAX_JOB_LOG_BYTES) throw new Error(reason);
+  return text;
+}
 function createGhCliReadClient({runner = defaultGhRunner} = {}) {
   return {
     repo: REPO,
@@ -1154,6 +1270,13 @@ function createGhCliReadClient({runner = defaultGhRunner} = {}) {
         'api', 'repos/' + REPO + endpoint, '--method', 'GET',
         '--header', 'Accept: application/vnd.github+json',
       ]), 'gh REST read failed');
+    },
+    async fetchText(endpoint) {
+      if (!ghTextEndpointAllowed(endpoint)) throw new Error('gh text endpoint forbidden');
+      return parseGhText(runner([
+        'api', 'repos/' + REPO + endpoint, '--method', 'GET',
+        '--allow-escape-sequences',
+      ]), 'gh text read failed');
     },
     async graphql(query, variables) {
       if (![REVIEW_THREADS_QUERY, STRICT_CURRENTNESS_QUERY].includes(query)
@@ -1177,6 +1300,21 @@ function createLiveClient({env = process.env, fetchImpl = fetch, runner = defaul
   const rest = createGitHubClient({
     token, repo: REPO, fetchImpl, userAgent: 'canonical-main-validation-merge-owner',
   });
+  async function fetchText(endpoint) {
+    if (!ghTextEndpointAllowed(endpoint)) throw new Error('github text endpoint forbidden');
+    let response;
+    let text;
+    try {
+      response = await rest.request(endpoint);
+      text = await response.text();
+    } catch {
+      throw new Error('github text read failed');
+    }
+    if (typeof text !== 'string' || Buffer.byteLength(text, 'utf8') > MAX_JOB_LOG_BYTES) {
+      throw new Error('github text read failed');
+    }
+    return text;
+  }
   async function graphql(query, variables) {
     const response = await fetchImpl('https://api.github.com/graphql', {
       method: 'POST',
@@ -1193,7 +1331,7 @@ function createLiveClient({env = process.env, fetchImpl = fetch, runner = defaul
     if (value?.errors?.length) throw new Error('graphql returned errors');
     return value;
   }
-  return {...rest, graphql};
+  return {...rest, fetchText, graphql};
 }
 
 function parseNumber(value, label) {
@@ -1356,7 +1494,9 @@ if (require.main === module) {
 module.exports = {
   GH_READ_TIMEOUT_MS,
   MAX_INPUT_BYTES,
+  MAX_JOB_LOG_BYTES,
   MAX_PAGES,
+  MAX_PR_RECOVERY_RUNS,
   MAX_REPORT_BYTES,
   MAX_PACKET_ACTIVITY_CANDIDATES,
   OPS_ISSUE,
@@ -1370,6 +1510,7 @@ module.exports = {
   defaultGhRunner,
   discoverOverlap,
   ghReadEndpointAllowed,
+  ghTextEndpointAllowed,
   evidencePaths,
   finalizeWithClient,
   gitAdminDir,

@@ -19,6 +19,9 @@ const PR = 3000;
 const BASE = 'a'.repeat(40);
 const HEAD = 'b'.repeat(40);
 const MERGE = 'c'.repeat(40);
+const RECOVERY_RUN = 701;
+const RECOVERY_VERIFY = 801;
+const RECOVERY_REQUIRED = 802;
 const TICK = String.fromCharCode(96);
 const PATHS = [
   '.github/plugin-control-plane/canonical-main/tests/work-system-contract.cjs',
@@ -148,6 +151,54 @@ function prObject(overrides = {}) {
     ...overrides,
   };
 }
+function naturalRun(overrides = {}) {
+  return {
+    id: 501,
+    name: 'SimCore CI',
+    path: '.github/workflows/simcore-ci.yml',
+    event: 'pull_request',
+    head_sha: HEAD,
+    status: 'completed',
+    conclusion: 'success',
+    pull_requests: [{number: PR}],
+    ...overrides,
+  };
+}
+function recoveryRun(overrides = {}) {
+  return {
+    id: RECOVERY_RUN,
+    name: 'SimCore CI',
+    path: '.github/workflows/simcore-ci.yml',
+    event: 'workflow_dispatch',
+    head_sha: HEAD,
+    head_branch: 'server/mcl-packet-2586',
+    status: 'completed',
+    conclusion: 'success',
+    pull_requests: [],
+    ...overrides,
+  };
+}
+function recoveryJobs() {
+  return [
+    {id: RECOVERY_VERIFY, name: 'Verify', status: 'completed', conclusion: 'success'},
+    {id: RECOVERY_REQUIRED, name: 'Required', status: 'completed', conclusion: 'success'},
+  ];
+}
+function recoveryJobLogs({
+  profile = 'PR_RECOVERY', base = BASE, head = HEAD, conclusion = 'NOOP',
+} = {}) {
+  return {
+    [RECOVERY_VERIFY]: [
+      'INPUT_PROFILE: ' + profile,
+      'INPUT_PR_BASE: ' + base,
+      'INPUT_PR_HEAD: ' + head,
+    ].join('\n'),
+    [RECOVERY_REQUIRED]: [
+      'PROFILE: ' + profile,
+      'profile=' + profile + ' conclusion=' + conclusion + ' verify=success',
+    ].join('\n'),
+  };
+}
 
 function emptyThreads(nodes = []) {
   return {
@@ -271,11 +322,15 @@ function fixtureClient(options = {}) {
         }];
         return {total_count: runs.length, workflow_runs: runs};
       }
-      if (endpoint === '/actions/runs/501/jobs?per_page=100') {
-        const jobs = options.jobs || [
-          {id: 601, name: 'Verify', status: 'completed', conclusion: 'success'},
-          {id: 602, name: 'Required', status: 'completed', conclusion: 'success'},
-        ];
+      const jobsMatch = /^\/actions\/runs\/([1-9][0-9]*)\/jobs\?per_page=100$/.exec(endpoint);
+      if (jobsMatch) {
+        const runId = Number(jobsMatch[1]);
+        const jobs = options.jobsByRun?.[runId]
+          || (runId === 501 ? options.jobs : null)
+          || (runId === 501 ? [
+            {id: 601, name: 'Verify', status: 'completed', conclusion: 'success'},
+            {id: 602, name: 'Required', status: 'completed', conclusion: 'success'},
+          ] : []);
         return {total_count: jobs.length, jobs};
       }
       if (endpoint.startsWith('/issues?state=open&per_page=100&page=')) {
@@ -302,6 +357,13 @@ function fixtureClient(options = {}) {
         return [{filename: 'docs/unrelated.md'}];
       }
       throw new Error('unexpected endpoint ' + endpoint);
+    },
+    async fetchText(endpoint) {
+      calls.push('text:' + endpoint);
+      if (options.textReadError) throw new Error('fixture text read error');
+      const match = /^\/actions\/jobs\/([1-9][0-9]*)\/logs$/.exec(endpoint);
+      if (!match) throw new Error('unexpected text endpoint ' + endpoint);
+      return options.jobLogs?.[Number(match[1])] || '';
     },
     async graphql(query) {
       if (options.graphqlError) throw new Error('fixture graphql error');
@@ -375,6 +437,10 @@ test('live client falls back to fixed gh read transport when token env is absent
     if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/issues/' + PR + '/comments?per_page=100&page=1') {
       return {code: 0, stdout: '[]', stderr: ''};
     }
+    if (args[0] === 'api'
+        && args[1] === 'repos/' + owner.REPO + '/actions/jobs/' + RECOVERY_REQUIRED + '/logs') {
+      return {code: 0, stdout: 'PROFILE: PR_RECOVERY', stderr: ''};
+    }
     if (args[0] === 'api' && args[1] === 'graphql') {
       const queryArg = args.find((value) => String(value).startsWith('query='));
       if (queryArg === 'query=' + owner.STRICT_CURRENTNESS_QUERY) {
@@ -396,6 +462,10 @@ test('live client falls back to fixed gh read transport when token env is absent
   assert.deepEqual(await client.api('/branches/main/protection/required_status_checks'), {strict: true});
   assert.deepEqual(await client.api('/compare/' + BASE + '...' + HEAD), compareObject());
   assert.deepEqual(await client.api('/issues/' + PR + '/comments?per_page=100&page=1'), []);
+  assert.equal(
+    await client.fetchText('/actions/jobs/' + RECOVERY_REQUIRED + '/logs'),
+    'PROFILE: PR_RECOVERY',
+  );
   assert.deepEqual(await client.graphql(owner.REVIEW_THREADS_QUERY, {
     owner: 'hanmiyoo10-alt', name: '-', number: PR,
   }), emptyThreads());
@@ -407,6 +477,8 @@ test('live client falls back to fixed gh read transport when token env is absent
   assert.equal(calls.some((args) => args.join(' ').includes('token')), false);
   await assert.rejects(client.api('/issues/' + PR + '/comments'), /gh read endpoint forbidden/);
   await assert.rejects(client.api('/releases'), /gh read endpoint forbidden/);
+  await assert.rejects(client.fetchText('/actions/runs/501/logs'), /gh text endpoint forbidden/);
+  await assert.rejects(client.fetchText('/releases/1'), /gh text endpoint forbidden/);
   await assert.rejects(client.graphql('query{viewer{login}}', {
     owner: 'hanmiyoo10-alt', name: '-', number: PR,
   }), /gh GraphQL query forbidden/);
@@ -439,6 +511,9 @@ test('gh fallback read failure stays bounded for both fixed REST and GraphQL rea
   await assert.rejects(client.api('/issues/' + PACKET), (error) => (
     error.message === 'gh REST read failed' && !String(error).includes(marker)
   ));
+  await assert.rejects(client.fetchText('/actions/jobs/' + RECOVERY_REQUIRED + '/logs'), (error) => (
+    error.message === 'gh text read failed' && !String(error).includes(marker)
+  ));
   await assert.rejects(client.graphql(owner.REVIEW_THREADS_QUERY, {
     owner: 'hanmiyoo10-alt', name: '-', number: PR,
   }), (error) => (
@@ -450,6 +525,7 @@ test('explicit env token keeps fixed fetch transport and does not call gh runner
   let ghCalls = 0;
   const responses = [
     {ok: true, status: 200, json: async () => ({commit: {sha: BASE}})},
+    {ok: true, status: 200, text: async () => 'PROFILE: PR_RECOVERY'},
   ];
   const client = owner.createLiveClient({
     env: {GH_TOKEN: 'fixture-token'},
@@ -457,6 +533,11 @@ test('explicit env token keeps fixed fetch transport and does not call gh runner
     fetchImpl: async () => responses.shift(),
   });
   assert.deepEqual(await client.api('/branches/main'), {commit: {sha: BASE}});
+  assert.equal(
+    await client.fetchText('/actions/jobs/' + RECOVERY_REQUIRED + '/logs'),
+    'PROFILE: PR_RECOVERY',
+  );
+  await assert.rejects(client.fetchText('/actions/runs/501/logs'), /github text endpoint forbidden/);
   assert.equal(ghCalls, 0);
 });
 
@@ -846,17 +927,123 @@ test('Required missing, ambiguous, or failed never becomes PASS', async () => {
   assert.ok(missing.receipt.reasonCodes.includes('REQUIRED_RUN_MISSING'));
 
   const failed = await owner.inspectWithClient({
-    client: fixtureClient({runs: [{
-      id: 501, name: 'SimCore CI', path: '.github/workflows/simcore-ci.yml',
-      event: 'pull_request', head_sha: HEAD, status: 'completed', conclusion: 'failure',
-      pull_requests: [{number: PR}],
-    }]}),
+    client: fixtureClient({
+      runs: [naturalRun({conclusion: 'failure'}), recoveryRun()],
+      jobsByRun: {[RECOVERY_RUN]: recoveryJobs()},
+      jobLogs: recoveryJobLogs(),
+    }),
     packetNumber: PACKET,
     prNumber: PR,
     implementationReceipt: implementationReceipt(),
   });
   assert.equal(failed.receipt.result, 'FAIL');
   assert.ok(failed.receipt.reasonCodes.includes('REQUIRED_RUN_FAILED'));
+});
+
+test('natural pull_request success remains preferred over PR_RECOVERY', async () => {
+  const client = fixtureClient({
+    runs: [naturalRun(), recoveryRun()],
+    jobsByRun: {[RECOVERY_RUN]: recoveryJobs()},
+    jobLogs: recoveryJobLogs(),
+  });
+  const evidence = await owner.readRequiredEvidence(client, HEAD, PR);
+  assert.equal(evidence.runId, 501);
+  assert.equal(evidence.jobId, 602);
+  assert.equal(client.calls.some((value) => String(value).startsWith('text:')), false);
+});
+
+test('queued natural validation may use one exact log-proven PR_RECOVERY', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      runs: [
+        naturalRun({status: 'queued', conclusion: null}),
+        recoveryRun(),
+      ],
+      jobsByRun: {[RECOVERY_RUN]: recoveryJobs()},
+      jobLogs: recoveryJobLogs(),
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.requiredRunId, RECOVERY_RUN);
+  assert.equal(result.report.requiredJobId, RECOVERY_REQUIRED);
+});
+
+test('missing natural validation may use one exact log-proven PR_RECOVERY', async () => {
+  const evidence = await owner.readRequiredEvidence(fixtureClient({
+    runs: [recoveryRun()],
+    jobsByRun: {[RECOVERY_RUN]: recoveryJobs()},
+    jobLogs: recoveryJobLogs(),
+  }), HEAD, PR);
+  assert.equal(evidence.runId, RECOVERY_RUN);
+  assert.equal(evidence.jobId, RECOVERY_REQUIRED);
+});
+
+test('PR_RECOVERY with wrong profile, base, or head is never qualifying', async () => {
+  for (const logs of [
+    recoveryJobLogs({profile: 'MAIN_HEALTH'}),
+    recoveryJobLogs({base: 'c'.repeat(40)}),
+    recoveryJobLogs({head: 'd'.repeat(40)}),
+  ]) {
+    await assert.rejects(owner.readRequiredEvidence(fixtureClient({
+      runs: [recoveryRun()],
+      jobsByRun: {[RECOVERY_RUN]: recoveryJobs()},
+      jobLogs: logs,
+    }), HEAD, PR), (error) => (
+      error instanceof owner.OwnerError
+      && error.reasonCodes.includes('REQUIRED_RUN_MISSING')
+    ));
+  }
+});
+
+test('multiple exact qualifying PR_RECOVERY runs are ambiguous', async () => {
+  const secondRun = 702;
+  const secondVerify = 803;
+  const secondRequired = 804;
+  const logs = recoveryJobLogs();
+  const secondLogs = {
+    [secondVerify]: logs[RECOVERY_VERIFY],
+    [secondRequired]: logs[RECOVERY_REQUIRED],
+  };
+  await assert.rejects(owner.readRequiredEvidence(fixtureClient({
+    runs: [recoveryRun(), recoveryRun({id: secondRun})],
+    jobsByRun: {
+      [RECOVERY_RUN]: recoveryJobs(),
+      [secondRun]: [
+        {id: secondVerify, name: 'Verify', status: 'completed', conclusion: 'success'},
+        {id: secondRequired, name: 'Required', status: 'completed', conclusion: 'success'},
+      ],
+    },
+    jobLogs: {...logs, ...secondLogs},
+  }), HEAD, PR), (error) => (
+    error instanceof owner.OwnerError
+    && error.reasonCodes.includes('PR_RECOVERY_RUN_AMBIGUOUS')
+  ));
+});
+
+test('PR_RECOVERY log read failures and oversized logs fail closed', async () => {
+  await assert.rejects(owner.readRequiredEvidence(fixtureClient({
+    runs: [recoveryRun()],
+    jobsByRun: {[RECOVERY_RUN]: recoveryJobs()},
+    textReadError: true,
+  }), HEAD, PR), (error) => (
+    error instanceof owner.OwnerError
+    && error.reasonCodes.includes('PR_RECOVERY_JOB_LOG_UNREADABLE')
+  ));
+
+  await assert.rejects(owner.readRequiredEvidence(fixtureClient({
+    runs: [recoveryRun()],
+    jobsByRun: {[RECOVERY_RUN]: recoveryJobs()},
+    jobLogs: {
+      ...recoveryJobLogs(),
+      [RECOVERY_VERIFY]: 'x'.repeat(owner.MAX_JOB_LOG_BYTES + 1),
+    },
+  }), HEAD, PR), (error) => (
+    error instanceof owner.OwnerError
+    && error.reasonCodes.includes('PR_RECOVERY_JOB_LOG_INVALID_OR_TOO_LARGE')
+  ));
 });
 
 test('fresh overlap blocks competing writer', async () => {

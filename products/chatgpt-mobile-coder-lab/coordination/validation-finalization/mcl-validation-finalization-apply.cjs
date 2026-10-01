@@ -131,6 +131,26 @@ const TARGET_3099 = Object.freeze({
     'd014-completion',
   ]),
 });
+const TARGET_3144 = Object.freeze({
+  packet: 3144,
+  packetRef: '#3144',
+  pr: 3147,
+  candidate: '900d3c67d9ff0f831b6efaec0dee69f1ebba4ee7',
+  merge: '2db2e75187c67a39e6b1b012a704f871982ba930',
+  workspaceManifestId: '9a4f4d2b279942ffbb462e9fa135dca89a3de1a02c3650b284817d44bc1da89c',
+  workspaceManifestPhaseId: '3144-implementation-pr-stage-entry',
+  workspaceLeaseId: 'f83f3788990ce9567a804f0e08b8886cc0cdddb596ccaf9e88046088d2ad29c5',
+  workspaceAcquiredGeneration: 664,
+  workspaceBranch: 'server/mcl-packet-3144',
+  workspaceWorktree: '/root/nyang-worktrees/mcl-packet-3144',
+  implementationReceiptDigest:
+    '5ab640da43f4b8ced263ada4b021d6760249535ac5959c7a3a054425b74fb78d',
+  requiredCoordinationGates: Object.freeze([
+    'currentization-scope-and-blob-preservation',
+    'd013-release',
+    'd014-completion',
+  ]),
+});
 const EXPECTED_EFFECTS_2786 = Object.freeze([
   'CANONICAL_VALIDATION_MERGE_RECEIPT',
 ]);
@@ -162,6 +182,11 @@ const PROFILES = Object.freeze({
   }),
   '#3099': Object.freeze({
     target: TARGET_3099,
+    mode: 'IMPLEMENTATION_COORDINATION',
+    expectedEffects: EXPECTED_EFFECTS_2786,
+  }),
+  '#3144': Object.freeze({
+    target: TARGET_3144,
     mode: 'IMPLEMENTATION_COORDINATION',
     expectedEffects: EXPECTED_EFFECTS_2786,
   }),
@@ -1700,6 +1725,7 @@ module.exports = {
   TARGET_3051,
   TARGET_3092,
   TARGET_3099,
+  TARGET_3144,
   apply2463Packet,
   apply2786Packet,
   applySelfOwnerPacket,

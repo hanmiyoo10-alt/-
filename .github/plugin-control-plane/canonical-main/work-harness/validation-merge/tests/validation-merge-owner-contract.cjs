@@ -466,6 +466,11 @@ test('live client falls back to fixed gh read transport when token env is absent
     await client.fetchText('/actions/jobs/' + RECOVERY_REQUIRED + '/logs'),
     'PROFILE: PR_RECOVERY',
   );
+  const jobLogCall = calls.find((args) => args.includes(
+    'repos/' + owner.REPO + '/actions/jobs/' + RECOVERY_REQUIRED + '/logs'));
+  assert.ok(jobLogCall);
+  assert.ok(jobLogCall.includes('--allow-escape-sequences'));
+  assert.equal(jobLogCall.some((value) => String(value).includes('text/plain')), false);
   assert.deepEqual(await client.graphql(owner.REVIEW_THREADS_QUERY, {
     owner: 'hanmiyoo10-alt', name: '-', number: PR,
   }), emptyThreads());
@@ -523,6 +528,7 @@ test('gh fallback read failure stays bounded for both fixed REST and GraphQL rea
 
 test('explicit env token keeps fixed fetch transport and does not call gh runner', async () => {
   let ghCalls = 0;
+  const fetchCalls = [];
   const responses = [
     {ok: true, status: 200, json: async () => ({commit: {sha: BASE}})},
     {ok: true, status: 200, text: async () => 'PROFILE: PR_RECOVERY'},
@@ -530,7 +536,10 @@ test('explicit env token keeps fixed fetch transport and does not call gh runner
   const client = owner.createLiveClient({
     env: {GH_TOKEN: 'fixture-token'},
     runner: () => { ghCalls += 1; return {code: 1, stdout: '', stderr: ''}; },
-    fetchImpl: async () => responses.shift(),
+    fetchImpl: async (...args) => {
+      fetchCalls.push(args);
+      return responses.shift();
+    },
   });
   assert.deepEqual(await client.api('/branches/main'), {commit: {sha: BASE}});
   assert.equal(
@@ -538,6 +547,8 @@ test('explicit env token keeps fixed fetch transport and does not call gh runner
     'PROFILE: PR_RECOVERY',
   );
   await assert.rejects(client.fetchText('/actions/runs/501/logs'), /github text endpoint forbidden/);
+  assert.equal(fetchCalls.length, 2);
+  assert.equal(fetchCalls[1][1].headers.Accept, 'application/vnd.github+json');
   assert.equal(ghCalls, 0);
 });
 

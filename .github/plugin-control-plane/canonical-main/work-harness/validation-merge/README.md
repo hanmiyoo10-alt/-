@@ -160,10 +160,13 @@ logs remain UNKNOWN/BLOCKED rather than PASS. Multiple qualifying recovery runs 
 ambiguous. Raw job logs are used only for bounded verification and are never copied
 into normal receipts, reports or issue evidence.
 
-The token-backed client reuses the existing bounded GitHub text transport. The
+The token-backed client reuses the existing GitHub client request transport with
+the default GitHub media type, then applies the same local text-size bound. The
 authenticated-`gh` fallback exposes only the fixed
-`/actions/jobs/<id>/logs` text endpoint under the same repository-owned 20-second
-read lifetime. This adds no workflow-dispatch or retry authority.
+`/actions/jobs/<id>/logs` text endpoint, uses `--allow-escape-sequences` only to
+permit GitHub's own ANSI-bearing job log bytes, and preserves the same
+repository-owned 20-second read lifetime. This adds no workflow-dispatch or retry
+authority.
 
 No latest-by-time heuristic is used.
 

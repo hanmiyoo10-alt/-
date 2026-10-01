@@ -83,6 +83,7 @@ function validateWorkspace(workspace, executor, route, scopes, observedBaseSha) 
   if (errors.length) return errors;
   errors.push(...validateLeaseWorkspace(workspace, executor));
   if (route === 'S' && !['repository', 'landing_metadata', 'landing_branch_repair'].includes(workspace.kind)) errors.push('WORKSPACE_S_ROUTE_REPOSITORY_REQUIRED');
+  if (route === 'L' && !['repository', 'landing_metadata'].includes(workspace.kind)) errors.push('WORKSPACE_L_ROUTE_REPOSITORY_REQUIRED');
   errors.push(...validateLandingMetadataBinding({workspace, executor, scopes, observedBaseSha}));
   errors.push(...validateLandingBranchRepairBinding({workspace, route, executor, scopes, observedBaseSha}));
   return [...new Set(errors)].sort();

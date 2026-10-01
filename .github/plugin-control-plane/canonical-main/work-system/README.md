@@ -342,6 +342,8 @@ Routine read-only canonical-main orientation has one semantic evidence contract 
 
 Preferred composition path: when the current host/session exposes a verified read-only composition that returns direct current `main` plus `#485` while preserving both source identities, source agreement, uncertainty, conflict, and failure provenance, prefer that composition over reconstructing the same orientation through avoidable manual fan-out. The currently reviewed external adapter names this operation `repo_snapshot`; the operation name and adapter are convenience surfaces only and never become repository truth owners.
 
+Routing eligibility is keyed to the stable read-only `repo_snapshot` compatibility contract, not to the adapter's semantic version. A later loaded compatible release is automatically eligible without a repository-policy edit when it preserves the same source identity, agreement, uncertainty, conflict, failure, and no-mutation semantics. An incompatible or unverifiable contract falls back to the direct path until separately reviewed.
+
 Fallback direct path: when that composition is unavailable or reports `BLOCKED_CAPABILITY`, automatically use the existing exactly two required reads without requiring user intervention:
 
 1. read direct current `main` authority and capture the exact SHA;

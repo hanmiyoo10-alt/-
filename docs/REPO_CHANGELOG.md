@@ -2237,3 +2237,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a4a1d01917567282c913443c34a9f5a11808dcd4)
 - Event ID: `7a6fcf4627e45deac63c0896b36a9866c7ff5cd5dd62e56b539ddd114037098b`
 <!-- canonical-main-doc-promoted:7a6fcf4627e45deac63c0896b36a9866c7ff5cd5dd62e56b539ddd114037098b -->
+
+### 2026-10-01 — Merge pull request #3165 from hanmiyoo10-alt/server/repo-cockpit-preflight-3164
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `aa7e4350b3269e9d0866e6544b1f3718335bc4d7`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/aa7e4350b3269e9d0866e6544b1f3718335bc4d7)
+- Event ID: `4928dda0de7d451a733642e1799ab5ebb320686fd2ed5dc8643ff4d6166391c9`
+<!-- canonical-main-doc-promoted:4928dda0de7d451a733642e1799ab5ebb320686fd2ed5dc8643ff4d6166391c9 -->

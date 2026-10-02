@@ -857,6 +857,68 @@ test('acquire failure is fail-closed', () => {
   assert.throws(() => stage.acquireLease(context, runner), /D013_ACQUIRE_NOT_PROVEN/);
 });
 
+test('normal acquire accepts exact ledger readback evidence without run id', () => {
+  const context = {
+    packetRef: '#77',
+    requestedScopes: ['path:docs/demo.md'],
+    workspace: {identity: {branch: 'server/mcl-packet-77', worktree: '/root/nyang-worktrees/mcl-packet-77'}},
+    mainSha: MAIN,
+  };
+  const leaseId = 'b'.repeat(64);
+  const evidenceRef = `receipt:mcl-task-lease-readback:acquire:${leaseId}:generation:12`;
+  const runner = (args) => {
+    if (args[0] === process.execPath && args.includes('lease-acquire')) {
+      return response(0, {
+        status: 'DISPATCH_READBACK_COMPLETE', leaseId,
+        observedGeneration: 12, runId: null, runConclusion: null, evidenceRef,
+      });
+    }
+    throw new Error(args.join(' '));
+  };
+  const value = stage.acquireLease(context, runner);
+  assert.equal(value.runId, null);
+  assert.equal(value.evidenceRef, evidenceRef);
+});
+
+test('normal repository release accepts exact ledger readback evidence without run id', () => {
+  const context = {packetRef: '#77'};
+  const leaseId = 'b'.repeat(64);
+  const evidenceRef = `receipt:mcl-task-lease-readback:release:${leaseId}:generation:13`;
+  const runner = (args) => {
+    if (args[0] === process.execPath && args.includes('lease-release')) {
+      return response(0, {
+        status: 'DISPATCH_READBACK_COMPLETE', leaseId,
+        observedGeneration: 13, runId: null, runConclusion: null, evidenceRef,
+      });
+    }
+    throw new Error(args.join(' '));
+  };
+  const value = stage.releaseRepositoryLease(context, leaseId, runner);
+  assert.equal(value.ok, true);
+  assert.equal(value.value.runId, null);
+  assert.equal(value.value.evidenceRef, evidenceRef);
+});
+
+test('normal acquire rejects mismatched ledger readback evidence locator', () => {
+  const context = {
+    packetRef: '#77',
+    requestedScopes: ['path:docs/demo.md'],
+    workspace: {identity: {branch: 'server/mcl-packet-77', worktree: '/root/nyang-worktrees/mcl-packet-77'}},
+    mainSha: MAIN,
+  };
+  const runner = (args) => {
+    if (args[0] === process.execPath && args.includes('lease-acquire')) {
+      return response(0, {
+        status: 'DISPATCH_READBACK_COMPLETE', leaseId: 'b'.repeat(64),
+        observedGeneration: 12, runId: null, runConclusion: null,
+        evidenceRef: 'receipt:mcl-task-lease-readback:release:' + 'b'.repeat(64) + ':generation:12',
+      });
+    }
+    throw new Error(args.join(' '));
+  };
+  assert.throws(() => stage.acquireLease(context, runner), /D013_ACQUIRE_NOT_PROVEN/);
+});
+
 test('manifest comment failure releases lease when no workspace/ref effect occurred', () => {
   const f = gitFixture();
   let releaseCalls = 0;

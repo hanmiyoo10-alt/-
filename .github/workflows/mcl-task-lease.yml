@@ -28,12 +28,12 @@ on:
         description: Durable device-routing class
         required: false
         type: choice
-        options: [S, M, S_TERMUX, M_PRIVATE_LAB, M_VM_LAB, S_PRIVATE_LOCAL]
+        options: [S, M, L, S_TERMUX, M_PRIVATE_LAB, M_VM_LAB, S_PRIVATE_LOCAL]
       executor:
         description: Exact selected execution surface
         required: false
         type: choice
-        options: [S, M, S_TERMUX, M_PRIVATE_LAB, M_VM_LAB, S_PRIVATE_LOCAL]
+        options: [S, M, L, S_TERMUX, M_PRIVATE_LAB, M_VM_LAB, S_PRIVATE_LOCAL]
       scopes_json:
         description: JSON array of normalized coordination scopes
         required: false

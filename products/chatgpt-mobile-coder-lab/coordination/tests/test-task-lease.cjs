@@ -433,6 +433,7 @@ ok('workflow is one fixed owner-only serialized issue writer', () => {
     'packet_ref:\n        description: Source packet reference; required for acquire/release, omit for activate\n        required: false',
   ));
   assert.ok(workflow.includes('options: [repository, landing_metadata, landing_branch_repair, not_applicable]'));
+  assert.equal((workflow.match(/options: \[S, M, L, S_TERMUX, M_PRIVATE_LAB, M_VM_LAB, S_PRIVATE_LOCAL\]/g) || []).length, 2);
 });
 class FakeClient {
   constructor(state, packetBody) {

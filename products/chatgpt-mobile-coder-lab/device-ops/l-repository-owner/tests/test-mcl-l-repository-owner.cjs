@@ -103,6 +103,49 @@ test('manifest contract rejects route executor and workspace substitution', () =
     assert.throws(() => owner.validateManifestShape(value), owner.OwnerError);
   }
 });
+function landingRunner({landing, base, head = base, branch = 'main', dirty = '', objectPresent = true, ancestor = true, remoteMain = base, protectedMain = base}) {
+  return (command, args) => {
+    if (command === 'gh') return {code:0, stdout:protectedMain + '\n', stderr:'', signal:null, error:null};
+    assert.equal(command, 'git');
+    assert.deepEqual(args.slice(0, 2), ['-C', landing]);
+    const rest = args.slice(2);
+    if (rest.join(' ') === 'branch --show-current') return {code:0, stdout:branch + '\n', stderr:'', signal:null, error:null};
+    if (rest.join(' ') === 'rev-parse HEAD') return {code:0, stdout:head + '\n', stderr:'', signal:null, error:null};
+    if (rest.join(' ') === 'status --porcelain=v1 -uall') return {code:0, stdout:dirty, stderr:'', signal:null, error:null};
+    if (rest.join(' ') === 'ls-remote --heads origin refs/heads/main') return {code:0, stdout:remoteMain + '\trefs/heads/main\n', stderr:'', signal:null, error:null};
+    if (rest[0] === 'cat-file' && rest[1] === '-e') return {code:objectPresent ? 0 : 1, stdout:'', stderr:'', signal:null, error:null};
+    if (rest[0] === 'merge-base' && rest[1] === '--is-ancestor') return {code:ancestor ? 0 : 1, stdout:'', stderr:'', signal:null, error:null};
+    throw new Error('unexpected runner call: ' + rest.join(' '));
+  };
+}
+
+test('landing currentness accepts exact-current and clean fast-forward-behind main', () => {
+  const landing = fs.mkdtempSync('/tmp/mcl-l-owner-');
+  const base = 'b'.repeat(40);
+  const old = 'a'.repeat(40);
+  const profile = {...owner.DEFAULT_PROFILE, landing};
+  try {
+    assert.equal(owner.inspectLanding(manifest({observedBaseSha:base}), {profile, runner:landingRunner({landing, base})}).landingRelation, 'equal');
+    assert.equal(owner.inspectLanding(manifest({observedBaseSha:base}), {profile, runner:landingRunner({landing, base, head:old, ancestor:true})}).landingRelation, 'behind_ff');
+  } finally { fs.rmSync(landing, {recursive:true, force:true}); }
+});
+
+test('landing currentness rejects non-ancestor dirty mismatch and missing-base states', () => {
+  const landing = fs.mkdtempSync('/tmp/mcl-l-owner-');
+  const base = 'b'.repeat(40);
+  const old = 'a'.repeat(40);
+  const profile = {...owner.DEFAULT_PROFILE, landing};
+  const m = manifest({observedBaseSha:base});
+  try {
+    expectReason(() => owner.inspectLanding(m, {profile, runner:landingRunner({landing, base, head:old, ancestor:false})}), 'LANDING_HEAD_NOT_ANCESTOR_OF_BASE');
+    expectReason(() => owner.inspectLanding(m, {profile, runner:landingRunner({landing, base, dirty:'x'})}), 'LANDING_DIRTY');
+    expectReason(() => owner.inspectLanding(m, {profile, runner:landingRunner({landing, base, branch:'other'})}), 'LANDING_BRANCH_INVALID');
+    expectReason(() => owner.inspectLanding(m, {profile, runner:landingRunner({landing, base, remoteMain:'c'.repeat(40)})}), 'REMOTE_MAIN_STALE');
+    expectReason(() => owner.inspectLanding(m, {profile, runner:landingRunner({landing, base, protectedMain:'c'.repeat(40)})}), 'PROTECTED_MAIN_STALE');
+    expectReason(() => owner.inspectLanding(m, {profile, runner:landingRunner({landing, base, objectPresent:false})}), 'BASE_OBJECT_MISSING');
+  } finally { fs.rmSync(landing, {recursive:true, force:true}); }
+});
+
 test('request parser binds packet paths message and patch hash', () => {
   const value = owner.parseRequestText(JSON.stringify({
     schema:owner.REQUEST_SCHEMA,

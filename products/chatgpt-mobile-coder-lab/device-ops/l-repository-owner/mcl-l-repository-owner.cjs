@@ -310,13 +310,21 @@ function inspectLanding(manifest, {profile = DEFAULT_PROFILE, runner = defaultRu
   const reasons = [];
   if (branch !== 'main') reasons.push('LANDING_BRANCH_INVALID');
   if (dirty) reasons.push('LANDING_DIRTY');
-  if (head !== manifest.observedBaseSha) reasons.push('LANDING_HEAD_STALE');
   if (liveRemote !== manifest.observedBaseSha) reasons.push('REMOTE_MAIN_STALE');
   if (main !== manifest.observedBaseSha) reasons.push('PROTECTED_MAIN_STALE');
   const object = runner('git', ['-C', profile.landing, 'cat-file', '-e', manifest.observedBaseSha + '^{commit}'], {env:safeChildEnv()});
-  if (object.error || object.signal || object.code !== 0) reasons.push('BASE_OBJECT_MISSING');
+  const baseObjectPresent = !object.error && !object.signal && object.code === 0;
+  if (!baseObjectPresent) reasons.push('BASE_OBJECT_MISSING');
+  if (head !== manifest.observedBaseSha && baseObjectPresent) {
+    const ancestry = runner('git', ['-C', profile.landing, 'merge-base', '--is-ancestor', head, manifest.observedBaseSha],
+      {env:safeChildEnv()});
+    if (ancestry.error || ancestry.signal || ![0, 1].includes(ancestry.code)) {
+      throw new OwnerError('UNKNOWN', ['LANDING_ANCESTRY_READ_FAILED']);
+    }
+    if (ancestry.code !== 0) reasons.push('LANDING_HEAD_NOT_ANCESTOR_OF_BASE');
+  }
   if (reasons.length) throw new OwnerError('BLOCKED', reasons);
-  return {main, head, remoteMain: liveRemote};
+  return {main, head, remoteMain: liveRemote, landingRelation: head === manifest.observedBaseSha ? 'equal' : 'behind_ff'};
 }
 
 function localBranchState(runner, landing, branch) {
@@ -695,6 +703,7 @@ module.exports = {
   executeApply,
   fixedValidationChecks,
   inspect,
+  inspectLanding,
   inspectPreparedWorkspace,
   manifestPathScopes,
   output,

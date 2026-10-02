@@ -393,6 +393,41 @@ function inspectDispatchCandidate({repo, candidate, plan, runner}) {
   };
 }
 
+function noRunReadbackEvidenceRef(plan, generation) {
+  return 'receipt:mcl-task-lease-readback:' + plan.operation + ':' + plan.leaseId
+    + ':generation:' + generation;
+}
+
+function reconcileNoRunReadback(plan, current) {
+  if (current?.status !== 'READY' || !Number.isSafeInteger(plan?.ledgerGeneration)
+      || !SHA256_RE.test(plan?.leaseId || '')) return null;
+  const expectedGeneration = plan.ledgerGeneration + 1;
+  if (current.ledgerGeneration !== expectedGeneration) return null;
+  const active = current.ledgerState?.activeLeases || [];
+  if (plan.operation === 'acquire') {
+    const matches = active.filter((item) => item.leaseId === plan.leaseId);
+    if (matches.length !== 1) return null;
+    const exact = matches[0];
+    if (exact.packetRef !== plan.workflowInputs?.packet_ref) return null;
+    if (plan.workflowInputs?.packet_body_sha256
+        && exact.packetBodySha256 !== plan.workflowInputs.packet_body_sha256) return null;
+  } else if (plan.operation === 'release') {
+    if (active.some((item) => item.leaseId === plan.leaseId)) return null;
+    const last = current.ledgerState?.lastRelease;
+    if (!last || last.leaseId !== plan.leaseId
+        || last.releasedAtGeneration !== expectedGeneration) return null;
+  } else {
+    return null;
+  }
+  return output('DISPATCH_READBACK_COMPLETE', [], {
+    runId: null,
+    runConclusion: null,
+    observedGeneration: expectedGeneration,
+    leaseId: plan.leaseId,
+    evidenceRef: noRunReadbackEvidenceRef(plan, expectedGeneration),
+  });
+}
+
 async function dispatchPlan({repo, plan, client, runner = defaultRunner, sleepFn = sleepMs, maxPolls = 20}) {
   if (plan.status !== 'PLAN_READY') return plan;
   const before = listRuns(repo, runner);
@@ -434,6 +469,11 @@ async function dispatchPlan({repo, plan, client, runner = defaultRunner, sleepFn
     });
   }
   if (!selected) {
+    if (!sawFresh && !sawUnknown) {
+      const current = await readContext({client, packetRef: plan.workflowInputs.packet_ref});
+      const reconciled = reconcileNoRunReadback(plan, current);
+      if (reconciled) return reconciled;
+    }
     return output('UNKNOWN', [
       sawFresh || sawUnknown ? 'DISPATCH_RUN_ATTRIBUTION_UNRESOLVED' : 'DISPATCH_RUN_NOT_FOUND',
     ]);

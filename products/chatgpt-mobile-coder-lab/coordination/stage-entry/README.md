@@ -185,6 +185,15 @@ The same locator is used in both `leaseEvidence.acquireEvidenceRef` and
 same manifest identity even when the caller-side acquire workflow run differs.
 A different leaseId or acquired generation remains a different manifest identity.
 
+For the normal repository lease path only, stage-entry accepts either the existing
+run-backed `DISPATCH_COMPLETE` evidence or exact
+`DISPATCH_READBACK_COMPLETE` evidence from the coordination operator. The
+readback form carries no run id and must expose the exact deterministic
+`receipt:mcl-task-lease-readback:<operation>:<leaseId>:generation:<generation>`
+locator. Acquire still requires the exact lease id and acquired generation.
+Normal release normalizes either evidence form behind one `evidenceRef`.
+Landing-normalization remains run-backed and is not widened by this rule.
+
 Caller-specific workflow-run identity remains execution provenance in the
 stage-entry receipt/report. It is not part of the normal stage-entry semantic
 D-014 identity. This does not change D-013 or D-014 schema or authority.

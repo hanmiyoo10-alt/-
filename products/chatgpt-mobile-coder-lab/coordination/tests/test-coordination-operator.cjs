@@ -101,6 +101,55 @@ function failedRunRunner({runId = 501, packetRef = '#2378', leaseId,
   return {calls, runner};
 }
 
+function dispatchRunInfo(runId, {status = 'completed', conclusion = 'success'} = {}) {
+  return JSON.stringify({
+    databaseId: runId,
+    event: 'workflow_dispatch',
+    workflowName: 'MCL Task Lease',
+    status,
+    conclusion,
+  });
+}
+
+function dispatchLog(plan, {
+  resultLeaseId = plan.leaseId,
+  generation = 8,
+  resultStatus = plan.operation === 'acquire' ? 'ACQUIRE_UPDATED' : 'RELEASE_UPDATED',
+  includeResult = true,
+  overrides = {},
+} = {}) {
+  const names = {
+    operation: 'MCL_LEASE_OPERATION',
+    expected_generation: 'MCL_LEASE_EXPECTED_GENERATION',
+    packet_ref: 'MCL_LEASE_PACKET_REF',
+    packet_body_sha256: 'MCL_LEASE_PACKET_BODY_SHA256',
+    route: 'MCL_LEASE_ROUTE',
+    executor: 'MCL_LEASE_EXECUTOR',
+    scopes_json: 'MCL_LEASE_SCOPES_JSON',
+    scope_disposition: 'MCL_LEASE_SCOPE_DISPOSITION',
+    workspace_kind: 'MCL_LEASE_WORKSPACE_KIND',
+    branch: 'MCL_LEASE_BRANCH',
+    worktree: 'MCL_LEASE_WORKTREE',
+    observed_base_sha: 'MCL_LEASE_OBSERVED_BASE_SHA',
+    lease_id: 'MCL_LEASE_ID',
+  };
+  const inputs = {...plan.workflowInputs, ...overrides};
+  const lines = Object.entries(inputs).map(([key, value]) =>
+    `${names[key]}: ${String(value ?? '')}`);
+  if (includeResult) {
+    lines.push(JSON.stringify({
+      schemaVersion: 1,
+      mode: 'MCL_TASK_LEASE',
+      status: resultStatus,
+      changed: true,
+      generation,
+      leaseId: resultLeaseId,
+      reasonCodes: [],
+    }));
+  }
+  return lines.join('\n');
+}
+
 function manifestInput() {
   return {
     schemaVersion: 1, mode: 'MCL_TASK_MANIFEST', packetRef: '#2378', packetBodySha256: 'c'.repeat(64),
@@ -190,7 +239,12 @@ function manifestInput() {
       }
       if (args[0] === 'workflow') return {code: 0, stdout: '', stderr: ''};
       if (args[0] === 'run' && args[1] === 'watch') return {code: 1, stdout: '', stderr: ''};
-      if (args[0] === 'run' && args[1] === 'view') return {code: 0, stdout: JSON.stringify({databaseId: 91, conclusion: 'failure', status: 'completed', event: 'workflow_dispatch'}), stderr: ''};
+      if (args[0] === 'run' && args[1] === 'view' && args.includes('--json')) {
+        return {code: 0, stdout: dispatchRunInfo(91, {conclusion: 'failure'}), stderr: ''};
+      }
+      if (args[0] === 'run' && args[1] === 'view' && args.includes('--log')) {
+        return {code: 0, stdout: dispatchLog(plan, {includeResult: false}), stderr: ''};
+      }
       throw new Error(`unexpected runner args ${args.join(' ')}`);
     };
     const plan = {status: 'PLAN_READY', operation: 'acquire', leaseId: 'f'.repeat(64),
@@ -386,9 +440,10 @@ function manifestInput() {
       if (args[0] === 'workflow' && args[1] === 'run') return {code: 0, stdout: '', stderr: ''};
       if (args[0] === 'run' && args[1] === 'watch') return {code: 1, stdout: '', stderr: ''};
       if (args[0] === 'run' && args[1] === 'view' && args.includes('--json')) {
-        return {code: 0, stdout: JSON.stringify({
-          databaseId: 601, conclusion: 'failure', status: 'completed', event: 'workflow_dispatch',
-        }), stderr: ''};
+        return {code: 0, stdout: dispatchRunInfo(601, {conclusion: 'failure'}), stderr: ''};
+      }
+      if (args[0] === 'run' && args[1] === 'view' && args.includes('--log')) {
+        return {code: 0, stdout: dispatchLog(plan, {includeResult: false}), stderr: ''};
       }
       throw new Error(`unexpected runner args ${args.join(' ')}`);
     };
@@ -427,12 +482,12 @@ function manifestInput() {
       if (args[0] === 'workflow' && args[1] === 'run') return {code: 0, stdout: '', stderr: ''};
       if (args[0] === 'run' && args[1] === 'watch') return {code: 0, stdout: '', stderr: ''};
       if (args[0] === 'run' && args[1] === 'view' && args.includes('--json')) {
-        return {code: 0, stdout: JSON.stringify({
-          databaseId: 602, conclusion: 'success', status: 'completed', event: 'workflow_dispatch',
-        }), stderr: ''};
+        return {code: 0, stdout: dispatchRunInfo(602), stderr: ''};
       }
       if (args[0] === 'run' && args[1] === 'view' && args.includes('--log')) {
-        return {code: 0, stdout: `result ${fixture.leaseId}`, stderr: ''};
+        return {code: 0, stdout: dispatchLog(plan, {
+          generation: released.generation, resultStatus: 'RELEASE_UPDATED',
+        }), stderr: ''};
       }
       throw new Error(`unexpected runner args ${args.join(' ')}`);
     };
@@ -464,17 +519,19 @@ function manifestInput() {
       if (args[0] === 'workflow') return {code: 0, stdout: '', stderr: ''};
       if (args[0] === 'run' && args[1] === 'watch') return {code: 0, stdout: '', stderr: ''};
       if (args[0] === 'run' && args[1] === 'view' && args.includes('--json')) {
-        return {code: 0, stdout: JSON.stringify({databaseId: 92, conclusion: 'success', status: 'completed'}), stderr: ''};
+        return {code: 0, stdout: dispatchRunInfo(92), stderr: ''};
       }
       if (args[0] === 'run' && args[1] === 'view' && args.includes('--log')) {
-        return {code: 0, stdout: 'another lease completed', stderr: ''};
+        return {code: 0, stdout: dispatchLog(plan, {
+          resultLeaseId: '0'.repeat(64), generation: 8,
+        }), stderr: ''};
       }
       throw new Error(`unexpected runner args ${args.join(' ')}`);
     };
     const result = await operator.dispatchPlan({repo: 'hanmiyoo10-alt/-', plan,
       client: fakeClient({state}), runner, sleepFn: () => {}, maxPolls: 1});
     assert.equal(result.status, 'UNKNOWN');
-    assert(result.reasonCodes.includes('DISPATCH_RUN_IDENTITY_UNPROVEN'));
+    assert(result.reasonCodes.includes('DISPATCH_RUN_ATTRIBUTION_UNRESOLVED'));
   });
 
   await test('successful workflow run completes only with matching lease log and readback', async () => {
@@ -493,10 +550,10 @@ function manifestInput() {
       if (args[0] === 'workflow') return {code: 0, stdout: '', stderr: ''};
       if (args[0] === 'run' && args[1] === 'watch') return {code: 0, stdout: '', stderr: ''};
       if (args[0] === 'run' && args[1] === 'view' && args.includes('--json')) {
-        return {code: 0, stdout: JSON.stringify({databaseId: 93, conclusion: 'success', status: 'completed'}), stderr: ''};
+        return {code: 0, stdout: dispatchRunInfo(93), stderr: ''};
       }
       if (args[0] === 'run' && args[1] === 'view' && args.includes('--log')) {
-        return {code: 0, stdout: `result ${acquired.leaseId}`, stderr: ''};
+        return {code: 0, stdout: dispatchLog(plan, {generation: 8}), stderr: ''};
       }
       throw new Error(`unexpected runner args ${args.join(' ')}`);
     };
@@ -504,6 +561,150 @@ function manifestInput() {
       client: fakeClient({state}), runner, sleepFn: () => {}, maxPolls: 1});
     assert.equal(result.status, 'DISPATCH_COMPLETE');
     assert.equal(result.runId, 93);
+  });
+
+  await test('concurrent fresh acquire runs select only exact packet operation and result', async () => {
+    const args = acquireArgs();
+    const request = {expectedGeneration: 7, ...args, packetBodySha256: lease.digest(packetBody())};
+    const acquired = lease.planAcquire(ledgerState(), request);
+    const acquiredState = lease.parseLedger(acquired.updatedBody).state;
+    const laterState = {...acquiredState, generation: 9};
+    const plan = {status: 'PLAN_READY', operation: 'acquire', leaseId: acquired.leaseId, workflowInputs: {
+      operation: 'acquire', expected_generation: '7', packet_ref: '#2378',
+      packet_body_sha256: lease.digest(packetBody()), route: args.route, executor: args.executor,
+      scopes_json: JSON.stringify(args.scopes), scope_disposition: args.scopeDisposition,
+      workspace_kind: args.workspaceKind, branch: args.branch, worktree: args.worktree,
+      observed_base_sha: args.observedBaseSha,
+    }};
+    const otherLease = 'e'.repeat(64);
+    const other = {status: 'PLAN_READY', operation: 'release', leaseId: otherLease,
+      workflowInputs: {operation: 'release', expected_generation: '7', packet_ref: '#9999', lease_id: otherLease}};
+    let listCount = 0;
+    const calls = [];
+    const runner = (argv) => {
+      calls.push(argv);
+      if (argv[0] === 'run' && argv[1] === 'list') {
+        listCount += 1;
+        return {code: 0, stdout: JSON.stringify(listCount === 1 ? [] : [
+          {databaseId: 101, status: 'completed', conclusion: 'success'},
+          {databaseId: 102, status: 'completed', conclusion: 'success'},
+        ]), stderr: ''};
+      }
+      if (argv[0] === 'workflow') return {code: 0, stdout: '', stderr: ''};
+      if (argv[0] === 'run' && argv[1] === 'watch') return {code: 1, stdout: '', stderr: 'transport'};
+      const runId = Number(argv[2]);
+      if (argv[0] === 'run' && argv[1] === 'view' && argv.includes('--json')) {
+        return {code: 0, stdout: dispatchRunInfo(runId), stderr: ''};
+      }
+      if (argv[0] === 'run' && argv[1] === 'view' && argv.includes('--log')) {
+        return {code: 0, stdout: runId === 101
+          ? dispatchLog(plan, {generation: 8})
+          : dispatchLog(other, {generation: 8, resultStatus: 'RELEASE_UPDATED'}), stderr: ''};
+      }
+      throw new Error(`unexpected runner args ${argv.join(' ')}`);
+    };
+    const result = await operator.dispatchPlan({repo: 'hanmiyoo10-alt/-', plan,
+      client: fakeClient({state: laterState}), runner, sleepFn: () => {}, maxPolls: 1});
+    assert.equal(result.status, 'DISPATCH_COMPLETE');
+    assert.equal(result.runId, 101);
+    assert.equal(result.observedGeneration, 8);
+    assert.equal(calls.filter((argv) => argv[0] === 'workflow' && argv[1] === 'run').length, 1);
+  });
+
+  await test('concurrent fresh release runs select only exact packet lease and result', async () => {
+    const fixture = activeReleaseFixture();
+    const releasedPlan = lease.planRelease(fixture.state, {
+      expectedGeneration: fixture.state.generation, leaseId: fixture.leaseId, packetRef: '#2378',
+    });
+    const released = lease.parseLedger(releasedPlan.updatedBody).state;
+    const plan = {status: 'PLAN_READY', operation: 'release', leaseId: fixture.leaseId,
+      workflowInputs: {operation: 'release', expected_generation: String(fixture.state.generation),
+        packet_ref: '#2378', lease_id: fixture.leaseId}};
+    const unrelated = {status: 'PLAN_READY', operation: 'release', leaseId: 'e'.repeat(64),
+      workflowInputs: {operation: 'release', expected_generation: String(fixture.state.generation),
+        packet_ref: '#9999', lease_id: 'e'.repeat(64)}};
+    let listCount = 0;
+    const runner = (argv) => {
+      if (argv[0] === 'run' && argv[1] === 'list') {
+        listCount += 1;
+        return {code: 0, stdout: JSON.stringify(listCount === 1 ? [] : [
+          {databaseId: 111, status: 'completed', conclusion: 'success'},
+          {databaseId: 112, status: 'completed', conclusion: 'success'},
+        ]), stderr: ''};
+      }
+      if (argv[0] === 'workflow') return {code: 0, stdout: '', stderr: ''};
+      if (argv[0] === 'run' && argv[1] === 'watch') return {code: 0, stdout: '', stderr: ''};
+      const runId = Number(argv[2]);
+      if (argv[0] === 'run' && argv[1] === 'view' && argv.includes('--json')) {
+        return {code: 0, stdout: dispatchRunInfo(runId), stderr: ''};
+      }
+      if (argv[0] === 'run' && argv[1] === 'view' && argv.includes('--log')) {
+        return {code: 0, stdout: runId === 111
+          ? dispatchLog(plan, {generation: released.generation, resultStatus: 'RELEASE_UPDATED'})
+          : dispatchLog(unrelated, {generation: released.generation, resultStatus: 'RELEASE_UPDATED'}), stderr: ''};
+      }
+      throw new Error(`unexpected runner args ${argv.join(' ')}`);
+    };
+    const result = await operator.dispatchPlan({repo: 'hanmiyoo10-alt/-', plan,
+      client: fakeClient({state: released}), runner, sleepFn: () => {}, maxPolls: 1});
+    assert.equal(result.status, 'DISPATCH_COMPLETE');
+    assert.equal(result.runId, 111);
+    assert.equal(result.observedGeneration, released.generation);
+  });
+
+  await test('two exact fresh candidates remain ambiguous without retry', async () => {
+    const request = {expectedGeneration: 7, ...acquireArgs(), packetBodySha256: lease.digest(packetBody())};
+    const acquired = lease.planAcquire(ledgerState(), request);
+    const state = lease.parseLedger(acquired.updatedBody).state;
+    const plan = {status: 'PLAN_READY', operation: 'acquire', leaseId: acquired.leaseId,
+      workflowInputs: {operation: 'acquire', packet_ref: '#2378'}};
+    let listCount = 0;
+    let dispatchCalls = 0;
+    const runner = (argv) => {
+      if (argv[0] === 'run' && argv[1] === 'list') {
+        listCount += 1;
+        return {code: 0, stdout: JSON.stringify(listCount === 1 ? [] : [
+          {databaseId: 121, status: 'completed', conclusion: 'success'},
+          {databaseId: 122, status: 'completed', conclusion: 'success'},
+        ]), stderr: ''};
+      }
+      if (argv[0] === 'workflow') { dispatchCalls += 1; return {code: 0, stdout: '', stderr: ''}; }
+      const runId = Number(argv[2]);
+      if (argv[0] === 'run' && argv[1] === 'view' && argv.includes('--json'))
+        return {code: 0, stdout: dispatchRunInfo(runId), stderr: ''};
+      if (argv[0] === 'run' && argv[1] === 'view' && argv.includes('--log'))
+        return {code: 0, stdout: dispatchLog(plan, {generation: 8}), stderr: ''};
+      throw new Error(`unexpected runner args ${argv.join(' ')}`);
+    };
+    const result = await operator.dispatchPlan({repo: 'hanmiyoo10-alt/-', plan,
+      client: fakeClient({state}), runner, sleepFn: () => {}, maxPolls: 1});
+    assert.equal(result.status, 'UNKNOWN');
+    assert(result.reasonCodes.includes('DISPATCH_RUN_AMBIGUOUS'));
+    assert.equal(dispatchCalls, 1);
+  });
+
+  await test('oversized exact candidate log remains unproven', async () => {
+    const plan = {status: 'PLAN_READY', operation: 'acquire', leaseId: 'f'.repeat(64),
+      workflowInputs: {operation: 'acquire', packet_ref: '#2378'}};
+    let listCount = 0;
+    const runner = (argv) => {
+      if (argv[0] === 'run' && argv[1] === 'list') {
+        listCount += 1;
+        return {code: 0, stdout: JSON.stringify(listCount === 1 ? [] : [
+          {databaseId: 131, status: 'completed', conclusion: 'success'},
+        ]), stderr: ''};
+      }
+      if (argv[0] === 'workflow') return {code: 0, stdout: '', stderr: ''};
+      if (argv[0] === 'run' && argv[1] === 'view' && argv.includes('--json'))
+        return {code: 0, stdout: dispatchRunInfo(131), stderr: ''};
+      if (argv[0] === 'run' && argv[1] === 'view' && argv.includes('--log'))
+        return {code: 0, stdout: 'x'.repeat(64 * 1024 + 1), stderr: ''};
+      throw new Error(`unexpected runner args ${argv.join(' ')}`);
+    };
+    const result = await operator.dispatchPlan({repo: 'hanmiyoo10-alt/-', plan,
+      client: fakeClient(), runner, sleepFn: () => {}, maxPolls: 1});
+    assert.equal(result.status, 'UNKNOWN');
+    assert(result.reasonCodes.includes('DISPATCH_RUN_ATTRIBUTION_UNRESOLVED'));
   });
 
   await test('env token path preserves fetch client and does not invoke gh fallback', async () => {
@@ -580,7 +781,8 @@ function manifestInput() {
   });
 
   await test('same injected gh runner serves fallback reads and bounded dispatch', async () => {
-    const request = {expectedGeneration: 7, ...acquireArgs(), packetBodySha256: lease.digest(packetBody())};
+    const argsFixture = acquireArgs();
+    const request = {expectedGeneration: 7, ...argsFixture, packetBodySha256: lease.digest(packetBody())};
     const acquired = lease.planAcquire(ledgerState(), request);
     const acquiredState = lease.parseLedger(acquired.updatedBody).state;
     let ledgerReads = 0;
@@ -606,20 +808,29 @@ function manifestInput() {
       if (args[0] === 'workflow' && args[1] === 'run') return {code: 0, stdout: '', stderr: ''};
       if (args[0] === 'run' && args[1] === 'watch') return {code: 0, stdout: '', stderr: ''};
       if (args[0] === 'run' && args[1] === 'view' && args.includes('--json')) {
-        return {code: 0, stdout: JSON.stringify({databaseId: 94, conclusion: 'success', status: 'completed'}), stderr: ''};
+        return {code: 0, stdout: dispatchRunInfo(94), stderr: ''};
       }
       if (args[0] === 'run' && args[1] === 'view' && args.includes('--log')) {
-        return {code: 0, stdout: `result ${acquired.leaseId}`, stderr: ''};
+        return {code: 0, stdout: dispatchLog({
+          status: 'PLAN_READY', operation: 'acquire', leaseId: acquired.leaseId,
+          workflowInputs: {
+            operation: 'acquire', expected_generation: '7', packet_ref: '#2378',
+            packet_body_sha256: lease.digest(packetBody()), route: 'S', executor: 'S',
+            scopes_json: JSON.stringify(argsFixture.scopes),
+            scope_disposition: 'DISJOINT', workspace_kind: 'repository',
+            branch: argsFixture.branch, worktree: argsFixture.worktree,
+            observed_base_sha: argsFixture.observedBaseSha,
+          },
+        }, {generation: 8}), stderr: ''};
       }
       throw new Error(`unexpected runner args ${args.join(' ')}`);
     };
-    const args = acquireArgs();
     const result = await operator.runCli([
       'lease-acquire', '--repo', 'hanmiyoo10-alt/-', '--packet', '#2378',
-      '--route', args.route, '--executor', args.executor,
-      '--scopes-json', JSON.stringify(args.scopes), '--scope-disposition', args.scopeDisposition,
-      '--workspace-kind', args.workspaceKind, '--branch', args.branch, '--worktree', args.worktree,
-      '--observed-base-sha', args.observedBaseSha, '--dispatch',
+      '--route', argsFixture.route, '--executor', argsFixture.executor,
+      '--scopes-json', JSON.stringify(argsFixture.scopes), '--scope-disposition', argsFixture.scopeDisposition,
+      '--workspace-kind', argsFixture.workspaceKind, '--branch', argsFixture.branch, '--worktree', argsFixture.worktree,
+      '--observed-base-sha', argsFixture.observedBaseSha, '--dispatch',
     ], {}, {runner, sleepFn: () => {}, maxPolls: 1});
     assert.equal(result.code, 0);
     const parsed = JSON.parse(result.text);

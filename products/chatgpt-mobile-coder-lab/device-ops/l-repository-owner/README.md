@@ -16,7 +16,12 @@ repository = hanmiyoo10-alt/-
 
 The landing clone is read/currentness input only. It is never a feature
 workspace and this owner does not fetch, reset, rebase, stash, clean, switch,
-or repair it.
+or repair it. A clean landing on exact branch `main` may remain fast-forward
+behind the manifest base only when live remote/protected main equal that base,
+the exact base object is already present locally, and landing HEAD is an
+ancestor of the base. `mcl-main-object-materialize L <sha>` is the separate
+no-ref object-acquisition owner when that exact base object is missing. Ahead,
+diverged/unrelated, dirty, branch-mismatched, or missing-object state blocks.
 
 ## Composition
 

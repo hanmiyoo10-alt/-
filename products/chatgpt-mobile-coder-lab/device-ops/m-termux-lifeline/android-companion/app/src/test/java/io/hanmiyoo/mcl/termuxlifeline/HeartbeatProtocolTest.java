@@ -1,27 +1,33 @@
 package io.hanmiyoo.mcl.termuxlifeline;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public final class HeartbeatProtocolTest {
     @Test
-    public void acceptsOnlyExactReviewedFrames() {
+    public void acceptsOnlyExactReviewedActions() {
         assertEquals(
             HeartbeatProtocol.Kind.HEARTBEAT,
-            HeartbeatProtocol.classify(HeartbeatProtocol.HEARTBEAT)
+            HeartbeatProtocol.classifyAction(HeartbeatProtocol.HEARTBEAT_ACTION)
         );
         assertEquals(
             HeartbeatProtocol.Kind.RECOVERY_OK,
-            HeartbeatProtocol.classify(HeartbeatProtocol.RECOVERY_OK)
+            HeartbeatProtocol.classifyAction(HeartbeatProtocol.RECOVERY_OK_ACTION)
         );
-        assertEquals(HeartbeatProtocol.Kind.INVALID, HeartbeatProtocol.classify(""));
+        assertEquals(HeartbeatProtocol.Kind.INVALID, HeartbeatProtocol.classifyAction(null));
+        assertEquals(HeartbeatProtocol.Kind.INVALID, HeartbeatProtocol.classifyAction(""));
         assertEquals(
             HeartbeatProtocol.Kind.INVALID,
-            HeartbeatProtocol.classify("MCL_M_TERMUX_LIFELINE_HEARTBEAT_V1")
+            HeartbeatProtocol.classifyAction(HeartbeatProtocol.HEARTBEAT_ACTION + ".extra")
         );
-        assertEquals(
-            HeartbeatProtocol.Kind.INVALID,
-            HeartbeatProtocol.classify("MCL_M_TERMUX_LIFELINE_HEARTBEAT_V1\nextra")
-        );
+    }
+
+    @Test
+    public void senderUidMustExactlyMatchInstalledTermuxUid() {
+        assertTrue(HeartbeatProtocol.senderUidMatchesTermux(10234, 10234));
+        assertFalse(HeartbeatProtocol.senderUidMatchesTermux(-1, 10234));
+        assertFalse(HeartbeatProtocol.senderUidMatchesTermux(10235, 10234));
     }
 }

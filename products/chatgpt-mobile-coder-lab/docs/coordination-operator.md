@@ -53,7 +53,11 @@ node products/chatgpt-mobile-coder-lab/coordination/mcl-coordination-operator.cj
 ```
 
 Adding `--dispatch` is the explicit effect boundary. It invokes only `.github/workflows/mcl-task-lease.yml` through `gh` argv with the explicit repository and `main` ref, then observes the resulting run and current ledger.
-A failed stale-generation run is surfaced as failure. The helper does not change inputs and retry automatically. More than one newly observed workflow run is `UNKNOWN / DISPATCH_RUN_AMBIGUOUS`.
+A failed stale-generation run is surfaced as failure. The helper does not change inputs and retry automatically.
+
+Fresh-run attribution is bounded and identity-driven rather than latest-by-time or cardinality-only. Every fresh candidate stays inside the fixed 20-run list and must prove the fixed workflow/event plus the exact planned operation and packet inputs in its bounded log. A successful candidate must also contain exactly one canonical `MCL_TASK_LEASE` result for the planned lease with a safe effect generation and the operation-specific updated/no-op status. Acquire binds the lease identity from that canonical result; release also requires the exact caller lease id. Exactly one qualifying fresh run remains the normal run-backed path. When no fresh run and no unknown candidate is observed at all, the operator may perform exactly one current packet/#2352 readback and return `DISPATCH_READBACK_COMPLETE` only for exact `preGeneration + 1` durable effect identity. Acquire requires the exact planned active lease; release requires exact lease absence plus exact `lastRelease` identity/generation. This readback path emits no run id, never dispatches again, and uses one deterministic ledger evidence locator. Any fresh/unknown candidate, multiple exact candidates, generation jump, identity mismatch, malformed state, or known failed run remains fail-closed.
+
+`gh run watch` remains bounded observation transport, but its exit status is not stronger than a subsequent exact fixed `run view` + bounded log attribution. A nonzero watch result therefore cannot turn an exact completed-success run into failure. A genuinely failed/nonterminal/malformed exact run remains failure or `UNKNOWN`, and no automatic retry is added.
 
 ## D-014 envelopes
 
@@ -70,7 +74,8 @@ These commands only emit envelopes. They do not post comments, choose a latest e
 - Acquire uses the current ledger generation and caller-supplied `DISJOINT` overlap evidence; this helper does not compute overlap.
 - Release requires the exact packet reference and lease identity against the fresh ledger.
 - Dispatch run ambiguity, workflow failure, malformed ledger evidence, and readback mismatch stay explicit rather than becoming success.
-- A successful dispatched run is accepted only when its bounded workflow log contains the exact planned lease ID; otherwise run attribution remains `UNKNOWN`.
+- Successful dispatch attribution requires exact workflow/event, operation, packet, planned input, canonical task-lease result, lease identity, effect generation, and current-ledger readback. A lease-id substring alone is never sufficient.
+- `observedGeneration` comes from the exact canonical task-lease result for the attributed run, not from an unrelated later ledger generation.
 - Output contains hashes/locators and bounded status only. It does not echo packet bodies, tokens, environment dumps, private device/session identifiers, or shell strings.
 
 ## Non-goals

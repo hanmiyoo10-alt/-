@@ -66,6 +66,25 @@ function landingAcquireRequest(executor = 'S', overrides = {}) {
     ...overrides,
   });
 }
+function landingBranchRepairAcquireRequest(overrides = {}) {
+  const identity = lease.landingBranchRepairIdentity('M');
+  return acquireRequest({
+    route: 'M',
+    executor: 'M',
+    scopes: [identity.scope],
+    workspaceKind: 'landing_branch_repair',
+    branch: identity.branch,
+    worktree: identity.worktree,
+    observedBaseSha: 'c'.repeat(40),
+    ...overrides,
+  });
+}
+function landingBranchRepairAcquireRequestS(overrides = {}) {
+  const identity = lease.landingBranchRepairIdentity('S');
+  return acquireRequest({ route:'S', executor:'S', scopes:[identity.scope],
+    workspaceKind:'landing_branch_repair', branch:identity.branch,
+    worktree:identity.worktree, observedBaseSha:'c'.repeat(40), ...overrides });
+}
 
 function stateFromPlan(plan) {
   assert.equal(plan.changed, true);
@@ -231,11 +250,19 @@ ok('ambiguous either executor and non-DISJOINT discovery fail closed', () => {
   assert.equal(unknown.status, 'BLOCKED');
   assert.ok(unknown.reasonCodes.includes('REQUEST_SCOPE_DISCOVERY_NOT_DISJOINT'));
 });
-ok('routing compatibility permits S fallback to M but not semantic context substitution', () => {
+ok('routing compatibility permits S fallback to M and exact L/L but not semantic context substitution', () => {
   assert.equal(lease.normalizeAcquireRequest(acquireRequest({executor:'M', workspaceKind:'repository', branch:'mainphone/task-a', worktree:'/data/data/com.termux/files/home/nyang-worktrees/task-a'})).ok, true);
-  const wrong = lease.normalizeAcquireRequest(acquireRequest({route:'S_TERMUX', executor:'S'}));
-  assert.equal(wrong.ok, false);
-  assert.ok(wrong.reasonCodes.includes('REQUEST_ROUTE_EXECUTOR_CONFLICT'));
+  assert.equal(lease.normalizeAcquireRequest(acquireRequest({route:'L', executor:'L', workspaceKind:'repository', branch:'laptop/task-a', worktree:'/home/alsl0/nyang-worktrees/task-a'})).ok, true);
+  for (const wrongRequest of [
+    acquireRequest({route:'S_TERMUX', executor:'S'}),
+    acquireRequest({route:'L', executor:'S'}),
+    acquireRequest({route:'L', executor:'M', branch:'mainphone/task-a', worktree:'/data/data/com.termux/files/home/nyang-worktrees/task-a'}),
+    acquireRequest({route:'S', executor:'L', branch:'laptop/task-a', worktree:'/home/alsl0/nyang-worktrees/task-a'}),
+  ]) {
+    const wrong = lease.normalizeAcquireRequest(wrongRequest);
+    assert.equal(wrong.ok, false);
+    assert.ok(wrong.reasonCodes.includes('REQUEST_ROUTE_EXECUTOR_CONFLICT'));
+  }
 });
 
 ok('landing branches and permanent repository paths are not leasable feature workspaces', () => {
@@ -247,9 +274,17 @@ ok('landing branches and permanent repository paths are not leasable feature wor
   assert.equal(mBranch.ok, false);
   const mPermanent = lease.normalizeAcquireRequest(acquireRequest({route:'M', executor:'M', branch:'mainphone/task-a', worktree:'/data/data/com.termux/files/home/nyang-worktrees/mainphone-work'}));
   assert.equal(mPermanent.ok, false);
+  const lLandingBranch = lease.normalizeAcquireRequest(acquireRequest({route:'L', executor:'L', branch:'main', worktree:'/home/alsl0/nyang-worktrees/task-a'}));
+  assert.equal(lLandingBranch.ok, false);
+  const lPermanent = lease.normalizeAcquireRequest(acquireRequest({route:'L', executor:'L', branch:'laptop/task-a', worktree:'/home/alsl0/nyang-repo'}));
+  assert.equal(lPermanent.ok, false);
+  const lOutsideRoot = lease.normalizeAcquireRequest(acquireRequest({route:'L', executor:'L', branch:'laptop/task-a', worktree:'/home/alsl0/other/task-a'}));
+  assert.equal(lOutsideRoot.ok, false);
+  const lNonNormalized = lease.normalizeAcquireRequest(acquireRequest({route:'L', executor:'L', branch:'laptop/task-a', worktree:'/home/alsl0/nyang-worktrees/../task-a'}));
+  assert.equal(lNonNormalized.ok, false);
 });
 
-ok('landing_metadata accepts only fixed S and M identities including S fallback to M', () => {
+ok('landing_metadata accepts fixed S M and exact L identities including S fallback to M', () => {
   const s = lease.normalizeAcquireRequest(landingAcquireRequest('S'));
   assert.equal(s.ok, true);
   assert.equal(s.lease.workspace.kind, 'landing_metadata');
@@ -259,6 +294,13 @@ ok('landing_metadata accepts only fixed S and M identities including S fallback 
   assert.equal(mFallback.lease.executor, 'M');
   assert.equal(mFallback.lease.workspace.branch, 'mainphone/work');
   assert.deepEqual(mFallback.lease.scopes, ['surface:mcl-landing-origin-main:M']);
+  const l = lease.normalizeAcquireRequest(landingAcquireRequest('L'));
+  assert.equal(l.ok, true);
+  assert.equal(l.lease.route, 'L');
+  assert.equal(l.lease.executor, 'L');
+  assert.equal(l.lease.workspace.branch, 'main');
+  assert.equal(l.lease.workspace.worktree, '/home/alsl0/nyang-repo');
+  assert.deepEqual(l.lease.scopes, ['surface:mcl-landing-origin-main:L']);
 });
 ok('landing_metadata rejects arbitrary identity scope and missing observed head', () => {
   for (const request of [
@@ -267,9 +309,69 @@ ok('landing_metadata rejects arbitrary identity scope and missing observed head'
     landingAcquireRequest('S', {scopes:['surface:mcl-landing-origin-main:M']}),
     acquireRequest({route:'S_TERMUX', executor:'S_TERMUX', scopes:['surface:mcl-landing-origin-main:S'], workspaceKind:'landing_metadata', branch:'server/work', worktree:'/root/nyang-repo'}),
     landingAcquireRequest('S', {observedBaseSha:null}),
+    landingAcquireRequest('L', {branch:'laptop/other'}),
+    landingAcquireRequest('L', {worktree:'/home/alsl0/nyang-worktrees/not-landing'}),
+    landingAcquireRequest('L', {scopes:['surface:mcl-landing-origin-main:S']}),
+    landingAcquireRequest('L', {observedBaseSha:null}),
   ]) {
     assert.equal(lease.normalizeAcquireRequest(request).ok, false);
   }
+});
+ok('landing_branch_repair accepts only the fixed M identity and scope', () => {
+  const exact = lease.normalizeAcquireRequest(landingBranchRepairAcquireRequest());
+  assert.equal(exact.ok, true);
+  assert.equal(exact.lease.route, 'M');
+  assert.equal(exact.lease.executor, 'M');
+  assert.equal(exact.lease.workspace.kind, 'landing_branch_repair');
+  assert.equal(exact.lease.workspace.branch, 'mainphone/work');
+  assert.equal(exact.lease.workspace.worktree, '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work');
+  assert.deepEqual(exact.lease.scopes, ['surface:mcl-landing-branch:M']);
+});
+ok('landing_branch_repair accepts the fixed S identity and scope', () => {
+  const exact = lease.normalizeAcquireRequest(landingBranchRepairAcquireRequestS());
+  assert.equal(exact.ok, true); assert.equal(exact.lease.route, 'S');
+  assert.equal(exact.lease.executor, 'S');
+  assert.equal(exact.lease.workspace.kind, 'landing_branch_repair');
+  assert.equal(exact.lease.workspace.branch, 'server/work');
+  assert.equal(exact.lease.workspace.worktree, '/root/nyang-repo');
+  assert.deepEqual(exact.lease.scopes, ['surface:mcl-landing-branch:S']);
+});
+ok('landing_branch_repair rejects route fallback arbitrary identity scope and missing observed head', () => {
+  for (const request of [
+    landingBranchRepairAcquireRequest({route:'S'}),
+    landingBranchRepairAcquireRequest({route:'S', executor:'S'}),
+    landingBranchRepairAcquireRequest({branch:'mainphone/other'}),
+    landingBranchRepairAcquireRequest({worktree:'/data/data/com.termux/files/home/nyang-worktrees/other'}),
+    landingBranchRepairAcquireRequest({scopes:['surface:mcl-landing-origin-main:M']}),
+    landingBranchRepairAcquireRequest({observedBaseSha:null}),
+  ]) {
+    assert.equal(lease.normalizeAcquireRequest(request).ok, false);
+  }
+});
+ok('L is not admitted to landing_branch_repair', () => {
+  const request = acquireRequest({
+    route:'L', executor:'L', scopes:['surface:mcl-landing-branch:L'],
+    workspaceKind:'landing_branch_repair', branch:'main', worktree:'/home/alsl0/nyang-repo',
+  });
+  const result = lease.normalizeAcquireRequest(request);
+  assert.equal(result.ok, false);
+  assert.ok(result.reasonCodes.includes('WORKSPACE_LANDING_BRANCH_REPAIR_EXECUTOR_INVALID'));
+});
+
+ok('L route rejects not_applicable workspace', () => {
+  const result = lease.normalizeAcquireRequest(acquireRequest({
+    route:'L', executor:'L', workspaceKind:'not_applicable',
+    branch:'not_applicable', worktree:'not_applicable', observedBaseSha:null,
+  }));
+  assert.equal(result.ok, false);
+  assert.ok(result.reasonCodes.includes('REQUEST_L_ROUTE_REPOSITORY_REQUIRED'));
+});
+
+ok('landing metadata and landing branch repair serialize on the fixed M worktree', () => {
+  const first = stateFromPlan(lease.planAcquire(activeState(), landingAcquireRequest('M')));
+  const conflict = lease.planAcquire(first, landingBranchRepairAcquireRequest({expectedGeneration:2, packetRef:'#2353'}));
+  assert.equal(conflict.status, 'CONFLICT');
+  assert.ok(conflict.reasonCodes.includes('ACTIVE_LEASE_WORKTREE_RESERVED'));
 });
 ok('duplicate landing metadata reservation conflicts while S and M remain independently reservable', () => {
   const first = stateFromPlan(lease.planAcquire(activeState(), landingAcquireRequest('S')));
@@ -279,6 +381,9 @@ ok('duplicate landing metadata reservation conflicts while S and M remain indepe
   const mPlan = lease.planAcquire(first, landingAcquireRequest('M', {expectedGeneration:2, packetRef:'#2353'}));
   assert.equal(mPlan.status, 'ACQUIRE_READY');
   assert.equal(stateFromPlan(mPlan).activeLeases.length, 2);
+  const lPlan = lease.planAcquire(first, landingAcquireRequest('L', {expectedGeneration:2, packetRef:'#2354'}));
+  assert.equal(lPlan.status, 'ACQUIRE_READY');
+  assert.equal(stateFromPlan(lPlan).activeLeases.length, 2);
 });
 
 ok('non-repository semantic contexts require explicit not_applicable workspace', () => {
@@ -327,7 +432,8 @@ ok('workflow is one fixed owner-only serialized issue writer', () => {
   assert.ok(workflow.includes(
     'packet_ref:\n        description: Source packet reference; required for acquire/release, omit for activate\n        required: false',
   ));
-  assert.ok(workflow.includes('options: [repository, landing_metadata, not_applicable]'));
+  assert.ok(workflow.includes('options: [repository, landing_metadata, landing_branch_repair, not_applicable]'));
+  assert.equal((workflow.match(/options: \[S, M, L, S_TERMUX, M_PRIVATE_LAB, M_VM_LAB, S_PRIVATE_LOCAL\]/g) || []).length, 2);
 });
 class FakeClient {
   constructor(state, packetBody) {

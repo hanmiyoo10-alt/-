@@ -13,6 +13,9 @@ const leaseId = 'a'.repeat(64);
 const packetHash = 'b'.repeat(64);
 const baseSha = 'c'.repeat(40);
 const observedSha = 'd'.repeat(40);
+const cleanupPath = 'path:products/chatgpt-mobile-coder-lab/device-ops/repository-patch/__pycache__/mcl-worktree-patch.cpython-312.pyc';
+const preservedDiffSha = 'f'.repeat(64);
+const preservedPath = 'path:products/chatgpt-mobile-coder-lab/device-ops/repository-patch/README.md';
 
 let passed = 0;
 function test(name, fn) {
@@ -84,6 +87,38 @@ function rendered(manifest, input = {}) {
     handoff.buildCompletionReceipt(manifest, receiptInput(input)),
   );
 }
+function cleanupManifestInput(overrides = {}) {
+  return manifestInput({
+    packetRef: '#2804',
+    phaseId: '2804-exact-one-pyc-cleanup',
+    scopes: [cleanupPath, 'surface:mcl:validation-residue-cleanup:2775'],
+    workspace: {
+      kind: 'repository', branch: 'server/mcl-packet-2775',
+      worktree: '/root/nyang-worktrees/mcl-packet-2775',
+    },
+    expectedOutputRefs: [cleanupPath],
+    ...overrides,
+  });
+}
+function preservedInput(evidenceRef = 'run:9', digest = preservedDiffSha, paths = [preservedPath]) {
+  return {
+    disposition: 'COMPLETE',
+    outputRefs: [cleanupPath],
+    validationRefs: [evidenceRef],
+    observedRefs: ['commit:' + observedSha],
+    leaseDisposition: 'RELEASED',
+    leaseReleaseEvidence: {
+      ledgerRef: '#2352', leaseId, releasedGeneration: 8, evidenceRef: 'run:3',
+    },
+    workspaceResult: 'preserved_dirty',
+    workspacePreservation: {
+      kind: 'TRACKED_DIFF_PRESERVED', beforeSha256: digest, afterSha256: digest,
+      preservedPathRefs: paths, evidenceRef,
+    },
+    blockerRefs: [],
+    requiredUnknownRefs: [],
+  };
+}
 
 const manifest = handoff.buildManifest(manifestInput());
 const firstText = rendered(manifest);
@@ -101,6 +136,14 @@ const secondText = rendered(manifest, {
 });
 const second = handoff.parseCompletionReceipt(secondText).value;
 
+test('legacy receipt and completion-core digests remain exact', () => {
+  assert.equal(manifest.manifestId, 'be0009285c526ee97c0d0580f28bcf60211cd4706af06af305e44ff16fccb1b8');
+  assert.equal(first.receiptId, '9f7b77737bca7198c224f5c21b52ad030af3c1dbbf1e0745184af4c91d22203c');
+  assert.equal(first.payloadSha256, '621cc747b2191c19761f413220fc666fba2cf5b5888098c08f387d537a08244b');
+  assert.equal('workspacePreservation' in first, false);
+  const out = classifier.classify({manifestId: manifest.manifestId, receiptTexts: [firstText]});
+  assert.equal(out.completionCoreDigest, '5096913bca8ae72f8e66d5141e5e67e2e64f3444d06eab404cece8c0f6d45907');
+});
 test('one valid COMPLETE receipt classifies SINGLE', () => {
   const out = classifier.classify({
     manifestId: manifest.manifestId,
@@ -155,6 +198,32 @@ test('completion-core mismatch classifies CONFLICT', () => {
   assert.equal(out.evidenceVariants, 'UNKNOWN');
   assert.deepEqual(out.reasonCodes, ['COMPLETION_CORE_CONFLICT']);
 });
+test('preserved-dirty identity is completion core while evidence locator is evidence-only', () => {
+  const cleanup = handoff.buildManifest(cleanupManifestInput());
+  const oneText = handoff.renderCompletionReceipt(
+    handoff.buildCompletionReceipt(cleanup, preservedInput('run:9')),
+  );
+  const twoText = handoff.renderCompletionReceipt(
+    handoff.buildCompletionReceipt(cleanup, preservedInput('run:10')),
+  );
+  const equivalent = classifier.classify({
+    manifestId: cleanup.manifestId,
+    receiptTexts: [oneText, twoText],
+  });
+  assert.equal(equivalent.status, 'MULTIPLE_EQUIVALENT');
+  assert.equal(equivalent.evidenceVariants, true);
+
+  const otherIdentityText = handoff.renderCompletionReceipt(
+    handoff.buildCompletionReceipt(cleanup, preservedInput('run:11', 'e'.repeat(64))),
+  );
+  const conflict = classifier.classify({
+    manifestId: cleanup.manifestId,
+    receiptTexts: [oneText, otherIdentityText],
+  });
+  assert.equal(conflict.status, 'CONFLICT');
+  assert.deepEqual(conflict.reasonCodes, ['COMPLETION_CORE_CONFLICT']);
+});
+
 test('manifest mismatch fails closed UNKNOWN', () => {
   const other = handoff.buildManifest(manifestInput({phaseId: 'other-phase'}));
   const out = classifier.classify({

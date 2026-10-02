@@ -93,6 +93,9 @@ The inspector composes existing owners rather than defining replacement truth:
 - merged repository `effect-recovery.v1` classification.
 
 Manifest selection is identity-based. There is no latest-comment-wins rule.
+Exact replay rows that fully validate to the same `manifestId + payloadSha256`
+collapse to one semantic candidate. Distinct valid matching manifest identities remain
+`CONFLICT / MANIFEST_MATCH_DUPLICATE`; immutable source comments are never rewritten.
 
 PR discovery is bounded and paginated. Incomplete discovery is `UNKNOWN`, never
 proof that a PR is absent.
@@ -120,7 +123,7 @@ Missing/stale/conflicting packet, lease, manifest, holder, workspace, remote, PR
 release-plan or session evidence remains `UNKNOWN`, `CONFLICT` or `BLOCKED`.
 
 Important fail-closed cases include:
-- duplicate or partial manifest/comment discovery;
+- distinct matching manifest identities or partial comment discovery;
 - holder/manifest/lease identity mismatch;
 - dirty path outside current packet scope;
 - local branch/HEAD mismatch;

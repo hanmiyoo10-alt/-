@@ -1,0 +1,232 @@
+# Validation Attention Projection v1
+
+> **Repository owns validation detail. GPT receives only validation attention.**
+
+This directory owns the Phase 8.7f thin read-only validation composition selected by
+#2873 / #2875.
+
+It does not define a second validation truth or receipt schema.
+
+## Canonical stack
+
+```text
+existing validation owners
+→ bounded child receipt/report artifacts
+→ REPOSITORY_EXECUTION_RECEIPT v2
+→ REPOSITORY_AGENT_DECISION_VIEW v1
+```
+
+Full child evidence stays behind stable local-artifact locators. Normal GPT-facing
+output is the Agent Decision View.
+
+## Public surface
+
+```sh
+node validation-attention-owner.cjs inspect \
+  --packet '#N' \
+  --pr N \
+  --implementation-receipt-file /bounded/receipt.json \
+  --format agent-view
+
+node validation-attention-owner.cjs finalize \
+  --packet '#N' \
+  --pr N \
+  --format agent-view
+```
+
+Only `receipt|agent-view` formats are supported.
+
+There is no caller repository, branch, head, owner, workflow, check, protection,
+merge method, currentization method, command, shell or artifact-path selector.
+
+## Inspect graph
+
+```text
+canonical IMPLEMENTATION_PR receipt
+→ validation-continuation inspect
+→ if MERGE_ADMISSION_READY:
+     validation-merge inspect
+→ aggregate generic v2 receipt
+→ Agent Decision View
+```
+
+The continuation owner remains authoritative for checkpoint/candidate reduction.
+The validation-merge owner remains authoritative for reviews, overlap, exact-head
+Required, strict branch protection and ancestry/currentness.
+
+The composition never turns a non-ready continuation into merge admission.
+
+Important routes:
+
+- `MERGE_ADMISSION_READY` → validation-merge inspect;
+- `CURRENTIZATION_REQUIRED` → BLOCKED + existing currentization next action;
+- `VALIDATION_REFRESH_REQUIRED` → BLOCKED + existing validation refresh;
+- `NEEDS_RECOVERY_INSPECT` → bounded NEEDS_REVIEW attention;
+- `UNKNOWN` / `CONFLICT` / `BLOCKED` remain explicit;
+- `ALREADY_MERGED` never causes merge admission or a merge retry.
+
+For `ALREADY_MERGED` finalization, the packet is re-read and every exact
+IMPLEMENTATION_PR path must remain inside at least one normalized packet path scope.
+The check reuses Work System `normalizeScope()` / `scopesOverlap()` semantics, so an
+exact path or deterministic trailing `/**` ceiling is valid while malformed or
+non-path ceilings fail closed. Reconstructed merge-inspect evidence always keeps the
+exact implementation paths; a wildcard packet ceiling is never reported as a changed
+file.
+
+### Pre-merge finalization-route admission
+
+After a clean validation-merge inspect and before returning merge admission READY, the
+composition reuses that child's already-captured exact packet paths/scopes plus the
+continuation owner's `priorCoordination` result.
+
+For any packet whose prior coordination is explicitly `NOT_APPLICABLE`, merge admission
+must already prove a validation-finalization route. Generic repository-neutral
+finalization requires `repoNeutralPacket()` to pass:
+- every exact/declared path must stay under a compile-time reviewed neutral prefix;
+- the reviewed prefixes are `.github/plugin-control-plane/canonical-main/` and
+  `tools/repo-env/`;
+- at least one semantic surface must be declared and every semantic surface must be
+  `surface:repo:*`.
+
+A non-neutral packet may instead present the exact canonical IMPLEMENTATION_PR gate
+`validation-finalization-external-owner-reviewed=PASS` with an evidence locator,
+proving a separately reviewed finalization owner exists.
+
+Without either route, inspect returns
+`BLOCKED / REPO_NEUTRAL_FINALIZATION_SCOPE_REQUIRED` before any merge effect.
+The gate is routing evidence only. It grants no finalization or mutation authority.
+Coordination-converged product/MCL flows retain their existing admission semantics.
+`products/**` is never made repository-neutral by a repo-looking semantic surface, and
+no semantic owner is inferred from an unreviewed path prefix. No extra GitHub/API read
+is introduced.
+
+## Finalize graph
+
+Finalize requires a canonical PASS validation-attention inspect sidecar for the same
+packet/PR/head.
+
+```text
+validation-attention inspect evidence
+→ existing validation-merge finalize
+→ exact merge/head readback
+→ existing stage-receipt projector
+→ repository-neutral validation-finalization evidence
+→ existing validation-finalization classifier
+→ generic v2 receipt
+→ Agent Decision View
+```
+
+V1 finalization is deliberately repository-neutral only. The packet must positively
+prove that every path stays under one reviewed repository-neutral prefix and every
+semantic surface is `surface:repo:*`. The current reviewed path classes are
+canonical-main infrastructure and repository-common environment tooling under
+`tools/repo-env/`; arbitrary repository paths are not admitted by this rule.
+
+Product/MCL coordination is never silently mapped to `NOT_APPLICABLE`.
+
+The derived canonical VALIDATION_MERGE receipt is evidence inside the local full
+report. V1 does not publish it to an issue and does not call the stage-checkpoint
+writer.
+
+## Normal-path view
+
+Clean inspect:
+
+```json
+{
+  "result": "PASS",
+  "attentionDisposition": "COMPLETE",
+  "attentionCount": 0,
+  "output": {
+    "currentization": "NOT_REQUIRED",
+    "required": "PASS",
+    "reviews": "CLEAR",
+    "threads": "CLEAR",
+    "branchProtection": "PASS",
+    "overlap": "DISJOINT",
+    "mergeAdmission": "READY"
+  },
+  "nextLegalAction": "MERGE_PR_WITH_EXISTING_EXPECTED_HEAD_ENDPOINT"
+}
+```
+
+Clean finalize:
+
+```json
+{
+  "result": "PASS",
+  "attentionDisposition": "COMPLETE",
+  "attentionCount": 0,
+  "output": {
+    "mergeAdmission": "COMPLETE",
+    "finalization": "ALREADY_FINALIZED"
+  },
+  "nextLegalAction": "POSTMERGE_CONVERGENCE"
+}
+```
+
+Normal semantic-surface budget:
+
+```text
+validation-attention inspect
+→ existing expected-head merge
+→ validation-attention finalize
+```
+
+Maximum: 3.
+
+## Evidence storage
+
+The composition persists bounded 0600 receipt/report sidecars below the checkout Git
+administrative directory.
+
+The aggregate report retains child receipt/report identities and locators instead of
+copying raw GitHub responses or logs.
+
+Normal output never includes raw shell transcript, comments, CI logs, credentials,
+lease/holder capabilities or conversation content.
+
+## Attention contract
+
+Clean PASS has zero attention items.
+
+Non-PASS uses bounded reason + stable child locator. UNKNOWN and CONFLICT cannot be
+compressed away.
+
+The existing Agent Decision View still owns priority ordering, display caps,
+`truncated`, `criticalTruncated` and fallback behavior.
+
+## Authority ceiling
+
+V1 is read-only evidence composition.
+
+It never:
+- merges, updates or currentizes a PR;
+- writes refs or source;
+- acquires/releases coordination;
+- dispatches workflows;
+- writes issues or stage checkpoints;
+- changes branch protection or Required;
+- runs arbitrary shell/commands;
+- grants merge, release, production, runtime, security or device authority;
+- reads or reacts to #2874 review-onset observations.
+
+The protected expected-head merge endpoint remains an external explicit effect.
+
+## Validation
+
+```sh
+node --check .github/plugin-control-plane/canonical-main/work-harness/validation-attention/validation-attention-owner.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/validation-attention/tests/validation-attention-owner-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/validation-continuation/tests/validation-continuation-owner-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/validation-merge/tests/validation-merge-owner-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/validation-finalization/tests/validation-finalization-owner-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/stage-receipt-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/execution-receipt-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/agent-decision-view-contract.cjs
+node .github/plugin-control-plane/canonical-main/tests/work-system-contract.cjs
+git diff --check
+```
+
+Review/classification onset is separately observed by #2874 and is not an
+implementation gate.

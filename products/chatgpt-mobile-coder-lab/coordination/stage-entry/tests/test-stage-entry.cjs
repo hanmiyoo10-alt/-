@@ -60,6 +60,37 @@ function response(code, value) {
   return {code, stdout: typeof value === 'string' ? value : JSON.stringify(value), stderr: ''};
 }
 
+function packetActivityEvidenceSet({
+  requesterRef = '#10',
+  candidateRef = '#20',
+  relationship = 'PARENT_WAITING_ON_SUCCESSOR',
+  repositoryMutationActive = false,
+  activeLease = false,
+  overlappingOpenPr = false,
+  sequencingExplicit = true,
+} = {}) {
+  return {
+    schemaVersion: 1,
+    mode: stage.PACKET_ACTIVITY_EVIDENCE_MODE,
+    requesterRef,
+    candidates: [{
+      candidateRef,
+      evidence: {
+        schemaVersion: 1,
+        mode: 'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE',
+        candidateRef,
+        requesterRef,
+        relationship,
+        repositoryMutationActive,
+        activeLease,
+        overlappingOpenPr,
+        sequencingExplicit,
+        sourceRefs: ['issue:' + candidateRef, 'issue:' + requesterRef],
+      },
+    }],
+  };
+}
+
 function inspectRunner({mainSequence = [MAIN, MAIN], preflight = 'pass', landingMain = MAIN, landingRemoteMain = MAIN, issueRows = null} = {}) {
   let mainRead = 0;
   return (args) => {
@@ -177,12 +208,61 @@ test('plan parser accepts only the reviewed S/S mutable shape', () => {
   assert.throws(() => stage.parsePlan({...plan(), command: 'git status'}), /PLAN_UNKNOWN_FIELD/);
 });
 
-test('packet scope parser accepts one exact Work System heading and rejects drift', () => {
+test('source-main and packet-activity sidecar bindings are optional and strict', () => {
+  const direct = stage.parseArgs(['inspect', '--packet', '#77', '--plan', '/tmp/plan.json']);
+  assert.equal(direct.sourceMain, null);
+  assert.equal(direct.packetActivityEvidenceFile, null);
+  const bound = stage.parseArgs([
+    'inspect', '--packet', '#77', '--plan', '/tmp/plan.json',
+    '--packet-activity-evidence-file', '/tmp/activity.json', '--source-main', MAIN,
+  ]);
+  assert.equal(bound.sourceMain, MAIN);
+  assert.equal(bound.packetActivityEvidenceFile, '/tmp/activity.json');
+  assert.throws(() => stage.parseArgs([
+    'inspect', '--packet', '#77', '--plan', '/tmp/plan.json', '--source-main', 'main',
+  ]), /SOURCE_MAIN_INVALID/);
+});
+
+test('target scope parsing delegates exact Work System grammar and preserves stage-entry guards', () => {
   assert.deepEqual(stage.extractPacketScopes(PACKET_BODY), ['path:docs/demo.md']);
-  assert.throws(() => stage.extractPacketScopes(PACKET_BODY.replace('Bounded write scope', 'Implementation write scope')),
-    /PACKET_SCOPE_SECTION_MISSING/);
-  assert.throws(() => stage.extractPacketScopes(`${PACKET_BODY}\n## Locked write scope\n1. \`path:src/**\``),
-    /PACKET_SCOPE_SECTION_DUPLICATE/);
+
+  for (const heading of [
+    'Bounded write scope',
+    'Bounded implementation write scope',
+    'Locked write scope',
+    'Bounded IMPLEMENTATION_PR write scope',
+    'Repository write-scope ceiling used by IMPLEMENTATION_PR',
+    'Bounded repository write ceiling',
+  ]) {
+    const body = PACKET_BODY.replace('Bounded write scope', heading)
+      .replace('1. \`path:docs/demo.md\`', '1. path:src/**\n2. surface:mcl:demo');
+    assert.deepEqual(stage.extractPacketScopes(body), ['path:src/**', 'surface:mcl:demo']);
+  }
+
+  const preserved = PACKET_BODY.replace(
+    '1. \`path:docs/demo.md\`',
+    '1. path:src/**\nPreservation: \`path:docs/preserve.md\`',
+  );
+  assert.deepEqual(stage.extractPacketScopes(preserved), ['path:src/**']);
+
+  const fenced = PACKET_BODY.replace(
+    '1. \`path:docs/demo.md\`',
+    '1. path:src/**\n~~~text\n## Locked write scope\n1. path:ignored/**\n~~~',
+  );
+  assert.deepEqual(stage.extractPacketScopes(fenced), ['path:src/**']);
+
+  assert.throws(() => stage.extractPacketScopes(
+    PACKET_BODY.replace('Bounded write scope', 'Implementation write scope')),
+  /PACKET_SCOPE_UNRESOLVED/);
+  assert.throws(() => stage.extractPacketScopes(
+    `${PACKET_BODY}\n## Locked write scope\n1. \`path:src/**\``),
+  /PACKET_SCOPE_CONFLICT/);
+  assert.throws(() => stage.extractPacketScopes(
+    PACKET_BODY.replace('1. \`path:docs/demo.md\`', '1. path:../src/**')),
+  /PACKET_SCOPE_UNRESOLVED/);
+  assert.throws(() => stage.extractPacketScopes(
+    PACKET_BODY.replace('1. \`path:docs/demo.md\`', '1. path:docs/demo.md\n2. path:docs/demo.md')),
+  /PACKET_SCOPE_DUPLICATE/);
 });
 
 test('ops capsule requires exact main, Required PASS, CLEAR and UNKNOWN NONE', () => {
@@ -224,6 +304,69 @@ fixture`},
   assert.equal(value.discovery, 'COMPLETE');
 });
 
+test('packet-activity evidence suppresses only exact proven noncompeting packet overlap', () => {
+  const rows = [
+    {number: 10, state: 'open', body: PACKET_BODY},
+    {number: 20, state: 'open', body: PACKET_BODY},
+  ];
+  const runner = (args) => {
+    const endpoint = args[2];
+    if (endpoint.startsWith(`repos/${stage.REPO}/issues?`)) return response(0, rows);
+    throw new Error(endpoint);
+  };
+  const requestedScopes = ['path:docs/demo.md'];
+  const withoutEvidence = stage.discoverOverlap({
+    packetNumber: 10, requestedScopes, runner,
+  });
+  assert.equal(withoutEvidence.state, 'OVERLAP');
+
+  const evidence = stage.normalizePacketActivityEvidenceSet(
+    packetActivityEvidenceSet(), 10);
+  const withEvidence = stage.discoverOverlap({
+    packetNumber: 10, requestedScopes, packetActivityEvidence: evidence, runner,
+  });
+  assert.equal(withEvidence.state, 'DISJOINT');
+  assert.equal(withEvidence.candidateActivity.length, 1);
+  assert.equal(withEvidence.candidateActivity[0].state, 'NONBLOCKING_PROVEN');
+
+  const activeEvidence = stage.normalizePacketActivityEvidenceSet(
+    packetActivityEvidenceSet({activeLease: true}), 10);
+  const active = stage.discoverOverlap({
+    packetNumber: 10, requestedScopes, packetActivityEvidence: activeEvidence, runner,
+  });
+  assert.equal(active.state, 'OVERLAP');
+  assert.equal(active.candidateActivity[0].state, 'ACTIVE_WRITER');
+});
+
+test('packet-activity evidence set rejects requester mismatch, duplicates and stale candidates', () => {
+  assert.throws(() => stage.normalizePacketActivityEvidenceSet(
+    packetActivityEvidenceSet({requesterRef: '#99'}), 10),
+  /PACKET_ACTIVITY_EVIDENCE_REQUESTER_CONFLICT/);
+
+  const duplicate = packetActivityEvidenceSet();
+  duplicate.candidates.push(structuredClone(duplicate.candidates[0]));
+  assert.throws(() => stage.normalizePacketActivityEvidenceSet(duplicate, 10),
+    /PACKET_ACTIVITY_EVIDENCE_CANDIDATE_INVALID/);
+
+  const rows = [
+    {number: 10, state: 'open', body: PACKET_BODY},
+    {number: 20, state: 'open', body: PACKET_BODY},
+  ];
+  const runner = (args) => {
+    const endpoint = args[2];
+    if (endpoint.startsWith(`repos/${stage.REPO}/issues?`)) return response(0, rows);
+    throw new Error(endpoint);
+  };
+  const stale = stage.normalizePacketActivityEvidenceSet(
+    packetActivityEvidenceSet({candidateRef: '#30'}), 10);
+  assert.throws(() => stage.discoverOverlap({
+    packetNumber: 10,
+    requestedScopes: ['path:docs/demo.md'],
+    packetActivityEvidence: stale,
+    runner,
+  }), /PACKET_ACTIVITY_EVIDENCE_CANDIDATE_NOT_CURRENT/);
+});
+
 test('unparseable nonterminal packet keeps overlap UNKNOWN', () => {
   const runner = (args) => {
     const endpoint = args[2];
@@ -233,14 +376,16 @@ test('unparseable nonterminal packet keeps overlap UNKNOWN', () => {
         {number: 20, state: 'open', body: `<!-- canonical-main-work-packet:v1 -->
 ## State
 \`IN_PROGRESS\`
-## Bounded repository write ceiling
-1. \`path:src/**\``},
+## Bounded write scope
+1. \`path:../src/**\``},
       ]);
     }
     throw new Error(endpoint);
   };
   const value = stage.discoverOverlap({packetNumber: 10, requestedScopes: ['path:docs/demo.md'], runner});
   assert.equal(value.state, 'UNKNOWN');
+  assert.equal(value.discovery, 'COMPLETE');
+  assert(value.findings.some((finding) => finding.code === 'PACKET_SCOPE_UNRESOLVED'));
 });
 
 test('discovery truncation remains UNKNOWN rather than optimistic DISJOINT', () => {
@@ -254,6 +399,29 @@ test('discovery truncation remains UNKNOWN rather than optimistic DISJOINT', () 
   const value = stage.discoverOverlap({packetNumber: 77, requestedScopes: ['path:docs/demo.md'], runner});
   assert.equal(value.state, 'UNKNOWN');
   assert.equal(value.discovery, 'PARTIAL');
+});
+
+test('source-main mismatch fails before overlap, landing, lease, or workspace reads', () => {
+  const t = tempProfile();
+  let calls = 0;
+  const runner = (args) => {
+    calls += 1;
+    if (args[0] === 'gh' && args[1] === 'api'
+        && args[2] === `repos/${stage.REPO}/branches/main`) {
+      return response(0, {commit: {sha: MAIN}});
+    }
+    throw new Error(`unexpected read after source mismatch: ${args.join(' ')}`);
+  };
+  try {
+    assert.throws(() => stage.inspectContext({
+      packetNumber: 77,
+      plan: plan(),
+      sourceMain: 'b'.repeat(40),
+      runner,
+      profile: t.profile,
+    }), /SOURCE_MAIN_CURRENT_MAIN_CONFLICT/);
+    assert.equal(calls, 1);
+  } finally { t.close(); }
 });
 
 test('inspect detects main movement before mutation', () => {
@@ -309,8 +477,8 @@ test('source overlap resolves before landing observation or normalization', () =
       {number: 88, state: 'open', body: `<!-- canonical-main-work-packet:v1 -->
 ## State
 \`IN_PROGRESS\`
-## Bounded repository write ceiling
-1. \`path:src/**\``},
+## Bounded write scope
+1. \`path:../src/**\``},
     ],
   });
   const runner = (args, options) => {
@@ -565,18 +733,32 @@ test('normalization revalidation is one-shot and requires exact convergence', ()
   }), /NORMALIZATION_NOT_CONVERGED/);
 });
 
-test('D-014 manifest builder preserves the fixed S repository workspace contract', () => {
-  const manifest = stage.buildManifest({
+test('D-014 manifest builder preserves workspace and deterministic lease evidence', () => {
+  const context = {
     packetNumber: 77,
     packetRef: '#77',
     mainSha: MAIN,
     packetBodySha256: 'c'.repeat(64),
     requestedScopes: ['path:docs/demo.md'],
     workspace: {identity: {branch: 'server/mcl-packet-77', worktree: '/root/nyang-worktrees/mcl-packet-77'}},
-  }, {leaseId: 'b'.repeat(64), observedGeneration: 9, runId: 500});
+  };
+  const lease = {leaseId: 'b'.repeat(64), observedGeneration: 9, runId: 500};
+  const manifest = stage.buildManifest(context, lease);
+  const replay = stage.buildManifest(context, {...lease, runId: 501});
+  const nextGeneration = stage.buildManifest(context, {...lease, observedGeneration: 10, runId: 502});
+  const differentLease = stage.buildManifest(context, {...lease, leaseId: 'd'.repeat(64), runId: 503});
+  const evidenceRef = `receipt:mcl-task-lease:${lease.leaseId}:generation:9`;
+
   assert.equal(manifest.workspace.branch, 'server/mcl-packet-77');
   assert.equal(manifest.workspace.worktree, '/root/nyang-worktrees/mcl-packet-77');
+  assert.equal(manifest.leaseEvidence.acquireEvidenceRef, evidenceRef);
+  assert(manifest.inputRefs.includes(evidenceRef));
+  assert.equal(manifest.inputRefs.some((ref) => ref.startsWith('run:')), false);
   assert.match(manifest.manifestId, /^[0-9a-f]{64}$/);
+  assert.equal(replay.manifestId, manifest.manifestId);
+  assert.equal(replay.payloadSha256, manifest.payloadSha256);
+  assert.notEqual(nextGeneration.manifestId, manifest.manifestId);
+  assert.notEqual(differentLease.manifestId, manifest.manifestId);
 });
 
 test('HANDOFF_READY projection is accepted by the existing strict patch-owner parser', () => {
@@ -604,12 +786,16 @@ test('generic stage-entry PASS receipt uses v2 axes and grants no authority', ()
   assert.equal(receipt.executionAuthorized, false);
 });
 
-test('late barrier accepts exact fresh context and exact active lease', () => {
+test('late barrier accepts exact fresh context and reuses packet-activity evidence', () => {
+  const packetActivityEvidence = stage.normalizePacketActivityEvidenceSet(
+    packetActivityEvidenceSet({requesterRef: '#77'}), 77);
   const context = {
     packetNumber: 77,
     packetRef: '#77',
     plan: plan(),
     mainSha: MAIN,
+    sourceMain: null,
+    packetActivityEvidence,
     packetBodySha256: 'a'.repeat(64),
     requestedScopes: ['path:docs/demo.md'],
     workspace: {identity: {branch: 'server/mcl-packet-77', worktree: '/root/nyang-worktrees/mcl-packet-77'}},
@@ -626,11 +812,16 @@ test('late barrier accepts exact fresh context and exact active lease', () => {
     }
     throw new Error(args.join(' '));
   };
+  let seenEvidence = null;
   const fresh = stage.revalidateAfterAcquire(context, lease, {
     runner,
-    inspector: () => ({...context}),
+    inspector: (input) => {
+      seenEvidence = input.packetActivityEvidence;
+      return {...context};
+    },
   });
   assert.equal(fresh.mainSha, MAIN);
+  assert.equal(seenEvidence, packetActivityEvidence);
 });
 
 test('late barrier rejects main drift before workspace effect', () => {
@@ -660,6 +851,68 @@ test('acquire failure is fail-closed', () => {
   const runner = (args) => {
     if (args[0] === process.execPath && args.includes('lease-acquire')) {
       return response(2, {schemaVersion: 1, status: 'BLOCKED', reasonCodes: ['FIXTURE']});
+    }
+    throw new Error(args.join(' '));
+  };
+  assert.throws(() => stage.acquireLease(context, runner), /D013_ACQUIRE_NOT_PROVEN/);
+});
+
+test('normal acquire accepts exact ledger readback evidence without run id', () => {
+  const context = {
+    packetRef: '#77',
+    requestedScopes: ['path:docs/demo.md'],
+    workspace: {identity: {branch: 'server/mcl-packet-77', worktree: '/root/nyang-worktrees/mcl-packet-77'}},
+    mainSha: MAIN,
+  };
+  const leaseId = 'b'.repeat(64);
+  const evidenceRef = `receipt:mcl-task-lease-readback:acquire:${leaseId}:generation:12`;
+  const runner = (args) => {
+    if (args[0] === process.execPath && args.includes('lease-acquire')) {
+      return response(0, {
+        status: 'DISPATCH_READBACK_COMPLETE', leaseId,
+        observedGeneration: 12, runId: null, runConclusion: null, evidenceRef,
+      });
+    }
+    throw new Error(args.join(' '));
+  };
+  const value = stage.acquireLease(context, runner);
+  assert.equal(value.runId, null);
+  assert.equal(value.evidenceRef, evidenceRef);
+});
+
+test('normal repository release accepts exact ledger readback evidence without run id', () => {
+  const context = {packetRef: '#77'};
+  const leaseId = 'b'.repeat(64);
+  const evidenceRef = `receipt:mcl-task-lease-readback:release:${leaseId}:generation:13`;
+  const runner = (args) => {
+    if (args[0] === process.execPath && args.includes('lease-release')) {
+      return response(0, {
+        status: 'DISPATCH_READBACK_COMPLETE', leaseId,
+        observedGeneration: 13, runId: null, runConclusion: null, evidenceRef,
+      });
+    }
+    throw new Error(args.join(' '));
+  };
+  const value = stage.releaseRepositoryLease(context, leaseId, runner);
+  assert.equal(value.ok, true);
+  assert.equal(value.value.runId, null);
+  assert.equal(value.value.evidenceRef, evidenceRef);
+});
+
+test('normal acquire rejects mismatched ledger readback evidence locator', () => {
+  const context = {
+    packetRef: '#77',
+    requestedScopes: ['path:docs/demo.md'],
+    workspace: {identity: {branch: 'server/mcl-packet-77', worktree: '/root/nyang-worktrees/mcl-packet-77'}},
+    mainSha: MAIN,
+  };
+  const runner = (args) => {
+    if (args[0] === process.execPath && args.includes('lease-acquire')) {
+      return response(0, {
+        status: 'DISPATCH_READBACK_COMPLETE', leaseId: 'b'.repeat(64),
+        observedGeneration: 12, runId: null, runConclusion: null,
+        evidenceRef: 'receipt:mcl-task-lease-readback:release:' + 'b'.repeat(64) + ':generation:12',
+      });
     }
     throw new Error(args.join(' '));
   };
@@ -869,8 +1122,11 @@ test('successful one-shot normalization composes into existing repository stage 
   } finally { f.close(); }
 });
 
-test('source contains no holder invocation, generic retry loop, or destructive Git repair', () => {
+test('source delegates target scope grammar and contains no broader effect machinery', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'mcl-stage-entry.cjs'), 'utf8');
+  assert.match(source, /scopeOverlap\.extractPacketScopes\(body\)/);
+  assert.doesNotMatch(source, /SCOPE_HEADINGS/);
+  assert.doesNotMatch(source, /function sections\(/);
   assert.doesNotMatch(source, /mcl-workspace-holder/);
   assert.doesNotMatch(source, /\bsetInterval\b|\bsetTimeout\b/);
   assert.doesNotMatch(source, /['"](?:reset|stash|rebase|merge|checkout|switch)['"]/);

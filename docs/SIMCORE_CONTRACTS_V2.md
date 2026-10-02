@@ -1,14 +1,16 @@
 # SimCore 2.0M Major - Contracts v2
 
-> Current production authority: `v0.69.1 - Refreshless Targeted Update Liveness Repair`
+> Frozen M2-6 architecture baseline identity: `v0.69.1 - Refreshless Targeted Update Liveness Repair`
 >
-> Production release: `release-simcore@5dc5ec1099c6097a6a0e46effeb826889a4741c3`
+> Frozen baseline release: `release-simcore@5dc5ec1099c6097a6a0e46effeb826889a4741c3`
 >
-> Production runtime blob: `de764f2c98174aa7f8ae8dc356d83aa6851b3745`
+> Frozen baseline runtime blob: `de764f2c98174aa7f8ae8dc356d83aa6851b3745`
 >
-> Validation: **LIVE_PASS**
+> Frozen baseline validation: **LIVE_PASS**
 >
 > Durable checkpoint: **M2-6**
+>
+> Current production/release identity is **not** owned by these frozen baseline fields. Read current production from `product-manifest.json` and the current `release-simcore` authority. The machine field `config/simcore-architecture-v2.json::production_baseline` is retained as the frozen architecture-baseline identity under schema v2, not as a competing current-production source.
 >
 > Current architecture state: **M2 architecture frozen at M2-6. No M2-7 is authorized. Future runtime work returns to source-proven quality/performance maintenance unless a separate roadmap reconciliation proves new structural debt.**
 

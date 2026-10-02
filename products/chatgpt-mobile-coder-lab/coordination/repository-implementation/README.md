@@ -50,11 +50,14 @@ The existing stage-entry manifest and `HANDOFF_READY` are immutable parent prepa
 
 Before effect, the coordinator requires the exact parent envelopes to exist as unique durable packet comments, verifies the current packet-body digest and active lease, and re-runs complete Work System overlap discovery.
 
+When an open historical packet overlaps only because its source scope is still present in a later lifecycle stage, the caller may provide one optional `--packet-activity-evidence-file`. The file uses the existing stage-entry packet-activity evidence-set schema and is normalized by the stage-entry owner before discovery. Only an exact `NONBLOCKING_PROVEN` packet classification may suppress that packet candidate. Missing evidence for an overlapping packet remains blocking; `ACTIVE_WRITER`, `UNKNOWN`, `CONFLICT`, stale-candidate evidence, malformed evidence, requester mismatch and every open-PR overlap remain fail-closed. Omitting the file preserves the historical raw-overlap behavior.
+
 A new child `REPOSITORY_MUTATION` manifest binds:
 
 - exact parent manifest and handoff comment locators;
 - repository-patch request hash;
 - fixed validation request hash;
+- repository-owned validation contract digest;
 - PR-publication request hash;
 - exact active lease/workspace/base/scopes.
 
@@ -64,16 +67,42 @@ The parent bytes are never rewritten.
 
 ## Validation binding
 
-V1 deliberately supports only the already-reviewed fixed prepared-state validation profile:
+V1 supports exactly four repository-reviewed semantic prepared-state validation profiles:
+
+```text
+mcl:d014-completion-set:v1
+repo:validation-continuation:v1
+repo:published-progress-recovery:v1
+mcl:validation-finalization-owner:v1
+```
+
+The coordinator derives the unique compatible profile from the exact normalized
+current packet scope. The caller-supplied validation request remains the same
+strict data-only shape:
 
 ```json
 {
   "schema": "mcl-repository-validation-request.v1",
-  "profile": "mcl:d014-completion-set:v1"
+  "profile": "<exact reviewed profile id>"
 }
 ```
 
-The profile is consumed by the existing repository patch owner between PREPARE and COMMIT. No arbitrary command, argv, executable or working directory is caller-controlled.
+That request is verification input, not profile-selection authority. Zero
+compatible profiles block as `NO_REVIEWED_VALIDATION_PROFILE`; multiple
+matches conflict as `VALIDATION_PROFILE_AMBIGUOUS`; a supplied request that
+does not match the derived profile blocks before PREPARE.
+
+The child D-014 manifest binds both the exact validation-request digest and the
+deterministic repository-owned validation-contract digest. The existing
+repository patch owner re-derives the profile contract and runs its fixed
+checks between PREPARE and COMMIT.
+
+The `repo:published-progress-recovery:v1` profile is admitted only for the exact six published-progress-recovery paths plus its two semantic surfaces, and runs the fixed classifier/adapter/session/recovery contract matrix owned by repository source.
+
+The `mcl:validation-finalization-owner:v1` profile is admitted only for the exact three validation-finalization owner paths plus `surface:mcl:validation-finalization-effect`, and runs the fixed MCL finalizer, generic validation-finalization, stage-receipt, and validation-continuation contract matrix owned by repository source.
+
+No arbitrary command, argv, executable, test path or working directory is
+caller-controlled.
 
 ## PR publication request
 
@@ -104,6 +133,13 @@ PR readback PASS
 → exact released-ledger readback
 → holder release
 → D-014 completion evidence
+
+Normal D-013 release evidence may be either the existing run-backed locator or
+the exact zero-run `DISPATCH_READBACK_COMPLETE` ledger locator normalized by
+stage-entry. Repository implementation does not require a workflow run id for
+that readback-complete case, but it still requires the same fresh packet/#2352
+readback and existing `validateReleased()` PASS before holder release or D-014
+completion.
 ```
 
 No automatic retry is added. A failure after prepare, commit, push or PR creation preserves the real partial state and leaves targeted recovery to the existing recovery owners.
@@ -119,13 +155,57 @@ node mcl-repository-implementation.cjs \
   --patch-file <regular file> \
   --validation-request-file <regular file> \
   --pr-request-file <regular file> \
+  [--packet-activity-evidence-file <regular JSON file>] \
   --apply
 ```
 
-`--apply` is mandatory. Normal stdout is one bounded `REPOSITORY_AGENT_DECISION_VIEW v1`. Raw Git, test, holder, lease and GitHub plumbing stays behind evidence locators unless targeted drill-down is required.
+`--apply` is mandatory. The packet-activity file is optional and cannot select a repository, packet relationship, PR, scope, effect owner or validation profile outside the existing exact schema/current discovery; it only supplies bounded evidence for packet candidates already present in the fresh complete overlap scan. Normal stdout is one bounded `REPOSITORY_AGENT_DECISION_VIEW v1`. Raw Git, test, holder, lease and GitHub plumbing stays behind evidence locators unless targeted drill-down is required.
 
-## First live consumer
+## Live-consumer history
 
-The first natural live consumer is the already-preserved #2569 stage-entry lane after this owner is merged and postmerge-proven.
+The first natural live consumer for the fixed implementation coordinator was
+#2569 using `mcl:d014-completion-set:v1`; that Phase 8.6b proof is preserved.
 
-That live proof must use the exact preserved #2569 parent lease/manifest/handoff/worktree, the fixed `mcl:d014-completion-set:v1` validation profile, one non-closing PR, and the normal later `VALIDATION_MERGE` stage. It must not edit the #2569 packet body while its active lease is bound.
+The second profile, `repo:validation-continuation:v1`, is a reviewed semantic
+extension. Existing #2770 coordination must not be rewritten or backfilled to
+claim adoption. A later live proof requires a fresh compatible activation
+under current authority.
+
+
+## Finalize-only recovery sibling
+
+`mcl-repository-implementation-finalize-recovery.cjs` owns one narrow replay-safe
+suffix for an IMPLEMENTATION_PR transaction whose source, commit, push, PR and
+D-013 release already completed but whose child/parent D-014 COMPLETE receipts
+did not durably converge.
+
+Admission is derived from current repository evidence only. The owner requires:
+- current nonterminal packet at `IMPLEMENTATION_PR`;
+- one current linked stage-entry parent manifest and one exact child effect manifest;
+- matching parent/child HANDOFF_READY evidence;
+- exact local = remote = one open PR head and exact changed-file set;
+- the exact D-013 lease already released;
+  - current exact `lastRelease` remains the fast-path proof;
+  - after natural `lastRelease` rotation, a bounded read-only scan of completed successful
+    `mcl-task-lease.yml` runs may prove the exact historical `RELEASE_UPDATED` lease
+    identity and generation;
+  - the historical scan reuses the exact validated open PR creation timestamp and the
+    exact effect-base SHA only to narrow candidate workflow-run discovery; release proof
+    still requires exact lease/status/generation evidence from a successful run log;
+  - the historical scan has both fixed per-read limits and one compile-time aggregate
+    lifetime ceiling; the remaining aggregate budget clamps each run-log read, and
+    aggregate exhaustion fails closed instead of proving release;
+  - missing, ambiguous or lifetime-exhausted historical evidence fails closed;
+- holder absent and workspace clean;
+- current main either equals the effect base, or one fixed read-only compare proves the effect base is the exact merge base/ancestor of current protected main; divergence, behind state, identity mismatch, or malformed comparison evidence fails closed.
+
+The only writable effect is append-only publication of a missing exact child
+completion receipt and then a missing exact parent completion receipt. Existing
+semantically exact receipts are reused. Distinct receipt variants fail closed.
+A second exact apply is zero-effect.
+
+This owner never edits source, commits, pushes, creates or updates a PR, merges,
+currentizes, acquires/releases a lease, claims/releases/cleans a holder, or
+changes runtime/device/release/production state. Its successful result proves
+only the recovered `IMPLEMENTATION_PR` suffix and returns
+`nextLegalAction=VALIDATION_MERGE`.

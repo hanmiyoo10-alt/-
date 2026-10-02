@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "colab-gpu-admission-request-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "request_id", "repository_sha", "operation_kind",
+    "execution_profile_id", "resource_class", "max_model_calls",
+    "max_wall_minutes", "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "request_id": {"type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"},
+    "repository_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "operation_kind": {"type": "string", "const": "COLAB_GPU_RUNTIME_SMOKE"},
+    "execution_profile_id": {"type": "string", "const": "colab-gpu-runtime-v1"},
+    "resource_class": {"type": "string", "const": "GPU_REQUIRED"},
+    "max_model_calls": {"type": "integer", "const": 0},
+    "max_wall_minutes": {"type": "integer"},
+    "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

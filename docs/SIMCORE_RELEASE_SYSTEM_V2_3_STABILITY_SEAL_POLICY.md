@@ -1,7 +1,7 @@
 # SimCore Release System v2.3 — Stability Seal Policy
 
 Date: 2026-08-28 KST
-Status: **IMPLEMENTED POLICY · NON-RUNTIME · REAL PR3 TERMINAL PROOF PENDING**
+Status: **IMPLEMENTED POLICY · NON-RUNTIME · REAL TERMINAL OPERATION PROVEN**
 Design authority: `docs/SIMCORE_RELEASE_SYSTEM_V2_3_STABILITY_SEAL_DESIGN.md`
 Tracking issue: `#673`
 Runtime mutation from this policy: **NONE**
@@ -165,6 +165,45 @@ new publisher = 0
 new clean-path gate = 0
 new polling = 0
 new issue automation controller = 0
+runtime mutation = NONE
+release-simcore mutation = NONE
+```
+
+
+## 10. Real terminal qualification convergence — 2026-09-22 KST
+
+The original evidence gate is now satisfied by real repository operation. This convergence preserves two distinct facts instead of rewriting history.
+
+### Original v0.64.9 terminal semantics
+
+The activated v0.64.9 work item #660 supplied accepted HUMAN_EVIDENCE:
+
+```text
+06409_SESSION_ROOT_RELOAD_CONTINUITY_REAL_LONG_CHAT
+= LIVE FAIL / CLASSIFIED BEFORE REFRESH
+terminalDisposition = LIVE_FAIL_HANDOFF_TO_NEW_RELEASE
+```
+
+A later separately reviewed historical administrative terminal transaction, PR #2710, merged at `ef2b35479576024f29d1f7ff4179ad107c6be5b2`. Post-merge main/production reobservation completed and the unchanged R2.3 pure evaluator returned `TERMINAL_REOBSERVED_CLOSE_ELIGIBLE / closeEligible=true / missingEvidence=[]`.
+
+This is genuine v0.64.9 terminal operational proof. It is **not** a v0.64.9 LIVE_PASS claim and PR #2710 is not reclassified as a normal clean-path PR3.
+
+### Genuine normal clean-path PR3 shape
+
+The ordinary third clean-path admin/evidence transaction was later exercised by v0.65.0 PR #755, which merged real HUMAN_EVIDENCE-backed `LIVE_PENDING -> LIVE_PASS` terminal state/admin closure without plugin/runtime or `release-simcore` mutation.
+
+Therefore R2.3 now has real operational evidence for both:
+
+1. the originally targeted explicit non-success terminal contract on v0.64.9; and
+2. the normal successful clean-path PR3 transaction shape on v0.65.0.
+
+Current qualification disposition:
+
+```text
+R2.3 REAL TERMINAL OPERATION PROVEN
+2 PRs to LIVE_PENDING preserved
+3 PRs through normal terminal closure preserved
+new publisher / polling / issue controller = 0
 runtime mutation = NONE
 release-simcore mutation = NONE
 ```

@@ -14,6 +14,24 @@ const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const ISSUE_ENDPOINT_RE = /^\/issues\/([1-9][0-9]*)$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const RUN_ID_RE = /^[1-9][0-9]*$/;
+const MAX_DISPATCH_LOG_BYTES = 64 * 1024;
+const WORKFLOW_NAME = 'MCL Task Lease';
+const TASK_LEASE_RESULT_PREFIX = '{"schemaVersion":1,"mode":"MCL_TASK_LEASE"';
+const WORKFLOW_INPUT_LOG_KEYS = Object.freeze({
+  operation: 'MCL_LEASE_OPERATION',
+  expected_generation: 'MCL_LEASE_EXPECTED_GENERATION',
+  packet_ref: 'MCL_LEASE_PACKET_REF',
+  packet_body_sha256: 'MCL_LEASE_PACKET_BODY_SHA256',
+  route: 'MCL_LEASE_ROUTE',
+  executor: 'MCL_LEASE_EXECUTOR',
+  scopes_json: 'MCL_LEASE_SCOPES_JSON',
+  scope_disposition: 'MCL_LEASE_SCOPE_DISPOSITION',
+  workspace_kind: 'MCL_LEASE_WORKSPACE_KIND',
+  branch: 'MCL_LEASE_BRANCH',
+  worktree: 'MCL_LEASE_WORKTREE',
+  observed_base_sha: 'MCL_LEASE_OBSERVED_BASE_SHA',
+  lease_id: 'MCL_LEASE_ID',
+});
 const AUTHORITY = Object.freeze({
   repositoryMutationAuthorized: false,
   deviceMutationAuthorized: false,
@@ -300,6 +318,116 @@ function findNewRun(beforeIds, runs) {
   return runs.filter((item) => Number.isSafeInteger(item.databaseId) && !beforeIds.has(item.databaseId));
 }
 
+function exactLogInput(log, key, expected) {
+  const marker = WORKFLOW_INPUT_LOG_KEYS[key];
+  if (!marker) return false;
+  const wanted = String(expected ?? '');
+  return String(log || '').split(/\r?\n/).some((line) => {
+    const needle = marker + ':';
+    const index = line.indexOf(needle);
+    return index >= 0 && line.slice(index + needle.length).trim() === wanted;
+  });
+}
+
+function taskLeaseResults(log) {
+  const rows = [];
+  for (const line of String(log || '').split(/\r?\n/)) {
+    const index = line.indexOf(TASK_LEASE_RESULT_PREFIX);
+    if (index < 0) continue;
+    try {
+      const value = JSON.parse(line.slice(index));
+      if (value?.schemaVersion === 1 && value?.mode === 'MCL_TASK_LEASE') rows.push(value);
+    } catch {
+      // Malformed task-lease output remains unproven.
+    }
+  }
+  return rows;
+}
+
+function resultMatchesPlan(result, plan) {
+  if (!result || result.leaseId !== plan.leaseId
+      || !Number.isSafeInteger(result.generation)) return false;
+  if (plan.operation === 'acquire') {
+    return ['ACQUIRE_UPDATED', 'ACQUIRE_NOOP'].includes(result.status);
+  }
+  if (plan.operation === 'release') {
+    return ['RELEASE_UPDATED', 'RELEASE_NOOP'].includes(result.status);
+  }
+  return false;
+}
+
+function inspectDispatchCandidate({repo, candidate, plan, runner}) {
+  const runId = normalizeRunId(candidate?.databaseId);
+  if (!runId) return {state: 'NO_MATCH'};
+  const viewed = runner(['run', 'view', String(runId), '--repo', repo, '--json',
+    'databaseId,headSha,status,conclusion,event,url,workflowName']);
+  let info = null;
+  try { info = JSON.parse(viewed.stdout || '{}'); } catch { info = null; }
+  if (viewed.code !== 0 || !info) return {state: 'UNKNOWN', runId};
+  if (info.databaseId !== runId || info.event !== 'workflow_dispatch'
+      || info.workflowName !== WORKFLOW_NAME) return {state: 'NO_MATCH', runId};
+  if (info.status !== 'completed') return {state: 'PENDING', runId};
+
+  const logged = runner(['run', 'view', String(runId), '--repo', repo, '--log']);
+  if (logged.code !== 0) return {state: 'UNKNOWN', runId};
+  const log = logged.stdout || '';
+  if (Buffer.byteLength(log, 'utf8') > MAX_DISPATCH_LOG_BYTES) {
+    return {state: 'UNKNOWN', runId, reasonCode: 'DISPATCH_RUN_LOG_TOO_LARGE'};
+  }
+  for (const [key, value] of Object.entries(plan.workflowInputs || {})) {
+    if (!exactLogInput(log, key, value)) return {state: 'NO_MATCH', runId};
+  }
+  if (info.conclusion !== 'success') {
+    return {state: 'MATCH_FAILURE', runId, runConclusion: info.conclusion || null};
+  }
+
+  const matchingResults = taskLeaseResults(log).filter((value) => resultMatchesPlan(value, plan));
+  if (matchingResults.length !== 1) {
+    return {state: 'UNKNOWN', runId,
+      reasonCode: matchingResults.length > 1
+        ? 'DISPATCH_RUN_RESULT_AMBIGUOUS' : 'DISPATCH_RUN_RESULT_UNPROVEN'};
+  }
+  return {
+    state: 'MATCH_SUCCESS', runId, runConclusion: 'success',
+    observedGeneration: matchingResults[0].generation,
+  };
+}
+
+function noRunReadbackEvidenceRef(plan, generation) {
+  return 'receipt:mcl-task-lease-readback:' + plan.operation + ':' + plan.leaseId
+    + ':generation:' + generation;
+}
+
+function reconcileNoRunReadback(plan, current) {
+  if (current?.status !== 'READY' || !Number.isSafeInteger(plan?.ledgerGeneration)
+      || !SHA256_RE.test(plan?.leaseId || '')) return null;
+  const expectedGeneration = plan.ledgerGeneration + 1;
+  if (current.ledgerGeneration !== expectedGeneration) return null;
+  const active = current.ledgerState?.activeLeases || [];
+  if (plan.operation === 'acquire') {
+    const matches = active.filter((item) => item.leaseId === plan.leaseId);
+    if (matches.length !== 1) return null;
+    const exact = matches[0];
+    if (exact.packetRef !== plan.workflowInputs?.packet_ref) return null;
+    if (plan.workflowInputs?.packet_body_sha256
+        && exact.packetBodySha256 !== plan.workflowInputs.packet_body_sha256) return null;
+  } else if (plan.operation === 'release') {
+    if (active.some((item) => item.leaseId === plan.leaseId)) return null;
+    const last = current.ledgerState?.lastRelease;
+    if (!last || last.leaseId !== plan.leaseId
+        || last.releasedAtGeneration !== expectedGeneration) return null;
+  } else {
+    return null;
+  }
+  return output('DISPATCH_READBACK_COMPLETE', [], {
+    runId: null,
+    runConclusion: null,
+    observedGeneration: expectedGeneration,
+    leaseId: plan.leaseId,
+    evidenceRef: noRunReadbackEvidenceRef(plan, expectedGeneration),
+  });
+}
+
 async function dispatchPlan({repo, plan, client, runner = defaultRunner, sleepFn = sleepMs, maxPolls = 20}) {
   if (plan.status !== 'PLAN_READY') return plan;
   const before = listRuns(repo, runner);
@@ -307,33 +435,73 @@ async function dispatchPlan({repo, plan, client, runner = defaultRunner, sleepFn
   const beforeIds = new Set(before.runs.map((item) => item.databaseId));
   const dispatched = runner(buildDispatchArgs(repo, plan.workflowInputs));
   if (dispatched.code !== 0) return output('DISPATCH_FAILED', ['WORKFLOW_DISPATCH_COMMAND_FAILED']);
-  let candidate = null;
+
+  let selected = null;
+  let selectedFailure = null;
+  let sawFresh = false;
+  let sawUnknown = false;
   for (let attempt = 0; attempt < maxPolls; attempt += 1) {
     const listed = listRuns(repo, runner);
     if (!listed.ok) return output('UNKNOWN', [listed.reason]);
     const fresh = findNewRun(beforeIds, listed.runs);
-    if (fresh.length > 1) return output('UNKNOWN', ['DISPATCH_RUN_AMBIGUOUS']);
-    if (fresh.length === 1) { candidate = fresh[0]; break; }
+    if (fresh.length) sawFresh = true;
+    const inspected = fresh.map((candidate) =>
+      inspectDispatchCandidate({repo, candidate, plan, runner}));
+    const exact = inspected.filter((item) =>
+      ['MATCH_SUCCESS', 'MATCH_FAILURE'].includes(item.state));
+    if (exact.length > 1) return output('UNKNOWN', ['DISPATCH_RUN_AMBIGUOUS']);
+    const pending = inspected.some((item) => item.state === 'PENDING');
+    const unknown = inspected.some((item) => item.state === 'UNKNOWN');
+    sawUnknown = sawUnknown || unknown;
+    if (exact.length === 1 && !pending && !unknown) {
+      if (exact[0].state === 'MATCH_SUCCESS') selected = exact[0];
+      else selectedFailure = exact[0];
+      break;
+    }
     sleepFn(1000);
   }
-  if (!candidate) return output('UNKNOWN', ['DISPATCH_RUN_NOT_FOUND']);
-  const runId = candidate.databaseId;
-  const watched = runner(['run', 'watch', String(runId), '--repo', repo, '--exit-status']);
-  const viewed = runner(['run', 'view', String(runId), '--repo', repo, '--json',
-    'databaseId,headSha,status,conclusion,event,url']);
-  let runInfo = null;
-  try { runInfo = JSON.parse(viewed.stdout || '{}'); } catch { runInfo = null; }
-  if (viewed.code !== 0 || !runInfo) return output('UNKNOWN', ['DISPATCH_RUN_READ_FAILED'], {runId});
+  if (selectedFailure) {
+    return output('DISPATCH_FAILED', ['WORKFLOW_FAILED_NO_AUTO_RETRY'], {
+      runId: selectedFailure.runId,
+      runConclusion: selectedFailure.runConclusion,
+      observedGeneration: null,
+      leaseId: plan.leaseId,
+    });
+  }
+  if (!selected) {
+    if (!sawFresh && !sawUnknown) {
+      const current = await readContext({client, packetRef: plan.workflowInputs.packet_ref});
+      const reconciled = reconcileNoRunReadback(plan, current);
+      if (reconciled) return reconciled;
+    }
+    return output('UNKNOWN', [
+      sawFresh || sawUnknown ? 'DISPATCH_RUN_ATTRIBUTION_UNRESOLVED' : 'DISPATCH_RUN_NOT_FOUND',
+    ]);
+  }
+
+  const runId = selected.runId;
+  runner(['run', 'watch', String(runId), '--repo', repo, '--exit-status']);
+  const final = inspectDispatchCandidate({
+    repo, candidate: {databaseId: runId}, plan, runner,
+  });
+  if (final.state === 'MATCH_FAILURE') {
+    return output('DISPATCH_FAILED', ['WORKFLOW_FAILED_NO_AUTO_RETRY'], {
+      runId, runConclusion: final.runConclusion, observedGeneration: null, leaseId: plan.leaseId,
+    });
+  }
+  if (final.state !== 'MATCH_SUCCESS') {
+    return output('UNKNOWN', [final.reasonCode || 'DISPATCH_RUN_IDENTITY_UNPROVEN'], {runId});
+  }
+
   const current = await readContext({client, packetRef: plan.workflowInputs.packet_ref});
-  const common = {runId, runConclusion: runInfo.conclusion || null,
-    observedGeneration: current.ledgerGeneration, leaseId: plan.leaseId};
-  if (watched.code !== 0 || runInfo.conclusion !== 'success') {
-    return output('DISPATCH_FAILED', ['WORKFLOW_FAILED_NO_AUTO_RETRY'], common);
+  if (current.status !== 'READY') {
+    return output('UNKNOWN', ['DISPATCH_LEDGER_READBACK_UNPROVEN'], {
+      runId, runConclusion: 'success', observedGeneration: final.observedGeneration,
+      leaseId: plan.leaseId,
+    });
   }
-  const logged = runner(['run', 'view', String(runId), '--repo', repo, '--log']);
-  if (logged.code !== 0 || !logged.stdout.includes(plan.leaseId)) {
-    return output('UNKNOWN', ['DISPATCH_RUN_IDENTITY_UNPROVEN'], common);
-  }
+  const common = {runId, runConclusion: 'success',
+    observedGeneration: final.observedGeneration, leaseId: plan.leaseId};
   const active = current.ledgerState?.activeLeases || [];
   if (plan.operation === 'acquire' && !active.some((item) => item.leaseId === plan.leaseId)) {
     return output('UNKNOWN', ['ACQUIRE_READBACK_MISSING'], common);

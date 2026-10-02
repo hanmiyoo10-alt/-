@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -9,6 +10,7 @@ const test = require('node:test');
 const ROOT = path.resolve(__dirname, '../../../../../..');
 const owner = require('../validation-merge-owner.cjs');
 const stageReceipt = require('../../stage-receipt.cjs');
+const {stableHash} = require('../../handoff.cjs');
 const agentView = require('../../agent-decision-view.cjs');
 const scopeOverlap = require('../../../work-system/scope-overlap.cjs');
 
@@ -17,6 +19,9 @@ const PR = 3000;
 const BASE = 'a'.repeat(40);
 const HEAD = 'b'.repeat(40);
 const MERGE = 'c'.repeat(40);
+const RECOVERY_RUN = 701;
+const RECOVERY_VERIFY = 801;
+const RECOVERY_REQUIRED = 802;
 const TICK = String.fromCharCode(96);
 const PATHS = [
   '.github/plugin-control-plane/canonical-main/tests/work-system-contract.cjs',
@@ -38,6 +43,47 @@ function packetBody(paths = PATHS, state = 'IN_PROGRESS', stage = 'VALIDATION_ME
     '## Interaction stage',
     '- Current stage: ' + TICK + stage + TICK,
   ].join('\n');
+}
+function packetActivityEvidenceSet({
+  candidateRef = '#9901',
+  requesterRef = '#' + PACKET,
+  relationship = 'PARENT_WAITING_ON_SUCCESSOR',
+  evidenceOverrides = {},
+} = {}) {
+  return {
+    schemaVersion: 1,
+    mode: owner.PACKET_ACTIVITY_EVIDENCE_MODE,
+    requesterRef,
+    candidates: [{
+      candidateRef,
+      evidence: {
+        schemaVersion: 1,
+        mode: 'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE',
+        candidateRef,
+        requesterRef,
+        relationship,
+        repositoryMutationActive: false,
+        activeLease: false,
+        overlappingOpenPr: false,
+        sequencingExplicit: true,
+        sourceRefs: [candidateRef, requesterRef],
+        ...evidenceOverrides,
+      },
+    }],
+  };
+}
+function overlappingPacket(number = 9901) {
+  return {
+    number,
+    state: 'open',
+    body: [
+      '<!-- canonical-main-work-packet:v1 -->',
+      '## State',
+      TICK + 'IN_PROGRESS' + TICK,
+      '## Bounded write scope',
+      '1. ' + TICK + 'path:' + PATHS[0] + TICK,
+    ].join('\n'),
+  };
 }
 
 function opsBody(main = BASE, overrides = {}) {
@@ -105,6 +151,54 @@ function prObject(overrides = {}) {
     ...overrides,
   };
 }
+function naturalRun(overrides = {}) {
+  return {
+    id: 501,
+    name: 'SimCore CI',
+    path: '.github/workflows/simcore-ci.yml',
+    event: 'pull_request',
+    head_sha: HEAD,
+    status: 'completed',
+    conclusion: 'success',
+    pull_requests: [{number: PR}],
+    ...overrides,
+  };
+}
+function recoveryRun(overrides = {}) {
+  return {
+    id: RECOVERY_RUN,
+    name: 'SimCore CI',
+    path: '.github/workflows/simcore-ci.yml',
+    event: 'workflow_dispatch',
+    head_sha: HEAD,
+    head_branch: 'server/mcl-packet-2586',
+    status: 'completed',
+    conclusion: 'success',
+    pull_requests: [],
+    ...overrides,
+  };
+}
+function recoveryJobs() {
+  return [
+    {id: RECOVERY_VERIFY, name: 'Verify', status: 'completed', conclusion: 'success'},
+    {id: RECOVERY_REQUIRED, name: 'Required', status: 'completed', conclusion: 'success'},
+  ];
+}
+function recoveryJobLogs({
+  profile = 'PR_RECOVERY', base = BASE, head = HEAD, conclusion = 'NOOP',
+} = {}) {
+  return {
+    [RECOVERY_VERIFY]: [
+      'INPUT_PROFILE: ' + profile,
+      'INPUT_PR_BASE: ' + base,
+      'INPUT_PR_HEAD: ' + head,
+    ].join('\n'),
+    [RECOVERY_REQUIRED]: [
+      'PROFILE: ' + profile,
+      'profile=' + profile + ' conclusion=' + conclusion + ' verify=success',
+    ].join('\n'),
+  };
+}
 
 function emptyThreads(nodes = []) {
   return {
@@ -118,12 +212,43 @@ function emptyThreads(nodes = []) {
   };
 }
 
+function strictCurrentness(overrides = {}) {
+  return {
+    data: {
+      repository: {
+        pullRequest: {
+          number: PR,
+          headRefOid: HEAD,
+          baseRefOid: BASE,
+          mergeStateStatus: 'CLEAN',
+          ...overrides,
+        },
+      },
+    },
+  };
+}
+
+function compareObject(overrides = {}) {
+  return {
+    status: 'ahead',
+    ahead_by: 1,
+    behind_by: 0,
+    total_commits: 1,
+    base_commit: {sha: BASE},
+    merge_base_commit: {sha: BASE},
+    ...overrides,
+  };
+}
+
 function fixtureClient(options = {}) {
   const calls = [];
   let branchReads = 0;
   let packetReads = 0;
   let prReads = 0;
   let overlapIssueReads = 0;
+  let strictProtectionReads = 0;
+  let strictGraphqlReads = 0;
+  let compareReads = 0;
   const otherPacket = {
     number: 9901,
     state: 'open',
@@ -143,6 +268,11 @@ function fixtureClient(options = {}) {
         branchReads += 1;
         const sha = options.branchSequence?.[branchReads - 1] || BASE;
         return {commit: {sha}};
+      }
+      if (endpoint === '/branches/main/protection/required_status_checks') {
+        strictProtectionReads += 1;
+        return options.strictProtectionSequence?.[strictProtectionReads - 1]
+          ?? options.strictProtection ?? {strict: true};
       }
       if (endpoint === '/issues/485') {
         return {state: 'open', body: options.opsBody || opsBody()};
@@ -174,6 +304,11 @@ function fixtureClient(options = {}) {
       if (endpoint.startsWith('/pulls/' + PR + '/requested_reviewers?')) {
         return options.requested || {users: [], teams: []};
       }
+      if (endpoint === '/compare/' + BASE + '...' + HEAD) {
+        compareReads += 1;
+        return options.compareSequence?.[compareReads - 1]
+          ?? options.compare ?? compareObject();
+      }
       if (endpoint === '/actions/runs?head_sha=' + HEAD + '&per_page=100') {
         const runs = options.runs || [{
           id: 501,
@@ -187,11 +322,15 @@ function fixtureClient(options = {}) {
         }];
         return {total_count: runs.length, workflow_runs: runs};
       }
-      if (endpoint === '/actions/runs/501/jobs?per_page=100') {
-        const jobs = options.jobs || [
-          {id: 601, name: 'Verify', status: 'completed', conclusion: 'success'},
-          {id: 602, name: 'Required', status: 'completed', conclusion: 'success'},
-        ];
+      const jobsMatch = /^\/actions\/runs\/([1-9][0-9]*)\/jobs\?per_page=100$/.exec(endpoint);
+      if (jobsMatch) {
+        const runId = Number(jobsMatch[1]);
+        const jobs = options.jobsByRun?.[runId]
+          || (runId === 501 ? options.jobs : null)
+          || (runId === 501 ? [
+            {id: 601, name: 'Verify', status: 'completed', conclusion: 'success'},
+            {id: 602, name: 'Required', status: 'completed', conclusion: 'success'},
+          ] : []);
         return {total_count: jobs.length, jobs};
       }
       if (endpoint.startsWith('/issues?state=open&per_page=100&page=')) {
@@ -219,19 +358,52 @@ function fixtureClient(options = {}) {
       }
       throw new Error('unexpected endpoint ' + endpoint);
     },
-    async graphql() {
-      if (options.graphqlError) throw new Error('fixture graphql error');
-      return options.threads || emptyThreads();
+    async fetchText(endpoint) {
+      calls.push('text:' + endpoint);
+      if (options.textReadError) throw new Error('fixture text read error');
+      const match = /^\/actions\/jobs\/([1-9][0-9]*)\/logs$/.exec(endpoint);
+      if (!match) throw new Error('unexpected text endpoint ' + endpoint);
+      return options.jobLogs?.[Number(match[1])] || '';
     },
+    async graphql(query) {
+      if (options.graphqlError) throw new Error('fixture graphql error');
+      if (query === owner.REVIEW_THREADS_QUERY) return options.threads || emptyThreads();
+      if (query === owner.STRICT_CURRENTNESS_QUERY) {
+        strictGraphqlReads += 1;
+        return options.strictGraphqlSequence?.[strictGraphqlReads - 1]
+          ?? options.strictGraphql ?? strictCurrentness();
+      }
+      throw new Error('unexpected graphql query');
+    },
+  };
+  return client;
+}
+function fixtureClientWithOverlap({packets = [], otherPrFiles = ['docs/unrelated.md']} = {}) {
+  const client = fixtureClient();
+  const originalApi = client.api.bind(client);
+  client.api = async (endpoint) => {
+    if (endpoint.startsWith('/issues?state=open&per_page=100&page=')) {
+      const page = Number(new URL('https://x' + endpoint).searchParams.get('page'));
+      return page === 1
+        ? [{number: PACKET, state: 'open', body: packetBody()}, ...packets]
+        : [];
+    }
+    if (endpoint.startsWith('/pulls/9902/files?')) {
+      return otherPrFiles.map((filename) => ({filename}));
+    }
+    return originalApi(endpoint);
   };
   return client;
 }
 
 test('CLI exposes only inspect/finalize and bounded fixed arguments', () => {
-  assert.equal(owner.parseArgs([
+  const inspectArgs = owner.parseArgs([
     'inspect', '--packet', '#2586', '--pr', '3000',
     '--implementation-receipt-file', '/tmp/receipt.json',
-  ]).command, 'inspect');
+    '--packet-activity-evidence-file', '/tmp/activity.json',
+  ]);
+  assert.equal(inspectArgs.command, 'inspect');
+  assert.equal(inspectArgs.packetActivityEvidenceFile, '/tmp/activity.json');
   assert.equal(owner.parseArgs(['finalize', '--packet', '2586', '--pr', '3000']).command,
     'finalize');
   assert.throws(() => owner.parseArgs([
@@ -250,10 +422,30 @@ test('live client falls back to fixed gh read transport when token env is absent
     if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/branches/main') {
       return {code: 0, stdout: JSON.stringify({commit: {sha: BASE}}), stderr: ''};
     }
+    if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/issues/' + PACKET) {
+      return {code: 0, stdout: JSON.stringify({number: PACKET, state: 'open', body: packetBody()}), stderr: ''};
+    }
+    if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/pulls/' + PR + '/files?per_page=100&page=1') {
+      return {code: 0, stdout: JSON.stringify(PATHS.map((filename) => ({filename}))), stderr: ''};
+    }
+    if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/branches/main/protection/required_status_checks') {
+      return {code: 0, stdout: JSON.stringify({strict: true}), stderr: ''};
+    }
+    if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/compare/' + BASE + '...' + HEAD) {
+      return {code: 0, stdout: JSON.stringify(compareObject()), stderr: ''};
+    }
     if (args[0] === 'api' && args[1] === 'repos/' + owner.REPO + '/issues/' + PR + '/comments?per_page=100&page=1') {
       return {code: 0, stdout: '[]', stderr: ''};
     }
+    if (args[0] === 'api'
+        && args[1] === 'repos/' + owner.REPO + '/actions/jobs/' + RECOVERY_REQUIRED + '/logs') {
+      return {code: 0, stdout: 'PROFILE: PR_RECOVERY', stderr: ''};
+    }
     if (args[0] === 'api' && args[1] === 'graphql') {
+      const queryArg = args.find((value) => String(value).startsWith('query='));
+      if (queryArg === 'query=' + owner.STRICT_CURRENTNESS_QUERY) {
+        return {code: 0, stdout: JSON.stringify(strictCurrentness()), stderr: ''};
+      }
       return {code: 0, stdout: JSON.stringify(emptyThreads()), stderr: ''};
     }
     return {code: 1, stdout: '', stderr: 'fixture denied'};
@@ -262,31 +454,101 @@ test('live client falls back to fixed gh read transport when token env is absent
     throw new Error('fetch must not be used without env token');
   }});
   assert.deepEqual(await client.api('/branches/main'), {commit: {sha: BASE}});
+  assert.deepEqual(await client.api('/issues/' + PACKET), {
+    number: PACKET, state: 'open', body: packetBody(),
+  });
+  assert.deepEqual(await client.api('/pulls/' + PR + '/files?per_page=100&page=1'),
+    PATHS.map((filename) => ({filename})));
+  assert.deepEqual(await client.api('/branches/main/protection/required_status_checks'), {strict: true});
+  assert.deepEqual(await client.api('/compare/' + BASE + '...' + HEAD), compareObject());
   assert.deepEqual(await client.api('/issues/' + PR + '/comments?per_page=100&page=1'), []);
+  assert.equal(
+    await client.fetchText('/actions/jobs/' + RECOVERY_REQUIRED + '/logs'),
+    'PROFILE: PR_RECOVERY',
+  );
+  const jobLogCall = calls.find((args) => args.includes(
+    'repos/' + owner.REPO + '/actions/jobs/' + RECOVERY_REQUIRED + '/logs'));
+  assert.ok(jobLogCall);
+  assert.ok(jobLogCall.includes('--allow-escape-sequences'));
+  assert.equal(jobLogCall.some((value) => String(value).includes('text/plain')), false);
   assert.deepEqual(await client.graphql(owner.REVIEW_THREADS_QUERY, {
     owner: 'hanmiyoo10-alt', name: '-', number: PR,
   }), emptyThreads());
+  assert.deepEqual(await client.graphql(owner.STRICT_CURRENTNESS_QUERY, {
+    owner: 'hanmiyoo10-alt', name: '-', number: PR,
+  }), strictCurrentness());
   assert.ok(calls.every((args) => args[0] === 'api'));
   assert.equal(calls.some((args) => args.includes('--method') && args.includes('POST')), false);
   assert.equal(calls.some((args) => args.join(' ').includes('token')), false);
   await assert.rejects(client.api('/issues/' + PR + '/comments'), /gh read endpoint forbidden/);
   await assert.rejects(client.api('/releases'), /gh read endpoint forbidden/);
+  await assert.rejects(client.fetchText('/actions/runs/501/logs'), /gh text endpoint forbidden/);
+  await assert.rejects(client.fetchText('/releases/1'), /gh text endpoint forbidden/);
   await assert.rejects(client.graphql('query{viewer{login}}', {
     owner: 'hanmiyoo10-alt', name: '-', number: PR,
   }), /gh GraphQL query forbidden/);
 });
 
+test('default gh fallback terminates a real stalled child at the fixed read lifetime', () => {
+  const originalSpawnSync = childProcess.spawnSync;
+  childProcess.spawnSync = (_command, _args, options) => originalSpawnSync(
+    process.execPath,
+    ['-e', 'setInterval(() => {}, ' + String(owner.GH_READ_TIMEOUT_MS * 4) + ')'],
+    options,
+  );
+  try {
+    const started = Date.now();
+    const result = owner.defaultGhRunner(['api', 'repos/' + owner.REPO + '/issues/' + PACKET]);
+    const elapsed = Date.now() - started;
+    assert.notEqual(result.code, 0);
+    assert(elapsed >= owner.GH_READ_TIMEOUT_MS - 1500, String(elapsed));
+    assert(elapsed < owner.GH_READ_TIMEOUT_MS + 5000, String(elapsed));
+  } finally {
+    childProcess.spawnSync = originalSpawnSync;
+  }
+});
+
+test('gh fallback read failure stays bounded for both fixed REST and GraphQL reads', async () => {
+  const marker = 'PRIVATE_AUTH_MATERIAL';
+  const client = owner.createGhCliReadClient({
+    runner: () => ({code: 1, stdout: '', stderr: marker}),
+  });
+  await assert.rejects(client.api('/issues/' + PACKET), (error) => (
+    error.message === 'gh REST read failed' && !String(error).includes(marker)
+  ));
+  await assert.rejects(client.fetchText('/actions/jobs/' + RECOVERY_REQUIRED + '/logs'), (error) => (
+    error.message === 'gh text read failed' && !String(error).includes(marker)
+  ));
+  await assert.rejects(client.graphql(owner.REVIEW_THREADS_QUERY, {
+    owner: 'hanmiyoo10-alt', name: '-', number: PR,
+  }), (error) => (
+    error.message === 'gh GraphQL read failed' && !String(error).includes(marker)
+  ));
+});
+
 test('explicit env token keeps fixed fetch transport and does not call gh runner', async () => {
   let ghCalls = 0;
+  const fetchCalls = [];
   const responses = [
     {ok: true, status: 200, json: async () => ({commit: {sha: BASE}})},
+    {ok: true, status: 200, text: async () => 'PROFILE: PR_RECOVERY'},
   ];
   const client = owner.createLiveClient({
     env: {GH_TOKEN: 'fixture-token'},
     runner: () => { ghCalls += 1; return {code: 1, stdout: '', stderr: ''}; },
-    fetchImpl: async () => responses.shift(),
+    fetchImpl: async (...args) => {
+      fetchCalls.push(args);
+      return responses.shift();
+    },
   });
   assert.deepEqual(await client.api('/branches/main'), {commit: {sha: BASE}});
+  assert.equal(
+    await client.fetchText('/actions/jobs/' + RECOVERY_REQUIRED + '/logs'),
+    'PROFILE: PR_RECOVERY',
+  );
+  await assert.rejects(client.fetchText('/actions/runs/501/logs'), /github text endpoint forbidden/);
+  assert.equal(fetchCalls.length, 2);
+  assert.equal(fetchCalls[1][1].headers.Accept, 'application/vnd.github+json');
   assert.equal(ghCalls, 0);
 });
 
@@ -295,10 +557,50 @@ test('canonical IMPLEMENTATION_PR receipt is reprojected and bound to PR head', 
   const value = owner.validateImplementationReceipt(receipt, PACKET, PR);
   assert.equal(value.expectedHead, HEAD);
   assert.deepEqual(value.paths, PATHS);
+  assert.ok(receipt.authorityRefs.some((row) => (
+    row.kind === 'PR' && row.locator === 'pr:#' + PR && row.identity === HEAD
+  )));
   const forged = structuredClone(receipt);
   forged.nextLegalAction = 'DONE';
   assert.throws(() => owner.validateImplementationReceipt(forged, PACKET, PR),
     /IMPLEMENTATION_STAGE_RECEIPT_IDENTITY_CONFLICT/);
+});
+
+test('legacy PR authority shape cannot cross the producer/validation boundary', () => {
+  const legacyProjected = implementationReceipt({
+    authorityRefs: [
+      {kind: 'GIT_REF', locator: 'refs/heads/main', identity: BASE},
+      {kind: 'PR', locator: '#' + PR, identity: 'head:' + HEAD},
+      {kind: 'COMMIT', locator: 'commit:' + HEAD, identity: HEAD},
+    ],
+  });
+  assert.equal(legacyProjected.status, 'INVALID');
+  assert.ok(legacyProjected.reasonCodes.some((code) => (
+    code.startsWith('INPUT_AUTHORITY_PR_LOCATOR_INVALID:')
+  )));
+  assert.ok(legacyProjected.reasonCodes.some((code) => (
+    code.startsWith('INPUT_AUTHORITY_PR_IDENTITY_INVALID:')
+  )));
+
+  const legacyHistoricalShape = structuredClone(implementationReceipt());
+  legacyHistoricalShape.authorityRefs = legacyHistoricalShape.authorityRefs.map((row) => (
+    row.kind === 'PR'
+      ? {...row, locator: '#' + PR, identity: 'head:' + HEAD}
+      : row
+  ));
+  const {receiptDigest: _legacyDigest, ...legacyHistoricalDraft} = legacyHistoricalShape;
+  legacyHistoricalShape.receiptDigest = stableHash(legacyHistoricalDraft);
+  const legacyHistoricalText = stageReceipt.renderStageReceipt(legacyHistoricalShape);
+  const legacyHistoricalParsed = stageReceipt.parseRenderedStageReceipt(legacyHistoricalText);
+  assert.equal(legacyHistoricalParsed.status, 'VALID');
+  assert.equal(
+    legacyHistoricalParsed.value.authorityRefs.find((row) => row.kind === 'PR').locator,
+    '#' + PR,
+  );
+  assert.throws(
+    () => owner.validateImplementationReceipt(legacyHistoricalParsed.value, PACKET, PR),
+    /IMPLEMENTATION_STAGE_RECEIPT_IDENTITY_CONFLICT/,
+  );
 });
 
 test('current main capture requires exact CLEAR PASS and UNKNOWN NONE', async () => {
@@ -330,6 +632,148 @@ test('inspect PASS returns canonical v2 readiness with no merge effect', async (
 });
 
 
+test('strict=false preserves existing merge-ready semantics without ancestry enforcement', async () => {
+  const client = fixtureClient({strictProtection: {strict: false}});
+  const result = await owner.inspectWithClient({
+    client,
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.strictProtection, false);
+  assert.equal(result.report.output.strictUpToDate, 'NOT_APPLICABLE');
+  assert.equal(client.calls.some((endpoint) => endpoint.startsWith('/compare/')), false);
+});
+
+test('strict=true exact current-main ancestry passes the new barrier', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient(),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.strictProtection, true);
+  assert.equal(result.report.mergeStateStatus, 'CLEAN');
+  assert.equal(result.report.ancestryStatus, 'ahead');
+  assert.equal(result.report.mergeBaseSha, BASE);
+  assert.equal(result.report.output.strictUpToDate, 'PASS');
+  assert.ok(result.receipt.steps.some((row) => row.name === 'strict-protection'));
+  assert.ok(result.receipt.steps.some((row) => row.name === 'strict-pr-merge-state'));
+  assert.ok(result.receipt.steps.some((row) => row.name === 'strict-main-ancestry'));
+  assert.ok(result.receipt.steps.some((row) => row.name === 'final-strict-main-ancestry'));
+});
+
+test('strict BEHIND blocks even when exact-head Required is successful', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({strictGraphql: strictCurrentness({mergeStateStatus: 'BEHIND'})}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('PR_HEAD_BEHIND_STRICT_BASE'));
+  assert.equal(result.receipt.nextLegalAction, 'CURRENTIZE_PR_THROUGH_EXISTING_OWNER');
+  assert.equal(result.receipt.counters.find((row) => row.name === 'merge_effects_performed').value, 0);
+});
+
+test('strict diverged ancestry blocks and routes to existing currentization owner', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      compare: compareObject({
+        status: 'diverged', ahead_by: 1, behind_by: 1,
+        merge_base_commit: {sha: 'e'.repeat(40)},
+      }),
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('PR_HEAD_NOT_CURRENT_MAIN_ANCESTOR'));
+  assert.equal(result.receipt.nextLegalAction, 'CURRENTIZE_PR_THROUGH_EXISTING_OWNER');
+});
+
+test('strict merge-base mismatch blocks even if compare status says ahead', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      compare: compareObject({merge_base_commit: {sha: 'e'.repeat(40)}}),
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('PR_HEAD_NOT_CURRENT_MAIN_ANCESTOR'));
+});
+
+test('strict merge-state UNKNOWN remains UNKNOWN', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({strictGraphql: strictCurrentness({mergeStateStatus: 'UNKNOWN'})}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'UNKNOWN');
+  assert.ok(result.receipt.reasonCodes.includes('PR_MERGE_STATE_UNKNOWN'));
+});
+
+test('strict protection missing or malformed remains UNKNOWN', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({strictProtection: {}}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'UNKNOWN');
+  assert.ok(result.receipt.reasonCodes.includes('STRICT_PROTECTION_UNKNOWN'));
+});
+
+test('strict compare malformed evidence remains UNKNOWN', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({compare: {status: 'ahead'}}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'UNKNOWN');
+  assert.ok(result.receipt.reasonCodes.includes('STRICT_COMPARE_UNKNOWN'));
+});
+
+test('final strict barrier catches late BEHIND movement', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      strictGraphqlSequence: [
+        strictCurrentness({mergeStateStatus: 'CLEAN'}),
+        strictCurrentness({mergeStateStatus: 'BEHIND'}),
+      ],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('PR_HEAD_BEHIND_STRICT_BASE'));
+  assert.equal(result.receipt.nextLegalAction, 'CURRENTIZE_PR_THROUGH_EXISTING_OWNER');
+  assert.ok(result.receipt.steps.some((row) => (
+    row.name === 'final-strict-pr-merge-state' && row.result === 'BLOCKED'
+  )));
+});
+
+test('final strict protection movement cannot become PASS', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      strictProtectionSequence: [{strict: true}, {strict: false}],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'UNKNOWN');
+  assert.ok(result.receipt.reasonCodes.includes('VALIDATION_STATE_CHANGED_DURING_CAPTURE'));
+});
+
 test('PR base or path drift fails closed', async () => {
   const baseDrift = await owner.inspectWithClient({
     client: fixtureClient({pr: prObject({base: {ref: 'main', sha: 'f'.repeat(40)}})}),
@@ -350,7 +794,7 @@ test('PR base or path drift fails closed', async () => {
   assert.ok(pathDrift.receipt.reasonCodes.includes('PR_CHANGED_FILES_SCOPE_MISMATCH'));
 });
 
-test('packet and implementation receipt scopes must agree exactly', async () => {
+test('implementation receipt and live PR changed files still agree exactly', async () => {
   const narrowed = implementationReceipt({
     scope: {
       paths: PATHS.slice(0, 4),
@@ -364,6 +808,59 @@ test('packet and implementation receipt scopes must agree exactly', async () => 
     packetNumber: PACKET,
     prNumber: PR,
     implementationReceipt: narrowed,
+  });
+  assert.equal(result.receipt.result, 'CONFLICT');
+  assert.ok(result.receipt.reasonCodes.includes('PR_CHANGED_FILES_SCOPE_MISMATCH'));
+});
+
+test('packet trailing-prefix ceiling admits narrower exact receipt and PR files', async () => {
+  const exact = PATHS.filter((value) => value.includes('/work-harness/validation-merge/'));
+  const receipt = implementationReceipt({
+    scope: {
+      paths: exact,
+      diffRequired: true,
+      diffIdentity: 'd'.repeat(64),
+      diffEvidenceLocator: 'commit:' + HEAD,
+    },
+  });
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      packetBody: packetBody([
+        '.github/plugin-control-plane/canonical-main/work-harness/validation-merge/**',
+      ]),
+      prFiles: exact,
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: receipt,
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.receipt.reasonCodes.length, 0);
+});
+
+test('exact changed file outside packet prefix ceiling remains CONFLICT', async () => {
+  const exact = [
+    ...PATHS.filter((value) => value.includes('/work-harness/validation-merge/')),
+    'docs/outside.md',
+  ].sort();
+  const receipt = implementationReceipt({
+    scope: {
+      paths: exact,
+      diffRequired: true,
+      diffIdentity: 'd'.repeat(64),
+      diffEvidenceLocator: 'commit:' + HEAD,
+    },
+  });
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      packetBody: packetBody([
+        '.github/plugin-control-plane/canonical-main/work-harness/validation-merge/**',
+      ]),
+      prFiles: exact,
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: receipt,
   });
   assert.equal(result.receipt.result, 'CONFLICT');
   assert.ok(result.receipt.reasonCodes.includes('IMPLEMENTATION_PACKET_SCOPE_MISMATCH'));
@@ -441,17 +938,123 @@ test('Required missing, ambiguous, or failed never becomes PASS', async () => {
   assert.ok(missing.receipt.reasonCodes.includes('REQUIRED_RUN_MISSING'));
 
   const failed = await owner.inspectWithClient({
-    client: fixtureClient({runs: [{
-      id: 501, name: 'SimCore CI', path: '.github/workflows/simcore-ci.yml',
-      event: 'pull_request', head_sha: HEAD, status: 'completed', conclusion: 'failure',
-      pull_requests: [{number: PR}],
-    }]}),
+    client: fixtureClient({
+      runs: [naturalRun({conclusion: 'failure'}), recoveryRun()],
+      jobsByRun: {[RECOVERY_RUN]: recoveryJobs()},
+      jobLogs: recoveryJobLogs(),
+    }),
     packetNumber: PACKET,
     prNumber: PR,
     implementationReceipt: implementationReceipt(),
   });
   assert.equal(failed.receipt.result, 'FAIL');
   assert.ok(failed.receipt.reasonCodes.includes('REQUIRED_RUN_FAILED'));
+});
+
+test('natural pull_request success remains preferred over PR_RECOVERY', async () => {
+  const client = fixtureClient({
+    runs: [naturalRun(), recoveryRun()],
+    jobsByRun: {[RECOVERY_RUN]: recoveryJobs()},
+    jobLogs: recoveryJobLogs(),
+  });
+  const evidence = await owner.readRequiredEvidence(client, HEAD, PR);
+  assert.equal(evidence.runId, 501);
+  assert.equal(evidence.jobId, 602);
+  assert.equal(client.calls.some((value) => String(value).startsWith('text:')), false);
+});
+
+test('queued natural validation may use one exact log-proven PR_RECOVERY', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      runs: [
+        naturalRun({status: 'queued', conclusion: null}),
+        recoveryRun(),
+      ],
+      jobsByRun: {[RECOVERY_RUN]: recoveryJobs()},
+      jobLogs: recoveryJobLogs(),
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.requiredRunId, RECOVERY_RUN);
+  assert.equal(result.report.requiredJobId, RECOVERY_REQUIRED);
+});
+
+test('missing natural validation may use one exact log-proven PR_RECOVERY', async () => {
+  const evidence = await owner.readRequiredEvidence(fixtureClient({
+    runs: [recoveryRun()],
+    jobsByRun: {[RECOVERY_RUN]: recoveryJobs()},
+    jobLogs: recoveryJobLogs(),
+  }), HEAD, PR);
+  assert.equal(evidence.runId, RECOVERY_RUN);
+  assert.equal(evidence.jobId, RECOVERY_REQUIRED);
+});
+
+test('PR_RECOVERY with wrong profile, base, or head is never qualifying', async () => {
+  for (const logs of [
+    recoveryJobLogs({profile: 'MAIN_HEALTH'}),
+    recoveryJobLogs({base: 'c'.repeat(40)}),
+    recoveryJobLogs({head: 'd'.repeat(40)}),
+  ]) {
+    await assert.rejects(owner.readRequiredEvidence(fixtureClient({
+      runs: [recoveryRun()],
+      jobsByRun: {[RECOVERY_RUN]: recoveryJobs()},
+      jobLogs: logs,
+    }), HEAD, PR), (error) => (
+      error instanceof owner.OwnerError
+      && error.reasonCodes.includes('REQUIRED_RUN_MISSING')
+    ));
+  }
+});
+
+test('multiple exact qualifying PR_RECOVERY runs are ambiguous', async () => {
+  const secondRun = 702;
+  const secondVerify = 803;
+  const secondRequired = 804;
+  const logs = recoveryJobLogs();
+  const secondLogs = {
+    [secondVerify]: logs[RECOVERY_VERIFY],
+    [secondRequired]: logs[RECOVERY_REQUIRED],
+  };
+  await assert.rejects(owner.readRequiredEvidence(fixtureClient({
+    runs: [recoveryRun(), recoveryRun({id: secondRun})],
+    jobsByRun: {
+      [RECOVERY_RUN]: recoveryJobs(),
+      [secondRun]: [
+        {id: secondVerify, name: 'Verify', status: 'completed', conclusion: 'success'},
+        {id: secondRequired, name: 'Required', status: 'completed', conclusion: 'success'},
+      ],
+    },
+    jobLogs: {...logs, ...secondLogs},
+  }), HEAD, PR), (error) => (
+    error instanceof owner.OwnerError
+    && error.reasonCodes.includes('PR_RECOVERY_RUN_AMBIGUOUS')
+  ));
+});
+
+test('PR_RECOVERY log read failures and oversized logs fail closed', async () => {
+  await assert.rejects(owner.readRequiredEvidence(fixtureClient({
+    runs: [recoveryRun()],
+    jobsByRun: {[RECOVERY_RUN]: recoveryJobs()},
+    textReadError: true,
+  }), HEAD, PR), (error) => (
+    error instanceof owner.OwnerError
+    && error.reasonCodes.includes('PR_RECOVERY_JOB_LOG_UNREADABLE')
+  ));
+
+  await assert.rejects(owner.readRequiredEvidence(fixtureClient({
+    runs: [recoveryRun()],
+    jobsByRun: {[RECOVERY_RUN]: recoveryJobs()},
+    jobLogs: {
+      ...recoveryJobLogs(),
+      [RECOVERY_VERIFY]: 'x'.repeat(owner.MAX_JOB_LOG_BYTES + 1),
+    },
+  }), HEAD, PR), (error) => (
+    error instanceof owner.OwnerError
+    && error.reasonCodes.includes('PR_RECOVERY_JOB_LOG_INVALID_OR_TOO_LARGE')
+  ));
 });
 
 test('fresh overlap blocks competing writer', async () => {
@@ -483,6 +1086,21 @@ test('fresh overlap blocks competing writer', async () => {
   assert.ok(result.receipt.reasonCodes.includes('OVERLAP_PRESENT'));
 });
 
+test('exact packet activity evidence can prove one overlapping parent nonblocking', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({packets: [overlappingPacket()]}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+    packetActivityEvidence: packetActivityEvidenceSet(),
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.deepEqual(result.report.packetActivityEvidenceCandidateRefs, ['#9901']);
+  assert.equal(result.report.packetActivityDecisions.length, 1);
+  assert.equal(result.report.packetActivityDecisions[0].state, 'NONBLOCKING_PROVEN');
+  assert.equal(result.report.output.overlap, 'DISJOINT');
+});
+
 test('late competing packet is caught by final overlap barrier', async () => {
   const latePacket = {
     number: 9903,
@@ -506,6 +1124,79 @@ test('late competing packet is caught by final overlap barrier', async () => {
   assert.ok(result.receipt.steps.some((row) => (
     row.name === 'final-overlap-currentness' && row.result === 'BLOCKED'
   )));
+});
+
+test('packet activity evidence requester mismatch fails closed', () => {
+  assert.throws(
+    () => owner.normalizePacketActivityEvidenceSet(
+      packetActivityEvidenceSet({requesterRef: '#9999'}), PACKET),
+    /PACKET_ACTIVITY_EVIDENCE_REQUESTER_CONFLICT/,
+  );
+});
+
+test('packet activity evidence for a non-current candidate is conflict', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({packets: [overlappingPacket()]}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+    packetActivityEvidence: packetActivityEvidenceSet({candidateRef: '#9999'}),
+  });
+  assert.equal(result.receipt.result, 'CONFLICT');
+  assert.ok(result.receipt.reasonCodes.includes('PACKET_ACTIVITY_EVIDENCE_CANDIDATE_NOT_CURRENT'));
+});
+
+test('mutation-active packet evidence remains blocking', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({packets: [overlappingPacket()]}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+    packetActivityEvidence: packetActivityEvidenceSet({
+      evidenceOverrides: {repositoryMutationActive: true},
+    }),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('OVERLAP_PRESENT'));
+});
+
+test('unsupported packet relationship stays unknown', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({packets: [overlappingPacket()]}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+    packetActivityEvidence: packetActivityEvidenceSet({relationship: 'UNREVIEWED_RELATION'}),
+  });
+  assert.equal(result.receipt.result, 'UNKNOWN');
+  assert.ok(result.receipt.reasonCodes.includes('OVERLAP_UNKNOWN'));
+});
+
+test('one proven packet cannot suppress another unproven overlapping packet', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({packets: [overlappingPacket(), overlappingPacket(9903)]}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+    packetActivityEvidence: packetActivityEvidenceSet(),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('OVERLAP_PRESENT'));
+});
+
+test('packet activity evidence cannot suppress an overlapping open PR', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({
+      packets: [overlappingPacket()],
+      otherPrFiles: [PATHS[0]],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+    packetActivityEvidence: packetActivityEvidenceSet(),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('OVERLAP_PRESENT'));
 });
 
 test('late main movement is preserved as UNKNOWN', async () => {
@@ -629,6 +1320,10 @@ test('source contains no merge writer, PR update, auto-merge, or retry loop', ()
   assert.doesNotMatch(source, /setInterval|while\s*\(\s*true\s*\)/);
   assert.match(source, /https:\/\/api\.github\.com\/graphql/);
   assert.match(source, /extractPacketScopes/);
+  assert.match(source, /required_status_checks/);
+  assert.match(source, /mergeStateStatus/);
+  assert.match(source, /\/compare\//);
+  assert.match(source, /CURRENTIZE_PR_THROUGH_EXISTING_OWNER/);
   assert.match(source, /MERGE_PR_WITH_EXISTING_EXPECTED_HEAD_ENDPOINT/);
 });
 

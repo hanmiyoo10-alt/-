@@ -45,7 +45,7 @@ An active lease records bounded coordination metadata only:
 - normalized `path:` / `surface:` scopes using Work System grammar;
 - deterministic scope fingerprint;
 - fresh scope-overlap disposition, which must be `DISJOINT`;
-- exact workspace kind plus branch/worktree identity: isolated feature workspace, fixed landing-metadata workspace, or explicit non-repository `not_applicable`;
+- exact workspace kind plus branch/worktree identity: isolated feature workspace, fixed S/M/L landing-metadata workspace, fixed exact S/M-only landing-branch-repair workspace, or explicit non-repository `not_applicable`;
 - optional observed base SHA as evidence only;
 - bounded source refs.
 
@@ -54,13 +54,15 @@ The controller never stores ChatGPT account identity, RDC/device/session identif
 ## Routing and workspace rules
 
 Acquisition cannot use an ambiguous `either` holder. Exact executor values are:
-`S`, `M`, `S_TERMUX`, `M_PRIVATE_LAB`, `M_VM_LAB`, `S_PRIVATE_LOCAL`.
+`S`, `M`, `L`, `S_TERMUX`, `M_PRIVATE_LAB`, `M_VM_LAB`, `S_PRIVATE_LOCAL`.
 
 `S` routing may resolve to exact executor `S` or the documented device-agnostic fallback `M`. Every semantic-context-specific route must resolve to the same exact context.
 
-Repository-backed S work must use a `server/*` feature branch and an isolated worktree under `/root/nyang-worktrees/`. Repository-backed M work must use `mainphone/*` and `/data/data/com.termux/files/home/nyang-worktrees/`. Landing branches/worktrees remain invalid **feature** workspaces.
+Repository-backed S work must use a `server/*` feature branch and an isolated worktree under `/root/nyang-worktrees/`. Repository-backed M work must use `mainphone/*` and `/data/data/com.termux/files/home/nyang-worktrees/`. Repository-backed L work must use exact route/executor `L / L`, a `laptop/*` feature branch, and an absolute normalized worktree strictly below `/home/alsl0/nyang-worktrees/`. The L landing/read clone is fixed at `main` + `/home/alsl0/nyang-repo` and remains invalid as a **feature** workspace. The serialized `mcl-task-lease` workflow exposes `L` as an exact route/executor choice so this reviewed profile can actually be acquired; workflow admission still grants coordination state only and never repository mutation authority.
 
-The additive `landing_metadata` kind is reserved only for reviewed fixed ordinary landing Git-metadata/object-store mutation owned by `landing-freshness`: executor `S` binds `server/work` + `/root/nyang-repo` + exact scope `surface:mcl-landing-origin-main:S`; executor `M` binds `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + exact scope `surface:mcl-landing-origin-main:M`. It requires a non-null observed landing HEAD SHA and accepts no caller-selected landing identity. Route `S` may use the documented exact executor `M` fallback, which binds only the M identity.
+The additive `landing_metadata` kind is reserved only for reviewed fixed ordinary landing Git-metadata/object-store mutation owned by `landing-freshness`: executor `S` binds `server/work` + `/root/nyang-repo` + exact scope `surface:mcl-landing-origin-main:S`; executor `M` binds `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + exact scope `surface:mcl-landing-origin-main:M`; executor `L` binds `main` + `/home/alsl0/nyang-repo` + exact scope `surface:mcl-landing-origin-main:L`. It requires a non-null observed landing HEAD SHA and accepts no caller-selected landing identity. Route `S` may use the documented exact executor `M` fallback, which binds only the M identity. Route `L` has no executor fallback.
+
+The additive `landing_branch_repair` kind binds only reviewed exact S/M landing identities: route/executor `S / S` binds `server/work` + `/root/nyang-repo` + `surface:mcl-landing-branch:S`; route/executor `M / M` binds `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + `surface:mcl-landing-branch:M`. L is deliberately not admitted to `landing_branch_repair` by this contract. It requires a non-null observed landing HEAD SHA. It reserves the Git worktree for the reviewed local landing branch-repair effect only; it does not grant route fallback, remote-ref, merge, release, runtime, or production authority.
 
 Non-repository contexts use explicit `not_applicable` branch/worktree identity instead of inventing a repository path.
 
@@ -71,7 +73,7 @@ Acquire fails closed when the ledger, expected generation, packet evidence, rout
 It also conflicts when:
 - the same packet already holds a materially different lease profile;
 - any active MCL lease overlaps the requested normalized scopes;
-- another active Git-workspace lease (`repository` or `landing_metadata`) reserves the same branch or worktree.
+- another active Git-workspace lease (`repository`, `landing_metadata`, or `landing_branch_repair`) reserves the same branch or worktree.
 
 The same executor may hold multiple leases when packets, normalized scopes, and workspace identities are disjoint. V1 does not lock an entire phone.
 
@@ -102,7 +104,7 @@ Supported ledger mutation is only `.github/workflows/mcl-task-lease.yml` plus th
 - checks out trusted `main`, not a caller-selected controller ref;
 - accepts only `activate`, `acquire`, or `release`;
 - cannot select another state issue or pass arbitrary shell/command text;
-- admits the reviewed `landing_metadata` workspace kind for the fixed landing Git-metadata/object-store effect class without adding any new permission, state issue, or writer.
+- admits only the reviewed fixed workspace kinds, including S/M/L `landing_metadata` and exact S/M-only `landing_branch_repair`, without adding any new permission, state issue, or generic writer.
 
 The controller re-reads #2352 and its exact generation before a PATCH, re-reads again immediately before writing, and validates post-write readback. Manual/out-of-protocol ledger edits are not serialized by GitHub itself; any body drift or malformed marker is `CONFLICT`/`UNKNOWN`, never an inferred free lease.
 

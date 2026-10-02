@@ -23,7 +23,15 @@ const HEAD = '2'.repeat(40);
 const LEASE = 'b'.repeat(64);
 const ACQUIRE = 'run:1234';
 const PATHS = [...patchOwner.D014_COMPLETION_SET_PATHS].sort();
-const SCOPES = [...PATHS.map((item) => 'path:' + item), 'surface:mcl:d014-completion-set'].sort();
+const SCOPES = [...patchOwner.D014_VALIDATION_SCOPES];
+const D014_PROFILE = patchOwner.validationProfileById(patchOwner.D014_VALIDATION_PROFILE);
+const VC_PATHS = [...patchOwner.VALIDATION_CONTINUATION_PATHS].sort();
+const VC_SCOPES = [...patchOwner.VALIDATION_CONTINUATION_SCOPES];
+const PPR_PATHS = [...patchOwner.PUBLISHED_PROGRESS_RECOVERY_PATHS].sort();
+const PPR_SCOPES = [...patchOwner.PUBLISHED_PROGRESS_RECOVERY_SCOPES];
+const VF_PATHS = [...patchOwner.VALIDATION_FINALIZATION_PATHS].sort();
+const VF_SCOPES = [...patchOwner.VALIDATION_FINALIZATION_SCOPES];
+const LOCAL_VALIDATION_ARTIFACT = 'local-artifact:/tmp/mcl-implementation-validation-fixture.json#sha256=' + 'f'.repeat(64);
 
 function makeParent() {
   return handoff.buildManifest({
@@ -105,7 +113,55 @@ function makeFiles() {
     cleanup() { fs.rmSync(dir, {recursive: true, force: true}); },
   };
 }
-function ownerPass(manifestId) {
+function makeVfParent() {
+  const parent = makeParent();
+  return handoff.buildManifest({
+    schemaVersion: 1,
+    mode: 'MCL_TASK_MANIFEST',
+    packetRef: parent.packetRef,
+    packetBodySha256: parent.packetBodySha256,
+    phaseId: parent.phaseId,
+    phaseClass: parent.phaseClass,
+    route: parent.route,
+    executor: parent.executor,
+    scopes: VF_SCOPES,
+    workspace: parent.workspace,
+    observedBaseSha: parent.observedBaseSha,
+    leaseRequirement: parent.leaseRequirement,
+    leaseEvidence: parent.leaseEvidence,
+    sourceAuthorityRefs: parent.sourceAuthorityRefs,
+    inputRefs: parent.inputRefs,
+    expectedOutputRefs: VF_PATHS.map((item) => 'path:' + item),
+    acceptanceRefs: parent.acceptanceRefs,
+    stopCondition: parent.stopCondition,
+    authority: parent.authority,
+  });
+}
+function makeVfCtx() {
+  return {...makeCtx(), requestedScopes: VF_SCOPES, parentManifest: makeVfParent()};
+}
+function makeVfFiles() {
+  const files = makeFiles();
+  files.request = {...files.request, expected_paths: VF_PATHS};
+  files.requestText = JSON.stringify(files.request);
+  fs.writeFileSync(files.requestFile, files.requestText);
+  files.validationText = JSON.stringify({
+    schema: patchOwner.VALIDATION_REQUEST_SCHEMA,
+    profile: patchOwner.VALIDATION_FINALIZATION_PROFILE,
+  });
+  fs.writeFileSync(files.validationFile, files.validationText);
+  return files;
+}
+function ownerPass(manifestId, {
+  affectedFiles = PATHS,
+  validationArtifact = null,
+} = {}) {
+  const validationCounters = validationArtifact ? [
+    {name: 'validation_passed', value: 4},
+    {name: 'validation_failed', value: 0},
+    {name: 'validation_infra', value: 0},
+    {name: 'validation_not_run', value: 0},
+  ] : [];
   return executionReceipt.projectExecutionReceipt({
     schemaVersion: 2,
     operationId: 'patch:' + manifestId,
@@ -118,9 +174,9 @@ function ownerPass(manifestId) {
     result: 'PASS',
     proofScope: 'IMPLEMENTATION_EFFECT',
     steps: [{name: 'push', result: 'PASS', evidenceLocator: 'commit:' + HEAD}],
-    counters: [{name: 'push_verified', value: 1}],
-    affectedFiles: PATHS,
-    artifactLocators: ['commit:' + HEAD],
+    counters: [{name: 'push_verified', value: 1}, ...validationCounters],
+    affectedFiles,
+    artifactLocators: ['commit:' + HEAD, ...(validationArtifact ? [validationArtifact] : [])],
     reasonCodes: [],
     requiredUnknowns: [],
     conflicts: [],
@@ -134,15 +190,28 @@ function ownerPass(manifestId) {
 test('PR request accepts only bounded non-closing linkage', () => {
   const value = impl.parsePrRequestText(JSON.stringify({
     schema: impl.PR_SCHEMA,
-    title: 'feat: bounded',
+    title: 'feat: bounded fixed profile',
     body: 'Body.\n\nRefs #9001',
   }), PACKET);
   assert.equal(value.schema, impl.PR_SCHEMA);
-  assert.throws(() => impl.parsePrRequestText(JSON.stringify({
-    schema: impl.PR_SCHEMA,
-    title: 'feat: bounded',
-    body: 'Fixes #9001',
-  }), PACKET), /PR_REQUEST_NON_CLOSING_REF_REQUIRED|PR_REQUEST_CLOSING_LINK_FORBIDDEN/);
+
+  for (const closing of [
+    'close #9001', 'closes: #9001', 'closed   #9001',
+    'fix #9001', 'fixes: #9001', 'fixed   #2786',
+    'resolve #9001', 'resolves: #9001', 'resolved   #9001',
+  ]) {
+    assert.throws(() => impl.parsePrRequestText(JSON.stringify({
+      schema: impl.PR_SCHEMA,
+      title: 'feat: ' + closing,
+      body: 'Refs #9001',
+    }), PACKET), /PR_REQUEST_CLOSING_LINK_FORBIDDEN/);
+    assert.throws(() => impl.parsePrRequestText(JSON.stringify({
+      schema: impl.PR_SCHEMA,
+      title: 'feat: bounded',
+      body: closing + '\n\nRefs #9001',
+    }), PACKET), /PR_REQUEST_CLOSING_LINK_FORBIDDEN/);
+  }
+
   assert.throws(() => impl.parsePrRequestText(JSON.stringify({
     schema: impl.PR_SCHEMA,
     title: 'feat: bounded',
@@ -163,8 +232,122 @@ test('CLI is explicit apply and has no owner/repo/base/head override', () => {
     '--apply',
   ];
   assert.equal(impl.parseArgs(valid).packet, PACKET);
+  const withActivity = [
+    ...valid.slice(0, -1),
+    '--packet-activity-evidence-file', '/tmp/activity.json',
+    '--apply',
+  ];
+  assert.equal(
+    impl.parseArgs(withActivity)['packet-activity-evidence-file'],
+    '/tmp/activity.json',
+  );
   assert.throws(() => impl.parseArgs(valid.filter((item) => item !== '--apply')), /EXPLICIT_APPLY_REQUIRED/);
   assert.throws(() => impl.parseArgs([...valid, '--base', 'main']), /ARGUMENT_UNSUPPORTED/);
+});
+
+test('packet activity evidence reuses stage-entry schema and requester binding', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'repo-impl-activity-'));
+  const file = path.join(dir, 'activity.json');
+  const evidence = {
+    schemaVersion: 1,
+    mode: 'MCL_STAGE_ENTRY_PACKET_ACTIVITY_EVIDENCE_SET',
+    requesterRef: PACKET,
+    candidates: [{
+      candidateRef: '#8001',
+      evidence: {
+        schemaVersion: 1,
+        mode: 'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE',
+        candidateRef: '#8001',
+        requesterRef: PACKET,
+        relationship: 'DEFERRED_OWNER',
+        repositoryMutationActive: false,
+        activeLease: false,
+        overlappingOpenPr: false,
+        sequencingExplicit: true,
+        sourceRefs: ['issue:#8001'],
+      },
+    }],
+  };
+  try {
+    fs.writeFileSync(file, JSON.stringify(evidence));
+    const parsed = impl.readPacketActivityEvidence(file, PACKET);
+    assert.equal(parsed.requesterRef, PACKET);
+    assert.equal(parsed.candidates.length, 1);
+    assert.equal(parsed.candidates[0].candidateRef, '#8001');
+    assert.equal(parsed.candidates[0].evidence.relationship, 'DEFERRED_OWNER');
+
+    fs.writeFileSync(file, JSON.stringify({...evidence, requesterRef: '#9002'}));
+    assert.throws(
+      () => impl.readPacketActivityEvidence(file, PACKET),
+      (error) => error instanceof impl.ImplementationError
+        && error.kind === 'CONFLICT'
+        && error.reasonCodes.includes('PACKET_ACTIVITY_EVIDENCE_REQUESTER_CONFLICT'),
+    );
+
+    fs.writeFileSync(file, '{not-json');
+    assert.throws(
+      () => impl.readPacketActivityEvidence(file, PACKET),
+      /PACKET_ACTIVITY_EVIDENCE_JSON_INVALID/,
+    );
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('current overlap forwards bounded activity evidence and preserves fail-closed results', () => {
+  const activity = {schemaVersion: 1, candidates: []};
+  let observed = null;
+  const pass = impl.requireCurrentOverlap({
+    packet: 9001,
+    requestedScopes: SCOPES,
+    packetActivityEvidence: activity,
+    runner: () => ({code: 0}),
+    discoverOverlap: (input) => {
+      observed = input;
+      return {state: 'DISJOINT', discovery: 'COMPLETE'};
+    },
+  });
+  assert.equal(pass.state, 'DISJOINT');
+  assert.equal(observed.packetNumber, 9001);
+  assert.deepEqual(observed.requestedScopes, SCOPES);
+  assert.equal(observed.packetActivityEvidence, activity);
+
+  observed = null;
+  impl.requireCurrentOverlap({
+    packet: 9001,
+    requestedScopes: SCOPES,
+    runner: () => ({code: 0}),
+    discoverOverlap: (input) => {
+      observed = input;
+      return {state: 'DISJOINT', discovery: 'COMPLETE'};
+    },
+  });
+  assert.equal(observed.packetActivityEvidence, null);
+
+  assert.throws(
+    () => impl.requireCurrentOverlap({
+      packet: 9001,
+      requestedScopes: SCOPES,
+      packetActivityEvidence: activity,
+      runner: () => ({code: 0}),
+      discoverOverlap: () => ({state: 'OVERLAP', discovery: 'COMPLETE'}),
+    }),
+    (error) => error instanceof impl.ImplementationError
+      && error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('CURRENT_SCOPE_NOT_DISJOINT'),
+  );
+  assert.throws(
+    () => impl.requireCurrentOverlap({
+      packet: 9001,
+      requestedScopes: SCOPES,
+      packetActivityEvidence: activity,
+      runner: () => ({code: 0}),
+      discoverOverlap: () => ({state: 'CONFLICT', discovery: 'COMPLETE'}),
+    }),
+    (error) => error instanceof impl.ImplementationError
+      && error.kind === 'CONFLICT'
+      && error.reasonCodes.includes('CURRENT_SCOPE_NOT_DISJOINT'),
+  );
 });
 
 test('child manifest binds parent, patch, validation, PR and lease identity', () => {
@@ -186,11 +369,78 @@ test('child manifest binds parent, patch, validation, PR and lease identity', ()
     assert.ok(child.inputRefs.includes(
       patchOwner.VALIDATION_REF_PREFIX + impl.sha256(Buffer.from(files.validationText))));
     assert.ok(child.inputRefs.includes(
+      patchOwner.VALIDATION_CONTRACT_REF_PREFIX + D014_PROFILE.contractDigest));
+    assert.ok(child.inputRefs.includes(
       'receipt:mcl-pr-publication-request:' + impl.sha256(Buffer.from(files.prText))));
     assert.ok(child.inputRefs.includes(ACQUIRE));
   } finally {
     files.cleanup();
   }
+});
+
+test('coordinator derives reviewed validation profile from exact packet scope', () => {
+  const d014 = impl.resolveValidationProfileBinding(
+    makeCtx(),
+    JSON.stringify({
+      schema: patchOwner.VALIDATION_REQUEST_SCHEMA,
+      profile: patchOwner.D014_VALIDATION_PROFILE,
+    }),
+  );
+  assert.equal(d014.profile.profileId, patchOwner.D014_VALIDATION_PROFILE);
+
+  const vcCtx = {...makeCtx(), requestedScopes: [...VC_SCOPES]};
+  const vc = impl.resolveValidationProfileBinding(
+    vcCtx,
+    JSON.stringify({
+      schema: patchOwner.VALIDATION_REQUEST_SCHEMA,
+      profile: patchOwner.VALIDATION_CONTINUATION_PROFILE,
+    }),
+  );
+  assert.equal(vc.profile.profileId, patchOwner.VALIDATION_CONTINUATION_PROFILE);
+  assert.deepEqual(vc.profile.paths, VC_PATHS);
+
+  const pprCtx = {...makeCtx(), requestedScopes: [...PPR_SCOPES]};
+  const ppr = impl.resolveValidationProfileBinding(
+    pprCtx,
+    JSON.stringify({schema: patchOwner.VALIDATION_REQUEST_SCHEMA, profile: patchOwner.PUBLISHED_PROGRESS_RECOVERY_PROFILE}),
+  );
+  assert.equal(ppr.profile.profileId, patchOwner.PUBLISHED_PROGRESS_RECOVERY_PROFILE);
+  assert.deepEqual(ppr.profile.paths, PPR_PATHS);
+  assert.throws(
+    () => impl.resolveValidationProfileBinding(
+      pprCtx,
+      JSON.stringify({schema: patchOwner.VALIDATION_REQUEST_SCHEMA, profile: patchOwner.D014_VALIDATION_PROFILE}),
+    ),
+    (error) => error instanceof impl.ImplementationError
+      && error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('VALIDATION_PROFILE_REQUEST_MISMATCH'),
+  );
+
+  assert.throws(
+    () => impl.resolveValidationProfileBinding(
+      vcCtx,
+      JSON.stringify({
+        schema: patchOwner.VALIDATION_REQUEST_SCHEMA,
+        profile: patchOwner.D014_VALIDATION_PROFILE,
+      }),
+    ),
+    (error) => error instanceof impl.ImplementationError
+      && error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('VALIDATION_PROFILE_REQUEST_MISMATCH'),
+  );
+
+  assert.throws(
+    () => impl.resolveValidationProfileBinding(
+      {...makeCtx(), requestedScopes: ['path:docs/unreviewed.txt']},
+      JSON.stringify({
+        schema: patchOwner.VALIDATION_REQUEST_SCHEMA,
+        profile: patchOwner.D014_VALIDATION_PROFILE,
+      }),
+    ),
+    (error) => error instanceof impl.ImplementationError
+      && error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('NO_REVIEWED_VALIDATION_PROFILE'),
+  );
 });
 
 test('PR publication is fixed to exact branch main base and readback', () => {
@@ -289,7 +539,7 @@ test('successful fixed transaction keeps publication before durable release and 
       },
       releaseLease() {
         events.push('lease-release');
-        return {ok: true, value: {runId: 7010}};
+        return {ok: true, value: {runId: null, evidenceRef: `receipt:mcl-task-lease-readback:release:${LEASE}:generation:88`}};
       },
       async readAfterRelease() {
         events.push('lease-readback');
@@ -317,6 +567,9 @@ test('successful fixed transaction keeps publication before durable release and 
     assert.equal(view.phase, 'IMPLEMENTATION_PR');
     assert.equal(view.result, 'PASS');
     assert.equal(view.nextLegalAction, 'VALIDATION_MERGE');
+    assert.equal(view.output.stageOwner, patchOwner.STAGE_OWNER_ID);
+    assert.equal(view.output.mutationPrimitive, patchOwner.MUTATION_PRIMITIVE_ID);
+    assert.equal(view.output.validationProfile, patchOwner.D014_VALIDATION_PROFILE);
     const at = (name) => events.indexOf(name);
     assert.ok(at('patch-owner') < at('pr-publish'));
     assert.ok(at('pr-publish') < at('lease-release'));
@@ -326,6 +579,74 @@ test('successful fixed transaction keeps publication before durable release and 
     assert.equal(events.filter((item) => item === 'lease-release').length, 1);
     assert.equal(events.filter((item) => item === 'holder-release').length, 1);
     assert.ok(stageRunnerCalls.some((args) => args[0] === 'gh' && args[1] === 'api'));
+  } finally {
+    files.cleanup();
+  }
+});
+
+test('validation-finalization local artifact stays execution-local while D014 converges', async () => {
+  const files = makeVfFiles();
+  const ctx = makeVfCtx();
+  const completionBodies = [];
+  const receiptPath = path.join(files.dir, 'vf-receipt.json');
+  let commentId = 710;
+  try {
+    const view = await impl.executePrepared(ctx, {
+      requestText: files.requestText,
+      requestFile: files.requestFile,
+      patchFile: files.patchFile,
+      validationRequestText: files.validationText,
+      validationRequestFile: files.validationFile,
+      prRequestText: files.prText,
+    }, {
+      tempRoot: files.dir,
+      postComment(body) {
+        if (body.includes('mcl-task-completion-receipt')) completionBodies.push(body);
+        return commentId++;
+      },
+      claimHolder() {
+        return {result: {status: 'CLAIMED', reasonCodes: []}, secret: 'e'.repeat(64)};
+      },
+      checkHolder() { return {status: 'CHECK_PASS', reasonCodes: []}; },
+      async invokePatchOwner({manifestText}) {
+        const parsed = handoff.parseManifest(manifestText);
+        assert.equal(parsed.status, 'VALID');
+        return ownerPass(parsed.value.manifestId, {
+          affectedFiles: VF_PATHS,
+          validationArtifact: LOCAL_VALIDATION_ARTIFACT,
+        });
+      },
+      async guardCurrent() {},
+      currentGitHead() { return HEAD; },
+      publishPr() { return {number: 7002, head: HEAD, changed: VF_PATHS}; },
+      releaseLease() { return {ok: true, value: {runId: 7011, evidenceRef: 'run:7011'}}; },
+      async readAfterRelease() {
+        return {packetAfter: {body: 'packet-body'}, ledgerAfter: {body: 'released-ledger'}};
+      },
+      validateReleased() {
+        return {ok: true, reasonCodes: [], state: {generation: 88}};
+      },
+      releaseHolder() { return {status: 'RELEASED', reasonCodes: []}; },
+      persistArtifacts() {
+        fs.writeFileSync(receiptPath, '{}');
+        return {
+          reportLocator: 'artifact:test:vf-report',
+          receiptLocator: 'artifact:test:vf-receipt',
+          receiptPath,
+        };
+      },
+    });
+    assert.equal(view.result, 'PASS');
+    assert.equal(view.output.validationProfile, patchOwner.VALIDATION_FINALIZATION_PROFILE);
+    assert.equal(completionBodies.length, 2);
+    for (const body of completionBodies) {
+      const parsed = handoff.parseCompletionReceipt(body);
+      assert.equal(parsed.status, 'VALID');
+      assert.equal(parsed.value.validationRefs.some((ref) => ref.startsWith('local-artifact:')), false);
+    }
+    const receipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
+    assert.ok(receipt.artifactLocators.includes(LOCAL_VALIDATION_ARTIFACT));
+    assert.equal(receipt.counters.find((row) => row.name === 'validation_passed')?.value, 4);
   } finally {
     files.cleanup();
   }
@@ -360,7 +681,7 @@ test('publication failure preserves lease and holder instead of manufacturing cl
         events.push('pr-fail');
         throw new impl.ImplementationError('UNKNOWN', ['PR_CREATE_UNPROVEN']);
       },
-      releaseLease() { events.push('lease-release'); return {ok: true, value: {runId: 1}}; },
+      releaseLease() { events.push('lease-release'); return {ok: true, value: {runId: 1, evidenceRef: 'run:1'}}; },
       releaseHolder() { events.push('holder-release'); return {status: 'RELEASED'}; },
     }), /PR_CREATE_UNPROVEN/);
     assert.deepEqual(events, ['holder-claim', 'pr-fail']);
@@ -379,4 +700,236 @@ test('main drift helper reports exact changed paths and no implicit normalizatio
   assert.equal(calls.length, 1);
   assert.deepEqual(impl.changedBetween('/tmp/w', BASE, BASE, spawn), []);
   assert.equal(calls.length, 1);
+});
+
+
+test('detached coordinator checkpoint sink covers owner-stage boundaries in order', async () => {
+  const files = makeFiles();
+  const checkpoints = [];
+  let commentId = 910;
+  const receiptPath = path.join(files.dir, 'detached-receipt.json');
+  try {
+    const view = await impl.executePrepared(makeCtx(), {
+      requestText: files.requestText,
+      requestFile: files.requestFile,
+      patchFile: files.patchFile,
+      validationRequestText: files.validationText,
+      validationRequestFile: files.validationFile,
+      prRequestText: files.prText,
+    }, {
+      tempRoot: files.dir,
+      runner() { return {code: 0, stdout: '{}', stderr: ''}; },
+      postComment() { return commentId++; },
+      claimHolder() {
+        return {result: {status: 'CLAIMED', reasonCodes: []}, secret: 'e'.repeat(64)};
+      },
+      checkHolder() { return {status: 'CHECK_PASS', reasonCodes: []}; },
+      async invokePatchOwner({manifestText}) {
+        const parsed = handoff.parseManifest(manifestText);
+        return ownerPass(parsed.value.manifestId);
+      },
+      async guardCurrent() {},
+      currentGitHead() { return HEAD; },
+      publishPr() { return {number: 9101, head: HEAD, changed: PATHS}; },
+      releaseLease() { return {ok: true, value: {runId: 9102, evidenceRef: 'run:9102'}}; },
+      async readAfterRelease() {
+        return {packetAfter: {body: 'packet-body'}, ledgerAfter: {body: 'released-ledger'}};
+      },
+      validateReleased() {
+        return {ok: true, reasonCodes: [], state: {generation: 91}};
+      },
+      releaseHolder() { return {status: 'RELEASED', reasonCodes: []}; },
+      persistArtifacts() {
+        fs.writeFileSync(receiptPath, '{}');
+        return {
+          reportLocator: 'artifact:detached:report',
+          receiptLocator: 'artifact:detached:receipt',
+          receiptPath,
+        };
+      },
+      checkpointSink: async (event) => { checkpoints.push(event); },
+    });
+    assert.equal(view.result, 'PASS');
+    assert.deepEqual(checkpoints.map((event) => event.checkpoint), [
+      'WORKSPACE_READY',
+      'REMOTE_HEAD_VERIFIED',
+      'PR_CREATED',
+      'COORDINATION_RELEASED',
+      'FINISHED',
+    ]);
+    assert.equal(checkpoints.at(-1).finalReceiptDigest.length, 64);
+    assert.equal(checkpoints.at(-1).finalReceiptLocator, 'artifact:detached:receipt');
+  } finally {
+    files.cleanup();
+  }
+});
+
+test('detached IPC checkpoint sink waits for exact ACK and fails closed', async () => {
+  const {EventEmitter} = require('node:events');
+  const good = new EventEmitter();
+  good.send = (message, callback) => {
+    callback(null);
+    queueMicrotask(() => good.emit('message', {
+      schema: 'mcl-detached-owner-checkpoint-ack.v1',
+      seq: message.seq,
+      status: 'PASS',
+      reasonCodes: [],
+    }));
+  };
+  const sink = impl.createDetachedIpcCheckpointSink(good, 1000);
+  await sink({
+    schema: 'mcl-detached-owner-checkpoint.v1',
+    checkpoint: 'WORKSPACE_READY',
+    primitiveId: 'fixture',
+    targetIdentity: 'fixture:target',
+    evidenceLocator: 'receipt:fixture',
+    nextPrimitive: 'PATCH_PREPARE',
+    finalReceiptDigest: null,
+    finalReceiptLocator: null,
+  });
+
+  const blocked = new EventEmitter();
+  blocked.send = (message, callback) => {
+    callback(null);
+    queueMicrotask(() => blocked.emit('message', {
+      schema: 'mcl-detached-owner-checkpoint-ack.v1',
+      seq: message.seq,
+      status: 'BLOCKED',
+      reasonCodes: ['FIXTURE_PERSIST_BLOCK'],
+    }));
+  };
+  const blockedSink = impl.createDetachedIpcCheckpointSink(blocked, 1000);
+  await assert.rejects(
+    () => blockedSink({
+      schema: 'mcl-detached-owner-checkpoint.v1',
+      checkpoint: 'WORKSPACE_READY',
+      primitiveId: 'fixture',
+      targetIdentity: 'fixture:target',
+      evidenceLocator: 'receipt:fixture',
+      nextPrimitive: 'PATCH_PREPARE',
+      finalReceiptDigest: null,
+      finalReceiptLocator: null,
+    }),
+    (error) => error instanceof impl.ImplementationError
+      && error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('FIXTURE_PERSIST_BLOCK'),
+  );
+});
+
+test('normal coordinator CLI remains fixed and exposes no detached control selector', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'mcl-repository-implementation.cjs'), 'utf8');
+  for (const token of [
+    "'checkpoint-sink'",
+    "'detached-command'",
+    "'runtime-command'",
+    "'retry'",
+    "'cancel'",
+  ]) assert(!source.includes(token), token);
+});
+
+
+test('new child manifest binds one exact implementation adapter contract ref', () => {
+  const files = makeFiles();
+  try {
+    const child = impl.buildChildManifest(
+      makeCtx(), files.request, files.validationText, files.prText);
+    const refs = child.inputRefs.filter((item) =>
+      item.startsWith(patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX));
+    assert.deepEqual(refs, [
+      patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
+        + patchOwner.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest,
+    ]);
+    assert(child.inputRefs.includes(
+      patchOwner.VALIDATION_CONTRACT_REF_PREFIX + D014_PROFILE.contractDigest));
+  } finally {
+    files.cleanup();
+  }
+});
+
+test('repository implementation preserves child semantic FAIL as NEEDS_REVIEW', async () => {
+  const files = makeFiles();
+  const validationLocator =
+    'local-artifact:/tmp/mcl-implementation-validation-child.json#sha256=' + 'f'.repeat(64);
+  const childReceipt = executionReceipt.projectExecutionReceipt({
+    schemaVersion: 2,
+    operationId: 'patch:semantic-fail',
+    primitiveId: 'mcl:repository-worktree-patch',
+    sourceIdentity: {kind: 'WORK_PACKET', locator: PACKET, identity: BODY_SHA},
+    executionSurface: 'MCL:S',
+    stage: 'HOST_ORCHESTRATED_REPOSITORY_PATCH',
+    executionLifecycle: 'FINISHED',
+    attentionDisposition: 'NEEDS_REVIEW',
+    result: 'FAIL',
+    proofScope: 'IMPLEMENTATION_EFFECT',
+    steps: [{name: 'prepared-validation', result: 'FAIL',
+      evidenceLocator: validationLocator}],
+    counters: [
+      {name: 'changed_paths', value: PATHS.length},
+      {name: 'commit_created', value: 0},
+      {name: 'push_verified', value: 0},
+      {name: 'validation_passed', value: 1},
+      {name: 'validation_failed', value: 1},
+      {name: 'validation_infra', value: 0},
+      {name: 'validation_not_run', value: 2},
+    ],
+    affectedFiles: PATHS,
+    artifactLocators: [validationLocator],
+    reasonCodes: ['SEMANTIC_TEST_FAILURE:completion-contract'],
+    requiredUnknowns: [],
+    conflicts: [],
+    blockers: [],
+    exitCode: 1,
+    stderrTail: null,
+    nextLegalAction: 'SEMANTIC_REVIEW',
+  });
+  const events = [];
+  const receiptPath = path.join(files.dir, 'implementation-stop.receipt.json');
+  try {
+    const view = await impl.executePrepared(makeCtx(), {
+      requestText: files.requestText,
+      requestFile: files.requestFile,
+      patchFile: files.patchFile,
+      validationRequestText: files.validationText,
+      validationRequestFile: files.validationFile,
+      prRequestText: files.prText,
+    }, {
+      tempRoot: files.dir,
+      postComment() { return 990; },
+      claimHolder() {
+        return {result: {status: 'CLAIMED', reasonCodes: []}, secret: '9'.repeat(64)};
+      },
+      checkHolder() { return {status: 'CHECK_PASS', reasonCodes: []}; },
+      async invokePatchOwner() { events.push('patch-owner'); return childReceipt; },
+      persistPatchOwnerArtifacts() {
+        return {
+          receiptLocator: 'artifact:test:child-receipt',
+          reportLocator: validationLocator,
+        };
+      },
+      persistArtifacts(_manifest, _report, receipt) {
+        fs.writeFileSync(receiptPath, JSON.stringify(receipt));
+        return {
+          reportLocator: 'artifact:test:implementation-report',
+          receiptLocator: 'artifact:test:implementation-receipt',
+          receiptPath,
+        };
+      },
+      publishPr() { events.push('pr-publish'); throw new Error('must not publish'); },
+      releaseLease() { events.push('lease-release'); throw new Error('must not release'); },
+      releaseHolder() { events.push('holder-release'); throw new Error('must not release'); },
+    });
+    assert.equal(view.result, 'FAIL');
+    assert.equal(view.attentionDisposition, 'NEEDS_REVIEW');
+    assert.equal(view.attentionCount, 1);
+    assert.equal(view.attention[0].reasonCode, 'SEMANTIC_TEST_FAILURE:completion-contract');
+    assert.equal(view.attention[0].locator, validationLocator);
+    assert.equal(view.output.validationFailed, 1);
+    assert.equal(view.output.validationNotRun, 2);
+    assert.equal(view.output.commitCreated, false);
+    assert.equal(view.output.remoteHeadExact, false);
+    assert.equal(view.nextLegalAction, 'SEMANTIC_REVIEW');
+    assert.deepEqual(events, ['patch-owner']);
+  } finally {
+    files.cleanup();
+  }
 });

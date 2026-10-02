@@ -1,6 +1,10 @@
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
 const policy = require('./policy.json');
+
+const MAX_BODY_BYTES = 128 * 1024;
 
 const PACKET_MARKER = `<!-- ${policy.markers.workPacket} -->`;
 const PACKET_STATES = Object.freeze([...policy.packetStates]);
@@ -135,13 +139,63 @@ function result(disposition, lifecycle, interactionStage, reasonCodes) {
   };
 }
 
+function parseArgs(argv = process.argv.slice(2)) {
+  if (argv.length !== 2 || argv[0] !== '--body-file' || !argv[1]) {
+    throw new Error('usage: node packet-projection.cjs --body-file <packet-body.md>');
+  }
+  return {bodyFile: argv[1]};
+}
+
+function readBodyFile(bodyFile) {
+  const resolved = path.resolve(bodyFile);
+  const stat = fs.lstatSync(resolved);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_BODY_BYTES) {
+    throw new Error('body-file must be a bounded regular file');
+  }
+  const body = fs.readFileSync(resolved, 'utf8');
+  if (Buffer.byteLength(body, 'utf8') > MAX_BODY_BYTES) {
+    throw new Error('body-file exceeds size bound');
+  }
+  return body;
+}
+
+function exitCodeFor(projection) {
+  if (projection?.disposition === 'PASS') return 0;
+  if (projection?.disposition === 'CONFLICT') return 2;
+  return 3;
+}
+
+function run(argv = process.argv.slice(2)) {
+  const args = parseArgs(argv);
+  return classifyPacketProjection(readBodyFile(args.bodyFile));
+}
+
+function main() {
+  try {
+    const projection = run();
+    process.stdout.write(`${JSON.stringify(projection)}\n`);
+    process.exitCode = exitCodeFor(projection);
+  } catch {
+    const projection = result('UNKNOWN', null, null, [REASON_CODES.INPUT_BODY_INVALID]);
+    process.stdout.write(`${JSON.stringify(projection)}\n`);
+    process.exitCode = 3;
+  }
+}
+
+if (require.main === module) main();
+
 module.exports = {
   INTERACTION_STAGES,
+  MAX_BODY_BYTES,
   PACKET_MARKER,
   PACKET_STATES,
   REASON_CODES,
   classifyPacketProjection,
+  exitCodeFor,
   extractPacketLifecycle,
+  parseArgs,
   parseInteractionStage,
   parseLifecycle,
+  readBodyFile,
+  run,
 };

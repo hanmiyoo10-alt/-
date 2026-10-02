@@ -229,7 +229,7 @@ function readHolderRecord(activeLease) {
 
 function manifestCandidates(commentRead, packet, activeLease, holderRead) {
   if (!commentRead.complete) return {state: 'UNKNOWN', manifest: null, reasons: ['COMMENTS_DISCOVERY_PARTIAL']};
-  const matching = [];
+  const matching = new Map();
   for (const row of commentRead.rows) {
     const body = typeof row?.body === 'string' ? row.body : '';
     if (!body.includes(handoff.MANIFEST_START)) continue;
@@ -245,11 +245,13 @@ function manifestCandidates(commentRead, packet, activeLease, holderRead) {
     if (JSON.stringify(manifest.workspace) !== JSON.stringify(activeLease.workspace)) continue;
     if (manifest.observedBaseSha !== activeLease.observedBaseSha) continue;
     if (holderRead.record && manifest.manifestId !== holderRead.record.manifestId) continue;
-    matching.push(manifest);
+    const identity = `${manifest.manifestId}:${manifest.payloadSha256}`;
+    if (!matching.has(identity)) matching.set(identity, manifest);
   }
-  if (matching.length === 0) return {state: 'UNKNOWN', manifest: null, reasons: ['MANIFEST_MATCH_MISSING']};
-  if (matching.length !== 1) return {state: 'CONFLICT', manifest: null, reasons: ['MANIFEST_MATCH_DUPLICATE']};
-  return {state: 'EXACT', manifest: matching[0], reasons: []};
+  const distinct = [...matching.values()];
+  if (distinct.length === 0) return {state: 'UNKNOWN', manifest: null, reasons: ['MANIFEST_MATCH_MISSING']};
+  if (distinct.length !== 1) return {state: 'CONFLICT', manifest: null, reasons: ['MANIFEST_MATCH_DUPLICATE']};
+  return {state: 'EXACT', manifest: distinct[0], reasons: []};
 }
 
 function finalizeHolderState(holderRead, manifestRead, activeLease) {

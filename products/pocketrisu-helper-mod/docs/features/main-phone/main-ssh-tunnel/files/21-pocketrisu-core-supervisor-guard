@@ -1,25 +1,177 @@
 #!/data/data/com.termux/files/usr/bin/sh
+set -u
 
-PREFIX="/data/data/com.termux/files/usr"
-export PATH="$PREFIX/bin:$PATH"
+PREFIX=/data/data/com.termux/files/usr
+HOME_DIR=/data/data/com.termux/files/home
+INTERVAL=15
 
-GUARD="$HOME/.local/bin/pocketrisu-core-supervisor-guard"
-STATE="$HOME/.local/state/pocketrisu-core-supervisor-guard"
-PIDFILE="$STATE/guard.pid"
-
-mkdir -p "$STATE"
-
-[ -x "$GUARD" ] || exit 0
-
-if [ -r "$PIDFILE" ]; then
-    pid="$(cat "$PIDFILE" 2>/dev/null || true)"
-    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-        cmdline="$(tr '\000' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
-        case "$cmdline" in
-            *pocketrisu-core-supervisor-guard*) exit 0 ;;
-        esac
-    fi
+if [ "${POCKETRISU_CORE_GUARD_TEST_MODE:-0}" = "1" ]; then
+    TEST_ROOT="${POCKETRISU_CORE_GUARD_TEST_ROOT:?test root required}"
+    PREFIX="$TEST_ROOT/prefix"
+    HOME_DIR="$TEST_ROOT/home"
+    INTERVAL="${POCKETRISU_CORE_GUARD_TEST_INTERVAL:-1}"
 fi
 
-nohup "$GUARD" --loop >> "$STATE/launcher.log" 2>&1 &
-exit 0
+export PATH="$PREFIX/bin:$PATH"
+
+GUARD="$HOME_DIR/.local/bin/pocketrisu-core-supervisor-guard"
+STATE="$HOME_DIR/.local/state/pocketrisu-core-supervisor-guard"
+NOHUP="$PREFIX/bin/nohup"
+SLEEP="$PREFIX/bin/sleep"
+SH="$PREFIX/bin/sh"
+TR="$PREFIX/bin/tr"
+ANCHOR_LOCKDIR="$STATE/anchor.lock"
+ANCHOR_PIDFILE="$STATE/anchor.pid"
+ANCHOR_LOG="$STATE/anchor.log"
+SELF="$0"
+validate_guard() {
+    if [ ! -e "$GUARD" ]; then
+        return 1
+    fi
+    [ -f "$GUARD" ] && [ ! -L "$GUARD" ] && [ -x "$GUARD" ] || return 2
+    return 0
+}
+
+pid_state() {
+    pidfile="$1"
+    identity="$2"
+    [ -r "$pidfile" ] || return 1
+    pid="$(cat "$pidfile" 2>/dev/null || true)"
+    case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+    kill -0 "$pid" 2>/dev/null || return 1
+    cmdline="$("$TR" '\000' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+    case "$identity:$cmdline" in
+        guard:*pocketrisu-core-supervisor-guard*--loop*) return 0 ;;
+        anchor:*21-pocketrisu-core-supervisor-guard*--anchor*) return 0 ;;
+        *) return 2 ;;
+    esac
+}
+
+guard_pid_state() {
+    pid_state "$STATE/guard.pid" guard
+}
+
+anchor_pid_state() {
+    pid_state "$ANCHOR_PIDFILE" anchor
+}
+start_guard() {
+    validate_guard
+    valid_rc=$?
+    [ "$valid_rc" -eq 0 ] || {
+        [ "$valid_rc" -eq 1 ] && return 1
+        return 2
+    }
+
+    guard_pid_state
+    state_rc=$?
+    [ "$state_rc" -ne 0 ] || return 0
+    [ "$state_rc" -ne 2 ] || return 2
+
+    mkdir -p "$STATE"
+    "$NOHUP" "$SH" "$GUARD" --loop >> "$STATE/launcher.log" 2>&1 &
+
+    i=0
+    while [ "$i" -lt 5 ]; do
+        "$SLEEP" 1
+        guard_pid_state
+        state_rc=$?
+        [ "$state_rc" -ne 0 ] || return 0
+        [ "$state_rc" -ne 2 ] || return 2
+        i=$((i + 1))
+    done
+    return 1
+}
+acquire_anchor_lock() {
+    mkdir -p "$STATE"
+    if mkdir "$ANCHOR_LOCKDIR" 2>/dev/null; then
+        printf '%s\n' "$$" > "$ANCHOR_PIDFILE"
+        return 0
+    fi
+
+    anchor_pid_state
+    state_rc=$?
+    [ "$state_rc" -ne 0 ] || return 1
+    [ "$state_rc" -ne 2 ] || return 2
+
+    rm -rf "$ANCHOR_LOCKDIR"
+    mkdir "$ANCHOR_LOCKDIR" 2>/dev/null || return 1
+    printf '%s\n' "$$" > "$ANCHOR_PIDFILE"
+}
+
+release_anchor_lock() {
+    current="$(cat "$ANCHOR_PIDFILE" 2>/dev/null || true)"
+    [ "$current" = "$$" ] && rm -f "$ANCHOR_PIDFILE"
+    rmdir "$ANCHOR_LOCKDIR" 2>/dev/null || true
+}
+
+anchor_cleanup() {
+    release_anchor_lock
+}
+anchor_terminate() {
+    anchor_cleanup
+    trap - EXIT INT TERM HUP
+    exit 0
+}
+
+anchor_loop() {
+    acquire_anchor_lock
+    lock_rc=$?
+    [ "$lock_rc" -ne 1 ] || exit 0
+    [ "$lock_rc" -ne 2 ] || exit 2
+    trap anchor_cleanup EXIT
+    trap anchor_terminate INT TERM HUP
+
+    while :; do
+        start_guard || true
+        "$SLEEP" "$INTERVAL"
+    done
+}
+
+start_anchor() {
+    anchor_pid_state
+    state_rc=$?
+    [ "$state_rc" -ne 0 ] || return 0
+    [ "$state_rc" -ne 2 ] || return 2
+
+    mkdir -p "$STATE"
+    "$NOHUP" "$SH" "$SELF" --anchor >> "$ANCHOR_LOG" 2>&1 &
+    i=0
+    while [ "$i" -lt 5 ]; do
+        "$SLEEP" 1
+        anchor_pid_state
+        state_rc=$?
+        [ "$state_rc" -ne 0 ] || return 0
+        [ "$state_rc" -ne 2 ] || return 2
+        i=$((i + 1))
+    done
+    return 1
+}
+
+case "${1:-}" in
+    "")
+        validate_guard
+        valid_rc=$?
+        [ "$valid_rc" -ne 1 ] || exit 0
+        [ "$valid_rc" -eq 0 ] || exit 2
+        start_guard
+        guard_rc=$?
+        [ "$guard_rc" -ne 2 ] || exit 2
+        start_anchor
+        anchor_rc=$?
+        [ "$anchor_rc" -ne 2 ] || exit 2
+        [ "$guard_rc" -eq 0 ] && [ "$anchor_rc" -eq 0 ]
+        ;;
+    --anchor)
+        anchor_loop
+        ;;
+    --ensure-anchor)
+        validate_guard
+        valid_rc=$?
+        [ "$valid_rc" -eq 0 ] || exit "$valid_rc"
+        start_anchor
+        ;;
+    *)
+        printf '%s\n' 'usage: 21-pocketrisu-core-supervisor-guard [--anchor|--ensure-anchor]' >&2
+        exit 2
+        ;;
+esac

@@ -13,6 +13,8 @@ const LEDGER_ISSUE = 2352;
 const PAGE_SIZE = 100;
 const MAX_PAGES = 5;
 const MAX_PLAN_BYTES = 16 * 1024;
+const MAX_PACKET_ACTIVITY_CANDIDATES = 12;
+const PACKET_ACTIVITY_EVIDENCE_MODE = 'MCL_STAGE_ENTRY_PACKET_ACTIVITY_EVIDENCE_SET';
 const PACKET_REF_RE = /^#[1-9][0-9]*$/;
 const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
@@ -42,14 +44,6 @@ const PLAN_FIELDS = new Set([
   'schema', 'phase', 'route', 'executor', 'preflight_owner', 'repository_effect',
   'overlap_guard', 'lease_guard', 'handoff_guard', 'fallback', 'next_gate', 'details',
 ]);
-const SCOPE_HEADINGS = new Set([
-  'Bounded write scope',
-  'Bounded implementation write scope',
-  'Locked write scope',
-  'Bounded IMPLEMENTATION_PR write scope',
-  'Repository write-scope ceiling used by IMPLEMENTATION_PR',
-]);
-
 class StageError extends Error {
   constructor(kind, reasonCodes, extra = {}) {
     super(reasonCodes[0] || kind);
@@ -108,6 +102,44 @@ function exactKeys(value, allowed, prefix) {
   }
 }
 
+function normalizePacketActivityEvidenceSet(input, packetNumber) {
+  exactKeys(input, new Set(['schemaVersion', 'mode', 'requesterRef', 'candidates']),
+    'PACKET_ACTIVITY_EVIDENCE_SET');
+  if (input.schemaVersion !== 1 || input.mode !== PACKET_ACTIVITY_EVIDENCE_MODE
+      || !Array.isArray(input.candidates)
+      || input.candidates.length > MAX_PACKET_ACTIVITY_CANDIDATES) {
+    throw new StageError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_SET_INVALID']);
+  }
+  const requesterRef = '#' + packetNumber;
+  if (input.requesterRef !== requesterRef) {
+    throw new StageError('CONFLICT', ['PACKET_ACTIVITY_EVIDENCE_REQUESTER_CONFLICT']);
+  }
+  const seen = new Set();
+  const candidates = input.candidates.map((row) => {
+    exactKeys(row, new Set(['candidateRef', 'evidence']), 'PACKET_ACTIVITY_EVIDENCE_CANDIDATE');
+    if (!PACKET_REF_RE.test(String(row.candidateRef || '')) || seen.has(row.candidateRef)) {
+      throw new StageError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_CANDIDATE_INVALID']);
+    }
+    seen.add(row.candidateRef);
+    const evidence = row.evidence;
+    exactKeys(evidence, new Set([
+      'schemaVersion', 'mode', 'candidateRef', 'requesterRef', 'relationship',
+      'repositoryMutationActive', 'activeLease', 'overlappingOpenPr',
+      'sequencingExplicit', 'sourceRefs',
+    ]), 'PACKET_ACTIVITY_EVIDENCE');
+    if (evidence.schemaVersion !== 1
+        || evidence.mode !== 'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE'
+        || evidence.candidateRef !== row.candidateRef
+        || evidence.requesterRef !== requesterRef
+        || !Array.isArray(evidence.sourceRefs)) {
+      throw new StageError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_PAYLOAD_INVALID']);
+    }
+    return {candidateRef: row.candidateRef, evidence};
+  });
+  candidates.sort((a, b) => a.candidateRef.localeCompare(b.candidateRef));
+  return {schemaVersion: 1, mode: PACKET_ACTIVITY_EVIDENCE_MODE, requesterRef, candidates};
+}
+
 function parsePlan(value) {
   exactKeys(value, PLAN_FIELDS, 'PLAN');
   const expected = {
@@ -153,14 +185,24 @@ function parseArgs(argv) {
     if (values[name] !== undefined) throw new StageError('UNKNOWN', [`ARGUMENT_DUPLICATE:${name}`]);
     values[name] = value;
   }
-  const allowed = new Set(['packet', 'plan', 'apply']);
+  const allowed = new Set(['packet', 'plan', 'source-main', 'packet-activity-evidence-file', 'apply']);
   const extras = Object.keys(values).filter((key) => !allowed.has(key));
   if (extras.length) throw new StageError('UNKNOWN', extras.map((key) => `ARGUMENT_UNSUPPORTED:${key}`));
   if (!PACKET_REF_RE.test(values.packet || '')) throw new StageError('UNKNOWN', ['PACKET_REF_INVALID']);
   if (!values.plan) throw new StageError('UNKNOWN', ['PLAN_FILE_REQUIRED']);
+  if (values['source-main'] !== undefined && !SHA40_RE.test(values['source-main'])) {
+    throw new StageError('UNKNOWN', ['SOURCE_MAIN_INVALID']);
+  }
   if (command === 'apply' && values.apply !== true) throw new StageError('BLOCKED', ['EXPLICIT_APPLY_REQUIRED']);
   if (command === 'inspect' && values.apply) throw new StageError('UNKNOWN', ['INSPECT_APPLY_FORBIDDEN']);
-  return {command, packetRef: values.packet, packetNumber: Number(values.packet.slice(1)), planFile: values.plan};
+  return {
+    command,
+    packetRef: values.packet,
+    packetNumber: Number(values.packet.slice(1)),
+    planFile: values.plan,
+    sourceMain: values['source-main'] || null,
+    packetActivityEvidenceFile: values['packet-activity-evidence-file'] || null,
+  };
 }
 
 function parseKeyValueReceipt(text) {
@@ -226,39 +268,18 @@ function parseOpsCapsule(body, expectedMain) {
   return fields;
 }
 
-function sections(text) {
-  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
-  const found = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const match = /^##\s+(.+?)\s*$/.exec(lines[index]);
-    if (!match || !SCOPE_HEADINGS.has(match[1])) continue;
-    const body = [];
-    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
-      if (/^##\s+/.test(lines[cursor])) break;
-      body.push(lines[cursor]);
-    }
-    found.push({heading: match[1], lines: body});
-  }
-  return found;
-}
-
 function extractPacketScopes(body) {
-  const found = sections(body);
-  if (found.length === 0) throw new StageError('UNKNOWN', ['PACKET_SCOPE_SECTION_MISSING']);
-  if (found.length !== 1) throw new StageError('CONFLICT', ['PACKET_SCOPE_SECTION_DUPLICATE']);
-  const raw = [];
-  for (const line of found[0].lines) {
-    const matches = [...line.matchAll(/`((?:path|surface):[^`]+)`/g)].map((item) => item[1]);
-    raw.push(...matches);
+  const parsed = scopeOverlap.extractPacketScopes(body);
+  if (!parsed.ok) {
+    throw new StageError(
+      parsed.conflict ? 'CONFLICT' : 'UNKNOWN',
+      [parsed.conflict ? 'PACKET_SCOPE_CONFLICT' : 'PACKET_SCOPE_UNRESOLVED'],
+    );
   }
-  if (!raw.length) throw new StageError('UNKNOWN', ['PACKET_SCOPE_EMPTY']);
-  const normalized = [];
-  for (const item of raw) {
-    const parsed = scopeOverlap.normalizeScope(item);
-    if (!parsed.ok) throw new StageError('UNKNOWN', ['PACKET_SCOPE_INVALID']);
-    normalized.push(parsed.normalized);
+  const normalized = parsed.scopes.map((item) => item.normalized);
+  if (new Set(normalized).size !== normalized.length) {
+    throw new StageError('CONFLICT', ['PACKET_SCOPE_DUPLICATE']);
   }
-  if (new Set(normalized).size !== normalized.length) throw new StageError('CONFLICT', ['PACKET_SCOPE_DUPLICATE']);
   return normalized.sort();
 }
 
@@ -273,17 +294,29 @@ function fetchPaged(endpointBuilder, runner = runDefault) {
   return {complete: false, rows};
 }
 
-function discoverOverlap({packetNumber, requestedScopes, runner = runDefault}) {
+function discoverOverlap({
+  packetNumber, requestedScopes, packetActivityEvidence = null, runner = runDefault,
+}) {
+  const requesterRef = '#' + packetNumber;
   const issues = fetchPaged(
     (page) => `repos/${REPO}/issues?state=open&per_page=${PAGE_SIZE}&page=${page}`, runner);
   if (!issues.complete) {
-    return scopeOverlap.resolveScopeOverlap({requestedScopes, discovery: 'PARTIAL', candidates: []});
+    return scopeOverlap.resolveScopeOverlap({
+      requesterRef, requestedScopes, discovery: 'PARTIAL', candidates: [],
+    });
   }
+  const evidenceRows = packetActivityEvidence?.candidates || [];
+  const evidenceByCandidate = new Map(
+    evidenceRows.map((row) => [row.candidateRef, row.evidence]),
+  );
+  const seenEvidence = new Set();
   const candidates = [];
   const prIssues = [];
   for (const item of issues.rows) {
     if (!Number.isSafeInteger(item?.number) || typeof item?.state !== 'string') {
-      return scopeOverlap.resolveScopeOverlap({requestedScopes, discovery: 'UNKNOWN', candidates});
+      return scopeOverlap.resolveScopeOverlap({
+        requesterRef, requestedScopes, discovery: 'UNKNOWN', candidates,
+      });
     }
     if (item.pull_request) {
       prIssues.push(item);
@@ -291,8 +324,22 @@ function discoverOverlap({packetNumber, requestedScopes, runner = runDefault}) {
     }
     if (item.number === packetNumber) continue;
     if (typeof item.body === 'string' && item.body.includes(PACKET_MARKER)) {
-      candidates.push({type: 'packet', ref: `#${item.number}`, issueState: item.state, body: item.body});
+      const canonicalRef = '#' + item.number;
+      const evidence = evidenceByCandidate.get(canonicalRef);
+      if (evidence) seenEvidence.add(canonicalRef);
+      candidates.push({
+        type: 'packet',
+        ref: canonicalRef,
+        issueState: item.state,
+        body: item.body,
+        ...(evidence ? {packetActivityEvidence: evidence} : {}),
+      });
     }
+  }
+  const staleEvidence = [...evidenceByCandidate.keys()]
+    .filter((candidateRef) => !seenEvidence.has(candidateRef));
+  if (staleEvidence.length) {
+    throw new StageError('CONFLICT', ['PACKET_ACTIVITY_EVIDENCE_CANDIDATE_NOT_CURRENT']);
   }
   for (const pr of prIssues) {
     const files = fetchPaged(
@@ -307,6 +354,7 @@ function discoverOverlap({packetNumber, requestedScopes, runner = runDefault}) {
     });
   }
   return scopeOverlap.resolveScopeOverlap({
+    requesterRef,
     requestedScopes,
     discovery: 'COMPLETE',
     candidates,
@@ -369,8 +417,14 @@ function inspectLanding(mainSha, runner = runDefault) {
   return {landing, ...classification};
 }
 
-function inspectContext({packetNumber, plan, runner = runDefault, profile}) {
+function inspectContext({
+  packetNumber, plan, sourceMain = null, packetActivityEvidence = null,
+  runner = runDefault, profile,
+}) {
   const firstMain = readMainSha(runner);
+  if (sourceMain !== null && sourceMain !== firstMain) {
+    throw new StageError('CONFLICT', ['SOURCE_MAIN_CURRENT_MAIN_CONFLICT']);
+  }
   const ops = ghJson(`repos/${REPO}/issues/${OPS_ISSUE}`, runner);
   const secondMain = readMainSha(runner);
   if (firstMain !== secondMain) throw new StageError('UNKNOWN', ['MAIN_CHANGED_DURING_CAPTURE']);
@@ -386,7 +440,7 @@ function inspectContext({packetNumber, plan, runner = runDefault, profile}) {
   }
 
   const requestedScopes = extractPacketScopes(issue.body);
-  const overlap = discoverOverlap({packetNumber, requestedScopes, runner});
+  const overlap = discoverOverlap({packetNumber, requestedScopes, packetActivityEvidence, runner});
   if (overlap.state === 'CONFLICT') throw new StageError('CONFLICT', ['OVERLAP_CONFLICT']);
   if (overlap.state === 'UNKNOWN') throw new StageError('UNKNOWN', ['OVERLAP_UNKNOWN']);
   if (overlap.state === 'OVERLAP') throw new StageError('BLOCKED', ['OVERLAP_PRESENT']);
@@ -412,6 +466,8 @@ function inspectContext({packetNumber, plan, runner = runDefault, profile}) {
     packetRef: `#${packetNumber}`,
     plan,
     mainSha: firstMain,
+    sourceMain,
+    packetActivityEvidence,
     packetBody: issue.body,
     packetBodySha256: sha256(issue.body),
     requestedScopes,
@@ -513,6 +569,8 @@ function revalidateBeforeLandingRefresh(context, lease, {
   const fresh = inspector({
     packetNumber: context.packetNumber,
     plan: context.plan,
+    sourceMain: context.sourceMain,
+    packetActivityEvidence: context.packetActivityEvidence,
     runner,
     profile,
   });
@@ -649,6 +707,8 @@ function revalidateAfterNormalization(context, {
   const fresh = inspector({
     packetNumber: context.packetNumber,
     plan: context.plan,
+    sourceMain: context.sourceMain,
+    packetActivityEvidence: context.packetActivityEvidence,
     runner,
     profile,
   });
@@ -667,6 +727,21 @@ function revalidateAfterNormalization(context, {
   return fresh;
 }
 
+function coordinationEvidenceRef(value, operation) {
+  if (value?.status === 'DISPATCH_COMPLETE'
+      && Number.isSafeInteger(value.runId)
+      && value.runConclusion === 'success') {
+    return `run:${value.runId}`;
+  }
+  if (value?.status !== 'DISPATCH_READBACK_COMPLETE'
+      || value.runId !== null
+      || value.runConclusion !== null
+      || !SHA256_RE.test(value.leaseId || '')
+      || !Number.isSafeInteger(value.observedGeneration)) return null;
+  const expected = `receipt:mcl-task-lease-readback:${operation}:${value.leaseId}:generation:${value.observedGeneration}`;
+  return value.evidenceRef === expected ? expected : null;
+}
+
 function acquireLease(context, runner = runDefault) {
   const identity = context.workspace.identity;
   const value = invokeOperator([
@@ -683,14 +758,13 @@ function acquireLease(context, runner = runDefault) {
     '--observed-base-sha', context.mainSha,
     '--dispatch',
   ], runner);
-  if (value.status !== 'DISPATCH_COMPLETE'
-      || !SHA256_RE.test(value.leaseId || '')
+  const evidenceRef = coordinationEvidenceRef(value, 'acquire');
+  if (!SHA256_RE.test(value.leaseId || '')
       || !Number.isSafeInteger(value.observedGeneration)
-      || !Number.isSafeInteger(value.runId)
-      || value.runConclusion !== 'success') {
+      || !evidenceRef) {
     throw new StageError('BLOCKED', ['D013_ACQUIRE_NOT_PROVEN']);
   }
-  return value;
+  return {...value, evidenceRef};
 }
 
 function releaseLease(context, leaseId, runner = runDefault) {
@@ -709,6 +783,24 @@ function releaseLease(context, leaseId, runner = runDefault) {
   }
 }
 
+function releaseRepositoryLease(context, leaseId, runner = runDefault) {
+  try {
+    const value = invokeOperator([
+      'lease-release',
+      '--repo', REPO,
+      '--packet', context.packetRef,
+      '--lease-id', leaseId,
+      '--dispatch',
+    ], runner);
+    const evidenceRef = coordinationEvidenceRef(value, 'release');
+    return evidenceRef
+      ? {ok: true, value: {...value, evidenceRef}}
+      : {ok: false, value};
+  } catch (error) {
+    return {ok: false, error};
+  }
+}
+
 function postComment(packetNumber, body, runner = runDefault) {
   const value = ghJson(`repos/${REPO}/issues/${packetNumber}/comments`, runner, {
     method: 'POST', body: {body},
@@ -717,8 +809,13 @@ function postComment(packetNumber, body, runner = runDefault) {
   return value.id;
 }
 
+function deterministicLeaseEvidenceRef(lease) {
+  return `receipt:mcl-task-lease:${lease.leaseId}:generation:${lease.observedGeneration}`;
+}
+
 function buildManifest(context, lease) {
   try {
+    const leaseEvidenceRef = deterministicLeaseEvidenceRef(lease);
     return taskHandoff.buildManifest({
     schemaVersion: 1,
     mode: 'MCL_TASK_MANIFEST',
@@ -740,7 +837,7 @@ function buildManifest(context, lease) {
       ledgerRef: '#2352',
       leaseId: lease.leaseId,
       acquiredGeneration: lease.observedGeneration,
-      acquireEvidenceRef: `run:${lease.runId}`,
+      acquireEvidenceRef: leaseEvidenceRef,
     },
     sourceAuthorityRefs: [
       context.packetRef,
@@ -751,7 +848,7 @@ function buildManifest(context, lease) {
     inputRefs: [
       `commit:${context.mainSha}`,
       'receipt:mcl-dispatch-plan:v1',
-      `run:${lease.runId}`,
+      leaseEvidenceRef,
     ],
     expectedOutputRefs: context.requestedScopes.filter((scope) => scope.startsWith('path:')),
     acceptanceRefs: [context.packetRef, 'issue:#2352'],
@@ -883,6 +980,8 @@ function revalidateAfterAcquire(context, lease, {
   const fresh = inspector({
     packetNumber: context.packetNumber,
     plan: context.plan,
+    sourceMain: context.sourceMain,
+    packetActivityEvidence: context.packetActivityEvidence,
     runner,
     profile,
   });
@@ -960,7 +1059,7 @@ function applyRepositoryContext(context, {
         ? 'PRESERVE_PARTIAL_STATE_AND_RECOVER'
         : 'REPAIR_AND_RETRY';
       if (!created.stateChanged) {
-        const cleanup = releaseLease(context, lease.leaseId, runner);
+        const cleanup = releaseRepositoryLease(context, lease.leaseId, runner);
         if (!cleanup.ok) {
           reasons = [...reasons, 'D013_CLEANUP_RELEASE_FAILED'];
           nextLegalAction = 'EXPLICIT_D013_RECOVERY_REQUIRED';
@@ -998,14 +1097,14 @@ function applyRepositoryContext(context, {
       ],
       steps: [
         {name: 'authority-currentness-overlap', result: 'PASS', evidenceLocator: `issue:#${context.packetNumber}`},
-        {name: 'd013-acquire', result: 'PASS', evidenceLocator: `run:${lease.runId}`},
+        {name: 'd013-acquire', result: 'PASS', evidenceLocator: lease.evidenceRef},
         {name: 'd014-manifest', result: 'PASS', evidenceLocator: `issue-comment:${manifestComment}`},
         {name: 'workspace-prepare', result: 'PASS', evidenceLocator: `receipt:mcl-stage-entry-workspace:${created.remoteHead}`},
         {name: 'execution-handoff', result: 'PASS', evidenceLocator: `issue-comment:${handoffComment}`},
       ],
       artifacts: [
         `issue:#${context.packetNumber}`,
-        `run:${lease.runId}`,
+        lease.evidenceRef,
         `receipt:mcl-task-manifest:${manifest.manifestId}`,
         `receipt:mcl-execution-handoff:${manifest.manifestId}`,
       ],
@@ -1013,7 +1112,7 @@ function applyRepositoryContext(context, {
     });
   } catch (error) {
     if (lease && !workspaceStateChanged) {
-      const cleanup = releaseLease(context, lease.leaseId, runner);
+      const cleanup = releaseRepositoryLease(context, lease.leaseId, runner);
       const extraReason = cleanup.ok ? [] : ['D013_CLEANUP_RELEASE_FAILED'];
       const wrapped = error instanceof StageError
         ? new StageError(error.kind, [...error.reasonCodes, ...extraReason])
@@ -1088,9 +1187,15 @@ function run(argv = process.argv.slice(2), deps = {}) {
   try {
     parsed = parseArgs(argv);
     const plan = parsePlan(readRegularJson(parsed.planFile));
+    const packetActivityEvidence = parsed.packetActivityEvidenceFile
+      ? normalizePacketActivityEvidenceSet(
+        readRegularJson(parsed.packetActivityEvidenceFile), parsed.packetNumber)
+      : null;
     const context = inspectContext({
       packetNumber: parsed.packetNumber,
       plan,
+      sourceMain: parsed.sourceMain,
+      packetActivityEvidence,
       runner: deps.runner || runDefault,
       profile: deps.profile,
     });
@@ -1133,9 +1238,10 @@ module.exports = {
   LANDING_WORKTREE,
   MAX_PAGES,
   PAGE_SIZE,
+  MAX_PACKET_ACTIVITY_CANDIDATES,
+  PACKET_ACTIVITY_EVIDENCE_MODE,
   PLAN_FIELDS,
   REPO,
-  SCOPE_HEADINGS,
   StageError,
   acquireLandingLease,
   acquireLease,
@@ -1154,6 +1260,7 @@ module.exports = {
   inspectLanding,
   inspectPreflight,
   normalizeLandingCurrentness,
+  normalizePacketActivityEvidenceSet,
   parseArgs,
   parseKeyValueReceipt,
   parseOpsCapsule,
@@ -1161,6 +1268,7 @@ module.exports = {
   postComment,
   receiptFor,
   releaseLease,
+  releaseRepositoryLease,
   revalidateAfterAcquire,
   revalidateAfterNormalization,
   revalidateBeforeLandingRefresh,

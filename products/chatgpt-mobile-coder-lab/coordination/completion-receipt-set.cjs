@@ -62,7 +62,7 @@ function validateInput(input) {
   return unique(reasons);
 }
 function completionCore(receipt) {
-  return {
+  const core = {
     manifestId: receipt.manifestId,
     manifestPayloadSha256: receipt.manifestPayloadSha256,
     packetRef: receipt.packetRef,
@@ -80,14 +80,27 @@ function completionCore(receipt) {
     requiredUnknownRefs: receipt.requiredUnknownRefs,
     authority: receipt.authority,
   };
+  if (receipt.workspacePreservation) {
+    core.workspacePreservation = {
+      kind: receipt.workspacePreservation.kind,
+      beforeSha256: receipt.workspacePreservation.beforeSha256,
+      afterSha256: receipt.workspacePreservation.afterSha256,
+      preservedPathRefs: receipt.workspacePreservation.preservedPathRefs,
+    };
+  }
+  return core;
 }
 function evidenceSnapshot(receipt) {
-  return {
+  const evidence = {
     outputRefs: receipt.outputRefs,
     validationRefs: receipt.validationRefs,
     observedRefs: receipt.observedRefs,
     evidenceRef: receipt.leaseReleaseEvidence?.evidenceRef ?? null,
   };
+  if (receipt.workspacePreservation) {
+    evidence.workspacePreservationEvidenceRef = receipt.workspacePreservation.evidenceRef;
+  }
+  return evidence;
 }
 function classify(input) {
   const inputReasons = validateInput(input);

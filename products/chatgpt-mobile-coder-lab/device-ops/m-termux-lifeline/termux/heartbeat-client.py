@@ -1,47 +1,36 @@
 #!/data/data/com.termux/files/usr/bin/python
 import fcntl
 import os
-import socket
+import subprocess
 import sys
 import time
 
-SOCKET_NAME = "\0mcl-m-termux-lifeline-v1"
-HEARTBEAT = b"MCL_M_TERMUX_LIFELINE_HEARTBEAT_V1\n"
-RECOVERY_OK = b"MCL_M_TERMUX_LIFELINE_RECOVERY_OK_V1\n"
-ACK = b"MCL_M_TERMUX_LIFELINE_ACK_V1\n"
-MAX_FRAME_BYTES = 64
+AM_PATH = "/data/data/com.termux/files/usr/bin/am"
+COMPANION_PACKAGE = "io.hanmiyoo.mcl.termuxlifeline"
+HEARTBEAT_ACTION = "io.hanmiyoo.mcl.termuxlifeline.action.HEARTBEAT_V1"
+RECOVERY_OK_ACTION = "io.hanmiyoo.mcl.termuxlifeline.action.RECOVERY_OK_V1"
 INTERVAL_SECONDS = 10.0
-TIMEOUT_SECONDS = 2.0
+DISPATCH_TIMEOUT_SECONDS = 2.0
 STATE_DIR = "/data/data/com.termux/files/home/.local/state/mcl-m-termux-lifeline"
 LOCK_PATH = STATE_DIR + "/heartbeat.lock"
 
 
-def read_frame(sock):
-    data = bytearray()
-    while len(data) < MAX_FRAME_BYTES:
-        chunk = sock.recv(1)
-        if not chunk:
-            break
-        data.extend(chunk)
-        if chunk == b"\n":
-            break
-    return bytes(data)
-
-
-def exchange(frame, socket_factory=socket.socket):
-    client = socket_factory(socket.AF_UNIX, socket.SOCK_STREAM)
-    try:
-        client.settimeout(TIMEOUT_SECONDS)
-        client.connect(SOCKET_NAME)
-        client.sendall(frame)
-        return read_frame(client) == ACK
-    except OSError:
+def dispatch(action, runner=subprocess.run):
+    if action not in (HEARTBEAT_ACTION, RECOVERY_OK_ACTION):
         return False
-    finally:
-        try:
-            client.close()
-        except OSError:
-            pass
+    argv = [AM_PATH, "broadcast", "-a", action, "-p", COMPANION_PACKAGE]
+    try:
+        result = runner(
+            argv,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=DISPATCH_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
 
 
 def acquire_singleton():
@@ -61,7 +50,7 @@ def heartbeat_loop():
         return 0
     try:
         while True:
-            exchange(HEARTBEAT)
+            dispatch(HEARTBEAT_ACTION)
             time.sleep(INTERVAL_SECONDS)
     except KeyboardInterrupt:
         return 0
@@ -73,7 +62,7 @@ def main(argv):
     if not argv:
         return heartbeat_loop()
     if argv == ["--recovery-ok"]:
-        return 0 if exchange(RECOVERY_OK) else 1
+        return 0 if dispatch(RECOVERY_OK_ACTION) else 1
     return 2
 
 

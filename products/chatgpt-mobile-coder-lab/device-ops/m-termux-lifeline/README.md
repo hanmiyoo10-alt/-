@@ -10,8 +10,9 @@ PocketRisu, authentication/session repair, or general device recovery.
 
 ~~~
 M Android companion foreground service
-        ↑ fixed abstract local UNIX socket
-        ↑ peer UID must equal installed com.termux UID
+        ↑ dynamic receiver exists only while armed
+        ↑ fixed package-scoped TermuxAm broadcasts
+        ↑ getSentFromUid() must equal installed com.termux UID
 Termux heartbeat client
 
 heartbeat stale
@@ -30,12 +31,14 @@ one fixed RUN_COMMAND dispatch
         ├─ ~/.termux/boot/31-mcl-m-rdc-supervisor-guard
         └─ ~/.termux/boot/32-mcl-m-tailscale-supervisor-guard
              ↓
-fixed RECOVERY_OK frame + bounded local receipt
+fixed RECOVERY_OK broadcast + bounded local receipt
 ~~~
 
-The companion lives outside the Termux process and UID boundary. The abstract
-socket accepts only the reviewed heartbeat/recovery frames, and the Android side
-checks peer credentials against the actual installed com.termux UID.
+The companion lives outside the Termux process and UID boundary. While armed it
+registers one dynamic exported receiver for exactly two package-scoped actions.
+The Android side checks BroadcastReceiver.getSentFromUid() against the actual
+installed com.termux UID and rejects intents carrying caller payload. There is no
+manifest receiver, synchronous sender ACK, or network listener.
 
 ## Safety boundary
 
@@ -99,11 +102,15 @@ Repository files map to fixed locations:
   ~/.termux/boot/30-mcl-m-termux-lifeline-heartbeat.
 
 The heartbeat client uses one local singleton lock and a 10-second heartbeat.
+Each send invokes the installed TermuxAm wrapper with only `broadcast -a <fixed
+reviewed action> -p io.hanmiyoo.mcl.termuxlifeline`. The sender records only
+whether dispatch was attempted successfully; it never claims a receiver ACK.
 The companion declares a heartbeat stale after 45 seconds. Each loss episode gets
 at most one recovery attempt, with a five-minute cooldown before a later episode.
 
-Recovery is accepted only when both a post-attempt heartbeat and the fixed
-RECOVERY_OK frame arrive before the 30-second verification timeout.
+Recovery is accepted only from receiver-side truth when both a post-attempt
+heartbeat broadcast and the fixed RECOVERY_OK broadcast arrive through the same
+UID/action/package gate before the 30-second verification timeout.
 
 ## Bounded observability
 
@@ -111,10 +118,14 @@ Durable/local receipts contain only semantic status:
 - heartbeat arm status;
 - RDC launcher pass/fail;
 - Tailscale launcher pass/fail;
-- companion acknowledgement pass/fail;
+- RECOVERY_OK dispatch pass/fail;
 - withheld details.
 
-No process tree, PID, command output, credentials, auth/session data, socket
+The Termux recovery receipt is `mcl-m-termux-lifeline-recovery.v2`; it does not
+claim companion acknowledgement. Receiver-side heartbeat/RECOVERY_OK timestamps
+remain the recovery truth used by the Android state machine.
+
+No process tree, PID, command output, credentials, auth/session data, broadcast
 payload transcript, or arbitrary stdout/stderr is collected as evidence.
 
 ## Validation

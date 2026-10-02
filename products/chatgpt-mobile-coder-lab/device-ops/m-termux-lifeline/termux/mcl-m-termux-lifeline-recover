@@ -30,7 +30,7 @@ umask 077
 
 RDC_STATUS=fail
 TAILSCALE_STATUS=fail
-ACK_STATUS=fail
+RECOVERY_OK_DISPATCH=fail
 
 if "$RDC_LAUNCHER" >/dev/null 2>&1; then
     RDC_STATUS=pass
@@ -40,17 +40,17 @@ if "$TAILSCALE_LAUNCHER" >/dev/null 2>&1; then
 fi
 if [ "$RDC_STATUS" = pass ] && [ "$TAILSCALE_STATUS" = pass ]; then
     if "$PYTHON" "$CLIENT" --recovery-ok >/dev/null 2>&1; then
-        ACK_STATUS=pass
+        RECOVERY_OK_DISPATCH=pass
     fi
 fi
 
 TMP="$RECEIPT.$$"
 {
     printf '%s\n' \
-        'schema=mcl-m-termux-lifeline-recovery.v1' \
+        'schema=mcl-m-termux-lifeline-recovery.v2' \
         "rdc_launcher=$RDC_STATUS" \
         "tailscale_launcher=$TAILSCALE_STATUS" \
-        "companion_ack=$ACK_STATUS" \
+        "recovery_ok_dispatch=$RECOVERY_OK_DISPATCH" \
         'details=withheld'
 } > "$TMP"
 mv "$TMP" "$RECEIPT"
@@ -59,4 +59,4 @@ cat "$RECEIPT"
 
 [ "$RDC_STATUS" = pass ] &&
 [ "$TAILSCALE_STATUS" = pass ] &&
-[ "$ACK_STATUS" = pass ]
+[ "$RECOVERY_OK_DISPATCH" = pass ]

@@ -727,6 +727,21 @@ function revalidateAfterNormalization(context, {
   return fresh;
 }
 
+function coordinationEvidenceRef(value, operation) {
+  if (value?.status === 'DISPATCH_COMPLETE'
+      && Number.isSafeInteger(value.runId)
+      && value.runConclusion === 'success') {
+    return `run:${value.runId}`;
+  }
+  if (value?.status !== 'DISPATCH_READBACK_COMPLETE'
+      || value.runId !== null
+      || value.runConclusion !== null
+      || !SHA256_RE.test(value.leaseId || '')
+      || !Number.isSafeInteger(value.observedGeneration)) return null;
+  const expected = `receipt:mcl-task-lease-readback:${operation}:${value.leaseId}:generation:${value.observedGeneration}`;
+  return value.evidenceRef === expected ? expected : null;
+}
+
 function acquireLease(context, runner = runDefault) {
   const identity = context.workspace.identity;
   const value = invokeOperator([
@@ -743,14 +758,13 @@ function acquireLease(context, runner = runDefault) {
     '--observed-base-sha', context.mainSha,
     '--dispatch',
   ], runner);
-  if (value.status !== 'DISPATCH_COMPLETE'
-      || !SHA256_RE.test(value.leaseId || '')
+  const evidenceRef = coordinationEvidenceRef(value, 'acquire');
+  if (!SHA256_RE.test(value.leaseId || '')
       || !Number.isSafeInteger(value.observedGeneration)
-      || !Number.isSafeInteger(value.runId)
-      || value.runConclusion !== 'success') {
+      || !evidenceRef) {
     throw new StageError('BLOCKED', ['D013_ACQUIRE_NOT_PROVEN']);
   }
-  return value;
+  return {...value, evidenceRef};
 }
 
 function releaseLease(context, leaseId, runner = runDefault) {
@@ -764,6 +778,24 @@ function releaseLease(context, leaseId, runner = runDefault) {
     ], runner);
     return value.status === 'DISPATCH_COMPLETE' && value.runConclusion === 'success'
       ? {ok: true, value} : {ok: false, value};
+  } catch (error) {
+    return {ok: false, error};
+  }
+}
+
+function releaseRepositoryLease(context, leaseId, runner = runDefault) {
+  try {
+    const value = invokeOperator([
+      'lease-release',
+      '--repo', REPO,
+      '--packet', context.packetRef,
+      '--lease-id', leaseId,
+      '--dispatch',
+    ], runner);
+    const evidenceRef = coordinationEvidenceRef(value, 'release');
+    return evidenceRef
+      ? {ok: true, value: {...value, evidenceRef}}
+      : {ok: false, value};
   } catch (error) {
     return {ok: false, error};
   }
@@ -1027,7 +1059,7 @@ function applyRepositoryContext(context, {
         ? 'PRESERVE_PARTIAL_STATE_AND_RECOVER'
         : 'REPAIR_AND_RETRY';
       if (!created.stateChanged) {
-        const cleanup = releaseLease(context, lease.leaseId, runner);
+        const cleanup = releaseRepositoryLease(context, lease.leaseId, runner);
         if (!cleanup.ok) {
           reasons = [...reasons, 'D013_CLEANUP_RELEASE_FAILED'];
           nextLegalAction = 'EXPLICIT_D013_RECOVERY_REQUIRED';
@@ -1065,14 +1097,14 @@ function applyRepositoryContext(context, {
       ],
       steps: [
         {name: 'authority-currentness-overlap', result: 'PASS', evidenceLocator: `issue:#${context.packetNumber}`},
-        {name: 'd013-acquire', result: 'PASS', evidenceLocator: `run:${lease.runId}`},
+        {name: 'd013-acquire', result: 'PASS', evidenceLocator: lease.evidenceRef},
         {name: 'd014-manifest', result: 'PASS', evidenceLocator: `issue-comment:${manifestComment}`},
         {name: 'workspace-prepare', result: 'PASS', evidenceLocator: `receipt:mcl-stage-entry-workspace:${created.remoteHead}`},
         {name: 'execution-handoff', result: 'PASS', evidenceLocator: `issue-comment:${handoffComment}`},
       ],
       artifacts: [
         `issue:#${context.packetNumber}`,
-        `run:${lease.runId}`,
+        lease.evidenceRef,
         `receipt:mcl-task-manifest:${manifest.manifestId}`,
         `receipt:mcl-execution-handoff:${manifest.manifestId}`,
       ],
@@ -1080,7 +1112,7 @@ function applyRepositoryContext(context, {
     });
   } catch (error) {
     if (lease && !workspaceStateChanged) {
-      const cleanup = releaseLease(context, lease.leaseId, runner);
+      const cleanup = releaseRepositoryLease(context, lease.leaseId, runner);
       const extraReason = cleanup.ok ? [] : ['D013_CLEANUP_RELEASE_FAILED'];
       const wrapped = error instanceof StageError
         ? new StageError(error.kind, [...error.reasonCodes, ...extraReason])
@@ -1236,6 +1268,7 @@ module.exports = {
   postComment,
   receiptFor,
   releaseLease,
+  releaseRepositoryLease,
   revalidateAfterAcquire,
   revalidateAfterNormalization,
   revalidateBeforeLandingRefresh,

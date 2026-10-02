@@ -738,9 +738,10 @@ async function executePrepared(ctx, inputs, deps = {}) {
       repo: REPO, manifest: child, handoff: childHandoff,
       holderSecret: secret, env, runner: operatorRunner, fetchImpl,
     });
-    const release = (deps.releaseLease || stageEntry.releaseLease)(
+    const release = (deps.releaseLease || stageEntry.releaseRepositoryLease)(
       {packetRef: ctx.packetRef}, child.leaseEvidence.leaseId, runner);
-    if (!release?.ok || !Number.isSafeInteger(release.value?.runId)) {
+    if (!release?.ok || typeof release.value?.evidenceRef !== 'string'
+        || release.value.evidenceRef.length === 0) {
       fail('BLOCKED', 'D013_RELEASE_NOT_PROVEN');
     }
     const {packetAfter, ledgerAfter} = await readAfterRelease();
@@ -756,14 +757,14 @@ async function executePrepared(ctx, inputs, deps = {}) {
       checkpoint: 'COORDINATION_RELEASED',
       primitiveId: 'MCL_COORDINATION_RELEASE',
       targetIdentity: 'lease:' + child.leaseEvidence.leaseId,
-      evidenceLocator: 'run:' + release.value.runId,
+      evidenceLocator: release.value.evidenceRef,
       nextPrimitive: 'FINALIZE_RECEIPTS',
     });
     const releaseEvidence = {
       ledgerRef: '#2352',
       leaseId: child.leaseEvidence.leaseId,
       releasedGeneration: released.state.generation,
-      evidenceRef: `run:${release.value.runId}`,
+      evidenceRef: release.value.evidenceRef,
     };
     const childReceipt = taskHandoff.buildCompletionReceipt(child, {
       disposition: 'COMPLETE',

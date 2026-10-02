@@ -133,6 +133,13 @@ PR readback PASS
 → exact released-ledger readback
 → holder release
 → D-014 completion evidence
+
+Normal D-013 release evidence may be either the existing run-backed locator or
+the exact zero-run `DISPATCH_READBACK_COMPLETE` ledger locator normalized by
+stage-entry. Repository implementation does not require a workflow run id for
+that readback-complete case, but it still requires the same fresh packet/#2352
+readback and existing `validateReleased()` PASS before holder release or D-014
+completion.
 ```
 
 No automatic retry is added. A failure after prepare, commit, push or PR creation preserves the real partial state and leaves targeted recovery to the existing recovery owners.

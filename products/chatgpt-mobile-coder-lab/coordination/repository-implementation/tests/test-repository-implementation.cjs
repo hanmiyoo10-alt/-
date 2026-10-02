@@ -539,7 +539,7 @@ test('successful fixed transaction keeps publication before durable release and 
       },
       releaseLease() {
         events.push('lease-release');
-        return {ok: true, value: {runId: 7010}};
+        return {ok: true, value: {runId: null, evidenceRef: `receipt:mcl-task-lease-readback:release:${LEASE}:generation:88`}};
       },
       async readAfterRelease() {
         events.push('lease-readback');
@@ -619,7 +619,7 @@ test('validation-finalization local artifact stays execution-local while D014 co
       async guardCurrent() {},
       currentGitHead() { return HEAD; },
       publishPr() { return {number: 7002, head: HEAD, changed: VF_PATHS}; },
-      releaseLease() { return {ok: true, value: {runId: 7011}}; },
+      releaseLease() { return {ok: true, value: {runId: 7011, evidenceRef: 'run:7011'}}; },
       async readAfterRelease() {
         return {packetAfter: {body: 'packet-body'}, ledgerAfter: {body: 'released-ledger'}};
       },
@@ -681,7 +681,7 @@ test('publication failure preserves lease and holder instead of manufacturing cl
         events.push('pr-fail');
         throw new impl.ImplementationError('UNKNOWN', ['PR_CREATE_UNPROVEN']);
       },
-      releaseLease() { events.push('lease-release'); return {ok: true, value: {runId: 1}}; },
+      releaseLease() { events.push('lease-release'); return {ok: true, value: {runId: 1, evidenceRef: 'run:1'}}; },
       releaseHolder() { events.push('holder-release'); return {status: 'RELEASED'}; },
     }), /PR_CREATE_UNPROVEN/);
     assert.deepEqual(events, ['holder-claim', 'pr-fail']);
@@ -731,7 +731,7 @@ test('detached coordinator checkpoint sink covers owner-stage boundaries in orde
       async guardCurrent() {},
       currentGitHead() { return HEAD; },
       publishPr() { return {number: 9101, head: HEAD, changed: PATHS}; },
-      releaseLease() { return {ok: true, value: {runId: 9102}}; },
+      releaseLease() { return {ok: true, value: {runId: 9102, evidenceRef: 'run:9102'}}; },
       async readAfterRelease() {
         return {packetAfter: {body: 'packet-body'}, ledgerAfter: {body: 'released-ledger'}};
       },

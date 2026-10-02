@@ -563,6 +563,111 @@ function manifestInput() {
     assert.equal(result.runId, 93);
   });
 
+  await test('zero fresh acquire run reconciles only exact plus-one ledger effect without redispatch', async () => {
+    const body = packetBody();
+    const request = {expectedGeneration: 7, ...acquireArgs(), packetBodySha256: lease.digest(body)};
+    const acquired = lease.planAcquire(ledgerState(), request);
+    const state = lease.parseLedger(acquired.updatedBody).state;
+    const plan = {status: 'PLAN_READY', operation: 'acquire', ledgerGeneration: 7,
+      leaseId: acquired.leaseId, workflowInputs: {
+        operation: 'acquire', packet_ref: '#2378', packet_body_sha256: lease.digest(body),
+      }};
+    let dispatchCalls = 0;
+    const runner = (argv) => {
+      if (argv[0] === 'run' && argv[1] === 'list') return {code: 0, stdout: '[]', stderr: ''};
+      if (argv[0] === 'workflow') { dispatchCalls += 1; return {code: 0, stdout: '', stderr: ''}; }
+      throw new Error(`unexpected runner args ${argv.join(' ')}`);
+    };
+    const client = fakeClient({body, state});
+    const result = await operator.dispatchPlan({repo: 'hanmiyoo10-alt/-', plan,
+      client, runner, sleepFn: () => {}, maxPolls: 1});
+    assert.equal(result.status, 'DISPATCH_READBACK_COMPLETE');
+    assert.equal(result.runId, null);
+    assert.equal(result.runConclusion, null);
+    assert.equal(result.observedGeneration, 8);
+    assert.equal(result.leaseId, acquired.leaseId);
+    assert.equal(result.evidenceRef,
+      `receipt:mcl-task-lease-readback:acquire:${acquired.leaseId}:generation:8`);
+    assert.equal(dispatchCalls, 1);
+    assert.equal(client.calls.length, 2);
+  });
+
+  await test('zero fresh release run reconciles only exact plus-one lastRelease evidence', async () => {
+    const fixture = activeReleaseFixture();
+    const releasedPlan = lease.planRelease(fixture.state, {
+      expectedGeneration: fixture.state.generation, leaseId: fixture.leaseId, packetRef: '#2378',
+    });
+    const released = lease.parseLedger(releasedPlan.updatedBody).state;
+    const plan = {status: 'PLAN_READY', operation: 'release',
+      ledgerGeneration: fixture.state.generation, leaseId: fixture.leaseId,
+      workflowInputs: {operation: 'release', packet_ref: '#2378', lease_id: fixture.leaseId}};
+    let dispatchCalls = 0;
+    const runner = (argv) => {
+      if (argv[0] === 'run' && argv[1] === 'list') return {code: 0, stdout: '[]', stderr: ''};
+      if (argv[0] === 'workflow') { dispatchCalls += 1; return {code: 0, stdout: '', stderr: ''}; }
+      throw new Error(`unexpected runner args ${argv.join(' ')}`);
+    };
+    const client = fakeClient({body: fixture.body, state: released});
+    const result = await operator.dispatchPlan({repo: 'hanmiyoo10-alt/-', plan,
+      client, runner, sleepFn: () => {}, maxPolls: 1});
+    assert.equal(result.status, 'DISPATCH_READBACK_COMPLETE');
+    assert.equal(result.runId, null);
+    assert.equal(result.observedGeneration, released.generation);
+    assert.equal(result.evidenceRef,
+      `receipt:mcl-task-lease-readback:release:${fixture.leaseId}:generation:${released.generation}`);
+    assert.equal(dispatchCalls, 1);
+    assert.equal(client.calls.length, 2);
+  });
+
+  await test('zero fresh run generation jump remains original unknown', async () => {
+    const body = packetBody();
+    const request = {expectedGeneration: 7, ...acquireArgs(), packetBodySha256: lease.digest(body)};
+    const acquired = lease.planAcquire(ledgerState(), request);
+    const acquiredState = lease.parseLedger(acquired.updatedBody).state;
+    const jumped = {...acquiredState, generation: 9};
+    const plan = {status: 'PLAN_READY', operation: 'acquire', ledgerGeneration: 7,
+      leaseId: acquired.leaseId, workflowInputs: {
+        operation: 'acquire', packet_ref: '#2378', packet_body_sha256: lease.digest(body),
+      }};
+    const runner = (argv) => {
+      if (argv[0] === 'run' && argv[1] === 'list') return {code: 0, stdout: '[]', stderr: ''};
+      if (argv[0] === 'workflow') return {code: 0, stdout: '', stderr: ''};
+      throw new Error(`unexpected runner args ${argv.join(' ')}`);
+    };
+    const result = await operator.dispatchPlan({repo: 'hanmiyoo10-alt/-', plan,
+      client: fakeClient({body, state: jumped}), runner, sleepFn: () => {}, maxPolls: 1});
+    assert.equal(result.status, 'UNKNOWN');
+    assert(result.reasonCodes.includes('DISPATCH_RUN_NOT_FOUND'));
+  });
+
+  await test('fresh nonmatching run never enters zero-run ledger reconciliation', async () => {
+    const plan = {status: 'PLAN_READY', operation: 'acquire', ledgerGeneration: 7,
+      leaseId: 'f'.repeat(64), workflowInputs: {operation: 'acquire', packet_ref: '#2378'}};
+    let listCount = 0;
+    const client = fakeClient();
+    const runner = (argv) => {
+      if (argv[0] === 'run' && argv[1] === 'list') {
+        listCount += 1;
+        return {code: 0, stdout: JSON.stringify(listCount === 1 ? [] : [
+          {databaseId: 140, status: 'completed', conclusion: 'success'},
+        ]), stderr: ''};
+      }
+      if (argv[0] === 'workflow') return {code: 0, stdout: '', stderr: ''};
+      if (argv[0] === 'run' && argv[1] === 'view' && argv.includes('--json')) {
+        return {code: 0, stdout: dispatchRunInfo(140), stderr: ''};
+      }
+      if (argv[0] === 'run' && argv[1] === 'view' && argv.includes('--log')) {
+        return {code: 0, stdout: 'MCL_LEASE_OPERATION: release\nMCL_LEASE_PACKET_REF: #2378', stderr: ''};
+      }
+      throw new Error(`unexpected runner args ${argv.join(' ')}`);
+    };
+    const result = await operator.dispatchPlan({repo: 'hanmiyoo10-alt/-', plan,
+      client, runner, sleepFn: () => {}, maxPolls: 1});
+    assert.equal(result.status, 'UNKNOWN');
+    assert(result.reasonCodes.includes('DISPATCH_RUN_ATTRIBUTION_UNRESOLVED'));
+    assert.equal(client.calls.length, 0);
+  });
+
   await test('concurrent fresh acquire runs select only exact packet operation and result', async () => {
     const args = acquireArgs();
     const request = {expectedGeneration: 7, ...args, packetBodySha256: lease.digest(packetBody())};

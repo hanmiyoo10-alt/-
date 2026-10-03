@@ -4,6 +4,7 @@
 const childProcess = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '../../../..');
@@ -19,6 +20,11 @@ const FIXED_WORKTREE_ROOT = '/home/alsl0/nyang-worktrees';
 const FIXED_BOT_NAME = 'mcl-repository-patch[bot]';
 const FIXED_BOT_EMAIL = 'mcl-repository-patch@users.noreply.github.com';
 const REQUEST_SCHEMA = 'mcl-l-repository-owner-request.v1';
+const CONTINUATION_REQUEST_SCHEMA = 'mcl-l-prepared-continuation-request.v1';
+const PRIOR_MANIFEST_REF_PREFIX = 'receipt:mcl-task-manifest:';
+const PRIOR_BLOCKED_RECEIPT_REF_PREFIX = 'receipt:mcl-task-completion-receipt:';
+const BLOCKER_REPAIR_REF_PREFIX = 'receipt:canonical-main-stage:';
+const PREPARED_DIFF_REF_PREFIX = 'receipt:mcl-l-prepared-diff:';
 const PR_REQUEST_SCHEMA = 'mcl-l-pr-publication-request.v1';
 const OUTPUT_SCHEMA = 'mcl-l-repository-owner.v1';
 const MAX_INPUT_BYTES = 64 * 1024;
@@ -155,6 +161,73 @@ function parseRequestText(text) {
     expected_paths: [...value.expected_paths].sort(),
     patch_sha256: value.patch_sha256,
   };
+}
+
+function parsePreparedContinuationRequestText(text) {
+  let value;
+  try { value = JSON.parse(String(text)); }
+  catch { throw new OwnerError('UNKNOWN', ['CONTINUATION_REQUEST_JSON_INVALID']); }
+  exactKeys(value, new Set([
+    'schema', 'message', 'expected_paths', 'prepared_digest', 'prior_manifest_id',
+    'prior_blocked_receipt_id', 'blocker_repair_receipt',
+  ]), 'CONTINUATION_REQUEST');
+  if (value.schema !== CONTINUATION_REQUEST_SCHEMA) {
+    throw new OwnerError('UNKNOWN', ['CONTINUATION_REQUEST_SCHEMA_INVALID']);
+  }
+  if (typeof value.message !== 'string' || value.message.length < 1
+      || value.message.length > 200 || /[\u0000-\u001f\u007f]/.test(value.message)) {
+    throw new OwnerError('UNKNOWN', ['CONTINUATION_REQUEST_MESSAGE_INVALID']);
+  }
+  if (!Array.isArray(value.expected_paths) || value.expected_paths.length < 1
+      || value.expected_paths.length > MAX_FILES
+      || value.expected_paths.some((item) => typeof item !== 'string')
+      || new Set(value.expected_paths).size !== value.expected_paths.length) {
+    throw new OwnerError('UNKNOWN', ['CONTINUATION_REQUEST_PATHS_INVALID']);
+  }
+  for (const item of value.expected_paths) validateRepoPath(item);
+  for (const [field, reason] of [
+    ['prepared_digest', 'CONTINUATION_PREPARED_DIGEST_INVALID'],
+    ['prior_manifest_id', 'CONTINUATION_PRIOR_MANIFEST_INVALID'],
+    ['prior_blocked_receipt_id', 'CONTINUATION_PRIOR_RECEIPT_INVALID'],
+    ['blocker_repair_receipt', 'CONTINUATION_BLOCKER_REPAIR_RECEIPT_INVALID'],
+  ]) {
+    if (!SHA256_RE.test(value[field] || '')) throw new OwnerError('UNKNOWN', [reason]);
+  }
+  return {
+    schema: value.schema,
+    message: value.message,
+    expected_paths: [...value.expected_paths].sort(),
+    prepared_digest: value.prepared_digest,
+    prior_manifest_id: value.prior_manifest_id,
+    prior_blocked_receipt_id: value.prior_blocked_receipt_id,
+    blocker_repair_receipt: value.blocker_repair_receipt,
+  };
+}
+
+function validatePreparedContinuationManifestBinding(manifest, request) {
+  const reasons = [];
+  if (typeof manifest.phaseId !== 'string' || !manifest.phaseId.includes('recovery-rebind')) {
+    reasons.push('CONTINUATION_RECOVERY_REBIND_REQUIRED');
+  }
+  if (!same(manifestPathScopes(manifest), request.expected_paths)) {
+    reasons.push('CONTINUATION_SCOPE_CONFLICT');
+  }
+  const refs = manifest.inputRefs || [];
+  const expected = [
+    [PRIOR_MANIFEST_REF_PREFIX, request.prior_manifest_id, 'CONTINUATION_PRIOR_MANIFEST_REF'],
+    [PRIOR_BLOCKED_RECEIPT_REF_PREFIX, request.prior_blocked_receipt_id, 'CONTINUATION_PRIOR_RECEIPT_REF'],
+    [BLOCKER_REPAIR_REF_PREFIX, request.blocker_repair_receipt, 'CONTINUATION_BLOCKER_REPAIR_REF'],
+    [PREPARED_DIFF_REF_PREFIX, request.prepared_digest, 'CONTINUATION_PREPARED_DIFF_REF'],
+  ];
+  for (const [prefix, digest, label] of expected) {
+    const matching = refs.filter((item) => typeof item === 'string' && item.startsWith(prefix));
+    if (matching.length !== 1) reasons.push(matching.length ? label + '_AMBIGUOUS' : label + '_REQUIRED');
+    else if (matching[0] !== prefix + digest) reasons.push(label + '_CONFLICT');
+  }
+  if (reasons.length) {
+    const conflict = reasons.some((item) => item.endsWith('_CONFLICT'));
+    throw new OwnerError(conflict ? 'CONFLICT' : 'BLOCKED', reasons);
+  }
 }
 
 function parsePrRequestText(text, packetRef) {
@@ -432,6 +505,283 @@ function validateStagedModes(runner, worktree, expectedPaths) {
   }
 }
 
+function gitResult(runner, cwd, args, options = {}) {
+  return runner('git', ['-C', cwd, ...args], {...options, env: options.env || safeChildEnv()});
+}
+
+function nulPaths(text) {
+  return String(text || '').split('\0').filter(Boolean).sort();
+}
+
+function indexEntry(runner, worktree, repoPath, env = null) {
+  const raw = git(runner, worktree, ['ls-files', '-s', '--', repoPath], env ? {env} : {}).trim();
+  if (!raw) return null;
+  const rows = raw.split('\n').filter(Boolean);
+  if (rows.length !== 1) throw new OwnerError('CONFLICT', ['CONTINUATION_INDEX_ENTRY_AMBIGUOUS']);
+  const fields = rows[0].split(/\s+/);
+  if (fields.length < 4) throw new OwnerError('UNKNOWN', ['CONTINUATION_INDEX_ENTRY_INVALID']);
+  return {mode: fields[0], blob: fields[1]};
+}
+
+function treeEntry(runner, worktree, rev, repoPath) {
+  const raw = git(runner, worktree, ['ls-tree', rev, '--', repoPath]).trim();
+  if (!raw) return null;
+  const rows = raw.split('\n').filter(Boolean);
+  if (rows.length !== 1) throw new OwnerError('CONFLICT', ['CONTINUATION_TREE_ENTRY_AMBIGUOUS']);
+  const fields = rows[0].split(/\s+/);
+  if (fields.length < 3) throw new OwnerError('UNKNOWN', ['CONTINUATION_TREE_ENTRY_INVALID']);
+  return {mode: fields[0], blob: fields[2]};
+}
+
+function patchId(runner, cwd, diffText) {
+  const result = runner('git', ['patch-id', '--stable'], {cwd, input: diffText, env: safeChildEnv()});
+  if (result.error || result.signal || result.code !== 0 || !String(result.stdout || '').trim()) {
+    throw new OwnerError('UNKNOWN', ['CONTINUATION_PATCH_ID_FAILED']);
+  }
+  return String(result.stdout).trim().split(/\s+/)[0];
+}
+
+function continuationCurrentMain(manifest, {profile = DEFAULT_PROFILE, runner = defaultRunner} = {}) {
+  let real;
+  try { real = fs.realpathSync(profile.landing); }
+  catch { throw new OwnerError('BLOCKED', ['LANDING_MISSING']); }
+  if (real !== profile.landing) throw new OwnerError('BLOCKED', ['LANDING_ALIAS_DENIED']);
+  const branch = git(runner, profile.landing, ['branch', '--show-current'], {reason:'LANDING_BRANCH_READ_FAILED'}).trim();
+  const dirty = git(runner, profile.landing, ['status', '--porcelain=v1', '-uall'], {reason:'LANDING_STATUS_READ_FAILED'});
+  if (branch !== 'main') throw new OwnerError('BLOCKED', ['LANDING_BRANCH_INVALID']);
+  if (dirty) throw new OwnerError('BLOCKED', ['LANDING_DIRTY']);
+  const remoteMain = remoteBranchHead(runner, profile.landing, 'main');
+  const main = protectedMain(runner);
+  if (!remoteMain || remoteMain !== main) throw new OwnerError('CONFLICT', ['CONTINUATION_MAIN_IDENTITY_CONFLICT']);
+  for (const sha of [manifest.observedBaseSha, main]) {
+    const object = gitResult(runner, profile.landing, ['cat-file', '-e', sha + '^{commit}']);
+    if (object.error || object.signal || object.code !== 0) {
+      throw new OwnerError('BLOCKED', [sha === main ? 'CONTINUATION_CURRENT_MAIN_OBJECT_MISSING' : 'CONTINUATION_PREPARED_BASE_OBJECT_MISSING']);
+    }
+  }
+  const ancestry = gitResult(runner, profile.landing, ['merge-base', '--is-ancestor', manifest.observedBaseSha, main]);
+  if (ancestry.error || ancestry.signal || ![0, 1].includes(ancestry.code)) {
+    throw new OwnerError('UNKNOWN', ['CONTINUATION_MAIN_ANCESTRY_READ_FAILED']);
+  }
+  if (ancestry.code !== 0) throw new OwnerError('CONFLICT', ['CONTINUATION_MAIN_NOT_DESCENDANT_OF_BASE']);
+  return main;
+}
+
+function preparedDiff(runner, worktree) {
+  const text = git(runner, worktree, ['diff', '--cached', '--binary', '--']);
+  if (!text || Buffer.byteLength(text, 'utf8') > MAX_PATCH_BYTES) {
+    throw new OwnerError('BLOCKED', ['CONTINUATION_PREPARED_DIFF_INVALID']);
+  }
+  return text;
+}
+
+function verifyReplayAgainstCurrent(manifest, request, currentMain, {runner = defaultRunner, candidateHead = null} = {}) {
+  const worktree = manifest.workspace.worktree;
+  const patch = candidateHead
+    ? git(runner, worktree, ['diff', '--binary', manifest.observedBaseSha, candidateHead, '--'])
+    : preparedDiff(runner, worktree);
+  if (!patch || sha256Bytes(Buffer.from(patch, 'utf8')) !== request.prepared_digest) {
+    throw new OwnerError('CONFLICT', ['CONTINUATION_PREPARED_DIGEST_CONFLICT']);
+  }
+  const originalStatus = candidateHead
+    ? git(runner, worktree, ['diff', '--name-status', '-z', manifest.observedBaseSha, candidateHead, '--'])
+    : git(runner, worktree, ['diff', '--cached', '--name-status', '-z', '--']);
+  const originalPatchId = patchId(runner, worktree, candidateHead
+    ? git(runner, worktree, ['diff', '--no-ext-diff', '--no-textconv', '-M', manifest.observedBaseSha, candidateHead, '--'])
+    : git(runner, worktree, ['diff', '--cached', '--no-ext-diff', '--no-textconv', '-M', '--']));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-current-replay-'));
+  const indexFile = path.join(dir, 'index');
+  const env = {...safeChildEnv(), GIT_INDEX_FILE:indexFile};
+  try {
+    runChecked(runner, 'git', ['-C', worktree, 'read-tree', currentMain], {env}, 'CONTINUATION_REPLAY_READ_TREE_FAILED');
+    runChecked(runner, 'git', ['-C', worktree, 'apply', '--cached', '--check', '-'], {env, input:patch}, 'CONTINUATION_REPLAY_APPLY_CHECK_FAILED');
+    runChecked(runner, 'git', ['-C', worktree, 'apply', '--cached', '-'], {env, input:patch}, 'CONTINUATION_REPLAY_APPLY_FAILED');
+    const replayPaths = nulPaths(git(runner, worktree, ['diff', '--cached', '--name-only', '-z', currentMain, '--'], {env}));
+    if (!same(replayPaths, request.expected_paths)) throw new OwnerError('CONFLICT', ['CONTINUATION_REPLAY_PATH_CONFLICT']);
+    const replayStatus = git(runner, worktree, ['diff', '--cached', '--name-status', '-z', currentMain, '--'], {env});
+    if (replayStatus !== originalStatus) throw new OwnerError('CONFLICT', ['CONTINUATION_REPLAY_CHANGE_IDENTITY_CONFLICT']);
+    for (const item of request.expected_paths) {
+      const original = candidateHead
+        ? treeEntry(runner, worktree, candidateHead, item)
+        : indexEntry(runner, worktree, item);
+      const replay = indexEntry(runner, worktree, item, env);
+      if (!original || !replay || !same(original, replay)) throw new OwnerError('CONFLICT', ['CONTINUATION_REPLAY_BLOB_MODE_CONFLICT']);
+    }
+    const replayPatchId = patchId(runner, worktree,
+      git(runner, worktree, ['diff', '--cached', '--no-ext-diff', '--no-textconv', '-M', currentMain, '--'], {env}));
+    if (replayPatchId !== originalPatchId) throw new OwnerError('CONFLICT', ['CONTINUATION_REPLAY_PATCH_ID_CONFLICT']);
+    return {patchId: originalPatchId, currentMain};
+  } finally {
+    try { fs.rmSync(dir, {recursive:true, force:true}); } catch {}
+  }
+}
+
+function assertCandidateCommit(runner, manifest, request, candidateHead) {
+  const worktree = manifest.workspace.worktree;
+  const parent = git(runner, worktree, ['rev-parse', candidateHead + '^']).trim();
+  if (parent !== manifest.observedBaseSha) throw new OwnerError('CONFLICT', ['CONTINUATION_COMMIT_PARENT_CONFLICT']);
+  const paths = nulPaths(git(runner, worktree, ['diff', '--name-only', '-z', manifest.observedBaseSha, candidateHead, '--']));
+  if (!same(paths, request.expected_paths)) throw new OwnerError('CONFLICT', ['CONTINUATION_COMMITTED_PATH_CONFLICT']);
+  const diff = git(runner, worktree, ['diff', '--binary', manifest.observedBaseSha, candidateHead, '--']);
+  if (sha256Bytes(Buffer.from(diff, 'utf8')) !== request.prepared_digest) throw new OwnerError('CONFLICT', ['CONTINUATION_COMMITTED_DIGEST_CONFLICT']);
+  const message = git(runner, worktree, ['log', '-1', '--format=%B', candidateHead]).replace(/\n+$/, '');
+  if (message !== request.message) throw new OwnerError('CONFLICT', ['CONTINUATION_COMMIT_MESSAGE_CONFLICT']);
+  const identity = git(runner, worktree, ['log', '-1', '--format=%an%x00%ae%x00%cn%x00%ce', candidateHead])
+    .replace(/\n+$/, '').split('\0');
+  if (!same(identity, [FIXED_BOT_NAME, FIXED_BOT_EMAIL, FIXED_BOT_NAME, FIXED_BOT_EMAIL])) {
+    throw new OwnerError('CONFLICT', ['CONTINUATION_COMMIT_IDENTITY_CONFLICT']);
+  }
+}
+
+function assertCurrentizedPayload(runner, manifest, request, candidateHead, currentMain, finalHead) {
+  const worktree = manifest.workspace.worktree;
+  const paths = nulPaths(git(runner, worktree, ['diff', '--name-only', '-z', currentMain, finalHead, '--']));
+  if (!same(paths, request.expected_paths)) throw new OwnerError('CONFLICT', ['CONTINUATION_CURRENTIZED_PATH_CONFLICT']);
+  for (const item of request.expected_paths) {
+    const candidate = treeEntry(runner, worktree, candidateHead, item);
+    const final = treeEntry(runner, worktree, finalHead, item);
+    if (!candidate || !final || !same(candidate, final)) throw new OwnerError('CONFLICT', ['CONTINUATION_CURRENTIZED_BLOB_MODE_CONFLICT']);
+  }
+}
+
+function classifyPreparedContinuationState(manifest, request, currentMain, {runner = defaultRunner, profile = DEFAULT_PROFILE} = {}) {
+  const worktree = manifest.workspace.worktree;
+  const top = git(runner, worktree, ['rev-parse', '--show-toplevel']).trim();
+  const branch = git(runner, worktree, ['branch', '--show-current']).trim();
+  const head = git(runner, worktree, ['rev-parse', 'HEAD']).trim();
+  if (top !== worktree || branch !== manifest.workspace.branch || !SHA40_RE.test(head)) throw new OwnerError('CONFLICT', ['CONTINUATION_WORKSPACE_IDENTITY_CONFLICT']);
+  const unmerged = nulPaths(git(runner, worktree, ['diff', '--name-only', '--diff-filter=U', '-z', '--']));
+  const unstaged = nulPaths(git(runner, worktree, ['diff', '--name-only', '-z', '--']));
+  const untracked = nulPaths(git(runner, worktree, ['ls-files', '--others', '--exclude-standard', '-z']));
+  if (unmerged.length || unstaged.length || untracked.length) throw new OwnerError('CONFLICT', ['CONTINUATION_WORKTREE_RESIDUE_CONFLICT']);
+  const remoteHead = remoteBranchHead(runner, profile.landing, manifest.workspace.branch);
+  if (!remoteHead) throw new OwnerError('CONFLICT', ['CONTINUATION_REMOTE_BRANCH_MISSING']);
+  const staged = stagedPaths(runner, worktree);
+  if (head === manifest.observedBaseSha) {
+    if (remoteHead !== manifest.observedBaseSha) throw new OwnerError('CONFLICT', ['CONTINUATION_REMOTE_HEAD_CONFLICT']);
+    if (!same(staged, request.expected_paths)) throw new OwnerError('CONFLICT', ['CONTINUATION_STAGED_PATH_CONFLICT']);
+    validateStagedModes(runner, worktree, request.expected_paths);
+    if (stagedDigest(runner, worktree) !== request.prepared_digest) throw new OwnerError('CONFLICT', ['CONTINUATION_PREPARED_DIGEST_CONFLICT']);
+    return {state:'PREPARED', candidateHead:null, finalHead:null, remoteHead};
+  }
+  if (staged.length) throw new OwnerError('CONFLICT', ['CONTINUATION_INDEX_NOT_CLEAN']);
+  const parents = git(runner, worktree, ['rev-list', '--parents', '-n', '1', head]).trim().split(/\s+/);
+  if (parents.length === 2) {
+    const candidateHead = head;
+    assertCandidateCommit(runner, manifest, request, candidateHead);
+    if (currentMain !== manifest.observedBaseSha && remoteHead !== manifest.observedBaseSha) throw new OwnerError('CONFLICT', ['CONTINUATION_REMOTE_HEAD_CONFLICT']);
+    if (currentMain === manifest.observedBaseSha && ![manifest.observedBaseSha, candidateHead].includes(remoteHead)) throw new OwnerError('CONFLICT', ['CONTINUATION_REMOTE_HEAD_CONFLICT']);
+    return {state: remoteHead === candidateHead ? 'PUSHED' : 'COMMITTED', candidateHead, finalHead:candidateHead, remoteHead};
+  }
+  if (parents.length === 3) {
+    const candidateHead = parents[1];
+    const mergedMain = parents[2];
+    assertCandidateCommit(runner, manifest, request, candidateHead);
+    if (mergedMain !== currentMain) throw new OwnerError('CONFLICT', ['CONTINUATION_CURRENTIZATION_MAIN_CONFLICT']);
+    assertCurrentizedPayload(runner, manifest, request, candidateHead, currentMain, head);
+    if (![manifest.observedBaseSha, head].includes(remoteHead)) throw new OwnerError('CONFLICT', ['CONTINUATION_REMOTE_HEAD_CONFLICT']);
+    return {state: remoteHead === head ? 'PUSHED' : 'CURRENTIZED', candidateHead, finalHead:head, remoteHead};
+  }
+  throw new OwnerError('CONFLICT', ['CONTINUATION_HEAD_SHAPE_CONFLICT']);
+}
+
+function runContinuationValidation(manifest, request, {runner = defaultRunner, root = ROOT} = {}) {
+  const checks = [
+    ['owner-source-syntax', ['--check', path.join(root, 'products/chatgpt-mobile-coder-lab/device-ops/l-repository-owner/mcl-l-repository-owner.cjs')]],
+    ['owner-contract', ['--test', path.join(root, 'products/chatgpt-mobile-coder-lab/device-ops/l-repository-owner/tests/test-mcl-l-repository-owner.cjs')]],
+    ['task-lease-contract', ['--test', path.join(root, 'products/chatgpt-mobile-coder-lab/coordination/tests/test-task-lease.cjs')]],
+    ['task-handoff-contract', ['--test', path.join(root, 'products/chatgpt-mobile-coder-lab/coordination/tests/test-task-handoff.cjs')]],
+    ['workspace-holder-contract', ['--test', path.join(root, 'products/chatgpt-mobile-coder-lab/coordination/tests/test-workspace-holder.cjs')]],
+  ];
+  for (const item of request.expected_paths) if (item.endsWith('.cjs')) {
+    checks.push(['changed-cjs-syntax:' + item, ['--check', path.join(manifest.workspace.worktree, item)]]);
+  }
+  const passed = [];
+  for (const [name, args] of checks) {
+    const result = runner(process.execPath, args, {cwd:root, env:safeChildEnv(), timeoutMs:COMMAND_TIMEOUT_MS});
+    if (result.error || result.signal || result.code !== 0) throw new OwnerError('BLOCKED', ['VALIDATION_FAILED:' + name]);
+    passed.push(name);
+  }
+  runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'diff', '--check'], {}, 'CONTINUATION_DIFF_CHECK_FAILED');
+  return passed;
+}
+
+function findExactOpenPr(runner, manifest, prRequest, expectedHead) {
+  const raw = gh(runner, ['pr', 'list', '--repo', FIXED_REPO, '--state', 'open', '--head', manifest.workspace.branch,
+    '--json', 'number,title,body,isDraft,headRefName,headRefOid,baseRefName'], {reason:'PR_READBACK_FAILED'});
+  let rows;
+  try { rows = JSON.parse(raw); } catch { throw new OwnerError('UNKNOWN', ['PR_READBACK_JSON_INVALID']); }
+  if (!Array.isArray(rows)) throw new OwnerError('UNKNOWN', ['PR_READBACK_JSON_INVALID']);
+  if (rows.length === 0) return null;
+  if (rows.length !== 1) throw new OwnerError('CONFLICT', ['PR_READBACK_COUNT_INVALID']);
+  const row = rows[0];
+  if (!Number.isInteger(row.number) || row.isDraft !== false || row.headRefName !== manifest.workspace.branch
+      || row.headRefOid !== expectedHead || row.baseRefName !== 'main' || row.title !== prRequest.title || row.body !== prRequest.body) {
+    throw new OwnerError('CONFLICT', ['PR_READBACK_IDENTITY_CONFLICT']);
+  }
+  return row;
+}
+
+function executePreparedContinuation(context, request, prRequest, {profile = DEFAULT_PROFILE, runner = defaultRunner, env = process.env, root = ROOT} = {}) {
+  const {manifest} = context;
+  validatePreparedContinuationManifestBinding(manifest, request);
+  if (!same(request.expected_paths, manifestPathScopes(manifest))) throw new OwnerError('CONFLICT', ['CONTINUATION_SCOPE_CONFLICT']);
+  holderCheck(context, env);
+  let currentMain = continuationCurrentMain(manifest, {profile, runner});
+  let state = classifyPreparedContinuationState(manifest, request, currentMain, {runner, profile});
+  let replay = null;
+  let checks = [];
+  if (state.state === 'PREPARED') {
+    replay = verifyReplayAgainstCurrent(manifest, request, currentMain, {runner});
+    checks = runContinuationValidation(manifest, request, {runner, root});
+    holderCheck(context, env);
+    if (continuationCurrentMain(manifest, {profile, runner}) !== currentMain) throw new OwnerError('CONFLICT', ['CONTINUATION_MAIN_CHANGED']);
+    runChecked(runner, 'git', ['-C', manifest.workspace.worktree, '-c', 'user.name=' + FIXED_BOT_NAME, '-c', 'user.email=' + FIXED_BOT_EMAIL,
+      'commit', '-m', request.message], {}, 'CONTINUATION_COMMIT_FAILED');
+    state = classifyPreparedContinuationState(manifest, request, currentMain, {runner, profile});
+    if (state.state !== 'COMMITTED' && state.state !== 'PUSHED') throw new OwnerError('CONFLICT', ['CONTINUATION_COMMIT_READBACK_CONFLICT']);
+  }
+  if (state.state === 'COMMITTED' && currentMain !== manifest.observedBaseSha) {
+    if (!replay) {
+      replay = verifyReplayAgainstCurrent(manifest, request, currentMain, {runner, candidateHead:state.candidateHead});
+    }
+    holderCheck(context, env);
+    if (continuationCurrentMain(manifest, {profile, runner}) !== currentMain) throw new OwnerError('CONFLICT', ['CONTINUATION_MAIN_CHANGED']);
+    runChecked(runner, 'git', ['-C', manifest.workspace.worktree, '-c', 'user.name=' + FIXED_BOT_NAME, '-c', 'user.email=' + FIXED_BOT_EMAIL,
+      'merge', '--no-ff', '--no-edit', currentMain], {}, 'CONTINUATION_CURRENTIZATION_MERGE_FAILED');
+    state = classifyPreparedContinuationState(manifest, request, currentMain, {runner, profile});
+    if (state.state !== 'CURRENTIZED' && state.state !== 'PUSHED') throw new OwnerError('CONFLICT', ['CONTINUATION_CURRENTIZATION_READBACK_CONFLICT']);
+    checks = runContinuationValidation(manifest, request, {runner, root});
+  }
+  if (state.state === 'COMMITTED' && currentMain === manifest.observedBaseSha) {
+    checks = checks.length ? checks : runContinuationValidation(manifest, request, {runner, root});
+  }
+  if (state.state === 'CURRENTIZED' || state.state === 'COMMITTED') {
+    holderCheck(context, env);
+    if (continuationCurrentMain(manifest, {profile, runner}) !== currentMain) throw new OwnerError('CONFLICT', ['CONTINUATION_MAIN_CHANGED']);
+    runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'push', 'origin', state.finalHead + ':refs/heads/' + manifest.workspace.branch], {}, 'PUSH_FAILED');
+    state = classifyPreparedContinuationState(manifest, request, currentMain, {runner, profile});
+    if (state.state !== 'PUSHED') throw new OwnerError('CONFLICT', ['PUSH_READBACK_FAILED']);
+  }
+  if (state.state !== 'PUSHED') throw new OwnerError('CONFLICT', ['CONTINUATION_STATE_UNSUPPORTED']);
+  holderCheck(context, env);
+  if (continuationCurrentMain(manifest, {profile, runner}) !== currentMain) throw new OwnerError('CONFLICT', ['CONTINUATION_MAIN_CHANGED']);
+  let pr = findExactOpenPr(runner, manifest, prRequest, state.finalHead);
+  if (!pr) {
+    gh(runner, ['pr', 'create', '--repo', FIXED_REPO, '--base', 'main', '--head', manifest.workspace.branch, '--title', prRequest.title, '--body', prRequest.body], {reason:'PR_CREATE_FAILED'});
+    pr = findExactOpenPr(runner, manifest, prRequest, state.finalHead);
+    if (!pr) throw new OwnerError('CONFLICT', ['PR_READBACK_MISSING']);
+  }
+  holderCheck(context, env);
+  return output('PASS', [], {
+    route:manifest.route, executor:manifest.executor, base_sha:manifest.observedBaseSha, current_main:currentMain,
+    branch:manifest.workspace.branch, changed_paths:request.expected_paths, prepared_digest:request.prepared_digest,
+    replay_patch_id:replay?.patchId || null, candidate_head:state.candidateHead, new_head:state.finalHead,
+    currentized:currentMain !== manifest.observedBaseSha, pr_number:pr.number, validation_checks:checks,
+    next_legal_action:'RELEASE_D013_THEN_RELEASE_HOLDER_THEN_D014_COMPLETE',
+  });
+}
+
 function fixedValidationChecks(request) {
   const checks = [
     ['owner-source-syntax', ['--check', 'products/chatgpt-mobile-coder-lab/device-ops/l-repository-owner/mcl-l-repository-owner.cjs']],
@@ -610,6 +960,13 @@ function inspect(context, {profile = DEFAULT_PROFILE, runner = defaultRunner} = 
 
 function parseArgs(argv) {
   const operation = argv[0];
+  const allowedByOperation = {
+    inspect: new Set(['manifest','ledger','packet']),
+    'prepare-workspace': new Set(['manifest','ledger','packet']),
+    apply: new Set(['manifest','ledger','packet','request','patch','pr-request']),
+    'continue-prepared': new Set(['manifest','ledger','packet','continuation-request','pr-request']),
+  };
+  if (!allowedByOperation[operation]) throw new OwnerError('UNKNOWN', ['OPERATION_UNSUPPORTED']);
   const values = {};
   let apply = false;
   for (let index = 1; index < argv.length; index += 1) {
@@ -619,13 +976,10 @@ function parseArgs(argv) {
       apply = true;
       continue;
     }
-    if (!token.startsWith('--') || index + 1 >= argv.length) {
-      throw new OwnerError('UNKNOWN', ['ARGUMENT_INVALID']);
-    }
+    if (!token.startsWith('--') || index + 1 >= argv.length) throw new OwnerError('UNKNOWN', ['ARGUMENT_INVALID']);
     const key = token.slice(2);
-    if (Object.prototype.hasOwnProperty.call(values, key)) {
-      throw new OwnerError('UNKNOWN', ['ARGUMENT_DUPLICATE:' + key]);
-    }
+    if (!allowedByOperation[operation].has(key)) throw new OwnerError('UNKNOWN', ['ARGUMENT_UNSUPPORTED:' + key]);
+    if (Object.prototype.hasOwnProperty.call(values, key)) throw new OwnerError('UNKNOWN', ['ARGUMENT_DUPLICATE:' + key]);
     values[key] = argv[++index];
   }
   return {operation, values, apply};
@@ -664,6 +1018,16 @@ function runCli(argv = process.argv.slice(2), env = process.env, options = {}) {
     const request = parseRequestText(requestBytes.toString('utf8'));
     const prRequest = parsePrRequestText(prBytes.toString('utf8'), request.packet_ref);
     result = executeApply(context, request, patchBytes, prRequest, {...options, env});
+  } else if (operation === 'continue-prepared') {
+    if (!apply) throw new OwnerError('BLOCKED', ['APPLY_FLAG_REQUIRED']);
+    for (const key of ['continuation-request', 'pr-request']) {
+      if (!values[key]) throw new OwnerError('UNKNOWN', ['ARGUMENT_REQUIRED:' + key]);
+    }
+    const requestBytes = readRegular(values['continuation-request'], 'CONTINUATION_REQUEST_FILE');
+    const prBytes = readRegular(values['pr-request'], 'PR_REQUEST_FILE');
+    const request = parsePreparedContinuationRequestText(requestBytes.toString('utf8'));
+    const prRequest = parsePrRequestText(prBytes.toString('utf8'), context.manifest.packetRef);
+    result = executePreparedContinuation(context, request, prRequest, {...options, env});
   } else {
     throw new OwnerError('UNKNOWN', ['OPERATION_UNSUPPORTED']);
   }
@@ -685,6 +1049,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+  BLOCKER_REPAIR_REF_PREFIX,
+  CONTINUATION_REQUEST_SCHEMA,
   DEFAULT_PROFILE,
   FALSE_AUTHORITY,
   FIXED_BOT_EMAIL,
@@ -700,7 +1066,10 @@ module.exports = {
   PR_REQUEST_SCHEMA,
   REQUEST_SCHEMA,
   evidenceContext,
+  classifyPreparedContinuationState,
+  continuationCurrentMain,
   executeApply,
+  executePreparedContinuation,
   fixedValidationChecks,
   inspect,
   inspectLanding,
@@ -708,15 +1077,19 @@ module.exports = {
   manifestPathScopes,
   output,
   parseArgs,
+  parsePreparedContinuationRequestText,
   parseManifestText,
   parsePrRequestText,
   parseRequestText,
   prepareWorkspace,
   protectedMain,
+  runContinuationValidation,
   runCli,
   sha256Bytes,
   validateBranch,
   validateManifestShape,
+  validatePreparedContinuationManifestBinding,
+  verifyReplayAgainstCurrent,
   validateRepoPath,
   validateWorktreePath,
 };

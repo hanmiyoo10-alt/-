@@ -1,7 +1,9 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const childProcess = require('node:child_process');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const owner = require('../mcl-l-repository-owner.cjs');
@@ -284,6 +286,129 @@ test('public CLI does not accept generic repo route executor or shell selectors'
   assert.equal(source.includes("values.route"), false);
   assert.equal(source.includes("values.executor"), false);
   assert.equal(source.includes("values.command"), false);
+});
+
+test('prepared continuation request binds exact immutable recovery lineage', () => {
+  const value = owner.parsePreparedContinuationRequestText(JSON.stringify({
+    schema:owner.CONTINUATION_REQUEST_SCHEMA,
+    message:'feat: continue bounded L candidate',
+    expected_paths:['z/file.md','a/file.cjs'],
+    prepared_digest:'1'.repeat(64),
+    prior_manifest_id:'2'.repeat(64),
+    prior_blocked_receipt_id:'3'.repeat(64),
+    blocker_repair_receipt:'4'.repeat(64),
+  }));
+  assert.deepEqual(value.expected_paths, ['a/file.cjs','z/file.md']);
+  assert.equal(value.prepared_digest, '1'.repeat(64));
+  expectReason(() => owner.parsePreparedContinuationRequestText(JSON.stringify({
+    ...value, schema:'wrong',
+  })), 'CONTINUATION_REQUEST_SCHEMA_INVALID');
+});
+
+test('prepared continuation manifest requires recovery lineage and prepared digest ref', () => {
+  const request = {
+    schema:owner.CONTINUATION_REQUEST_SCHEMA, message:'x', expected_paths:['a/file.cjs'],
+    prepared_digest:'1'.repeat(64), prior_manifest_id:'2'.repeat(64),
+    prior_blocked_receipt_id:'3'.repeat(64), blocker_repair_receipt:'4'.repeat(64),
+  };
+  const m = manifest({
+    phaseId:'9001-recovery-rebind',
+    scopes:['path:a/file.cjs','surface:mcl:test'],
+    inputRefs:[
+      'receipt:mcl-task-manifest:' + request.prior_manifest_id,
+      'receipt:mcl-task-completion-receipt:' + request.prior_blocked_receipt_id,
+      'receipt:canonical-main-stage:' + request.blocker_repair_receipt,
+      'receipt:mcl-l-prepared-diff:' + request.prepared_digest,
+    ],
+  });
+  assert.doesNotThrow(() => owner.validatePreparedContinuationManifestBinding(m, request));
+  expectReason(() => owner.validatePreparedContinuationManifestBinding({...m, phaseId:'9001-normal'}, request),
+    'CONTINUATION_RECOVERY_REBIND_REQUIRED');
+  expectReason(() => owner.validatePreparedContinuationManifestBinding({...m, inputRefs:m.inputRefs.slice(0,3)}, request),
+    'CONTINUATION_PREPARED_DIFF_REF_REQUIRED');
+});
+
+test('CLI exposes literal continue-prepared without generic patch or command selectors', () => {
+  const parsed = owner.parseArgs([
+    'continue-prepared','--manifest','m','--ledger','l','--packet','p',
+    '--continuation-request','r','--pr-request','pr','--apply',
+  ]);
+  assert.equal(parsed.operation, 'continue-prepared');
+  assert.equal(parsed.apply, true);
+  assert.deepEqual(Object.keys(parsed.values).sort(),
+    ['continuation-request','ledger','manifest','packet','pr-request']);
+  expectReason(() => owner.parseArgs([
+    'continue-prepared','--manifest','m','--ledger','l','--packet','p',
+    '--continuation-request','r','--pr-request','pr','--patch','x','--apply',
+  ]), 'ARGUMENT_UNSUPPORTED:patch');
+});
+
+function gitExec(cwd, args, options = {}) {
+  const cp = childProcess.spawnSync('git', args, {cwd, encoding:'utf8', input:options.input, env:process.env});
+  if (cp.status !== 0) throw new Error('git failed: ' + args.join(' ') + '\n' + (cp.stderr || cp.stdout));
+  return cp.stdout || '';
+}
+
+test('prepared replay preserves identity across PREPARED COMMITTED CURRENTIZED and PUSHED', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-continuation-'));
+  const remote = path.join(tmp, 'remote.git');
+  const landing = path.join(tmp, 'landing');
+  const feature = path.join(tmp, 'feature');
+  try {
+    gitExec(tmp, ['init','--bare',remote]);
+    gitExec(tmp, ['clone',remote,landing]);
+    gitExec(landing, ['config','user.name','fixture']);
+    gitExec(landing, ['config','user.email','fixture@example.invalid']);
+    fs.writeFileSync(path.join(landing, 'base.txt'), 'base\n');
+    gitExec(landing, ['add','base.txt']);
+    gitExec(landing, ['commit','-m','base']);
+    gitExec(landing, ['branch','-M','main']);
+    gitExec(landing, ['push','-u','origin','main']);
+    const base = gitExec(landing, ['rev-parse','HEAD']).trim();
+    gitExec(landing, ['worktree','add','-b','laptop/task-9001',feature,base]);
+    gitExec(landing, ['push','origin',base + ':refs/heads/laptop/task-9001']);
+    fs.writeFileSync(path.join(landing, 'main.txt'), 'main advance\n');
+    gitExec(landing, ['add','main.txt']);
+    gitExec(landing, ['commit','-m','main advance']);
+    gitExec(landing, ['push','origin','main']);
+    const currentMain = gitExec(landing, ['rev-parse','HEAD']).trim();
+    fs.mkdirSync(path.join(feature, 'src'), {recursive:true});
+    fs.writeFileSync(path.join(feature, 'src/new.cjs'), "'use strict';\nmodule.exports = 1;\n");
+    gitExec(feature, ['add','src/new.cjs']);
+    const prepared = gitExec(feature, ['diff','--cached','--binary','--']);
+    const request = {
+      schema:owner.CONTINUATION_REQUEST_SCHEMA, message:'feat: fixture candidate',
+      expected_paths:['src/new.cjs'], prepared_digest:owner.sha256Bytes(Buffer.from(prepared,'utf8')),
+      prior_manifest_id:'2'.repeat(64), prior_blocked_receipt_id:'3'.repeat(64),
+      blocker_repair_receipt:'4'.repeat(64),
+    };
+    const m = manifest({
+      workspace:{kind:'repository',branch:'laptop/task-9001',worktree:feature},
+      observedBaseSha:base, scopes:['path:src/new.cjs','surface:mcl:test'],
+    });
+    const profile = {...owner.DEFAULT_PROFILE, landing, worktreeRoot:tmp};
+    assert.equal(owner.classifyPreparedContinuationState(m, request, currentMain, {profile}).state, 'PREPARED');
+    const replay = owner.verifyReplayAgainstCurrent(m, request, currentMain);
+    assert.equal(replay.currentMain, currentMain);
+    gitExec(feature, ['-c','user.name=' + owner.FIXED_BOT_NAME, '-c','user.email=' + owner.FIXED_BOT_EMAIL,
+      'commit','-m',request.message]);
+    const committed = owner.classifyPreparedContinuationState(m, request, currentMain, {profile});
+    assert.equal(committed.state, 'COMMITTED');
+    const replayAfterLostCommitAck = owner.verifyReplayAgainstCurrent(
+      m, request, currentMain, {candidateHead:committed.candidateHead});
+    assert.equal(replayAfterLostCommitAck.patchId, replay.patchId);
+    gitExec(feature, ['-c','user.name=' + owner.FIXED_BOT_NAME, '-c','user.email=' + owner.FIXED_BOT_EMAIL,
+      'merge','--no-ff','--no-edit',currentMain]);
+    const currentized = owner.classifyPreparedContinuationState(m, request, currentMain, {profile});
+    assert.equal(currentized.state, 'CURRENTIZED');
+    gitExec(feature, ['push','origin','HEAD:refs/heads/laptop/task-9001']);
+    const pushed = owner.classifyPreparedContinuationState(m, request, currentMain, {profile});
+    assert.equal(pushed.state, 'PUSHED');
+    assert.equal(pushed.candidateHead, committed.candidateHead);
+  } finally {
+    try { gitExec(landing, ['worktree','remove',feature]); } catch {}
+    fs.rmSync(tmp, {recursive:true, force:true});
+  }
 });
 
 console.log('ALL_TESTS_PASS', passed);

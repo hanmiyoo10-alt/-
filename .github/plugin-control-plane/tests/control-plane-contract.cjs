@@ -369,6 +369,8 @@ assert.doesNotMatch(issueWorkflow, /pull-requests:\s*write/);
 
 const statusWorkflow = fs.readFileSync(path.join(root, '.github/workflows/plugin-control-plane-status.yml'), 'utf8');
 assert.match(statusWorkflow, /schedule:/);
+assert.match(statusWorkflow, /cron:\s*'17 \* \* \* \*'/, 'status view self-heal must run hourly at minute 17');
+assert.doesNotMatch(statusWorkflow, /cron:\s*'17 \*\/2 \* \* \*'/, 'two-hour status cadence is too sparse for the 150-minute freshness contract');
 assert.match(statusWorkflow, /Reconcile open PR ownership from trusted main/);
 assert.match(statusWorkflow, /pr-classifier\.cjs/);
 assert.match(statusWorkflow, /refresh-status/);

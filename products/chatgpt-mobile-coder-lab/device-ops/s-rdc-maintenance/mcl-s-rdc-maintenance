@@ -1,0 +1,291 @@
+#!/bin/sh
+# mcl-s-rdc-maintenance:v1
+set -eu
+
+SCHEMA=mcl-s-rdc-maintenance.v1
+BASE_VERSION=0.2.48
+TARGET_VERSION=0.2.52
+PACKAGE='@wonderwhy-er/desktop-commander'
+FIXED_HOME=/data/data/com.termux/files/home
+FIXED_PREFIX=/data/data/com.termux/files/usr
+FIXED_ROOTFS="$FIXED_PREFIX/var/lib/proot-distro/containers/ubuntu/rootfs"
+TEST_MODE=${MCL_S_RDC_MAINTENANCE_TEST_MODE:-0}
+
+usage() {
+  echo 'usage: mcl-s-rdc-maintenance --check|--stage|--activate' >&2
+  exit 2
+}
+[ "$#" -eq 1 ] || usage
+MODE=$1
+case "$MODE" in --check|--stage|--activate) ;; *) usage ;; esac
+
+case "$TEST_MODE" in
+  0)
+    [ "${HOME:-}" = "$FIXED_HOME" ] || { echo 'BLOCKED wrong execution home' >&2; exit 2; }
+    HOME_DIR=$FIXED_HOME
+    PREFIX_DIR=$FIXED_PREFIX
+    ROOTFS=$FIXED_ROOTFS
+    READY_ATTEMPTS=30
+    READY_SLEEP=2
+    ;;  1)
+    TEST_ROOT=${MCL_S_RDC_MAINTENANCE_TEST_ROOT:-}
+    case "$TEST_ROOT" in
+      /tmp/mcl-s-rdc-maintenance-test-*) ;;
+      *) echo 'BLOCKED invalid test root' >&2; exit 2 ;;
+    esac
+    HOME_DIR="$TEST_ROOT/home"
+    PREFIX_DIR="$TEST_ROOT/prefix"
+    ROOTFS="$TEST_ROOT/rootfs"
+    READY_ATTEMPTS=${MCL_S_RDC_MAINTENANCE_TEST_READY_ATTEMPTS:-2}
+    READY_SLEEP=${MCL_S_RDC_MAINTENANCE_TEST_READY_SLEEP:-0}
+    ;;
+  *)
+    echo 'BLOCKED invalid test mode' >&2
+    exit 2
+    ;;
+esac
+
+ACTIVE="$ROOTFS/root/.local/share/desktop-commander-remote"
+STAGE="$ROOTFS/root/.local/share/desktop-commander-remote.mcl-stage-0.2.52"
+BACKUP="$ROOTFS/root/.local/share/desktop-commander-remote.mcl-backup-0.2.48"
+SERVICE="$PREFIX_DIR/var/service/desktop-commander-remote"
+LOG="$HOME_DIR/.local/state/desktop-commander-remote/current"
+CONFIG="$ROOTFS/root/.desktop-commander-device/device.json"
+WATCHDOG="$HOME_DIR/.local/bin/rdc-health-watchdog"
+NPM="$PREFIX_DIR/bin/npm"
+SV="$PREFIX_DIR/bin/sv"
+NODE="$PREFIX_DIR/bin/node"
+if [ "$TEST_MODE" = 0 ]; then
+  SLEEP="$PREFIX_DIR/bin/sleep"
+else
+  SLEEP=$(command -v sleep)
+fi
+MARKER="$STAGE/.mcl-s-rdc-maintenance-stage-v1"
+
+bundle_version() {
+  dir=$1
+  [ -d "$dir" ] && [ ! -L "$dir" ] || return 1
+  pkg="$dir/node_modules/@wonderwhy-er/desktop-commander/package.json"
+  entry="$dir/node_modules/@wonderwhy-er/desktop-commander/dist/index.js"
+  [ -f "$pkg" ] && [ ! -L "$pkg" ] && [ -f "$entry" ] && [ ! -L "$entry" ] || return 1
+  "$NODE" - "$pkg" "$PACKAGE" <<'NODE'
+const fs = require('fs');
+try {
+  const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+  if (value?.name !== process.argv[3] || typeof value?.version !== 'string') process.exit(2);
+  process.stdout.write(value.version);
+} catch {
+  process.exit(2);
+}
+NODE
+}
+
+bundle_is_version() {
+  dir=$1
+  wanted=$2
+  observed=$(bundle_version "$dir" 2>/dev/null) || return 1
+  [ "$observed" = "$wanted" ]
+}
+
+stage_state() {
+  if [ ! -e "$STAGE" ] && [ ! -L "$STAGE" ]; then echo missing; return; fi
+  [ -d "$STAGE" ] && [ ! -L "$STAGE" ] || { echo conflict; return; }
+  [ -f "$MARKER" ] && [ ! -L "$MARKER" ] || { echo conflict; return; }
+  grep -Fqx "schema=$SCHEMA target=$TARGET_VERSION" "$MARKER" || { echo conflict; return; }
+  bundle_is_version "$STAGE" "$TARGET_VERSION" || { echo conflict; return; }
+  echo ready
+}
+
+backup_state() {
+  if [ ! -e "$BACKUP" ] && [ ! -L "$BACKUP" ]; then echo missing; return; fi
+  [ -d "$BACKUP" ] && [ ! -L "$BACKUP" ] || { echo conflict; return; }
+  bundle_is_version "$BACKUP" "$BASE_VERSION" || { echo conflict; return; }
+  echo base
+}
+
+service_state() {
+  out=$("$SV" status "$SERVICE" 2>/dev/null || true)
+  case "$out" in
+    run:*) echo running ;;
+    down:*) echo down ;;
+    *) echo unknown ;;
+  esac
+}
+
+now_epoch() {
+  if [ "$TEST_MODE" = 1 ] && [ -n "${MCL_S_RDC_MAINTENANCE_TEST_NOW:-}" ]; then
+    case "$MCL_S_RDC_MAINTENANCE_TEST_NOW" in *[!0-9]*|'') return 1 ;; esac
+    printf '%s\n' "$MCL_S_RDC_MAINTENANCE_TEST_NOW"
+    return
+  fi
+  date +%s
+}
+
+session_fresh() {
+  [ -f "$CONFIG" ] && [ ! -L "$CONFIG" ] || return 1
+  now=$(now_epoch) || return 1
+  "$NODE" - "$CONFIG" "$now" <<'NODE'
+const fs = require('fs');
+try {
+  const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+  const token = config?.session?.access_token;
+  const now = Number(process.argv[3]);
+  if (!token || !Number.isSafeInteger(now)) process.exit(2);
+  const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+  const exp = Number(payload.exp || 0);
+  process.exit(exp > now + 180 ? 0 : 3);
+} catch {
+  process.exit(4);
+}
+NODE
+}
+
+watchdog_safe() {
+  [ -x "$WATCHDOG" ] || return 1
+  set +e
+  out=$("$WATCHDOG" --check 2>&1)
+  rc=$?
+  set -e
+  [ "$rc" -eq 0 ] && [ "$out" = 'rdc-watchdog: healthy' ]
+}
+
+log_lines() {
+  [ -f "$LOG" ] && [ ! -L "$LOG" ] || return 1
+  wc -l < "$LOG" | tr -d ' '
+}
+
+wait_ready_since() {
+  start=$1
+  i=0
+  while [ "$i" -lt "$READY_ATTEMPTS" ]; do
+    total=$(log_lines) || return 2
+    [ "$total" -ge "$start" ] || return 2
+    newer=$(tail -n +"$((start + 1))" "$LOG" 2>/dev/null || true)
+    if printf '%s\n' "$newer" | grep -Fq '🔐 Starting device authorization flow'; then return 3; fi
+    if printf '%s\n' "$newer" | grep -Fq '✅ Device ready:'; then return 0; fi
+    "$SLEEP" "$READY_SLEEP"
+    i=$((i + 1))
+  done
+  return 1
+}
+
+emit() {
+  operation=$1
+  result=$2
+  active=$(bundle_version "$ACTIVE" 2>/dev/null || printf unknown)
+  staged=$(stage_state)
+  backup=$(backup_state)
+  service=$(service_state)
+  printf '%s\n' \
+    "schema=$SCHEMA" \
+    "operation=$operation" \
+    "active_version=$active" \
+    "staged=$staged" \
+    "backup=$backup" \
+    "service=$service" \
+    "result=$result" \
+    'details=withheld'
+}
+
+check_only() {
+  active=$(bundle_version "$ACTIVE" 2>/dev/null || printf unknown)
+  staged=$(stage_state)
+  backup=$(backup_state)
+  service=$(service_state)
+  if [ "$active" = "$TARGET_VERSION" ] && [ "$service" = running ]; then
+    emit check target_active
+    return 0
+  fi
+  if [ "$active" = "$BASE_VERSION" ] && [ "$service" = running ]; then
+    case "$staged:$backup" in
+      missing:missing) emit check needs_stage; return 0 ;;
+      ready:missing) emit check ready_to_activate; return 0 ;;
+    esac
+  fi
+  emit check blocked
+  return 2
+}
+
+stage_target() {
+  active=$(bundle_version "$ACTIVE" 2>/dev/null || printf unknown)
+  [ "$active" = "$TARGET_VERSION" ] && { emit stage target_active; return 0; }
+  [ "$active" = "$BASE_VERSION" ] || { emit stage blocked; return 2; }
+  [ "$(service_state)" = running ] || { emit stage blocked; return 2; }
+  [ "$(backup_state)" = missing ] || { emit stage blocked; return 2; }
+  case "$(stage_state)" in
+    ready) emit stage ready_to_activate; return 0 ;;
+    conflict) emit stage blocked; return 2 ;;
+  esac
+
+  parent=$(dirname "$STAGE")
+  [ -d "$parent" ] && [ ! -L "$parent" ] || { emit stage blocked; return 2; }
+  tmp="$STAGE.tmp.$$"
+  [ ! -e "$tmp" ] && [ ! -L "$tmp" ] || { emit stage blocked; return 2; }
+  trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+  mkdir -p "$tmp"
+  if ! "$NPM" install --prefix "$tmp" --omit=dev --ignore-scripts --no-save \
+      "$PACKAGE@$TARGET_VERSION" >/dev/null 2>&1; then
+    emit stage unknown
+    return 2
+  fi
+  bundle_is_version "$tmp" "$TARGET_VERSION" || { emit stage unknown; return 2; }
+  printf 'schema=%s target=%s\n' "$SCHEMA" "$TARGET_VERSION" > "$tmp/.mcl-s-rdc-maintenance-stage-v1"
+  mv "$tmp" "$STAGE"
+  trap - EXIT HUP INT TERM
+  emit stage ready_to_activate
+}
+
+restore_base() {
+  [ "$(backup_state)" = base ] || return 2
+  [ "$(stage_state)" = missing ] || return 2
+  bundle_is_version "$ACTIVE" "$TARGET_VERSION" || return 2
+  before=$(log_lines) || return 2
+  mv "$ACTIVE" "$STAGE" || return 2
+  if ! mv "$BACKUP" "$ACTIVE"; then
+    mv "$STAGE" "$ACTIVE" 2>/dev/null || true
+    return 2
+  fi
+  bundle_is_version "$ACTIVE" "$BASE_VERSION" || return 2
+  "$SV" restart "$SERVICE" >/dev/null 2>&1 || return 2
+  wait_ready_since "$before" || return 2
+  return 0
+}
+
+activate_target() {
+  bundle_is_version "$ACTIVE" "$BASE_VERSION" || { emit activate blocked; return 2; }
+  [ "$(stage_state)" = ready ] || { emit activate blocked; return 2; }
+  [ "$(backup_state)" = missing ] || { emit activate blocked; return 2; }
+  [ "$(service_state)" = running ] || { emit activate blocked; return 2; }
+  watchdog_safe || { emit activate blocked; return 2; }
+  session_fresh || { emit activate blocked; return 2; }
+  before=$(log_lines) || { emit activate blocked; return 2; }
+
+  mv "$ACTIVE" "$BACKUP" || { emit activate unknown; return 2; }
+  if ! mv "$STAGE" "$ACTIVE"; then
+    mv "$BACKUP" "$ACTIVE" 2>/dev/null || true
+    emit activate unknown
+    return 2
+  fi
+  bundle_is_version "$ACTIVE" "$TARGET_VERSION" || { restore_base || true; emit activate unknown; return 2; }
+  if ! "$SV" restart "$SERVICE" >/dev/null 2>&1; then
+    if restore_base; then emit activate rolled_back; return 1; fi
+    emit activate unknown
+    return 2
+  fi
+  if wait_ready_since "$before"; then
+    emit activate target_active
+    return 0
+  fi
+  if restore_base; then
+    emit activate rolled_back
+    return 1
+  fi
+  emit activate unknown
+  return 2
+}
+
+case "$MODE" in
+  --check) check_only ;;
+  --stage) stage_target ;;
+  --activate) activate_target ;;
+esac

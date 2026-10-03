@@ -8,7 +8,7 @@ packet finalizer and does not add caller-selected coordination semantics.
 
 ## Reviewed fixed profiles
 
-V1 contains exactly eleven reviewed targets.
+V1 contains exactly twelve reviewed targets.
 
 ### Profile A — #2463 / PR #2464
 
@@ -155,7 +155,24 @@ packet-scoped currentization:
 For #3108 the only permitted finalization effect is publication of the missing
 canonical VALIDATION_MERGE receipt followed by read-only re-inspection.
 
-The caller supplies only one of the eleven reviewed packet numbers and a bounded output
+### Profile L — #2791 / PR #2795
+
+The twelfth profile is the exact merged M Termux lifeline IPC repair after
+packet-scoped currentization:
+
+- exact currentized canonical IMPLEMENTATION_PR receipt and merged candidate attribution;
+- exact currentization manifest/workspace lineage;
+- fixed PASS gates for currentization scope/blob preservation and replay safety,
+  D-013 release, D-014 completion, exact-head Verify/Required, dedicated lifeline CI,
+  and the exact seven-path scope;
+- current packet-lease absence in #2352;
+- exact clean preserved currentization worktree and holder absence;
+- no validation-stage D-014 manifest is created.
+
+For #2791 the only permitted finalization effect is publication of the missing
+canonical VALIDATION_MERGE receipt followed by read-only re-inspection.
+
+The caller supplies only one of the twelve reviewed packet numbers and a bounded output
 format. Repository, PR, manifest, lease, run, workspace, effect, command and comment
 target remain non-selectable.
 
@@ -194,6 +211,9 @@ node mcl-validation-finalization-apply.cjs apply --packet '#3144' --format agent
 
 node mcl-validation-finalization-apply.cjs inspect --packet '#3108' --format agent-view
 node mcl-validation-finalization-apply.cjs apply --packet '#3108' --format agent-view
+
+node mcl-validation-finalization-apply.cjs inspect --packet '#2791' --format agent-view
+node mcl-validation-finalization-apply.cjs apply --packet '#2791' --format agent-view
 ~~~
 
 inspect is always read-only.
@@ -215,7 +235,7 @@ Before any effect, all reviewed profiles prove:
 Profile A additionally proves the reviewed validation D-014 manifest, historical
 release provenance, exact holder relation and D-014 completion state.
 
-Profiles B, C, D, E, F, G, H, I, J and K each require their exact compile-time canonical IMPLEMENTATION_PR
+Profiles B, C, D, E, F, G, H, I, J, K and L each require their exact compile-time canonical IMPLEMENTATION_PR
 receipt digest plus their exact compile-time coordination gate set. Profile B
 requires `implementation-coordination-readback` + `implementation-d013-release`.
 Profile C requires the reviewed original implementation release/completion gates
@@ -238,6 +258,10 @@ Profile K requires `d013-release`, `d014-completion`,
 `currentization-coordination-released`, `currentization-d014-complete`,
 `currentization-scope-and-blob-preservation`,
 `packet-scoped-currentization-replay` and `natural-3090-recovery-proof`.
+Profile L requires `currentization-scope-and-blob-preservation`,
+`currentization-replay-safe`, `currentization-d013-release`,
+`currentization-d014-complete`, `exact-head-required`, `exact-head-verify`,
+`lifeline-dedicated-ci` and `exact-seven-path-scope`.
 Each profile's exact valid workspace manifest is used only to resolve the fixed
 worktree/holder location; it is never manufactured or rewritten as a
 validation-stage D-014 manifest.
@@ -289,6 +313,10 @@ FINALIZATION_REQUIRED / PASS / ACTION_REQUIRED
 #3108:
 FINALIZATION_REQUIRED / PASS / ACTION_REQUIRED
 + CANONICAL_VALIDATION_MERGE_RECEIPT
+
+#2791:
+FINALIZATION_REQUIRED / PASS / ACTION_REQUIRED
++ CANONICAL_VALIDATION_MERGE_RECEIPT
 ~~~
 
 Any other pre-effect state fails closed, except an exact ALREADY_FINALIZED state,
@@ -309,7 +337,7 @@ exact stale holder cleanup if present
 → STOP
 ~~~
 
-Profiles B through K share the smaller effect order:
+Profiles B through L share the smaller effect order:
 
 ~~~
 prove exact fixed packet lease absent
@@ -332,10 +360,10 @@ Profile A may perform only:
 - one exact D-014 COMPLETE packet comment if absent;
 - one exact canonical VALIDATION_MERGE packet comment if absent.
 
-Profiles B, C, D, E, F, G, H, I, J and K may perform only:
+Profiles B, C, D, E, F, G, H, I, J, K and L may perform only:
 - one exact canonical VALIDATION_MERGE packet comment if absent.
 
-Profiles B, C, D, E, F, G, H, I, J and K never clean a holder and never construct or publish D-014 evidence.
+Profiles B, C, D, E, F, G, H, I, J, K and L never clean a holder and never construct or publish D-014 evidence.
 
 The owner has no source/index/commit/ref/PR/currentization/merge, D-013, device,
 runtime, package, service, release or production mutation surface.
@@ -362,7 +390,7 @@ against the exact selected validation manifest. Multiple COMPLETE snapshots are
 interpreted only by completion-receipt-set.cjs; there is no latest-comment-wins
 selection.
 
-Profiles B, C, D, E, F, G, H, I, J and K have no validation-stage D-014 manifest. Their exact reviewed
+Profiles B, C, D, E, F, G, H, I, J, K and L have no validation-stage D-014 manifest. Their exact reviewed
 workspace manifests are read only for fixed workspace/holder identity. The owner
 must never build, publish or retrospectively complete those manifests as
 validation-stage evidence.
@@ -382,7 +410,7 @@ All reviewed profiles bind:
 Profile A additionally binds the reviewed historical D-013 release and
 exact/equivalent validation D-014 completion evidence.
 
-Profiles B through K instead bind the exact canonical IMPLEMENTATION_PR receipt and
+Profiles B through L instead bind the exact canonical IMPLEMENTATION_PR receipt and
 their reviewed implementation-coordination convergence gates. They contain no
 synthetic validation D-014 gate or receipt.
 

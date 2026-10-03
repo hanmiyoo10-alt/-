@@ -1,0 +1,160 @@
+#!/bin/sh
+set -eu
+
+FIXED_HOME='/data/data/com.termux/files/home'
+BEGIN_MARK='# BEGIN mcl-m-operator-path:v1'
+END_MARK='# END mcl-m-operator-path:v1'
+BLOCK=$(cat <<'EOF'
+# BEGIN mcl-m-operator-path:v1
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
+# END mcl-m-operator-path:v1
+EOF
+)
+
+usage() {
+    printf '%s\n' 'usage: mcl-m-operator-path --check|--apply' >&2
+    exit 2
+}
+
+[ "$#" -eq 1 ] || usage
+case "$1" in
+    --check) MODE=check ;;
+    --apply) MODE=apply ;;
+    *) usage ;;
+esac
+
+LOCAL_STATE=unknown
+LOGIN_STATE=unknown
+INTERACTIVE_STATE=unknown
+RESULT=unknown
+emit_receipt() {
+    printf '%s\n' \
+        'schema=mcl-m-operator-path.v1' \
+        "local_bin=$LOCAL_STATE" \
+        "login_profile=$LOGIN_STATE" \
+        "interactive_profile=$INTERACTIVE_STATE" \
+        "result=$RESULT" \
+        'details=withheld'
+}
+
+finish() {
+    case "$RESULT" in
+        pass) emit_receipt; exit 0 ;;
+        needs_apply) emit_receipt; exit 1 ;;
+        blocked|unknown) emit_receipt; exit 2 ;;
+        *) RESULT=unknown; emit_receipt; exit 2 ;;
+    esac
+}
+
+TEST_MODE=${MCL_M_OPERATOR_PATH_TEST_MODE:-}
+if [ "$TEST_MODE" = 1 ]; then
+    HOME_DIR=${MCL_M_OPERATOR_PATH_TEST_ROOT:-}
+    case "$HOME_DIR" in
+        /*) ;;
+        *) RESULT=blocked; finish ;;
+    esac
+    [ -d "$HOME_DIR" ] || { RESULT=blocked; finish; }
+else
+    [ -z "$TEST_MODE" ] || { RESULT=blocked; finish; }
+    HOME_DIR=$FIXED_HOME
+    [ "${HOME:-}" = "$FIXED_HOME" ] || { RESULT=blocked; finish; }
+fi
+LOCAL_BIN="$HOME_DIR/.local/bin"
+LOGIN_PROFILE="$HOME_DIR/.bash_profile"
+INTERACTIVE_PROFILE="$HOME_DIR/.bashrc"
+
+local_bin_state() {
+    if [ -L "$LOCAL_BIN" ]; then
+        printf '%s\n' conflict
+    elif [ -d "$LOCAL_BIN" ]; then
+        printf '%s\n' present
+    elif [ -e "$LOCAL_BIN" ]; then
+        printf '%s\n' conflict
+    else
+        printf '%s\n' missing
+    fi
+}
+
+profile_state() {
+    profile=$1
+    if [ -L "$profile" ] || [ ! -e "$profile" ] || [ ! -f "$profile" ]; then
+        printf '%s\n' conflict
+        return
+    fi
+    if [ ! -r "$profile" ]; then
+        printf '%s\n' unknown
+        return
+    fi
+
+    begin_count=$(grep -Fxc "$BEGIN_MARK" "$profile" 2>/dev/null || true)
+    end_count=$(grep -Fxc "$END_MARK" "$profile" 2>/dev/null || true)
+    if [ "$begin_count" = 0 ] && [ "$end_count" = 0 ]; then
+        printf '%s\n' missing
+        return
+    fi
+    if [ "$begin_count" != 1 ] || [ "$end_count" != 1 ]; then
+        printf '%s\n' conflict
+        return
+    fi
+
+    segment=$(sed -n '/^# BEGIN mcl-m-operator-path:v1$/,/^# END mcl-m-operator-path:v1$/p' "$profile" 2>/dev/null) || {
+        printf '%s\n' unknown
+        return
+    }
+    if [ "$segment" = "$BLOCK" ]; then
+        printf '%s\n' present
+    else
+        printf '%s\n' conflict
+    fi
+}
+
+classify() {
+    LOCAL_STATE=$(local_bin_state)
+    LOGIN_STATE=$(profile_state "$LOGIN_PROFILE")
+    INTERACTIVE_STATE=$(profile_state "$INTERACTIVE_PROFILE")
+
+    if [ "$LOCAL_STATE" = unknown ] || [ "$LOGIN_STATE" = unknown ] || [ "$INTERACTIVE_STATE" = unknown ]; then
+        RESULT=unknown
+    elif [ "$LOCAL_STATE" != present ] || [ "$LOGIN_STATE" = conflict ] || [ "$INTERACTIVE_STATE" = conflict ]; then
+        RESULT=blocked
+    elif [ "$LOGIN_STATE" = missing ] || [ "$INTERACTIVE_STATE" = missing ]; then
+        RESULT=needs_apply
+    else
+        RESULT=pass
+    fi
+}
+append_block() {
+    profile=$1
+    printf '\n%s\n' "$BLOCK" >> "$profile"
+}
+
+classify
+if [ "$MODE" = check ]; then
+    finish
+fi
+
+case "$RESULT" in
+    pass) finish ;;
+    needs_apply) ;;
+    blocked|unknown) finish ;;
+    *) RESULT=unknown; finish ;;
+esac
+
+# Re-read the complete fixed eligibility immediately before mutation.
+classify
+[ "$RESULT" = needs_apply ] || finish
+
+if [ "$LOGIN_STATE" = missing ]; then
+    append_block "$LOGIN_PROFILE" || { RESULT=unknown; finish; }
+fi
+if [ "$INTERACTIVE_STATE" = missing ]; then
+    append_block "$INTERACTIVE_PROFILE" || { RESULT=unknown; finish; }
+fi
+
+# Post-write convergence must be exact.
+classify
+[ "$RESULT" = pass ] || { RESULT=unknown; finish; }
+finish

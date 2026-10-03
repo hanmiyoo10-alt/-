@@ -94,6 +94,66 @@ must stage only ordinary `100644` paths, and must pass `git diff --check`.
 Closing keywords are rejected. Publication is always `base=main`, exact
 manifest head branch, non-draft, and exact-head read back.
 
+## Recovery-bound prepared continuation
+
+The literal `continue-prepared` operation is the only reviewed re-entry for an
+exact L candidate whose patch was already staged before an interrupted owner
+apply. It does not replay normal `apply` and it is not a generic start-phase or
+Git-command selector.
+
+```text
+MCL_WORKSPACE_HOLDER_CLAIM=<ephemeral-claim> \
+node mcl-l-repository-owner.cjs continue-prepared \
+  --manifest <recovery-rebind-manifest> --ledger <ledger> --packet <packet> \
+  --continuation-request <request> --pr-request <pr-request> --apply
+```
+
+The continuation manifest must be an exact fresh L/L D-013/D-014 binding for
+the existing feature branch/worktree and must carry exactly one reference each
+for the prior manifest, prior blocked completion receipt, blocker-repair stage
+receipt, and exact prepared-diff digest. Ordinary stage-entry manifests cannot
+enter this path.
+
+The request contains only a bounded commit message, exact expected paths, the
+prepared digest and the three recovery-lineage digests. It cannot select a
+branch, worktree, base, current-main SHA, remote, executable, Git command, merge
+strategy, retry count or fallback. Current protected main is read independently.
+
+Before any effect the owner requires the local and remote feature branch at the
+reviewed prepared base, exact staged paths/digest/modes, no unstaged/untracked or
+unmerged residue, current-main ancestry, and an already-local current-main commit
+object. A missing current-main object blocks and hands off to the existing
+`mcl-main-object-materialize L <sha>` owner.
+
+Replay proof uses a private temporary Git index loaded from exact current main.
+The staged patch must apply there with the same changed-path/change-kind, stable
+patch semantics and exact blob+mode identities. No feature-worktree bytes or refs
+are changed by replay proof.
+
+Effect order is fixed and exactly-once aware:
+
+```text
+PREPARED
+→ current-source fixed validation
+→ candidate commit with fixed command-local identity
+→ ordinary non-force merge of exact current main when stale
+→ exact current-main-relative path/blob/mode proof
+→ current-source fixed validation again
+→ ordinary non-force push
+→ one exact non-closing PR
+```
+
+Exact COMMITTED, CURRENTIZED and PUSHED states suppress duplicate effects after
+a lost acknowledgement. A different currentization parent, remote-head movement,
+merge conflict, payload/mode drift or ambiguous PR fails closed. No reset,
+restore, stash, clean, rebase, cherry-pick, force push or patch reapplication is
+part of this operation.
+
+Because the preserved feature workspace may predate the continuation owner, the
+owner and coordination contract checks run from the exact current-source snapshot
+that invoked the owner. Changed candidate CJS syntax and Git diff checks run
+against the real feature workspace.
+
 ## Fixed validation
 
 Before commit the owner always runs repository-owned checks for:

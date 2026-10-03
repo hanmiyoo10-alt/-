@@ -140,14 +140,13 @@ function loadCurrent(input, requireActiveLease = true) {
   if (!workspace.ok) return {result: output('BLOCKED', workspace.reasonCodes), manifest, workspace};
   return {result: null, manifest, workspace};
 }
-function claimHolder(input) {
-  const current = loadCurrent(input, true);
-  if (current.result) return {result: current.result, secret: null};
-  const holderPath = current.workspace.holderPath;
+function createHolderRecord(holderPath, manifest, secret) {
+  if (!/^[0-9a-f]{64}$/.test(secret || '')) {
+    return {result: output('BLOCKED', ['HOLDER_CLAIM_INVALID']), secret: null};
+  }
   if (fs.existsSync(holderPath)) return {result: output('BLOCKED', ['HOLDER_ALREADY_EXISTS']), secret: null};
-  const secret = crypto.randomBytes(32).toString('hex');
-  const record = {schemaVersion: 1, mode: 'MCL_WORKSPACE_HOLDER', manifestId: current.manifest.manifestId,
-    leaseId: current.manifest.leaseEvidence.leaseId, claimDigest: claimDigest(secret)};
+  const record = {schemaVersion: 1, mode: 'MCL_WORKSPACE_HOLDER', manifestId: manifest.manifestId,
+    leaseId: manifest.leaseEvidence.leaseId, claimDigest: claimDigest(secret)};
   let fd;
   try {
     fd = fs.openSync(holderPath, 'wx', 0o600);
@@ -160,25 +159,45 @@ function claimHolder(input) {
   fs.closeSync(fd);
   return {result: output('CLAIMED', [], {manifestId: record.manifestId, leaseId: record.leaseId, claimDigest: record.claimDigest}), secret};
 }
-function checkHolder(input, secret) {
-  const current = loadCurrent(input, true);
-  if (current.result) return current.result;
-  const holder = readHolder(current.workspace.holderPath);
+function checkHolderRecord(holderPath, manifest, secret) {
+  const holder = readHolder(holderPath);
   if (!holder.ok) return output('BLOCKED', holder.reasonCodes);
-  const reasons = holderMatches(holder.value, current.manifest, secret);
+  const reasons = holderMatches(holder.value, manifest, secret);
   return reasons.length ? output('BLOCKED', reasons) : output('CHECK_PASS', [], {
     manifestId: holder.value.manifestId, leaseId: holder.value.leaseId, claimDigest: holder.value.claimDigest,
   });
 }
+function releaseHolderRecord(holderPath, manifest, secret) {
+  const holder = readHolder(holderPath);
+  if (!holder.ok) return output('BLOCKED', holder.reasonCodes);
+  const reasons = holderMatches(holder.value, manifest, secret);
+  if (reasons.length) return output('BLOCKED', reasons);
+  try { fs.unlinkSync(holderPath); } catch (_) { return output('BLOCKED', ['HOLDER_REMOVE_FAILED']); }
+  return output('RELEASED', [], {manifestId: holder.value.manifestId, leaseId: holder.value.leaseId, claimDigest: holder.value.claimDigest});
+}
+function cleanupStaleHolderRecord(holderPath, manifest) {
+  const holder = readHolder(holderPath);
+  if (!holder.ok) return output('BLOCKED', holder.reasonCodes);
+  if (holder.value.manifestId !== manifest.manifestId || holder.value.leaseId !== manifest.leaseEvidence.leaseId) {
+    return output('BLOCKED', ['HOLDER_IDENTITY_CONFLICT']);
+  }
+  try { fs.unlinkSync(holderPath); } catch (_) { return output('BLOCKED', ['HOLDER_REMOVE_FAILED']); }
+  return output('STALE_CLEANED', [], {manifestId: holder.value.manifestId, leaseId: holder.value.leaseId, claimDigest: holder.value.claimDigest});
+}
+function claimHolder(input) {
+  const current = loadCurrent(input, true);
+  if (current.result) return {result: current.result, secret: null};
+  return createHolderRecord(current.workspace.holderPath, current.manifest, crypto.randomBytes(32).toString('hex'));
+}
+function checkHolder(input, secret) {
+  const current = loadCurrent(input, true);
+  if (current.result) return current.result;
+  return checkHolderRecord(current.workspace.holderPath, current.manifest, secret);
+}
 function releaseHolder(input, secret) {
   const current = loadCurrent(input, false);
   if (current.result) return current.result;
-  const holder = readHolder(current.workspace.holderPath);
-  if (!holder.ok) return output('BLOCKED', holder.reasonCodes);
-  const reasons = holderMatches(holder.value, current.manifest, secret);
-  if (reasons.length) return output('BLOCKED', reasons);
-  try { fs.unlinkSync(current.workspace.holderPath); } catch (_) { return output('BLOCKED', ['HOLDER_REMOVE_FAILED']); }
-  return output('RELEASED', [], {manifestId: holder.value.manifestId, leaseId: holder.value.leaseId, claimDigest: holder.value.claimDigest});
+  return releaseHolderRecord(current.workspace.holderPath, current.manifest, secret);
 }
 function cleanupStale(input) {
   const manifestRead = readManifest(input.manifestPath);
@@ -189,11 +208,7 @@ function cleanupStale(input) {
   if (parsed.state.activeLeases.some((item) => item.leaseId === manifest.leaseEvidence?.leaseId)) return output('BLOCKED', ['LEASE_STILL_ACTIVE']);
   const workspace = inspectWorkspace(manifest);
   if (!workspace.ok) return output('BLOCKED', workspace.reasonCodes);
-  const holder = readHolder(workspace.holderPath);
-  if (!holder.ok) return output('BLOCKED', holder.reasonCodes);
-  if (holder.value.manifestId !== manifest.manifestId || holder.value.leaseId !== manifest.leaseEvidence.leaseId) return output('BLOCKED', ['HOLDER_IDENTITY_CONFLICT']);
-  try { fs.unlinkSync(workspace.holderPath); } catch (_) { return output('BLOCKED', ['HOLDER_REMOVE_FAILED']); }
-  return output('STALE_CLEANED', [], {manifestId: holder.value.manifestId, leaseId: holder.value.leaseId, claimDigest: holder.value.claimDigest});
+  return cleanupStaleHolderRecord(workspace.holderPath, manifest);
 }
 function parseArgs(argv) {
   const command = argv[0];
@@ -245,12 +260,16 @@ module.exports = {
   claimDigest,
   claimHolder,
   checkHolder,
+  checkHolderRecord,
   cleanupStale,
+  cleanupStaleHolderRecord,
+  createHolderRecord,
   inspectWorkspace,
   output,
   readHolder,
   readManifest,
   releaseHolder,
+  releaseHolderRecord,
   runCli,
   validateEvidence,
 };

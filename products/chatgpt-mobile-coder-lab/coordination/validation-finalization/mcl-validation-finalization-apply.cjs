@@ -260,6 +260,30 @@ const TARGET_2791 = Object.freeze({
     'exact-seven-path-scope',
   ]),
 });
+const TARGET_3216 = Object.freeze({
+  packet: 3216,
+  packetRef: '#3216',
+  pr: 3219,
+  candidate: '6d9c957960187ac019da97b1cce87a031030fec3',
+  merge: '3df6d7c29d55d0dc451e368b60902833b712aa5d',
+  workspaceManifestId: '7e4894e742c4197682fcadbb3dcc3a697af86d0b2a4fee551df42ae457d4286b',
+  workspaceManifestPhaseId: '3216-implementation-pr-recovery-rebind',
+  workspaceLeaseId: 'e076cac60eba5a12168e7eb1f68f561ac2880cf02d7eb4d061b16c77a8ec8914',
+  workspaceAcquiredGeneration: 730,
+  workspaceBranch: 'server/mcl-packet-3216',
+  workspaceWorktree: '/root/nyang-worktrees/mcl-packet-3216',
+  implementationReceiptDigest:
+    '2eca442f98b3581f456bfce89000e52769c4f62f0e6f6d54876e053bad6efd74',
+  requiredCoordinationGates: Object.freeze([
+    'currentization-scope-and-blob-preservation',
+    'd013-release',
+    'd014-completion',
+    'implementation-coordination-converged',
+    'exact-head-required',
+    'exact-head-verify',
+    'exact-four-path-diff',
+  ]),
+});
 const EXPECTED_EFFECTS_2786 = Object.freeze([
   'CANONICAL_VALIDATION_MERGE_RECEIPT',
 ]);
@@ -321,6 +345,11 @@ const PROFILES = Object.freeze({
   }),
   '#2791': Object.freeze({
     target: TARGET_2791,
+    mode: 'IMPLEMENTATION_COORDINATION',
+    expectedEffects: EXPECTED_EFFECTS_2786,
+  }),
+  '#3216': Object.freeze({
+    target: TARGET_3216,
     mode: 'IMPLEMENTATION_COORDINATION',
     expectedEffects: EXPECTED_EFFECTS_2786,
   }),
@@ -1953,6 +1982,7 @@ module.exports = {
   TARGET,
   TARGET_2786,
   TARGET_2791,
+  TARGET_3216,
   TARGET_3043,
   TARGET_3051,
   TARGET_3092,

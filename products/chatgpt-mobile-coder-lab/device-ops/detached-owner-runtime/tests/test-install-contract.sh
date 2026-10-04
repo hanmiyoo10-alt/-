@@ -13,14 +13,14 @@ export MCL_DETACHED_RUNTIME_TEST_ROOT="$ROOT"
 cp "$INSTALL" "$WRONG/install-s-termux.sh"
 chmod 700 "$WRONG/install-s-termux.sh"
 set +e
-wrong=$("$WRONG/install-s-termux.sh" --check 2>&1)
+wrong=$(sh "$WRONG/install-s-termux.sh" --check 2>&1)
 wrong_rc=$?
 set -e
 [ "$wrong_rc" -eq 1 ]
 printf '%s\n' "$wrong" | grep -Fq 'BLOCKED source repository layout invalid'
 
 set +e
-first=$("$INSTALL" --check 2>&1)
+first=$(sh "$INSTALL" --check 2>&1)
 first_rc=$?
 set -e
 [ "$first_rc" -eq 1 ]
@@ -28,7 +28,7 @@ printf '%s\n' "$first" | grep -Fq 'schema=mcl-detached-owner-runtime-install.v3'
 printf '%s\n' "$first" | grep -Fq 'result=missing'
 [ ! -e "$ROOT/prefix/var/service/mcl-detached-owner-runtime" ]
 
-"$INSTALL" --apply > "$ROOT/apply.out"
+sh "$INSTALL" --apply > "$ROOT/apply.out"
 grep -Fq 'schema=mcl-detached-owner-runtime-install.v3' "$ROOT/apply.out"
 grep -Fq 'support_bundle=present' "$ROOT/apply.out"
 grep -Fq 'host_front=present' "$ROOT/apply.out"
@@ -40,7 +40,7 @@ grep -Fq 'socket=absent' "$ROOT/apply.out"
 grep -Fq 'result=pass' "$ROOT/apply.out"
 grep -Fq 'runtime_started=false' "$ROOT/apply.out"
 
-"$INSTALL" --check > "$ROOT/check.out"
+sh "$INSTALL" --check > "$ROOT/check.out"
 grep -Fq 'result=pass' "$ROOT/check.out"
 grep -Fq 'support_bundle=present' "$ROOT/check.out"
 grep -Fq 'host_front=present' "$ROOT/check.out"
@@ -58,6 +58,7 @@ SUPPORT="$LIB/repository"
 RUNTIME_JS="$SUPPORT/products/chatgpt-mobile-coder-lab/device-ops/detached-owner-runtime/mcl-detached-owner-runtime.cjs"
 SERVICE_JS="$SUPPORT/products/chatgpt-mobile-coder-lab/device-ops/detached-owner-runtime/mcl-detached-owner-runtime-service.cjs"
 POLICY="$SUPPORT/.github/plugin-control-plane/canonical-main/work-system/policy.json"
+PACKET_ACTIVITY="$SUPPORT/.github/plugin-control-plane/canonical-main/work-system/packet-activity.cjs"
 
 [ -f "$SERVICE/run" ] && [ ! -L "$SERVICE/run" ] && [ -x "$SERVICE/run" ]
 [ -f "$SERVICE/down" ] && [ ! -L "$SERVICE/down" ]
@@ -69,7 +70,8 @@ POLICY="$SUPPORT/.github/plugin-control-plane/canonical-main/work-system/policy.
 [ -d "$HOST_RUN" ] && [ ! -L "$HOST_RUN" ] && [ "$(stat -c '%a' "$HOST_RUN")" = 700 ]
 [ -d "$SUPPORT" ] && [ ! -L "$SUPPORT" ]
 [ -z "$(find "$SUPPORT" -type l -print -quit)" ]
-[ "$(find "$SUPPORT" -type f | wc -l)" -eq 22 ]
+[ "$(find "$SUPPORT" -type f | wc -l)" -eq 23 ]
+[ -f "$PACKET_ACTIVITY" ] && [ ! -L "$PACKET_ACTIVITY" ] && [ "$(stat -c '%a' "$PACKET_ACTIVITY")" = 600 ]
 
 for file in $(find "$SUPPORT" -type f -print); do
   [ "$(stat -c '%a' "$file")" = 600 ]
@@ -103,26 +105,26 @@ node -e "'use strict'; require(process.argv[1]); require(process.argv[2]); requi
 printf '%s\n' '{"tampered":true}' > "$POLICY"
 chmod 600 "$POLICY"
 set +e
-tampered=$("$INSTALL" --check 2>&1)
+tampered=$(sh "$INSTALL" --check 2>&1)
 tampered_rc=$?
 set -e
 [ "$tampered_rc" -eq 1 ]
 printf '%s\n' "$tampered" | grep -Fq 'support_bundle=missing'
 
-"$INSTALL" --apply > "$ROOT/reapply.out"
+sh "$INSTALL" --apply > "$ROOT/reapply.out"
 grep -Fq 'support_bundle=present' "$ROOT/reapply.out"
-"$INSTALL" --check > "$ROOT/recheck.out"
+sh "$INSTALL" --check > "$ROOT/recheck.out"
 grep -Fq 'result=pass' "$ROOT/recheck.out"
 
 printf '%s\n' '// managed-byte-drift' >> "$HOST_JS"
 chmod 600 "$HOST_JS"
 set +e
-host_tampered=$("$INSTALL" --check 2>&1)
+host_tampered=$(sh "$INSTALL" --check 2>&1)
 host_tampered_rc=$?
 set -e
 [ "$host_tampered_rc" -eq 1 ]
 printf '%s\n' "$host_tampered" | grep -Fq 'host_front=missing'
-"$INSTALL" --apply > "$ROOT/reapply-host.out"
+sh "$INSTALL" --apply > "$ROOT/reapply-host.out"
 grep -Fq 'host_front=present' "$ROOT/reapply-host.out"
 
 node -e "'use strict'; require(process.argv[1]); require(process.argv[2]); require(process.argv[3]);" "$RUNTIME_JS" "$SERVICE_JS" "$HOST_JS"
@@ -130,7 +132,7 @@ node -e "'use strict'; require(process.argv[1]); require(process.argv[2]); requi
 
 before=$(sha256sum "$SERVICE/down" | awk '{print $1}')
 set +e
-activate=$("$INSTALL" --activate 2>&1)
+activate=$(sh "$INSTALL" --activate 2>&1)
 activate_rc=$?
 set -e
 [ "$activate_rc" -eq 2 ]

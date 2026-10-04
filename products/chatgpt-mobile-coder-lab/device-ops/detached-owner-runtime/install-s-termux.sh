@@ -29,6 +29,7 @@ SUPPORT_FILES='
 .github/plugin-control-plane/canonical-main/work-harness/handoff.cjs
 .github/plugin-control-plane/canonical-main/work-harness/preflight.cjs
 .github/plugin-control-plane/canonical-main/work-system/packet-projection.cjs
+.github/plugin-control-plane/canonical-main/work-system/packet-activity.cjs
 .github/plugin-control-plane/canonical-main/work-system/policy.json
 .github/plugin-control-plane/canonical-main/work-system/pr-activity.cjs
 .github/plugin-control-plane/canonical-main/work-system/scope-overlap.cjs

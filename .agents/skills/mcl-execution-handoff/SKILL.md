@@ -38,17 +38,24 @@ Do not replace any of these owners with a locally copied truth table.
 
 ## V1 supported phase
 
-V1 admission supports only the already-reviewed ordinary repository-backed
-mutable route:
+V1 admission supports the current ordinary repository-backed mutable route
+plus explicitly selected historical/current S-route compatibility:
 
 ```text
+preferred current route:
+route=L
+executor=L
+repository_effect=mutable
+
+explicit S route:
 route=S
 executor=S | M
 repository_effect=mutable
 ```
 
-`M` is valid here only when the current dispatcher/D-012 phase already selected
-the documented ordinary-repository fallback. This skill never switches executor.
+`L` is always exact `L / L` and has no executor fallback. `M` remains valid only
+inside an explicitly selected `route=S` handoff that already owns that historical
+executor identity. This skill never switches route or executor.
 
 For `repository_effect=read_only`, return `NOT_APPLICABLE`; read-only work does
 not need an effect admission token.
@@ -68,8 +75,7 @@ explicit, current for the same phase, and mutually consistent.
 
 Require one valid `mcl-dispatch-plan.v1` phase with:
 - positive phase index/total;
-- `route=S`;
-- exact `executor=S|M`;
+- either exact `route=L / executor=L` or explicit `route=S / executor=S|M`;
 - `repository_effect=mutable`;
 - `overlap_guard=required`;
 - `lease_guard=required`;
@@ -79,9 +85,14 @@ The plan is planning evidence only and grants no effect authority.
 
 ### 2. Route-conditioned preflight evidence
 
-Require the current route/preflight owner evidence needed by the source packet.
-Any required blocked, missing, malformed, `UNKNOWN`, or `CONFLICT` evidence
-prevents handoff.
+For exact `L / L`, current D-012 declares first-pass preflight
+`not_applicable`; require that exact dispatcher disposition and continue to the
+later overlap/lease/currentness/manifest gates without inventing a preflight
+result.
+
+For explicit `route=S`, require the current route/preflight owner evidence needed
+by the source packet. Any required blocked, missing, malformed, `UNKNOWN`, or
+`CONFLICT` evidence prevents handoff.
 
 Do not synthesize an aggregate `healthy`, `ready`, or `safe_to_mutate`
 verdict from owner fields.
@@ -165,8 +176,8 @@ schema=mcl-execution-handoff.v1
 status=<HANDOFF_READY|BLOCKED|UNKNOWN|CONFLICT|SEPARATE_OWNER_REQUIRED|NOT_APPLICABLE>
 packet_ref=<#N>
 phase=<positive-index>/<positive-total>
-route=<S|current-route>
-executor=<S|M|not_applicable|unknown>
+route=<L|S|current-route>
+executor=<L|S|M|not_applicable|unknown>
 effect_class=<repository_mutation|separate_owner|none|unknown>
 manifest_id=<sha256|not_applicable|unknown>
 lease_id=<sha256|not_applicable|unknown>
@@ -203,9 +214,10 @@ Missing required evidence without contradictory present evidence remains
 
 ## No fallback after selection
 
-Once the current plan names executor `S` or `M`, this skill never swaps to
-the other executor because of later status, currentness, lease, or manifest
-failure. Return the evidence-backed non-ready disposition instead.
+Once the current plan names exact `L`, `S`, or `M`, this skill never swaps
+route or executor because of later status, currentness, lease, or manifest
+failure. In particular, an L failure never becomes an implicit S fallback.
+Return the evidence-backed non-ready disposition instead.
 
 ## Effect boundary
 

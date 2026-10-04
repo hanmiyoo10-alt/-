@@ -34,11 +34,21 @@ class MclExecutionHandoffSkillContractTests(unittest.TestCase):
         self.assertIn("Actual effect execution remains with the already-authorized existing owner", self.skill)
 
     def test_v1_support_is_narrow(self):
-        for token in ["route=S", "executor=S | M", "repository_effect=mutable"]:
+        for token in ["route=L", "executor=L", "route=S", "executor=S | M", "repository_effect=mutable"]:
             self.assertIn(token, self.skill)
+        self.assertEqual(self.case("repo-l-handoff-ready")["expected"]["status"], "HANDOFF_READY")
         self.assertEqual(self.case("repo-s-handoff-ready")["expected"]["status"], "HANDOFF_READY")
         self.assertEqual(self.case("repo-m-fallback-handoff-ready")["expected"]["status"], "HANDOFF_READY")
         self.assertEqual(self.case("read-only-not-applicable")["expected"]["status"], "NOT_APPLICABLE")
+
+    def test_l_identity_is_exact_and_preflight_is_not_applicable(self):
+        ready = self.case("repo-l-handoff-ready")
+        self.assertEqual(ready["input"]["plan"]["route"], "L")
+        self.assertEqual(ready["input"]["plan"]["executor"], "L")
+        self.assertEqual(ready["input"]["plan"]["preflight_owner"], "not_applicable")
+        self.assertEqual(ready["expected"]["status"], "HANDOFF_READY")
+        self.assertEqual(self.case("repo-l-wrong-executor-rejected")["expected"]["status"], "CONFLICT")
+        self.assertIn("an L failure never becomes an implicit S fallback", self.skill)
 
     def test_context_specific_routes_stay_separate_owner(self):
         self.assertIn("return `SEPARATE_OWNER_REQUIRED`", self.skill)
@@ -95,10 +105,13 @@ class MclExecutionHandoffSkillContractTests(unittest.TestCase):
         self.assertIn("does not advance packet lifecycle", self.skill)
 
     def test_no_executor_fallback_after_selection(self):
-        case = self.case("selected-s-never-falls-back")
-        self.assertEqual(case["expected"]["executor"], "S")
-        self.assertFalse(case["expected"]["auto_switched_executor"])
-        self.assertIn("never swaps to\nthe other executor", self.skill)
+        l_case = self.case("selected-l-never-falls-back")
+        self.assertEqual(l_case["expected"]["executor"], "L")
+        self.assertFalse(l_case["expected"]["auto_switched_executor"])
+        s_case = self.case("selected-s-never-falls-back")
+        self.assertEqual(s_case["expected"]["executor"], "S")
+        self.assertFalse(s_case["expected"]["auto_switched_executor"])
+        self.assertIn("never swaps\nroute or executor", self.skill)
 
     def test_receipt_contract_is_bounded_and_non_authoritative(self):
         for token in [
@@ -111,7 +124,7 @@ class MclExecutionHandoffSkillContractTests(unittest.TestCase):
             "details=withheld",
         ]:
             self.assertIn(token, self.skill)
-        for case_id in ["repo-s-handoff-ready", "repo-m-fallback-handoff-ready"]:
+        for case_id in ["repo-l-handoff-ready", "repo-s-handoff-ready", "repo-m-fallback-handoff-ready"]:
             case = self.case(case_id)
             self.assertFalse(case["expected"]["mutation_authorized"])
             self.assertFalse(case["expected"]["execution_authorized"])
@@ -146,13 +159,15 @@ class MclExecutionHandoffSkillContractTests(unittest.TestCase):
         ids = [case["id"] for case in self.evals["cases"]]
         self.assertEqual(len(ids), len(set(ids)))
         required = {
+            "repo-l-handoff-ready", "repo-l-wrong-executor-rejected",
             "repo-s-handoff-ready", "repo-m-fallback-handoff-ready",
             "read-only-not-applicable", "s-termux-separate-owner",
             "gui-action-separate-owner", "preflight-unknown", "preflight-blocked",
             "overlap-conflict", "overlap-present", "lease-missing", "lease-released",
             "packet-digest-conflict", "workspace-conflict", "git-currentness-unknown",
             "manifest-identity-conflict", "terminal-packet-blocked",
-            "authority-scope-only-blocked", "selected-s-never-falls-back",
+            "authority-scope-only-blocked", "selected-l-never-falls-back",
+            "selected-s-never-falls-back",
             "command-payload-rejected",
         }
         self.assertTrue(required.issubset(set(ids)))

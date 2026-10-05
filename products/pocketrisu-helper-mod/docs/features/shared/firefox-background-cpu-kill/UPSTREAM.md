@@ -4,43 +4,43 @@ Feature-ID: `firefox-background-cpu-kill`
 Area: `shared`
 PR status: `NOT_PREPARED`
 Isolation status: `CLEAN`
-Deployment status: `INVESTIGATING_FIX`
+Deployment status: `LIVE_A_B_PASS_CHAT_SMOKE_PENDING`
 
 ## Problem / motivation
-On Android/Samsung, PocketRisu's sound-based keep-session-alive path can keep Firefox media/content work active while the app is cached. Android ActivityManager has been observed killing the corresponding Gecko tab process for `excessive cpu`, after which Firefox recreates the content process on resume and PocketRisu visibly reconstructs the document.
+On Android/Samsung, PocketRisu's sound keep-alive can keep Firefox Gecko work active while backgrounded. Android ActivityManager then kills the PocketRisu-correlated Gecko tab process for `excessive cpu`, and Firefox reconstructs the content process on resume.
 
 ## Minimal upstream scope
-Prevent the continuous sound keep-alive loop from starting on Android Firefox, while preserving the existing behavior on other platforms.
-
-Touch only the smallest client-side keep-session-alive boundary needed for that platform guard.
+Prevent the continuous sound keep-alive loop from starting on Android Firefox only. Preserve existing behavior on other platforms.
 
 ## Dependencies
 - existing `keepSessionAlive` setting
-- existing browser/platform detection helpers
-- no dependency on server session-lock or DB persistence changes
+- existing browser/platform detection
+- no server/session-lock/DB dependency
 
 ## Explicitly out of scope
-- server restart/health-stall investigation
-- SSH tunnel supervision
-- stale-writer/session-lock protocol
-- forced save/flush on hide/pagehide
+- server/SSH issues
+- stale-writer protocol
+- hide/pagehide forced flush
 - V3 iframe redesign
-- general plugin CPU throttling
-- Android notification behavior
+- general plugin throttling
+- Android notifications
 
 ## Verification evidence
-Real-device evidence on SM-S938N / Android 16:
-- Firefox main process survived.
-- Gecko tab process correlated with PocketRisu reconstruction was later killed by ActivityManager for `excessive cpu`.
-- Firefox utility process was killed in the same sweep for `excessive cpu`.
-- current PocketRisu DB has `keepSessionAlive: sound`.
-- sound mode implementation loops a 2.325 s, 44.1 kHz stereo MP3 continuously.
-- Android AudioService shows Firefox AAudio media playback active and background playback hardening events.
-- persistence and server process remain healthy across the reconstruction.
+- official upstream still has the same continuous sound loop in `src/App.svelte`.
+- local candidate commit: `4f693cba1c993b42407b1b73a9ae407f4e102b97`.
+- one tracked file changed: `src/App.svelte`.
+- `svelte-check`: 0 errors, 4 pre-existing warnings.
+- production build: PASS.
+- old Firefox AAudio player released at 02:52:55 KST after loading the candidate.
+- no replacement Firefox AAudio player was created.
+- Firefox stayed backgrounded from 02:53:10 through at least 02:58:59 with the same main/tab process set.
+- main/tab `oom_score_adj` stayed around 900/910, but no `excessive cpu` kill occurred.
+- server persistence stayed healthy and no 423 `Session deactivated` occurred.
 
 ## Upstream pitch
-The keep-alive option is intended to prevent background expiry, but on Android Firefox continuous media playback can instead keep cached Gecko work active long enough for the OS to kill the tab for excessive CPU. Avoiding the continuous sound loop on that platform prevents the keep-alive feature from causing the reconstruction it is meant to avoid.
+A keep-alive feature should not trigger the browser/OS condition that destroys the tab it is trying to preserve. On Android Firefox, continuous audio should therefore be skipped rather than looped.
 
 ## Review / PR state
-- official upstream currently contains the same continuous sound-loop implementation in `src/App.svelte`.
-- next action: verify the Android Firefox guard locally before preparing an official upstream PR.
+- local A/B: PASS for >5 minutes background, audio remains stopped.
+- remaining local gate: one normal foreground chat send with durable chat-content persist, plus longer natural-use observation.
+- next action: when those pass, rebuild the one-file change from latest official upstream for PR.

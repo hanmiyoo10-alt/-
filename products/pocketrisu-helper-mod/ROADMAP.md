@@ -1,6 +1,6 @@
 # ROADMAP
 
-기준: 2026-09-25
+기준: 2026-10-06
 
 
 ## 완료 / LIVE_PROVEN — main-ssh-tunnel supervisor hardening
@@ -76,6 +76,16 @@ Worker pre-launch structured clone과 chunk-store CDC/hash/SQLite commit은 이 
 금지: 단순 주기적 `git pull`.
 
 ## P1 — 조사 중
+
+### Firefox background CPU kill — VERIFIED_LOCAL
+- Android/Samsung `excessive cpu` kill로 Firefox Gecko content process가 사라지고 복귀 시 PocketRisu가 재구성되는 메커니즘을 실기기에서 연결함.
+- root trigger는 Android Firefox의 continuous sound keep-alive로 강하게 좁혀짐.
+- local candidate `4f693cba1c993b42407b1b73a9ae407f4e102b97`: Android Firefox에서 sound keep-alive loop skip.
+- check/build PASS.
+- reload 후 AAudio release + no replacement player.
+- >5분 background A/B에서 same process set, excessive-CPU kill 0.
+- 남은 gate: foreground chat-content persist smoke 1회 + 더 긴 자연 운용.
+- gate 통과 후 latest official upstream에서 one-file PR 재구성.
 
 ### 초장기챗 새고/복귀 health 정체
 - 새고 때 실제 DB read/encode/serialize 경로 찾기.

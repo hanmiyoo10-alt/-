@@ -61,6 +61,7 @@ const D014_VALIDATION_PROFILE = 'mcl:d014-completion-set:v1';
 const VALIDATION_CONTINUATION_PROFILE = 'repo:validation-continuation:v1';
 const PUBLISHED_PROGRESS_RECOVERY_PROFILE = 'repo:published-progress-recovery:v1';
 const VALIDATION_FINALIZATION_PROFILE = 'mcl:validation-finalization-owner:v1';
+const S_RDC_MAINTENANCE_PROFILE = 'mcl:s-rdc-maintenance-owner:v1';
 const D014_COMPLETION_SET_PATHS = Object.freeze([
   'products/chatgpt-mobile-coder-lab/coordination/completion-receipt-set.cjs',
   'products/chatgpt-mobile-coder-lab/coordination/tests/test-completion-receipt-set.cjs',
@@ -86,6 +87,13 @@ const VALIDATION_FINALIZATION_PATHS = Object.freeze([
   'products/chatgpt-mobile-coder-lab/coordination/validation-finalization/mcl-validation-finalization-apply.cjs',
   'products/chatgpt-mobile-coder-lab/coordination/validation-finalization/tests/test-mcl-validation-finalization-apply.cjs',
 ]);
+const S_RDC_MAINTENANCE_PATHS = Object.freeze([
+  'products/chatgpt-mobile-coder-lab/device-ops/s-rdc-maintenance/README.md',
+  'products/chatgpt-mobile-coder-lab/device-ops/s-rdc-maintenance/device-name-shim.cjs',
+  'products/chatgpt-mobile-coder-lab/device-ops/s-rdc-maintenance/install-s-termux.sh',
+  'products/chatgpt-mobile-coder-lab/device-ops/s-rdc-maintenance/mcl-s-rdc-maintenance',
+  'products/chatgpt-mobile-coder-lab/device-ops/s-rdc-maintenance/tests/test-contract.sh',
+]);
 const D014_VALIDATION_SCOPES = Object.freeze([
   ...D014_COMPLETION_SET_PATHS.map((item) => 'path:' + item),
   'surface:mcl:d014-completion-set',
@@ -102,6 +110,10 @@ const PUBLISHED_PROGRESS_RECOVERY_SCOPES = Object.freeze([
 const VALIDATION_FINALIZATION_SCOPES = Object.freeze([
   ...VALIDATION_FINALIZATION_PATHS.map((item) => 'path:' + item),
   'surface:mcl:validation-finalization-effect',
+].sort());
+const S_RDC_MAINTENANCE_SCOPES = Object.freeze([
+  ...S_RDC_MAINTENANCE_PATHS.map((item) => 'path:' + item),
+  'surface:mcl:s-primary-rdc-runtime',
 ].sort());
 const PREPARED_VALIDATION_TIMEOUT_MS = 120000;
 const MAX_VALIDATION_OUTPUT_BYTES = 64 * 1024;
@@ -175,6 +187,26 @@ const VALIDATION_FINALIZATION_CHECKS = Object.freeze([
   Object.freeze({name: 'validation-continuation-contract', args: ['--test', '.github/plugin-control-plane/canonical-main/work-harness/validation-continuation/tests/validation-continuation-owner-contract.cjs']}),
 ]);
 
+const S_RDC_MAINTENANCE_CHECKS = Object.freeze([
+  Object.freeze({
+    name: 's-rdc-maintenance-controller-syntax',
+    args: ['-n', S_RDC_MAINTENANCE_PATHS[3]],
+  }),
+  Object.freeze({
+    name: 's-rdc-maintenance-installer-syntax',
+    args: ['-n', S_RDC_MAINTENANCE_PATHS[2]],
+  }),
+  Object.freeze({
+    name: 's-rdc-maintenance-shim-syntax',
+    args: ['--check', S_RDC_MAINTENANCE_PATHS[1]],
+  }),
+  Object.freeze({
+    name: 's-rdc-maintenance-contract',
+    args: [S_RDC_MAINTENANCE_PATHS[4]],
+  }),
+]);
+const FIXED_VALIDATION_SHELL = '/bin/sh';
+
 function buildValidationProfile({profileId, paths, scopes, checks}) {
   const core = taskHandoff.stable({
     profileId,
@@ -221,26 +253,69 @@ const VALIDATION_PROFILES = Object.freeze([
     scopes: VALIDATION_FINALIZATION_SCOPES,
     checks: VALIDATION_FINALIZATION_CHECKS,
   }),
+  buildValidationProfile({
+    profileId: S_RDC_MAINTENANCE_PROFILE,
+    paths: S_RDC_MAINTENANCE_PATHS,
+    scopes: S_RDC_MAINTENANCE_SCOPES,
+    checks: S_RDC_MAINTENANCE_CHECKS,
+  }),
 ]);
+function expectedImplementationValidationAdapterShape(profileId, check) {
+  if (!check || typeof check.checkId !== 'string' || !Array.isArray(check.args)) {
+    throw new Error('IMPLEMENTATION_VALIDATION_CHECK_SHAPE_UNSUPPORTED:UNKNOWN');
+  }
+  if (profileId === S_RDC_MAINTENANCE_PROFILE) {
+    const fixed = {
+      's-rdc-maintenance-controller-syntax': {
+        launcher: 'sh', resultParser: 'sh-exit-v1', pathArgIndex: 1,
+        args: ['-n', S_RDC_MAINTENANCE_PATHS[3]], command: FIXED_VALIDATION_SHELL,
+      },
+      's-rdc-maintenance-installer-syntax': {
+        launcher: 'sh', resultParser: 'sh-exit-v1', pathArgIndex: 1,
+        args: ['-n', S_RDC_MAINTENANCE_PATHS[2]], command: FIXED_VALIDATION_SHELL,
+      },
+      's-rdc-maintenance-shim-syntax': {
+        launcher: 'node', resultParser: 'node-exit-v1', pathArgIndex: 1,
+        args: ['--check', S_RDC_MAINTENANCE_PATHS[1]], command: process.execPath,
+      },
+      's-rdc-maintenance-contract': {
+        launcher: 'sh', resultParser: 'sh-exit-v1', pathArgIndex: 0,
+        args: [S_RDC_MAINTENANCE_PATHS[4]], command: FIXED_VALIDATION_SHELL,
+      },
+    }[check.checkId];
+    if (!fixed || !same(check.args, fixed.args)) {
+      throw new Error('IMPLEMENTATION_VALIDATION_CHECK_SHAPE_UNSUPPORTED:' + check.checkId);
+    }
+    validateRepoPath(check.args[fixed.pathArgIndex]);
+    return fixed;
+  }
+  if (check.args.length !== 2 || !['--check', '--test'].includes(check.args[0])) {
+    throw new Error('IMPLEMENTATION_VALIDATION_CHECK_SHAPE_UNSUPPORTED:' + check.checkId);
+  }
+  validateRepoPath(check.args[1]);
+  return {
+    launcher: 'node',
+    resultParser: 'node-exit-v1',
+    pathArgIndex: 1,
+    args: [...check.args],
+    command: process.execPath,
+  };
+}
 function buildImplementationValidationAdapterContract(profiles = VALIDATION_PROFILES) {
   const adapters = [];
   for (const profile of profiles) {
     for (const check of profile.checks) {
-      if (!Array.isArray(check.args) || check.args.length !== 2
-          || !['--check', '--test'].includes(check.args[0])) {
-        throw new Error('IMPLEMENTATION_VALIDATION_CHECK_SHAPE_UNSUPPORTED:' + check.checkId);
-      }
-      validateRepoPath(check.args[1]);
+      const shape = expectedImplementationValidationAdapterShape(profile.profileId, check);
       adapters.push({
         profileId: profile.profileId,
         checkId: check.checkId,
-        launcher: 'node',
+        launcher: shape.launcher,
         cwdPolicy: 'manifest-worktree',
-        pathArgIndex: 1,
-        canonicalPath: check.args[1],
+        pathArgIndex: shape.pathArgIndex,
+        canonicalPath: check.args[shape.pathArgIndex],
         aliases: [],
         timeoutMs: check.timeoutMs,
-        resultParser: 'node-exit-v1',
+        resultParser: shape.resultParser,
       });
     }
   }
@@ -979,10 +1054,17 @@ function resolveImplementationValidationInvocation({
   const found = adapterForValidationCheck(binding, check, adapterContract);
   if (found.kind !== 'PASS') return found;
   const adapter = found.value;
-  if (adapter.launcher !== 'node' || adapter.cwdPolicy !== 'manifest-worktree'
-      || adapter.resultParser !== 'node-exit-v1'
-      || adapter.pathArgIndex !== 1 || adapter.timeoutMs !== check.timeoutMs
-      || !Array.isArray(adapter.aliases)) {
+  let expected;
+  try {
+    expected = expectedImplementationValidationAdapterShape(binding.profile.profileId, check);
+  } catch {
+    return {kind: 'CONFLICT', reasonCodes: ['CHECK_ADAPTER_CONTRACT_CONFLICT:' + check.checkId]};
+  }
+  if (adapter.launcher !== expected.launcher || adapter.cwdPolicy !== 'manifest-worktree'
+      || adapter.resultParser !== expected.resultParser
+      || adapter.pathArgIndex !== expected.pathArgIndex
+      || adapter.canonicalPath !== check.args[expected.pathArgIndex]
+      || adapter.timeoutMs !== check.timeoutMs || !Array.isArray(adapter.aliases)) {
     return {kind: 'CONFLICT', reasonCodes: ['CHECK_ADAPTER_CONTRACT_CONFLICT:' + check.checkId]};
   }
   const candidates = [adapter.canonicalPath, ...adapter.aliases];
@@ -1017,7 +1099,7 @@ function resolveImplementationValidationInvocation({
     reasonCodes: [],
     value: {
       launcher: adapter.launcher,
-      command: process.execPath,
+      command: expected.command,
       args,
       cwd: manifest.workspace.worktree,
       path: selected,
@@ -1034,10 +1116,15 @@ function validationArtifactSummary(rows) {
     notRun: rows.filter((row) => row.result === 'NOT_RUN').length,
   };
 }
-function notRunValidationRow(check) {
+function notRunValidationRow(check, profileId = null) {
+  let launcher = 'node';
+  if (profileId) {
+    try { launcher = expectedImplementationValidationAdapterShape(profileId, check).launcher; }
+    catch {}
+  }
   return {
     checkId: check.checkId,
-    launcher: 'node',
+    launcher,
     argv: [...check.args],
     path: null,
     resolution: 'NOT_RUN',
@@ -1149,7 +1236,7 @@ function runAdapterPreparedValidation({
   const rows = [];
   const finish = (kind, reasonCodes) => {
     while (rows.length < profile.checks.length) {
-      rows.push(notRunValidationRow(profile.checks[rows.length]));
+      rows.push(notRunValidationRow(profile.checks[rows.length], profile.profileId));
     }
     const artifact = buildImplementationValidationArtifact({binding, manifest, rows});
     let persisted;
@@ -1182,7 +1269,7 @@ function runAdapterPreparedValidation({
     const resolved = validationAdapterResolverImpl({binding, check, manifest});
     if (resolved.kind !== 'PASS') {
       rows.push({
-        ...notRunValidationRow(check),
+        ...notRunValidationRow(check, profile.profileId),
         result: 'INFRA',
         resolution: 'UNRESOLVED',
         reasonCodes: unique(resolved.reasonCodes || []),
@@ -1261,6 +1348,14 @@ function runFixedPreparedValidation({
     };
   }
   if (binding.adapterMode !== 'V1') {
+    if (profile.profileId === S_RDC_MAINTENANCE_PROFILE) {
+      return {
+        kind: 'BLOCKED',
+        reasonCodes: ['IMPLEMENTATION_VALIDATION_ADAPTER_REQUIRED'],
+        value: validationEvidence(
+          profile.profileId, 'BLOCKED', ['IMPLEMENTATION_VALIDATION_ADAPTER_REQUIRED'], 0),
+      };
+    }
     return runLegacyPreparedValidation({
       binding, manifest, env, validationSpawnSyncImpl,
     });
@@ -2114,19 +2209,23 @@ module.exports = {
   VALIDATION_CONTINUATION_PROFILE,
   PUBLISHED_PROGRESS_RECOVERY_PROFILE,
   VALIDATION_FINALIZATION_PROFILE,
+  S_RDC_MAINTENANCE_PROFILE,
   DETACHED_CHECKPOINT_SCHEMA,
   D014_COMPLETION_SET_PATHS,
   VALIDATION_CONTINUATION_PATHS,
   PUBLISHED_PROGRESS_RECOVERY_PATHS,
   VALIDATION_FINALIZATION_PATHS,
+  S_RDC_MAINTENANCE_PATHS,
   D014_VALIDATION_SCOPES,
   VALIDATION_CONTINUATION_SCOPES,
   PUBLISHED_PROGRESS_RECOVERY_SCOPES,
   VALIDATION_FINALIZATION_SCOPES,
+  S_RDC_MAINTENANCE_SCOPES,
   D014_VALIDATION_CHECKS,
   VALIDATION_CONTINUATION_CHECKS,
   PUBLISHED_PROGRESS_RECOVERY_CHECKS,
   VALIDATION_FINALIZATION_CHECKS,
+  S_RDC_MAINTENANCE_CHECKS,
   VALIDATION_PROFILES,
   IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT,
   buildImplementationValidationAdapterContract,

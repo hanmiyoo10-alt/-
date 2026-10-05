@@ -51,9 +51,11 @@ The repository source exposes:
 ./install-s-termux.sh --apply
 ```
 
-The installer only materializes the exact maintenance controller into the fixed
-S-Termux local-bin target. It never stages a package and never restarts a
-service.
+The installer materializes the exact maintenance controller into the fixed
+S-Termux local-bin target and the exact repository-owned device-name shim into
+the fixed S-Termux host source path
+`$HOME/.local/share/mcl-s-rdc-maintenance/device-name-shim.cjs`. It never
+stages a package, mutates the live PRoot shim target, or restarts a service.
 
 `--check` is read-only. It observes the active/staged/rollback bundle versions
 and fixed service state and emits bounded semantic fields only.
@@ -94,9 +96,12 @@ separate reversible label repair. The live service run is accepted only at the
 reviewed pre-label SHA-256
 `c629b9a3580c2255319bb39a75ecd1dc025c11cf8d059d8da3622c9c9e854252`.
 
-`--label-stage` is restart-free. It materializes the repository-owned
-`device-name-shim.cjs` and one exact staged run sibling whose only semantic
-change is a fixed Node `--require` for that shim. The deterministic candidate
+`--label-stage` is restart-free. In production it consumes only the exact
+installer-managed S-Termux host shim source, so staging does not depend on the
+current checkout state of the PRoot landing repository. It materializes that
+fixed `device-name-shim.cjs` into the existing PRoot target and one exact staged
+run sibling whose only semantic change is a fixed Node `--require` for that
+shim. The deterministic candidate
 run SHA-256 is
 `e498f0350f651ebb03a859aac9409806c14bab98b7806e9b7c57a970b1b62069`.
 

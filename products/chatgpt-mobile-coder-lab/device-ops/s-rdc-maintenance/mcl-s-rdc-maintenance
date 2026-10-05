@@ -31,7 +31,7 @@ case "$TEST_MODE" in
     ROOTFS=$FIXED_ROOTFS
     READY_ATTEMPTS=30
     READY_SLEEP=2
-    SHIM_SOURCE="$FIXED_ROOTFS/root/nyang-repo/products/chatgpt-mobile-coder-lab/device-ops/s-rdc-maintenance/device-name-shim.cjs"
+    SHIM_SOURCE="$FIXED_HOME/.local/share/mcl-s-rdc-maintenance/device-name-shim.cjs"
     ;;  1)
     TEST_ROOT=${MCL_S_RDC_MAINTENANCE_TEST_ROOT:-}
     case "$TEST_ROOT" in

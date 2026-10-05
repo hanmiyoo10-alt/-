@@ -187,6 +187,8 @@ DESKTOP_COMMANDER_DEVICE_NAME=S "$NODE_BIN" --require "$SHIM" --input-type=modul
 if DESKTOP_COMMANDER_DEVICE_NAME=X "$NODE_BIN" --require "$SHIM" -e "process.exit(0)" >/dev/null 2>&1; then fail shim-arbitrary-label; fi
 grep -Fq "BASE_RUN_SHA='c629b9a3580c2255319bb39a75ecd1dc025c11cf8d059d8da3622c9c9e854252'" "$CTL" || fail base-run-sha
 grep -Fq "TARGET_RUN_SHA='e498f0350f651ebb03a859aac9409806c14bab98b7806e9b7c57a970b1b62069'" "$CTL" || fail target-run-sha
+grep -Fq 'SHIM_SOURCE="$FIXED_HOME/.local/share/mcl-s-rdc-maintenance/device-name-shim.cjs"' "$CTL" || fail production-shim-source
+pass production-shim-source-fixed
 grep -Fq 'BASE_VERSION=0.2.48' "$CTL" || fail base-version
 grep -Fq 'TARGET_VERSION=0.2.52' "$CTL" || fail target-version
 grep -Fq 'desktop-commander-remote.mcl-stage-0.2.52' "$CTL" || fail fixed-stage
@@ -414,11 +416,14 @@ set -e
 MCL_S_RDC_MAINTENANCE_INSTALL_TEST_MODE=1 \
   MCL_S_RDC_MAINTENANCE_INSTALL_TEST_ROOT="$install_root" sh "$INSTALL" --apply >/dev/null
 target="$install_root/home/.local/bin/mcl-s-rdc-maintenance"
+shim_target="$install_root/home/.local/share/mcl-s-rdc-maintenance/device-name-shim.cjs"
 [ -f "$target" ] && [ "$(stat -c %a "$target")" = 700 ] || fail installer-target
-snap1=$(sha256sum "$target" | awk '{print $1}')
+[ -f "$shim_target" ] && [ "$(stat -c %a "$shim_target")" = 600 ] || fail installer-shim-target
+cmp -s "$SHIM" "$shim_target" || fail installer-shim-bytes
+snap1=$(sha256sum "$target" "$shim_target")
 MCL_S_RDC_MAINTENANCE_INSTALL_TEST_MODE=1 \
   MCL_S_RDC_MAINTENANCE_INSTALL_TEST_ROOT="$install_root" sh "$INSTALL" --apply >/dev/null
-snap2=$(sha256sum "$target" | awk '{print $1}')
+snap2=$(sha256sum "$target" "$shim_target")
 [ "$snap1" = "$snap2" ] || fail installer-idempotence
 pass installer-idempotence
 
@@ -428,6 +433,12 @@ MCL_S_RDC_MAINTENANCE_INSTALL_TEST_MODE=1 \
   MCL_S_RDC_MAINTENANCE_INSTALL_TEST_ROOT="$install_root" sh "$INSTALL" --apply >/dev/null
 cmp -s "$CTL" "$target" || fail installer-drift-repair
 pass installer-managed-drift
+printf '%s\n' "'use strict';" '// mcl-s-rdc-device-name:v1' 'drift' > "$shim_target"
+chmod 600 "$shim_target"
+MCL_S_RDC_MAINTENANCE_INSTALL_TEST_MODE=1 \
+  MCL_S_RDC_MAINTENANCE_INSTALL_TEST_ROOT="$install_root" sh "$INSTALL" --apply >/dev/null
+cmp -s "$SHIM" "$shim_target" || fail installer-shim-drift-repair
+pass installer-shim-managed-drift
 
 conflict_root="/tmp/mcl-s-rdc-maintenance-install-test-conflict-$$"
 mkdir -p "$conflict_root/home/.local/bin"
@@ -439,6 +450,18 @@ RC=$?
 set -e
 [ "$RC" -eq 2 ] || fail installer-conflict-rc
 pass installer-foreign-conflict
+shim_conflict_root="/tmp/mcl-s-rdc-maintenance-install-test-shim-conflict-$$"
+mkdir -p "$shim_conflict_root/home/.local/bin" "$shim_conflict_root/home/.local/share/mcl-s-rdc-maintenance"
+cp "$CTL" "$shim_conflict_root/home/.local/bin/mcl-s-rdc-maintenance"
+chmod 700 "$shim_conflict_root/home/.local/bin/mcl-s-rdc-maintenance"
+printf 'foreign\n' > "$shim_conflict_root/home/.local/share/mcl-s-rdc-maintenance/device-name-shim.cjs"
+set +e
+MCL_S_RDC_MAINTENANCE_INSTALL_TEST_MODE=1 \
+  MCL_S_RDC_MAINTENANCE_INSTALL_TEST_ROOT="$shim_conflict_root" sh "$INSTALL" --apply >/dev/null 2>&1
+RC=$?
+set -e
+[ "$RC" -eq 2 ] || fail installer-shim-conflict-rc
+pass installer-shim-foreign-conflict
 symlink_root="/tmp/mcl-s-rdc-maintenance-install-test-symlink-$$"
 mkdir -p "$symlink_root/home/.local/bin"
 ln -s "$TMP/foreign" "$symlink_root/home/.local/bin/mcl-s-rdc-maintenance"
@@ -449,6 +472,18 @@ RC=$?
 set -e
 [ "$RC" -eq 2 ] || fail installer-symlink-rc
 pass installer-symlink-conflict
+shim_symlink_root="/tmp/mcl-s-rdc-maintenance-install-test-shim-symlink-$$"
+mkdir -p "$shim_symlink_root/home/.local/bin" "$shim_symlink_root/home/.local/share/mcl-s-rdc-maintenance"
+cp "$CTL" "$shim_symlink_root/home/.local/bin/mcl-s-rdc-maintenance"
+chmod 700 "$shim_symlink_root/home/.local/bin/mcl-s-rdc-maintenance"
+ln -s "$TMP/foreign" "$shim_symlink_root/home/.local/share/mcl-s-rdc-maintenance/device-name-shim.cjs"
+set +e
+MCL_S_RDC_MAINTENANCE_INSTALL_TEST_MODE=1 \
+  MCL_S_RDC_MAINTENANCE_INSTALL_TEST_ROOT="$shim_symlink_root" sh "$INSTALL" --check >/dev/null 2>&1
+RC=$?
+set -e
+[ "$RC" -eq 2 ] || fail installer-shim-symlink-rc
+pass installer-shim-symlink-conflict
 
 echo "1..$PASS"
 echo 'PASS s-rdc-maintenance contract'

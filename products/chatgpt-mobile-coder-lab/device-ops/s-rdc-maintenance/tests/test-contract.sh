@@ -4,6 +4,7 @@ set -eu
 HERE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 CTL="$HERE/mcl-s-rdc-maintenance"
 INSTALL="$HERE/install-s-termux.sh"
+SHIM="$HERE/device-name-shim.cjs"
 NODE_BIN=$(command -v node)
 TMP=$(mktemp -d /tmp/mcl-s-rdc-maintenance-contract.XXXXXX)
 trap 'rm -rf "$TMP" /tmp/mcl-s-rdc-maintenance-test-*-$$ /tmp/mcl-s-rdc-maintenance-install-test-*-$$' EXIT HUP INT TERM
@@ -29,13 +30,67 @@ write_config() {
   printf '{"session":{"access_token":"x.%s.y"}}\n' "$payload" > "$root/rootfs/root/.desktop-commander-device/device.json"
 }
 
+write_base_run() {
+  root=$1
+  service="$root/prefix/var/service/desktop-commander-remote"
+  mkdir -p "$service"
+  cat > "$service/run" <<'EOF'
+#!/data/data/com.termux/files/usr/bin/sh
+PREFIX=/data/data/com.termux/files/usr
+HOME=/data/data/com.termux/files/home
+export PREFIX HOME PATH="$PREFIX/bin:$PATH"
+"$PREFIX/bin/termux-wake-lock" >/dev/null 2>&1 || true
+GROUP_SYNC="$HOME/.local/bin/sync-proot-android-groups"
+if [ -x "$GROUP_SYNC" ]; then
+  "$GROUP_SYNC" --repair || echo "desktop-commander-remote: group preflight failed; continuing" >&2
+fi
+child_pid=""
+stop_child() {
+  [ -n "$child_pid" ] || return 0
+  "$PREFIX/bin/kill" -TERM -- "-$child_pid" 2>/dev/null || true
+  i=0
+  while "$PREFIX/bin/kill" -0 "$child_pid" 2>/dev/null && [ "$i" -lt 20 ]; do
+    sleep 0.25
+    i=$((i + 1))
+  done
+  "$PREFIX/bin/kill" -KILL -- "-$child_pid" 2>/dev/null || true
+}
+trap 'stop_child; exit 0' TERM INT HUP
+"$PREFIX/bin/setsid" "$PREFIX/bin/proot-distro" login ubuntu -- /bin/bash -lc '
+  set -eu
+  export HOME=/root
+  export DESKTOP_COMMANDER_DEVICE_NAME="S"
+  cd /root/nyang-repo
+  exec /data/data/com.termux/files/usr/bin/node /root/.local/share/desktop-commander-remote/node_modules/@wonderwhy-er/desktop-commander/dist/index.js remote
+' 2>&1 &
+child_pid=$!
+wait "$child_pid"
+rc=$?
+trap - TERM INT HUP
+exit "$rc"
+EOF
+  chmod 700 "$service/run"
+  [ "$(sha256sum "$service/run" | awk '{print $1}')" = c629b9a3580c2255319bb39a75ecd1dc025c11cf8d059d8da3622c9c9e854252 ] || fail base-run-fixture
+}
+
+make_post_upgrade_root() {
+  name=$1
+  root=$(make_root "$name")
+  active="$root/rootfs/root/.local/share/desktop-commander-remote"
+  backup="$root/rootfs/root/.local/share/desktop-commander-remote.mcl-backup-0.2.48"
+  mv "$active" "$backup"
+  make_bundle "$active" 0.2.52
+  printf '%s\n' "$root"
+}
+
 make_root() {
   name=$1
   root="/tmp/mcl-s-rdc-maintenance-test-$name-$$"
   rm -rf "$root"
   mkdir -p "$root/prefix/bin" "$root/home/.local/bin" \
     "$root/home/.local/state/desktop-commander-remote" \
-    "$root/rootfs/root/.local/share" "$root/service"
+    "$root/rootfs/root/.local/share" "$root/service" \
+    "$root/prefix/var/service/desktop-commander-remote"
   ln -s "$NODE_BIN" "$root/prefix/bin/node"
   make_bundle "$root/rootfs/root/.local/share/desktop-commander-remote" 0.2.48
   write_config "$root" 2000
@@ -54,6 +109,7 @@ fi
 echo 'rdc-watchdog: healthy'
 EOF
   chmod 755 "$root/home/.local/bin/rdc-health-watchdog"
+  write_base_run "$root"
   printf '%s\n' "$root"
 }
 
@@ -90,7 +146,13 @@ case "$1" in
     echo "$count" >> "$root/restarts"
     [ ! -f "$root/fail-restart-$count" ] || exit 1
     if [ ! -f "$root/no-ready-$count" ]; then
-      printf '%s\n' "2026-10-03T00:00:0"$count"Z ✅ Device ready: restart-$count" >> \
+      run="$root/prefix/var/service/desktop-commander-remote/run"
+      if grep -Fq -- '--require /root/.local/share/mcl-s-rdc-maintenance/device-name-shim.cjs' "$run" 2>/dev/null; then
+        ready='S'
+      else
+        ready="restart-$count"
+      fi
+      printf '%s\n' "2026-10-03T00:00:0"$count"Z ✅ Device ready: $ready" >> \
         "$root/home/.local/state/desktop-commander-remote/current"
     fi
     ;;
@@ -119,6 +181,12 @@ assert_line() {
 }
 sh -n "$CTL" || fail controller-syntax
 sh -n "$INSTALL" || fail installer-syntax
+node --check "$SHIM" || fail shim-syntax
+grep -Fqx '// mcl-s-rdc-device-name:v1' "$SHIM" || fail shim-marker
+DESKTOP_COMMANDER_DEVICE_NAME=S "$NODE_BIN" --require "$SHIM" --input-type=module -e "import os from 'node:os'; if (os.hostname() !== 'S') process.exit(1)" || fail shim-label
+if DESKTOP_COMMANDER_DEVICE_NAME=X "$NODE_BIN" --require "$SHIM" -e "process.exit(0)" >/dev/null 2>&1; then fail shim-arbitrary-label; fi
+grep -Fq "BASE_RUN_SHA='c629b9a3580c2255319bb39a75ecd1dc025c11cf8d059d8da3622c9c9e854252'" "$CTL" || fail base-run-sha
+grep -Fq "TARGET_RUN_SHA='e498f0350f651ebb03a859aac9409806c14bab98b7806e9b7c57a970b1b62069'" "$CTL" || fail target-run-sha
 grep -Fq 'BASE_VERSION=0.2.48' "$CTL" || fail base-version
 grep -Fq 'TARGET_VERSION=0.2.52' "$CTL" || fail target-version
 grep -Fq 'desktop-commander-remote.mcl-stage-0.2.52' "$CTL" || fail fixed-stage
@@ -225,6 +293,115 @@ capture "$root" --stage
 [ "$RC" -eq 2 ] || fail symlink-stage-rc
 [ ! -e "$root/npm-calls" ] || fail symlink-stage-npm
 pass symlink-stage-block
+
+root=$(make_post_upgrade_root labelcheck)
+write_mocks "$root"
+run="$root/prefix/var/service/desktop-commander-remote/run"
+base_snap=$(sha256sum "$run" | awk '{print $1}')
+capture "$root" --label-check
+[ "$RC" -eq 0 ] || fail label-check-rc
+assert_line 'result=needs_label_stage'
+[ "$(sha256sum "$run" | awk '{print $1}')" = "$base_snap" ] || fail label-check-run-mutated
+[ ! -e "$root/restarts" ] || fail label-check-restart
+pass label-check-read-only
+
+root=$(make_post_upgrade_root labelstage)
+write_mocks "$root"
+run="$root/prefix/var/service/desktop-commander-remote/run"
+stage_run="$root/prefix/var/service/desktop-commander-remote/run.mcl-label-stage"
+shim_target="$root/rootfs/root/.local/share/mcl-s-rdc-maintenance/device-name-shim.cjs"
+base_snap=$(sha256sum "$run" | awk '{print $1}')
+capture "$root" --label-stage
+[ "$RC" -eq 0 ] || fail label-stage-rc
+assert_line 'result=ready_to_label_activate'
+[ "$(sha256sum "$run" | awk '{print $1}')" = "$base_snap" ] || fail label-stage-live-mutated
+[ "$(sha256sum "$stage_run" | awk '{print $1}')" = e498f0350f651ebb03a859aac9409806c14bab98b7806e9b7c57a970b1b62069 ] || fail label-stage-run-sha
+cmp -s "$SHIM" "$shim_target" || fail label-stage-shim
+[ ! -e "$root/restarts" ] || fail label-stage-restart
+capture "$root" --label-stage
+[ "$RC" -eq 0 ] || fail label-stage-repeat-rc
+[ ! -e "$root/restarts" ] || fail label-stage-repeat-restart
+pass label-stage-idempotent
+
+root=$(make_post_upgrade_root labelactivate)
+write_mocks "$root"
+capture "$root" --label-stage
+capture "$root" --label-activate
+[ "$RC" -eq 0 ] || fail label-activate-rc
+assert_line 'result=label_active'
+run="$root/prefix/var/service/desktop-commander-remote/run"
+backup_run="$root/prefix/var/service/desktop-commander-remote/run.mcl-label-backup"
+[ "$(sha256sum "$run" | awk '{print $1}')" = e498f0350f651ebb03a859aac9409806c14bab98b7806e9b7c57a970b1b62069 ] || fail label-activate-run
+[ "$(sha256sum "$backup_run" | awk '{print $1}')" = c629b9a3580c2255319bb39a75ecd1dc025c11cf8d059d8da3622c9c9e854252 ] || fail label-activate-backup
+[ "$(wc -l < "$root/restarts")" -eq 1 ] || fail label-activate-restart-count
+capture "$root" --label-activate
+[ "$RC" -eq 0 ] || fail label-activate-idempotent-rc
+[ "$(wc -l < "$root/restarts")" -eq 1 ] || fail label-activate-idempotent-restart
+pass label-activate-success
+
+root=$(make_post_upgrade_root labeldrift)
+write_mocks "$root"
+printf '\n# drift\n' >> "$root/prefix/var/service/desktop-commander-remote/run"
+capture "$root" --label-stage
+[ "$RC" -eq 2 ] || fail label-drift-rc
+[ ! -e "$root/restarts" ] || fail label-drift-restart
+pass label-drift-block
+
+root=$(make_post_upgrade_root labelforeign)
+write_mocks "$root"
+printf 'foreign\n' > "$root/prefix/var/service/desktop-commander-remote/run.mcl-label-stage"
+capture "$root" --label-stage
+[ "$RC" -eq 2 ] || fail label-foreign-stage-rc
+pass label-foreign-stage-block
+
+root=$(make_post_upgrade_root labelwatchdog)
+write_mocks "$root"
+capture "$root" --label-stage
+: > "$root/watchdog-block"
+capture "$root" --label-activate
+[ "$RC" -eq 2 ] || fail label-watchdog-rc
+[ ! -e "$root/restarts" ] || fail label-watchdog-restart
+pass label-watchdog-block
+
+root=$(make_post_upgrade_root labelstale)
+write_mocks "$root"
+capture "$root" --label-stage
+write_config "$root" 1100
+capture "$root" --label-activate
+[ "$RC" -eq 2 ] || fail label-stale-rc
+[ ! -e "$root/restarts" ] || fail label-stale-restart
+pass label-stale-session-block
+
+root=$(make_post_upgrade_root labelrollback)
+write_mocks "$root"
+capture "$root" --label-stage
+: > "$root/no-ready-1"
+capture "$root" --label-activate
+[ "$RC" -eq 1 ] || fail label-rollback-rc
+assert_line 'result=rolled_back'
+run="$root/prefix/var/service/desktop-commander-remote/run"
+[ "$(sha256sum "$run" | awk '{print $1}')" = c629b9a3580c2255319bb39a75ecd1dc025c11cf8d059d8da3622c9c9e854252 ] || fail label-rollback-run
+[ "$(wc -l < "$root/restarts")" -eq 2 ] || fail label-rollback-restarts
+pass label-timeout-rollback
+
+root=$(make_post_upgrade_root labelrollbackfail)
+write_mocks "$root"
+capture "$root" --label-stage
+: > "$root/no-ready-1"
+: > "$root/fail-restart-2"
+capture "$root" --label-activate
+[ "$RC" -eq 2 ] || fail label-rollback-fail-rc
+assert_line 'result=unknown'
+run="$root/prefix/var/service/desktop-commander-remote/run"
+[ "$(sha256sum "$run" | awk '{print $1}')" = c629b9a3580c2255319bb39a75ecd1dc025c11cf8d059d8da3622c9c9e854252 ] || fail label-rollback-fail-run
+pass label-rollback-restart-failure
+
+root=$(make_post_upgrade_root labelsymlink)
+write_mocks "$root"
+ln -s "$root/foreign" "$root/prefix/var/service/desktop-commander-remote/run.mcl-label-stage"
+capture "$root" --label-stage
+[ "$RC" -eq 2 ] || fail label-symlink-stage-rc
+pass label-symlink-stage-block
 
 install_root="/tmp/mcl-s-rdc-maintenance-install-test-basic-$$"
 mkdir -p "$install_root/home/.local/bin"

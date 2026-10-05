@@ -10,14 +10,18 @@ FIXED_HOME=/data/data/com.termux/files/home
 FIXED_PREFIX=/data/data/com.termux/files/usr
 FIXED_ROOTFS="$FIXED_PREFIX/var/lib/proot-distro/containers/ubuntu/rootfs"
 TEST_MODE=${MCL_S_RDC_MAINTENANCE_TEST_MODE:-0}
+HERE=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 
 usage() {
-  echo 'usage: mcl-s-rdc-maintenance --check|--stage|--activate' >&2
+  echo 'usage: mcl-s-rdc-maintenance --check|--stage|--activate|--label-check|--label-stage|--label-activate' >&2
   exit 2
 }
 [ "$#" -eq 1 ] || usage
 MODE=$1
-case "$MODE" in --check|--stage|--activate) ;; *) usage ;; esac
+case "$MODE" in
+  --check|--stage|--activate|--label-check|--label-stage|--label-activate) ;;
+  *) usage ;;
+esac
 
 case "$TEST_MODE" in
   0)
@@ -27,6 +31,7 @@ case "$TEST_MODE" in
     ROOTFS=$FIXED_ROOTFS
     READY_ATTEMPTS=30
     READY_SLEEP=2
+    SHIM_SOURCE="$FIXED_ROOTFS/root/nyang-repo/products/chatgpt-mobile-coder-lab/device-ops/s-rdc-maintenance/device-name-shim.cjs"
     ;;  1)
     TEST_ROOT=${MCL_S_RDC_MAINTENANCE_TEST_ROOT:-}
     case "$TEST_ROOT" in
@@ -38,6 +43,7 @@ case "$TEST_MODE" in
     ROOTFS="$TEST_ROOT/rootfs"
     READY_ATTEMPTS=${MCL_S_RDC_MAINTENANCE_TEST_READY_ATTEMPTS:-2}
     READY_SLEEP=${MCL_S_RDC_MAINTENANCE_TEST_READY_SLEEP:-0}
+    SHIM_SOURCE="$HERE/device-name-shim.cjs"
     ;;
   *)
     echo 'BLOCKED invalid test mode' >&2
@@ -61,6 +67,13 @@ else
   SLEEP=$(command -v sleep)
 fi
 MARKER="$STAGE/.mcl-s-rdc-maintenance-stage-v1"
+LIVE_RUN="$SERVICE/run"
+LABEL_RUN_STAGE="$SERVICE/run.mcl-label-stage"
+LABEL_RUN_BACKUP="$SERVICE/run.mcl-label-backup"
+LABEL_SHIM_DIR="$ROOTFS/root/.local/share/mcl-s-rdc-maintenance"
+LABEL_SHIM="$LABEL_SHIM_DIR/device-name-shim.cjs"
+BASE_RUN_SHA='c629b9a3580c2255319bb39a75ecd1dc025c11cf8d059d8da3622c9c9e854252'
+TARGET_RUN_SHA='e498f0350f651ebb03a859aac9409806c14bab98b7806e9b7c57a970b1b62069'
 
 bundle_version() {
   dir=$1
@@ -163,6 +176,83 @@ wait_ready_since() {
     newer=$(tail -n +"$((start + 1))" "$LOG" 2>/dev/null || true)
     if printf '%s\n' "$newer" | grep -Fq '🔐 Starting device authorization flow'; then return 3; fi
     if printf '%s\n' "$newer" | grep -Fq '✅ Device ready:'; then return 0; fi
+    "$SLEEP" "$READY_SLEEP"
+    i=$((i + 1))
+  done
+  return 1
+}
+
+sha256_file() {
+  [ -f "$1" ] && [ ! -L "$1" ] || return 1
+  sha256sum "$1" 2>/dev/null | awk '{print $1}'
+}
+
+run_state() {
+  [ -f "$LIVE_RUN" ] && [ ! -L "$LIVE_RUN" ] || { echo conflict; return; }
+  [ "$(stat -c %a "$LIVE_RUN" 2>/dev/null || true)" = 700 ] || { echo conflict; return; }
+  observed=$(sha256_file "$LIVE_RUN") || { echo conflict; return; }
+  case "$observed" in
+    "$BASE_RUN_SHA") echo base ;;
+    "$TARGET_RUN_SHA") echo target ;;
+    *) echo conflict ;;
+  esac
+}
+
+label_stage_state() {
+  if [ ! -e "$LABEL_RUN_STAGE" ] && [ ! -L "$LABEL_RUN_STAGE" ]; then echo missing; return; fi
+  [ -f "$LABEL_RUN_STAGE" ] && [ ! -L "$LABEL_RUN_STAGE" ] || { echo conflict; return; }
+  [ "$(stat -c %a "$LABEL_RUN_STAGE" 2>/dev/null || true)" = 700 ] || { echo conflict; return; }
+  [ "$(sha256_file "$LABEL_RUN_STAGE" || true)" = "$TARGET_RUN_SHA" ] || { echo conflict; return; }
+  echo ready
+}
+
+label_backup_state() {
+  if [ ! -e "$LABEL_RUN_BACKUP" ] && [ ! -L "$LABEL_RUN_BACKUP" ]; then echo missing; return; fi
+  [ -f "$LABEL_RUN_BACKUP" ] && [ ! -L "$LABEL_RUN_BACKUP" ] || { echo conflict; return; }
+  [ "$(stat -c %a "$LABEL_RUN_BACKUP" 2>/dev/null || true)" = 700 ] || { echo conflict; return; }
+  [ "$(sha256_file "$LABEL_RUN_BACKUP" || true)" = "$BASE_RUN_SHA" ] || { echo conflict; return; }
+  echo base
+}
+
+shim_source_ok() {
+  [ -f "$SHIM_SOURCE" ] && [ ! -L "$SHIM_SOURCE" ] || return 1
+  grep -Fqx '// mcl-s-rdc-device-name:v1' "$SHIM_SOURCE"
+}
+
+shim_state() {
+  if [ ! -e "$LABEL_SHIM" ] && [ ! -L "$LABEL_SHIM" ]; then echo missing; return; fi
+  [ -f "$LABEL_SHIM" ] && [ ! -L "$LABEL_SHIM" ] || { echo conflict; return; }
+  shim_source_ok || { echo conflict; return; }
+  cmp -s "$SHIM_SOURCE" "$LABEL_SHIM" || { echo conflict; return; }
+  echo ready
+}
+
+build_label_run() {
+  src=$1
+  out=$2
+  "$NODE" - "$src" "$out" <<'NODE'
+const fs = require('fs');
+const src = process.argv[2];
+const out = process.argv[3];
+const before = 'exec /data/data/com.termux/files/usr/bin/node /root/.local/share/desktop-commander-remote/node_modules/@wonderwhy-er/desktop-commander/dist/index.js remote';
+const after = 'exec /data/data/com.termux/files/usr/bin/node --require /root/.local/share/mcl-s-rdc-maintenance/device-name-shim.cjs /root/.local/share/desktop-commander-remote/node_modules/@wonderwhy-er/desktop-commander/dist/index.js remote';
+const text = fs.readFileSync(src, 'utf8');
+if (text.split(before).length !== 2) process.exit(2);
+fs.writeFileSync(out, text.replace(before, after), {mode: 0o700});
+NODE
+  chmod 700 "$out"
+  [ "$(sha256_file "$out" || true)" = "$TARGET_RUN_SHA" ]
+}
+
+wait_label_ready_since() {
+  start=$1
+  i=0
+  while [ "$i" -lt "$READY_ATTEMPTS" ]; do
+    total=$(log_lines) || return 2
+    [ "$total" -ge "$start" ] || return 2
+    newer=$(tail -n +"$((start + 1))" "$LOG" 2>/dev/null || true)
+    if printf '%s\n' "$newer" | grep -Fq '🔐 Starting device authorization flow'; then return 3; fi
+    if printf '%s\n' "$newer" | grep -Fq '✅ Device ready: S'; then return 0; fi
     "$SLEEP" "$READY_SLEEP"
     i=$((i + 1))
   done
@@ -284,8 +374,131 @@ activate_target() {
   return 2
 }
 
+label_check() {
+  bundle_is_version "$ACTIVE" "$TARGET_VERSION" || { emit label-check blocked; return 2; }
+  [ "$(backup_state)" = base ] || { emit label-check blocked; return 2; }
+  [ "$(service_state)" = running ] || { emit label-check blocked; return 2; }
+  live=$(run_state)
+  staged=$(label_stage_state)
+  saved=$(label_backup_state)
+  shim=$(shim_state)
+  case "$live:$staged:$saved:$shim" in
+    base:missing:missing:missing) emit label-check needs_label_stage; return 0 ;;
+    base:ready:missing:ready) emit label-check ready_to_label_activate; return 0 ;;
+    target:missing:base:ready) emit label-check label_active; return 0 ;;
+    *) emit label-check blocked; return 2 ;;
+  esac
+}
+
+label_stage() {
+  bundle_is_version "$ACTIVE" "$TARGET_VERSION" || { emit label-stage blocked; return 2; }
+  [ "$(backup_state)" = base ] || { emit label-stage blocked; return 2; }
+  [ "$(service_state)" = running ] || { emit label-stage blocked; return 2; }
+  [ "$(run_state)" = base ] || { emit label-stage blocked; return 2; }
+  [ "$(label_backup_state)" = missing ] || { emit label-stage blocked; return 2; }
+  case "$(label_stage_state)" in
+    conflict) emit label-stage blocked; return 2 ;;
+    ready)
+      [ "$(shim_state)" = ready ] || { emit label-stage blocked; return 2; }
+      emit label-stage ready_to_label_activate
+      return 0
+      ;;
+  esac
+  case "$(shim_state)" in
+    conflict) emit label-stage blocked; return 2 ;;
+    ready) ;;
+    missing)
+      shim_source_ok || { emit label-stage blocked; return 2; }
+      parent=$(dirname "$LABEL_SHIM_DIR")
+      [ -d "$parent" ] && [ ! -L "$parent" ] || { emit label-stage blocked; return 2; }
+      if [ -e "$LABEL_SHIM_DIR" ] || [ -L "$LABEL_SHIM_DIR" ]; then
+        [ -d "$LABEL_SHIM_DIR" ] && [ ! -L "$LABEL_SHIM_DIR" ] || { emit label-stage blocked; return 2; }
+      else
+        mkdir "$LABEL_SHIM_DIR" || { emit label-stage unknown; return 2; }
+      fi
+      tmp_shim="$LABEL_SHIM.tmp.$$"
+      [ ! -e "$tmp_shim" ] && [ ! -L "$tmp_shim" ] || { emit label-stage blocked; return 2; }
+      cp "$SHIM_SOURCE" "$tmp_shim" || { emit label-stage unknown; return 2; }
+      chmod 600 "$tmp_shim"
+      mv "$tmp_shim" "$LABEL_SHIM" || { rm -f "$tmp_shim"; emit label-stage unknown; return 2; }
+      [ "$(shim_state)" = ready ] || { emit label-stage unknown; return 2; }
+      ;;
+  esac
+  service_parent=$(dirname "$LIVE_RUN")
+  [ -d "$service_parent" ] && [ ! -L "$service_parent" ] || { emit label-stage blocked; return 2; }
+  tmp_run="$LABEL_RUN_STAGE.tmp.$$"
+  [ ! -e "$tmp_run" ] && [ ! -L "$tmp_run" ] || { emit label-stage blocked; return 2; }
+  if ! build_label_run "$LIVE_RUN" "$tmp_run"; then
+    rm -f "$tmp_run"
+    emit label-stage unknown
+    return 2
+  fi
+  mv "$tmp_run" "$LABEL_RUN_STAGE" || { rm -f "$tmp_run"; emit label-stage unknown; return 2; }
+  [ "$(label_stage_state)" = ready ] || { emit label-stage unknown; return 2; }
+  emit label-stage ready_to_label_activate
+}
+
+restore_label_run() {
+  [ "$(label_backup_state)" = base ] || return 2
+  [ "$(run_state)" = target ] || return 2
+  [ "$(label_stage_state)" = missing ] || return 2
+  before=$(log_lines) || return 2
+  mv "$LIVE_RUN" "$LABEL_RUN_STAGE" || return 2
+  if ! mv "$LABEL_RUN_BACKUP" "$LIVE_RUN"; then
+    mv "$LABEL_RUN_STAGE" "$LIVE_RUN" 2>/dev/null || true
+    return 2
+  fi
+  [ "$(run_state)" = base ] || return 2
+  "$SV" restart "$SERVICE" >/dev/null 2>&1 || return 2
+  wait_ready_since "$before" || return 2
+  return 0
+}
+
+label_activate() {
+  bundle_is_version "$ACTIVE" "$TARGET_VERSION" || { emit label-activate blocked; return 2; }
+  [ "$(backup_state)" = base ] || { emit label-activate blocked; return 2; }
+  [ "$(service_state)" = running ] || { emit label-activate blocked; return 2; }
+  [ "$(shim_state)" = ready ] || { emit label-activate blocked; return 2; }
+  if [ "$(run_state)" = target ] && [ "$(label_backup_state)" = base ] && [ "$(label_stage_state)" = missing ]; then
+    emit label-activate label_active
+    return 0
+  fi
+  [ "$(run_state)" = base ] || { emit label-activate blocked; return 2; }
+  [ "$(label_stage_state)" = ready ] || { emit label-activate blocked; return 2; }
+  [ "$(label_backup_state)" = missing ] || { emit label-activate blocked; return 2; }
+  watchdog_safe || { emit label-activate blocked; return 2; }
+  session_fresh || { emit label-activate blocked; return 2; }
+  before=$(log_lines) || { emit label-activate blocked; return 2; }
+
+  mv "$LIVE_RUN" "$LABEL_RUN_BACKUP" || { emit label-activate unknown; return 2; }
+  if ! mv "$LABEL_RUN_STAGE" "$LIVE_RUN"; then
+    mv "$LABEL_RUN_BACKUP" "$LIVE_RUN" 2>/dev/null || true
+    emit label-activate unknown
+    return 2
+  fi
+  [ "$(run_state)" = target ] || { restore_label_run || true; emit label-activate unknown; return 2; }
+  if ! "$SV" restart "$SERVICE" >/dev/null 2>&1; then
+    if restore_label_run; then emit label-activate rolled_back; return 1; fi
+    emit label-activate unknown
+    return 2
+  fi
+  if wait_label_ready_since "$before"; then
+    emit label-activate label_active
+    return 0
+  fi
+  if restore_label_run; then
+    emit label-activate rolled_back
+    return 1
+  fi
+  emit label-activate unknown
+  return 2
+}
+
 case "$MODE" in
   --check) check_only ;;
   --stage) stage_target ;;
   --activate) activate_target ;;
+  --label-check) label_check ;;
+  --label-stage) label_stage ;;
+  --label-activate) label_activate ;;
 esac

@@ -43,6 +43,9 @@ The repository source exposes:
 ./mcl-s-rdc-maintenance --check
 ./mcl-s-rdc-maintenance --stage
 ./mcl-s-rdc-maintenance --activate
+./mcl-s-rdc-maintenance --label-check
+./mcl-s-rdc-maintenance --label-stage
+./mcl-s-rdc-maintenance --label-activate
 
 ./install-s-termux.sh --check
 ./install-s-termux.sh --apply
@@ -83,6 +86,31 @@ force break, takeover, latest-wins rule, or automatic widening.
 A successful local activation is not the whole live proof. The packet still
 requires an external Remote Desktop Commander roundtrip on S and preservation
 evidence for S-Termux 0.2.51 before `LIVE_PROVEN`.
+
+## Primary-S display-label repair
+
+After the 0.2.52 migration is already complete, the same owner exposes one
+separate reversible label repair. The live service run is accepted only at the
+reviewed pre-label SHA-256
+`c629b9a3580c2255319bb39a75ecd1dc025c11cf8d059d8da3622c9c9e854252`.
+
+`--label-stage` is restart-free. It materializes the repository-owned
+`device-name-shim.cjs` and one exact staged run sibling whose only semantic
+change is a fixed Node `--require` for that shim. The deterministic candidate
+run SHA-256 is
+`e498f0350f651ebb03a859aac9409806c14bab98b7806e9b7c57a970b1b62069`.
+
+The shim accepts only the already-exported label `S` and overrides
+`os.hostname()` process-locally. There is no caller-selected label, global
+`NODE_OPTIONS`, Android/PRoot hostname mutation or vendor package patch.
+
+`--label-activate` requires exact 0.2.52 active bundle, exact 0.2.48 rollback
+bundle, running service, healthy watchdog, fresh persisted session and readable
+log. It preserves the exact original run, promotes the exact staged run and
+requests one restart. Success requires a new `Device ready: S` observation and
+no new authorization flow. Failure restores the exact original run and requests
+at most one rollback restart. Repeating an already exact successful state is a
+no-op.
 
 ## Evidence boundary
 

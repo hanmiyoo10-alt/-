@@ -282,13 +282,14 @@ If either binding is missing, conflicting, ambiguous or changes during the
 invocation, the owner fails closed. A manifest that carries validation binding
 cannot silently fall back to the legacy no-validation path.
 
-V1 has exactly four repository-owned fixed profiles:
+V1 has exactly five repository-owned fixed profiles:
 
 ```text
 mcl:d014-completion-set:v1
 repo:validation-continuation:v1
 repo:published-progress-recovery:v1
 mcl:validation-finalization-owner:v1
+mcl:s-rdc-maintenance-owner:v1
 ```
 
 Each profile owns one exact path+surface signature, ordered fixed checks,
@@ -317,6 +318,8 @@ Decision View contracts.
 The `repo:published-progress-recovery:v1` profile is admitted only for the exact six published-progress-recovery paths plus `surface:repo:published-progress-recovery-projection` and `surface:mcl:published-progress-recovery-inspection`. Its fixed checks cover pure classifier syntax/contract, MCL adapter syntax/contract, reviewed RDC session-evidence, and the existing effect-recovery neighbor. The caller cannot substitute another test path or check list.
 
 The `mcl:validation-finalization-owner:v1` profile is admitted only for the exact three MCL validation-finalization owner paths plus `surface:mcl:validation-finalization-effect`. Its fixed checks cover the MCL finalizer source/test syntax and contract plus the generic validation-finalization, stage-receipt, and validation-continuation contracts. Near-match or caller-selected scopes remain fail-closed.
+
+The `mcl:s-rdc-maintenance-owner:v1` profile is admitted only for the exact five primary-S RDC maintenance paths plus `surface:mcl:s-primary-rdc-runtime`. Its fixed prepared checks are controller shell syntax, installer shell syntax, device-name shim Node syntax, and the focused maintenance contract. The adapter contract maps only those reviewed shell checks to fixed `/bin/sh`; existing profiles keep their Node launcher semantics and core contract digests.
 
 The executable and argv are repository source, not caller data. Children run
 with `shell=false`, a bounded timeout/output ceiling, the manifest worktree as

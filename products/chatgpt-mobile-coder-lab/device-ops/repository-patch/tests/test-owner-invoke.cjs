@@ -55,6 +55,9 @@ const PPR_PROFILE = inv.validationProfileById(inv.PUBLISHED_PROGRESS_RECOVERY_PR
 const VF_PATHS = [...inv.VALIDATION_FINALIZATION_PATHS].sort();
 const VF_SCOPES = [...inv.VALIDATION_FINALIZATION_SCOPES];
 const VF_PROFILE = inv.validationProfileById(inv.VALIDATION_FINALIZATION_PROFILE);
+const S_RDC_PATHS = [...inv.S_RDC_MAINTENANCE_PATHS].sort();
+const S_RDC_SCOPES = [...inv.S_RDC_MAINTENANCE_SCOPES];
+const S_RDC_PROFILE = inv.validationProfileById(inv.S_RDC_MAINTENANCE_PROFILE);
 const VALIDATION_REQUEST = {
   schema: inv.VALIDATION_REQUEST_SCHEMA,
   profile: inv.D014_VALIDATION_PROFILE,
@@ -1136,9 +1139,11 @@ test('validation request parser is strict and profile-bound', () => {
 });
 
 test('reviewed validation profile set is exact and scope-derived', () => {
-  assert.equal(inv.VALIDATION_PROFILES.length, 4);
+  assert.equal(inv.VALIDATION_PROFILES.length, 5);
   assert.equal(D014_PROFILE.contractDigest, '0b82f7b5ca8d6bc4f6b487653fd87451f2d6c3867a3a4dc87679587ea2fcf8bb');
   assert.equal(VC_PROFILE.contractDigest, '692e94f9a599e6dfbd840d404635d45f906de2c5933f0e04545d22f6ecbd550c');
+  assert.equal(PPR_PROFILE.contractDigest, '2659556be26cc3d14bae828a4fb591d5e145b6cfe55a1afafacdbb352aef650c');
+  assert.equal(VF_PROFILE.contractDigest, '0ce3cc442587b99180afb25a5fe9bb8cb117274149290270df396c0b33673155');
   assert.equal(
     inv.resolveValidationProfileForScopes(D014_SCOPES).profileId,
     inv.D014_VALIDATION_PROFILE,
@@ -1157,6 +1162,16 @@ test('reviewed validation profile set is exact and scope-derived', () => {
     inv.VALIDATION_FINALIZATION_PROFILE,
   );
   assert.deepEqual(VF_PROFILE.paths, VF_PATHS);
+  assert.equal(
+    inv.resolveValidationProfileForScopes(S_RDC_SCOPES).profileId,
+    inv.S_RDC_MAINTENANCE_PROFILE,
+  );
+  assert.deepEqual(S_RDC_PROFILE.paths, S_RDC_PATHS);
+  assert.throws(
+    () => inv.resolveValidationProfileForScopes(S_RDC_SCOPES.slice(0, -1)),
+    (error) => error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('NO_REVIEWED_VALIDATION_PROFILE'),
+  );
   assert.throws(
     () => inv.resolveValidationProfileForScopes(VF_SCOPES.slice(0, -1)),
     (error) => error.kind === 'BLOCKED'
@@ -1314,6 +1329,89 @@ test('validation-finalization profile binds exact contract and fixed checks', ()
     assert.deepEqual(calls.map((call) => call.args),
       inv.VALIDATION_FINALIZATION_CHECKS.map((check) => check.args));
   } finally { fs.rmSync(dir, {recursive: true, force: true}); }
+});
+
+test('s-rdc maintenance profile requires adapter and runs fixed node/sh matrix', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-profile-s-rdc-test-'));
+  try {
+    const request = {schema: inv.VALIDATION_REQUEST_SCHEMA, profile: inv.S_RDC_MAINTENANCE_PROFILE};
+    const text = JSON.stringify(request);
+    const bytes = Buffer.from(text, 'utf8');
+    const validationPath = path.join(dir, 'validation.json');
+    fs.writeFileSync(validationPath, bytes);
+    const hash = crypto.createHash('sha256').update(bytes).digest('hex');
+    const adapterRef = inv.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
+      + inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest;
+    const workspace = {
+      kind: 'repository',
+      branch: 'server/s-rdc-fixture',
+      worktree: '/root/nyang-worktrees/s-rdc-fixture',
+    };
+    const m = manifest({
+      scopes: [...S_RDC_SCOPES],
+      workspace,
+      inputRefs: [
+        'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+        inv.PRIMITIVE_REF,
+        inv.VALIDATION_REF_PREFIX + hash,
+        inv.VALIDATION_CONTRACT_REF_PREFIX + S_RDC_PROFILE.contractDigest,
+        adapterRef,
+      ],
+    });
+    const binding = inv.prepareValidationBinding({
+      manifest: m, request: {expected_paths: [...S_RDC_PATHS]},
+      validationRequestText: text, validationRequestFile: validationPath,
+    });
+    const calls = [];
+    const regular = {isFile: () => true, isSymbolicLink: () => false};
+    const result = inv.runFixedPreparedValidation({
+      binding,
+      manifest: m,
+      validationAdapterResolverImpl({binding: resolvedBinding, check, manifest: resolvedManifest}) {
+        return inv.resolveImplementationValidationInvocation({
+          binding: resolvedBinding, check, manifest: resolvedManifest,
+          candidateStatImpl: () => regular,
+        });
+      },
+      validationSpawnSyncImpl(command, args, options) {
+        calls.push({command, args, options});
+        return {status: 0, signal: null, stdout: '', stderr: ''};
+      },
+      persistValidationArtifactImpl: () => ({
+        locator: 'local-artifact:/tmp/s-rdc-validation.json#sha256=' + '9'.repeat(64),
+      }),
+    });
+    assert.equal(result.kind, 'PASS');
+    assert.equal(result.value.checks_passed, 4);
+    assert.deepEqual(calls.map((call) => call.command),
+      ['/bin/sh', '/bin/sh', process.execPath, '/bin/sh']);
+    assert.deepEqual(calls.map((call) => call.args),
+      inv.S_RDC_MAINTENANCE_CHECKS.map((check) => check.args));
+    assert(calls.every((call) => call.options.shell === false));
+
+    const legacyManifest = manifest({
+      scopes: [...S_RDC_SCOPES],
+      workspace,
+      inputRefs: [
+        'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+        inv.PRIMITIVE_REF,
+        inv.VALIDATION_REF_PREFIX + hash,
+        inv.VALIDATION_CONTRACT_REF_PREFIX + S_RDC_PROFILE.contractDigest,
+      ],
+    });
+    const legacyBinding = inv.prepareValidationBinding({
+      manifest: legacyManifest, request: {expected_paths: [...S_RDC_PATHS]},
+      validationRequestText: text, validationRequestFile: validationPath,
+    });
+    const blocked = inv.runFixedPreparedValidation({
+      binding: legacyBinding, manifest: legacyManifest,
+      validationSpawnSyncImpl() { throw new Error('must not spawn'); },
+    });
+    assert.equal(blocked.kind, 'BLOCKED');
+    assert(blocked.reasonCodes.includes('IMPLEMENTATION_VALIDATION_ADAPTER_REQUIRED'));
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
 });
 
 test('validation contract ref is mandatory and exact', () => {
@@ -1723,6 +1821,8 @@ test('implementation adapter contract is separate from stable profile digests', 
     '692e94f9a599e6dfbd840d404635d45f906de2c5933f0e04545d22f6ecbd550c');
   assert.equal(PPR_PROFILE.contractDigest,
     '2659556be26cc3d14bae828a4fb591d5e145b6cfe55a1afafacdbb352aef650c');
+  assert.equal(VF_PROFILE.contractDigest,
+    '0ce3cc442587b99180afb25a5fe9bb8cb117274149290270df396c0b33673155');
   const adapter = inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT;
   assert.equal(adapter.schema, inv.IMPLEMENTATION_VALIDATION_ADAPTER_SCHEMA);
   assert.match(adapter.contractDigest, /^[0-9a-f]{64}$/);
@@ -1732,7 +1832,20 @@ test('implementation adapter contract is separate from stable profile digests', 
     inv.D014_VALIDATION_CHECKS.length
     + inv.VALIDATION_CONTINUATION_CHECKS.length
     + inv.PUBLISHED_PROGRESS_RECOVERY_CHECKS.length
-    + inv.VALIDATION_FINALIZATION_CHECKS.length);
+    + inv.VALIDATION_FINALIZATION_CHECKS.length
+    + inv.S_RDC_MAINTENANCE_CHECKS.length);
+  const historicalRows = adapter.adapters.filter(
+    (row) => row.profileId !== inv.S_RDC_MAINTENANCE_PROFILE);
+  assert(historicalRows.every((row) => row.launcher === 'node'
+    && row.pathArgIndex === 1 && row.resultParser === 'node-exit-v1'));
+  const sRdcRows = adapter.adapters.filter(
+    (row) => row.profileId === inv.S_RDC_MAINTENANCE_PROFILE);
+  assert.deepEqual(sRdcRows.map((row) => [row.checkId, row.launcher, row.pathArgIndex, row.resultParser]), [
+    ['s-rdc-maintenance-controller-syntax', 'sh', 1, 'sh-exit-v1'],
+    ['s-rdc-maintenance-installer-syntax', 'sh', 1, 'sh-exit-v1'],
+    ['s-rdc-maintenance-shim-syntax', 'node', 1, 'node-exit-v1'],
+    ['s-rdc-maintenance-contract', 'sh', 0, 'sh-exit-v1'],
+  ]);
 });
 
 test('adapter binding is opt-in exact while historical manifests stay legacy', () => {
@@ -1826,6 +1939,41 @@ test('fixed adapter resolver permits exactly one reviewed path candidate', () =>
   });
   assert.equal(ambiguous.kind, 'CONFLICT');
   assert(ambiguous.reasonCodes.includes('CHECK_ADAPTER_PATH_CONFLICT:fixture-check'));
+});
+
+test('fixed shell adapter resolver cannot widen command or argv shape', () => {
+  const check = S_RDC_PROFILE.checks[0];
+  const binding = {profile: S_RDC_PROFILE};
+  const manifestValue = {workspace: {worktree: '/tmp/fixture-worktree'}};
+  const stat = {isFile: () => true, isSymbolicLink: () => false};
+  const pass = inv.resolveImplementationValidationInvocation({
+    binding, check, manifest: manifestValue,
+    candidateStatImpl: () => stat,
+  });
+  assert.equal(pass.kind, 'PASS');
+  assert.equal(pass.value.launcher, 'sh');
+  assert.equal(pass.value.command, '/bin/sh');
+  assert.deepEqual(pass.value.args, check.args);
+
+  const contract = inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT;
+  const tampered = {
+    ...contract,
+    adapters: contract.adapters.map((row) => row.profileId === inv.S_RDC_MAINTENANCE_PROFILE
+      && row.checkId === check.checkId ? {...row, launcher: 'node'} : row),
+  };
+  const blocked = inv.resolveImplementationValidationInvocation({
+    binding, check, manifest: manifestValue, adapterContract: tampered,
+    candidateStatImpl: () => stat,
+  });
+  assert.equal(blocked.kind, 'CONFLICT');
+  assert(blocked.reasonCodes.includes('CHECK_ADAPTER_CONTRACT_CONFLICT:' + check.checkId));
+
+  const widenedCheck = {...check, args: ['-c', check.args[1]]};
+  const widened = inv.resolveImplementationValidationInvocation({
+    binding, check: widenedCheck, manifest: manifestValue,
+    candidateStatImpl: () => stat,
+  });
+  assert.equal(widened.kind, 'CONFLICT');
 });
 
 test('adapter semantic failure is FAIL with remaining checks NOT_RUN and stable artifact', () => {

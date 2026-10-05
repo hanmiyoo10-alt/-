@@ -16,6 +16,7 @@ case "$MODE" in --check|--apply) ;; *) usage ;; esac
 
 HERE=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 SOURCE="$HERE/mcl-s-rdc-maintenance"
+SHIM_SOURCE="$HERE/device-name-shim.cjs"
 
 case "$TEST_MODE" in
   0)
@@ -39,7 +40,9 @@ TARGET="$HOME_DIR/.local/bin/mcl-s-rdc-maintenance"
 
 source_ok() {
   [ -f "$SOURCE" ] && [ ! -L "$SOURCE" ] || return 1
-  grep -Fqx '# mcl-s-rdc-maintenance:v1' "$SOURCE"
+  [ -f "$SHIM_SOURCE" ] && [ ! -L "$SHIM_SOURCE" ] || return 1
+  grep -Fqx '# mcl-s-rdc-maintenance:v1' "$SOURCE" || return 1
+  grep -Fqx '// mcl-s-rdc-device-name:v1' "$SHIM_SOURCE"
 }
 
 target_state() {

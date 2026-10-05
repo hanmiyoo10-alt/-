@@ -1,6 +1,6 @@
 # CURRENT — 포켓리스 보조 개조
 
-최종 갱신 기준: **2026-09-25**
+최종 갱신 기준: **2026-10-06**
 
 새 채팅이나 작업 재개 시 가장 먼저 읽는 현재 상태 체크포인트.
 
@@ -92,6 +92,23 @@
 
 다음 한 단계:
 - 📱 메인폰 notification relay의 실제 `termux-notification` 옵션과 호출 중복 조건을 INSPECT_ONLY로 확인.
+
+## Firefox background CPU kill — LIVE_A_B_PASS
+
+상태: **VERIFIED_LOCAL / CHAT_SEND_SMOKE_PENDING**
+
+확정:
+- Android ActivityManager가 PocketRisu와 시간축이 연결된 Firefox Gecko tab process를 `excessive cpu` 이유로 kill함.
+- Firefox main process와 서버 PocketRisu, 메인 SSH core tunnel은 생존.
+- 현재 `keepSessionAlive: sound` 구현은 2.325초 / 44.1kHz stereo MP3를 연속 loop하고, Android AudioService에서 실제 Firefox AAudio playback이 유지됨.
+- 서버폰 feature branch `feat/firefox-background-cpu-kill`, commit `4f693cba1c993b42407b1b73a9ae407f4e102b97`: Android Firefox에서만 sound keep-alive loop를 시작하지 않음.
+- `svelte-check` 0 errors, production build PASS.
+- 실기기 reload 후 기존 AAudio player가 02:52:55 KST release되고 재생성되지 않음.
+- 02:53:10 → 02:58:59 background 관찰에서 동일 Firefox process set 유지, `excessive cpu` kill 0건.
+- reload 후 server patch persist 정상, 423 `Session deactivated` 없음.
+
+다음 한 단계:
+- 평소 foreground chat send 1회를 durable `chat-content` persist까지 확인하고, 이후 더 긴 자연 background interval에서 재발 여부를 관찰한다. 통과 후 latest official upstream에서 one-file PR 후보로 재구성.
 
 ## 조사 중 — 초장기챗 새고 health 정체
 

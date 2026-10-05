@@ -59,6 +59,39 @@ RUNTIME_JS="$SUPPORT/products/chatgpt-mobile-coder-lab/device-ops/detached-owner
 SERVICE_JS="$SUPPORT/products/chatgpt-mobile-coder-lab/device-ops/detached-owner-runtime/mcl-detached-owner-runtime-service.cjs"
 POLICY="$SUPPORT/.github/plugin-control-plane/canonical-main/work-system/policy.json"
 PACKET_ACTIVITY="$SUPPORT/.github/plugin-control-plane/canonical-main/work-system/packet-activity.cjs"
+SV="$ROOT/prefix/bin/sv"
+SV_LOG="$ROOT/sv.log"
+SOCKET_PID_FILE="$ROOT/socket.pid"
+
+mkdir -p "$ROOT/prefix/bin"
+cat > "$SV" <<'EOF'
+#!/bin/sh
+set -eu
+ROOT=${MCL_DETACHED_RUNTIME_TEST_ROOT:?}
+LOG="$ROOT/sv.log"
+SOCKET_PID_FILE="$ROOT/socket.pid"
+cmd=${1-}
+service=${2-}
+printf '%s %s\n' "$cmd" "$service" >> "$LOG"
+case "$cmd" in
+  status)
+    if [ -f "$service/down" ] && [ ! -L "$service/down" ]; then
+      printf 'down: %s: 0s\n' "$service"
+    else
+      printf 'run: %s: (pid 1) 0s\n' "$service"
+    fi
+    ;;
+  down)
+    if [ -f "$SOCKET_PID_FILE" ]; then
+      kill "$(cat "$SOCKET_PID_FILE")" 2>/dev/null || true
+      rm -f "$SOCKET_PID_FILE"
+    fi
+    rm -f "$ROOT/home/.local/run/mcl-detached-owner-runtime/control.sock"
+    ;;
+  *) exit 64 ;;
+esac
+EOF
+chmod 700 "$SV"
 
 [ -f "$SERVICE/run" ] && [ ! -L "$SERVICE/run" ] && [ -x "$SERVICE/run" ]
 [ -f "$SERVICE/down" ] && [ ! -L "$SERVICE/down" ]
@@ -121,14 +154,56 @@ chmod 600 "$HOST_JS"
 set +e
 host_tampered=$(sh "$INSTALL" --check 2>&1)
 host_tampered_rc=$?
+deactivate_tampered=$(sh "$INSTALL" --deactivate 2>&1)
+deactivate_tampered_rc=$?
 set -e
 [ "$host_tampered_rc" -eq 1 ]
 printf '%s\n' "$host_tampered" | grep -Fq 'host_front=missing'
+[ "$deactivate_tampered_rc" -eq 1 ]
+printf '%s\n' "$deactivate_tampered" | grep -Fq 'BLOCKED installed split-runtime identity mismatch'
 sh "$INSTALL" --apply > "$ROOT/reapply-host.out"
 grep -Fq 'host_front=present' "$ROOT/reapply-host.out"
 
 node -e "'use strict'; require(process.argv[1]); require(process.argv[2]); require(process.argv[3]);" "$RUNTIME_JS" "$SERVICE_JS" "$HOST_JS"
 [ ! -e "$HOST_RUN/control.sock" ]
+
+rm -f "$SERVICE/down"
+ln -s "$ROOT/foreign-down" "$SERVICE/down"
+set +e
+bad_down=$(sh "$INSTALL" --deactivate 2>&1)
+bad_down_rc=$?
+set -e
+[ "$bad_down_rc" -eq 1 ]
+printf '%s\n' "$bad_down" | grep -Fq 'BLOCKED service down marker invalid'
+rm -f "$SERVICE/down"
+sh "$INSTALL" --apply > "$ROOT/reapply-down.out"
+
+rm -f "$SERVICE/down"
+node -e 'const net=require("node:net"); const p=process.argv[1]; const s=net.createServer(()=>{}); s.listen(p); setInterval(()=>{},1000);' "$HOST_RUN/control.sock" &
+SOCKET_PID=$!
+printf '%s\n' "$SOCKET_PID" > "$SOCKET_PID_FILE"
+for _ in $(seq 1 50); do
+  [ -S "$HOST_RUN/control.sock" ] && break
+  sleep 0.1
+done
+[ -S "$HOST_RUN/control.sock" ]
+: > "$SV_LOG"
+sh "$INSTALL" --deactivate > "$ROOT/deactivate.out"
+wait "$SOCKET_PID" 2>/dev/null || true
+grep -Fq 'schema=mcl-detached-owner-runtime-install.v3' "$ROOT/deactivate.out"
+grep -Fq 'operation=deactivate' "$ROOT/deactivate.out"
+grep -Fq 'activation=disabled' "$ROOT/deactivate.out"
+grep -Fq 'socket=absent' "$ROOT/deactivate.out"
+grep -Fq 'result=pass' "$ROOT/deactivate.out"
+grep -Fq 'runtime_started=false' "$ROOT/deactivate.out"
+[ -f "$SERVICE/down" ] && [ ! -L "$SERVICE/down" ] && [ "$(stat -c '%a' "$SERVICE/down")" = 600 ]
+[ ! -e "$HOST_RUN/control.sock" ]
+[ "$(grep -Fc "down $SERVICE" "$SV_LOG")" -eq 1 ]
+
+sh "$INSTALL" --deactivate > "$ROOT/deactivate-again.out"
+grep -Fq 'operation=deactivate' "$ROOT/deactivate-again.out"
+grep -Fq 'result=pass' "$ROOT/deactivate-again.out"
+[ "$(grep -Fc "down $SERVICE" "$SV_LOG")" -eq 1 ]
 
 before=$(sha256sum "$SERVICE/down" | awk '{print $1}')
 set +e

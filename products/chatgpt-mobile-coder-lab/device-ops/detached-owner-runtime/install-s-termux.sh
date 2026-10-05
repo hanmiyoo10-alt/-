@@ -68,7 +68,7 @@ SV="$PREFIX/bin/sv"
 HOST_SOURCE="$SOURCE_REPO_ROOT/$HOST_SOURCE_REL"
 
 usage() {
-  echo "usage: install-s-termux.sh --check|--apply|--activate" >&2
+  echo "usage: install-s-termux.sh --check|--apply|--activate|--deactivate" >&2
   exit 2
 }
 block() {
@@ -77,7 +77,7 @@ block() {
 }
 [ "$#" -eq 1 ] || usage
 MODE="${1#--}"
-case "$MODE" in check|apply|activate) ;; *) usage ;; esac
+case "$MODE" in check|apply|activate|deactivate) ;; *) usage ;; esac
 
 validate_source_layout() {
   [ "$SELF_DIR" = "$EXPECTED_SOURCE_DIR" ] || block "source repository layout invalid"
@@ -118,6 +118,24 @@ mode_exact() {
   dst=$1
   expected=$2
   [ "$(stat -c '%a' "$dst" 2>/dev/null || echo invalid)" = "$expected" ]
+}
+down_marker_exact() {
+  [ -f "$SERVICE_DIR/down" ] && [ ! -L "$SERVICE_DIR/down" ] && mode_exact "$SERVICE_DIR/down" 600
+}
+service_down() {
+  [ -x "$SV" ] || return 1
+  status=$("$SV" status "$SERVICE_DIR" 2>/dev/null || true)
+  printf '%s\n' "$status" | grep -Eq '^down: '
+}
+emit_deactivate() {
+  printf '%s\n' \
+    'schema=mcl-detached-owner-runtime-install.v3' \
+    'operation=deactivate' \
+    'activation=disabled' \
+    'socket=absent' \
+    'result=pass' \
+    'runtime_started=false' \
+    'details=withheld'
 }
 text_exact() {
   dst=$1
@@ -184,6 +202,35 @@ fi
 if [ -e "$HOST_RUN_DIR" ]; then
   [ -d "$HOST_RUN_DIR" ] && [ ! -L "$HOST_RUN_DIR" ] || block "host run dir invalid"
 fi
+
+if [ "$MODE" = deactivate ]; then
+  bundle_exact && host_exact || block "installed split-runtime identity mismatch"
+  text_exact "$SERVICE_RUN" "$(expected_service)" && mode_exact "$SERVICE_RUN" 700 || block "installed split-runtime identity mismatch"
+  if [ -e "$SERVICE_DIR/down" ] || [ -L "$SERVICE_DIR/down" ]; then
+    down_marker_exact || block "service down marker invalid"
+  fi
+  if [ -e "$SOCKET_PATH" ]; then
+    [ -S "$SOCKET_PATH" ] && [ ! -L "$SOCKET_PATH" ] || block "control socket invalid"
+  else
+    [ ! -L "$SOCKET_PATH" ] || block "control socket invalid"
+  fi
+  [ -x "$SV" ] || block "sv unavailable"
+  if down_marker_exact && [ ! -e "$SOCKET_PATH" ] && service_down; then
+    emit_deactivate
+    exit 0
+  fi
+  if [ ! -e "$SERVICE_DIR/down" ] && [ ! -L "$SERVICE_DIR/down" ]; then
+    : > "$SERVICE_DIR/down"
+    chmod 600 "$SERVICE_DIR/down"
+  fi
+  down_marker_exact || block "service down marker invalid"
+  "$SV" down "$SERVICE_DIR" >/dev/null 2>&1 || block "service down failed"
+  service_down || block "service not down"
+  [ ! -e "$SOCKET_PATH" ] && [ ! -L "$SOCKET_PATH" ] || block "control socket still present"
+  emit_deactivate
+  exit 0
+fi
+
 [ ! -e "$SOCKET_PATH" ] && [ ! -L "$SOCKET_PATH" ] || block "control socket must be absent before install"
 
 mkdir -p "$SUPPORT_ROOT" "$HOST_LIB_DIR" "$HOST_BIN_DIR" "$HOST_RUN_DIR" "$SERVICE_DIR"

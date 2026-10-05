@@ -83,6 +83,8 @@ The installed layout never uses ambient /root/nyang-repo, NODE_PATH, a symlink s
 
 install-s-termux.sh --check validates both the host and PRoot halves. --apply replaces only the fixed managed bundle/wrappers and leaves the service disabled. --activate first requires the complete installed split identity, then enables exactly the fixed runit service.
 
+`--deactivate` is the reversible first-wave retirement operation for this managed service. It requires the complete installed identity, preserves the installed client/host/support/service bytes, creates or validates the restrictive runit `down` marker, requests `down` only through the fixed `sv` binary and fixed service path, and returns PASS only after the service reports `down:` and the control socket is absent. It does not uninstall files or alter repository/worktree continuity evidence. Existing `--activate` remains the exact rollback path.
+
 The install contract imports the installed runtime, service and host modules without starting a socket/service. Runtime contract tests cover the host half-close path, fixed persistent worker reuse, prepare-only semantic request projection and worker-loss fail-closed behavior.
 
 ## Failure-domain claim ceiling

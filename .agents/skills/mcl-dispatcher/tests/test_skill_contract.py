@@ -39,20 +39,20 @@ class MclDispatcherSkillContractTests(unittest.TestCase):
 
     def test_semantics_precede_status(self):
         self.assertIn("Semantic requirement is classified\n**before** current status", self.skill)
-        case = self.case("ordinary-repo-s-offline-no-auto-switch")
+        case = self.case("ordinary-repo-l-offline-no-auto-switch")
         self.assertFalse(case["expected"]["status_changed_route"])
-        self.assertFalse(case["expected"]["auto_switched_to_m"])
+        self.assertFalse(case["expected"]["auto_switched_to_s"])
 
     def test_s_fallback_is_candidate_not_automatic(self):
-        self.assertIn("reported as `M_candidate`", self.skill)
-        self.assertIn("never switches executor merely because S is unavailable", self.skill)
-        self.assertEqual(self.case("ordinary-repo-mutable")["expected"]["fallback"], "M_candidate")
+        self.assertIn("reported only as\n`S_candidate`", self.skill)
+        self.assertIn("never changes route merely because L is unavailable", self.skill)
+        self.assertEqual(self.case("ordinary-repo-mutable")["expected"]["fallback"], "S_candidate")
 
     def test_multi_context_work_splits_phases(self):
         self.assertIn("split it into ordered phase receipts", self.skill)
         case = self.case("s-termux-split-phase")
         self.assertEqual(case["expected"]["phase_count"], 2)
-        self.assertEqual(case["expected"]["phase_routes"], ["S", "S_TERMUX"])
+        self.assertEqual(case["expected"]["phase_routes"], ["L", "S_TERMUX"])
         self.assertFalse(case["expected"]["collapsed_contexts"])
 
     def test_current_preflight_coverage_is_consumed_without_freezing_it(self):
@@ -66,6 +66,14 @@ class MclDispatcherSkillContractTests(unittest.TestCase):
             self.assertEqual(case["expected"]["next_gate"], "preflight")
             self.assertFalse(case["expected"]["effect_performed"])
         self.assertFalse(self.case("gui-action-preflight")["expected"]["action_authorized"])
+
+    def test_l_default_has_no_first_pass_preflight(self):
+        case = self.case("ordinary-repo-mutable")
+        self.assertEqual(case["expected"]["route"], "L")
+        self.assertEqual(case["expected"]["executor"], "L")
+        self.assertEqual(case["expected"]["preflight_owner"], "not_applicable")
+        self.assertEqual(case["expected"]["next_gate"], "scope_overlap")
+        self.assertIn("Current ordinary `L / L` intentionally has no separate first-pass", self.skill)
 
     def test_future_unsupported_preflight_route_uses_current_route_owner(self):
         self.assertIn("If a future current D-012 route is not supported by current `mcl-preflight`", self.skill)
@@ -93,6 +101,8 @@ class MclDispatcherSkillContractTests(unittest.TestCase):
 
     def test_read_only_does_not_manufacture_lease(self):
         case = self.case("repo-read-only-no-lease")
+        self.assertEqual(case["expected"]["route"], "L")
+        self.assertEqual(case["expected"]["executor"], "L")
         self.assertEqual(case["expected"]["repository_effect"], "read_only")
         self.assertEqual(case["expected"]["overlap_guard"], "not_required")
         self.assertEqual(case["expected"]["lease_guard"], "not_required")
@@ -153,7 +163,7 @@ class MclDispatcherSkillContractTests(unittest.TestCase):
         ids = [case["id"] for case in self.evals["cases"]]
         self.assertEqual(len(ids), len(set(ids)))
         required = {
-            "ordinary-repo-mutable", "ordinary-repo-s-offline-no-auto-switch",
+            "ordinary-repo-mutable", "ordinary-repo-l-offline-no-auto-switch",
             "repo-read-only-no-lease", "s-termux-split-phase", "private-lab-plan",
             "vm-lab-plan", "s-private-local-plan", "gui-companion-preflight",
             "gui-read-preflight", "gui-action-preflight", "future-route-owner-fallback",

@@ -25,4 +25,5 @@ Diagnostic note:
 - push to fork: PASS; remote/local candidate SHA matched.
 - failure: GitHub connector PR creation returned HTTP 403 `Resource not accessible by integration`.
 - interpretation: repository change/branch is valid; PR-open action is blocked by connector permission, not by code or validation.
-- next action: use an already-authorized local GitHub CLI/session if available; do not modify the candidate code to work around an API permission failure.
+- resolution: local authenticated `gh` session opened official PR `PocketRisu/PocketRisu#94` from the already-pushed candidate branch; no code change was made to work around the connector permission failure.
+- re-validation: PR is open and mergeable; CodeQL Advanced and PR Check started.

@@ -27,3 +27,13 @@ Diagnostic note:
 - interpretation: repository change/branch is valid; PR-open action is blocked by connector permission, not by code or validation.
 - resolution: local authenticated `gh` session opened official PR `PocketRisu/PocketRisu#94` from the already-pushed candidate branch; no code change was made to work around the connector permission failure.
 - re-validation: PR is open and mergeable; CodeQL Advanced and PR Check started.
+
+### 2026-10-06 — official PR #94 CI GREEN
+- stage: `CI`
+- PR: `PocketRisu/PocketRisu#94`
+- candidate: `d79f8af15f08b471de37aab4841deb536e0bdf5d`
+- CodeQL Advanced: PASS.
+- PR Check Linux/Test: PASS.
+- check substeps: svelte-check PASS, build PASS, tests PASS, compatibility tests PASS.
+- review state at recording time: no reviews, no changes requested.
+- outcome: `GREEN / MAINTAINER_REVIEW_PENDING`.

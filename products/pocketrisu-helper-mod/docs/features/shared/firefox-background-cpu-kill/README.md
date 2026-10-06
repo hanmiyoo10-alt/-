@@ -2,7 +2,7 @@
 
 Feature-ID: `firefox-background-cpu-kill`
 Area: `shared`
-Status: **UPSTREAM_PR_GREEN / MAINTAINER_REVIEW_PENDING / NOT_GLOBAL_RECONSTRUCTION_FIX**
+Status: **FORK_PR_OPEN / LOCAL_ONLY / NOT_GLOBAL_RECONSTRUCTION_FIX**
 
 ## 목적
 Android/Samsung이 백그라운드 Firefox의 PocketRisu Gecko content process를 `excessive cpu` 이유로 종료하는 한 가지 확인된 새고 메커니즘을 수정한다.
@@ -48,12 +48,12 @@ ADB/AudioService에서 Firefox AAudio playback, background audio hardening, kill
 ## 다음 한 단계
 CPU-kill 경로는 자연 운용으로 계속 감시하되, same-process document recreation은 별도 feature에서 추적한다.
 
-## Upstream PR
-- official PR: `PocketRisu/PocketRisu#94`
-- branch: `hanmiyoo10-alt/PocketRisu:feat/firefox-background-cpu-kill-upstream`
-- latest-upstream candidate: `d79f8af15f08b471de37aab4841deb536e0bdf5d`
-- base: `3d30fc5a1982b1b5d149b97e188b8ee45d89e1d2`
+## PR 상태
+- 현재 허용 PR: `hanmiyoo10-alt/PocketRisu#11`
+- base: `deploy/termux-pocketrisu`
+- head: `feat/firefox-background-cpu-kill`
+- candidate: `4f693cba1c993b42407b1b73a9ae407f4e102b97`
 - changed files: 1 (`src/App.svelte`), additions: 7, deletions: 0.
-- CodeQL Advanced: PASS.
-- PR Check Linux/Test: PASS, including svelte-check, build, tests, compatibility tests.
-- PR is open, mergeable, non-draft; maintainer review pending.
+- 상태: OPEN / mergeable / non-draft.
+- official `PocketRisu/PocketRisu#94`는 잘못 생성되어 **CLOSED / NOT MERGED**.
+- 이 feature는 사용자 fork 내부 PR로만 유지한다.

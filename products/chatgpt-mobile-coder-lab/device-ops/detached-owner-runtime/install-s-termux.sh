@@ -157,6 +157,14 @@ host_exact() {
   file_exact "$HOST_SOURCE" "$TARGET_HOST_JS" && mode_exact "$TARGET_HOST_JS" 600 || return 1
   text_exact "$TARGET_CLIENT" "$(expected_client)" && mode_exact "$TARGET_CLIENT" 700 || return 1
 }
+deactivation_identity_exact() {
+  host_exact || return 1
+  text_exact "$SERVICE_RUN" "$(expected_service)" && mode_exact "$SERVICE_RUN" 700 || return 1
+  [ -d "$SUPPORT_ROOT" ] && [ ! -L "$SUPPORT_ROOT" ] || return 1
+  [ -z "$(find "$SUPPORT_ROOT" -type l -print -quit 2>/dev/null)" ] || return 1
+  file_exact "$SOURCE_REPO_ROOT/$RUNTIME_REL" "$TARGET_RUNTIME_JS" && mode_exact "$TARGET_RUNTIME_JS" 600 || return 1
+  file_exact "$SOURCE_REPO_ROOT/$SERVICE_REL" "$TARGET_SERVICE_JS" && mode_exact "$TARGET_SERVICE_JS" 600 || return 1
+}
 show_state() {
   result=pass
   if bundle_exact; then bundle=present; else bundle=missing; result=missing; fi
@@ -204,8 +212,7 @@ if [ -e "$HOST_RUN_DIR" ]; then
 fi
 
 if [ "$MODE" = deactivate ]; then
-  bundle_exact && host_exact || block "installed split-runtime identity mismatch"
-  text_exact "$SERVICE_RUN" "$(expected_service)" && mode_exact "$SERVICE_RUN" 700 || block "installed split-runtime identity mismatch"
+  deactivation_identity_exact || block "installed split-runtime identity mismatch"
   if [ -e "$SERVICE_DIR/down" ] || [ -L "$SERVICE_DIR/down" ]; then
     down_marker_exact || block "service down marker invalid"
   fi

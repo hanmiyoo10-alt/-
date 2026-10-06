@@ -1,6 +1,6 @@
 # CURRENT — 포켓리스 보조 개조
 
-최종 갱신 기준: **2026-09-25**
+최종 갱신 기준: **2026-10-06**
 
 새 채팅이나 작업 재개 시 가장 먼저 읽는 현재 상태 체크포인트.
 
@@ -92,6 +92,31 @@
 
 다음 한 단계:
 - 📱 메인폰 notification relay의 실제 `termux-notification` 옵션과 호출 중복 조건을 INSPECT_ONLY로 확인.
+
+## Firefox 새고 — 두 메커니즘 분리 추적
+
+### 1) background excessive-CPU process kill — MECHANISM_FIX_PASS
+- Android ActivityManager가 PocketRisu와 연결된 Firefox Gecko tab process를 `excessive cpu` 이유로 kill하는 경로를 실기기에서 확인했다.
+- 원인은 Android Firefox의 `keepSessionAlive: sound` continuous MP3 loop로 좁혀졌고, Android Firefox에서만 sound loop를 시작하지 않는 fix를 적용했다.
+- 독립 feature commit: `4f693cba1c993b42407b1b73a9ae407f4e102b97`.
+- reload 후 AAudio player release, replacement player 없음, >5분 background A/B에서 excessive-CPU kill 0건.
+- 이 fix는 한 메커니즘을 해결하며 모든 새고의 전역 해결책은 아니다.
+
+### 2) same-process document reconstruction — DEPLOYED_DIAGNOSTIC
+- 2026-10-06 16:49 visible reconstruction은 Firefox main/tab PID set이 그대로 유지된 상태에서 발생했다.
+- incident 시각 Firefox process kill/start 이벤트는 없었지만 PocketRisu `Session boot registered`와 client initialization이 다시 발생했다.
+- `NodeStorage.sessionInitialized`는 runtime static이고 production reset path가 없으므로 새 JS document/runtime 생성은 확정.
+- navigation type과 BFCache 여부는 아직 UNKNOWN.
+- 독립 diagnostic commit: `2ca8dc4a92e8533d983a90f6d2aca63cb4bf8224`.
+- 현재 deploy composition HEAD: `dc7ea7583094231c99d67146aaf9b81d2e8f57a0`.
+- lifecycle trace는 bootId/navType/timeOrigin/wasDiscarded/pageshow/pagehide/visibility/writer-session prefix를 기록한다.
+
+### 서버 재기동 별도 사실
+- 서버 PocketRisu는 약 15:55 KST 한 차례 재기동되어 현재 generation reset을 설명한다.
+- 16:49 same-process reconstruction과의 인과관계는 아직 UNKNOWN이며 인증 retry 코드 자체는 reload를 호출하지 않는다.
+
+다음 한 단계:
+- 메인폰 Firefox가 lifecycle trace 포함 새 dist를 한 번 로드한 뒤 자연 재현을 기다린다. 다음 재현에서 LG-Gram PID/kill telemetry와 lifecycle navType/timeOrigin을 결합해 두 번째 메커니즘을 분류한다.
 
 ## 조사 중 — 초장기챗 새고 health 정체
 

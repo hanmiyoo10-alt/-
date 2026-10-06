@@ -167,6 +167,64 @@ grep -Fq 'host_front=present' "$ROOT/reapply-host.out"
 node -e "'use strict'; require(process.argv[1]); require(process.argv[2]); require(process.argv[3]);" "$RUNTIME_JS" "$SERVICE_JS" "$HOST_JS"
 [ ! -e "$HOST_RUN/control.sock" ]
 
+# A managed active runtime may outlive non-executed support dependencies.
+# --check remains strict, while --deactivate may use only the narrower exact
+# host/service/core identity and must preserve the drifted support bytes.
+rm -f "$SERVICE/down"
+rm -f "$PACKET_ACTIVITY"
+printf '%s
+' '{"legacy":true}' > "$POLICY"
+chmod 600 "$POLICY"
+node -e 'const net=require("node:net"); const p=process.argv[1]; const s=net.createServer(()=>{}); s.listen(p); setInterval(()=>{},1000);' "$HOST_RUN/control.sock" &
+LEGACY_SOCKET_PID=$!
+printf '%s
+' "$LEGACY_SOCKET_PID" > "$SOCKET_PID_FILE"
+for _ in $(seq 1 50); do
+  [ -S "$HOST_RUN/control.sock" ] && break
+  sleep 0.1
+done
+[ -S "$HOST_RUN/control.sock" ]
+: > "$SV_LOG"
+sh "$INSTALL" --deactivate > "$ROOT/deactivate-legacy.out"
+wait "$LEGACY_SOCKET_PID" 2>/dev/null || true
+grep -Fq 'operation=deactivate' "$ROOT/deactivate-legacy.out"
+grep -Fq 'result=pass' "$ROOT/deactivate-legacy.out"
+[ ! -e "$PACKET_ACTIVITY" ]
+grep -Fq '{"legacy":true}' "$POLICY"
+set +e
+legacy_check=$(sh "$INSTALL" --check 2>&1)
+legacy_check_rc=$?
+set -e
+[ "$legacy_check_rc" -eq 1 ]
+printf '%s
+' "$legacy_check" | grep -Fq 'support_bundle=missing'
+sh "$INSTALL" --apply > "$ROOT/reapply-legacy.out"
+grep -Fq 'support_bundle=present' "$ROOT/reapply-legacy.out"
+
+# Stop-only admission never tolerates core runtime/service drift.
+printf '%s
+' '// core-byte-drift' >> "$RUNTIME_JS"
+chmod 600 "$RUNTIME_JS"
+set +e
+core_tampered=$(sh "$INSTALL" --deactivate 2>&1)
+core_tampered_rc=$?
+set -e
+[ "$core_tampered_rc" -eq 1 ]
+printf '%s
+' "$core_tampered" | grep -Fq 'BLOCKED installed split-runtime identity mismatch'
+sh "$INSTALL" --apply > "$ROOT/reapply-core.out"
+
+# Any support-tree symlink remains a hard block even for stop-only admission.
+ln -s "$ROOT/foreign-support" "$SUPPORT/.legacy-link"
+set +e
+support_symlink=$(sh "$INSTALL" --deactivate 2>&1)
+support_symlink_rc=$?
+set -e
+[ "$support_symlink_rc" -eq 1 ]
+printf '%s
+' "$support_symlink" | grep -Fq 'BLOCKED support root contains symlink'
+rm -f "$SUPPORT/.legacy-link"
+
 rm -f "$SERVICE/down"
 ln -s "$ROOT/foreign-down" "$SERVICE/down"
 set +e

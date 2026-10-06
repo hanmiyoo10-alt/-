@@ -384,3 +384,48 @@ Codex 모델 선택은 이 결정의 authority가 아니다. L model policy는 �
 ### 이유
 
 coordination identity와 effect authority를 먼저 분리해 검증한 뒤 physical L에서 실제 commit/push/PR transaction까지 증명됐다. 이제 routing preference를 L로 올리더라도 D-013/D-014, isolated worktree, exact L owner, device-specific semantic route를 그대로 유지할 수 있다.
+
+
+## D-020 — S Android phantom-budget reading uses a dedicated bounded Wireless-ADB route
+
+상태: ACTIVE
+
+### 결정
+
+물리 S의 Android ActivityManager phantom-process budget/count를 읽기 전용으로 관찰할 때는
+S_ANDROID_PHANTOM_BUDGET_READ route를 사용한다.
+
+기본 구성:
+
+    ordinary ChatGPT
+    → RDC M
+    → M Termux mcl-s-phantom-process-budget
+    → already user-paired Wireless ADB
+    → exact S model SM-G998N
+    → fixed com.termux + ActivityManager read argv
+    → bounded receipt
+
+이 route는 #3292의 post-thin-phone 측정 질문만 소유하는 좁은 system-evidence route다.
+S_ANDROID_GUI_ADB_READ / S_ANDROID_GUI_ADB_ACTION의 visible ChatGPT UI authority를
+확장하거나 대체하지 않으며, M 전용 m-phantom-process-budget owner도 변경하지 않는다.
+
+V1은 정확히 한 대의 연결된 S와 고정 Termux ADB binary, 고정 com.termux package,
+고정 model SM-G998N, 그리고 package UID / dumpsys activity settings /
+dumpsys activity processes read만 허용한다. caller-selected serial/IP/port/path/package/
+command/ADB binary, arbitrary ADB shell, raw dumpsys/process 출력, settings/device_config write,
+phantom limit 변경, install/uninstall/clear/force-stop, reboot/network/security/pairing/service
+mutation은 허용하지 않는다.
+
+연결 부재, 다중 target, model mismatch, malformed/insufficient evidence는
+offline / ambiguous / mismatch / unknown / blocked로 보존한다. route 선택은
+Wireless ADB를 자동 pairing하거나 복구할 authority가 아니며, M transport가 unavailable이면
+다른 unreviewed transport로 대체하지 않는다.
+
+### 이유
+
+#3290으로 S-Termux의 generic retired supervisor footprint가 runsv 11 → 7로
+실제 감소했지만 이는 Android ActivityManager의 현재 PhantomProcessRecord count/headroom을
+증명하지 않는다. #3235의 M observer는 read contract가 적합해도 exact M model/owner에
+묶여 있고, #2453/D-016은 visible UI 전용이다. 따라서 transport precedent만 재사용하고
+system evidence를 별도 narrow owner/route로 분리해야 Termux process shape를 Android truth로
+승격하지 않으면서 #3292를 측정할 수 있다.

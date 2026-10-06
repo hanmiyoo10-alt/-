@@ -4,17 +4,17 @@ Feature-ID: `firefox-same-process-reconstruction`
 Area: `shared`
 PR status: `NOT_PREPARED`
 Isolation status: `CLEAN`
-Deployment status: `DIAGNOSTIC_ONLY`
+Deployment status: `LOCAL_DIAGNOSTIC_DEPLOYED`
 
 ## Problem / motivation
-PocketRisu can visibly reconstruct on Android Firefox even when Firefox main and Gecko tab process PIDs survive unchanged. This is distinct from the already observed Android `excessive cpu` Gecko process kill mechanism.
+PocketRisu can visibly reconstruct on Android Firefox even when Firefox main and Gecko tab process PIDs survive unchanged. This is distinct from the Android `excessive cpu` Gecko process kill mechanism.
 
 ## Minimal upstream scope
-Investigation only. Add no product behavior change until the document-level navigation mechanism is confirmed.
+Investigation only. No product behavior change until document-level navigation is classified.
 
 ## Dependencies
 - independent from `firefox-background-cpu-kill`
-- may be deployed together on the local composite deploy branch
+- locally composed with that fix only on `deploy/termux-pocketrisu`
 - no server/session-lock behavior change
 
 ## Explicitly out of scope
@@ -32,8 +32,16 @@ Investigation only. Add no product behavior change until the document-level navi
 - client initialization warnings reappeared.
 - runtime-static `NodeStorage.sessionInitialized` has no production reset path.
 
+Diagnostic candidate:
+- branch `feat/firefox-same-process-reconstruction`
+- commit `2ca8dc4a92e8533d983a90f6d2aca63cb4bf8224`
+- one tracked file: `src/ts/log-capture.ts`
+- check/build PASS
+- no product behavior change
+
 ## Upstream pitch
 None yet. Root navigation mechanism must be confirmed first.
 
 ## Review / PR state
-- next action: restore minimal lifecycle/navType instrumentation and collect one natural recurrence.
+- local diagnostic deployed in composite deploy HEAD `dc7ea7583094231c99d67146aaf9b81d2e8f57a0`.
+- next action: collect one natural recurrence with navType/timeOrigin/pageshow/pagehide evidence.

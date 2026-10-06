@@ -38,6 +38,10 @@ done
 if [ -d "$root/desktop-commander-remote" ]; then
   echo "u 11 10 0 0 ? 00:00:00 svlogd -tt $home/.local/state/desktop-commander-remote"
 fi
+echo "u 12 10 0 0 ? 00:00:00 svlogd -tt $home/.local/state/desktop-commander-remote-termux"
+if [ -f "${MCL_S_RETIRED_RUNSV_DETACH_TEST_ROOT}/force-primary-logger" ]; then
+  echo "u 98 1 0 0 ? 00:00:00 svlogd -tt $home/.local/state/desktop-commander-remote"
+fi
 for n in mcl-detached-owner-runtime desktop-commander-remote desktop-commander-watchdog llmgateway-bridge; do
   if [ -f "${MCL_S_RETIRED_RUNSV_DETACH_TEST_ROOT}/app-$n" ]; then
     case "$n" in
@@ -66,7 +70,7 @@ setup() {
   done
   chmod 755 "$ROOT/mcl-detached-owner-runtime" "$ROOT/desktop-commander-remote" "$ROOT/desktop-commander-watchdog"
   chmod 700 "$ROOT/llmgateway-bridge"
-  rm -f "$TMP"/app-* "$TMP/force-supervisor"
+  rm -f "$TMP"/app-* "$TMP/force-supervisor" "$TMP/force-primary-logger"
 }
 hashes() {
   export MCL_TEST_SHA_DETACHED=$(sha256sum "$ROOT/mcl-detached-owner-runtime/run" | awk '{print $1}')
@@ -138,6 +142,14 @@ setup; hashes
 : > "$TMP/app-llmgateway-bridge"
 if run_owner --detach >/dev/null 2>&1; then exit 1; fi
 [ -d "$ROOT/llmgateway-bridge" ]
+pass=$((pass+1))
+
+setup; hashes
+: > "$TMP/force-primary-logger"
+out=$(run_owner --detach 2>/dev/null || true)
+printf '%s\n' "$out" | grep -q 'reason=detach-rolled-back'
+for s in $TARGETS; do [ -d "$ROOT/$s" ]; done
+[ ! -e "$ROOT/.mcl-retired-services" ]
 pass=$((pass+1))
 
 setup; hashes

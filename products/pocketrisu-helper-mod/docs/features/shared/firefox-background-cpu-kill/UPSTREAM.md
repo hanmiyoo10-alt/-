@@ -2,9 +2,9 @@
 
 Feature-ID: `firefox-background-cpu-kill`
 Area: `shared`
-PR status: `GREEN`
+PR status: `FORK_PR_OPEN`
 Isolation status: `CLEAN`
-Deployment status: `LOCAL_VERIFIED / UPSTREAM_PR_GREEN`
+Deployment status: `LOCAL_VERIFIED / FORK_ONLY`
 
 ## Problem / motivation
 On Android/Samsung, PocketRisu's sound keep-alive can keep Firefox Gecko work active while backgrounded. Android ActivityManager then kills the PocketRisu-correlated Gecko tab process for `excessive cpu`, and Firefox reconstructs the content process on resume.
@@ -41,14 +41,10 @@ Prevent the continuous sound keep-alive loop from starting on Android Firefox on
 A keep-alive feature should not trigger the browser/OS condition that destroys the tab it is trying to preserve. On Android Firefox, continuous audio should therefore be skipped rather than looped.
 
 ## Review / PR state
-- local A/B: PASS for >5 minutes background, audio remains stopped.
-- post-fix persistence: 161 durable `chat-content` commits observed after the fix.
-- no additional Firefox `excessive cpu` kills observed after 01:55 KST in retained watcher events.
-- latest-upstream rebuild base: `3d30fc5a1982b1b5d149b97e188b8ee45d89e1d2`.
-- upstream candidate SHA: `d79f8af15f08b471de37aab4841deb536e0bdf5d`.
-- official PR: `PocketRisu/PocketRisu#94`.
-- current PR state: OPEN / GREEN / mergeable / non-draft.
-- CodeQL Advanced: PASS.
-- PR Check Linux/Test: PASS, including svelte-check, build, tests, and compatibility tests.
-- reviews: none yet; changes-requested: none.
-- next action: wait for maintainer review/merge; do not broaden this PR with same-process or LMKD work.
+- current PR: `hanmiyoo10-alt/PocketRisu#11`
+- target: fork-local `deploy/termux-pocketrisu`
+- candidate: `4f693cba1c993b42407b1b73a9ae407f4e102b97`
+- state: OPEN / mergeable / non-draft.
+- mistaken official PR `PocketRisu/PocketRisu#94`: CLOSED / NOT MERGED.
+- official upstream submission is **not authorized by default**. This dossier is a rebuild recipe/evidence record, not permission to open an official PR.
+- next action: validate/review/merge only inside `hanmiyoo10-alt/PocketRisu` unless the user explicitly requests an official upstream PR in a future task.

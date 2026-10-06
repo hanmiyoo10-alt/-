@@ -2,7 +2,7 @@
 
 Feature-ID: `firefox-same-process-reconstruction`
 Area: `shared`
-Status: **INVESTIGATE / DOCUMENT-RUNTIME-RECREATION_CONFIRMED**
+Status: **DEPLOYED_DIAGNOSTIC / NATURAL_REPRO_PENDING**
 
 ## 목적
 Android Firefox에서 Firefox app/main process와 Gecko tab process PID가 모두 유지된 채 PocketRisu JS document/runtime만 새로 만들어지는 별도 새고 경로를 추적한다.
@@ -28,6 +28,7 @@ Android Firefox에서 Firefox app/main process와 Gecko tab process PID가 모�
 ## 현재 분류
 확정:
 - 같은 Firefox process에서 새 JS document/runtime 재생성.
+- 이전 `firefox-background-cpu-kill` fix가 막은 excessive-CPU process-kill 경로와 별개.
 
 미확정:
 - navigation type: `reload` / `navigate` / `back_forward`.
@@ -35,18 +36,27 @@ Android Firefox에서 Firefox app/main process와 Gecko tab process PID가 모�
 - Firefox 자체 restore/discard 정책인지 앱 코드 navigation인지.
 - 서버 재기동과의 간접 상관 여부.
 
-## 다음 계측
-초경량 lifecycle trace만 복원:
-- bootId
-- `performance.getEntriesByType('navigation')[0].type`
-- `performance.timeOrigin`
-- `document.wasDiscarded`
-- `pageshow.persisted`
-- `pagehide.persisted`
-- visibility transition
-- writer session id prefix
+## 계측 구현
+독립 source branch:
+- branch: `feat/firefox-same-process-reconstruction`
+- commit: `2ca8dc4a92e8533d983a90f6d2aca63cb4bf8224`
+- 변경: `src/ts/log-capture.ts` 한 파일
+- 기록: bootId, navType, timeOrigin, wasDiscarded, pageshow/pagehide persisted, visibility, writer session prefix, readyState, history.length.
+- localStorage 최근 24 event 보존 + visible 시 최근 12 event mirror.
+- 무거운 iframe/page-pressure 계측 없음.
 
-무거운 iframe/page-pressure 계측은 이번 feature 범위에서 제외.
+검증:
+- `svelte-check`: 0 errors, 기존 a11y warning 4개.
+- production build: PASS.
+
+로컬 deploy 조합:
+- `deploy/termux-pocketrisu`
+- `cf32f901`: Android Firefox sound keep-alive guard
+- `dc7ea758`: same-process lifecycle diagnostic
+- final deploy HEAD: `dc7ea7583094231c99d67146aaf9b81d2e8f57a0`
+- final composition production build: PASS.
+- server `/api/health`: ready.
+- dist에 CPU guard + lifecycle marker 둘 다 존재.
 
 ## 다음 한 단계
-lifecycle trace를 독립 source commit으로 추가하고 deploy 조합 branch에 CPU-kill fix와 함께 배포한 뒤 다음 자연 재현을 기다린다.
+메인폰 Firefox가 새 dist를 한 번 로드한 뒤 다음 자연 재현을 기다린다. 재현 시 lifecycle row의 navType/timeOrigin/pageshow/pagehide와 LG-Gram process telemetry를 결합해 document reconstruction 종류를 확정한다.

@@ -14,3 +14,15 @@ Stages: `LOCAL_TEST | CI | PR_REVIEW | MERGE | DEPLOY | POST_DEPLOY_VERIFY`
 Diagnostic note:
 - prior V3 iframe footprint and generic memory-pressure hypotheses did not establish deterministic causality.
 - explicit Android `excessive cpu` evidence remains valid for this feature's narrower mechanism.
+
+
+### 2026-10-06 — official PR create API permission failure
+- stage: `PR_OPEN`
+- candidate branch: `hanmiyoo10-alt/PocketRisu:feat/firefox-background-cpu-kill-upstream`
+- candidate SHA: `d79f8af15f08b471de37aab4841deb536e0bdf5d`
+- latest official base: `PocketRisu/PocketRisu@3d30fc5a1982b1b5d149b97e188b8ee45d89e1d2`
+- validation before PR: `pnpm check` 0 errors / 4 pre-existing warnings; `pnpm build` PASS.
+- push to fork: PASS; remote/local candidate SHA matched.
+- failure: GitHub connector PR creation returned HTTP 403 `Resource not accessible by integration`.
+- interpretation: repository change/branch is valid; PR-open action is blocked by connector permission, not by code or validation.
+- next action: use an already-authorized local GitHub CLI/session if available; do not modify the candidate code to work around an API permission failure.

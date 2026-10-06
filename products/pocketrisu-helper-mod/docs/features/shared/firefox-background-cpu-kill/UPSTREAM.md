@@ -2,9 +2,9 @@
 
 Feature-ID: `firefox-background-cpu-kill`
 Area: `shared`
-PR status: `NOT_PREPARED`
+PR status: `VALIDATING`
 Isolation status: `CLEAN`
-Deployment status: `LIVE_A_B_PASS_CHAT_SMOKE_PENDING`
+Deployment status: `LOCAL_VERIFIED / UPSTREAM_PR_OPEN`
 
 ## Problem / motivation
 On Android/Samsung, PocketRisu's sound keep-alive can keep Firefox Gecko work active while backgrounded. Android ActivityManager then kills the PocketRisu-correlated Gecko tab process for `excessive cpu`, and Firefox reconstructs the content process on resume.
@@ -42,5 +42,10 @@ A keep-alive feature should not trigger the browser/OS condition that destroys t
 
 ## Review / PR state
 - local A/B: PASS for >5 minutes background, audio remains stopped.
-- remaining local gate: one normal foreground chat send with durable chat-content persist, plus longer natural-use observation.
-- next action: when those pass, rebuild the one-file change from latest official upstream for PR.
+- post-fix persistence: 161 durable `chat-content` commits observed after the fix.
+- no additional Firefox `excessive cpu` kills observed after 01:55 KST in retained watcher events.
+- latest-upstream rebuild base: `3d30fc5a1982b1b5d149b97e188b8ee45d89e1d2`.
+- upstream candidate SHA: `d79f8af15f08b471de37aab4841deb536e0bdf5d`.
+- official PR: `PocketRisu/PocketRisu#94`.
+- current PR state: OPEN / VALIDATING; CodeQL Advanced + PR Check running.
+- next action: inspect CI/review result; record any failure before changing code.

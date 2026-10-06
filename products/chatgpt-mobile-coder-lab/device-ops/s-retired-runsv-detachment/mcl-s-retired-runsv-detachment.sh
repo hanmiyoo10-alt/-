@@ -105,7 +105,13 @@ runsv_present() {
 primary_logger_present() {
   dump=$(process_dump)
   printf '%s\n' "$dump" | awk -v logdir="$PRIMARY_LOG_DIR" '
-    index($0,"svlogd") && index($0,logdir) {found=1}
+    {
+      for (i=1; i+2<=NF; i++) {
+        cmd=$i
+        sub(/^.*\//, "", cmd)
+        if (cmd=="svlogd" && $(i+1)=="-tt" && $(i+2)==logdir) found=1
+      }
+    }
     END {exit(found ? 0 : 1)}'
 }
 pattern_present() {

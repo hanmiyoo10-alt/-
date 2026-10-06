@@ -1,6 +1,6 @@
 # ROADMAP
 
-기준: 2026-09-25
+기준: 2026-10-06
 
 
 ## 완료 / LIVE_PROVEN — main-ssh-tunnel supervisor hardening
@@ -76,6 +76,18 @@ Worker pre-launch structured clone과 chunk-store CDC/hash/SQLite commit은 이 
 금지: 단순 주기적 `git pull`.
 
 ## P1 — 조사 중
+
+### Firefox background CPU kill — MECHANISM_FIX_PASS
+- continuous sound keep-alive가 Android/Samsung cached-process CPU 정책에 걸려 Gecko tab/utility가 `excessive cpu`로 kill되는 경로 확인.
+- Android Firefox sound loop guard 적용 및 실기기 A/B PASS.
+- 이 feature는 해당 process-kill 메커니즘만 소유한다.
+
+### Firefox same-process document reconstruction — DEPLOYED_DIAGNOSTIC
+- Firefox main/tab PID가 그대로 유지된 채 PocketRisu JS document/runtime만 새로 부팅되는 두 번째 경로를 16:49 실재현으로 확인.
+- process-kill 경로와 별도 Feature-ID로 분리.
+- lifecycle trace diagnostic 배포 완료.
+- 다음 자연 재현에서 navType/timeOrigin/pageshow/pagehide를 수집해 reload/navigate/back_forward/BFCache를 분류한다.
+- 서버 재기동과의 인과관계는 UNKNOWN.
 
 ### 초장기챗 새고/복귀 health 정체
 - 새고 때 실제 DB read/encode/serialize 경로 찾기.

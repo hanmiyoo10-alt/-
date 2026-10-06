@@ -37,3 +37,11 @@ Diagnostic note:
 - check substeps: svelte-check PASS, build PASS, tests PASS, compatibility tests PASS.
 - review state at recording time: no reviews, no changes requested.
 - outcome: `GREEN / MAINTAINER_REVIEW_PENDING`.
+
+### 2026-10-06 — official PR #94 withdrawn
+- stage: `PR_TARGET_CORRECTION`
+- mistake: the validated candidate was opened against `PocketRisu/PocketRisu#94`, but the intended PR destination is the user's fork only.
+- correction: official PR #94 was closed immediately and verified `CLOSED / NOT MERGED`.
+- replacement: fork-local PR `hanmiyoo10-alt/PocketRisu#11`, base `deploy/termux-pocketrisu`, head `feat/firefox-background-cpu-kill`.
+- code was not changed during the target correction.
+- durable rule: do not open an official `PocketRisu/PocketRisu` PR unless the user explicitly requests official upstream submission.

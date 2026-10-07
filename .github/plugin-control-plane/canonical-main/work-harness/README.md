@@ -213,6 +213,17 @@ node .github/plugin-control-plane/canonical-main/work-harness/stage-checkpoint.c
 
 The body file is bounded to 8 KiB. The harness verifies the target is one open canonical-main work packet, derives one SHA-256 checkpoint identity from packet number + stage + normalized body, then uses surface-specific provenance markers to record the same checkpoint payload on the packet and #293.
 
+Runtime/effect-only packets may record explicit repository-stage non-applicability without inventing freehand checkpoint prose:
+
+```sh
+node .github/plugin-control-plane/canonical-main/work-harness/stage-checkpoint.cjs \
+  not-applicable \
+  --packet <canonical-main-packet-issue> \
+  --stage <IMPLEMENTATION_PR|VALIDATION_MERGE|POSTMERGE_CONVERGENCE>
+```
+
+This mode does **not** collapse or skip the fixed five-stage model. It generates one deterministic `NOT_APPLICABLE / PASS` checkpoint body and feeds it through the same packet + #293 digest/marker/idempotency writer. It is fail-closed: the target must be an open canonical-main work packet whose lifecycle is `IN_PROGRESS`, and the existing Work System scope parser must prove a non-empty surface-only write scope with zero repository `path:` scopes. `AUTHORITY_SCOPE` and `EXPERIMENT_CLOSE` are never eligible. Missing checkpoints remain missing and continue to trigger the ordinary strict-prefix conflicts.
+
 Retries are idempotent within the bounded comment scan. Existing matching packet/audit comments are reused; if a prior attempt wrote only one side, the next attempt writes only the missing side. Duplicate checkpoint markers fail closed rather than adding another record. Comment discovery is bounded to 20 pages per destination, matching the repository's existing bounded issue-bookkeeping pattern.
 
 The machine result is compact JSON with `COMPLETE`, `PARTIAL`, `UNKNOWN`, or `FAILED`, the checkpoint identity, and both destination issue/comment identities. One side failing never becomes green by absence. `PARTIAL`/`UNKNOWN` use a nonzero exit so an agent cannot silently treat incomplete audit synchronization as complete.

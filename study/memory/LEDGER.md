@@ -578,3 +578,27 @@ Related memory IDs: S-MIDTERM-001, E-2026-10-07-001
 Follow-up trigger: 첫 모의고사 생성 시 전체 시험범위 커버리지 표를 함께 점검한다.
 Resolution / later evidence: ACTIVE — 중간고사 종료 또는 사용자의 전략 변경 전까지 적용.
 ```
+
+
+### E-2026-10-07-003 — 과목별 중간고사 문제 유형 확인
+
+```text
+Entry ID: E-2026-10-07-003
+Date: 2026-10-07
+Subject / scope: 2026-2 중간고사 / 과목별 출제 형식
+Status: OBSERVED
+Observation: 사용자가 현재 알고 있는 과목별 중간고사 문제 유형을 직접 제공했다.
+Context: 1회독 이후 전체범위 누적 모의고사를 실제 시험 형식에 맞춰 생성하기 위한 출제 형식 확정 과정.
+Result:
+- AI 수학 입문: 문제풀이형
+- 미디어 리터러시: 단답형 + 서술형
+- AI 중심세상: 객관식 + 서술형 예정
+- AI 프로그래밍입문: 객관식 + 서술형, 손코딩 가능성 있음
+- 디자인과 시각문화: 서술형 + 단답형
+- 커뮤니케이션이론: 아직 미확정
+Interpretation: 확정된 형식은 모의고사 기본 템플릿으로 사용한다. '예정', '가능성 있음'으로 표현된 항목은 확정 사실로 승격하지 않고 실제 공지/교수 언급이 확인되기 전까지 잠정 형식으로 유지한다.
+Confidence: HIGH for user-stated status; tentative where explicitly marked 예정/가능성
+Related memory IDs: S-MIDTERM-001
+Follow-up trigger: 커뮤니케이션이론 형식 또는 AI 중심세상/AI 프로그래밍의 최종 시험 형식이 확인되면 갱신한다.
+Resolution / later evidence: ACTIVE
+```

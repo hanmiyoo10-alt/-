@@ -620,3 +620,21 @@ Related memory IDs: S-MIDTERM-001
 Follow-up trigger: 각 과목 1회독 완료 후 첫 모의고사 생성 시 녹음/영상 소스를 함께 점검한다.
 Resolution / later evidence: ACTIVE
 ```
+
+
+### E-2026-10-07-005 — 미디어 리터러시 현재 체크포인트: 온라인 저널리즘 정리 완료, 문제 미풀이
+
+```text
+Entry ID: E-2026-10-07-005
+Date: 2026-10-07
+Subject / scope: 미디어 리터러시 / 1회독
+Status: OBSERVED
+Observation: 사용자는 마지막으로 공부한 지점이 온라인 저널리즘이며, 해당 내용 정리는 완료했지만 관련 문제풀이는 아직 하지 않았다고 직접 확인했다.
+Context: 3주차 완료 여부를 재검토하는 과정. 3주차와 4주차 폴더가 동일한 저널리즘/뉴스 PDF 덱을 공유해 주차 단위 완료 판정이 모호함.
+Result: 현재 진도는 '온라인 저널리즘 정리 완료 / 해당 구간 문제 미풀이'로 고정한다. 이후 진도는 주차 완료라고 단정하기보다 동일 PDF 덱 내 개념 체크포인트로 추적한다.
+Interpretation: 1회독은 PPT/PDF 중심으로 진행하므로, 다음 단계는 온라인 저널리즘 이후 PDF에 남은 개념을 이어서 정리하고, 이전에 정리한 구간의 문제풀이는 별도 미완료 상태로 관리한다.
+Confidence: HIGH
+Related memory IDs: E-2026-10-07-004
+Follow-up trigger: 다음 학습에서 온라인 저널리즘 이후 개념을 이어서 정리하거나, 해당 구간 문제풀이를 시작할 때 갱신한다.
+Resolution / later evidence: ACTIVE
+```

@@ -602,3 +602,21 @@ Related memory IDs: S-MIDTERM-001
 Follow-up trigger: 커뮤니케이션이론 형식 또는 AI 중심세상/AI 프로그래밍의 최종 시험 형식이 확인되면 갱신한다.
 Resolution / later evidence: ACTIVE
 ```
+
+
+### E-2026-10-07-004 — 1회독 자료와 2회독 이후 출제 자료 분리
+
+```text
+Entry ID: E-2026-10-07-004
+Date: 2026-10-07
+Subject / scope: 2026-2 중간고사 / 영상편집실습 제외 전 과목
+Status: OBSERVED
+Observation: 사용자는 1회독에서는 PPT/PDF를 중심으로 학습하고, 강의 녹음본과 영상은 1회독 완료 후 모의고사 반복 단계부터 출제 근거에 포함하기로 명확히 했다.
+Context: 미디어 리터러시 3주차 완료 여부와 4주차 재개 지점을 확인하는 과정.
+Result: 1회독의 기본 소스는 PPT/PDF다. 2회독 이후 전체범위 모의고사에서는 PPT/PDF에 더해 강의 녹음과 영상까지 사용한다.
+Interpretation: 1회독은 범위 구조와 핵심 개념을 빠르게 완주하는 단계로 유지하고, 교수의 구두 강조·수업 맥락·추가 사례는 모의고사 단계에서 반영한다.
+Confidence: HIGH
+Related memory IDs: S-MIDTERM-001
+Follow-up trigger: 각 과목 1회독 완료 후 첫 모의고사 생성 시 녹음/영상 소스를 함께 점검한다.
+Resolution / later evidence: ACTIVE
+```

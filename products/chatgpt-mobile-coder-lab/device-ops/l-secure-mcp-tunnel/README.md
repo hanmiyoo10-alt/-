@@ -46,21 +46,30 @@ runtime API key file:
 
 local state:
   /home/alsl0/.local/state/mcl-secure-mcp
+
+single-instance lock:
+  /home/alsl0/.local/state/mcl-secure-mcp/run.lock
 \`\`\`
 
 The two credential-reference files must be regular, non-symlink, owned by the
 current L user, and mode 0600. The state directory must be regular/non-symlink,
-user-owned, and mode 0700. Secret values and tunnel identifiers are never emitted
-in receipts.
+user-owned, and mode 0700. Both executable paths must be regular, non-symlink,
+user-owned, owner-executable, and not writable by group or others. An existing
+run lock must be a regular user-owned mode-0600 file. Secret values and tunnel
+identifiers are never emitted in receipts.
 
 The Repository Read MCP child receives only the fixed public repository identity
 and GitHub API URL. No GitHub token is inherited or materialized by this owner.
 
 ## tunnel-client contract
 
-This owner pins exact tunnel-client version **0.0.15**. A missing binary, symlink,
-foreign owner, non-executable file, failed version probe, or any other version
-fails closed. Updating that pin requires a reviewed source change.
+This owner pins tunnel-client semantic version **0.0.15**. The version probe
+accepts only bare \`0.0.15\` or the official release form
+\`0.0.15+<40-hex-sha> (git sha: <same-40-hex-sha>)\`. Receipts retain only the
+bounded semantic version and never forward raw probe output. A missing binary,
+symlink, foreign owner, unsafe writable mode, non-executable file, malformed
+release string, failed version probe, or any other semantic version fails closed.
+Updating the pin requires a reviewed source change.
 
 The installation runbook should still consult OpenAI's latest public release
 surface instead of embedding a version-specific download URL. The source pin
@@ -84,12 +93,21 @@ The tunnel id is read from the fixed private file and passed only through
 allowlist instead of inheriting caller-selected proxy, command, token, repository,
 or network configuration.
 
+Before removing any previous health URL or emitting the \`starting\` receipt,
+\`--run\` acquires a non-blocking exclusive lock on the fixed mode-0600
+\`run.lock\` file. The lock descriptor is deliberately inherited across the
+foreground exec so the advisory lock remains held for the tunnel-client lifetime.
+A concurrent run returns bounded \`RUN_ALREADY_ACTIVE\` and launches no second
+client or Repository Read MCP child. The lock file may remain after exit; file
+existence alone never means an instance is active.
+
 OpenAI currently documents Secure MCP Tunnel as outbound HTTPS from the
 customer-run tunnel-client to the OpenAI control plane, with stdio supported
 through \`--mcp.command\`, runtime API keys supported by file references, and
-health/admin surfaces loopback-only by default. The current public stable release
-at implementation time is v0.0.15. Re-read current OpenAI documentation before
-changing this contract.
+health/admin surfaces loopback-only by default. For stdio targets it also
+requires a single active tunnel-client per tunnel ID. The current public stable
+release at implementation time is v0.0.15. Re-read current OpenAI documentation
+before changing this contract.
 
 References:
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import fcntl
 import os
 import re
 import stat
@@ -12,6 +13,9 @@ from typing import Callable, Mapping, Sequence
 
 SCHEMA = "mcl-l-secure-mcp-tunnel.v1"
 SUPPORTED_TUNNEL_CLIENT_VERSION = "0.0.15"
+OFFICIAL_RELEASE_VERSION_RE = re.compile(
+    rf"^{re.escape(SUPPORTED_TUNNEL_CLIENT_VERSION)}\+([0-9a-f]{{40}}) \(git sha: \1\)$"
+)
 TUNNEL_ID_RE = re.compile(r"^tunnel_[0-9a-f]{32}$")
 FIXED_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
@@ -23,6 +27,7 @@ class Profile:
     runtime_key_file: Path
     state_dir: Path
     health_url_file: Path
+    lock_file: Path
     home: Path
 
 PRODUCTION_PROFILE = Profile(
@@ -32,6 +37,7 @@ PRODUCTION_PROFILE = Profile(
     runtime_key_file=Path("/home/alsl0/.config/mcl-secure-mcp/runtime-api-key"),
     state_dir=Path("/home/alsl0/.local/state/mcl-secure-mcp"),
     health_url_file=Path("/home/alsl0/.local/state/mcl-secure-mcp/health.url"),
+    lock_file=Path("/home/alsl0/.local/state/mcl-secure-mcp/run.lock"),
     home=Path("/home/alsl0"),
 )
 
@@ -101,6 +107,8 @@ def _lstat_regular(path: Path, *, executable: bool = False, exact_mode: int | No
     mode = stat.S_IMODE(st.st_mode)
     if exact_mode is not None and mode != exact_mode:
         return "MODE_INVALID"
+    if executable and mode & (stat.S_IWGRP | stat.S_IWOTH):
+        return "WRITABLE_BY_OTHERS"
     if executable and not (mode & stat.S_IXUSR):
         return "NOT_EXECUTABLE"
     return None
@@ -176,10 +184,14 @@ def _version(binary: Path, runner: Runner) -> tuple[str | None, str | None]:
         return None, "VERSION_CHECK_FAILED"
     if result.returncode != 0:
         return None, "VERSION_CHECK_FAILED"
-    value = result.stdout.strip()
-    if value != SUPPORTED_TUNNEL_CLIENT_VERSION:
-        return value or None, "VERSION_DRIFT"
-    return value, None
+    raw = result.stdout.strip()
+    if len(raw) > 256:
+        return None, "VERSION_DRIFT"
+    if raw == SUPPORTED_TUNNEL_CLIENT_VERSION:
+        return SUPPORTED_TUNNEL_CLIENT_VERSION, None
+    if OFFICIAL_RELEASE_VERSION_RE.fullmatch(raw):
+        return SUPPORTED_TUNNEL_CLIENT_VERSION, None
+    return None, "VERSION_DRIFT"
 
 
 def check_profile(profile: Profile = PRODUCTION_PROFILE, runner: Runner | None = None) -> tuple[dict[str, object], str | None]:
@@ -226,12 +238,19 @@ def check_profile(profile: Profile = PRODUCTION_PROFILE, runner: Runner | None =
     state_problem = _private_dir(profile.state_dir)
     if state_problem:
         reasons.append(f"STATE_DIR_{state_problem}")
-    elif profile.health_url_file.parent != profile.state_dir:
-        reasons.append("HEALTH_URL_PARENT_INVALID")
-    elif profile.health_url_file.exists() or profile.health_url_file.is_symlink():
-        health_problem = _lstat_regular(profile.health_url_file, exact_mode=0o600)
-        if health_problem:
-            reasons.append(f"HEALTH_URL_FILE_{health_problem}")
+    else:
+        if profile.health_url_file.parent != profile.state_dir:
+            reasons.append("HEALTH_URL_PARENT_INVALID")
+        elif profile.health_url_file.exists() or profile.health_url_file.is_symlink():
+            health_problem = _lstat_regular(profile.health_url_file, exact_mode=0o600)
+            if health_problem:
+                reasons.append(f"HEALTH_URL_FILE_{health_problem}")
+        if profile.lock_file.parent != profile.state_dir:
+            reasons.append("RUN_LOCK_PARENT_INVALID")
+        elif profile.lock_file.exists() or profile.lock_file.is_symlink():
+            lock_problem = _lstat_regular(profile.lock_file, exact_mode=0o600)
+            if lock_problem:
+                reasons.append(f"RUN_LOCK_FILE_{lock_problem}")
 
     result = "pass" if not reasons else "blocked"
     reason = "PASS" if not reasons else ",".join(sorted(set(reasons)))
@@ -292,6 +311,31 @@ def _remove_safe_health_file(profile: Profile) -> None:
     path.unlink()
 
 
+def _acquire_run_lock(profile: Profile) -> int:
+    if profile.lock_file.parent != profile.state_dir:
+        raise RuntimeError("RUN_LOCK_PARENT_INVALID")
+    flags = os.O_RDWR | os.O_CREAT
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        fd = os.open(profile.lock_file, flags, 0o600)
+    except OSError as error:
+        raise RuntimeError("RUN_LOCK_OPEN_FAILED") from error
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid() or stat.S_IMODE(st.st_mode) != 0o600:
+            raise RuntimeError("RUN_LOCK_UNSAFE")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise RuntimeError("RUN_ALREADY_ACTIVE") from error
+        os.set_inheritable(fd, True)
+        return fd
+    except Exception:
+        os.close(fd)
+        raise
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -313,26 +357,40 @@ def main(
         return 64
 
     receipt, run_argv, run_env = build_run_plan(profile, runner)
+    if run_argv is None or run_env is None:
+        sys.stdout.write(render_receipt(receipt))
+        return 3
+
+    lock_fd: int | None = None
+    try:
+        os.umask(0o077)
+        lock_fd = _acquire_run_lock(profile)
+        _remove_safe_health_file(profile)
+    except RuntimeError as error:
+        if lock_fd is not None:
+            os.close(lock_fd)
+        reason = str(error)
+        if reason not in {
+            "RUN_LOCK_PARENT_INVALID",
+            "RUN_LOCK_OPEN_FAILED",
+            "RUN_LOCK_UNSAFE",
+            "RUN_ALREADY_ACTIVE",
+            "HEALTH_URL_FILE_UNSAFE",
+        }:
+            reason = "RUN_PREFLIGHT_EFFECT_FAILED"
+        sys.stdout.write(render_receipt(receipt | {"result": "blocked", "reason": reason}))
+        return 3
+
     sys.stdout.write(render_receipt(receipt))
     sys.stdout.flush()
-    if run_argv is None or run_env is None:
-        return 3
     try:
-        _remove_safe_health_file(profile)
-        os.umask(0o077)
         executor(run_argv[0], run_argv, run_env)
-    except (OSError, RuntimeError):
-        sys.stdout.write(render_receipt(_receipt(
-            operation="run",
-            tunnel_client="exact",
-            tunnel_client_version=SUPPORTED_TUNNEL_CLIENT_VERSION,
-            repository_read_mcp="exact",
-            tunnel_id_ref="present",
-            runtime_key_ref="present",
-            result="blocked",
-            reason="EXEC_FAILED",
-        )))
+    except OSError:
+        sys.stdout.write(render_receipt(receipt | {"result": "blocked", "reason": "EXEC_FAILED"}))
         return 4
+    finally:
+        if lock_fd is not None:
+            os.close(lock_fd)
     return 0
 
 

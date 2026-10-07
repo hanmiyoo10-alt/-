@@ -1,5 +1,8 @@
+import contextlib
+import fcntl
 import importlib.machinery
 import importlib.util
+import io
 import os
 import sys
 import tempfile
@@ -37,7 +40,11 @@ class Fixture:
         os.chmod(self.state_dir, 0o700)
 
         self.tunnel = self.bin_dir / "tunnel-client"
-        self.tunnel.write_text("#!/bin/sh\nprintf '0.0.15\\n'\n")
+        release_sha = "a" * 40
+        self.tunnel.write_text(
+            "#!/bin/sh\n"
+            f"printf '0.0.15+{release_sha} (git sha: {release_sha})\\n'\n"
+        )
         os.chmod(self.tunnel, 0o700)
 
         self.repo_mcp = self.mcp_dir / "repo-ci-mcp"
@@ -53,6 +60,7 @@ class Fixture:
         os.chmod(self.key, 0o600)
 
         self.health = self.state_dir / "health.url"
+        self.lock = self.state_dir / "run.lock"
         self.profile = M.Profile(
             tunnel_client=self.tunnel,
             repo_mcp=self.repo_mcp,
@@ -60,6 +68,7 @@ class Fixture:
             runtime_key_file=self.key,
             state_dir=self.state_dir,
             health_url_file=self.health,
+            lock_file=self.lock,
             home=self.home,
         )
 
@@ -93,7 +102,50 @@ class ContractTests(unittest.TestCase):
         os.chmod(self.f.tunnel, 0o700)
         receipt, _ = M.check_profile(self.f.profile)
         self.assertEqual(receipt["result"], "blocked")
+        self.assertEqual(receipt["tunnel_client_version"], "unknown")
         self.assertIn("TUNNEL_CLIENT_VERSION_DRIFT", receipt["reason"])
+
+    def test_bare_pinned_semantic_version_is_accepted(self):
+        self.f.tunnel.write_text("#!/bin/sh\nprintf '0.0.15\\n'\n")
+        os.chmod(self.f.tunnel, 0o700)
+        receipt, _ = M.check_profile(self.f.profile)
+        self.assertEqual(receipt["result"], "pass")
+        self.assertEqual(receipt["tunnel_client_version"], "0.0.15")
+
+    def test_release_version_requires_matching_git_sha(self):
+        self.f.tunnel.write_text(
+            "#!/bin/sh\nprintf '0.0.15+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "
+            "(git sha: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)\\n'\n"
+        )
+        os.chmod(self.f.tunnel, 0o700)
+        receipt, _ = M.check_profile(self.f.profile)
+        self.assertEqual(receipt["result"], "blocked")
+        self.assertEqual(receipt["tunnel_client_version"], "unknown")
+        self.assertIn("TUNNEL_CLIENT_VERSION_DRIFT", receipt["reason"])
+
+    def test_version_probe_output_never_crosses_receipt_boundary(self):
+        self.f.tunnel.write_text(
+            "#!/bin/sh\nprintf '0.0.16\\nresult=pass\\nsecret-probe-output\\n'\n"
+        )
+        os.chmod(self.f.tunnel, 0o700)
+        receipt, _ = M.check_profile(self.f.profile)
+        text = M.render_receipt(receipt)
+        self.assertEqual(receipt["result"], "blocked")
+        self.assertEqual(receipt["tunnel_client_version"], "unknown")
+        self.assertNotIn("secret-probe-output", text)
+        self.assertNotIn("result=pass", text)
+
+    def test_group_or_world_writable_executables_are_rejected(self):
+        os.chmod(self.f.tunnel, 0o775)
+        receipt, _ = M.check_profile(self.f.profile)
+        self.assertEqual(receipt["result"], "blocked")
+        self.assertIn("TUNNEL_CLIENT_WRITABLE_BY_OTHERS", receipt["reason"])
+
+        os.chmod(self.f.tunnel, 0o700)
+        os.chmod(self.f.repo_mcp, 0o777)
+        receipt, _ = M.check_profile(self.f.profile)
+        self.assertEqual(receipt["result"], "blocked")
+        self.assertIn("REPOSITORY_READ_MCP_WRITABLE_BY_OTHERS", receipt["reason"])
 
     def test_foreign_owner_is_rejected(self):
         original_getuid = M.os.getuid
@@ -159,7 +211,33 @@ class ContractTests(unittest.TestCase):
         code = M.main(["--run"], profile=self.f.profile, executor=fake_exec)
         self.assertEqual(code, 0)
         self.assertFalse(self.f.health.exists())
+        self.assertTrue(self.f.lock.exists())
+        self.assertEqual(self.f.lock.stat().st_mode & 0o777, 0o600)
         self.assertEqual(captured["path"], str(self.f.tunnel))
+
+    def test_run_lock_blocks_a_second_active_instance(self):
+        fd = os.open(self.f.lock, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            called = []
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                code = M.main(
+                    ["--run"],
+                    profile=self.f.profile,
+                    executor=lambda *args: called.append(args),
+                )
+            self.assertEqual(code, 3)
+            self.assertEqual(called, [])
+            self.assertIn("reason=RUN_ALREADY_ACTIVE", output.getvalue())
+        finally:
+            os.close(fd)
+
+    def test_unsafe_existing_lock_file_is_rejected(self):
+        self.f.lock.write_text("")
+        os.chmod(self.f.lock, 0o666)
+        receipt, _ = M.check_profile(self.f.profile)
+        self.assertEqual(receipt["result"], "blocked")
+        self.assertIn("RUN_LOCK_FILE_MODE_INVALID", receipt["reason"])
 
     def test_arbitrary_arguments_are_rejected(self):
         self.assertEqual(M.main(["--run", "--command", "sh"], profile=self.f.profile), 64)

@@ -1,7 +1,7 @@
 # Current Study Memory Snapshot
 
 Status: `SNAPSHOT_READY`
-As of: `2026-09-07`
+As of: `2026-10-07`
 
 이 문서는 새 대화/세션이 공부 맥락을 빠르게 재구성하기 위한 **current-only projection**입니다.
 
@@ -27,21 +27,65 @@ CANDIDATE_SOURCE = study/memory/INBOX.md
 PROBLEM_EVIDENCE_SOURCE = study/problems/LEDGER.md
 PROBLEM_PATTERN_SOURCE = study/problems/PATTERNS.md
 REVIEW_QUEUE_SOURCE = study/problems/REVIEW_QUEUE.md
+MIDTERM_PROGRESS_SOURCE = study/logs/2026-10-07-midterm-dashboard.md
 ```
 
 ## Active goals
 
-- PSAT에 맞는 문제풀이 체계를 만들고, 문제를 단순 반복하기보다 유형·판단 구조·오답 패턴을 축적한다.
-- 실제 교재/문제풀이가 시작되면 본인 해석을 먼저 만든 뒤 O/X 검증을 통해 해석 오류의 종류를 잡는다.
-- 개별 문제의 실수와 반복되는 약점을 분리해서 기록하고, 다른 문제로 교정이 전이되는지 확인한다.
+- 2026-2 중간고사를 우선 준비한다.
+- AI 수학 입문은 6주차까지, 영상편집실습을 제외한 다른 중간고사 이론/필기 과목은 7주차까지 1회독을 완결한다.
+- 영상편집실습은 필기 회독이 아니라 실제 시험 조건에서 독립적으로 작품을 완성할 수 있는지를 기준으로 준비한다.
+- 영상편집실습 제외 과목은 1회독 이후 실제 시험 형식의 모의고사 반복 학습으로 전환한다.
 
 ## Active subjects
 
 ```text
-PSAT = ACTIVE
+AI_MATH = ACTIVE
+AI_PROGRAMMING = ACTIVE
+AI_CENTERED_WORLD = ACTIVE
+MEDIA_LITERACY = ACTIVE
+COMMUNICATION_THEORY = ACTIVE
+DESIGN_AND_VISUAL_CULTURE = ACTIVE
+VIDEO_EDITING_PRACTICUM = ACTIVE
+PSAT = BACKGROUND
 ```
 
-현재 스냅샷은 다른 과목을 비활성이라고 단정하지 않는다. 장기기억 시스템에 현재 활성으로 확인된 범위만 투영한다.
+## Current midterm coverage
+
+- AI 수학 입문: 6주차까지
+- AI 프로그래밍입문: 7주차까지
+- AI 중심세상: 7주차까지
+- 미디어 리터러시: 7주차까지
+- 커뮤니케이션이론: 7주차까지
+- 디자인과 시각문화: 7주차까지
+- 영상편집실습: 실기
+
+세부 진도와 아직 미확정인 주차별 커버리지는 `study/logs/2026-10-07-midterm-dashboard.md`가 소유합니다.
+
+## Active midterm strategy
+
+### S-MIDTERM-001 — 1회독 이후 시험형 모의고사 무한 반복
+
+```text
+각 과목 시험범위 1회독
+→ 수업 PPT/PDF + 강의 녹음으로 실제 시험 형식에 맞춘 새 모의고사 문제 파일 생성
+→ 사용자 전체 풀이
+→ 채점 / 오답·불확실 영역 분류
+→ 별도 해설지 파일 생성
+→ 사용자 해설지 학습
+→ 이전 오답 영역의 다음 회차 출제 가중치 상향
+→ 새 문제로 다음 모의고사
+→ 반복
+```
+
+운영 규칙:
+
+- 영상편집실습은 이 루프에서 제외한다.
+- 문제지와 해설지는 분리한다.
+- 사용자가 다 풀기 전에는 정답/해설을 노출하지 않는다.
+- 사실/개념의 기본 출제 근거는 수업 PPT/PDF와 강의 녹음이다.
+- 실제 시험 형식 정보가 확인되면 문항 유형, 문항 수, 배점 구조를 가능한 한 맞춘다.
+- 같은 문제 암기보다 새 문항에서의 전이를 확인한다.
 
 ## High-value learner patterns
 
@@ -49,71 +93,31 @@ PSAT = ACTIVE
 문제나 출제 구조를 **패턴으로 분류하고 규칙을 찾는 접근**이 여러 과목에서 반복적으로 효과적이었던 경험이 있다.
 
 ### P-002
-언어 기반 문제에서는 **같은 의미가 다른 표현으로 바뀌는 과정**을 명시적으로 확인해 주는 것이 유용할 수 있다. 현재는 MEDIUM confidence이며 실제 PSAT 오답으로 계속 검증한다.
-
-## Active strategies
-
-### S-PSAT-001 — 패턴 분류 우선
-
-```text
-문제 풀이
-→ 문제 구조 / 요구 판단 확인
-→ 함정·선지 패턴 분류
-→ 오답 원인을 패턴 단위로 기록
-→ 다음 문제에서 재사용
-```
-
-### S-PSAT-002 — 사용자 해석 먼저, O/X 검증
-
-```text
-지문/선지 직접 해석
-→ O/X 판정
-→ 틀렸다면 바뀐 표현 / 범위 / 논리관계 확인
-→ 같은 오류가 반복되는지 추적
-```
-
-### S-PSAT-003 — 현재 기본 경로는 교재 중심 독학
-
-별도 강의를 기본 전제로 두지 않는다. 독학으로 특정 영역이 반복적으로 막힐 때만 보조 설명 수단을 재검토한다.
-
-## Problem-memory operating rule
-
-```text
-개별 문제 1회
-→ study/problems/LEDGER.md
-
-같은 오류 구조 반복
-→ study/problems/PATTERNS.md
-
-재풀이/전이 확인 필요
-→ study/problems/REVIEW_QUEUE.md
-
-학습자 특성이나 전략으로 일반화할 만큼 충분한 근거
-→ study/memory/LEDGER.md
-→ PROFILE.md 또는 STRATEGIES.md 검토
-```
-
-한 문제를 틀렸다는 이유만으로 `PROFILE.md`에 약점으로 기록하지 않는다.
+언어 기반 문제에서는 **같은 의미가 다른 표현으로 바뀌는 과정**을 명시적으로 확인해 주는 것이 유용할 수 있다. 현재는 MEDIUM confidence이며 실제 문제 오답으로 계속 검증한다.
 
 ## Current watch items
 
-- 실제 PSAT 오답에서 `재진술 / 동의표현 / 범위 변화 / 의미 동치` 문제가 반복되는지 확인한다.
-- 패턴 분류가 지나치게 세분화되어 문제풀이 속도를 잡아먹지 않는지 확인한다.
-- PSAT에서의 독학 선호를 전반적인 학습 성향으로 성급하게 일반화하지 않는다.
-- 같은 문제를 외워서 맞힌 것을 교정 성공으로 오판하지 않고, 다른 문제로 전이되는지 확인한다.
+- 각 과목 1회독을 실제 시험범위 끝까지 완료했는지 자료 존재와 구분해 판단한다.
+- 첫 모의고사 전에 실제 시험 형식 정보가 PPT/PDF/녹음/공지 중 어디에 있는지 확인한다.
+- 모의고사 문제의 범위 커버리지가 특정 주차나 개념에 치우치지 않는지 확인한다.
+- 오답을 그대로 재출제하기보다 새 문항에서 같은 개념의 전이 여부를 확인한다.
+- 영상편집실습은 기능 체크리스트보다 독립 제작 성공 여부를 우선한다.
 
-## Immediate next memory action
+## Immediate next study action
 
-실제 PSAT 교재나 문제를 다루기 시작하면 다음 순서를 사용한다.
+현재 과목별 상세 우선순위는 `study/logs/2026-10-07-midterm-dashboard.md`를 따른다.
+
+공통 전환 조건:
 
 ```text
-1. 사용자가 먼저 문제/선지를 해석한다.
-2. 해석을 O/X로 검증한다.
-3. 틀렸거나 근거가 불안정하면 문제 단위 기록을 problems/LEDGER에 남긴다.
-4. 오류 원인을 READING_RESTATE / SCOPE_SHIFT / LOGIC_RELATION 등 가장 좁은 범주로 분류한다.
-5. 같은 구조가 다른 문제에서 반복되면 problems/PATTERNS로 승격한다.
-6. 필요하면 REVIEW_QUEUE에 RETRY 또는 TRANSFER_CHECK를 등록한다.
-7. 충분한 문제 증거가 누적된 경우에만 PROFILE 또는 STRATEGIES를 갱신한다.
+과목 1회독 미완료
+→ 범위 완결 우선
+
+과목 1회독 완료
+→ S-MIDTERM-001 모의고사 반복 루프로 즉시 전환
+
+영상편집실습
+→ 실전 제작 / 독립 수행 검증
 ```
 
 ## Snapshot states

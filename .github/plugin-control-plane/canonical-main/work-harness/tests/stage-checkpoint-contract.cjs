@@ -159,11 +159,29 @@ assert.throws(
   () => parseNotApplicableArgs(['not-applicable', '--packet', String(PACKET)]),
   /usage/,
 );
-assert.match(renderNotApplicableBody('IMPLEMENTATION_PR'), /NOT_APPLICABLE \/ PASS/);
-assert.match(renderNotApplicableBody('VALIDATION_MERGE'), /candidate PR validation/);
-assert.match(renderNotApplicableBody('POSTMERGE_CONVERGENCE'), /merged-main source convergence/);
-assert.throws(() => renderNotApplicableBody('AUTHORITY_SCOPE'), /NOT_APPLICABLE_STAGE_INVALID/);
-assert.throws(() => renderNotApplicableBody('EXPERIMENT_CLOSE'), /NOT_APPLICABLE_STAGE_INVALID/);
+const renderScopeFingerprint = 'f'.repeat(64);
+const renderedImplementationNa = renderNotApplicableBody('IMPLEMENTATION_PR', renderScopeFingerprint);
+assert.match(renderedImplementationNa, /NOT_APPLICABLE \/ PASS/);
+assert.ok(renderedImplementationNa.includes(
+  `canonical-main-stage-not-applicable:v1 scope=${renderScopeFingerprint}`,
+));
+assert.match(renderNotApplicableBody('VALIDATION_MERGE', renderScopeFingerprint), /candidate PR validation/);
+assert.match(
+  renderNotApplicableBody('POSTMERGE_CONVERGENCE', renderScopeFingerprint),
+  /merged-main source convergence/,
+);
+assert.throws(
+  () => renderNotApplicableBody('AUTHORITY_SCOPE', renderScopeFingerprint),
+  /NOT_APPLICABLE_STAGE_INVALID/,
+);
+assert.throws(
+  () => renderNotApplicableBody('EXPERIMENT_CLOSE', renderScopeFingerprint),
+  /NOT_APPLICABLE_STAGE_INVALID/,
+);
+assert.throws(
+  () => renderNotApplicableBody('IMPLEMENTATION_PR'),
+  /NOT_APPLICABLE_SCOPE_FINGERPRINT_INVALID/,
+);
 
 (async () => {
   const inspectNone = fakeClient({
@@ -468,6 +486,22 @@ assert.throws(() => renderNotApplicableBody('EXPERIMENT_CLOSE'), /NOT_APPLICABLE
     });
     assert.equal(recorded.status, 'COMPLETE');
   }
+
+  const runtimeScopeDrift = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: runtimeOnlyPacketBody('IN_PROGRESS', 'EXPERIMENT_CLOSE', {includePath: true}),
+    },
+    packetComments: runtimeSequence.comments.get(PACKET),
+    auditComments: runtimeSequence.comments.get(AUDIT_ISSUE),
+  });
+  const runtimeScopeDriftResult = await inspectCheckpoint({
+    client: runtimeScopeDrift,
+    packetNumber: PACKET,
+  });
+  assert.equal(runtimeScopeDriftResult.disposition, 'CONFLICT');
+  assert.ok(runtimeScopeDriftResult.reasonCodes.includes('CHECKPOINT_NOT_APPLICABLE_SCOPE_STALE'));
 
   const runtimeExperiment = fakeClient({
     packetIssue: {

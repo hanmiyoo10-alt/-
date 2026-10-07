@@ -1,27 +1,53 @@
 # Cloudflare auxiliary status v1
 
 This directory owns the repository source baseline for a deliberately narrow
-Cloudflare Worker profile. It is not a deployed runtime or production authority.
+Cloudflare Worker profile. It is not production authority.
 
 ## V1 contract
 
 V1 exposes only:
 
-- `GET /health` for bounded self-health;
-- `GET /capabilities` for a static capability manifest.
+- authenticated `GET /health` for bounded self-health;
+- authenticated `GET /capabilities` for a static capability manifest.
 
-Everything else fails closed. V1 has no outbound fetch, upstream URL selection,
-credential/token exchange, repository write, shell, device effect, binding,
-secret, route, custom domain, or permissive wildcard CORS surface.
+The authentication boundary is intentionally small:
+
+- HTTP Basic over HTTPS;
+- fixed non-secret username `mcl`;
+- password supplied only by the Cloudflare Worker Secret binding
+  `MCL_STATUS_PASSWORD`;
+- no password or reusable credential value in repository source/config/tests;
+- no query-string token, cookie/session, JWT, identity database, or external IdP.
+
+Missing, malformed, wrong, or unavailable credentials fail closed with a bounded
+`401` Basic challenge. The capability manifest reports
+`credentialBindings=true` and `authentication="http-basic"` so it does not
+hide the required secret dependency.
+
+Everything outside the two fixed endpoints fails closed. V1 has no outbound
+fetch, upstream URL selection, credential/token exchange, repository write,
+shell, device effect, proxy, custom-domain identity, or permissive wildcard CORS
+surface.
 
 The checked-in Wrangler config keeps `workers_dev` and preview URLs disabled.
-It contains no account, zone, custom-domain, route, binding, or secret identity.
+It declares only the required secret name, never a secret value, and contains no
+account, zone, custom-domain, route, or plaintext credential identity.
+
+## Secret boundary
+
+Cloudflare Workers Secrets are runtime bindings. Set the live password only in a
+separate runtime-authorized packet after this source change is merged. Never put
+the value in `wrangler.jsonc`, `.env`, `.dev.vars`, GitHub issues, tests, or
+Git.
+
+A later runtime packet must set `MCL_STATUS_PASSWORD` before deploying this
+source because Wrangler validates `secrets.required` during deploy.
 
 ## Capability growth
 
 Widen capability only through separately reviewed layers:
 
-1. preserve this read-only self-status baseline;
+1. preserve this authenticated read-only self-status baseline;
 2. add fixed allowlisted public egress only for a concrete use case, with
    bounded methods, redirects, body size, timeout, rate/cost behavior, and
    destination-specific auth review;
@@ -34,14 +60,9 @@ exists.
 
 ## Deployment boundary
 
-This packet owns source and contract tests only. Worker creation/version upload,
-Cloudflare Access, custom-domain routing, bindings, secrets, and any
+This source packet owns code/config/tests only. Worker secret mutation,
+deployment/version upload, custom-domain routing, DNS, and any
 `myang.link` hostname are separate future packets.
-
-Current Cloudflare guidance supports protecting Workers or specific hostnames
-with Access and attaching Custom Domains to Workers. Those mechanisms should be
-selected and live-proven by the later deployment owner rather than pre-baked
-into this source baseline.
 
 ## Validation
 

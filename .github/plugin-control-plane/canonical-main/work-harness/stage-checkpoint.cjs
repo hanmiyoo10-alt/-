@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createGitHubClient } = require('../infra/github-client.cjs');
 const { classifyPacketProjection } = require('../work-system/packet-projection.cjs');
+const { extractPacketScopes } = require('../work-system/scope-overlap.cjs');
 
 const FIXED_REPO = 'hanmiyoo10-alt/-';
 const AUDIT_ISSUE = 293;
@@ -19,6 +20,11 @@ const STAGES = Object.freeze([
   'VALIDATION_MERGE',
   'POSTMERGE_CONVERGENCE',
   'EXPERIMENT_CLOSE',
+]);
+const NOT_APPLICABLE_STAGES = Object.freeze([
+  'IMPLEMENTATION_PR',
+  'VALIDATION_MERGE',
+  'POSTMERGE_CONVERGENCE',
 ]);
 const INSPECT_MODE = 'CANONICAL_MAIN_STAGE_CHECKPOINT_INSPECT';
 const CHECKPOINT_MARKER_TOKEN = 'canonical-main-stage-checkpoint:v1';
@@ -411,24 +417,125 @@ function resultBase(packetNumber, stage, digest, packet, audit, reasonCodes = []
   };
 }
 
-async function validatePacketIssue(client, packetNumber) {
+async function validatePacketIssue(client, packetNumber, expectedBodySha256 = null) {
   const issue = await client.api(`/issues/${packetNumber}`);
   const body = String(issue?.body || '');
   if (!issue || issue.pull_request) return ['PACKET_TARGET_NOT_ISSUE'];
   if (issue.state !== 'open') return ['PACKET_TARGET_NOT_OPEN'];
   const count = body.split(/\r?\n/).filter((line) => line.trim() === PACKET_MARKER).length;
   if (count !== 1) return [count === 0 ? 'PACKET_MARKER_MISSING' : 'PACKET_MARKER_DUPLICATE'];
+  if (expectedBodySha256) {
+    const observed = crypto.createHash('sha256').update(body, 'utf8').digest('hex');
+    if (observed !== expectedBodySha256) return ['PACKET_BODY_DRIFT'];
+  }
   return [];
 }
 
-async function recordCheckpoint({ client, packetNumber, stage, body }) {
+function renderNotApplicableBody(stage) {
+  const stageLines = {
+    IMPLEMENTATION_PR: 'No repository implementation, branch, worktree, or PR effect is required or authorized by this packet.',
+    VALIDATION_MERGE: 'No candidate PR validation or repository merge effect is required or authorized by this packet.',
+    POSTMERGE_CONVERGENCE: 'No merged-main source convergence effect is required or authorized by this packet.',
+  };
+  if (!NOT_APPLICABLE_STAGES.includes(stage)) throw new Error('NOT_APPLICABLE_STAGE_INVALID');
+  return [
+    `## ${stage} applicability checkpoint`,
+    '',
+    'Disposition: `NOT_APPLICABLE / PASS`.',
+    '',
+    'The canonical Work System scope parser proves this current packet has a non-empty surface-only write scope with zero repository path scopes.',
+    '',
+    stageLines[stage],
+    '',
+    'This checkpoint is explicit applicability evidence only. It does not collapse the fixed five-stage model, infer success from absence, or grant repository, runtime, merge, release, production, or security authority.',
+  ].join('\n');
+}
+
+async function inspectNotApplicablePacket(client, packetNumber, stage) {
+  if (!Number.isInteger(packetNumber) || packetNumber <= 0 || packetNumber === AUDIT_ISSUE) {
+    return {ok: false, reasonCodes: ['PACKET_NUMBER_INVALID']};
+  }
+  if (!NOT_APPLICABLE_STAGES.includes(stage)) {
+    return {ok: false, reasonCodes: ['NOT_APPLICABLE_STAGE_FORBIDDEN']};
+  }
+
+  let issue;
+  try {
+    issue = await client.api(`/issues/${packetNumber}`);
+  } catch {
+    return {ok: false, reasonCodes: ['PACKET_READ_FAILED']};
+  }
+  const body = String(issue?.body || '');
+  if (!issue || issue.pull_request) return {ok: false, reasonCodes: ['PACKET_TARGET_NOT_ISSUE']};
+  if (issue.state !== 'open') return {ok: false, reasonCodes: ['PACKET_TARGET_NOT_OPEN']};
+
+  const markerCount = body.split(/\r?\n/).filter((line) => line.trim() === PACKET_MARKER).length;
+  if (markerCount !== 1) {
+    return {ok: false, reasonCodes: [markerCount === 0 ? 'PACKET_MARKER_MISSING' : 'PACKET_MARKER_DUPLICATE']};
+  }
+
+  const projection = classifyPacketProjection(body);
+  if (projection.disposition !== 'PASS') {
+    return {
+      ok: false,
+      reasonCodes: [projection.disposition === 'CONFLICT'
+        ? 'PACKET_PROJECTION_CONFLICT'
+        : 'PACKET_PROJECTION_UNRESOLVED'],
+    };
+  }
+  if (projection.lifecycle !== 'IN_PROGRESS') {
+    return {ok: false, reasonCodes: ['PACKET_LIFECYCLE_NOT_IN_PROGRESS']};
+  }
+
+  const parsed = extractPacketScopes(body);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      reasonCodes: [parsed.conflict ? 'PACKET_SCOPE_CONFLICT' : 'PACKET_SCOPE_UNRESOLVED'],
+    };
+  }
+  const pathScopes = parsed.scopes.filter((scope) => scope.kind === 'path');
+  const surfaceScopes = parsed.scopes.filter((scope) => scope.kind === 'surface');
+  if (pathScopes.length) return {ok: false, reasonCodes: ['NOT_APPLICABLE_PATH_SCOPE_PRESENT']};
+  if (!surfaceScopes.length || surfaceScopes.length !== parsed.scopes.length) {
+    return {ok: false, reasonCodes: ['NOT_APPLICABLE_SURFACE_SCOPE_REQUIRED']};
+  }
+
+  return {
+    ok: true,
+    packetBodySha256: crypto.createHash('sha256').update(body, 'utf8').digest('hex'),
+  };
+}
+
+async function recordNotApplicableCheckpoint({ client, packetNumber, stage }) {
+  const evidence = await inspectNotApplicablePacket(client, packetNumber, stage);
+  if (!evidence.ok) {
+    return resultBase(packetNumber, stage, null,
+      destination(packetNumber), destination(AUDIT_ISSUE), evidence.reasonCodes, 'FAILED');
+  }
+  return recordCheckpoint({
+    client,
+    packetNumber,
+    stage,
+    body: renderNotApplicableBody(stage),
+    expectedPacketBodySha256: evidence.packetBodySha256,
+  });
+}
+
+async function recordCheckpoint({
+  client,
+  packetNumber,
+  stage,
+  body,
+  expectedPacketBodySha256 = null,
+}) {
   const inputReasons = validateInput({ packetNumber, stage, body });
   if (inputReasons.length) {
     return resultBase(packetNumber, stage, null,
       destination(packetNumber), destination(AUDIT_ISSUE), inputReasons, 'FAILED');
   }
 
-  const packetReasons = await validatePacketIssue(client, packetNumber);
+  const packetReasons = await validatePacketIssue(client, packetNumber, expectedPacketBodySha256);
   if (packetReasons.length) {
     return resultBase(packetNumber, stage, null,
       destination(packetNumber), destination(AUDIT_ISSUE), packetReasons, 'FAILED');
@@ -481,6 +588,15 @@ async function recordCheckpoint({ client, packetNumber, stage, body }) {
   await writeIfMissing(packet, 'packet');
   await writeIfMissing(audit, 'audit');
   return resultBase(packetNumber, stage, digest, packet, audit, reasonCodes);
+}
+
+function parseNotApplicableArgs(argv = process.argv.slice(2)) {
+  if (argv.length !== 5 || argv[0] !== 'not-applicable'
+      || argv[1] !== '--packet' || !/^[1-9]\d*$/.test(argv[2])
+      || argv[3] !== '--stage' || !argv[4]) {
+    throw new Error('usage: node stage-checkpoint.cjs not-applicable --packet <number> --stage <stage>');
+  }
+  return {packetNumber: Number(argv[2]), stage: argv[4]};
 }
 
 function parseInspectArgs(argv = process.argv.slice(2)) {
@@ -538,8 +654,13 @@ async function run({
   runner = defaultGhRunner,
 } = {}) {
   const inspectMode = argv[0] === 'inspect';
-  const args = inspectMode ? parseInspectArgs(argv) : parseArgs(argv);
-  const body = inspectMode ? null : readBodyFile(args.bodyFile);
+  const notApplicableMode = argv[0] === 'not-applicable';
+  const args = inspectMode
+    ? parseInspectArgs(argv)
+    : notApplicableMode
+      ? parseNotApplicableArgs(argv)
+      : parseArgs(argv);
+  const body = inspectMode || notApplicableMode ? null : readBodyFile(args.bodyFile);
   const resolvedToken = token || env.GH_TOKEN || env.GITHUB_TOKEN;
   const resolvedRepo = String(repo || env.GITHUB_REPOSITORY || (!resolvedToken ? FIXED_REPO : '')).trim();
   if (!validRepo(resolvedRepo) || (!resolvedToken && resolvedRepo !== FIXED_REPO)) {
@@ -561,6 +682,9 @@ async function run({
     packetNumber: args.packetNumber,
   });
   if (inspectMode) return inspectCheckpoint({ client, packetNumber: args.packetNumber });
+  if (notApplicableMode) {
+    return recordNotApplicableCheckpoint({ client, packetNumber: args.packetNumber, stage: args.stage });
+  }
   return recordCheckpoint({ client, packetNumber: args.packetNumber, stage: args.stage, body });
 }
 
@@ -591,10 +715,12 @@ module.exports = {
   MAX_COMMENT_BODY_BYTES,
   PACKET_MARKER,
   STAGES,
+  NOT_APPLICABLE_STAGES,
   checkpointDigest,
   checkpointMarker,
   createGhCheckpointClient,
   inspectCheckpoint,
+  inspectNotApplicablePacket,
   inspectionResult,
   createStageCheckpointClient,
   defaultGhRunner,
@@ -603,8 +729,11 @@ module.exports = {
   parseArgs,
   parseCheckpointSurface,
   parseInspectArgs,
+  parseNotApplicableArgs,
   recordCheckpoint,
+  recordNotApplicableCheckpoint,
   renderComment,
+  renderNotApplicableBody,
   run,
   validateInput,
   validatePacketIssue,

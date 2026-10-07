@@ -190,3 +190,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2721)
 - Event ID: `46eb6f820404663d5338aebe17e6af98e8af63cc0662e414fb1659800395272d`
 <!-- canonical-main-doc-promoted:46eb6f820404663d5338aebe17e6af98e8af63cc0662e414fb1659800395272d -->
+
+### 2026-10-07 — Cloudflare Worker auxiliary read-only status / egress plane candidate
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3315)
+- Event ID: `b54650e98f870cea0963f7cb08b4445b9304c8b4c56177a699c0d1dff9191073`
+<!-- canonical-main-doc-promoted:b54650e98f870cea0963f7cb08b4445b9304c8b4c56177a699c0d1dff9191073 -->

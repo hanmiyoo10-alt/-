@@ -560,3 +560,21 @@ Related memory IDs: S-MIDTERM-001
 Follow-up trigger: 어떤 과목이 1회독을 완료하면 해당 과목의 실제 시험 형식과 범위를 확인하고 첫 모의고사 파일을 생성한다.
 Resolution / later evidence: ACTIVE — 중간고사 종료 또는 사용자의 전략 변경 전까지 반복 적용.
 ```
+
+
+### E-2026-10-07-002 — 모든 모의고사는 시험범위 전체 누적 출제
+
+```text
+Entry ID: E-2026-10-07-002
+Date: 2026-10-07
+Subject / scope: 2026-2 중간고사 / 영상편집실습 제외 전 과목
+Status: OBSERVED
+Observation: 사용자는 1회독 이후 반복하는 모든 모의고사의 범위가 항상 해당 과목의 중간고사 전체 시험범위여야 한다고 명확히 했다.
+Context: S-MIDTERM-001의 오답 가중치 규칙을 구체화하는 과정.
+Result: 어떤 회차도 일부 주차/일부 개념만 대상으로 축소하지 않는다. 이전 오답과 불확실 영역은 전체 범위를 유지한 상태에서 문항 수, 변형 방식, 난이도 또는 확인 강도를 높이는 용도로만 사용한다.
+Interpretation: 매 회차의 핵심 목표는 전체 범위 누적 인출 + 약점 재검증이다. 약점 집중은 전체 범위 커버리지를 대체할 수 없다.
+Confidence: HIGH
+Related memory IDs: S-MIDTERM-001, E-2026-10-07-001
+Follow-up trigger: 첫 모의고사 생성 시 전체 시험범위 커버리지 표를 함께 점검한다.
+Resolution / later evidence: ACTIVE — 중간고사 종료 또는 사용자의 전략 변경 전까지 적용.
+```

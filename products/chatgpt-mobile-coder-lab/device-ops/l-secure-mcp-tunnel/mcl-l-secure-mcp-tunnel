@@ -4,6 +4,7 @@ from __future__ import annotations
 import fcntl
 import os
 import re
+import signal
 import stat
 import subprocess
 import sys
@@ -132,30 +133,50 @@ def _private_dir(path: Path) -> str | None:
     return None
 
 
-def _ancestor_symlink(path: Path) -> bool:
+def _ancestor_problem(path: Path) -> str | None:
+    if not path.is_absolute():
+        return "PATH_INVALID"
     current = Path("/")
+    chain = [current]
     for part in path.parts[1:-1]:
         current /= part
+        chain.append(current)
+    for directory in chain:
         try:
-            if current.is_symlink():
-                return True
+            st = directory.lstat()
+        except FileNotFoundError:
+            return "MISSING"
         except OSError:
-            return True
-    return False
+            return "UNREADABLE"
+        if stat.S_ISLNK(st.st_mode):
+            return "SYMLINK"
+        if not stat.S_ISDIR(st.st_mode):
+            return "NOT_DIRECTORY"
+        if st.st_uid not in {0, os.getuid()}:
+            return "FOREIGN_OWNER"
+        if stat.S_IMODE(st.st_mode) & (stat.S_IWGRP | stat.S_IWOTH):
+            return "WRITABLE_BY_OTHERS"
+    return None
 
 
 def _read_tunnel_id(path: Path) -> tuple[str | None, str | None]:
-    if _ancestor_symlink(path):
-        return None, "ANCESTOR_SYMLINK"
+    ancestor = _ancestor_problem(path)
+    if ancestor:
+        return None, f"ANCESTOR_{ancestor}"
     problem = _lstat_regular(path, exact_mode=0o600)
     if problem:
         return None, problem
     try:
-        raw = path.read_text(encoding="ascii")
+        st = path.lstat()
+        if st.st_size > 128:
+            return None, "INVALID"
+        with path.open("rb") as handle:
+            data = handle.read(129)
+        if len(data) > 128:
+            return None, "INVALID"
+        raw = data.decode("ascii")
     except (OSError, UnicodeError):
         return None, "UNREADABLE"
-    if len(raw) > 128:
-        return None, "INVALID"
     value = raw.strip()
     if not TUNNEL_ID_RE.fullmatch(value):
         return None, "INVALID"
@@ -163,13 +184,18 @@ def _read_tunnel_id(path: Path) -> tuple[str | None, str | None]:
 
 
 def _check_key_ref(path: Path) -> str | None:
-    if _ancestor_symlink(path):
-        return "ANCESTOR_SYMLINK"
+    ancestor = _ancestor_problem(path)
+    if ancestor:
+        return f"ANCESTOR_{ancestor}"
     problem = _lstat_regular(path, exact_mode=0o600)
     if problem:
         return problem
     try:
-        data = path.read_bytes()
+        st = path.lstat()
+        if not 1 <= st.st_size <= 16384:
+            return "INVALID"
+        with path.open("rb") as handle:
+            data = handle.read(16385)
     except OSError:
         return "UNREADABLE"
     if not 1 <= len(data) <= 16384 or not data.strip():
@@ -199,9 +225,10 @@ def check_profile(profile: Profile = PRODUCTION_PROFILE, runner: Runner | None =
     reasons: list[str] = []
 
     tunnel_state = "exact"
-    if _ancestor_symlink(profile.tunnel_client):
+    ancestor = _ancestor_problem(profile.tunnel_client)
+    if ancestor:
         tunnel_state = "blocked"
-        reasons.append("TUNNEL_CLIENT_ANCESTOR_SYMLINK")
+        reasons.append(f"TUNNEL_CLIENT_ANCESTOR_{ancestor}")
     else:
         problem = _lstat_regular(profile.tunnel_client, executable=True)
         if problem:
@@ -216,9 +243,10 @@ def check_profile(profile: Profile = PRODUCTION_PROFILE, runner: Runner | None =
             reasons.append(f"TUNNEL_CLIENT_{problem}")
 
     repo_state = "exact"
-    if _ancestor_symlink(profile.repo_mcp):
+    ancestor = _ancestor_problem(profile.repo_mcp)
+    if ancestor:
         repo_state = "blocked"
-        reasons.append("REPOSITORY_READ_MCP_ANCESTOR_SYMLINK")
+        reasons.append(f"REPOSITORY_READ_MCP_ANCESTOR_{ancestor}")
     else:
         problem = _lstat_regular(profile.repo_mcp, executable=True)
         if problem:
@@ -329,11 +357,36 @@ def _acquire_run_lock(profile: Profile) -> int:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error:
             raise RuntimeError("RUN_ALREADY_ACTIVE") from error
-        os.set_inheritable(fd, True)
+        os.set_inheritable(fd, False)
         return fd
     except Exception:
         os.close(fd)
         raise
+
+
+def _default_executor(path: str, argv: Sequence[str], env: Mapping[str, str]) -> int:
+    process = subprocess.Popen(
+        list(argv),
+        executable=path,
+        env=dict(env),
+        close_fds=True,
+    )
+    previous_handlers: dict[int, object] = {}
+
+    def forward(signum: int, _frame: object) -> None:
+        try:
+            process.send_signal(signum)
+        except ProcessLookupError:
+            pass
+
+    for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        previous_handlers[signum] = signal.getsignal(signum)
+        signal.signal(signum, forward)
+    try:
+        return process.wait()
+    finally:
+        for signum, handler in previous_handlers.items():
+            signal.signal(signum, handler)
 
 
 def main(
@@ -341,7 +394,7 @@ def main(
     *,
     profile: Profile = PRODUCTION_PROFILE,
     runner: Runner | None = None,
-    executor: Callable[[str, Sequence[str], Mapping[str, str]], None] = os.execve,
+    executor: Callable[[str, Sequence[str], Mapping[str, str]], int | None] = _default_executor,
 ) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if args == ["--check"]:
@@ -384,14 +437,14 @@ def main(
     sys.stdout.write(render_receipt(receipt))
     sys.stdout.flush()
     try:
-        executor(run_argv[0], run_argv, run_env)
+        child_code = executor(run_argv[0], run_argv, run_env)
     except OSError:
         sys.stdout.write(render_receipt(receipt | {"result": "blocked", "reason": "EXEC_FAILED"}))
         return 4
     finally:
         if lock_fd is not None:
             os.close(lock_fd)
-    return 0
+    return 0 if child_code is None else int(child_code)
 
 
 if __name__ == "__main__":

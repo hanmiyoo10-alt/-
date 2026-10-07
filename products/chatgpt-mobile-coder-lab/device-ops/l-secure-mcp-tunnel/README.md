@@ -53,10 +53,13 @@ single-instance lock:
 
 The two credential-reference files must be regular, non-symlink, owned by the
 current L user, and mode 0600. The state directory must be regular/non-symlink,
-user-owned, and mode 0700. Both executable paths must be regular, non-symlink,
-user-owned, owner-executable, and not writable by group or others. An existing
-run lock must be a regular user-owned mode-0600 file. Secret values and tunnel
-identifiers are never emitted in receipts.
+user-owned, and mode 0700. Every fixed path ancestor from `/` through the leaf
+parent must be a real directory, owned by root or the current L user, and not
+writable by group or others. Both executable paths must also be regular,
+non-symlink, user-owned, owner-executable, and not writable by group or others.
+An existing run lock must be a regular user-owned mode-0600 file. Credential
+reads are bounded before allocation. Secret values and tunnel identifiers are
+never emitted in receipts.
 
 The Repository Read MCP child receives only the fixed public repository identity
 and GitHub API URL. No GitHub token is inherited or materialized by this owner.

@@ -27,7 +27,7 @@ M = load_owner()
 
 class Fixture:
     def __init__(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(dir=Path.home())
         root = Path(self.tmp.name)
         self.home = root / "home"
         self.bin_dir = self.home / ".local/libexec/mcl-secure-mcp"
@@ -147,14 +147,30 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(receipt["result"], "blocked")
         self.assertIn("REPOSITORY_READ_MCP_WRITABLE_BY_OTHERS", receipt["reason"])
 
+    def test_group_or_world_writable_ancestor_is_rejected(self):
+        os.chmod(self.f.bin_dir, 0o770)
+        receipt, _ = M.check_profile(self.f.profile)
+        self.assertEqual(receipt["result"], "blocked")
+        self.assertIn("TUNNEL_CLIENT_ANCESTOR_WRITABLE_BY_OTHERS", receipt["reason"])
+
+    def test_runtime_key_size_is_bounded_before_read(self):
+        with self.f.key.open("wb") as handle:
+            handle.truncate(1024 * 1024 * 1024)
+        receipt, _ = M.check_profile(self.f.profile)
+        self.assertEqual(receipt["result"], "blocked")
+        self.assertIn("RUNTIME_KEY_REF_INVALID", receipt["reason"])
+
     def test_foreign_owner_is_rejected(self):
+        original_ancestor = M._ancestor_problem
         original_getuid = M.os.getuid
         current_uid = original_getuid()
+        M._ancestor_problem = lambda _path: None
         M.os.getuid = lambda: current_uid + 1
         try:
             receipt, _ = M.check_profile(self.f.profile)
         finally:
             M.os.getuid = original_getuid
+            M._ancestor_problem = original_ancestor
         self.assertEqual(receipt["result"], "blocked")
         self.assertIn("TUNNEL_CLIENT_FOREIGN_OWNER", receipt["reason"])
 
@@ -229,6 +245,13 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(code, 3)
             self.assertEqual(called, [])
             self.assertIn("reason=RUN_ALREADY_ACTIVE", output.getvalue())
+        finally:
+            os.close(fd)
+
+    def test_run_lock_fd_is_close_on_exec(self):
+        fd = M._acquire_run_lock(self.f.profile)
+        try:
+            self.assertFalse(os.get_inheritable(fd))
         finally:
             os.close(fd)
 

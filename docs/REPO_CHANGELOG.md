@@ -2289,3 +2289,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/21f8740159bc5f648b9d4b047a340a24cd430cce)
 - Event ID: `c34940260c741b0897b677440d8d8a6eac677e8ee447af94cd9f8d1229cfb7ee`
 <!-- canonical-main-doc-promoted:c34940260c741b0897b677440d8d8a6eac677e8ee447af94cd9f8d1229cfb7ee -->
+
+### 2026-10-07 — feat(repo): add explicit runtime-only N/A checkpoints (#3330)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `bd47a6f850f15cde807198f40d7e22169404c092`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/bd47a6f850f15cde807198f40d7e22169404c092)
+- Event ID: `8ba3c5110d39073d8072488bd97f407e7184b2bd4f94756cbf951bbaf0e8f754`
+<!-- canonical-main-doc-promoted:8ba3c5110d39073d8072488bd97f407e7184b2bd4f94756cbf951bbaf0e8f754 -->

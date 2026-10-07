@@ -9,16 +9,21 @@ const {
   MAX_BODY_BYTES,
   MAX_COMMENT_BODY_BYTES,
   STAGES,
+  NOT_APPLICABLE_STAGES,
   checkpointDigest,
   checkpointMarker,
   createGhCheckpointClient,
   createStageCheckpointClient,
   exitCodeFor,
   inspectCheckpoint,
+  inspectNotApplicablePacket,
   parseArgs,
   parseInspectArgs,
+  parseNotApplicableArgs,
   recordCheckpoint,
+  recordNotApplicableCheckpoint,
   renderComment,
+  renderNotApplicableBody,
   run,
   validateInput,
 } = require('../stage-checkpoint.cjs');
@@ -40,6 +45,26 @@ function inspectPacketBody(lifecycle, currentStage) {
     '- Completed stage(s): `NONE`',
     `- Current stage: \`${currentStage}\``,
     '- Next stage: `NONE`',
+  ].join('\n');
+}
+
+function runtimeOnlyPacketBody(lifecycle, currentStage, {includePath = false} = {}) {
+  const scopes = ['- `surface:runtime:fixture`'];
+  if (includePath) scopes.unshift('- `path:src/runtime-fixture.js`');
+  return [
+    '<!-- canonical-main-work-packet:v1 -->',
+    '# packet',
+    '',
+    '## State',
+    `\`${lifecycle}\``,
+    '',
+    '## Interaction stage',
+    '- Completed stage(s): `NONE`',
+    `- Current stage: \`${currentStage}\``,
+    '- Next stage: `NONE`',
+    '',
+    '## Bounded write scope',
+    ...scopes,
   ].join('\n');
 }
 
@@ -93,6 +118,11 @@ assert.deepEqual(STAGES, [
   'POSTMERGE_CONVERGENCE',
   'EXPERIMENT_CLOSE',
 ]);
+assert.deepEqual(NOT_APPLICABLE_STAGES, [
+  'IMPLEMENTATION_PR',
+  'VALIDATION_MERGE',
+  'POSTMERGE_CONVERGENCE',
+]);
 assert.deepEqual(validateInput({ packetNumber: PACKET, stage: STAGE, body: BODY }), []);
 assert.ok(validateInput({ packetNumber: AUDIT_ISSUE, stage: STAGE, body: BODY }).includes('AUDIT_ISSUE_CANNOT_BE_PACKET'));
 assert.ok(validateInput({ packetNumber: PACKET, stage: 'NOPE', body: BODY }).includes('STAGE_INVALID'));
@@ -117,6 +147,41 @@ assert.throws(() => parseArgs(['--packet', '0', '--stage', STAGE, '--body-file',
 assert.deepEqual(parseInspectArgs(['inspect', '--packet', String(PACKET)]), {packetNumber: PACKET});
 assert.throws(() => parseInspectArgs(['inspect', '--packet', '0']), /usage/);
 assert.throws(() => parseInspectArgs(['inspect', '--packet', String(PACKET), '--stage', STAGE]), /usage/);
+assert.deepEqual(
+  parseNotApplicableArgs(['not-applicable', '--packet', String(PACKET), '--stage', STAGE]),
+  {packetNumber: PACKET, stage: STAGE},
+);
+assert.throws(
+  () => parseNotApplicableArgs(['not-applicable', '--packet', '0', '--stage', STAGE]),
+  /usage/,
+);
+assert.throws(
+  () => parseNotApplicableArgs(['not-applicable', '--packet', String(PACKET)]),
+  /usage/,
+);
+const renderScopeFingerprint = 'f'.repeat(64);
+const renderedImplementationNa = renderNotApplicableBody('IMPLEMENTATION_PR', renderScopeFingerprint);
+assert.match(renderedImplementationNa, /NOT_APPLICABLE \/ PASS/);
+assert.ok(renderedImplementationNa.includes(
+  `canonical-main-stage-not-applicable:v1 scope=${renderScopeFingerprint}`,
+));
+assert.match(renderNotApplicableBody('VALIDATION_MERGE', renderScopeFingerprint), /candidate PR validation/);
+assert.match(
+  renderNotApplicableBody('POSTMERGE_CONVERGENCE', renderScopeFingerprint),
+  /merged-main source convergence/,
+);
+assert.throws(
+  () => renderNotApplicableBody('AUTHORITY_SCOPE', renderScopeFingerprint),
+  /NOT_APPLICABLE_STAGE_INVALID/,
+);
+assert.throws(
+  () => renderNotApplicableBody('EXPERIMENT_CLOSE', renderScopeFingerprint),
+  /NOT_APPLICABLE_STAGE_INVALID/,
+);
+assert.throws(
+  () => renderNotApplicableBody('IMPLEMENTATION_PR'),
+  /NOT_APPLICABLE_SCOPE_FINGERPRINT_INVALID/,
+);
 
 (async () => {
   const inspectNone = fakeClient({
@@ -287,6 +352,194 @@ assert.throws(() => parseInspectArgs(['inspect', '--packet', String(PACKET), '--
   const aheadResult = await inspectCheckpoint({client: stageAhead, packetNumber: PACKET});
   assert.equal(aheadResult.disposition, 'CONFLICT');
   assert.ok(aheadResult.reasonCodes.includes('PACKET_STAGE_AHEAD_OF_DURABLE_PREFIX'));
+
+  const runtimeOnly = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: runtimeOnlyPacketBody('IN_PROGRESS', 'AUTHORITY_SCOPE'),
+    },
+  });
+  const runtimeEvidence = await inspectNotApplicablePacket(runtimeOnly, PACKET, 'IMPLEMENTATION_PR');
+  assert.equal(runtimeEvidence.ok, true);
+  assert.match(runtimeEvidence.packetBodySha256, /^[0-9a-f]{64}$/);
+
+  const runtimeNa = await recordNotApplicableCheckpoint({
+    client: runtimeOnly,
+    packetNumber: PACKET,
+    stage: 'IMPLEMENTATION_PR',
+  });
+  assert.equal(runtimeNa.status, 'COMPLETE');
+  assert.deepEqual(runtimeOnly.writes.map((row) => row.issue), [PACKET, AUDIT_ISSUE]);
+  assert.match(runtimeOnly.writes[0].body, /NOT_APPLICABLE \/ PASS/);
+  assert.match(runtimeOnly.writes[0].body, /surface-only write scope/);
+
+  const runtimeNaRetry = await recordNotApplicableCheckpoint({
+    client: runtimeOnly,
+    packetNumber: PACKET,
+    stage: 'IMPLEMENTATION_PR',
+  });
+  assert.equal(runtimeNaRetry.status, 'COMPLETE');
+  assert.equal(runtimeOnly.writes.length, 2, 'N/A replay must reuse the paired checkpoint');
+
+  const pathScoped = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: runtimeOnlyPacketBody('IN_PROGRESS', 'AUTHORITY_SCOPE', {includePath: true}),
+    },
+  });
+  const pathRejected = await recordNotApplicableCheckpoint({
+    client: pathScoped,
+    packetNumber: PACKET,
+    stage: 'IMPLEMENTATION_PR',
+  });
+  assert.equal(pathRejected.status, 'FAILED');
+  assert.ok(pathRejected.reasonCodes.includes('NOT_APPLICABLE_PATH_SCOPE_PRESENT'));
+  assert.equal(pathScoped.writes.length, 0);
+
+  const noScope = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: inspectPacketBody('IN_PROGRESS', 'AUTHORITY_SCOPE'),
+    },
+  });
+  const noScopeRejected = await recordNotApplicableCheckpoint({
+    client: noScope,
+    packetNumber: PACKET,
+    stage: 'IMPLEMENTATION_PR',
+  });
+  assert.equal(noScopeRejected.status, 'FAILED');
+  assert.ok(noScopeRejected.reasonCodes.includes('PACKET_SCOPE_UNRESOLVED'));
+
+  const donePacket = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: runtimeOnlyPacketBody('DONE', 'EXPERIMENT_CLOSE'),
+    },
+  });
+  const doneRejected = await recordNotApplicableCheckpoint({
+    client: donePacket,
+    packetNumber: PACKET,
+    stage: 'VALIDATION_MERGE',
+  });
+  assert.equal(doneRejected.status, 'FAILED');
+  assert.ok(doneRejected.reasonCodes.includes('PACKET_LIFECYCLE_NOT_IN_PROGRESS'));
+
+  for (const forbiddenStage of ['AUTHORITY_SCOPE', 'EXPERIMENT_CLOSE']) {
+    const forbidden = await recordNotApplicableCheckpoint({
+      client: runtimeOnly,
+      packetNumber: PACKET,
+      stage: forbiddenStage,
+    });
+    assert.equal(forbidden.status, 'FAILED');
+    assert.ok(forbidden.reasonCodes.includes('NOT_APPLICABLE_STAGE_FORBIDDEN'));
+  }
+
+  let issueReads = 0;
+  const driftingClient = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: runtimeOnlyPacketBody('IN_PROGRESS', 'AUTHORITY_SCOPE'),
+    },
+  });
+  const originalDriftApi = driftingClient.api.bind(driftingClient);
+  driftingClient.api = async (endpoint, options = {}) => {
+    if (endpoint === `/issues/${PACKET}` && (!options.method || options.method === 'GET')) {
+      issueReads += 1;
+      if (issueReads > 1) {
+        return {
+          number: PACKET,
+          state: 'open',
+          body: runtimeOnlyPacketBody('IN_PROGRESS', 'AUTHORITY_SCOPE', {includePath: true}),
+        };
+      }
+    }
+    return originalDriftApi(endpoint, options);
+  };
+  const driftRejected = await recordNotApplicableCheckpoint({
+    client: driftingClient,
+    packetNumber: PACKET,
+    stage: 'IMPLEMENTATION_PR',
+  });
+  assert.equal(driftRejected.status, 'FAILED');
+  assert.ok(driftRejected.reasonCodes.includes('PACKET_BODY_DRIFT'));
+  assert.equal(driftingClient.writes.length, 0);
+
+  const runtimeSequence = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: runtimeOnlyPacketBody('IN_PROGRESS', 'AUTHORITY_SCOPE'),
+    },
+    packetComments: [checkpointComment('AUTHORITY_SCOPE', authDigest, 'packet', 150)],
+    auditComments: [checkpointComment('AUTHORITY_SCOPE', authDigest, 'audit', 151)],
+  });
+  for (const stage of NOT_APPLICABLE_STAGES) {
+    const recorded = await recordNotApplicableCheckpoint({
+      client: runtimeSequence,
+      packetNumber: PACKET,
+      stage,
+    });
+    assert.equal(recorded.status, 'COMPLETE');
+  }
+
+  const runtimeScopeDrift = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: runtimeOnlyPacketBody('IN_PROGRESS', 'EXPERIMENT_CLOSE', {includePath: true}),
+    },
+    packetComments: runtimeSequence.comments.get(PACKET),
+    auditComments: runtimeSequence.comments.get(AUDIT_ISSUE),
+  });
+  const runtimeScopeDriftResult = await inspectCheckpoint({
+    client: runtimeScopeDrift,
+    packetNumber: PACKET,
+  });
+  assert.equal(runtimeScopeDriftResult.disposition, 'CONFLICT');
+  assert.ok(runtimeScopeDriftResult.reasonCodes.includes('CHECKPOINT_NOT_APPLICABLE_SCOPE_STALE'));
+
+  const runtimeExperiment = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: runtimeOnlyPacketBody('IN_PROGRESS', 'EXPERIMENT_CLOSE'),
+    },
+    packetComments: runtimeSequence.comments.get(PACKET),
+    auditComments: runtimeSequence.comments.get(AUDIT_ISSUE),
+  });
+  const runtimeExperimentReady = await inspectCheckpoint({client: runtimeExperiment, packetNumber: PACKET});
+  assert.equal(runtimeExperimentReady.disposition, 'PASS');
+  assert.equal(runtimeExperimentReady.rebindDisposition, 'CONTINUE_CURRENT_STAGE');
+  assert.equal(runtimeExperimentReady.nextStage, 'EXPERIMENT_CLOSE');
+
+  const runtimeExpCheckpoint = await recordCheckpoint({
+    client: runtimeExperiment,
+    packetNumber: PACKET,
+    stage: 'EXPERIMENT_CLOSE',
+    body: 'runtime experiment terminal evidence',
+  });
+  assert.equal(runtimeExpCheckpoint.status, 'COMPLETE');
+  const runtimeCloseReady = await inspectCheckpoint({client: runtimeExperiment, packetNumber: PACKET});
+  assert.equal(runtimeCloseReady.disposition, 'PASS');
+  assert.equal(runtimeCloseReady.rebindDisposition, 'CONTINUE_TRANSACTION_CLOSURE');
+
+  const runtimeTerminal = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'closed',
+      body: runtimeOnlyPacketBody('DONE', 'EXPERIMENT_CLOSE'),
+    },
+    packetComments: runtimeExperiment.comments.get(PACKET),
+    auditComments: runtimeExperiment.comments.get(AUDIT_ISSUE),
+  });
+  const runtimeTerminalResult = await inspectCheckpoint({client: runtimeTerminal, packetNumber: PACKET});
+  assert.equal(runtimeTerminalResult.disposition, 'PASS');
+  assert.equal(runtimeTerminalResult.rebindDisposition, 'STOP_TERMINAL');
 
   const allDigests = ['1', '2', '3', '4', '5'].map((digit) => digit.repeat(64));
   const packetAll = STAGES.map((stage, index) => checkpointComment(stage, allDigests[index], 'packet', 20 + index));
@@ -550,6 +803,8 @@ assert.throws(() => parseInspectArgs(['inspect', '--packet', String(PACKET), '--
   assert.match(source, /REPOSITORY_IDENTITY_INVALID/);
   assert.match(source, /MAX_COMMENT_PAGES = 20/);
   assert.match(source, /shell: false/);
+  assert.match(source, /require\('\.\.\/work-system\/scope-overlap\.cjs'\)/);
+  assert.doesNotMatch(source, /function extractPacketScopes\(/);
   assert.doesNotMatch(source, /--repo/);
   assert.doesNotMatch(source, /issue_comment:/);
   assert.doesNotMatch(source, /tools\/repo-ci-mcp/);

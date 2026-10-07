@@ -62,6 +62,8 @@ PSAT = BACKGROUND
 
 세부 진도와 아직 미확정인 주차별 커버리지는 `study/logs/2026-10-07-midterm-dashboard.md`가 소유합니다.
 
+- MEDIA_LITERACY_CHECKPOINT = 온라인 저널리즘 정리 완료 / 해당 구간 문제 미풀이
+
 ## Active midterm strategy
 
 ### S-MIDTERM-001 — 1회독 이후 시험형 모의고사 무한 반복

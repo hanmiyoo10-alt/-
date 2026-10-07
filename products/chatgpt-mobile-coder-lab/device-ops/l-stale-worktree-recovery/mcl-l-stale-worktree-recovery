@@ -1,0 +1,475 @@
+#!/usr/bin/env python3
+import argparse
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+SCHEMA = "mcl-l-stale-worktree-recovery.v1"
+MODE = "MCL_L_STALE_WORKTREE_RECOVERY"
+HOLDER_FILE = "mcl-workspace-holder.v1.json"
+LEDGER_MARKER = "<!-- mcl-task-lease-state:v1 -->"
+SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+TARGET_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+BRANCH_RE = re.compile(r"^laptop/[A-Za-z0-9][A-Za-z0-9._/-]{0,180}$")
+MAX_LEDGER_BYTES = 262144
+
+AUTHORITY = {
+    "repositoryMutationAuthorized": False,
+    "deviceMutationAuthorized": False,
+    "mergeAuthorized": False,
+    "releaseAuthorized": False,
+    "productionAuthorized": False,
+}
+
+PRODUCTION_PROFILE = {
+    "control": "/home/alsl0/nyang-repo",
+    "root": "/home/alsl0/nyang-worktrees",
+    "branch_prefix": "laptop/",
+    "allowed_origins": {
+        "https://github.com/hanmiyoo10-alt/-.git",
+        "https://github.com/hanmiyoo10-alt/-",
+        "git@github.com:hanmiyoo10-alt/-.git",
+        "ssh://git@github.com/hanmiyoo10-alt/-.git",
+    },
+}
+
+
+def _run(args, check=True):
+    result = subprocess.run(
+        args,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        shell=False,
+    )
+    if check and result.returncode != 0:
+        raise RuntimeError("COMMAND_FAILED")
+    return result
+
+
+def _git(control, *args, check=True):
+    return _run(["git", "-C", control, *args], check=check)
+
+
+def _digest_bytes(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def _receipt(operation, status, target, expected_branch, expected_head,
+             reasons=None, observed_branch=None, observed_head=None,
+             registration="unknown", lease="unknown", holder="unknown"):
+    return {
+        "schema": SCHEMA,
+        "mode": MODE,
+        "operation": operation,
+        "status": status,
+        "target": target,
+        "expectedBranch": expected_branch,
+        "expectedHead": expected_head,
+        "observedBranch": observed_branch,
+        "observedHead": observed_head,
+        "registration": registration,
+        "lease": lease,
+        "holder": holder,
+        "reasonCodes": sorted(set(reasons or [])),
+        "details": "withheld",
+        "authority": dict(AUTHORITY),
+    }
+
+
+def _safe_target(profile, target_name):
+    if not TARGET_RE.fullmatch(target_name or "") or target_name in {".", ".."}:
+        return None, ["TARGET_BASENAME_INVALID"]
+    root = os.path.normpath(profile["root"])
+    candidate = os.path.normpath(os.path.join(root, target_name))
+    if os.path.dirname(candidate) != root:
+        return None, ["TARGET_ESCAPE"]
+    return candidate, []
+
+
+def _read_regular_text(path, max_bytes):
+    try:
+        st = os.lstat(path)
+    except OSError:
+        return None, ["LEDGER_READ_FAILED"]
+    if os.path.islink(path) or not os.path.isfile(path):
+        return None, ["LEDGER_NOT_REGULAR"]
+    if st.st_size > max_bytes:
+        return None, ["LEDGER_TOO_LARGE"]
+    try:
+        return Path(path).read_text(encoding="utf-8"), []
+    except (OSError, UnicodeError):
+        return None, ["LEDGER_READ_FAILED"]
+
+
+def _parse_ledger(text):
+    if not isinstance(text, str) or text.count(LEDGER_MARKER) != 1:
+        return None, ["LEDGER_MARKER_INVALID"]
+    tail = text.split(LEDGER_MARKER, 1)[1]
+    match = re.match(r"^\n```json\n([^\n]+)\n```(?:\n|$)", tail)
+    if not match:
+        return None, ["LEDGER_ENVELOPE_INVALID"]
+    try:
+        state = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None, ["LEDGER_JSON_INVALID"]
+    reasons = []
+    if state.get("schemaVersion") != 1:
+        reasons.append("LEDGER_SCHEMA_INVALID")
+    if state.get("mode") != "MCL_TASK_LEASE_LEDGER":
+        reasons.append("LEDGER_MODE_INVALID")
+    if state.get("status") != "ACTIVE":
+        reasons.append("LEDGER_NOT_ACTIVE")
+    if not isinstance(state.get("generation"), int) or state["generation"] < 0:
+        reasons.append("LEDGER_GENERATION_INVALID")
+    leases = state.get("activeLeases")
+    if not isinstance(leases, list):
+        reasons.append("LEDGER_ACTIVE_LEASES_INVALID")
+        leases = []
+    for item in leases:
+        if not isinstance(item, dict):
+            reasons.append("LEDGER_LEASE_INVALID")
+            continue
+        if not SHA256_RE.fullmatch(str(item.get("leaseId", ""))):
+            reasons.append("LEDGER_LEASE_INVALID")
+        workspace = item.get("workspace")
+        if not isinstance(workspace, dict):
+            reasons.append("LEDGER_LEASE_WORKSPACE_INVALID")
+            continue
+        if not isinstance(workspace.get("branch"), str) or not isinstance(workspace.get("worktree"), str):
+            reasons.append("LEDGER_LEASE_WORKSPACE_INVALID")
+    if reasons:
+        return None, sorted(set(reasons))
+    return state, []
+
+
+def _lease_state(ledger_state, target, branch):
+    for item in ledger_state["activeLeases"]:
+        workspace = item["workspace"]
+        if workspace.get("worktree") == target or workspace.get("branch") == branch:
+            return "active"
+    return "clear"
+
+
+def _parse_worktrees(control):
+    result = _git(control, "worktree", "list", "--porcelain")
+    records = []
+    for block in result.stdout.strip().split("\n\n") if result.stdout.strip() else []:
+        record = {"worktree": None, "HEAD": None, "branch": None, "prunable": False, "locked": False}
+        for line in block.splitlines():
+            if line.startswith("worktree "):
+                record["worktree"] = line[9:]
+            elif line.startswith("HEAD "):
+                record["HEAD"] = line[5:]
+            elif line.startswith("branch "):
+                record["branch"] = line[7:]
+            elif line == "prunable" or line.startswith("prunable "):
+                record["prunable"] = True
+            elif line == "locked" or line.startswith("locked "):
+                record["locked"] = True
+        records.append(record)
+    return records
+
+
+def _common_git_dir(control):
+    raw = _git(control, "rev-parse", "--git-common-dir").stdout.strip()
+    if not os.path.isabs(raw):
+        raw = os.path.join(control, raw)
+    return os.path.realpath(raw)
+
+
+def _matching_admin_dirs(control, target):
+    root = os.path.join(_common_git_dir(control), "worktrees")
+    if not os.path.isdir(root):
+        return []
+    expected = os.path.normpath(os.path.join(target, ".git"))
+    matches = []
+    for child in Path(root).iterdir():
+        try:
+            if child.is_symlink() or not child.is_dir():
+                continue
+            gitdir = child / "gitdir"
+            st = gitdir.lstat()
+            if gitdir.is_symlink() or not gitdir.is_file() or st.st_size > 4096:
+                continue
+            value = gitdir.read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeError):
+            continue
+        if os.path.normpath(value) == expected:
+            matches.append(child)
+    return matches
+
+
+def _fetch_head_identity(control):
+    gitdir = _common_git_dir(control)
+    path = os.path.join(gitdir, "FETCH_HEAD")
+    if not os.path.lexists(path):
+        return "missing"
+    try:
+        st = os.lstat(path)
+        if os.path.islink(path) or not os.path.isfile(path):
+            return "invalid"
+        return "present:" + _digest_bytes(Path(path).read_bytes())
+    except OSError:
+        return "invalid"
+
+
+def _snapshot(profile, target):
+    control = profile["control"]
+    branch = _git(control, "branch", "--show-current").stdout.strip()
+    head = _git(control, "rev-parse", "HEAD").stdout.strip()
+    status = _git(control, "status", "--porcelain=v1", "-z", "--untracked-files=all").stdout.encode()
+    index = _git(control, "ls-files", "-s", "-z").stdout.encode()
+    refs = _git(control, "for-each-ref", "--format=%(refname)%09%(objectname)").stdout.encode()
+    others = []
+    for record in _parse_worktrees(control):
+        if record.get("worktree") != target:
+            others.append((record.get("worktree"), record.get("HEAD"), record.get("branch"),
+                           record.get("prunable"), record.get("locked")))
+    return {
+        "branch": branch,
+        "head": head,
+        "status": _digest_bytes(status),
+        "index": _digest_bytes(index),
+        "refs": _digest_bytes(refs),
+        "fetch_head": _fetch_head_identity(control),
+        "other_worktrees": others,
+    }
+
+
+def _validate_fixed_environment(profile):
+    reasons = []
+    control = os.path.normpath(profile["control"])
+    root = os.path.normpath(profile["root"])
+    if not os.path.isdir(control) or os.path.realpath(control) != control:
+        reasons.append("CONTROL_REPOSITORY_INVALID")
+        return reasons
+    if not os.path.isdir(root) or os.path.realpath(root) != root:
+        reasons.append("WORKTREE_ROOT_INVALID")
+    top = _git(control, "rev-parse", "--show-toplevel", check=False)
+    if top.returncode != 0 or top.stdout.strip() != control:
+        reasons.append("CONTROL_TOPLEVEL_CONFLICT")
+    origin = _git(control, "remote", "get-url", "origin", check=False)
+    if origin.returncode != 0 or origin.stdout.strip() not in profile["allowed_origins"]:
+        reasons.append("ORIGIN_INVALID")
+    status = _git(control, "status", "--porcelain=v1", "-z", "--untracked-files=all", check=False)
+    if status.returncode != 0:
+        reasons.append("LANDING_STATUS_UNKNOWN")
+    elif status.stdout:
+        reasons.append("LANDING_DIRTY")
+    return reasons
+
+
+def inspect_target(target_name, expected_branch, expected_head, ledger_text, profile=None):
+    profile = profile or PRODUCTION_PROFILE
+    reasons = []
+    observed_branch = None
+    observed_head = None
+    registration_state = "unknown"
+    holder_state = "unknown"
+    lease_state = "unknown"
+
+    if not BRANCH_RE.fullmatch(expected_branch or "") or not expected_branch.startswith(profile["branch_prefix"]):
+        reasons.append("EXPECTED_BRANCH_INVALID")
+    if not SHA40_RE.fullmatch(expected_head or ""):
+        reasons.append("EXPECTED_HEAD_INVALID")
+    target, target_reasons = _safe_target(profile, target_name)
+    reasons.extend(target_reasons)
+    reasons.extend(_validate_fixed_environment(profile))
+    ledger, ledger_reasons = _parse_ledger(ledger_text)
+    reasons.extend(ledger_reasons)
+    if target is None or reasons:
+        return {
+            "eligible": False, "reasons": sorted(set(reasons)),
+            "observedBranch": observed_branch, "observedHead": observed_head,
+            "registration": registration_state, "lease": lease_state, "holder": holder_state,
+            "targetPath": target,
+        }
+
+    lease_state = _lease_state(ledger, target, expected_branch)
+    if lease_state != "clear":
+        reasons.append("ACTIVE_LEASE_TARGET_RESERVED")
+
+    if os.path.lexists(target):
+        reasons.append("TARGET_PRESENT")
+
+    records = [r for r in _parse_worktrees(profile["control"]) if r.get("worktree") == target]
+    if len(records) != 1:
+        reasons.append("REGISTRATION_COUNT_INVALID")
+    else:
+        registration_state = "stale"
+        record = records[0]
+        observed_head = record.get("HEAD")
+        ref = record.get("branch") or ""
+        observed_branch = ref[len("refs/heads/"):] if ref.startswith("refs/heads/") else None
+        if not record.get("prunable"):
+            reasons.append("REGISTRATION_NOT_PRUNABLE")
+        if record.get("locked"):
+            reasons.append("REGISTRATION_LOCKED")
+        if observed_branch != expected_branch:
+            reasons.append("REGISTERED_BRANCH_MISMATCH")
+        if observed_head != expected_head:
+            reasons.append("REGISTERED_HEAD_MISMATCH")
+
+    ref_result = _git(profile["control"], "rev-parse", "--verify", f"refs/heads/{expected_branch}", check=False)
+    if ref_result.returncode != 0:
+        reasons.append("LOCAL_BRANCH_REF_MISSING")
+    elif ref_result.stdout.strip() != expected_head:
+        reasons.append("LOCAL_BRANCH_REF_MISMATCH")
+
+    admins = _matching_admin_dirs(profile["control"], target)
+    if len(admins) != 1:
+        reasons.append("ADMIN_IDENTITY_AMBIGUOUS")
+    else:
+        admin = admins[0]
+        head_file = admin / "HEAD"
+        try:
+            if head_file.is_symlink() or not head_file.is_file():
+                reasons.append("ADMIN_HEAD_INVALID")
+            elif head_file.read_text(encoding="utf-8").strip() != f"ref: refs/heads/{expected_branch}":
+                reasons.append("ADMIN_HEAD_MISMATCH")
+        except (OSError, UnicodeError):
+            reasons.append("ADMIN_HEAD_INVALID")
+        if os.path.lexists(admin / "locked"):
+            reasons.append("ADMIN_LOCKED")
+        holder = admin / HOLDER_FILE
+        if os.path.lexists(holder):
+            holder_state = "present"
+            reasons.append("WORKSPACE_HOLDER_PRESENT")
+        else:
+            holder_state = "absent"
+
+    return {
+        "eligible": not reasons,
+        "reasons": sorted(set(reasons)),
+        "observedBranch": observed_branch,
+        "observedHead": observed_head,
+        "registration": registration_state,
+        "lease": lease_state,
+        "holder": holder_state,
+        "targetPath": target,
+    }
+
+
+def apply_target(target_name, expected_branch, expected_head, ledger_text, explicit_apply=False,
+                 profile=None, before_recheck=None):
+    profile = profile or PRODUCTION_PROFILE
+    if not explicit_apply:
+        return _receipt("apply", "BLOCKED", target_name, expected_branch, expected_head,
+                        ["EXPLICIT_APPLY_REQUIRED"])
+    target, target_reasons = _safe_target(profile, target_name)
+    if target is None:
+        return _receipt("apply", "BLOCKED", target_name, expected_branch, expected_head, target_reasons)
+
+    try:
+        before = _snapshot(profile, target)
+    except Exception:
+        return _receipt("apply", "BLOCKED", target_name, expected_branch, expected_head,
+                        ["PRESERVATION_READ_FAILED"])
+
+    first = inspect_target(target_name, expected_branch, expected_head, ledger_text, profile=profile)
+    if not first["eligible"]:
+        return _receipt("apply", "BLOCKED", target_name, expected_branch, expected_head,
+                        first["reasons"], first["observedBranch"], first["observedHead"],
+                        first["registration"], first["lease"], first["holder"])
+    if before_recheck is not None:
+        before_recheck()
+    second = inspect_target(target_name, expected_branch, expected_head, ledger_text, profile=profile)
+    if not second["eligible"]:
+        return _receipt("apply", "BLOCKED", target_name, expected_branch, expected_head,
+                        ["RECHECK_BLOCKED", *second["reasons"]], second["observedBranch"],
+                        second["observedHead"], second["registration"], second["lease"], second["holder"])
+
+    result = _git(profile["control"], "worktree", "remove", target, check=False)
+    if result.returncode != 0:
+        return _receipt("apply", "BLOCKED", target_name, expected_branch, expected_head,
+                        ["WORKTREE_REMOVE_FAILED"], second["observedBranch"], second["observedHead"],
+                        second["registration"], second["lease"], second["holder"])
+
+    reasons = []
+    if os.path.lexists(target):
+        reasons.append("POST_REMOVE_TARGET_PRESENT")
+    if any(r.get("worktree") == target for r in _parse_worktrees(profile["control"])):
+        reasons.append("POST_REMOVE_REGISTRATION_PRESENT")
+    if _matching_admin_dirs(profile["control"], target):
+        reasons.append("POST_REMOVE_ADMIN_PRESENT")
+    ref_result = _git(profile["control"], "rev-parse", "--verify", f"refs/heads/{expected_branch}", check=False)
+    if ref_result.returncode != 0 or ref_result.stdout.strip() != expected_head:
+        reasons.append("POST_REMOVE_BRANCH_REF_CONFLICT")
+    try:
+        after = _snapshot(profile, target)
+        if after != before:
+            reasons.append("POST_REMOVE_PRESERVATION_DRIFT")
+    except Exception:
+        reasons.append("POST_REMOVE_PRESERVATION_UNKNOWN")
+
+    return _receipt(
+        "apply",
+        "REMOVED" if not reasons else "BLOCKED",
+        target_name,
+        expected_branch,
+        expected_head,
+        reasons,
+        second["observedBranch"],
+        second["observedHead"],
+        "removed" if not reasons else "unknown",
+        second["lease"],
+        second["holder"],
+    )
+
+
+def _parse_args(argv):
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("operation", choices=["inspect", "apply"])
+    parser.add_argument("--target", required=True)
+    parser.add_argument("--expected-branch", required=True)
+    parser.add_argument("--expected-head", required=True)
+    parser.add_argument("--ledger-file", required=True)
+    parser.add_argument("--apply", action="store_true")
+    ns, extra = parser.parse_known_args(argv)
+    if extra:
+        raise ValueError("ARGUMENT_INVALID")
+    if ns.operation == "inspect" and ns.apply:
+        raise ValueError("APPLY_FLAG_WITH_INSPECT")
+    return ns
+
+
+def run_cli(argv=None):
+    try:
+        ns = _parse_args(list(sys.argv[1:] if argv is None else argv))
+        ledger_text, ledger_reasons = _read_regular_text(ns.ledger_file, MAX_LEDGER_BYTES)
+        if ledger_reasons:
+            receipt = _receipt(ns.operation, "BLOCKED", ns.target, ns.expected_branch,
+                               ns.expected_head, ledger_reasons)
+        elif ns.operation == "inspect":
+            result = inspect_target(ns.target, ns.expected_branch, ns.expected_head, ledger_text)
+            receipt = _receipt(
+                "inspect", "ELIGIBLE" if result["eligible"] else "BLOCKED",
+                ns.target, ns.expected_branch, ns.expected_head, result["reasons"],
+                result["observedBranch"], result["observedHead"], result["registration"],
+                result["lease"], result["holder"],
+            )
+        else:
+            receipt = apply_target(
+                ns.target, ns.expected_branch, ns.expected_head, ledger_text,
+                explicit_apply=ns.apply,
+            )
+    except (ValueError, RuntimeError):
+        receipt = _receipt("unknown", "BLOCKED", "unknown", None, None, ["ARGUMENT_INVALID"])
+    code = 0 if receipt["status"] in {"ELIGIBLE", "REMOVED"} else 2
+    return code, json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n"
+
+
+def main():
+    code, text = run_cli()
+    sys.stdout.write(text)
+    return code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

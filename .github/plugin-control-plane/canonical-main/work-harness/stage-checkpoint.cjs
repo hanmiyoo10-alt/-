@@ -29,6 +29,8 @@ const NOT_APPLICABLE_STAGES = Object.freeze([
 const INSPECT_MODE = 'CANONICAL_MAIN_STAGE_CHECKPOINT_INSPECT';
 const CHECKPOINT_MARKER_TOKEN = 'canonical-main-stage-checkpoint:v1';
 const CHECKPOINT_MARKER_RE = /^<!-- canonical-main-stage-checkpoint:v1 packet=([1-9][0-9]*) stage=(AUTHORITY_SCOPE|IMPLEMENTATION_PR|VALIDATION_MERGE|POSTMERGE_CONVERGENCE|EXPERIMENT_CLOSE) digest=([0-9a-f]{64}) surface=(packet|audit) -->$/;
+const NOT_APPLICABLE_MARKER_TOKEN = 'canonical-main-stage-not-applicable:v1';
+const NOT_APPLICABLE_MARKER_RE = /^<!-- canonical-main-stage-not-applicable:v1 scope=([0-9a-f]{64}) -->$/;
 
 const ISSUE_GET_RE = /^\/issues\/([1-9][0-9]*)$/;
 const COMMENTS_GET_RE = /^\/issues\/([1-9][0-9]*)\/comments\?per_page=100&page=([1-9][0-9]*)$/;
@@ -166,6 +168,31 @@ function uniqueSorted(values) {
   return [...new Set(values)].sort();
 }
 
+function notApplicableScopeFingerprint(scopes) {
+  const normalized = uniqueSorted(
+    (Array.isArray(scopes) ? scopes : [])
+      .map((scope) => scope?.normalized)
+      .filter((value) => typeof value === 'string' && value.length > 0),
+  );
+  return crypto.createHash('sha256')
+    .update(`stage-checkpoint-not-applicable:v1\n${normalized.join('\n')}`, 'utf8')
+    .digest('hex');
+}
+
+function parseNotApplicableMarker(comment) {
+  const matches = String(comment?.body || '').replace(/\r\n/g, '\n').split('\n')
+    .filter((line) => line.includes(NOT_APPLICABLE_MARKER_TOKEN));
+  if (!matches.length) return {fingerprint: null, reasonCodes: []};
+  if (matches.length !== 1) {
+    return {fingerprint: null, reasonCodes: ['CHECKPOINT_APPLICABILITY_MARKER_DUPLICATE']};
+  }
+  const match = matches[0].match(NOT_APPLICABLE_MARKER_RE);
+  if (!match) {
+    return {fingerprint: null, reasonCodes: ['CHECKPOINT_APPLICABILITY_MARKER_MALFORMED']};
+  }
+  return {fingerprint: match[1], reasonCodes: []};
+}
+
 function inspectionResult({
   packetNumber,
   disposition,
@@ -210,6 +237,7 @@ function inspectionResult({
 
 function parseCheckpointSurface(comments, packetNumber, expectedSurface) {
   const counts = new Map();
+  const commentsByKey = new Map();
   const reasonCodes = [];
   for (const comment of comments) {
     const lines = String(comment?.body || '').replace(/\r\n/g, '\n').split('\n');
@@ -231,9 +259,11 @@ function parseCheckpointSurface(comments, packetNumber, expectedSurface) {
       }
       const key = `${stage}:${digest}`;
       counts.set(key, (counts.get(key) || 0) + 1);
+      if (!commentsByKey.has(key)) commentsByKey.set(key, []);
+      commentsByKey.get(key).push(comment);
     }
   }
-  return { counts, reasonCodes };
+  return { counts, commentsByKey, reasonCodes };
 }
 
 async function inspectCheckpoint({ client, packetNumber }) {
@@ -287,6 +317,7 @@ async function inspectCheckpoint({ client, packetNumber }) {
   reasonCodes.push(...packetMarkers.reasonCodes, ...auditMarkers.reasonCodes);
 
   const stageDigests = new Map(STAGES.map((stage) => [stage, new Set()]));
+  const notApplicableEvidence = [];
   const keys = new Set([...packetMarkers.counts.keys(), ...auditMarkers.counts.keys()]);
   for (const key of keys) {
     const packetCount = packetMarkers.counts.get(key) || 0;
@@ -305,6 +336,50 @@ async function inspectCheckpoint({ client, packetNumber }) {
     const stage = key.slice(0, separator);
     const digest = key.slice(separator + 1);
     stageDigests.get(stage).add(digest);
+
+    const packetApplicability = parseNotApplicableMarker(packetMarkers.commentsByKey.get(key)?.[0]);
+    const auditApplicability = parseNotApplicableMarker(auditMarkers.commentsByKey.get(key)?.[0]);
+    if (packetApplicability.reasonCodes.length || auditApplicability.reasonCodes.length) {
+      conflict = true;
+      reasonCodes.push(...packetApplicability.reasonCodes, ...auditApplicability.reasonCodes);
+      continue;
+    }
+    const packetFingerprint = packetApplicability.fingerprint;
+    const auditFingerprint = auditApplicability.fingerprint;
+    if (packetFingerprint || auditFingerprint) {
+      if (!packetFingerprint || !auditFingerprint || packetFingerprint !== auditFingerprint) {
+        conflict = true;
+        reasonCodes.push('CHECKPOINT_APPLICABILITY_EVIDENCE_MISMATCH');
+        continue;
+      }
+      notApplicableEvidence.push({stage, digest, scopeFingerprint: packetFingerprint});
+    }
+  }
+
+  if (notApplicableEvidence.length) {
+    const parsedScopes = extractPacketScopes(String(issue?.body || ''));
+    if (!parsedScopes.ok) {
+      if (parsedScopes.conflict) {
+        conflict = true;
+        reasonCodes.push('CHECKPOINT_APPLICABILITY_SCOPE_CONFLICT');
+      } else {
+        unknown = true;
+        reasonCodes.push('CHECKPOINT_APPLICABILITY_SCOPE_UNRESOLVED');
+      }
+    } else {
+      const pathScopes = parsedScopes.scopes.filter((scope) => scope.kind === 'path');
+      const surfaceScopes = parsedScopes.scopes.filter((scope) => scope.kind === 'surface');
+      if (pathScopes.length || !surfaceScopes.length || surfaceScopes.length !== parsedScopes.scopes.length) {
+        conflict = true;
+        reasonCodes.push('CHECKPOINT_NOT_APPLICABLE_SCOPE_STALE');
+      } else {
+        const currentScopeFingerprint = notApplicableScopeFingerprint(parsedScopes.scopes);
+        if (notApplicableEvidence.some((row) => row.scopeFingerprint !== currentScopeFingerprint)) {
+          conflict = true;
+          reasonCodes.push('CHECKPOINT_NOT_APPLICABLE_SCOPE_STALE');
+        }
+      }
+    }
   }
 
   let prefixLength = 0;
@@ -431,14 +506,18 @@ async function validatePacketIssue(client, packetNumber, expectedBodySha256 = nu
   return [];
 }
 
-function renderNotApplicableBody(stage) {
+function renderNotApplicableBody(stage, scopeFingerprint) {
   const stageLines = {
     IMPLEMENTATION_PR: 'No repository implementation, branch, worktree, or PR effect is required or authorized by this packet.',
     VALIDATION_MERGE: 'No candidate PR validation or repository merge effect is required or authorized by this packet.',
     POSTMERGE_CONVERGENCE: 'No merged-main source convergence effect is required or authorized by this packet.',
   };
   if (!NOT_APPLICABLE_STAGES.includes(stage)) throw new Error('NOT_APPLICABLE_STAGE_INVALID');
+  if (!/^[0-9a-f]{64}$/.test(String(scopeFingerprint || ''))) {
+    throw new Error('NOT_APPLICABLE_SCOPE_FINGERPRINT_INVALID');
+  }
   return [
+    `<!-- canonical-main-stage-not-applicable:v1 scope=${scopeFingerprint} -->`,
     `## ${stage} applicability checkpoint`,
     '',
     'Disposition: `NOT_APPLICABLE / PASS`.',
@@ -504,6 +583,7 @@ async function inspectNotApplicablePacket(client, packetNumber, stage) {
   return {
     ok: true,
     packetBodySha256: crypto.createHash('sha256').update(body, 'utf8').digest('hex'),
+    scopeFingerprint: notApplicableScopeFingerprint(parsed.scopes),
   };
 }
 
@@ -517,7 +597,7 @@ async function recordNotApplicableCheckpoint({ client, packetNumber, stage }) {
     client,
     packetNumber,
     stage,
-    body: renderNotApplicableBody(stage),
+    body: renderNotApplicableBody(stage, evidence.scopeFingerprint),
     expectedPacketBodySha256: evidence.packetBodySha256,
   });
 }
@@ -716,12 +796,14 @@ module.exports = {
   PACKET_MARKER,
   STAGES,
   NOT_APPLICABLE_STAGES,
+  NOT_APPLICABLE_MARKER_TOKEN,
   checkpointDigest,
   checkpointMarker,
   createGhCheckpointClient,
   inspectCheckpoint,
   inspectNotApplicablePacket,
   inspectionResult,
+  notApplicableScopeFingerprint,
   createStageCheckpointClient,
   defaultGhRunner,
   exitCodeFor,
@@ -729,6 +811,7 @@ module.exports = {
   parseArgs,
   parseCheckpointSurface,
   parseInspectArgs,
+  parseNotApplicableMarker,
   parseNotApplicableArgs,
   recordCheckpoint,
   recordNotApplicableCheckpoint,

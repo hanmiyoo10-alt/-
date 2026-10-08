@@ -2,6 +2,7 @@ import importlib.util
 import pathlib
 import subprocess
 import unittest
+from unittest import mock
 import xml.etree.ElementTree as ET
 
 OWNER = pathlib.Path(__file__).resolve().parents[1]
@@ -106,12 +107,41 @@ class LifelineContractTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
 
         recovery = (TERMUX / "mcl-m-termux-lifeline-recover").read_text()
-        self.assertIn('$HOME_DIR/.termux/boot/31-mcl-m-rdc-supervisor-guard', recovery)
-        self.assertIn('$HOME_DIR/.termux/boot/32-mcl-m-tailscale-supervisor-guard', recovery)
+        self.assertIn('$HOME_DIR/.local/bin/mcl-m-rdc-supervisor-guard', recovery)
+        self.assertIn('$HOME_DIR/.local/bin/mcl-m-tailscale-supervisor-guard', recovery)
+        self.assertIn('"$RDC_GUARD" --once', recovery)
+        self.assertIn('"$TAILSCALE_GUARD" --once', recovery)
+        self.assertNotIn('$HOME_DIR/.termux/boot/31-mcl-m-rdc-supervisor-guard', recovery)
+        self.assertNotIn('$HOME_DIR/.termux/boot/32-mcl-m-tailscale-supervisor-guard', recovery)
+        self.assertIn('"$PYTHON" "$CLIENT" --status', recovery)
+        self.assertIn('"$PYTHON" "$CLIENT" --heartbeat-once', recovery)
         self.assertIn('"$PYTHON" "$CLIENT" --recovery-ok', recovery)
-        self.assertIn("schema=mcl-m-termux-lifeline-recovery.v2", recovery)
+        self.assertIn("schema=mcl-m-termux-lifeline-recovery.v3", recovery)
+        self.assertIn("rdc_target=", recovery)
+        self.assertIn("tailscale_target=", recovery)
+        self.assertIn("heartbeat_dispatch=", recovery)
         self.assertIn("recovery_ok_dispatch=", recovery)
+        self.assertIn("guard_ring_started=false", recovery)
+        self.assertNotIn("rdc_launcher=", recovery)
+        self.assertNotIn("tailscale_launcher=", recovery)
         self.assertNotIn("companion_ack=", recovery)
+
+        rdc_pos = recovery.index('if "$RDC_GUARD" --once')
+        tailscale_pos = recovery.index('if "$TAILSCALE_GUARD" --once')
+        heartbeat_pos = recovery.index('"$NOHUP" "$PYTHON" "$CLIENT"')
+        first_status_pos = recovery.index('"$PYTHON" "$CLIENT" --status')
+        heartbeat_once_pos = recovery.index('"$PYTHON" "$CLIENT" --heartbeat-once')
+        second_status_pos = recovery.index(
+            '"$PYTHON" "$CLIENT" --status',
+            first_status_pos + 1,
+        )
+        recovery_ok_pos = recovery.index('"$PYTHON" "$CLIENT" --recovery-ok')
+        self.assertLess(rdc_pos, tailscale_pos)
+        self.assertLess(tailscale_pos, heartbeat_pos)
+        self.assertLess(heartbeat_pos, first_status_pos)
+        self.assertLess(first_status_pos, heartbeat_once_pos)
+        self.assertLess(heartbeat_once_pos, second_status_pos)
+        self.assertLess(second_status_pos, recovery_ok_pos)
         for forbidden in (
             "runsvdir",
             "pkill",
@@ -177,6 +207,16 @@ class LifelineContractTest(unittest.TestCase):
         )
         self.assertEqual(module.main(["unexpected"]), 2)
 
+        with mock.patch.object(module, "wait_singleton_active", return_value=True):
+            self.assertEqual(module.main(["--status"]), 0)
+        with mock.patch.object(module, "wait_singleton_active", return_value=False):
+            self.assertEqual(module.main(["--status"]), 1)
+        with mock.patch.object(module, "dispatch", return_value=True) as dispatched:
+            self.assertEqual(module.main(["--heartbeat-once"]), 0)
+            dispatched.assert_called_once_with(module.HEARTBEAT_ACTION)
+        with mock.patch.object(module, "dispatch", return_value=False):
+            self.assertEqual(module.main(["--heartbeat-once"]), 1)
+
         seen = {}
 
         class Result:
@@ -212,6 +252,47 @@ class LifelineContractTest(unittest.TestCase):
         self.assertNotIn("socket", source)
         self.assertNotIn("MCL_M_TERMUX_LIFELINE_ACK_V1", source)
         self.assertNotIn("SOCKET_NAME", source)
+
+    def test_heartbeat_singleton_status_is_lock_backed_and_bounded(self):
+        module_path = TERMUX / "heartbeat-client.py"
+        spec = importlib.util.spec_from_file_location("mcl_lifeline_heartbeat_status", module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        closed = []
+        unlocked = []
+
+        def open_missing(*_args, **_kwargs):
+            raise FileNotFoundError()
+
+        self.assertFalse(module.singleton_active(open_fn=open_missing))
+
+        def blocking_flock(_fd, operation):
+            if operation & module.fcntl.LOCK_NB:
+                raise BlockingIOError()
+            unlocked.append(operation)
+
+        self.assertTrue(
+            module.singleton_active(
+                open_fn=lambda *_a, **_k: 11,
+                flock_fn=blocking_flock,
+                close_fn=closed.append,
+            )
+        )
+        self.assertEqual(closed, [11])
+
+        clock = iter([0.0, 0.1, 0.2, 0.3])
+        sleeps = []
+        self.assertTrue(
+            module.wait_singleton_active(
+                timeout=1.0,
+                interval=0.05,
+                now=lambda: next(clock),
+                sleep=sleeps.append,
+                probe=iter([False, False, True]).__next__,
+            )
+        )
+        self.assertEqual(sleeps, [0.05, 0.05])
 
     def test_no_network_or_generic_command_surface_in_owner(self):
         all_text = "\n".join(

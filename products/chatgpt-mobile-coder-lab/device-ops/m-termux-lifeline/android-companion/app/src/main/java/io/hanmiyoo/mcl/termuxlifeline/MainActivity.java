@@ -1,9 +1,12 @@
 package io.hanmiyoo.mcl.termuxlifeline;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.widget.Button;
@@ -41,6 +44,11 @@ public final class MainActivity extends Activity {
         permission.setText("앱 권한 설정 열기");
         permission.setOnClickListener(v -> openAppSettings());
         root.addView(permission);
+
+        Button notificationPermission = new Button(this);
+        notificationPermission.setText("알림 권한 요청");
+        notificationPermission.setOnClickListener(v -> requestNotificationPermission());
+        root.addView(notificationPermission);
 
         Button policyAck = new Button(this);
         policyAck.setText("Termux 정책을 직접 설정했음을 확인");
@@ -80,6 +88,15 @@ public final class MainActivity extends Activity {
             Uri.parse("package:" + getPackageName())
         );
         startActivity(intent);
+    }
+
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                new String[] {Manifest.permission.POST_NOTIFICATIONS}, 1001);
+        }
     }
 
     static boolean isPolicyAcknowledged(Context context) {

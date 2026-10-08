@@ -674,3 +674,20 @@ Related memory IDs: E-2026-10-07-005, E-2026-10-07-006
 Follow-up trigger: 탐사 저널리즘 개념 정리 후 동일한 짧은 확인문제 형식으로 검증한다.
 Resolution / later evidence: COMPLETE
 ```
+
+
+### E-2026-10-08-001 — 미디어 리터러시 탐사 저널리즘 기본 확인 통과
+
+```text
+Entry ID: E-2026-10-08-001
+Date: 2026-10-08
+Subject / scope: 미디어 리터러시 / 탐사 저널리즘
+Status: OBSERVED
+Observation: 사용자가 탐사 저널리즘 기본 확인문제 3개에 답했다.
+Result: 1) 숨겨진, 2) 사회적으로 중요한 사안 + 개인/기관이 숨기려는 내용, 3) X로 모두 정답 처리 가능했다.
+Interpretation: 탐사 저널리즘의 기본 정의와 3개 핵심 기준은 즉시회상 수준에서 통과했다. 다음 개념은 탐사 저널리즘을 보는 두 시각과 통합 기준이다.
+Confidence: HIGH
+Related memory IDs: E-2026-10-07-006
+Follow-up trigger: 탐사 저널리즘의 두 시각과 통합 기준 정리 후 짧은 확인문제로 검증한다.
+Resolution / later evidence: COMPLETE
+```

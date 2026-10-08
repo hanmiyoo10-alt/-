@@ -82,7 +82,7 @@ server push done:     2026-09-12T12:53:15Z
 - permanent working repository: `/root/nyang-repo`.
 - permanent device branch: `server/work`.
 - Tailscale 사용 가능.
-- Remote Desktop Commander 실행 버전 확인 시 `@wonderwhy-er/desktop-commander@0.2.48`.
+- Remote Desktop Commander 실행 버전 확인 시 `@wonderwhy-er/desktop-commander@0.2.52`.
 - Remote agent는 Ubuntu PRoot 문맥에서 실행했지만 Node binary 자체는 Termux의 `/data/data/com.termux/files/usr/bin/node`를 사용했다.
 
 주의:

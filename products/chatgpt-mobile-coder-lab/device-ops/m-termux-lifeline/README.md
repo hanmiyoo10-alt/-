@@ -27,11 +27,11 @@ manual prerequisites already satisfied
 one fixed RUN_COMMAND dispatch
              ↓
 ~/.local/bin/mcl-m-termux-lifeline-recover
-        ├─ re-arm fixed heartbeat client
-        ├─ ~/.termux/boot/31-mcl-m-rdc-supervisor-guard
-        └─ ~/.termux/boot/32-mcl-m-tailscale-supervisor-guard
+        ├─ fixed RDC target guard --once
+        ├─ fixed Tailscale target guard --once after RDC PASS
+        └─ re-arm fixed heartbeat client after target repair
              ↓
-fixed RECOVERY_OK broadcast + bounded local receipt
+fixed RECOVERY_OK broadcast + bounded v3 local receipt
 ~~~
 
 The companion lives outside the Termux process and UID boundary. While armed it
@@ -60,8 +60,11 @@ environment, stdin, result PendingIntent, terminal foreground request, retry
 count, or fallback executable.
 
 The recovery script never starts a global runsvdir. It may invoke only the two
-already-reviewed fixed M guard launchers. Their own contracts remain the owner of
-RDC and Tailscale supervisor repair.
+already-reviewed fixed M target guards with literal `--once`, sequenced RDC
+before Tailscale. Their own contracts remain the owner of RDC and Tailscale
+supervisor repair. The emergency recovery path does not invoke either Termux:Boot
+guard launcher and therefore does not intentionally re-arm the guard-service /
+independent-anchor rings while Android process pressure is already high.
 
 ## Force-stop separation
 
@@ -103,10 +106,14 @@ Repository files map to fixed locations:
 
 The heartbeat client uses one local singleton lock and a 10-second heartbeat.
 Each send invokes the installed TermuxAm wrapper with only `broadcast -a <fixed
-reviewed action> -p io.hanmiyoo.mcl.termuxlifeline`. The sender records only
-whether dispatch was attempted successfully; it never claims a receiver ACK.
-The companion declares a heartbeat stale after 45 seconds. Each loss episode gets
-at most one recovery attempt, with a five-minute cooldown before a later episode.
+reviewed action> -p io.hanmiyoo.mcl.termuxlifeline`. The fixed `--status`
+operation proves the singleton lock is actively held, while fixed
+`--heartbeat-once` performs exactly one reviewed heartbeat dispatch. Recovery
+re-arm is accepted only after singleton liveness, one heartbeat dispatch, and a
+second singleton-liveness proof all succeed. The sender never claims a receiver
+ACK. The companion declares a heartbeat stale after 45 seconds. Each loss episode
+gets at most one recovery attempt, with a five-minute cooldown before a later
+episode.
 
 Recovery is accepted only from receiver-side truth when both a post-attempt
 heartbeat broadcast and the fixed RECOVERY_OK broadcast arrive through the same
@@ -115,15 +122,21 @@ UID/action/package gate before the 30-second verification timeout.
 ## Bounded observability
 
 Durable/local receipts contain only semantic status:
-- heartbeat arm status;
-- RDC launcher pass/fail;
-- Tailscale launcher pass/fail;
-- RECOVERY_OK dispatch pass/fail;
+- RDC target repair pass/fail;
+- Tailscale target repair pass/fail/not-run;
+- heartbeat startup proof pass/fail/not-run, rendered as `heartbeat_dispatch`;
+- RECOVERY_OK dispatch pass/fail/not-run;
+- fixed `guard_ring_started=false`;
 - withheld details.
 
-The Termux recovery receipt is `mcl-m-termux-lifeline-recovery.v2`; it does not
-claim companion acknowledgement. Receiver-side heartbeat/RECOVERY_OK timestamps
-remain the recovery truth used by the Android state machine.
+The Termux recovery receipt is `mcl-m-termux-lifeline-recovery.v3`. A target
+`pass` proves only that the fixed target guard's bounded `--once` effect
+returned successfully; it is not durable-survival proof under Android phantom
+trimming. `heartbeat_dispatch=pass` additionally requires active singleton
+proof, one fixed heartbeat dispatch, and active singleton proof again. The
+receipt still does not claim companion acknowledgement.
+Receiver-side heartbeat/RECOVERY_OK timestamps remain the recovery truth used by
+the Android state machine.
 
 No process tree, PID, command output, credentials, auth/session data, broadcast
 payload transcript, or arbitrary stdout/stderr is collected as evidence.

@@ -42,9 +42,12 @@ manifest receiver, synchronous sender ACK, or network listener.
 
 ## Safety boundary
 
-The Android manifest intentionally contains only foreground-service permissions
-plus com.termux.permission.RUN_COMMAND. There is no INTERNET, accessibility,
-overlay, wake-lock, device-admin, root, shared-UID, or exported service surface.
+The Android manifest intentionally contains only foreground-service permissions,
+POST_NOTIFICATIONS for the user-visible lifeline status proof, plus
+com.termux.permission.RUN_COMMAND. There is no INTERNET, accessibility, overlay,
+wake-lock, device-admin, root, shared-UID, or exported service surface.
+POST_NOTIFICATIONS is requested only from the explicit in-app notification
+permission button on Android 13+; launch and arm never request it automatically.
 
 RUN_COMMAND is fixed to:
 - package com.termux;
@@ -86,10 +89,15 @@ not write Termux allow-external-apps=true.
 Termux RUN_COMMAND requires both user-controlled prerequisites. Live activation
 therefore remains a later explicit opt-in:
 1. install the companion APK;
-2. grant its RUN_COMMAND permission through Android;
-3. set allow-external-apps=true in the user's Termux configuration;
-4. materialize the fixed Termux files with termux/install.sh --install;
-5. arm the heartbeat and companion service deliberately.
+2. press the in-app notification permission button and grant notification
+   permission on Android 13+ so the reviewed HEALTHY status surface is visible;
+3. grant its RUN_COMMAND permission through Android;
+4. set allow-external-apps=true in the user's Termux configuration;
+5. materialize the fixed Termux files with termux/install.sh --install;
+6. arm the heartbeat and companion service deliberately.
+
+Notification permission affects proof/status visibility only. It does not grant
+RUN_COMMAND recovery authority or replace either Termux prerequisite.
 
 install.sh only copies the reviewed fixed files and modes. It does not change
 Android permissions, Termux settings, or start runtime processes.

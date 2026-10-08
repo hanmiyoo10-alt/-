@@ -31,13 +31,28 @@ details=withheld
 ```
 
 The observer resolves only the standard per-user Android Platform-Tools
-`adb.exe` location, requires exactly one connected target, verifies exact M
-model `SM-S938N`, resolves the fixed `com.termux` package UID, and reads only
-fixed ActivityManager/package evidence.
+`adb.exe` location. It may inspect multiple connected rows internally. For
+each row it uses fixed read-only `get-devpath` evidence before model reads:
+exact `usb:...` means USB and is excluded from a `wireless_adb` receipt;
+exact `unknown` is the only admitted socket/TLS candidate; failed, empty, or
+foreign devpath output remains unresolved.
 
-It never prints ADB serials, IP addresses, ports, pairing material, process
-tables, dumpsys payloads, or command stderr. Missing, malformed, ambiguous, or
-mismatched evidence fails closed to a bounded receipt.
+This transport check does not rely on the optional `usb:` token in
+`adb devices -l`, because ADB's libusb backend may omit that long-list token
+while the transport itself still owns a USB devpath.
+
+For each admitted socket/TLS candidate the fixed `ro.product.model` output
+must be exactly one bounded non-empty printable line. Empty, multiline, control-
+character, or failed model evidence remains unresolved. The observer proceeds
+only when exactly one candidate matches fixed M model `SM-S938N` and no other
+candidate remains unresolved. It then resolves the fixed `com.termux` package
+UID and reads only fixed ActivityManager/package evidence.
+
+It never prints ADB serials, IP addresses, ports, devpaths, transport IDs,
+pairing material, process tables, dumpsys payloads, or command stderr. It never
+connects, disconnects, pairs, or changes device/connectivity state. Missing,
+malformed, ambiguous, unresolved, or mismatched evidence fails closed to the
+same bounded receipt schema.
 
 ## Non-authority
 

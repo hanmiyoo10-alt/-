@@ -117,6 +117,66 @@ function runAdb(runner, adb, args) {
   return runner(adb, args);
 }
 
+function singleOutputLine(text, maxLength = 128) {
+  const lines = String(text || '').replace(/\r/g, '').split('\n');
+  while (lines.length && lines.at(-1) === '') lines.pop();
+  if (lines.length !== 1) return null;
+  const value = lines[0].trim();
+  if (!value || value.length > maxLength || /[^\x20-\x7e]/.test(value)) return null;
+  return value;
+}
+
+function classifyDevpath(text) {
+  const value = singleOutputLine(text, 240);
+  if (!value) return 'unresolved';
+  if (/^usb:[!-~]+$/.test(value)) return 'usb';
+  if (value === 'unknown') return 'network';
+  return 'unresolved';
+}
+
+function selectWirelessTarget({runner, adb, devices}) {
+  if (devices.length === 0) return {state: 'offline'};
+
+  const matches = [];
+  let networkCandidates = 0;
+  let unresolved = 0;
+
+  for (const candidate of devices) {
+    const devpathResult = runAdb(runner, adb, ['-s', candidate.serial, 'get-devpath']);
+    if (!successful(devpathResult)) {
+      unresolved += 1;
+      continue;
+    }
+    const transport = classifyDevpath(devpathResult.stdout);
+    if (transport === 'usb') continue;
+    if (transport !== 'network') {
+      unresolved += 1;
+      continue;
+    }
+
+    networkCandidates += 1;
+    const modelResult = runAdb(runner, adb, [
+      '-s', candidate.serial, 'shell', 'getprop', 'ro.product.model',
+    ]);
+    if (!successful(modelResult)) {
+      unresolved += 1;
+      continue;
+    }
+    const model = singleOutputLine(modelResult.stdout);
+    if (!model) {
+      unresolved += 1;
+      continue;
+    }
+    if (model === TARGET_MODEL) matches.push(candidate.serial);
+  }
+
+  if (matches.length > 1) return {state: 'ambiguous'};
+  if (unresolved > 0) return {state: 'unknown'};
+  if (matches.length === 1) return {state: 'match', serial: matches[0]};
+  if (networkCandidates === 0) return {state: 'offline'};
+  return {state: 'mismatch'};
+}
+
 function collectStatus({
   platform = process.platform,
   env = process.env,
@@ -129,23 +189,19 @@ function collectStatus({
   const devicesResult = runAdb(runner, resolved.path, ['devices', '-l']);
   if (!successful(devicesResult)) return baseReceipt();
   const devices = parseConnectedDevices(devicesResult.stdout);
-  if (devices.length === 0) {
+  const selected = selectWirelessTarget({runner, adb: resolved.path, devices});
+  if (selected.state === 'offline') {
     return baseReceipt({connection: 'offline', result: 'blocked'});
   }
-  if (devices.length !== 1) {
+  if (selected.state === 'ambiguous') {
     return baseReceipt({connection: 'ambiguous', result: 'blocked'});
   }
-
-  const serial = devices[0].serial;
-  const modelResult = runAdb(runner, resolved.path, [
-    '-s', serial, 'shell', 'getprop', 'ro.product.model',
-  ]);
-  if (!successful(modelResult)) return baseReceipt({connection: 'connected'});
-  const model = modelResult.stdout.trim();
-  if (model !== TARGET_MODEL) {
+  if (selected.state === 'mismatch') {
     return baseReceipt({connection: 'connected', model: 'mismatch', result: 'blocked'});
   }
+  if (selected.state !== 'match') return baseReceipt();
 
+  const serial = selected.serial;
   const uidResult = runAdb(runner, resolved.path, [
     '-s', serial, 'shell', 'cmd', 'package', 'list', 'packages', '-U', TERMUX_PACKAGE,
   ]);
@@ -204,11 +260,14 @@ module.exports = {
   TERMUX_PACKAGE,
   baseReceipt,
   collectStatus,
+  classifyDevpath,
   parseConnectedDevices,
   parseMaxPhantomProcesses,
   parsePhantomCounts,
   parseTermuxUid,
   renderReceipt,
   resolveAdbPath,
+  selectWirelessTarget,
+  singleOutputLine,
   termuxUidToken,
 };

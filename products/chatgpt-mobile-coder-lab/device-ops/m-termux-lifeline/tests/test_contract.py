@@ -106,12 +106,30 @@ class LifelineContractTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
 
         recovery = (TERMUX / "mcl-m-termux-lifeline-recover").read_text()
-        self.assertIn('$HOME_DIR/.termux/boot/31-mcl-m-rdc-supervisor-guard', recovery)
-        self.assertIn('$HOME_DIR/.termux/boot/32-mcl-m-tailscale-supervisor-guard', recovery)
+        self.assertIn('$HOME_DIR/.local/bin/mcl-m-rdc-supervisor-guard', recovery)
+        self.assertIn('$HOME_DIR/.local/bin/mcl-m-tailscale-supervisor-guard', recovery)
+        self.assertIn('"$RDC_GUARD" --once', recovery)
+        self.assertIn('"$TAILSCALE_GUARD" --once', recovery)
+        self.assertNotIn('$HOME_DIR/.termux/boot/31-mcl-m-rdc-supervisor-guard', recovery)
+        self.assertNotIn('$HOME_DIR/.termux/boot/32-mcl-m-tailscale-supervisor-guard', recovery)
         self.assertIn('"$PYTHON" "$CLIENT" --recovery-ok', recovery)
-        self.assertIn("schema=mcl-m-termux-lifeline-recovery.v2", recovery)
+        self.assertIn("schema=mcl-m-termux-lifeline-recovery.v3", recovery)
+        self.assertIn("rdc_target=", recovery)
+        self.assertIn("tailscale_target=", recovery)
+        self.assertIn("heartbeat_dispatch=", recovery)
         self.assertIn("recovery_ok_dispatch=", recovery)
+        self.assertIn("guard_ring_started=false", recovery)
+        self.assertNotIn("rdc_launcher=", recovery)
+        self.assertNotIn("tailscale_launcher=", recovery)
         self.assertNotIn("companion_ack=", recovery)
+
+        rdc_pos = recovery.index('if "$RDC_GUARD" --once')
+        tailscale_pos = recovery.index('if "$TAILSCALE_GUARD" --once')
+        heartbeat_pos = recovery.index('"$NOHUP" "$PYTHON" "$CLIENT"')
+        recovery_ok_pos = recovery.index('"$PYTHON" "$CLIENT" --recovery-ok')
+        self.assertLess(rdc_pos, tailscale_pos)
+        self.assertLess(tailscale_pos, heartbeat_pos)
+        self.assertLess(heartbeat_pos, recovery_ok_pos)
         for forbidden in (
             "runsvdir",
             "pkill",

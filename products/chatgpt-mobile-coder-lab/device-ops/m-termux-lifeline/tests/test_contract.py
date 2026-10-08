@@ -26,6 +26,7 @@ class LifelineContractTest(unittest.TestCase):
             {
                 "android.permission.FOREGROUND_SERVICE",
                 "android.permission.FOREGROUND_SERVICE_SPECIAL_USE",
+                "android.permission.POST_NOTIFICATIONS",
                 "com.termux.permission.RUN_COMMAND",
             },
         )
@@ -90,6 +91,17 @@ class LifelineContractTest(unittest.TestCase):
         self.assertNotIn("putString", activity)
         self.assertNotIn("Settings.Global", activity)
         self.assertNotIn("Settings.Secure", activity)
+
+    def test_notification_permission_is_explicit_user_action_only(self):
+        activity = (JAVA / "MainActivity.java").read_text()
+        self.assertIn('notificationPermission.setText("알림 권한 요청")', activity)
+        self.assertIn("notificationPermission.setOnClickListener", activity)
+        self.assertEqual(activity.count("requestNotificationPermission()"), 2)
+        self.assertIn("Build.VERSION.SDK_INT >= 33", activity)
+        self.assertIn("Manifest.permission.POST_NOTIFICATIONS", activity)
+        self.assertIn("requestPermissions(", activity)
+        self.assertNotIn("pm grant", activity)
+        self.assertNotIn("appops", activity)
 
     def test_termux_scripts_are_syntax_valid_and_fixed_surface(self):
         scripts = (

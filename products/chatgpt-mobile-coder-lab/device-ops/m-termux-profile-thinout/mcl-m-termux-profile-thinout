@@ -1,0 +1,570 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -u
+
+SCHEMA='mcl-m-termux-profile-thinout.v1'
+EXPECTED_PACKAGE='termux-services'
+EXPECTED_VERSION='0.13-1'
+EXPECTED_STOCK_SHA='8c8b8c5222a74bd037cb059ccbbedd4d94cf1f0b1b76b2df8cfa220b9de9d3f8'
+EXPECTED_REPLACEMENT_SHA='1b29e3aed2751b48631ae490e49eda19a80e9e09a62af1e381607b705b2a8652'
+EXPECTED_MODE='700'
+PREFIX='/data/data/com.termux/files/usr'
+TEST_MODE="${MCL_M_TERMUX_PROFILE_THINOUT_TEST_MODE:-0}"
+
+case "$TEST_MODE" in
+    0) ;;
+    1)
+        ROOT="${MCL_M_TERMUX_PROFILE_THINOUT_TEST_ROOT:?test root required}"
+        PREFIX="$ROOT/prefix"
+        ;;
+    *)
+        printf '%s\n' \
+            "schema=$SCHEMA" \
+            'operation=unknown' \
+            'state=unknown' \
+            "package=$EXPECTED_PACKAGE" \
+            "package_version=$EXPECTED_VERSION" \
+            'diversion=unknown' \
+            'service_daemon_auto_start=unknown' \
+            'result=blocked' \
+            'reason=invalid_test_mode' \
+            'details=withheld'
+        exit 64
+        ;;
+esac
+
+TARGET="$PREFIX/etc/profile.d/start-services.sh"
+DIVERT="$PREFIX/etc/profile.d/start-services.sh.mcl-stock"
+TMPDIR="$PREFIX/tmp"
+DPKG_QUERY="$PREFIX/bin/dpkg-query"
+DPKG_DIVERT="$PREFIX/bin/dpkg-divert"
+GREP="$PREFIX/bin/grep"
+SHA256SUM="$PREFIX/bin/sha256sum"
+STAT="$PREFIX/bin/stat"
+CHMOD="$PREFIX/bin/chmod"
+MV="$PREFIX/bin/mv"
+RM="$PREFIX/bin/rm"
+MKDIR="$PREFIX/bin/mkdir"
+FLOCK="$PREFIX/bin/flock"
+LOCK_DIR="$PREFIX/etc/profile.d"
+
+OPERATION='unknown'
+STATE='unknown'
+DIVERSION='unknown'
+AUTO_START='unknown'
+RESULT='unknown'
+REASON='unknown'
+
+emit() {
+    printf '%s\n' \
+        "schema=$SCHEMA" \
+        "operation=$OPERATION" \
+        "state=$STATE" \
+        "package=$EXPECTED_PACKAGE" \
+        "package_version=$EXPECTED_VERSION" \
+        "diversion=$DIVERSION" \
+        "service_daemon_auto_start=$AUTO_START" \
+        "result=$RESULT" \
+        "reason=$REASON" \
+        'details=withheld'
+}
+
+regular_file() {
+    [ -f "$1" ] && [ ! -L "$1" ]
+}
+
+file_sha() {
+    "$SHA256SUM" "$1" 2>/dev/null | {
+        read -r sum _rest || return 1
+        printf '%s' "$sum"
+    }
+}
+
+file_mode() {
+    "$STAT" -c '%a' "$1" 2>/dev/null
+}
+
+package_ok() {
+    [ -x "$DPKG_QUERY" ] || return 1
+    version="$("$DPKG_QUERY" -W -f='${Version}' "$EXPECTED_PACKAGE" 2>/dev/null || true)"
+    status="$("$DPKG_QUERY" -W -f='${db:Status-Status}' "$EXPECTED_PACKAGE" 2>/dev/null || true)"
+    eflag="$("$DPKG_QUERY" -W -f='${db:Status-Eflag}' "$EXPECTED_PACKAGE" 2>/dev/null || true)"
+    [ "$version" = "$EXPECTED_VERSION" ] || return 1
+    [ "$status" = 'installed' ] || return 1
+    [ "$eflag" = 'ok' ] || return 1
+    owner="$("$DPKG_QUERY" -S "$TARGET" 2>/dev/null || true)"
+    printf '%s\n' "$owner" | "$GREP" -Fqx "$EXPECTED_PACKAGE: $TARGET"
+}
+
+acquire_lock() {
+    kind="$1"
+    [ -x "$FLOCK" ] || {
+        REASON='flock_missing'
+        return 1
+    }
+    [ -d "$LOCK_DIR" ] && [ ! -L "$LOCK_DIR" ] || {
+        REASON='lock_directory_invalid'
+        return 1
+    }
+    exec 9<"$LOCK_DIR" || {
+        REASON='lock_open_failed'
+        return 1
+    }
+    case "$kind" in
+        shared)
+            "$FLOCK" -s -n 9 >/dev/null 2>&1 || {
+                REASON='check_lock_busy'
+                return 1
+            }
+            ;;
+        exclusive)
+            "$FLOCK" -n 9 >/dev/null 2>&1 || {
+                REASON='mutation_lock_busy'
+                return 1
+            }
+            ;;
+        *)
+            REASON='lock_mode_invalid'
+            return 1
+            ;;
+    esac
+    return 0
+}
+
+diversion_owner() {
+    "$DPKG_DIVERT" --listpackage "$TARGET" 2>/dev/null || true
+}
+
+archive_exact() {
+    regular_file "$DIVERT" || return 1
+    [ "$(file_sha "$DIVERT")" = "$EXPECTED_STOCK_SHA" ] || return 1
+    [ "$(file_mode "$DIVERT")" = "$EXPECTED_MODE" ] || return 1
+}
+
+replacement_exact() {
+    regular_file "$TARGET" || return 1
+    [ "$(file_sha "$TARGET")" = "$EXPECTED_REPLACEMENT_SHA" ] || return 1
+    [ "$(file_mode "$TARGET")" = "$EXPECTED_MODE" ] || return 1
+}
+
+prepare_replacement() {
+    path="$1"
+    {
+        printf '%s\n' 'export SVDIR=$PREFIX/var/service'
+        printf '%s\n' 'export LOGDIR=$PREFIX/var/log'
+    } > "$path" || return 1
+    "$CHMOD" "$EXPECTED_MODE" "$path" || return 1
+    [ "$(file_sha "$path")" = "$EXPECTED_REPLACEMENT_SHA" ] || return 1
+    [ "$(file_mode "$path")" = "$EXPECTED_MODE" ] || return 1
+}
+
+install_prepared_replacement() {
+    path="$1"
+    [ ! -e "$TARGET" ] && [ ! -L "$TARGET" ] || return 1
+    "$MV" -n "$path" "$TARGET" >/dev/null 2>&1 || return 1
+    [ ! -e "$path" ] || return 1
+    replacement_exact
+}
+
+classify() {
+    STATE='unknown'
+    DIVERSION='unknown'
+    AUTO_START='unknown'
+
+    package_ok || {
+        STATE='unknown'
+        REASON='package_identity_mismatch'
+        return 3
+    }
+    [ -x "$DPKG_DIVERT" ] || {
+        STATE='unknown'
+        REASON='dpkg_divert_missing'
+        return 3
+    }
+
+    truename="$("$DPKG_DIVERT" --truename "$TARGET" 2>/dev/null || true)"
+    owner="$(diversion_owner)"
+
+    if [ "$truename" = "$TARGET" ]; then
+        DIVERSION='absent'
+        [ -z "$owner" ] || {
+            STATE='conflict'
+            REASON='unexpected_diversion_owner'
+            return 2
+        }
+        [ ! -e "$DIVERT" ] && [ ! -L "$DIVERT" ] || {
+            STATE='conflict'
+            REASON='unexpected_archive_without_diversion'
+            return 2
+        }
+        regular_file "$TARGET" || {
+            STATE='conflict'
+            REASON='stock_target_not_regular'
+            return 2
+        }
+        [ "$(file_sha "$TARGET")" = "$EXPECTED_STOCK_SHA" ] || {
+            STATE='drift'
+            REASON='stock_hash_mismatch'
+            return 2
+        }
+        [ "$(file_mode "$TARGET")" = "$EXPECTED_MODE" ] || {
+            STATE='drift'
+            REASON='stock_mode_mismatch'
+            return 2
+        }
+        STATE='stock'
+        AUTO_START='present'
+        REASON='exact_stock'
+        return 0
+    fi
+
+    if [ "$truename" = "$DIVERT" ]; then
+        DIVERSION='present'
+        [ "$owner" = 'LOCAL' ] || {
+            STATE='conflict'
+            REASON='diversion_owner_mismatch'
+            return 2
+        }
+        regular_file "$DIVERT" || {
+            STATE='conflict'
+            REASON='archive_not_regular'
+            return 2
+        }
+        [ "$(file_sha "$DIVERT")" = "$EXPECTED_STOCK_SHA" ] || {
+            STATE='drift'
+            REASON='archive_hash_mismatch'
+            return 2
+        }
+        [ "$(file_mode "$DIVERT")" = "$EXPECTED_MODE" ] || {
+            STATE='drift'
+            REASON='archive_mode_mismatch'
+            return 2
+        }
+
+        if [ ! -e "$TARGET" ] && [ ! -L "$TARGET" ]; then
+            STATE='interrupted'
+            AUTO_START='absent'
+            REASON='exact_interrupted'
+            return 0
+        fi
+
+        regular_file "$TARGET" || {
+            STATE='conflict'
+            REASON='replacement_not_regular'
+            return 2
+        }
+        [ "$(file_sha "$TARGET")" = "$EXPECTED_REPLACEMENT_SHA" ] || {
+            STATE='drift'
+            REASON='replacement_hash_mismatch'
+            return 2
+        }
+        [ "$(file_mode "$TARGET")" = "$EXPECTED_MODE" ] || {
+            STATE='drift'
+            REASON='replacement_mode_mismatch'
+            return 2
+        }
+        STATE='thinned'
+        AUTO_START='absent'
+        REASON='exact_thinned'
+        return 0
+    fi
+
+    STATE='conflict'
+    REASON='unexpected_diversion_target'
+    return 2
+}
+
+reclassify_with_reason() {
+    wanted_reason="$1"
+    classify >/dev/null 2>&1
+    rc=$?
+    REASON="$wanted_reason"
+    return "$rc"
+}
+
+make_tmp() {
+    "$MKDIR" -p "$TMPDIR" || return 1
+    tmp="$TMPDIR/mcl-m-termux-profile-thinout.$$"
+    "$RM" -f "$tmp" 2>/dev/null || true
+    prepare_replacement "$tmp" || {
+        "$RM" -f "$tmp" 2>/dev/null || true
+        return 1
+    }
+    printf '%s' "$tmp"
+}
+
+restore_local_diversion_to_stock() {
+    classify >/dev/null 2>&1
+    rc=$?
+    [ "$rc" -eq 0 ] || return 1
+
+    if [ "$STATE" = 'stock' ]; then
+        return 0
+    fi
+
+    if [ "$STATE" = 'thinned' ]; then
+        "$RM" -f "$TARGET" 2>/dev/null || return 1
+        classify >/dev/null 2>&1
+        rc=$?
+        [ "$rc" -eq 0 ] && [ "$STATE" = 'interrupted' ] || return 1
+    fi
+
+    [ "$STATE" = 'interrupted' ] || return 1
+    "$DPKG_DIVERT" --local --remove --rename --divert "$DIVERT" "$TARGET" >/dev/null 2>&1 || return 1
+    classify >/dev/null 2>&1
+    [ "$?" -eq 0 ] && [ "$STATE" = 'stock' ]
+}
+
+rebuild_thinned_no_clobber() {
+    classify >/dev/null 2>&1
+    rc=$?
+    [ "$rc" -eq 0 ] || return 1
+    [ "$STATE" = 'interrupted' ] || return 1
+
+    tmp="$(make_tmp)" || return 1
+    if ! install_prepared_replacement "$tmp"; then
+        "$RM" -f "$tmp" 2>/dev/null || true
+        return 1
+    fi
+    classify >/dev/null 2>&1
+    [ "$?" -eq 0 ] && [ "$STATE" = 'thinned' ]
+}
+
+do_check() {
+    OPERATION='check'
+    if ! acquire_lock shared; then
+        STATE='unknown'
+        DIVERSION='unknown'
+        AUTO_START='unknown'
+        RESULT='blocked'
+        emit
+        return 2
+    fi
+    classify
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+        RESULT='pass'
+        emit
+        return 0
+    fi
+    [ "$rc" -eq 3 ] && RESULT='unknown' || RESULT='blocked'
+    emit
+    return "$rc"
+}
+
+do_apply() {
+    OPERATION='apply'
+    if ! acquire_lock exclusive; then
+        STATE='unknown'
+        DIVERSION='unknown'
+        AUTO_START='unknown'
+        RESULT='blocked'
+        emit
+        return 2
+    fi
+    classify
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        [ "$rc" -eq 3 ] && RESULT='unknown' || RESULT='blocked'
+        emit
+        return "$rc"
+    fi
+
+    origin="$STATE"
+    case "$origin" in
+        stock|interrupted) ;;
+        *)
+            RESULT='blocked'
+            REASON='apply_requires_stock_or_interrupted'
+            emit
+            return 2
+            ;;
+    esac
+
+    tmp="$(make_tmp)" || {
+        RESULT='fail'
+        REASON='replacement_prepare_failed'
+        emit
+        return 4
+    }
+    created_diversion=0
+
+    if [ "$origin" = 'stock' ]; then
+        if ! "$DPKG_DIVERT" --local --add --rename --divert "$DIVERT" "$TARGET" >/dev/null 2>&1; then
+            "$RM" -f "$tmp" 2>/dev/null || true
+            reclassify_with_reason 'diversion_add_failed' >/dev/null 2>&1 || true
+            RESULT='fail'
+            emit
+            return 4
+        fi
+        created_diversion=1
+        classify >/dev/null 2>&1
+        if [ "$?" -ne 0 ] || [ "$STATE" != 'interrupted' ]; then
+            "$RM" -f "$tmp" 2>/dev/null || true
+            restore_local_diversion_to_stock >/dev/null 2>&1 || true
+            reclassify_with_reason 'diversion_add_readback_failed' >/dev/null 2>&1 || true
+            RESULT='fail'
+            emit
+            return 4
+        fi
+    fi
+
+    if ! install_prepared_replacement "$tmp"; then
+        "$RM" -f "$tmp" 2>/dev/null || true
+        if [ "$created_diversion" -eq 1 ]; then
+            if restore_local_diversion_to_stock; then
+                reclassify_with_reason 'replacement_install_failed' >/dev/null 2>&1 || true
+            else
+                reclassify_with_reason 'replacement_install_failed_rollback_failed' >/dev/null 2>&1 || true
+            fi
+        else
+            reclassify_with_reason 'replacement_install_failed' >/dev/null 2>&1 || true
+        fi
+        RESULT='fail'
+        emit
+        return 4
+    fi
+
+    if classify && [ "$STATE" = 'thinned' ]; then
+        RESULT='pass'
+        if [ "$origin" = 'interrupted' ]; then
+            REASON='applied_from_interrupted'
+        else
+            REASON='applied'
+        fi
+        emit
+        return 0
+    fi
+
+    if [ "$created_diversion" -eq 1 ]; then
+        restore_local_diversion_to_stock >/dev/null 2>&1 || true
+    fi
+    reclassify_with_reason 'apply_readback_failed' >/dev/null 2>&1 || true
+    RESULT='fail'
+    emit
+    return 4
+}
+
+do_restore() {
+    OPERATION='restore'
+    if ! acquire_lock exclusive; then
+        STATE='unknown'
+        DIVERSION='unknown'
+        AUTO_START='unknown'
+        RESULT='blocked'
+        emit
+        return 2
+    fi
+    classify
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        [ "$rc" -eq 3 ] && RESULT='unknown' || RESULT='blocked'
+        emit
+        return "$rc"
+    fi
+
+    origin="$STATE"
+    case "$origin" in
+        thinned|interrupted) ;;
+        *)
+            RESULT='blocked'
+            REASON='restore_requires_thinned_or_interrupted'
+            emit
+            return 2
+            ;;
+    esac
+
+    if [ "$origin" = 'thinned' ]; then
+        if ! "$RM" -f "$TARGET"; then
+            reclassify_with_reason 'replacement_remove_failed' >/dev/null 2>&1 || true
+            RESULT='fail'
+            emit
+            return 4
+        fi
+        classify >/dev/null 2>&1
+        if [ "$?" -ne 0 ] || [ "$STATE" != 'interrupted' ]; then
+            reclassify_with_reason 'replacement_remove_readback_failed' >/dev/null 2>&1 || true
+            RESULT='fail'
+            emit
+            return 4
+        fi
+    fi
+
+    if "$DPKG_DIVERT" --local --remove --rename --divert "$DIVERT" "$TARGET" >/dev/null 2>&1; then
+        if classify && [ "$STATE" = 'stock' ]; then
+            RESULT='pass'
+            if [ "$origin" = 'interrupted' ]; then
+                REASON='restored_from_interrupted'
+            else
+                REASON='restored'
+            fi
+            emit
+            return 0
+        fi
+        reclassify_with_reason 'restore_readback_failed' >/dev/null 2>&1 || true
+        RESULT='fail'
+        emit
+        return 4
+    fi
+
+    classify >/dev/null 2>&1
+    rc=$?
+    if [ "$rc" -eq 0 ] && [ "$STATE" = 'stock' ]; then
+        RESULT='pass'
+        REASON='restored_concurrently'
+        emit
+        return 0
+    fi
+
+    if [ "$rc" -eq 0 ] && [ "$STATE" = 'interrupted' ]; then
+        if rebuild_thinned_no_clobber; then
+            REASON='diversion_remove_failed'
+        else
+            reclassify_with_reason 'diversion_remove_failed_rollback_failed' >/dev/null 2>&1 || true
+        fi
+    else
+        REASON='diversion_remove_failed'
+    fi
+    RESULT='fail'
+    emit
+    return 4
+}
+
+case "${1:-}" in
+    --check)
+        [ "$#" -eq 1 ] || {
+            OPERATION='check'
+            RESULT='blocked'
+            REASON='arguments_forbidden'
+            emit
+            exit 64
+        }
+        do_check
+        ;;
+    --apply)
+        [ "$#" -eq 1 ] || {
+            OPERATION='apply'
+            RESULT='blocked'
+            REASON='arguments_forbidden'
+            emit
+            exit 64
+        }
+        do_apply
+        ;;
+    --restore)
+        [ "$#" -eq 1 ] || {
+            OPERATION='restore'
+            RESULT='blocked'
+            REASON='arguments_forbidden'
+            emit
+            exit 64
+        }
+        do_restore
+        ;;
+    *)
+        OPERATION='unknown'
+        RESULT='blocked'
+        REASON='unsupported_operation'
+        emit
+        exit 64
+        ;;
+esac

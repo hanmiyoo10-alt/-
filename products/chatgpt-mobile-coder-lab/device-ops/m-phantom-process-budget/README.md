@@ -31,13 +31,23 @@ details=withheld
 ```
 
 The observer resolves only the standard per-user Android Platform-Tools
-`adb.exe` location, requires exactly one connected target, verifies exact M
-model `SM-S938N`, resolves the fixed `com.termux` package UID, and reads only
-fixed ActivityManager/package evidence.
+`adb.exe` location. It may inspect multiple connected ADB rows internally, but
+only non-USB rows are eligible for the `wireless_adb` receipt. It reads the
+fixed `ro.product.model` property for those candidates and proceeds only when
+exactly one readable non-USB target matches fixed M model `SM-S938N` and every
+other non-USB candidate model is also readable. It then resolves the fixed
+`com.termux` package UID and reads only fixed ActivityManager/package evidence.
 
-It never prints ADB serials, IP addresses, ports, pairing material, process
-tables, dumpsys payloads, or command stderr. Missing, malformed, ambiguous, or
-mismatched evidence fails closed to a bounded receipt.
+USB M is never selected. Multiple wireless M matches are ambiguous. A failed
+model read remains unknown because the unresolved candidate could also be M.
+Zero non-USB connected rows are offline; readable non-USB rows with no M match
+are a model mismatch.
+
+The observer never prints ADB serials, IP addresses, ports, transport IDs,
+pairing material, process tables, dumpsys payloads, or command stderr. It never
+connects, disconnects, pairs, or changes device/connectivity state. Missing,
+malformed, ambiguous, unresolved, or mismatched evidence fails closed to the
+same bounded receipt schema.
 
 ## Non-authority
 

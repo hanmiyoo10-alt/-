@@ -76,8 +76,11 @@ function parseConnectedDevices(text) {
   for (const raw of String(text || '').replace(/\r/g, '').split('\n')) {
     const line = raw.trim();
     if (!line || line === 'List of devices attached') continue;
-    const match = /^(\S+)\s+(\S+)(?:\s+.*)?$/.exec(line);
-    if (match && match[2] === 'device') rows.push({serial: match[1]});
+    const match = /^(\S+)\s+(\S+)(?:\s+(.*))?$/.exec(line);
+    if (!match || match[2] !== 'device') continue;
+    const metadata = String(match[3] || '');
+    const usb = /(?:^|\s)usb:\S+(?:\s|$)/.test(metadata);
+    rows.push({serial: match[1], usb});
   }
   return rows;
 }
@@ -117,6 +120,29 @@ function runAdb(runner, adb, args) {
   return runner(adb, args);
 }
 
+function selectWirelessTarget({runner, adb, devices}) {
+  const candidates = devices.filter((row) => row.usb !== true);
+  if (candidates.length === 0) return {state: 'offline'};
+
+  const matches = [];
+  let unresolved = 0;
+  for (const candidate of candidates) {
+    const result = runAdb(runner, adb, [
+      '-s', candidate.serial, 'shell', 'getprop', 'ro.product.model',
+    ]);
+    if (!successful(result)) {
+      unresolved += 1;
+      continue;
+    }
+    if (result.stdout.trim() === TARGET_MODEL) matches.push(candidate.serial);
+  }
+
+  if (matches.length > 1) return {state: 'ambiguous'};
+  if (unresolved > 0) return {state: 'unknown'};
+  if (matches.length === 0) return {state: 'mismatch'};
+  return {state: 'match', serial: matches[0]};
+}
+
 function collectStatus({
   platform = process.platform,
   env = process.env,
@@ -129,23 +155,19 @@ function collectStatus({
   const devicesResult = runAdb(runner, resolved.path, ['devices', '-l']);
   if (!successful(devicesResult)) return baseReceipt();
   const devices = parseConnectedDevices(devicesResult.stdout);
-  if (devices.length === 0) {
+  const selected = selectWirelessTarget({runner, adb: resolved.path, devices});
+  if (selected.state === 'offline') {
     return baseReceipt({connection: 'offline', result: 'blocked'});
   }
-  if (devices.length !== 1) {
+  if (selected.state === 'ambiguous') {
     return baseReceipt({connection: 'ambiguous', result: 'blocked'});
   }
-
-  const serial = devices[0].serial;
-  const modelResult = runAdb(runner, resolved.path, [
-    '-s', serial, 'shell', 'getprop', 'ro.product.model',
-  ]);
-  if (!successful(modelResult)) return baseReceipt({connection: 'connected'});
-  const model = modelResult.stdout.trim();
-  if (model !== TARGET_MODEL) {
+  if (selected.state === 'mismatch') {
     return baseReceipt({connection: 'connected', model: 'mismatch', result: 'blocked'});
   }
+  if (selected.state !== 'match') return baseReceipt();
 
+  const serial = selected.serial;
   const uidResult = runAdb(runner, resolved.path, [
     '-s', serial, 'shell', 'cmd', 'package', 'list', 'packages', '-U', TERMUX_PACKAGE,
   ]);
@@ -210,5 +232,6 @@ module.exports = {
   parseTermuxUid,
   renderReceipt,
   resolveAdbPath,
+  selectWirelessTarget,
   termuxUidToken,
 };

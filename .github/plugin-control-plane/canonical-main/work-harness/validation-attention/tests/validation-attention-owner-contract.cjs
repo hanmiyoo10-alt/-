@@ -447,6 +447,26 @@ test('repo-common tools/repo-env packet uses repository-neutral pre-merge route'
   assert.equal(result.report.output.mergeAdmission, 'READY');
 });
 
+test('Repository Patch Write packet uses repository-neutral pre-merge route', async () => {
+  const repoPaths = [
+    'tools/repo-write/README.md',
+    'tools/repo-write/currentize_candidate.py',
+    'tools/repo-write/tests/test_currentize_candidate.py',
+  ];
+  const {deps} = fixtureDeps({
+    mergeInspect: mergeInspectResult({
+      paths: repoPaths,
+      scopes: [...repoPaths.map((p) => 'path:' + p), 'surface:repo:pr-currentization-effect'],
+    }),
+  });
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: implementationReceipt({paths: repoPaths}), deps,
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.output.mergeAdmission, 'READY');
+});
+
 test('reviewed external route can admit a non-neutral NOT_APPLICABLE packet', async () => {
   const otherPaths = ['docs/example.md'];
   const {deps} = fixtureDeps({
@@ -1048,6 +1068,14 @@ test('repo-neutral predicate is narrow, explicit and reviewed-prefix bounded', (
   assert.equal(attention.repoNeutralPacket({
     paths: ['tools/repo-write/README.md'],
     scopes: ['path:tools/repo-write/README.md', 'surface:repo:repository-write'],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/repo-write/README.md'],
+    scopes: ['path:tools/repo-write/README.md', 'surface:repo-ops:repository-write'],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/other/README.md'],
+    scopes: ['path:tools/other/README.md', 'surface:repo:other-tooling'],
   }), false);
   assert.equal(attention.repoNeutralPacket({
     paths: ['products/x/a.js'],

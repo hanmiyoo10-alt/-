@@ -36,6 +36,10 @@ const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const PACKET_REF_RE = /^#[1-9][0-9]*$/;
 const BRANCH_RE = /^laptop\/[A-Za-z0-9._/-]+$/;
+const WORKFLOW_PATH_PREFIX = '.github/workflows/';
+const FIXED_GH = '/usr/bin/gh';
+const FIXED_ORIGIN_URL = 'https://github.com/hanmiyoo10-alt/-.git';
+const FIXED_GITHUB_CREDENTIAL_HELPER = '!/usr/bin/gh auth git-credential';
 const FALSE_AUTHORITY = Object.freeze({
   repositoryMutationAuthorized: false,
   deviceMutationAuthorized: false,
@@ -348,6 +352,109 @@ function git(runner, cwd, args, options = {}) {
 
 function gh(runner, args, options = {}) {
   return runChecked(runner, 'gh', args, options, options.reason || 'GH_COMMAND_FAILED');
+}
+
+function requiresWorkflowOauthScope(paths) {
+  return Array.isArray(paths)
+    && paths.some((item) => typeof item === 'string' && item.startsWith(WORKFLOW_PATH_PREFIX));
+}
+
+function candidatePathsFromNameStatus(text) {
+  const fields = String(text).split('\0');
+  if (fields.length && fields[fields.length - 1] === '') fields.pop();
+  const paths = [];
+  for (let index = 0; index < fields.length;) {
+    const status = fields[index++];
+    if (!/^(?:[ACDMRTUXB]|[RC][0-9]{1,3})$/.test(status || '')) {
+      throw new OwnerError('UNKNOWN', ['GITHUB_WORKFLOW_DIFF_UNOBSERVED']);
+    }
+    const count = status.startsWith('R') || status.startsWith('C') ? 2 : 1;
+    if (index + count > fields.length) {
+      throw new OwnerError('UNKNOWN', ['GITHUB_WORKFLOW_DIFF_UNOBSERVED']);
+    }
+    for (let item = 0; item < count; item += 1) {
+      const candidate = fields[index++];
+      try { validateRepoPath(candidate); }
+      catch { throw new OwnerError('UNKNOWN', ['GITHUB_WORKFLOW_DIFF_UNOBSERVED']); }
+      paths.push(candidate);
+    }
+  }
+  if (!paths.length) throw new OwnerError('UNKNOWN', ['GITHUB_WORKFLOW_DIFF_UNOBSERVED']);
+  return [...new Set(paths)].sort();
+}
+
+function candidatePathsFromStagedDiff(runner, worktree) {
+  const result = runner('git', ['-C', worktree, 'diff', '--cached', '--name-status', '-z', '-M', '--'], {
+    env: safeChildEnv(),
+    timeoutMs: COMMAND_TIMEOUT_MS,
+  });
+  if (result.error || result.signal || result.code !== 0) {
+    throw new OwnerError('UNKNOWN', ['GITHUB_WORKFLOW_DIFF_UNOBSERVED']);
+  }
+  return candidatePathsFromNameStatus(result.stdout);
+}
+
+function candidatePathsFromCommitDiff(runner, worktree, base, candidateHead) {
+  const result = runner('git', ['-C', worktree, 'diff', '--name-status', '-z', '-M', base, candidateHead, '--'], {
+    env: safeChildEnv(),
+    timeoutMs: COMMAND_TIMEOUT_MS,
+  });
+  if (result.error || result.signal || result.code !== 0) {
+    throw new OwnerError('UNKNOWN', ['GITHUB_WORKFLOW_DIFF_UNOBSERVED']);
+  }
+  return candidatePathsFromNameStatus(result.stdout);
+}
+
+function parseGithubOauthScopes(text) {
+  const matches = [];
+  for (const line of String(text).split(/\r?\n/)) {
+    const match = /^x-oauth-scopes:\s*(.*)$/i.exec(line);
+    if (match) matches.push(match[1]);
+  }
+  if (matches.length !== 1) throw new OwnerError('UNKNOWN', ['GITHUB_AUTH_SCOPE_UNOBSERVED']);
+  return [...new Set(matches[0].split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean))].sort();
+}
+
+function requireGithubWorkflowPushCredential(paths, worktree, {runner = defaultRunner} = {}) {
+  if (!requiresWorkflowOauthScope(paths)) return false;
+  const originResult = runner('git', ['-C', worktree, 'remote', 'get-url', '--push', '--all', 'origin'], {
+    env: safeChildEnv(),
+    timeoutMs: COMMAND_TIMEOUT_MS,
+  });
+  if (originResult.error || originResult.signal || originResult.code !== 0) {
+    throw new OwnerError('UNKNOWN', ['GITHUB_WORKFLOW_ORIGIN_UNOBSERVED']);
+  }
+  const pushUrls = originResult.stdout.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+  if (pushUrls.length !== 1 || pushUrls[0] !== FIXED_ORIGIN_URL) {
+    throw new OwnerError('BLOCKED', ['GITHUB_PUSH_CREDENTIAL_BINDING_REQUIRED']);
+  }
+  const result = runner(FIXED_GH, ['api', '-i', 'user'], {
+    env: safeChildEnv(),
+    timeoutMs: COMMAND_TIMEOUT_MS,
+  });
+  if (result.error || result.signal || result.code !== 0) {
+    throw new OwnerError('UNKNOWN', ['GITHUB_AUTH_SCOPE_UNOBSERVED']);
+  }
+  const scopes = parseGithubOauthScopes(result.stdout);
+  if (!scopes.includes('workflow')) {
+    throw new OwnerError('BLOCKED', ['GITHUB_WORKFLOW_SCOPE_REQUIRED']);
+  }
+  return true;
+}
+
+function pushExactCandidate(runner, worktree, head, branch, paths) {
+  const args = ['-C', worktree];
+  if (requiresWorkflowOauthScope(paths)) {
+    requireGithubWorkflowPushCredential(paths, worktree, {runner});
+    args.push(
+      '-c', 'credential.https://github.com.helper=',
+      '-c', 'credential.https://github.com.helper=' + FIXED_GITHUB_CREDENTIAL_HELPER,
+    );
+  }
+  args.push('push', 'origin', head + ':refs/heads/' + branch);
+  runChecked(runner, 'git', args, {}, 'PUSH_FAILED');
 }
 
 function remoteBranchHead(runner, landing, branch) {
@@ -729,6 +836,14 @@ function executePreparedContinuation(context, request, prRequest, {profile = DEF
   holderCheck(context, env);
   let currentMain = continuationCurrentMain(manifest, {profile, runner});
   let state = classifyPreparedContinuationState(manifest, request, currentMain, {runner, profile});
+  const candidatePaths = state.state === 'PUSHED' ? []
+    : state.state === 'PREPARED'
+      ? candidatePathsFromStagedDiff(runner, manifest.workspace.worktree)
+      : candidatePathsFromCommitDiff(runner, manifest.workspace.worktree,
+        manifest.observedBaseSha, state.candidateHead);
+  if (state.state !== 'PUSHED') {
+    requireGithubWorkflowPushCredential(candidatePaths, manifest.workspace.worktree, {runner});
+  }
   let replay = null;
   let checks = [];
   if (state.state === 'PREPARED') {
@@ -759,7 +874,7 @@ function executePreparedContinuation(context, request, prRequest, {profile = DEF
   if (state.state === 'CURRENTIZED' || state.state === 'COMMITTED') {
     holderCheck(context, env);
     if (continuationCurrentMain(manifest, {profile, runner}) !== currentMain) throw new OwnerError('CONFLICT', ['CONTINUATION_MAIN_CHANGED']);
-    runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'push', 'origin', state.finalHead + ':refs/heads/' + manifest.workspace.branch], {}, 'PUSH_FAILED');
+    pushExactCandidate(runner, manifest.workspace.worktree, state.finalHead, manifest.workspace.branch, candidatePaths);
     state = classifyPreparedContinuationState(manifest, request, currentMain, {runner, profile});
     if (state.state !== 'PUSHED') throw new OwnerError('CONFLICT', ['PUSH_READBACK_FAILED']);
   }
@@ -873,6 +988,8 @@ function executeApply(context, request, patchBytes, prRequest, {
     {}, 'PATCH_DIFF_CHECK_FAILED');
   ensureNoResidue(runner, manifest.workspace.worktree);
   const preparedDigest = stagedDigest(runner, manifest.workspace.worktree);
+  const candidatePaths = candidatePathsFromStagedDiff(runner, manifest.workspace.worktree);
+  requireGithubWorkflowPushCredential(candidatePaths, manifest.workspace.worktree, {runner});
   holderCheck(context, env);
   const checks = runFixedValidation(manifest, request, {runner});
   holderCheck(context, env);
@@ -903,10 +1020,7 @@ function executeApply(context, request, patchBytes, prRequest, {
   if (beforePush !== manifest.observedBaseSha) {
     throw new OwnerError('CONFLICT', ['REMOTE_HEAD_MOVED']);
   }
-  runChecked(runner, 'git', [
-    '-C', manifest.workspace.worktree, 'push', 'origin',
-    newHead + ':refs/heads/' + manifest.workspace.branch,
-  ], {}, 'PUSH_FAILED');
+  pushExactCandidate(runner, manifest.workspace.worktree, newHead, manifest.workspace.branch, candidatePaths);
   const afterPush = remoteBranchHead(runner, profile.landing, manifest.workspace.branch);
   if (afterPush !== newHead) throw new OwnerError('CONFLICT', ['PUSH_READBACK_FAILED']);
   holderCheck(context, env);
@@ -1066,6 +1180,9 @@ module.exports = {
   PR_REQUEST_SCHEMA,
   REQUEST_SCHEMA,
   evidenceContext,
+  candidatePathsFromCommitDiff,
+  candidatePathsFromNameStatus,
+  candidatePathsFromStagedDiff,
   classifyPreparedContinuationState,
   continuationCurrentMain,
   executeApply,
@@ -1081,7 +1198,11 @@ module.exports = {
   parseManifestText,
   parsePrRequestText,
   parseRequestText,
+  parseGithubOauthScopes,
   prepareWorkspace,
+  pushExactCandidate,
+  requireGithubWorkflowPushCredential,
+  requiresWorkflowOauthScope,
   protectedMain,
   runContinuationValidation,
   runCli,
@@ -1092,4 +1213,8 @@ module.exports = {
   verifyReplayAgainstCurrent,
   validateRepoPath,
   validateWorktreePath,
+  WORKFLOW_PATH_PREFIX,
+  FIXED_GH,
+  FIXED_ORIGIN_URL,
+  FIXED_GITHUB_CREDENTIAL_HELPER,
 };

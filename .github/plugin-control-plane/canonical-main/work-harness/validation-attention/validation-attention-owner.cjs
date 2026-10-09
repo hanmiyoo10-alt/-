@@ -10,6 +10,7 @@ const MAX_REPORT_BYTES = 32 * 1024;
 const REPO_NEUTRAL_PATH_PREFIXES = Object.freeze([
   '.github/plugin-control-plane/canonical-main/',
   'tools/repo-env/',
+  'tools/repo-ci-mcp/',
 ]);
 const EXTERNAL_FINALIZATION_GATE = 'validation-finalization-external-owner-reviewed';
 

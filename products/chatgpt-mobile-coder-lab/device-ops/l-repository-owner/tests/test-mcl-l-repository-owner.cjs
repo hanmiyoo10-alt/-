@@ -178,6 +178,207 @@ test('request parser fails closed on duplicate unsafe or malformed paths', () =>
   }
 });
 
+test('workflow candidate paths are rename-aware and include both sides', () => {
+  assert.deepEqual(owner.candidatePathsFromNameStatus(
+    'R100\0.github/workflows/old.yml\0docs/new.yml\0M\0docs/a.md\0'),
+    ['.github/workflows/old.yml','docs/a.md','docs/new.yml']);
+  assert.equal(owner.requiresWorkflowOauthScope(
+    owner.candidatePathsFromNameStatus('R100\0.github/workflows/old.yml\0docs/new.yml\0')), true);
+  assert.equal(owner.requiresWorkflowOauthScope(
+    owner.candidatePathsFromNameStatus('R100\0docs/old.md\0docs/new.md\0')), false);
+  expectReason(() => owner.candidatePathsFromNameStatus('R100\0only-one-path\0'),
+    'GITHUB_WORKFLOW_DIFF_UNOBSERVED');
+});
+
+test('workflow OAuth preflight binds scope probe to exact effective push URL and fixed gh credential', () => {
+  assert.equal(owner.requiresWorkflowOauthScope(['.github/workflows/a.yml']), true);
+  assert.equal(owner.requiresWorkflowOauthScope(['.github/workflows/nested/a.yaml']), true);
+  assert.equal(owner.requiresWorkflowOauthScope(['.github/workflow/a.yml']), false);
+  assert.equal(owner.requiresWorkflowOauthScope(['docs/.github/workflows/a.yml']), false);
+
+  const calls = [];
+  const passRunner = (command, args) => {
+    calls.push([command, args]);
+    if (command === 'git' && args.includes('remote')) {
+      assert.deepEqual(args, ['-C','/tmp/wt','remote','get-url','--push','--all','origin']);
+      return {code:0, stdout:owner.FIXED_ORIGIN_URL + '\n', stderr:'', signal:null, error:null};
+    }
+    if (command === 'git' && args.includes('config')) {
+      assert.deepEqual(args, ['-C','/tmp/wt','config','--show-origin','--name-only','--list']);
+      return {code:0, stdout:'file:/tmp/config\tcredential.https://github.com.helper\n', stderr:'', signal:null, error:null};
+    }
+    assert.equal(command, owner.FIXED_GH);
+    assert.deepEqual(args, ['api','-i','user']);
+    return {
+      code:0,
+      stdout:'HTTP/2 200\r\nx-oauth-scopes: repo, workflow, read:org\r\n\r\n{}\n',
+      stderr:'', signal:null, error:null,
+    };
+  };
+  assert.equal(owner.requireGithubWorkflowPushCredential(
+    ['.github/workflows/a.yml'], '/tmp/wt', {runner:passRunner}), true);
+  assert.equal(calls.length, 3);
+
+  const missingRunner = (command) => {
+    if (command === 'git') return {code:0, stdout:owner.FIXED_ORIGIN_URL + '\n', stderr:'', signal:null, error:null};
+    return {code:0, stdout:'HTTP/2 200\r\nx-oauth-scopes: repo, read:org\r\n\r\n{}\n', stderr:'', signal:null, error:null};
+  };
+  expectReason(() => owner.requireGithubWorkflowPushCredential(
+    ['.github/workflows/a.yml'], '/tmp/wt', {runner:missingRunner}),
+    'GITHUB_WORKFLOW_SCOPE_REQUIRED');
+
+  for (const output of [
+    'git@github.com:hanmiyoo10-alt/-.git\n',
+    owner.FIXED_ORIGIN_URL + '\nhttps://mirror.invalid/repo.git\n',
+  ]) {
+    const invalidPushUrl = (command) => {
+      if (command === 'git') return {code:0, stdout:output, stderr:'', signal:null, error:null};
+      throw new Error('gh must not run after push URL mismatch');
+    };
+    expectReason(() => owner.requireGithubWorkflowPushCredential(
+      ['.github/workflows/a.yml'], '/tmp/wt', {runner:invalidPushUrl}),
+      'GITHUB_PUSH_CREDENTIAL_BINDING_REQUIRED');
+  }
+
+  const originUnknown = () => ({code:1, stdout:'', stderr:'withheld', signal:null, error:null});
+  expectReason(() => owner.requireGithubWorkflowPushCredential(
+    ['.github/workflows/a.yml'], '/tmp/wt', {runner:originUnknown}),
+    'GITHUB_WORKFLOW_ORIGIN_UNOBSERVED');
+
+  let nonWorkflowCalls = 0;
+  assert.equal(owner.requireGithubWorkflowPushCredential(
+    ['docs/a.md'], '/tmp/wt', {runner:() => { nonWorkflowCalls += 1; }}), false);
+  assert.equal(nonWorkflowCalls, 0);
+});
+
+test('workflow HTTP auth preflight rejects URL-specific extraHeader keys without reading values', () => {
+  const passRunner = () => ({
+    code:0,
+    stdout:'file:/tmp/config\thttp.extraheader\nfile:/tmp/config\tcredential.https://github.com.helper\n',
+    stderr:'', signal:null, error:null,
+  });
+  assert.equal(owner.requireNoUrlSpecificHttpExtraHeaders('/tmp/wt', {runner:passRunner}), true);
+
+  for (const name of [
+    'http.https://github.com/hanmiyoo10-alt/-.git.extraheader',
+    'http.https://github.com/hanmiyoo10-alt/-.git/info.extraheader',
+    'http.https://github.com/hanmiyoo10-alt/-.git/info/refs.extraheader',
+    'http.https://github.com/hanmiyoo10-alt/-.git/git-receive-pack.extraheader',
+    'http.https://example.invalid/other.extraheader',
+  ]) {
+    const runner = () => ({code:0, stdout:'file:/tmp/config\t' + name + '\n', stderr:'', signal:null, error:null});
+    expectReason(() => owner.requireNoUrlSpecificHttpExtraHeaders('/tmp/wt', {runner}),
+      'GITHUB_HTTP_AUTH_HEADER_BINDING_REQUIRED');
+  }
+
+  const malformed = () => ({code:0, stdout:'http.https://github.com/x.extraheader\n', stderr:'', signal:null, error:null});
+  expectReason(() => owner.requireNoUrlSpecificHttpExtraHeaders('/tmp/wt', {runner:malformed}),
+    'GITHUB_HTTP_AUTH_HEADER_CONFIG_UNOBSERVED');
+  const unavailable = () => ({code:1, stdout:'', stderr:'withheld', signal:null, error:null});
+  expectReason(() => owner.requireNoUrlSpecificHttpExtraHeaders('/tmp/wt', {runner:unavailable}),
+    'GITHUB_HTTP_AUTH_HEADER_CONFIG_UNOBSERVED');
+});
+
+test('workflow OAuth scope parser fails closed on ambiguous or unavailable evidence', () => {
+  assert.deepEqual(owner.parseGithubOauthScopes('x-oauth-scopes: workflow, repo, workflow\n'), ['repo','workflow']);
+  expectReason(() => owner.parseGithubOauthScopes('x-oauth-scopes: repo\nx-oauth-scopes: workflow\n'),
+    'GITHUB_AUTH_SCOPE_UNOBSERVED');
+  const runner = (command) => {
+    if (command === 'git') return {code:0, stdout:owner.FIXED_ORIGIN_URL + '\n', stderr:'', signal:null, error:null};
+    return {code:1, stdout:'', stderr:'withheld', signal:null, error:null};
+  };
+  expectReason(() => owner.requireGithubWorkflowPushCredential(
+    ['.github/workflows/a.yml'], '/tmp/wt', {runner}),
+    'GITHUB_AUTH_SCOPE_UNOBSERVED');
+});
+
+test('workflow push clears inherited HTTP auth and uses the same fixed gh credential helper as the scope probe', () => {
+  const calls = [];
+  const runner = (command, args) => {
+    calls.push([command, args]);
+    if (command === 'git' && args.includes('remote')) {
+      return {code:0, stdout:owner.FIXED_ORIGIN_URL + '\n', stderr:'', signal:null, error:null};
+    }
+    if (command === owner.FIXED_GH) {
+      return {code:0, stdout:'HTTP/2 200\r\nx-oauth-scopes: repo, workflow\r\n\r\n{}\n', stderr:'', signal:null, error:null};
+    }
+    return {code:0, stdout:'', stderr:'', signal:null, error:null};
+  };
+  owner.pushExactCandidate(
+    runner, '/tmp/wt', 'a'.repeat(40), 'laptop/test', ['.github/workflows/a.yml']);
+  const push = calls.find(([command, args]) => command === 'git' && args.includes('push'));
+  assert.ok(push);
+  assert.deepEqual(push[1], [
+    '-C','/tmp/wt',
+    '-c','http.extraHeader=',
+    '-c','http.https://github.com/.extraHeader=',
+    '-c','http.https://github.com/hanmiyoo10-alt/-.git.extraHeader=',
+    '-c','credential.https://github.com.helper=',
+    '-c','credential.https://github.com.helper=' + owner.FIXED_GITHUB_CREDENTIAL_HELPER,
+    '-c','credential.https://github.com/hanmiyoo10-alt/-.git.helper=',
+    '-c','credential.https://github.com/hanmiyoo10-alt/-.git.helper=' + owner.FIXED_GITHUB_CREDENTIAL_HELPER,
+    'push','origin','a'.repeat(40) + ':refs/heads/laptop/test',
+  ]);
+  assert.equal(calls.some(([command]) => command === owner.FIXED_GH), true);
+
+  calls.length = 0;
+  owner.pushExactCandidate(runner, '/tmp/wt', 'b'.repeat(40), 'laptop/test', ['docs/a.md']);
+  assert.deepEqual(calls, [[
+    'git',
+    ['-C','/tmp/wt','push','origin','b'.repeat(40) + ':refs/heads/laptop/test'],
+  ]]);
+});
+
+test('workflow candidate path extraction uses staged or original candidate diff', () => {
+  const calls = [];
+  const runner = (command, args) => {
+    calls.push([command, args]);
+    if (args.includes('--cached')) {
+      return {code:0, stdout:'R100\0.github/workflows/old.yml\0docs/new.yml\0', stderr:'', signal:null, error:null};
+    }
+    return {code:0, stdout:'R100\0.github/workflows/old.yml\0docs/new.yml\0', stderr:'', signal:null, error:null};
+  };
+  assert.deepEqual(owner.candidatePathsFromStagedDiff(runner, '/tmp/wt'),
+    ['.github/workflows/old.yml','docs/new.yml']);
+  assert.deepEqual(owner.candidatePathsFromCommitDiff(
+    runner, '/tmp/wt', 'a'.repeat(40), 'b'.repeat(40)),
+    ['.github/workflows/old.yml','docs/new.yml']);
+  assert.deepEqual(calls[0][1],
+    ['-C','/tmp/wt','diff','--cached','--name-status','-z','-M','--']);
+  assert.deepEqual(calls[1][1],
+    ['-C','/tmp/wt','diff','--name-status','-z','-M','a'.repeat(40),'b'.repeat(40),'--']);
+});
+
+test('workflow credential preflight follows staging and precedes commit/push effects', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../mcl-l-repository-owner.cjs'), 'utf8');
+  const applyStart = source.indexOf('function executeApply');
+  const applyEnd = source.indexOf('\nfunction inspect(', applyStart);
+  const applyBlock = source.slice(applyStart, applyEnd);
+  const stagedPaths = applyBlock.indexOf(
+    'const candidatePaths = candidatePathsFromStagedDiff(runner, manifest.workspace.worktree);');
+  const applyGate = applyBlock.indexOf(
+    'requireGithubWorkflowPushCredential(candidatePaths, manifest.workspace.worktree, {runner});');
+  assert.ok(stagedPaths >= 0);
+  assert.ok(stagedPaths > applyBlock.indexOf("'apply', '--index'"));
+  assert.ok(applyGate > stagedPaths);
+  assert.ok(applyGate < applyBlock.indexOf("'commit', '-m'"));
+  assert.ok(applyBlock.includes(
+    'pushExactCandidate(runner, manifest.workspace.worktree, newHead, manifest.workspace.branch, candidatePaths);'));
+
+  const contStart = source.indexOf('function executePreparedContinuation');
+  const contEnd = source.indexOf('\nfunction fixedValidationChecks', contStart);
+  const contBlock = source.slice(contStart, contEnd);
+  const candidateGate = contBlock.indexOf("const candidatePaths = state.state === 'PUSHED' ? []");
+  assert.ok(candidateGate >= 0);
+  assert.ok(candidateGate < contBlock.indexOf("if (state.state === 'PREPARED')"));
+  assert.ok(contBlock.includes('candidatePathsFromStagedDiff(runner, manifest.workspace.worktree)'));
+  assert.ok(contBlock.includes('candidatePathsFromCommitDiff(runner, manifest.workspace.worktree,'));
+  assert.ok(contBlock.includes(
+    'pushExactCandidate(runner, manifest.workspace.worktree, state.finalHead, manifest.workspace.branch, candidatePaths);'));
+  assert.equal(source.includes("'auth', 'refresh'"), false);
+  assert.equal(source.includes('gh auth refresh'), false);
+});
+
 test('request parser rejects wrong schema packet and patch hash', () => {
   for (const patch of [
     {schema:'wrong',packet_ref:'#9001',message:'x',expected_paths:['a'],patch_sha256:'f'.repeat(64)},

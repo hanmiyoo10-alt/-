@@ -82,9 +82,13 @@ continuation owner's `priorCoordination` result.
 For any packet whose prior coordination is explicitly `NOT_APPLICABLE`, merge admission
 must already prove a validation-finalization route. Generic repository-neutral
 finalization requires `repoNeutralPacket()` to pass:
-- every exact/declared path must stay under a compile-time reviewed neutral prefix;
-- the reviewed prefixes are `.github/plugin-control-plane/canonical-main/` and
-  `tools/repo-env/`;
+- every exact/declared path must match a compile-time reviewed neutral path rule;
+- the reviewed prefixes are `.github/plugin-control-plane/canonical-main/`,
+  `tools/repo-env/`, and `tools/repo-ci-mcp/`;
+- one additional reviewed exact path is
+  `.github/tooling/ci-summary/manifests/plugin-control-plane.json`; this is an
+  exact-file exception and does not admit its directory, sibling files, near-match
+  suffixes, or the broader `.github/tooling/ci-summary/**` tree;
 - at least one semantic surface must be declared and every semantic surface must be
   `surface:repo:*`.
 
@@ -118,9 +122,10 @@ validation-attention inspect evidence
 
 V1 finalization is deliberately repository-neutral only. The packet must positively
 prove that every path stays under one reviewed repository-neutral prefix and every
-semantic surface is `surface:repo:*`. The current reviewed path classes are
-canonical-main infrastructure and repository-common environment tooling under
-`tools/repo-env/`; arbitrary repository paths are not admitted by this rule.
+semantic surface is `surface:repo:*`. The current reviewed path classes are canonical-main infrastructure,
+repository-common environment tooling under `tools/repo-env/`, and Repository Read MCP
+tooling under `tools/repo-ci-mcp/`; arbitrary repository paths are not admitted by this
+rule.
 
 Product/MCL coordination is never silently mapped to `NOT_APPLICABLE`.
 

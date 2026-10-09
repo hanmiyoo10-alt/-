@@ -244,6 +244,50 @@ Inspection reads only the target packet, its comments, and #293 comments. It pai
 
 The inspect result always fixes `mutationAuthorized=false` and `executionAuthorized=false`. It performs no comment POST and adds no stage/effect authority; it operationalizes the existing Phase 8.7g fresh durable rebind contract at the checkpoint owner.
 
+## Read-only canonical Work-Stage Pilot
+
+`work-stage-pilot.cjs` is a thin read-only navigator over the existing canonical
+stage-checkpoint owner. It does not execute stages, classify current `main + #485`
+health, or create a second lifecycle/checkpoint parser.
+
+```sh
+node .github/plugin-control-plane/canonical-main/work-harness/work-stage-pilot.cjs inspect --packet <number>
+```
+
+The live path delegates stage discovery to `stage-checkpoint.cjs inspect`, then
+projects only bounded routing evidence needed for the next decision:
+
+- packet/native lifecycle and current stage;
+- durable completed-stage prefix and rebind disposition;
+- the existing next legal action;
+- next semantic owner/handoff class;
+- bounded required-input hints, source locators, and reason codes.
+
+Stage handoff is routing only:
+
+- `AUTHORITY_SCOPE` → current owning authority chain;
+- `IMPLEMENTATION_PR` → the packet's existing implementation owner;
+- `VALIDATION_MERGE` → existing validation-attention, using PR identity plus the
+  canonical IMPLEMENTATION_PR receipt;
+- `POSTMERGE_CONVERGENCE` → the packet/project's existing postmerge authorities;
+- `EXPERIMENT_CLOSE` → existing proof-eligibility / project experiment owner;
+- terminal and close-sync dispositions preserve the stage-checkpoint owner's exact
+  next legal action.
+
+The Pilot deliberately does **not** parse or classify direct `main + #485` health.
+That remains owned by Repository Read MCP `canonical_main_status` and the verified
+read-only Cockpit `repo_snapshot` composition. A user-facing cockpit may compose
+those read surfaces with the Pilot while the underlying owners remain separate.
+
+`UNKNOWN`, `CONFLICT`, terminal, and reuse-completed checkpoint states remain
+explicit. A PASS-shaped checkpoint inspection must match the canonical inspector
+schema/mode and contain coherent packet, lifecycle, stage, rebind, next-action, and
+authority-false fields before routing. The Pilot cannot synthesize live proof,
+publish checkpoints/receipts, merge/currentize/push branches, dispatch workflows,
+mutate issues/PRs/refs, or run arbitrary commands. CLI exit status preserves the
+canonical checkpoint convention: PASS=0, CONFLICT=2, UNKNOWN=3. Every result fixes
+`mutationAuthorized=false` and `executionAuthorized=false`.
+
 ## Derived canonical-main stage receipt
 
 `stage-receipt.cjs` is a read-only projector for #2275 item 10. It accepts bounded structured stage facts already established by owning authority/evidence and emits one deterministic `CANONICAL_MAIN_STAGE_RECEIPT` plus a compact Markdown projection. It does not read GitHub, discover truth, parse arbitrary packet prose, or write repository/issue state.
@@ -378,6 +422,7 @@ node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync
 node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync-workflow-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/authoritative-handoff-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/stage-checkpoint-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/work-stage-pilot-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/execution-receipt-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/agent-decision-view-contract.cjs
 ```

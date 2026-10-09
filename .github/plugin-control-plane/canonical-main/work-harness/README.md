@@ -408,6 +408,7 @@ node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync
 node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync-workflow-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/authoritative-handoff-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/stage-checkpoint-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/work-stage-pilot-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/execution-receipt-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/agent-decision-view-contract.cjs
 ```

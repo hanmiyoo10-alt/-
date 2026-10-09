@@ -2345,3 +2345,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f36a04355b9a17f05c96da929a9e6b925044f1e5)
 - Event ID: `80b3a62ae89903901195a0dbe04ff31b5200ab468dc769edddb09246c13f76e0`
 <!-- canonical-main-doc-promoted:80b3a62ae89903901195a0dbe04ff31b5200ab468dc769edddb09246c13f76e0 -->
+
+### 2026-10-09 — Merge pull request #3480 from hanmiyoo10-alt/repo/validation-repository-write-routing-3478
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `4895cd22b5a244e91745125d24dbd98fa3193b71`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/4895cd22b5a244e91745125d24dbd98fa3193b71)
+- Event ID: `5b09e074cea8dd028de78479bd821d285e2c0aeab144120b256ed3134e1f8567`
+<!-- canonical-main-doc-promoted:5b09e074cea8dd028de78479bd821d285e2c0aeab144120b256ed3134e1f8567 -->

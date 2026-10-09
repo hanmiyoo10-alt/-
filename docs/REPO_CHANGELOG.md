@@ -2305,3 +2305,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/e648eb2df1b35b564fbca0d6885a95c007ce417f)
 - Event ID: `e5b1e2dc0d1c02f4c1503f7159465af34e25d086a748bbf0c17af4267007a6c1`
 <!-- canonical-main-doc-promoted:e5b1e2dc0d1c02f4c1503f7159465af34e25d086a748bbf0c17af4267007a6c1 -->
+
+### 2026-10-09 — Merge pull request #3446 from hanmiyoo10-alt/repo/validation-plugin-manifest-routing-3445
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `337b9b96cfacda1c10fd3c56dfcc814e01744009`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/337b9b96cfacda1c10fd3c56dfcc814e01744009)
+- Event ID: `47a689c013d86c09a7f207c868ebb2ec06bb4debddae731f414053af4e0e7f1c`
+<!-- canonical-main-doc-promoted:47a689c013d86c09a7f207c868ebb2ec06bb4debddae731f414053af4e0e7f1c -->

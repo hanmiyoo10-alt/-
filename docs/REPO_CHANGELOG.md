@@ -2297,3 +2297,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/bd47a6f850f15cde807198f40d7e22169404c092)
 - Event ID: `8ba3c5110d39073d8072488bd97f407e7184b2bd4f94756cbf951bbaf0e8f754`
 <!-- canonical-main-doc-promoted:8ba3c5110d39073d8072488bd97f407e7184b2bd4f94756cbf951bbaf0e8f754 -->
+
+### 2026-10-09 — Merge pull request #3433 from hanmiyoo10-alt/repo/validation-repository-read-routing-3429
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `e648eb2df1b35b564fbca0d6885a95c007ce417f`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/e648eb2df1b35b564fbca0d6885a95c007ce417f)
+- Event ID: `e5b1e2dc0d1c02f4c1503f7159465af34e25d086a748bbf0c17af4267007a6c1`
+<!-- canonical-main-doc-promoted:e5b1e2dc0d1c02f4c1503f7159465af34e25d086a748bbf0c17af4267007a6c1 -->

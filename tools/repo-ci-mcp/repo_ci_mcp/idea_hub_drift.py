@@ -137,6 +137,15 @@ def discover_candidate_paths(files: list[object], known_paths: set[str]) -> tupl
     return sorted(discovered), findings
 
 
+def _normalized_file_set(files: list[object]) -> set[str]:
+    normalized: set[str] = set()
+    for item in files:
+        path = _normalize_path(item)
+        if path is not None:
+            normalized.add(path)
+    return normalized
+
+
 def _normalize_discussions(
     raw: object,
 ) -> tuple[dict[int, dict[str, str]], set[int], list[dict[str, Any]]]:
@@ -259,18 +268,20 @@ def _check_navigation(
 
 
 def classify_idea_hub_drift(payload: object) -> dict[str, Any]:
-    repository_ref = payload.get("repositoryRef") if isinstance(payload, dict) else None
-    result = _result_base(repository_ref)
-
     if not isinstance(payload, dict):
+        result = _result_base(None)
         result["findings"] = [_finding("INPUT_INVALID", "UNKNOWN", evidence="input must be a JSON object")]
         result["findingCounts"]["UNKNOWN"] = 1
         return result
-    if not isinstance(repository_ref, str) or not repository_ref.strip() or len(repository_ref) > 128:
+
+    repository_ref = _safe_repository_ref(payload.get("repositoryRef"))
+    if repository_ref is None:
+        result = _result_base(None)
         result["findings"] = [_finding("REPOSITORY_REF_INVALID", "UNKNOWN")]
         result["findingCounts"]["UNKNOWN"] = 1
         return result
 
+    result = _result_base(repository_ref)
     files = payload.get("files")
     known_sources = payload.get("knownSources")
     if not isinstance(files, list):
@@ -325,8 +336,7 @@ def classify_idea_hub_drift(payload: object) -> dict[str, Any]:
     )
     findings.extend(discussion_findings)
     result["discussionCount"] = len(discussions)
-    file_set = {_normalize_path(item) for item in files}
-    file_set.discard(None)
+    file_set = _normalized_file_set(files)
 
     for path, source in sorted(normalized_known.items()):
         classification = source["classification"]

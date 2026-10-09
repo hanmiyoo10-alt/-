@@ -24,6 +24,7 @@ SHADOW_MESSAGE = "repo-currentization semantic shadow"
 MAX_REQUEST_BYTES = 16_384
 MAX_BRANCH_BYTES = 180
 MAX_VALIDATIONS = 50
+MAX_GENERATION_COMMITS = 1000
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -39,6 +40,8 @@ class CurrentizeError(RuntimeError):
 
 def run(repo: Path, *args: str, check: bool = True,
         env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    git_env = dict(env or os.environ)
+    git_env["GIT_NO_REPLACE_OBJECTS"] = "1"
     cp = subprocess.run(
         ["git", *args],
         cwd=repo,
@@ -46,7 +49,7 @@ def run(repo: Path, *args: str, check: bool = True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,
-        env=env,
+        env=git_env,
     )
     if check and cp.returncode != 0:
         raise CurrentizeError(
@@ -69,15 +72,22 @@ def ancestor(repo: Path, base: str, head: str) -> bool:
 
 
 def remote_head(repo: Path, branch: str) -> str | None:
-    cp = run(repo, "ls-remote", "--heads", FIXED_REMOTE, f"refs/heads/{branch}", check=False)
+    target = f"refs/heads/{branch}"
+    cp = run(repo, "ls-remote", "--symref", "--heads", FIXED_REMOTE, target, check=False)
     if cp.returncode != 0:
         raise CurrentizeError("REMOTE_HEAD_READ_FAILED", detail=(cp.stderr or cp.stdout).strip(), exit_code=4)
-    rows = [line.split() for line in cp.stdout.splitlines() if line.strip()]
-    if not rows:
+    heads: list[str] = []
+    for line in cp.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 3 and fields[0] == "ref:" and fields[2] == target:
+            raise CurrentizeError("REMOTE_BRANCH_SYMBOLIC", detail=fields[1], exit_code=4)
+        if len(fields) == 2 and fields[1] == target and SHA40.fullmatch(fields[0]):
+            heads.append(fields[0])
+    if not heads:
         return None
-    if len(rows) != 1 or len(rows[0]) != 2 or not SHA40.fullmatch(rows[0][0]):
+    if len(heads) != 1:
         raise CurrentizeError("REMOTE_HEAD_AMBIGUOUS", exit_code=4)
-    return rows[0][0]
+    return heads[0]
 
 
 def fetch_ref(repo: Path, branch: str, expected: str) -> None:
@@ -168,20 +178,23 @@ def load_request(path: Path) -> dict[str, Any]:
 def generation_shape(repo: Path, generation_base: str, candidate_head: str) -> str:
     if not ancestor(repo, generation_base, candidate_head):
         raise CurrentizeError("GENERATION_BASE_NOT_ANCESTOR")
-    merges = [
-        line.strip()
-        for line in run(repo, "rev-list", "--first-parent", "--merges",
-                        f"{generation_base}..{candidate_head}").stdout.splitlines()
-        if line.strip()
-    ]
-    if not merges:
-        return "LINEAR"
-    if len(merges) != 1:
+    rows = run(
+        repo, "rev-list", "--first-parent", "--parents",
+        f"--max-count={MAX_GENERATION_COMMITS}", candidate_head,
+    ).stdout.splitlines()
+    for line in rows:
+        fields = line.strip().split()
+        if not fields:
+            continue
+        commit, parents = fields[0], fields[1:]
+        if commit == generation_base:
+            return "LINEAR"
+        if len(parents) == 1:
+            continue
+        if len(parents) == 2 and parents[1] == generation_base:
+            return "PRIOR_CURRENTIZATION"
         raise CurrentizeError("GENERATION_MERGE_HISTORY_UNSUPPORTED")
-    parents = run(repo, "rev-list", "--parents", "-n", "1", merges[0]).stdout.strip().split()
-    if len(parents) != 3 or parents[2] != generation_base:
-        raise CurrentizeError("GENERATION_BASE_NOT_CURRENTIZATION_PARENT")
-    return "PRIOR_CURRENTIZATION"
+    raise CurrentizeError("GENERATION_HISTORY_BOUND_EXCEEDED")
 
 
 def shadow_candidate(repo: Path, generation_base: str, candidate_head: str) -> str:
@@ -212,6 +225,24 @@ def planner_request(request: dict[str, Any], shadow: str) -> dict[str, Any]:
         "owningCi": request["owningCi"],
         "requiredValidations": request["requiredValidations"],
     }
+
+
+def replay_evidence(function, *args):
+    previous = os.environ.get("GIT_NO_REPLACE_OBJECTS")
+    os.environ["GIT_NO_REPLACE_OBJECTS"] = "1"
+    try:
+        return function(*args)
+    finally:
+        if previous is None:
+            os.environ.pop("GIT_NO_REPLACE_OBJECTS", None)
+        else:
+            os.environ["GIT_NO_REPLACE_OBJECTS"] = previous
+
+
+def planner_proof(repo: Path, request: dict[str, Any], shadow: str) -> dict[str, Any]:
+    return replay_evidence(
+        replay.plan_currentization, repo, planner_request(request, shadow)
+    )
 
 
 def compact_planner(payload: dict[str, Any]) -> dict[str, Any]:
@@ -250,7 +281,7 @@ def validate_new_head(repo: Path, old_head: str, current_main: str, new_head: st
     if not ancestor(repo, old_head, new_head) or not ancestor(repo, current_main, new_head):
         raise CurrentizeError("MERGE_ANCESTRY_INVALID")
 
-    rows = replay.name_status(repo, current_main, new_head)
+    rows = replay_evidence(replay.name_status, repo, current_main, new_head)
     paths = replay.status_paths(rows)
     if paths != proof.get("changedPaths"):
         raise CurrentizeError("POSTMERGE_PATH_IDENTITY_MISMATCH")
@@ -258,14 +289,14 @@ def validate_new_head(repo: Path, old_head: str, current_main: str, new_head: st
     if identity != proof.get("changeIdentity"):
         raise CurrentizeError("POSTMERGE_CHANGE_IDENTITY_MISMATCH")
 
-    patch_id = replay.stable_patch_id(repo, current_main, new_head)
+    patch_id = replay_evidence(replay.stable_patch_id, repo, current_main, new_head)
     if patch_id != proof.get("originalPatchId"):
         raise CurrentizeError("POSTMERGE_PATCH_ID_MISMATCH")
 
     tree_identity: dict[str, Any] = {}
     for path in paths:
-        expected = replay.tree_entry(repo, old_head, path)
-        observed = replay.tree_entry(repo, new_head, path)
+        expected = replay_evidence(replay.tree_entry, repo, old_head, path)
+        observed = replay_evidence(replay.tree_entry, repo, new_head, path)
         tree_identity[path] = {"candidateHead": expected, "currentizedHead": observed}
         if expected != observed:
             raise CurrentizeError("POSTMERGE_TREE_IDENTITY_MISMATCH", detail=path)
@@ -324,7 +355,7 @@ def apply_currentization(repo: Path, request: dict[str, Any]) -> dict[str, Any]:
         )
 
     shadow = shadow_candidate(repo, generation_base, old_head)
-    proof = replay.plan_currentization(repo, planner_request(request, shadow))
+    proof = planner_proof(repo, request, shadow)
     if proof.get("state") != "DISJOINT_REPLAY_PROVEN":
         state = str(proof.get("state") or "UNKNOWN")
         if state not in {"CURRENT", "OVERLAP", "CONFLICT", "UNKNOWN"}:
@@ -350,10 +381,18 @@ def apply_currentization(repo: Path, request: dict[str, Any]) -> dict[str, Any]:
     try:
         run(repo, "worktree", "add", "--detach", str(worktree), old_head)
         added = True
-        run(worktree, "config", "user.name", BOT_NAME)
-        run(worktree, "config", "user.email", BOT_EMAIL)
+        merge_env = dict(os.environ)
+        merge_env.update({
+            "GIT_AUTHOR_NAME": BOT_NAME,
+            "GIT_AUTHOR_EMAIL": BOT_EMAIL,
+            "GIT_COMMITTER_NAME": BOT_NAME,
+            "GIT_COMMITTER_EMAIL": BOT_EMAIL,
+        })
 
-        merge = run(worktree, "merge", "--no-ff", "-m", MERGE_MESSAGE, current_main, check=False)
+        merge = run(
+            worktree, "merge", "--no-ff", "-m", MERGE_MESSAGE, current_main,
+            check=False, env=merge_env,
+        )
         if merge.returncode != 0:
             raise CurrentizeError("MERGE_CONFLICT_OR_FAILURE", detail=(merge.stderr or merge.stdout).strip())
 
@@ -364,18 +403,59 @@ def apply_currentization(repo: Path, request: dict[str, Any]) -> dict[str, Any]:
 
         assert_remote_barrier(repo, branch, old_head, current_main, "BEFORE_PUSH")
 
-        push = run(worktree, "push", FIXED_REMOTE, f"{new_head}:refs/heads/{branch}", check=False)
+        push_acknowledgement = "ACKNOWLEDGED"
+        push = run(
+            worktree, "push", "--no-follow-tags", FIXED_REMOTE,
+            f"{new_head}:refs/heads/{branch}", check=False,
+        )
         if push.returncode != 0:
-            now = remote_head(repo, branch)
-            reason = "REMOTE_HEAD_RACE" if now != old_head else "PUSH_FAILED_NON_RACE"
-            raise CurrentizeError(reason, detail=(push.stderr or push.stdout).strip(), exit_code=4)
-        pushed = True
+            try:
+                now = remote_head(repo, branch)
+            except CurrentizeError as read_error:
+                raise CurrentizeError(
+                    "PUSH_RESULT_UNKNOWN",
+                    detail=(push.stderr or push.stdout).strip(),
+                    exit_code=5,
+                    mutation_may_have_occurred=True,
+                ) from read_error
+            if now == new_head:
+                pushed = True
+                push_acknowledgement = "LOST_RECONCILED"
+            elif now == old_head:
+                raise CurrentizeError(
+                    "PUSH_FAILED_NON_RACE",
+                    detail=(push.stderr or push.stdout).strip(),
+                    exit_code=4,
+                )
+            else:
+                raise CurrentizeError(
+                    "REMOTE_HEAD_RACE",
+                    detail=json.dumps(
+                        {"oldHead": old_head, "newHead": new_head, "observed": now},
+                        separators=(",", ":"),
+                    ),
+                    exit_code=4,
+                    mutation_may_have_occurred=True,
+                )
+        else:
+            pushed = True
 
         observed = remote_head(repo, branch)
         if observed != new_head:
             raise CurrentizeError(
                 "POSTPUSH_HEAD_MISMATCH",
                 detail=json.dumps({"expected": new_head, "observed": observed}, separators=(",", ":")),
+                exit_code=5,
+                mutation_may_have_occurred=True,
+            )
+        observed_main = remote_head(repo, "main")
+        if observed_main != current_main:
+            raise CurrentizeError(
+                "CURRENT_MAIN_MOVED_AFTER_PUSH",
+                detail=json.dumps(
+                    {"expected": current_main, "observed": observed_main},
+                    separators=(",", ":"),
+                ),
                 exit_code=5,
                 mutation_may_have_occurred=True,
             )
@@ -396,6 +476,8 @@ def apply_currentization(repo: Path, request: dict[str, Any]) -> dict[str, Any]:
             patchId=preservation["patchId"],
             treeIdentity=preservation["treeIdentity"],
             rerunPlan=proof.get("rerunPlan", []),
+            pushAcknowledgement=push_acknowledgement,
+            postPushMain=observed_main,
             historicalExactHeadEvidenceReusableAsCurrent=False,
         )
     except CurrentizeError as exc:

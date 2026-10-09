@@ -183,11 +183,14 @@ base, then calls `currentness_replay.plan_currentization()`. Only
 `DISJOINT_REPLAY_PROVEN` may enter the Git effect. Planner `OVERLAP`, `CONFLICT`,
 or `UNKNOWN` stays non-mutating and fail-closed.
 
-For a previously currentized branch, `generationBase` must be the exact second
-parent of the single first-parent merge in that generation. This allows another
-currentization generation without teaching the read-only planner to reinterpret
-arbitrary merge history. The success receipt advances `nextGenerationBase` to
-the exact main that was merged.
+For a previously currentized branch, the newest generation anchor must be the
+first first-parent merge encountered from the candidate tip whose exact second
+parent is `generationBase`. Older currentization merges below that anchor are
+historical and do not cap the number of later generations; any unrelated merge
+encountered before the anchor fails closed. The walk is bounded. This supports
+third and later currentizations without teaching the read-only planner to
+reinterpret arbitrary merge history. The success receipt advances
+`nextGenerationBase` to the exact main that was merged.
 
 The mutation transaction is fixed:
 
@@ -200,9 +203,16 @@ remote main/head exact read
 → ordinary git merge --no-ff of exact current main
 → semantic path / patch / blob+mode preservation proof
 → fresh remote main/head barrier
-→ ordinary non-force push to the same branch
+→ ordinary non-force push with follow-tags disabled
 → exact remote-head readback
+→ exact post-push main readback
 ```
+
+All exact commit/tree/history evidence, including calls through the imported
+read-only planner, disables Git replacement objects. Remote branch reads use
+symbolic-ref evidence and reject symbolic branch aliases rather than following
+them. Merge identity is supplied through command-local environment variables, so
+linked worktrees do not persist bot identity into shared repository config.
 
 `main`, `master`, `release-*`, and `release/*` are denied. There is no caller
 remote, merge strategy, refspec, Git command, commit message, force option,
@@ -210,9 +220,16 @@ conflict resolver, PR mutation, CI dispatch, merge-to-main, release, production,
 runtime, or device authority. The caller's packet/project still owns permission
 to mutate the named ordinary work branch.
 
+A nonzero push result is read back. If the exact new head is already present,
+the helper records lost-ack reconciliation and continues validation; if readback
+cannot establish the effect, mutation uncertainty is preserved. A post-push main
+move never returns `CURRENTIZED`; the branch effect is reported as potentially
+performed and the caller must reconverge against fresh authority.
+
 Every successful changed head carries the planner's complete `RERUN_REQUIRED`
 set forward. Old exact-head CI remains historical only. Rebase, reset,
-cherry-pick, stash, clean, and force push are not part of the helper.
+cherry-pick, stash, clean, tag publication, and force push are not part of the
+helper.
 
 Example:
 

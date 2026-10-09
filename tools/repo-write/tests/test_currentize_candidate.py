@@ -97,6 +97,15 @@ class CurrentizeCandidateTests(unittest.TestCase):
         git(self.repo, "push", "origin", "main")
         return head
 
+    def advance_main_three(self):
+        git(self.repo, "checkout", "main")
+        (self.repo / "main-three.txt").write_text("main-three-change\n", encoding="utf-8")
+        git(self.repo, "add", "main-three.txt")
+        git(self.repo, "commit", "-m", "main three")
+        head = git(self.repo, "rev-parse", "HEAD")
+        git(self.repo, "push", "origin", "main")
+        return head
+
     def test_linear_candidate_currentizes_by_non_force_merge(self):
         out = currentize.apply_currentization(self.repo, self.request())
         self.assertEqual(out["disposition"], "CURRENTIZED")
@@ -109,6 +118,10 @@ class CurrentizeCandidateTests(unittest.TestCase):
         self.assertFalse(out["forcePushUsed"])
         self.assertFalse(out["rebaseUsed"])
         self.assertFalse(out["historicalExactHeadEvidenceReusableAsCurrent"])
+        self.assertEqual(out["postPushMain"], self.main1)
+        self.assertEqual(out["pushAcknowledgement"], "ACKNOWLEDGED")
+        self.assertEqual(git(self.repo, "config", "user.name"), "fixture")
+        self.assertEqual(git(self.repo, "config", "user.email"), "fixture@example.invalid")
         reruns = {row["validationId"] for row in out["rerunPlan"]}
         self.assertEqual(reruns, {
             "protected:Required",
@@ -141,6 +154,24 @@ class CurrentizeCandidateTests(unittest.TestCase):
         self.assertEqual(second["changedPaths"], ["candidate.txt"])
         self.assertEqual(second["patchId"], first["patchId"])
         self.assertFalse(second["forcePushUsed"])
+
+        second_head = second["newHead"]
+        main3 = self.advance_main_three()
+        third = currentize.apply_currentization(
+            self.repo,
+            self.request(
+                expectedHead=second_head,
+                generationBase=main2,
+                currentMain=main3,
+            ),
+        )
+        self.assertEqual(third["disposition"], "CURRENTIZED")
+        self.assertEqual(third["generationShape"], "PRIOR_CURRENTIZATION")
+        self.assertEqual(third["oldHead"], second_head)
+        self.assertEqual(third["nextGenerationBase"], main3)
+        self.assertEqual(third["newHead"], self.remote_head())
+        self.assertEqual(third["changedPaths"], ["candidate.txt"])
+        self.assertEqual(third["patchId"], first["patchId"])
 
     def test_overlap_preserves_remote_head_and_planner_disposition(self):
         git(self.repo, "checkout", "main")
@@ -201,7 +232,7 @@ class CurrentizeCandidateTests(unittest.TestCase):
                 self.repo,
                 self.request(expectedHead=merged),
             )
-        self.assertEqual(caught.exception.reason, "GENERATION_BASE_NOT_CURRENTIZATION_PARENT")
+        self.assertEqual(caught.exception.reason, "GENERATION_MERGE_HISTORY_UNSUPPORTED")
         self.assertEqual(self.remote_head(), merged)
 
     def test_current_main_race_blocks_before_push(self):
@@ -240,11 +271,89 @@ class CurrentizeCandidateTests(unittest.TestCase):
         self.assertEqual(caught.exception.reason, "REMOTE_HEAD_MOVED_BEFORE_PUSH")
         self.assertEqual(self.remote_head(), before)
 
+    def test_postpush_main_movement_is_reported_as_mutating_uncertainty(self):
+        real = currentize.remote_head
+        counts = {"main": 0}
+        before = self.remote_head()
+
+        def fake(repo, branch):
+            if branch == "main":
+                counts["main"] += 1
+                if counts["main"] == 4:
+                    return "d" * 40
+            return real(repo, branch)
+
+        with mock.patch.object(currentize, "remote_head", side_effect=fake):
+            with self.assertRaises(currentize.CurrentizeError) as caught:
+                currentize.apply_currentization(self.repo, self.request())
+        self.assertEqual(caught.exception.reason, "CURRENT_MAIN_MOVED_AFTER_PUSH")
+        self.assertTrue(caught.exception.mutation_may_have_occurred)
+        self.assertNotEqual(self.remote_head(), before)
+
+    def test_lost_push_ack_is_reconciled_when_exact_new_head_is_observed(self):
+        real_run = currentize.run
+
+        def fake_run(repo, *args, check=True, env=None):
+            if args and args[0] == "push":
+                actual = real_run(repo, *args, check=False, env=env)
+                self.assertEqual(actual.returncode, 0)
+                return subprocess.CompletedProcess(
+                    ["git", *args], 1, stdout="", stderr="simulated lost acknowledgement"
+                )
+            return real_run(repo, *args, check=check, env=env)
+
+        with mock.patch.object(currentize, "run", side_effect=fake_run):
+            out = currentize.apply_currentization(self.repo, self.request())
+        self.assertEqual(out["disposition"], "CURRENTIZED")
+        self.assertEqual(out["pushAcknowledgement"], "LOST_RECONCILED")
+        self.assertEqual(out["newHead"], self.remote_head())
+
+    def test_symbolic_remote_branch_is_rejected(self):
+        alias = "repo/currentize-alias"
+        git(self.repo, "push", "origin", f"{self.candidate}:refs/heads/release-prod")
+        git(self.remote, "symbolic-ref", f"refs/heads/{alias}", "refs/heads/release-prod")
+        with self.assertRaises(currentize.CurrentizeError) as caught:
+            currentize.apply_currentization(
+                self.repo,
+                self.request(branch=alias),
+            )
+        self.assertEqual(caught.exception.reason, "REMOTE_BRANCH_SYMBOLIC")
+
+    def test_push_follow_tags_configuration_cannot_publish_tags(self):
+        git(self.repo, "config", "push.followTags", "true")
+        git(self.repo, "tag", "-a", "surprise", self.candidate, "-m", "surprise")
+        out = currentize.apply_currentization(self.repo, self.request())
+        self.assertEqual(out["disposition"], "CURRENTIZED")
+        remote_tag = git(
+            self.repo, "ls-remote", "--tags", "origin", "refs/tags/surprise"
+        )
+        self.assertEqual(remote_tag, "")
+
+    def test_replacement_objects_do_not_change_exact_candidate_evidence(self):
+        git(self.repo, "checkout", "-b", "replacement", self.base)
+        (self.repo / "candidate.txt").write_text("replacement-change\n", encoding="utf-8")
+        git(self.repo, "add", "candidate.txt")
+        git(self.repo, "commit", "-m", "replacement")
+        replacement = git(self.repo, "rev-parse", "HEAD")
+        git(self.repo, "replace", self.candidate, replacement)
+        git(self.repo, "checkout", "main")
+
+        out = currentize.apply_currentization(self.repo, self.request())
+        self.assertEqual(out["disposition"], "CURRENTIZED")
+        observed = git(
+            self.repo, "--no-replace-objects", "show",
+            f'{out["newHead"]}:candidate.txt',
+        )
+        self.assertEqual(observed, "candidate-change")
+
     def test_source_contract_has_fixed_non_force_effect_surface(self):
         source = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('FIXED_REMOTE = "origin"', source)
         self.assertIn('"merge", "--no-ff"', source)
-        self.assertIn('"push", FIXED_REMOTE', source)
+        self.assertIn('"push", "--no-follow-tags", FIXED_REMOTE', source)
+        self.assertIn('GIT_NO_REPLACE_OBJECTS', source)
+        self.assertNotIn('"config", "user.name"', source)
+        self.assertNotIn('"config", "user.email"', source)
         for forbidden in (
             '"push", "--force"',
             '"push", "--force-with-lease"',

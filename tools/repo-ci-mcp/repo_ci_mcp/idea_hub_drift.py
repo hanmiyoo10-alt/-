@@ -75,12 +75,21 @@ def _finding(
     return item
 
 
+def _safe_repository_ref(repository_ref: object) -> str | None:
+    if not isinstance(repository_ref, str):
+        return None
+    text = repository_ref.strip()
+    if not text or len(text) > 128 or any(ord(char) < 32 or ord(char) == 127 for char in text):
+        return None
+    return text
+
+
 def _result_base(repository_ref: object) -> dict[str, Any]:
     return {
         "schemaVersion": SCHEMA_VERSION,
         "mode": "IDEA_HUB_DRIFT_AUDIT",
         "result": "UNKNOWN",
-        "repositoryRef": repository_ref if isinstance(repository_ref, str) else None,
+        "repositoryRef": _safe_repository_ref(repository_ref),
         "candidateCount": 0,
         "reviewedSourceCount": 0,
         "discussionCount": 0,
@@ -128,12 +137,19 @@ def discover_candidate_paths(files: list[object], known_paths: set[str]) -> tupl
     return sorted(discovered), findings
 
 
-def _normalize_discussions(raw: object) -> tuple[dict[int, dict[str, str]], list[dict[str, Any]]]:
+def _normalize_discussions(
+    raw: object,
+) -> tuple[dict[int, dict[str, str]], set[int], list[dict[str, Any]]]:
     findings: list[dict[str, Any]] = []
+    invalid_numbers: set[int] = set()
     if not isinstance(raw, list):
-        return {}, [_finding("DISCUSSIONS_INVALID", "UNKNOWN", evidence="discussions must be a list")]
+        return {}, invalid_numbers, [
+            _finding("DISCUSSIONS_INVALID", "UNKNOWN", evidence="discussions must be a list")
+        ]
     if len(raw) > MAX_DISCUSSIONS:
-        return {}, [_finding("DISCUSSION_BOUND_EXCEEDED", "UNKNOWN", evidence=f"discussions > {MAX_DISCUSSIONS}")]
+        return {}, invalid_numbers, [
+            _finding("DISCUSSION_BOUND_EXCEEDED", "UNKNOWN", evidence=f"discussions > {MAX_DISCUSSIONS}")
+        ]
 
     out: dict[int, dict[str, str]] = {}
     for item in raw:
@@ -147,40 +163,50 @@ def _normalize_discussions(raw: object) -> tuple[dict[int, dict[str, str]], list
         if isinstance(number, bool) or not isinstance(number, int) or number <= 0:
             findings.append(_finding("DISCUSSION_NUMBER_INVALID", "UNKNOWN", evidence=_bounded(number)))
             continue
-        if number in out:
+        if number in out or number in invalid_numbers:
+            out.pop(number, None)
+            invalid_numbers.add(number)
             findings.append(_finding("DISCUSSION_DUPLICATE", "UNKNOWN", discussion_number=number))
             continue
         if not isinstance(body, str) or len(body) > MAX_BODY_CHARS:
+            invalid_numbers.add(number)
             findings.append(_finding("DISCUSSION_BODY_INVALID", "UNKNOWN", discussion_number=number))
             continue
         if not isinstance(category, str) or not isinstance(title, str):
+            invalid_numbers.add(number)
             findings.append(_finding("DISCUSSION_METADATA_INVALID", "UNKNOWN", discussion_number=number))
             continue
         out[number] = {"body": body, "category": category, "title": title}
-    return out, findings
+    return out, invalid_numbers, findings
 
 
-def _projection_markers(source: dict[str, Any]) -> list[str]:
+def _projection_markers(source: dict[str, Any]) -> tuple[list[str], bool]:
     raw = source.get("projectionMarkers")
     if raw is None:
-        return list(DEFAULT_PROJECTION_MARKERS)
+        return list(DEFAULT_PROJECTION_MARKERS), True
     if not isinstance(raw, list):
-        return []
-    return [item for item in raw if isinstance(item, str) and item]
+        return list(DEFAULT_PROJECTION_MARKERS), False
+    markers = [item for item in raw if isinstance(item, str) and item]
+    return (markers, True) if markers and len(markers) == len(raw) else (list(DEFAULT_PROJECTION_MARKERS), False)
 
 
-def _required_markers(source: dict[str, Any], path: str) -> list[str]:
+def _required_markers(source: dict[str, Any], path: str) -> tuple[list[str], bool]:
     raw = source.get("requiredMarkers")
     if raw is None:
-        return [path]
+        return [path], True
     if not isinstance(raw, list):
-        return []
-    return [item for item in raw if isinstance(item, str) and item]
+        return [path], False
+    markers = [item for item in raw if isinstance(item, str) and item]
+    return (markers, True) if markers and len(markers) == len(raw) else ([path], False)
 
+
+def _discussion_link_present(body: str, number: int) -> bool:
+    return re.search(rf"/discussions/{number}(?=$|[/?#)\s])", body) is not None
 
 def _check_navigation(
     navigation: object,
     discussions: dict[int, dict[str, str]],
+    invalid_discussion_numbers: set[int],
 ) -> list[dict[str, Any]]:
     if navigation is None:
         return []
@@ -204,15 +230,19 @@ def _check_navigation(
 
     root = discussions.get(root_number)
     if root is None:
-        return [_finding("NAVIGATION_ROOT_MISSING", "DRIFT", discussion_number=root_number)]
+        disposition = "UNKNOWN" if root_number in invalid_discussion_numbers else "DRIFT"
+        code = "NAVIGATION_ROOT_UNKNOWN" if disposition == "UNKNOWN" else "NAVIGATION_ROOT_MISSING"
+        return [_finding(code, disposition, discussion_number=root_number)]
 
     findings: list[dict[str, Any]] = []
     for number in normalized_owners:
         discussion = discussions.get(number)
         if discussion is None:
-            findings.append(_finding("NAVIGATION_OWNER_MISSING", "DRIFT", discussion_number=number))
+            disposition = "UNKNOWN" if number in invalid_discussion_numbers else "DRIFT"
+            code = "NAVIGATION_OWNER_UNKNOWN" if disposition == "UNKNOWN" else "NAVIGATION_OWNER_MISSING"
+            findings.append(_finding(code, disposition, discussion_number=number))
             continue
-        if f"/discussions/{number}" not in root["body"]:
+        if not _discussion_link_present(root["body"], number):
             findings.append(_finding("NAVIGATION_OWNER_LINK_MISSING", "DRIFT", discussion_number=number))
         for marker in DEFAULT_PROJECTION_MARKERS:
             if marker.upper() not in discussion["body"].upper():
@@ -245,6 +275,12 @@ def classify_idea_hub_drift(payload: object) -> dict[str, Any]:
     known_sources = payload.get("knownSources")
     if not isinstance(files, list):
         result["findings"] = [_finding("FILE_INVENTORY_INVALID", "UNKNOWN")]
+        result["findingCounts"]["UNKNOWN"] = 1
+        return result
+    if len(files) > MAX_FILES:
+        result["findings"] = [
+            _finding("FILE_INVENTORY_BOUND_EXCEEDED", "UNKNOWN", evidence=f"files > {MAX_FILES}")
+        ]
         result["findingCounts"]["UNKNOWN"] = 1
         return result
     if not isinstance(known_sources, list) or len(known_sources) > MAX_KNOWN_SOURCES:
@@ -284,7 +320,9 @@ def classify_idea_hub_drift(payload: object) -> dict[str, Any]:
     result["reviewedSourceCount"] = len(normalized_known)
     result["sourceClassCounts"] = {name: class_counts.get(name, 0) for name in sorted(SOURCE_CLASSES)}
 
-    discussions, discussion_findings = _normalize_discussions(payload.get("discussions"))
+    discussions, invalid_discussion_numbers, discussion_findings = _normalize_discussions(
+        payload.get("discussions")
+    )
     findings.extend(discussion_findings)
     result["discussionCount"] = len(discussions)
     file_set = {_normalize_path(item) for item in files}
@@ -310,10 +348,16 @@ def classify_idea_hub_drift(payload: object) -> dict[str, Any]:
 
         discussion = discussions.get(number)
         if discussion is None:
+            disposition = "UNKNOWN" if number in invalid_discussion_numbers else "DRIFT"
+            code = (
+                "DURABLE_SOURCE_DISCUSSION_UNKNOWN"
+                if disposition == "UNKNOWN"
+                else "DURABLE_SOURCE_DISCUSSION_MISSING"
+            )
             findings.append(
                 _finding(
-                    "DURABLE_SOURCE_DISCUSSION_MISSING",
-                    "DRIFT",
+                    code,
+                    disposition,
                     source_ref=path,
                     discussion_number=number,
                     owner_category=category if isinstance(category, str) else None,
@@ -333,7 +377,17 @@ def classify_idea_hub_drift(payload: object) -> dict[str, Any]:
                 )
             )
 
-        for marker in _required_markers(source, path):
+        required_markers, required_markers_valid = _required_markers(source, path)
+        if not required_markers_valid:
+            findings.append(
+                _finding(
+                    "REQUIRED_MARKERS_INVALID",
+                    "UNKNOWN",
+                    source_ref=path,
+                    discussion_number=number,
+                )
+            )
+        for marker in required_markers:
             if marker not in discussion["body"]:
                 findings.append(
                     _finding(
@@ -347,7 +401,17 @@ def classify_idea_hub_drift(payload: object) -> dict[str, Any]:
                 )
                 break
 
-        for marker in _projection_markers(source):
+        projection_markers, projection_markers_valid = _projection_markers(source)
+        if not projection_markers_valid:
+            findings.append(
+                _finding(
+                    "PROJECTION_MARKERS_INVALID",
+                    "UNKNOWN",
+                    source_ref=path,
+                    discussion_number=number,
+                )
+            )
+        for marker in projection_markers:
             if marker.upper() not in discussion["body"].upper():
                 findings.append(
                     _finding(
@@ -376,7 +440,9 @@ def classify_idea_hub_drift(payload: object) -> dict[str, Any]:
         if path not in normalized_known:
             findings.append(_finding("UNCLASSIFIED_SOURCE_CANDIDATE", "UNKNOWN", source_ref=path))
 
-    findings.extend(_check_navigation(payload.get("navigation"), discussions))
+    findings.extend(
+        _check_navigation(payload.get("navigation"), discussions, invalid_discussion_numbers)
+    )
 
     findings.sort(
         key=lambda item: (
@@ -427,8 +493,12 @@ def main(argv: list[str] | None = None) -> int:
         }
     else:
         try:
-            raw = open(args[0], "r", encoding="utf-8").read() if args else sys.stdin.read()
-        except OSError:
+            if args:
+                with open(args[0], "r", encoding="utf-8") as handle:
+                    raw = handle.read()
+            else:
+                raw = sys.stdin.read()
+        except (OSError, UnicodeError):
             result = {
                 **_result_base(None),
                 "findings": [_finding("INPUT_READ_FAILED", "UNKNOWN")],

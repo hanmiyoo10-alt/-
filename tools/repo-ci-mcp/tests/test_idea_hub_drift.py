@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import contextlib
 import copy
+import io
 import json
+import os
+import tempfile
 import unittest
 
-from repo_ci_mcp.idea_hub_drift import classify_idea_hub_drift
+from repo_ci_mcp.idea_hub_drift import MAX_FILES, classify_idea_hub_drift, main
 
 OWNERS = [
     3396, 3397, 3399, 3400, 3401, 3402, 3403, 3404, 3405, 3406,
@@ -176,6 +180,79 @@ class IdeaHubDriftTests(unittest.TestCase):
         out = classify_idea_hub_drift(payload)
         self.assertEqual(out["result"], "DRIFT")
         self.assertNotIn(secret, json.dumps(out, ensure_ascii=False))
+
+
+    def test_malformed_projection_markers_remain_unknown_and_use_defaults(self):
+        payload = baseline()
+        payload["knownSources"][0]["projectionMarkers"] = "PROJECTION"
+        out = classify_idea_hub_drift(payload)
+        self.assertEqual(out["result"], "UNKNOWN")
+        self.assertIn("PROJECTION_MARKERS_INVALID", [item["code"] for item in out["findings"]])
+
+    def test_malformed_required_markers_remain_unknown_and_use_default_backlink(self):
+        payload = baseline()
+        payload["knownSources"][0]["requiredMarkers"] = "not-a-list"
+        out = classify_idea_hub_drift(payload)
+        self.assertEqual(out["result"], "UNKNOWN")
+        self.assertIn("REQUIRED_MARKERS_INVALID", [item["code"] for item in out["findings"]])
+
+    def test_malformed_referenced_discussion_is_unknown_not_missing_drift(self):
+        payload = baseline()
+        discussion = next(item for item in payload["discussions"] if item["number"] == 3400)
+        discussion["body"] = None
+        out = classify_idea_hub_drift(payload)
+        self.assertEqual(out["result"], "UNKNOWN")
+        codes = [item["code"] for item in out["findings"]]
+        self.assertIn("DISCUSSION_BODY_INVALID", codes)
+        self.assertIn("DURABLE_SOURCE_DISCUSSION_UNKNOWN", codes)
+        self.assertNotIn("DURABLE_SOURCE_DISCUSSION_MISSING", codes)
+
+    def test_navigation_link_requires_complete_discussion_number(self):
+        payload = baseline()
+        root = next(item for item in payload["discussions"] if item["number"] == 3387)
+        root["body"] = root["body"].replace("/discussions/3422", "/discussions/34220")
+        out = classify_idea_hub_drift(payload)
+        self.assertEqual(out["result"], "DRIFT")
+        self.assertIn("NAVIGATION_OWNER_LINK_MISSING", [item["code"] for item in out["findings"]])
+
+    def test_invalid_long_repository_ref_is_not_echoed(self):
+        payload = baseline()
+        sensitive = "private-" + ("x" * 200)
+        payload["repositoryRef"] = sensitive
+        out = classify_idea_hub_drift(payload)
+        self.assertEqual(out["result"], "UNKNOWN")
+        self.assertIsNone(out["repositoryRef"])
+        self.assertNotIn(sensitive, json.dumps(out, ensure_ascii=False))
+
+    def test_oversized_file_inventory_returns_before_iteration(self):
+        class ExplodingList(list):
+            def __iter__(self):
+                raise AssertionError("oversized file inventory must not be traversed")
+
+        payload = baseline()
+        payload["files"] = ExplodingList([None] * (MAX_FILES + 1))
+        out = classify_idea_hub_drift(payload)
+        self.assertEqual(out["result"], "UNKNOWN")
+        self.assertEqual(out["findings"][0]["code"], "FILE_INVENTORY_BOUND_EXCEEDED")
+
+    def test_non_utf8_cli_file_returns_unknown_json(self):
+        handle = tempfile.NamedTemporaryFile(delete=False)
+        try:
+            handle.write(b"\xff\xfe")
+            handle.close()
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = main([handle.name])
+            self.assertEqual(code, 2)
+            out = json.loads(stdout.getvalue())
+            self.assertEqual(out["result"], "UNKNOWN")
+            self.assertEqual(out["findings"][0]["code"], "INPUT_READ_FAILED")
+        finally:
+            try:
+                handle.close()
+            except OSError:
+                pass
+            os.unlink(handle.name)
 
     def test_output_is_deterministic(self):
         payload = baseline()

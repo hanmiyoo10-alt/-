@@ -178,6 +178,73 @@ test('request parser fails closed on duplicate unsafe or malformed paths', () =>
   }
 });
 
+test('workflow OAuth preflight is fixed to Actions workflow paths and X-OAuth-Scopes', () => {
+  assert.equal(owner.requiresWorkflowOauthScope(['.github/workflows/a.yml']), true);
+  assert.equal(owner.requiresWorkflowOauthScope(['.github/workflows/nested/a.yaml']), true);
+  assert.equal(owner.requiresWorkflowOauthScope(['.github/workflow/a.yml']), false);
+  assert.equal(owner.requiresWorkflowOauthScope(['docs/.github/workflows/a.yml']), false);
+  assert.equal(owner.requiresWorkflowOauthScope(['docs/a.md']), false);
+
+  const calls = [];
+  const passRunner = (command, args) => {
+    calls.push([command, args]);
+    return {
+      code:0,
+      stdout:'HTTP/2 200\r\nx-oauth-scopes: repo, workflow, read:org\r\ncontent-type: application/json\r\n\r\n{}\n',
+      stderr:'', signal:null, error:null,
+    };
+  };
+  assert.equal(owner.requireGithubWorkflowScope(['.github/workflows/a.yml'], {runner:passRunner}), true);
+  assert.deepEqual(calls, [['gh', ['api','-i','user']]]);
+
+  const missingRunner = () => ({
+    code:0,
+    stdout:'HTTP/2 200\r\nx-oauth-scopes: repo, read:org\r\n\r\n{}\n',
+    stderr:'', signal:null, error:null,
+  });
+  expectReason(() => owner.requireGithubWorkflowScope(['.github/workflows/a.yml'], {runner:missingRunner}),
+    'GITHUB_WORKFLOW_SCOPE_REQUIRED');
+
+  const unobservedRunner = () => ({code:0, stdout:'HTTP/2 200\r\n\r\n{}\n', stderr:'', signal:null, error:null});
+  expectReason(() => owner.requireGithubWorkflowScope(['.github/workflows/a.yml'], {runner:unobservedRunner}),
+    'GITHUB_AUTH_SCOPE_UNOBSERVED');
+
+  let nonWorkflowCalls = 0;
+  assert.equal(owner.requireGithubWorkflowScope(['docs/a.md'], {runner:() => { nonWorkflowCalls += 1; }}), false);
+  assert.equal(nonWorkflowCalls, 0);
+});
+
+test('workflow OAuth scope parser fails closed on ambiguous or unavailable evidence', () => {
+  assert.deepEqual(owner.parseGithubOauthScopes('x-oauth-scopes: workflow, repo, workflow\n'), ['repo','workflow']);
+  expectReason(() => owner.parseGithubOauthScopes('x-oauth-scopes: repo\nx-oauth-scopes: workflow\n'),
+    'GITHUB_AUTH_SCOPE_UNOBSERVED');
+  expectReason(() => owner.requireGithubWorkflowScope(['.github/workflows/a.yml'], {
+    runner:() => ({code:1, stdout:'', stderr:'withheld', signal:null, error:null}),
+  }), 'GITHUB_AUTH_SCOPE_UNOBSERVED');
+});
+
+test('workflow OAuth preflight precedes apply patch/commit and continuation effects', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../mcl-l-repository-owner.cjs'), 'utf8');
+  const applyStart = source.indexOf('function executeApply');
+  const applyEnd = source.indexOf('\nfunction inspect(', applyStart);
+  const applyBlock = source.slice(applyStart, applyEnd);
+  assert.ok(applyBlock.indexOf('requireGithubWorkflowScope(request.expected_paths, {runner});') >= 0);
+  assert.ok(applyBlock.indexOf('requireGithubWorkflowScope(request.expected_paths, {runner});')
+    < applyBlock.indexOf("'apply', '--check'"));
+  assert.ok(applyBlock.indexOf('requireGithubWorkflowScope(request.expected_paths, {runner});')
+    < applyBlock.indexOf("'commit', '-m'"));
+
+  const contStart = source.indexOf('function executePreparedContinuation');
+  const contEnd = source.indexOf('\nfunction fixedValidationChecks', contStart);
+  const contBlock = source.slice(contStart, contEnd);
+  const gate = contBlock.indexOf("if (state.state !== 'PUSHED') requireGithubWorkflowScope(request.expected_paths, {runner});");
+  assert.ok(gate >= 0);
+  assert.ok(gate < contBlock.indexOf("if (state.state === 'PREPARED')"));
+  assert.ok(gate < contBlock.indexOf("'push', 'origin'"));
+  assert.equal(source.includes("'auth', 'refresh'"), false);
+  assert.equal(source.includes('gh auth refresh'), false);
+});
+
 test('request parser rejects wrong schema packet and patch hash', () => {
   for (const patch of [
     {schema:'wrong',packet_ref:'#9001',message:'x',expected_paths:['a'],patch_sha256:'f'.repeat(64)},

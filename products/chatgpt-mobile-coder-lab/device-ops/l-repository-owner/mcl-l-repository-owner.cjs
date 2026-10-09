@@ -36,6 +36,7 @@ const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const PACKET_REF_RE = /^#[1-9][0-9]*$/;
 const BRANCH_RE = /^laptop\/[A-Za-z0-9._/-]+$/;
+const WORKFLOW_PATH_PREFIX = '.github/workflows/';
 const FALSE_AUTHORITY = Object.freeze({
   repositoryMutationAuthorized: false,
   deviceMutationAuthorized: false,
@@ -348,6 +349,39 @@ function git(runner, cwd, args, options = {}) {
 
 function gh(runner, args, options = {}) {
   return runChecked(runner, 'gh', args, options, options.reason || 'GH_COMMAND_FAILED');
+}
+
+function requiresWorkflowOauthScope(paths) {
+  return Array.isArray(paths)
+    && paths.some((item) => typeof item === 'string' && item.startsWith(WORKFLOW_PATH_PREFIX));
+}
+
+function parseGithubOauthScopes(text) {
+  const matches = [];
+  for (const line of String(text).split(/\r?\n/)) {
+    const match = /^x-oauth-scopes:\s*(.*)$/i.exec(line);
+    if (match) matches.push(match[1]);
+  }
+  if (matches.length !== 1) throw new OwnerError('UNKNOWN', ['GITHUB_AUTH_SCOPE_UNOBSERVED']);
+  return [...new Set(matches[0].split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean))].sort();
+}
+
+function requireGithubWorkflowScope(paths, {runner = defaultRunner} = {}) {
+  if (!requiresWorkflowOauthScope(paths)) return false;
+  const result = runner('gh', ['api', '-i', 'user'], {
+    env: safeChildEnv(),
+    timeoutMs: COMMAND_TIMEOUT_MS,
+  });
+  if (result.error || result.signal || result.code !== 0) {
+    throw new OwnerError('UNKNOWN', ['GITHUB_AUTH_SCOPE_UNOBSERVED']);
+  }
+  const scopes = parseGithubOauthScopes(result.stdout);
+  if (!scopes.includes('workflow')) {
+    throw new OwnerError('BLOCKED', ['GITHUB_WORKFLOW_SCOPE_REQUIRED']);
+  }
+  return true;
 }
 
 function remoteBranchHead(runner, landing, branch) {
@@ -729,6 +763,7 @@ function executePreparedContinuation(context, request, prRequest, {profile = DEF
   holderCheck(context, env);
   let currentMain = continuationCurrentMain(manifest, {profile, runner});
   let state = classifyPreparedContinuationState(manifest, request, currentMain, {runner, profile});
+  if (state.state !== 'PUSHED') requireGithubWorkflowScope(request.expected_paths, {runner});
   let replay = null;
   let checks = [];
   if (state.state === 'PREPARED') {
@@ -853,6 +888,7 @@ function executeApply(context, request, patchBytes, prRequest, {
   if (sha256Bytes(patchBytes) !== request.patch_sha256) {
     throw new OwnerError('CONFLICT', ['PATCH_SHA_CONFLICT']);
   }
+  requireGithubWorkflowScope(request.expected_paths, {runner});
   holderCheck(context, env);
   const patchFile = path.join(manifest.workspace.worktree, '.git-mcl-l-owner.patch.tmp');
   if (fs.existsSync(patchFile)) throw new OwnerError('CONFLICT', ['PATCH_TEMP_ALREADY_EXISTS']);
@@ -1081,7 +1117,10 @@ module.exports = {
   parseManifestText,
   parsePrRequestText,
   parseRequestText,
+  parseGithubOauthScopes,
   prepareWorkspace,
+  requireGithubWorkflowScope,
+  requiresWorkflowOauthScope,
   protectedMain,
   runContinuationValidation,
   runCli,
@@ -1092,4 +1131,5 @@ module.exports = {
   verifyReplayAgainstCurrent,
   validateRepoPath,
   validateWorktreePath,
+  WORKFLOW_PATH_PREFIX,
 };

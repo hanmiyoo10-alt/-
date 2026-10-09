@@ -596,17 +596,23 @@ function readCanonicalInspectEvidence(packetNumber, prNumber, root = ROOT, deps 
   }
   return {receipt: canonicalReceipt, report, implementation};
 }
-function repoNeutralPath(repoPath) {
-  const value = String(repoPath);
-  return REPO_NEUTRAL_EXACT_PATHS.has(value)
-    || REPO_NEUTRAL_PATH_PREFIXES.some((prefix) => value.startsWith(prefix));
+function repoNeutralPathScope(scope) {
+  const normalized = scopeOverlap.normalizeScope(scope);
+  if (!normalized.ok || normalized.kind !== 'path') return false;
+  if (normalized.mode === 'exact' && REPO_NEUTRAL_EXACT_PATHS.has(normalized.value)) {
+    return true;
+  }
+  return REPO_NEUTRAL_PATH_PREFIXES.some(
+    (prefix) => String(normalized.value).startsWith(prefix));
 }
 function repoNeutralPacket(packet) {
   const scopes = packet?.scopes || [];
   const paths = packet?.paths || [];
+  const pathScopes = scopes.filter((row) => row.startsWith('path:'));
   const surfaces = scopes.filter((row) => row.startsWith('surface:'));
   return paths.length > 0
-    && paths.every((repoPath) => repoNeutralPath(repoPath))
+    && pathScopes.length > 0
+    && pathScopes.every((scope) => repoNeutralPathScope(scope))
     && surfaces.length > 0
     && surfaces.every((row) => row.startsWith('surface:repo:'));
 }

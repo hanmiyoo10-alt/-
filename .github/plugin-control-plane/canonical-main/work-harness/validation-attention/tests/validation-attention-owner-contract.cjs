@@ -997,6 +997,13 @@ test('repo-neutral predicate is narrow, explicit and reviewed-prefix bounded', (
     ],
   }), false);
   assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/tooling/ci-summary/manifests/plugin-control-plane.json'],
+    scopes: [
+      'path:.github/tooling/ci-summary/manifests/plugin-control-plane.json/**',
+      'surface:repo:plugin-control-plane-ci-manifest',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
     paths: ['.github/tooling/ci-summary/receipt_runner.py'],
     scopes: [
       'path:.github/tooling/ci-summary/receipt_runner.py',

@@ -9,7 +9,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: canonical-main-stage-checkpoint-publish-${{ github.event.comment.id || github.run_id }}
+  group: canonical-main-stage-checkpoint-publish
   cancel-in-progress: false
 
 jobs:

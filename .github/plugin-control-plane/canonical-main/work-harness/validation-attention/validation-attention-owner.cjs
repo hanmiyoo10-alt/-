@@ -11,6 +11,7 @@ const REPO_NEUTRAL_PATH_PREFIXES = Object.freeze([
   '.github/plugin-control-plane/canonical-main/',
   'tools/repo-env/',
   'tools/repo-ci-mcp/',
+  'tools/repo-write/',
 ]);
 const REPO_NEUTRAL_EXACT_PATHS = Object.freeze(new Set([
   '.github/tooling/ci-summary/manifests/plugin-control-plane.json',

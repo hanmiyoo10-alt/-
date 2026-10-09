@@ -154,6 +154,37 @@ owner and coordination contract checks run from the exact current-source snapsho
 that invoked the owner. Changed candidate CJS syntax and Git diff checks run
 against the real feature workspace.
 
+## Workflow-file OAuth preflight
+
+When an exact candidate contains a path below .github/workflows/, GitHub requires
+an OAuth credential with the workflow scope to add or update that workflow
+through Git transport. The owner therefore performs one fixed read-only capability
+preflight before any normal apply patch/commit effect, and before any remaining
+continue-prepared effect for a candidate that is not already PUSHED.
+
+For workflow-path candidates the owner first requires exact origin
+https://github.com/hanmiyoo10-alt/-.git, then probes OAuth scopes with the fixed
+/usr/bin/gh binary under the same sanitized child environment. The actual
+workflow-path push is explicitly bound to the same gh credential helper by
+resetting other GitHub HTTPS helpers for that command and setting only
+!/usr/bin/gh auth git-credential. This binds the checked OAuth token to the
+credential used by the push rather than assuming origin authentication matches
+GitHub CLI authentication.
+
+The preflight parses only the X-OAuth-Scopes response header and never reads,
+emits, refreshes, or changes the token itself.
+
+workflow path + exact HTTPS origin + workflow scope present -> continue through existing owner gates
+workflow path + non-exact/unobserved origin -> BLOCKED or UNKNOWN before source effects
+workflow path + known workflow scope absent -> BLOCKED / GITHUB_WORKFLOW_SCOPE_REQUIRED
+workflow path + scope evidence unavailable or ambiguous -> UNKNOWN / GITHUB_AUTH_SCOPE_UNOBSERVED
+no workflow path -> existing behavior unchanged
+
+The owner never runs gh auth refresh, opens an authorization flow, or mutates
+GitHub credentials. Adding workflow remains an explicit user-controlled
+prerequisite. Existing non-force push, remote-head readback, holder, D-013/D-014,
+PR, merge, release and production boundaries are unchanged.
+
 ## Fixed validation
 
 Before commit the owner always runs repository-owned checks for:

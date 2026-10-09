@@ -36,6 +36,10 @@ const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const PACKET_REF_RE = /^#[1-9][0-9]*$/;
 const BRANCH_RE = /^laptop\/[A-Za-z0-9._/-]+$/;
+const WORKFLOW_PATH_PREFIX = '.github/workflows/';
+const FIXED_GH = '/usr/bin/gh';
+const FIXED_ORIGIN_URL = 'https://github.com/hanmiyoo10-alt/-.git';
+const FIXED_GITHUB_CREDENTIAL_HELPER = '!/usr/bin/gh auth git-credential';
 const FALSE_AUTHORITY = Object.freeze({
   repositoryMutationAuthorized: false,
   deviceMutationAuthorized: false,
@@ -348,6 +352,62 @@ function git(runner, cwd, args, options = {}) {
 
 function gh(runner, args, options = {}) {
   return runChecked(runner, 'gh', args, options, options.reason || 'GH_COMMAND_FAILED');
+}
+
+function requiresWorkflowOauthScope(paths) {
+  return Array.isArray(paths)
+    && paths.some((item) => typeof item === 'string' && item.startsWith(WORKFLOW_PATH_PREFIX));
+}
+
+function parseGithubOauthScopes(text) {
+  const matches = [];
+  for (const line of String(text).split(/\r?\n/)) {
+    const match = /^x-oauth-scopes:\s*(.*)$/i.exec(line);
+    if (match) matches.push(match[1]);
+  }
+  if (matches.length !== 1) throw new OwnerError('UNKNOWN', ['GITHUB_AUTH_SCOPE_UNOBSERVED']);
+  return [...new Set(matches[0].split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean))].sort();
+}
+
+function requireGithubWorkflowPushCredential(paths, worktree, {runner = defaultRunner} = {}) {
+  if (!requiresWorkflowOauthScope(paths)) return false;
+  const originResult = runner('git', ['-C', worktree, 'remote', 'get-url', 'origin'], {
+    env: safeChildEnv(),
+    timeoutMs: COMMAND_TIMEOUT_MS,
+  });
+  if (originResult.error || originResult.signal || originResult.code !== 0) {
+    throw new OwnerError('UNKNOWN', ['GITHUB_WORKFLOW_ORIGIN_UNOBSERVED']);
+  }
+  if (originResult.stdout.trim() !== FIXED_ORIGIN_URL) {
+    throw new OwnerError('BLOCKED', ['GITHUB_WORKFLOW_ORIGIN_INVALID']);
+  }
+  const result = runner(FIXED_GH, ['api', '-i', 'user'], {
+    env: safeChildEnv(),
+    timeoutMs: COMMAND_TIMEOUT_MS,
+  });
+  if (result.error || result.signal || result.code !== 0) {
+    throw new OwnerError('UNKNOWN', ['GITHUB_AUTH_SCOPE_UNOBSERVED']);
+  }
+  const scopes = parseGithubOauthScopes(result.stdout);
+  if (!scopes.includes('workflow')) {
+    throw new OwnerError('BLOCKED', ['GITHUB_WORKFLOW_SCOPE_REQUIRED']);
+  }
+  return true;
+}
+
+function pushExactCandidate(runner, worktree, head, branch, paths) {
+  const args = ['-C', worktree];
+  if (requiresWorkflowOauthScope(paths)) {
+    requireGithubWorkflowPushCredential(paths, worktree, {runner});
+    args.push(
+      '-c', 'credential.https://github.com.helper=',
+      '-c', 'credential.https://github.com.helper=' + FIXED_GITHUB_CREDENTIAL_HELPER,
+    );
+  }
+  args.push('push', 'origin', head + ':refs/heads/' + branch);
+  runChecked(runner, 'git', args, {}, 'PUSH_FAILED');
 }
 
 function remoteBranchHead(runner, landing, branch) {
@@ -729,6 +789,7 @@ function executePreparedContinuation(context, request, prRequest, {profile = DEF
   holderCheck(context, env);
   let currentMain = continuationCurrentMain(manifest, {profile, runner});
   let state = classifyPreparedContinuationState(manifest, request, currentMain, {runner, profile});
+  if (state.state !== 'PUSHED') requireGithubWorkflowPushCredential(request.expected_paths, manifest.workspace.worktree, {runner});
   let replay = null;
   let checks = [];
   if (state.state === 'PREPARED') {
@@ -759,7 +820,7 @@ function executePreparedContinuation(context, request, prRequest, {profile = DEF
   if (state.state === 'CURRENTIZED' || state.state === 'COMMITTED') {
     holderCheck(context, env);
     if (continuationCurrentMain(manifest, {profile, runner}) !== currentMain) throw new OwnerError('CONFLICT', ['CONTINUATION_MAIN_CHANGED']);
-    runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'push', 'origin', state.finalHead + ':refs/heads/' + manifest.workspace.branch], {}, 'PUSH_FAILED');
+    pushExactCandidate(runner, manifest.workspace.worktree, state.finalHead, manifest.workspace.branch, request.expected_paths);
     state = classifyPreparedContinuationState(manifest, request, currentMain, {runner, profile});
     if (state.state !== 'PUSHED') throw new OwnerError('CONFLICT', ['PUSH_READBACK_FAILED']);
   }
@@ -853,6 +914,7 @@ function executeApply(context, request, patchBytes, prRequest, {
   if (sha256Bytes(patchBytes) !== request.patch_sha256) {
     throw new OwnerError('CONFLICT', ['PATCH_SHA_CONFLICT']);
   }
+  requireGithubWorkflowPushCredential(request.expected_paths, manifest.workspace.worktree, {runner});
   holderCheck(context, env);
   const patchFile = path.join(manifest.workspace.worktree, '.git-mcl-l-owner.patch.tmp');
   if (fs.existsSync(patchFile)) throw new OwnerError('CONFLICT', ['PATCH_TEMP_ALREADY_EXISTS']);
@@ -903,10 +965,7 @@ function executeApply(context, request, patchBytes, prRequest, {
   if (beforePush !== manifest.observedBaseSha) {
     throw new OwnerError('CONFLICT', ['REMOTE_HEAD_MOVED']);
   }
-  runChecked(runner, 'git', [
-    '-C', manifest.workspace.worktree, 'push', 'origin',
-    newHead + ':refs/heads/' + manifest.workspace.branch,
-  ], {}, 'PUSH_FAILED');
+  pushExactCandidate(runner, manifest.workspace.worktree, newHead, manifest.workspace.branch, request.expected_paths);
   const afterPush = remoteBranchHead(runner, profile.landing, manifest.workspace.branch);
   if (afterPush !== newHead) throw new OwnerError('CONFLICT', ['PUSH_READBACK_FAILED']);
   holderCheck(context, env);
@@ -1081,7 +1140,11 @@ module.exports = {
   parseManifestText,
   parsePrRequestText,
   parseRequestText,
+  parseGithubOauthScopes,
   prepareWorkspace,
+  pushExactCandidate,
+  requireGithubWorkflowPushCredential,
+  requiresWorkflowOauthScope,
   protectedMain,
   runContinuationValidation,
   runCli,
@@ -1092,4 +1155,8 @@ module.exports = {
   verifyReplayAgainstCurrent,
   validateRepoPath,
   validateWorktreePath,
+  WORKFLOW_PATH_PREFIX,
+  FIXED_GH,
+  FIXED_ORIGIN_URL,
+  FIXED_GITHUB_CREDENTIAL_HELPER,
 };

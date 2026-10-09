@@ -1,16 +1,17 @@
 package io.hanmiyoo.mcl.termuxlifeline;
 
+import android.app.Activity;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
-import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
+import android.net.Uri;
+import android.os.Bundle;
 import android.os.IBinder;
 import android.os.SystemClock;
 import java.util.concurrent.atomic.AtomicLong;
@@ -20,13 +21,32 @@ public final class LifelineService extends Service {
     static final String RUN_COMMAND_PERMISSION = "com.termux.permission.RUN_COMMAND";
     static final String RUN_COMMAND_ACTION = "com.termux.RUN_COMMAND";
     static final String RUN_COMMAND_SERVICE = "com.termux.app.RunCommandService";
+    static final String RUN_COMMAND_PATH = "com.termux.RUN_COMMAND_PATH";
+    static final String RUN_COMMAND_ARGUMENTS = "com.termux.RUN_COMMAND_ARGUMENTS";
+    static final String RUN_COMMAND_WORKDIR = "com.termux.RUN_COMMAND_WORKDIR";
+    static final String RUN_COMMAND_BACKGROUND = "com.termux.RUN_COMMAND_BACKGROUND";
+    static final String RUN_COMMAND_PENDING_INTENT = "com.termux.RUN_COMMAND_PENDING_INTENT";
+    static final String RESULT_BUNDLE = "result";
+    static final String RESULT_EXIT_CODE = "exitCode";
+    static final String RESULT_ERROR_CODE = "err";
+    static final String HEARTBEAT_CLIENT_PATH =
+        "/data/data/com.termux/files/home/.local/lib/mcl-m-termux-lifeline/heartbeat-client.py";
     static final String RECOVERY_PATH =
         "/data/data/com.termux/files/home/.local/bin/mcl-m-termux-lifeline-recover";
     static final String TERMUX_HOME = "/data/data/com.termux/files/home";
     static final long WATCHDOG_INTERVAL_MS = 5_000L;
+    static final long PROBE_INTERVAL_MS = 10_000L;
+    static final long RUN_COMMAND_TIMEOUT_MS = 30_000L;
 
     private static final String CHANNEL_ID = "mcl_m_termux_lifeline";
     private static final int NOTIFICATION_ID = 2756;
+    private static final String ACTION_RUN_COMMAND_RESULT =
+        "io.hanmiyoo.mcl.termuxlifeline.action.RUN_COMMAND_RESULT_V1";
+    private static final String CALLBACK_SCHEME = "mcl-lifeline-result";
+    private static final String CALLBACK_AUTHORITY = "callback";
+    private static final String KIND_PROBE = "probe";
+    private static final String KIND_RECOVERY = "recovery";
+
     private final AtomicLong lastHeartbeatMs = new AtomicLong(0L);
     private final AtomicLong lastRecoveryReceiptMs = new AtomicLong(0L);
     private volatile boolean running;
@@ -34,101 +54,56 @@ public final class LifelineService extends Service {
     private volatile boolean attemptedForCurrentLoss;
     private volatile boolean failedForCurrentLoss;
     private volatile long lastAttemptMs;
+    private volatile long lastProbeDispatchMs;
     private volatile String status = "WAITING_FOR_FIRST_HEARTBEAT";
-    private volatile boolean receiverRegistered;
-    private final BroadcastReceiver heartbeatReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            handleHeartbeatBroadcast(this, intent);
-        }
-    };
+
+    private long nextGeneration;
+    private int nextRequestCode = 1000;
+    private String pendingKind;
+    private String pendingCallbackData;
+    private long pendingSinceMs;
 
     @Override
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
-        startForeground(
-            NOTIFICATION_ID,
-            buildNotification(status),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-        );
-        if (!registerHeartbeatReceiver()) {
-            stopSelf();
-            return;
-        }
-        running = true;
-        Thread watchdogThread = new Thread(this::watchdogLoop, "mcl-termux-lifeline-watchdog");
-        watchdogThread.setDaemon(true);
-        watchdogThread.start();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && ACTION_RUN_COMMAND_RESULT.equals(intent.getAction())) {
+            if (!running) {
+                stopSelf(startId);
+                return START_NOT_STICKY;
+            }
+            handleRunCommandResult(intent);
+            return START_NOT_STICKY;
+        }
+
+        if (!running) {
+            startForeground(
+                NOTIFICATION_ID,
+                buildNotification(status),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            );
+            running = true;
+            Thread watchdogThread = new Thread(this::watchdogLoop, "mcl-termux-lifeline-watchdog");
+            watchdogThread.setDaemon(true);
+            watchdogThread.start();
+        }
         return START_NOT_STICKY;
     }
 
     @Override
     public void onDestroy() {
         running = false;
-        if (receiverRegistered) {
-            try {
-                unregisterReceiver(heartbeatReceiver);
-            } catch (IllegalArgumentException ignored) {
-            }
-            receiverRegistered = false;
-        }
+        clearPendingOperation();
         super.onDestroy();
     }
 
     @Override
     public IBinder onBind(Intent intent) {
         return null;
-    }
-
-    private boolean registerHeartbeatReceiver() {
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(HeartbeatProtocol.HEARTBEAT_ACTION);
-        filter.addAction(HeartbeatProtocol.RECOVERY_OK_ACTION);
-        try {
-            registerReceiver(heartbeatReceiver, filter, Context.RECEIVER_EXPORTED);
-            receiverRegistered = true;
-            return true;
-        } catch (RuntimeException error) {
-            setStatus("RECEIVER_UNAVAILABLE");
-            return false;
-        }
-    }
-
-    private void handleHeartbeatBroadcast(BroadcastReceiver receiver, Intent intent) {
-        if (!broadcastIsFixedAndFromTermux(receiver, intent)) return;
-        HeartbeatProtocol.Kind kind = HeartbeatProtocol.classifyAction(intent.getAction());
-        if (kind == HeartbeatProtocol.Kind.INVALID) return;
-        long now = SystemClock.elapsedRealtime();
-        if (kind == HeartbeatProtocol.Kind.HEARTBEAT) {
-            lastHeartbeatMs.set(now);
-            if (!recoveryPending) setStatus("HEALTHY");
-            return;
-        }
-        lastRecoveryReceiptMs.set(now);
-        lastHeartbeatMs.set(now);
-    }
-
-    private boolean broadcastIsFixedAndFromTermux(BroadcastReceiver receiver, Intent intent) {
-        if (intent == null || !getPackageName().equals(intent.getPackage())) return false;
-        if (intent.getExtras() != null
-                || intent.getData() != null
-                || intent.getClipData() != null
-                || intent.getCategories() != null
-                || intent.getComponent() != null
-                || intent.getSelector() != null) {
-            return false;
-        }
-        try {
-            ApplicationInfo app = getPackageManager().getApplicationInfo(TERMUX_PACKAGE, 0);
-            return HeartbeatProtocol.senderUidMatchesTermux(receiver.getSentFromUid(), app.uid);
-        } catch (PackageManager.NameNotFoundException error) {
-            return false;
-        }
     }
 
     private void watchdogLoop() {
@@ -147,39 +122,80 @@ public final class LifelineService extends Service {
 
     private void tick() {
         long now = SystemClock.elapsedRealtime();
-        long heartbeat = lastHeartbeatMs.get();
+
+        if (pendingTimedOut(now)) {
+            handlePendingTimeout(now);
+            return;
+        }
+        if (hasPendingOperation()) {
+            if (recoveryPending) setStatus("RECOVERY_VERIFYING");
+            return;
+        }
 
         if (recoveryPending) {
             RecoveryOutcome.State outcome = RecoveryOutcome.classify(
                 now,
                 lastAttemptMs,
-                heartbeat,
+                lastHeartbeatMs.get(),
                 lastRecoveryReceiptMs.get()
             );
-            if (outcome == RecoveryOutcome.State.PENDING) {
-                setStatus("RECOVERY_VERIFYING");
-                return;
-            }
-            recoveryPending = false;
             if (outcome == RecoveryOutcome.State.RECOVERED) {
+                recoveryPending = false;
                 attemptedForCurrentLoss = false;
                 failedForCurrentLoss = false;
                 setStatus("RECOVERED");
-            } else {
+                return;
+            }
+            if (outcome == RecoveryOutcome.State.FAILED) {
+                recoveryPending = false;
                 failedForCurrentLoss = true;
                 setStatus("RECOVERY_FAILED");
+                return;
             }
+            if (probeDue(now) && !dispatchFixedProbe(now)) {
+                recoveryPending = false;
+                failedForCurrentLoss = true;
+                setStatus("RECOVERY_FAILED");
+                return;
+            }
+            setStatus("RECOVERY_VERIFYING");
             return;
         }
 
+        LifelinePolicy.PackageState packageState = readPackageState();
+        if (packageState == LifelinePolicy.PackageState.STOPPED) {
+            setStatus("BLOCKED_FORCE_STOP_DOMAIN");
+            return;
+        }
+        if (packageState == LifelinePolicy.PackageState.UNKNOWN) {
+            setStatus("UNKNOWN_PACKAGE_STATE");
+            return;
+        }
+        if (!hasRunCommandPermission()) {
+            setStatus("NEEDS_MANUAL_RUN_COMMAND_PERMISSION");
+            return;
+        }
+        if (!MainActivity.isPolicyAcknowledged(this)) {
+            setStatus("NEEDS_MANUAL_TERMUX_POLICY");
+            return;
+        }
+
+        long heartbeat = lastHeartbeatMs.get();
         boolean hasSeenHeartbeat = heartbeat > 0L;
+        if (probeDue(now)) {
+            if (dispatchFixedProbe(now)) {
+                if (!hasSeenHeartbeat) setStatus("WAITING_FOR_FIRST_HEARTBEAT");
+                return;
+            }
+        }
+
         LifelinePolicy.Decision decision = LifelinePolicy.decide(
             now,
             heartbeat,
             hasSeenHeartbeat,
-            readPackageState(),
-            hasRunCommandPermission(),
-            MainActivity.isPolicyAcknowledged(this),
+            packageState,
+            true,
+            true,
             attemptedForCurrentLoss,
             lastAttemptMs
         );
@@ -202,13 +218,162 @@ public final class LifelineService extends Service {
 
         attemptedForCurrentLoss = true;
         lastAttemptMs = now;
-        if (dispatchFixedRecovery()) {
+        if (dispatchFixedRecovery(now)) {
             recoveryPending = true;
             setStatus("RECOVERY_DISPATCHED");
         } else {
             failedForCurrentLoss = true;
             setStatus("RECOVERY_FAILED");
         }
+    }
+
+    private boolean probeDue(long now) {
+        return lastProbeDispatchMs == 0L || now - lastProbeDispatchMs >= PROBE_INTERVAL_MS;
+    }
+
+    private boolean dispatchFixedProbe(long now) {
+        boolean started = dispatchFixedRunCommand(
+            HEARTBEAT_CLIENT_PATH,
+            new String[] {"--status"},
+            KIND_PROBE,
+            now
+        );
+        if (started) lastProbeDispatchMs = now;
+        return started;
+    }
+
+    private boolean dispatchFixedRecovery(long now) {
+        return dispatchFixedRunCommand(RECOVERY_PATH, new String[0], KIND_RECOVERY, now);
+    }
+
+    private synchronized boolean dispatchFixedRunCommand(
+            String path,
+            String[] arguments,
+            String kind,
+            long now) {
+        if (pendingKind != null) return false;
+
+        long generation = ++nextGeneration;
+        int requestCode = nextRequestCode++;
+        if (nextRequestCode == Integer.MAX_VALUE) nextRequestCode = 1000;
+
+        String callbackData = CALLBACK_SCHEME + "://" + CALLBACK_AUTHORITY
+            + "/" + kind + "/" + generation;
+        Intent callbackIntent = new Intent(this, LifelineService.class);
+        callbackIntent.setAction(ACTION_RUN_COMMAND_RESULT);
+        callbackIntent.setData(Uri.parse(callbackData));
+        PendingIntent callback = PendingIntent.getService(
+            this,
+            requestCode,
+            callbackIntent,
+            PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_MUTABLE
+        );
+
+        Intent commandIntent = new Intent();
+        commandIntent.setClassName(TERMUX_PACKAGE, RUN_COMMAND_SERVICE);
+        commandIntent.setAction(RUN_COMMAND_ACTION);
+        commandIntent.putExtra(RUN_COMMAND_PATH, path);
+        commandIntent.putExtra(RUN_COMMAND_ARGUMENTS, arguments);
+        commandIntent.putExtra(RUN_COMMAND_WORKDIR, TERMUX_HOME);
+        commandIntent.putExtra(RUN_COMMAND_BACKGROUND, true);
+        commandIntent.putExtra(RUN_COMMAND_PENDING_INTENT, callback);
+
+        pendingKind = kind;
+        pendingCallbackData = callbackData;
+        pendingSinceMs = now;
+        try {
+            if (startService(commandIntent) == null) {
+                clearPendingOperationLocked();
+                return false;
+            }
+            return true;
+        } catch (SecurityException error) {
+            clearPendingOperationLocked();
+            setStatus("NEEDS_MANUAL_RUN_COMMAND_PERMISSION");
+            return false;
+        } catch (RuntimeException error) {
+            clearPendingOperationLocked();
+            return false;
+        }
+    }
+
+    private synchronized void handleRunCommandResult(Intent intent) {
+        if (pendingKind == null || pendingCallbackData == null) return;
+        if (intent.getData() == null || !pendingCallbackData.equals(intent.getDataString())) return;
+
+        String kind = pendingKind;
+        boolean success = runCommandSucceeded(intent);
+        clearPendingOperationLocked();
+        long now = SystemClock.elapsedRealtime();
+
+        if (KIND_PROBE.equals(kind)) {
+            if (success) {
+                lastHeartbeatMs.set(now);
+                if (!recoveryPending) setStatus("HEALTHY");
+            } else if (!recoveryPending && lastHeartbeatMs.get() == 0L) {
+                setStatus("WAITING_FOR_FIRST_HEARTBEAT");
+            }
+            return;
+        }
+
+        if (!KIND_RECOVERY.equals(kind) || !recoveryPending) return;
+        if (!success) {
+            recoveryPending = false;
+            failedForCurrentLoss = true;
+            setStatus("RECOVERY_FAILED");
+            return;
+        }
+
+        lastRecoveryReceiptMs.set(now);
+        if (!dispatchFixedProbe(now)) {
+            recoveryPending = false;
+            failedForCurrentLoss = true;
+            setStatus("RECOVERY_FAILED");
+            return;
+        }
+        setStatus("RECOVERY_VERIFYING");
+    }
+
+    private boolean runCommandSucceeded(Intent intent) {
+        Bundle result = intent.getBundleExtra(RESULT_BUNDLE);
+        if (result == null
+                || !result.containsKey(RESULT_EXIT_CODE)
+                || !result.containsKey(RESULT_ERROR_CODE)) {
+            return false;
+        }
+        return result.getInt(RESULT_ERROR_CODE, Integer.MIN_VALUE) == Activity.RESULT_OK
+            && result.getInt(RESULT_EXIT_CODE, Integer.MIN_VALUE) == 0;
+    }
+
+    private synchronized boolean hasPendingOperation() {
+        return pendingKind != null;
+    }
+
+    private synchronized boolean pendingTimedOut(long now) {
+        return pendingKind != null && now - pendingSinceMs >= RUN_COMMAND_TIMEOUT_MS;
+    }
+
+    private synchronized void handlePendingTimeout(long now) {
+        if (pendingKind == null || now - pendingSinceMs < RUN_COMMAND_TIMEOUT_MS) return;
+        String kind = pendingKind;
+        clearPendingOperationLocked();
+        if (KIND_RECOVERY.equals(kind)) {
+            recoveryPending = false;
+            failedForCurrentLoss = true;
+            setStatus("RECOVERY_FAILED");
+        } else if (!recoveryPending && lastHeartbeatMs.get() == 0L) {
+            setStatus("WAITING_FOR_FIRST_HEARTBEAT");
+        }
+    }
+
+    private synchronized void clearPendingOperation() {
+        clearPendingOperationLocked();
+    }
+
+    private void clearPendingOperationLocked() {
+        pendingKind = null;
+        pendingCallbackData = null;
+        pendingSinceMs = 0L;
     }
 
     private LifelinePolicy.PackageState readPackageState() {
@@ -225,24 +390,6 @@ public final class LifelineService extends Service {
 
     private boolean hasRunCommandPermission() {
         return checkSelfPermission(RUN_COMMAND_PERMISSION) == PackageManager.PERMISSION_GRANTED;
-    }
-
-    private boolean dispatchFixedRecovery() {
-        Intent intent = new Intent();
-        intent.setClassName(TERMUX_PACKAGE, RUN_COMMAND_SERVICE);
-        intent.setAction(RUN_COMMAND_ACTION);
-        intent.putExtra("com.termux.RUN_COMMAND_PATH", RECOVERY_PATH);
-        intent.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", new String[0]);
-        intent.putExtra("com.termux.RUN_COMMAND_WORKDIR", TERMUX_HOME);
-        intent.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
-        try {
-            return startService(intent) != null;
-        } catch (SecurityException error) {
-            setStatus("NEEDS_MANUAL_RUN_COMMAND_PERMISSION");
-            return false;
-        } catch (RuntimeException error) {
-            return false;
-        }
     }
 
     private void createNotificationChannel() {
@@ -267,6 +414,8 @@ public final class LifelineService extends Service {
     private void setStatus(String next) {
         status = next;
         NotificationManager manager = getSystemService(NotificationManager.class);
-        if (manager != null) manager.notify(NOTIFICATION_ID, buildNotification(next));
+        if (manager != null && running) {
+            manager.notify(NOTIFICATION_ID, buildNotification(next));
+        }
     }
 }

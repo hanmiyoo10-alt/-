@@ -1,178 +1,175 @@
 # M Termux lifeline v1
 
-This owner covers one narrow failure domain: the M device loses the entire
-Termux process group while Android still considers com.termux runnable.
+This owner covers one narrow failure domain: the M device loses the Termux
+control-plane process group while Android still considers `com.termux` runnable.
 
-It does not cover Android force-stop, FLAG_STOPPED, RDC relay/transport loss,
+It does not cover Android force-stop, `FLAG_STOPPED`, RDC relay/transport loss,
 PocketRisu, authentication/session repair, or general device recovery.
 
 ## Architecture
 
-~~~
-M Android companion foreground service
-        ↑ dynamic receiver exists only while armed
-        ↑ fixed package-scoped TermuxAm broadcasts
-        ↑ getSentFromUid() must equal installed com.termux UID
-Termux heartbeat client
+```text
+user explicitly arms Android companion foreground service
+        |
+        v
+non-exported LifelineService watchdog
+        |
+        | fixed RUN_COMMAND + one-shot result PendingIntent
+        v
+heartbeat-client.py --status
+        |
+        +-- exit 0 -> current singleton is active -> HEALTHY
+        |
+        +-- nonzero/missing/late result -> no liveness refresh
+                                  |
+                                  v
+                        existing stale/cooldown policy
+                                  |
+                         fixed RUN_COMMAND recovery
+                                  |
+             mcl-m-termux-lifeline-recover
+                 | RDC target guard --once
+                 | Tailscale target guard --once
+                 | re-arm heartbeat singleton
+                 v
+                         command-result callback
+                                  |
+                         fixed --status probe
+                                  |
+                         existing recovery outcome
+```
 
-heartbeat stale
-        ↓
-read com.termux ApplicationInfo.FLAG_STOPPED
-        ├─ stopped / unknown
-        │    → block or fail closed
-        └─ installed + not stopped
-             ↓
-manual prerequisites already satisfied
-             ↓
-one fixed RUN_COMMAND dispatch
-             ↓
-~/.local/bin/mcl-m-termux-lifeline-recover
-        ├─ fixed RDC target guard --once
-        ├─ fixed Tailscale target guard --once after RDC PASS
-        └─ re-arm fixed heartbeat client after target repair
-             ↓
-fixed RECOVERY_OK broadcast + bounded v3 local receipt
-~~~
+The companion is the only initiator of liveness and recovery IPC. Termux does
+not send a broadcast, ContentProvider call, local socket request, or network
+message back to the companion.
 
-The companion lives outside the Termux process and UID boundary. While armed it
-registers one dynamic exported receiver for exactly two package-scoped actions.
-The Android side checks BroadcastReceiver.getSentFromUid() against the actual
-installed com.termux UID and rejects intents carrying caller payload. There is no
-manifest receiver, synchronous sender ACK, or network listener.
+## RUN_COMMAND result boundary
 
-## Safety boundary
+The Android companion already owns one fixed Termux `RUN_COMMAND` permission and
+service path. V1 reuses that same reviewed transport for two fixed commands only:
 
-The Android manifest intentionally contains only foreground-service permissions,
-POST_NOTIFICATIONS for the user-visible lifeline status proof, plus
-com.termux.permission.RUN_COMMAND. There is no INTERNET, accessibility, overlay,
-wake-lock, device-admin, root, shared-UID, or exported service surface.
-POST_NOTIFICATIONS is requested only from the explicit in-app notification
-permission button on Android 13+; launch and arm never request it automatically.
+- `~/.local/lib/mcl-m-termux-lifeline/heartbeat-client.py --status`;
+- `~/.local/bin/mcl-m-termux-lifeline-recover` with zero arguments.
 
-RUN_COMMAND is fixed to:
-- package com.termux;
-- service com.termux.app.RunCommandService;
-- action com.termux.RUN_COMMAND;
-- path $HOME/.local/bin/mcl-m-termux-lifeline-recover;
-- zero arguments;
-- fixed Termux home working directory;
-- background execution.
+Each invocation creates a fresh one-shot mutable PendingIntent that targets the
+same non-exported `LifelineService`. Mutability exists only so Termux can fill
+its documented command-result bundle. Currentness is not trusted from mutable
+extras: the companion binds each outstanding operation to a unique creator-set
+callback URI and in-memory operation kind. A late result, unexpected callback
+URI, missing bundle, Termux internal error, or nonzero command exit code fails
+closed.
 
-There is no caller-selected command, path, argument, working directory,
-environment, stdin, result PendingIntent, terminal foreground request, retry
-count, or fallback executable.
+The companion consumes only the documented result bundle's internal-error code
+and exit code. It does not read, log, persist, or treat stdout/stderr as
+authority.
 
-The recovery script never starts a global runsvdir. It may invoke only the two
-already-reviewed fixed M target guards with literal `--once`, sequenced RDC
-before Tailscale. Their own contracts remain the owner of RDC and Tailscale
-supervisor repair. The emergency recovery path does not invoke either Termux:Boot
-guard launcher and therefore does not intentionally re-arm the guard-service /
-independent-anchor rings while Android process pressure is already high.
+If the companion process dies, its in-memory pending operation disappears. A
+late PendingIntent may start a service instance, but a result callback received
+while the service is not already armed is ignored and the service stops. A
+callback therefore cannot silently re-arm a dead companion.
+
+## Heartbeat singleton
+
+`heartbeat-client.py` is now a local liveness primitive only. It owns one
+singleton file lock and sleeps while holding that lock. It has exactly two
+modes:
+
+- no arguments: acquire and hold the singleton lock;
+- `--status`: bounded proof that another live heartbeat singleton holds the lock.
+
+There is no Termux-to-companion broadcast, ContentProvider, socket, arbitrary
+Android command, or network path in the heartbeat client.
+
+The boot helper still arms this singleton. Recovery re-arms it only after both
+fixed target guards pass.
+
+## Recovery
+
+The recovery entry remains target-only and sequential:
+
+```text
+fixed RDC target guard --once
+→ fixed Tailscale target guard --once
+→ re-arm heartbeat singleton
+→ prove heartbeat --status
+```
+
+It never starts a global `runsvdir` and never invokes either Termux:Boot guard
+launcher. The guard-ring owners remain unchanged for their own boot semantics.
+
+The local recovery receipt is `mcl-m-termux-lifeline-recovery.v4`:
+
+- `rdc_target=pass|fail`;
+- `tailscale_target=pass|fail|not_run`;
+- `heartbeat_active=pass|fail|not_run`;
+- `guard_ring_started=false`;
+- `details=withheld`.
+
+The receipt is bounded local observability only. The Android companion does not
+parse its stdout. Recovery callback success proves only that the fixed recovery
+entry exited successfully. The companion then requires a separate fresh
+`heartbeat-client.py --status` result before the existing recovery outcome may
+be accepted.
 
 ## Force-stop separation
 
-A stale heartbeat is not enough to authorize recovery.
+The watchdog checks `ApplicationInfo.FLAG_STOPPED` before issuing a probe or
+recovery command:
 
-The companion first reads ApplicationInfo.FLAG_STOPPED:
-- STOPPED → BLOCKED_FORCE_STOP_DOMAIN;
-- package state unreadable/unknown → UNKNOWN_PACKAGE_STATE;
-- installed and not stopped → continue to prerequisite checks.
+- STOPPED -> `BLOCKED_FORCE_STOP_DOMAIN`;
+- unreadable/unknown -> `UNKNOWN_PACKAGE_STATE`;
+- installed and not stopped -> continue to manual prerequisite checks.
 
 The companion never clears stopped state and never issues force-stop or package
-state mutation. The force-stop domain belongs to the next separate packet.
+state mutation.
 
 ## Manual prerequisites and activation
 
-The implementation does not grant com.termux.permission.RUN_COMMAND and does
-not write Termux allow-external-apps=true.
+The implementation does not grant `com.termux.permission.RUN_COMMAND` and does
+not write `allow-external-apps=true`.
 
-Termux RUN_COMMAND requires both user-controlled prerequisites. Live activation
-therefore remains a later explicit opt-in:
-1. install the companion APK;
-2. press the in-app notification permission button and grant notification
-   permission on Android 13+ so the reviewed HEALTHY status surface is visible;
-3. grant its RUN_COMMAND permission through Android;
-4. set allow-external-apps=true in the user's Termux configuration;
-5. materialize the fixed Termux files with termux/install.sh --install;
-6. arm the heartbeat and companion service deliberately.
+Live activation therefore remains explicit:
 
-Notification permission affects proof/status visibility only. It does not grant
-RUN_COMMAND recovery authority or replace either Termux prerequisite.
+1. install the exact reviewed companion APK;
+2. explicitly grant notification permission on Android 13+ so the status surface
+   is visible;
+3. explicitly grant the companion's RUN_COMMAND permission;
+4. set `allow-external-apps=true` in Termux yourself and acknowledge that policy
+   in the companion;
+5. materialize the fixed Termux files through `termux/install.sh --install`;
+6. arm the heartbeat singleton and companion deliberately.
 
-install.sh only copies the reviewed fixed files and modes. It does not change
-Android permissions, Termux settings, or start runtime processes.
-
-Reference: Termux RUN_COMMAND Intent documentation.
-
-## Termux files
-
-Repository files map to fixed locations:
-- heartbeat-client.py → ~/.local/lib/mcl-m-termux-lifeline/heartbeat-client.py;
-- mcl-m-termux-lifeline-recover → ~/.local/bin/mcl-m-termux-lifeline-recover;
-- 30-mcl-m-termux-lifeline-heartbeat →
-  ~/.termux/boot/30-mcl-m-termux-lifeline-heartbeat.
-
-The heartbeat client uses one local singleton lock and a 10-second heartbeat.
-Each send invokes the installed TermuxAm wrapper with only `broadcast -a <fixed
-reviewed action> -p io.hanmiyoo.mcl.termuxlifeline`. The fixed `--status`
-operation proves the singleton lock is actively held, while fixed
-`--heartbeat-once` performs exactly one reviewed heartbeat dispatch. Recovery
-re-arm is accepted only after singleton liveness, one heartbeat dispatch, and a
-second singleton-liveness proof all succeed. The sender never claims a receiver
-ACK. The companion declares a heartbeat stale after 45 seconds. Each loss episode
-gets at most one recovery attempt, with a five-minute cooldown before a later
-episode.
-
-Recovery is accepted only from receiver-side truth when both a post-attempt
-heartbeat broadcast and the fixed RECOVERY_OK broadcast arrive through the same
-UID/action/package gate before the 30-second verification timeout.
+The watchdog will not probe Termux until package state is readable/not-stopped,
+RUN_COMMAND permission is present, and the user policy acknowledgement is set.
 
 ## Bounded observability
 
-Durable/local receipts contain only semantic status:
-- RDC target repair pass/fail;
-- Tailscale target repair pass/fail/not-run;
-- heartbeat startup proof pass/fail/not-run, rendered as `heartbeat_dispatch`;
-- RECOVERY_OK dispatch pass/fail/not-run;
-- fixed `guard_ring_started=false`;
-- withheld details.
+Normal durable evidence contains only semantic state. The companion never
+records command stdout/stderr, process trees, PIDs, credentials, auth/session
+data, arbitrary command output, Android identifiers, or caller-selected data.
 
-The Termux recovery receipt is `mcl-m-termux-lifeline-recovery.v3`. A target
-`pass` proves only that the fixed target guard's bounded `--once` effect
-returned successfully; it is not durable-survival proof under Android phantom
-trimming. `heartbeat_dispatch=pass` additionally requires active singleton
-proof, one fixed heartbeat dispatch, and active singleton proof again. The
-receipt still does not claim companion acknowledgement.
-Receiver-side heartbeat/RECOVERY_OK timestamps remain the recovery truth used by
-the Android state machine.
-
-No process tree, PID, command output, credentials, auth/session data, broadcast
-payload transcript, or arbitrary stdout/stderr is collected as evidence.
+The status surface may report states including `HEALTHY`,
+`WAITING_FOR_FIRST_HEARTBEAT`, `NEEDS_MANUAL_RUN_COMMAND_PERMISSION`,
+`NEEDS_MANUAL_TERMUX_POLICY`, `BLOCKED_FORCE_STOP_DOMAIN`,
+`UNKNOWN_PACKAGE_STATE`, `RECOVERY_DISPATCHED`, `RECOVERY_VERIFYING`,
+`RECOVERED`, and `RECOVERY_FAILED`.
 
 ## Validation
 
 Repository contract tests:
 
-~~~sh
+```sh
 python3 -m unittest discover \
   -s products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/tests -v
 
-python3 -m py_compile \
-  products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/termux/heartbeat-client.py
+python3 -c "from pathlib import Path; p=Path('products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/termux/heartbeat-client.py'); compile(p.read_text(), str(p), 'exec')"
 
 gradle \
   -p products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/android-companion \
   :app:testDebugUnitTest :app:assembleDebug
 
 git diff --check
-~~~
+```
 
-The specialized MCL M Termux Lifeline workflow runs these contracts and builds
-a debug APK for review. Building an APK is not live activation.
-
-## Current activation state
-
-Repository implementation and APK build evidence are separate from device
-activation. No APK install, permission grant, Termux settings change, Termux
-process kill, or live whole-process-loss experiment is authorized by this owner
-implementation stage.
+Source/build success does not install the APK or mutate M. Real-device
+`HEALTHY` remains a later explicit postmerge acceptance proof.

@@ -143,8 +143,8 @@ function parseRequestBody(rawBody, deps = DEFAULT_DEPS) {
   if (typeof metadata.bodySha256 !== 'string' || !SHA256_RE.test(metadata.bodySha256)) {
     throw new RequestError('REQUEST_BODY_HASH_INVALID');
   }
-  if (metadata.packetBodySha256 !== null
-      && (typeof metadata.packetBodySha256 !== 'string' || !SHA256_RE.test(metadata.packetBodySha256))) {
+  if (typeof metadata.packetBodySha256 !== 'string'
+      || !SHA256_RE.test(metadata.packetBodySha256)) {
     throw new RequestError('REQUEST_PACKET_BODY_HASH_INVALID');
   }
 

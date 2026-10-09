@@ -170,6 +170,61 @@ The existing `patch_branch.py` writer remains unchanged and continues to reject
 stale `expected_head`. The planner validates a possible future reconciliation;
 it does not weaken that exact-head/CAS contract or add a remote reconciler.
 
+## Bounded candidate currentization effect
+
+`currentize_candidate.py` is the mutation-side companion to the read-only planner.
+It operates only on one already-existing ordinary remote work branch, with remote
+fixed to `origin`, and requires exact `expectedHead`, semantic `generationBase`,
+exact `currentMain`, owning CI, and non-empty validation IDs.
+
+The helper does not replace currentness classification. It creates a temporary
+linear semantic-shadow commit from the candidate tree and the exact generation
+base, then calls `currentness_replay.plan_currentization()`. Only
+`DISJOINT_REPLAY_PROVEN` may enter the Git effect. Planner `OVERLAP`, `CONFLICT`,
+or `UNKNOWN` stays non-mutating and fail-closed.
+
+For a previously currentized branch, `generationBase` must be the exact second
+parent of the single first-parent merge in that generation. This allows another
+currentization generation without teaching the read-only planner to reinterpret
+arbitrary merge history. The success receipt advances `nextGenerationBase` to
+the exact main that was merged.
+
+The mutation transaction is fixed:
+
+```text
+remote main/head exact read
+→ fetch exact bound commits
+→ existing currentness planner proof
+→ fresh remote main/head barrier
+→ isolated detached candidate worktree
+→ ordinary git merge --no-ff of exact current main
+→ semantic path / patch / blob+mode preservation proof
+→ fresh remote main/head barrier
+→ ordinary non-force push to the same branch
+→ exact remote-head readback
+```
+
+`main`, `master`, `release-*`, and `release/*` are denied. There is no caller
+remote, merge strategy, refspec, Git command, commit message, force option,
+conflict resolver, PR mutation, CI dispatch, merge-to-main, release, production,
+runtime, or device authority. The caller's packet/project still owns permission
+to mutate the named ordinary work branch.
+
+Every successful changed head carries the planner's complete `RERUN_REQUIRED`
+set forward. Old exact-head CI remains historical only. Rebase, reset,
+cherry-pick, stash, clean, and force push are not part of the helper.
+
+Example:
+
+```bash
+python tools/repo-write/currentize_candidate.py \
+  --repo . \
+  --request-file request.json
+```
+
+Request schema v1 contains exactly `schemaVersion`, `branch`, `expectedHead`,
+`generationBase`, `currentMain`, `owningCi`, and `requiredValidations`.
+
 
 ## Compact candidate/merge payload identity
 

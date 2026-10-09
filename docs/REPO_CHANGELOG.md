@@ -2329,3 +2329,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/70907bee36f8c65ea7bd3d8b20d5f8f2418b0172)
 - Event ID: `a3953a65c5fb0a53114e5eed259ef1bd01be9c02ff964acc7343da28dd07ee2f`
 <!-- canonical-main-doc-promoted:a3953a65c5fb0a53114e5eed259ef1bd01be9c02ff964acc7343da28dd07ee2f -->
+
+### 2026-10-09 — Merge pull request #3465 from hanmiyoo10-alt/repo/stage-checkpoint-workflow-routing-3456-v2
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `dc3e9999da4f32c759e77f1b608ebfd5dbf0ebeb`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/dc3e9999da4f32c759e77f1b608ebfd5dbf0ebeb)
+- Event ID: `359eab24e448edaa514128b66de6ceede236a653b984a6b9a1615d2a6f8ec5c1`
+<!-- canonical-main-doc-promoted:359eab24e448edaa514128b66de6ceede236a653b984a6b9a1615d2a6f8ec5c1 -->

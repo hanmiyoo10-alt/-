@@ -12,6 +12,9 @@ const REPO_NEUTRAL_PATH_PREFIXES = Object.freeze([
   'tools/repo-env/',
   'tools/repo-ci-mcp/',
 ]);
+const REPO_NEUTRAL_EXACT_PATHS = Object.freeze(new Set([
+  '.github/tooling/ci-summary/manifests/plugin-control-plane.json',
+]));
 const EXTERNAL_FINALIZATION_GATE = 'validation-finalization-external-owner-reviewed';
 
 const continuation = require('../validation-continuation/validation-continuation-owner.cjs');
@@ -593,13 +596,17 @@ function readCanonicalInspectEvidence(packetNumber, prNumber, root = ROOT, deps 
   }
   return {receipt: canonicalReceipt, report, implementation};
 }
+function repoNeutralPath(repoPath) {
+  const value = String(repoPath);
+  return REPO_NEUTRAL_EXACT_PATHS.has(value)
+    || REPO_NEUTRAL_PATH_PREFIXES.some((prefix) => value.startsWith(prefix));
+}
 function repoNeutralPacket(packet) {
   const scopes = packet?.scopes || [];
   const paths = packet?.paths || [];
   const surfaces = scopes.filter((row) => row.startsWith('surface:'));
   return paths.length > 0
-    && paths.every((repoPath) => REPO_NEUTRAL_PATH_PREFIXES.some(
-      (prefix) => String(repoPath).startsWith(prefix)))
+    && paths.every((repoPath) => repoNeutralPath(repoPath))
     && surfaces.length > 0
     && surfaces.every((row) => row.startsWith('surface:repo:'));
 }

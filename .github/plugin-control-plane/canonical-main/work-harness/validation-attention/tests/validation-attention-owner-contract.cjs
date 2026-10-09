@@ -983,6 +983,34 @@ test('repo-neutral predicate is narrow, explicit and reviewed-prefix bounded', (
     scopes: ['path:tools/repo-ci-mcp/README.md', 'surface:repo-ops:repository-read-mcp'],
   }), false);
   assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/tooling/ci-summary/manifests/plugin-control-plane.json'],
+    scopes: [
+      'path:.github/tooling/ci-summary/manifests/plugin-control-plane.json',
+      'surface:repo:plugin-control-plane-ci-manifest',
+    ],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/tooling/ci-summary/manifests/plugin-control-plane.json.bak'],
+    scopes: [
+      'path:.github/tooling/ci-summary/manifests/plugin-control-plane.json.bak',
+      'surface:repo:plugin-control-plane-ci-manifest',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/tooling/ci-summary/receipt_runner.py'],
+    scopes: [
+      'path:.github/tooling/ci-summary/receipt_runner.py',
+      'surface:repo:plugin-control-plane-ci-manifest',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/tooling/ci-summary/manifests/plugin-control-plane.json'],
+    scopes: [
+      'path:.github/tooling/ci-summary/manifests/plugin-control-plane.json',
+      'surface:repo-ops:plugin-control-plane-ci-manifest',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
     paths: ['tools/repo-write/README.md'],
     scopes: ['path:tools/repo-write/README.md', 'surface:repo:repository-write'],
   }), false);

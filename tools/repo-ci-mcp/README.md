@@ -110,3 +110,45 @@ repo-ci-mcp
 ```
 
 The default MCP transport is stdio through `MCPServer`.
+
+
+## Idea Hub drift audit helper
+
+`repo_ci_mcp.idea_hub_drift` is a pure offline classifier for the source-linked GitHub Discussions Idea Hub.
+
+It consumes caller-supplied JSON only. It does not fetch GitHub, create or edit Discussions, create issues, allocate idea IDs, mutate repository state, or become an idea authority.
+
+The input envelope contains:
+
+- `repositoryRef`: exact repository ref/SHA used for the audit;
+- `files`: repository file inventory;
+- `knownSources`: reviewed source-role records;
+- `discussions`: caller-supplied Discussion number/category/title/body projections;
+- optional `navigation`: root index + owning Discussion numbers.
+
+Reviewed source classes are:
+
+- `DURABLE_SOURCE`
+- `DERIVED_OR_SUPPORTING`
+- `HISTORICAL_OR_SUPERSEDED`
+- `EMPTY_OR_LOCATOR_ONLY`
+- `UNKNOWN`
+
+Top-level result precedence is:
+
+`DRIFT > UNKNOWN > WARN > PASS`
+
+A new ROADMAP/backlog-like candidate that has not been reviewed stays `UNKNOWN`; filename shape alone never manufactures ownership. A reviewed durable source with a missing owning Discussion/backlink or missing projection boundary is `DRIFT`.
+
+Example:
+
+```bash
+PYTHONPATH=tools/repo-ci-mcp \
+  python -m repo_ci_mcp.idea_hub_drift /path/to/input.json
+```
+
+The CLI may also read JSON from stdin. Exit status is `0` for `PASS/WARN`, `2` for `UNKNOWN`, and `3` for `DRIFT`.
+
+The classifier emits only bounded source/discussion locators and reason codes. It does not echo Discussion bodies, so callers do not need to expose raw private logs or credentials to the result. Public Idea Hub inputs should still follow the repository's existing privacy boundary.
+
+This helper is deliberately not registered as a Repository Read MCP network tool in v1 and is not a CI-blocking gate. Any future network exposure, automatic scheduling, or write/remediation path requires a separate reviewed owner.

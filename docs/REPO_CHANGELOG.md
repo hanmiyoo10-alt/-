@@ -2337,3 +2337,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/dc3e9999da4f32c759e77f1b608ebfd5dbf0ebeb)
 - Event ID: `359eab24e448edaa514128b66de6ceede236a653b984a6b9a1615d2a6f8ec5c1`
 <!-- canonical-main-doc-promoted:359eab24e448edaa514128b66de6ceede236a653b984a6b9a1615d2a6f8ec5c1 -->
+
+### 2026-10-09 — Merge pull request #3471 from hanmiyoo10-alt/repo/stage-checkpoint-publish-3468
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `f36a04355b9a17f05c96da929a9e6b925044f1e5`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f36a04355b9a17f05c96da929a9e6b925044f1e5)
+- Event ID: `80b3a62ae89903901195a0dbe04ff31b5200ab468dc769edddb09246c13f76e0`
+<!-- canonical-main-doc-promoted:80b3a62ae89903901195a0dbe04ff31b5200ab468dc769edddb09246c13f76e0 -->

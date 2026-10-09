@@ -126,7 +126,32 @@ function failClosedContracts() {
 
   const malformed = pilot.projectInspection({disposition: 'PASS', packetNumber: 4000});
   assert.equal(malformed.result, 'UNKNOWN');
-  assert.ok(malformed.reasonCodes.includes('PILOT_STAGE_ROUTE_UNKNOWN'));
+  assert.ok(malformed.reasonCodes.includes('PILOT_INSPECTION_SCHEMA_INVALID'));
+  assert.ok(malformed.reasonCodes.includes('PILOT_INSPECTION_MODE_INVALID'));
+  assert.ok(malformed.reasonCodes.includes('PILOT_INSPECTION_LIFECYCLE_MISSING'));
+  assert.ok(malformed.reasonCodes.includes('PILOT_INSPECTION_REBIND_MISSING'));
+  assert.ok(malformed.reasonCodes.includes('PILOT_INSPECTION_NEXT_ACTION_MISSING'));
+
+  const truncated = pilot.projectInspection({
+    disposition: 'PASS',
+    schemaVersion: 1,
+    mode: pilot.CHECKPOINT_INSPECT_MODE,
+    packetNumber: 4000,
+    nativeState: 'open',
+    currentStage: 'IMPLEMENTATION_PR',
+    completedStages: [],
+    mutationAuthorized: false,
+    executionAuthorized: false,
+  });
+  assert.equal(truncated.result, 'UNKNOWN');
+  assert.equal(truncated.handoffOwner, 'STAGE_CHECKPOINT_INSPECTOR');
+  assert.ok(truncated.reasonCodes.includes('PILOT_INSPECTION_LIFECYCLE_MISSING'));
+  assert.ok(truncated.reasonCodes.includes('PILOT_INSPECTION_REBIND_MISSING'));
+  assert.ok(truncated.reasonCodes.includes('PILOT_INSPECTION_NEXT_ACTION_MISSING'));
+
+  const wrongMode = pilot.projectInspection(inspection({mode: 'SOME_OTHER_MODE'}));
+  assert.equal(wrongMode.result, 'UNKNOWN');
+  assert.ok(wrongMode.reasonCodes.includes('PILOT_INSPECTION_MODE_INVALID'));
 
   const invalid = pilot.projectInspection(null);
   assert.equal(invalid.result, 'UNKNOWN');
@@ -175,8 +200,8 @@ async function cliContract() {
   assert.equal(parsed.result, 'PASS');
   assertReadOnly(parsed);
   assert.equal(pilot.exitCodeFor({result: 'PASS'}), 0);
-  assert.equal(pilot.exitCodeFor({result: 'UNKNOWN'}), 2);
-  assert.equal(pilot.exitCodeFor({result: 'CONFLICT'}), 3);
+  assert.equal(pilot.exitCodeFor({result: 'UNKNOWN'}), 3);
+  assert.equal(pilot.exitCodeFor({result: 'CONFLICT'}), 2);
 }
 
 (async () => {

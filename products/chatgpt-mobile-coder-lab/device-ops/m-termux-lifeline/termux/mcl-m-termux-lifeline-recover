@@ -28,24 +28,17 @@ umask 077
 
 RDC_TARGET=fail
 TAILSCALE_TARGET=not_run
-HEARTBEAT_DISPATCH=not_run
-RECOVERY_OK_DISPATCH=not_run
+HEARTBEAT_ACTIVE=not_run
 
 if "$RDC_GUARD" --once >/dev/null 2>&1; then
     RDC_TARGET=pass
     TAILSCALE_TARGET=fail
     if "$TAILSCALE_GUARD" --once >/dev/null 2>&1; then
         TAILSCALE_TARGET=pass
-        HEARTBEAT_DISPATCH=fail
+        HEARTBEAT_ACTIVE=fail
         "$NOHUP" "$PYTHON" "$CLIENT" >/dev/null 2>&1 &
-        RECOVERY_OK_DISPATCH=fail
-        if "$PYTHON" "$CLIENT" --status >/dev/null 2>&1 &&
-           "$PYTHON" "$CLIENT" --heartbeat-once >/dev/null 2>&1 &&
-           "$PYTHON" "$CLIENT" --status >/dev/null 2>&1; then
-            HEARTBEAT_DISPATCH=pass
-            if "$PYTHON" "$CLIENT" --recovery-ok >/dev/null 2>&1; then
-                RECOVERY_OK_DISPATCH=pass
-            fi
+        if "$PYTHON" "$CLIENT" --status >/dev/null 2>&1; then
+            HEARTBEAT_ACTIVE=pass
         fi
     fi
 fi
@@ -53,11 +46,10 @@ fi
 TMP="$RECEIPT.$$"
 {
     printf '%s\n' \
-        'schema=mcl-m-termux-lifeline-recovery.v3' \
+        'schema=mcl-m-termux-lifeline-recovery.v4' \
         "rdc_target=$RDC_TARGET" \
         "tailscale_target=$TAILSCALE_TARGET" \
-        "heartbeat_dispatch=$HEARTBEAT_DISPATCH" \
-        "recovery_ok_dispatch=$RECOVERY_OK_DISPATCH" \
+        "heartbeat_active=$HEARTBEAT_ACTIVE" \
         'guard_ring_started=false' \
         'details=withheld'
 } > "$TMP"
@@ -67,5 +59,4 @@ cat "$RECEIPT"
 
 [ "$RDC_TARGET" = pass ] &&
 [ "$TAILSCALE_TARGET" = pass ] &&
-[ "$HEARTBEAT_DISPATCH" = pass ] &&
-[ "$RECOVERY_OK_DISPATCH" = pass ]
+[ "$HEARTBEAT_ACTIVE" = pass ]

@@ -100,6 +100,63 @@ function terminalAndCloseSyncContracts() {
   assertReadOnly(closeSync);
 }
 
+function tupleCoherenceContracts() {
+  const invalidCases = [
+    inspection({
+      rebindDisposition: 'UNKNOWN_REBIND',
+      nextStage: 'VALIDATION_MERGE',
+      nextLegalAction: 'ADVANCE_TO_VALIDATION_MERGE',
+    }),
+    inspection({
+      currentStage: 'IMPLEMENTATION_PR',
+      rebindDisposition: 'CONTINUE_CURRENT_STAGE',
+      nextStage: 'VALIDATION_MERGE',
+      nextLegalAction: 'CONTINUE_VALIDATION_MERGE',
+    }),
+    inspection({
+      currentStage: 'IMPLEMENTATION_PR',
+      rebindDisposition: 'CONTINUE_CURRENT_STAGE',
+      nextStage: 'IMPLEMENTATION_PR',
+      nextLegalAction: 'ADVANCE_TO_IMPLEMENTATION_PR',
+    }),
+    inspection({
+      currentStage: 'IMPLEMENTATION_PR',
+      rebindDisposition: 'REUSE_COMPLETED_STAGE',
+      nextStage: 'VALIDATION_MERGE',
+      nextLegalAction: 'CONTINUE_VALIDATION_MERGE',
+    }),
+    inspection({
+      currentStage: 'IMPLEMENTATION_PR',
+      rebindDisposition: 'REUSE_COMPLETED_STAGE',
+      nextStage: 'AUTHORITY_SCOPE',
+      nextLegalAction: 'ADVANCE_TO_AUTHORITY_SCOPE',
+    }),
+    inspection({
+      nativeState: 'closed',
+      lifecycle: 'DONE',
+      currentStage: 'EXPERIMENT_CLOSE',
+      rebindDisposition: 'STOP_TERMINAL',
+      nextStage: 'EXPERIMENT_CLOSE',
+      nextLegalAction: 'NONE_TERMINAL_PACKET_COMPLETE',
+    }),
+    inspection({
+      lifecycle: 'DONE',
+      currentStage: 'EXPERIMENT_CLOSE',
+      rebindDisposition: 'CONTINUE_TRANSACTION_CLOSURE',
+      nextStage: null,
+      nextLegalAction: 'NONE_TERMINAL_PACKET_COMPLETE',
+    }),
+  ];
+
+  for (const candidate of invalidCases) {
+    const result = pilot.projectInspection(candidate);
+    assert.equal(result.result, 'UNKNOWN');
+    assert.equal(result.handoffOwner, 'STAGE_CHECKPOINT_INSPECTOR');
+    assert.ok(result.reasonCodes.includes('PILOT_INSPECTION_REBIND_TUPLE_INVALID'));
+    assertReadOnly(result);
+  }
+}
+
 function failClosedContracts() {
   const unknown = pilot.projectInspection(inspection({
     disposition: 'UNKNOWN',
@@ -208,6 +265,7 @@ async function cliContract() {
   stageRoutingContract();
   reuseCompletedStageRoutesForward();
   terminalAndCloseSyncContracts();
+  tupleCoherenceContracts();
   failClosedContracts();
   await delegationContract();
   await cliContract();

@@ -121,6 +121,29 @@ function validatePassInspection(inspection) {
   if (typeof inspection.nextLegalAction !== 'string' || !inspection.nextLegalAction) {
     reasons.push('PILOT_INSPECTION_NEXT_ACTION_MISSING');
   }
+
+  const currentIndex = stageCheckpoint.STAGES.indexOf(inspection.currentStage);
+  const nextIndex = stageCheckpoint.STAGES.indexOf(inspection.nextStage);
+  const rebindTupleValid = (
+    (inspection.rebindDisposition === 'STOP_TERMINAL'
+      && inspection.nextStage === null
+      && inspection.nextLegalAction === 'NONE_TERMINAL_PACKET_COMPLETE')
+    || (inspection.rebindDisposition === 'CONTINUE_TRANSACTION_CLOSURE'
+      && inspection.nextStage === null
+      && inspection.nextLegalAction === 'SELF_CLOSE_SYNC_CURRENT_PACKET')
+    || (inspection.rebindDisposition === 'CONTINUE_CURRENT_STAGE'
+      && inspection.nextStage === inspection.currentStage
+      && inspection.nextLegalAction === `CONTINUE_${inspection.currentStage}`)
+    || (inspection.rebindDisposition === 'REUSE_COMPLETED_STAGE'
+      && nextIndex >= 0
+      && currentIndex >= 0
+      && nextIndex > currentIndex
+      && inspection.nextLegalAction === `ADVANCE_TO_${inspection.nextStage}`)
+  );
+  if (!rebindTupleValid) {
+    reasons.push('PILOT_INSPECTION_REBIND_TUPLE_INVALID');
+  }
+
   if (inspection.mutationAuthorized !== false || inspection.executionAuthorized !== false) {
     reasons.push('PILOT_INSPECTION_AUTHORITY_FLAGS_INVALID');
   }

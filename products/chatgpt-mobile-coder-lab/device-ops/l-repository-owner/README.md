@@ -154,6 +154,52 @@ owner and coordination contract checks run from the exact current-source snapsho
 that invoked the owner. Changed candidate CJS syntax and Git diff checks run
 against the real feature workspace.
 
+## Workflow-file OAuth preflight
+
+When the actual candidate diff touches a path below `.github/workflows/`,
+GitHub requires an OAuth credential with the `workflow` scope to add, update,
+delete, or rename that workflow through Git transport. Workflow-touch detection
+is derived from Git's rename-aware `--name-status -z -M` candidate diff and
+includes both source and destination paths for rename/copy records.
+
+Normal `apply` performs this classification after the patch has been staged
+but before commit, so a missing or unknown workflow capability fails closed in
+the existing PREPARED state. `continue-prepared` derives the same candidate
+paths from the staged PREPARED diff or from the original candidate commit
+relative to the reviewed base, never from later current-main merge noise.
+
+For workflow-touch candidates the owner reads the effective push URL with
+`git remote get-url --push --all origin`. Exactly one push URL must exist and
+it must equal `https://github.com/hanmiyoo10-alt/-.git`. The owner then probes
+OAuth scopes with fixed `/usr/bin/gh api -i user` under the sanitized child
+environment. The actual workflow-path push is explicitly bound to that same gh
+credential by first clearing inherited generic and fixed-GitHub HTTPS
+`http.extraHeader` values, then resetting inherited GitHub HTTPS credential
+helpers for the push command and installing exactly
+`!/usr/bin/gh auth git-credential`.
+
+The preflight parses only the `X-OAuth-Scopes` response header and never reads,
+emits, refreshes, or changes token/password/header credential material.
+
+```text
+no workflow-touch path -> existing behavior unchanged
+workflow touch + effective push URL not exactly fixed HTTPS origin
+  -> BLOCKED / GITHUB_PUSH_CREDENTIAL_BINDING_REQUIRED
+workflow touch + push URL evidence unavailable
+  -> UNKNOWN / GITHUB_WORKFLOW_ORIGIN_UNOBSERVED
+workflow touch + known workflow scope absent
+  -> BLOCKED / GITHUB_WORKFLOW_SCOPE_REQUIRED
+workflow touch + scope evidence unavailable/ambiguous
+  -> UNKNOWN / GITHUB_AUTH_SCOPE_UNOBSERVED
+workflow touch + exact push URL + workflow scope
+  -> continue through existing owner gates
+```
+
+The owner never runs `gh auth refresh`, opens an authorization flow, or mutates
+GitHub credentials. Adding `workflow` remains an explicit user-controlled
+prerequisite. Existing non-force push, remote-head readback, holder, D-013/D-014,
+PR, merge, release and production boundaries are unchanged.
+
 ## Fixed validation
 
 Before commit the owner always runs repository-owned checks for:

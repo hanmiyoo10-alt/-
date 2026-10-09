@@ -10,10 +10,10 @@ PocketRisu, authentication/session repair, or general device recovery.
 
 ~~~
 M Android companion foreground service
-        ↑ dynamic receiver exists only while armed
-        ↑ fixed package-scoped TermuxAm broadcasts
-        ↑ getSentFromUid() must equal installed com.termux UID
-Termux heartbeat client
+        ↑ only accepts fixed semantic ingress while already armed
+        ↑ exported fixed ContentProvider call surface
+        ↑ Binder.getCallingUid() must equal installed com.termux UID
+Termux heartbeat client via /system/bin/content
 
 heartbeat stale
         ↓
@@ -34,11 +34,13 @@ one fixed RUN_COMMAND dispatch
 fixed RECOVERY_OK broadcast + bounded v3 local receipt
 ~~~
 
-The companion lives outside the Termux process and UID boundary. While armed it
-registers one dynamic exported receiver for exactly two package-scoped actions.
-The Android side checks BroadcastReceiver.getSentFromUid() against the actual
-installed com.termux UID and rejects intents carrying caller payload. There is no
-manifest receiver, synchronous sender ACK, or network listener.
+The companion lives outside the Termux process and UID boundary. One fixed
+exported ContentProvider accepts only the reviewed HEARTBEAT / RECOVERY_OK method
+names, rejects caller arg/extras, and checks Binder.getCallingUid() against the
+actual installed com.termux UID. It can deliver state only to an already-active
+LifelineService instance; provider access never starts, arms, restarts, or
+recovers the service. Query/insert/update/delete/data access is unsupported.
+There is no manifest receiver, synchronous sender ACK, or network listener.
 
 ## Safety boundary
 
@@ -113,15 +115,17 @@ Repository files map to fixed locations:
   ~/.termux/boot/30-mcl-m-termux-lifeline-heartbeat.
 
 The heartbeat client uses one local singleton lock and a 10-second heartbeat.
-Each send invokes the installed TermuxAm wrapper with only `broadcast -a <fixed
-reviewed action> -p io.hanmiyoo.mcl.termuxlifeline`. The fixed `--status`
-operation proves the singleton lock is actively held, while fixed
-`--heartbeat-once` performs exactly one reviewed heartbeat dispatch. Recovery
-re-arm is accepted only after singleton liveness, one heartbeat dispatch, and a
-second singleton-liveness proof all succeed. The sender never claims a receiver
-ACK. The companion declares a heartbeat stale after 45 seconds. Each loss episode
-gets at most one recovery attempt, with a five-minute cooldown before a later
-episode.
+Each send invokes fixed `/system/bin/content call` with the fixed provider URI
+and exactly one reviewed HEARTBEAT / RECOVERY_OK method name. The subprocess PATH
+prepends `/system/bin` only because Android's content launcher resolves
+`app_process` by name. The fixed `--status` operation proves the singleton lock
+is actively held, while fixed `--heartbeat-once` performs exactly one reviewed
+provider dispatch attempt. Recovery re-arm is accepted only after singleton
+liveness, one heartbeat dispatch, and a second singleton-liveness proof all
+succeed. Content-command exit status never claims a receiver ACK; receiver-side
+state remains authoritative. The companion declares a heartbeat stale after
+45 seconds. Each loss episode gets at most one recovery attempt, with a
+five-minute cooldown before a later episode.
 
 Recovery is accepted only from receiver-side truth when both a post-attempt
 heartbeat broadcast and the fixed RECOVERY_OK broadcast arrive through the same

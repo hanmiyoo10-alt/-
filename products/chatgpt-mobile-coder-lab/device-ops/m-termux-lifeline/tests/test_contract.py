@@ -42,21 +42,29 @@ class LifelineContractTest(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, text)
 
-    def test_android_service_is_local_and_sender_uid_bound(self):
+    def test_android_provider_is_binder_uid_bound_and_service_local(self):
         root = ET.parse(MANIFEST).getroot()
         service = root.find("application/service")
+        provider = root.find("application/provider")
         self.assertIsNotNone(service)
+        self.assertIsNotNone(provider)
         self.assertIsNone(root.find("application/receiver"))
         self.assertEqual(service.attrib[ANDROID_NS + "exported"], "false")
         self.assertEqual(service.attrib[ANDROID_NS + "foregroundServiceType"], "specialUse")
+        self.assertEqual(provider.attrib[ANDROID_NS + "name"], ".HeartbeatProvider")
+        self.assertEqual(
+            provider.attrib[ANDROID_NS + "authorities"],
+            "io.hanmiyoo.mcl.termuxlifeline.heartbeat",
+        )
+        self.assertEqual(provider.attrib[ANDROID_NS + "exported"], "true")
+        self.assertEqual(provider.attrib[ANDROID_NS + "grantUriPermissions"], "false")
 
-        source = (JAVA / "LifelineService.java").read_text()
-        required = (
+        service_source = (JAVA / "LifelineService.java").read_text()
+        provider_source = (JAVA / "HeartbeatProvider.java").read_text()
+        required_service = (
             'TERMUX_PACKAGE = "com.termux"',
-            "BroadcastReceiver",
-            "Context.RECEIVER_EXPORTED",
-            "getSentFromUid()",
-            "senderUidMatchesTermux",
+            "AtomicReference<LifelineService>",
+            "acceptVerifiedIngress",
             "ApplicationInfo.FLAG_STOPPED",
             'RUN_COMMAND_ACTION = "com.termux.RUN_COMMAND"',
             'RUN_COMMAND_SERVICE = "com.termux.app.RunCommandService"',
@@ -64,20 +72,39 @@ class LifelineContractTest(unittest.TestCase):
             "new String[0]",
             '"com.termux.RUN_COMMAND_BACKGROUND", true',
         )
-        for needle in required:
-            self.assertIn(needle, source)
+        for needle in required_service:
+            self.assertIn(needle, service_source)
         for forbidden in (
-            "PendingIntent",
-            "LocalServerSocket",
-            "getPeerCredentials()",
-            "RUN_COMMAND_STDIN",
-            "RUN_COMMAND_COMMAND_LABEL",
-            "ProcessBuilder",
-            "Runtime.getRuntime",
-            "force-stop",
-            "setApplicationEnabledSetting",
+            "BroadcastReceiver",
+            "registerReceiver",
+            "getSentFromUid",
+            "Context.RECEIVER_EXPORTED",
         ):
-            self.assertNotIn(forbidden, source)
+            self.assertNotIn(forbidden, service_source)
+
+        required_provider = (
+            "extends ContentProvider",
+            "Binder.getCallingUid()",
+            "getApplicationInfo(",
+            "LifelineService.TERMUX_PACKAGE",
+            "HeartbeatProtocol.senderUidMatchesTermux",
+            "LifelineService.acceptVerifiedIngress(kind)",
+            'throw new SecurityException("caller payload forbidden")',
+            'throw new SecurityException("method forbidden")',
+            'throw new SecurityException("caller uid forbidden")',
+            "UnsupportedOperationException",
+        )
+        for needle in required_provider:
+            self.assertIn(needle, provider_source)
+        for forbidden in (
+            "startService(",
+            "startForegroundService(",
+            "sendBroadcast(",
+            "registerReceiver(",
+            "Intent ",
+        ):
+            self.assertNotIn(forbidden, provider_source)
+
 
     def test_force_stop_is_separate_domain_and_prerequisites_are_manual(self):
         policy = (JAVA / "LifelinePolicy.java").read_text()
@@ -201,14 +228,18 @@ class LifelineContractTest(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 2)
 
-    def test_heartbeat_client_has_exact_local_broadcast_surface(self):
+    def test_heartbeat_client_has_exact_binder_provider_surface(self):
         module_path = TERMUX / "heartbeat-client.py"
         spec = importlib.util.spec_from_file_location("mcl_lifeline_heartbeat", module_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 
-        self.assertEqual(module.AM_PATH, "/data/data/com.termux/files/usr/bin/am")
-        self.assertEqual(module.COMPANION_PACKAGE, "io.hanmiyoo.mcl.termuxlifeline")
+        self.assertEqual(module.CONTENT_PATH, "/system/bin/content")
+        self.assertEqual(
+            module.PROVIDER_URI,
+            "content://io.hanmiyoo.mcl.termuxlifeline.heartbeat",
+        )
+        self.assertEqual(module.SYSTEM_PATH, "/system/bin")
         self.assertEqual(
             module.HEARTBEAT_ACTION,
             "io.hanmiyoo.mcl.termuxlifeline.action.HEARTBEAT_V1",
@@ -243,15 +274,16 @@ class LifelineContractTest(unittest.TestCase):
         self.assertEqual(
             seen["argv"],
             [
-                module.AM_PATH,
-                "broadcast",
-                "-a",
+                module.CONTENT_PATH,
+                "call",
+                "--uri",
+                module.PROVIDER_URI,
+                "--method",
                 module.HEARTBEAT_ACTION,
-                "-p",
-                module.COMPANION_PACKAGE,
             ],
         )
         self.assertEqual(seen["kwargs"]["timeout"], module.DISPATCH_TIMEOUT_SECONDS)
+        self.assertEqual(seen["kwargs"]["env"]["PATH"].split(":")[0], "/system/bin")
         self.assertFalse(module.dispatch("unexpected", runner=good_runner))
 
         class FailedResult:
@@ -262,8 +294,10 @@ class LifelineContractTest(unittest.TestCase):
         )
         source = module_path.read_text()
         self.assertNotIn("socket", source)
+        self.assertNotIn("am broadcast", source)
         self.assertNotIn("MCL_M_TERMUX_LIFELINE_ACK_V1", source)
         self.assertNotIn("SOCKET_NAME", source)
+
 
     def test_heartbeat_singleton_status_is_lock_backed_and_bounded(self):
         module_path = TERMUX / "heartbeat-client.py"

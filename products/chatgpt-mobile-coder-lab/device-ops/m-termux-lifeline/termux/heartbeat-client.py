@@ -5,8 +5,9 @@ import subprocess
 import sys
 import time
 
-AM_PATH = "/data/data/com.termux/files/usr/bin/am"
-COMPANION_PACKAGE = "io.hanmiyoo.mcl.termuxlifeline"
+CONTENT_PATH = "/system/bin/content"
+PROVIDER_URI = "content://io.hanmiyoo.mcl.termuxlifeline.heartbeat"
+SYSTEM_PATH = "/system/bin"
 HEARTBEAT_ACTION = "io.hanmiyoo.mcl.termuxlifeline.action.HEARTBEAT_V1"
 RECOVERY_OK_ACTION = "io.hanmiyoo.mcl.termuxlifeline.action.RECOVERY_OK_V1"
 INTERVAL_SECONDS = 10.0
@@ -20,7 +21,10 @@ LOCK_PATH = STATE_DIR + "/heartbeat.lock"
 def dispatch(action, runner=subprocess.run):
     if action not in (HEARTBEAT_ACTION, RECOVERY_OK_ACTION):
         return False
-    argv = [AM_PATH, "broadcast", "-a", action, "-p", COMPANION_PACKAGE]
+    env = os.environ.copy()
+    current_path = env.get("PATH", "")
+    env["PATH"] = SYSTEM_PATH + (":" + current_path if current_path else "")
+    argv = [CONTENT_PATH, "call", "--uri", PROVIDER_URI, "--method", action]
     try:
         result = runner(
             argv,
@@ -29,6 +33,7 @@ def dispatch(action, runner=subprocess.run):
             stderr=subprocess.DEVNULL,
             timeout=DISPATCH_TIMEOUT_SECONDS,
             check=False,
+            env=env,
         )
     except (OSError, subprocess.TimeoutExpired):
         return False

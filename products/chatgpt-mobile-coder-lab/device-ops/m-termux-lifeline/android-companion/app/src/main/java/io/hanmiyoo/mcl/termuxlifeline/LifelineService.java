@@ -4,16 +4,14 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
-import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.os.IBinder;
 import android.os.SystemClock;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class LifelineService extends Service {
     static final String TERMUX_PACKAGE = "com.termux";
@@ -27,6 +25,8 @@ public final class LifelineService extends Service {
 
     private static final String CHANNEL_ID = "mcl_m_termux_lifeline";
     private static final int NOTIFICATION_ID = 2756;
+    private static final AtomicReference<LifelineService> ACTIVE_INSTANCE =
+        new AtomicReference<>();
     private final AtomicLong lastHeartbeatMs = new AtomicLong(0L);
     private final AtomicLong lastRecoveryReceiptMs = new AtomicLong(0L);
     private volatile boolean running;
@@ -35,14 +35,6 @@ public final class LifelineService extends Service {
     private volatile boolean failedForCurrentLoss;
     private volatile long lastAttemptMs;
     private volatile String status = "WAITING_FOR_FIRST_HEARTBEAT";
-    private volatile boolean receiverRegistered;
-    private final BroadcastReceiver heartbeatReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            handleHeartbeatBroadcast(this, intent);
-        }
-    };
-
     @Override
     public void onCreate() {
         super.onCreate();
@@ -52,11 +44,8 @@ public final class LifelineService extends Service {
             buildNotification(status),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         );
-        if (!registerHeartbeatReceiver()) {
-            stopSelf();
-            return;
-        }
         running = true;
+        ACTIVE_INSTANCE.set(this);
         Thread watchdogThread = new Thread(this::watchdogLoop, "mcl-termux-lifeline-watchdog");
         watchdogThread.setDaemon(true);
         watchdogThread.start();
@@ -70,13 +59,7 @@ public final class LifelineService extends Service {
     @Override
     public void onDestroy() {
         running = false;
-        if (receiverRegistered) {
-            try {
-                unregisterReceiver(heartbeatReceiver);
-            } catch (IllegalArgumentException ignored) {
-            }
-            receiverRegistered = false;
-        }
+        ACTIVE_INSTANCE.compareAndSet(this, null);
         super.onDestroy();
     }
 
@@ -85,24 +68,17 @@ public final class LifelineService extends Service {
         return null;
     }
 
-    private boolean registerHeartbeatReceiver() {
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(HeartbeatProtocol.HEARTBEAT_ACTION);
-        filter.addAction(HeartbeatProtocol.RECOVERY_OK_ACTION);
-        try {
-            registerReceiver(heartbeatReceiver, filter, Context.RECEIVER_EXPORTED);
-            receiverRegistered = true;
-            return true;
-        } catch (RuntimeException error) {
-            setStatus("RECEIVER_UNAVAILABLE");
+    static boolean acceptVerifiedIngress(HeartbeatProtocol.Kind kind) {
+        LifelineService active = ACTIVE_INSTANCE.get();
+        if (active == null || !active.running || kind == null
+                || kind == HeartbeatProtocol.Kind.INVALID) {
             return false;
         }
+        active.handleVerifiedIngress(kind);
+        return true;
     }
 
-    private void handleHeartbeatBroadcast(BroadcastReceiver receiver, Intent intent) {
-        if (!broadcastIsFixedAndFromTermux(receiver, intent)) return;
-        HeartbeatProtocol.Kind kind = HeartbeatProtocol.classifyAction(intent.getAction());
-        if (kind == HeartbeatProtocol.Kind.INVALID) return;
+    private void handleVerifiedIngress(HeartbeatProtocol.Kind kind) {
         long now = SystemClock.elapsedRealtime();
         if (kind == HeartbeatProtocol.Kind.HEARTBEAT) {
             lastHeartbeatMs.set(now);
@@ -111,24 +87,6 @@ public final class LifelineService extends Service {
         }
         lastRecoveryReceiptMs.set(now);
         lastHeartbeatMs.set(now);
-    }
-
-    private boolean broadcastIsFixedAndFromTermux(BroadcastReceiver receiver, Intent intent) {
-        if (intent == null || !getPackageName().equals(intent.getPackage())) return false;
-        if (intent.getExtras() != null
-                || intent.getData() != null
-                || intent.getClipData() != null
-                || intent.getCategories() != null
-                || intent.getComponent() != null
-                || intent.getSelector() != null) {
-            return false;
-        }
-        try {
-            ApplicationInfo app = getPackageManager().getApplicationInfo(TERMUX_PACKAGE, 0);
-            return HeartbeatProtocol.senderUidMatchesTermux(receiver.getSentFromUid(), app.uid);
-        } catch (PackageManager.NameNotFoundException error) {
-            return false;
-        }
     }
 
     private void watchdogLoop() {

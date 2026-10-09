@@ -22,6 +22,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <provider
+            android:name=".HeartbeatProvider"
+            android:authorities="io.hanmiyoo.mcl.termuxlifeline.heartbeat"
+            android:exported="true"
+            android:grantUriPermissions="false" />
         <service
             android:name=".LifelineService"
             android:exported="false"

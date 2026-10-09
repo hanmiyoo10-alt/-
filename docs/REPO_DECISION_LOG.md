@@ -197,3 +197,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3315)
 - Event ID: `b54650e98f870cea0963f7cb08b4445b9304c8b4c56177a699c0d1dff9191073`
 <!-- canonical-main-doc-promoted:b54650e98f870cea0963f7cb08b4445b9304c8b4c56177a699c0d1dff9191073 -->
+
+### 2026-10-09 — REPO-IDEA-HUB-DRIFT-AUDIT-V1 — source-linked projection coverage scanner
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3425)
+- Event ID: `ce6efaa2ebc2feafa6c4c4df80d9982cb9a2897647d251a7b9ef4d5fbe1c7637`
+<!-- canonical-main-doc-promoted:ce6efaa2ebc2feafa6c4c4df80d9982cb9a2897647d251a7b9ef4d5fbe1c7637 -->

@@ -1,4 +1,4 @@
-
+'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -155,6 +155,13 @@ function parserContract() {
     'REQUEST_PACKET_BODY_HASH_INVALID',
   );
   reason(
+    () => request.parseRequestBody(
+      requestBody({metadata: {packetBodySha256: null}}),
+      fakeDeps().deps,
+    ),
+    'REQUEST_PACKET_BODY_HASH_INVALID',
+  );
+  reason(
     () => request.parseRequestBody('prefix\n' + requestBody(), fakeDeps().deps),
     'REQUEST_EXTRANEOUS_TEXT',
   );
@@ -304,6 +311,8 @@ function workflowContract() {
   const workflow = fs.readFileSync(workflowPath, 'utf8');
   assert.ok(workflow.includes('issue_comment:'));
   assert.ok(workflow.includes('types: [created]'));
+  assert.ok(workflow.includes('group: canonical-main-stage-checkpoint-publish'));
+  assert.equal(workflow.includes('github.event.comment.id || github.run_id'), false);
   assert.equal(workflow.includes('workflow_dispatch'), false);
   assert.ok(workflow.includes('contents: read'));
   assert.ok(workflow.includes('issues: write'));

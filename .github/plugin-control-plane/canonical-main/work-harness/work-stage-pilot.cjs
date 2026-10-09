@@ -3,6 +3,7 @@
 const stageCheckpoint = require('./stage-checkpoint.cjs');
 
 const MODE = 'CANONICAL_MAIN_WORK_STAGE_PILOT';
+const CHECKPOINT_INSPECT_MODE = 'CANONICAL_MAIN_STAGE_CHECKPOINT_INSPECT';
 const STAGE_CHECKPOINT_OWNER = '.github/plugin-control-plane/canonical-main/work-harness/stage-checkpoint.cjs';
 const VALIDATION_ATTENTION_OWNER = '.github/plugin-control-plane/canonical-main/work-harness/validation-attention/validation-attention-owner.cjs';
 const PROOF_ELIGIBILITY_OWNER = '.github/plugin-control-plane/canonical-main/work-system/proof-eligibility.cjs';
@@ -95,6 +96,37 @@ function unknownResult(inspection, reasonCodes) {
   });
 }
 
+function validatePassInspection(inspection) {
+  const reasons = [];
+  if (inspection.schemaVersion !== 1) reasons.push('PILOT_INSPECTION_SCHEMA_INVALID');
+  if (inspection.mode !== CHECKPOINT_INSPECT_MODE) reasons.push('PILOT_INSPECTION_MODE_INVALID');
+  if (!Number.isSafeInteger(inspection.packetNumber) || inspection.packetNumber <= 0) {
+    reasons.push('PILOT_INSPECTION_PACKET_INVALID');
+  }
+  if (!['open', 'closed'].includes(inspection.nativeState)) {
+    reasons.push('PILOT_INSPECTION_NATIVE_STATE_INVALID');
+  }
+  if (typeof inspection.lifecycle !== 'string' || !inspection.lifecycle) {
+    reasons.push('PILOT_INSPECTION_LIFECYCLE_MISSING');
+  }
+  if (!stageCheckpoint.STAGES.includes(inspection.currentStage)) {
+    reasons.push('PILOT_INSPECTION_CURRENT_STAGE_INVALID');
+  }
+  if (!Array.isArray(inspection.completedStages)) {
+    reasons.push('PILOT_INSPECTION_COMPLETED_STAGES_INVALID');
+  }
+  if (typeof inspection.rebindDisposition !== 'string' || !inspection.rebindDisposition) {
+    reasons.push('PILOT_INSPECTION_REBIND_MISSING');
+  }
+  if (typeof inspection.nextLegalAction !== 'string' || !inspection.nextLegalAction) {
+    reasons.push('PILOT_INSPECTION_NEXT_ACTION_MISSING');
+  }
+  if (inspection.mutationAuthorized !== false || inspection.executionAuthorized !== false) {
+    reasons.push('PILOT_INSPECTION_AUTHORITY_FLAGS_INVALID');
+  }
+  return uniqueBoundedStrings(reasons);
+}
+
 function projectInspection(inspection) {
   if (!inspection || typeof inspection !== 'object' || Array.isArray(inspection)) {
     return unknownResult({}, ['PILOT_INSPECTION_OBJECT_REQUIRED']);
@@ -115,6 +147,10 @@ function projectInspection(inspection) {
       ownerLocator: STAGE_CHECKPOINT_OWNER,
       requiredInputs: ['targeted-stage-checkpoint-drill-down'],
     });
+  }
+  const passReasons = validatePassInspection(inspection);
+  if (passReasons.length) {
+    return unknownResult(inspection, passReasons);
   }
   if (inspection.rebindDisposition === 'STOP_TERMINAL'
       || inspection.nextLegalAction === 'NONE_TERMINAL_PACKET_COMPLETE') {
@@ -183,7 +219,7 @@ function parseArgs(argv = process.argv.slice(2)) {
 
 function exitCodeFor(result) {
   if (result?.result === 'PASS') return 0;
-  if (result?.result === 'CONFLICT') return 3;
+  if (result?.result === 'UNKNOWN') return 3;
   return 2;
 }
 
@@ -210,6 +246,7 @@ if (require.main === module) main();
 module.exports = {
   DEFAULT_DEPS,
   MODE,
+  CHECKPOINT_INSPECT_MODE,
   PROOF_ELIGIBILITY_OWNER,
   STAGE_CHECKPOINT_OWNER,
   STAGE_ROUTES,
@@ -220,4 +257,5 @@ module.exports = {
   parseArgs,
   projectInspection,
   runCli,
+  validatePassInspection,
 };

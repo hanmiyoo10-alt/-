@@ -990,6 +990,34 @@ test('repo-neutral predicate is narrow, explicit and reviewed-prefix bounded', (
     ],
   }), true);
   assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/workflows/canonical-main-stage-checkpoint-publish.yml'],
+    scopes: [
+      'path:.github/workflows/canonical-main-stage-checkpoint-publish.yml',
+      'surface:repo:canonical-stage-checkpoint-publication',
+    ],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/workflows/canonical-main-stage-checkpoint-publish.yml.bak'],
+    scopes: [
+      'path:.github/workflows/canonical-main-stage-checkpoint-publish.yml.bak',
+      'surface:repo:canonical-stage-checkpoint-publication',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/workflows/canonical-main-stage-checkpoint-publish.yml'],
+    scopes: [
+      'path:.github/workflows/canonical-main-stage-checkpoint-publish.yml',
+      'surface:repo-ops:canonical-stage-checkpoint-publication',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/workflows/canonical-main-ops.yml'],
+    scopes: [
+      'path:.github/workflows/canonical-main-ops.yml',
+      'surface:repo:canonical-stage-checkpoint-publication',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
     paths: ['.github/tooling/ci-summary/manifests/plugin-control-plane.json.bak'],
     scopes: [
       'path:.github/tooling/ci-summary/manifests/plugin-control-plane.json.bak',

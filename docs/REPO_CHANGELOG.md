@@ -2361,3 +2361,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/5c0b4ec8a4354a861444aecdc8a3febbd6197ba0)
 - Event ID: `17bf58efe7c1f5cbf12e3d95c8dff56fd3bbc0af38648941cacb50e2ef378d04`
 <!-- canonical-main-doc-promoted:17bf58efe7c1f5cbf12e3d95c8dff56fd3bbc0af38648941cacb50e2ef378d04 -->
+
+### 2026-10-10 — Merge pull request #3495 from hanmiyoo10-alt/repo/validation-taxonomy-exact-route-3494
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `1e3876599c8dc574aa59798d2502ce3aaa43bee8`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1e3876599c8dc574aa59798d2502ce3aaa43bee8)
+- Event ID: `0876f62165a4c07aad5bc21974b7471c7cb1bb8c631302b2db865c2d4f577583`
+<!-- canonical-main-doc-promoted:0876f62165a4c07aad5bc21974b7471c7cb1bb8c631302b2db865c2d4f577583 -->

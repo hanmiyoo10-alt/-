@@ -23,61 +23,84 @@ class RepoCockpitError extends Error {
   }
 }
 
-function textField(body, label) {
-  const re = new RegExp(`^- ${label}:\\s*(.+)$`, 'mi');
-  const match = String(body || '').match(re);
-  return match ? match[1].trim() : null;
-}
+const CAPSULE_FIELD_ORDER = Object.freeze([
+  'STATE', 'MAIN', 'CHANGE', 'WHY', 'NEXT', 'AUTHORITY', 'UNKNOWN'
+]);
+const SUMMARY_COMPAT_MARKER = '<!-- canonical-main-summary-compat:v1';
 
 function unquoteCode(value) {
   return value ? value.replace(/`/g, '').trim() : value;
 }
 
+function extractCanonicalCapsule(body) {
+  const text = String(body || '').replace(/\r\n/g, '\n');
+  const headings = [...text.matchAll(/^## Canonical Operator Capsule$/gm)];
+  if (headings.length !== 1) return null;
+
+  const afterHeading = text
+    .slice(headings[0].index + headings[0][0].length)
+    .replace(/^\n/, '');
+  const boundary = afterHeading.indexOf('\n\n');
+  if (boundary < 0) return null;
+
+  const lines = afterHeading.slice(0, boundary).split('\n');
+  if (lines.length !== CAPSULE_FIELD_ORDER.length) return null;
+
+  const fields = {};
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = /^- ([A-Z]+): (.+)$/.exec(lines[index]);
+    if (!match || match[1] !== CAPSULE_FIELD_ORDER[index]) return null;
+    fields[match[1]] = match[2];
+  }
+
+  return {
+    fields,
+    remainder: afterHeading.slice(boundary + 2)
+  };
+}
+
+function extractSummaryCompat(remainder) {
+  const text = String(remainder || '').trimStart();
+  if (!text.startsWith(SUMMARY_COMPAT_MARKER)) return null;
+  const end = text.indexOf('-->', SUMMARY_COMPAT_MARKER.length);
+  if (end < 0) return null;
+  return text.slice(SUMMARY_COMPAT_MARKER.length, end);
+}
+
 export function parseOperatorCapsule(body) {
-  const text = String(body || '');
-  const state = unquoteCode(textField(text, 'STATE'));
-  const mainLine = textField(text, 'MAIN');
-  const authorityLine = textField(text, 'AUTHORITY');
-  const unknown = unquoteCode(textField(text, 'UNKNOWN'));
+  const capsule = extractCanonicalCapsule(body);
+  if (!capsule) {
+    return {
+      state: null,
+      renderedMainSha: null,
+      required: null,
+      convergence: null,
+      production: null,
+      nativeProtectionProjection: null,
+      unknown: null
+    };
+  }
+
+  const rawState = unquoteCode(capsule.fields.STATE);
+  const state = ['CLEAR', 'ATTENTION', 'INCIDENT', 'UNKNOWN'].includes(rawState)
+    ? rawState
+    : null;
+  const mainLine = capsule.fields.MAIN;
+  const authorityLine = capsule.fields.AUTHORITY;
+  const unknown = unquoteCode(capsule.fields.UNKNOWN);
+  const summaryCompat = extractSummaryCompat(capsule.remainder);
   const mainMatch = mainLine?.match(
-    /`?([0-9a-f]{40})`?\s*\/\s*Required\s+([A-Z]+)\s+—\s+run\s+(\d+)/i
+    /^`?([0-9a-f]{40})`?\s*\/\s*Required\s+([A-Z]+)\s+—\s+run\s+(\d+)$/i
   );
-  const convergenceMatch = text.match(/Convergence:\s*`?([A-Z_]+)`?/i);
-  const productionMatch =
-    text.match(
-      /(?:Production authority observation|Production authority):\s*([A-Z_]+)\s+—\s+([^\n]+)/i
-    ) ??
-    authorityLine?.match(/Production\s+([A-Z_]+)\s+—\s+([^;\n]+)/i);
-  const detailProtectionState = text.match(
-    /Protection state:\s*`?([A-Z_]+)`?/i
+  const convergenceMatch = summaryCompat?.match(
+    /^Convergence:\s*`?([A-Z_]+)`?$/mi
   );
-  const detailProtected = text.match(
-    /GitHub branch protected:\s*`?(true|false)`?/i
-  );
-  const compatProtection = text.match(
-    /Native protection:\s*`?([A-Z_]+)`?\s*\/\s*protected\s*`?(true|false)`?/i
+  const productionMatch = authorityLine?.match(
+    /Production\s+([A-Z_]+)\s+—\s+([^;\n]+)/i
   );
   const authorityProtection = authorityLine?.match(
     /native protection\s*`?([A-Z_]+)`?\s*\/\s*protected\s*`?(true|false)`?/i
   );
-
-  let nativeProtectionProjection = null;
-  if (detailProtectionState && detailProtected) {
-    nativeProtectionProjection = {
-      state: detailProtectionState[1],
-      protected: detailProtected[1] === 'true'
-    };
-  } else if (compatProtection) {
-    nativeProtectionProjection = {
-      state: compatProtection[1],
-      protected: compatProtection[2] === 'true'
-    };
-  } else if (authorityProtection) {
-    nativeProtectionProjection = {
-      state: authorityProtection[1],
-      protected: authorityProtection[2] === 'true'
-    };
-  }
 
   return {
     state: state ?? null,
@@ -89,7 +112,12 @@ export function parseOperatorCapsule(body) {
     production: productionMatch
       ? { state: productionMatch[1], detail: productionMatch[2].trim() }
       : null,
-    nativeProtectionProjection,
+    nativeProtectionProjection: authorityProtection
+      ? {
+          state: authorityProtection[1],
+          protected: authorityProtection[2] === 'true'
+        }
+      : null,
     unknown: unknown ?? null
   };
 }
@@ -276,6 +304,7 @@ export async function repoSnapshot({ githubJson } = {}) {
   }
 
   if (
+    unknown.length === 0 &&
     directProtected !== null &&
     typeof projectedProtected === 'boolean' &&
     directProtected !== projectedProtected
@@ -331,6 +360,56 @@ function hostAllowed(req, publicDomain) {
     host === 'localhost' ||
     host === '127.0.0.1'
   );
+}
+
+function originAllowed(req, publicDomain) {
+  const rawOrigin = req.headers.origin;
+  if (!rawOrigin) return true;
+
+  let origin;
+  try {
+    origin = new URL(String(rawOrigin));
+  } catch {
+    return false;
+  }
+  if (!['http:', 'https:'].includes(origin.protocol)) return false;
+
+  const allowed = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+  if (publicDomain) allowed.add(String(publicDomain).toLowerCase());
+  return allowed.has(origin.hostname.toLowerCase());
+}
+
+function isJsonObject(value) {
+  return Boolean(value) &&
+    typeof value === 'object' &&
+    !Array.isArray(value);
+}
+
+function validJsonRpcRequest(msg) {
+  if (!isJsonObject(msg)) return false;
+  if (msg.jsonrpc !== '2.0') return false;
+  if (typeof msg.method !== 'string' || msg.method.length === 0) return false;
+
+  if (Object.prototype.hasOwnProperty.call(msg, 'id')) {
+    const id = msg.id;
+    const validId =
+      id === null ||
+      typeof id === 'string' ||
+      (typeof id === 'number' && Number.isFinite(id));
+    if (!validId) return false;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(msg, 'params')) {
+    const params = msg.params;
+    if (!isJsonObject(params) && !Array.isArray(params)) return false;
+  }
+
+  return true;
+}
+
+function validToolArguments(value) {
+  if (value === undefined) return true;
+  return isJsonObject(value) && Object.keys(value).length === 0;
 }
 
 function sendJson(res, status, value) {
@@ -412,6 +491,9 @@ async function handleRequest(
   if (!hostAllowed(req, publicDomain)) {
     return sendJson(res, 403, { error: 'host_not_allowed' });
   }
+  if (!originAllowed(req, publicDomain)) {
+    return sendJson(res, 403, { error: 'origin_not_allowed' });
+  }
   if (req.method !== 'POST') {
     res.writeHead(405, { allow: 'POST' });
     return res.end();
@@ -428,7 +510,7 @@ async function handleRequest(
     );
   }
 
-  if (!msg || typeof msg !== 'object' || Array.isArray(msg)) {
+  if (!validJsonRpcRequest(msg)) {
     return sendJson(res, 400, rpcError(null, -32600, 'Invalid Request'));
   }
 
@@ -441,7 +523,10 @@ async function handleRequest(
   const id = msg.id ?? null;
 
   if (msg.method === 'initialize') {
-    const requestedVersion = typeof msg.params?.protocolVersion === 'string'
+    if (!isJsonObject(msg.params)) {
+      return sendJson(res, 200, rpcError(id, -32602, 'Invalid params'));
+    }
+    const requestedVersion = typeof msg.params.protocolVersion === 'string'
       ? msg.params.protocolVersion
       : null;
     return sendJson(
@@ -470,8 +555,18 @@ async function handleRequest(
   }
 
   if (msg.method === 'tools/call') {
-    if (msg.params?.name !== 'repo_snapshot') {
+    if (!isJsonObject(msg.params)) {
+      return sendJson(res, 200, rpcError(id, -32602, 'Invalid params'));
+    }
+    if (msg.params.name !== 'repo_snapshot') {
       return sendJson(res, 200, rpcError(id, -32602, 'unknown_tool'));
+    }
+    if (!validToolArguments(msg.params.arguments)) {
+      return sendJson(
+        res,
+        200,
+        rpcError(id, -32602, 'invalid_tool_arguments')
+      );
     }
 
     const snapshot = await readSnapshot();

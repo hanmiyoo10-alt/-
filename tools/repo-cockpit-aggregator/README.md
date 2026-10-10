@@ -44,9 +44,9 @@ Required capsule evidence includes:
 - Native protection projection;
 - explicit UNKNOWN field.
 
-The parser accepts the current #485 operational labels such as `Production authority observation`, `Protection state`, and `GitHub branch protected`, while retaining the bounded compatibility forms already emitted by canonical-main.
+The parser requires exactly one bounded `## Canonical Operator Capsule` with the canonical ordered rows `STATE / MAIN / CHANGE / WHY / NEXT / AUTHORITY / UNKNOWN`. Production and native-protection projection come only from the capsule `AUTHORITY` row, while convergence comes from the immediately following canonical summary-compat block. Stale or unrelated rows elsewhere in issue #485 cannot satisfy capsule completeness.
 
-Main movement, closed/invalid #485, or missing required evidence remains UNKNOWN. A rendered-main mismatch is classified `SETTLING_OR_STALE` only after completeness has been proven, so missing evidence is never downgraded from UNKNOWN to a merely stale state.
+Main movement, closed/invalid #485, malformed/duplicate/incomplete capsule evidence, or missing required evidence remains UNKNOWN. A rendered-main mismatch or protection disagreement is promoted to a specialized stale/conflict state only after completeness has been proven, so incomplete evidence is never downgraded from UNKNOWN.
 
 ## HTTP / MCP safety
 
@@ -56,11 +56,11 @@ Main movement, closed/invalid #485, or missing required evidence remains UNKNOWN
 
 Authenticated snapshot execution is bounded by one shared per-process gate across both surfaces: at most 6 snapshot executions per 60 seconds by default. Rejected excess requests perform zero additional GitHub reads. The service does not replay a cached status snapshot to satisfy this guard.
 
-MCP request bodies are accumulated as bytes and decoded once as UTF-8, so multibyte characters remain intact across HTTP chunk boundaries. Bodies must decode to a non-null JSON object. Scalars, arrays, and `null` return JSON-RPC `-32600 Invalid Request` instead of reaching method dispatch.
+MCP request bodies are accumulated as bytes and decoded once as UTF-8, so multibyte characters remain intact across HTTP chunk boundaries. Before a body is read or dispatched, an `Origin` header, when present, must resolve to the configured public domain or a loopback host. Untrusted or malformed origins fail with HTTP 403.
 
-Malformed JSON keeps JSON-RPC parse-error behavior. JSON-RPC notifications omit `id` and receive HTTP 202 with no response body.
+Bodies must decode to a valid JSON-RPC 2.0 request object with a non-empty string method, valid string/number/null identifier when present, and object/array params when present. Invalid request objects return JSON-RPC `-32600 Invalid Request` before dispatch. Malformed JSON keeps parse-error behavior, while valid JSON-RPC notifications omit `id` and receive HTTP 202 with no response body.
 
-The initialize handshake supports protocol revision `2025-06-18`. A client requesting another revision receives `2025-06-18` as the server's supported counter-offer rather than an echoed unsupported value.
+The initialize handshake supports protocol revision `2025-06-18`. A client requesting another revision receives `2025-06-18` as the server's supported counter-offer rather than an echoed unsupported value. The only public tool is `repo_snapshot`; its arguments must be absent or exactly an empty object matching the advertised schema, otherwise the request returns `-32602` before consuming snapshot allowance or GitHub reads.
 
 ## Deployment boundary
 

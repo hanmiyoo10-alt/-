@@ -26,20 +26,45 @@ function capsule({
   unknown = true,
   unknownValue = 'NONE'
 } = {}) {
-  return [
-    ...(state ? [`- STATE: \`${stateValue}\``] : []),
-    ...(main ? [`- MAIN: \`${mainSha}\` / Required PASS — run 123`] : []),
-    ...(unknown ? [`- UNKNOWN: ${unknownValue}`] : []),
-    ...(convergence ? ['- Convergence: `STABLE`'] : []),
+  const authority = [
     ...(production
-      ? ['- Production authority observation: MATCH — release-simcore abc123']
+      ? ['Production MATCH — release-simcore abc123']
       : []),
     ...(nativeProtection
-      ? [
-          '- Protection state: `ACTIVE`',
-          '- GitHub branch protected: `true`'
-        ]
+      ? ['native protection `ACTIVE` / protected `true`']
       : [])
+  ].join('; ') || 'NONE';
+  const rows = [
+    ...(state ? [`- STATE: \`${stateValue}\``] : []),
+    ...(main ? [`- MAIN: \`${mainSha}\` / Required PASS — run 123`] : []),
+    '- CHANGE: LOW — fixture',
+    '- WHY: `NONE`',
+    '- NEXT: `NONE`',
+    `- AUTHORITY: ${authority}`,
+    ...(unknown ? [`- UNKNOWN: ${unknownValue}`] : [])
+  ];
+  const compat = convergence
+    ? [
+        '<!-- canonical-main-summary-compat:v1',
+        'Convergence: `STABLE`',
+        '-->'
+      ].join('\n')
+    : '<!-- canonical-main-summary-compat:v1\n-->';
+
+  return [
+    '## Canonical Operator Capsule',
+    ...rows,
+    '',
+    compat,
+    '',
+    '<details>',
+    '<summary>Operational details</summary>',
+    '',
+    '- Production authority observation: STALE_FIXTURE — ignored',
+    '- Protection state: `INACTIVE`',
+    '- GitHub branch protected: `false`',
+    '',
+    '</details>'
   ].join('\n');
 }
 
@@ -140,7 +165,7 @@ test('rejected read credentials fail as BLOCKED_CAPABILITY', async () => {
   }
 });
 
-test('stable capture parses current #485 detail labels and returns PASS', async () => {
+test('stable capture parses the canonical #485 capsule and returns PASS', async () => {
   const { reader, calls } = sequence([
     branch(),
     issue(),
@@ -158,6 +183,38 @@ test('stable capture parses current #485 detail labels and returns PASS', async 
   assert.deepEqual(result.unknown, []);
   assert.equal(result.sourceAgreement.directMainStable, true);
   assert.equal(result.sourceAgreement.mainShaAgrees, true);
+});
+
+test('only the bounded canonical capsule is parsed', async () => {
+  const prefixed = issue();
+  prefixed.body = [
+    '- STATE: `INCIDENT`',
+    `- MAIN: \`${SHA2}\` / Required FAIL — run 999`,
+    '- AUTHORITY: Production BROKEN — stale; native protection `INACTIVE` / protected `false`',
+    '- UNKNOWN: STALE',
+    '',
+    prefixed.body
+  ].join('\n');
+
+  const first = sequence([branch(), prefixed, branch()]);
+  const firstResult = await repoSnapshot({ githubJson: first.reader });
+  assert.equal(firstResult.authority, 'PASS');
+  assert.equal(firstResult.health, 'CLEAR');
+  assert.equal(firstResult.main, SHA);
+
+  const missing = issue();
+  missing.body = missing.body.replace('## Canonical Operator Capsule\n', '');
+  const second = sequence([branch(), missing, branch()]);
+  const secondResult = await repoSnapshot({ githubJson: second.reader });
+  assert.equal(secondResult.authority, 'UNKNOWN');
+  assert.ok(secondResult.unknown.includes('issue-485-state'));
+
+  const duplicated = issue();
+  duplicated.body += '\n\n## Canonical Operator Capsule\n- STATE: `CLEAR`';
+  const third = sequence([branch(), duplicated, branch()]);
+  const thirdResult = await repoSnapshot({ githubJson: third.reader });
+  assert.equal(thirdResult.authority, 'UNKNOWN');
+  assert.ok(thirdResult.unknown.includes('issue-485-state'));
 });
 
 test('main movement during capture is UNKNOWN', async () => {
@@ -184,6 +241,19 @@ test('incomplete capsule remains UNKNOWN even when rendered main is stale', asyn
   assert.equal(result.sourceAgreement.mainShaAgrees, false);
 });
 
+test('incomplete capsule remains UNKNOWN when protection also conflicts', async () => {
+  const { reader } = sequence([
+    branch(SHA, false),
+    issue({ production: false }),
+    branch(SHA, false)
+  ]);
+  const result = await repoSnapshot({ githubJson: reader });
+  assert.equal(result.authority, 'UNKNOWN');
+  assert.ok(result.unknown.includes('production-projection'));
+  assert.equal(result.protection.protected, false);
+  assert.equal(result.protection.projected.protected, true);
+});
+
 test('closed operator issue is UNKNOWN', async () => {
   const closed = issue();
   closed.state = 'closed';
@@ -205,6 +275,17 @@ test('missing operator STATE is UNKNOWN', async () => {
   const { reader } = sequence([
     branch(),
     issue({ state: false }),
+    branch()
+  ]);
+  const result = await repoSnapshot({ githubJson: reader });
+  assert.equal(result.authority, 'UNKNOWN');
+  assert.ok(result.unknown.includes('issue-485-state'));
+});
+
+test('invalid operator STATE is UNKNOWN', async () => {
+  const { reader } = sequence([
+    branch(),
+    issue({ stateValue: 'BROKEN' }),
     branch()
   ]);
   const result = await repoSnapshot({ githubJson: reader });
@@ -381,6 +462,86 @@ test('snapshot rate limit is shared by HTTP and MCP before extra GitHub reads', 
   assert.equal(fetchCalls, 3);
 });
 
+test('untrusted MCP Origin is rejected before request dispatch', async (t) => {
+  let fetchCalls = 0;
+  const { server, base } = await listeningServer({
+    token: 'test-only-token',
+    fetchImpl: async (url) => {
+      fetchCalls += 1;
+      return okJson(url === ISSUE_485 ? issue() : branch());
+    }
+  });
+  t.after(() => server.close());
+
+  const blocked = await fetch(`${base}/mcp`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'text/plain',
+      origin: 'https://evil.example'
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 70,
+      method: 'tools/call',
+      params: { name: 'repo_snapshot', arguments: {} }
+    })
+  });
+  assert.equal(blocked.status, 403);
+  assert.deepEqual(await blocked.json(), { error: 'origin_not_allowed' });
+  assert.equal(fetchCalls, 0);
+
+  const trusted = await fetch(`${base}/mcp`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      origin: new URL(base).origin
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 71,
+      method: 'tools/list'
+    })
+  });
+  assert.equal(trusted.status, 200);
+  assert.equal((await trusted.json()).result.tools.length, 1);
+  assert.equal(fetchCalls, 0);
+});
+
+test('tool arguments must match the advertised empty-object schema before reads', async (t) => {
+  let fetchCalls = 0;
+  const { server, base } = await listeningServer({
+    token: 'test-only-token',
+    fetchImpl: async (url) => {
+      fetchCalls += 1;
+      return okJson(url === ISSUE_485 ? issue() : branch());
+    }
+  });
+  t.after(() => server.close());
+
+  for (const argumentsValue of [null, [], 'bad', { extra: true }]) {
+    const { response, body } = await postJson(base, {
+      jsonrpc: '2.0',
+      id: 72,
+      method: 'tools/call',
+      params: { name: 'repo_snapshot', arguments: argumentsValue }
+    });
+    assert.equal(response.status, 200);
+    assert.equal(body.error.code, -32602);
+    assert.equal(body.error.message, 'invalid_tool_arguments');
+    assert.equal(fetchCalls, 0);
+  }
+
+  const valid = await postJson(base, {
+    jsonrpc: '2.0',
+    id: 73,
+    method: 'tools/call',
+    params: { name: 'repo_snapshot', arguments: {} }
+  });
+  assert.equal(valid.response.status, 200);
+  assert.equal(valid.body.result.structuredContent.authority, 'PASS');
+  assert.equal(fetchCalls, 3);
+});
+
 test('public MCP tool surface remains one fixed read-only tool', async (t) => {
   const { server, base } = await listeningServer({ token: '' });
   t.after(() => server.close());
@@ -433,6 +594,27 @@ test('all JSON-RPC notifications receive no response body', async (t) => {
     });
     assert.equal(response.status, 202, method);
     assert.equal(await response.text(), '', method);
+  }
+});
+
+test('malformed JSON-RPC request objects return -32600 before dispatch', async (t) => {
+  const { server, base } = await listeningServer({ token: '' });
+  t.after(() => server.close());
+
+  const cases = [
+    { id: 80, method: 'ping' },
+    { jsonrpc: '1.0', id: 81, method: 'ping' },
+    { jsonrpc: '2.0', id: true, method: 'ping' },
+    { jsonrpc: '2.0', id: { bad: true }, method: 'ping' },
+    { jsonrpc: '2.0', id: 82, method: 42 },
+    { jsonrpc: '2.0', id: 83, method: 'ping', params: null },
+    { jsonrpc: '2.0', method: 'notifications/cancelled', params: null }
+  ];
+
+  for (const value of cases) {
+    const { response, body } = await postJson(base, value);
+    assert.equal(response.status, 400);
+    assert.equal(body.error.code, -32600);
   }
 });
 

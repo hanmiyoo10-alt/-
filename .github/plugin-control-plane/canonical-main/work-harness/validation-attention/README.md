@@ -87,10 +87,11 @@ finalization requires `repoNeutralPacket()` to pass:
   `tools/repo-env/`, `tools/repo-ci-mcp/`, `tools/repo-write/`, and
   `tools/github-discussions-mcp/`;
 - reviewed exact paths are
-  `.github/tooling/ci-summary/manifests/plugin-control-plane.json` and
-  `.github/workflows/canonical-main-stage-checkpoint-publish.yml`; these are
-  exact-file exceptions only and do not admit their directories, sibling files,
-  near-match suffixes, the broader `.github/tooling/ci-summary/**` tree, or
+  `.github/tooling/ci-summary/manifests/plugin-control-plane.json`,
+  `.github/workflows/canonical-main-stage-checkpoint-publish.yml`, and
+  `.github/plugin-control-plane/taxonomy.json`; these are exact-file exceptions only
+  and do not admit their directories, sibling files, near-match suffixes, the broader
+  `.github/tooling/ci-summary/**` or `.github/plugin-control-plane/**` trees, or
   `.github/workflows/**`;
 - at least one semantic surface must be declared and every semantic surface must be
   `surface:repo:*`.

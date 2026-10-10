@@ -52,19 +52,19 @@ receipt or durable repository evidence.
 
 ## Command-agent classification
 
-The owner walks at most 16 ancestors from its own runtime PID.
+The owner first walks at most 16 ancestors from its own runtime PID.
 
-A command-agent candidate must satisfy both:
+A current command-agent candidate must satisfy both:
 
 1. its normalized command line contains both compile-time markers
    `@wonderwhy-er/desktop-commander` and `/dist/index.js`;
 2. the next process below it in the current ancestor chain is a direct shell
    child named exactly `cmd.exe`, `powershell.exe`, or `pwsh.exe`.
 
-Exactly one such candidate is required.
+Exactly one current-chain candidate is required.
 
 Every parent-child edge used for the ancestor chain, command-agent relation,
-peer-shell classification, or unexpected-child classification must also prove:
+peer-shell classification, or alternate-agent classification must also prove:
 
 ```text
 parent CreationTimeMs <= child CreationTimeMs
@@ -74,15 +74,31 @@ This rejects stale `ParentProcessId` relationships after Windows PID reuse.
 Missing, malformed, or contradictory creation-time evidence fails closed to
 `UNKNOWN`; no timestamp age or inactivity inference is introduced.
 
-This intentionally distinguishes the active command-agent relation from other
-Desktop Commander processes that may contain the same package path.
+After current-agent admission, the owner reuses the **same bounded process
+table** to inventory every row carrying the fixed Desktop Commander agent
+markers. It does not run a second process query and does not accept a caller
+agent/PID/session selector.
 
-The current shell root must be one direct child of that agent. Other direct
-children are classified as follows:
+The current shell root must be one direct child of the verified current agent.
+Other direct children of the current agent are classified as follows:
 
 - another fixed shell name → peer RDC command session;
 - `conhost.exe` → fixed Windows console-host sibling and ignored;
 - anything else → topology ambiguous / UNKNOWN.
+
+For marker-bearing alternate agents:
+
+- one or more valid direct fixed-shell children → `PRESENT`;
+- missing children, stale parent/child identity, only benign children, or any
+  otherwise unclassifiable alternate topology → `UNKNOWN`;
+- no alternate marker-bearing agent at all is required before `ABSENT` is
+  eligible.
+
+Therefore v1 `ABSENT` is now deliberately stronger and fail-closed: the
+current verified agent must be the only marker-eligible Desktop Commander
+agent in the bounded table, with no peer shell or ambiguous direct child.
+Historical pre-repair ABSENT receipts remain agent-local historical evidence
+and must not be reinterpreted as global absence.
 
 There is no elapsed-time, idle-time, latest-wins, PID-age, shell-duration, or
 ownership inference.
@@ -104,12 +120,19 @@ authority=<all false>
 
 Semantics:
 
-- `PASS / ABSENT / SOLE_RDC_COMMAND_SESSION` means no peer direct command
-  shell was observed under that exact verified command agent.
-- `PASS / PRESENT / OTHER_RDC_COMMAND_SESSION_PRESENT` means at least one
-  peer direct shell exists. It does **not** prove that shell owns a packet,
-  lease, holder, source effect, or recovery right.
-- missing, duplicate, malformed, unreadable, unsupported, or unexpected
+- `PASS / ABSENT / SOLE_RDC_COMMAND_SESSION` means the current verified
+  Desktop Commander agent is the only marker-eligible command agent in the
+  bounded Windows process table and no peer direct command shell exists under
+  it.
+- `PASS / PRESENT / OTHER_RDC_COMMAND_SESSION_PRESENT` means the owner has
+  definite evidence of at least one additional direct RDC command shell,
+  either under the current agent or under another marker-eligible agent. It
+  does **not** prove that shell owns a packet, lease, holder, source effect, or
+  recovery right.
+- alternate marker-bearing agent topology that cannot safely prove a live
+  direct command shell remains
+  `UNKNOWN / RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS`.
+- missing, duplicate, malformed, unreadable, unsupported, stale, or unexpected
   topology remains `UNKNOWN`.
 
 The owner never emits `LIVE` and never converts session presence into current

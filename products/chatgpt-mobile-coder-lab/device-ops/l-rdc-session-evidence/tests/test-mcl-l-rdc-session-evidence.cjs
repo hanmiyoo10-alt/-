@@ -21,11 +21,13 @@ function rawTable(rows) {
   }));
 }
 
+const AGENT_COMMAND =
+  'node C:\\Users\\x\\desktop-commander-remote\\node_modules\\@wonderwhy-er\\desktop-commander\\dist\\index.js';
+
 function fixture({peer = false, unexpected = false, duplicateAgent = false} = {}) {
   const rows = [
     row(1, 0, 'system.exe'),
-    row(50, 1, 'node.exe',
-      'node C:\\Users\\x\\desktop-commander-remote\\node_modules\\@wonderwhy-er\\desktop-commander\\dist\\index.js'),
+    row(50, 1, 'node.exe', AGENT_COMMAND),
     row(60, 50, 'powershell.exe', 'powershell -NoProfile'),
     row(61, 60, 'node.exe', 'node evidence.cjs inspect'),
     row(70, 50, 'conhost.exe', 'conhost.exe'),
@@ -33,11 +35,23 @@ function fixture({peer = false, unexpected = false, duplicateAgent = false} = {}
   if (peer) rows.push(row(80, 50, 'cmd.exe', 'cmd.exe'));
   if (unexpected) rows.push(row(81, 50, 'python.exe', 'python.exe worker.py'));
   if (duplicateAgent) {
-    rows.push(row(40, 1, 'node.exe',
-      'node C:\\Users\\x\\desktop-commander-remote\\node_modules\\@wonderwhy-er\\desktop-commander\\dist\\index.js'));
+    rows.push(row(40, 1, 'node.exe', AGENT_COMMAND));
     rows[0] = row(1, 40, 'powershell.exe', 'powershell');
   }
   return rows;
+}
+
+function withAlternateAgent(rows, {
+  agentPid = 90,
+  childPid = 91,
+  childName = 'cmd.exe',
+  agentTime = 1000,
+  childTime = 1001,
+  includeChild = true,
+} = {}) {
+  const out = [...rows, row(agentPid, 1, 'node.exe', AGENT_COMMAND, agentTime)];
+  if (includeChild) out.push(row(childPid, agentPid, childName, childName, childTime));
+  return out;
 }
 
 test('fixed CLI admits inspect only', () => {
@@ -92,6 +106,60 @@ test('peer direct shell returns PRESENT without owner inference', () => {
   assert.equal(result.reasonCode, 'OTHER_RDC_COMMAND_SESSION_PRESENT');
   assert.notEqual(result.sessionState, 'LIVE');
   assert.deepEqual(result.authority, owner.FALSE_AUTHORITY);
+});
+
+test('alternate eligible command agent with direct shell returns PRESENT', () => {
+  const rows = withAlternateAgent(fixture());
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'PRESENT',
+    reasonCode: 'OTHER_RDC_COMMAND_SESSION_PRESENT',
+  });
+});
+
+test('alternate marker agent without classifiable shell returns global UNKNOWN', () => {
+  const rows = withAlternateAgent(fixture(), {includeChild: false});
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS',
+  });
+});
+
+test('alternate marker agent with stale creation-time relation returns global UNKNOWN', () => {
+  const rows = withAlternateAgent(fixture(), {agentTime: 2000, childTime: 1000});
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS',
+  });
+});
+
+test('alternate marker agent with unexpected direct child returns global UNKNOWN', () => {
+  const rows = withAlternateAgent(fixture(), {childName: 'python.exe'});
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS',
+  });
+});
+
+test('later definite alternate shell wins over earlier ambiguous alternate marker', () => {
+  let rows = withAlternateAgent(fixture(), {
+    agentPid: 90,
+    childPid: 91,
+    includeChild: false,
+  });
+  rows = withAlternateAgent(rows, {
+    agentPid: 100,
+    childPid: 101,
+    childName: 'pwsh.exe',
+  });
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'PRESENT',
+    reasonCode: 'OTHER_RDC_COMMAND_SESSION_PRESENT',
+  });
 });
 
 test('conhost direct child is the only Windows benign sibling', () => {
@@ -261,6 +329,18 @@ test('fixed Windows transport has no caller interpolation surface', () => {
   assert.match(source, /shell: false/);
   assert.doesNotMatch(source, /shell: true/);
   assert.doesNotMatch(source, /childProcess\.exec/);
+});
+
+test('v1 schema and receipt field shape remain compatible', () => {
+  assert.equal(owner.SCHEMA, 'mcl-l-rdc-session-evidence.v1');
+  assert.equal(owner.OWNER, 'mcl-l-rdc-session-evidence');
+  assert.deepEqual(Object.keys(owner.receipt({
+    sessionState: 'ABSENT',
+    reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+  })), [
+    'schema', 'status', 'executor', 'sessionState', 'reasonCode',
+    'owner', 'details', 'authority',
+  ]);
 });
 
 test('receipt is bounded and excludes raw process/session identity', () => {

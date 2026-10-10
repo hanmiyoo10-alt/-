@@ -1186,6 +1186,46 @@ test('repo-neutral predicate is narrow, explicit and reviewed-prefix bounded', (
   }), false);
 });
 
+test('reviewed repo-neutral prefix roots are admitted without widening siblings', () => {
+  const reviewedPrefixes = [
+    '.github/plugin-control-plane/canonical-main/',
+    'tools/repo-env/',
+    'tools/repo-ci-mcp/',
+    'tools/repo-write/',
+    'tools/github-discussions-mcp/',
+  ];
+  for (const prefix of reviewedPrefixes) {
+    const root = prefix.slice(0, -1);
+    assert.equal(attention.repoNeutralPacket({
+      paths: [root],
+      scopes: ['path:' + root + '/**', 'surface:repo:reviewed-prefix-root'],
+    }), true);
+    assert.equal(attention.repoNeutralPacket({
+      paths: [root + '/README.md'],
+      scopes: ['path:' + root + '/README.md', 'surface:repo:reviewed-prefix-child'],
+    }), true);
+  }
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/github-discussions-mcp', '.github/plugin-control-plane/taxonomy.json'],
+    scopes: [
+      'path:tools/github-discussions-mcp/**',
+      'path:.github/plugin-control-plane/taxonomy.json',
+      'surface:repo:github-discussions-connector',
+    ],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/github-discussions-mcp-other'],
+    scopes: [
+      'path:tools/github-discussions-mcp-other/**',
+      'surface:repo:github-discussions-connector',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/other'],
+    scopes: ['path:tools/other/**', 'surface:repo:other-tooling'],
+  }), false);
+});
+
 test('source is thin composition with no direct effect/network/shell/review-onset surface', () => {
   const source = fs.readFileSync(path.join(__dirname, '../validation-attention-owner.cjs'), 'utf8');
   assert.doesNotMatch(source, /child_process|spawnSync|execFile|execSync|fetch\(|https:\/\/api\.github\.com/);

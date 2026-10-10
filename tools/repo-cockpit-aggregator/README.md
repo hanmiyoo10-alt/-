@@ -26,7 +26,7 @@ The token must be separately provisioned with least privilege for read access to
 
 The service deliberately does not read `GITHUB_TOKEN`, invoke `gh auth token`, read token files, or return/log the credential.
 
-Missing authentication fails closed before any GitHub network call.
+Missing authentication, or a GitHub 401/403 authentication/permission rejection, fails closed as `BLOCKED_CAPABILITY`.
 
 ## Status capture
 
@@ -44,7 +44,9 @@ Required capsule evidence includes:
 - Native protection projection;
 - explicit UNKNOWN field.
 
-Main movement, closed/invalid #485, or missing required evidence remains UNKNOWN.
+The parser accepts the current #485 operational labels such as `Production authority observation`, `Protection state`, and `GitHub branch protected`, while retaining the bounded compatibility forms already emitted by canonical-main.
+
+Main movement, closed/invalid #485, or missing required evidence remains UNKNOWN. A rendered-main mismatch is classified `SETTLING_OR_STALE` only after completeness has been proven, so missing evidence is never downgraded from UNKNOWN to a merely stale state.
 
 ## HTTP / MCP safety
 
@@ -52,9 +54,13 @@ Main movement, closed/invalid #485, or missing required evidence remains UNKNOWN
 
 `GET /snapshot` and MCP `repo_snapshot` use the authenticated fixed-repository reader.
 
-MCP request bodies must decode to a non-null JSON object. Scalars, arrays, and `null` return JSON-RPC `-32600 Invalid Request` instead of reaching method dispatch.
+Authenticated snapshot execution is bounded by one shared per-process gate across both surfaces: at most 6 snapshot executions per 60 seconds by default. Rejected excess requests perform zero additional GitHub reads. The service does not replay a cached status snapshot to satisfy this guard.
 
-Malformed JSON keeps JSON-RPC parse-error behavior.
+MCP request bodies are accumulated as bytes and decoded once as UTF-8, so multibyte characters remain intact across HTTP chunk boundaries. Bodies must decode to a non-null JSON object. Scalars, arrays, and `null` return JSON-RPC `-32600 Invalid Request` instead of reaching method dispatch.
+
+Malformed JSON keeps JSON-RPC parse-error behavior. JSON-RPC notifications omit `id` and receive HTTP 202 with no response body.
+
+The initialize handshake supports protocol revision `2025-06-18`. A client requesting another revision receives `2025-06-18` as the server's supported counter-offer rather than an echoed unsupported value.
 
 ## Deployment boundary
 

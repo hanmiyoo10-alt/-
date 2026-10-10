@@ -5,8 +5,10 @@ import test from 'node:test';
 import {
   BRANCH_MAIN,
   ISSUE_485,
+  MCP_PROTOCOL_VERSION,
   createGitHubJson,
   createRepoCockpitServer,
+  readJson,
   repoSnapshot
 } from '../src/server.mjs';
 
@@ -17,6 +19,7 @@ function capsule({
   state = true,
   stateValue = 'CLEAR',
   main = true,
+  mainSha = SHA,
   nativeProtection = true,
   convergence = true,
   production = true,
@@ -25,14 +28,17 @@ function capsule({
 } = {}) {
   return [
     ...(state ? [`- STATE: \`${stateValue}\``] : []),
-    ...(main ? [`- MAIN: \`${SHA}\` / Required PASS — run 123`] : []),
+    ...(main ? [`- MAIN: \`${mainSha}\` / Required PASS — run 123`] : []),
     ...(unknown ? [`- UNKNOWN: ${unknownValue}`] : []),
-    ...(convergence ? ['Convergence: `STABLE`'] : []),
+    ...(convergence ? ['- Convergence: `STABLE`'] : []),
     ...(production
-      ? ['Production authority: MATCH — release-simcore abc123']
+      ? ['- Production authority observation: MATCH — release-simcore abc123']
       : []),
     ...(nativeProtection
-      ? ['Native protection: `ACTIVE` / protected `true`']
+      ? [
+          '- Protection state: `ACTIVE`',
+          '- GitHub branch protected: `true`'
+        ]
       : [])
   ].join('\n');
 }
@@ -58,6 +64,14 @@ function sequence(rows) {
     return rows.shift();
   };
   return { reader, calls };
+}
+
+function okJson(value) {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => value
+  };
 }
 
 async function listeningServer(options = {}) {
@@ -96,23 +110,37 @@ test('missing read token performs zero GitHub network calls', async () => {
   assert.equal(result.error, 'GITHUB_READ_AUTH_REQUIRED');
 });
 
-test('dedicated read token is used without leaking into failures', async () => {
+test('dedicated read token is used without leaking into generic failures', async () => {
   const secret = 'test-only-secret';
   let authorization = null;
   const githubJson = createGitHubJson({
     token: secret,
     fetchImpl: async (_url, options) => {
       authorization = options.headers.Authorization;
-      return { ok: false, status: 403 };
+      return { ok: false, status: 500 };
     }
   });
   const result = await repoSnapshot({ githubJson });
   assert.equal(authorization, `Bearer ${secret}`);
   assert.equal(result.authority, 'UNKNOWN');
+  assert.equal(result.error, 'GITHUB_HTTP_500');
   assert.doesNotMatch(JSON.stringify(result), new RegExp(secret));
 });
 
-test('stable capture reads main then issue then main and returns PASS', async () => {
+test('rejected read credentials fail as BLOCKED_CAPABILITY', async () => {
+  for (const status of [401, 403]) {
+    const githubJson = createGitHubJson({
+      token: 'test-only-secret',
+      fetchImpl: async () => ({ ok: false, status })
+    });
+    const result = await repoSnapshot({ githubJson });
+    assert.equal(result.authority, 'BLOCKED_CAPABILITY', status);
+    assert.deepEqual(result.unknown, ['github-read-auth'], status);
+    assert.equal(result.error, `GITHUB_HTTP_${status}`, status);
+  }
+});
+
+test('stable capture parses current #485 detail labels and returns PASS', async () => {
   const { reader, calls } = sequence([
     branch(),
     issue(),
@@ -122,6 +150,11 @@ test('stable capture reads main then issue then main and returns PASS', async ()
   assert.deepEqual(calls, [BRANCH_MAIN, ISSUE_485, BRANCH_MAIN]);
   assert.equal(result.authority, 'PASS');
   assert.equal(result.main, SHA);
+  assert.equal(result.production.state, 'MATCH');
+  assert.deepEqual(result.protection.projected, {
+    state: 'ACTIVE',
+    protected: true
+  });
   assert.deepEqual(result.unknown, []);
   assert.equal(result.sourceAgreement.directMainStable, true);
   assert.equal(result.sourceAgreement.mainShaAgrees, true);
@@ -137,6 +170,18 @@ test('main movement during capture is UNKNOWN', async () => {
   assert.equal(result.authority, 'UNKNOWN');
   assert.equal(result.main, null);
   assert.ok(result.unknown.includes('main-changed-during-capture'));
+});
+
+test('incomplete capsule remains UNKNOWN even when rendered main is stale', async () => {
+  const { reader } = sequence([
+    branch(SHA2),
+    issue({ mainSha: SHA, production: false }),
+    branch(SHA2)
+  ]);
+  const result = await repoSnapshot({ githubJson: reader });
+  assert.equal(result.authority, 'UNKNOWN');
+  assert.ok(result.unknown.includes('production-projection'));
+  assert.equal(result.sourceAgreement.mainShaAgrees, false);
 });
 
 test('closed operator issue is UNKNOWN', async () => {
@@ -235,6 +280,25 @@ test('non-NONE operator unknown evidence prevents PASS', async () => {
   assert.ok(result.unknown.includes('PENDING'));
 });
 
+test('readJson preserves multibyte UTF-8 split across chunks', async () => {
+  const raw = Buffer.from(JSON.stringify({
+    jsonrpc: '2.0',
+    id: 'é',
+    method: 'ping'
+  }));
+  const marker = Buffer.from('é');
+  const start = raw.indexOf(marker);
+  assert.ok(start >= 0);
+  const fakeRequest = {
+    async *[Symbol.asyncIterator]() {
+      yield raw.subarray(0, start + 1);
+      yield raw.subarray(start + 1);
+    }
+  };
+  const parsed = await readJson(fakeRequest);
+  assert.equal(parsed.id, 'é');
+});
+
 test('health endpoint works without GitHub token or fetch', async (t) => {
   let fetchCalls = 0;
   const { server, base } = await listeningServer({
@@ -275,6 +339,48 @@ test('snapshot without token fails closed before network', async (t) => {
   assert.equal(fetchCalls, 0);
 });
 
+test('snapshot rate limit is shared by HTTP and MCP before extra GitHub reads', async (t) => {
+  let fetchCalls = 0;
+  const fetchImpl = async (url) => {
+    fetchCalls += 1;
+    return okJson(url === ISSUE_485 ? issue() : branch());
+  };
+  const { server, base } = await listeningServer({
+    token: 'test-only-token',
+    fetchImpl,
+    snapshotMaxPerWindow: 1,
+    snapshotWindowMs: 60_000,
+    now: () => 0
+  });
+  t.after(() => server.close());
+
+  const first = await fetch(`${base}/snapshot`);
+  assert.equal(first.status, 200);
+  assert.equal((await first.json()).authority, 'PASS');
+  assert.equal(fetchCalls, 3);
+
+  const second = await fetch(`${base}/snapshot`);
+  const secondBody = await second.json();
+  assert.equal(second.status, 429);
+  assert.equal(secondBody.authority, 'BLOCKED_CAPABILITY');
+  assert.equal(secondBody.error, 'GITHUB_READ_RATE_LIMITED');
+  assert.equal(fetchCalls, 3);
+
+  const tool = await postJson(base, {
+    jsonrpc: '2.0',
+    id: 44,
+    method: 'tools/call',
+    params: { name: 'repo_snapshot', arguments: {} }
+  });
+  assert.equal(tool.response.status, 200);
+  assert.equal(tool.body.result.isError, true);
+  assert.equal(
+    tool.body.result.structuredContent.error,
+    'GITHUB_READ_RATE_LIMITED'
+  );
+  assert.equal(fetchCalls, 3);
+});
+
 test('public MCP tool surface remains one fixed read-only tool', async (t) => {
   const { server, base } = await listeningServer({ token: '' });
   t.after(() => server.close());
@@ -295,6 +401,39 @@ test('public MCP tool surface remains one fixed read-only tool', async (t) => {
   });
   assert.equal(tool.annotations.readOnlyHint, true);
   assert.equal(tool.annotations.destructiveHint, false);
+});
+
+test('initialize counter-offers only the supported handshake version', async (t) => {
+  const { server, base } = await listeningServer({ token: '' });
+  t.after(() => server.close());
+
+  const { response, body } = await postJson(base, {
+    jsonrpc: '2.0',
+    id: 2,
+    method: 'initialize',
+    params: { protocolVersion: '2099-01-01' }
+  });
+  assert.equal(response.status, 200);
+  assert.equal(body.result.protocolVersion, MCP_PROTOCOL_VERSION);
+});
+
+test('all JSON-RPC notifications receive no response body', async (t) => {
+  const { server, base } = await listeningServer({ token: '' });
+  t.after(() => server.close());
+
+  for (const method of ['notifications/initialized', 'notifications/cancelled']) {
+    const response = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method,
+        params: {}
+      })
+    });
+    assert.equal(response.status, 202, method);
+    assert.equal(await response.text(), '', method);
+  }
 });
 
 test('JSON null scalar and array requests return -32600 and server remains alive', async (t) => {

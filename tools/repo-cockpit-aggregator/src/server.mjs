@@ -10,6 +10,9 @@ export const API = `https://api.github.com/repos/${REPO}`;
 export const ISSUE_485 = `${API}/issues/485`;
 export const BRANCH_MAIN = `${API}/branches/main`;
 export const MAX_BODY = 64 * 1024;
+export const MCP_PROTOCOL_VERSION = '2025-06-18';
+export const DEFAULT_SNAPSHOT_MAX_PER_WINDOW = 6;
+export const DEFAULT_SNAPSHOT_WINDOW_MS = 60 * 1000;
 const SHA40_RE = /^[0-9a-f]{40}$/;
 
 class RepoCockpitError extends Error {
@@ -34,17 +37,47 @@ export function parseOperatorCapsule(body) {
   const text = String(body || '');
   const state = unquoteCode(textField(text, 'STATE'));
   const mainLine = textField(text, 'MAIN');
+  const authorityLine = textField(text, 'AUTHORITY');
   const unknown = unquoteCode(textField(text, 'UNKNOWN'));
   const mainMatch = mainLine?.match(
     /`?([0-9a-f]{40})`?\s*\/\s*Required\s+([A-Z]+)\s+—\s+run\s+(\d+)/i
   );
   const convergenceMatch = text.match(/Convergence:\s*`?([A-Z_]+)`?/i);
-  const productionMatch = text.match(
-    /Production authority:\s*([A-Z_]+)\s+—\s+([^\n]+)/i
+  const productionMatch =
+    text.match(
+      /(?:Production authority observation|Production authority):\s*([A-Z_]+)\s+—\s+([^\n]+)/i
+    ) ??
+    authorityLine?.match(/Production\s+([A-Z_]+)\s+—\s+([^;\n]+)/i);
+  const detailProtectionState = text.match(
+    /Protection state:\s*`?([A-Z_]+)`?/i
   );
-  const protectionMatch = text.match(
+  const detailProtected = text.match(
+    /GitHub branch protected:\s*`?(true|false)`?/i
+  );
+  const compatProtection = text.match(
     /Native protection:\s*`?([A-Z_]+)`?\s*\/\s*protected\s*`?(true|false)`?/i
   );
+  const authorityProtection = authorityLine?.match(
+    /native protection\s*`?([A-Z_]+)`?\s*\/\s*protected\s*`?(true|false)`?/i
+  );
+
+  let nativeProtectionProjection = null;
+  if (detailProtectionState && detailProtected) {
+    nativeProtectionProjection = {
+      state: detailProtectionState[1],
+      protected: detailProtected[1] === 'true'
+    };
+  } else if (compatProtection) {
+    nativeProtectionProjection = {
+      state: compatProtection[1],
+      protected: compatProtection[2] === 'true'
+    };
+  } else if (authorityProtection) {
+    nativeProtectionProjection = {
+      state: authorityProtection[1],
+      protected: authorityProtection[2] === 'true'
+    };
+  }
 
   return {
     state: state ?? null,
@@ -56,9 +89,7 @@ export function parseOperatorCapsule(body) {
     production: productionMatch
       ? { state: productionMatch[1], detail: productionMatch[2].trim() }
       : null,
-    nativeProtectionProjection: protectionMatch
-      ? { state: protectionMatch[1], protected: protectionMatch[2] === 'true' }
-      : null,
+    nativeProtectionProjection,
     unknown: unknown ?? null
   };
 }
@@ -108,7 +139,11 @@ function readErrorSnapshot(error, observedAt) {
   const code = error instanceof RepoCockpitError
     ? error.code
     : 'GITHUB_READ_FAILED';
-  const authRequired = code === 'GITHUB_READ_AUTH_REQUIRED';
+  const authBlocked = new Set([
+    'GITHUB_READ_AUTH_REQUIRED',
+    'GITHUB_HTTP_401',
+    'GITHUB_HTTP_403'
+  ]).has(code);
   return {
     schemaVersion: 1,
     contract: 'repo_snapshot:v1',
@@ -116,10 +151,51 @@ function readErrorSnapshot(error, observedAt) {
     kind: 'REPO_SNAPSHOT',
     repository: REPO,
     observedAt,
-    authority: authRequired ? 'BLOCKED_CAPABILITY' : 'UNKNOWN',
-    unknown: [authRequired ? 'github-read-auth' : 'github-read'],
+    authority: authBlocked ? 'BLOCKED_CAPABILITY' : 'UNKNOWN',
+    unknown: [authBlocked ? 'github-read-auth' : 'github-read'],
     error: code,
     sources: [BRANCH_MAIN, ISSUE_485]
+  };
+}
+
+function rateLimitedSnapshot(observedAt = new Date().toISOString()) {
+  return {
+    schemaVersion: 1,
+    contract: 'repo_snapshot:v1',
+    serviceVersion: VERSION,
+    kind: 'REPO_SNAPSHOT',
+    repository: REPO,
+    observedAt,
+    authority: 'BLOCKED_CAPABILITY',
+    unknown: ['github-read-rate-limit'],
+    error: 'GITHUB_READ_RATE_LIMITED',
+    sources: [BRANCH_MAIN, ISSUE_485]
+  };
+}
+
+function createSnapshotRateLimiter({
+  maxPerWindow = DEFAULT_SNAPSHOT_MAX_PER_WINDOW,
+  windowMs = DEFAULT_SNAPSHOT_WINDOW_MS,
+  now = Date.now
+} = {}) {
+  const limit = Number.isInteger(maxPerWindow) && maxPerWindow > 0
+    ? maxPerWindow
+    : DEFAULT_SNAPSHOT_MAX_PER_WINDOW;
+  const duration = Number.isFinite(windowMs) && windowMs > 0
+    ? windowMs
+    : DEFAULT_SNAPSHOT_WINDOW_MS;
+  let windowStart = now();
+  let used = 0;
+
+  return function allowSnapshotRead() {
+    const current = now();
+    if (current < windowStart || current - windowStart >= duration) {
+      windowStart = current;
+      used = 0;
+    }
+    if (used >= limit) return false;
+    used += 1;
+    return true;
   };
 }
 
@@ -191,6 +267,7 @@ export async function repoSnapshot({ githubJson } = {}) {
   let authority = unknown.length ? 'UNKNOWN' : 'PASS';
 
   if (
+    unknown.length === 0 &&
     stableMain &&
     renderedMain &&
     renderedMain !== directMain
@@ -264,12 +341,16 @@ function sendJson(res, status, value) {
   res.end(JSON.stringify(value));
 }
 
-async function readJson(req) {
-  let raw = '';
+export async function readJson(req) {
+  const chunks = [];
+  let bytes = 0;
   for await (const chunk of req) {
-    raw += chunk;
-    if (raw.length > MAX_BODY) throw new Error('request_too_large');
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    bytes += buffer.length;
+    if (bytes > MAX_BODY) throw new Error('request_too_large');
+    chunks.push(buffer);
   }
+  const raw = Buffer.concat(chunks).toString('utf8');
   return JSON.parse(raw || '{}');
 }
 
@@ -302,7 +383,7 @@ const TOOL = {
 async function handleRequest(
   req,
   res,
-  { githubJson, publicDomain }
+  { readSnapshot, publicDomain }
 ) {
   if (req.method === 'GET' && req.url === '/healthz') {
     return sendJson(res, 200, {
@@ -316,12 +397,13 @@ async function handleRequest(
     if (!hostAllowed(req, publicDomain)) {
       return sendJson(res, 403, { error: 'host_not_allowed' });
     }
-    const snapshot = await repoSnapshot({ githubJson });
-    return sendJson(
-      res,
-      snapshot.authority === 'BLOCKED_CAPABILITY' ? 503 : 200,
-      snapshot
-    );
+    const snapshot = await readSnapshot();
+    const status = snapshot.error === 'GITHUB_READ_RATE_LIMITED'
+      ? 429
+      : snapshot.authority === 'BLOCKED_CAPABILITY'
+        ? 503
+        : 200;
+    return sendJson(res, status, snapshot);
   }
 
   if (req.url !== '/mcp') {
@@ -350,19 +432,26 @@ async function handleRequest(
     return sendJson(res, 400, rpcError(null, -32600, 'Invalid Request'));
   }
 
-  const id = msg.id ?? null;
-  if (msg.method === 'notifications/initialized') {
+  const hasId = Object.prototype.hasOwnProperty.call(msg, 'id');
+  if (typeof msg.method === 'string' && !hasId) {
     res.writeHead(202);
     return res.end();
   }
 
+  const id = msg.id ?? null;
+
   if (msg.method === 'initialize') {
+    const requestedVersion = typeof msg.params?.protocolVersion === 'string'
+      ? msg.params.protocolVersion
+      : null;
     return sendJson(
       res,
       200,
       rpcResult(id, {
         protocolVersion:
-          msg.params?.protocolVersion || '2025-06-18',
+          requestedVersion === MCP_PROTOCOL_VERSION
+            ? requestedVersion
+            : MCP_PROTOCOL_VERSION,
         capabilities: { tools: { listChanged: false } },
         serverInfo: {
           name: 'hanmiyoo-repo-cockpit-aggregator',
@@ -385,7 +474,7 @@ async function handleRequest(
       return sendJson(res, 200, rpcError(id, -32602, 'unknown_tool'));
     }
 
-    const snapshot = await repoSnapshot({ githubJson });
+    const snapshot = await readSnapshot();
     return sendJson(
       res,
       200,
@@ -405,11 +494,27 @@ async function handleRequest(
 export function createRepoCockpitServer({
   token = process.env.GITHUB_REPO_READ_TOKEN,
   fetchImpl = globalThis.fetch,
-  publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || null
+  publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || null,
+  snapshotMaxPerWindow = DEFAULT_SNAPSHOT_MAX_PER_WINDOW,
+  snapshotWindowMs = DEFAULT_SNAPSHOT_WINDOW_MS,
+  now = Date.now
 } = {}) {
-  const githubJson = createGitHubJson({ token, fetchImpl });
+  const readToken = typeof token === 'string' ? token.trim() : '';
+  const githubJson = createGitHubJson({ token: readToken, fetchImpl });
+  const allowSnapshotRead = createSnapshotRateLimiter({
+    maxPerWindow: snapshotMaxPerWindow,
+    windowMs: snapshotWindowMs,
+    now
+  });
+  const readSnapshot = async () => {
+    if (readToken && !allowSnapshotRead()) {
+      return rateLimitedSnapshot();
+    }
+    return repoSnapshot({ githubJson });
+  };
+
   return createServer((req, res) => {
-    void handleRequest(req, res, { githubJson, publicDomain })
+    void handleRequest(req, res, { readSnapshot, publicDomain })
       .catch(() => {
         if (!res.headersSent) {
           sendJson(res, 500, { error: 'internal_error' });

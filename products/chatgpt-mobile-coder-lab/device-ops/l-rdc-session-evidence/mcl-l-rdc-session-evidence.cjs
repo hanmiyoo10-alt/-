@@ -85,9 +85,16 @@ function normalizeProcessRow(raw) {
   const pid = Number(raw.ProcessId);
   const ppid = Number(raw.ParentProcessId);
   const name = typeof raw.Name === 'string' ? raw.Name.trim().toLowerCase() : '';
-  const commandLine = raw.CommandLine === null || raw.CommandLine === undefined
-    ? ''
-    : String(raw.CommandLine);
+  let commandLine = '';
+  let commandLineReadable = false;
+  if (raw.CommandLine === null || raw.CommandLine === undefined || raw.CommandLine === '') {
+    commandLine = '';
+  } else if (typeof raw.CommandLine === 'string') {
+    commandLine = raw.CommandLine;
+    commandLineReadable = true;
+  } else {
+    throw new Error('PROCESS_ROW_INVALID');
+  }
   const creationTimeMs = Number(raw.CreationTimeMs);
   if (!Number.isSafeInteger(pid) || pid <= 0
       || !Number.isSafeInteger(ppid) || ppid < 0
@@ -96,7 +103,7 @@ function normalizeProcessRow(raw) {
       || commandLine.length > MAX_COMMAND_LINE) {
     throw new Error('PROCESS_ROW_INVALID');
   }
-  return {pid, ppid, name, commandLine, creationTimeMs};
+  return {pid, ppid, name, commandLine, commandLineReadable, creationTimeMs};
 }
 
 function parseProcessTable(text) {
@@ -134,6 +141,44 @@ function validParentLink(parent, child) {
     && Number.isSafeInteger(parent.creationTimeMs)
     && Number.isSafeInteger(child.creationTimeMs)
     && parent.creationTimeMs <= child.creationTimeMs);
+}
+
+function directChildrenForAgent(rows, agent) {
+  const children = rows.filter((row) => row.ppid === agent.pid);
+  if (children.some((row) => !validParentLink(agent, row))) {
+    return {state: 'UNKNOWN', children: []};
+  }
+  return {state: 'EXACT', children};
+}
+
+function classifyAlternateAgents(rows, currentAgent) {
+  if (!currentAgent.commandLineReadable || !hasAgentMarker(currentAgent)) {
+    return topologyResult('UNKNOWN', 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS');
+  }
+  if (rows.some((row) => row.pid !== currentAgent.pid
+      && row.name === currentAgent.name
+      && row.commandLineReadable === false)) {
+    return topologyResult('UNKNOWN', 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS');
+  }
+
+  const potentialAgents = rows.filter(hasAgentMarker);
+  if (potentialAgents.filter((row) => row.pid === currentAgent.pid).length !== 1) {
+    return topologyResult('UNKNOWN', 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS');
+  }
+  const alternates = potentialAgents.filter((row) => row.pid !== currentAgent.pid);
+  if (alternates.length === 0) {
+    return topologyResult('ABSENT', 'SOLE_RDC_COMMAND_SESSION');
+  }
+
+  for (const alternate of alternates) {
+    const direct = directChildrenForAgent(rows, alternate);
+    if (direct.state !== 'EXACT' || direct.children.length === 0) continue;
+    if (direct.children.some((child) => SHELL_NAMES.has(child.name))) {
+      return topologyResult('PRESENT', 'OTHER_RDC_COMMAND_SESSION_PRESENT');
+    }
+  }
+
+  return topologyResult('UNKNOWN', 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS');
 }
 
 function classifyProcessTable(rows, selfPid) {
@@ -180,10 +225,11 @@ function classifyProcessTable(rows, selfPid) {
   }
 
   const {agent, currentRoot} = candidates[0];
-  const directChildren = rows.filter((row) => row.ppid === agent.pid);
-  if (directChildren.some((row) => !validParentLink(agent, row))) {
+  const currentDirect = directChildrenForAgent(rows, agent);
+  if (currentDirect.state !== 'EXACT') {
     return topologyResult('UNKNOWN', 'RDC_AGENT_TOPOLOGY_AMBIGUOUS');
   }
+  const directChildren = currentDirect.children;
   if (directChildren.filter((row) => row.pid === currentRoot.pid).length !== 1) {
     return topologyResult('UNKNOWN', 'RDC_AGENT_TOPOLOGY_AMBIGUOUS');
   }
@@ -205,7 +251,7 @@ function classifyProcessTable(rows, selfPid) {
   if (peerShells > 0) {
     return topologyResult('PRESENT', 'OTHER_RDC_COMMAND_SESSION_PRESENT');
   }
-  return topologyResult('ABSENT', 'SOLE_RDC_COMMAND_SESSION');
+  return classifyAlternateAgents(rows, agent);
 }
 
 function inspectLocal({
@@ -271,8 +317,10 @@ module.exports = {
   POWERSHELL,
   SCHEMA,
   SHELL_NAMES,
+  classifyAlternateAgents,
   classifyProcessTable,
   defaultRunner,
+  directChildrenForAgent,
   hasAgentMarker,
   inspectLocal,
   normalizeProcessRow,

@@ -606,8 +606,11 @@ function repoNeutralPathScope(scope) {
   if (normalized.mode === 'exact' && REPO_NEUTRAL_EXACT_PATHS.has(normalized.value)) {
     return true;
   }
-  return REPO_NEUTRAL_PATH_PREFIXES.some(
-    (prefix) => String(normalized.value).startsWith(prefix));
+  const value = String(normalized.value);
+  return REPO_NEUTRAL_PATH_PREFIXES.some((prefix) => {
+    const reviewedRoot = prefix.slice(0, -1);
+    return value === reviewedRoot || value.startsWith(prefix);
+  });
 }
 function repoNeutralPacket(packet) {
   const scopes = packet?.scopes || [];

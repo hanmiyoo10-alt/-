@@ -4,10 +4,23 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[5]
 OWNER = ROOT / "products/chatgpt-mobile-coder-lab/device-ops/wireless-adb-ui"
+WRAPPER = OWNER / "mcl-adb-ui"
 SOURCE = OWNER / "mcl_adb_ui.py"
 WORKFLOW = ROOT / ".github/workflows/mcl-wireless-adb-ui.yml"
 
 class ContractTests(unittest.TestCase):
+    def test_termux_wrapper_has_fixed_direct_exec_entrypoint(self):
+        wrapper = WRAPPER.read_text()
+        lines = wrapper.splitlines()
+        self.assertGreaterEqual(len(lines), 3)
+        self.assertEqual(lines[0], "#!/data/data/com.termux/files/usr/bin/sh")
+        self.assertNotIn("/usr/bin/env", lines[0])
+        self.assertEqual(lines[1], "set -eu")
+        self.assertEqual(
+            lines[2],
+            'exec python3 "$(dirname "$0")/mcl_adb_ui.py" "$@"',
+        )
+
     def test_action_surface_is_fixed_and_bounded(self):
         source = SOURCE.read_text()
         for forbidden in (

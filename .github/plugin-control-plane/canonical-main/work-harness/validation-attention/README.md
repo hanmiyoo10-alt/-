@@ -85,7 +85,9 @@ finalization requires `repoNeutralPacket()` to pass:
 - every exact/declared path must match a compile-time reviewed neutral path rule;
 - the reviewed prefixes are `.github/plugin-control-plane/canonical-main/`,
   `tools/repo-env/`, `tools/repo-ci-mcp/`, `tools/repo-write/`, and
-  `tools/github-discussions-mcp/`;
+  `tools/github-discussions-mcp/`; each slash-terminated reviewed prefix admits both
+  its exact normalized prefix root and descendants under that prefix, while lookalike
+  siblings remain non-neutral;
 - reviewed exact paths are
   `.github/tooling/ci-summary/manifests/plugin-control-plane.json`,
   `.github/workflows/canonical-main-stage-checkpoint-publish.yml`, and

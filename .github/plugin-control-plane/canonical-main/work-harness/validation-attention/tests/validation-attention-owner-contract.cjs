@@ -447,6 +447,68 @@ test('repo-common tools/repo-env packet uses repository-neutral pre-merge route'
   assert.equal(result.report.output.mergeAdmission, 'READY');
 });
 
+test('Repository Patch Write packet uses repository-neutral pre-merge route', async () => {
+  const repoPaths = [
+    'tools/repo-write/README.md',
+    'tools/repo-write/currentize_candidate.py',
+    'tools/repo-write/tests/test_currentize_candidate.py',
+  ];
+  const {deps} = fixtureDeps({
+    mergeInspect: mergeInspectResult({
+      paths: repoPaths,
+      scopes: [...repoPaths.map((p) => 'path:' + p), 'surface:repo:pr-currentization-effect'],
+    }),
+  });
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: implementationReceipt({paths: repoPaths}), deps,
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.output.mergeAdmission, 'READY');
+});
+
+test('GitHub Discussions MCP packet uses repository-neutral pre-merge route', async () => {
+  const repoPaths = [
+    'tools/github-discussions-mcp/README.md',
+    'tools/github-discussions-mcp/github_discussions_mcp/service.py',
+    'tools/github-discussions-mcp/tests/test_service.py',
+  ];
+  const {deps} = fixtureDeps({
+    mergeInspect: mergeInspectResult({
+      paths: repoPaths,
+      scopes: [
+        ...repoPaths.map((p) => 'path:' + p),
+        'surface:repo:github-discussions-connector',
+      ],
+    }),
+  });
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: implementationReceipt({paths: repoPaths}), deps,
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.output.mergeAdmission, 'READY');
+});
+
+test('GitHub Discussions MCP route rejects non-repo semantic surface', async () => {
+  const repoPaths = ['tools/github-discussions-mcp/README.md'];
+  const {deps} = fixtureDeps({
+    mergeInspect: mergeInspectResult({
+      paths: repoPaths,
+      scopes: [
+        'path:tools/github-discussions-mcp/README.md',
+        'surface:repo-ops:github-discussions-connector',
+      ],
+    }),
+  });
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: implementationReceipt({paths: repoPaths}), deps,
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert(result.receipt.blockers.includes('REPO_NEUTRAL_FINALIZATION_SCOPE_REQUIRED'));
+});
+
 test('reviewed external route can admit a non-neutral NOT_APPLICABLE packet', async () => {
   const otherPaths = ['docs/example.md'];
   const {deps} = fixtureDeps({
@@ -975,6 +1037,163 @@ test('repo-neutral predicate is narrow, explicit and reviewed-prefix bounded', (
     scopes: ['path:tools/repo-env/wsl/**', 'surface:repo:host-tooling-wsl'],
   }), true);
   assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/repo-ci-mcp/README.md'],
+    scopes: ['path:tools/repo-ci-mcp/README.md', 'surface:repo:repository-read-mcp'],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/repo-ci-mcp/README.md'],
+    scopes: ['path:tools/repo-ci-mcp/README.md', 'surface:repo-ops:repository-read-mcp'],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/github-discussions-mcp/README.md'],
+    scopes: [
+      'path:tools/github-discussions-mcp/README.md',
+      'surface:repo:github-discussions-connector',
+    ],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/github-discussions-mcp/README.md'],
+    scopes: [
+      'path:tools/github-discussions-mcp/README.md',
+      'surface:repo-ops:github-discussions-connector',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/other/README.md'],
+    scopes: ['path:tools/other/README.md', 'surface:repo:other-tool'],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/tooling/ci-summary/manifests/plugin-control-plane.json'],
+    scopes: [
+      'path:.github/tooling/ci-summary/manifests/plugin-control-plane.json',
+      'surface:repo:plugin-control-plane-ci-manifest',
+    ],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/workflows/canonical-main-stage-checkpoint-publish.yml'],
+    scopes: [
+      'path:.github/workflows/canonical-main-stage-checkpoint-publish.yml',
+      'surface:repo:canonical-stage-checkpoint-publication',
+    ],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/plugin-control-plane/taxonomy.json'],
+    scopes: [
+      'path:.github/plugin-control-plane/taxonomy.json',
+      'surface:repo:github-discussions-connector',
+    ],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/plugin-control-plane/taxonomy.json'],
+    scopes: [
+      'path:.github/plugin-control-plane/taxonomy.json',
+      'surface:repo-ops:github-discussions-connector',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/plugin-control-plane/registry.json'],
+    scopes: [
+      'path:.github/plugin-control-plane/registry.json',
+      'surface:repo:github-discussions-connector',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/plugin-control-plane/other.json'],
+    scopes: [
+      'path:.github/plugin-control-plane/other.json',
+      'surface:repo:github-discussions-connector',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/plugin-control-plane/taxonomy.json'],
+    scopes: [
+      'path:.github/plugin-control-plane/taxonomy.json/**',
+      'surface:repo:github-discussions-connector',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/workflows/canonical-main-stage-checkpoint-publish.yml.bak'],
+    scopes: [
+      'path:.github/workflows/canonical-main-stage-checkpoint-publish.yml.bak',
+      'surface:repo:canonical-stage-checkpoint-publication',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/workflows/canonical-main-stage-checkpoint-publish.yml'],
+    scopes: [
+      'path:.github/workflows/canonical-main-stage-checkpoint-publish.yml',
+      'surface:repo-ops:canonical-stage-checkpoint-publication',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/workflows/canonical-main-ops.yml'],
+    scopes: [
+      'path:.github/workflows/canonical-main-ops.yml',
+      'surface:repo:canonical-stage-checkpoint-publication',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/tooling/ci-summary/manifests/plugin-control-plane.json.bak'],
+    scopes: [
+      'path:.github/tooling/ci-summary/manifests/plugin-control-plane.json.bak',
+      'surface:repo:plugin-control-plane-ci-manifest',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/tooling/ci-summary/manifests/plugin-control-plane.json'],
+    scopes: [
+      'path:.github/tooling/ci-summary/manifests/plugin-control-plane.json/**',
+      'surface:repo:plugin-control-plane-ci-manifest',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/tooling/ci-summary/receipt_runner.py'],
+    scopes: [
+      'path:.github/tooling/ci-summary/receipt_runner.py',
+      'surface:repo:plugin-control-plane-ci-manifest',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/tooling/ci-summary/manifests/plugin-control-plane.json'],
+    scopes: [
+      'path:.github/tooling/ci-summary/manifests/plugin-control-plane.json',
+      'surface:repo-ops:plugin-control-plane-ci-manifest',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/repo-cockpit-aggregator/README.md'],
+    scopes: [
+      'path:tools/repo-cockpit-aggregator/README.md',
+      'surface:repo:repo-cockpit-aggregator',
+    ],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/repo-cockpit-aggregator/README.md'],
+    scopes: [
+      'path:tools/repo-cockpit-aggregator/README.md',
+      'surface:repo-ops:repo-cockpit-aggregator',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/repo-cockpit-other/README.md'],
+    scopes: [
+      'path:tools/repo-cockpit-other/README.md',
+      'surface:repo:repo-cockpit-other',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/repo-write/README.md'],
+    scopes: ['path:tools/repo-write/README.md', 'surface:repo:repository-write'],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/repo-write/README.md'],
+    scopes: ['path:tools/repo-write/README.md', 'surface:repo-ops:repository-write'],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/other/README.md'],
+    scopes: ['path:tools/other/README.md', 'surface:repo:other-tooling'],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
     paths: ['products/x/a.js'],
     scopes: ['path:products/x/a.js', 'surface:repo:x'],
   }), false);
@@ -985,6 +1204,47 @@ test('repo-neutral predicate is narrow, explicit and reviewed-prefix bounded', (
   assert.equal(attention.repoNeutralPacket({
     paths: PATHS,
     scopes: [...PATHS.map((p) => 'path:' + p), 'surface:mcl:x'],
+  }), false);
+});
+
+test('reviewed repo-neutral prefix roots are admitted without widening siblings', () => {
+  const reviewedPrefixes = [
+    '.github/plugin-control-plane/canonical-main/',
+    'tools/repo-env/',
+    'tools/repo-ci-mcp/',
+    'tools/repo-write/',
+    'tools/github-discussions-mcp/',
+    'tools/repo-cockpit-aggregator/',
+  ];
+  for (const prefix of reviewedPrefixes) {
+    const root = prefix.slice(0, -1);
+    assert.equal(attention.repoNeutralPacket({
+      paths: [root],
+      scopes: ['path:' + root + '/**', 'surface:repo:reviewed-prefix-root'],
+    }), true);
+    assert.equal(attention.repoNeutralPacket({
+      paths: [root + '/README.md'],
+      scopes: ['path:' + root + '/README.md', 'surface:repo:reviewed-prefix-child'],
+    }), true);
+  }
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/github-discussions-mcp', '.github/plugin-control-plane/taxonomy.json'],
+    scopes: [
+      'path:tools/github-discussions-mcp/**',
+      'path:.github/plugin-control-plane/taxonomy.json',
+      'surface:repo:github-discussions-connector',
+    ],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/github-discussions-mcp-other'],
+    scopes: [
+      'path:tools/github-discussions-mcp-other/**',
+      'surface:repo:github-discussions-connector',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/other'],
+    scopes: ['path:tools/other/**', 'surface:repo:other-tooling'],
   }), false);
 });
 

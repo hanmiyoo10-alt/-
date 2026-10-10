@@ -244,6 +244,50 @@ Inspection reads only the target packet, its comments, and #293 comments. It pai
 
 The inspect result always fixes `mutationAuthorized=false` and `executionAuthorized=false`. It performs no comment POST and adds no stage/effect authority; it operationalizes the existing Phase 8.7g fresh durable rebind contract at the checkpoint owner.
 
+## Read-only canonical Work-Stage Pilot
+
+`work-stage-pilot.cjs` is a thin read-only navigator over the existing canonical
+stage-checkpoint owner. It does not execute stages, classify current `main + #485`
+health, or create a second lifecycle/checkpoint parser.
+
+```sh
+node .github/plugin-control-plane/canonical-main/work-harness/work-stage-pilot.cjs inspect --packet <number>
+```
+
+The live path delegates stage discovery to `stage-checkpoint.cjs inspect`, then
+projects only bounded routing evidence needed for the next decision:
+
+- packet/native lifecycle and current stage;
+- durable completed-stage prefix and rebind disposition;
+- the existing next legal action;
+- next semantic owner/handoff class;
+- bounded required-input hints, source locators, and reason codes.
+
+Stage handoff is routing only:
+
+- `AUTHORITY_SCOPE` → current owning authority chain;
+- `IMPLEMENTATION_PR` → the packet's existing implementation owner;
+- `VALIDATION_MERGE` → existing validation-attention, using PR identity plus the
+  canonical IMPLEMENTATION_PR receipt;
+- `POSTMERGE_CONVERGENCE` → the packet/project's existing postmerge authorities;
+- `EXPERIMENT_CLOSE` → existing proof-eligibility / project experiment owner;
+- terminal and close-sync dispositions preserve the stage-checkpoint owner's exact
+  next legal action.
+
+The Pilot deliberately does **not** parse or classify direct `main + #485` health.
+That remains owned by Repository Read MCP `canonical_main_status` and the verified
+read-only Cockpit `repo_snapshot` composition. A user-facing cockpit may compose
+those read surfaces with the Pilot while the underlying owners remain separate.
+
+`UNKNOWN`, `CONFLICT`, terminal, and reuse-completed checkpoint states remain
+explicit. A PASS-shaped checkpoint inspection must match the canonical inspector
+schema/mode and contain coherent packet, lifecycle, stage, rebind, next-action, and
+authority-false fields before routing. The Pilot cannot synthesize live proof,
+publish checkpoints/receipts, merge/currentize/push branches, dispatch workflows,
+mutate issues/PRs/refs, or run arbitrary commands. CLI exit status preserves the
+canonical checkpoint convention: PASS=0, CONFLICT=2, UNKNOWN=3. Every result fixes
+`mutationAuthorized=false` and `executionAuthorized=false`.
+
 ## Derived canonical-main stage receipt
 
 `stage-receipt.cjs` is a read-only projector for #2275 item 10. It accepts bounded structured stage facts already established by owning authority/evidence and emits one deterministic `CANONICAL_MAIN_STAGE_RECEIPT` plus a compact Markdown projection. It does not read GitHub, discover truth, parse arbitrary packet prose, or write repository/issue state.
@@ -343,6 +387,41 @@ This is **CAS-style** currentness protection, not a server-atomic compare-and-sw
 
 The request-file ceiling is 32 KiB. CLI exit status is `0` for `UPDATED`, `2` for `BLOCKED`, and `3` for `UNKNOWN`.
 
+## Native paired stage-checkpoint publication queue
+
+The connected publication transport is fixed to persistent control issue **#3469**.
+
+A valid request is owner-authored on that exact open non-PR issue and carries only
+packet number, canonical stage, checkpoint body SHA-256, the REQUIRED current packet
+body SHA-256, and the bounded checkpoint Markdown body. Repository, queue issue,
+audit issue, destination issue, ref, workflow, command, shell, token, and credential
+are not caller-selectable.
+
+`stage-checkpoint-request.cjs` independently verifies the event repository, queue,
+owner/OWNER/non-bot actor identity, exact envelope/schema/body hashes and body ceiling,
+then delegates actual packet + #293 publication to the existing
+`stage-checkpoint.cjs::recordCheckpoint()` owner. It does not calculate checkpoint
+digests/markers or duplicate destination semantics.
+
+`.github/workflows/canonical-main-stage-checkpoint-publish.yml` listens only to
+new issue comments, serializes the entire publication surface with one fixed
+non-canceling concurrency group, checks out trusted `main`, reads event data through
+`GITHUB_EVENT_PATH`, and grants only `contents: read` plus `issues: write`.
+The Actions path requires `GITHUB_TOKEN` and does not use the no-env `gh` fallback.
+
+Queue result comments are compact transport receipts only. They use a distinct result
+marker, never contain a request marker or raw checkpoint body, and cannot form a
+valid recursive request. Existing `COMPLETE / PARTIAL / UNKNOWN / FAILED`
+stage-checkpoint semantics are preserved without promotion.
+
+Focused contract:
+
+```sh
+node .github/plugin-control-plane/canonical-main/work-harness/tests/stage-checkpoint-request-contract.cjs
+```
+
+Implementation owner: #3468. Design owner: #3454. Persistent queue: #3469.
+
 ## Current non-goals
 
 The current Harness still does **not** add:
@@ -378,6 +457,7 @@ node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync
 node .github/plugin-control-plane/canonical-main/work-harness/tests/receipt-sync-workflow-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/authoritative-handoff-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/stage-checkpoint-contract.cjs
+node .github/plugin-control-plane/canonical-main/work-harness/tests/work-stage-pilot-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/execution-receipt-contract.cjs
 node .github/plugin-control-plane/canonical-main/work-harness/tests/agent-decision-view-contract.cjs
 ```

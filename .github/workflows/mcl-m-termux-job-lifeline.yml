@@ -1,0 +1,38 @@
+name: MCL M Termux Job Lifeline
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/mcl-m-termux-job-lifeline.yml"
+      - "products/chatgpt-mobile-coder-lab/device-ops/m-termux-job-lifeline/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/mcl-m-termux-job-lifeline.yml"
+      - "products/chatgpt-mobile-coder-lab/device-ops/m-termux-job-lifeline/**"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run contract tests
+        run: |
+          python -m unittest discover \
+            -s products/chatgpt-mobile-coder-lab/device-ops/m-termux-job-lifeline/tests \
+            -v
+      - name: Python syntax
+        run: |
+          python -m py_compile \
+            products/chatgpt-mobile-coder-lab/device-ops/m-termux-job-lifeline/mcl-m-termux-job-lifeline.py
+      - name: Run-wrapper syntax
+        run: |
+          bash -n \
+            products/chatgpt-mobile-coder-lab/device-ops/m-termux-job-lifeline/mcl-m-termux-job-lifeline-run

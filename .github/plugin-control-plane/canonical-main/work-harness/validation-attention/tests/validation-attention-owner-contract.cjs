@@ -1161,6 +1161,27 @@ test('repo-neutral predicate is narrow, explicit and reviewed-prefix bounded', (
     ],
   }), false);
   assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/repo-cockpit-aggregator/README.md'],
+    scopes: [
+      'path:tools/repo-cockpit-aggregator/README.md',
+      'surface:repo:repo-cockpit-aggregator',
+    ],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/repo-cockpit-aggregator/README.md'],
+    scopes: [
+      'path:tools/repo-cockpit-aggregator/README.md',
+      'surface:repo-ops:repo-cockpit-aggregator',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/repo-cockpit-other/README.md'],
+    scopes: [
+      'path:tools/repo-cockpit-other/README.md',
+      'surface:repo:repo-cockpit-other',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
     paths: ['tools/repo-write/README.md'],
     scopes: ['path:tools/repo-write/README.md', 'surface:repo:repository-write'],
   }), true);
@@ -1193,6 +1214,7 @@ test('reviewed repo-neutral prefix roots are admitted without widening siblings'
     'tools/repo-ci-mcp/',
     'tools/repo-write/',
     'tools/github-discussions-mcp/',
+    'tools/repo-cockpit-aggregator/',
   ];
   for (const prefix of reviewedPrefixes) {
     const root = prefix.slice(0, -1);

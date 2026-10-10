@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import http.client
 import os
 import sys
 import unittest
@@ -24,6 +25,7 @@ from github_discussions_mcp.transport import (
     GitHubGraphQLConfig,
     GitHubGraphQLTransport,
     GitHubGraphQLTransportError,
+    TIMEOUT_ENV,
     TOKEN_ENV,
 )
 
@@ -61,10 +63,46 @@ class TransportContractTests(unittest.TestCase):
             config = GitHubGraphQLConfig.from_env()
         self.assertIsNone(config.token)
 
+    def test_nonfinite_timeout_falls_back_to_default(self):
+        for raw in ("NaN", "inf", "-inf"):
+            with self.subTest(raw=raw), mock.patch.dict(
+                os.environ,
+                {
+                    TOKEN_ENV: "dedicated",
+                    TIMEOUT_ENV: raw,
+                },
+                clear=True,
+            ):
+                config = GitHubGraphQLConfig.from_env()
+                self.assertEqual(config.timeout_seconds, 8.0)
+
     def test_dedicated_token_is_redacted_from_repr(self):
         secret = "dedicated-secret-value"
         config = GitHubGraphQLConfig(token=secret)
         self.assertNotIn(secret, repr(config))
+
+    def test_response_read_failures_are_translated_to_transport_errors(self):
+        transport = GitHubGraphQLTransport(GitHubGraphQLConfig(token="dedicated"))
+        for failure in (
+            http.client.IncompleteRead(b'{"data":', 20),
+            ConnectionResetError("reset"),
+        ):
+            with self.subTest(failure=type(failure).__name__):
+                response = mock.MagicMock()
+                response.read.side_effect = failure
+                context = mock.MagicMock()
+                context.__enter__.return_value = response
+                context.__exit__.return_value = False
+                with mock.patch("urllib.request.urlopen", return_value=context):
+                    with self.assertRaises(GitHubGraphQLTransportError) as caught:
+                        transport.execute(
+                            CATEGORIES_QUERY,
+                            {"owner": "hanmiyoo10-alt", "name": "-"},
+                        )
+                self.assertEqual(
+                    caught.exception.reason_code,
+                    "GITHUB_RESPONSE_READ_ERROR",
+                )
 
     def test_endpoint_is_fixed(self):
         self.assertEqual(GRAPHQL_ENDPOINT, "https://api.github.com/graphql")

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import http.client
 import json
+import math
 import os
 import urllib.error
 import urllib.request
@@ -34,6 +36,8 @@ class GitHubGraphQLConfig:
         try:
             timeout = float(raw)
         except ValueError:
+            timeout = 8.0
+        if not math.isfinite(timeout):
             timeout = 8.0
         timeout = min(max(timeout, 1.0), 30.0)
         token = os.getenv(TOKEN_ENV)
@@ -74,7 +78,16 @@ class GitHubGraphQLTransport:
 
         try:
             with urllib.request.urlopen(request, timeout=self.config.timeout_seconds) as response:
-                raw = response.read().decode("utf-8")
+                try:
+                    raw = response.read().decode("utf-8")
+                except (
+                    http.client.HTTPException,
+                    ConnectionResetError,
+                    OSError,
+                    UnicodeDecodeError,
+                    ValueError,
+                ) as exc:
+                    raise GitHubGraphQLTransportError("GITHUB_RESPONSE_READ_ERROR") from exc
         except urllib.error.HTTPError as exc:
             raise GitHubGraphQLTransportError(f"GITHUB_HTTP_{exc.code}") from exc
         except urllib.error.URLError as exc:

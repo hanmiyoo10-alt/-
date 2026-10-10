@@ -217,6 +217,20 @@ test('only the bounded canonical capsule is parsed', async () => {
   assert.ok(thirdResult.unknown.includes('issue-485-state'));
 });
 
+test('canonical SETTLING convergence forms remain parseable', async () => {
+  for (const line of [
+    'Convergence: `SETTLING` — waiting for requiredCi (30s)',
+    'Convergence: `SETTLING` / `STALE` — waiting for requiredCi, protection (31s)'
+  ]) {
+    const settling = issue();
+    settling.body = settling.body.replace('Convergence: `STABLE`', line);
+    const { reader } = sequence([branch(), settling, branch()]);
+    const result = await repoSnapshot({ githubJson: reader });
+    assert.equal(result.convergence, 'SETTLING', line);
+    assert.equal(result.unknown.includes('convergence'), false, line);
+  }
+});
+
 test('main movement during capture is UNKNOWN', async () => {
   const { reader } = sequence([
     branch(SHA),
@@ -542,6 +556,52 @@ test('tool arguments must match the advertised empty-object schema before reads'
   assert.equal(fetchCalls, 3);
 });
 
+test('unsupported MCP protocol header is rejected before snapshot reads', async (t) => {
+  let fetchCalls = 0;
+  const { server, base } = await listeningServer({
+    token: 'test-only-token',
+    fetchImpl: async (url) => {
+      fetchCalls += 1;
+      return okJson(url === ISSUE_485 ? issue() : branch());
+    }
+  });
+  t.after(() => server.close());
+
+  const blocked = await fetch(`${base}/mcp`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'mcp-protocol-version': '2099-01-01'
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 74,
+      method: 'tools/call',
+      params: { name: 'repo_snapshot', arguments: {} }
+    })
+  });
+  const blockedBody = await blocked.json();
+  assert.equal(blocked.status, 400);
+  assert.equal(blockedBody.error.code, -32600);
+  assert.equal(fetchCalls, 0);
+
+  const allowed = await fetch(`${base}/mcp`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'mcp-protocol-version': MCP_PROTOCOL_VERSION
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 75,
+      method: 'tools/list'
+    })
+  });
+  assert.equal(allowed.status, 200);
+  assert.equal((await allowed.json()).result.tools.length, 1);
+  assert.equal(fetchCalls, 0);
+});
+
 test('public MCP tool surface remains one fixed read-only tool', async (t) => {
   const { server, base } = await listeningServer({ token: '' });
   t.after(() => server.close());
@@ -572,10 +632,46 @@ test('initialize counter-offers only the supported handshake version', async (t)
     jsonrpc: '2.0',
     id: 2,
     method: 'initialize',
-    params: { protocolVersion: '2099-01-01' }
+    params: {
+      protocolVersion: '2099-01-01',
+      capabilities: {},
+      clientInfo: { name: 'fixture-client', version: '1.0.0' }
+    }
   });
   assert.equal(response.status, 200);
   assert.equal(body.result.protocolVersion, MCP_PROTOCOL_VERSION);
+});
+
+test('initialize rejects incomplete required params', async (t) => {
+  const { server, base } = await listeningServer({ token: '' });
+  t.after(() => server.close());
+
+  const cases = [
+    {},
+    { protocolVersion: MCP_PROTOCOL_VERSION },
+    { protocolVersion: MCP_PROTOCOL_VERSION, capabilities: {} },
+    {
+      protocolVersion: MCP_PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: {}
+    },
+    {
+      protocolVersion: MCP_PROTOCOL_VERSION,
+      capabilities: [],
+      clientInfo: { name: 'fixture-client', version: '1.0.0' }
+    }
+  ];
+
+  for (const params of cases) {
+    const { response, body } = await postJson(base, {
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'initialize',
+      params
+    });
+    assert.equal(response.status, 200);
+    assert.equal(body.error.code, -32602);
+  }
 });
 
 test('all JSON-RPC notifications receive no response body', async (t) => {

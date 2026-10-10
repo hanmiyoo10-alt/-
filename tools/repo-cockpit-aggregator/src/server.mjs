@@ -92,9 +92,18 @@ export function parseOperatorCapsule(body) {
   const mainMatch = mainLine?.match(
     /^`?([0-9a-f]{40})`?\s*\/\s*Required\s+([A-Z]+)\s+—\s+run\s+(\d+)$/i
   );
-  const convergenceMatch = summaryCompat?.match(
-    /^Convergence:\s*`?([A-Z_]+)`?$/mi
+  const stableConvergence = summaryCompat?.match(
+    /^Convergence:\s*`STABLE`$/m
   );
+  const settlingConvergence = summaryCompat?.match(
+    /^Convergence:\s*`SETTLING`(?:\s*\/\s*`STALE`)?\s+—\s+waiting for\s+.+\s+\(\d+s\)$/m
+  );
+  const convergence =
+    stableConvergence
+      ? 'STABLE'
+      : settlingConvergence
+        ? 'SETTLING'
+        : null;
   const productionMatch = authorityLine?.match(
     /Production\s+([A-Z_]+)\s+—\s+([^;\n]+)/i
   );
@@ -108,7 +117,7 @@ export function parseOperatorCapsule(body) {
     required: mainMatch
       ? { state: mainMatch[2].toUpperCase(), run: mainMatch[3] }
       : null,
-    convergence: convergenceMatch?.[1] ?? null,
+    convergence,
     production: productionMatch
       ? { state: productionMatch[1], detail: productionMatch[2].trim() }
       : null,
@@ -412,6 +421,31 @@ function validToolArguments(value) {
   return isJsonObject(value) && Object.keys(value).length === 0;
 }
 
+function validInitializeParams(params) {
+  if (!isJsonObject(params)) return false;
+  if (typeof params.protocolVersion !== 'string' ||
+      params.protocolVersion.length === 0) {
+    return false;
+  }
+  if (!isJsonObject(params.capabilities)) return false;
+  if (!isJsonObject(params.clientInfo)) return false;
+  if (typeof params.clientInfo.name !== 'string' ||
+      params.clientInfo.name.length === 0) {
+    return false;
+  }
+  if (typeof params.clientInfo.version !== 'string' ||
+      params.clientInfo.version.length === 0) {
+    return false;
+  }
+  return true;
+}
+
+function protocolVersionAllowed(req) {
+  const value = req.headers['mcp-protocol-version'];
+  if (value === undefined) return true;
+  return String(value) === MCP_PROTOCOL_VERSION;
+}
+
 function sendJson(res, status, value) {
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
@@ -515,20 +549,26 @@ async function handleRequest(
   }
 
   const hasId = Object.prototype.hasOwnProperty.call(msg, 'id');
+  const id = msg.id ?? null;
+
+  if (msg.method !== 'initialize' && !protocolVersionAllowed(req)) {
+    return sendJson(
+      res,
+      400,
+      rpcError(id, -32600, 'Unsupported MCP-Protocol-Version')
+    );
+  }
+
   if (typeof msg.method === 'string' && !hasId) {
     res.writeHead(202);
     return res.end();
   }
 
-  const id = msg.id ?? null;
-
   if (msg.method === 'initialize') {
-    if (!isJsonObject(msg.params)) {
+    if (!validInitializeParams(msg.params)) {
       return sendJson(res, 200, rpcError(id, -32602, 'Invalid params'));
     }
-    const requestedVersion = typeof msg.params.protocolVersion === 'string'
-      ? msg.params.protocolVersion
-      : null;
+    const requestedVersion = msg.params.protocolVersion;
     return sendJson(
       res,
       200,

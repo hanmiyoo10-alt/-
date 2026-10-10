@@ -60,7 +60,9 @@ MCP request bodies are accumulated as bytes and decoded once as UTF-8, so multib
 
 Bodies must decode to a valid JSON-RPC 2.0 request object with a non-empty string method, valid string/number/null identifier when present, and object/array params when present. Invalid request objects return JSON-RPC `-32600 Invalid Request` before dispatch. Malformed JSON keeps parse-error behavior, while valid JSON-RPC notifications omit `id` and receive HTTP 202 with no response body.
 
-The initialize handshake supports protocol revision `2025-06-18`. A client requesting another revision receives `2025-06-18` as the server's supported counter-offer rather than an echoed unsupported value. The only public tool is `repo_snapshot`; its arguments must be absent or exactly an empty object matching the advertised schema, otherwise the request returns `-32602` before consuming snapshot allowance or GitHub reads.
+The initialize handshake supports protocol revision `2025-06-18`. Initialize params must include a non-empty `protocolVersion`, an object `capabilities`, and `clientInfo` with non-empty `name` and `version`; incomplete params return `-32602`. A client requesting another handshake revision receives `2025-06-18` as the server's supported counter-offer rather than an echoed unsupported value. For subsequent MCP requests, an `MCP-Protocol-Version` header may be omitted for compatibility, but when present it must equal `2025-06-18`; unsupported values fail with HTTP 400 before dispatch or GitHub reads.
+
+The only public tool is `repo_snapshot`; its arguments must be absent or exactly an empty object matching the advertised schema, otherwise the request returns `-32602` before consuming snapshot allowance or GitHub reads. Canonical convergence parsing accepts bare `STABLE` and the repository renderer's detailed `SETTLING` form, including its optional `STALE` suffix and bounded waiting/age detail.
 
 ## Deployment boundary
 

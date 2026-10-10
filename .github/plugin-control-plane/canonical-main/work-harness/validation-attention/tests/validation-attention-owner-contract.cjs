@@ -467,6 +467,48 @@ test('Repository Patch Write packet uses repository-neutral pre-merge route', as
   assert.equal(result.report.output.mergeAdmission, 'READY');
 });
 
+test('GitHub Discussions MCP packet uses repository-neutral pre-merge route', async () => {
+  const repoPaths = [
+    'tools/github-discussions-mcp/README.md',
+    'tools/github-discussions-mcp/github_discussions_mcp/service.py',
+    'tools/github-discussions-mcp/tests/test_service.py',
+  ];
+  const {deps} = fixtureDeps({
+    mergeInspect: mergeInspectResult({
+      paths: repoPaths,
+      scopes: [
+        ...repoPaths.map((p) => 'path:' + p),
+        'surface:repo:github-discussions-connector',
+      ],
+    }),
+  });
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: implementationReceipt({paths: repoPaths}), deps,
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.output.mergeAdmission, 'READY');
+});
+
+test('GitHub Discussions MCP route rejects non-repo semantic surface', async () => {
+  const repoPaths = ['tools/github-discussions-mcp/README.md'];
+  const {deps} = fixtureDeps({
+    mergeInspect: mergeInspectResult({
+      paths: repoPaths,
+      scopes: [
+        'path:tools/github-discussions-mcp/README.md',
+        'surface:repo-ops:github-discussions-connector',
+      ],
+    }),
+  });
+  const result = await attention.inspectComposition({
+    client: {}, packetNumber: PACKET, prNumber: PR,
+    implementationReceipt: implementationReceipt({paths: repoPaths}), deps,
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert(result.receipt.blockers.includes('REPO_NEUTRAL_FINALIZATION_SCOPE_REQUIRED'));
+});
+
 test('reviewed external route can admit a non-neutral NOT_APPLICABLE packet', async () => {
   const otherPaths = ['docs/example.md'];
   const {deps} = fixtureDeps({
@@ -1001,6 +1043,24 @@ test('repo-neutral predicate is narrow, explicit and reviewed-prefix bounded', (
   assert.equal(attention.repoNeutralPacket({
     paths: ['tools/repo-ci-mcp/README.md'],
     scopes: ['path:tools/repo-ci-mcp/README.md', 'surface:repo-ops:repository-read-mcp'],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/github-discussions-mcp/README.md'],
+    scopes: [
+      'path:tools/github-discussions-mcp/README.md',
+      'surface:repo:github-discussions-connector',
+    ],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/github-discussions-mcp/README.md'],
+    scopes: [
+      'path:tools/github-discussions-mcp/README.md',
+      'surface:repo-ops:github-discussions-connector',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/other/README.md'],
+    scopes: ['path:tools/other/README.md', 'surface:repo:other-tool'],
   }), false);
   assert.equal(attention.repoNeutralPacket({
     paths: ['.github/tooling/ci-summary/manifests/plugin-control-plane.json'],

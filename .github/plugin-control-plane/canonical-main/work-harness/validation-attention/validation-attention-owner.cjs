@@ -13,6 +13,7 @@ const REPO_NEUTRAL_PATH_PREFIXES = Object.freeze([
   'tools/repo-ci-mcp/',
   'tools/repo-write/',
   'tools/github-discussions-mcp/',
+  'tools/repo-cockpit-aggregator/',
 ]);
 const REPO_NEUTRAL_EXACT_PATHS = Object.freeze(new Set([
   '.github/tooling/ci-summary/manifests/plugin-control-plane.json',

@@ -2369,3 +2369,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/1e3876599c8dc574aa59798d2502ce3aaa43bee8)
 - Event ID: `0876f62165a4c07aad5bc21974b7471c7cb1bb8c631302b2db865c2d4f577583`
 <!-- canonical-main-doc-promoted:0876f62165a4c07aad5bc21974b7471c7cb1bb8c631302b2db865c2d4f577583 -->
+
+### 2026-10-10 — Merge pull request #3498 from hanmiyoo10-alt/repo/validation-neutral-prefix-root-3497
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `c0a05a43be7245d80f25b35c2494cafa35944447`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c0a05a43be7245d80f25b35c2494cafa35944447)
+- Event ID: `b3f256810d26f7d2967b98bac17dc1e2d9c93c9db539eb4bfb04e97c26d9fe54`
+<!-- canonical-main-doc-promoted:b3f256810d26f7d2967b98bac17dc1e2d9c93c9db539eb4bfb04e97c26d9fe54 -->

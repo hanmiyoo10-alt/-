@@ -1077,6 +1077,41 @@ test('repo-neutral predicate is narrow, explicit and reviewed-prefix bounded', (
     ],
   }), true);
   assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/plugin-control-plane/taxonomy.json'],
+    scopes: [
+      'path:.github/plugin-control-plane/taxonomy.json',
+      'surface:repo:github-discussions-connector',
+    ],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/plugin-control-plane/taxonomy.json'],
+    scopes: [
+      'path:.github/plugin-control-plane/taxonomy.json',
+      'surface:repo-ops:github-discussions-connector',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/plugin-control-plane/registry.json'],
+    scopes: [
+      'path:.github/plugin-control-plane/registry.json',
+      'surface:repo:github-discussions-connector',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/plugin-control-plane/other.json'],
+    scopes: [
+      'path:.github/plugin-control-plane/other.json',
+      'surface:repo:github-discussions-connector',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/plugin-control-plane/taxonomy.json'],
+    scopes: [
+      'path:.github/plugin-control-plane/taxonomy.json/**',
+      'surface:repo:github-discussions-connector',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
     paths: ['.github/workflows/canonical-main-stage-checkpoint-publish.yml.bak'],
     scopes: [
       'path:.github/workflows/canonical-main-stage-checkpoint-publish.yml.bak',

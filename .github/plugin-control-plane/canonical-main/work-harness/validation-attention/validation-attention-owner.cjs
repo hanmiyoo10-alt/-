@@ -17,6 +17,7 @@ const REPO_NEUTRAL_PATH_PREFIXES = Object.freeze([
 const REPO_NEUTRAL_EXACT_PATHS = Object.freeze(new Set([
   '.github/tooling/ci-summary/manifests/plugin-control-plane.json',
   '.github/workflows/canonical-main-stage-checkpoint-publish.yml',
+  '.github/plugin-control-plane/taxonomy.json',
 ]));
 const EXTERNAL_FINALIZATION_GATE = 'validation-finalization-external-owner-reviewed';
 

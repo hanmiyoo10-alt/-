@@ -84,8 +84,9 @@ must already prove a validation-finalization route. Generic repository-neutral
 finalization requires `repoNeutralPacket()` to pass:
 - every exact/declared path must match a compile-time reviewed neutral path rule;
 - the reviewed prefixes are `.github/plugin-control-plane/canonical-main/`,
-  `tools/repo-env/`, `tools/repo-ci-mcp/`, `tools/repo-write/`, and
-  `tools/github-discussions-mcp/`; each slash-terminated reviewed prefix admits both
+  `tools/repo-env/`, `tools/repo-ci-mcp/`, `tools/repo-write/`,
+  `tools/github-discussions-mcp/`, and `tools/repo-cockpit-aggregator/`; each
+  slash-terminated reviewed prefix admits both
   its exact normalized prefix root and descendants under that prefix, while lookalike
   siblings remain non-neutral;
 - reviewed exact paths are
@@ -131,8 +132,9 @@ prove that every path stays under one reviewed repository-neutral prefix and eve
 semantic surface is `surface:repo:*`. The current reviewed path classes are canonical-main infrastructure,
 repository-common environment tooling under `tools/repo-env/`, Repository Read MCP
 tooling under `tools/repo-ci-mcp/`, Repository Patch Write tooling under
-`tools/repo-write/`, and bounded GitHub Discussions tooling under
-`tools/github-discussions-mcp/`; arbitrary repository paths are not admitted by this rule.
+`tools/repo-write/`, bounded GitHub Discussions tooling under
+`tools/github-discussions-mcp/`, and read-only Repo Cockpit aggregation tooling under
+`tools/repo-cockpit-aggregator/`; arbitrary repository paths are not admitted by this rule.
 
 Product/MCL coordination is never silently mapped to `NOT_APPLICABLE`.
 

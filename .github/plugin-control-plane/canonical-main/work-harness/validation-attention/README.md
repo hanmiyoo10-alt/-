@@ -84,12 +84,17 @@ must already prove a validation-finalization route. Generic repository-neutral
 finalization requires `repoNeutralPacket()` to pass:
 - every exact/declared path must match a compile-time reviewed neutral path rule;
 - the reviewed prefixes are `.github/plugin-control-plane/canonical-main/`,
-  `tools/repo-env/`, and `tools/repo-ci-mcp/`;
+  `tools/repo-env/`, `tools/repo-ci-mcp/`, `tools/repo-write/`,
+  `tools/github-discussions-mcp/`, and `tools/repo-cockpit-aggregator/`; each
+  slash-terminated reviewed prefix admits both
+  its exact normalized prefix root and descendants under that prefix, while lookalike
+  siblings remain non-neutral;
 - reviewed exact paths are
-  `.github/tooling/ci-summary/manifests/plugin-control-plane.json` and
-  `.github/workflows/canonical-main-stage-checkpoint-publish.yml`; these are
-  exact-file exceptions only and do not admit their directories, sibling files,
-  near-match suffixes, the broader `.github/tooling/ci-summary/**` tree, or
+  `.github/tooling/ci-summary/manifests/plugin-control-plane.json`,
+  `.github/workflows/canonical-main-stage-checkpoint-publish.yml`, and
+  `.github/plugin-control-plane/taxonomy.json`; these are exact-file exceptions only
+  and do not admit their directories, sibling files, near-match suffixes, the broader
+  `.github/tooling/ci-summary/**` or `.github/plugin-control-plane/**` trees, or
   `.github/workflows/**`;
 - at least one semantic surface must be declared and every semantic surface must be
   `surface:repo:*`.
@@ -125,9 +130,11 @@ validation-attention inspect evidence
 V1 finalization is deliberately repository-neutral only. The packet must positively
 prove that every path stays under one reviewed repository-neutral prefix and every
 semantic surface is `surface:repo:*`. The current reviewed path classes are canonical-main infrastructure,
-repository-common environment tooling under `tools/repo-env/`, and Repository Read MCP
-tooling under `tools/repo-ci-mcp/`; arbitrary repository paths are not admitted by this
-rule.
+repository-common environment tooling under `tools/repo-env/`, Repository Read MCP
+tooling under `tools/repo-ci-mcp/`, Repository Patch Write tooling under
+`tools/repo-write/`, bounded GitHub Discussions tooling under
+`tools/github-discussions-mcp/`, and read-only Repo Cockpit aggregation tooling under
+`tools/repo-cockpit-aggregator/`; arbitrary repository paths are not admitted by this rule.
 
 Product/MCL coordination is never silently mapped to `NOT_APPLICABLE`.
 

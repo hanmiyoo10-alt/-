@@ -11,10 +11,14 @@ const REPO_NEUTRAL_PATH_PREFIXES = Object.freeze([
   '.github/plugin-control-plane/canonical-main/',
   'tools/repo-env/',
   'tools/repo-ci-mcp/',
+  'tools/repo-write/',
+  'tools/github-discussions-mcp/',
+  'tools/repo-cockpit-aggregator/',
 ]);
 const REPO_NEUTRAL_EXACT_PATHS = Object.freeze(new Set([
   '.github/tooling/ci-summary/manifests/plugin-control-plane.json',
   '.github/workflows/canonical-main-stage-checkpoint-publish.yml',
+  '.github/plugin-control-plane/taxonomy.json',
 ]));
 const EXTERNAL_FINALIZATION_GATE = 'validation-finalization-external-owner-reviewed';
 
@@ -603,8 +607,11 @@ function repoNeutralPathScope(scope) {
   if (normalized.mode === 'exact' && REPO_NEUTRAL_EXACT_PATHS.has(normalized.value)) {
     return true;
   }
-  return REPO_NEUTRAL_PATH_PREFIXES.some(
-    (prefix) => String(normalized.value).startsWith(prefix));
+  const value = String(normalized.value);
+  return REPO_NEUTRAL_PATH_PREFIXES.some((prefix) => {
+    const reviewedRoot = prefix.slice(0, -1);
+    return value === reviewedRoot || value.startsWith(prefix);
+  });
 }
 function repoNeutralPacket(packet) {
   const scopes = packet?.scopes || [];

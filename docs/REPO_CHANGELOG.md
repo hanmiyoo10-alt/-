@@ -2385,3 +2385,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ded9ebdb19b2f59f95123c9a903ddccc60149314)
 - Event ID: `a0b104be55a86ee800a22460054a7bac9334e3910fff53d0ed1f805c265b924d`
 <!-- canonical-main-doc-promoted:a0b104be55a86ee800a22460054a7bac9334e3910fff53d0ed1f805c265b924d -->
+
+### 2026-10-10 — Merge pull request #3501 from hanmiyoo10-alt/repo/validation-cockpit-routing-3500
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `bb21eb689eaaefea7b14dfda0119cf01249076b6`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/bb21eb689eaaefea7b14dfda0119cf01249076b6)
+- Event ID: `fc9639aa2b7f793fbc4fa1d2ead243b6129afe8fa5c008c4d4971badc47860c1`
+<!-- canonical-main-doc-promoted:fc9639aa2b7f793fbc4fa1d2ead243b6129afe8fa5c008c4d4971badc47860c1 -->

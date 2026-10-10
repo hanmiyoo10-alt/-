@@ -2353,3 +2353,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/4895cd22b5a244e91745125d24dbd98fa3193b71)
 - Event ID: `5b09e074cea8dd028de78479bd821d285e2c0aeab144120b256ed3134e1f8567`
 <!-- canonical-main-doc-promoted:5b09e074cea8dd028de78479bd821d285e2c0aeab144120b256ed3134e1f8567 -->
+
+### 2026-10-10 — Merge pull request #3492 from hanmiyoo10-alt/repo/validation-discussions-mcp-routing-3490
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `5c0b4ec8a4354a861444aecdc8a3febbd6197ba0`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/5c0b4ec8a4354a861444aecdc8a3febbd6197ba0)
+- Event ID: `17bf58efe7c1f5cbf12e3d95c8dff56fd3bbc0af38648941cacb50e2ef378d04`
+<!-- canonical-main-doc-promoted:17bf58efe7c1f5cbf12e3d95c8dff56fd3bbc0af38648941cacb50e2ef378d04 -->

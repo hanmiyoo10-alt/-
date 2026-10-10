@@ -179,6 +179,7 @@
       "sourceRefs": [],
       "sourceRoots": [
         "tools/repo-ci-mcp/**",
+        "tools/github-discussions-mcp/**",
         "tools/repo-write/**",
         "tools/repo-env/**"
       ],

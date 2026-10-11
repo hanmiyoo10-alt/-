@@ -293,7 +293,8 @@ def classify_reference(request: Any) -> dict[str, Any]:
         )
 
     frozen_by_locator: dict[str, tuple[str, dict[str, Any] | None]] = {}
-    for raw_path in frozen_paths:
+    frozen_errors: list[str] = []
+    for raw_path in sorted(frozen_paths):
         try:
             locator, registry = _load_frozen_fixture(raw_path)
             frozen_by_locator[locator] = (
@@ -301,35 +302,38 @@ def classify_reference(request: Any) -> dict[str, Any]:
                 _domain_for_scope(registry, scope),
             )
         except Exception:
-            accumulated = [
-                (locator, digest, domain)
-                for locator, (digest, domain) in sorted(frozen_by_locator.items())
-            ]
-            accumulated_registries = tuple({
-                "registry": locator,
-                "registry_sha256": digest,
-                "scope_present": domain is not None,
-                "match": bool(domain and _reference_matches(domain, reference)),
-            } for locator, digest, domain in accumulated)
-            return _result(
-                "UNKNOWN",
-                "FROZEN_FIXTURE_INVALID",
-                scope=scope,
-                reference=reference,
-                live_registry_sha256=live_registry_digest,
-                live_scope_present=live_domain is not None,
-                live_match=bool(live_domain and _reference_matches(live_domain, reference)),
-                frozen_registries=accumulated_registries,
-                frozen_scope_fixtures=tuple(
-                    locator for locator, _, domain in accumulated if domain is not None
-                ),
-                frozen_match_fixtures=tuple(
-                    locator
-                    for locator, _, domain in accumulated
-                    if domain is not None and _reference_matches(domain, reference)
-                ),
-                frozen_error_locator=raw_path,
-            )
+            frozen_errors.append(raw_path)
+
+    frozen_rows = [
+        (locator, digest, domain)
+        for locator, (digest, domain) in sorted(frozen_by_locator.items())
+    ]
+    if frozen_errors:
+        frozen_registries = tuple({
+            "registry": locator,
+            "registry_sha256": digest,
+            "scope_present": domain is not None,
+            "match": bool(domain and _reference_matches(domain, reference)),
+        } for locator, digest, domain in frozen_rows)
+        return _result(
+            "UNKNOWN",
+            "FROZEN_FIXTURE_INVALID",
+            scope=scope,
+            reference=reference,
+            live_registry_sha256=live_registry_digest,
+            live_scope_present=live_domain is not None,
+            live_match=bool(live_domain and _reference_matches(live_domain, reference)),
+            frozen_registries=frozen_registries,
+            frozen_scope_fixtures=tuple(
+                locator for locator, _, domain in frozen_rows if domain is not None
+            ),
+            frozen_match_fixtures=tuple(
+                locator
+                for locator, _, domain in frozen_rows
+                if domain is not None and _reference_matches(domain, reference)
+            ),
+            frozen_error_locator=frozen_errors[0],
+        )
     frozen_rows = [
         (locator, digest, domain)
         for locator, (digest, domain) in sorted(frozen_by_locator.items())

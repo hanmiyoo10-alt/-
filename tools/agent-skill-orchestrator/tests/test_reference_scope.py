@@ -586,6 +586,27 @@ class ReferenceScopeTests(unittest.TestCase):
             {"field": "primary_path", "value": "plugins/risu/local/voyage/**"},
         )
 
+    def test_invalid_fixture_order_does_not_change_receipt_or_valid_provenance(self):
+        first = classify_reference(self.request(
+            "plugin:voyage-token-check",
+            "guidelines_path",
+            "docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md",
+            frozen=["domains/registry.json", VOYAGE_FROZEN],
+        ))
+        second = classify_reference(self.request(
+            "plugin:voyage-token-check",
+            "guidelines_path",
+            "docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md",
+            frozen=[VOYAGE_FROZEN, "domains/registry.json"],
+        ))
+        self.assertEqual(first, second)
+        self.assertEqual(first["disposition"], "UNKNOWN")
+        self.assertEqual(first["reason_code"], "FROZEN_FIXTURE_INVALID")
+        self.assertEqual(first["frozen"]["error_locator"], "domains/registry.json")
+        self.assertEqual(first["frozen"]["match_fixtures"], [VOYAGE_FROZEN])
+        self.assertEqual(len(first["frozen"]["registries"]), 1)
+        self.assertEqual(first["frozen"]["registries"][0]["registry"], VOYAGE_FROZEN)
+
     def test_invalid_later_fixture_preserves_accumulated_frozen_provenance(self):
         out = classify_reference(self.request(
             "plugin:voyage-token-check",

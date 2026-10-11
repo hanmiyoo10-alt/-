@@ -204,3 +204,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3425)
 - Event ID: `ce6efaa2ebc2feafa6c4c4df80d9982cb9a2897647d251a7b9ef4d5fbe1c7637`
 <!-- canonical-main-doc-promoted:ce6efaa2ebc2feafa6c4c4df80d9982cb9a2897647d251a7b9ef4d5fbe1c7637 -->
+
+### 2026-10-11 — REPO-GITHUB-ISSUE-NATIVE-METADATA-01 — native issue metadata adoption
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3522)
+- Event ID: `a7a4394af4f85e48051b4ca565a3ebd4ca45ab8b532df6690fca6125991e337e`
+<!-- canonical-main-doc-promoted:a7a4394af4f85e48051b4ca565a3ebd4ca45ab8b532df6690fca6125991e337e -->

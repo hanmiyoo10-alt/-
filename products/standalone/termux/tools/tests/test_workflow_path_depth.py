@@ -75,6 +75,32 @@ class WorkflowPathDepthTests(unittest.TestCase):
             with self.subTest(case=case):
                 self.assertEqual(check_reference(case)["status"], "UNKNOWN")
 
+    def test_parent_traversal_after_component_is_unknown(self):
+        cases = [
+            {**self.t5(), "old_reference": "link/../helper.py"},
+            {
+                **self.t5(),
+                "candidate_new_reference": "link/../phase_receipt.py",
+            },
+        ]
+        for case in cases:
+            with self.subTest(case=case):
+                self.assertEqual(check_reference(case)["status"], "UNKNOWN")
+
+    def test_nul_in_reference_or_working_directory_is_unknown(self):
+        nul = chr(0)
+        cases = [
+            {**self.t5(), "old_reference": "helper" + nul + ".py"},
+            {**self.t5(), "candidate_new_reference": "helper" + nul + ".py"},
+            {
+                **self.t5(),
+                "old_working_dir": "plugins/termux" + nul + "/large-doc-editor",
+            },
+        ]
+        for case in cases:
+            with self.subTest(case=case):
+                self.assertEqual(check_reference(case)["status"], "UNKNOWN")
+
     def test_candidate_that_targets_wrong_location_fails(self):
         out = check_reference(self.t5("../../../../docs/not-the-helper.py"))
         self.assertEqual(out["status"], "FAIL")
@@ -95,6 +121,18 @@ class WorkflowPathDepthTests(unittest.TestCase):
         second = check_batch(json.loads(json.dumps(request)))
         self.assertEqual(first, second)
         self.assertEqual(first["status"], "FAIL")
+        for field in (
+            "mutation_authorized",
+            "execution_authorized",
+            "network_used",
+            "github_used",
+            "merge_authorized",
+            "release_authorized",
+            "production_authorized",
+            "runtime_authorized",
+            "device_authorized",
+        ):
+            self.assertFalse(first[field])
         self.assertEqual(
             [row["candidate_new_reference"] for row in first["results"]],
             [

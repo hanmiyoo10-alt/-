@@ -22,7 +22,12 @@ class ValidationUnknown(ValueError):
 def _repo_dir(value: Any, field: str) -> str:
     if not isinstance(value, str) or not value or len(value) > MAX_PATH_CHARS:
         raise ValidationUnknown(f"{field}: expected bounded non-empty path")
-    if value != value.strip() or value.startswith("/") or value.endswith("/"):
+    if (
+        value != value.strip()
+        or value.startswith("/")
+        or value.endswith("/")
+        or chr(0) in value
+    ):
         raise ValidationUnknown(f"{field}: noncanonical repository directory")
     if "\\" in value or "//" in value:
         raise ValidationUnknown(f"{field}: noncanonical repository directory")
@@ -37,7 +42,11 @@ def _repo_dir(value: Any, field: str) -> str:
 def _relative_ref(value: Any, field: str) -> str:
     if not isinstance(value, str) or not value or len(value) > MAX_PATH_CHARS:
         raise ValidationUnknown(f"{field}: expected bounded non-empty relative path")
-    if value != value.strip() or value.startswith("/"):
+    if (
+        value != value.strip()
+        or value.startswith("/")
+        or chr(0) in value
+    ):
         raise ValidationUnknown(f"{field}: expected canonical relative path")
     if "\\" in value or "//" in value:
         raise ValidationUnknown(f"{field}: expected canonical POSIX relative path")
@@ -46,6 +55,15 @@ def _relative_ref(value: Any, field: str) -> str:
     parts = value.split("/")
     if any(part in {"", "."} for part in parts):
         raise ValidationUnknown(f"{field}: expected canonical relative path")
+    seen_path_component = False
+    for part in parts:
+        if part == "..":
+            if seen_path_component:
+                raise ValidationUnknown(
+                    f"{field}: parent traversal after path component is unsupported"
+                )
+        else:
+            seen_path_component = True
     return value
 
 
@@ -178,6 +196,12 @@ def check_batch(request: Any) -> dict[str, Any]:
         "mutation_authorized": False,
         "execution_authorized": False,
         "network_used": False,
+        "github_used": False,
+        "merge_authorized": False,
+        "release_authorized": False,
+        "production_authorized": False,
+        "runtime_authorized": False,
+        "device_authorized": False,
     }
 
 

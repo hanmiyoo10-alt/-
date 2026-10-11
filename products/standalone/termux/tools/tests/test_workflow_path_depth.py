@@ -453,6 +453,16 @@ class WorkflowPathDepthTests(unittest.TestCase):
             "UNKNOWN",
         )
 
+    def test_sha1_repo_rejects_abbreviated_commit_oid(self):
+        self.assertEqual(len(self.old_oid), 40)
+        out = self.batch([self.t5()], old_ref=self.old_oid[:-1])
+        self.assertEqual(out["status"], "UNKNOWN")
+
+    def test_object_format_metadata_matches_repository(self):
+        out = self.batch([self.t5()])
+        self.assertEqual(out["object_format"], "sha1")
+        self.assertEqual(out["oid_length"], 40)
+
     def test_cli_rejects_duplicate_keys_and_oversized_input(self):
         duplicate = (
             '{"schema":"termux-workflow-path-depth.v1",'

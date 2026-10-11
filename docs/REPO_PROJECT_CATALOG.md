@@ -13,6 +13,7 @@
 | product:app-api-mod-lab | App API Mod Lab | research-product-root | products/app-api-mod-lab/** | evidence=products/app-api-mod-lab/CURRENT.md; manifest=products/app-api-mod-lab/product.json | docs/APP_API_MOD_LAB_GUIDELINES.md |
 | product:local-model-lab | Local Model Lab | research-product-root | products/local-model-lab/** | evidence=products/local-model-lab/CURRENT.md; manifest=products/local-model-lab/product.json | docs/LOCAL_MODEL_LAB_GUIDELINES.md |
 | product:pocketrisu-helper-mod | PocketRisu Helper Mod | operations-product-root | products/pocketrisu-helper-mod/** | manifest=products/pocketrisu-helper-mod/product.json; currentState=products/pocketrisu-helper-mod/CURRENT.md | docs/POCKETRISU_HELPER_MOD_GUIDELINES.md |
+| product:termux | Termux | prototype | products/standalone/termux/** | evidence=products/standalone/termux/README.md | docs/TERMUX_DEVELOPMENT_GUIDELINES.md |
 
 ## Family Navigation Projection
 
@@ -30,7 +31,7 @@
 | PRODUCT | X | App API Mod Lab | product:app-api-mod-lab | products/app-api-mod-lab/** | products/standalone/app-api-mod-lab | regroup |
 | PRODUCT | X | Mobile Coder Lab | scope:research-product | products/chatgpt-mobile-coder-lab/** | products/standalone/mobile-coder-lab | reclassify |
 | PRODUCT | O | PocketRisu | product:pocketrisu-helper-mod | products/pocketrisu-helper-mod/** | products/risu/pocketrisu | regroup |
-| PRODUCT | X | Termux | plugin:termux-large-doc-editor | plugins/termux/** | products/standalone/termux | reclassify |
+| PRODUCT | X | Termux | plugin:termux-large-doc-editor<br>product:termux | plugins/termux/**<br>products/standalone/termux/** | products/standalone/termux | reclassify |
 | PLUGIN | O | Local | plugin:usage-dashboard<br>plugin:devpass<br>plugin:voyage-token-check | plugins/usage-dashboard/**<br>products/usage-dashboard/**<br>plugins/risu/local/usage-dashboard/**<br>plugins/risu/local/devpass/**<br>plugins/devpass/**<br>plugins/risu/local/voyage/**<br>voyage-token-check/**<br>tools/usage-dashboard-mcp/** | plugins/risu/local | consolidate |
 | PLUGIN | O | SimCore | plugin:simcore | plugins/simcore/**<br>products/simcore/**<br>tools/simcore-mcp/** | plugins/risu/simcore | regroup |
 | PLATFORM | X | Agent Platform | scope:repo | .agents/skills/**<br>tools/agent-skill-orchestrator/**<br>tools/agent-skill-eval/**<br>tools/agent-skill-security/** | platform/agents | regroup |

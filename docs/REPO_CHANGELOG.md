@@ -2409,3 +2409,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2fae4a82084ff01e1f3a23990bdbaf9268aebfa7)
 - Event ID: `30ecaa7bd667993290269717ab38b96ac9373c67097af9027b2256922afd19ad`
 <!-- canonical-main-doc-promoted:30ecaa7bd667993290269717ab38b96ac9373c67097af9027b2256922afd19ad -->
+
+### 2026-10-10 — feat(termux): land standalone product-family T0 (#3530)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `071041f1b330e5e0e614baf6091be57eee5c5e9c`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/071041f1b330e5e0e614baf6091be57eee5c5e9c)
+- Event ID: `429041afc4a221cc2c6ac1659b9bcbb0942931cd7ca7d40186fac49790fce35a`
+<!-- canonical-main-doc-promoted:429041afc4a221cc2c6ac1659b9bcbb0942931cd7ca7d40186fac49790fce35a -->

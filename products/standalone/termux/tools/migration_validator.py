@@ -487,12 +487,15 @@ def validate(repo: Path, base: str, head: str, plan: dict[str, Any]) -> dict[str
     if not scan_paths:
         scan_paths = sorted(
             {
-                path
-                for path in changed
-                if path.startswith(new_root + "/")
-                or path.startswith(".github/workflows/")
-                or path.endswith(".py")
-                or path.endswith(".sh")
+                change["logical_path"]
+                for change in changes
+                if not change["status"].startswith("D")
+                and (
+                    change["logical_path"].startswith(new_root + "/")
+                    or change["logical_path"].startswith(".github/workflows/")
+                    or change["logical_path"].endswith(".py")
+                    or change["logical_path"].endswith(".sh")
+                )
             }
         )
 

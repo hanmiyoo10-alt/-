@@ -428,6 +428,41 @@ class MigrationValidatorTests(unittest.TestCase):
         with self.assertRaises(mv.ValidationUnknown):
             mv.validate(self.repo, base, head, plan)
 
+    def test_low_similarity_move_skips_deleted_source_in_auto_scan(self):
+        self.write(
+            "plugins/termux/demo/script.py",
+            "A" * 4000 + "\n",
+        )
+        base = self.commit("low similarity base")
+        old = self.repo / "plugins/termux/demo"
+        new = self.repo / "products/standalone/termux/demo"
+        new.parent.mkdir(parents=True, exist_ok=True)
+        old.rename(new)
+        (new / "script.py").write_text("print('rewritten')\n", encoding="utf-8")
+        head = self.commit("low similarity move")
+
+        plan = mv._validate_plan(
+            {
+                "schema": "termux-migration-plan.v1",
+                "old_root": "plugins/termux/demo",
+                "new_root": "products/standalone/termux/demo",
+                "authorized_paths": [
+                    "plugins/termux/demo/**",
+                    "products/standalone/termux/demo/**",
+                ],
+                "expected_changed_file_count": 2,
+                "content_edit_relpaths": ["script.py"],
+                "allowed_old_root_relpaths": [],
+                "scan_paths": [],
+            }
+        )
+        result = mv.validate(self.repo, base, head, plan)
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(
+            [change["status"][0] for change in result["changes"]],
+            ["D", "A"],
+        )
+
     def test_noncanonical_authorization_scope_is_unknown(self):
         with self.assertRaises(mv.ValidationUnknown):
             self.plan(

@@ -18,6 +18,15 @@ DISPOSITIONS = {
     "ABSENT_FROM_SUPPLIED_REGISTRIES",
     "UNKNOWN",
 }
+AUTHORITY_REF_KINDS = frozenset({
+    "release_branch",
+    "manifest",
+    "artifact",
+    "release_spec_dir",
+    "declared_by",
+    "evidence",
+    "current_state",
+})
 
 
 def _result(
@@ -88,7 +97,10 @@ def _validate_request(request: Any) -> tuple[str, dict[str, str], list[str]] | N
     elif field == "authority_ref":
         if set(reference) != {"field", "kind", "value"}:
             return None
-        if not isinstance(reference.get("kind"), str) or not reference["kind"].strip():
+        if (
+            not isinstance(reference.get("kind"), str)
+            or reference["kind"] not in AUTHORITY_REF_KINDS
+        ):
             return None
     else:
         return None
@@ -169,13 +181,6 @@ def classify_reference(request: Any) -> dict[str, Any]:
         for locator, (digest, domain) in sorted(frozen_by_locator.items())
     ]
 
-    present_domains = [domain for _, _, domain in frozen_rows if domain is not None]
-    domain_ids = {domain["domain_id"] for domain in present_domains}
-    if live_domain is not None:
-        domain_ids.add(live_domain["domain_id"])
-    if len(domain_ids) > 1:
-        return _unknown("SCOPE_IDENTITY_DISAGREEMENT")
-
     live_scope_present = live_domain is not None
     live_match = bool(live_domain and _reference_matches(live_domain, reference))
     frozen_scope_fixtures = tuple(
@@ -192,6 +197,24 @@ def classify_reference(request: Any) -> dict[str, Any]:
         "scope_present": domain is not None,
         "match": bool(domain and _reference_matches(domain, reference)),
     } for locator, digest, domain in frozen_rows)
+
+    present_domains = [domain for _, _, domain in frozen_rows if domain is not None]
+    domain_ids = {domain["domain_id"] for domain in present_domains}
+    if live_domain is not None:
+        domain_ids.add(live_domain["domain_id"])
+    if len(domain_ids) > 1:
+        return _result(
+            "UNKNOWN",
+            "SCOPE_IDENTITY_DISAGREEMENT",
+            scope=scope,
+            reference=reference,
+            live_registry_sha256=live_registry_digest,
+            frozen_registries=frozen_registry_rows,
+            live_scope_present=live_scope_present,
+            live_match=live_match,
+            frozen_scope_fixtures=frozen_scope_fixtures,
+            frozen_match_fixtures=frozen_match_fixtures,
+        )
 
     if not live_scope_present and not frozen_scope_fixtures:
         return _result(
@@ -228,14 +251,18 @@ def classify_reference(request: Any) -> dict[str, Any]:
 def _read_cli_input(args: list[str]) -> str:
     if args:
         target = Path(args[0])
-        stat = target.stat()
-        if not target.is_file() or stat.st_size > MAX_REQUEST_BYTES:
+        stat = target.lstat()
+        if target.is_symlink() or not target.is_file() or stat.st_size > MAX_REQUEST_BYTES:
             raise ValueError("request file invalid or too large")
-        return target.read_text(encoding="utf-8")
-    raw = sys.stdin.read(MAX_REQUEST_BYTES + 1)
-    if len(raw.encode("utf-8")) > MAX_REQUEST_BYTES:
+        with target.open("rb") as handle:
+            raw_bytes = handle.read(MAX_REQUEST_BYTES + 1)
+        if len(raw_bytes) > MAX_REQUEST_BYTES:
+            raise ValueError("request file too large")
+        return raw_bytes.decode("utf-8")
+    raw_bytes = sys.stdin.buffer.read(MAX_REQUEST_BYTES + 1)
+    if len(raw_bytes) > MAX_REQUEST_BYTES:
         raise ValueError("stdin request too large")
-    return raw
+    return raw_bytes.decode("utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:

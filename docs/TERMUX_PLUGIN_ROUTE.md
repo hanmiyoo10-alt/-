@@ -28,8 +28,8 @@ These repository documents are the durable project memory and take precedence ov
 ## Current state
 
 - Staged product-family migration is active under #2801.
-- `response-watch/` has moved to `products/standalone/termux/response-watch/` under the non-production `product:termux` family owner.
-- Current `main` still contains `background-gpt/`, `large-doc-editor/`, `taskbridge/`, and `screen-on/` under the legacy `plugins/termux/` route.
+- `response-watch/` and `background-gpt/` have moved to `products/standalone/termux/response-watch/` and `products/standalone/termux/background-gpt/` under the non-production `product:termux` family owner.
+- Current `main` still contains `large-doc-editor/`, `taskbridge/`, and `screen-on/` under the legacy `plugins/termux/` route.
 - These child implementations and evidence do not establish a route-wide Termux production release authority.
 - No `latest.js` or `install.js` is published yet.
 - No Termux production release branch, production manifest, or production version has been established yet; preserve these as `UNKNOWN` until repository evidence establishes them.

@@ -140,6 +140,18 @@
         "manifest": "products/pocketrisu-helper-mod/product.json",
         "currentState": "products/pocketrisu-helper-mod/CURRENT.md"
       }
+    },
+    "termux": {
+      "displayName": "Termux",
+      "lifecycle": "prototype",
+      "issueValues": ["termux", "Termux"],
+      "paths": [
+        "products/standalone/termux/**"
+      ],
+      "statusAdapter": "prototype",
+      "authority": {
+        "evidence": "products/standalone/termux/README.md"
+      }
     }
   },
   "scopes": [

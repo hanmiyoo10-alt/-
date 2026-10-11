@@ -17,6 +17,7 @@ const MODE = 'GITHUB_PROJECT_PLANNING_PROJECTION_WRITER';
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_PROJECT_ITEMS = 10000;
 const MAX_PROJECT_FIELDS = 1000;
+const MAX_PROJECT_ITEM_FIELD_VALUES = 100;
 const MAX_PROJECT_QUERY_ITEMS = 100;
 const MAX_PROJECT_ITEM_OUTPUT_BYTES = 4 * 1024 * 1024;
 const PROJECT_ITEM_JQ = '{totalCount,items:[.items[]|{id:.id,content:{type:.content.type,number:.content.number,repository:.content.repository,url:.content.url},status:.status,priority:.priority,area:.area,"work Type":.["work Type"]}]}';
@@ -180,11 +181,18 @@ function normalizeProjectIdentity(raw) {
 }
 
 function normalizeProjectSchema(raw) {
-  if (!raw || !Array.isArray(raw.fields)) {
+  if (!raw || !Array.isArray(raw.fields)
+      || !Number.isSafeInteger(raw.totalCount) || raw.totalCount < 0) {
     return {ok: false, reasonCodes: ['PROJECT_SCHEMA_INVALID']};
   }
-  if (raw.fields.length >= MAX_PROJECT_FIELDS) {
+  if (raw.fields.length !== raw.totalCount) {
+    return {ok: false, reasonCodes: ['PROJECT_SCHEMA_TRUNCATED']};
+  }
+  if (raw.totalCount >= MAX_PROJECT_FIELDS) {
     return {ok: false, reasonCodes: ['PROJECT_SCHEMA_LIMIT_REACHED']};
+  }
+  if (raw.totalCount > MAX_PROJECT_ITEM_FIELD_VALUES) {
+    return {ok: false, reasonCodes: ['PROJECT_ITEM_FIELD_EVIDENCE_LIMIT_EXCEEDED']};
   }
   const normalized = {};
   for (const [name, expectedOptions] of Object.entries(FIELD_SCHEMA)) {
@@ -459,6 +467,16 @@ function readEvidenceDefault(issueNumber, runner = defaultRunner) {
     return {ok: false, status: 'BLOCKED', reasonCodes: ['MAIN_CHANGED_DURING_BARRIER']};
   }
 
+  const finalSchemaRead = runJson(runner, 'gh', [
+    'project', 'field-list', String(PROJECT_NUMBER), '--owner', PROJECT_OWNER,
+    '--format', 'json', '--limit', String(MAX_PROJECT_FIELDS),
+  ]);
+  if (!finalSchemaRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: finalSchemaRead.reasonCodes};
+  const finalSchema = normalizeProjectSchema(finalSchemaRead.value);
+  if (!finalSchema.ok || digest(finalSchema.value) !== digest(schema.value)) {
+    return {ok: false, status: 'BLOCKED', reasonCodes: ['PROJECT_SCHEMA_CHANGED_DURING_BARRIER']};
+  }
+
   const itemsRead = runJson(runner, 'gh', [
     'project', 'item-list', String(PROJECT_NUMBER), '--owner', PROJECT_OWNER,
     '--format', 'json', '--limit', String(MAX_PROJECT_QUERY_ITEMS),
@@ -700,6 +718,7 @@ module.exports = {
   FIELD_SCHEMA,
   ITEM_KEYS,
   MAX_PROJECT_FIELDS,
+  MAX_PROJECT_ITEM_FIELD_VALUES,
   MAX_PROJECT_ITEM_OUTPUT_BYTES,
   MAX_PROJECT_ITEMS,
   MAX_PROJECT_QUERY_ITEMS,

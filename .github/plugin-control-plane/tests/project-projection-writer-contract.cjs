@@ -44,12 +44,13 @@ function schemaRaw() {
     type: 'ProjectV2SingleSelectField',
     options: options.map((option) => ({id: `OPT_${option.replace(/\s/g, '_')}`, name: option})),
   });
-  return {fields: [
+  const fields = [
     field('Status', ['Todo', 'In Progress', 'Done']),
     field('Priority', ['P0', 'P1', 'P2', 'P3']),
     field('Area', ['Unspecified', 'Termux', 'Mobile Coder Lab', 'PocketRisu', 'Repository Ops']),
     field('Work Type', ['Unspecified', 'Work Packet', 'Anomaly']),
-  ]};
+  ];
+  return {fields, totalCount: fields.length};
 }
 
 function normalizedSchema() {
@@ -215,10 +216,20 @@ wrongTypeSchema.fields.find((field) => field.name === 'Status').type = 'ProjectV
 const wrongTypeSchemaResult = writer.normalizeProjectSchema(wrongTypeSchema);
 assert.equal(wrongTypeSchemaResult.ok, false);
 assert.ok(wrongTypeSchemaResult.reasonCodes.includes('PROJECT_SCHEMA_FIELD_TYPE_MISMATCH'));
+const tooWideSchema = schemaRaw();
+while (tooWideSchema.fields.length <= writer.MAX_PROJECT_ITEM_FIELD_VALUES) {
+  tooWideSchema.fields.push({id: `EXTRA_${tooWideSchema.fields.length}`, name: `Extra ${tooWideSchema.fields.length}`, type: 'ProjectV2Field'});
+}
+tooWideSchema.totalCount = tooWideSchema.fields.length;
+const tooWideSchemaResult = writer.normalizeProjectSchema(tooWideSchema);
+assert.equal(tooWideSchemaResult.ok, false);
+assert.ok(tooWideSchemaResult.reasonCodes.includes('PROJECT_ITEM_FIELD_EVIDENCE_LIMIT_EXCEEDED'));
+
 const maxedSchema = schemaRaw();
 while (maxedSchema.fields.length < writer.MAX_PROJECT_FIELDS) {
-  maxedSchema.fields.push({id: `EXTRA_${maxedSchema.fields.length}`, name: `Extra ${maxedSchema.fields.length}`, options: []});
+  maxedSchema.fields.push({id: `EXTRA_${maxedSchema.fields.length}`, name: `Extra ${maxedSchema.fields.length}`, type: 'ProjectV2Field'});
 }
+maxedSchema.totalCount = maxedSchema.fields.length;
 const maxedSchemaResult = writer.normalizeProjectSchema(maxedSchema);
 assert.equal(maxedSchemaResult.ok, false);
 assert.ok(maxedSchemaResult.reasonCodes.includes('PROJECT_SCHEMA_LIMIT_REACHED'));
@@ -482,9 +493,11 @@ assert.equal(writer.buildItemEditArgs(42, {key: 'status', field: 'Status', desir
     assert.equal(itemListCall.includes('--field'), false);
   }
   assert.equal(itemListOptions.maxBuffer, writer.MAX_PROJECT_ITEM_OUTPUT_BYTES);
-  const fieldListCall = calls.find((args) => args[0] === 'gh' && args[1] === 'project' && args[2] === 'field-list');
-  assert.ok(fieldListCall);
-  assert.ok(fieldListCall.includes(String(writer.MAX_PROJECT_FIELDS)));
+  const fieldListCalls = calls.filter((args) => args[0] === 'gh' && args[1] === 'project' && args[2] === 'field-list');
+  assert.equal(fieldListCalls.length, 2);
+  for (const fieldListCall of fieldListCalls) {
+    assert.ok(fieldListCall.includes(String(writer.MAX_PROJECT_FIELDS)));
+  }
   const mainReads = calls.filter((args) => args[0] === 'gh' && args[1] === 'api');
   assert.equal(mainReads.length, 2);
   assert.deepEqual(calls.at(-1).slice(0, 3), ['gh', 'project', 'item-list']);
@@ -527,11 +540,13 @@ function completeReadRunner({
   finalOpsBody = null,
   finalIssueBody = null,
   finalItemFields = null,
+  finalSchemaMutator = null,
 } = {}) {
   let apiReads = 0;
   let opsReads = 0;
   let issueReads = 0;
   let itemReads = 0;
+  let schemaReads = 0;
   const projectView = {
     id: writer.PROJECT_ID,
     title: writer.PROJECT_TITLE,
@@ -558,7 +573,10 @@ function completeReadRunner({
       return {code: 0, stdout: JSON.stringify(projectView)};
     }
     if (command === 'gh' && args[0] === 'project' && args[1] === 'field-list') {
-      return {code: 0, stdout: JSON.stringify(schemaRaw())};
+      schemaReads += 1;
+      const raw = schemaRaw();
+      if (schemaReads > 1 && typeof finalSchemaMutator === 'function') finalSchemaMutator(raw);
+      return {code: 0, stdout: JSON.stringify(raw)};
     }
     if (command === 'gh' && args[0] === 'issue' && args[2] === '42') {
       issueReads += 1;
@@ -607,6 +625,17 @@ function completeReadRunner({
   assert.equal(read.ok, false);
   assert.equal(read.status, 'BLOCKED');
   assert.ok(read.reasonCodes.includes('MAIN_CHANGED_DURING_BARRIER'));
+}
+
+{
+  const read = writer.readEvidenceDefault(42, completeReadRunner({
+    finalSchemaMutator: (raw) => {
+      raw.fields.find((field) => field.name === 'Area').options[0].name = 'Changed';
+    },
+  }));
+  assert.equal(read.ok, false);
+  assert.equal(read.status, 'BLOCKED');
+  assert.ok(read.reasonCodes.includes('PROJECT_SCHEMA_CHANGED_DURING_BARRIER'));
 }
 
 {

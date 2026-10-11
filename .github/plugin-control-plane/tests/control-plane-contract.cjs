@@ -40,6 +40,8 @@ assert.equal(taxonomyById.get('pocketrisu').risu, 'yes');
 assert.equal(taxonomyById.get('pocketrisu').targetRoot, 'products/risu/pocketrisu');
 assert.equal(taxonomyById.get('app-api-mod-lab').risu, 'no');
 assert.equal(taxonomyById.get('termux').targetRoot, 'products/standalone/termux');
+assert.deepEqual(taxonomyById.get('termux').sourceRefs, ['plugin:termux-large-doc-editor', 'product:termux']);
+assert.deepEqual(taxonomyById.get('termux').sourceRoots, ['plugins/termux/**', 'products/standalone/termux/**']);
 assert.equal(taxonomyById.get('mobile-coder-lab').targetRoot, 'products/standalone/mobile-coder-lab');
 assert.equal(taxonomyById.get('simcore').targetRoot, 'plugins/risu/simcore');
 assert.deepEqual(taxonomyById.get('local').sourceRefs, ['plugin:usage-dashboard', 'plugin:devpass', 'plugin:voyage-token-check']);
@@ -104,6 +106,7 @@ assert.deepEqual(Object.keys(registry.products).sort(), [
   'app-api-mod-lab',
   'local-model-lab',
   'pocketrisu-helper-mod',
+  'termux',
 ]);
 assert.deepEqual((registry.scopes || []).map((scope) => scope.id).sort(), [
   'local-runtime',
@@ -165,6 +168,21 @@ assert.deepEqual(devpassLegacyReadme.labels, ['plugin:devpass']);
 assert.deepEqual(devpassLegacyReadme.ambiguousPaths, []);
 assert.deepEqual(classifyPaths(['plugins/devpass/latest.js'], registry).labels, ['plugin:devpass']);
 assert.deepEqual(classifyPaths(['plugins/termux/large-doc-editor/server.py'], registry).labels, ['plugin:termux-large-doc-editor']);
+assert.deepEqual(registry.products.termux.authority, {evidence: 'products/standalone/termux/README.md'});
+assert.equal(registry.products.termux.lifecycle, 'prototype');
+assert.equal(registry.products.termux.statusAdapter, 'prototype');
+const termuxLanding = classifyPaths(['products/standalone/termux/README.md'], registry);
+assert.deepEqual(termuxLanding.labels, ['product:termux']);
+assert.deepEqual(termuxLanding.ambiguousPaths, []);
+assert.deepEqual(termuxLanding.unclassifiedPaths, []);
+for (const legacyChildPath of [
+  'plugins/termux/background-gpt/README.md',
+  'plugins/termux/response-watch/README.md',
+  'plugins/termux/screen-on/README.md',
+  'plugins/termux/taskbridge/README.md',
+]) {
+  assert.deepEqual(classifyPaths([legacyChildPath], registry).labels, ['scope:unclassified'], `${legacyChildPath} must remain unclassified during T0`);
+}
 const voyageLegacyPath = classifyPaths(['voyage-token-check/DESIGN_STATUS.md'], registry);
 assert.deepEqual(voyageLegacyPath.labels, ['plugin:voyage-token-check']);
 assert.deepEqual(voyageLegacyPath.ambiguousPaths, []);
@@ -274,6 +292,7 @@ assert.deepEqual(classifyIssueBody('Plugin: simcore', registry), {explicit: true
 assert.deepEqual(classifyIssueBody('Scope: voyage-token-check', registry), {explicit: true, labels: ['plugin:voyage-token-check']});
 assert.deepEqual(classifyIssueBody('Scope: pocketrisu-helper-mod', registry), {explicit: true, labels: ['product:pocketrisu-helper-mod']});
 assert.deepEqual(classifyIssueBody('Scope: local-model-lab', registry), {explicit: true, labels: ['product:local-model-lab']});
+assert.deepEqual(classifyIssueBody('Scope: termux', registry), {explicit: true, labels: ['product:termux']});
 assert.deepEqual(classifyIssueBody('Scope: study', registry), {explicit: true, labels: ['scope:study']});
 assert.deepEqual(classifyIssueBody('Scope: local-runtime', registry), {explicit: true, labels: ['scope:local-runtime']});
 assert.deepEqual(classifyIssueBody('### Scope\n\nshared', registry), {explicit: true, labels: ['scope:shared']});
@@ -306,6 +325,7 @@ assert.match(issueTemplate, /^        - local$/m);
 assert.match(issueTemplate, /voyage-token-check/);
 assert.match(issueTemplate, /pocketrisu-helper-mod/);
 assert.match(issueTemplate, /^        - local-model-lab$/m);
+assert.match(issueTemplate, /^        - termux$/m);
 assert.match(issueTemplate, /^        - study$/m);
 assert.match(issueTemplate, /^        - local-runtime$/m);
 assert.match(issueTemplate, /^        - custom$/m);

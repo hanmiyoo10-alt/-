@@ -192,6 +192,8 @@ assert.equal(ops.value.mainSha, HEAD);
 assert.equal(ops.value.requiredRun, '999');
 assert.equal(ops.value.protectionActive, true);
 assert.equal(writer.parseOpsCapsule('broken').ok, false);
+assert.equal(writer.parseOpsCapsule(opsBody() + '\n## Canonical Operator Capsule\n- STATE: `CLEAR`').ok, false);
+assert.equal(writer.parseOpsCapsule('quoted - STATE: `CLEAR`\n' + opsBody()).ok, true);
 
 const identity = writer.normalizeProjectIdentity({
   id: writer.PROJECT_ID,
@@ -207,6 +209,13 @@ assert.equal(schema.ok, true);
 const badSchema = schemaRaw();
 badSchema.fields.find((field) => field.name === 'Status').options.pop();
 assert.equal(writer.normalizeProjectSchema(badSchema).ok, false);
+const maxedSchema = schemaRaw();
+while (maxedSchema.fields.length < writer.MAX_PROJECT_FIELDS) {
+  maxedSchema.fields.push({id: `EXTRA_${maxedSchema.fields.length}`, name: `Extra ${maxedSchema.fields.length}`, options: []});
+}
+const maxedSchemaResult = writer.normalizeProjectSchema(maxedSchema);
+assert.equal(maxedSchemaResult.ok, false);
+assert.ok(maxedSchemaResult.reasonCodes.includes('PROJECT_SCHEMA_LIMIT_REACHED'));
 
 const item = writer.normalizeProjectItemList(itemListRaw([itemRaw()]), 42);
 assert.equal(item.ok, true);
@@ -420,7 +429,12 @@ assert.equal(writer.buildItemEditArgs(42, {key: 'status', field: 'Status', desir
     if (command === 'git' && args.includes('status')) return {code: 0, stdout: ''};
     if (command === 'gh' && args[0] === 'api') return {code: 0, stdout: HEAD + '\n'};
     if (command === 'gh' && args[0] === 'issue' && args[2] === '485') {
-      return {code: 0, stdout: JSON.stringify({body: opsBody()})};
+      return {code: 0, stdout: JSON.stringify({
+        body: opsBody(),
+        state: 'OPEN',
+        number: writer.OPS_ISSUE,
+        url: `https://github.com/${writer.REPO}/issues/${writer.OPS_ISSUE}`,
+      })};
     }
     if (command === 'gh' && args[0] === 'project' && args[1] === 'view') {
       return {code: 0, stdout: JSON.stringify(projectView)};
@@ -446,6 +460,11 @@ assert.equal(writer.buildItemEditArgs(42, {key: 'status', field: 'Status', desir
   const itemListCall = calls.find((args) => args[0] === 'gh' && args[1] === 'project' && args[2] === 'item-list');
   assert.ok(itemListCall);
   assert.ok(itemListCall.includes(String(writer.MAX_PROJECT_ITEMS)));
+  const fieldListCall = calls.find((args) => args[0] === 'gh' && args[1] === 'project' && args[2] === 'field-list');
+  assert.ok(fieldListCall);
+  assert.ok(fieldListCall.includes(String(writer.MAX_PROJECT_FIELDS)));
+  const mainReads = calls.filter((args) => args[0] === 'gh' && args[1] === 'api');
+  assert.equal(mainReads.length, 2);
 }
 
 {
@@ -477,6 +496,61 @@ assert.equal(writer.buildItemEditArgs(42, {key: 'status', field: 'Status', desir
   assert.ok(read.reasonCodes.includes('LOCAL_SOURCE_DIRTY'));
   const statusCall = calls.find((args) => args[0] === 'git' && args.includes('status'));
   assert.ok(statusCall.includes('.github/plugin-control-plane/canonical-main/work-system/'));
+}
+
+function completeReadRunner({opsState = 'OPEN', finalMain = HEAD} = {}) {
+  let apiReads = 0;
+  const projectView = {
+    id: writer.PROJECT_ID,
+    title: writer.PROJECT_TITLE,
+    number: writer.PROJECT_NUMBER,
+    url: writer.PROJECT_URL,
+  };
+  return (command, args) => {
+    if (command === 'git' && args.includes('rev-parse')) return {code: 0, stdout: HEAD + '\n'};
+    if (command === 'git' && args.includes('status')) return {code: 0, stdout: ''};
+    if (command === 'gh' && args[0] === 'api') {
+      apiReads += 1;
+      return {code: 0, stdout: (apiReads === 1 ? HEAD : finalMain) + '\n'};
+    }
+    if (command === 'gh' && args[0] === 'issue' && args[2] === '485') {
+      return {code: 0, stdout: JSON.stringify({
+        body: opsBody(),
+        state: opsState,
+        number: writer.OPS_ISSUE,
+        url: `https://github.com/${writer.REPO}/issues/${writer.OPS_ISSUE}`,
+      })};
+    }
+    if (command === 'gh' && args[0] === 'project' && args[1] === 'view') {
+      return {code: 0, stdout: JSON.stringify(projectView)};
+    }
+    if (command === 'gh' && args[0] === 'project' && args[1] === 'field-list') {
+      return {code: 0, stdout: JSON.stringify(schemaRaw())};
+    }
+    if (command === 'gh' && args[0] === 'issue' && args[2] === '42') {
+      return {code: 0, stdout: JSON.stringify(issueRaw())};
+    }
+    if (command === 'gh' && args[0] === 'project' && args[1] === 'item-list') {
+      return {code: 0, stdout: JSON.stringify(itemListRaw([itemRaw()]))};
+    }
+    return {code: 1, stdout: ''};
+  };
+}
+
+{
+  const read = writer.readEvidenceDefault(42, completeReadRunner({opsState: 'CLOSED'}));
+  assert.equal(read.ok, false);
+  assert.equal(read.status, 'BLOCKED');
+  assert.ok(read.reasonCodes.includes('OPS_ISSUE_INVALID'));
+}
+
+{
+  const read = writer.readEvidenceDefault(42, completeReadRunner({
+    finalMain: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+  }));
+  assert.equal(read.ok, false);
+  assert.equal(read.status, 'BLOCKED');
+  assert.ok(read.reasonCodes.includes('MAIN_CHANGED_DURING_BARRIER'));
 }
 
 const source = fs.readFileSync(path.resolve(__dirname, '../project-projection-writer.cjs'), 'utf8');

@@ -16,6 +16,7 @@ const OPS_ISSUE = 485;
 const MODE = 'GITHUB_PROJECT_PLANNING_PROJECTION_WRITER';
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_PROJECT_ITEMS = 10000;
+const MAX_PROJECT_FIELDS = 1000;
 
 const FIELD_ORDER = Object.freeze([
   Object.freeze({key: 'status', display: 'Status'}),
@@ -105,22 +106,45 @@ function parseCliArgs(argv = process.argv.slice(2)) {
   return {operation, issueNumber};
 }
 
+function singleMatch(text, pattern) {
+  const matches = [...String(text).matchAll(pattern)];
+  return matches.length === 1 ? matches[0] : null;
+}
+
 function parseOpsCapsule(body) {
   const text = String(body || '');
-  const state = /- STATE: `([^\`]+)`/.exec(text)?.[1] || null;
-  const main = /- MAIN: `([0-9a-f]{40})` \/ Required PASS[^\n]*run ([1-9][0-9]*)/.exec(text);
-  const convergence = /Convergence: `([^\`]+)`/.exec(text)?.[1] || null;
-  const unknown = /- UNKNOWN: ([^\n]+)/.exec(text)?.[1]?.trim() || null;
-  const authority = /- AUTHORITY: ([^\n]+)/.exec(text)?.[1] || '';
-  if (!main) return {ok: false, reasonCodes: ['OPS_CAPSULE_INVALID']};
+  const headingMatches = [...text.matchAll(/^## Canonical Operator Capsule$/gm)];
+  if (headingMatches.length !== 1) {
+    return {ok: false, reasonCodes: ['OPS_CAPSULE_INVALID']};
+  }
+  const start = headingMatches[0].index + headingMatches[0][0].length;
+  const after = text.slice(start);
+  const boundaries = [
+    after.indexOf('\n<!-- canonical-main-summary-compat:v1'),
+    after.indexOf('\n<details>'),
+    after.search(/\n## /),
+  ].filter((value) => value >= 0);
+  const capsule = after.slice(0, boundaries.length ? Math.min(...boundaries) : after.length);
+
+  const state = singleMatch(capsule, /^- STATE: `([^\`]+)`$/gm);
+  const main = singleMatch(capsule, /^- MAIN: `([0-9a-f]{40})` \/ Required PASS[^\n]*run ([1-9][0-9]*)$/gm);
+  const unknown = singleMatch(capsule, /^- UNKNOWN: ([^\n]+)$/gm);
+  const authority = singleMatch(capsule, /^- AUTHORITY: ([^\n]+)$/gm);
+  const summaryMarkerMatches = [...text.matchAll(/^<!-- canonical-main-summary-compat:v1$/gm)];
+  const convergence = singleMatch(text, /^Convergence: `([^\`]+)`$/gm);
+  if (!state || !main || !unknown || !authority
+      || summaryMarkerMatches.length !== 1 || !convergence) {
+    return {ok: false, reasonCodes: ['OPS_CAPSULE_INVALID']};
+  }
+
   const result = {
-    state,
+    state: state[1],
     mainSha: main[1],
     requiredRun: main[2],
-    convergence,
-    productionMatch: authority.includes('Production MATCH'),
-    protectionActive: authority.includes('native protection `ACTIVE` / protected `true`'),
-    unknown,
+    convergence: convergence[1],
+    productionMatch: authority[1].includes('Production MATCH'),
+    protectionActive: authority[1].includes('native protection `ACTIVE` / protected `true`'),
+    unknown: unknown[1].trim(),
   };
   const ready = result.state === 'CLEAR'
     && result.convergence === 'STABLE'
@@ -155,6 +179,9 @@ function normalizeProjectIdentity(raw) {
 function normalizeProjectSchema(raw) {
   if (!raw || !Array.isArray(raw.fields)) {
     return {ok: false, reasonCodes: ['PROJECT_SCHEMA_INVALID']};
+  }
+  if (raw.fields.length >= MAX_PROJECT_FIELDS) {
+    return {ok: false, reasonCodes: ['PROJECT_SCHEMA_LIMIT_REACHED']};
   }
   const normalized = {};
   for (const [name, expectedOptions] of Object.entries(FIELD_SCHEMA)) {
@@ -328,9 +355,19 @@ function readEvidenceDefault(issueNumber, runner = defaultRunner) {
     return {ok: false, status: 'BLOCKED', reasonCodes: ['LOCAL_SOURCE_NOT_CURRENT']};
   }
 
-  const opsRead = runJson(runner, 'gh', ['issue', 'view', String(OPS_ISSUE), '--repo', REPO, '--json', 'body']);
+  const opsRead = runJson(runner, 'gh', [
+    'issue', 'view', String(OPS_ISSUE), '--repo', REPO,
+    '--json', 'body,state,number,url',
+  ]);
   if (!opsRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: opsRead.reasonCodes};
-  const ops = parseOpsCapsule(opsRead.value?.body);
+  const expectedOpsUrl = `https://github.com/${REPO}/issues/${OPS_ISSUE}`;
+  if (opsRead.value?.number !== OPS_ISSUE
+      || opsRead.value?.url !== expectedOpsUrl
+      || opsRead.value?.state !== 'OPEN'
+      || typeof opsRead.value?.body !== 'string') {
+    return {ok: false, status: 'BLOCKED', reasonCodes: ['OPS_ISSUE_INVALID']};
+  }
+  const ops = parseOpsCapsule(opsRead.value.body);
   if (!ops.ok) return {ok: false, status: 'BLOCKED', reasonCodes: ops.reasonCodes};
   if (ops.value.mainSha !== mainSha) {
     return {ok: false, status: 'BLOCKED', reasonCodes: ['MAIN_485_MISMATCH']};
@@ -341,7 +378,10 @@ function readEvidenceDefault(issueNumber, runner = defaultRunner) {
   const project = normalizeProjectIdentity(projectRead.value);
   if (!project.ok) return {ok: false, status: 'BLOCKED', reasonCodes: project.reasonCodes};
 
-  const schemaRead = runJson(runner, 'gh', ['project', 'field-list', String(PROJECT_NUMBER), '--owner', PROJECT_OWNER, '--format', 'json']);
+  const schemaRead = runJson(runner, 'gh', [
+    'project', 'field-list', String(PROJECT_NUMBER), '--owner', PROJECT_OWNER,
+    '--format', 'json', '--limit', String(MAX_PROJECT_FIELDS),
+  ]);
   if (!schemaRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: schemaRead.reasonCodes};
   const schema = normalizeProjectSchema(schemaRead.value);
   if (!schema.ok) return {ok: false, status: 'BLOCKED', reasonCodes: schema.reasonCodes};
@@ -361,6 +401,16 @@ function readEvidenceDefault(issueNumber, runner = defaultRunner) {
   if (!itemsRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: itemsRead.reasonCodes};
   const item = normalizeProjectItemList(itemsRead.value, issueNumber);
   if (!item.ok) return {ok: false, status: 'BLOCKED', reasonCodes: item.reasonCodes};
+
+  const finalMainRead = runResult(runner, 'gh', ['api', `repos/${REPO}/branches/main`, '--jq', '.commit.sha']);
+  if (!finalMainRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: finalMainRead.reasonCodes};
+  const finalMainSha = finalMainRead.stdout.trim();
+  if (!/^[0-9a-f]{40}$/.test(finalMainSha)) {
+    return {ok: false, status: 'UNKNOWN', reasonCodes: ['MAIN_SHA_INVALID']};
+  }
+  if (finalMainSha !== mainSha) {
+    return {ok: false, status: 'BLOCKED', reasonCodes: ['MAIN_CHANGED_DURING_BARRIER']};
+  }
 
   return {
     ok: true,
@@ -590,6 +640,7 @@ module.exports = {
   FIELD_ORDER,
   FIELD_SCHEMA,
   ITEM_KEYS,
+  MAX_PROJECT_FIELDS,
   MAX_PROJECT_ITEMS,
   MODE,
   OPS_ISSUE,

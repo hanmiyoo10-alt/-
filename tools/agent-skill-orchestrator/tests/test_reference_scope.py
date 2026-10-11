@@ -12,7 +12,13 @@ PACKAGE = Path(__file__).resolve().parents[1]
 if str(PACKAGE) not in sys.path:
     sys.path.insert(0, str(PACKAGE))
 
-from reference_scope import AUTHORITY_REF_KINDS, _read_cli_input, classify_reference
+from reference_scope import (
+    AUTHORITY_REF_KINDS,
+    MAX_REGISTRY_BYTES,
+    _bounded_registry_snapshot,
+    _read_cli_input,
+    classify_reference,
+)
 from registry import load_domain_registry, registry_sha256
 
 TERMUX_FROZEN = "tests/fixtures/termux-large-doc-editor-o4f0-frozen-domain-registry.json"
@@ -237,6 +243,75 @@ class ReferenceScopeTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(ValueError, "request file too large"):
                 _read_cli_input([str(target)])
+
+    def test_invalid_frozen_fixture_preserves_known_live_provenance(self):
+        out = classify_reference(self.request(
+            "plugin:voyage-token-check",
+            "primary_path",
+            "plugins/risu/local/voyage/**",
+            frozen=["domains/registry.json"],
+        ))
+        self.assertEqual(out["disposition"], "UNKNOWN")
+        self.assertEqual(out["reason_code"], "FROZEN_FIXTURE_INVALID")
+        self.assertEqual(out["scope"], "plugin:voyage-token-check")
+        self.assertTrue(out["live"]["scope_present"])
+        self.assertTrue(out["live"]["match"])
+        self.assertIsNotNone(out["live"]["registry_sha256"])
+
+    def test_scope_must_match_domain_registry_scope_contract(self):
+        for scope in ("voyage-token-check", "scope:repo", "plugin:Bad", "plugin:"):
+            out = classify_reference(self.request(
+                scope,
+                "guidelines_path",
+                "docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md",
+                frozen=[VOYAGE_FROZEN],
+            ))
+            self.assertEqual(out["disposition"], "UNKNOWN")
+            self.assertEqual(out["reason_code"], "REQUEST_INVALID")
+
+    def test_query_value_honors_registry_256_character_ceiling(self):
+        out = classify_reference(self.request(
+            "plugin:voyage-token-check",
+            "authority_ref",
+            "x" * 257,
+            kind="evidence",
+            frozen=[VOYAGE_FROZEN],
+        ))
+        self.assertEqual(out["disposition"], "UNKNOWN")
+        self.assertEqual(out["reason_code"], "REQUEST_INVALID")
+
+    def test_duplicate_json_keys_are_rejected_by_cli(self):
+        raw = (
+            '{"schema_version":1,'
+            '"scope":"plugin:not-real",'
+            '"scope":"plugin:voyage-token-check",'
+            '"reference":{"field":"primary_path","value":"plugins/risu/local/voyage/**"},'
+            '"frozen_registry_paths":[]}'
+        )
+        run = subprocess.run(
+            [sys.executable, str(PACKAGE / "reference_scope.py")],
+            input=raw,
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=PACKAGE,
+        )
+        self.assertEqual(run.returncode, 2)
+        output = json.loads(run.stdout)
+        self.assertEqual(output["disposition"], "UNKNOWN")
+        self.assertEqual(output["reason_code"], "INPUT_JSON_INVALID")
+
+    def test_frozen_registry_source_read_is_bounded_before_loader(self):
+        oversized = b"{" + (b" " * MAX_REGISTRY_BYTES) + b"}"
+        target = Path("/virtual/frozen-domain-registry.json")
+        with (
+            mock.patch.object(Path, "lstat", return_value=mock.Mock(st_size=1)),
+            mock.patch.object(Path, "is_symlink", return_value=False),
+            mock.patch.object(Path, "is_file", return_value=True),
+            mock.patch.object(Path, "open", return_value=io.BytesIO(oversized)),
+        ):
+            with self.assertRaisesRegex(ValueError, "registry file too large"):
+                _bounded_registry_snapshot(target)
 
     def test_cli_returns_deterministic_json(self):
         request = self.request(

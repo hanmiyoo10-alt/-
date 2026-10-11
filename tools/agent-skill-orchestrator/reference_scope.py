@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +13,8 @@ PACKAGE_ROOT = Path(__file__).resolve().parent
 FROZEN_FIXTURE_ROOT = PACKAGE_ROOT / "tests" / "fixtures"
 MAX_FROZEN_FIXTURES = 16
 MAX_REQUEST_BYTES = 32 * 1024
+MAX_REGISTRY_BYTES = 256 * 1024
+SCOPE_RE = re.compile(r"^(plugin|product):[a-z0-9][a-z0-9._-]{0,127}$")
 DISPOSITIONS = {
     "LIVE_CURRENT_ONLY",
     "FROZEN_RETROSPECTIVE_ONLY",
@@ -83,7 +87,7 @@ def _validate_request(request: Any) -> tuple[str, dict[str, str], list[str]] | N
     if type(request["schema_version"]) is not int or request["schema_version"] != 1:
         return None
     scope = request["scope"]
-    if not isinstance(scope, str) or not scope.strip() or len(scope) > 160:
+    if not isinstance(scope, str) or SCOPE_RE.fullmatch(scope) is None:
         return None
     reference = request["reference"]
     if not isinstance(reference, dict):
@@ -106,7 +110,7 @@ def _validate_request(request: Any) -> tuple[str, dict[str, str], list[str]] | N
         return None
     if not isinstance(reference.get("value"), str) or not reference["value"].strip():
         return None
-    if len(reference["value"]) > 512:
+    if len(reference["value"]) > 256:
         return None
     frozen = request["frozen_registry_paths"]
     if (
@@ -136,20 +140,31 @@ def _reference_matches(domain: dict[str, Any], reference: dict[str, str]) -> boo
     )
 
 
+def _bounded_registry_snapshot(path: Path) -> dict[str, Any]:
+    stat = path.lstat()
+    if path.is_symlink() or not path.is_file() or stat.st_size > MAX_REGISTRY_BYTES:
+        raise ValueError("registry file invalid or too large")
+    with path.open("rb") as handle:
+        raw = handle.read(MAX_REGISTRY_BYTES + 1)
+    if len(raw) > MAX_REGISTRY_BYTES:
+        raise ValueError("registry file too large")
+    raw.decode("utf-8")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        snapshot = Path(temp_dir) / "registry.json"
+        snapshot.write_bytes(raw)
+        return load_domain_registry(snapshot)
+
+
 def _load_frozen_fixture(raw_path: str) -> tuple[str, dict[str, Any]]:
     requested = Path(raw_path)
     candidate = requested if requested.is_absolute() else PACKAGE_ROOT / requested
-    if candidate.is_symlink():
-        raise ValueError("frozen fixture symlink is not allowed")
     resolved = candidate.resolve(strict=True)
     root = FROZEN_FIXTURE_ROOT.resolve(strict=True)
     if resolved.parent != root:
         raise ValueError("frozen fixture must be a direct child of tests/fixtures")
     if not resolved.name.endswith("-frozen-domain-registry.json"):
         raise ValueError("unsupported frozen fixture filename")
-    if not resolved.is_file():
-        raise ValueError("frozen fixture must be a regular file")
-    data = load_domain_registry(resolved)
+    data = _bounded_registry_snapshot(resolved)
     return resolved.relative_to(PACKAGE_ROOT).as_posix(), data
 
 
@@ -160,7 +175,7 @@ def classify_reference(request: Any) -> dict[str, Any]:
     scope, reference, frozen_paths = validated
 
     try:
-        live_registry = load_domain_registry(DOMAIN_REGISTRY_PATH)
+        live_registry = _bounded_registry_snapshot(DOMAIN_REGISTRY_PATH)
         live_registry_digest = registry_sha256(live_registry)
         live_domain = _domain_for_scope(live_registry, scope)
     except Exception:
@@ -175,7 +190,15 @@ def classify_reference(request: Any) -> dict[str, Any]:
                 _domain_for_scope(registry, scope),
             )
     except Exception:
-        return _unknown("FROZEN_FIXTURE_INVALID")
+        return _result(
+            "UNKNOWN",
+            "FROZEN_FIXTURE_INVALID",
+            scope=scope,
+            reference=reference,
+            live_registry_sha256=live_registry_digest,
+            live_scope_present=live_domain is not None,
+            live_match=bool(live_domain and _reference_matches(live_domain, reference)),
+        )
     frozen_rows = [
         (locator, digest, domain)
         for locator, (digest, domain) in sorted(frozen_by_locator.items())
@@ -265,13 +288,26 @@ def _read_cli_input(args: list[str]) -> str:
     return raw_bytes.decode("utf-8")
 
 
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if len(args) > 1:
         output = _unknown("CLI_ARGUMENT_INVALID")
     else:
         try:
-            output = classify_reference(json.loads(_read_cli_input(args)))
+            request = json.loads(
+                _read_cli_input(args),
+                object_pairs_hook=_reject_duplicate_keys,
+            )
+            output = classify_reference(request)
         except Exception:
             output = _unknown("INPUT_JSON_INVALID")
     print(json.dumps(output, sort_keys=True, separators=(",", ":")))

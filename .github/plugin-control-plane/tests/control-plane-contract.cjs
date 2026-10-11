@@ -17,6 +17,8 @@ const {
 const {projectRows} = require('../canonical-main/observers/project-status.cjs');
 const {
   findStatusIssues,
+  auditStatusRetirements,
+  runStatusRetirementAudit,
   reconcileStatusIssue,
   runStatusOwnerTasks,
 } = require('../controller.cjs');
@@ -506,6 +508,59 @@ async function runStatusRefreshContracts() {
   assert.equal(pageCalls.length, 2, 'status discovery must paginate until a short page');
   assert.equal(pagedIdentity.canonical.number, 275);
   assert.deepEqual(pagedIdentity.duplicates.map((row) => row.number), [2317]);
+
+  const registryForAudit = {
+    plugins: {simcore: {}},
+    products: {termux: {}},
+  };
+  const auditRows = [
+    {number: 10, title: '[plugin-status:simcore]', state: 'open', labels: [status], body: generatedBody},
+    {number: 11, title: '[product-status:termux]', state: 'open', labels: [status], body: generatedBody},
+    {number: 12, title: '[plugin-status:retired-owner]', state: 'open', labels: [status], body: generatedBody},
+    {number: 13, title: '[plugin-status:retired-owner]', state: 'open', labels: [status], body: generatedBody},
+    {number: 14, title: '[plugin-status:closed-owner]', state: 'closed', labels: [status], body: generatedBody},
+    {number: 17, title: '[plugin-status:legacy_owner]', state: 'open', labels: [status], body: generatedBody},
+  ];
+  const auditAttention = auditStatusRetirements(auditRows, registryForAudit);
+  assert.equal(auditAttention.result, 'ATTENTION');
+  assert.deepEqual(auditAttention.candidates, [
+    {number: 12, kind: 'plugin', id: 'retired-owner', reason: 'OWNER_ABSENT_FROM_REGISTRY'},
+    {number: 13, kind: 'plugin', id: 'retired-owner', reason: 'OWNER_ABSENT_FROM_REGISTRY'},
+    {number: 17, kind: 'plugin', id: 'legacy_owner', reason: 'OWNER_ABSENT_FROM_REGISTRY'},
+  ]);
+  assert.deepEqual(auditAttention.ambiguous, []);
+  assert.deepEqual(auditAttention.authority, {
+    issueMutation: false,
+    registryMutation: false,
+    retirementAuthorized: false,
+  });
+
+  const auditUnknown = auditStatusRetirements([
+    ...auditRows,
+    {number: 15, title: '[plugin-status:missing-marker]', state: 'open', labels: [status], body: 'no generated marker'},
+    {number: 16, title: '[plugin-status:]', state: 'open', labels: [status], body: generatedBody},
+  ], registryForAudit);
+  assert.equal(auditUnknown.result, 'UNKNOWN');
+  assert.deepEqual(auditUnknown.ambiguous, [
+    {number: 15, reason: 'STATUS_MARKER_MISSING'},
+    {number: 16, reason: 'STATUS_IDENTITY_MALFORMED'},
+  ]);
+
+  const auditClear = auditStatusRetirements(auditRows.slice(0, 2), registryForAudit);
+  assert.equal(auditClear.result, 'CLEAR');
+  assert.deepEqual(auditClear.candidates, []);
+  assert.deepEqual(auditClear.ambiguous, []);
+
+  const auditApiCalls = [];
+  const auditRun = await runStatusRetirementAudit('hanmiyoo10-alt/-', registryForAudit, async (_repo, endpoint, options = {}) => {
+    auditApiCalls.push({endpoint, method: options.method || 'GET'});
+    if (endpoint.endsWith('page=1')) return auditRows;
+    throw new Error(`unexpected audit page: ${endpoint}`);
+  });
+  assert.equal(auditRun.result, 'ATTENTION');
+  assert.equal(auditApiCalls.length, 1);
+  assert.equal(auditApiCalls[0].method, 'GET');
+  assert.equal(auditApiCalls.some((call) => call.method !== 'GET'), false, 'retirement audit must never mutate status issues');
 
   const registryForStatus = {plugins: {}, products: {}, managedLabelPrefixes: ['plugin:', 'product:', 'scope:']};
   const updateCalls = [];

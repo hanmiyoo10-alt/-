@@ -314,6 +314,61 @@ async function findStatusIssues(repo, kind, id, apiFn = api) {
   return resolveStatusIssueIdentity(rows, kind, id);
 }
 
+function statusIssueLabels(issue) {
+  return (issue?.labels || []).map((label) => typeof label === 'string' ? label : label?.name).filter(Boolean);
+}
+
+function auditStatusRetirements(issues, registry) {
+  const registered = new Set([
+    ...Object.keys(registry.plugins || {}).map((id) => `plugin:${id}`),
+    ...Object.keys(registry.products || {}).map((id) => `product:${id}`),
+  ]);
+  const candidates = [];
+  const ambiguous = [];
+
+  for (const issue of issues || []) {
+    if (issue?.pull_request || issue?.state !== 'open') continue;
+    if (!statusIssueLabels(issue).includes('control-plane:status')) continue;
+
+    const match = String(issue.title || '').match(/^\[(plugin|product)-status:(.+)\]$/);
+    if (!match) {
+      ambiguous.push({number: issue.number ?? null, reason: 'STATUS_IDENTITY_MALFORMED'});
+      continue;
+    }
+    if (!String(issue.body || '').includes(STATUS_MARKER)) {
+      ambiguous.push({number: issue.number ?? null, reason: 'STATUS_MARKER_MISSING'});
+      continue;
+    }
+
+    const [, kind, id] = match;
+    if (!registered.has(`${kind}:${id}`)) {
+      candidates.push({number: issue.number ?? null, kind, id, reason: 'OWNER_ABSENT_FROM_REGISTRY'});
+    }
+  }
+
+  const byNumber = (a, b) => (a.number ?? Number.MAX_SAFE_INTEGER) - (b.number ?? Number.MAX_SAFE_INTEGER);
+  candidates.sort(byNumber);
+  ambiguous.sort(byNumber);
+  return {
+    schema: 'control-plane-status-retirement-audit.v1',
+    result: ambiguous.length ? 'UNKNOWN' : candidates.length ? 'ATTENTION' : 'CLEAR',
+    candidates,
+    ambiguous,
+    authority: {
+      issueMutation: false,
+      registryMutation: false,
+      retirementAuthorized: false,
+    },
+  };
+}
+
+async function runStatusRetirementAudit(repo, registry = loadRegistry(), apiFn = api) {
+  const issues = await listStatusIssues(repo, apiFn);
+  const receipt = auditStatusRetirements(issues, registry);
+  console.log(JSON.stringify(receipt, null, 2));
+  return receipt;
+}
+
 async function findExactStatusIssues(repo, kind, id, rawApiFn = rawApi) {
   const title = `[${kind}-status:${id}]`;
   const query = `repo:${repo} is:issue in:title "${title}" label:"control-plane:status"`;
@@ -439,6 +494,10 @@ async function main() {
   if (command === 'classify-pr') return classifyPr();
   if (command === 'classify-issue') return classifyIssue();
   if (command === 'refresh-status') return refreshStatus();
+  if (command === 'audit-status-retirements') {
+    const event = process.env.GITHUB_EVENT_PATH && fs.existsSync(process.env.GITHUB_EVENT_PATH) ? readEvent() : {};
+    return runStatusRetirementAudit(repoFrom(event));
+  }
   throw new Error(`unknown command: ${command}`);
 }
 
@@ -453,6 +512,8 @@ module.exports = {
   findStatusIssues,
   findExactStatusIssues,
   listStatusIssues,
+  auditStatusRetirements,
+  runStatusRetirementAudit,
   reconcileStatusIssue,
   runStatusOwnerTasks,
 };

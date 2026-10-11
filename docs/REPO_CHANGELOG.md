@@ -2433,3 +2433,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d978c6c8ab93393423accdc30cd3bdd5d42d5456)
 - Event ID: `bdae469c3e318edf604ff2abd84c01aaf122c550a50f2e932b782247155927ec`
 <!-- canonical-main-doc-promoted:bdae469c3e318edf604ff2abd84c01aaf122c550a50f2e932b782247155927ec -->
+
+### 2026-10-11 — refactor(termux): move screen on into product family (#3536)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `93aabcf254afa93458d6b3cf80ffc1a49802cc62`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/93aabcf254afa93458d6b3cf80ffc1a49802cc62)
+- Event ID: `5972624513bfb504a77589f3ba727e8cf3bc3db2ee79eb98f476a3529930a8c0`
+<!-- canonical-main-doc-promoted:5972624513bfb504a77589f3ba727e8cf3bc3db2ee79eb98f476a3529930a8c0 -->

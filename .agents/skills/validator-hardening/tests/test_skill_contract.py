@@ -150,11 +150,23 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "CONFLICT",
             "A review disposition does not rewrite the target validator's own result.",
             "stop with review disposition `UNKNOWN` and reason code `REVIEW_BLOCKED_UNKNOWN_OWNER`",
+            "reason code `REVIEW_BLOCKED_UNKNOWN_CLAIM`",
         ):
             self.assertIn(required, self.text)
 
     def test_no_frozen_commit_sha_in_skill(self):
         self.assertIsNone(re.search(r"\b[0-9a-f]{40}\b", self.text))
+
+    def test_review_receipt_requires_exact_source_identity(self):
+        for required in (
+            "exact commit object ID",
+            "worktree state as `CLEAN` or `DIRTY`",
+            "immutable target-byte digest or bounded diff identity",
+            "reviewed source identity (exact commit/object/artifact identity)",
+            "worktree state: CLEAN | DIRTY | NOT_APPLICABLE",
+            "dirty target digest or bounded diff identity when applicable",
+        ):
+            self.assertIn(required, self.text)
 
     def test_eval_fixture_family_is_complete(self):
         self.assertIsInstance(self.eval_payload, dict)
@@ -180,6 +192,21 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         )
         negative = next(case for case in self.evals if case["id"] == "narrow-validator-negative")
         self.assertIn("NOT_APPLICABLE_WITH_OWNER_BASIS", negative["expected_output"])
+        grounded_ids = {
+            "path-ref-adversarial",
+            "json-schema-adversarial",
+            "source-ast-adversarial",
+            "git-object-adversarial",
+            "narrow-validator-negative",
+        }
+        for case in self.evals:
+            if case["id"] in grounded_ids:
+                self.assertIn("Target:", case["prompt"])
+                self.assertIn("Owner:", case["prompt"])
+                self.assertIn("Claim:", case["prompt"])
+                self.assertTrue(
+                    "Guideline:" in case["prompt"] or "Guideline/contract:" in case["prompt"]
+                )
 
     def test_eval_fixture_matches_repository_output_normalizer(self):
         spec = importlib.util.spec_from_file_location("validator_hardening_prepare_eval", PREPARE_EVAL)

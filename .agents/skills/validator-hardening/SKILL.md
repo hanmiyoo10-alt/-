@@ -57,11 +57,21 @@ Identify exactly:
 - target-owned result vocabulary;
 - current tests and validation surfaces relevant to that claim.
 
-If ownership or the requested semantic claim cannot be established from current evidence, stop with review disposition `UNKNOWN` and reason code `REVIEW_BLOCKED_UNKNOWN_OWNER`. Do not continue by guessing an owner.
+If the owning project/domain cannot be established from current evidence, stop with review disposition `UNKNOWN` and reason code `REVIEW_BLOCKED_UNKNOWN_OWNER`. Do not continue by guessing an owner.
+
+If the owner is established but the requested semantic claim is missing, ambiguous, or cannot be bounded, stop with review disposition `UNKNOWN` and reason code `REVIEW_BLOCKED_UNKNOWN_CLAIM`. Do not mislabel claim ambiguity as an ownership failure.
 
 ### 2. Extract the current evidence contract
 
 Record the target's accepted input classes, evidence sources, explicit uncertainty behavior, effect boundary, and any owner-defined resource ceilings.
+
+Capture the exact reviewed source identity before interpreting results:
+
+- for Git-backed repository work, record the exact commit object ID that anchors the review;
+- record worktree state as `CLEAN` or `DIRTY`;
+- when reviewed target bytes are dirty relative to that commit, record an immutable target-byte digest or bounded diff identity in addition to the baseline commit because the commit alone does not identify the inspected bytes;
+- for a non-Git artifact, record the owner-defined immutable artifact digest or equivalent exact identity;
+- if the reviewed bytes cannot be attributed to an immutable identity, preserve `UNKNOWN` rather than claiming `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`.
 
 Separate:
 
@@ -193,7 +203,7 @@ For the review itself, use these advisory dispositions:
 
 - `HARDENING_REVIEW_COMPLETE` - all declared applicable dimensions were exercised with sufficient current evidence and no unresolved review gap remains;
 - `PARTIAL` - useful review evidence exists but one or more declared dimensions remain unexercised or insufficiently proven;
-- `UNKNOWN` - the requested review cannot be resolved from current owner/evidence; use a bounded reason code such as `REVIEW_BLOCKED_UNKNOWN_OWNER` when the owner itself cannot be established;
+- `UNKNOWN` - the requested review cannot be resolved from current owner/evidence; use bounded reason codes such as `REVIEW_BLOCKED_UNKNOWN_OWNER` for unavailable ownership and `REVIEW_BLOCKED_UNKNOWN_CLAIM` for an unresolved requested claim;
 - `CONFLICT` - current authoritative-looking owner evidence materially disagrees.
 
 A review disposition does not rewrite the target validator's own result.
@@ -209,6 +219,9 @@ target
 owning scope / guideline
 requested claim
 owner result vocabulary
+reviewed source identity (exact commit/object/artifact identity)
+worktree state: CLEAN | DIRTY | NOT_APPLICABLE
+dirty target digest or bounded diff identity when applicable
 applicability by dimension A-G
 cases actually exercised
 owner tests / commands actually used
@@ -225,6 +238,6 @@ Keep the receipt bounded. Point to larger logs or artifacts instead of embedding
 
 ## Completion criterion
 
-The skill is complete for one review only when current owner evidence has been read, applicability for all seven dimensions is explicit, exercised cases and unresolved gaps are separated, uncertainty has not been normalized away, and the final receipt states what it does and does not prove.
+The skill is complete for one review only when current owner evidence has been read, the reviewed bytes have an exact immutable source identity, worktree dirtiness is explicit, applicability for all seven dimensions is explicit, exercised cases and unresolved gaps are separated, uncertainty has not been normalized away, and the final receipt states what it does and does not prove.
 
 A clean review never certifies every future input or implementation as secure or correct.

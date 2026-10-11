@@ -17,6 +17,8 @@ const MODE = 'GITHUB_PROJECT_PLANNING_PROJECTION_WRITER';
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_PROJECT_ITEMS = 10000;
 const MAX_PROJECT_FIELDS = 1000;
+const MAX_PROJECT_ITEM_OUTPUT_BYTES = 32 * 1024 * 1024;
+const PROJECT_ITEM_JQ = '{totalCount,items:[.items[]|{id:.id,content:{type:.content.type,number:.content.number,repository:.content.repository,url:.content.url},status:.status,priority:.priority,area:.area,"work Type":.["work Type"]}]}';
 
 const FIELD_ORDER = Object.freeze([
   Object.freeze({key: 'status', display: 'Status'}),
@@ -82,13 +84,13 @@ function digest(value) {
   return sha256(JSON.stringify(deterministic(value)));
 }
 
-function defaultRunner(command, args, {cwd = ROOT} = {}) {
+function defaultRunner(command, args, {cwd = ROOT, maxBuffer = MAX_OUTPUT_BYTES} = {}) {
   const result = childProcess.spawnSync(command, args, {
     cwd,
     encoding: 'utf8',
     shell: false,
     env: process.env,
-    maxBuffer: MAX_OUTPUT_BYTES,
+    maxBuffer,
   });
   return {
     code: Number.isInteger(result.status) ? result.status : 1,
@@ -307,8 +309,8 @@ function normalizeProjectItemList(raw, issueNumber) {
   };
 }
 
-function runResult(runner, command, args) {
-  const result = runner(command, args, {cwd: ROOT});
+function runResult(runner, command, args, options = {}) {
+  const result = runner(command, args, {cwd: ROOT, ...options});
   if (!result || !Number.isInteger(result.code) || typeof result.stdout !== 'string') {
     return {ok: false, reasonCodes: ['RUNNER_RESULT_INVALID']};
   }
@@ -317,8 +319,8 @@ function runResult(runner, command, args) {
     : {ok: false, reasonCodes: ['READ_COMMAND_FAILED']};
 }
 
-function runJson(runner, command, args) {
-  const result = runResult(runner, command, args);
+function runJson(runner, command, args, options = {}) {
+  const result = runResult(runner, command, args, options);
   if (!result.ok) return result;
   const parsed = safeJson(result.stdout);
   return parsed.ok
@@ -397,10 +399,37 @@ function readEvidenceDefault(issueNumber, runner = defaultRunner) {
   const itemsRead = runJson(runner, 'gh', [
     'project', 'item-list', String(PROJECT_NUMBER), '--owner', PROJECT_OWNER,
     '--format', 'json', '--limit', String(MAX_PROJECT_ITEMS),
-  ]);
+    '--jq', PROJECT_ITEM_JQ,
+  ], {maxBuffer: MAX_PROJECT_ITEM_OUTPUT_BYTES});
   if (!itemsRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: itemsRead.reasonCodes};
   const item = normalizeProjectItemList(itemsRead.value, issueNumber);
   if (!item.ok) return {ok: false, status: 'BLOCKED', reasonCodes: item.reasonCodes};
+
+  const finalOpsRead = runJson(runner, 'gh', [
+    'issue', 'view', String(OPS_ISSUE), '--repo', REPO,
+    '--json', 'body,state,number,url',
+  ]);
+  if (!finalOpsRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: finalOpsRead.reasonCodes};
+  if (finalOpsRead.value?.number !== OPS_ISSUE
+      || finalOpsRead.value?.url !== expectedOpsUrl
+      || finalOpsRead.value?.state !== 'OPEN'
+      || typeof finalOpsRead.value?.body !== 'string') {
+    return {ok: false, status: 'BLOCKED', reasonCodes: ['OPS_CHANGED_DURING_BARRIER']};
+  }
+  const finalOps = parseOpsCapsule(finalOpsRead.value.body);
+  if (!finalOps.ok || digest(finalOps.value) !== digest(ops.value)) {
+    return {ok: false, status: 'BLOCKED', reasonCodes: ['OPS_CHANGED_DURING_BARRIER']};
+  }
+
+  const finalIssueRead = runJson(runner, 'gh', [
+    'issue', 'view', String(issueNumber), '--repo', REPO,
+    '--json', 'body,state,labels,title,number,url',
+  ]);
+  if (!finalIssueRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: finalIssueRead.reasonCodes};
+  const finalIssue = normalizeIssue(finalIssueRead.value, issueNumber);
+  if (!finalIssue.ok || digest(finalIssue.value) !== digest(issue.value)) {
+    return {ok: false, status: 'BLOCKED', reasonCodes: ['TARGET_ISSUE_CHANGED_DURING_BARRIER']};
+  }
 
   const finalMainRead = runResult(runner, 'gh', ['api', `repos/${REPO}/branches/main`, '--jq', '.commit.sha']);
   if (!finalMainRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: finalMainRead.reasonCodes};
@@ -641,8 +670,10 @@ module.exports = {
   FIELD_SCHEMA,
   ITEM_KEYS,
   MAX_PROJECT_FIELDS,
+  MAX_PROJECT_ITEM_OUTPUT_BYTES,
   MAX_PROJECT_ITEMS,
   MODE,
+  PROJECT_ITEM_JQ,
   OPS_ISSUE,
   PROJECT_ID,
   PROJECT_NUMBER,

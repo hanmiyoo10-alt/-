@@ -423,7 +423,8 @@ assert.equal(writer.buildItemEditArgs(42, {key: 'status', field: 'Status', desir
   const issueView = issueRaw();
   const itemList = itemListRaw([itemRaw()]);
   const calls = [];
-  const fakeRunner = (command, args) => {
+  let itemListOptions = null;
+  const fakeRunner = (command, args, options = {}) => {
     calls.push([command, ...args]);
     if (command === 'git' && args.includes('rev-parse')) return {code: 0, stdout: HEAD + '\n'};
     if (command === 'git' && args.includes('status')) return {code: 0, stdout: ''};
@@ -446,6 +447,7 @@ assert.equal(writer.buildItemEditArgs(42, {key: 'status', field: 'Status', desir
       return {code: 0, stdout: JSON.stringify(issueView)};
     }
     if (command === 'gh' && args[0] === 'project' && args[1] === 'item-list') {
+      itemListOptions = options;
       return {code: 0, stdout: JSON.stringify(itemList)};
     }
     return {code: 1, stdout: ''};
@@ -460,6 +462,10 @@ assert.equal(writer.buildItemEditArgs(42, {key: 'status', field: 'Status', desir
   const itemListCall = calls.find((args) => args[0] === 'gh' && args[1] === 'project' && args[2] === 'item-list');
   assert.ok(itemListCall);
   assert.ok(itemListCall.includes(String(writer.MAX_PROJECT_ITEMS)));
+  assert.ok(itemListCall.includes('--jq'));
+  assert.ok(itemListCall.includes(writer.PROJECT_ITEM_JQ));
+  assert.equal(itemListCall.includes('--field'), false);
+  assert.equal(itemListOptions.maxBuffer, writer.MAX_PROJECT_ITEM_OUTPUT_BYTES);
   const fieldListCall = calls.find((args) => args[0] === 'gh' && args[1] === 'project' && args[2] === 'field-list');
   assert.ok(fieldListCall);
   assert.ok(fieldListCall.includes(String(writer.MAX_PROJECT_FIELDS)));
@@ -498,8 +504,15 @@ assert.equal(writer.buildItemEditArgs(42, {key: 'status', field: 'Status', desir
   assert.ok(statusCall.includes('.github/plugin-control-plane/canonical-main/work-system/'));
 }
 
-function completeReadRunner({opsState = 'OPEN', finalMain = HEAD} = {}) {
+function completeReadRunner({
+  opsState = 'OPEN',
+  finalMain = HEAD,
+  finalOpsBody = null,
+  finalIssueBody = null,
+} = {}) {
   let apiReads = 0;
+  let opsReads = 0;
+  let issueReads = 0;
   const projectView = {
     id: writer.PROJECT_ID,
     title: writer.PROJECT_TITLE,
@@ -514,8 +527,9 @@ function completeReadRunner({opsState = 'OPEN', finalMain = HEAD} = {}) {
       return {code: 0, stdout: (apiReads === 1 ? HEAD : finalMain) + '\n'};
     }
     if (command === 'gh' && args[0] === 'issue' && args[2] === '485') {
+      opsReads += 1;
       return {code: 0, stdout: JSON.stringify({
-        body: opsBody(),
+        body: opsReads === 1 || finalOpsBody === null ? opsBody() : finalOpsBody,
         state: opsState,
         number: writer.OPS_ISSUE,
         url: `https://github.com/${writer.REPO}/issues/${writer.OPS_ISSUE}`,
@@ -528,7 +542,10 @@ function completeReadRunner({opsState = 'OPEN', finalMain = HEAD} = {}) {
       return {code: 0, stdout: JSON.stringify(schemaRaw())};
     }
     if (command === 'gh' && args[0] === 'issue' && args[2] === '42') {
-      return {code: 0, stdout: JSON.stringify(issueRaw())};
+      issueReads += 1;
+      return {code: 0, stdout: JSON.stringify(issueRaw(42, {
+        body: issueReads === 1 || finalIssueBody === null ? packetBody() : finalIssueBody,
+      }))};
     }
     if (command === 'gh' && args[0] === 'project' && args[1] === 'item-list') {
       return {code: 0, stdout: JSON.stringify(itemListRaw([itemRaw()]))};
@@ -542,6 +559,24 @@ function completeReadRunner({opsState = 'OPEN', finalMain = HEAD} = {}) {
   assert.equal(read.ok, false);
   assert.equal(read.status, 'BLOCKED');
   assert.ok(read.reasonCodes.includes('OPS_ISSUE_INVALID'));
+}
+
+{
+  const read = writer.readEvidenceDefault(42, completeReadRunner({
+    finalOpsBody: opsBody().replace('- STATE: `CLEAR`', '- STATE: `ATTENTION`'),
+  }));
+  assert.equal(read.ok, false);
+  assert.equal(read.status, 'BLOCKED');
+  assert.ok(read.reasonCodes.includes('OPS_CHANGED_DURING_BARRIER'));
+}
+
+{
+  const read = writer.readEvidenceDefault(42, completeReadRunner({
+    finalIssueBody: packetBody() + '\nchanged',
+  }));
+  assert.equal(read.ok, false);
+  assert.equal(read.status, 'BLOCKED');
+  assert.ok(read.reasonCodes.includes('TARGET_ISSUE_CHANGED_DURING_BARRIER'));
 }
 
 {

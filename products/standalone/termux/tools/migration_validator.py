@@ -14,6 +14,23 @@ from typing import Any
 
 
 SCHEMA = "termux-migration-plan.v1"
+MAX_CHANGED_FILES = 1000
+MAX_RENAME_CANDIDATES = 2000
+GIT_ENV_CLEAR = {
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_NAMESPACE",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+    "GIT_EXTERNAL_DIFF",
+    "GIT_DIFF_OPTS",
+    "GIT_CONFIG_COUNT",
+    "GIT_CONFIG_PARAMETERS",
+}
 OID_RE = re.compile(r"^[0-9a-fA-F]{40,64}$")
 PARENT_DEPTH_RE = re.compile(r"Path\(__file__\)\.resolve\(\)\.parents\[(\d+)\]")
 UPWARD_CHAIN_RE = re.compile(r"(?:\.\./){2,}")
@@ -31,22 +48,27 @@ def _decode_utf8(payload: bytes, context: str) -> str:
 
 
 def _norm_repo_path(value: str, field: str) -> str:
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str) or not value:
         raise ValidationUnknown(f"{field}: expected non-empty repository-relative path")
-    normalized = value.replace("\\", "/").strip()
-    if normalized.startswith("/"):
-        raise ValidationUnknown(f"{field}: absolute paths are not allowed: {value!r}")
-    raw = normalized.strip("/")
-    p = PurePosixPath(raw)
-    if p.is_absolute() or ".." in p.parts or "." in p.parts or not p.parts:
+    if value != value.strip() or "\\" in value:
+        raise ValidationUnknown(f"{field}: noncanonical repository path: {value!r}")
+    if value.startswith("/") or value.endswith("/"):
+        raise ValidationUnknown(f"{field}: noncanonical repository path: {value!r}")
+    p = PurePosixPath(value)
+    if (
+        p.is_absolute()
+        or ".." in p.parts
+        or "." in p.parts
+        or not p.parts
+        or p.as_posix() != value
+    ):
         raise ValidationUnknown(f"{field}: invalid repository-relative path: {value!r}")
-    return p.as_posix()
+    return value
 
 
 def _norm_scope(value: str, field: str) -> str:
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str) or not value:
         raise ValidationUnknown(f"{field}: expected non-empty scope")
-    value = value.replace("\\", "/").strip()
     if value.endswith("/**"):
         return _norm_repo_path(value[:-3], field) + "/**"
     return _norm_repo_path(value, field)
@@ -69,8 +91,14 @@ def _validate_plan(raw: Any) -> dict[str, Any]:
     scopes = [_norm_scope(x, "authorized_paths[]") for x in scopes]
 
     count = raw.get("expected_changed_file_count")
-    if not isinstance(count, int) or count < 1:
-        raise ValidationUnknown("expected_changed_file_count: expected positive integer")
+    if (
+        type(count) is not int
+        or count < 1
+        or count > MAX_CHANGED_FILES
+    ):
+        raise ValidationUnknown(
+            f"expected_changed_file_count: expected integer in 1..{MAX_CHANGED_FILES}"
+        )
 
     def rel_list(name: str) -> list[str]:
         value = raw.get(name, [])
@@ -98,8 +126,17 @@ def _validate_plan(raw: Any) -> dict[str, Any]:
 
 def _git(repo: Path, *args: str, text: bool = True) -> str | bytes:
     env = os.environ.copy()
+    for key in list(env):
+        if (
+            key in GIT_ENV_CLEAR
+            or key.startswith("GIT_CONFIG_KEY_")
+            or key.startswith("GIT_CONFIG_VALUE_")
+        ):
+            env.pop(key, None)
     env["GIT_NO_LAZY_FETCH"] = "1"
+    env["GIT_NO_REPLACE_OBJECTS"] = "1"
     env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_OPTIONAL_LOCKS"] = "0"
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
         stdout=subprocess.PIPE,
@@ -149,6 +186,8 @@ def _diff_changes(repo: Path, base_oid: str, head_oid: str) -> list[dict[str, An
             repo,
             "diff",
             "--find-renames=20%",
+            f"-l{MAX_RENAME_CANDIDATES}",
+            "--no-ext-diff",
             "--name-status",
             "-z",
             base_oid,
@@ -234,6 +273,19 @@ def _show_text(
         return None
 
 
+def _validate_repository(repo: Path) -> None:
+    if not repo.is_dir():
+        raise ValidationUnknown(f"repo_root: not a directory: {repo}")
+    inside = str(_git(repo, "rev-parse", "--is-inside-work-tree")).strip()
+    if inside != "true":
+        raise ValidationUnknown("repo_root: not a Git work tree")
+    top = Path(str(_git(repo, "rev-parse", "--show-toplevel")).strip()).resolve()
+    if top != repo.resolve():
+        raise ValidationUnknown(
+            f"repo_root: expected work-tree root {repo.resolve()}, observed {top}"
+        )
+
+
 def _scope_contains(scope: str, path: str) -> bool:
     if scope.endswith("/**"):
         root = scope[:-3].rstrip("/")
@@ -247,6 +299,7 @@ def _finding(kind: str, disposition: str, **extra: Any) -> dict[str, Any]:
 
 def validate(repo: Path, base: str, head: str, plan: dict[str, Any]) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
+    _validate_repository(repo)
     base_oid = _resolve_commit(repo, base, "base_ref")
     head_oid = _resolve_commit(repo, head, "head_ref")
     changes = _diff_changes(repo, base_oid, head_oid)
@@ -474,7 +527,6 @@ def main(argv: list[str] | None = None) -> int:
         repo = Path(args.repo_root).resolve()
         raw = json.loads(Path(args.plan).read_text(encoding="utf-8"))
         plan = _validate_plan(raw)
-        _git(repo, "rev-parse", "--is-inside-work-tree")
         result = validate(repo, args.base_ref, args.head_ref, plan)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 1 if result["status"] == "FAIL" else 0

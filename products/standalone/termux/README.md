@@ -13,7 +13,7 @@ This root establishes the repository-level standalone Termux product-family iden
 - Release branch: `UNKNOWN — not established yet`
 - Production manifest: `UNKNOWN — not established yet`
 
-This landing does not create or imply production, release, deployment, updater, device, runtime, or installation authority.
+This T0 landing is **not a production release**. It does not create or imply production, release, deployment, updater, device, runtime, or installation authority.
 
 ## Current source compatibility
 

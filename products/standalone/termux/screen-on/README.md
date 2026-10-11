@@ -21,23 +21,23 @@ The companion uses explicit user-approved capability pairing instead of reusing 
 The repo-owned companion is now the default route:
 
 ```bash
-python plugins/termux/screen-on/screen_on.py doctor
-python plugins/termux/screen-on/screen_on.py diagnostic
-python plugins/termux/screen-on/screen_on.py setup
+python products/standalone/termux/screen-on/screen_on.py doctor
+python products/standalone/termux/screen-on/screen_on.py diagnostic
+python products/standalone/termux/screen-on/screen_on.py setup
 # Open the companion app; it shows the one-time pairing code automatically, then:
-python plugins/termux/screen-on/screen_on.py --pair-code 12345678 setup
-python plugins/termux/screen-on/screen_on.py on
-python plugins/termux/screen-on/screen_on.py status
-python plugins/termux/screen-on/screen_on.py off
+python products/standalone/termux/screen-on/screen_on.py --pair-code 12345678 setup
+python products/standalone/termux/screen-on/screen_on.py on
+python products/standalone/termux/screen-on/screen_on.py status
+python products/standalone/termux/screen-on/screen_on.py off
 ```
 
 EONSOFT remains an explicit compatibility fallback:
 
 ```bash
-python plugins/termux/screen-on/screen_on.py --backend eonsoft doctor
-python plugins/termux/screen-on/screen_on.py --backend eonsoft setup
-python plugins/termux/screen-on/screen_on.py --backend eonsoft on
-python plugins/termux/screen-on/screen_on.py --backend eonsoft off
+python products/standalone/termux/screen-on/screen_on.py --backend eonsoft doctor
+python products/standalone/termux/screen-on/screen_on.py --backend eonsoft setup
+python products/standalone/termux/screen-on/screen_on.py --backend eonsoft on
+python products/standalone/termux/screen-on/screen_on.py --backend eonsoft off
 ```
 
 EONSOFT does not provide reliable `status` or startup `diagnostic` receipts through this controller.
@@ -51,7 +51,7 @@ On the tested Android 16 device, `pm path` / `cmd package` can transiently fail 
 ## Tests
 
 ```bash
-python -m unittest discover -s plugins/termux/screen-on/tests -p 'test_*.py'
+python -m unittest discover -s products/standalone/termux/screen-on/tests -p 'test_*.py'
 ```
 
 The companion workflow runs Python regression tests, Android unit tests, and a debug APK build.

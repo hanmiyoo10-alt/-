@@ -2417,3 +2417,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/071041f1b330e5e0e614baf6091be57eee5c5e9c)
 - Event ID: `429041afc4a221cc2c6ac1659b9bcbb0942931cd7ca7d40186fac49790fce35a`
 <!-- canonical-main-doc-promoted:429041afc4a221cc2c6ac1659b9bcbb0942931cd7ca7d40186fac49790fce35a -->
+
+### 2026-10-11 — refactor(termux): move response watch into product family (#3533)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `78b407697e64b6e05fe24b5a68917c8d775b731f`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/78b407697e64b6e05fe24b5a68917c8d775b731f)
+- Event ID: `27ab799285c267953b7b16561a05c245ff7c85d9ac3f270e3b47e01909d3f769`
+<!-- canonical-main-doc-promoted:27ab799285c267953b7b16561a05c245ff7c85d9ac3f270e3b47e01909d3f769 -->

@@ -10,62 +10,97 @@ TOOLS = Path(__file__).resolve().parents[1]
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
-from workflow_path_depth import SCHEMA, check_batch, check_reference
+from workflow_path_depth import SCHEMA, check_batch
 
 
 class WorkflowPathDepthTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.repo_root = Path(self.temp.name)
-        for rel in (
-            "plugins/termux/large-doc-editor",
-            "products/standalone/termux/large-doc-editor",
-            "plugins/termux/example",
-            "products/termux/example",
-            "a",
-            "b",
-        ):
-            (self.repo_root / rel).mkdir(parents=True, exist_ok=True)
+        self.repo_root = Path(self.temp.name) / "repo"
+        self.repo_root.mkdir()
+        self.git("init", "-q")
+        self.git("config", "user.name", "test")
+        self.git("config", "user.email", "test@example.invalid")
+
+        self.write("plugins/termux/large-doc-editor/anchor.txt", "old\n")
+        self.write("plugins/termux/example/anchor.txt", "old\n")
+        self.write("a/anchor.txt", "old\n")
+        self.write(".github/tooling/ci-summary/phase_receipt.py", "print('receipt')\n")
+        self.write("shared/helper.py", "print('shared')\n")
+        self.commit("old")
+        self.old_oid = self.rev()
+
+        self.remove_tree("plugins/termux/large-doc-editor")
+        self.remove_tree("plugins/termux/example")
+        self.write("products/standalone/termux/large-doc-editor/anchor.txt", "new\n")
+        self.write("products/termux/example/anchor.txt", "new\n")
+        self.write("b/anchor.txt", "new\n")
+        self.commit("new")
+        self.new_oid = self.rev()
 
     def tearDown(self):
         self.temp.cleanup()
 
-    def tree_proof(self, path):
-        parts = path.split("/")
-        return [
-            {
-                "path": "/".join(parts[: index + 1]),
-                "mode": "040000",
-                "type": "tree",
-            }
-            for index in range(len(parts))
-        ]
-
-    def check(self, item):
-        return check_reference(
-            item,
-            self.repo_root,
-            os.pathconf(self.repo_root, "PC_NAME_MAX"),
+    def git(self, *args, check=True):
+        return subprocess.run(
+            ["git", "-C", str(self.repo_root), *args],
+            check=check,
+            capture_output=True,
+            text=True,
         )
 
-    def batch(self, request):
-        payload = dict(request)
-        payload.setdefault("repo_root", str(self.repo_root))
-        return check_batch(payload)
+    def rev(self):
+        return self.git("rev-parse", "HEAD").stdout.strip()
+
+    def write(self, rel, text):
+        path = self.repo_root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    def remove_tree(self, rel):
+        path = self.repo_root / rel
+        if not path.exists() and not path.is_symlink():
+            return
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+            return
+        for child in sorted(path.rglob("*"), reverse=True):
+            if child.is_symlink() or child.is_file():
+                child.unlink()
+            else:
+                child.rmdir()
+        path.rmdir()
+
+    def commit(self, message):
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", message)
+
+    def batch(self, references, old_ref=None, new_ref=None):
+        return check_batch({
+            "schema": SCHEMA,
+            "repo_root": str(self.repo_root),
+            "old_ref": old_ref or self.old_oid,
+            "new_ref": new_ref or self.new_oid,
+            "references": references,
+        })
+
+    def check(self, item, old_ref=None, new_ref=None):
+        out = self.batch([item], old_ref=old_ref, new_ref=new_ref)
+        self.assertEqual(len(out["results"]), 1)
+        return out["results"][0]
 
     def t5(self, candidate="../../../../.github/tooling/ci-summary/phase_receipt.py"):
-        old_dir = "plugins/termux/large-doc-editor"
-        new_dir = "products/standalone/termux/large-doc-editor"
         return {
-            "old_working_dir": old_dir,
-            "new_working_dir": new_dir,
+            "old_working_dir": "plugins/termux/large-doc-editor",
+            "new_working_dir": "products/standalone/termux/large-doc-editor",
             "old_reference": "../../../.github/tooling/ci-summary/phase_receipt.py",
             "candidate_new_reference": candidate,
-            "old_working_dir_tree_proof": self.tree_proof(old_dir),
-            "new_working_dir_tree_proof": self.tree_proof(new_dir),
         }
 
-    def test_t5_one_level_deeper_preserves_same_target(self):
+    def test_t5_removed_old_directory_uses_authenticated_old_tree(self):
+        self.assertFalse(
+            (self.repo_root / "plugins/termux/large-doc-editor").exists()
+        )
         out = self.check(self.t5())
         self.assertEqual(out["status"], "PASS")
         self.assertEqual(
@@ -73,6 +108,7 @@ class WorkflowPathDepthTests(unittest.TestCase):
             ".github/tooling/ci-summary/phase_receipt.py",
         )
         self.assertEqual(out["working_dir_depth_delta"], 1)
+        self.assertEqual(out["tree_evidence"], "AUTHENTICATED_LOCAL_GIT")
         self.assertEqual(
             out["expected_new_reference"],
             "../../../../.github/tooling/ci-summary/phase_receipt.py",
@@ -84,21 +120,13 @@ class WorkflowPathDepthTests(unittest.TestCase):
         ))
         self.assertEqual(out["status"], "FAIL")
         self.assertEqual(out["reason"], "RELOCATED_REFERENCE_MISMATCH")
-        self.assertEqual(
-            out["expected_new_reference"],
-            "../../../../.github/tooling/ci-summary/phase_receipt.py",
-        )
 
     def test_same_depth_move_can_preserve_relative_depth(self):
-        old_dir = "plugins/termux/example"
-        new_dir = "products/termux/example"
         out = self.check({
-            "old_working_dir": old_dir,
-            "new_working_dir": new_dir,
-            "old_reference": "../../../.github/tooling/helper.py",
-            "candidate_new_reference": "../../../.github/tooling/helper.py",
-            "old_working_dir_tree_proof": self.tree_proof(old_dir),
-            "new_working_dir_tree_proof": self.tree_proof(new_dir),
+            "old_working_dir": "plugins/termux/example",
+            "new_working_dir": "products/termux/example",
+            "old_reference": "../../../shared/helper.py",
+            "candidate_new_reference": "../../../shared/helper.py",
         })
         self.assertEqual(out["status"], "PASS")
         self.assertEqual(out["working_dir_depth_delta"], 0)
@@ -109,8 +137,6 @@ class WorkflowPathDepthTests(unittest.TestCase):
             "new_working_dir": "b",
             "old_reference": "../../outside",
             "candidate_new_reference": "../outside",
-            "old_working_dir_tree_proof": self.tree_proof("a"),
-            "new_working_dir_tree_proof": self.tree_proof("b"),
         })
         self.assertEqual(out["status"], "UNKNOWN")
 
@@ -137,55 +163,13 @@ class WorkflowPathDepthTests(unittest.TestCase):
             with self.subTest(case=case):
                 self.assertEqual(self.check(case)["status"], "UNKNOWN")
 
-    def test_nul_in_reference_or_working_directory_is_unknown(self):
+    def test_nul_and_surrogate_inputs_are_unknown(self):
         nul = chr(0)
-        cases = [
-            {**self.t5(), "old_reference": "helper" + nul + ".py"},
-            {**self.t5(), "candidate_new_reference": "helper" + nul + ".py"},
-            {
-                **self.t5(),
-                "old_working_dir": "plugins/termux" + nul + "/large-doc-editor",
-            },
-        ]
-        for case in cases:
-            with self.subTest(case=case):
-                self.assertEqual(self.check(case)["status"], "UNKNOWN")
-
-    def test_symlink_or_incomplete_tree_proof_is_unknown(self):
-        symlinked = self.t5()
-        symlinked["old_working_dir_tree_proof"][1] = {
-            "path": "plugins/termux",
-            "mode": "120000",
-            "type": "blob",
-        }
-        self.assertEqual(self.check(symlinked)["status"], "UNKNOWN")
-
-        incomplete = self.t5()
-        incomplete["new_working_dir_tree_proof"] = incomplete[
-            "new_working_dir_tree_proof"
-        ][:-1]
-        self.assertEqual(self.check(incomplete)["status"], "UNKNOWN")
-
-    def test_removed_old_directory_can_use_pre_move_tree_proof(self):
-        old_dir = self.repo_root / "plugins/termux/large-doc-editor"
-        old_dir.rmdir()
-        out = self.check(self.t5())
-        self.assertEqual(out["status"], "PASS")
-
-    def test_unpaired_surrogate_in_path_input_is_unknown(self):
         surrogate = chr(0xD800)
         cases = [
-            {**self.t5(), "old_reference": "../helper" + surrogate + ".py"},
-            {
-                **self.t5(),
-                "candidate_new_reference": "../helper" + surrogate + ".py",
-            },
-            {
-                **self.t5(),
-                "new_working_dir": "products/standalone/termux/"
-                + surrogate
-                + "large-doc-editor",
-            },
+            {**self.t5(), "old_reference": "helper" + nul + ".py"},
+            {**self.t5(), "candidate_new_reference": "../x" + surrogate},
+            {**self.t5(), "new_working_dir": "products/" + surrogate + "/x"},
         ]
         for case in cases:
             with self.subTest(case=case):
@@ -203,31 +187,89 @@ class WorkflowPathDepthTests(unittest.TestCase):
     def test_component_exceeding_filesystem_name_max_is_unknown(self):
         name_max = os.pathconf(self.repo_root, "PC_NAME_MAX")
         if name_max >= 512:
-            self.skipTest("filesystem NAME_MAX is outside this bounded fixture")
+            self.skipTest("filesystem NAME_MAX outside bounded fixture")
         too_long = "a" * (name_max + 1)
-        cases = [
+        for case in (
             {**self.t5(), "old_reference": "../../" + too_long},
-            {
-                **self.t5(),
-                "candidate_new_reference": "../../../" + too_long,
-            },
-        ]
-        for case in cases:
+            {**self.t5(), "candidate_new_reference": "../../../" + too_long},
+        ):
             with self.subTest(case=case):
                 self.assertEqual(self.check(case)["status"], "UNKNOWN")
 
     def test_multibyte_component_uses_encoded_byte_limit(self):
         name_max = os.pathconf(self.repo_root, "PC_NAME_MAX")
-        char = "é"
-        count = name_max // len(char.encode("utf-8")) + 1
-        component = char * count
+        component = "é" * (name_max // 2 + 1)
         if len(component) > 512:
-            self.skipTest("fixture exceeds bounded character input")
-        case = {**self.t5(), "old_reference": "../../" + component}
-        self.assertEqual(self.check(case)["status"], "UNKNOWN")
+            self.skipTest("fixture exceeds character bound")
+        self.assertEqual(
+            self.check({**self.t5(), "old_reference": "../../" + component})[
+                "status"
+            ],
+            "UNKNOWN",
+        )
+
+    def test_authenticated_working_directory_symlink_is_unknown(self):
+        self.git("checkout", "-q", self.old_oid)
+        self.remove_tree("plugins/termux/large-doc-editor")
+        (self.repo_root / "actual/old").mkdir(parents=True)
+        (self.repo_root / "plugins/termux/large-doc-editor").symlink_to(
+            self.repo_root / "actual/old",
+            target_is_directory=True,
+        )
+        self.commit("old-symlink")
+        symlink_old = self.rev()
+        self.git("checkout", "-q", self.new_oid)
+        out = self.check(self.t5(), old_ref=symlink_old)
+        self.assertEqual(out["status"], "UNKNOWN")
+
+    def test_authenticated_target_parent_symlink_is_unknown(self):
+        self.git("checkout", "-q", self.old_oid)
+        self.remove_tree("shared")
+        (self.repo_root / "real-shared").mkdir()
+        self.write("real-shared/helper.py", "print('real')\n")
+        (self.repo_root / "shared").symlink_to(
+            self.repo_root / "real-shared",
+            target_is_directory=True,
+        )
+        self.write("old/work/anchor.txt", "x\n")
+        self.commit("target-symlink")
+        symlink_old = self.rev()
+
+        self.git("checkout", "-q", self.new_oid)
+        self.write("new/work/anchor.txt", "x\n")
+        self.commit("new-work")
+        new_work = self.rev()
+
+        item = {
+            "old_working_dir": "old/work",
+            "new_working_dir": "new/work",
+            "old_reference": "../../shared/helper.py",
+            "candidate_new_reference": "../../shared/helper.py",
+        }
+        out = self.check(item, old_ref=symlink_old, new_ref=new_work)
+        self.assertEqual(out["status"], "UNKNOWN")
+
+    def test_missing_target_in_new_tree_is_unknown(self):
+        self.git("checkout", "-q", self.new_oid)
+        (self.repo_root / "shared/helper.py").unlink()
+        self.commit("remove-target")
+        missing_new = self.rev()
+        out = self.check({
+            "old_working_dir": "plugins/termux/example",
+            "new_working_dir": "products/termux/example",
+            "old_reference": "../../../shared/helper.py",
+            "candidate_new_reference": "../../../shared/helper.py",
+        }, new_ref=missing_new)
+        self.assertEqual(out["status"], "UNKNOWN")
 
     def test_candidate_that_targets_wrong_location_fails(self):
-        out = self.check(self.t5("../../../../docs/not-the-helper.py"))
+        self.write("docs/not-the-helper.py", "x\n")
+        self.commit("wrong-target-exists")
+        wrong_new = self.rev()
+        out = self.check(
+            self.t5("../../../../docs/not-the-helper.py"),
+            new_ref=wrong_new,
+        )
         self.assertEqual(out["status"], "FAIL")
         self.assertNotEqual(
             out["candidate_resolved_target"],
@@ -235,17 +277,15 @@ class WorkflowPathDepthTests(unittest.TestCase):
         )
 
     def test_batch_preserves_input_order_and_aggregate_status(self):
-        request = {
-            "schema": SCHEMA,
-            "references": [
-                self.t5(),
-                self.t5("../../../.github/tooling/ci-summary/phase_receipt.py"),
-            ],
-        }
+        request = [
+            self.t5(),
+            self.t5("../../../.github/tooling/ci-summary/phase_receipt.py"),
+        ]
         first = self.batch(request)
         second = self.batch(json.loads(json.dumps(request)))
         self.assertEqual(first, second)
         self.assertEqual(first["status"], "FAIL")
+        self.assertTrue(first["git_read_only_used"])
         for field in (
             "mutation_authorized",
             "execution_authorized",
@@ -258,29 +298,29 @@ class WorkflowPathDepthTests(unittest.TestCase):
             "device_authorized",
         ):
             self.assertFalse(first[field])
-        self.assertEqual(
-            [row["candidate_new_reference"] for row in first["results"]],
-            [
-                "../../../../.github/tooling/ci-summary/phase_receipt.py",
-                "../../../.github/tooling/ci-summary/phase_receipt.py",
-            ],
-        )
 
-    def test_batch_shape_and_limit_fail_closed(self):
-        self.assertEqual(self.batch({"schema": SCHEMA})["status"], "UNKNOWN")
+    def test_batch_shape_ref_and_limit_fail_closed(self):
+        self.assertEqual(check_batch({"schema": SCHEMA})["status"], "UNKNOWN")
         self.assertEqual(
-            self.batch({"schema": SCHEMA, "references": []})["status"],
+            check_batch({
+                "schema": SCHEMA,
+                "repo_root": str(self.repo_root),
+                "old_ref": self.old_oid,
+                "new_ref": self.new_oid,
+                "references": [],
+            })["status"],
             "UNKNOWN",
         )
+        self.assertEqual(self.batch([self.t5()] * 65)["status"], "UNKNOWN")
         self.assertEqual(
-            self.batch({"schema": SCHEMA, "references": [self.t5()] * 65})["status"],
+            self.batch([self.t5()], old_ref="-bad-ref")["status"],
             "UNKNOWN",
         )
 
     def test_cli_rejects_duplicate_keys_and_oversized_input(self):
         duplicate = (
             '{"schema":"termux-workflow-path-depth.v1",'
-            '"schema":"termux-workflow-path-depth.v1","references":[]}'
+            '"schema":"termux-workflow-path-depth.v1"}'
         )
         run = subprocess.run(
             [sys.executable, str(TOOLS / "workflow_path_depth.py")],
@@ -311,6 +351,8 @@ class WorkflowPathDepthTests(unittest.TestCase):
         request = {
             "schema": SCHEMA,
             "repo_root": str(self.repo_root),
+            "old_ref": self.old_oid,
+            "new_ref": self.new_oid,
             "references": [self.t5()],
         }
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
@@ -328,8 +370,28 @@ class WorkflowPathDepthTests(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
         parsed = json.loads(run.stdout)
         self.assertEqual(parsed["status"], "PASS")
+        self.assertEqual(parsed["old_oid"], self.old_oid)
+        self.assertEqual(parsed["new_oid"], self.new_oid)
         self.assertFalse(parsed["mutation_authorized"])
         self.assertFalse(parsed["network_used"])
+
+    def test_ambient_git_repository_overrides_do_not_change_evidence(self):
+        previous = {
+            key: os.environ.get(key)
+            for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_OBJECT_DIRECTORY")
+        }
+        try:
+            os.environ["GIT_DIR"] = str(self.repo_root / "missing.git")
+            os.environ["GIT_WORK_TREE"] = str(self.repo_root / "missing-work")
+            os.environ["GIT_OBJECT_DIRECTORY"] = str(self.repo_root / "missing-objects")
+            out = self.batch([self.t5()])
+        finally:
+            for key, value in previous.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+        self.assertEqual(out["status"], "PASS")
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 
 const childProcess = require('node:child_process');
 
-const SCHEMA = 'mcl-l-rdc-session-evidence.v1';
+const SCHEMA = 'mcl-l-rdc-session-evidence.v2';
 const OWNER = 'mcl-l-rdc-session-evidence';
 const POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
 const AGENT_PACKAGE_MARKER = '@wonderwhy-er/desktop-commander';

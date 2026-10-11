@@ -1,4 +1,4 @@
-# MCL L RDC session evidence v1
+# MCL L RDC session evidence v2
 
 `mcl-l-rdc-session-evidence` is a read-only Windows-side evidence owner for one
 bounded question on the physical L route:
@@ -105,11 +105,14 @@ For alternate-agent admission:
 Command-line readability is retained only as internal evidence and is never
 exposed in the public receipt.
 
-Therefore v1 `ABSENT` is deliberately stronger and fail-closed: the current
+Therefore v2 `ABSENT` is deliberately stronger and fail-closed: the current
 verified agent must be the only safely eligible/plausible Desktop Commander
 agent in the bounded table, with no peer shell or ambiguous direct child.
 Historical pre-repair ABSENT receipts remain agent-local historical evidence
-and must not be reinterpreted as global absence.
+and must not be reinterpreted as global absence. In particular, every historical
+`mcl-l-rdc-session-evidence.v1` receipt is incompatible with v2 admission and
+must remain historical only; only a receipt produced by the v2 owner can satisfy
+the repaired producer-generation contract.
 
 There is no elapsed-time, idle-time, latest-wins, PID-age, shell-duration, or
 ownership inference.
@@ -119,7 +122,7 @@ ownership inference.
 Normal output is bounded to:
 
 ```text
-schema=mcl-l-rdc-session-evidence.v1
+schema=mcl-l-rdc-session-evidence.v2
 status=<PASS|UNKNOWN>
 executor=L
 sessionState=<ABSENT|PRESENT|UNKNOWN>

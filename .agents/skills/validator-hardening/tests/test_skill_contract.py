@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import unittest
@@ -8,12 +9,15 @@ from pathlib import Path
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 SKILL = SKILL_ROOT / "SKILL.md"
 EVALS = SKILL_ROOT / "evals" / "evals.json"
+REPO_ROOT = SKILL_ROOT.parents[2]
+PREPARE_EVAL = REPO_ROOT / "tools" / "agent-skill-eval" / "prepare_eval.py"
 
 
 class ValidatorHardeningSkillContractTests(unittest.TestCase):
     def setUp(self):
         self.text = SKILL.read_text(encoding="utf-8")
-        self.evals = json.loads(EVALS.read_text(encoding="utf-8"))
+        self.eval_payload = json.loads(EVALS.read_text(encoding="utf-8"))
+        self.evals = self.eval_payload["cases"]
 
     def test_frontmatter_name_matches_directory_and_description_is_bounded(self):
         self.assertTrue(self.text.startswith("---\n"))
@@ -145,6 +149,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "UNKNOWN",
             "CONFLICT",
             "A review disposition does not rewrite the target validator's own result.",
+            "stop with review disposition `UNKNOWN` and reason code `REVIEW_BLOCKED_UNKNOWN_OWNER`",
         ):
             self.assertIn(required, self.text)
 
@@ -152,18 +157,40 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         self.assertIsNone(re.search(r"\b[0-9a-f]{40}\b", self.text))
 
     def test_eval_fixture_family_is_complete(self):
+        self.assertIsInstance(self.eval_payload, dict)
+        self.assertEqual(self.eval_payload.get("skill"), "validator-hardening")
         self.assertIsInstance(self.evals, list)
         ids = {case["id"] for case in self.evals}
         self.assertTrue(
             {
                 "path-ref-adversarial",
                 "json-schema-adversarial",
+                "source-ast-adversarial",
                 "git-object-adversarial",
                 "narrow-validator-negative",
+                "unknown-owner-negative",
             }.issubset(ids)
         )
+        ast_case = next(case for case in self.evals if case["id"] == "source-ast-adversarial")
+        self.assertTrue(
+            any(
+                "computed" in assertion.lower() or "alias" in assertion.lower()
+                for assertion in ast_case["assertions"]
+            )
+        )
         negative = next(case for case in self.evals if case["id"] == "narrow-validator-negative")
-        self.assertFalse(negative["should_trigger_broadening"])
+        self.assertIn("NOT_APPLICABLE_WITH_OWNER_BASIS", negative["expected_output"])
+
+    def test_eval_fixture_matches_repository_output_normalizer(self):
+        spec = importlib.util.spec_from_file_location("validator_hardening_prepare_eval", PREPARE_EVAL)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        normalized = module._normalize_output_fixture(self.eval_payload, "validator-hardening")
+        self.assertEqual(len(normalized), len(self.evals))
+        self.assertTrue(all(case["assertions"] for case in normalized))
+        self.assertTrue(all(case["expected_output"] for case in normalized))
 
     def test_no_runtime_helper_is_required(self):
         self.assertFalse((SKILL_ROOT / "scripts").exists())

@@ -57,7 +57,7 @@ Identify exactly:
 - target-owned result vocabulary;
 - current tests and validation surfaces relevant to that claim.
 
-If ownership or the requested semantic claim cannot be established from current evidence, stop with `REVIEW_BLOCKED_UNKNOWN_OWNER`. Do not continue by guessing an owner.
+If ownership or the requested semantic claim cannot be established from current evidence, stop with review disposition `UNKNOWN` and reason code `REVIEW_BLOCKED_UNKNOWN_OWNER`. Do not continue by guessing an owner.
 
 ### 2. Extract the current evidence contract
 
@@ -193,7 +193,7 @@ For the review itself, use these advisory dispositions:
 
 - `HARDENING_REVIEW_COMPLETE` - all declared applicable dimensions were exercised with sufficient current evidence and no unresolved review gap remains;
 - `PARTIAL` - useful review evidence exists but one or more declared dimensions remain unexercised or insufficiently proven;
-- `UNKNOWN` - the requested review cannot be resolved from current owner/evidence;
+- `UNKNOWN` - the requested review cannot be resolved from current owner/evidence; use a bounded reason code such as `REVIEW_BLOCKED_UNKNOWN_OWNER` when the owner itself cannot be established;
 - `CONFLICT` - current authoritative-looking owner evidence materially disagrees.
 
 A review disposition does not rewrite the target validator's own result.
@@ -214,7 +214,7 @@ cases actually exercised
 owner tests / commands actually used
 observations with source/evidence basis
 PROVEN_GAP findings, if any
-UNKNOWN / unresolved gaps
+UNKNOWN / unresolved gaps and reason codes
 resource bounds used
 authority/effect denials checked
 review disposition: HARDENING_REVIEW_COMPLETE | PARTIAL | UNKNOWN | CONFLICT

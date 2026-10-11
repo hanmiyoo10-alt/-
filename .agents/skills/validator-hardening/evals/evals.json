@@ -1,119 +1,75 @@
-[
-  {
-    "id": "path-ref-adversarial",
-    "should_trigger_broadening": true,
-    "target_kind": "path/ref validator",
-    "prompt": "Review a read-only Git/path validator that already handles normal repository-relative paths. Harden it against malformed refs and hostile path text without changing its owner or adding a writer.",
-    "expected_dimensions": [
-      "A",
-      "E",
-      "F",
-      "G"
-    ],
-    "expected_checks": [
-      "empty or whitespace input",
-      "NUL/control characters",
-      "Unicode surrogate or normalization-sensitive input",
-      "absolute/traversal/non-canonical path",
-      "separator/platform variants",
-      "option-like ref beginning with '-'",
-      "character versus encoded-byte/component ceilings",
-      "missing or ambiguous evidence remains UNKNOWN"
-    ],
-    "must_not": [
-      "auto-rewrite paths",
-      "invent repository state",
-      "replace Required"
-    ]
-  },
-  {
-    "id": "json-schema-adversarial",
-    "should_trigger_broadening": true,
-    "target_kind": "JSON/schema classifier",
-    "prompt": "Review a classifier that consumes a bounded JSON fixture and distinguishes live from frozen registry evidence. Find parser and schema edge classes without changing registry authority.",
-    "expected_dimensions": [
-      "B",
-      "E",
-      "F",
-      "G"
-    ],
-    "expected_checks": [
-      "duplicate JSON keys when parser behavior matters",
-      "wrong scalar/container types",
-      "oversize document/array/string",
-      "deep nesting/recursion",
-      "unknown/additional fields",
-      "decode or parser failure",
-      "bounded failure provenance"
-    ],
-    "must_not": [
-      "normalize malformed JSON into PASS",
-      "rewrite registry data",
-      "create a second truth store"
-    ]
-  },
-  {
-    "id": "git-object-adversarial",
-    "should_trigger_broadening": true,
-    "target_kind": "Git object/evidence classifier",
-    "prompt": "Review a Git-backed read-only classifier that resolves candidate objects and path identity. Stress object-type and availability ambiguity while preserving fail-closed semantics.",
-    "expected_dimensions": [
-      "D",
-      "E",
-      "F",
-      "G"
-    ],
-    "expected_checks": [
-      "missing/unavailable object",
-      "blob versus tree",
-      "symlink",
-      "gitlink",
-      "malformed or unsupported object id",
-      "partial clone/lazy availability",
-      "replacement object behavior",
-      "ambient Git repository/config/pathspec/trace environment poisoning"
-    ],
-    "must_not": [
-      "fetch missing objects implicitly unless owner authorizes it",
-      "treat SHA-shaped text as object proof",
-      "mutate Git"
-    ]
-  },
-  {
-    "id": "narrow-validator-negative",
-    "should_trigger_broadening": false,
-    "target_kind": "narrow enum validator",
-    "prompt": "A small pure validator checks one closed enum with exhaustive owner tests and no filesystem, JSON, AST, Git, subprocess, or external evidence. Review only whether its current contract is adequately covered.",
-    "expected_dimensions": [
-      "E",
-      "F",
-      "G"
-    ],
-    "expected_checks": [
-      "mark unrelated dimensions NOT_APPLICABLE_WITH_OWNER_BASIS",
-      "preserve exhaustive owner tests",
-      "avoid unrelated repository archaeology"
-    ],
-    "must_not": [
-      "force Git object tests",
-      "force Hypothesis",
-      "add filesystem or network checks",
-      "broaden the validator just because the skill lists more dimensions"
-    ]
-  },
-  {
-    "id": "unknown-owner-negative",
-    "should_trigger_broadening": false,
-    "target_kind": "unowned classifier claim",
-    "prompt": "Harden this classifier, but no current source path, project owner, guideline, or result vocabulary can be established.",
-    "expected_dimensions": [],
-    "expected_checks": [
-      "stop with REVIEW_BLOCKED_UNKNOWN_OWNER",
-      "do not guess an owner"
-    ],
-    "must_not": [
-      "invent PASS/FAIL semantics",
-      "write a replacement validator"
-    ]
-  }
-]
+{
+  "skill": "validator-hardening",
+  "cases": [
+    {
+      "id": "path-ref-adversarial",
+      "prompt": "Review a read-only Git/path validator that already handles normal repository-relative paths. Harden it against malformed refs and hostile path text without changing its owner or adding a writer.",
+      "expected_output": "A bounded hardening review that exercises malformed and ambiguous path/ref classes, preserves owner-defined FAIL versus UNKNOWN semantics, and performs no mutation.",
+      "assertions": [
+        "Checks empty/whitespace, NUL/control characters, Unicode surrogate or normalization-sensitive input.",
+        "Checks absolute, traversal, non-canonical, separator/platform variants and option-like refs.",
+        "Distinguishes character limits from encoded-byte or path-component ceilings when owner-defined.",
+        "Keeps missing or ambiguous evidence UNKNOWN rather than manufacturing PASS or FAIL.",
+        "Does not auto-rewrite paths, invent repository state, or replace Required."
+      ]
+    },
+    {
+      "id": "json-schema-adversarial",
+      "prompt": "Review a classifier that consumes a bounded JSON fixture and distinguishes live from frozen registry evidence. Find parser and schema edge classes without changing registry authority.",
+      "expected_output": "A bounded structured-data hardening review covering parser ambiguity, duplicate keys, malformed shapes, size/depth limits, additional fields, and uncertainty without rewriting registry truth.",
+      "assertions": [
+        "Checks duplicate JSON keys when parser behavior matters.",
+        "Checks wrong scalar/container types, malformed shapes, oversize documents/fields and deep nesting.",
+        "Checks unknown/additional fields according to the owning schema and decode/parser failures.",
+        "Keeps parser ambiguity and insufficient evidence explicit rather than normalizing them into PASS.",
+        "Does not rewrite registry data or create a second truth store."
+      ]
+    },
+    {
+      "id": "source-ast-adversarial",
+      "prompt": "Review a read-only source classifier that currently matches literal parent-depth and helper-reference expressions. Harden its source/AST handling without changing the classifier owner or adding an automatic rewriter.",
+      "expected_output": "A source/AST hardening review that treats computed expressions, aliasing, indirection, generated forms, unsupported syntax and parse failures as explicit evidence classes rather than assuming unmatched source is safe.",
+      "assertions": [
+        "Exercises computed or dynamic expressions that defeat literal matching.",
+        "Checks aliasing, indirection, imports or generated forms when relevant to the owner contract.",
+        "Treats unsupported syntax and parse failures as explicit uncertainty or owner-defined failure, never as safe-by-no-match.",
+        "Separates semantically similar forms whose source text differs.",
+        "Does not introduce an automatic source rewriter."
+      ]
+    },
+    {
+      "id": "git-object-adversarial",
+      "prompt": "Review a Git-backed read-only classifier that resolves candidate objects and path identity. Stress object-type and availability ambiguity while preserving fail-closed semantics.",
+      "expected_output": "A Git/object hardening review that verifies exact object types and availability, distinguishes blob/tree/symlink/gitlink cases, checks ambient Git poisoning and preserves UNKNOWN for missing evidence without mutating Git.",
+      "assertions": [
+        "Checks missing or unavailable objects and malformed or unsupported object IDs.",
+        "Distinguishes blob, tree, symlink and gitlink instead of trusting SHA-shaped text.",
+        "Checks partial clone/lazy availability and replacement objects where applicable.",
+        "Checks ambient Git repository, config, pathspec, trace or environment poisoning where relevant.",
+        "Does not fetch or mutate missing evidence unless the owning contract separately authorizes that effect."
+      ]
+    },
+    {
+      "id": "narrow-validator-negative",
+      "prompt": "A small pure validator checks one closed enum with exhaustive owner tests and no filesystem, JSON, AST, Git, subprocess, or external evidence. Review only whether its current contract is adequately covered.",
+      "expected_output": "A compact review that marks unrelated dimensions NOT_APPLICABLE_WITH_OWNER_BASIS from current owner evidence, preserves the exhaustive enum tests, and avoids broad repository archaeology or new dependencies.",
+      "assertions": [
+        "Does not force Git-object, filesystem, JSON or network checks when owner evidence proves them not applicable.",
+        "Does not force Hypothesis or another testing framework.",
+        "Preserves the existing narrow validator boundary.",
+        "Does not broaden the validator merely because the skill lists seven dimensions."
+      ]
+    },
+    {
+      "id": "unknown-owner-negative",
+      "prompt": "Harden this classifier, but no current source path, project owner, guideline, or result vocabulary can be established.",
+      "expected_output": "Stop with review disposition UNKNOWN and reason code REVIEW_BLOCKED_UNKNOWN_OWNER; do not guess an owner, invent result semantics, or write a replacement validator.",
+      "assertions": [
+        "Uses UNKNOWN as the declared review disposition.",
+        "Includes reason code REVIEW_BLOCKED_UNKNOWN_OWNER.",
+        "Does not invent PASS/FAIL semantics.",
+        "Does not write or recommend a replacement validator as a way around missing ownership."
+      ]
+    }
+  ]
+}

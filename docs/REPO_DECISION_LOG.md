@@ -190,3 +190,24 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2721)
 - Event ID: `46eb6f820404663d5338aebe17e6af98e8af63cc0662e414fb1659800395272d`
 <!-- canonical-main-doc-promoted:46eb6f820404663d5338aebe17e6af98e8af63cc0662e414fb1659800395272d -->
+
+### 2026-10-07 — Cloudflare Worker auxiliary read-only status / egress plane candidate
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3315)
+- Event ID: `b54650e98f870cea0963f7cb08b4445b9304c8b4c56177a699c0d1dff9191073`
+<!-- canonical-main-doc-promoted:b54650e98f870cea0963f7cb08b4445b9304c8b4c56177a699c0d1dff9191073 -->
+
+### 2026-10-09 — REPO-IDEA-HUB-DRIFT-AUDIT-V1 — source-linked projection coverage scanner
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3425)
+- Event ID: `ce6efaa2ebc2feafa6c4c4df80d9982cb9a2897647d251a7b9ef4d5fbe1c7637`
+<!-- canonical-main-doc-promoted:ce6efaa2ebc2feafa6c4c4df80d9982cb9a2897647d251a7b9ef4d5fbe1c7637 -->
+
+### 2026-10-11 — REPO-GITHUB-ISSUE-NATIVE-METADATA-01 — native issue metadata adoption
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3522)
+- Event ID: `a7a4394af4f85e48051b4ca565a3ebd4ca45ab8b532df6690fca6125991e337e`
+<!-- canonical-main-doc-promoted:a7a4394af4f85e48051b4ca565a3ebd4ca45ab8b532df6690fca6125991e337e -->

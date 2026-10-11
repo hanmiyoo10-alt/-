@@ -151,7 +151,58 @@ function directChildrenForAgent(rows, agent) {
   return {state: 'EXACT', children};
 }
 
-function classifyAlternateAgents(rows, currentAgent) {
+function classifySameLineageAgents(rows, chain, currentAgent) {
+  const currentIndex = chain.findIndex((row) => row.pid === currentAgent.pid);
+  if (currentIndex < 0) {
+    return {
+      result: topologyResult('UNKNOWN', 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS'),
+      agentPids: null,
+    };
+  }
+
+  const agentPids = new Set([currentAgent.pid]);
+  let expectedChild = currentAgent;
+  for (let index = currentIndex + 1; index < chain.length; index += 1) {
+    const ancestor = chain[index];
+    if (!hasAgentMarker(ancestor)) break;
+    if (!validParentLink(ancestor, expectedChild)) {
+      return {
+        result: topologyResult('UNKNOWN', 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS'),
+        agentPids: null,
+      };
+    }
+
+    const direct = directChildrenForAgent(rows, ancestor);
+    if (direct.state !== 'EXACT'
+        || direct.children.filter((child) => child.pid === expectedChild.pid).length !== 1) {
+      return {
+        result: topologyResult('UNKNOWN', 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS'),
+        agentPids: null,
+      };
+    }
+
+    for (const child of direct.children) {
+      if (child.pid === expectedChild.pid) continue;
+      if (SHELL_NAMES.has(child.name)) {
+        return {
+          result: topologyResult('PRESENT', 'OTHER_RDC_COMMAND_SESSION_PRESENT'),
+          agentPids: null,
+        };
+      }
+      if (BENIGN_DIRECT_CHILDREN.has(child.name)) continue;
+      return {
+        result: topologyResult('UNKNOWN', 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS'),
+        agentPids: null,
+      };
+    }
+
+    agentPids.add(ancestor.pid);
+    expectedChild = ancestor;
+  }
+  return {result: null, agentPids};
+}
+
+function classifyAlternateAgents(rows, currentAgent, sameLineageAgentPids = new Set([currentAgent.pid])) {
   if (!currentAgent.commandLineReadable || !hasAgentMarker(currentAgent)) {
     return topologyResult('UNKNOWN', 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS');
   }
@@ -165,7 +216,7 @@ function classifyAlternateAgents(rows, currentAgent) {
   if (potentialAgents.filter((row) => row.pid === currentAgent.pid).length !== 1) {
     return topologyResult('UNKNOWN', 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS');
   }
-  const alternates = potentialAgents.filter((row) => row.pid !== currentAgent.pid);
+  const alternates = potentialAgents.filter((row) => !sameLineageAgentPids.has(row.pid));
   if (alternates.length === 0) {
     return topologyResult('ABSENT', 'SOLE_RDC_COMMAND_SESSION');
   }
@@ -251,7 +302,9 @@ function classifyProcessTable(rows, selfPid) {
   if (peerShells > 0) {
     return topologyResult('PRESENT', 'OTHER_RDC_COMMAND_SESSION_PRESENT');
   }
-  return classifyAlternateAgents(rows, agent);
+  const lineage = classifySameLineageAgents(rows, chain, agent);
+  if (lineage.result) return lineage.result;
+  return classifyAlternateAgents(rows, agent, lineage.agentPids);
 }
 
 function inspectLocal({

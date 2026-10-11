@@ -86,6 +86,18 @@ Other direct children of the current agent are classified as follows:
 - `conhost.exe` → fixed Windows console-host sibling and ignored;
 - anything else → topology ambiguous / UNKNOWN.
 
+A contiguous marker-bearing ancestor immediately above the verified current
+agent may be part of the same Desktop Commander wrapper lineage rather than an
+independent command agent. Such an ancestor is admitted into the current
+lineage only while every parent/child creation-time edge remains valid and its
+direct children contain exactly the expected next-lower lineage process plus
+optional `conhost.exe` siblings. A direct fixed shell sibling under that wrapper
+is definite `PRESENT` evidence; any other sibling keeps the topology `UNKNOWN`.
+Only marker-bearing ancestors admitted by this exact contiguous lineage rule
+are excluded from alternate-agent inventory. A marker-bearing process outside
+that lineage remains an alternate candidate under the existing fail-closed
+rules.
+
 For alternate-agent admission:
 
 - one or more marker-bearing alternate agents with valid direct fixed-shell
@@ -106,8 +118,10 @@ Command-line readability is retained only as internal evidence and is never
 exposed in the public receipt.
 
 Therefore v2 `ABSENT` is deliberately stronger and fail-closed: the current
-verified agent must be the only safely eligible/plausible Desktop Commander
-agent in the bounded table, with no peer shell or ambiguous direct child.
+verified agent plus any exactly admitted same-instance wrapper lineage must be
+the only safely eligible/plausible Desktop Commander lineage in the bounded
+table, with no peer shell, competing alternate agent, or ambiguous direct
+child.
 Historical pre-repair ABSENT receipts remain agent-local historical evidence
 and must not be reinterpreted as global absence. In particular, every historical
 `mcl-l-rdc-session-evidence.v1` receipt is incompatible with v2 admission and

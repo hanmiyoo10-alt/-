@@ -69,7 +69,9 @@ Capture the exact reviewed source identity before interpreting results:
 
 - for Git-backed repository work, record the exact commit object ID that anchors the review;
 - record worktree state as `CLEAN` or `DIRTY`;
-- when reviewed target bytes are dirty relative to that commit, record an immutable target-byte digest or bounded diff identity in addition to the baseline commit because the commit alone does not identify the inspected bytes;
+- when the worktree is dirty relative to that commit, identify every dirty input that contributes to the review, including target source, imported helpers/modules, tests, fixtures, and owner-contract files actually relied upon;
+- record an immutable digest or bounded diff identity for each such dirty reviewed/executed input, not only for the target file;
+- if dirty contributing inputs cannot be bounded and identified completely, preserve `UNKNOWN` rather than claiming `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`;
 - for a non-Git artifact, record the owner-defined immutable artifact digest or equivalent exact identity;
 - if the reviewed bytes cannot be attributed to an immutable identity, preserve `UNKNOWN` rather than claiming `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`.
 
@@ -183,14 +185,27 @@ Verify the target remains within its declared effect surface:
 - no bypass of CI, Required, branch protection, or project gates;
 - no creation of a second mutable truth store merely to make classification easier.
 
-### 5. Prefer existing owner tests, then add bounded adversarial generation
+### 5. Preserve read-only review, then use bounded adversarial execution only when separately authorized
 
-Run or cite the current owner tests first. Add focused deterministic cases before broad fuzzing.
+Inspect or cite the current owner tests first.
+
+On a read-only surface that lacks execution capability:
+
+- propose a focused deterministic adversarial matrix without editing the repository under review;
+- mark every unexecuted case explicitly as proposed/not exercised;
+- do not claim that owner tests, commands, fuzzing, or adversarial inputs were run;
+- use review disposition `PARTIAL` when execution is still needed to prove the requested hardening claim.
+
+When a separately authorized execution-capable surface exists:
+
+- execute focused deterministic cases only in an isolated temporary workspace/copy or an existing owner-provided temporary harness;
+- never edit the repository checkout under review merely to create review cases;
+- preserve the exact source/input identities used by that isolated execution.
 
 When Python property-based generation is justified:
 
 - keep the current unittest/pytest owner unchanged;
-- use Hypothesis only from an already-authorized isolated development environment;
+- use Hypothesis only from an already-authorized isolated development environment and isolated temporary workspace/copy;
 - bound examples, input sizes, recursion, and deadlines explicitly;
 - keep generated inputs reproducible enough to reduce a failure to a concrete regression case;
 - never make Hypothesis itself a runtime, production, or CI authority.
@@ -221,7 +236,7 @@ requested claim
 owner result vocabulary
 reviewed source identity (exact commit/object/artifact identity)
 worktree state: CLEAN | DIRTY | NOT_APPLICABLE
-dirty target digest or bounded diff identity when applicable
+dirty reviewed/executed input identities (digest or bounded diff identity) when applicable
 applicability by dimension A-G
 cases actually exercised
 owner tests / commands actually used

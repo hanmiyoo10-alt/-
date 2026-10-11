@@ -161,10 +161,12 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         for required in (
             "exact commit object ID",
             "worktree state as `CLEAN` or `DIRTY`",
-            "immutable target-byte digest or bounded diff identity",
+            "every dirty input that contributes to the review",
+            "record an immutable digest or bounded diff identity for each such dirty reviewed/executed input",
+            "dirty contributing inputs cannot be bounded and identified completely",
             "reviewed source identity (exact commit/object/artifact identity)",
             "worktree state: CLEAN | DIRTY | NOT_APPLICABLE",
-            "dirty target digest or bounded diff identity when applicable",
+            "dirty reviewed/executed input identities (digest or bounded diff identity) when applicable",
         ):
             self.assertIn(required, self.text)
 
@@ -207,6 +209,34 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
                 self.assertTrue(
                     "Guideline:" in case["prompt"] or "Guideline/contract:" in case["prompt"]
                 )
+
+    def test_read_only_eval_contract_does_not_fabricate_execution(self):
+        positive_ids = {
+            "path-ref-adversarial",
+            "json-schema-adversarial",
+            "source-ast-adversarial",
+            "git-object-adversarial",
+            "narrow-validator-negative",
+        }
+        for case in self.evals:
+            if case["id"] not in positive_ids:
+                continue
+            self.assertIn("read-only static hardening review", case["expected_output"])
+            self.assertIn("no owner tests or adversarial cases were executed", case["expected_output"])
+            self.assertIn("PARTIAL", case["expected_output"])
+            self.assertTrue(
+                any("Does not claim owner tests" in assertion for assertion in case["assertions"])
+            )
+
+    def test_read_only_review_never_edits_target_checkout_for_cases(self):
+        for required in (
+            "propose a focused deterministic adversarial matrix without editing the repository under review",
+            "mark every unexecuted case explicitly as proposed/not exercised",
+            "do not claim that owner tests, commands, fuzzing, or adversarial inputs were run",
+            "isolated temporary workspace/copy",
+            "never edit the repository checkout under review merely to create review cases",
+        ):
+            self.assertIn(required, self.text)
 
     def test_eval_fixture_matches_repository_output_normalizer(self):
         spec = importlib.util.spec_from_file_location("validator_hardening_prepare_eval", PREPARE_EVAL)

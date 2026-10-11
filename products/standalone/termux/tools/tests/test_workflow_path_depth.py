@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -29,8 +30,23 @@ class WorkflowPathDepthTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def tree_proof(self, path):
+        parts = path.split("/")
+        return [
+            {
+                "path": "/".join(parts[: index + 1]),
+                "mode": "040000",
+                "type": "tree",
+            }
+            for index in range(len(parts))
+        ]
+
     def check(self, item):
-        return check_reference(item, self.repo_root)
+        return check_reference(
+            item,
+            self.repo_root,
+            os.pathconf(self.repo_root, "PC_NAME_MAX"),
+        )
 
     def batch(self, request):
         payload = dict(request)
@@ -38,11 +54,15 @@ class WorkflowPathDepthTests(unittest.TestCase):
         return check_batch(payload)
 
     def t5(self, candidate="../../../../.github/tooling/ci-summary/phase_receipt.py"):
+        old_dir = "plugins/termux/large-doc-editor"
+        new_dir = "products/standalone/termux/large-doc-editor"
         return {
-            "old_working_dir": "plugins/termux/large-doc-editor",
-            "new_working_dir": "products/standalone/termux/large-doc-editor",
+            "old_working_dir": old_dir,
+            "new_working_dir": new_dir,
             "old_reference": "../../../.github/tooling/ci-summary/phase_receipt.py",
             "candidate_new_reference": candidate,
+            "old_working_dir_tree_proof": self.tree_proof(old_dir),
+            "new_working_dir_tree_proof": self.tree_proof(new_dir),
         }
 
     def test_t5_one_level_deeper_preserves_same_target(self):
@@ -70,11 +90,15 @@ class WorkflowPathDepthTests(unittest.TestCase):
         )
 
     def test_same_depth_move_can_preserve_relative_depth(self):
+        old_dir = "plugins/termux/example"
+        new_dir = "products/termux/example"
         out = self.check({
-            "old_working_dir": "plugins/termux/example",
-            "new_working_dir": "products/termux/example",
+            "old_working_dir": old_dir,
+            "new_working_dir": new_dir,
             "old_reference": "../../../.github/tooling/helper.py",
             "candidate_new_reference": "../../../.github/tooling/helper.py",
+            "old_working_dir_tree_proof": self.tree_proof(old_dir),
+            "new_working_dir_tree_proof": self.tree_proof(new_dir),
         })
         self.assertEqual(out["status"], "PASS")
         self.assertEqual(out["working_dir_depth_delta"], 0)
@@ -85,6 +109,8 @@ class WorkflowPathDepthTests(unittest.TestCase):
             "new_working_dir": "b",
             "old_reference": "../../outside",
             "candidate_new_reference": "../outside",
+            "old_working_dir_tree_proof": self.tree_proof("a"),
+            "new_working_dir_tree_proof": self.tree_proof("b"),
         })
         self.assertEqual(out["status"], "UNKNOWN")
 
@@ -125,16 +151,26 @@ class WorkflowPathDepthTests(unittest.TestCase):
             with self.subTest(case=case):
                 self.assertEqual(self.check(case)["status"], "UNKNOWN")
 
-    def test_symlinked_working_directory_is_unknown(self):
-        actual = self.repo_root / "actual" / "old"
-        actual.mkdir(parents=True)
-        (self.repo_root / "link").symlink_to(actual, target_is_directory=True)
-        case = {
-            **self.t5(),
-            "old_working_dir": "link",
-            "old_reference": "../helper.py",
+    def test_symlink_or_incomplete_tree_proof_is_unknown(self):
+        symlinked = self.t5()
+        symlinked["old_working_dir_tree_proof"][1] = {
+            "path": "plugins/termux",
+            "mode": "120000",
+            "type": "blob",
         }
-        self.assertEqual(self.check(case)["status"], "UNKNOWN")
+        self.assertEqual(self.check(symlinked)["status"], "UNKNOWN")
+
+        incomplete = self.t5()
+        incomplete["new_working_dir_tree_proof"] = incomplete[
+            "new_working_dir_tree_proof"
+        ][:-1]
+        self.assertEqual(self.check(incomplete)["status"], "UNKNOWN")
+
+    def test_removed_old_directory_can_use_pre_move_tree_proof(self):
+        old_dir = self.repo_root / "plugins/termux/large-doc-editor"
+        old_dir.rmdir()
+        out = self.check(self.t5())
+        self.assertEqual(out["status"], "PASS")
 
     def test_unpaired_surrogate_in_path_input_is_unknown(self):
         surrogate = chr(0xD800)
@@ -163,6 +199,32 @@ class WorkflowPathDepthTests(unittest.TestCase):
         for case in cases:
             with self.subTest(case=case):
                 self.assertEqual(self.check(case)["status"], "UNKNOWN")
+
+    def test_component_exceeding_filesystem_name_max_is_unknown(self):
+        name_max = os.pathconf(self.repo_root, "PC_NAME_MAX")
+        if name_max >= 512:
+            self.skipTest("filesystem NAME_MAX is outside this bounded fixture")
+        too_long = "a" * (name_max + 1)
+        cases = [
+            {**self.t5(), "old_reference": "../../" + too_long},
+            {
+                **self.t5(),
+                "candidate_new_reference": "../../../" + too_long,
+            },
+        ]
+        for case in cases:
+            with self.subTest(case=case):
+                self.assertEqual(self.check(case)["status"], "UNKNOWN")
+
+    def test_multibyte_component_uses_encoded_byte_limit(self):
+        name_max = os.pathconf(self.repo_root, "PC_NAME_MAX")
+        char = "é"
+        count = name_max // len(char.encode("utf-8")) + 1
+        component = char * count
+        if len(component) > 512:
+            self.skipTest("fixture exceeds bounded character input")
+        case = {**self.t5(), "old_reference": "../../" + component}
+        self.assertEqual(self.check(case)["status"], "UNKNOWN")
 
     def test_candidate_that_targets_wrong_location_fails(self):
         out = self.check(self.t5("../../../../docs/not-the-helper.py"))

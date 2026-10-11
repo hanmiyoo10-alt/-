@@ -1,9 +1,10 @@
-import json
+import importlib.util
+import os
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-import importlib.util
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "migration_validator.py"
@@ -93,10 +94,16 @@ class MigrationValidatorTests(unittest.TestCase):
         result = mv.validate(self.repo, base, head, self.plan())
         self.assertEqual(result["status"], "WARN")
         self.assertTrue(
-            any(f["reason"] == "FIXED_PARENT_DEPTH_REFERENCE" for f in result["findings"])
+            any(
+                f["reason"] == "FIXED_PARENT_DEPTH_REFERENCE"
+                for f in result["findings"]
+            )
         )
         self.assertFalse(
-            any(f["reason"] == "BYTE_PARITY_MISMATCH" for f in result["findings"])
+            any(
+                f["reason"] == "BYTE_PARITY_MISMATCH"
+                for f in result["findings"]
+            )
         )
 
     def test_unauthorized_changed_path_fails(self):
@@ -113,13 +120,45 @@ class MigrationValidatorTests(unittest.TestCase):
             )
         )
 
+    def test_unauthorized_rename_source_fails_even_when_destination_is_authorized(self):
+        self.write("plugins/termux/demo/a.txt", "alpha\n")
+        self.write("docs/outside.txt", "outside\n")
+        base = self.commit("base")
+        new = self.repo / "products/standalone/termux/demo"
+        new.mkdir(parents=True, exist_ok=True)
+        (self.repo / "plugins/termux/demo/a.txt").rename(new / "a.txt")
+        workflow = self.repo / ".github/workflows/outside.txt"
+        workflow.parent.mkdir(parents=True, exist_ok=True)
+        (self.repo / "docs/outside.txt").rename(workflow)
+        head = self.commit("move")
+        plan = self.plan(
+            changed_count=2,
+            authorized_paths=[
+                "plugins/termux/demo/**",
+                "products/standalone/termux/demo/**",
+                ".github/workflows/outside.txt",
+            ],
+            scan_paths=[],
+        )
+        result = mv.validate(self.repo, base, head, plan)
+        self.assertEqual(result["status"], "FAIL")
+        finding = next(
+            f
+            for f in result["findings"]
+            if f["reason"] == "CHANGED_PATH_OUTSIDE_AUTHORIZED_SCOPE"
+        )
+        self.assertIn("docs/outside.txt", finding["paths"])
+
     def test_byte_parity_mismatch_fails(self):
         base = self.base_repo()
         head = self.move_tree(edit_depth=True)
         result = mv.validate(self.repo, base, head, self.plan())
         self.assertEqual(result["status"], "FAIL")
         self.assertTrue(
-            any(f["reason"] == "BYTE_PARITY_MISMATCH" for f in result["findings"])
+            any(
+                f["reason"] == "BYTE_PARITY_MISMATCH"
+                for f in result["findings"]
+            )
         )
 
     def test_declared_content_edit_is_allowed(self):
@@ -129,7 +168,29 @@ class MigrationValidatorTests(unittest.TestCase):
         result = mv.validate(self.repo, base, head, plan)
         self.assertEqual(result["status"], "WARN")
         self.assertFalse(
-            any(f["reason"] == "BYTE_PARITY_MISMATCH" for f in result["findings"])
+            any(
+                f["reason"] == "BYTE_PARITY_MISMATCH"
+                for f in result["findings"]
+            )
+        )
+
+    def test_mode_change_fails_even_when_bytes_match(self):
+        self.write("plugins/termux/demo/run.sh", "#!/bin/sh\nexit 0\n")
+        os.chmod(self.repo / "plugins/termux/demo/run.sh", 0o755)
+        base = self.commit("base executable")
+        new = self.repo / "products/standalone/termux/demo"
+        new.parent.mkdir(parents=True, exist_ok=True)
+        (self.repo / "plugins/termux/demo").rename(new)
+        os.chmod(new / "run.sh", 0o644)
+        head = self.commit("move and drop executable bit")
+        plan = self.plan(changed_count=1, scan_paths=[])
+        result = mv.validate(self.repo, base, head, plan)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertTrue(
+            any(
+                f["reason"] == "TREE_MODE_OR_TYPE_MISMATCH"
+                for f in result["findings"]
+            )
         )
 
     def test_unexpected_old_root_residue_fails(self):
@@ -138,7 +199,10 @@ class MigrationValidatorTests(unittest.TestCase):
         result = mv.validate(self.repo, base, head, self.plan(changed_count=3))
         self.assertEqual(result["status"], "FAIL")
         self.assertTrue(
-            any(f["reason"] == "OLD_ROOT_RESIDUE_MISMATCH" for f in result["findings"])
+            any(
+                f["reason"] == "OLD_ROOT_RESIDUE_MISMATCH"
+                for f in result["findings"]
+            )
         )
 
     def test_declared_old_root_residue_is_allowed(self):
@@ -151,8 +215,52 @@ class MigrationValidatorTests(unittest.TestCase):
         result = mv.validate(self.repo, base, head, plan)
         self.assertEqual(result["status"], "WARN")
         self.assertFalse(
-            any(f["reason"] == "OLD_ROOT_RESIDUE_MISMATCH" for f in result["findings"])
+            any(
+                f["reason"] == "OLD_ROOT_RESIDUE_MISMATCH"
+                for f in result["findings"]
+            )
         )
+
+    def test_option_like_ref_is_rejected_before_git_diff(self):
+        self.base_repo()
+        output = self.repo / "should-not-exist"
+        with self.assertRaises(mv.ValidationUnknown):
+            mv._resolve_commit(
+                self.repo,
+                f"--output={output}",
+                "base_ref",
+            )
+        self.assertFalse(output.exists())
+
+    def test_explicit_missing_scan_path_is_unknown(self):
+        base = self.base_repo()
+        head = self.move_tree()
+        plan = self.plan(
+            scan_paths=["products/standalone/termux/demo/missing.py"]
+        )
+        with self.assertRaises(mv.ValidationUnknown):
+            mv.validate(self.repo, base, head, plan)
+
+    def test_non_utf8_git_path_decode_is_unknown(self):
+        with self.assertRaises(mv.ValidationUnknown):
+            mv._zlist(b"good\x00bad-\xff\x00", "git path")
+
+    def test_git_disables_lazy_fetch_and_terminal_prompt(self):
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=b"ok\n",
+            stderr=b"",
+        )
+        with mock.patch.object(
+            mv.subprocess,
+            "run",
+            return_value=completed,
+        ) as run:
+            self.assertEqual(mv._git(self.repo, "status"), "ok\n")
+        env = run.call_args.kwargs["env"]
+        self.assertEqual(env["GIT_NO_LAZY_FETCH"], "1")
+        self.assertEqual(env["GIT_TERMINAL_PROMPT"], "0")
 
 
 if __name__ == "__main__":

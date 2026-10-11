@@ -2457,3 +2457,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2ab6408a9fa13eb07fa092076b8d806b49019852)
 - Event ID: `baf9a2ad4b8a0e0e7bfe01d2dc2c96e9a7422647963db6f3c780a2381d350528`
 <!-- canonical-main-doc-promoted:baf9a2ad4b8a0e0e7bfe01d2dc2c96e9a7422647963db6f3c780a2381d350528 -->
+
+### 2026-10-11 — refactor(termux): retire legacy plugin route (#3542)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `78f0766183a65160e5e31e4d0f13eb7b00e374e2`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/78f0766183a65160e5e31e4d0f13eb7b00e374e2)
+- Event ID: `409cfae0588c200e1d4bdbc6c46f04dba871e5cb34490eaad1c03c95cbecb7c8`
+<!-- canonical-main-doc-promoted:409cfae0588c200e1d4bdbc6c46f04dba871e5cb34490eaad1c03c95cbecb7c8 -->

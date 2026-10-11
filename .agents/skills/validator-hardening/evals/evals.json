@@ -1,0 +1,119 @@
+[
+  {
+    "id": "path-ref-adversarial",
+    "should_trigger_broadening": true,
+    "target_kind": "path/ref validator",
+    "prompt": "Review a read-only Git/path validator that already handles normal repository-relative paths. Harden it against malformed refs and hostile path text without changing its owner or adding a writer.",
+    "expected_dimensions": [
+      "A",
+      "E",
+      "F",
+      "G"
+    ],
+    "expected_checks": [
+      "empty or whitespace input",
+      "NUL/control characters",
+      "Unicode surrogate or normalization-sensitive input",
+      "absolute/traversal/non-canonical path",
+      "separator/platform variants",
+      "option-like ref beginning with '-'",
+      "character versus encoded-byte/component ceilings",
+      "missing or ambiguous evidence remains UNKNOWN"
+    ],
+    "must_not": [
+      "auto-rewrite paths",
+      "invent repository state",
+      "replace Required"
+    ]
+  },
+  {
+    "id": "json-schema-adversarial",
+    "should_trigger_broadening": true,
+    "target_kind": "JSON/schema classifier",
+    "prompt": "Review a classifier that consumes a bounded JSON fixture and distinguishes live from frozen registry evidence. Find parser and schema edge classes without changing registry authority.",
+    "expected_dimensions": [
+      "B",
+      "E",
+      "F",
+      "G"
+    ],
+    "expected_checks": [
+      "duplicate JSON keys when parser behavior matters",
+      "wrong scalar/container types",
+      "oversize document/array/string",
+      "deep nesting/recursion",
+      "unknown/additional fields",
+      "decode or parser failure",
+      "bounded failure provenance"
+    ],
+    "must_not": [
+      "normalize malformed JSON into PASS",
+      "rewrite registry data",
+      "create a second truth store"
+    ]
+  },
+  {
+    "id": "git-object-adversarial",
+    "should_trigger_broadening": true,
+    "target_kind": "Git object/evidence classifier",
+    "prompt": "Review a Git-backed read-only classifier that resolves candidate objects and path identity. Stress object-type and availability ambiguity while preserving fail-closed semantics.",
+    "expected_dimensions": [
+      "D",
+      "E",
+      "F",
+      "G"
+    ],
+    "expected_checks": [
+      "missing/unavailable object",
+      "blob versus tree",
+      "symlink",
+      "gitlink",
+      "malformed or unsupported object id",
+      "partial clone/lazy availability",
+      "replacement object behavior",
+      "ambient Git repository/config/pathspec/trace environment poisoning"
+    ],
+    "must_not": [
+      "fetch missing objects implicitly unless owner authorizes it",
+      "treat SHA-shaped text as object proof",
+      "mutate Git"
+    ]
+  },
+  {
+    "id": "narrow-validator-negative",
+    "should_trigger_broadening": false,
+    "target_kind": "narrow enum validator",
+    "prompt": "A small pure validator checks one closed enum with exhaustive owner tests and no filesystem, JSON, AST, Git, subprocess, or external evidence. Review only whether its current contract is adequately covered.",
+    "expected_dimensions": [
+      "E",
+      "F",
+      "G"
+    ],
+    "expected_checks": [
+      "mark unrelated dimensions NOT_APPLICABLE_WITH_OWNER_BASIS",
+      "preserve exhaustive owner tests",
+      "avoid unrelated repository archaeology"
+    ],
+    "must_not": [
+      "force Git object tests",
+      "force Hypothesis",
+      "add filesystem or network checks",
+      "broaden the validator just because the skill lists more dimensions"
+    ]
+  },
+  {
+    "id": "unknown-owner-negative",
+    "should_trigger_broadening": false,
+    "target_kind": "unowned classifier claim",
+    "prompt": "Harden this classifier, but no current source path, project owner, guideline, or result vocabulary can be established.",
+    "expected_dimensions": [],
+    "expected_checks": [
+      "stop with REVIEW_BLOCKED_UNKNOWN_OWNER",
+      "do not guess an owner"
+    ],
+    "must_not": [
+      "invent PASS/FAIL semantics",
+      "write a replacement validator"
+    ]
+  }
+]

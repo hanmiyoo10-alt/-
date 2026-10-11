@@ -175,13 +175,20 @@ const termuxLanding = classifyPaths(['products/standalone/termux/README.md'], re
 assert.deepEqual(termuxLanding.labels, ['product:termux']);
 assert.deepEqual(termuxLanding.ambiguousPaths, []);
 assert.deepEqual(termuxLanding.unclassifiedPaths, []);
+const responseWatchTarget = classifyPaths(['products/standalone/termux/response-watch/README.md'], registry);
+assert.deepEqual(responseWatchTarget.labels, ['product:termux']);
+assert.deepEqual(responseWatchTarget.ambiguousPaths, []);
+assert.deepEqual(responseWatchTarget.unclassifiedPaths, []);
+const responseWatchLegacy = classifyPaths(['plugins/termux/response-watch/README.md'], registry);
+assert.deepEqual(responseWatchLegacy.labels, ['scope:unclassified']);
+assert.deepEqual(responseWatchLegacy.ambiguousPaths, []);
+assert.deepEqual(responseWatchLegacy.unclassifiedPaths, ['plugins/termux/response-watch/README.md']);
 for (const legacyChildPath of [
   'plugins/termux/background-gpt/README.md',
-  'plugins/termux/response-watch/README.md',
   'plugins/termux/screen-on/README.md',
   'plugins/termux/taskbridge/README.md',
 ]) {
-  assert.deepEqual(classifyPaths([legacyChildPath], registry).labels, ['scope:unclassified'], `${legacyChildPath} must remain unclassified during T0`);
+  assert.deepEqual(classifyPaths([legacyChildPath], registry).labels, ['scope:unclassified'], `${legacyChildPath} must remain unclassified during staged migration`);
 }
 const voyageLegacyPath = classifyPaths(['voyage-token-check/DESIGN_STATUS.md'], registry);
 assert.deepEqual(voyageLegacyPath.labels, ['plugin:voyage-token-check']);

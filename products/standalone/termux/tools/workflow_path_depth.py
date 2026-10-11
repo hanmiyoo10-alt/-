@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 import os
 import posixpath
+import re
+import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -13,11 +15,48 @@ from typing import Any
 SCHEMA = "termux-workflow-path-depth.v1"
 MAX_REFERENCES = 64
 MAX_PATH_CHARS = 512
+MAX_REF_CHARS = 256
 MAX_INPUT_BYTES = 64 * 1024
+MAX_GIT_OUTPUT_BYTES = 64 * 1024
+OID_RE = re.compile(r"^[0-9a-fA-F]{40,64}$")
+REGULAR_BLOB_MODES = {"100644", "100755"}
+GIT_ENV_CLEAR = {
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_NAMESPACE",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+    "GIT_EXTERNAL_DIFF",
+    "GIT_DIFF_OPTS",
+    "GIT_CONFIG_COUNT",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_GLOB_PATHSPECS",
+    "GIT_NOGLOB_PATHSPECS",
+    "GIT_LITERAL_PATHSPECS",
+    "GIT_ICASE_PATHSPECS",
+}
 
 
 class ValidationUnknown(ValueError):
     pass
+
+
+def _authority_denials() -> dict[str, bool]:
+    return {
+        "mutation_authorized": False,
+        "execution_authorized": False,
+        "network_used": False,
+        "github_used": False,
+        "merge_authorized": False,
+        "release_authorized": False,
+        "production_authorized": False,
+        "runtime_authorized": False,
+        "device_authorized": False,
+    }
 
 
 def _contains_surrogate(value: str) -> bool:
@@ -25,7 +64,13 @@ def _contains_surrogate(value: str) -> bool:
 
 
 def _repo_root(value: Any) -> Path:
-    if not isinstance(value, str) or not value or chr(0) in value or _contains_surrogate(value):
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > 4096
+        or chr(0) in value
+        or _contains_surrogate(value)
+    ):
         raise ValidationUnknown("repo_root: expected usable absolute path")
     root = Path(value)
     if not root.is_absolute():
@@ -39,6 +84,92 @@ def _repo_root(value: Any) -> Path:
     return resolved
 
 
+def _git_env() -> dict[str, str]:
+    env = os.environ.copy()
+    for key in list(env):
+        if (
+            key in GIT_ENV_CLEAR
+            or key.startswith("GIT_CONFIG_KEY_")
+            or key.startswith("GIT_CONFIG_VALUE_")
+            or key.startswith("GIT_TRACE")
+        ):
+            env.pop(key, None)
+    env["GIT_NO_LAZY_FETCH"] = "1"
+    env["GIT_NO_REPLACE_OBJECTS"] = "1"
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    env["GIT_LITERAL_PATHSPECS"] = "1"
+    return env
+
+
+def _git(repo: Path, *args: str) -> bytes:
+    proc = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=_git_env(),
+        check=False,
+    )
+    if len(proc.stdout) > MAX_GIT_OUTPUT_BYTES or len(proc.stderr) > MAX_GIT_OUTPUT_BYTES:
+        raise ValidationUnknown(f"git {' '.join(args)}: output exceeds bound")
+    if proc.returncode != 0:
+        err = proc.stderr.decode("utf-8", "replace").strip()
+        raise ValidationUnknown(
+            f"git {' '.join(args)} failed: {err or 'unknown error'}"
+        )
+    return proc.stdout
+
+
+def _decode_utf8(payload: bytes, field: str) -> str:
+    try:
+        return payload.decode("utf-8", "strict")
+    except UnicodeDecodeError as exc:
+        raise ValidationUnknown(f"{field}: non-UTF-8 Git evidence") from exc
+
+
+def _validate_repository(repo: Path) -> None:
+    inside = _decode_utf8(
+        _git(repo, "rev-parse", "--is-inside-work-tree"),
+        "repo_root",
+    ).strip()
+    if inside != "true":
+        raise ValidationUnknown("repo_root: not a Git work tree")
+    top = Path(
+        _decode_utf8(
+            _git(repo, "rev-parse", "--show-toplevel"),
+            "repo_root",
+        ).strip()
+    ).resolve()
+    if top != repo:
+        raise ValidationUnknown("repo_root: expected exact Git work-tree root")
+
+
+def _resolve_commit(repo: Path, value: Any, field: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > MAX_REF_CHARS
+        or value != value.strip()
+        or value.startswith("-")
+        or chr(0) in value
+        or _contains_surrogate(value)
+    ):
+        raise ValidationUnknown(f"{field}: invalid Git ref")
+    oid = _decode_utf8(
+        _git(
+            repo,
+            "rev-parse",
+            "--verify",
+            "--end-of-options",
+            f"{value}^{{commit}}",
+        ),
+        field,
+    ).strip()
+    if not OID_RE.fullmatch(oid):
+        raise ValidationUnknown(f"{field}: Git did not resolve a commit object ID")
+    return oid.lower()
+
+
 def _name_max(repo_root: Path) -> int:
     try:
         value = int(os.pathconf(repo_root, "PC_NAME_MAX"))
@@ -47,38 +178,6 @@ def _name_max(repo_root: Path) -> int:
     if value < 1:
         raise ValidationUnknown("repo_root: invalid NAME_MAX")
     return value
-
-
-def _validate_component_bytes(parts: list[str] | tuple[str, ...], name_max: int, field: str) -> None:
-    for part in parts:
-        if part == "..":
-            continue
-        try:
-            encoded = part.encode("utf-8", "strict")
-        except UnicodeEncodeError as exc:
-            raise ValidationUnknown(f"{field}: unusable Unicode component") from exc
-        if len(encoded) > name_max:
-            raise ValidationUnknown(
-                f"{field}: component exceeds filesystem NAME_MAX"
-            )
-
-
-def _tree_proof(value: Any, working_dir: str, field: str) -> None:
-    parts = PurePosixPath(working_dir).parts
-    if not isinstance(value, list) or len(value) != len(parts):
-        raise ValidationUnknown(f"{field}: complete tree proof required")
-    current: list[str] = []
-    for index, (row, part) in enumerate(zip(value, parts)):
-        current.append(part)
-        expected_path = "/".join(current)
-        if not isinstance(row, dict) or set(row) != {"path", "mode", "type"}:
-            raise ValidationUnknown(f"{field}[{index}]: invalid tree proof row")
-        if row["path"] != expected_path:
-            raise ValidationUnknown(f"{field}[{index}]: tree proof path mismatch")
-        if row["mode"] != "040000" or row["type"] != "tree":
-            raise ValidationUnknown(
-                f"{field}[{index}]: symlink or non-tree directory component"
-            )
 
 
 def _repo_dir(value: Any, field: str) -> str:
@@ -108,14 +207,14 @@ def _relative_ref(value: Any, field: str) -> str:
     if (
         value != value.strip()
         or value.startswith("/")
+        or value.endswith("/")
+        or value == "."
         or chr(0) in value
         or _contains_surrogate(value)
     ):
         raise ValidationUnknown(f"{field}: expected canonical relative path")
     if "\\" in value or "//" in value:
         raise ValidationUnknown(f"{field}: expected canonical POSIX relative path")
-    if value.endswith("/") or value == ".":
-        raise ValidationUnknown(f"{field}: expected file-like relative path")
     parts = value.split("/")
     if any(part in {"", "."} for part in parts):
         raise ValidationUnknown(f"{field}: expected canonical relative path")
@@ -131,6 +230,22 @@ def _relative_ref(value: Any, field: str) -> str:
     if not seen_path_component:
         raise ValidationUnknown(f"{field}: expected file-like path component")
     return value
+
+
+def _validate_component_bytes(
+    parts: list[str] | tuple[str, ...],
+    name_max: int,
+    field: str,
+) -> None:
+    for part in parts:
+        if part == "..":
+            continue
+        try:
+            encoded = part.encode("utf-8", "strict")
+        except UnicodeEncodeError as exc:
+            raise ValidationUnknown(f"{field}: unusable Unicode component") from exc
+        if len(encoded) > name_max:
+            raise ValidationUnknown(f"{field}: component exceeds filesystem NAME_MAX")
 
 
 def _resolve_repo_target(working_dir: str, reference: str) -> str:
@@ -154,9 +269,70 @@ def _relative_to_target(working_dir: str, target: str) -> str:
     return _relative_ref(relative, "expected_new_reference")
 
 
+def _tree_entry(repo: Path, commit_oid: str, path: str) -> dict[str, str]:
+    raw = _git(repo, "ls-tree", "-z", commit_oid, "--", path)
+    records = [record for record in raw.split(b"\0") if record]
+    if len(records) != 1:
+        raise ValidationUnknown(f"tree entry unavailable or ambiguous: {path}")
+    try:
+        meta, raw_name = records[0].split(b"\t", 1)
+        mode, object_type, oid = _decode_utf8(
+            meta, "git ls-tree metadata"
+        ).split(" ", 2)
+    except ValueError as exc:
+        raise ValidationUnknown(f"malformed tree entry: {path}") from exc
+    name = _decode_utf8(raw_name, "git ls-tree path")
+    if name != path or not OID_RE.fullmatch(oid):
+        raise ValidationUnknown(f"unexpected tree entry identity: {path}")
+    return {
+        "mode": mode,
+        "type": object_type,
+        "oid": oid.lower(),
+    }
+
+
+def _verify_directory_prefixes(
+    repo: Path,
+    commit_oid: str,
+    directory: str,
+    field: str,
+) -> None:
+    current: list[str] = []
+    for part in PurePosixPath(directory).parts:
+        current.append(part)
+        path = "/".join(current)
+        entry = _tree_entry(repo, commit_oid, path)
+        if entry["mode"] != "040000" or entry["type"] != "tree":
+            raise ValidationUnknown(f"{field}: symlink or non-tree component: {path}")
+
+
+def _verify_regular_target(
+    repo: Path,
+    commit_oid: str,
+    target: str,
+    field: str,
+) -> dict[str, str]:
+    parts = PurePosixPath(target).parts
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        raise ValidationUnknown(f"{field}: noncanonical target")
+    current: list[str] = []
+    for part in parts[:-1]:
+        current.append(part)
+        path = "/".join(current)
+        entry = _tree_entry(repo, commit_oid, path)
+        if entry["mode"] != "040000" or entry["type"] != "tree":
+            raise ValidationUnknown(f"{field}: symlink or non-tree target component: {path}")
+    final = _tree_entry(repo, commit_oid, target)
+    if final["type"] != "blob" or final["mode"] not in REGULAR_BLOB_MODES:
+        raise ValidationUnknown(f"{field}: target is not a regular file")
+    return final
+
+
 def check_reference(
     item: Any,
-    repo_root: Path | None = None,
+    repo: Path | None = None,
+    old_oid: str | None = None,
+    new_oid: str | None = None,
     name_max: int | None = None,
 ) -> dict[str, Any]:
     try:
@@ -165,17 +341,17 @@ def check_reference(
             "new_working_dir",
             "old_reference",
             "candidate_new_reference",
-            "old_working_dir_tree_proof",
-            "new_working_dir_tree_proof",
         }:
             raise ValidationUnknown("request shape invalid")
-        if repo_root is None or name_max is None:
-            raise ValidationUnknown("repo_root filesystem evidence required")
+        if repo is None or old_oid is None or new_oid is None or name_max is None:
+            raise ValidationUnknown("authenticated Git evidence required")
+
         old_dir = _repo_dir(item["old_working_dir"], "old_working_dir")
         new_dir = _repo_dir(item["new_working_dir"], "new_working_dir")
         old_ref = _relative_ref(item["old_reference"], "old_reference")
         new_ref = _relative_ref(
-            item["candidate_new_reference"], "candidate_new_reference"
+            item["candidate_new_reference"],
+            "candidate_new_reference",
         )
         _validate_component_bytes(
             PurePosixPath(old_dir).parts, name_max, "old_working_dir"
@@ -187,20 +363,24 @@ def check_reference(
         _validate_component_bytes(
             new_ref.split("/"), name_max, "candidate_new_reference"
         )
-        _tree_proof(
-            item["old_working_dir_tree_proof"],
-            old_dir,
-            "old_working_dir_tree_proof",
-        )
-        _tree_proof(
-            item["new_working_dir_tree_proof"],
-            new_dir,
-            "new_working_dir_tree_proof",
-        )
+
+        _verify_directory_prefixes(repo, old_oid, old_dir, "old_working_dir")
+        _verify_directory_prefixes(repo, new_oid, new_dir, "new_working_dir")
 
         target = _resolve_repo_target(old_dir, old_ref)
         expected = _relative_to_target(new_dir, target)
+        _validate_component_bytes(
+            expected.split("/"), name_max, "expected_new_reference"
+        )
         candidate_target = _resolve_repo_target(new_dir, new_ref)
+
+        old_target_entry = _verify_regular_target(
+            repo, old_oid, target, "old_target"
+        )
+        new_target_entry = _verify_regular_target(
+            repo, new_oid, target, "new_target"
+        )
+
         status = (
             "PASS"
             if new_ref == expected and candidate_target == target
@@ -222,21 +402,15 @@ def check_reference(
             "resolved_target": target,
             "expected_new_reference": expected,
             "candidate_resolved_target": candidate_target,
-            "filesystem_name_max_bytes": name_max,
-            "working_directory_tree_proof": "SUPPLIED_EVIDENCE_ACCEPTED",
             "working_dir_depth_delta": (
                 len(PurePosixPath(new_dir).parts)
                 - len(PurePosixPath(old_dir).parts)
             ),
-            "mutation_authorized": False,
-            "execution_authorized": False,
-            "network_used": False,
-            "github_used": False,
-            "merge_authorized": False,
-            "release_authorized": False,
-            "production_authorized": False,
-            "runtime_authorized": False,
-            "device_authorized": False,
+            "filesystem_name_max_bytes": name_max,
+            "tree_evidence": "AUTHENTICATED_LOCAL_GIT",
+            "old_target_blob": old_target_entry["oid"],
+            "new_target_blob": new_target_entry["oid"],
+            **_authority_denials(),
         }
     except ValidationUnknown as exc:
         return {
@@ -244,22 +418,20 @@ def check_reference(
             "status": "UNKNOWN",
             "reason": "INVALID_OR_AMBIGUOUS_INPUT",
             "error": str(exc),
-            "mutation_authorized": False,
-            "execution_authorized": False,
-            "network_used": False,
-            "github_used": False,
-            "merge_authorized": False,
-            "release_authorized": False,
-            "production_authorized": False,
-            "runtime_authorized": False,
-            "device_authorized": False,
+            **_authority_denials(),
         }
 
 
 def check_batch(request: Any) -> dict[str, Any]:
     if (
         not isinstance(request, dict)
-        or set(request) != {"schema", "repo_root", "references"}
+        or set(request) != {
+            "schema",
+            "repo_root",
+            "old_ref",
+            "new_ref",
+            "references",
+        }
         or request.get("schema") != SCHEMA
         or not isinstance(request.get("references"), list)
         or not request["references"]
@@ -270,20 +442,15 @@ def check_batch(request: Any) -> dict[str, Any]:
             "status": "UNKNOWN",
             "reason": "BATCH_INVALID",
             "results": [],
-            "mutation_authorized": False,
-            "execution_authorized": False,
-            "network_used": False,
-            "github_used": False,
-            "merge_authorized": False,
-            "release_authorized": False,
-            "production_authorized": False,
-            "runtime_authorized": False,
-            "device_authorized": False,
+            **_authority_denials(),
         }
 
     try:
-        repo_root = _repo_root(request["repo_root"])
-        name_max = _name_max(repo_root)
+        repo = _repo_root(request["repo_root"])
+        _validate_repository(repo)
+        old_oid = _resolve_commit(repo, request["old_ref"], "old_ref")
+        new_oid = _resolve_commit(repo, request["new_ref"], "new_ref")
+        name_max = _name_max(repo)
     except ValidationUnknown as exc:
         return {
             "schema": SCHEMA,
@@ -291,37 +458,26 @@ def check_batch(request: Any) -> dict[str, Any]:
             "reason": "BATCH_INVALID",
             "error": str(exc),
             "results": [],
-            "mutation_authorized": False,
-            "execution_authorized": False,
-            "network_used": False,
-            "github_used": False,
-            "merge_authorized": False,
-            "release_authorized": False,
-            "production_authorized": False,
-            "runtime_authorized": False,
-            "device_authorized": False,
+            **_authority_denials(),
         }
 
     results = [
-        check_reference(item, repo_root, name_max)
+        check_reference(item, repo, old_oid, new_oid, name_max)
         for item in request["references"]
     ]
     order = {"UNKNOWN": 2, "FAIL": 1, "PASS": 0}
-    status = max((row["status"] for row in results), key=lambda x: order[x], default="PASS")
+    status = max((row["status"] for row in results), key=lambda x: order[x])
     return {
         "schema": SCHEMA,
         "status": status,
         "reason": f"BATCH_{status}",
+        "old_ref": request["old_ref"],
+        "new_ref": request["new_ref"],
+        "old_oid": old_oid,
+        "new_oid": new_oid,
         "results": results,
-        "mutation_authorized": False,
-        "execution_authorized": False,
-        "network_used": False,
-        "github_used": False,
-        "merge_authorized": False,
-        "release_authorized": False,
-        "production_authorized": False,
-        "runtime_authorized": False,
-        "device_authorized": False,
+        "git_read_only_used": True,
+        **_authority_denials(),
     }
 
 
@@ -353,15 +509,7 @@ def main(argv: list[str] | None = None) -> int:
             "status": "UNKNOWN",
             "reason": "CLI_ARGUMENT_INVALID",
             "results": [],
-            "mutation_authorized": False,
-            "execution_authorized": False,
-            "network_used": False,
-            "github_used": False,
-            "merge_authorized": False,
-            "release_authorized": False,
-            "production_authorized": False,
-            "runtime_authorized": False,
-            "device_authorized": False,
+            **_authority_denials(),
         }
     else:
         try:
@@ -376,15 +524,7 @@ def main(argv: list[str] | None = None) -> int:
                 "reason": "INPUT_INVALID",
                 "error": str(exc),
                 "results": [],
-                "mutation_authorized": False,
-                "execution_authorized": False,
-                "network_used": False,
-                "github_used": False,
-                "merge_authorized": False,
-                "release_authorized": False,
-                "production_authorized": False,
-                "runtime_authorized": False,
-                "device_authorized": False,
+                **_authority_denials(),
             }
     print(json.dumps(output, sort_keys=True, separators=(",", ":")))
     return 2 if output["status"] == "UNKNOWN" else (1 if output["status"] == "FAIL" else 0)

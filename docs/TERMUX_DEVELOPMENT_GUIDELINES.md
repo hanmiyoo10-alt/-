@@ -7,7 +7,7 @@ Canonical repository: `hanmiyoo10-alt/-`
 Current source layout: staged split-root under #2801
 
 - Standalone Termux family root: `products/standalone/termux/`
-- Migrated children: `products/standalone/termux/response-watch/`, `products/standalone/termux/background-gpt/`
+- Migrated children: `products/standalone/termux/response-watch/`, `products/standalone/termux/background-gpt/`, `products/standalone/termux/screen-on/`
 - Unmigrated child route: `plugins/termux/`
 
 Production release branch: `UNKNOWN — not established yet`
@@ -81,6 +81,7 @@ The default development target is the current owning child path. During staged m
 
 - Response Watch: `products/standalone/termux/response-watch/`
 - Background GPT: `products/standalone/termux/background-gpt/`
+- Screen On: `products/standalone/termux/screen-on/`
 - Unmigrated Termux children: `plugins/termux/<child>/`
 
 Do not modify unrelated host/application code unless evidence shows that

@@ -191,8 +191,15 @@ const backgroundGptLegacy = classifyPaths(['plugins/termux/background-gpt/README
 assert.deepEqual(backgroundGptLegacy.labels, ['scope:unclassified']);
 assert.deepEqual(backgroundGptLegacy.ambiguousPaths, []);
 assert.deepEqual(backgroundGptLegacy.unclassifiedPaths, ['plugins/termux/background-gpt/README.md']);
+const screenOnTarget = classifyPaths(['products/standalone/termux/screen-on/README.md'], registry);
+assert.deepEqual(screenOnTarget.labels, ['product:termux']);
+assert.deepEqual(screenOnTarget.ambiguousPaths, []);
+assert.deepEqual(screenOnTarget.unclassifiedPaths, []);
+const screenOnLegacy = classifyPaths(['plugins/termux/screen-on/README.md'], registry);
+assert.deepEqual(screenOnLegacy.labels, ['scope:unclassified']);
+assert.deepEqual(screenOnLegacy.ambiguousPaths, []);
+assert.deepEqual(screenOnLegacy.unclassifiedPaths, ['plugins/termux/screen-on/README.md']);
 for (const legacyChildPath of [
-  'plugins/termux/screen-on/README.md',
   'plugins/termux/taskbridge/README.md',
 ]) {
   assert.deepEqual(classifyPaths([legacyChildPath], registry).labels, ['scope:unclassified'], `${legacyChildPath} must remain unclassified during staged migration`);

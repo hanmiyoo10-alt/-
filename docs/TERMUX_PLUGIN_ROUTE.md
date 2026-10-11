@@ -1,41 +1,35 @@
 # Termux Plugin Route
 
 Date: 2026-08-24
-Status: RESERVED · NON-RUNTIME · STAGED MIGRATION
-Scope: legacy compatibility route `plugins/termux/`
+Status: RETIRED · NON-RUNTIME
+Scope: retired legacy route `plugins/termux/`
 
-## Purpose
+## Retirement state
 
-Reserve an independent plugin root for the Termux customization project without changing any existing plugin runtime or release path.
+The staged migration under #2801 is complete through T6.
 
-```text
-plugins/
-  termux/
-```
+All current Termux child source now lives under:
+
+`products/standalone/termux/**`
+
+The legacy `plugins/termux/**` route is retired and must remain absent from current source. Do not recreate it merely as a compatibility placeholder or future fixed plugin root.
 
 ## Durable operating contract
 
-All Termux plugin development, diagnostic, release, evidence, regression, and production-handling work must follow:
+All Termux development, diagnostics, evidence, regression, release planning, and production-handling work must follow:
 
-`docs/TERMUX_DEVELOPMENT_GUIDELINES.md`
+- `docs/TERMUX_DEVELOPMENT_GUIDELINES.md`
+- `docs/TERMUX_REPO_AUTOMATION.md`
 
-Repository-driven project-memory and production-state synchronization must follow:
+Conversation memory remains context only. Current production/release truth must be re-read from the owning repository evidence.
 
-`docs/TERMUX_REPO_AUTOMATION.md`
+## Current authority boundary
 
-These repository documents are the durable project memory and take precedence over conversation memory for project operating rules. Production state must still be re-read from the actual repository/release artifacts rather than inferred from memory.
+- Product family: `product:termux`
+- Canonical source root: `products/standalone/termux/`
+- Lifecycle: prototype / NON-PRODUCTION
+- Production release branch: UNKNOWN — not established
+- Production manifest: UNKNOWN — not established
+- Production version: UNKNOWN — not established
 
-## Current state
-
-- Staged product-family migration is active under #2801.
-- `response-watch/`, `background-gpt/`, `screen-on/`, `taskbridge/`, and `large-doc-editor/` have moved under `products/standalone/termux/` and are owned by the non-production `product:termux` family.
-- The legacy `plugins/termux/` route now retains compatibility residue only until the separately reviewed T6 retirement stage; the Large Doc Editor old root retains only compatibility evidence, not runnable implementation.
-- These child implementations and evidence do not establish a route-wide Termux production release authority.
-- No `latest.js` or `install.js` is published yet.
-- No Termux production release branch, production manifest, or production version has been established yet; preserve these as `UNKNOWN` until repository evidence establishes them.
-- Existing plugin paths such as `plugins/simcore/`, `plugins/devpass/`, and `plugins/usage-dashboard/` are untouched.
-- No credentials, tokens, session data, or private configuration belong in this route.
-
-## Future use
-
-When the Termux-side plugin artifact is ready, publish it under this fixed root and keep any updater URL stable. Runtime or installer files should only be added after they are complete enough to be treated as release artifacts.
+Retiring the old route does not create a release branch, production artifact, deployment path, updater, runtime state, or device authority.

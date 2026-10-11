@@ -1,6 +1,6 @@
 # Termux Standalone Product Family
 
-Status: `T5_LARGE_DOC_EDITOR_MIGRATED / NON_PRODUCTION`
+Status: `T6_LEGACY_ROUTE_RETIRED / NON_PRODUCTION`
 
 This root establishes the repository-level standalone Termux product-family identity selected by #2595 and authorized for T0 by #2801. It is an evidence and routing surface only.
 
@@ -19,13 +19,13 @@ This T0 landing is **not a production release**. It does not create or imply pro
 
 T5 has moved Response Watch, Background GPT, Screen On, TaskBridge, and Large Doc Editor under `products/standalone/termux/**` as `product:termux` source.
 
-No unmigrated runnable child implementation remains under `plugins/termux/**`. The legacy `plugin:termux-large-doc-editor` owner is intentionally retained only as compatibility metadata until T6, with a compatibility/evidence README at `plugins/termux/large-doc-editor/README.md`. No compatibility copy remains for Response Watch, Background GPT, Screen On, or TaskBridge; those old paths stay intentionally unclassified/fail-closed.
+The legacy `plugins/termux/**` route has been retired. No current source or compatibility placeholder remains there. Response Watch, Background GPT, Screen On, TaskBridge, and Large Doc Editor are all owned through the `product:termux` family root.
 
 ## Staged migration
 
 Child relocation is separately staged under #2801:
 
-`T1 response-watch (complete) → T2 background-gpt (complete) → T3 screen-on (complete) → T4 taskbridge (complete) → T5 large-doc-editor (complete) → T6 legacy-route retirement review`
+`T1 response-watch (complete) → T2 background-gpt (complete) → T3 screen-on (complete) → T4 taskbridge (complete) → T5 large-doc-editor (complete) → T6 legacy-route retirement (complete)`
 
 Each later stage requires its own fresh authority, impact, consumer, validation, and compatibility review. T0 authorizes no child physical move.
 

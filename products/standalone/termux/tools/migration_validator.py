@@ -180,18 +180,19 @@ def _git_bounded_bytes(
         raise ValidationUnknown("git: bounded stdout pipe unavailable")
     chunks: list[bytes] = []
     total = 0
-    while True:
-        chunk = proc.stdout.read(65_536)
-        if not chunk:
-            break
-        total += len(chunk)
-        if total > max_bytes:
-            proc.kill()
-            proc.wait()
-            raise ValidationUnknown(
-                f"git {' '.join(args)} output exceeds {max_bytes} bytes"
-            )
-        chunks.append(chunk)
+    with proc.stdout:
+        while True:
+            chunk = proc.stdout.read(65_536)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > max_bytes:
+                proc.kill()
+                proc.wait()
+                raise ValidationUnknown(
+                    f"git {' '.join(args)} output exceeds {max_bytes} bytes"
+                )
+            chunks.append(chunk)
     returncode = proc.wait()
     payload = b"".join(chunks)
     if returncode != 0:
@@ -487,7 +488,7 @@ def validate(repo: Path, base: str, head: str, plan: dict[str, Any]) -> dict[str
         scan_paths = sorted(
             {
                 path
-                for path in changed_endpoints
+                for path in changed
                 if path.startswith(new_root + "/")
                 or path.startswith(".github/workflows/")
                 or path.endswith(".py")

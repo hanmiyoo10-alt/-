@@ -357,7 +357,9 @@ class MigrationValidatorTests(unittest.TestCase):
             "update-index",
             "--add",
             "--cacheinfo",
-            f"160000,{seed_one},vendor/lib",
+            "160000",
+            seed_one,
+            "vendor/lib",
         )
         git(self.repo, "commit", "-m", "base with gitlink")
         base = git(self.repo, "rev-parse", "HEAD")
@@ -371,7 +373,9 @@ class MigrationValidatorTests(unittest.TestCase):
             self.repo,
             "update-index",
             "--cacheinfo",
-            f"160000,{seed_two},vendor/lib",
+            "160000",
+            seed_two,
+            "vendor/lib",
         )
         git(self.repo, "commit", "-m", "move plus gitlink update")
         head = git(self.repo, "rev-parse", "HEAD")

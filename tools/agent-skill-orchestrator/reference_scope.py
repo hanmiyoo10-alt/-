@@ -144,12 +144,17 @@ def _reference_matches(domain: dict[str, Any], reference: dict[str, str]) -> boo
     )
 
 
-def _read_bounded_regular_file(path: Path, max_bytes: int) -> bytes:
+def _read_bounded_regular_file(
+    path: Path | str,
+    max_bytes: int,
+    *,
+    dir_fd: int | None = None,
+) -> bytes:
     nofollow = getattr(os, "O_NOFOLLOW", None)
     if nofollow is None:
         raise ValueError("no-follow file reads are unsupported")
     flags = os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0) | nofollow
-    fd = os.open(path, flags)
+    fd = os.open(path, flags, dir_fd=dir_fd)
     try:
         info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode) or info.st_size > max_bytes:
@@ -183,15 +188,36 @@ def _bounded_registry_snapshot(path: Path) -> dict[str, Any]:
 def _load_frozen_fixture(raw_path: str) -> tuple[str, dict[str, Any]]:
     requested = Path(raw_path)
     candidate = requested if requested.is_absolute() else PACKAGE_ROOT / requested
-    root = FROZEN_FIXTURE_ROOT.resolve(strict=True)
-    parent = candidate.parent.resolve(strict=True)
-    if parent != root:
+    lexical_root = Path(os.path.abspath(FROZEN_FIXTURE_ROOT))
+    lexical_candidate = Path(os.path.abspath(candidate))
+    if lexical_candidate.parent != lexical_root:
         raise ValueError("frozen fixture must be a direct child of tests/fixtures")
-    if not candidate.name.endswith("-frozen-domain-registry.json"):
+    if not lexical_candidate.name.endswith("-frozen-domain-registry.json"):
         raise ValueError("unsupported frozen fixture filename")
-    stable_path = root / candidate.name
-    data = _bounded_registry_snapshot(stable_path)
-    return stable_path.relative_to(PACKAGE_ROOT).as_posix(), data
+
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    odirectory = getattr(os, "O_DIRECTORY", None)
+    if nofollow is None or odirectory is None:
+        raise ValueError("anchored fixture reads are unsupported")
+    root_flags = os.O_RDONLY | odirectory | getattr(os, "O_CLOEXEC", 0) | nofollow
+    root_fd = os.open(lexical_root, root_flags)
+    try:
+        raw = _read_bounded_regular_file(
+            lexical_candidate.name,
+            MAX_REGISTRY_BYTES,
+            dir_fd=root_fd,
+        )
+    finally:
+        os.close(root_fd)
+
+    text = raw.decode("utf-8")
+    json.loads(text, object_pairs_hook=_reject_duplicate_keys)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        snapshot = Path(temp_dir) / "registry.json"
+        snapshot.write_bytes(raw)
+        data = load_domain_registry(snapshot)
+    locator = (FROZEN_FIXTURE_ROOT / lexical_candidate.name).relative_to(PACKAGE_ROOT)
+    return locator.as_posix(), data
 
 
 def classify_reference(request: Any) -> dict[str, Any]:
@@ -205,7 +231,12 @@ def classify_reference(request: Any) -> dict[str, Any]:
         live_registry_digest = registry_sha256(live_registry)
         live_domain = _domain_for_scope(live_registry, scope)
     except Exception:
-        return _unknown("LIVE_REGISTRY_INVALID")
+        return _result(
+            "UNKNOWN",
+            "LIVE_REGISTRY_INVALID",
+            scope=scope,
+            reference=reference,
+        )
 
     frozen_by_locator: dict[str, tuple[str, dict[str, Any] | None]] = {}
     for raw_path in frozen_paths:

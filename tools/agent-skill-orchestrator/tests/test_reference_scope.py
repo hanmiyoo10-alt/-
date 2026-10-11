@@ -382,6 +382,75 @@ class ReferenceScopeTests(unittest.TestCase):
         self.assertEqual(out["disposition"], "UNKNOWN")
         self.assertEqual(out["reason_code"], "FROZEN_FIXTURE_INVALID")
 
+    def test_fixture_read_is_anchored_to_opened_directory_descriptor(self):
+        fixture_root = PACKAGE / "tests" / "fixtures"
+        outside = PACKAGE / "tests" / "outside-reference-scope"
+        outside.mkdir(exist_ok=True)
+        fixture_name = "anchored-reference-scope-frozen-domain-registry.json"
+        outside_fixture = outside / fixture_name
+        outside_fixture.write_text(
+            (PACKAGE / VOYAGE_FROZEN).read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        real_open = os.open
+
+        def anchored_open(path, flags, *args, **kwargs):
+            if Path(path) == fixture_root:
+                fd = real_open(path, flags, *args, **kwargs)
+                replacement = fixture_root.with_name("fixtures-reference-scope-backup")
+                fixture_root.rename(replacement)
+                try:
+                    fixture_root.symlink_to(outside, target_is_directory=True)
+                except Exception:
+                    replacement.rename(fixture_root)
+                    os.close(fd)
+                    raise
+                self.addCleanup(
+                    lambda: (
+                        fixture_root.unlink(missing_ok=True),
+                        replacement.rename(fixture_root),
+                    )
+                )
+                return fd
+            return real_open(path, flags, *args, **kwargs)
+
+        try:
+            with mock.patch("reference_scope.os.open", side_effect=anchored_open):
+                out = classify_reference(self.request(
+                    "plugin:voyage-token-check",
+                    "guidelines_path",
+                    "docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md",
+                    frozen=[f"tests/fixtures/{fixture_name}"],
+                ))
+            self.assertEqual(out["disposition"], "UNKNOWN")
+            self.assertEqual(out["reason_code"], "FROZEN_FIXTURE_INVALID")
+            self.assertEqual(
+                out["frozen"]["error_locator"],
+                f"tests/fixtures/{fixture_name}",
+            )
+        finally:
+            outside_fixture.unlink(missing_ok=True)
+            outside.rmdir()
+
+    def test_live_registry_failure_preserves_validated_query(self):
+        with mock.patch(
+            "reference_scope._bounded_registry_snapshot",
+            side_effect=ValueError("live registry unavailable"),
+        ):
+            out = classify_reference(self.request(
+                "plugin:voyage-token-check",
+                "primary_path",
+                "plugins/risu/local/voyage/**",
+                frozen=[],
+            ))
+        self.assertEqual(out["disposition"], "UNKNOWN")
+        self.assertEqual(out["reason_code"], "LIVE_REGISTRY_INVALID")
+        self.assertEqual(out["scope"], "plugin:voyage-token-check")
+        self.assertEqual(
+            out["reference"],
+            {"field": "primary_path", "value": "plugins/risu/local/voyage/**"},
+        )
+
     def test_invalid_later_fixture_preserves_accumulated_frozen_provenance(self):
         out = classify_reference(self.request(
             "plugin:voyage-token-check",

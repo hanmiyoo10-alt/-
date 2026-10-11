@@ -340,6 +340,27 @@ class LocationRelativeSentinelTests(unittest.TestCase):
         ):
             self.assertFalse(out[key])
 
+    def test_cli_json_decoder_limits_fail_closed(self):
+        script = TOOLS / "location_relative_sentinel.py"
+        cases = [
+            "[" * 2000 + "]" * 2000,
+            "1" * 5000,
+        ]
+        for payload in cases:
+            with self.subTest(size=len(payload)):
+                run = subprocess.run(
+                    [sys.executable, str(script)],
+                    input=payload,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(run.returncode, 2, run.stderr)
+                parsed = json.loads(run.stdout)
+                self.assertEqual(parsed["status"], "UNKNOWN")
+                self.assertEqual(parsed["reason"], "INPUT_INVALID")
+                self.assertFalse(parsed["mutation_authorized"])
+
     def test_cli_exit_codes_and_deterministic_json(self):
         script = TOOLS / "location_relative_sentinel.py"
 

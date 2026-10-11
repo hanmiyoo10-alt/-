@@ -2425,3 +2425,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/78b407697e64b6e05fe24b5a68917c8d775b731f)
 - Event ID: `27ab799285c267953b7b16561a05c245ff7c85d9ac3f270e3b47e01909d3f769`
 <!-- canonical-main-doc-promoted:27ab799285c267953b7b16561a05c245ff7c85d9ac3f270e3b47e01909d3f769 -->
+
+### 2026-10-11 — refactor(termux): move background gpt into product family (#3534)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `d978c6c8ab93393423accdc30cd3bdd5d42d5456`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d978c6c8ab93393423accdc30cd3bdd5d42d5456)
+- Event ID: `bdae469c3e318edf604ff2abd84c01aaf122c550a50f2e932b782247155927ec`
+<!-- canonical-main-doc-promoted:bdae469c3e318edf604ff2abd84c01aaf122c550a50f2e932b782247155927ec -->

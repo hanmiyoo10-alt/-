@@ -383,54 +383,105 @@ class ReferenceScopeTests(unittest.TestCase):
         self.assertEqual(out["reason_code"], "FROZEN_FIXTURE_INVALID")
 
     def test_fixture_read_is_anchored_to_opened_directory_descriptor(self):
-        fixture_root = PACKAGE / "tests" / "fixtures"
-        outside = PACKAGE / "tests" / "outside-reference-scope"
-        outside.mkdir(exist_ok=True)
-        fixture_name = "anchored-reference-scope-frozen-domain-registry.json"
-        outside_fixture = outside / fixture_name
-        outside_fixture.write_text(
-            (PACKAGE / VOYAGE_FROZEN).read_text(encoding="utf-8"),
-            encoding="utf-8",
-        )
-        real_open = os.open
+        with tempfile.TemporaryDirectory() as temp:
+            package_root = Path(temp) / "package"
+            fixture_root = package_root / "tests" / "fixtures"
+            outside = package_root / "tests" / "outside"
+            fixture_root.mkdir(parents=True)
+            outside.mkdir(parents=True)
+            fixture_name = "anchored-reference-scope-frozen-domain-registry.json"
+            outside_fixture = outside / fixture_name
+            outside_fixture.write_text(
+                (PACKAGE / VOYAGE_FROZEN).read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
 
-        def anchored_open(path, flags, *args, **kwargs):
-            if Path(path) == fixture_root:
+            real_open = os.open
+            swapped = False
+            backup = fixture_root.with_name("fixtures-backup")
+
+            def anchored_open(path, flags, *args, **kwargs):
+                nonlocal swapped
                 fd = real_open(path, flags, *args, **kwargs)
-                replacement = fixture_root.with_name("fixtures-reference-scope-backup")
-                fixture_root.rename(replacement)
-                try:
+                if Path(path) == fixture_root and not swapped:
+                    fixture_root.rename(backup)
                     fixture_root.symlink_to(outside, target_is_directory=True)
-                except Exception:
-                    replacement.rename(fixture_root)
-                    os.close(fd)
-                    raise
-                self.addCleanup(
-                    lambda: (
-                        fixture_root.unlink(missing_ok=True),
-                        replacement.rename(fixture_root),
-                    )
-                )
+                    swapped = True
                 return fd
-            return real_open(path, flags, *args, **kwargs)
 
-        try:
-            with mock.patch("reference_scope.os.open", side_effect=anchored_open):
+            with (
+                mock.patch("reference_scope.PACKAGE_ROOT", package_root),
+                mock.patch("reference_scope.FROZEN_FIXTURE_ROOT", fixture_root),
+                mock.patch("reference_scope.os.open", side_effect=anchored_open),
+            ):
                 out = classify_reference(self.request(
                     "plugin:voyage-token-check",
                     "guidelines_path",
                     "docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md",
                     frozen=[f"tests/fixtures/{fixture_name}"],
                 ))
+
             self.assertEqual(out["disposition"], "UNKNOWN")
             self.assertEqual(out["reason_code"], "FROZEN_FIXTURE_INVALID")
             self.assertEqual(
                 out["frozen"]["error_locator"],
                 f"tests/fixtures/{fixture_name}",
             )
-        finally:
-            outside_fixture.unlink(missing_ok=True)
-            outside.rmdir()
+            self.assertTrue(swapped)
+            fixture_root.unlink()
+            backup.rename(fixture_root)
+
+    def test_live_registry_read_is_anchored_to_opened_directory_descriptor(self):
+        with tempfile.TemporaryDirectory() as temp:
+            package_root = Path(temp) / "package"
+            domains_root = package_root / "domains"
+            outside = package_root / "outside"
+            domains_root.mkdir(parents=True)
+            outside.mkdir(parents=True)
+            live_path = domains_root / "registry.json"
+            live_path.write_text(
+                (PACKAGE / "domains" / "registry.json").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            outside_live = outside / "registry.json"
+            outside_live.write_text(
+                (PACKAGE / "domains" / "registry.json").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            real_open = os.open
+            swapped = False
+            backup = domains_root.with_name("domains-backup")
+
+            def anchored_open(path, flags, *args, **kwargs):
+                nonlocal swapped
+                fd = real_open(path, flags, *args, **kwargs)
+                if Path(path) == domains_root and not swapped:
+                    domains_root.rename(backup)
+                    domains_root.symlink_to(outside, target_is_directory=True)
+                    swapped = True
+                return fd
+
+            with (
+                mock.patch("reference_scope.DOMAIN_REGISTRY_PATH", live_path),
+                mock.patch("reference_scope.os.open", side_effect=anchored_open),
+            ):
+                out = classify_reference(self.request(
+                    "plugin:voyage-token-check",
+                    "primary_path",
+                    "plugins/risu/local/voyage/**",
+                    frozen=[],
+                ))
+
+            self.assertEqual(out["disposition"], "LIVE_CURRENT_ONLY")
+            self.assertEqual(out["scope"], "plugin:voyage-token-check")
+            self.assertEqual(
+                out["live"]["registry_sha256"],
+                registry_sha256(load_domain_registry(PACKAGE / "domains" / "registry.json")),
+            )
+            self.assertTrue(swapped)
+            domains_root.unlink()
+            backup.rename(domains_root)
 
     def test_live_registry_failure_preserves_validated_query(self):
         with mock.patch(

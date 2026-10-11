@@ -175,14 +175,36 @@ def _read_bounded_regular_file(
         os.close(fd)
 
 
-def _bounded_registry_snapshot(path: Path) -> dict[str, Any]:
-    raw = _read_bounded_regular_file(path, MAX_REGISTRY_BYTES)
+def _open_directory_nofollow(path: Path) -> int:
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    odirectory = getattr(os, "O_DIRECTORY", None)
+    if nofollow is None or odirectory is None:
+        raise ValueError("anchored directory reads are unsupported")
+    flags = os.O_RDONLY | odirectory | getattr(os, "O_CLOEXEC", 0) | nofollow
+    return os.open(path, flags)
+
+
+def _validate_registry_bytes(raw: bytes) -> dict[str, Any]:
     text = raw.decode("utf-8")
     json.loads(text, object_pairs_hook=_reject_duplicate_keys)
     with tempfile.TemporaryDirectory() as temp_dir:
         snapshot = Path(temp_dir) / "registry.json"
         snapshot.write_bytes(raw)
         return load_domain_registry(snapshot)
+
+
+def _bounded_registry_snapshot(path: Path) -> dict[str, Any]:
+    lexical = Path(os.path.abspath(path))
+    root_fd = _open_directory_nofollow(lexical.parent)
+    try:
+        raw = _read_bounded_regular_file(
+            lexical.name,
+            MAX_REGISTRY_BYTES,
+            dir_fd=root_fd,
+        )
+    finally:
+        os.close(root_fd)
+    return _validate_registry_bytes(raw)
 
 
 def _load_frozen_fixture(raw_path: str) -> tuple[str, dict[str, Any]]:
@@ -195,12 +217,7 @@ def _load_frozen_fixture(raw_path: str) -> tuple[str, dict[str, Any]]:
     if not lexical_candidate.name.endswith("-frozen-domain-registry.json"):
         raise ValueError("unsupported frozen fixture filename")
 
-    nofollow = getattr(os, "O_NOFOLLOW", None)
-    odirectory = getattr(os, "O_DIRECTORY", None)
-    if nofollow is None or odirectory is None:
-        raise ValueError("anchored fixture reads are unsupported")
-    root_flags = os.O_RDONLY | odirectory | getattr(os, "O_CLOEXEC", 0) | nofollow
-    root_fd = os.open(lexical_root, root_flags)
+    root_fd = _open_directory_nofollow(lexical_root)
     try:
         raw = _read_bounded_regular_file(
             lexical_candidate.name,
@@ -210,12 +227,7 @@ def _load_frozen_fixture(raw_path: str) -> tuple[str, dict[str, Any]]:
     finally:
         os.close(root_fd)
 
-    text = raw.decode("utf-8")
-    json.loads(text, object_pairs_hook=_reject_duplicate_keys)
-    with tempfile.TemporaryDirectory() as temp_dir:
-        snapshot = Path(temp_dir) / "registry.json"
-        snapshot.write_bytes(raw)
-        data = load_domain_registry(snapshot)
+    data = _validate_registry_bytes(raw)
     locator = (FROZEN_FIXTURE_ROOT / lexical_candidate.name).relative_to(PACKAGE_ROOT)
     return locator.as_posix(), data
 

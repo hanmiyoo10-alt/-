@@ -13,6 +13,30 @@ from workflow_path_depth import SCHEMA, check_batch, check_reference
 
 
 class WorkflowPathDepthTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.repo_root = Path(self.temp.name)
+        for rel in (
+            "plugins/termux/large-doc-editor",
+            "products/standalone/termux/large-doc-editor",
+            "plugins/termux/example",
+            "products/termux/example",
+            "a",
+            "b",
+        ):
+            (self.repo_root / rel).mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def check(self, item):
+        return check_reference(item, self.repo_root)
+
+    def batch(self, request):
+        payload = dict(request)
+        payload.setdefault("repo_root", str(self.repo_root))
+        return check_batch(payload)
+
     def t5(self, candidate="../../../../.github/tooling/ci-summary/phase_receipt.py"):
         return {
             "old_working_dir": "plugins/termux/large-doc-editor",
@@ -22,7 +46,7 @@ class WorkflowPathDepthTests(unittest.TestCase):
         }
 
     def test_t5_one_level_deeper_preserves_same_target(self):
-        out = check_reference(self.t5())
+        out = self.check(self.t5())
         self.assertEqual(out["status"], "PASS")
         self.assertEqual(
             out["resolved_target"],
@@ -35,7 +59,7 @@ class WorkflowPathDepthTests(unittest.TestCase):
         )
 
     def test_t5_old_depth_candidate_fails_with_expected_reference(self):
-        out = check_reference(self.t5(
+        out = self.check(self.t5(
             "../../../.github/tooling/ci-summary/phase_receipt.py"
         ))
         self.assertEqual(out["status"], "FAIL")
@@ -46,7 +70,7 @@ class WorkflowPathDepthTests(unittest.TestCase):
         )
 
     def test_same_depth_move_can_preserve_relative_depth(self):
-        out = check_reference({
+        out = self.check({
             "old_working_dir": "plugins/termux/example",
             "new_working_dir": "products/termux/example",
             "old_reference": "../../../.github/tooling/helper.py",
@@ -56,7 +80,7 @@ class WorkflowPathDepthTests(unittest.TestCase):
         self.assertEqual(out["working_dir_depth_delta"], 0)
 
     def test_repository_escape_is_unknown(self):
-        out = check_reference({
+        out = self.check({
             "old_working_dir": "a",
             "new_working_dir": "b",
             "old_reference": "../../outside",
@@ -73,7 +97,7 @@ class WorkflowPathDepthTests(unittest.TestCase):
         ]
         for case in cases:
             with self.subTest(case=case):
-                self.assertEqual(check_reference(case)["status"], "UNKNOWN")
+                self.assertEqual(self.check(case)["status"], "UNKNOWN")
 
     def test_parent_traversal_after_component_is_unknown(self):
         cases = [
@@ -85,7 +109,7 @@ class WorkflowPathDepthTests(unittest.TestCase):
         ]
         for case in cases:
             with self.subTest(case=case):
-                self.assertEqual(check_reference(case)["status"], "UNKNOWN")
+                self.assertEqual(self.check(case)["status"], "UNKNOWN")
 
     def test_nul_in_reference_or_working_directory_is_unknown(self):
         nul = chr(0)
@@ -99,10 +123,49 @@ class WorkflowPathDepthTests(unittest.TestCase):
         ]
         for case in cases:
             with self.subTest(case=case):
-                self.assertEqual(check_reference(case)["status"], "UNKNOWN")
+                self.assertEqual(self.check(case)["status"], "UNKNOWN")
+
+    def test_symlinked_working_directory_is_unknown(self):
+        actual = self.repo_root / "actual" / "old"
+        actual.mkdir(parents=True)
+        (self.repo_root / "link").symlink_to(actual, target_is_directory=True)
+        case = {
+            **self.t5(),
+            "old_working_dir": "link",
+            "old_reference": "../helper.py",
+        }
+        self.assertEqual(self.check(case)["status"], "UNKNOWN")
+
+    def test_unpaired_surrogate_in_path_input_is_unknown(self):
+        surrogate = chr(0xD800)
+        cases = [
+            {**self.t5(), "old_reference": "../helper" + surrogate + ".py"},
+            {
+                **self.t5(),
+                "candidate_new_reference": "../helper" + surrogate + ".py",
+            },
+            {
+                **self.t5(),
+                "new_working_dir": "products/standalone/termux/"
+                + surrogate
+                + "large-doc-editor",
+            },
+        ]
+        for case in cases:
+            with self.subTest(case=case):
+                self.assertEqual(self.check(case)["status"], "UNKNOWN")
+
+    def test_parent_only_references_are_unknown(self):
+        cases = [
+            {**self.t5(), "old_reference": ".."},
+            {**self.t5(), "candidate_new_reference": "../../../.."},
+        ]
+        for case in cases:
+            with self.subTest(case=case):
+                self.assertEqual(self.check(case)["status"], "UNKNOWN")
 
     def test_candidate_that_targets_wrong_location_fails(self):
-        out = check_reference(self.t5("../../../../docs/not-the-helper.py"))
+        out = self.check(self.t5("../../../../docs/not-the-helper.py"))
         self.assertEqual(out["status"], "FAIL")
         self.assertNotEqual(
             out["candidate_resolved_target"],
@@ -117,8 +180,8 @@ class WorkflowPathDepthTests(unittest.TestCase):
                 self.t5("../../../.github/tooling/ci-summary/phase_receipt.py"),
             ],
         }
-        first = check_batch(request)
-        second = check_batch(json.loads(json.dumps(request)))
+        first = self.batch(request)
+        second = self.batch(json.loads(json.dumps(request)))
         self.assertEqual(first, second)
         self.assertEqual(first["status"], "FAIL")
         for field in (
@@ -142,13 +205,13 @@ class WorkflowPathDepthTests(unittest.TestCase):
         )
 
     def test_batch_shape_and_limit_fail_closed(self):
-        self.assertEqual(check_batch({"schema": SCHEMA})["status"], "UNKNOWN")
+        self.assertEqual(self.batch({"schema": SCHEMA})["status"], "UNKNOWN")
         self.assertEqual(
-            check_batch({"schema": SCHEMA, "references": []})["status"],
+            self.batch({"schema": SCHEMA, "references": []})["status"],
             "UNKNOWN",
         )
         self.assertEqual(
-            check_batch({"schema": SCHEMA, "references": [self.t5()] * 65})["status"],
+            self.batch({"schema": SCHEMA, "references": [self.t5()] * 65})["status"],
             "UNKNOWN",
         )
 
@@ -183,7 +246,11 @@ class WorkflowPathDepthTests(unittest.TestCase):
         self.assertEqual(json.loads(run.stdout)["status"], "UNKNOWN")
 
     def test_cli_returns_deterministic_json_and_status(self):
-        request = {"schema": SCHEMA, "references": [self.t5()]}
+        request = {
+            "schema": SCHEMA,
+            "repo_root": str(self.repo_root),
+            "references": [self.t5()],
+        }
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
             json.dump(request, handle)
             target = Path(handle.name)

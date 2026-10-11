@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import posixpath
 import sys
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 SCHEMA = "termux-workflow-path-depth.v1"
@@ -19,6 +19,38 @@ class ValidationUnknown(ValueError):
     pass
 
 
+def _contains_surrogate(value: str) -> bool:
+    return any(0xD800 <= ord(char) <= 0xDFFF for char in value)
+
+
+def _repo_root(value: Any) -> Path:
+    if not isinstance(value, str) or not value or chr(0) in value or _contains_surrogate(value):
+        raise ValidationUnknown("repo_root: expected usable absolute path")
+    root = Path(value)
+    if not root.is_absolute():
+        raise ValidationUnknown("repo_root: expected absolute path")
+    try:
+        resolved = root.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ValidationUnknown("repo_root: unavailable") from exc
+    if not resolved.is_dir():
+        raise ValidationUnknown("repo_root: expected directory")
+    return resolved
+
+
+def _verify_working_dir(repo_root: Path, working_dir: str, field: str) -> None:
+    current = repo_root
+    for part in PurePosixPath(working_dir).parts:
+        current = current / part
+        try:
+            if current.is_symlink():
+                raise ValidationUnknown(f"{field}: symlink component is unsupported")
+            if not current.is_dir():
+                raise ValidationUnknown(f"{field}: directory evidence unavailable")
+        except OSError as exc:
+            raise ValidationUnknown(f"{field}: directory evidence unavailable") from exc
+
+
 def _repo_dir(value: Any, field: str) -> str:
     if not isinstance(value, str) or not value or len(value) > MAX_PATH_CHARS:
         raise ValidationUnknown(f"{field}: expected bounded non-empty path")
@@ -27,6 +59,7 @@ def _repo_dir(value: Any, field: str) -> str:
         or value.startswith("/")
         or value.endswith("/")
         or chr(0) in value
+        or _contains_surrogate(value)
     ):
         raise ValidationUnknown(f"{field}: noncanonical repository directory")
     if "\\" in value or "//" in value:
@@ -46,6 +79,7 @@ def _relative_ref(value: Any, field: str) -> str:
         value != value.strip()
         or value.startswith("/")
         or chr(0) in value
+        or _contains_surrogate(value)
     ):
         raise ValidationUnknown(f"{field}: expected canonical relative path")
     if "\\" in value or "//" in value:
@@ -64,6 +98,8 @@ def _relative_ref(value: Any, field: str) -> str:
                 )
         else:
             seen_path_component = True
+    if not seen_path_component:
+        raise ValidationUnknown(f"{field}: expected file-like path component")
     return value
 
 
@@ -85,10 +121,10 @@ def _relative_to_target(working_dir: str, target: str) -> str:
     relative = posixpath.relpath(target, start=working_dir)
     if relative.startswith("/"):
         raise ValidationUnknown("computed reference is not relative")
-    return relative
+    return _relative_ref(relative, "expected_new_reference")
 
 
-def check_reference(item: Any) -> dict[str, Any]:
+def check_reference(item: Any, repo_root: Path | None = None) -> dict[str, Any]:
     try:
         if not isinstance(item, dict) or set(item) != {
             "old_working_dir",
@@ -97,8 +133,12 @@ def check_reference(item: Any) -> dict[str, Any]:
             "candidate_new_reference",
         }:
             raise ValidationUnknown("request shape invalid")
+        if repo_root is None:
+            raise ValidationUnknown("repo_root evidence required")
         old_dir = _repo_dir(item["old_working_dir"], "old_working_dir")
         new_dir = _repo_dir(item["new_working_dir"], "new_working_dir")
+        _verify_working_dir(repo_root, old_dir, "old_working_dir")
+        _verify_working_dir(repo_root, new_dir, "new_working_dir")
         old_ref = _relative_ref(item["old_reference"], "old_reference")
         new_ref = _relative_ref(
             item["candidate_new_reference"], "candidate_new_reference"
@@ -163,7 +203,7 @@ def check_reference(item: Any) -> dict[str, Any]:
 def check_batch(request: Any) -> dict[str, Any]:
     if (
         not isinstance(request, dict)
-        or set(request) != {"schema", "references"}
+        or set(request) != {"schema", "repo_root", "references"}
         or request.get("schema") != SCHEMA
         or not isinstance(request.get("references"), list)
         or not request["references"]
@@ -185,7 +225,27 @@ def check_batch(request: Any) -> dict[str, Any]:
             "device_authorized": False,
         }
 
-    results = [check_reference(item) for item in request["references"]]
+    try:
+        repo_root = _repo_root(request["repo_root"])
+    except ValidationUnknown as exc:
+        return {
+            "schema": SCHEMA,
+            "status": "UNKNOWN",
+            "reason": "BATCH_INVALID",
+            "error": str(exc),
+            "results": [],
+            "mutation_authorized": False,
+            "execution_authorized": False,
+            "network_used": False,
+            "github_used": False,
+            "merge_authorized": False,
+            "release_authorized": False,
+            "production_authorized": False,
+            "runtime_authorized": False,
+            "device_authorized": False,
+        }
+
+    results = [check_reference(item, repo_root) for item in request["references"]]
     order = {"UNKNOWN": 2, "FAIL": 1, "PASS": 0}
     status = max((row["status"] for row in results), key=lambda x: order[x], default="PASS")
     return {

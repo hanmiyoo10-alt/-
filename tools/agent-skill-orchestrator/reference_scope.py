@@ -46,7 +46,7 @@ def _result(
     frozen_registries: tuple[dict[str, Any], ...] = (),
     frozen_scope_fixtures: tuple[str, ...] = (),
     frozen_match_fixtures: tuple[str, ...] = (),
-    frozen_error_locator: str | None = None,
+    frozen_error_locators: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -64,7 +64,8 @@ def _result(
             "registries": list(frozen_registries),
             "scope_present_fixtures": list(frozen_scope_fixtures),
             "match_fixtures": list(frozen_match_fixtures),
-            "error_locator": frozen_error_locator,
+            "error_locator": frozen_error_locators[0] if frozen_error_locators else None,
+            "error_locators": list(frozen_error_locators),
         },
         "historical_exhaustiveness_claimed": False,
         "deletion_authorized": False,
@@ -187,6 +188,27 @@ def _open_directory_nofollow(
     return os.open(path, flags, dir_fd=dir_fd)
 
 
+def _open_absolute_directory_nofollow(path: Path | str) -> int:
+    lexical = Path(os.path.abspath(path))
+    if not lexical.is_absolute() or not lexical.anchor:
+        raise ValueError("absolute directory path required")
+
+    opened: list[int] = []
+    try:
+        current_fd = _open_directory_nofollow(lexical.anchor)
+        opened.append(current_fd)
+        for part in lexical.parts[1:]:
+            current_fd = _open_directory_nofollow(part, dir_fd=current_fd)
+            opened.append(current_fd)
+        for fd in opened[:-1]:
+            os.close(fd)
+        return opened[-1]
+    except Exception:
+        for fd in reversed(opened):
+            os.close(fd)
+        raise
+
+
 def _read_package_relative_regular_file(
     parts: tuple[str, ...],
     max_bytes: int,
@@ -204,7 +226,7 @@ def _read_package_relative_regular_file(
     ):
         raise ValueError("invalid package-relative file path")
 
-    root_fd = _open_directory_nofollow(PACKAGE_ROOT)
+    root_fd = _open_absolute_directory_nofollow(PACKAGE_ROOT)
     directory_fds: list[int] = []
     current_fd = root_fd
     try:
@@ -223,18 +245,34 @@ def _read_package_relative_regular_file(
         os.close(root_fd)
 
 
+def _reject_unicode_surrogates(value: Any) -> None:
+    if isinstance(value, str):
+        if any(0xD800 <= ord(char) <= 0xDFFF for char in value):
+            raise ValueError("registry contains unsupported Unicode surrogate code point")
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            _reject_unicode_surrogates(key)
+            _reject_unicode_surrogates(item)
+        return
+    if isinstance(value, list):
+        for item in value:
+            _reject_unicode_surrogates(item)
+
+
 def _validate_registry_bytes(raw: bytes) -> dict[str, Any]:
     text = raw.decode("utf-8")
     data = json.loads(text, object_pairs_hook=_reject_duplicate_keys)
     if not isinstance(data, dict):
         raise ValueError("registry must be a JSON object")
     validate_domain_registry_data(data)
+    _reject_unicode_surrogates(data)
     return data
 
 
 def _bounded_registry_snapshot(path: Path) -> dict[str, Any]:
     lexical = Path(os.path.abspath(path))
-    root_fd = _open_directory_nofollow(lexical.parent)
+    root_fd = _open_absolute_directory_nofollow(lexical.parent)
     try:
         raw = _read_bounded_regular_file(
             lexical.name,
@@ -332,7 +370,7 @@ def classify_reference(request: Any) -> dict[str, Any]:
                 for locator, _, domain in frozen_rows
                 if domain is not None and _reference_matches(domain, reference)
             ),
-            frozen_error_locator=frozen_errors[0],
+            frozen_error_locators=tuple(frozen_errors),
         )
     frozen_rows = [
         (locator, digest, domain)

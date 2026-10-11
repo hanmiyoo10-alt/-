@@ -646,6 +646,59 @@ class ReferenceScopeTests(unittest.TestCase):
         finally:
             target.unlink(missing_ok=True)
 
+
+    def test_package_root_ancestor_symlink_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            trusted = root / "trusted"
+            package_root = trusted / "tools" / "agent-skill-orchestrator"
+            outside_root = root / "outside"
+            outside_package = outside_root / "agent-skill-orchestrator"
+            (package_root / "domains").mkdir(parents=True)
+            (outside_package / "domains").mkdir(parents=True)
+            registry_text = (PACKAGE / "domains" / "registry.json").read_text(encoding="utf-8")
+            (package_root / "domains" / "registry.json").write_text(registry_text, encoding="utf-8")
+            (outside_package / "domains" / "registry.json").write_text(registry_text, encoding="utf-8")
+
+            tools_root = trusted / "tools"
+            backup = trusted / "tools-backup"
+            tools_root.rename(backup)
+            tools_root.symlink_to(outside_root, target_is_directory=True)
+
+            with mock.patch("reference_scope.PACKAGE_ROOT", package_root):
+                out = classify_reference(self.request(
+                    "plugin:voyage-token-check",
+                    "primary_path",
+                    "plugins/risu/local/voyage/**",
+                    frozen=[],
+                ))
+
+            self.assertEqual(out["disposition"], "UNKNOWN")
+            self.assertEqual(out["reason_code"], "LIVE_REGISTRY_INVALID")
+
+    def test_all_invalid_frozen_fixture_locators_are_reported(self):
+        out = classify_reference(self.request(
+            "plugin:voyage-token-check",
+            "guidelines_path",
+            "docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md",
+            frozen=["z-invalid.json", VOYAGE_FROZEN, "domains/registry.json"],
+        ))
+        self.assertEqual(out["disposition"], "UNKNOWN")
+        self.assertEqual(out["reason_code"], "FROZEN_FIXTURE_INVALID")
+        self.assertEqual(
+            out["frozen"]["error_locators"],
+            ["domains/registry.json", "z-invalid.json"],
+        )
+        self.assertEqual(out["frozen"]["error_locator"], "domains/registry.json")
+        self.assertEqual(out["frozen"]["match_fixtures"], [VOYAGE_FROZEN])
+
+    def test_registry_surrogate_code_points_are_rejected_before_hashing(self):
+        registry = load_domain_registry(PACKAGE / "domains" / "registry.json")
+        registry["domains"][0]["name"] = "\ud800"
+        raw = json.dumps(registry, ensure_ascii=True).encode("utf-8")
+        with self.assertRaisesRegex(ValueError, "surrogate"):
+            _validate_registry_bytes(raw)
+
     def test_cli_returns_deterministic_json(self):
         request = self.request(
             "plugin:voyage-token-check",

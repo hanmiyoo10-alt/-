@@ -38,6 +38,7 @@
         "Proposes checks for aliasing, indirection, imports or generated forms when relevant to the owner contract.",
         "Treats unsupported syntax and parse failures as explicit uncertainty or owner-defined failure, never as safe-by-no-match.",
         "Separates semantically similar forms whose source text differs.",
+        "Proposes checks for non-Git ambient execution poisoning such as PATH, PYTHONPATH/module search path, HOME/tool configuration, working directory, locale/encoding, and other owner-relevant environment state.",
         "Does not introduce an automatic source rewriter.",
         "Does not claim owner tests, commands, fuzzing, or adversarial inputs were executed on the read-only eval surface.",
         "Uses PARTIAL when execution is still needed to prove the requested hardening claim."
@@ -50,6 +51,7 @@
       "assertions": [
         "Proposes checks for missing or unavailable objects and malformed or unsupported object IDs.",
         "Distinguishes blob, tree, symlink and gitlink instead of trusting SHA-shaped text.",
+        "Proposes separate checks for Git object type and tree-entry mode, including regular/executable 100644/100755 -> blob, symlink 120000 -> blob, gitlink 160000 -> commit, and directory 040000 -> tree where applicable.",
         "Proposes checks for partial clone/lazy availability and replacement objects where applicable.",
         "Proposes checks for ambient Git repository, config, pathspec, trace or environment poisoning where relevant.",
         "Does not fetch or mutate missing evidence unless the owning contract separately authorizes that effect.",

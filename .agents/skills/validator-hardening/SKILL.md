@@ -141,8 +141,8 @@ Unsupported or unresolved syntax stays explicit. Do not treat "not matched" as "
 Consider, where applicable:
 
 - missing or unavailable objects;
-- exact object type rather than SHA-shaped text alone;
-- blob, tree, symlink, and gitlink distinctions;
+- exact Git object type rather than SHA-shaped text alone and, when evidence comes from a tree entry, the exact tree-entry mode as a separate fact;
+- validate expected type/mode combinations where applicable: regular/executable file modes `100644`/`100755` -> `blob`, symlink mode `120000` -> `blob`, gitlink mode `160000` -> `commit`, and directory mode `040000` -> `tree`;
 - malformed or unsupported object IDs and object formats;
 - partial clone or lazy object availability;
 - replacement objects;
@@ -170,6 +170,7 @@ Check, where applicable:
 - scan/file/object-count ceilings;
 - recursion/depth ceilings;
 - subprocess timeout and output ceilings;
+- generic execution-environment/dependency poisoning outside Git when applicable, including inherited `PATH`, `PYTHONPATH`/module search path, `HOME`/tool configuration, working directory, locale/encoding/timezone, executable resolution, proxy/network environment, and other owner-relevant ambient state;
 - bounded diagnostic excerpts;
 - deterministic ordering and reason-code stability when contractually required;
 - repeated identical immutable input does not produce semantically contradictory output.
@@ -198,9 +199,14 @@ On a read-only surface that lacks execution capability:
 
 When a separately authorized execution-capable surface exists:
 
-- execute focused deterministic cases only in an isolated temporary workspace/copy or an existing owner-provided temporary harness;
+- direct target execution additionally requires an owner-provided sandbox or equivalent proven effect containment for writes outside the workspace, subprocesses, network access, credentials, devices, and other external state the target could reach;
+- a temporary directory alone is not effect containment;
+- if that containment is unavailable, keep direct target execution static-only or limit execution to existing owner tests whose effect boundary is already explicitly established and permitted by the current owner;
+- execute focused deterministic cases only inside that proven containment plus an isolated temporary workspace/copy or an existing owner-provided temporary harness;
 - never edit the repository checkout under review merely to create review cases;
-- preserve the exact source/input identities used by that isolated execution.
+- preserve the exact source/input identities used by that isolated execution;
+- for every exercised case, record the bounded execution-surface identity: operating system/filesystem semantics when relevant, interpreter/parser/runtime version, Git and other material tool versions, working directory, sandbox/containment identity, and relevant sanitized environment/config overrides;
+- if material runtime/toolchain/environment identity cannot be bounded, do not claim `HARDENING_REVIEW_COMPLETE` from that execution.
 
 When Python property-based generation is justified:
 
@@ -211,6 +217,12 @@ When Python property-based generation is justified:
 - never make Hypothesis itself a runtime, production, or CI authority.
 
 Property-based generation is a feedback amplifier, not proof that ungenerated classes are safe.
+
+### Eval fixture boundary
+
+Source-controlled fixtures under `evals/` are a candidate review corpus. Their presence and structural validity do not prove that the Agent Platform live-eval adapter currently registers this skill or can execute those fixtures.
+
+Live-eval registration is a separate Agent Platform wiring decision owned outside this skill directory. Until that owner explicitly registers the skill, do not describe these fixtures as runnable through the public live-eval workflow.
 
 ### 6. Interpret observations without stealing target semantics
 
@@ -240,6 +252,8 @@ dirty reviewed/executed input identities (digest or bounded diff identity) when 
 applicability by dimension A-G
 cases actually exercised
 owner tests / commands actually used
+execution surface/runtime/toolchain identity for each exercised case, or NOT_APPLICABLE when no execution occurred
+relevant sanitized environment/config identity and sandbox/containment identity for exercised cases
 observations with source/evidence basis
 PROVEN_GAP findings, if any
 UNKNOWN / unresolved gaps and reason codes
@@ -253,6 +267,6 @@ Keep the receipt bounded. Point to larger logs or artifacts instead of embedding
 
 ## Completion criterion
 
-The skill is complete for one review only when current owner evidence has been read, the reviewed bytes have an exact immutable source identity, worktree dirtiness is explicit, applicability for all seven dimensions is explicit, exercised cases and unresolved gaps are separated, uncertainty has not been normalized away, and the final receipt states what it does and does not prove.
+The skill is complete for one review only when current owner evidence has been read, the reviewed bytes have an exact immutable source identity, worktree dirtiness is explicit, applicability for all seven dimensions is explicit, exercised cases and unresolved gaps are separated, every exercised case has bounded runtime/toolchain/environment and effect-containment identity, uncertainty has not been normalized away, and the final receipt states what it does and does not prove.
 
 A clean review never certifies every future input or implementation as secure or correct.

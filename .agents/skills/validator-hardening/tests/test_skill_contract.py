@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 import re
 import unittest
@@ -9,8 +8,6 @@ from pathlib import Path
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 SKILL = SKILL_ROOT / "SKILL.md"
 EVALS = SKILL_ROOT / "evals" / "evals.json"
-REPO_ROOT = SKILL_ROOT.parents[2]
-PREPARE_EVAL = REPO_ROOT / "tools" / "agent-skill-eval" / "prepare_eval.py"
 
 
 class ValidatorHardeningSkillContractTests(unittest.TestCase):
@@ -104,11 +101,14 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "computed or dynamic expressions",
             "aliasing, indirection",
             "unsupported syntax",
-            "exact object type",
-            "blob, tree, symlink, and gitlink distinctions",
+            "exact Git object type",
+            "validate expected type/mode combinations",
             "partial clone or lazy object availability",
             "replacement objects",
             "ambient Git repository, config, pathspec, trace, or environment poisoning",
+            "exact tree-entry mode as a separate fact",
+            "symlink mode `120000` -> `blob`",
+            "gitlink mode `160000` -> `commit`",
         ):
             self.assertIn(required, self.text)
 
@@ -120,6 +120,9 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "subprocess timeout and output ceilings",
             "deterministic ordering and reason-code stability",
             "repeated identical immutable input",
+            "generic execution-environment/dependency poisoning outside Git",
+            "inherited `PATH`",
+            "`PYTHONPATH`/module search path",
         ):
             self.assertIn(required, self.text)
 
@@ -238,16 +241,28 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, self.text)
 
-    def test_eval_fixture_matches_repository_output_normalizer(self):
-        spec = importlib.util.spec_from_file_location("validator_hardening_prepare_eval", PREPARE_EVAL)
-        self.assertIsNotNone(spec)
-        self.assertIsNotNone(spec.loader)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        normalized = module._normalize_output_fixture(self.eval_payload, "validator-hardening")
-        self.assertEqual(len(normalized), len(self.evals))
-        self.assertTrue(all(case["assertions"] for case in normalized))
-        self.assertTrue(all(case["expected_output"] for case in normalized))
+    def test_eval_fixture_is_candidate_corpus_not_live_registration_claim(self):
+        self.assertIn("### Eval fixture boundary", self.text)
+        self.assertIn("candidate review corpus", self.text)
+        self.assertIn("do not describe these fixtures as runnable through the public live-eval workflow", self.text)
+        for case in self.evals:
+            self.assertTrue(case["prompt"])
+            self.assertTrue(case["expected_output"])
+            self.assertTrue(case["assertions"])
+
+    def test_executed_cases_require_runtime_identity_and_effect_containment(self):
+        for required in (
+            "owner-provided sandbox or equivalent proven effect containment",
+            "a temporary directory alone is not effect containment",
+            "writes outside the workspace, subprocesses, network access, credentials, devices",
+            "operating system/filesystem semantics when relevant",
+            "interpreter/parser/runtime version",
+            "Git and other material tool versions",
+            "sandbox/containment identity",
+            "do not claim `HARDENING_REVIEW_COMPLETE` from that execution",
+            "execution surface/runtime/toolchain identity for each exercised case",
+        ):
+            self.assertIn(required, self.text)
 
     def test_no_runtime_helper_is_required(self):
         self.assertFalse((SKILL_ROOT / "scripts").exists())

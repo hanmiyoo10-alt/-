@@ -12,7 +12,6 @@ body:
         - usage-dashboard
         - simcore
         - devpass
-        - termux-large-doc-editor
         - voyage-token-check
         - pocketrisu-helper-mod
         - local-model-lab

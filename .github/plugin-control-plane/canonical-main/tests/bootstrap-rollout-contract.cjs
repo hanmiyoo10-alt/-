@@ -97,7 +97,7 @@ assert.deepEqual(byId.simcore.memory.outputs, [
 ]);
 assert.equal(byId.simcore.authority.releaseBranch, 'release-simcore');
 
-for (const id of ['devpass', 'local', 'termux', 'termux-large-doc-editor', 'voyage-token-check', 'pocketrisu-helper-mod']) {
+for (const id of ['devpass', 'local', 'termux', 'voyage-token-check', 'pocketrisu-helper-mod']) {
   assert.equal(byId[id].memory.profile, 'check-only', `${id} must not gain a writable memory system during Phase G`);
   assert.deepEqual(byId[id].memory.outputs, [], `${id} check-only profile must have no writable outputs`);
 }

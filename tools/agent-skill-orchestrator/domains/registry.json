@@ -8,25 +8,24 @@
       "lifecycle": "production",
       "primary_path": "plugins/usage-dashboard/**",
       "authority_refs": [
-        {"kind": "release_branch", "value": "release-usage-dashboard"},
-        {"kind": "manifest", "value": "plugins/usage-dashboard/runtime/product-manifest.json"},
-        {"kind": "artifact", "value": "plugins/usage-dashboard/latest.js"},
-        {"kind": "release_spec_dir", "value": ".github/usage-dashboard/releases"}
+        {
+          "kind": "release_branch",
+          "value": "release-usage-dashboard"
+        },
+        {
+          "kind": "manifest",
+          "value": "plugins/usage-dashboard/runtime/product-manifest.json"
+        },
+        {
+          "kind": "artifact",
+          "value": "plugins/usage-dashboard/latest.js"
+        },
+        {
+          "kind": "release_spec_dir",
+          "value": ".github/usage-dashboard/releases"
+        }
       ],
       "guidelines_path": "docs/USAGE_DASHBOARD_GUIDELINES.md",
-      "registration_semantics": "domain_metadata_only_no_skill_promotion"
-    },
-    {
-      "domain_id": "termux-large-doc-editor",
-      "scope": "plugin:termux-large-doc-editor",
-      "name": "Termux Large Doc Editor",
-      "lifecycle": "prototype",
-      "primary_path": "plugins/termux/large-doc-editor/**",
-      "authority_refs": [
-        {"kind": "declared_by", "value": "docs/REPO_PROJECT_CATALOG.md"},
-        {"kind": "evidence", "value": "plugins/termux/large-doc-editor/README.md"}
-      ],
-      "guidelines_path": "docs/TERMUX_DEVELOPMENT_GUIDELINES.md",
       "registration_semantics": "domain_metadata_only_no_skill_promotion"
     },
     {
@@ -36,8 +35,14 @@
       "lifecycle": "design-evidence-validation",
       "primary_path": "plugins/risu/local/voyage/**",
       "authority_refs": [
-        {"kind": "declared_by", "value": "docs/REPO_PROJECT_CATALOG.md"},
-        {"kind": "evidence", "value": "plugins/risu/local/voyage/DESIGN_STATUS.md"}
+        {
+          "kind": "declared_by",
+          "value": "docs/REPO_PROJECT_CATALOG.md"
+        },
+        {
+          "kind": "evidence",
+          "value": "plugins/risu/local/voyage/DESIGN_STATUS.md"
+        }
       ],
       "guidelines_path": "docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md",
       "registration_semantics": "domain_metadata_only_no_skill_promotion"

@@ -65,15 +65,13 @@
       "family": "product",
       "risu": "no",
       "sourceRefs": [
-        "plugin:termux-large-doc-editor",
         "product:termux"
       ],
       "sourceRoots": [
-        "plugins/termux/**",
         "products/standalone/termux/**"
       ],
       "targetRoot": "products/standalone/termux",
-      "migration": "reclassify"
+      "migration": "preserve"
     },
     {
       "id": "mobile-coder-lab",

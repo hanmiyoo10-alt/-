@@ -343,7 +343,7 @@ class LocationRelativeSentinelTests(unittest.TestCase):
     def test_cli_json_decoder_limits_fail_closed(self):
         script = TOOLS / "location_relative_sentinel.py"
         cases = [
-            "[" * 2000 + "]" * 2000,
+            "[" * 100_000 + "]" * 100_000,
             "1" * 5000,
         ]
         for payload in cases:

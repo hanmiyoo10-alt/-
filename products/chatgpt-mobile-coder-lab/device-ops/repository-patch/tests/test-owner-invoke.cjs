@@ -42,6 +42,22 @@ const AUTHORITY = {...inv.FALSE_AUTHORITY};
 const PATHS = ['docs/demo.txt'];
 const SCOPES = PATHS.map((item) => 'path:' + item);
 const D014_PATHS = [...inv.D014_COMPLETION_SET_PATHS];
+const D014_SCOPES = [...inv.D014_VALIDATION_SCOPES];
+const D014_PROFILE = inv.validationProfileById(inv.D014_VALIDATION_PROFILE);
+const D014_CONTRACT_REF =
+  inv.VALIDATION_CONTRACT_REF_PREFIX + D014_PROFILE.contractDigest;
+const VC_PATHS = [...inv.VALIDATION_CONTINUATION_PATHS].sort();
+const VC_SCOPES = [...inv.VALIDATION_CONTINUATION_SCOPES];
+const VC_PROFILE = inv.validationProfileById(inv.VALIDATION_CONTINUATION_PROFILE);
+const PPR_PATHS = [...inv.PUBLISHED_PROGRESS_RECOVERY_PATHS].sort();
+const PPR_SCOPES = [...inv.PUBLISHED_PROGRESS_RECOVERY_SCOPES];
+const PPR_PROFILE = inv.validationProfileById(inv.PUBLISHED_PROGRESS_RECOVERY_PROFILE);
+const VF_PATHS = [...inv.VALIDATION_FINALIZATION_PATHS].sort();
+const VF_SCOPES = [...inv.VALIDATION_FINALIZATION_SCOPES];
+const VF_PROFILE = inv.validationProfileById(inv.VALIDATION_FINALIZATION_PROFILE);
+const S_RDC_PATHS = [...inv.S_RDC_MAINTENANCE_PATHS].sort();
+const S_RDC_SCOPES = [...inv.S_RDC_MAINTENANCE_SCOPES];
+const S_RDC_PROFILE = inv.validationProfileById(inv.S_RDC_MAINTENANCE_PROFILE);
 const VALIDATION_REQUEST = {
   schema: inv.VALIDATION_REQUEST_SCHEMA,
   profile: inv.D014_VALIDATION_PROFILE,
@@ -192,11 +208,12 @@ function d014Request(overrides = {}) {
 }
 function validationManifest(overrides = {}) {
   return manifest({
-    scopes: D014_PATHS.map((item) => 'path:' + item),
+    scopes: [...D014_SCOPES],
     inputRefs: [
       'receipt:mcl-repository-patch-request:' + PATCH_HASH,
       inv.PRIMITIVE_REF,
       inv.VALIDATION_REF_PREFIX + VALIDATION_HASH,
+      D014_CONTRACT_REF,
     ],
     ...overrides,
   });
@@ -220,6 +237,86 @@ function tempValidationInputs() {
 }
 function d014Primitive(phase, overrides = {}) {
   return primitive(phase, {changed_paths: [...D014_PATHS], ...overrides});
+}
+
+
+const RECOVERY_DIGEST = '1'.repeat(64);
+const PRIOR_MANIFEST_ID = '2'.repeat(64);
+
+function continuationRequest(overrides = {}) {
+  return {
+    schema: inv.CONTINUATION_REQUEST_SCHEMA,
+    message: 'docs: continue prepared patch',
+    expected_paths: [...PATHS],
+    prepared_digest: PATCH_HASH,
+    recovery_receipt_digest: RECOVERY_DIGEST,
+    prior_manifest_id: PRIOR_MANIFEST_ID,
+    ...overrides,
+  };
+}
+function continuationManifest(overrides = {}) {
+  return manifest({
+    phaseId: '2520-implementation-pr-recovery-rebind',
+    inputRefs: [
+      inv.RECOVERY_REF_PREFIX + RECOVERY_DIGEST,
+      inv.PRIOR_MANIFEST_REF_PREFIX + PRIOR_MANIFEST_ID,
+      inv.PRIMITIVE_REF,
+    ],
+    ...overrides,
+  });
+}
+function tempContinuationInputs() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-repo-patch-continuation-test-'));
+  const requestPath = path.join(dir, 'request.json');
+  const manifestPath = path.join(dir, 'manifest.json');
+  const handoffPath = path.join(dir, 'handoff.json');
+  const m = continuationManifest();
+  fs.writeFileSync(requestPath, JSON.stringify(continuationRequest()), 'utf8');
+  fs.writeFileSync(manifestPath, JSON.stringify(m), 'utf8');
+  fs.writeFileSync(handoffPath, JSON.stringify(handoff(m)), 'utf8');
+  return {dir, requestPath, manifestPath, handoffPath, manifest: m};
+}
+function fakeContinuationGit(state, overrides = {}) {
+  const head = state === 'PREPARED' ? BASE : NEW_HEAD;
+  const remote = overrides.remote || (state === 'PUSHED' ? NEW_HEAD : BASE);
+  const expectedMessage = overrides.message || continuationRequest().message;
+  return (args) => {
+    const key = args.join('\0');
+    if (key === ['rev-parse', '--show-toplevel'].join('\0')) return WORKSPACE.worktree + '\n';
+    if (key === ['branch', '--show-current'].join('\0')) return WORKSPACE.branch + '\n';
+    if (key === ['rev-parse', 'HEAD'].join('\0')) return head + '\n';
+    if (key === ['diff', '--name-only', '-z', '--'].join('\0')) return '';
+    if (key === ['ls-files', '--others', '--exclude-standard', '-z'].join('\0')) return '';
+    if (key === ['ls-remote', '--heads', 'origin', 'refs/heads/' + WORKSPACE.branch].join('\0')) {
+      return remote + '\trefs/heads/' + WORKSPACE.branch + '\n';
+    }
+    if (state === 'PREPARED') {
+      if (key === ['diff', '--cached', '--name-only', '-z', '--'].join('\0')) {
+        return PATHS.join('\0') + '\0';
+      }
+      if (key === ['diff', '--cached', '--binary', '--'].join('\0')) return PATCH.toString('utf8');
+    } else {
+      if (key === ['diff', '--cached', '--name-only', '-z', '--'].join('\0')) return '';
+      if (key === ['rev-parse', 'HEAD^'].join('\0')) return BASE + '\n';
+      if (key === ['diff', '--name-only', '-z', BASE, NEW_HEAD, '--'].join('\0')) {
+        return PATHS.join('\0') + '\0';
+      }
+      if (key === ['diff', '--binary', BASE, NEW_HEAD, '--'].join('\0')) return PATCH.toString('utf8');
+      if (key === ['log', '-1', '--format=%B', 'HEAD'].join('\0')) return expectedMessage + '\n';
+      if (key === ['log', '-1', '--format=%an%x00%ae%x00%cn%x00%ce', 'HEAD'].join('\0')) {
+        return 'mcl-repository-patch[bot]\0mcl-repository-patch@users.noreply.github.com'
+          + '\0mcl-repository-patch[bot]\0mcl-repository-patch@users.noreply.github.com\n';
+      }
+    }
+    throw new Error('unexpected git read: ' + args.join(' '));
+  };
+}
+function continuationPrimitive(phase, overrides = {}) {
+  return primitive(phase, {
+    patch_sha256: PATCH_HASH,
+    prepared_digest: PATCH_HASH,
+    ...overrides,
+  });
 }
 
 function passReceipt(m = manifest()) {
@@ -276,14 +373,34 @@ test('handoff rejects non-ready and authority escalation', () => {
   );
 });
 
-test('manifest binding requires S repository mutation scopes and request hash ref', () => {
+test('manifest binding matches patch paths against the manifest path subset', () => {
   const m = manifest();
   assert.doesNotThrow(() => inv.validateManifestBinding(m, handoff(m), request()));
-  const wrong = manifest({scopes: ['path:docs/other.txt']});
-  assert.throws(
-    () => inv.validateManifestBinding(wrong, handoff(wrong), request()),
-    (error) => error.kind === 'CONFLICT' && error.reasonCodes.includes('MANIFEST_SCOPE_CONFLICT'),
-  );
+
+  const withSurface = manifest({scopes: [...SCOPES, 'surface:mcl:demo']});
+  assert.doesNotThrow(() => inv.validateManifestBinding(
+    withSurface, handoff(withSurface), request(),
+  ));
+
+  const withMultipleSurfaces = manifest({
+    scopes: [...SCOPES, 'surface:mcl:demo', 'surface:mcl:other'],
+  });
+  assert.doesNotThrow(() => inv.validateManifestBinding(
+    withMultipleSurfaces, handoff(withMultipleSurfaces), request(),
+  ));
+
+  for (const scopes of [
+    ['path:docs/other.txt'],
+    [...SCOPES, 'path:docs/other.txt', 'surface:mcl:demo'],
+    ['surface:mcl:demo'],
+  ]) {
+    const wrong = manifest({scopes});
+    assert.throws(
+      () => inv.validateManifestBinding(wrong, handoff(wrong), request()),
+      (error) => error.kind === 'CONFLICT'
+        && error.reasonCodes.includes('MANIFEST_SCOPE_CONFLICT'),
+    );
+  }
 });
 
 test('current evidence passes with exact lease and injected holder validator', () => {
@@ -298,6 +415,23 @@ test('current evidence passes with exact lease and injected holder validator', (
     holderValidator: () => { holderChecks += 1; },
   }));
   assert.equal(holderChecks, 1);
+});
+
+test('current evidence keeps full lease-to-manifest scope equality with surfaces', () => {
+  const m = manifest({scopes: [...SCOPES, 'surface:mcl:demo']});
+  const current = currentEvidence(m);
+  current.context.ledgerState.activeLeases[0].scopes = [...SCOPES];
+  assert.throws(
+    () => inv.validateCurrentEvidence({
+      ...current,
+      manifest: m,
+      handoff: handoff(m),
+      holderSecret: HOLDER,
+      holderValidator: () => {},
+    }),
+    (error) => error.kind === 'CONFLICT'
+      && error.reasonCodes.includes('LEASE_SCOPES_CONFLICT'),
+  );
 });
 
 test('stage drift blocks before effect', () => {
@@ -731,6 +865,262 @@ test('agent-view CLI mode emits only the final decision view', async () => {
 });
 
 
+test('continue-prepared CLI is literal and normal CLI remains unchanged', () => {
+  const normal = [
+    '--repo', 'owner/repo',
+    '--handoff-file', '/tmp/handoff.json',
+    '--manifest-file', '/tmp/manifest.json',
+    '--request-file', '/tmp/request.json',
+    '--patch-file', '/tmp/request.patch',
+  ];
+  assert.equal(inv.parseArgs(normal).operation, 'normal');
+  const continued = inv.parseArgs([
+    'continue-prepared',
+    '--repo', 'owner/repo',
+    '--handoff-file', '/tmp/handoff.json',
+    '--manifest-file', '/tmp/manifest.json',
+    '--request-file', '/tmp/continuation.json',
+  ]);
+  assert.equal(continued.operation, 'continue-prepared');
+  assert.equal(continued.patchFile, null);
+  assert.throws(() => inv.parseArgs([
+    'continue-prepared',
+    ...normal,
+  ]), /ARGUMENT_INVALID/);
+  assert.throws(() => inv.parseArgs(['commit', ...normal]), /ARGUMENT_INVALID/);
+});
+
+test('prepared continuation request is strict and sorted', () => {
+  const parsed = inv.parsePreparedContinuationRequestText(JSON.stringify(continuationRequest({
+    expected_paths: ['z.txt', 'a.txt'],
+  })));
+  assert.deepEqual(parsed.expected_paths, ['a.txt', 'z.txt']);
+  assert.throws(
+    () => inv.parsePreparedContinuationRequestText(JSON.stringify({
+      ...continuationRequest(), command: 'git commit',
+    })),
+    (error) => error.kind === 'UNKNOWN'
+      && error.reasonCodes.includes('CONTINUATION_REQUEST_UNKNOWN_FIELD:command'),
+  );
+});
+
+test('prepared continuation manifest requires exact recovery lineage', () => {
+  const requestValue = continuationRequest();
+  const m = continuationManifest();
+  assert.doesNotThrow(() => inv.validatePreparedContinuationManifestBinding(
+    m, handoff(m), requestValue,
+  ));
+  const missingRecovery = continuationManifest({
+    inputRefs: [inv.PRIOR_MANIFEST_REF_PREFIX + PRIOR_MANIFEST_ID, inv.PRIMITIVE_REF],
+  });
+  assert.throws(
+    () => inv.validatePreparedContinuationManifestBinding(
+      missingRecovery, handoff(missingRecovery), requestValue,
+    ),
+    (error) => error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('CONTINUATION_RECOVERY_REF_REQUIRED'),
+  );
+  const ordinary = manifest({
+    inputRefs: [
+      inv.RECOVERY_REF_PREFIX + RECOVERY_DIGEST,
+      inv.PRIOR_MANIFEST_REF_PREFIX + PRIOR_MANIFEST_ID,
+      inv.PRIMITIVE_REF,
+    ],
+  });
+  assert.throws(
+    () => inv.validatePreparedContinuationManifestBinding(
+      ordinary, handoff(ordinary), requestValue,
+    ),
+    (error) => error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('CONTINUATION_RECOVERY_REBIND_REQUIRED'),
+  );
+});
+
+test('prepared continuation state classifier recognizes PREPARED COMMITTED and PUSHED', () => {
+  const m = continuationManifest();
+  const requestValue = continuationRequest();
+  for (const state of ['PREPARED', 'COMMITTED', 'PUSHED']) {
+    const value = inv.classifyPreparedContinuationState({
+      manifest: m,
+      request: requestValue,
+      gitReadImpl: fakeContinuationGit(state),
+    });
+    assert.equal(value.state, state);
+    assert.equal(crypto.createHash('sha256').update(value.diffBytes).digest('hex'), PATCH_HASH);
+  }
+});
+
+test('prepared continuation classifier rejects staged digest or remote drift', () => {
+  const m = continuationManifest();
+  assert.throws(
+    () => inv.classifyPreparedContinuationState({
+      manifest: m,
+      request: continuationRequest({prepared_digest: '9'.repeat(64)}),
+      gitReadImpl: fakeContinuationGit('PREPARED'),
+    }),
+    (error) => error.kind === 'CONFLICT'
+      && error.reasonCodes.includes('CONTINUATION_PREPARED_DIGEST_CONFLICT'),
+  );
+  assert.throws(
+    () => inv.classifyPreparedContinuationState({
+      manifest: m,
+      request: continuationRequest(),
+      gitReadImpl: fakeContinuationGit('COMMITTED', {remote: '8'.repeat(40)}),
+    }),
+    (error) => error.kind === 'CONFLICT'
+      && error.reasonCodes.includes('CONTINUATION_REMOTE_HEAD_CONFLICT'),
+  );
+});
+
+test('PREPARED continuation invokes commit then push without prepare', async () => {
+  const inputs = tempContinuationInputs();
+  try {
+    let guards = 0;
+    const calls = [];
+    let inspectCount = 0;
+    const receipt = await inv.invokePreparedContinuation({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(continuationRequest()),
+      requestFile: inputs.requestPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => { guards += 1; },
+      inspectStateImpl: () => {
+        inspectCount += 1;
+        return inspectCount === 1
+          ? {state: 'PREPARED', newHead: null, remoteHead: BASE, diffBytes: PATCH}
+          : {state: 'COMMITTED', newHead: NEW_HEAD, remoteHead: BASE, diffBytes: PATCH};
+      },
+      spawnSyncImpl: (file, args) => {
+        const phase = args[0].toUpperCase();
+        calls.push(phase);
+        const value = phase === 'COMMIT'
+          ? continuationPrimitive('COMMIT')
+          : continuationPrimitive('PUSH');
+        return {status: 0, signal: null, stdout: JSON.stringify(value), stderr: ''};
+      },
+      root: ROOT,
+    });
+    assert.deepEqual(calls, ['COMMIT', 'PUSH']);
+    assert.equal(calls.includes('PREPARE'), false);
+    assert.equal(guards, 3);
+    assert.equal(receipt.result, 'PASS');
+    const byName = new Map(receipt.steps.map((step) => [step.name, step.result]));
+    assert.equal(byName.get('recovered-prepared-binding'), 'PASS');
+    assert.equal(byName.get('patch-commit'), 'PASS');
+    assert.equal(byName.get('patch-push-postverify'), 'PASS');
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('lost commit acknowledgement skips duplicate commit and performs push only', async () => {
+  const inputs = tempContinuationInputs();
+  try {
+    const calls = [];
+    const receipt = await inv.invokePreparedContinuation({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(continuationRequest()),
+      requestFile: inputs.requestPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {},
+      inspectStateImpl: () => ({
+        state: 'COMMITTED', newHead: NEW_HEAD, remoteHead: BASE, diffBytes: PATCH,
+      }),
+      spawnSyncImpl: (file, args) => {
+        calls.push(args[0].toUpperCase());
+        return {status: 0, signal: null,
+          stdout: JSON.stringify(continuationPrimitive('PUSH')), stderr: ''};
+      },
+      root: ROOT,
+    });
+    assert.deepEqual(calls, ['PUSH']);
+    assert.equal(receipt.result, 'PASS');
+    assert.equal(receipt.counters.find((x) => x.name === 'commit_already_proven').value, 1);
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('lost push acknowledgement skips both duplicate effects', async () => {
+  const inputs = tempContinuationInputs();
+  try {
+    let calls = 0;
+    const receipt = await inv.invokePreparedContinuation({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(continuationRequest()),
+      requestFile: inputs.requestPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {},
+      inspectStateImpl: () => ({
+        state: 'PUSHED', newHead: NEW_HEAD, remoteHead: NEW_HEAD, diffBytes: PATCH,
+      }),
+      spawnSyncImpl: () => { calls += 1; throw new Error('duplicate effect'); },
+      root: ROOT,
+    });
+    assert.equal(calls, 0);
+    assert.equal(receipt.result, 'PASS');
+    assert.equal(receipt.counters.find((x) => x.name === 'commit_already_proven').value, 1);
+    assert.equal(receipt.counters.find((x) => x.name === 'push_already_proven').value, 1);
+    assert.equal(receipt.counters.find((x) => x.name === 'push_verified').value, 1);
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('prepared continuation input drift blocks before later effect', async () => {
+  const inputs = tempContinuationInputs();
+  try {
+    let guards = 0;
+    let calls = 0;
+    const receipt = await inv.invokePreparedContinuation({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(continuationRequest()),
+      requestFile: inputs.requestPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {
+        guards += 1;
+        if (guards === 2) fs.writeFileSync(inputs.requestPath, '{}', 'utf8');
+      },
+      inspectStateImpl: () => ({
+        state: 'PREPARED', newHead: null, remoteHead: BASE, diffBytes: PATCH,
+      }),
+      spawnSyncImpl: () => {
+        calls += 1;
+        return {status: 0, signal: null,
+          stdout: JSON.stringify(continuationPrimitive('COMMIT')), stderr: ''};
+      },
+      root: ROOT,
+    });
+    assert.equal(calls, 1);
+    assert.equal(receipt.result, 'CONFLICT');
+    assert(receipt.conflicts.includes('CONTINUATION_REQUEST_CHANGED_DURING_INVOCATION'));
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('continuation source exposes no generic start phase or retry surface', () => {
+  const source = fs.readFileSync(INVOKER_PATH, 'utf8');
+  assert(source.includes("args[0] === 'continue-prepared'"));
+  assert(!source.includes("'start-phase'"));
+  assert(!source.includes("'retry-count'"));
+  assert(!source.includes('reset --hard'));
+  assert(!source.includes('git restore'));
+  assert(!source.includes('git stash'));
+  assert(!source.includes('git clean'));
+  assert(!source.includes('--force'));
+});
+
+
+
 test('validation request parser is strict and profile-bound', () => {
   assert.deepEqual(inv.parseValidationRequestText(VALIDATION_TEXT), VALIDATION_REQUEST);
   assert.throws(
@@ -746,6 +1136,329 @@ test('validation request parser is strict and profile-bound', () => {
     (error) => error.kind === 'BLOCKED'
       && error.reasonCodes.includes('VALIDATION_PROFILE_UNSUPPORTED'),
   );
+});
+
+test('reviewed validation profile set is exact and scope-derived', () => {
+  assert.equal(inv.VALIDATION_PROFILES.length, 5);
+  assert.equal(D014_PROFILE.contractDigest, '0b82f7b5ca8d6bc4f6b487653fd87451f2d6c3867a3a4dc87679587ea2fcf8bb');
+  assert.equal(VC_PROFILE.contractDigest, '692e94f9a599e6dfbd840d404635d45f906de2c5933f0e04545d22f6ecbd550c');
+  assert.equal(PPR_PROFILE.contractDigest, '2659556be26cc3d14bae828a4fb591d5e145b6cfe55a1afafacdbb352aef650c');
+  assert.equal(VF_PROFILE.contractDigest, '0ce3cc442587b99180afb25a5fe9bb8cb117274149290270df396c0b33673155');
+  assert.equal(
+    inv.resolveValidationProfileForScopes(D014_SCOPES).profileId,
+    inv.D014_VALIDATION_PROFILE,
+  );
+  assert.equal(
+    inv.resolveValidationProfileForScopes(VC_SCOPES).profileId,
+    inv.VALIDATION_CONTINUATION_PROFILE,
+  );
+  assert.equal(
+    inv.resolveValidationProfileForScopes(PPR_SCOPES).profileId,
+    inv.PUBLISHED_PROGRESS_RECOVERY_PROFILE,
+  );
+  assert.deepEqual(PPR_PROFILE.paths, PPR_PATHS);
+  assert.equal(
+    inv.resolveValidationProfileForScopes(VF_SCOPES).profileId,
+    inv.VALIDATION_FINALIZATION_PROFILE,
+  );
+  assert.deepEqual(VF_PROFILE.paths, VF_PATHS);
+  assert.equal(
+    inv.resolveValidationProfileForScopes(S_RDC_SCOPES).profileId,
+    inv.S_RDC_MAINTENANCE_PROFILE,
+  );
+  assert.deepEqual(S_RDC_PROFILE.paths, S_RDC_PATHS);
+  assert.throws(
+    () => inv.resolveValidationProfileForScopes(S_RDC_SCOPES.slice(0, -1)),
+    (error) => error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('NO_REVIEWED_VALIDATION_PROFILE'),
+  );
+  assert.throws(
+    () => inv.resolveValidationProfileForScopes(VF_SCOPES.slice(0, -1)),
+    (error) => error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('NO_REVIEWED_VALIDATION_PROFILE'),
+  );
+  assert.throws(
+    () => inv.resolveValidationProfileForScopes(SCOPES),
+    (error) => error.kind === 'BLOCKED'
+      && error.reasonCodes.includes('NO_REVIEWED_VALIDATION_PROFILE'),
+  );
+  const duplicate = {...VC_PROFILE, profileId: 'repo:validation-continuation:duplicate'};
+  assert.throws(
+    () => inv.resolveValidationProfileForScopes(VC_SCOPES, [VC_PROFILE, duplicate]),
+    (error) => error.kind === 'CONFLICT'
+      && error.reasonCodes.includes('VALIDATION_PROFILE_AMBIGUOUS'),
+  );
+  assert.deepEqual(
+    inv.parseValidationRequestText(JSON.stringify({
+      schema: inv.VALIDATION_REQUEST_SCHEMA,
+      profile: inv.VALIDATION_CONTINUATION_PROFILE,
+    })),
+    {
+      schema: inv.VALIDATION_REQUEST_SCHEMA,
+      profile: inv.VALIDATION_CONTINUATION_PROFILE,
+    },
+  );
+});
+
+test('validation-continuation profile binds exact contract and fixed checks', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-profile-vc-test-'));
+  try {
+    const validationRequest = {
+      schema: inv.VALIDATION_REQUEST_SCHEMA,
+      profile: inv.VALIDATION_CONTINUATION_PROFILE,
+    };
+    const text = JSON.stringify(validationRequest);
+    const bytes = Buffer.from(text, 'utf8');
+    const validationPath = path.join(dir, 'validation.json');
+    fs.writeFileSync(validationPath, bytes);
+    const validationHash = crypto.createHash('sha256').update(bytes).digest('hex');
+    const m = manifest({
+      scopes: [...VC_SCOPES],
+      inputRefs: [
+        'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+        inv.PRIMITIVE_REF,
+        inv.VALIDATION_REF_PREFIX + validationHash,
+        inv.VALIDATION_CONTRACT_REF_PREFIX + VC_PROFILE.contractDigest,
+      ],
+    });
+    const binding = inv.prepareValidationBinding({
+      manifest: m,
+      request: {expected_paths: [...VC_PATHS]},
+      validationRequestText: text,
+      validationRequestFile: validationPath,
+    });
+    assert.equal(binding.request.profile, inv.VALIDATION_CONTINUATION_PROFILE);
+    assert.equal(binding.contractDigest, VC_PROFILE.contractDigest);
+    const calls = [];
+    const result = inv.runFixedPreparedValidation({
+      binding,
+      manifest: m,
+      validationSpawnSyncImpl(command, args, options) {
+        calls.push({command, args, options});
+        return {status: 0, signal: null, stdout: '', stderr: ''};
+      },
+    });
+    assert.equal(result.kind, 'PASS');
+    assert.equal(result.value.profile, inv.VALIDATION_CONTINUATION_PROFILE);
+    assert.equal(result.value.checks_passed, inv.VALIDATION_CONTINUATION_CHECKS.length);
+    assert.deepEqual(
+      calls.map((call) => call.args),
+      inv.VALIDATION_CONTINUATION_CHECKS.map((check) => check.args),
+    );
+    assert.throws(
+      () => inv.assertValidationInputStable({...binding, contractDigest: '0'.repeat(64)}),
+      (error) => error.kind === 'CONFLICT'
+        && error.reasonCodes.includes('VALIDATION_CONTRACT_CHANGED_DURING_INVOCATION'),
+    );
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('published-progress profile binds exact contract and fixed checks', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-profile-ppr-test-'));
+  try {
+    const validationRequest = {schema: inv.VALIDATION_REQUEST_SCHEMA, profile: inv.PUBLISHED_PROGRESS_RECOVERY_PROFILE};
+    const text = JSON.stringify(validationRequest);
+    const bytes = Buffer.from(text, 'utf8');
+    const validationPath = path.join(dir, 'validation.json');
+    fs.writeFileSync(validationPath, bytes);
+    const validationHash = crypto.createHash('sha256').update(bytes).digest('hex');
+    const m = manifest({
+      scopes: [...PPR_SCOPES],
+      inputRefs: [
+        'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+        inv.PRIMITIVE_REF,
+        inv.VALIDATION_REF_PREFIX + validationHash,
+        inv.VALIDATION_CONTRACT_REF_PREFIX + PPR_PROFILE.contractDigest,
+      ],
+    });
+    const binding = inv.prepareValidationBinding({
+      manifest: m,
+      request: {expected_paths: [...PPR_PATHS]},
+      validationRequestText: text,
+      validationRequestFile: validationPath,
+    });
+    assert.equal(binding.request.profile, inv.PUBLISHED_PROGRESS_RECOVERY_PROFILE);
+    assert.equal(binding.contractDigest, PPR_PROFILE.contractDigest);
+    const calls = [];
+    const result = inv.runFixedPreparedValidation({
+      binding,
+      manifest: m,
+      validationSpawnSyncImpl(command, args, options) {
+        calls.push({command, args, options});
+        return {status: 0, signal: null, stdout: '', stderr: ''};
+      },
+    });
+    assert.equal(result.kind, 'PASS');
+    assert.equal(result.value.profile, inv.PUBLISHED_PROGRESS_RECOVERY_PROFILE);
+    assert.equal(result.value.checks_passed, inv.PUBLISHED_PROGRESS_RECOVERY_CHECKS.length);
+    assert.deepEqual(calls.map((call) => call.args), inv.PUBLISHED_PROGRESS_RECOVERY_CHECKS.map((check) => check.args));
+  } finally { fs.rmSync(dir, {recursive: true, force: true}); }
+});
+
+test('validation-finalization profile binds exact contract and fixed checks', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-profile-vf-test-'));
+  try {
+    const request = {schema: inv.VALIDATION_REQUEST_SCHEMA, profile: inv.VALIDATION_FINALIZATION_PROFILE};
+    const text = JSON.stringify(request);
+    const bytes = Buffer.from(text, 'utf8');
+    const validationPath = path.join(dir, 'validation.json');
+    fs.writeFileSync(validationPath, bytes);
+    const hash = crypto.createHash('sha256').update(bytes).digest('hex');
+    const m = manifest({scopes: [...VF_SCOPES], inputRefs: [
+      'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+      inv.PRIMITIVE_REF,
+      inv.VALIDATION_REF_PREFIX + hash,
+      inv.VALIDATION_CONTRACT_REF_PREFIX + VF_PROFILE.contractDigest,
+    ]});
+    const binding = inv.prepareValidationBinding({
+      manifest: m, request: {expected_paths: [...VF_PATHS]},
+      validationRequestText: text, validationRequestFile: validationPath,
+    });
+    assert.equal(binding.request.profile, inv.VALIDATION_FINALIZATION_PROFILE);
+    assert.equal(binding.contractDigest, VF_PROFILE.contractDigest);
+    const calls = [];
+    const result = inv.runFixedPreparedValidation({binding, manifest: m,
+      validationSpawnSyncImpl(command, args, options) {
+        calls.push({command, args, options});
+        return {status: 0, signal: null, stdout: '', stderr: ''};
+      }});
+    assert.equal(result.kind, 'PASS');
+    assert.equal(result.value.checks_passed, inv.VALIDATION_FINALIZATION_CHECKS.length);
+    assert.deepEqual(calls.map((call) => call.args),
+      inv.VALIDATION_FINALIZATION_CHECKS.map((check) => check.args));
+  } finally { fs.rmSync(dir, {recursive: true, force: true}); }
+});
+
+test('s-rdc maintenance profile requires adapter and runs fixed node/sh matrix', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-profile-s-rdc-test-'));
+  try {
+    const request = {schema: inv.VALIDATION_REQUEST_SCHEMA, profile: inv.S_RDC_MAINTENANCE_PROFILE};
+    const text = JSON.stringify(request);
+    const bytes = Buffer.from(text, 'utf8');
+    const validationPath = path.join(dir, 'validation.json');
+    fs.writeFileSync(validationPath, bytes);
+    const hash = crypto.createHash('sha256').update(bytes).digest('hex');
+    const adapterRef = inv.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
+      + inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest;
+    const workspace = {
+      kind: 'repository',
+      branch: 'server/s-rdc-fixture',
+      worktree: '/root/nyang-worktrees/s-rdc-fixture',
+    };
+    const m = manifest({
+      scopes: [...S_RDC_SCOPES],
+      workspace,
+      inputRefs: [
+        'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+        inv.PRIMITIVE_REF,
+        inv.VALIDATION_REF_PREFIX + hash,
+        inv.VALIDATION_CONTRACT_REF_PREFIX + S_RDC_PROFILE.contractDigest,
+        adapterRef,
+      ],
+    });
+    const binding = inv.prepareValidationBinding({
+      manifest: m, request: {expected_paths: [...S_RDC_PATHS]},
+      validationRequestText: text, validationRequestFile: validationPath,
+    });
+    const calls = [];
+    const regular = {isFile: () => true, isSymbolicLink: () => false};
+    const result = inv.runFixedPreparedValidation({
+      binding,
+      manifest: m,
+      validationAdapterResolverImpl({binding: resolvedBinding, check, manifest: resolvedManifest}) {
+        return inv.resolveImplementationValidationInvocation({
+          binding: resolvedBinding, check, manifest: resolvedManifest,
+          candidateStatImpl: () => regular,
+        });
+      },
+      validationSpawnSyncImpl(command, args, options) {
+        calls.push({command, args, options});
+        return {status: 0, signal: null, stdout: '', stderr: ''};
+      },
+      persistValidationArtifactImpl: () => ({
+        locator: 'local-artifact:/tmp/s-rdc-validation.json#sha256=' + '9'.repeat(64),
+      }),
+    });
+    assert.equal(result.kind, 'PASS');
+    assert.equal(result.value.checks_passed, 4);
+    assert.deepEqual(calls.map((call) => call.command),
+      ['/bin/sh', '/bin/sh', process.execPath, '/bin/sh']);
+    assert.deepEqual(calls.map((call) => call.args),
+      inv.S_RDC_MAINTENANCE_CHECKS.map((check) => check.args));
+    assert(calls.every((call) => call.options.shell === false));
+
+    const legacyManifest = manifest({
+      scopes: [...S_RDC_SCOPES],
+      workspace,
+      inputRefs: [
+        'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+        inv.PRIMITIVE_REF,
+        inv.VALIDATION_REF_PREFIX + hash,
+        inv.VALIDATION_CONTRACT_REF_PREFIX + S_RDC_PROFILE.contractDigest,
+      ],
+    });
+    const legacyBinding = inv.prepareValidationBinding({
+      manifest: legacyManifest, request: {expected_paths: [...S_RDC_PATHS]},
+      validationRequestText: text, validationRequestFile: validationPath,
+    });
+    const blocked = inv.runFixedPreparedValidation({
+      binding: legacyBinding, manifest: legacyManifest,
+      validationSpawnSyncImpl() { throw new Error('must not spawn'); },
+    });
+    assert.equal(blocked.kind, 'BLOCKED');
+    assert(blocked.reasonCodes.includes('IMPLEMENTATION_VALIDATION_ADAPTER_REQUIRED'));
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('validation contract ref is mandatory and exact', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-profile-contract-test-'));
+  try {
+    const text = VALIDATION_TEXT;
+    const validationPath = path.join(dir, 'validation.json');
+    fs.writeFileSync(validationPath, text, 'utf8');
+    const requestValue = d014Request();
+    const missing = validationManifest({
+      inputRefs: [
+        'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+        inv.PRIMITIVE_REF,
+        inv.VALIDATION_REF_PREFIX + VALIDATION_HASH,
+      ],
+    });
+    assert.throws(
+      () => inv.prepareValidationBinding({
+        manifest: missing,
+        request: requestValue,
+        validationRequestText: text,
+        validationRequestFile: validationPath,
+      }),
+      (error) => error.kind === 'BLOCKED'
+        && error.reasonCodes.includes('VALIDATION_CONTRACT_REF_REQUIRED'),
+    );
+    const wrong = validationManifest({
+      inputRefs: [
+        'receipt:mcl-repository-patch-request:' + PATCH_HASH,
+        inv.PRIMITIVE_REF,
+        inv.VALIDATION_REF_PREFIX + VALIDATION_HASH,
+        inv.VALIDATION_CONTRACT_REF_PREFIX + '0'.repeat(64),
+      ],
+    });
+    assert.throws(
+      () => inv.prepareValidationBinding({
+        manifest: wrong,
+        request: requestValue,
+        validationRequestText: text,
+        validationRequestFile: validationPath,
+      }),
+      (error) => error.kind === 'CONFLICT'
+        && error.reasonCodes.includes('VALIDATION_CONTRACT_REF_CONFLICT'),
+    );
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
 });
 
 test('manifest-bound fixed validation passes between prepare and commit', async () => {
@@ -854,6 +1567,7 @@ test('fixed profile rejects any non-reviewed patch path set', async () => {
         'receipt:mcl-repository-patch-request:' + PATCH_HASH,
         inv.PRIMITIVE_REF,
         validationRef,
+        D014_CONTRACT_REF,
       ],
     });
     fs.writeFileSync(inputs.requestPath, JSON.stringify(request()), 'utf8');
@@ -1007,4 +1721,414 @@ test('public CLI exposes no validation command or profile selector', () => {
     "'argv'",
     "'executable'",
   ]) assert(!source.includes(token), token);
+});
+
+
+test('detached typed checkpoint sink follows proven patch boundaries only', async () => {
+  const inputs = tempValidationInputs();
+  try {
+    let primitiveCalls = 0;
+    const events = [];
+    const phases = [
+      d014Primitive('PREPARE'),
+      d014Primitive('COMMIT'),
+      d014Primitive('PUSH'),
+    ];
+    const receipt = await inv.invokeLive({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(d014Request()),
+      requestFile: inputs.requestPath,
+      patchFile: inputs.patchPath,
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {},
+      spawnSyncImpl: () => ({
+        status: 0, signal: null,
+        stdout: JSON.stringify(phases[primitiveCalls++]), stderr: '',
+      }),
+      validationSpawnSyncImpl: () => ({status: 0, signal: null, stdout: '', stderr: ''}),
+      checkpointSink: async (event) => { events.push(event); },
+      root: ROOT,
+    });
+    assert.equal(receipt.result, 'PASS');
+    assert.deepEqual(events.map((event) => event.checkpoint), [
+      'SOURCE_MUTATION_COMPLETE',
+      'VALIDATION_PASS',
+      'COMMIT_CREATED',
+      'PUSH_COMPLETE',
+    ]);
+    for (const event of events) {
+      assert.equal(event.schema, inv.DETACHED_CHECKPOINT_SCHEMA);
+      assert.equal(event.finalReceiptDigest, null);
+      assert.equal(event.finalReceiptLocator, null);
+    }
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('checkpoint persistence failure after PREPARE blocks before validation commit push', async () => {
+  const inputs = tempValidationInputs();
+  try {
+    let primitiveCalls = 0;
+    let validationCalls = 0;
+    const receipt = await inv.invokeLive({
+      repo: 'owner/repo',
+      handoffText: JSON.stringify(handoff(inputs.manifest)),
+      manifestText: JSON.stringify(inputs.manifest),
+      requestText: JSON.stringify(d014Request()),
+      requestFile: inputs.requestPath,
+      patchFile: inputs.patchPath,
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+      env: {MCL_WORKSPACE_HOLDER_CLAIM: HOLDER},
+      guardImpl: async () => {},
+      spawnSyncImpl: () => {
+        primitiveCalls += 1;
+        return {
+          status: 0, signal: null,
+          stdout: JSON.stringify(d014Primitive('PREPARE')), stderr: '',
+        };
+      },
+      validationSpawnSyncImpl: () => {
+        validationCalls += 1;
+        return {status: 0, signal: null, stdout: '', stderr: ''};
+      },
+      checkpointSink: async () => { throw new Error('fixture persist failure'); },
+      root: ROOT,
+    });
+    assert.equal(receipt.result, 'BLOCKED');
+    assert(receipt.blockers.includes('CONTINUITY_CHECKPOINT_PERSIST_FAILED'));
+    assert.equal(primitiveCalls, 1);
+    assert.equal(validationCalls, 0);
+    const byName = new Map(receipt.steps.map((step) => [step.name, step.result]));
+    assert.equal(byName.get('patch-prepare'), 'PASS');
+    assert.equal(byName.get('patch-commit'), 'SKIPPED');
+    assert.equal(byName.get('patch-push-postverify'), 'SKIPPED');
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+
+test('implementation adapter contract is separate from stable profile digests', () => {
+  assert.equal(D014_PROFILE.contractDigest,
+    '0b82f7b5ca8d6bc4f6b487653fd87451f2d6c3867a3a4dc87679587ea2fcf8bb');
+  assert.equal(VC_PROFILE.contractDigest,
+    '692e94f9a599e6dfbd840d404635d45f906de2c5933f0e04545d22f6ecbd550c');
+  assert.equal(PPR_PROFILE.contractDigest,
+    '2659556be26cc3d14bae828a4fb591d5e145b6cfe55a1afafacdbb352aef650c');
+  assert.equal(VF_PROFILE.contractDigest,
+    '0ce3cc442587b99180afb25a5fe9bb8cb117274149290270df396c0b33673155');
+  const adapter = inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT;
+  assert.equal(adapter.schema, inv.IMPLEMENTATION_VALIDATION_ADAPTER_SCHEMA);
+  assert.match(adapter.contractDigest, /^[0-9a-f]{64}$/);
+  assert.equal(inv.buildImplementationValidationAdapterContract().contractDigest,
+    adapter.contractDigest);
+  assert.equal(adapter.adapters.length,
+    inv.D014_VALIDATION_CHECKS.length
+    + inv.VALIDATION_CONTINUATION_CHECKS.length
+    + inv.PUBLISHED_PROGRESS_RECOVERY_CHECKS.length
+    + inv.VALIDATION_FINALIZATION_CHECKS.length
+    + inv.S_RDC_MAINTENANCE_CHECKS.length);
+  const historicalRows = adapter.adapters.filter(
+    (row) => row.profileId !== inv.S_RDC_MAINTENANCE_PROFILE);
+  assert(historicalRows.every((row) => row.launcher === 'node'
+    && row.pathArgIndex === 1 && row.resultParser === 'node-exit-v1'));
+  const sRdcRows = adapter.adapters.filter(
+    (row) => row.profileId === inv.S_RDC_MAINTENANCE_PROFILE);
+  assert.deepEqual(sRdcRows.map((row) => [row.checkId, row.launcher, row.pathArgIndex, row.resultParser]), [
+    ['s-rdc-maintenance-controller-syntax', 'sh', 1, 'sh-exit-v1'],
+    ['s-rdc-maintenance-installer-syntax', 'sh', 1, 'sh-exit-v1'],
+    ['s-rdc-maintenance-shim-syntax', 'node', 1, 'node-exit-v1'],
+    ['s-rdc-maintenance-contract', 'sh', 0, 'sh-exit-v1'],
+  ]);
+});
+
+test('adapter binding is opt-in exact while historical manifests stay legacy', () => {
+  const inputs = tempValidationInputs();
+  try {
+    const legacy = inv.prepareValidationBinding({
+      manifest: inputs.manifest,
+      request: d014Request(),
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+    });
+    assert.equal(legacy.adapterMode, 'LEGACY');
+    assert.equal(legacy.adapterContractDigest, null);
+
+    const exactRef = inv.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
+      + inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest;
+    const boundManifest = validationManifest({
+      inputRefs: [...inputs.manifest.inputRefs, exactRef],
+    });
+    const bound = inv.prepareValidationBinding({
+      manifest: boundManifest,
+      request: d014Request(),
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+    });
+    assert.equal(bound.adapterMode, 'V1');
+    assert.equal(bound.adapterContractDigest,
+      inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest);
+
+    assert.throws(() => inv.prepareValidationBinding({
+      manifest: {...boundManifest, inputRefs: [...boundManifest.inputRefs, exactRef]},
+      request: d014Request(),
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+    }), (error) => error.kind === 'CONFLICT'
+      && error.reasonCodes.includes('IMPLEMENTATION_VALIDATION_ADAPTER_REF_AMBIGUOUS'));
+
+    const wrongRef = inv.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX + '0'.repeat(64);
+    assert.throws(() => inv.prepareValidationBinding({
+      manifest: {...boundManifest,
+        inputRefs: boundManifest.inputRefs.map((item) =>
+          item === exactRef ? wrongRef : item)},
+      request: d014Request(),
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+    }), (error) => error.kind === 'CONFLICT'
+      && error.reasonCodes.includes('IMPLEMENTATION_VALIDATION_ADAPTER_REF_CONFLICT'));
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('fixed adapter resolver permits exactly one reviewed path candidate', () => {
+  const check = {checkId: 'fixture-check', args: ['--test', 'old/path.cjs'], timeoutMs: 123};
+  const binding = {profile: {profileId: 'fixture-profile'}};
+  const manifestValue = {workspace: {worktree: '/tmp/fixture-worktree'}};
+  const stat = {isFile: () => true, isSymbolicLink: () => false};
+  const adapterContract = {
+    schema: inv.IMPLEMENTATION_VALIDATION_ADAPTER_SCHEMA,
+    contractDigest: 'a'.repeat(64),
+    adapters: [{
+      profileId: 'fixture-profile',
+      checkId: 'fixture-check',
+      launcher: 'node',
+      cwdPolicy: 'manifest-worktree',
+      pathArgIndex: 1,
+      canonicalPath: 'old/path.cjs',
+      aliases: ['new/path.cjs'],
+      timeoutMs: 123,
+      resultParser: 'node-exit-v1',
+    }],
+  };
+  const alias = inv.resolveImplementationValidationInvocation({
+    binding, check, manifest: manifestValue, adapterContract,
+    candidateStatImpl: (file) => file.endsWith('/new/path.cjs') ? stat : null,
+  });
+  assert.equal(alias.kind, 'PASS');
+  assert.equal(alias.value.resolution, 'ALIAS');
+  assert.equal(alias.value.args[1], 'new/path.cjs');
+
+  const missing = inv.resolveImplementationValidationInvocation({
+    binding, check, manifest: manifestValue, adapterContract,
+    candidateStatImpl: () => null,
+  });
+  assert.equal(missing.kind, 'UNKNOWN');
+  assert(missing.reasonCodes.includes('CHECK_ADAPTER_STALE:fixture-check'));
+
+  const ambiguous = inv.resolveImplementationValidationInvocation({
+    binding, check, manifest: manifestValue, adapterContract,
+    candidateStatImpl: () => stat,
+  });
+  assert.equal(ambiguous.kind, 'CONFLICT');
+  assert(ambiguous.reasonCodes.includes('CHECK_ADAPTER_PATH_CONFLICT:fixture-check'));
+});
+
+test('fixed shell adapter resolver cannot widen command or argv shape', () => {
+  const check = S_RDC_PROFILE.checks[0];
+  const binding = {profile: S_RDC_PROFILE};
+  const manifestValue = {workspace: {worktree: '/tmp/fixture-worktree'}};
+  const stat = {isFile: () => true, isSymbolicLink: () => false};
+  const pass = inv.resolveImplementationValidationInvocation({
+    binding, check, manifest: manifestValue,
+    candidateStatImpl: () => stat,
+  });
+  assert.equal(pass.kind, 'PASS');
+  assert.equal(pass.value.launcher, 'sh');
+  assert.equal(pass.value.command, '/bin/sh');
+  assert.deepEqual(pass.value.args, check.args);
+
+  const contract = inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT;
+  const tampered = {
+    ...contract,
+    adapters: contract.adapters.map((row) => row.profileId === inv.S_RDC_MAINTENANCE_PROFILE
+      && row.checkId === check.checkId ? {...row, launcher: 'node'} : row),
+  };
+  const blocked = inv.resolveImplementationValidationInvocation({
+    binding, check, manifest: manifestValue, adapterContract: tampered,
+    candidateStatImpl: () => stat,
+  });
+  assert.equal(blocked.kind, 'CONFLICT');
+  assert(blocked.reasonCodes.includes('CHECK_ADAPTER_CONTRACT_CONFLICT:' + check.checkId));
+
+  const widenedCheck = {...check, args: ['-c', check.args[1]]};
+  const widened = inv.resolveImplementationValidationInvocation({
+    binding, check: widenedCheck, manifest: manifestValue,
+    candidateStatImpl: () => stat,
+  });
+  assert.equal(widened.kind, 'CONFLICT');
+});
+
+test('adapter semantic failure is FAIL with remaining checks NOT_RUN and stable artifact', () => {
+  const inputs = tempValidationInputs();
+  try {
+    const exactRef = inv.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
+      + inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest;
+    const m = validationManifest({inputRefs: [...inputs.manifest.inputRefs, exactRef]});
+    const binding = inv.prepareValidationBinding({
+      manifest: m,
+      request: d014Request(),
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+    });
+    let calls = 0;
+    const locator = 'local-artifact:/tmp/mcl-implementation-validation-fixture.json#sha256='
+      + 'b'.repeat(64);
+    const result = inv.runFixedPreparedValidation({
+      binding,
+      manifest: m,
+      validationAdapterResolverImpl({check, manifest}) {
+        return {kind: 'PASS', reasonCodes: [], value: {
+          launcher: 'node', command: process.execPath, args: [...check.args],
+          cwd: manifest.workspace.worktree, path: check.args[1],
+          resolution: 'CANONICAL', timeoutMs: check.timeoutMs,
+        }};
+      },
+      validationSpawnSyncImpl() {
+        calls += 1;
+        return calls === 2
+          ? {status: 1, signal: null, stdout: 'assertion mismatch', stderr: ''}
+          : {status: 0, signal: null, stdout: '', stderr: ''};
+      },
+      persistValidationArtifactImpl: () => ({locator}),
+    });
+    assert.equal(calls, 2);
+    assert.equal(result.kind, 'FAIL');
+    assert.equal(result.value.status, 'FAIL');
+    assert.equal(result.value.checks_passed, 1);
+    assert.equal(result.value.checks_failed, 1);
+    assert.equal(result.value.checks_infra, 0);
+    assert.equal(result.value.checks_not_run, inv.D014_VALIDATION_CHECKS.length - 2);
+    assert.equal(result.artifactLocator, locator);
+    assert.equal(result.artifact.orderedChecks[0].result, 'PASS');
+    assert.equal(result.artifact.orderedChecks[1].result, 'FAIL');
+    assert(result.artifact.orderedChecks.slice(2).every((row) => row.result === 'NOT_RUN'));
+    assert(result.reasonCodes.includes('SEMANTIC_TEST_FAILURE:completion-test-syntax'));
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('adapter infrastructure failure never becomes semantic FAIL', () => {
+  const inputs = tempValidationInputs();
+  try {
+    const exactRef = inv.IMPLEMENTATION_VALIDATION_ADAPTER_REF_PREFIX
+      + inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest;
+    const m = validationManifest({inputRefs: [...inputs.manifest.inputRefs, exactRef]});
+    const binding = inv.prepareValidationBinding({
+      manifest: m,
+      request: d014Request(),
+      validationRequestText: VALIDATION_TEXT,
+      validationRequestFile: inputs.validationPath,
+    });
+    const result = inv.runFixedPreparedValidation({
+      binding,
+      manifest: m,
+      validationAdapterResolverImpl({check, manifest}) {
+        return {kind: 'PASS', reasonCodes: [], value: {
+          launcher: 'node', command: process.execPath, args: [...check.args],
+          cwd: manifest.workspace.worktree, path: check.args[1],
+          resolution: 'CANONICAL', timeoutMs: check.timeoutMs,
+        }};
+      },
+      validationSpawnSyncImpl() {
+        return {status: null, signal: 'SIGTERM', stdout: '', stderr: ''};
+      },
+      persistValidationArtifactImpl: () => ({
+        locator: 'local-artifact:/tmp/infra.json#sha256=' + 'c'.repeat(64),
+      }),
+    });
+    assert.equal(result.kind, 'BLOCKED');
+    assert.equal(result.value.checks_failed, 0);
+    assert.equal(result.value.checks_infra, 1);
+    assert(result.reasonCodes[0].startsWith('PREPARED_VALIDATION_INFRA_ERROR:'));
+    assert(!result.reasonCodes[0].startsWith('SEMANTIC_TEST_FAILURE:'));
+  } finally {
+    fs.rmSync(inputs.dir, {recursive: true, force: true});
+  }
+});
+
+test('semantic FAIL projects one bounded validation attention item', () => {
+  const locator = 'local-artifact:/tmp/mcl-implementation-validation-fixture.json#sha256='
+    + 'd'.repeat(64);
+  const receipt = inv.projectGenericReceipt({
+    manifest: validationManifest(),
+    request: d014Request(),
+    primitiveSourceSha256: '1'.repeat(64),
+    kind: 'FAIL',
+    reasons: ['SEMANTIC_TEST_FAILURE:completion-contract'],
+    prepare: d014Primitive('PREPARE'),
+    validation: {
+      status: 'FAIL', checks_passed: 1, checks_failed: 1,
+      checks_infra: 0, checks_not_run: 2,
+    },
+    validationEnabled: true,
+    validationArtifactLocator: locator,
+  });
+  assert.equal(receipt.result, 'FAIL');
+  assert.equal(receipt.attentionDisposition, 'NEEDS_REVIEW');
+  const view = inv.projectOwnerAgentView(receipt, validationManifest(), {
+    workspaceInspector: () => ({ok: true, holderPath: '/tmp/fake-git-admin/holder.json'}),
+    writer: (filePath) => ({filePath, digest: 'e'.repeat(64)}),
+  });
+  assert.equal(view.result, 'FAIL');
+  assert.equal(view.attentionDisposition, 'NEEDS_REVIEW');
+  assert.equal(view.attentionCount, 1);
+  assert.equal(view.attention[0].reasonCode, 'SEMANTIC_TEST_FAILURE:completion-contract');
+  assert.equal(view.attention[0].locator, locator);
+  assert.equal(view.output.validationFailed, 1);
+  assert.equal(view.output.validationNotRun, 2);
+});
+
+test('validation artifact persistence is bounded private regular-file evidence', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-validation-artifact-'));
+  try {
+    const rows = inv.D014_VALIDATION_CHECKS.map((check) => ({
+      checkId: check.checkId, launcher: 'node', argv: [...check.args],
+      path: check.args[1], resolution: 'CANONICAL', result: 'PASS',
+      reasonCodes: [], exitCode: 0, signal: null,
+      stdout: {bytes: 0, sha256: crypto.createHash('sha256').update('').digest('hex')},
+      stderr: {bytes: 0, sha256: crypto.createHash('sha256').update('').digest('hex')},
+    }));
+    const binding = {
+      profile: D014_PROFILE,
+      adapterContractDigest: inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest,
+    };
+    const m = validationManifest();
+    const artifact = inv.buildImplementationValidationArtifact({binding, manifest: m, rows});
+    const persisted = inv.persistImplementationValidationArtifact(m, artifact, {
+      workspaceInspector: () => ({ok: true, holderPath: path.join(dir, 'holder.json')}),
+    });
+    const stat = fs.lstatSync(persisted.filePath);
+    assert.equal(stat.isFile(), true);
+    assert.equal(stat.isSymbolicLink(), false);
+    assert.equal(stat.mode & 0o777, 0o600);
+    assert(stat.size < 32 * 1024);
+    assert(persisted.locator.startsWith('local-artifact:' + persisted.filePath + '#sha256='));
+    const parsed = JSON.parse(fs.readFileSync(persisted.filePath, 'utf8'));
+    assert.equal(parsed.profileContractDigest, D014_PROFILE.contractDigest);
+    assert.equal(parsed.adapterContractDigest,
+      inv.IMPLEMENTATION_VALIDATION_ADAPTER_CONTRACT.contractDigest);
+    assert.equal(parsed.summary.passed, inv.D014_VALIDATION_CHECKS.length);
+    assert.equal(Object.prototype.hasOwnProperty.call(parsed, 'env'), false);
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
 });

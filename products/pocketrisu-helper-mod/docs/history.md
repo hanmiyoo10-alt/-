@@ -53,3 +53,10 @@ INSPECT_ONLY에서 확인한 근거:
 상세 설계:
 - `docs/features/server-phone/local-usage-bridge/DESIGN.md`
 - `docs/features/server-phone/large-doc-backend-adapter/DESIGN.md`
+
+## 2026-09-25 main-ssh-tunnel guard-anchor live proof
+- guard-owner durability follow-up #2786 / PR #2878을 merge하고 exact merged guard + independent anchor launcher를 M에 backup-first로 배포했다.
+- controlled guard hard loss에서는 anchor가 새 guard를 복구했고, controlled anchor hard loss에서는 살아남은 guard가 새 anchor를 복구했다.
+- 최종 guard/anchor는 정확히 1개씩 수렴했으며 `pocketrisu-ssh-tunnel` supervision과 localhost health를 보존했다.
+- shared top-level `runsvdir`는 계속 absent였고 그 사망 원인은 `UNKNOWN`으로 유지한다.
+- network toggle/reset, phone reboot, whole-Termux loss, broad service-tree restart, server PocketRisu/sshd mutation 없이 live proof를 완료했다.

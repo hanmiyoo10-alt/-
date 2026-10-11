@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "product": "SimCore",
   "scope": "R_V2_3_STABILITY_SEAL",
-  "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED_REAL_TERMINAL_PROOF_PENDING",
+  "status": "IMPLEMENTED_PERMANENT_CI_QUALIFIED_REAL_TERMINAL_OPERATION_PROVEN",
   "date": "2026-08-28",
   "name": "Stability Seal",
   "trackingIssue": 673,
@@ -24,7 +24,7 @@
     "qualificationRun": 33141818351,
     "verifyJob": 98754100717,
     "requiredJob": 98754155453,
-    "realTerminalOperationalProof": "PENDING"
+    "realTerminalOperationalProof": "PROVEN"
   },
   "designInput": {
     "releaseVersion": "0.64.9",
@@ -58,7 +58,7 @@
     {
       "id": "R2_3_B_HUMAN_LIVE_PASS_PR3_TERMINAL_SEAL",
       "classification": "STABILIZE",
-      "status": "IMPLEMENTED_POLICY_PERMANENT_CI_PASS_REAL_PR3_PROOF_PENDING",
+      "status": "IMPLEMENTED_POLICY_PERMANENT_CI_PASS_REAL_TERMINAL_OPERATION_PROVEN",
       "goal": "Keep PR3 as the existing third clean-path admin/evidence transaction and require post-PR3 durable reobservation before work-item completion."
     },
     {
@@ -109,13 +109,32 @@
     "originalRequiredEvidence": "V0_64_9_HUMAN_EVIDENCE_AND_PR3_TERMINAL_SHAPE",
     "operatorOverride": "EXPLICIT_IMPLEMENTATION_AUTHORIZATION_RECEIVED_2026_08_28",
     "mechanicalPolicyImplementation": "ACTIVE_PERMANENT_CI_QUALIFIED",
-    "realTerminalQualification": "PENDING",
-    "reason": "The policy and permanent regression are qualified, while genuine terminal proof remains evidence-gated and cannot be inferred from synthetic tests."
+    "realTerminalQualification": "PROVEN",
+    "reason": "Real terminal operation is now source-backed by v0.64.9 accepted HUMAN_EVIDENCE plus merged historical terminal transaction and post-merge reobservation; the ordinary successful clean-path PR3 shape is independently proven by v0.65.0 PR #755."
   },
   "watch": [
     "WORK_ITEM_CLOSURE_WORDING_NOW_POLICY_OWNED",
     "CONTROL_PLANE_SCOPE_LABEL_NOISE_NON_AUTHORITY"
   ],
   "runtimeMutation": "NONE",
-  "releaseSimcoreMutation": "NONE"
+  "releaseSimcoreMutation": "NONE",
+  "terminalQualification": {
+    "status": "REAL_TERMINAL_OPERATION_PROVEN",
+    "qualificationDate": "2026-09-22",
+    "originalTargetIssue": 660,
+    "originalTargetVersion": "0.64.9",
+    "originalTerminalDisposition": "LIVE_FAIL_HANDOFF_TO_NEW_RELEASE",
+    "humanEvidenceAccepted": true,
+    "humanEvidenceRef": "docs/SIMCORE_LIVE_06409_SESSION_ACCESS_ERROR_2026-08-28.md",
+    "historicalTerminalTransactionPr": 2710,
+    "historicalTerminalMerge": "ef2b35479576024f29d1f7ff4179ad107c6be5b2",
+    "postmergeRequiredRun": 35561845562,
+    "closureEvaluatorState": "TERMINAL_REOBSERVED_CLOSE_ELIGIBLE",
+    "closureEvaluatorEligible": true,
+    "cleanPathPr3ProofVersion": "0.65.0",
+    "cleanPathPr3": 755,
+    "cleanPathPr3Merge": "481003fefea01dc2e70b3b8dac08e81264b94250",
+    "originalTargetLivePassClaimed": false,
+    "historicalTransactionIsCleanPathPr3": false
+  }
 }

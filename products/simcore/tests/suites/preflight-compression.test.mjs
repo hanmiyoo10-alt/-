@@ -160,6 +160,10 @@ export async function runSuite({ fixtures }) {
   assert(check.includes('GATE_PR1_DRY'), 'PR1 dry gate not wired into permanent verifier');
   assert(check.includes('candidate-requests'), 'PR1 dry trigger is not request-scoped');
   assert(check.includes('pr1-dry-qualification.mjs'), 'PR1 dry verifier invocation missing');
+  equal(status.predecessor?.version, 'R2.3', 'R2.4 predecessor version');
+  equal(status.predecessor?.status, 'IMPLEMENTED_PERMANENT_CI_QUALIFIED_REAL_TERMINAL_OPERATION_PROVEN', 'R2.4 predecessor qualification drift');
+  pass('r24-predecessor-r23-terminal-qualification-proven');
+
   pass('r24-authority-freeze-and-gate-wiring');
 
   const guard = semantic.indexOf("typeof hostApi.getLocalPluginStorage !== 'function'");

@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createGitHubClient } = require('../infra/github-client.cjs');
+const packetProjection = require('../work-system/packet-projection.cjs');
 
 const MODE = 'CANONICAL_MAIN_COORDINATION_BODY_PATCH';
 const PACKET_MARKER = '<!-- canonical-main-work-packet:v1 -->';
@@ -193,6 +194,15 @@ async function executeCoordinationBodyPatch({ client, request } = {}) {
   const patch = applyPatch(firstBody, request.operation);
   if (!patch.ok) return resultFromRequest('BLOCKED', patch.reasonCodes, request, { observedBeforeSha256 });
   const expectedAfterSha256 = bodyDigest(patch.body);
+  if (request.surface === 'WORK_PACKET') {
+    const projection = packetProjection.classifyPacketProjection(patch.body);
+    if (projection.disposition !== 'PASS') {
+      return resultFromRequest(projection.disposition, projection.reasonCodes, request, {
+        observedBeforeSha256,
+        expectedAfterSha256,
+      });
+    }
+  }
 
   let barrier;
   try {

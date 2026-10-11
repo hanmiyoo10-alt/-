@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
+
+    <application
+        android:allowBackup="false"
+        android:label="Termux Screen On Companion"
+        android:supportsRtl="true">
+        <activity
+            android:name=".PairingActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <receiver
+            android:name=".ScreenOnReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="io.hanmiyoo.screenoncompanion.action.PAIR" />
+                <action android:name="io.hanmiyoo.screenoncompanion.action.ON" />
+                <action android:name="io.hanmiyoo.screenoncompanion.action.OFF" />
+                <action android:name="io.hanmiyoo.screenoncompanion.action.STATUS" />
+                <action android:name="io.hanmiyoo.screenoncompanion.action.DIAGNOSTIC" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

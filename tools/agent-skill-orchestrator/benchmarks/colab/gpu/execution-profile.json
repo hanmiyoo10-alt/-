@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "profile_id": "llama-b10516-colab-cuda-v1",
+  "source": {
+    "repository": "https://github.com/ggml-org/llama.cpp.git",
+    "release": "b10516",
+    "source_digest": "b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9"
+  },
+  "configure_args": [
+    "-DGGML_CUDA=ON",
+    "-DLLAMA_CURL=OFF",
+    "-DBUILD_SHARED_LIBS=ON",
+    "-DCMAKE_BUILD_TYPE=Release"
+  ],
+  "build_target": "llama-server",
+  "parallel_jobs": 2,
+  "smoke_args": ["--version"]
+}

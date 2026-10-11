@@ -1,0 +1,62 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -u
+
+[ "$#" -eq 0 ] || exit 2
+
+PREFIX=/data/data/com.termux/files/usr
+HOME_DIR=/data/data/com.termux/files/home
+PYTHON="$PREFIX/bin/python"
+NOHUP="$PREFIX/bin/nohup"
+CLIENT="$HOME_DIR/.local/lib/mcl-m-termux-lifeline/heartbeat-client.py"
+RDC_GUARD="$HOME_DIR/.local/bin/mcl-m-rdc-supervisor-guard"
+TAILSCALE_GUARD="$HOME_DIR/.local/bin/mcl-m-tailscale-supervisor-guard"
+STATE="$HOME_DIR/.local/state/mcl-m-termux-lifeline"
+RECEIPT="$STATE/recovery.receipt"
+
+valid_file() {
+    [ -f "$1" ] && [ ! -L "$1" ]
+}
+
+[ -x "$PYTHON" ] || exit 2
+[ -x "$NOHUP" ] || exit 2
+valid_file "$CLIENT" || exit 2
+valid_file "$RDC_GUARD" && [ -x "$RDC_GUARD" ] || exit 2
+valid_file "$TAILSCALE_GUARD" && [ -x "$TAILSCALE_GUARD" ] || exit 2
+
+mkdir -p "$STATE" || exit 2
+umask 077
+
+RDC_TARGET=fail
+TAILSCALE_TARGET=not_run
+HEARTBEAT_ACTIVE=not_run
+
+if "$RDC_GUARD" --once >/dev/null 2>&1; then
+    RDC_TARGET=pass
+    TAILSCALE_TARGET=fail
+    if "$TAILSCALE_GUARD" --once >/dev/null 2>&1; then
+        TAILSCALE_TARGET=pass
+        HEARTBEAT_ACTIVE=fail
+        "$NOHUP" "$PYTHON" "$CLIENT" >/dev/null 2>&1 &
+        if "$PYTHON" "$CLIENT" --status >/dev/null 2>&1; then
+            HEARTBEAT_ACTIVE=pass
+        fi
+    fi
+fi
+
+TMP="$RECEIPT.$$"
+{
+    printf '%s\n' \
+        'schema=mcl-m-termux-lifeline-recovery.v4' \
+        "rdc_target=$RDC_TARGET" \
+        "tailscale_target=$TAILSCALE_TARGET" \
+        "heartbeat_active=$HEARTBEAT_ACTIVE" \
+        'guard_ring_started=false' \
+        'details=withheld'
+} > "$TMP"
+mv "$TMP" "$RECEIPT"
+
+cat "$RECEIPT"
+
+[ "$RDC_TARGET" = pass ] &&
+[ "$TAILSCALE_TARGET" = pass ] &&
+[ "$HEARTBEAT_ACTIVE" = pass ]

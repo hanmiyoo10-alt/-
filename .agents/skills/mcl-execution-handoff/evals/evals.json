@@ -3,6 +3,53 @@
   "schema_version": 1,
   "cases": [
     {
+      "id": "repo-l-handoff-ready",
+      "input": {
+        "plan": {
+          "route": "L",
+          "executor": "L",
+          "preflight_owner": "not_applicable",
+          "repository_effect": "mutable",
+          "overlap_guard": "required",
+          "lease_guard": "required",
+          "phase": "1/1"
+        },
+        "preflight": "not_applicable",
+        "overlap": "DISJOINT",
+        "lease": "active_matching",
+        "git_currentness": "current",
+        "manifest": "matching",
+        "packet_stage": "IMPLEMENTATION_PR"
+      },
+      "expected": {
+        "status": "HANDOFF_READY",
+        "executor": "L",
+        "auto_switched_executor": false,
+        "mutation_authorized": false,
+        "execution_authorized": false,
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "repo-l-wrong-executor-rejected",
+      "input": {
+        "plan": {
+          "route": "L",
+          "executor": "S",
+          "preflight_owner": "not_applicable",
+          "repository_effect": "mutable",
+          "overlap_guard": "required",
+          "lease_guard": "required",
+          "phase": "1/1"
+        }
+      },
+      "expected": {
+        "status": "CONFLICT",
+        "reason_code": "ROUTE_EXECUTOR_CONFLICT",
+        "effect_performed": false
+      }
+    },
+    {
       "id": "repo-s-handoff-ready",
       "input": {
         "plan": {
@@ -60,8 +107,8 @@
       "id": "read-only-not-applicable",
       "input": {
         "plan": {
-          "route": "S",
-          "executor": "S",
+          "route": "L",
+          "executor": "L",
           "repository_effect": "read_only",
           "phase": "1/1"
         }
@@ -344,6 +391,28 @@
       "expected": {
         "status": "BLOCKED",
         "reason_code": "PACKET_STAGE_NOT_MUTATION_CAPABLE",
+        "effect_performed": false
+      }
+    },
+    {
+      "id": "selected-l-never-falls-back",
+      "input": {
+        "plan": {
+          "route": "L",
+          "executor": "L",
+          "preflight_owner": "not_applicable",
+          "repository_effect": "mutable",
+          "phase": "1/1"
+        },
+        "preflight": "not_applicable",
+        "overlap": "DISJOINT",
+        "lease": "missing",
+        "s_available": true
+      },
+      "expected": {
+        "status": "BLOCKED",
+        "executor": "L",
+        "auto_switched_executor": false,
         "effect_performed": false
       }
     },

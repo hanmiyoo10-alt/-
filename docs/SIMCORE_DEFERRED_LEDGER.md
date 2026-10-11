@@ -57,7 +57,9 @@ Operational rule:
 
 > **See something suspicious in a diagnostic → capture it immediately. Do not rely on chat memory to remember it later.**
 
-## Current baseline
+## Historical baseline at ledger establishment
+
+> The block below is preserved as point-in-time evidence for the ledger's original M2-era routing. It is **not current operational authority**. Read current production, validation, priority, and checkpoint from `product-manifest.json` and `docs/CURRENT_DEVELOPMENT.md`. Later evidence may have satisfied individual `PENDING` lines below; do not reactivate them from this historical block alone.
 
 ```text
 Production: v0.64.7 — Cross-Reload Cache Observer Continuity

@@ -62,6 +62,9 @@ CI/PR/review/merge/deploy 실패를 시간순으로 기록. 성공해도 지우�
 
 - branch: `feat/<Feature-ID>` 또는 `feat/<Feature-ID>-<설명>`
 - PR body: `Feature-ID: <Feature-ID>` 정확히 한 줄
+- **기본 PR 목적지는 사용자 fork `hanmiyoo10-alt/PocketRisu`이다.**
+- **official `PocketRisu/PocketRisu` PR은 사용자가 현재 작업에서 명시적으로 official upstream 제출을 요청한 경우에만 허용한다.**
+- `UPSTREAM.md`의 upstream-ready/rebuild recipe는 기술적 준비 상태를 뜻할 뿐 official PR 생성 권한을 뜻하지 않는다.
 - unrelated cleanup/format/refactor 혼합 금지
 - 다른 Feature-ID가 섞이면 자동 merge 대상 제외
 

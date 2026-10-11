@@ -3,7 +3,6 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
@@ -48,13 +47,13 @@ function packet() {
   };
 }
 
-function manifest() {
+function manifest({phaseId = '2693-implementation-pr-stage-entry'} = {}) {
   return handoff.buildManifest({
     schemaVersion: 1,
     mode: 'MCL_TASK_MANIFEST',
     packetRef: '#2693',
     packetBodySha256: PACKET_HASH,
-    phaseId: '2693-implementation-pr-stage-entry',
+    phaseId,
     phaseClass: 'REPOSITORY_MUTATION',
     route: 'S',
     executor: 'S',
@@ -165,75 +164,38 @@ test('another RDC command session fails closed and never becomes LIVE', async ()
   assert.notEqual(out.evidence.sessionState, 'LIVE');
 });
 
-test('session snapshot projects only ABSENT or UNKNOWN', () => {
+test('standalone session owner compatibility preserves existing recovery semantics', () => {
   assert.deepEqual(
-    owner.sessionStateFromSnapshot({
-      topologyResolved: true,
-      currentRootShell: true,
-      otherShellCount: 0,
-      unexpectedChildCount: 0,
+    owner.sessionStateFromEvidence({
+      sessionState: 'ABSENT',
+      reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+      compatibilityReason: 'SOLE_RDC_COMMAND_SESSION',
     }),
     {state: 'ABSENT', reason: 'SOLE_RDC_COMMAND_SESSION'},
   );
-  assert.equal(owner.sessionStateFromSnapshot({
-    topologyResolved: true,
-    currentRootShell: true,
-    otherShellCount: 1,
-    unexpectedChildCount: 0,
-  }).state, 'UNKNOWN');
-  assert.equal(owner.sessionStateFromSnapshot({
-    topologyResolved: false,
-  }).state, 'UNKNOWN');
-  for (const snapshot of [
-    {topologyResolved: true, currentRootShell: true, otherShellCount: 0, unexpectedChildCount: 0},
-    {topologyResolved: true, currentRootShell: true, otherShellCount: 2, unexpectedChildCount: 0},
-    {topologyResolved: false},
-  ]) {
-    assert.notEqual(owner.sessionStateFromSnapshot(snapshot).state, 'LIVE');
-  }
+  assert.deepEqual(
+    owner.sessionStateFromEvidence({
+      sessionState: 'PRESENT',
+      reasonCode: 'OTHER_RDC_COMMAND_SESSION_PRESENT',
+      compatibilityReason: 'OTHER_RDC_COMMAND_SESSION_PRESENT',
+    }),
+    {state: 'UNKNOWN', reason: 'OTHER_RDC_COMMAND_SESSION_PRESENT'},
+  );
+  assert.deepEqual(
+    owner.sessionStateFromEvidence({
+      sessionState: 'UNKNOWN',
+      reasonCode: 'RDC_AGENT_TOPOLOGY_AMBIGUOUS',
+      compatibilityReason: 'RDC_AGENT_CHILD_TOPOLOGY_AMBIGUOUS',
+    }),
+    {state: 'UNKNOWN', reason: 'RDC_AGENT_CHILD_TOPOLOGY_AMBIGUOUS'},
+  );
 });
 
-
-function procRow(root, pid, ppid, comm, argv) {
-  const dir = path.join(root, String(pid));
-  fs.mkdirSync(dir, {recursive: true});
-  fs.writeFileSync(path.join(dir, 'stat'), `${pid} (${comm}) S ${ppid} 0 0 0 0\n`);
-  fs.writeFileSync(path.join(dir, 'comm'), comm + '\n');
-  fs.writeFileSync(path.join(dir, 'cmdline'), Buffer.from(argv.join('\0') + '\0'));
-}
-
-test('scanLocalSession excludes current command root and proves sole-session absence', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-recovery-proc-'));
-  try {
-    procRow(root, 10, 20, 'node', ['node', 'inspect.js']);
-    procRow(root, 20, 30, 'sh', ['/bin/sh', '-c', 'node inspect.js']);
-    procRow(root, 30, 40, 'node-MainThread', [
-      '/data/data/com.termux/files/usr/bin/node',
-      '/root/.local/share/desktop-commander-remote/node_modules/@wonderwhy-er/desktop-commander/dist/index.js',
-    ]);
-    const result = owner.scanLocalSession({procRoot: root, selfPid: 10});
-    assert.deepEqual(result, {state: 'ABSENT', reason: 'SOLE_RDC_COMMAND_SESSION'});
-  } finally {
-    fs.rmSync(root, {recursive: true, force: true});
-  }
-});
-
-test('scanLocalSession treats another command root as UNKNOWN', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-recovery-proc-'));
-  try {
-    procRow(root, 10, 20, 'node', ['node', 'inspect.js']);
-    procRow(root, 20, 30, 'sh', ['/bin/sh', '-c', 'node inspect.js']);
-    procRow(root, 30, 40, 'node-MainThread', [
-      '/data/data/com.termux/files/usr/bin/node',
-      '/root/.local/share/desktop-commander-remote/node_modules/@wonderwhy-er/desktop-commander/dist/index.js',
-    ]);
-    procRow(root, 21, 30, 'sh', ['/bin/sh', '-c', 'sleep 20']);
-    const result = owner.scanLocalSession({procRoot: root, selfPid: 10});
-    assert.equal(result.state, 'UNKNOWN');
-    assert.equal(result.reason, 'OTHER_RDC_COMMAND_SESSION_PRESENT');
-  } finally {
-    fs.rmSync(root, {recursive: true, force: true});
-  }
+test('recovery inspector source consumes standalone session owner and has no duplicate proc scanner', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../mcl-effect-recovery-inspect.cjs'), 'utf8');
+  assert.match(source, /rdc-session-evidence\/mcl-rdc-session-evidence\.cjs/);
+  assert.doesNotMatch(source, /function readProcRecord/);
+  assert.doesNotMatch(source, /function isCommandAgent/);
 });
 
 
@@ -315,7 +277,7 @@ test('holder mismatch fails closed', async () => {
   assert.equal(out.view.result, 'CONFLICT');
 });
 
-test('manifest candidate selection rejects duplicate matching envelopes', () => {
+test('manifest candidate selection collapses exact replay rows', () => {
   const m = manifest();
   const rendered = handoff.renderManifest(m);
   const result = owner.manifestCandidates(
@@ -323,6 +285,24 @@ test('manifest candidate selection rejects duplicate matching envelopes', () => 
     packet(),
     activeLease(),
     {record: {manifestId: m.manifestId, leaseId: LEASE}},
+  );
+  assert.equal(result.state, 'EXACT');
+  assert.equal(result.manifest.manifestId, m.manifestId);
+  assert.deepEqual(result.reasons, []);
+});
+
+test('manifest candidate selection rejects distinct matching identities', () => {
+  const first = manifest();
+  const second = manifest({phaseId: '2693-implementation-pr-replay'});
+  assert.notEqual(first.manifestId, second.manifestId);
+  const result = owner.manifestCandidates(
+    {complete: true, rows: [
+      {body: handoff.renderManifest(first)},
+      {body: handoff.renderManifest(second)},
+    ]},
+    packet(),
+    activeLease(),
+    {record: null},
   );
   assert.equal(result.state, 'CONFLICT');
   assert.ok(result.reasons.includes('MANIFEST_MATCH_DUPLICATE'));

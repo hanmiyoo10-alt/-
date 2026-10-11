@@ -1,0 +1,28 @@
+name: MCL M Termux API Callback
+
+on:
+  pull_request:
+    paths:
+      - 'products/chatgpt-mobile-coder-lab/device-ops/m-termux-api-callback/**'
+      - '.github/workflows/mcl-m-termux-api-callback.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'products/chatgpt-mobile-coder-lab/device-ops/m-termux-api-callback/**'
+      - '.github/workflows/mcl-m-termux-api-callback.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Run callback contract tests
+        run: python3 -m unittest discover -s products/chatgpt-mobile-coder-lab/device-ops/m-termux-api-callback/tests -v
+      - name: Check helper syntax
+        run: python3 -m py_compile products/chatgpt-mobile-coder-lab/device-ops/m-termux-api-callback/mcl-m-termux-api-callback.py

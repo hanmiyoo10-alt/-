@@ -37,10 +37,28 @@ Existing owners remain authoritative:
 
 A PASS from this harness proves preparation only. All authority flags remain false.
 
+## Current-source bootstrap
+
+A fixed S Ubuntu launcher may load stage-entry from an exact current-main disposable
+source snapshot when the fixed landing predates this owner. The installed launcher
+is `/usr/local/bin/mcl-stage-entry-current`, sourced from
+`device-bootstrap/mcl-stage-entry-current`.
+
+The launcher owns source acquisition only. It reads canonical remote `main`,
+captures that exact tree outside `/root/nyang-repo`, verifies remote main stayed
+stable during capture, and invokes only the snapshotted `mcl-stage-entry.cjs`.
+It never fetches, switches, resets, or writes the fixed landing.
+
+The launcher passes `--source-main <sha>`. When supplied, stage-entry requires
+that SHA to equal its fresh direct protected-main read before packet overlap,
+landing observation, D-013, workspace, or repository effects. Direct invocation
+without `--source-main` preserves the existing behavior.
+
 ## Commands
 
 ```text
-node mcl-stage-entry.cjs inspect --packet '#N' --plan <regular-json-file>
+node mcl-stage-entry.cjs inspect --packet '#N' --plan <regular-json-file> \
+  [--packet-activity-evidence-file <regular-json-file>]
 
 node mcl-stage-entry.cjs apply \
   --packet '#N' \
@@ -51,6 +69,23 @@ node mcl-stage-entry.cjs apply \
 The repository is fixed to `hanmiyoo10-alt/-`. V1 accepts no caller repository,
 remote, branch, worktree path, workflow, command, argv fragment, environment map,
 owner selector, retry count, or fallback executor.
+
+### Optional packet-activity evidence
+
+Both stage-entry operations may consume one optional regular, non-symlink
+`MCL_STAGE_ENTRY_PACKET_ACTIVITY_EVIDENCE_SET` file. The set is bound to the
+exact requester packet, contains at most 12 candidate rows, and carries only
+existing `WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE` objects.
+
+Evidence is attached only to the matching current open packet candidate and is
+then interpreted by the existing Work System scope-overlap owner. A stale
+candidate, duplicate row, requester mismatch, malformed payload, or unresolved
+activity fails closed. Active-writer evidence remains blocking.
+
+Without this file, overlap behavior is unchanged. The same normalized evidence
+is retained across normalization and late pre-effect revalidation. The
+current-source launcher forwards the file only; it does not create or infer
+packet-activity evidence.
 
 The supplied plan must be exactly the reviewed S/S mutable single-phase shape:
 
@@ -64,6 +99,8 @@ repository_effect=mutable
 overlap_guard=required
 lease_guard=required
 handoff_guard=required
+fallback=none
+next_gate=owner_effect
 details=withheld
 ```
 
@@ -132,6 +169,34 @@ On PASS it:
 7. returns a generic `REPOSITORY_EXECUTION_RECEIPT` v2.
 
 Success intentionally leaves the D-013 lease active for the next fixed owner.
+
+### Deterministic normal-stage manifest identity
+
+For the normal repository stage-entry path, D-014 binds lease acquisition through
+one semantic locator derived only from the exact active lease identity and its
+acquired ledger generation:
+
+```text
+receipt:mcl-task-lease:<leaseId>:generation:<acquiredGeneration>
+```
+
+The same locator is used in both `leaseEvidence.acquireEvidenceRef` and
+`inputRefs`. Exact replay of the same lease/generation therefore produces the
+same manifest identity even when the caller-side acquire workflow run differs.
+A different leaseId or acquired generation remains a different manifest identity.
+
+For the normal repository lease path only, stage-entry accepts either the existing
+run-backed `DISPATCH_COMPLETE` evidence or exact
+`DISPATCH_READBACK_COMPLETE` evidence from the coordination operator. The
+readback form carries no run id and must expose the exact deterministic
+`receipt:mcl-task-lease-readback:<operation>:<leaseId>:generation:<generation>`
+locator. Acquire still requires the exact lease id and acquired generation.
+Normal release normalizes either evidence form behind one `evidenceRef`.
+Landing-normalization remains run-backed and is not widened by this rule.
+
+Caller-specific workflow-run identity remains execution provenance in the
+stage-entry receipt/report. It is not part of the normal stage-entry semantic
+D-014 identity. This does not change D-013 or D-014 schema or authority.
 
 Expected next action:
 

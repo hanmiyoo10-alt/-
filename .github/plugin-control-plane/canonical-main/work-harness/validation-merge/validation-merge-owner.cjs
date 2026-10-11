@@ -13,8 +13,14 @@ const PAGE_SIZE = 100;
 const MAX_PAGES = 20;
 const MAX_INPUT_BYTES = 16 * 1024;
 const MAX_REPORT_BYTES = 32 * 1024;
+const GH_READ_TIMEOUT_MS = 20_000;
+const MAX_JOB_LOG_BYTES = 1024 * 1024;
+const MAX_PR_RECOVERY_RUNS = 16;
 const SHA40_RE = /^[0-9a-f]{40}$/;
 const PACKET_MARKER = '<!-- canonical-main-work-packet:v1 -->';
+const PACKET_ACTIVITY_EVIDENCE_MODE = 'VALIDATION_MERGE_PACKET_ACTIVITY_EVIDENCE_SET';
+const PACKET_REF_RE = /^#[1-9][0-9]*$/;
+const MAX_PACKET_ACTIVITY_CANDIDATES = 12;
 
 const {createGitHubClient} = require(path.join(ROOT,
   '.github/plugin-control-plane/canonical-main/infra/github-client.cjs'));
@@ -64,6 +70,56 @@ function readRegularJson(filePath, maxBytes = MAX_INPUT_BYTES) {
   } catch {
     throw new OwnerError('UNKNOWN', ['INPUT_JSON_INVALID']);
   }
+}
+function exactObjectKeys(value, expected) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const actual = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  return actual.length === wanted.length
+    && actual.every((key, index) => key === wanted[index]);
+}
+function normalizePacketActivityEvidenceSet(input, packetNumber) {
+  if (!exactObjectKeys(input, ['schemaVersion', 'mode', 'requesterRef', 'candidates'])
+      || input.schemaVersion !== 1
+      || input.mode !== PACKET_ACTIVITY_EVIDENCE_MODE
+      || !Array.isArray(input.candidates)
+      || input.candidates.length > MAX_PACKET_ACTIVITY_CANDIDATES) {
+    throw new OwnerError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_SET_INVALID']);
+  }
+  const requesterRef = '#' + packetNumber;
+  if (input.requesterRef !== requesterRef) {
+    throw new OwnerError('CONFLICT', ['PACKET_ACTIVITY_EVIDENCE_REQUESTER_CONFLICT']);
+  }
+  const seen = new Set();
+  const candidates = input.candidates.map((row) => {
+    if (!exactObjectKeys(row, ['candidateRef', 'evidence'])
+        || !PACKET_REF_RE.test(String(row.candidateRef || ''))
+        || seen.has(row.candidateRef)) {
+      throw new OwnerError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_CANDIDATE_INVALID']);
+    }
+    seen.add(row.candidateRef);
+    const evidence = row.evidence;
+    if (!exactObjectKeys(evidence, [
+      'schemaVersion', 'mode', 'candidateRef', 'requesterRef', 'relationship',
+      'repositoryMutationActive', 'activeLease', 'overlappingOpenPr',
+      'sequencingExplicit', 'sourceRefs',
+    ])
+        || evidence.schemaVersion !== 1
+        || evidence.mode !== 'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE'
+        || evidence.candidateRef !== row.candidateRef
+        || evidence.requesterRef !== requesterRef
+        || !Array.isArray(evidence.sourceRefs)) {
+      throw new OwnerError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_PAYLOAD_INVALID']);
+    }
+    return {candidateRef: row.candidateRef, evidence};
+  });
+  candidates.sort((left, right) => left.candidateRef.localeCompare(right.candidateRef));
+  return canonicalize({
+    schemaVersion: 1,
+    mode: PACKET_ACTIVITY_EVIDENCE_MODE,
+    requesterRef,
+    candidates,
+  });
 }
 
 function stageReceiptFacts(receipt) {
@@ -227,13 +283,30 @@ async function readPacket(client, packetNumber) {
       'issue:#' + packetNumber);
   }
   const scopes = parsed.scopes.map((row) => row.normalized).sort();
+  const pathScopes = parsed.scopes
+    .filter((row) => row.kind === 'path')
+    .map((row) => row.normalized)
+    .sort();
   const paths = parsed.scopes.filter((row) => row.kind === 'path').map((row) => row.value).sort();
   return {
     bodySha256: sha256(String(issue.body || '')),
     scopes,
+    pathScopes,
     paths,
     evidenceLocator: 'issue:#' + packetNumber,
   };
+}
+
+function exactPathsWithinPacketScopes(exactPaths, packetPathScopes) {
+  if (!Array.isArray(exactPaths) || !exactPaths.length
+      || !Array.isArray(packetPathScopes) || !packetPathScopes.length) return false;
+  const ceilings = packetPathScopes.map((value) => scopeOverlap.normalizeScope(value));
+  if (ceilings.some((row) => !row.ok || row.kind !== 'path')) return false;
+  return exactPaths.every((value) => {
+    const exact = scopeOverlap.normalizeScope('path:' + value);
+    return exact.ok && exact.kind === 'path' && exact.mode === 'exact'
+      && ceilings.some((ceiling) => scopeOverlap.scopesOverlap(ceiling, exact));
+  });
 }
 
 async function readPrHeader(client, prNumber) {
@@ -291,6 +364,18 @@ const REVIEW_THREADS_QUERY = [
   ' }',
   '}',
 ].join('\n');
+
+const STRICT_CURRENTNESS_QUERY = [
+  'query($owner:String!,$name:String!,$number:Int!){',
+  ' repository(owner:$owner,name:$name){',
+  '  pullRequest(number:$number){number headRefOid baseRefOid mergeStateStatus}',
+  ' }',
+  '}',
+].join('\n');
+
+const REVIEWED_MERGE_STATES = new Set([
+  'BEHIND', 'BLOCKED', 'CLEAN', 'DIRTY', 'DRAFT', 'HAS_HOOKS', 'UNKNOWN', 'UNSTABLE',
+]);
 
 async function readReviewBarrier(client, prNumber) {
   const reviews = await fetchPagedArray(client,
@@ -362,6 +447,223 @@ async function readReviewBarrier(client, prNumber) {
   };
 }
 
+async function readStrictProtection(client) {
+  const value = await api(client,
+    '/branches/main/protection/required_status_checks', 'STRICT_PROTECTION');
+  if (!value || typeof value.strict !== 'boolean') {
+    throw new OwnerError('UNKNOWN', ['STRICT_PROTECTION_UNKNOWN'],
+      'branch-protection:main:required_status_checks');
+  }
+  return {
+    strict: value.strict,
+    evidenceLocator: 'branch-protection:main:required_status_checks',
+  };
+}
+
+async function readStrictPrMergeState(client, prNumber, expectedHead) {
+  let value;
+  try {
+    value = await client.graphql(STRICT_CURRENTNESS_QUERY, {
+      owner: 'hanmiyoo10-alt', name: '-', number: prNumber,
+    });
+  } catch {
+    throw new OwnerError('UNKNOWN', ['PR_MERGE_STATE_READ_FAILED'], 'pr:#' + prNumber);
+  }
+  const pr = value?.data?.repository?.pullRequest;
+  if (!pr || Number(pr.number) !== prNumber
+      || typeof pr.headRefOid !== 'string' || typeof pr.mergeStateStatus !== 'string') {
+    throw new OwnerError('UNKNOWN', ['PR_MERGE_STATE_UNKNOWN'], 'pr:#' + prNumber);
+  }
+  if (pr.headRefOid !== expectedHead) {
+    throw new OwnerError('CONFLICT', ['PR_MERGE_STATE_HEAD_CONFLICT'], 'pr:#' + prNumber);
+  }
+  const mergeStateStatus = pr.mergeStateStatus.toUpperCase();
+  if (!REVIEWED_MERGE_STATES.has(mergeStateStatus) || mergeStateStatus === 'UNKNOWN') {
+    throw new OwnerError('UNKNOWN', ['PR_MERGE_STATE_UNKNOWN'], 'pr:#' + prNumber);
+  }
+  if (mergeStateStatus === 'BEHIND') {
+    throw new OwnerError('BLOCKED', ['PR_HEAD_BEHIND_STRICT_BASE'], 'pr:#' + prNumber);
+  }
+  return {
+    mergeStateStatus,
+    evidenceLocator: 'pr:#' + prNumber,
+  };
+}
+
+async function readStrictAncestry(client, mainSha, expectedHead) {
+  const locator = 'compare:' + mainSha + '...' + expectedHead;
+  const value = await api(client,
+    '/compare/' + mainSha + '...' + expectedHead, 'STRICT_COMPARE');
+  if (!value || typeof value.status !== 'string'
+      || !Number.isInteger(value.ahead_by) || !Number.isInteger(value.behind_by)) {
+    throw new OwnerError('UNKNOWN', ['STRICT_COMPARE_UNKNOWN'], locator);
+  }
+  const baseSha = value?.base_commit?.sha;
+  const mergeBaseSha = value?.merge_base_commit?.sha;
+  if (!SHA40_RE.test(String(baseSha || '')) || !SHA40_RE.test(String(mergeBaseSha || ''))) {
+    throw new OwnerError('UNKNOWN', ['STRICT_COMPARE_IDENTITY_UNKNOWN'], locator);
+  }
+  if (baseSha !== mainSha) {
+    throw new OwnerError('CONFLICT', ['STRICT_COMPARE_BASE_CONFLICT'], locator);
+  }
+  const status = value.status.toLowerCase();
+  if (status === 'behind' || status === 'diverged' || mergeBaseSha !== mainSha) {
+    throw new OwnerError('BLOCKED', ['PR_HEAD_NOT_CURRENT_MAIN_ANCESTOR'], locator);
+  }
+  if (status === 'identical') {
+    if (expectedHead !== mainSha || value.ahead_by !== 0 || value.behind_by !== 0) {
+      throw new OwnerError('CONFLICT', ['STRICT_COMPARE_HEAD_CONFLICT'], locator);
+    }
+  } else if (status === 'ahead') {
+    if (value.ahead_by < 1 || value.behind_by !== 0) {
+      throw new OwnerError('CONFLICT', ['STRICT_COMPARE_COUNTS_CONFLICT'], locator);
+    }
+  } else {
+    throw new OwnerError('UNKNOWN', ['STRICT_COMPARE_STATUS_UNKNOWN'], locator);
+  }
+  return {
+    status,
+    mergeBaseSha,
+    evidenceLocator: locator,
+  };
+}
+
+async function readStrictCurrentness({client, prNumber, mainSha, expectedHead, perform, prefix = ''}) {
+  const protection = await perform(prefix + 'strict-protection',
+    'branch-protection:main:required_status_checks',
+    () => readStrictProtection(client));
+  if (!protection.strict) {
+    return {
+      strict: false,
+      status: 'NOT_APPLICABLE',
+      mergeStateStatus: 'NOT_APPLICABLE',
+      ancestryStatus: 'NOT_APPLICABLE',
+      mergeBaseSha: null,
+    };
+  }
+  const mergeState = await perform(prefix + 'strict-pr-merge-state', 'pr:#' + prNumber,
+    () => readStrictPrMergeState(client, prNumber, expectedHead));
+  const ancestry = await perform(prefix + 'strict-main-ancestry',
+    'compare:' + mainSha + '...' + expectedHead,
+    () => readStrictAncestry(client, mainSha, expectedHead));
+  return {
+    strict: true,
+    status: 'PASS',
+    mergeStateStatus: mergeState.mergeStateStatus,
+    ancestryStatus: ancestry.status,
+    mergeBaseSha: ancestry.mergeBaseSha,
+  };
+}
+
+function strictCurrentnessBlocked(error) {
+  return error instanceof OwnerError && error.kind === 'BLOCKED'
+    && error.reasonCodes.some((code) => (
+      code === 'PR_HEAD_BEHIND_STRICT_BASE'
+      || code === 'PR_HEAD_NOT_CURRENT_MAIN_ANCESTOR'
+    ));
+}
+
+function simcoreWorkflowRun(run) {
+  return run?.name === 'SimCore CI'
+    || String(run?.path || '').endsWith('.github/workflows/simcore-ci.yml');
+}
+function logContainsToken(text, token) {
+  return String(text || '').split(/\r?\n/).some((line) => line.includes(token));
+}
+async function readBoundedJobLog(client, jobId) {
+  if (!client || typeof client.fetchText !== 'function') {
+    throw new OwnerError('UNKNOWN', ['PR_RECOVERY_LOG_TRANSPORT_UNAVAILABLE'],
+      'job:' + jobId);
+  }
+  let text;
+  try {
+    text = await client.fetchText('/actions/jobs/' + jobId + '/logs');
+  } catch {
+    throw new OwnerError('UNKNOWN', ['PR_RECOVERY_JOB_LOG_UNREADABLE'],
+      'job:' + jobId);
+  }
+  if (typeof text !== 'string' || Buffer.byteLength(text, 'utf8') > MAX_JOB_LOG_BYTES) {
+    throw new OwnerError('UNKNOWN', ['PR_RECOVERY_JOB_LOG_INVALID_OR_TOO_LARGE'],
+      'job:' + jobId);
+  }
+  return text;
+}
+async function readRunJobInventory(client, runId, reasonCode) {
+  const jobs = await api(client,
+    '/actions/runs/' + runId + '/jobs?per_page=100', 'ACTIONS_JOBS');
+  if (!jobs || !Array.isArray(jobs.jobs) || !Number.isInteger(jobs.total_count)
+      || jobs.total_count > 100 || jobs.jobs.length !== jobs.total_count) {
+    throw new OwnerError('UNKNOWN', [reasonCode], 'run:' + runId);
+  }
+  return jobs.jobs;
+}
+
+async function readPrRecoveryEvidence(
+  client, runInventory, headSha, prNumber, naturalError,
+) {
+  const pr = await api(client, '/pulls/' + prNumber, 'PR_RECOVERY_PR');
+  const prHeadSha = assertSha(pr?.head?.sha, 'PR_RECOVERY_PR_HEAD_INVALID');
+  const prBaseSha = assertSha(pr?.base?.sha, 'PR_RECOVERY_PR_BASE_INVALID');
+  const prHeadRef = String(pr?.head?.ref || '');
+  if (prHeadSha !== headSha) {
+    throw new OwnerError('CONFLICT', ['PR_RECOVERY_PR_HEAD_MISMATCH'], 'pr:#' + prNumber);
+  }
+  if (!prHeadRef) {
+    throw new OwnerError('UNKNOWN', ['PR_RECOVERY_PR_HEAD_REF_MISSING'], 'pr:#' + prNumber);
+  }
+  const candidates = runInventory.filter((run) => (
+    run?.event === 'workflow_dispatch'
+    && simcoreWorkflowRun(run)
+    && run?.head_sha === headSha
+    && run?.head_branch === prHeadRef
+  ));
+  if (candidates.length > MAX_PR_RECOVERY_RUNS) {
+    throw new OwnerError('UNKNOWN', ['PR_RECOVERY_RUN_INVENTORY_TOO_LARGE']);
+  }
+  const qualified = [];
+  for (const run of candidates) {
+    if (run?.status !== 'completed' || run?.conclusion !== 'success') continue;
+    const jobs = await readRunJobInventory(
+      client, run.id, 'PR_RECOVERY_JOB_INVENTORY_INCOMPLETE');
+    const verify = jobs.filter((job) => job?.name === 'Verify');
+    const required = jobs.filter((job) => job?.name === 'Required');
+    if (verify.length !== 1 || required.length !== 1) {
+      throw new OwnerError('UNKNOWN', ['PR_RECOVERY_JOB_AMBIGUOUS'], 'run:' + run.id);
+    }
+    if (verify[0].status !== 'completed' || required[0].status !== 'completed') {
+      throw new OwnerError('BLOCKED', ['PR_RECOVERY_JOB_NOT_COMPLETED'], 'run:' + run.id);
+    }
+    if (verify[0].conclusion !== 'success' || required[0].conclusion !== 'success') {
+      throw new OwnerError('CONFLICT', ['PR_RECOVERY_RUN_JOB_CONFLICT'], 'run:' + run.id);
+    }
+    const verifyLog = await readBoundedJobLog(client, verify[0].id);
+    const requiredLog = await readBoundedJobLog(client, required[0].id);
+    const verifyQualified = logContainsToken(verifyLog, 'INPUT_PROFILE: PR_RECOVERY')
+      && logContainsToken(verifyLog, 'INPUT_PR_BASE: ' + prBaseSha)
+      && logContainsToken(verifyLog, 'INPUT_PR_HEAD: ' + headSha);
+    const requiredQualified = logContainsToken(requiredLog, 'PROFILE: PR_RECOVERY')
+      && /profile=PR_RECOVERY conclusion=(?:PASS|NOOP) verify=success/.test(requiredLog);
+    if (!verifyQualified || !requiredQualified) continue;
+    qualified.push({
+      runId: Number(run.id),
+      verifyJobId: Number(verify[0].id),
+      jobId: Number(required[0].id),
+    });
+  }
+  if (qualified.length > 1) {
+    throw new OwnerError('UNKNOWN', ['PR_RECOVERY_RUN_AMBIGUOUS']);
+  }
+  if (qualified.length === 1) {
+    const value = qualified[0];
+    return {
+      runId: value.runId,
+      jobId: value.jobId,
+      evidenceLocator: 'run:' + value.runId + '/job:' + value.jobId,
+    };
+  }
+  throw naturalError;
+}
+
 async function readRequiredEvidence(client, headSha, prNumber) {
   const data = await api(client,
     '/actions/runs?head_sha=' + headSha + '&per_page=100', 'ACTIONS_RUNS');
@@ -373,61 +675,82 @@ async function readRequiredEvidence(client, headSha, prNumber) {
     throw new OwnerError('CONFLICT', ['REQUIRED_RUN_SHA_MISMATCH']);
   }
   const matches = data.workflow_runs.filter((run) => {
-    if (run?.event !== 'pull_request') return false;
-    const workflowMatch = run?.name === 'SimCore CI'
-      || String(run?.path || '').endsWith('.github/workflows/simcore-ci.yml');
-    if (!workflowMatch) return false;
+    if (run?.event !== 'pull_request' || !simcoreWorkflowRun(run)) return false;
     if (Array.isArray(run.pull_requests) && run.pull_requests.length) {
       return run.pull_requests.some((row) => Number(row?.number) === prNumber);
     }
     return true;
   });
-  if (matches.length !== 1) {
-    throw new OwnerError('UNKNOWN',
-      [matches.length ? 'REQUIRED_RUN_AMBIGUOUS' : 'REQUIRED_RUN_MISSING']);
+  if (matches.length > 1) {
+    throw new OwnerError('UNKNOWN', ['REQUIRED_RUN_AMBIGUOUS']);
   }
-  const run = matches[0];
-  if (run.status !== 'completed') {
-    throw new OwnerError('BLOCKED', ['REQUIRED_RUN_NOT_COMPLETED'], 'run:' + run.id);
+  if (matches.length === 1) {
+    const run = matches[0];
+    if (run.status === 'completed') {
+      if (run.conclusion !== 'success') {
+        throw new OwnerError('FAIL', ['REQUIRED_RUN_FAILED'], 'run:' + run.id);
+      }
+      const jobs = await readRunJobInventory(
+        client, run.id, 'REQUIRED_JOB_INVENTORY_INCOMPLETE');
+      const required = jobs.filter((job) => job?.name === 'Required');
+      if (required.length !== 1) {
+        throw new OwnerError('UNKNOWN', ['REQUIRED_JOB_AMBIGUOUS'], 'run:' + run.id);
+      }
+      if (required[0].status !== 'completed') {
+        throw new OwnerError('BLOCKED', ['REQUIRED_JOB_NOT_COMPLETED'], 'run:' + run.id);
+      }
+      if (required[0].conclusion !== 'success') {
+        throw new OwnerError('FAIL', ['REQUIRED_JOB_FAILED'], 'run:' + run.id);
+      }
+      return {
+        runId: Number(run.id),
+        jobId: Number(required[0].id),
+        evidenceLocator: 'run:' + run.id + '/job:' + required[0].id,
+      };
+    }
+    return readPrRecoveryEvidence(
+      client, data.workflow_runs, headSha, prNumber,
+      new OwnerError('BLOCKED', ['REQUIRED_RUN_NOT_COMPLETED'], 'run:' + run.id),
+    );
   }
-  if (run.conclusion !== 'success') {
-    throw new OwnerError('FAIL', ['REQUIRED_RUN_FAILED'], 'run:' + run.id);
-  }
-  const jobs = await api(client,
-    '/actions/runs/' + run.id + '/jobs?per_page=100', 'ACTIONS_JOBS');
-  if (!jobs || !Array.isArray(jobs.jobs) || !Number.isInteger(jobs.total_count)
-      || jobs.total_count > 100 || jobs.jobs.length !== jobs.total_count) {
-    throw new OwnerError('UNKNOWN', ['REQUIRED_JOB_INVENTORY_INCOMPLETE'], 'run:' + run.id);
-  }
-  const required = jobs.jobs.filter((job) => job?.name === 'Required');
-  if (required.length !== 1) {
-    throw new OwnerError('UNKNOWN', ['REQUIRED_JOB_AMBIGUOUS'], 'run:' + run.id);
-  }
-  if (required[0].status !== 'completed') {
-    throw new OwnerError('BLOCKED', ['REQUIRED_JOB_NOT_COMPLETED'], 'run:' + run.id);
-  }
-  if (required[0].conclusion !== 'success') {
-    throw new OwnerError('FAIL', ['REQUIRED_JOB_FAILED'], 'run:' + run.id);
-  }
-  return {
-    runId: Number(run.id),
-    jobId: Number(required[0].id),
-    evidenceLocator: 'run:' + run.id + '/job:' + required[0].id,
-  };
+  return readPrRecoveryEvidence(
+    client, data.workflow_runs, headSha, prNumber,
+    new OwnerError('UNKNOWN', ['REQUIRED_RUN_MISSING']),
+  );
 }
 
-async function discoverOverlap(client, packetNumber, prNumber, requestedScopes) {
+async function discoverOverlap(
+  client, packetNumber, prNumber, requestedScopes, packetActivityEvidence = null,
+) {
   const issueInventory = await fetchPagedArray(client,
     (page) => '/issues?state=open&per_page=100&page=' + page, 'OPEN_ISSUES');
   const prInventory = await fetchPagedArray(client,
     (page) => '/pulls?state=open&per_page=100&page=' + page, 'OPEN_PRS');
   let discovery = issueInventory.complete && prInventory.complete ? 'COMPLETE' : 'PARTIAL';
+  const evidenceRows = packetActivityEvidence?.candidates || [];
+  const evidenceByCandidate = new Map(evidenceRows.map((row) => [row.candidateRef, row.evidence]));
+  const seenEvidence = new Set();
   const candidates = issueInventory.rows
     .filter((row) => !row?.pull_request && Number(row?.number) !== packetNumber
       && String(row?.body || '').includes(PACKET_MARKER))
-    .map((row) => ({
-      type: 'packet', ref: 'issue:#' + row.number, issueState: row.state, body: row.body,
-    }));
+    .map((row) => {
+      const canonicalRef = '#' + row.number;
+      const evidence = evidenceByCandidate.get(canonicalRef);
+      if (evidence) seenEvidence.add(canonicalRef);
+      return {
+        type: 'packet',
+        ref: 'issue:#' + row.number,
+        issueState: row.state,
+        body: row.body,
+        ...(evidence ? {packetActivityEvidence: evidence} : {}),
+      };
+    });
+  const staleEvidence = [...evidenceByCandidate.keys()]
+    .filter((candidateRef) => !seenEvidence.has(candidateRef));
+  if (staleEvidence.length) {
+    throw new OwnerError('CONFLICT', ['PACKET_ACTIVITY_EVIDENCE_CANDIDATE_NOT_CURRENT'],
+      'issue:' + staleEvidence[0]);
+  }
   for (const pr of prInventory.rows) {
     if (Number(pr?.number) === prNumber) continue;
     const files = await fetchPagedArray(client,
@@ -442,7 +765,12 @@ async function discoverOverlap(client, packetNumber, prNumber, requestedScopes) 
       filesComplete: files.complete,
     });
   }
-  const result = scopeOverlap.resolveScopeOverlap({requestedScopes, discovery, candidates});
+  const result = scopeOverlap.resolveScopeOverlap({
+    requesterRef: '#' + packetNumber,
+    requestedScopes,
+    discovery,
+    candidates,
+  });
   if (result.discovery !== 'COMPLETE') {
     throw new OwnerError('UNKNOWN', ['OVERLAP_DISCOVERY_INCOMPLETE'],
       'owner:work-system-scope-overlap');
@@ -456,7 +784,12 @@ async function discoverOverlap(client, packetNumber, prNumber, requestedScopes) 
   if (result.state === 'OVERLAP' || result.findings.length) {
     throw new OwnerError('BLOCKED', ['OVERLAP_PRESENT'], 'owner:work-system-scope-overlap');
   }
-  return {candidateCount: result.candidateCount, evidenceLocator: 'owner:work-system-scope-overlap'};
+  return {
+    candidateCount: result.candidateCount,
+    candidateActivity: result.candidateActivity || [],
+    packetActivityEvidenceCandidateRefs: [...evidenceByCandidate.keys()].sort(),
+    evidenceLocator: 'owner:work-system-scope-overlap',
+  };
 }
 
 function errorDisposition(error) {
@@ -524,10 +857,13 @@ function makeReceipt({
   });
 }
 
-async function inspectWithClient({client, packetNumber, prNumber, implementationReceipt}) {
+async function inspectWithClient({
+  client, packetNumber, prNumber, implementationReceipt, packetActivityEvidence = null,
+}) {
   const steps = [];
   const artifacts = [];
   const state = {headSha: null, paths: [], output: {pr: '#' + prNumber, merge: 'NOT_RUN'}};
+  let normalizedPacketActivityEvidence = null;
   async function perform(name, locator, fn) {
     try {
       const value = await fn();
@@ -543,6 +879,13 @@ async function inspectWithClient({client, packetNumber, prNumber, implementation
     }
   }
   try {
+    if (packetActivityEvidence) {
+      normalizedPacketActivityEvidence = await perform(
+        'packet-activity-evidence',
+        'caller:packet-activity-evidence',
+        async () => normalizePacketActivityEvidenceSet(packetActivityEvidence, packetNumber),
+      );
+    }
     const implementation = await perform('implementation-stage-receipt',
       'receipt:canonical-main-stage:IMPLEMENTATION_PR',
       async () => validateImplementationReceipt(implementationReceipt, packetNumber, prNumber));
@@ -552,38 +895,56 @@ async function inspectWithClient({client, packetNumber, prNumber, implementation
       () => readCurrentMain(client));
     const packet = await perform('packet-stage-scope', 'issue:#' + packetNumber,
       () => readPacket(client, packetNumber));
-    if (JSON.stringify(packet.paths) !== JSON.stringify(implementation.paths)) {
+    if (!exactPathsWithinPacketScopes(implementation.paths, packet.pathScopes)) {
       throw new OwnerError('CONFLICT', ['IMPLEMENTATION_PACKET_SCOPE_MISMATCH'],
         'issue:#' + packetNumber);
     }
     const pr = await perform('pr-identity-files', 'pr:#' + prNumber,
-      () => readOpenPr(client, prNumber, current.mainSha, implementation.expectedHead, packet.paths));
+      () => readOpenPr(client, prNumber, current.mainSha, implementation.expectedHead,
+        implementation.paths));
+    const strictCurrentness = await readStrictCurrentness({
+      client, prNumber, mainSha: current.mainSha,
+      expectedHead: implementation.expectedHead, perform,
+    });
     const reviews = await perform('review-barrier', 'pr:#' + prNumber,
       () => readReviewBarrier(client, prNumber));
     const required = await perform('exact-head-required', 'commit:' + implementation.expectedHead,
       () => readRequiredEvidence(client, implementation.expectedHead, prNumber));
     artifacts.push(required.evidenceLocator);
     const overlap = await perform('fresh-overlap', 'owner:work-system-scope-overlap',
-      () => discoverOverlap(client, packetNumber, prNumber, packet.scopes));
+      () => discoverOverlap(
+        client, packetNumber, prNumber, packet.scopes, normalizedPacketActivityEvidence));
     const finalCurrent = await perform('final-main-ops-currentness', 'issue:#485',
       () => readCurrentMain(client));
     const finalPacket = await perform('final-packet-currentness', 'issue:#' + packetNumber,
       () => readPacket(client, packetNumber));
     const finalPr = await perform('final-pr-currentness', 'pr:#' + prNumber,
-      () => readOpenPr(client, prNumber, finalCurrent.mainSha, implementation.expectedHead, packet.paths));
+      () => readOpenPr(client, prNumber, finalCurrent.mainSha, implementation.expectedHead,
+        implementation.paths));
+    const finalStrictCurrentness = await readStrictCurrentness({
+      client, prNumber, mainSha: finalCurrent.mainSha,
+      expectedHead: implementation.expectedHead, perform, prefix: 'final-',
+    });
     await perform('final-review-currentness', 'pr:#' + prNumber,
       () => readReviewBarrier(client, prNumber));
-    await perform('final-overlap-currentness', 'owner:work-system-scope-overlap',
-      () => discoverOverlap(client, packetNumber, prNumber, packet.scopes));
+    const finalOverlap = await perform(
+      'final-overlap-currentness',
+      'owner:work-system-scope-overlap',
+      () => discoverOverlap(
+        client, packetNumber, prNumber, packet.scopes, normalizedPacketActivityEvidence),
+    );
     if (finalCurrent.mainSha !== current.mainSha
         || finalPacket.bodySha256 !== packet.bodySha256
-        || finalPr.headSha !== pr.headSha || finalPr.baseSha !== pr.baseSha) {
+        || finalPr.headSha !== pr.headSha || finalPr.baseSha !== pr.baseSha
+        || !stableEqual(finalStrictCurrentness, strictCurrentness)) {
       throw new OwnerError('UNKNOWN', ['VALIDATION_STATE_CHANGED_DURING_CAPTURE']);
     }
     state.output = {
       pr: '#' + prNumber,
       headExact: true,
       baseExact: true,
+      strictUpToDate: strictCurrentness.status,
+      strictProtection: strictCurrentness.strict ? 'STRICT' : 'NON_STRICT',
       reviewClear: true,
       overlap: 'DISJOINT',
       required: 'PASS',
@@ -616,9 +977,16 @@ async function inspectWithClient({client, packetNumber, prNumber, implementation
         requiredRunId: required.runId,
         requiredJobId: required.jobId,
         overlapCandidateCount: overlap.candidateCount,
+        packetActivityEvidenceCandidateRefs: overlap.packetActivityEvidenceCandidateRefs,
+        packetActivityDecisions: overlap.candidateActivity,
+        finalPacketActivityEvidenceCandidateRefs: finalOverlap.packetActivityEvidenceCandidateRefs,
         reviewCount: reviews.reviewCount,
         issueCommentCount: reviews.issueCommentCount,
         reviewCommentCount: reviews.reviewCommentCount,
+        strictProtection: strictCurrentness.strict,
+        mergeStateStatus: strictCurrentness.mergeStateStatus,
+        ancestryStatus: strictCurrentness.ancestryStatus,
+        mergeBaseSha: strictCurrentness.mergeBaseSha,
         result: 'PASS',
         receiptDigest: receipt.receiptDigest,
         output: state.output,
@@ -635,7 +1003,9 @@ async function inspectWithClient({client, packetNumber, prNumber, implementation
       error,
       nextLegalAction: error?.kind === 'NEEDS_REVIEW'
         ? 'RESOLVE_PENDING_REVIEW'
-        : 'TARGETED_DRILLDOWN_REQUIRED',
+        : strictCurrentnessBlocked(error)
+          ? 'CURRENTIZE_PR_THROUGH_EXISTING_OWNER'
+          : 'TARGETED_DRILLDOWN_REQUIRED',
       artifactLocators: artifacts,
     });
     return {
@@ -848,6 +1218,8 @@ async function finalizeWithClient({client, packetNumber, prNumber, inspectEviden
 
 const GH_READ_ENDPOINTS = Object.freeze([
   /^\/branches\/main$/,
+  /^\/branches\/main\/protection\/required_status_checks$/,
+  /^\/compare\/[0-9a-f]{40}\.\.\.[0-9a-f]{40}$/,
   /^\/issues\/(?:485|[1-9][0-9]*)$/,
   /^\/issues\/[1-9][0-9]*\/comments\?per_page=100&page=[1-9][0-9]*$/,
   /^\/pulls\/[1-9][0-9]*$/,
@@ -858,19 +1230,35 @@ const GH_READ_ENDPOINTS = Object.freeze([
   /^\/issues\?state=open&per_page=100&page=[1-9][0-9]*$/,
   /^\/pulls\?state=open&per_page=100&page=[1-9][0-9]*$/,
 ]);
+const GH_TEXT_ENDPOINTS = Object.freeze([
+  /^\/actions\/jobs\/[1-9][0-9]*\/logs$/,
+]);
 
 function ghReadEndpointAllowed(endpoint) {
   return GH_READ_ENDPOINTS.some((pattern) => pattern.test(String(endpoint || '')));
 }
+function ghTextEndpointAllowed(endpoint) {
+  return GH_TEXT_ENDPOINTS.some((pattern) => pattern.test(String(endpoint || '')));
+}
 function defaultGhRunner(args) {
   const result = childProcess.spawnSync('gh', args, {
-    encoding: 'utf8', shell: false, maxBuffer: 8 * 1024 * 1024,
+    encoding: 'utf8',
+    shell: false,
+    maxBuffer: 8 * 1024 * 1024,
+    timeout: GH_READ_TIMEOUT_MS,
+    killSignal: 'SIGKILL',
   });
   return {code: result.status ?? 1, stdout: result.stdout || '', stderr: result.stderr || ''};
 }
 function parseGhJson(result, reason) {
   if (!result || result.code !== 0) throw new Error(reason);
   try { return JSON.parse(result.stdout || ''); } catch { throw new Error(reason); }
+}
+function parseGhText(result, reason) {
+  if (!result || result.code !== 0) throw new Error(reason);
+  const text = String(result.stdout || '');
+  if (Buffer.byteLength(text, 'utf8') > MAX_JOB_LOG_BYTES) throw new Error(reason);
+  return text;
 }
 function createGhCliReadClient({runner = defaultGhRunner} = {}) {
   return {
@@ -883,8 +1271,15 @@ function createGhCliReadClient({runner = defaultGhRunner} = {}) {
         '--header', 'Accept: application/vnd.github+json',
       ]), 'gh REST read failed');
     },
+    async fetchText(endpoint) {
+      if (!ghTextEndpointAllowed(endpoint)) throw new Error('gh text endpoint forbidden');
+      return parseGhText(runner([
+        'api', 'repos/' + REPO + endpoint, '--method', 'GET',
+        '--allow-escape-sequences',
+      ]), 'gh text read failed');
+    },
     async graphql(query, variables) {
-      if (query !== REVIEW_THREADS_QUERY
+      if (![REVIEW_THREADS_QUERY, STRICT_CURRENTNESS_QUERY].includes(query)
           || !variables || variables.owner !== 'hanmiyoo10-alt' || variables.name !== '-'
           || !Number.isInteger(variables.number) || variables.number < 1) {
         throw new Error('gh GraphQL query forbidden');
@@ -905,6 +1300,21 @@ function createLiveClient({env = process.env, fetchImpl = fetch, runner = defaul
   const rest = createGitHubClient({
     token, repo: REPO, fetchImpl, userAgent: 'canonical-main-validation-merge-owner',
   });
+  async function fetchText(endpoint) {
+    if (!ghTextEndpointAllowed(endpoint)) throw new Error('github text endpoint forbidden');
+    let response;
+    let text;
+    try {
+      response = await rest.request(endpoint);
+      text = await response.text();
+    } catch {
+      throw new Error('github text read failed');
+    }
+    if (typeof text !== 'string' || Buffer.byteLength(text, 'utf8') > MAX_JOB_LOG_BYTES) {
+      throw new Error('github text read failed');
+    }
+    return text;
+  }
   async function graphql(query, variables) {
     const response = await fetchImpl('https://api.github.com/graphql', {
       method: 'POST',
@@ -921,7 +1331,7 @@ function createLiveClient({env = process.env, fetchImpl = fetch, runner = defaul
     if (value?.errors?.length) throw new Error('graphql returned errors');
     return value;
   }
-  return {...rest, graphql};
+  return {...rest, fetchText, graphql};
 }
 
 function parseNumber(value, label) {
@@ -932,7 +1342,9 @@ function parseNumber(value, label) {
 function parseArgs(argv = process.argv.slice(2)) {
   if (!['inspect', 'finalize'].includes(argv[0])) throw new Error('COMMAND_INVALID');
   const command = argv[0];
-  const allowed = new Set(['packet', 'pr', 'implementation-receipt-file', 'format']);
+  const allowed = new Set([
+    'packet', 'pr', 'implementation-receipt-file', 'packet-activity-evidence-file', 'format',
+  ]);
   const values = {};
   for (let index = 1; index < argv.length; index += 2) {
     const token = argv[index];
@@ -949,12 +1361,14 @@ function parseArgs(argv = process.argv.slice(2)) {
   if (command === 'inspect' && !values['implementation-receipt-file']) {
     throw new Error('IMPLEMENTATION_RECEIPT_REQUIRED');
   }
-  if (command === 'finalize' && values['implementation-receipt-file']) {
+  if (command === 'finalize'
+      && (values['implementation-receipt-file'] || values['packet-activity-evidence-file'])) {
     throw new Error('ARGUMENT_INVALID');
   }
   return {
     command, packetNumber, prNumber,
     implementationReceiptFile: values['implementation-receipt-file'] || null,
+    packetActivityEvidenceFile: values['packet-activity-evidence-file'] || null,
     format,
   };
 }
@@ -993,11 +1407,16 @@ async function runCli(argv = process.argv.slice(2), options = {}) {
   const client = options.client || createLiveClient(options);
   let result;
   if (args.command === 'inspect') {
+    const packetActivityEvidence = args.packetActivityEvidenceFile
+      ? normalizePacketActivityEvidenceSet(
+        readRegularJson(args.packetActivityEvidenceFile), args.packetNumber)
+      : null;
     result = await inspectWithClient({
       client,
       packetNumber: args.packetNumber,
       prNumber: args.prNumber,
       implementationReceipt: readRegularJson(args.implementationReceiptFile),
+      packetActivityEvidence,
     });
   } else {
     let inspectEvidence;
@@ -1073,23 +1492,31 @@ if (require.main === module) {
 }
 
 module.exports = {
+  GH_READ_TIMEOUT_MS,
   MAX_INPUT_BYTES,
+  MAX_JOB_LOG_BYTES,
   MAX_PAGES,
+  MAX_PR_RECOVERY_RUNS,
   MAX_REPORT_BYTES,
+  MAX_PACKET_ACTIVITY_CANDIDATES,
   OPS_ISSUE,
+  PACKET_ACTIVITY_EVIDENCE_MODE,
   REPO,
   REVIEW_THREADS_QUERY,
+  STRICT_CURRENTNESS_QUERY,
   OwnerError,
   createGhCliReadClient,
   createLiveClient,
   defaultGhRunner,
   discoverOverlap,
   ghReadEndpointAllowed,
+  ghTextEndpointAllowed,
   evidencePaths,
   finalizeWithClient,
   gitAdminDir,
   inspectWithClient,
   makeReceipt,
+  normalizePacketActivityEvidenceSet,
   parseArgs,
   parseOpsCapsule,
   persistResult,
@@ -1099,6 +1526,10 @@ module.exports = {
   readOpenPr,
   readPacket,
   readRequiredEvidence,
+  readStrictAncestry,
+  readStrictCurrentness,
+  readStrictPrMergeState,
+  readStrictProtection,
   readReviewBarrier,
   runCli,
   validateImplementationReceipt,

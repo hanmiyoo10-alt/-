@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {classifyPrActivity} = require('./pr-activity.cjs');
+const {classifyPacketActivity} = require('./packet-activity.cjs');
 const {parseLifecycle} = require('./packet-projection.cjs');
 
 const PACKET_MARKER = '<!-- canonical-main-work-packet:v1 -->';
@@ -28,6 +29,8 @@ const REASON_CODES = Object.freeze({
   PR_CHANGED_FILES_INCOMPLETE: 'PR_CHANGED_FILES_INCOMPLETE',
   PR_ACTIVITY_UNKNOWN: 'PR_ACTIVITY_UNKNOWN',
   PR_ACTIVITY_CONFLICT: 'PR_ACTIVITY_CONFLICT',
+  PACKET_ACTIVITY_UNKNOWN: 'PACKET_ACTIVITY_UNKNOWN',
+  PACKET_ACTIVITY_CONFLICT: 'PACKET_ACTIVITY_CONFLICT',
   LINKED_PR_EVIDENCE_MISSING: 'LINKED_PR_EVIDENCE_MISSING',
   PACKET_PR_SCOPE_DRIFT: 'PACKET_PR_SCOPE_DRIFT',
   WRITE_SCOPE_OVERLAP: 'WRITE_SCOPE_OVERLAP',
@@ -115,14 +118,60 @@ function scopesOverlap(left, right) {
   return contains(right.value, left.value);
 }
 
-function sectionBlocks(body, heading) {
-  const lines = body.split(/\r?\n/);
+function markdownStructure(body) {
+  const records = [];
+  let fence = null;
+  for (const text of body.split(/\r?\n/)) {
+    const match = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(text);
+    const marker = match ? {char: match[1][0], length: match[1].length, tail: match[2]} : null;
+    if (!fence) {
+      if (marker) fence = {char: marker.char, length: marker.length};
+      records.push({text, fenced: Boolean(marker)});
+      continue;
+    }
+    records.push({text, fenced: true});
+    if (marker && marker.char === fence.char && marker.length >= fence.length && !marker.tail.trim()) {
+      fence = null;
+    }
+  }
+  return {ok: fence === null, lines: records};
+}
+
+function nonWriteBoundary(line) {
+  const heading = /^#{3,6}\s+(.+?)\s*#*\s*$/.exec(line);
+  if (heading && /^(?:explicit\s+)?(?:non-write(?:\s*\/\s*(?:preservation|non-effect))?|preservation(?:\s*\/\s*non-write)?)(?:\s+(?:scope|boundary|surfaces?))?$/i.test(heading[1].trim())) {
+    return true;
+  }
+  return /^Preservation(?:\s*\/|\s|:)/i.test(line)
+    || /^Non-write(?:\s|:)/i.test(line)
+    || /^Do not modify:\s*$/i.test(line)
+    || /^Forbidden:\s*$/i.test(line)
+    || /^Do not touch unless fresh evidence proves required:/i.test(line);
+}
+
+function scopeDeclaration(rawLine) {
+  const list = /^\s*(?:[-*+]|\d+\.)\s+(.+?)\s*$/.exec(rawLine);
+  const value = list ? list[1] : rawLine.trim();
+  if (list) {
+    const code = /^`([^`]+)`/.exec(value);
+    if (code) return code[1];
+    return /^(?:path|surface):\S+$/.test(value) ? value : null;
+  }
+  const labeled = /^(?:Scope ceiling|Semantic\/effect surface):\s*`([^`]+)`\s*$/.exec(value);
+  if (labeled) return labeled[1];
+  const code = /^`([^`]+)`$/.exec(value);
+  if (code) return code[1];
+  return /^(?:path|surface):\S+$/.test(value) ? value : null;
+}
+
+function sectionBlocks(lines, heading) {
   const blocks = [];
   for (let start = 0; start < lines.length; start += 1) {
-    if (lines[start].trim().toLowerCase() !== `## ${heading}`.toLowerCase()) continue;
+    if (lines[start].fenced
+        || lines[start].text.trim().toLowerCase() !== `## ${heading}`.toLowerCase()) continue;
     let end = lines.length;
     for (let index = start + 1; index < lines.length; index += 1) {
-      if (/^##\s+/.test(lines[index].trim())) {
+      if (!lines[index].fenced && /^##\s+/.test(lines[index].text.trim())) {
         end = index;
         break;
       }
@@ -133,8 +182,12 @@ function sectionBlocks(body, heading) {
 }
 
 function extractPacketScopes(body) {
+  const structure = markdownStructure(body);
+  if (!structure.ok) {
+    return {ok: false, conflict: false, scopes: [], reason: 'unclosed Markdown fence in packet body'};
+  }
   const matches = PACKET_SCOPE_HEADINGS.flatMap((heading) => (
-    sectionBlocks(body, heading).map((lines) => ({heading, lines}))
+    sectionBlocks(structure.lines, heading).map((lines) => ({heading, lines}))
   ));
   if (matches.length === 0) {
     return {ok: false, conflict: false, scopes: [], reason: 'missing deterministic write-scope section'};
@@ -151,15 +204,12 @@ function extractPacketScopes(body) {
   const scopes = [];
   const invalid = [];
 
-  for (const rawLine of lines) {
-    const cleaned = rawLine.replace(/^\s*(?:[-*+]|\d+\.)\s+/, '').trim();
+  for (const record of lines) {
+    if (record.fenced) continue;
+    const cleaned = record.text.trim();
     if (!cleaned) continue;
-    if (/^Preservation(?:\s*\/|\s|:)/i.test(cleaned)
-        || /^Non-write(?:\s|:)/i.test(cleaned)
-        || /^Do not touch unless fresh evidence proves required:/i.test(cleaned)) break;
-    const codeToken = cleaned.match(/`([^`]+)`/)?.[1];
-    const plainToken = !codeToken && !/\s/.test(cleaned) ? cleaned : null;
-    const token = codeToken || plainToken;
+    if (nonWriteBoundary(cleaned)) break;
+    const token = scopeDeclaration(record.text);
     if (!token) continue;
 
     const parsed = normalizeScope(token.startsWith('path:') || token.startsWith('surface:') ? token : `path:${token}`);
@@ -184,6 +234,11 @@ function candidateRef(candidate, index) {
   return typeof candidate?.ref === 'string' && candidate.ref.trim()
     ? candidate.ref.trim()
     : `candidate:${index}`;
+}
+
+function canonicalPacketActivityRef(ref) {
+  const issueRef = /^issue:(#[1-9][0-9]*)$/.exec(ref);
+  return issueRef ? issueRef[1] : ref;
 }
 
 function resolveScopeOverlap(input) {
@@ -329,6 +384,38 @@ function resolveScopeOverlap(input) {
           [ref],
         ));
         return;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(candidate, 'packetActivityEvidence')) {
+        const activity = classifyPacketActivity({
+          candidateRef: canonicalPacketActivityRef(ref),
+          requesterRef: typeof input?.requesterRef === 'string' ? input.requesterRef.trim() : '',
+          evidence: candidate.packetActivityEvidence,
+        });
+        candidateActivity.push(activity);
+        if (activity.state === 'NONBLOCKING_PROVEN') {
+          packetRecords.push({
+            ref,
+            active: false,
+            scopes: parsedScopes.scopes,
+            linkedPrRef: typeof candidate.linkedPrRef === 'string' ? candidate.linkedPrRef.trim() : null,
+          });
+          return;
+        }
+        if (activity.state === 'UNKNOWN' || activity.state === 'CONFLICT') {
+          findings.push(makeFinding(
+            activity.state === 'CONFLICT'
+              ? REASON_CODES.PACKET_ACTIVITY_CONFLICT
+              : REASON_CODES.PACKET_ACTIVITY_UNKNOWN,
+            activity.state,
+            ref,
+            requested[0]?.normalized || '<unresolved>',
+            activity.reasonCode,
+            activity.sourceRefs,
+            {candidateType: 'packet', activityReasonCode: activity.reasonCode},
+          ));
+          return;
+        }
       }
 
       packetRecords.push({

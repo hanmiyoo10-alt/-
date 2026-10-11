@@ -63,3 +63,23 @@ Disposition:
 - do not mark real-device deployment or post-deploy verification complete yet;
 - keep central `runsvdir` death cause as `UNKNOWN`;
 - next mutation is bounded to backup + install of the two guard files on the main phone.
+
+### 2026-09-27 — POST_DEPLOY_VERIFY / natural link-handoff stale SSH latency
+
+Observed:
+- passive reconnect watcher recorded DOWN → UP windows of about 16 seconds and 99 seconds;
+- the first window coincided with M network-path network is unreachable evidence while tailscaled stayed alive;
+- repeated later link-change churn preceded the second window;
+- the stale SSH child exited about 89 seconds after the second DOWN observation;
+- existing runit restarted the child and localhost health recovered;
+- server PocketRisu and sshd remained running.
+
+Attribution:
+- initiating M link/interface churn cause remains UNKNOWN;
+- this is not the completed missing-supervisor/guard-owner failure class;
+- the old deployed ServerAliveInterval=30 + ServerAliveCountMax=3 is consistent with the observed stale-child exit latency.
+
+Follow-up:
+- #3043 owns only durable tunnel-run source + bounded OpenSSH liveness reduction;
+- candidate policy is 15 × 3 (~45 seconds);
+- health/network/Tailscale/RDC state remains observation-only and cannot directly restart SSH.

@@ -1,0 +1,47 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -eu
+
+SSH="/data/data/com.termux/files/usr/bin/ssh"
+GREP="/data/data/com.termux/files/usr/bin/grep"
+CAT="/data/data/com.termux/files/usr/bin/cat"
+STAT="/data/data/com.termux/files/usr/bin/stat"
+TARGET_FILE="$HOME/.config/pocketrisu-main-ssh-tunnel/target"
+
+fail_target() {
+    printf '%s\n' 'pocketrisu-ssh-tunnel: private target unavailable or invalid' >&2
+    exit 111
+}
+
+[ -f "$TARGET_FILE" ] && [ ! -L "$TARGET_FILE" ] && [ -r "$TARGET_FILE" ] || fail_target
+
+mode="$("$STAT" -c '%a' "$TARGET_FILE" 2>/dev/null || true)"
+case "$mode" in
+    400|600) ;;
+    *) fail_target ;;
+esac
+
+line_count="$("$GREP" -c '^' "$TARGET_FILE" 2>/dev/null || true)"
+[ "$line_count" = "1" ] || fail_target
+
+REMOTE="$("$CAT" "$TARGET_FILE")"
+case "$REMOTE" in
+    ""|-*) fail_target ;;
+esac
+
+printf '%s\n' "$REMOTE" |
+    "$GREP" -Eq '^[A-Za-z0-9._-]+@[A-Za-z0-9.:-]+$' ||
+    fail_target
+
+exec "$SSH" -N \
+    -o BatchMode=yes \
+    -o StrictHostKeyChecking=yes \
+    -o ExitOnForwardFailure=yes \
+    -o ConnectTimeout=10 \
+    -o ServerAliveInterval=15 \
+    -o ServerAliveCountMax=3 \
+    -p 8022 \
+    -L 127.0.0.1:6001:127.0.0.1:6001 \
+    -L 127.0.0.1:39117:127.0.0.1:39117 \
+    -L 127.0.0.1:39118:127.0.0.1:39118 \
+    -L 127.0.0.1:39119:127.0.0.1:39119 \
+    "$REMOTE"

@@ -161,8 +161,17 @@ case "${1:-}" in
     --anchor)
         anchor_loop
         ;;
+    --ensure-anchor)
+        validate_service
+        valid_rc=$?
+        [ "$valid_rc" -eq 0 ] || {
+            [ "$valid_rc" -eq 1 ] && exit 1
+            exit 2
+        }
+        start_anchor
+        ;;
     *)
-        printf '%s\n' 'usage: 32-mcl-m-tailscale-supervisor-guard [--anchor]' >&2
+        printf '%s\n' 'usage: 32-mcl-m-tailscale-supervisor-guard [--anchor|--ensure-anchor]' >&2
         exit 2
         ;;
 esac

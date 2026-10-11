@@ -47,6 +47,7 @@ export async function runSuite() {
   const pass = (id) => assertions.push({ id, status: 'PASS' });
 
   const fixture = JSON.parse(fs.readFileSync('products/simcore/tests/fixtures/stability-seal/case.json', 'utf8'));
+  const r23Status = JSON.parse(fs.readFileSync('products/simcore/releases/R_V2_3_STABILITY_SEAL_STATUS.json', 'utf8'));
   equal(fixture.input.releaseVersion, '0.64.9', 'v0.64.9 replay fixture');
   equal(fixture.input.currentLifecycle, 'LIVE_PENDING', 'fixture current lifecycle');
   equal(fixture.input.workItemIssue, 660, 'fixture work item');
@@ -168,8 +169,38 @@ export async function runSuite() {
     'HUMAN_EVIDENCE accepted',
     'terminal closure PR / PR3 merged',
     'Repository labels are convenience metadata only',
-    'REAL PR3 TERMINAL PROOF PENDING',
+    'REAL TERMINAL OPERATION PROVEN',
   ]) assert(policyDoc.includes(token), `R2.3 policy doc token missing: ${token}`);
+  equal(r23Status.status, 'IMPLEMENTED_PERMANENT_CI_QUALIFIED_REAL_TERMINAL_OPERATION_PROVEN', 'R2.3 living qualification status');
+  equal(r23Status.implementation?.realTerminalOperationalProof, 'PROVEN', 'R2.3 implementation terminal proof');
+  const unitB = r23Status.units.find((row) => row.id === 'R2_3_B_HUMAN_LIVE_PASS_PR3_TERMINAL_SEAL');
+  equal(unitB?.status, 'IMPLEMENTED_POLICY_PERMANENT_CI_PASS_REAL_TERMINAL_OPERATION_PROVEN', 'R2.3-B qualification status');
+  equal(r23Status.implementationGate?.realTerminalQualification, 'PROVEN', 'R2.3 qualification gate');
+  const qualification = r23Status.terminalQualification;
+  equal(qualification?.status, 'REAL_TERMINAL_OPERATION_PROVEN', 'terminal qualification record status');
+  equal(qualification?.originalTargetIssue, 660, 'terminal qualification original target');
+  equal(qualification?.originalTargetVersion, '0.64.9', 'terminal qualification original version');
+  equal(qualification?.originalTerminalDisposition, 'LIVE_FAIL_HANDOFF_TO_NEW_RELEASE', 'terminal qualification original disposition');
+  equal(qualification?.humanEvidenceAccepted, true, 'terminal qualification HUMAN_EVIDENCE');
+  equal(qualification?.historicalTerminalTransactionPr, 2710, 'historical terminal transaction PR');
+  equal(qualification?.historicalTerminalMerge, 'ef2b35479576024f29d1f7ff4179ad107c6be5b2', 'historical terminal merge');
+  equal(qualification?.postmergeRequiredRun, 35561845562, 'historical postmerge Required run');
+  equal(qualification?.closureEvaluatorState, 'TERMINAL_REOBSERVED_CLOSE_ELIGIBLE', 'historical evaluator state');
+  equal(qualification?.closureEvaluatorEligible, true, 'historical evaluator eligibility');
+  equal(qualification?.cleanPathPr3ProofVersion, '0.65.0', 'clean PR3 proof version');
+  equal(qualification?.cleanPathPr3, 755, 'clean PR3 proof');
+  equal(qualification?.cleanPathPr3Merge, '481003fefea01dc2e70b3b8dac08e81264b94250', 'clean PR3 merge');
+  equal(qualification?.originalTargetLivePassClaimed, false, 'v0.64.9 LIVE_PASS was manufactured');
+  equal(qualification?.historicalTransactionIsCleanPathPr3, false, 'historical admin transaction was relabeled as normal PR3');
+  equal(r23Status.objective.steadyStatePrsToLivePending, 2, 'R2.3 PR cost to LIVE_PENDING changed');
+  equal(r23Status.objective.steadyStatePrsThroughTerminalClosure, 3, 'R2.3 terminal PR cost changed');
+  equal(r23Status.objective.newPublisher, 0, 'R2.3 publisher count changed');
+  equal(r23Status.objective.newPolling, 0, 'R2.3 polling count changed');
+  equal(r23Status.objective.newIssueAutomationController, 0, 'R2.3 issue controller count changed');
+  equal(r23Status.runtimeMutation, 'NONE', 'R2.3 runtime mutation changed');
+  equal(r23Status.releaseSimcoreMutation, 'NONE', 'R2.3 release-simcore mutation changed');
+  pass('R2.3-real-terminal-operation-qualification');
+
   pass('R2.3-durable-policy-surface');
 
   return { coverage: 'EXECUTABLE', status: 'PASS', assertions };

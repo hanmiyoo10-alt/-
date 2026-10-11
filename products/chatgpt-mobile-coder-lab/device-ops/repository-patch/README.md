@@ -44,7 +44,7 @@ Before invocation the caller must already have:
 2. exact Work System `DISJOINT` scopes for the intended repository paths;
 3. one active D-013 repository lease for the exact `server/*` branch/worktree;
 4. one D-014 `REPOSITORY_MUTATION` manifest bound to the current packet body,
-   exact lease/workspace/base and exact path scopes;
+   exact lease/workspace/base and full normalized coordination scopes;
 5. one workspace-holder claim from the existing holder owner;
 6. one `mcl-execution-handoff.v1` `HANDOFF_READY / phase=1/1` receipt.
 
@@ -53,6 +53,14 @@ The patch request hash must also appear in D-014 `inputRefs` as:
 ```text
 receipt:mcl-repository-patch-request:<patch-sha256>
 ```
+
+Repository-byte authority remains path-only. The manifest may additionally carry
+reviewed semantic `surface:` scopes for coordination/effect identity, but the
+manifest's complete `path:` subset must equal the request's `expected_paths`
+exactly. A surface never substitutes for, adds, or removes a writable path.
+
+Late-effect guards still require the active D-013 lease scopes to equal the full
+manifest scope set, including any semantic surfaces.
 
 ## Patch request
 
@@ -69,6 +77,71 @@ Caller-owned request data is bounded:
 
 The patch is a separate bounded UTF-8 unified diff. Branch/worktree/base identity
 comes only from D-014/D-013, never from this request.
+
+## Recovery-bound prepared continuation
+
+The normal owner path remains unchanged:
+
+```text
+prepare
+→ optional fixed prepared validation
+→ commit
+→ push
+```
+
+A separately reviewed recovery-rebind manifest may instead use the literal
+`continue-prepared` entrypoint when Phase 8.6.5 preserved exact staged bytes.
+
+This path is intentionally not a generic phase selector. It accepts one strict
+`mcl-repository-prepared-continuation-request.v1` and requires the active D-014
+manifest to bind both the exact prior task manifest and exact effect-recovery
+receipt.
+
+The host classifies the physical Git state before any effect:
+
+```text
+PREPARED
+  HEAD == base
+  remote == base
+  exact staged paths + prepared digest
+  → commit only
+
+COMMITTED
+  HEAD^ == base
+  exact committed paths/digest/message/fixed bot identity
+  remote == base
+  → skip commit, push only
+
+PUSHED
+  same committed proof
+  remote == exact local HEAD
+  → skip commit and push
+```
+
+No PREPARE runs in continuation mode.
+
+The prepared digest is always the SHA-256 of the exact binary Git diff bytes.
+For lower-primitive reuse the host writes those already-proven bytes to a
+restrictive ephemeral patch file and uses the same digest as the ordinary
+primitive request patch hash. The primitive therefore receives truthful patch
+bytes/hash evidence without reapplying them.
+
+The host still requires the fresh process-local workspace-holder claim and
+re-runs current packet/D-013/D-014/holder guards before every missing later
+effect. A continued effect never gains authority from the continuation receipt
+itself.
+
+Lost acknowledgement is fail-safe:
+
+- an exact COMMITTED state suppresses a second commit;
+- an exact PUSHED state suppresses a second push;
+- a third/conflicting remote head, changed digest/path/message/identity, or
+  unresolved state fails closed;
+- missing acknowledgement is never interpreted as proof that an effect did not
+  happen.
+
+The continuation path never reset/restores/stashes/cleans/reapplies the
+workspace, never force-pushes, and never auto-retries.
 
 ## Primitive semantics
 
@@ -182,12 +255,14 @@ The owner also exposes one **in-process only** validation seam for the Phase 8.6
 coordinator. The public CLI is unchanged and does not accept a validation
 command, profile, script, argv, path, working directory or environment.
 
-The caller supplies a strict data-only request object to `invokeLive()`:
+The in-process stage coordinator supplies a strict data-only request object to
+`invokeLive()`, but the request is verification input rather than profile
+selection authority:
 
 ```json
 {
   "schema": "mcl-repository-validation-request.v1",
-  "profile": "mcl:d014-completion-set:v1"
+  "profile": "<exact reviewed profile id>"
 }
 ```
 
@@ -197,18 +272,34 @@ Its exact file bytes are SHA-256 bound in the current D-014 manifest as:
 receipt:mcl-repository-validation-request:<sha256>
 ```
 
-If that binding is missing, conflicting, ambiguous or changes during the
-invocation, the owner fails closed. A manifest that carries such a binding
+The same manifest also binds the repository-owned semantic contract digest:
+
+```text
+receipt:mcl-repository-validation-contract:<sha256>
+```
+
+If either binding is missing, conflicting, ambiguous or changes during the
+invocation, the owner fails closed. A manifest that carries validation binding
 cannot silently fall back to the legacy no-validation path.
 
-V1 has one repository-owned fixed profile only:
+V1 has exactly five repository-owned fixed profiles:
 
 ```text
 mcl:d014-completion-set:v1
+repo:validation-continuation:v1
+repo:published-progress-recovery:v1
+mcl:validation-finalization-owner:v1
+mcl:s-rdc-maintenance-owner:v1
 ```
 
-It is admitted only for the exact reviewed completion-set patch paths. After
-`PREPARE` succeeds and before `COMMIT`, the owner runs this fixed sequence in
+Each profile owns one exact path+surface signature, ordered fixed checks,
+profile version, compatible fixed stage owner, mutation primitive identity and
+deterministic contract digest. Profile-to-check mapping is repository source,
+not caller data.
+
+The completion-set profile remains admitted only for the exact reviewed
+completion-set scope. After `PREPARE` succeeds and before `COMMIT`, the owner
+runs this fixed sequence in
 the already-authorized leased worktree:
 
 ```text
@@ -217,6 +308,18 @@ node --check products/chatgpt-mobile-coder-lab/coordination/tests/test-completio
 node --test  products/chatgpt-mobile-coder-lab/coordination/tests/test-completion-receipt-set.cjs
 node --test  products/chatgpt-mobile-coder-lab/coordination/tests/test-task-handoff.cjs
 ```
+
+The `repo:validation-continuation:v1` profile is admitted only for the exact
+five validation-continuation paths plus its semantic surface. Its fixed checks
+cover stage-receipt and validation-continuation syntax/contracts plus the
+neighboring validation-merge, Work System, execution-receipt and Agent
+Decision View contracts.
+
+The `repo:published-progress-recovery:v1` profile is admitted only for the exact six published-progress-recovery paths plus `surface:repo:published-progress-recovery-projection` and `surface:mcl:published-progress-recovery-inspection`. Its fixed checks cover pure classifier syntax/contract, MCL adapter syntax/contract, reviewed RDC session-evidence, and the existing effect-recovery neighbor. The caller cannot substitute another test path or check list.
+
+The `mcl:validation-finalization-owner:v1` profile is admitted only for the exact three MCL validation-finalization owner paths plus `surface:mcl:validation-finalization-effect`. Its fixed checks cover the MCL finalizer source/test syntax and contract plus the generic validation-finalization, stage-receipt, and validation-continuation contracts. Near-match or caller-selected scopes remain fail-closed.
+
+The `mcl:s-rdc-maintenance-owner:v1` profile is admitted only for the exact five primary-S RDC maintenance paths plus `surface:mcl:s-primary-rdc-runtime`. Its fixed prepared checks are controller shell syntax, installer shell syntax, device-name shim Node syntax, and the focused maintenance contract. The adapter contract maps only those reviewed shell checks to fixed `/bin/sh`; existing profiles keep their Node launcher semantics and core contract digests.
 
 The executable and argv are repository source, not caller data. Children run
 with `shell=false`, a bounded timeout/output ceiling, the manifest worktree as

@@ -33,9 +33,10 @@ Route one bounded semantic subtask at a time. Semantic requirement is classified
 Blocked, offline, dirty, stale, missing, or `UNKNOWN` evidence does not silently
 change a context-specific route into another route.
 
-For ordinary device-agnostic repository work, preserve only the fallback D-012
-currently documents. A possible M fallback is reported as `M_candidate`; this
-skill never switches executor merely because S is unavailable.
+For ordinary device-agnostic repository work, current D-012 prefers exact
+`route=L / executor=L`. A possible S fallback is reported only as
+`S_candidate`; this skill never changes route merely because L is unavailable.
+M is not an ordinary generic fallback.
 
 Ambiguous semantic requirements remain `UNKNOWN`. Requirements that current
 D-012 classifies outside reviewed ownership remain
@@ -66,6 +67,11 @@ Current `S_ANDROID_GUI`, `S_ANDROID_GUI_ADB_READ`, and
 `S_ANDROID_GUI_ADB_ACTION` routes are supported there with
 `executor=not_applicable`; preflight remains read-only and performs no GUI/ADB
 effect or action authorization.
+
+Current ordinary `L / L` intentionally has no separate first-pass
+`mcl-preflight` owner. Record `preflight_owner=not_applicable` and
+`next_gate=scope_overlap`; that is only a routing-plan fact and never a readiness
+claim. The later D-013/D-014/currentness/L-owner gates remain mandatory.
 
 If a future current D-012 route is not supported by current `mcl-preflight`,
 use `preflight_owner=route_owner` and follow that current route-specific owner
@@ -109,7 +115,7 @@ repository_effect=<none|read_only|mutable|unknown>
 overlap_guard=<required|not_required|unknown>
 lease_guard=<required|owner_defined|not_required|unknown>
 handoff_guard=<required|not_required|owner_defined|unknown>
-fallback=<M_candidate|none|not_applicable|unknown>
+fallback=<S_candidate|none|not_applicable|unknown>
 next_gate=<preflight|route_owner|scope_overlap|lease_plan|git_currentness|owner_effect|separate_authority|blocked|unknown>
 details=withheld
 ```

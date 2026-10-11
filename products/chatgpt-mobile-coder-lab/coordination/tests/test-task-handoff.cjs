@@ -9,6 +9,13 @@ const leaseId = 'a'.repeat(64);
 const packetHash = 'b'.repeat(64);
 const baseSha = 'c'.repeat(40);
 const observedSha = 'd'.repeat(40);
+const preservedDiffSha = 'f'.repeat(64);
+const emptyDiffSha = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+const cleanupPath = 'path:products/chatgpt-mobile-coder-lab/device-ops/repository-patch/__pycache__/mcl-worktree-patch.cpython-312.pyc';
+const preservedPaths = [
+  'path:products/chatgpt-mobile-coder-lab/coordination/repository-implementation/README.md',
+  'path:products/chatgpt-mobile-coder-lab/device-ops/repository-patch/README.md',
+];
 let passed = 0;
 function test(name, fn) {
   try { fn(); passed += 1; process.stdout.write(`PASS ${name}\n`); }
@@ -57,6 +64,38 @@ function receiptInput(overrides = {}) {
     requiredUnknownRefs: [],
     ...overrides,
   };
+}
+function cleanupManifestInput(overrides = {}) {
+  return manifestInput({
+    packetRef: '#2804',
+    phaseId: '2804-exact-one-pyc-cleanup',
+    scopes: [cleanupPath, 'surface:mcl:validation-residue-cleanup:2775'],
+    workspace: {
+      kind: 'repository', branch: 'server/mcl-packet-2775',
+      worktree: '/root/nyang-worktrees/mcl-packet-2775',
+    },
+    expectedOutputRefs: [cleanupPath],
+    ...overrides,
+  });
+}
+function preservationInput(overrides = {}) {
+  return {
+    kind: 'TRACKED_DIFF_PRESERVED',
+    beforeSha256: preservedDiffSha,
+    afterSha256: preservedDiffSha,
+    preservedPathRefs: preservedPaths,
+    evidenceRef: 'run:9',
+    ...overrides,
+  };
+}
+function preservedDirtyReceiptInput(overrides = {}) {
+  return receiptInput({
+    outputRefs: [cleanupPath],
+    validationRefs: ['run:9'],
+    workspaceResult: 'preserved_dirty',
+    workspacePreservation: preservationInput(),
+    ...overrides,
+  });
 }
 
 const manifest = handoff.buildManifest(manifestInput());
@@ -120,6 +159,31 @@ test('S route supports documented M repository fallback', () => {
   }));
   assert.equal(m.executor, 'M');
 });
+test('L route accepts exact L repository identity and rejects fallback or invalid workspace', () => {
+  const l = handoff.buildManifest(manifestInput({
+    route: 'L',
+    executor: 'L',
+    workspace: { kind: 'repository', branch: 'laptop/task-handoff-2359', worktree: '/home/alsl0/nyang-worktrees/task-handoff-2359' },
+  }));
+  assert.equal(l.route, 'L');
+  assert.equal(l.executor, 'L');
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    route: 'L', executor: 'S',
+    workspace: { kind: 'repository', branch: 'server/task-handoff-2359', worktree: '/root/nyang-worktrees/task-handoff-2359' },
+  })), /MANIFEST_ROUTE_EXECUTOR_CONFLICT/);
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    route: 'L', executor: 'L',
+    workspace: { kind: 'not_applicable', branch: 'not_applicable', worktree: 'not_applicable' },
+  })), /WORKSPACE_L_ROUTE_REPOSITORY_REQUIRED/);
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    route: 'L', executor: 'L',
+    workspace: { kind: 'repository', branch: 'main', worktree: '/home/alsl0/nyang-worktrees/task-handoff-2359' },
+  })), /WORKSPACE_BRANCH_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    route: 'L', executor: 'L',
+    workspace: { kind: 'repository', branch: 'laptop/task-handoff-2359', worktree: '/home/alsl0/nyang-repo' },
+  })), /WORKTREE_LANDING_RESERVED/);
+});
 
 test('landing_metadata manifest reuses exact D-013 S identity', () => {
   const m = handoff.buildManifest(manifestInput({
@@ -139,6 +203,20 @@ test('landing_metadata manifest supports documented S route fallback to exact M 
   }));
   assert.equal(m.executor, 'M');
 });
+test('landing_metadata manifest supports exact L identity', () => {
+  const m = handoff.buildManifest(manifestInput({
+    phaseId: 'landing-refresh-l',
+    route: 'L',
+    executor: 'L',
+    scopes: ['surface:mcl-landing-origin-main:L'],
+    workspace: { kind: 'landing_metadata', branch: 'main', worktree: '/home/alsl0/nyang-repo' },
+    observedBaseSha: baseSha,
+  }));
+  assert.equal(m.route, 'L');
+  assert.equal(m.executor, 'L');
+  assert.equal(m.workspace.kind, 'landing_metadata');
+});
+
 test('landing_metadata manifest rejects mismatched scope identity and missing observed head', () => {
   expectThrow(() => handoff.buildManifest(manifestInput({
     scopes: ['surface:mcl-landing-origin-main:M'],
@@ -148,6 +226,55 @@ test('landing_metadata manifest rejects mismatched scope identity and missing ob
     scopes: ['surface:mcl-landing-origin-main:S'], observedBaseSha: null,
     workspace: { kind: 'landing_metadata', branch: 'server/work', worktree: '/root/nyang-repo' },
   })), /LANDING_METADATA_BASE_SHA_REQUIRED/);
+});
+test('landing_branch_repair manifest accepts exact M/M identity and scope', () => {
+  const m = handoff.buildManifest(manifestInput({
+    phaseId: 'landing-branch-repair-m',
+    route: 'M',
+    executor: 'M',
+    scopes: ['surface:mcl-landing-branch:M'],
+    workspace: { kind: 'landing_branch_repair', branch: 'mainphone/work', worktree: '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work' },
+    observedBaseSha: baseSha,
+  }));
+  assert.equal(m.route, 'M');
+  assert.equal(m.executor, 'M');
+  assert.equal(m.workspace.kind, 'landing_branch_repair');
+});
+test('landing_branch_repair manifest accepts exact S/S identity and scope', () => {
+  const m = handoff.buildManifest(manifestInput({
+    phaseId:'landing-branch-repair-s', route:'S', executor:'S',
+    scopes:['surface:mcl-landing-branch:S'],
+    workspace:{kind:'landing_branch_repair',branch:'server/work',worktree:'/root/nyang-repo'},
+    observedBaseSha:baseSha,
+  }));
+  assert.equal(m.route,'S'); assert.equal(m.executor,'S');
+  assert.equal(m.workspace.kind,'landing_branch_repair');
+});
+test('landing_branch_repair manifest rejects L because Step A does not admit an L repair owner', () => {
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    phaseId: 'landing-branch-repair-l',
+    route: 'L',
+    executor: 'L',
+    scopes: ['surface:mcl-landing-branch:L'],
+    workspace: { kind: 'landing_branch_repair', branch: 'main', worktree: '/home/alsl0/nyang-repo' },
+    observedBaseSha: baseSha,
+  })), /WORKSPACE_LANDING_BRANCH_REPAIR_EXECUTOR_INVALID|LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID/);
+});
+
+test('landing_branch_repair manifest rejects fallback mismatched identity scope and missing base', () => {
+  const base = {
+    phaseId: 'landing-branch-repair-m',
+    route: 'M',
+    executor: 'M',
+    scopes: ['surface:mcl-landing-branch:M'],
+    workspace: { kind: 'landing_branch_repair', branch: 'mainphone/work', worktree: '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work' },
+    observedBaseSha: baseSha,
+  };
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, route:'S'})), /LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, route:'S', executor:'S'})), /WORKSPACE_LANDING_BRANCH_REPAIR_EXECUTOR_INVALID|WORKSPACE_LANDING_BRANCH_REPAIR_IDENTITY_INVALID|LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID|LANDING_BRANCH_REPAIR_SCOPE_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, scopes:['surface:mcl-landing-origin-main:M']})), /LANDING_BRANCH_REPAIR_SCOPE_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, observedBaseSha:null})), /LANDING_BRANCH_REPAIR_BASE_SHA_REQUIRED/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, workspace:{...base.workspace, branch:'mainphone/other'}})), /WORKSPACE_LANDING_BRANCH_REPAIR_IDENTITY_INVALID/);
 });
 test('context route supports not-applicable repo workspace', () => {
   const m = handoff.buildManifest(manifestInput({
@@ -210,6 +337,91 @@ test('complete repository phase requires clean workspace result', () => expectTh
   () => handoff.buildCompletionReceipt(manifest, receiptInput({ workspaceResult: 'unknown' })),
   /RECEIPT_COMPLETE_WORKSPACE_NOT_CONVERGED/,
 ));
+test('legacy completion receipt omits optional preservation field', () => {
+  assert.equal('workspacePreservation' in receipt, false);
+  assert.doesNotMatch(handoff.renderCompletionReceipt(receipt), /workspacePreservation/);
+});
+test('reviewed cleanup accepts exact preserved-dirty completion proof', () => {
+  const m = handoff.buildManifest(cleanupManifestInput());
+  const r = handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput());
+  assert.equal(r.workspaceResult, 'preserved_dirty');
+  assert.deepEqual(r.workspacePreservation.preservedPathRefs, [...preservedPaths].sort());
+  assert.equal(handoff.validateReceiptAgainstManifest(r, m).status, 'VALID');
+});
+test('preserved-dirty proof requires equal non-empty tracked diff identity', () => {
+  const m = handoff.buildManifest(cleanupManifestInput());
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({
+      workspacePreservation: preservationInput({afterSha256: 'e'.repeat(64)}),
+    })),
+    /RECEIPT_PRESERVATION_DIFF_IDENTITY_MISMATCH/,
+  );
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({
+      workspacePreservation: preservationInput({beforeSha256: emptyDiffSha, afterSha256: emptyDiffSha}),
+    })),
+    /RECEIPT_PRESERVATION_EMPTY_DIFF_FORBIDDEN/,
+  );
+});
+test('preserved-dirty path proof is nonempty unique path-only and excludes cleanup path', () => {
+  const m = handoff.buildManifest(cleanupManifestInput());
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({
+      workspacePreservation: preservationInput({preservedPathRefs: []}),
+    })), /RECEIPT_PRESERVATION_PATH_REFS_INVALID/,
+  );
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({
+      workspacePreservation: preservationInput({preservedPathRefs: [preservedPaths[0], preservedPaths[0]]}),
+    })), /RECEIPT_PRESERVATION_PATH_REF_DUPLICATE/,
+  );
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({
+      workspacePreservation: preservationInput({preservedPathRefs: ['surface:mcl:test']}),
+    })), /RECEIPT_PRESERVATION_PATH_REF_INVALID/,
+  );
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({
+      workspacePreservation: preservationInput({preservedPathRefs: [cleanupPath]}),
+    })), /RECEIPT_PRESERVATION_CLEANUP_PATH_CONFLICT/,
+  );
+});
+test('preserved-dirty evidence must be explicit and included in validation refs', () => {
+  const m = handoff.buildManifest(cleanupManifestInput());
+  const missing = preservationInput();
+  delete missing.evidenceRef;
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({workspacePreservation: missing})),
+    /RECEIPT_PRESERVATION_FIELD_REQUIRED:evidenceRef/,
+  );
+  expectThrow(
+    () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({validationRefs: ['run:10']})),
+    /RECEIPT_PRESERVATION_EVIDENCE_NOT_VALIDATED/,
+  );
+});
+test('preserved-dirty completion is cleanup-manifest only', () => {
+  expectThrow(
+    () => handoff.buildCompletionReceipt(manifest, preservedDirtyReceiptInput()),
+    /RECEIPT_PRESERVED_DIRTY_MANIFEST_SCOPE_INVALID|RECEIPT_PRESERVED_DIRTY_EXPECTED_OUTPUT_MISSING/,
+  );
+});
+test('workspace preservation is forbidden outside complete preserved-dirty receipt', () => {
+  for (const workspaceResult of ['clean', 'not_applicable', 'unknown']) {
+    expectThrow(
+      () => handoff.buildCompletionReceipt(manifest, receiptInput({
+        workspaceResult, workspacePreservation: preservationInput(),
+      })), /RECEIPT_PRESERVATION_UNEXPECTED/,
+    );
+  }
+  const m = handoff.buildManifest(cleanupManifestInput());
+  for (const disposition of ['BLOCKED', 'PARTIAL']) {
+    expectThrow(
+      () => handoff.buildCompletionReceipt(m, preservedDirtyReceiptInput({
+        disposition, blockerRefs: disposition === 'BLOCKED' ? ['#2805'] : [],
+      })), /RECEIPT_PRESERVED_DIRTY_COMPLETE_REQUIRED/,
+    );
+  }
+});
 
 test('complete landing_metadata phase also requires clean workspace result after release', () => {
   const m = handoff.buildManifest(manifestInput({

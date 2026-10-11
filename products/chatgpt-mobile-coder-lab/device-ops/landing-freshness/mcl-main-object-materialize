@@ -5,6 +5,7 @@ SCHEMA='mcl-main-object-materialize.v1'
 CANONICAL_ORIGIN='https://github.com/hanmiyoo10-alt/-.git'
 S_REPO='/root/nyang-repo'
 M_REPO='/data/data/com.termux/files/home/nyang-worktrees/mainphone-work'
+L_REPO='/home/alsl0/nyang-repo'
 
 route=${1-}
 expected=${2-}
@@ -15,6 +16,7 @@ fi
 case "$route" in
   S) REPO=$S_REPO ;;
   M) REPO=$M_REPO ;;
+  L) REPO=$L_REPO ;;
   *) printf '%s\n' 'mcl-main-object-materialize: unsupported route' >&2; exit 64 ;;
 esac
 

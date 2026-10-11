@@ -1,0 +1,45 @@
+name: Screen On Android Companion
+
+on:
+  pull_request:
+    paths:
+      - 'plugins/termux/screen-on/**'
+      - '.github/workflows/screen-on-android-companion.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/termux/screen-on/**'
+      - '.github/workflows/screen-on-android-companion.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Python wrapper tests
+        run: python -m unittest discover -s plugins/termux/screen-on/tests -p 'test_*.py' -v
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Android unit tests
+        run: gradle -p plugins/termux/screen-on/android-companion :app:testDebugUnitTest
+      - name: Build debug APK
+        run: gradle -p plugins/termux/screen-on/android-companion :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: termux-screen-on-companion-debug-apk
+          path: plugins/termux/screen-on/android-companion/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

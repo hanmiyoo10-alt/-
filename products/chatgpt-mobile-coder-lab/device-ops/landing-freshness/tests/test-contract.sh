@@ -13,6 +13,7 @@ REMOTE="$TMP/remote.git"
 SEED="$TMP/seed"
 S_FIX="$TMP/s-landing"
 M_FIX="$TMP/m-landing"
+L_FIX="$TMP/l-landing"
 TOOL="$TMP/mcl-landing-freshness"
 OUT=''
 ERR=''
@@ -82,6 +83,9 @@ configure_fixture_origin "$S_FIX"
 git clone -q "$REMOTE" "$M_FIX"
 git -C "$M_FIX" switch -q -c mainphone/rdc-prep-milestone-2213
 configure_fixture_origin "$M_FIX"
+
+git clone -q "$REMOTE" "$L_FIX"
+configure_fixture_origin "$L_FIX"
 
 sed \
   -e "s|CANONICAL_ORIGIN='https://github.com/hanmiyoo10-alt/-.git'|CANONICAL_ORIGIN='file://$REMOTE'|" \
@@ -298,6 +302,7 @@ make_materialize_tool() {
     -e "s|CANONICAL_ORIGIN='https://github.com/hanmiyoo10-alt/-.git'|CANONICAL_ORIGIN='file://$REMOTE'|" \
     -e "s|S_REPO='/root/nyang-repo'|S_REPO='$S_FIX'|" \
     -e "s|M_REPO='/data/data/com.termux/files/home/nyang-worktrees/mainphone-work'|M_REPO='$M_FIX'|" \
+    -e "s|L_REPO='/home/alsl0/nyang-repo'|L_REPO='$L_FIX'|" \
     "$MATERIALIZE_SOURCE" >"$dest"
   chmod +x "$dest"
 }
@@ -349,6 +354,32 @@ assert_eq "$(field materialization)" materialized
 assert_eq "$(field object_after)" present
 assert_eq "$(git -C "$M_FIX" branch --show-current)" "$m_branch_before"
 assert_eq "$(git -C "$M_FIX" for-each-ref --format='%(refname)%09%(objectname)' | LC_ALL=C sort)" "$m_refs_before"
+pass
+
+# Fixed L landing is eligible for no-ref object materialization without ref/HEAD movement.
+git -C "$L_FIX" cat-file -e "$remote_four^{commit}" 2>/dev/null && fail 'L unexpectedly has remote_four before materialization'
+l_head_before=$(git -C "$L_FIX" rev-parse HEAD)
+l_branch_before=$(git -C "$L_FIX" branch --show-current)
+l_refs_before=$(git -C "$L_FIX" for-each-ref --format='%(refname)%09%(objectname)' | LC_ALL=C sort)
+l_origin_before=$(origin_main "$L_FIX")
+set +e
+OUT=$("$MAT_TOOL" L "$remote_four" 2>"$TMP/stderr")
+RC=$?
+set -e
+assert_eq "$RC" 0
+assert_eq "$(field materialization)" materialized
+assert_eq "$(field object_before)" missing
+assert_eq "$(field object_after)" present
+assert_eq "$(field head_preserved)" yes
+assert_eq "$(field branch_preserved)" yes
+assert_eq "$(field worktree_preserved)" yes
+assert_eq "$(field refs_preserved)" yes
+assert_eq "$(field index_preserved)" yes
+assert_eq "$(field fetch_head_preserved)" yes
+assert_eq "$(git -C "$L_FIX" rev-parse HEAD)" "$l_head_before"
+assert_eq "$(git -C "$L_FIX" branch --show-current)" "$l_branch_before"
+assert_eq "$(git -C "$L_FIX" for-each-ref --format='%(refname)%09%(objectname)' | LC_ALL=C sort)" "$l_refs_before"
+assert_eq "$(origin_main "$L_FIX")" "$l_origin_before"
 pass
 
 # Already-present is deterministic and performs no ref movement.
@@ -461,6 +492,7 @@ pass
 
 # Static no-ref/no-destructive-command contract.
 grep -Fq 'fetch --quiet --no-tags --no-write-fetch-head "$effective_origin" refs/heads/main' "$MATERIALIZE_SOURCE" || fail 'no-ref fetch contract missing'
+grep -Fq "L_REPO='/home/alsl0/nyang-repo'" "$MATERIALIZE_SOURCE" || fail 'fixed L path missing'
 if grep -Eq 'git -C "\$REPO" (merge |pull |switch |checkout |reset |stash |clean |worktree |tag |push |commit |update-ref )' "$MATERIALIZE_SOURCE"; then
   fail 'forbidden materializer Git mutation command found'
 fi

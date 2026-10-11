@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "github-discussions-mcp"
+version = "0.1.0"
+description = "Bounded GitHub Discussions MCP connector for hanmiyoo10-alt/-"
+requires-python = ">=3.10"
+dependencies = [
+  "mcp>=2,<3",
+]
+
+[project.scripts]
+github-discussions-mcp = "github_discussions_mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["github_discussions_mcp*"]

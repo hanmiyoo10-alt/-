@@ -4,10 +4,23 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[5]
 OWNER = ROOT / "products/chatgpt-mobile-coder-lab/device-ops/wireless-adb-ui"
+WRAPPER = OWNER / "mcl-adb-ui"
 SOURCE = OWNER / "mcl_adb_ui.py"
 WORKFLOW = ROOT / ".github/workflows/mcl-wireless-adb-ui.yml"
 
 class ContractTests(unittest.TestCase):
+    def test_termux_wrapper_has_fixed_direct_exec_entrypoint(self):
+        wrapper = WRAPPER.read_text()
+        lines = wrapper.splitlines()
+        self.assertGreaterEqual(len(lines), 3)
+        self.assertEqual(lines[0], "#!/data/data/com.termux/files/usr/bin/sh")
+        self.assertNotIn("/usr/bin/env", lines[0])
+        self.assertEqual(lines[1], "set -eu")
+        self.assertEqual(
+            lines[2],
+            'exec python3 "$(dirname "$0")/mcl_adb_ui.py" "$@"',
+        )
+
     def test_action_surface_is_fixed_and_bounded(self):
         source = SOURCE.read_text()
         for forbidden in (
@@ -24,7 +37,12 @@ class ContractTests(unittest.TestCase):
             'add_argument("--category"',
             'add_argument("--resource-id"',
             'add_argument("--suffix"',
+            'add_argument("--url"',
+            'add_argument("--uri"',
+            'add_argument("--scheme"',
+            'add_argument("--host"',
             'add_argument("--query"',
+            'add_argument("--fragment"',
             'add_argument("--depth"',
             'add_argument("--parent"',
             'add_argument("--class"',
@@ -41,6 +59,8 @@ class ContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, source)
         self.assertIn('sub.add_parser("launch-target")', source)
+        self.assertIn('sub.add_parser("launch-landing")', source)
+        self.assertIn('landing.add_argument("--route", choices=sorted(LANDING_ROUTES), required=True)', source)
         self.assertIn('sub.add_parser("probe-new-chat")', source)
         self.assertIn('sub.add_parser("activate")', source)
         self.assertIn('sub.add_parser("type-ascii")', source)

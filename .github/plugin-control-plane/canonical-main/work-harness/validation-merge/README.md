@@ -53,12 +53,16 @@ present, the existing fixed REST client is used. If neither environment variable
 present, V1 falls back to the already-authenticated `gh api` credential store with:
 
 - an exact read-only REST endpoint allowlist owned by this module;
-- the one fixed review-thread GraphQL query only;
-- no caller-selected endpoint, method, command or query;
+- the fixed reviewed GraphQL queries only;
+- a repository-owned 20-second lifetime for each individual `gh` read, terminated with a hard child-process kill when the bound is exceeded;
+- no caller-selected timeout, endpoint, method, command or query;
 - no token extraction, token printing, mutation request, retry loop or merge authority.
 
-A missing/broken authorized transport remains UNKNOWN. The fallback changes transport
-only and does not weaken the currentness, review, overlap or Required barriers.
+A missing, broken, or timed-out authorized transport remains UNKNOWN through the
+existing read-failure path. Timeout never converts a missing page, issue, PR file,
+review, Required, currentness, or overlap observation into complete evidence. The
+fallback changes transport lifetime only and does not weaken the currentness, review,
+overlap or Required barriers.
 
 ## Inspect prerequisites
 
@@ -86,8 +90,14 @@ Scope parsing is delegated to the existing Work System
 `extractPacketScopes()`. This module does not maintain another heading/token
 grammar.
 
-The implementation receipt path set, current packet path set and live PR changed
-file set must agree exactly.
+The implementation receipt path set and live PR changed-file set must agree
+exactly. The current packet path scopes are an authorization ceiling instead:
+every exact receipt/PR path must be contained by at least one parsed packet path
+scope using only the Work System's existing exact-path or trailing-`/**` semantics.
+An exact packet path contains only that file; a trailing prefix may contain narrower
+descendant files. Any exact changed file outside the packet ceiling is CONFLICT.
+Unsupported or unresolved scope syntax remains UNKNOWN/CONFLICT through the
+existing Work System parser; this owner adds no wildcard grammar.
 
 ## Current-main barrier
 
@@ -103,7 +113,8 @@ A settling/stale or uncertain state cannot become merge-ready.
 
 The PR must be open, non-draft, same-repository, based on main/current main,
 exactly at the implementation receipt head, explicitly mergeable and contain
-only the packet's exact path set.
+exactly the implementation receipt's changed-file set, with every such file already
+proven inside the packet authorization ceiling.
 
 Review inspection includes:
 - REST reviews;
@@ -123,16 +134,84 @@ Inspect performs complete Work System discovery over every other current
 canonical packet and open PR changed-file inventory. Only
 COMPLETE / DISJOINT / zero findings is merge-ready.
 
-Exact-head Required evidence is bound to the exact PR head and SimCore CI
-pull_request run. The selected run and its single Required job must both be
-completed successfully.
+Exact-head Required evidence is bound to the exact PR head and SimCore CI.
+
+The preferred evidence is the unique natural `pull_request` run. A completed
+natural failure remains authoritative failure and is never overridden by fallback
+evidence. A completed natural success continues to use its single successful
+`Required` job exactly as before.
+
+Only when natural `pull_request` evidence is missing or nonterminal may the owner
+consider the already-reviewed SimCore `PR_RECOVERY` transport. The fallback is
+fail-closed and requires all of the following from fresh GitHub evidence:
+
+- one unique completed-success SimCore CI `workflow_dispatch` run on the exact PR
+  head and exact current PR head ref;
+- one unique completed-success `Verify` job and one unique completed-success
+  `Required` job;
+- bounded `Verify` job logs proving `INPUT_PROFILE: PR_RECOVERY` plus the exact
+  current PR base and exact candidate head;
+- bounded `Required` job logs proving `PROFILE: PR_RECOVERY` and a successful
+  `profile=PR_RECOVERY ... verify=success` result;
+- no second qualifying recovery run.
+
+Wrong profile/base/head evidence is non-qualifying. Missing, unreadable or oversized
+logs remain UNKNOWN/BLOCKED rather than PASS. Multiple qualifying recovery runs are
+ambiguous. Raw job logs are used only for bounded verification and are never copied
+into normal receipts, reports or issue evidence.
+
+The token-backed client reuses the existing GitHub client request transport with
+the default GitHub media type, then applies the same local text-size bound. The
+authenticated-`gh` fallback exposes only the fixed
+`/actions/jobs/<id>/logs` text endpoint, uses `--allow-escape-sequences` only to
+permit GitHub's own ANSI-bearing job log bytes, and preserves the same
+repository-owned 20-second read lifetime. This adds no workflow-dispatch or retry
+authority.
 
 No latest-by-time heuristic is used.
 
+## Strict up-to-date barrier
+
+The owner also reads the current main branch's required-status protection
+through the fixed `required_status_checks` endpoint.
+
+If `strict=false`, the added ancestry barrier is `NOT_APPLICABLE` and the
+existing base/head/review/overlap/Required semantics remain unchanged.
+
+If `strict=true`, merge-ready inspection additionally requires both:
+
+1. one fixed GraphQL read for the exact PR's `mergeStateStatus` and head OID;
+2. one fixed GitHub compare read for exact `currentMainSha...expectedHead`.
+
+The compare evidence must bind the current main as both the requested/base
+identity and merge base. Only `ahead` (current main is an ancestor of the
+candidate) or exact `identical` is current.
+
+For strict protection:
+
+- `mergeStateStatus=BEHIND` blocks with currentization required;
+- compare `behind`, `diverged`, or a merge-base mismatch blocks with
+  currentization required;
+- missing, malformed, inaccessible, or `UNKNOWN` strict/merge-state/compare
+  evidence remains UNKNOWN;
+- a successful old-head Required check never overrides the strict currentness
+  barrier.
+
+The owner does not currentize the branch. A strict-currentness block routes only
+to the existing currentization owner:
+
+```text
+CURRENTIZE_PR_THROUGH_EXISTING_OWNER
+```
+
+After currentization creates a new exact head that contains current main and a
+new exact-head Required succeeds, a fresh inspect may become merge-ready.
+
 ## Final currentness
 
-Before returning PASS, inspect repeats the current main/#485, packet, PR and
-review barriers and requires unchanged semantic identity.
+Before returning PASS, inspect repeats the current main/#485, packet, PR,
+strict-protection/merge-state/ancestry, review and overlap barriers and requires
+unchanged semantic identity.
 
 Inspect then reports:
 

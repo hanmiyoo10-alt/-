@@ -206,7 +206,7 @@ When a separately authorized execution-capable surface exists:
 - direct target execution additionally requires an owner-provided sandbox or equivalent proven effect containment for writes outside the workspace, subprocesses, network access, credentials, devices, and other external state the target could reach;
 - direct adversarial execution also requires bounded host-resource containment appropriate to the target: an outer wall-clock timeout plus CPU time, memory, process/thread count, filesystem growth, and output limits where the host/harness can expose them;
 - a temporary directory alone is neither effect containment nor host-resource containment;
-- if either required containment class is unavailable, keep direct target execution static-only or limit execution to existing owner tests whose effect and resource boundaries are already explicitly established and permitted by the current owner;
+- if either required containment class is unavailable, keep direct target execution static-only; existing owner tests may run only when their effect/resource boundaries are already explicitly established and permitted by the current owner **and** they execute in an isolated copy/workspace or a proven no-write configuration that cannot mutate the reviewed checkout;
 - execute focused deterministic cases only inside that proven effect/resource containment plus an isolated temporary workspace/copy or an existing owner-provided temporary harness;
 - never edit the repository checkout under review merely to create review cases;
 - preserve the exact source/input identities used by that isolated execution;

@@ -275,6 +275,8 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "bounded host-resource containment",
             "outer wall-clock timeout plus CPU time, memory, process/thread count, filesystem growth, and output limits",
             "effect/resource containment identity for exercised cases",
+            "isolated copy/workspace or a proven no-write configuration",
+            "cannot mutate the reviewed checkout",
         ):
             self.assertIn(required, self.text)
 

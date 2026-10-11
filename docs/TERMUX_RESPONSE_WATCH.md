@@ -2,7 +2,7 @@
 
 Date: 2026-08-26
 Status: PROTOTYPE · NON-PRODUCTION
-Scope: `plugins/termux/response-watch/`
+Scope: `products/standalone/termux/response-watch/`
 Canonical issue: `#445`
 
 ## Primary goal

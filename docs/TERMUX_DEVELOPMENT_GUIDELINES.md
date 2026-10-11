@@ -4,7 +4,11 @@ This document is the durable project memory and operating contract for the Termu
 
 Canonical repository: `hanmiyoo10-alt/-`
 
-Canonical plugin path: `plugins/termux/`
+Current source layout: staged split-root under #2801
+
+- Standalone Termux family root: `products/standalone/termux/`
+- Migrated child: `products/standalone/termux/response-watch/`
+- Unmigrated child route: `plugins/termux/`
 
 Production release branch: `UNKNOWN — not established yet`
 
@@ -73,9 +77,10 @@ and update the documentation.
 
 ## 1. Project scope
 
-The default development target is:
+The default development target is the current owning child path. During staged migration, current `main` uses:
 
-`plugins/termux/`
+- Response Watch: `products/standalone/termux/response-watch/`
+- Unmigrated Termux children: `plugins/termux/<child>/`
 
 Do not modify unrelated host/application code unless evidence shows that
 the problem cannot be solved inside the plugin.

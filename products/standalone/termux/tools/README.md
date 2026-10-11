@@ -10,8 +10,8 @@ creating another work orchestrator or replacing repository authority.
 Given an exact Git base ref, exact Git head ref, and one
 `termux-migration-plan.v1` JSON file, the validator can check:
 
-- logical changed-file count against one exact expected ceiling;
-- every changed path endpoint against exact/prefix authorization scopes,
+- logical changed-file count against one exact expected ceiling, bounded to 1000;
+- every changed path endpoint against canonical exact/prefix authorization scopes,
   including both source and destination of detected renames/copies;
 - base old-root inventory against head new-root inventory;
 - Git mode/type preservation for relocated files;
@@ -30,13 +30,19 @@ endpoints are still checked against the authorization ceiling.
 Before any diff/tree/content read, caller refs are resolved to commit object IDs.
 Option-like refs are rejected. All later Git operations use those resolved IDs.
 
-Every Git subprocess sets:
+Every Git subprocess:
+- clears ambient repository-selection/object-store overrides such as `GIT_DIR`,
+  `GIT_WORK_TREE`, alternate object directories, namespaces, and injected
+  `GIT_CONFIG_*` parameter variables;
+- sets `GIT_NO_LAZY_FETCH=1` so a partial clone cannot demand-fetch missing objects;
+- sets `GIT_NO_REPLACE_OBJECTS=1` so `refs/replace` cannot substitute evidence;
+- sets `GIT_TERMINAL_PROMPT=0` and `GIT_OPTIONAL_LOCKS=0`;
+- uses an explicit bounded rename-candidate policy and disables external diff helpers.
 
-- `GIT_NO_LAZY_FETCH=1` so a partial clone cannot demand-fetch missing objects;
-- `GIT_TERMINAL_PROMPT=0` so validation cannot open an authentication prompt.
-
-Missing objects, malformed Git evidence, non-UTF-8 Git paths, and explicitly
-requested scan paths that are missing or unreadable fail closed to `UNKNOWN`.
+The supplied `--repo-root` must resolve to the exact Git work-tree root.
+Missing objects, malformed Git evidence, noncanonical plan paths, non-UTF-8 Git
+paths, and explicitly requested scan paths that are missing or unreadable fail
+closed to `UNKNOWN`.
 The validator never treats skipped evidence as `PASS`.
 
 ## What it never does
@@ -75,8 +81,13 @@ All authority flags in the result are always `false`.
 }
 ```
 
-`authorized_paths` supports exact repository-relative paths and only one bounded
-prefix form: a trailing `/**`.
+`authorized_paths` supports exact canonical POSIX repository-relative paths
+and only one bounded prefix form: a trailing `/**`. Leading/trailing
+whitespace, backslashes, duplicate separators, leading/trailing slashes, and
+other path-normalization aliases are rejected rather than silently normalized.
+
+`expected_changed_file_count` must be a JSON integer from 1 through 1000.
+JSON booleans are rejected.
 
 `content_edit_relpaths` are relative to the moved child root. Every other file
 from the base old-root inventory must preserve the same Git object identity at
@@ -131,5 +142,7 @@ python -m unittest discover \
 The tests use temporary local Git repositories and perform no network or
 repository mutation outside their temporary directories. They cover the
 #2801-derived path-depth/parity cases plus rename-endpoint authorization,
-unsafe refs, explicit scan failure, non-UTF-8 Git paths, mode/type parity, and
-lazy-fetch suppression.
+unsafe refs, explicit scan failure, non-UTF-8 Git paths, mode/type parity,
+lazy-fetch/replacement-object suppression, ambient Git repository isolation,
+noncanonical plan rejection, boolean-count rejection, and rename-limit
+independence.

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import posixpath
 import sys
 from pathlib import Path, PurePosixPath
@@ -38,17 +39,46 @@ def _repo_root(value: Any) -> Path:
     return resolved
 
 
-def _verify_working_dir(repo_root: Path, working_dir: str, field: str) -> None:
-    current = repo_root
-    for part in PurePosixPath(working_dir).parts:
-        current = current / part
+def _name_max(repo_root: Path) -> int:
+    try:
+        value = int(os.pathconf(repo_root, "PC_NAME_MAX"))
+    except (OSError, ValueError) as exc:
+        raise ValidationUnknown("repo_root: NAME_MAX unavailable") from exc
+    if value < 1:
+        raise ValidationUnknown("repo_root: invalid NAME_MAX")
+    return value
+
+
+def _validate_component_bytes(parts: list[str] | tuple[str, ...], name_max: int, field: str) -> None:
+    for part in parts:
+        if part == "..":
+            continue
         try:
-            if current.is_symlink():
-                raise ValidationUnknown(f"{field}: symlink component is unsupported")
-            if not current.is_dir():
-                raise ValidationUnknown(f"{field}: directory evidence unavailable")
-        except OSError as exc:
-            raise ValidationUnknown(f"{field}: directory evidence unavailable") from exc
+            encoded = part.encode("utf-8", "strict")
+        except UnicodeEncodeError as exc:
+            raise ValidationUnknown(f"{field}: unusable Unicode component") from exc
+        if len(encoded) > name_max:
+            raise ValidationUnknown(
+                f"{field}: component exceeds filesystem NAME_MAX"
+            )
+
+
+def _tree_proof(value: Any, working_dir: str, field: str) -> None:
+    parts = PurePosixPath(working_dir).parts
+    if not isinstance(value, list) or len(value) != len(parts):
+        raise ValidationUnknown(f"{field}: complete tree proof required")
+    current: list[str] = []
+    for index, (row, part) in enumerate(zip(value, parts)):
+        current.append(part)
+        expected_path = "/".join(current)
+        if not isinstance(row, dict) or set(row) != {"path", "mode", "type"}:
+            raise ValidationUnknown(f"{field}[{index}]: invalid tree proof row")
+        if row["path"] != expected_path:
+            raise ValidationUnknown(f"{field}[{index}]: tree proof path mismatch")
+        if row["mode"] != "040000" or row["type"] != "tree":
+            raise ValidationUnknown(
+                f"{field}[{index}]: symlink or non-tree directory component"
+            )
 
 
 def _repo_dir(value: Any, field: str) -> str:
@@ -124,24 +154,48 @@ def _relative_to_target(working_dir: str, target: str) -> str:
     return _relative_ref(relative, "expected_new_reference")
 
 
-def check_reference(item: Any, repo_root: Path | None = None) -> dict[str, Any]:
+def check_reference(
+    item: Any,
+    repo_root: Path | None = None,
+    name_max: int | None = None,
+) -> dict[str, Any]:
     try:
         if not isinstance(item, dict) or set(item) != {
             "old_working_dir",
             "new_working_dir",
             "old_reference",
             "candidate_new_reference",
+            "old_working_dir_tree_proof",
+            "new_working_dir_tree_proof",
         }:
             raise ValidationUnknown("request shape invalid")
-        if repo_root is None:
-            raise ValidationUnknown("repo_root evidence required")
+        if repo_root is None or name_max is None:
+            raise ValidationUnknown("repo_root filesystem evidence required")
         old_dir = _repo_dir(item["old_working_dir"], "old_working_dir")
         new_dir = _repo_dir(item["new_working_dir"], "new_working_dir")
-        _verify_working_dir(repo_root, old_dir, "old_working_dir")
-        _verify_working_dir(repo_root, new_dir, "new_working_dir")
         old_ref = _relative_ref(item["old_reference"], "old_reference")
         new_ref = _relative_ref(
             item["candidate_new_reference"], "candidate_new_reference"
+        )
+        _validate_component_bytes(
+            PurePosixPath(old_dir).parts, name_max, "old_working_dir"
+        )
+        _validate_component_bytes(
+            PurePosixPath(new_dir).parts, name_max, "new_working_dir"
+        )
+        _validate_component_bytes(old_ref.split("/"), name_max, "old_reference")
+        _validate_component_bytes(
+            new_ref.split("/"), name_max, "candidate_new_reference"
+        )
+        _tree_proof(
+            item["old_working_dir_tree_proof"],
+            old_dir,
+            "old_working_dir_tree_proof",
+        )
+        _tree_proof(
+            item["new_working_dir_tree_proof"],
+            new_dir,
+            "new_working_dir_tree_proof",
         )
 
         target = _resolve_repo_target(old_dir, old_ref)
@@ -168,6 +222,8 @@ def check_reference(item: Any, repo_root: Path | None = None) -> dict[str, Any]:
             "resolved_target": target,
             "expected_new_reference": expected,
             "candidate_resolved_target": candidate_target,
+            "filesystem_name_max_bytes": name_max,
+            "working_directory_tree_proof": "VERIFIED",
             "working_dir_depth_delta": (
                 len(PurePosixPath(new_dir).parts)
                 - len(PurePosixPath(old_dir).parts)
@@ -227,6 +283,7 @@ def check_batch(request: Any) -> dict[str, Any]:
 
     try:
         repo_root = _repo_root(request["repo_root"])
+        name_max = _name_max(repo_root)
     except ValidationUnknown as exc:
         return {
             "schema": SCHEMA,
@@ -245,7 +302,10 @@ def check_batch(request: Any) -> dict[str, Any]:
             "device_authorized": False,
         }
 
-    results = [check_reference(item, repo_root) for item in request["references"]]
+    results = [
+        check_reference(item, repo_root, name_max)
+        for item in request["references"]
+    ]
     order = {"UNKNOWN": 2, "FAIL": 1, "PASS": 0}
     status = max((row["status"] for row in results), key=lambda x: order[x], default="PASS")
     return {

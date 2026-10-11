@@ -214,6 +214,24 @@ class LocationRelativeSentinelTests(unittest.TestCase):
             out["files"][0]["error"],
         )
 
+    def test_non_python_file_path_is_unknown(self):
+        out = classify(
+            self.request(
+                "VALUE = 1\n",
+                "VALUE = 1\n",
+                old_path="plugins/termux/taskbridge/tests/test_x.txt",
+                new_path="products/standalone/termux/taskbridge/tests/test_x.txt",
+            )
+        )
+        self.assertEqual(out["status"], "UNKNOWN")
+        self.assertIn("Python source", out["files"][0]["error"])
+
+    def test_ast_node_budget_is_bounded(self):
+        source = "x = 1\n" * 6000
+        out = classify(self.request(source, source))
+        self.assertEqual(out["status"], "UNKNOWN")
+        self.assertIn("AST node budget exceeded", out["files"][0]["error"])
+
     def test_root_relative_file_suffix_must_be_preserved(self):
         out = classify(
             self.request(
@@ -234,6 +252,7 @@ class LocationRelativeSentinelTests(unittest.TestCase):
             {"new_root": "products//standalone/termux/taskbridge"},
             {"old_path": "plugins/termux/taskbridge/../taskbridge/tests/x.py"},
             {"new_path": "products\\standalone\\termux\\taskbridge\\tests\\x.py"},
+            {"old_path": "plugins/termux/taskbridge/tests/x.py\n"},
         ]
         for overrides in cases:
             with self.subTest(overrides=overrides):
@@ -281,6 +300,11 @@ class LocationRelativeSentinelTests(unittest.TestCase):
         out = classify(self.request("VALUE = 1\n", "VALUE = 1\n"))
         self.assertEqual(out["evidence_provenance"], "CALLER_SUPPLIED")
         self.assertFalse(out["authenticated_repository_evidence"])
+        self.assertEqual(
+            out["path_resolution_model"],
+            "LEXICAL_REPOSITORY_RELATIVE",
+        )
+        self.assertFalse(out["runtime_symlink_resolution_proven"])
         for key in (
             "filesystem_source_discovery_used",
             "git_used",

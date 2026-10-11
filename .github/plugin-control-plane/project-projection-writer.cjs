@@ -17,7 +17,8 @@ const MODE = 'GITHUB_PROJECT_PLANNING_PROJECTION_WRITER';
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_PROJECT_ITEMS = 10000;
 const MAX_PROJECT_FIELDS = 1000;
-const MAX_PROJECT_ITEM_OUTPUT_BYTES = 32 * 1024 * 1024;
+const MAX_PROJECT_QUERY_ITEMS = 100;
+const MAX_PROJECT_ITEM_OUTPUT_BYTES = 4 * 1024 * 1024;
 const PROJECT_ITEM_JQ = '{totalCount,items:[.items[]|{id:.id,content:{type:.content.type,number:.content.number,repository:.content.repository,url:.content.url},status:.status,priority:.priority,area:.area,"work Type":.["work Type"]}]}';
 
 const FIELD_ORDER = Object.freeze([
@@ -195,6 +196,9 @@ function normalizeProjectSchema(raw) {
     if (typeof field.id !== 'string' || !field.id) {
       return {ok: false, reasonCodes: ['PROJECT_SCHEMA_FIELD_ID_INVALID']};
     }
+    if (field.type !== 'ProjectV2SingleSelectField') {
+      return {ok: false, reasonCodes: ['PROJECT_SCHEMA_FIELD_TYPE_MISMATCH']};
+    }
     if (!Array.isArray(field.options)) {
       return {ok: false, reasonCodes: ['PROJECT_SCHEMA_OPTIONS_INVALID']};
     }
@@ -244,6 +248,18 @@ function normalizeIssue(raw, issueNumber) {
       state: raw.state.toLowerCase(),
       labels: labels.sort(),
     },
+    reasonCodes: [],
+  };
+}
+
+function projectItemQueryForIssue(issue) {
+  if (!issue || typeof issue.title !== 'string' || !issue.title || /[\r\n]/.test(issue.title)) {
+    return {ok: false, reasonCodes: ['PROJECT_ITEM_QUERY_TITLE_INVALID']};
+  }
+  const quoted = `"${issue.title.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  return {
+    ok: true,
+    value: `repo:${REPO} is:issue title:${quoted}`,
     reasonCodes: [],
   };
 }
@@ -395,6 +411,17 @@ function readEvidenceDefault(issueNumber, runner = defaultRunner) {
   if (!issueRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: issueRead.reasonCodes};
   const issue = normalizeIssue(issueRead.value, issueNumber);
   if (!issue.ok) return {ok: false, status: 'BLOCKED', reasonCodes: issue.reasonCodes};
+  const itemQuery = projectItemQueryForIssue(issue.value);
+  if (!itemQuery.ok) return {ok: false, status: 'BLOCKED', reasonCodes: itemQuery.reasonCodes};
+
+  const firstItemsRead = runJson(runner, 'gh', [
+    'project', 'item-list', String(PROJECT_NUMBER), '--owner', PROJECT_OWNER,
+    '--format', 'json', '--limit', String(MAX_PROJECT_QUERY_ITEMS),
+    '--query', itemQuery.value, '--jq', PROJECT_ITEM_JQ,
+  ], {maxBuffer: MAX_PROJECT_ITEM_OUTPUT_BYTES});
+  if (!firstItemsRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: firstItemsRead.reasonCodes};
+  const firstItem = normalizeProjectItemList(firstItemsRead.value, issueNumber);
+  if (!firstItem.ok) return {ok: false, status: 'BLOCKED', reasonCodes: firstItem.reasonCodes};
 
   const finalOpsRead = runJson(runner, 'gh', [
     'issue', 'view', String(OPS_ISSUE), '--repo', REPO,
@@ -434,12 +461,15 @@ function readEvidenceDefault(issueNumber, runner = defaultRunner) {
 
   const itemsRead = runJson(runner, 'gh', [
     'project', 'item-list', String(PROJECT_NUMBER), '--owner', PROJECT_OWNER,
-    '--format', 'json', '--limit', String(MAX_PROJECT_ITEMS),
-    '--jq', PROJECT_ITEM_JQ,
+    '--format', 'json', '--limit', String(MAX_PROJECT_QUERY_ITEMS),
+    '--query', itemQuery.value, '--jq', PROJECT_ITEM_JQ,
   ], {maxBuffer: MAX_PROJECT_ITEM_OUTPUT_BYTES});
   if (!itemsRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: itemsRead.reasonCodes};
   const item = normalizeProjectItemList(itemsRead.value, issueNumber);
   if (!item.ok) return {ok: false, status: 'BLOCKED', reasonCodes: item.reasonCodes};
+  if (digest(item.value) !== digest(firstItem.value)) {
+    return {ok: false, status: 'BLOCKED', reasonCodes: ['PROJECT_ITEM_CHANGED_DURING_BARRIER']};
+  }
 
   return {
     ok: true,
@@ -672,6 +702,7 @@ module.exports = {
   MAX_PROJECT_FIELDS,
   MAX_PROJECT_ITEM_OUTPUT_BYTES,
   MAX_PROJECT_ITEMS,
+  MAX_PROJECT_QUERY_ITEMS,
   MODE,
   PROJECT_ITEM_JQ,
   OPS_ISSUE,
@@ -696,6 +727,7 @@ module.exports = {
   parseCliArgs,
   parseOpsCapsule,
   planSnapshot,
+  projectItemQueryForIssue,
   readEvidenceDefault,
   sameItemFields,
   snapshotIdentity,

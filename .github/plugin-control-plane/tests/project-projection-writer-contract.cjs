@@ -41,6 +41,7 @@ function schemaRaw() {
   const field = (name, options) => ({
     id: `FIELD_${name.replace(/\s/g, '_')}`,
     name,
+    type: 'ProjectV2SingleSelectField',
     options: options.map((option) => ({id: `OPT_${option.replace(/\s/g, '_')}`, name: option})),
   });
   return {fields: [
@@ -209,6 +210,11 @@ assert.equal(schema.ok, true);
 const badSchema = schemaRaw();
 badSchema.fields.find((field) => field.name === 'Status').options.pop();
 assert.equal(writer.normalizeProjectSchema(badSchema).ok, false);
+const wrongTypeSchema = schemaRaw();
+wrongTypeSchema.fields.find((field) => field.name === 'Status').type = 'ProjectV2Field';
+const wrongTypeSchemaResult = writer.normalizeProjectSchema(wrongTypeSchema);
+assert.equal(wrongTypeSchemaResult.ok, false);
+assert.ok(wrongTypeSchemaResult.reasonCodes.includes('PROJECT_SCHEMA_FIELD_TYPE_MISMATCH'));
 const maxedSchema = schemaRaw();
 while (maxedSchema.fields.length < writer.MAX_PROJECT_FIELDS) {
   maxedSchema.fields.push({id: `EXTRA_${maxedSchema.fields.length}`, name: `Extra ${maxedSchema.fields.length}`, options: []});
@@ -465,12 +471,16 @@ assert.equal(writer.buildItemEditArgs(42, {key: 'status', field: 'Status', desir
   assert.equal(read.snapshot.item.presence.priority, false);
   assert.equal(calls.some((args) => args.includes('item-edit')), false);
   assert.equal(calls.some((args) => args.includes('item-add')), false);
-  const itemListCall = calls.find((args) => args[0] === 'gh' && args[1] === 'project' && args[2] === 'item-list');
-  assert.ok(itemListCall);
-  assert.ok(itemListCall.includes(String(writer.MAX_PROJECT_ITEMS)));
-  assert.ok(itemListCall.includes('--jq'));
-  assert.ok(itemListCall.includes(writer.PROJECT_ITEM_JQ));
-  assert.equal(itemListCall.includes('--field'), false);
+  const itemListCalls = calls.filter((args) => args[0] === 'gh' && args[1] === 'project' && args[2] === 'item-list');
+  assert.equal(itemListCalls.length, 2);
+  for (const itemListCall of itemListCalls) {
+    assert.ok(itemListCall.includes(String(writer.MAX_PROJECT_QUERY_ITEMS)));
+    assert.ok(itemListCall.includes('--query'));
+    assert.ok(itemListCall.includes('repo:hanmiyoo10-alt/- is:issue title:"[work] fixture"'));
+    assert.ok(itemListCall.includes('--jq'));
+    assert.ok(itemListCall.includes(writer.PROJECT_ITEM_JQ));
+    assert.equal(itemListCall.includes('--field'), false);
+  }
   assert.equal(itemListOptions.maxBuffer, writer.MAX_PROJECT_ITEM_OUTPUT_BYTES);
   const fieldListCall = calls.find((args) => args[0] === 'gh' && args[1] === 'project' && args[2] === 'field-list');
   assert.ok(fieldListCall);
@@ -516,10 +526,12 @@ function completeReadRunner({
   finalMain = HEAD,
   finalOpsBody = null,
   finalIssueBody = null,
+  finalItemFields = null,
 } = {}) {
   let apiReads = 0;
   let opsReads = 0;
   let issueReads = 0;
+  let itemReads = 0;
   const projectView = {
     id: writer.PROJECT_ID,
     title: writer.PROJECT_TITLE,
@@ -555,7 +567,9 @@ function completeReadRunner({
       }))};
     }
     if (command === 'gh' && args[0] === 'project' && args[1] === 'item-list') {
-      return {code: 0, stdout: JSON.stringify(itemListRaw([itemRaw()]))};
+      itemReads += 1;
+      const fields = itemReads === 1 || finalItemFields === null ? {} : finalItemFields;
+      return {code: 0, stdout: JSON.stringify(itemListRaw([itemRaw(42, fields)]))};
     }
     return {code: 1, stdout: ''};
   };
@@ -593,6 +607,15 @@ function completeReadRunner({
   assert.equal(read.ok, false);
   assert.equal(read.status, 'BLOCKED');
   assert.ok(read.reasonCodes.includes('MAIN_CHANGED_DURING_BARRIER'));
+}
+
+{
+  const read = writer.readEvidenceDefault(42, completeReadRunner({
+    finalItemFields: {area: 'Termux'},
+  }));
+  assert.equal(read.ok, false);
+  assert.equal(read.status, 'BLOCKED');
+  assert.ok(read.reasonCodes.includes('PROJECT_ITEM_CHANGED_DURING_BARRIER'));
 }
 
 const source = fs.readFileSync(path.resolve(__dirname, '../project-projection-writer.cjs'), 'utf8');

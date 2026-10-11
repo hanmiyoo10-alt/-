@@ -106,9 +106,43 @@ class WorkflowPathDepthTests(unittest.TestCase):
     def test_batch_shape_and_limit_fail_closed(self):
         self.assertEqual(check_batch({"schema": SCHEMA})["status"], "UNKNOWN")
         self.assertEqual(
+            check_batch({"schema": SCHEMA, "references": []})["status"],
+            "UNKNOWN",
+        )
+        self.assertEqual(
             check_batch({"schema": SCHEMA, "references": [self.t5()] * 65})["status"],
             "UNKNOWN",
         )
+
+    def test_cli_rejects_duplicate_keys_and_oversized_input(self):
+        duplicate = (
+            '{"schema":"termux-workflow-path-depth.v1",'
+            '"schema":"termux-workflow-path-depth.v1","references":[]}'
+        )
+        run = subprocess.run(
+            [sys.executable, str(TOOLS / "workflow_path_depth.py")],
+            input=duplicate,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(run.returncode, 2)
+        self.assertEqual(json.loads(run.stdout)["status"], "UNKNOWN")
+
+        with tempfile.NamedTemporaryFile("wb", delete=False) as handle:
+            handle.write(b" " * (64 * 1024 + 1))
+            target = Path(handle.name)
+        try:
+            run = subprocess.run(
+                [sys.executable, str(TOOLS / "workflow_path_depth.py"), str(target)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            target.unlink(missing_ok=True)
+        self.assertEqual(run.returncode, 2)
+        self.assertEqual(json.loads(run.stdout)["status"], "UNKNOWN")
 
     def test_cli_returns_deterministic_json_and_status(self):
         request = {"schema": SCHEMA, "references": [self.t5()]}

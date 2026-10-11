@@ -1,6 +1,6 @@
 # Termux Standalone Product Family
 
-Status: `T4_TASKBRIDGE_MIGRATED / NON_PRODUCTION`
+Status: `T5_LARGE_DOC_EDITOR_MIGRATED / NON_PRODUCTION`
 
 This root establishes the repository-level standalone Termux product-family identity selected by #2595 and authorized for T0 by #2801. It is an evidence and routing surface only.
 
@@ -17,19 +17,15 @@ This T0 landing is **not a production release**. It does not create or imply pro
 
 ## Current source compatibility
 
-T4 has moved Response Watch, Background GPT, Screen On, and TaskBridge to `products/standalone/termux/response-watch/**`, `products/standalone/termux/background-gpt/**`, `products/standalone/termux/screen-on/**`, and `products/standalone/termux/taskbridge/**` under `product:termux`.
+T5 has moved Response Watch, Background GPT, Screen On, TaskBridge, and Large Doc Editor under `products/standalone/termux/**` as `product:termux` source.
 
-The unmigrated children remain under `plugins/termux/**`:
-
-- `large-doc-editor/**`
-
-The existing `plugin:termux-large-doc-editor` owner continues to classify the current Large Doc Editor path. No compatibility copy remains at `plugins/termux/response-watch/**`, `plugins/termux/background-gpt/**`, `plugins/termux/screen-on/**`, or `plugins/termux/taskbridge/**`; those old paths stay intentionally unclassified/fail-closed.
+No unmigrated runnable child implementation remains under `plugins/termux/**`. The legacy `plugin:termux-large-doc-editor` owner is intentionally retained only as compatibility metadata until T6, with a compatibility/evidence README at `plugins/termux/large-doc-editor/README.md`. No compatibility copy remains for Response Watch, Background GPT, Screen On, or TaskBridge; those old paths stay intentionally unclassified/fail-closed.
 
 ## Staged migration
 
 Child relocation is separately staged under #2801:
 
-`T1 response-watch (complete) → T2 background-gpt (complete) → T3 screen-on (complete) → T4 taskbridge (complete) → T5 large-doc-editor → T6 legacy-route retirement review`
+`T1 response-watch (complete) → T2 background-gpt (complete) → T3 screen-on (complete) → T4 taskbridge (complete) → T5 large-doc-editor (complete) → T6 legacy-route retirement review`
 
 Each later stage requires its own fresh authority, impact, consumer, validation, and compatibility review. T0 authorizes no child physical move.
 

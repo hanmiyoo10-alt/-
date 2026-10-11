@@ -6,14 +6,14 @@ Date: 2026-08-29
 
 ## Goal
 
-Keep `plugins/termux/large-doc-editor` as an independent working feature while giving PocketRisu a narrow, authenticated server-side path to the same large-document capabilities.
+Keep `products/standalone/termux/large-doc-editor` as an independent working feature while giving PocketRisu a narrow, authenticated server-side path to the same large-document capabilities.
 
 The first PocketRisu integration is intentionally read-only. Editing/saving is a later phase after the session and conflict semantics are proven through the adapter.
 
 ## Confirmed source contract
 
 Original backend:
-- `plugins/termux/large-doc-editor/server.py`
+- `products/standalone/termux/large-doc-editor/server.py`
 - binds `127.0.0.1:8765`
 - configured workspace root
 - allowed suffixes `.txt`, `.md`, `.log`, `.json`

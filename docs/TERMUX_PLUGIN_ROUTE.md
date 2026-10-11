@@ -2,7 +2,7 @@
 
 Date: 2026-08-24
 Status: RESERVED · NON-RUNTIME · STAGED MIGRATION
-Scope: legacy/unmigrated child route `plugins/termux/`
+Scope: legacy compatibility route `plugins/termux/`
 
 ## Purpose
 
@@ -28,8 +28,8 @@ These repository documents are the durable project memory and take precedence ov
 ## Current state
 
 - Staged product-family migration is active under #2801.
-- `response-watch/`, `background-gpt/`, `screen-on/`, and `taskbridge/` have moved under `products/standalone/termux/` and are owned by the non-production `product:termux` family.
-- Current `main` still contains `large-doc-editor/` under the legacy `plugins/termux/` route.
+- `response-watch/`, `background-gpt/`, `screen-on/`, `taskbridge/`, and `large-doc-editor/` have moved under `products/standalone/termux/` and are owned by the non-production `product:termux` family.
+- The legacy `plugins/termux/` route now retains compatibility residue only until the separately reviewed T6 retirement stage; the Large Doc Editor old root retains only compatibility evidence, not runnable implementation.
 - These child implementations and evidence do not establish a route-wide Termux production release authority.
 - No `latest.js` or `install.js` is published yet.
 - No Termux production release branch, production manifest, or production version has been established yet; preserve these as `UNKNOWN` until repository evidence establishes them.

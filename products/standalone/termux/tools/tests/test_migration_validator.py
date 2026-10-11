@@ -352,14 +352,13 @@ class MigrationValidatorTests(unittest.TestCase):
 
         self.write("plugins/termux/demo/a.txt", "alpha\n")
         git(self.repo, "add", "-A")
-        git(
-            self.repo,
-            "update-index",
-            "--add",
-            "--cacheinfo",
-            "160000",
-            seed_one,
-            "vendor/lib",
+        subprocess.run(
+            ["git", "-C", str(self.repo), "update-index", "--add", "--index-info"],
+            input=f"160000 {seed_one}\tvendor/lib\n",
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
         )
         git(self.repo, "commit", "-m", "base with gitlink")
         base = git(self.repo, "rev-parse", "HEAD")
@@ -369,13 +368,13 @@ class MigrationValidatorTests(unittest.TestCase):
         new.parent.mkdir(parents=True, exist_ok=True)
         old.rename(new)
         git(self.repo, "add", "-A")
-        git(
-            self.repo,
-            "update-index",
-            "--cacheinfo",
-            "160000",
-            seed_two,
-            "vendor/lib",
+        subprocess.run(
+            ["git", "-C", str(self.repo), "update-index", "--add", "--index-info"],
+            input=f"160000 {seed_two}\tvendor/lib\n",
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
         )
         git(self.repo, "commit", "-m", "move plus gitlink update")
         head = git(self.repo, "rev-parse", "HEAD")

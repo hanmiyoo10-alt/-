@@ -73,7 +73,10 @@ Capture the exact reviewed source identity before interpreting results:
 - record an immutable digest or bounded diff identity for each such dirty reviewed/executed input, not only for the target file;
 - if dirty contributing inputs cannot be bounded and identified completely, preserve `UNKNOWN` rather than claiming `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`;
 - for a non-Git artifact, record the owner-defined immutable artifact digest or equivalent exact identity;
-- if the reviewed bytes cannot be attributed to an immutable identity, preserve `UNKNOWN` rather than claiming `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`.
+- if the reviewed bytes cannot be attributed to an immutable identity, preserve `UNKNOWN` rather than claiming `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`;
+- prefer reading and executing from an immutable snapshot when available;
+- when any contributing evidence comes from a mutable checkout/worktree, immediately before emitting the final receipt revalidate the commit/worktree state and every contributing source, helper, test, fixture, owner-contract, and executed-input identity recorded for the review;
+- if any contributing input changed during the review, stop with `UNKNOWN / REVIEW_INPUT_CHANGED_DURING_REVIEW`; never attribute observations to the earlier identity.
 
 Separate:
 
@@ -87,13 +90,14 @@ A previous PASS proves only the exact scope of that prior check.
 
 ### 3. Classify hardening-dimension applicability
 
-For every dimension below, record one of:
+For every dimension below, classify applicability **relative to the locked requested claim**, not merely to the validator as a whole. Record one of:
 
-- `APPLICABLE`;
-- `NOT_APPLICABLE_WITH_OWNER_BASIS`;
+- `APPLICABLE` — this dimension is material to proving the locked claim;
+- `OUT_OF_SCOPE_FOR_CLAIM_WITH_OWNER_BASIS` — the dimension may apply to the target generally, but current owner/contract evidence shows it is outside this locked claim and it must not be exercised merely to broaden the review;
+- `NOT_APPLICABLE_WITH_OWNER_BASIS` — current owner/contract evidence shows the dimension does not apply to the relevant target contract at all;
 - `UNKNOWN`.
 
-Do not mark a dimension not applicable merely because the current implementation does not test it. Cite the current owner/contract basis.
+Do not mark a dimension not applicable or out of scope merely because the current implementation does not test it. Cite the current owner/contract basis. A narrow claim must not expand into unrelated validator behavior just because another dimension applies to the target elsewhere.
 
 ### 4. Build the adversarial matrix
 
@@ -200,9 +204,10 @@ On a read-only surface that lacks execution capability:
 When a separately authorized execution-capable surface exists:
 
 - direct target execution additionally requires an owner-provided sandbox or equivalent proven effect containment for writes outside the workspace, subprocesses, network access, credentials, devices, and other external state the target could reach;
-- a temporary directory alone is not effect containment;
-- if that containment is unavailable, keep direct target execution static-only or limit execution to existing owner tests whose effect boundary is already explicitly established and permitted by the current owner;
-- execute focused deterministic cases only inside that proven containment plus an isolated temporary workspace/copy or an existing owner-provided temporary harness;
+- direct adversarial execution also requires bounded host-resource containment appropriate to the target: an outer wall-clock timeout plus CPU time, memory, process/thread count, filesystem growth, and output limits where the host/harness can expose them;
+- a temporary directory alone is neither effect containment nor host-resource containment;
+- if either required containment class is unavailable, keep direct target execution static-only or limit execution to existing owner tests whose effect and resource boundaries are already explicitly established and permitted by the current owner;
+- execute focused deterministic cases only inside that proven effect/resource containment plus an isolated temporary workspace/copy or an existing owner-provided temporary harness;
 - never edit the repository checkout under review merely to create review cases;
 - preserve the exact source/input identities used by that isolated execution;
 - for every exercised case, record the bounded execution-surface identity: operating system/filesystem semantics when relevant, interpreter/parser/runtime version, Git and other material tool versions, working directory, sandbox/containment identity, and relevant sanitized environment/config overrides;
@@ -237,6 +242,14 @@ A review disposition does not rewrite the target validator's own result.
 
 When an adversarial case exposes a target defect, describe it as a `PROVEN_GAP` only when current evidence demonstrates the violated contract. Otherwise preserve `UNKNOWN` or `PARTIAL`.
 
+When CI, Required, or another remote validation result contributes to the requested claim, bind it to immutable provenance before using it:
+
+- record the exact run/check/job identity and attempt when relevant;
+- record the exact tested source/head SHA and conclusion;
+- preserve an immutable or stable result locator;
+- verify that the tested identity matches the reviewed source identity or the owning contract's explicitly allowed relation;
+- stale, mismatched, or unattributable remote validation evidence remains `UNKNOWN` or `CONFLICT`; never reuse it as current proof.
+
 ### 7. Emit a bounded review receipt
 
 Report:
@@ -253,7 +266,8 @@ applicability by dimension A-G
 cases actually exercised
 owner tests / commands actually used
 execution surface/runtime/toolchain identity for each exercised case, or NOT_APPLICABLE when no execution occurred
-relevant sanitized environment/config identity and sandbox/containment identity for exercised cases
+relevant sanitized environment/config identity and effect/resource containment identity for exercised cases
+external validation evidence used, if any: exact run/check/job identity, tested source/head SHA, conclusion, attempt when relevant, and immutable result locator
 observations with source/evidence basis
 PROVEN_GAP findings, if any
 UNKNOWN / unresolved gaps and reason codes
@@ -267,6 +281,6 @@ Keep the receipt bounded. Point to larger logs or artifacts instead of embedding
 
 ## Completion criterion
 
-The skill is complete for one review only when current owner evidence has been read, the reviewed bytes have an exact immutable source identity, worktree dirtiness is explicit, applicability for all seven dimensions is explicit, exercised cases and unresolved gaps are separated, every exercised case has bounded runtime/toolchain/environment and effect-containment identity, uncertainty has not been normalized away, and the final receipt states what it does and does not prove.
+The skill is complete for one review only when current owner evidence has been read, the reviewed bytes have an exact immutable source identity or have passed the final mutable-input revalidation barrier, worktree dirtiness is explicit, applicability for all seven dimensions is explicit relative to the locked requested claim, exercised cases and unresolved gaps are separated, every exercised case has bounded runtime/toolchain/environment plus effect/resource-containment identity, every external validation result used has immutable run/head/conclusion provenance, uncertainty has not been normalized away, and the final receipt states what it does and does not prove.
 
 A clean review never certifies every future input or implementation as secure or correct.

@@ -48,6 +48,8 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "current owning project/domain guideline or contract",
             "target validator/classifier source and current tests",
             "REVIEW_BLOCKED_UNKNOWN_OWNER",
+            "OUT_OF_SCOPE_FOR_CLAIM_WITH_OWNER_BASIS",
+            "relative to the locked requested claim",
         ):
             self.assertIn(required, self.text)
 
@@ -160,6 +162,15 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
     def test_no_frozen_commit_sha_in_skill(self):
         self.assertIsNone(re.search(r"\b[0-9a-f]{40}\b", self.text))
 
+    def test_mutable_inputs_are_revalidated_before_receipt(self):
+        for required in (
+            "prefer reading and executing from an immutable snapshot",
+            "immediately before emitting the final receipt revalidate",
+            "every contributing source, helper, test, fixture, owner-contract, and executed-input identity",
+            "UNKNOWN / REVIEW_INPUT_CHANGED_DURING_REVIEW",
+        ):
+            self.assertIn(required, self.text)
+
     def test_review_receipt_requires_exact_source_identity(self):
         for required in (
             "exact commit object ID",
@@ -253,7 +264,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
     def test_executed_cases_require_runtime_identity_and_effect_containment(self):
         for required in (
             "owner-provided sandbox or equivalent proven effect containment",
-            "a temporary directory alone is not effect containment",
+            "a temporary directory alone is neither effect containment nor host-resource containment",
             "writes outside the workspace, subprocesses, network access, credentials, devices",
             "operating system/filesystem semantics when relevant",
             "interpreter/parser/runtime version",
@@ -261,6 +272,29 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "sandbox/containment identity",
             "do not claim `HARDENING_REVIEW_COMPLETE` from that execution",
             "execution surface/runtime/toolchain identity for each exercised case",
+            "bounded host-resource containment",
+            "outer wall-clock timeout plus CPU time, memory, process/thread count, filesystem growth, and output limits",
+            "effect/resource containment identity for exercised cases",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_external_validation_requires_immutable_provenance(self):
+        for required in (
+            "exact run/check/job identity",
+            "exact tested source/head SHA and conclusion",
+            "immutable or stable result locator",
+            "tested identity matches the reviewed source identity",
+            "stale, mismatched, or unattributable remote validation evidence",
+            "external validation evidence used, if any",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_dimension_applicability_is_claim_scoped(self):
+        for required in (
+            "relative to the locked requested claim",
+            "OUT_OF_SCOPE_FOR_CLAIM_WITH_OWNER_BASIS",
+            "must not be exercised merely to broaden the review",
+            "A narrow claim must not expand into unrelated validator behavior",
         ):
             self.assertIn(required, self.text)
 

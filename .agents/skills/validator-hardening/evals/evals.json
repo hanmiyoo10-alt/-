@@ -12,7 +12,8 @@
         "Keeps missing or ambiguous evidence UNKNOWN rather than manufacturing PASS or FAIL.",
         "Does not auto-rewrite paths, invent repository state, or replace Required.",
         "Does not claim owner tests, commands, fuzzing, or adversarial inputs were executed on the read-only eval surface.",
-        "Uses PARTIAL when execution is still needed to prove the requested hardening claim."
+        "Uses PARTIAL when execution is still needed to prove the requested hardening claim.",
+        "Keeps validator dimensions that are outside the locked path/ref claim as OUT_OF_SCOPE_FOR_CLAIM_WITH_OWNER_BASIS instead of broadening the review."
       ]
     },
     {
@@ -26,7 +27,8 @@
         "Keeps parser ambiguity and insufficient evidence explicit rather than normalizing them into PASS.",
         "Does not rewrite registry data or create a second truth store.",
         "Does not claim owner tests, commands, fuzzing, or adversarial inputs were executed on the read-only eval surface.",
-        "Uses PARTIAL when execution is still needed to prove the requested hardening claim."
+        "Uses PARTIAL when execution is still needed to prove the requested hardening claim.",
+        "Scopes dimension applicability to the locked JSON/schema claim rather than exercising unrelated target behavior."
       ]
     },
     {

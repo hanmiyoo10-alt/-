@@ -469,7 +469,7 @@ def main(argv: list[str] | None = None) -> int:
                 object_pairs_hook=_reject_duplicate_keys,
             )
             output = classify(request)
-        except (json.JSONDecodeError, ValidationUnknown) as exc:
+        except (ValueError, RecursionError, ValidationUnknown) as exc:
             output = {
                 "schema": SCHEMA,
                 "status": "UNKNOWN",

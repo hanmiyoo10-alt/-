@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -13,6 +14,7 @@ from typing import Any
 
 
 SCHEMA = "termux-migration-plan.v1"
+OID_RE = re.compile(r"^[0-9a-fA-F]{40,64}$")
 PARENT_DEPTH_RE = re.compile(r"Path\(__file__\)\.resolve\(\)\.parents\[(\d+)\]")
 UPWARD_CHAIN_RE = re.compile(r"(?:\.\./){2,}")
 
@@ -21,10 +23,20 @@ class ValidationUnknown(RuntimeError):
     pass
 
 
+def _decode_utf8(payload: bytes, context: str) -> str:
+    try:
+        return payload.decode("utf-8", "strict")
+    except UnicodeDecodeError as exc:
+        raise ValidationUnknown(f"{context}: non-UTF-8 evidence") from exc
+
+
 def _norm_repo_path(value: str, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValidationUnknown(f"{field}: expected non-empty repository-relative path")
-    raw = value.replace("\\", "/").strip("/")
+    normalized = value.replace("\\", "/").strip()
+    if normalized.startswith("/"):
+        raise ValidationUnknown(f"{field}: absolute paths are not allowed: {value!r}")
+    raw = normalized.strip("/")
     p = PurePosixPath(raw)
     if p.is_absolute() or ".." in p.parts or "." in p.parts or not p.parts:
         raise ValidationUnknown(f"{field}: invalid repository-relative path: {value!r}")
@@ -85,52 +97,140 @@ def _validate_plan(raw: Any) -> dict[str, Any]:
 
 
 def _git(repo: Path, *args: str, text: bool = True) -> str | bytes:
+    env = os.environ.copy()
+    env["GIT_NO_LAZY_FETCH"] = "1"
+    env["GIT_TERMINAL_PROMPT"] = "0"
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=env,
         check=False,
     )
     if proc.returncode != 0:
         err = proc.stderr.decode("utf-8", "replace").strip()
         raise ValidationUnknown(f"git {' '.join(args)} failed: {err or 'unknown error'}")
     if text:
-        return proc.stdout.decode("utf-8", "strict")
+        return _decode_utf8(proc.stdout, f"git {' '.join(args)} output")
     return proc.stdout
 
 
-def _zlist(payload: bytes) -> list[str]:
-    return [x.decode("utf-8", "strict") for x in payload.split(b"\0") if x]
+def _resolve_commit(repo: Path, ref: str, field: str) -> str:
+    if not isinstance(ref, str) or not ref.strip():
+        raise ValidationUnknown(f"{field}: expected non-empty Git ref")
+    ref = ref.strip()
+    if ref.startswith("-") or "\x00" in ref:
+        raise ValidationUnknown(f"{field}: unsafe Git ref")
+    oid = str(
+        _git(
+            repo,
+            "rev-parse",
+            "--verify",
+            "--end-of-options",
+            f"{ref}^{{commit}}",
+        )
+    ).strip()
+    if not OID_RE.fullmatch(oid):
+        raise ValidationUnknown(f"{field}: Git did not resolve a commit object ID")
+    return oid.lower()
 
 
-def _changed_files(repo: Path, base: str, head: str) -> list[str]:
-    return sorted(_zlist(_git(repo, "diff", "--find-renames=20%", "--name-only", "-z", base, head, "--", text=False)))
+def _zlist(payload: bytes, context: str) -> list[str]:
+    values = []
+    for item in payload.split(b"\0"):
+        if item:
+            values.append(_decode_utf8(item, context))
+    return values
 
 
-def _tree_files(repo: Path, ref: str, root: str) -> list[str]:
-    out = _zlist(_git(repo, "ls-tree", "-r", "--name-only", "-z", ref, "--", root, text=False))
+def _diff_changes(repo: Path, base_oid: str, head_oid: str) -> list[dict[str, Any]]:
+    tokens = _zlist(
+        _git(
+            repo,
+            "diff",
+            "--find-renames=20%",
+            "--name-status",
+            "-z",
+            base_oid,
+            head_oid,
+            "--",
+            text=False,
+        ),
+        "git diff path",
+    )
+    changes: list[dict[str, Any]] = []
+    index = 0
+    while index < len(tokens):
+        status = tokens[index]
+        index += 1
+        if not status or status[0] not in "ACDMRTUXB":
+            raise ValidationUnknown(f"git diff: unsupported status record {status!r}")
+        path_count = 2 if status[0] in {"R", "C"} else 1
+        if index + path_count > len(tokens):
+            raise ValidationUnknown("git diff: truncated name-status record")
+        paths = tokens[index : index + path_count]
+        index += path_count
+        changes.append(
+            {"status": status, "paths": paths, "logical_path": paths[-1]}
+        )
+    return changes
+
+
+def _tree_files(repo: Path, ref_oid: str, root: str) -> list[str]:
+    out = _zlist(
+        _git(
+            repo,
+            "ls-tree",
+            "-r",
+            "--name-only",
+            "-z",
+            ref_oid,
+            "--",
+            root,
+            text=False,
+        ),
+        "git ls-tree path",
+    )
     prefix = root.rstrip("/") + "/"
     rel = []
     for path in out:
         if path == root:
             rel.append(PurePosixPath(path).name)
         elif path.startswith(prefix):
-            rel.append(path[len(prefix):])
+            rel.append(path[len(prefix) :])
     return sorted(rel)
 
 
-def _blob(repo: Path, ref: str, path: str) -> str:
-    return str(_git(repo, "rev-parse", f"{ref}:{path}")).strip()
-
-
-def _show_text(repo: Path, ref: str, path: str) -> str | None:
+def _tree_entry(repo: Path, ref_oid: str, path: str) -> dict[str, str]:
+    raw = _git(repo, "ls-tree", "-z", ref_oid, "--", path, text=False)
+    records = [record for record in raw.split(b"\0") if record]
+    if len(records) != 1:
+        raise ValidationUnknown(f"tree entry unavailable or ambiguous: {path}")
     try:
-        data = _git(repo, "show", f"{ref}:{path}", text=False)
+        meta, raw_name = records[0].split(b"\t", 1)
+        mode, object_type, oid = _decode_utf8(
+            meta, "git ls-tree metadata"
+        ).split(" ", 2)
+    except ValueError as exc:
+        raise ValidationUnknown(f"malformed tree entry: {path}") from exc
+    name = _decode_utf8(raw_name, "git ls-tree path")
+    if name != path or not OID_RE.fullmatch(oid):
+        raise ValidationUnknown(f"unexpected tree entry identity: {path}")
+    return {"mode": mode, "type": object_type, "oid": oid.lower()}
+
+
+def _show_text(
+    repo: Path, ref_oid: str, path: str, *, required: bool
+) -> str | None:
+    try:
+        entry = _tree_entry(repo, ref_oid, path)
+        if entry["type"] != "blob":
+            raise ValidationUnknown(f"scan path is not a blob: {path}")
+        data = _git(repo, "cat-file", "blob", entry["oid"], text=False)
+        return _decode_utf8(data, f"scan path {path}")
     except ValidationUnknown:
-        return None
-    try:
-        return data.decode("utf-8", "strict")
-    except UnicodeDecodeError:
+        if required:
+            raise
         return None
 
 
@@ -147,34 +247,50 @@ def _finding(kind: str, disposition: str, **extra: Any) -> dict[str, Any]:
 
 def validate(repo: Path, base: str, head: str, plan: dict[str, Any]) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
-    changed = _changed_files(repo, base, head)
+    base_oid = _resolve_commit(repo, base, "base_ref")
+    head_oid = _resolve_commit(repo, head, "head_ref")
+    changes = _diff_changes(repo, base_oid, head_oid)
+    changed = sorted(change["logical_path"] for change in changes)
+    changed_endpoints = sorted(
+        {path for change in changes for path in change["paths"]}
+    )
     authorized = plan["authorized_paths"]
 
-    unexpected = [p for p in changed if not any(_scope_contains(s, p) for s in authorized)]
+    unexpected = [
+        path
+        for path in changed_endpoints
+        if not any(_scope_contains(scope, path) for scope in authorized)
+    ]
     if unexpected:
         findings.append(
-            _finding("CHANGED_PATH_OUTSIDE_AUTHORIZED_SCOPE", "FAIL", paths=unexpected)
+            _finding(
+                "CHANGED_PATH_OUTSIDE_AUTHORIZED_SCOPE",
+                "FAIL",
+                paths=unexpected,
+            )
         )
 
-    if len(changed) != plan["expected_changed_file_count"]:
+    if len(changes) != plan["expected_changed_file_count"]:
         findings.append(
             _finding(
                 "CHANGED_FILE_COUNT_MISMATCH",
                 "FAIL",
                 expected=plan["expected_changed_file_count"],
-                actual=len(changed),
+                actual=len(changes),
             )
         )
 
     old_root = plan["old_root"]
     new_root = plan["new_root"]
-    base_inventory = _tree_files(repo, base, old_root)
-    new_inventory = _tree_files(repo, head, new_root)
+    base_inventory = _tree_files(repo, base_oid, old_root)
+    new_inventory = _tree_files(repo, head_oid, new_root)
     allowed_old = sorted(plan["allowed_old_root_relpaths"])
-    head_old_inventory = _tree_files(repo, head, old_root)
+    head_old_inventory = _tree_files(repo, head_oid, old_root)
 
     if not base_inventory:
-        findings.append(_finding("BASE_OLD_ROOT_EMPTY_OR_MISSING", "FAIL", root=old_root))
+        findings.append(
+            _finding("BASE_OLD_ROOT_EMPTY_OR_MISSING", "FAIL", root=old_root)
+        )
     if base_inventory != new_inventory:
         findings.append(
             _finding(
@@ -198,45 +314,77 @@ def validate(repo: Path, base: str, head: str, plan: dict[str, Any]) -> dict[str
     unknown_edits = sorted(edits - set(base_inventory))
     if unknown_edits:
         findings.append(
-            _finding("CONTENT_EDIT_REL_PATH_NOT_IN_BASE_INVENTORY", "FAIL", paths=unknown_edits)
+            _finding(
+                "CONTENT_EDIT_REL_PATH_NOT_IN_BASE_INVENTORY",
+                "FAIL",
+                paths=unknown_edits,
+            )
         )
 
     parity_mismatches = []
+    mode_mismatches = []
     for rel in base_inventory:
-        if rel in edits:
-            continue
         old_path = f"{old_root}/{rel}"
         new_path = f"{new_root}/{rel}"
         try:
-            old_sha = _blob(repo, base, old_path)
-            new_sha = _blob(repo, head, new_path)
+            old_entry = _tree_entry(repo, base_oid, old_path)
+            new_entry = _tree_entry(repo, head_oid, new_path)
         except ValidationUnknown as exc:
             parity_mismatches.append({"path": rel, "error": str(exc)})
             continue
-        if old_sha != new_sha:
-            parity_mismatches.append({"path": rel, "base": old_sha, "head": new_sha})
+        if (old_entry["mode"], old_entry["type"]) != (
+            new_entry["mode"],
+            new_entry["type"],
+        ):
+            mode_mismatches.append(
+                {"path": rel, "base": old_entry, "head": new_entry}
+            )
+        if rel not in edits and old_entry["oid"] != new_entry["oid"]:
+            parity_mismatches.append(
+                {
+                    "path": rel,
+                    "base": old_entry["oid"],
+                    "head": new_entry["oid"],
+                }
+            )
+    if mode_mismatches:
+        findings.append(
+            _finding(
+                "TREE_MODE_OR_TYPE_MISMATCH",
+                "FAIL",
+                files=mode_mismatches,
+            )
+        )
     if parity_mismatches:
         findings.append(
             _finding("BYTE_PARITY_MISMATCH", "FAIL", files=parity_mismatches)
         )
 
+    explicit_scan_paths = bool(plan["scan_paths"])
     scan_paths = plan["scan_paths"]
     if not scan_paths:
         scan_paths = sorted(
             {
-                p
-                for p in changed
-                if p.startswith(new_root + "/")
-                or p.startswith(".github/workflows/")
-                or p.endswith(".py")
-                or p.endswith(".sh")
+                path
+                for path in changed_endpoints
+                if path.startswith(new_root + "/")
+                or path.startswith(".github/workflows/")
+                or path.endswith(".py")
+                or path.endswith(".sh")
             }
         )
 
-    depth_delta = len(PurePosixPath(new_root).parts) - len(PurePosixPath(old_root).parts)
+    depth_delta = len(PurePosixPath(new_root).parts) - len(
+        PurePosixPath(old_root).parts
+    )
     allow_old_refs = set(plan["allow_old_root_reference_paths"])
     for path in scan_paths:
-        text = _show_text(repo, head, path)
+        text = _show_text(
+            repo,
+            head_oid,
+            path,
+            required=explicit_scan_paths,
+        )
         if text is None:
             continue
         for lineno, line in enumerate(text.splitlines(), 1):
@@ -287,10 +435,14 @@ def validate(repo: Path, base: str, head: str, plan: dict[str, Any]) -> dict[str
         "status": status,
         "base_ref": base,
         "head_ref": head,
+        "base_oid": base_oid,
+        "head_oid": head_oid,
         "old_root": old_root,
         "new_root": new_root,
-        "changed_file_count": len(changed),
+        "changed_file_count": len(changes),
         "changed_files": changed,
+        "changed_path_endpoints": changed_endpoints,
+        "changes": changes,
         "base_old_inventory": base_inventory,
         "head_new_inventory": new_inventory,
         "head_old_inventory": head_old_inventory,
@@ -308,7 +460,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--repo-root", default=".", help="local Git checkout root")
     p.add_argument("--base-ref", required=True)
     p.add_argument("--head-ref", required=True)
-    p.add_argument("--plan", required=True, help="termux-migration-plan.v1 JSON file")
+    p.add_argument(
+        "--plan",
+        required=True,
+        help="termux-migration-plan.v1 JSON file",
+    )
     return p.parse_args(argv)
 
 
@@ -322,7 +478,12 @@ def main(argv: list[str] | None = None) -> int:
         result = validate(repo, args.base_ref, args.head_ref, plan)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 1 if result["status"] == "FAIL" else 0
-    except (OSError, json.JSONDecodeError, ValidationUnknown) as exc:
+    except (
+        OSError,
+        ValueError,
+        json.JSONDecodeError,
+        ValidationUnknown,
+    ) as exc:
         result = {
             "schema": "termux-migration-validation.v1",
             "status": "UNKNOWN",

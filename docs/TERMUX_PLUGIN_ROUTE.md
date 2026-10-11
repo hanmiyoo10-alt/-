@@ -1,8 +1,8 @@
 # Termux Plugin Route
 
 Date: 2026-08-24
-Status: RESERVED · NON-RUNTIME
-Scope: `plugins/termux/`
+Status: RESERVED · NON-RUNTIME · STAGED MIGRATION
+Scope: legacy/unmigrated child route `plugins/termux/`
 
 ## Purpose
 
@@ -27,7 +27,9 @@ These repository documents are the durable project memory and take precedence ov
 
 ## Current state
 
-- The route is no longer empty. Current `main` contains `background-gpt/`, `large-doc-editor/`, `response-watch/`, `taskbridge/`, and `screen-on/` child roots under `plugins/termux/`.
+- Staged product-family migration is active under #2801.
+- `response-watch/` has moved to `products/standalone/termux/response-watch/` under the non-production `product:termux` family owner.
+- Current `main` still contains `background-gpt/`, `large-doc-editor/`, `taskbridge/`, and `screen-on/` under the legacy `plugins/termux/` route.
 - These child implementations and evidence do not establish a route-wide Termux production release authority.
 - No `latest.js` or `install.js` is published yet.
 - No Termux production release branch, production manifest, or production version has been established yet; preserve these as `UNKNOWN` until repository evidence establishes them.

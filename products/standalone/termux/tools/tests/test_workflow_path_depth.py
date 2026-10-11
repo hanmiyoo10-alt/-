@@ -5,11 +5,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 TOOLS = Path(__file__).resolve().parents[1]
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
+import workflow_path_depth as wpd
 from workflow_path_depth import SCHEMA, check_batch
 
 
@@ -298,6 +300,18 @@ class WorkflowPathDepthTests(unittest.TestCase):
             "device_authorized",
         ):
             self.assertFalse(first[field])
+
+    def test_batch_caches_repeated_git_tree_reads(self):
+        references = [self.t5()] * 64
+        with mock.patch.object(wpd, "_git", wraps=wpd._git) as git_call:
+            out = self.batch(references)
+        ls_tree_calls = [
+            call
+            for call in git_call.call_args_list
+            if len(call.args) > 1 and call.args[1] == "ls-tree"
+        ]
+        self.assertEqual(out["status"], "PASS")
+        self.assertLess(len(ls_tree_calls), 20)
 
     def test_batch_shape_ref_and_limit_fail_closed(self):
         self.assertEqual(check_batch({"schema": SCHEMA})["status"], "UNKNOWN")

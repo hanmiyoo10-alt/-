@@ -269,7 +269,16 @@ def _relative_to_target(working_dir: str, target: str) -> str:
     return _relative_ref(relative, "expected_new_reference")
 
 
-def _tree_entry(repo: Path, commit_oid: str, path: str) -> dict[str, str]:
+def _tree_entry(
+    repo: Path,
+    commit_oid: str,
+    path: str,
+    cache: dict[tuple[str, str], dict[str, str]],
+) -> dict[str, str]:
+    key = (commit_oid, path)
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
     raw = _git(repo, "ls-tree", "-z", commit_oid, "--", path)
     records = [record for record in raw.split(b"\0") if record]
     if len(records) != 1:
@@ -284,11 +293,13 @@ def _tree_entry(repo: Path, commit_oid: str, path: str) -> dict[str, str]:
     name = _decode_utf8(raw_name, "git ls-tree path")
     if name != path or not OID_RE.fullmatch(oid):
         raise ValidationUnknown(f"unexpected tree entry identity: {path}")
-    return {
+    entry = {
         "mode": mode,
         "type": object_type,
         "oid": oid.lower(),
     }
+    cache[key] = entry
+    return entry
 
 
 def _verify_directory_prefixes(
@@ -296,12 +307,13 @@ def _verify_directory_prefixes(
     commit_oid: str,
     directory: str,
     field: str,
+    cache: dict[tuple[str, str], dict[str, str]],
 ) -> None:
     current: list[str] = []
     for part in PurePosixPath(directory).parts:
         current.append(part)
         path = "/".join(current)
-        entry = _tree_entry(repo, commit_oid, path)
+        entry = _tree_entry(repo, commit_oid, path, cache)
         if entry["mode"] != "040000" or entry["type"] != "tree":
             raise ValidationUnknown(f"{field}: symlink or non-tree component: {path}")
 
@@ -311,6 +323,7 @@ def _verify_regular_target(
     commit_oid: str,
     target: str,
     field: str,
+    cache: dict[tuple[str, str], dict[str, str]],
 ) -> dict[str, str]:
     parts = PurePosixPath(target).parts
     if not parts or any(part in {"", ".", ".."} for part in parts):
@@ -319,10 +332,10 @@ def _verify_regular_target(
     for part in parts[:-1]:
         current.append(part)
         path = "/".join(current)
-        entry = _tree_entry(repo, commit_oid, path)
+        entry = _tree_entry(repo, commit_oid, path, cache)
         if entry["mode"] != "040000" or entry["type"] != "tree":
             raise ValidationUnknown(f"{field}: symlink or non-tree target component: {path}")
-    final = _tree_entry(repo, commit_oid, target)
+    final = _tree_entry(repo, commit_oid, target, cache)
     if final["type"] != "blob" or final["mode"] not in REGULAR_BLOB_MODES:
         raise ValidationUnknown(f"{field}: target is not a regular file")
     return final
@@ -334,6 +347,7 @@ def check_reference(
     old_oid: str | None = None,
     new_oid: str | None = None,
     name_max: int | None = None,
+    tree_cache: dict[tuple[str, str], dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     try:
         if not isinstance(item, dict) or set(item) != {
@@ -345,6 +359,8 @@ def check_reference(
             raise ValidationUnknown("request shape invalid")
         if repo is None or old_oid is None or new_oid is None or name_max is None:
             raise ValidationUnknown("authenticated Git evidence required")
+        if tree_cache is None:
+            tree_cache = {}
 
         old_dir = _repo_dir(item["old_working_dir"], "old_working_dir")
         new_dir = _repo_dir(item["new_working_dir"], "new_working_dir")
@@ -364,8 +380,12 @@ def check_reference(
             new_ref.split("/"), name_max, "candidate_new_reference"
         )
 
-        _verify_directory_prefixes(repo, old_oid, old_dir, "old_working_dir")
-        _verify_directory_prefixes(repo, new_oid, new_dir, "new_working_dir")
+        _verify_directory_prefixes(
+            repo, old_oid, old_dir, "old_working_dir", tree_cache
+        )
+        _verify_directory_prefixes(
+            repo, new_oid, new_dir, "new_working_dir", tree_cache
+        )
 
         target = _resolve_repo_target(old_dir, old_ref)
         expected = _relative_to_target(new_dir, target)
@@ -375,10 +395,10 @@ def check_reference(
         candidate_target = _resolve_repo_target(new_dir, new_ref)
 
         old_target_entry = _verify_regular_target(
-            repo, old_oid, target, "old_target"
+            repo, old_oid, target, "old_target", tree_cache
         )
         new_target_entry = _verify_regular_target(
-            repo, new_oid, target, "new_target"
+            repo, new_oid, target, "new_target", tree_cache
         )
 
         status = (
@@ -461,8 +481,16 @@ def check_batch(request: Any) -> dict[str, Any]:
             **_authority_denials(),
         }
 
+    tree_cache: dict[tuple[str, str], dict[str, str]] = {}
     results = [
-        check_reference(item, repo, old_oid, new_oid, name_max)
+        check_reference(
+            item,
+            repo,
+            old_oid,
+            new_oid,
+            name_max,
+            tree_cache,
+        )
         for item in request["references"]
     ]
     order = {"UNKNOWN": 2, "FAIL": 1, "PASS": 0}

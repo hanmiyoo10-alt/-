@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from registry import DOMAIN_REGISTRY_PATH, load_domain_registry
+from registry import DOMAIN_REGISTRY_PATH, load_domain_registry, registry_sha256
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 FROZEN_FIXTURE_ROOT = PACKAGE_ROOT / "tests" / "fixtures"
@@ -28,6 +28,8 @@ def _result(
     reference: dict[str, str] | None = None,
     live_scope_present: bool = False,
     live_match: bool = False,
+    live_registry_sha256: str | None = None,
+    frozen_registries: tuple[dict[str, Any], ...] = (),
     frozen_scope_fixtures: tuple[str, ...] = (),
     frozen_match_fixtures: tuple[str, ...] = (),
 ) -> dict[str, Any]:
@@ -39,10 +41,12 @@ def _result(
         "reference": reference,
         "live": {
             "registry": "domains/registry.json",
+            "registry_sha256": live_registry_sha256,
             "scope_present": live_scope_present,
             "match": live_match,
         },
         "frozen": {
+            "registries": list(frozen_registries),
             "scope_present_fixtures": list(frozen_scope_fixtures),
             "match_fixtures": list(frozen_match_fixtures),
         },
@@ -67,7 +71,7 @@ def _validate_request(request: Any) -> tuple[str, dict[str, str], list[str]] | N
         "frozen_registry_paths",
     }:
         return None
-    if request["schema_version"] != 1:
+    if type(request["schema_version"]) is not int or request["schema_version"] != 1:
         return None
     scope = request["scope"]
     if not isinstance(scope, str) or not scope.strip() or len(scope) > 160:
@@ -76,6 +80,8 @@ def _validate_request(request: Any) -> tuple[str, dict[str, str], list[str]] | N
     if not isinstance(reference, dict):
         return None
     field = reference.get("field")
+    if not isinstance(field, str):
+        return None
     if field in {"primary_path", "guidelines_path"}:
         if set(reference) != {"field", "value"}:
             return None
@@ -143,20 +149,27 @@ def classify_reference(request: Any) -> dict[str, Any]:
 
     try:
         live_registry = load_domain_registry(DOMAIN_REGISTRY_PATH)
+        live_registry_digest = registry_sha256(live_registry)
         live_domain = _domain_for_scope(live_registry, scope)
     except Exception:
         return _unknown("LIVE_REGISTRY_INVALID")
 
-    frozen_rows: list[tuple[str, dict[str, Any] | None]] = []
+    frozen_by_locator: dict[str, tuple[str, dict[str, Any] | None]] = {}
     try:
         for raw_path in frozen_paths:
             locator, registry = _load_frozen_fixture(raw_path)
-            frozen_rows.append((locator, _domain_for_scope(registry, scope)))
-        frozen_rows.sort(key=lambda row: row[0])
+            frozen_by_locator[locator] = (
+                registry_sha256(registry),
+                _domain_for_scope(registry, scope),
+            )
     except Exception:
         return _unknown("FROZEN_FIXTURE_INVALID")
+    frozen_rows = [
+        (locator, digest, domain)
+        for locator, (digest, domain) in sorted(frozen_by_locator.items())
+    ]
 
-    present_domains = [domain for _, domain in frozen_rows if domain is not None]
+    present_domains = [domain for _, _, domain in frozen_rows if domain is not None]
     domain_ids = {domain["domain_id"] for domain in present_domains}
     if live_domain is not None:
         domain_ids.add(live_domain["domain_id"])
@@ -165,12 +178,20 @@ def classify_reference(request: Any) -> dict[str, Any]:
 
     live_scope_present = live_domain is not None
     live_match = bool(live_domain and _reference_matches(live_domain, reference))
-    frozen_scope_fixtures = tuple(locator for locator, domain in frozen_rows if domain is not None)
+    frozen_scope_fixtures = tuple(
+        locator for locator, _, domain in frozen_rows if domain is not None
+    )
     frozen_match_fixtures = tuple(
         locator
-        for locator, domain in frozen_rows
+        for locator, _, domain in frozen_rows
         if domain is not None and _reference_matches(domain, reference)
     )
+    frozen_registry_rows = tuple({
+        "registry": locator,
+        "registry_sha256": digest,
+        "scope_present": domain is not None,
+        "match": bool(domain and _reference_matches(domain, reference)),
+    } for locator, digest, domain in frozen_rows)
 
     if not live_scope_present and not frozen_scope_fixtures:
         return _result(
@@ -178,6 +199,8 @@ def classify_reference(request: Any) -> dict[str, Any]:
             "SCOPE_NOT_FOUND",
             scope=scope,
             reference=reference,
+            live_registry_sha256=live_registry_digest,
+            frozen_registries=frozen_registry_rows,
         )
     if live_match and frozen_match_fixtures:
         disposition = "LIVE_AND_FROZEN"
@@ -193,6 +216,8 @@ def classify_reference(request: Any) -> dict[str, Any]:
         disposition,
         scope=scope,
         reference=reference,
+        live_registry_sha256=live_registry_digest,
+        frozen_registries=frozen_registry_rows,
         live_scope_present=live_scope_present,
         live_match=live_match,
         frozen_scope_fixtures=frozen_scope_fixtures,

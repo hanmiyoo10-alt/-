@@ -316,9 +316,9 @@ class MigrationValidatorTests(unittest.TestCase):
         new.parent.mkdir(parents=True, exist_ok=True)
         old.rename(new)
         head = self.commit("move with large scan candidate")
-        plan = self.plan(changed_count=3, scan_paths=[])
+        plan = self.plan(changed_count=1, scan_paths=[])
         result = mv.validate(self.repo, base, head, plan)
-        self.assertEqual(result["status"], "WARN")
+        self.assertEqual(result["status"], "PASS")
         self.assertFalse(
             any(
                 f.get("path") == "products/standalone/termux/demo/large.py"
@@ -338,9 +338,90 @@ class MigrationValidatorTests(unittest.TestCase):
         old.rename(new)
         head = self.commit("move with large scan candidate")
         plan = self.plan(
-            changed_count=3,
+            changed_count=1,
             scan_paths=["products/standalone/termux/demo/large.py"],
         )
+        with self.assertRaises(mv.ValidationUnknown):
+            mv.validate(self.repo, base, head, plan)
+
+    def test_diff_includes_gitlink_changes_even_when_config_ignores_submodules(self):
+        self.write("seed.txt", "one\n")
+        seed_one = self.commit("seed one")
+        self.write("seed.txt", "two\n")
+        seed_two = self.commit("seed two")
+
+        self.write("plugins/termux/demo/a.txt", "alpha\n")
+        git(self.repo, "add", "-A")
+        git(
+            self.repo,
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            f"160000,{seed_one},vendor/lib",
+        )
+        git(self.repo, "commit", "-m", "base with gitlink")
+        base = git(self.repo, "rev-parse", "HEAD")
+
+        old = self.repo / "plugins/termux/demo"
+        new = self.repo / "products/standalone/termux/demo"
+        new.parent.mkdir(parents=True, exist_ok=True)
+        old.rename(new)
+        git(self.repo, "add", "-A")
+        git(
+            self.repo,
+            "update-index",
+            "--cacheinfo",
+            f"160000,{seed_two},vendor/lib",
+        )
+        git(self.repo, "commit", "-m", "move plus gitlink update")
+        head = git(self.repo, "rev-parse", "HEAD")
+        git(self.repo, "config", "diff.ignoreSubmodules", "all")
+
+        plan = self.plan(changed_count=2, scan_paths=[])
+        result = mv.validate(self.repo, base, head, plan)
+        self.assertEqual(result["status"], "FAIL")
+        finding = next(
+            f
+            for f in result["findings"]
+            if f["reason"] == "CHANGED_PATH_OUTSIDE_AUTHORIZED_SCOPE"
+        )
+        self.assertIn("vendor/lib", finding["paths"])
+
+    def test_diff_output_is_bounded_before_materializing_unbounded_payload(self):
+        self.write("plugins/termux/demo/a.txt", "alpha\n")
+        base = self.commit("base")
+        old = self.repo / "plugins/termux/demo"
+        new = self.repo / "products/standalone/termux/demo"
+        new.parent.mkdir(parents=True, exist_ok=True)
+        old.rename(new)
+        head = self.commit("move")
+        plan = self.plan(changed_count=1, scan_paths=[])
+
+        with mock.patch.object(mv, "MAX_DIFF_OUTPUT_BYTES", 8):
+            with self.assertRaises(mv.ValidationUnknown):
+                mv.validate(self.repo, base, head, plan)
+
+    def test_missing_auto_scan_blob_is_unknown(self):
+        self.write("plugins/termux/demo/a.py", "print('x')\n")
+        base = self.commit("base")
+        old = self.repo / "plugins/termux/demo"
+        new = self.repo / "products/standalone/termux/demo"
+        new.parent.mkdir(parents=True, exist_ok=True)
+        old.rename(new)
+        head = self.commit("move")
+        plan = self.plan(changed_count=1, scan_paths=[])
+
+        entry = mv._tree_entry(
+            self.repo,
+            mv._resolve_commit(self.repo, head, "head_ref"),
+            "products/standalone/termux/demo/a.py",
+        )
+        object_path = (
+            self.repo / ".git" / "objects" / entry["oid"][:2] / entry["oid"][2:]
+        )
+        self.assertTrue(object_path.exists())
+        object_path.unlink()
+
         with self.assertRaises(mv.ValidationUnknown):
             mv.validate(self.repo, base, head, plan)
 

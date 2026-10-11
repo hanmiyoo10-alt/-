@@ -36,14 +36,12 @@ Every Git subprocess:
   `GIT_CONFIG_*` parameter variables;
 - sets `GIT_NO_LAZY_FETCH=1` so a partial clone cannot demand-fetch missing objects;
 - sets `GIT_NO_REPLACE_OBJECTS=1` so `refs/replace` cannot substitute evidence;
-- clears inherited `GIT_TRACE*` destinations and ambient Git pathspec-mode overrides;
+- clears inherited `GIT_TRACE*` destinations and all ambient global Git pathspec-mode overrides before forcing literal pathspecs;
 - sets `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`, and `GIT_LITERAL_PATHSPECS=1`;
-- uses an explicit bounded rename-candidate policy and disables external diff helpers.
+- uses an explicit bounded rename-candidate policy, includes gitlink/submodule pointer changes regardless of ambient ignore configuration, disables external diff helpers, and streams diff output through a fixed 1 MiB cap before parsing.
 
 The supplied `--repo-root` must resolve to the exact Git work-tree root.
-Missing objects, malformed Git evidence, noncanonical plan paths, non-UTF-8 Git
-paths, and explicitly requested scan paths that are missing or unreadable fail
-closed to `UNKNOWN`.
+Missing objects, malformed Git evidence, noncanonical plan paths, non-UTF-8 Git paths, oversized diff output, and explicitly requested scan paths that are missing or unreadable fail closed to `UNKNOWN`. Auto-scan skips only intentional non-blob, oversized, or non-UTF-8 content; unavailable Git objects still propagate to `UNKNOWN`.
 The validator never treats skipped evidence as `PASS`.
 
 ## What it never does

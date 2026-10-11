@@ -17,6 +17,7 @@ SCHEMA = "termux-migration-plan.v1"
 MAX_CHANGED_FILES = 1000
 MAX_RENAME_CANDIDATES = 2000
 MAX_SCAN_BYTES = 262_144
+MAX_DIFF_OUTPUT_BYTES = 1_048_576
 GIT_ENV_CLEAR = {
     "GIT_DIR",
     "GIT_WORK_TREE",
@@ -31,6 +32,10 @@ GIT_ENV_CLEAR = {
     "GIT_DIFF_OPTS",
     "GIT_CONFIG_COUNT",
     "GIT_CONFIG_PARAMETERS",
+    "GIT_GLOB_PATHSPECS",
+    "GIT_NOGLOB_PATHSPECS",
+    "GIT_LITERAL_PATHSPECS",
+    "GIT_ICASE_PATHSPECS",
 }
 OID_RE = re.compile(r"^[0-9a-fA-F]{40,64}$")
 PARENT_DEPTH_RE = re.compile(r"Path\(__file__\)\.resolve\(\)\.parents\[(\d+)\]")
@@ -125,7 +130,7 @@ def _validate_plan(raw: Any) -> dict[str, Any]:
     }
 
 
-def _git(repo: Path, *args: str, text: bool = True) -> str | bytes:
+def _git_env() -> dict[str, str]:
     env = os.environ.copy()
     for key in list(env):
         if (
@@ -140,11 +145,15 @@ def _git(repo: Path, *args: str, text: bool = True) -> str | bytes:
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GIT_OPTIONAL_LOCKS"] = "0"
     env["GIT_LITERAL_PATHSPECS"] = "1"
+    return env
+
+
+def _git(repo: Path, *args: str, text: bool = True) -> str | bytes:
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        env=env,
+        env=_git_env(),
         check=False,
     )
     if proc.returncode != 0:
@@ -153,6 +162,42 @@ def _git(repo: Path, *args: str, text: bool = True) -> str | bytes:
     if text:
         return _decode_utf8(proc.stdout, f"git {' '.join(args)} output")
     return proc.stdout
+
+
+def _git_bounded_bytes(
+    repo: Path,
+    *args: str,
+    max_bytes: int,
+) -> bytes:
+    proc = subprocess.Popen(
+        ["git", "-C", str(repo), *args],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=_git_env(),
+    )
+    if proc.stdout is None:
+        proc.kill()
+        raise ValidationUnknown("git: bounded stdout pipe unavailable")
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = proc.stdout.read(65_536)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            proc.kill()
+            proc.wait()
+            raise ValidationUnknown(
+                f"git {' '.join(args)} output exceeds {max_bytes} bytes"
+            )
+        chunks.append(chunk)
+    returncode = proc.wait()
+    payload = b"".join(chunks)
+    if returncode != 0:
+        err = payload.decode("utf-8", "replace").strip()
+        raise ValidationUnknown(f"git {' '.join(args)} failed: {err or 'unknown error'}")
+    return payload
 
 
 def _resolve_commit(repo: Path, ref: str, field: str) -> str:
@@ -185,18 +230,19 @@ def _zlist(payload: bytes, context: str) -> list[str]:
 
 def _diff_changes(repo: Path, base_oid: str, head_oid: str) -> list[dict[str, Any]]:
     tokens = _zlist(
-        _git(
+        _git_bounded_bytes(
             repo,
             "diff",
             "--find-renames=20%",
             f"-l{MAX_RENAME_CANDIDATES}",
             "--no-ext-diff",
+            "--ignore-submodules=none",
             "--name-status",
             "-z",
             base_oid,
             head_oid,
             "--",
-            text=False,
+            max_bytes=MAX_DIFF_OUTPUT_BYTES,
         ),
         "git diff path",
     )
@@ -215,6 +261,10 @@ def _diff_changes(repo: Path, base_oid: str, head_oid: str) -> list[dict[str, An
         changes.append(
             {"status": status, "paths": paths, "logical_path": paths[-1]}
         )
+        if len(changes) > MAX_CHANGED_FILES:
+            raise ValidationUnknown(
+                f"git diff: more than {MAX_CHANGED_FILES} logical changes"
+            )
     return changes
 
 
@@ -264,24 +314,26 @@ def _tree_entry(repo: Path, ref_oid: str, path: str) -> dict[str, str]:
 def _show_text(
     repo: Path, ref_oid: str, path: str, *, required: bool
 ) -> str | None:
-    try:
-        entry = _tree_entry(repo, ref_oid, path)
-        if entry["type"] != "blob":
+    entry = _tree_entry(repo, ref_oid, path)
+    if entry["type"] != "blob":
+        if required:
             raise ValidationUnknown(f"scan path is not a blob: {path}")
-        size_text = str(_git(repo, "cat-file", "-s", entry["oid"])).strip()
-        try:
-            size = int(size_text)
-        except ValueError as exc:
+        return None
+    size_text = str(_git(repo, "cat-file", "-s", entry["oid"])).strip()
+    try:
+        size = int(size_text)
+    except ValueError as exc:
+        raise ValidationUnknown(
+            f"scan path {path}: invalid blob size {size_text!r}"
+        ) from exc
+    if size > MAX_SCAN_BYTES:
+        if required:
             raise ValidationUnknown(
-                f"scan path {path}: invalid blob size {size_text!r}"
-            ) from exc
-        if size > MAX_SCAN_BYTES:
-            if required:
-                raise ValidationUnknown(
-                    f"scan path {path}: blob size {size} exceeds {MAX_SCAN_BYTES}"
-                )
-            return None
-        data = _git(repo, "cat-file", "blob", entry["oid"], text=False)
+                f"scan path {path}: blob size {size} exceeds {MAX_SCAN_BYTES}"
+            )
+        return None
+    data = _git(repo, "cat-file", "blob", entry["oid"], text=False)
+    try:
         return _decode_utf8(data, f"scan path {path}")
     except ValidationUnknown:
         if required:

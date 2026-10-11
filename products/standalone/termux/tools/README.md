@@ -10,18 +10,34 @@ creating another work orchestrator or replacing repository authority.
 Given an exact Git base ref, exact Git head ref, and one
 `termux-migration-plan.v1` JSON file, the validator can check:
 
-- changed-file count against one exact expected ceiling;
-- every changed path against exact/prefix authorization scopes;
+- logical changed-file count against one exact expected ceiling;
+- every changed path endpoint against exact/prefix authorization scopes,
+  including both source and destination of detected renames/copies;
 - base old-root inventory against head new-root inventory;
+- Git mode/type preservation for relocated files;
 - byte identity for relocated files except explicit content-edit exceptions;
 - exact allowed residue under the old root;
 - location-sensitive references such as
   `Path(__file__).resolve().parents[N]`, repeated `../`, and old-root text
   references as bounded warnings.
 
-The Git diff uses migration-friendly rename detection (`--find-renames=20%`) so
-a content-edited move can still count as one logical changed file when Git can
-identify the rename.
+The Git diff uses migration-friendly rename detection (`--find-renames=20%`).
+A detected rename/copy counts as one logical changed file, while both path
+endpoints are still checked against the authorization ceiling.
+
+## Read-only / no-network boundary
+
+Before any diff/tree/content read, caller refs are resolved to commit object IDs.
+Option-like refs are rejected. All later Git operations use those resolved IDs.
+
+Every Git subprocess sets:
+
+- `GIT_NO_LAZY_FETCH=1` so a partial clone cannot demand-fetch missing objects;
+- `GIT_TERMINAL_PROMPT=0` so validation cannot open an authentication prompt.
+
+Missing objects, malformed Git evidence, non-UTF-8 Git paths, and explicitly
+requested scan paths that are missing or unreadable fail closed to `UNKNOWN`.
+The validator never treats skipped evidence as `PASS`.
 
 ## What it never does
 
@@ -63,14 +79,17 @@ All authority flags in the result are always `false`.
 prefix form: a trailing `/**`.
 
 `content_edit_relpaths` are relative to the moved child root. Every other file
-from the base old-root inventory must have the same blob identity at the head
-new root.
+from the base old-root inventory must preserve the same Git object identity at
+the head new root. Mode/type preservation is required for every moved file,
+including declared content edits.
 
 `allowed_old_root_relpaths` is an exact residue allowlist. Use an empty list
 when the old root must disappear.
 
-`scan_paths` is optional. If omitted, the validator scans the changed new-root,
-workflow, Python, and shell paths it can read as UTF-8 text.
+`scan_paths` is optional. When supplied, every listed path must be present and
+UTF-8 readable at the head ref or the result is `UNKNOWN`. If omitted, the
+validator performs a best-effort bounded scan of changed new-root, workflow,
+Python, and shell paths that exist at the head.
 
 ## Command
 
@@ -88,7 +107,8 @@ Result vocabulary:
 - `WARN` — structural migration checks pass but location-sensitive references
   require human/source review;
 - `FAIL` — one or more deterministic migration contracts failed;
-- `UNKNOWN` — plan/Git evidence was missing, malformed, or unreadable.
+- `UNKNOWN` — plan/Git evidence was missing, malformed, unreadable, or
+  unavailable without network fetch.
 
 Exit codes:
 
@@ -109,4 +129,7 @@ python -m unittest discover \
 ```
 
 The tests use temporary local Git repositories and perform no network or
-repository mutation outside their temporary directories.
+repository mutation outside their temporary directories. They cover the
+#2801-derived path-depth/parity cases plus rename-endpoint authorization,
+unsafe refs, explicit scan failure, non-UTF-8 Git paths, mode/type parity, and
+lazy-fetch suppression.

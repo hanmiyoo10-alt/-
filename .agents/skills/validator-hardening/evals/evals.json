@@ -84,6 +84,17 @@
         "Does not invent PASS/FAIL semantics.",
         "Does not write or recommend a replacement validator as a way around missing ownership."
       ]
+    },
+    {
+      "id": "owner-conflict-negative",
+      "prompt": "Two current authoritative-looking repository owner sources materially disagree about which project/domain owns the validator, and the current owning contracts do not resolve the disagreement. Review only the ownership-locking step; do not guess which owner wins.",
+      "expected_output": "Stop with review disposition CONFLICT and reason code REVIEW_OWNER_CONFLICT, preserving both conflicting owner source references. Do not downgrade the disagreement to REVIEW_BLOCKED_UNKNOWN_OWNER.",
+      "assertions": [
+        "Uses CONFLICT rather than UNKNOWN for materially disagreeing current owner evidence.",
+        "Includes reason code REVIEW_OWNER_CONFLICT.",
+        "Preserves the conflicting source references.",
+        "Does not guess or choose the convenient owner."
+      ]
     }
   ]
 }

@@ -48,6 +48,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "current owning project/domain guideline or contract",
             "target validator/classifier source and current tests",
             "REVIEW_BLOCKED_UNKNOWN_OWNER",
+            "REVIEW_OWNER_CONFLICT",
             "OUT_OF_SCOPE_FOR_CLAIM_WITH_OWNER_BASIS",
             "relative to the locked requested claim",
         ):
@@ -161,6 +162,16 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_no_frozen_commit_sha_in_skill(self):
         self.assertIsNone(re.search(r"\b[0-9a-f]{40}\b", self.text))
+
+    def test_git_backed_actual_bytes_have_identity_beyond_clean_status(self):
+        for required in (
+            "neutralizes replacement-object substitution",
+            "never treat `CLEAN` alone as byte identity",
+            "actual bytes inspected even when the worktree reports `CLEAN`",
+            "filter-normalized or otherwise transformed checkout bytes",
+            "must not rely on `git status` cleanliness",
+        ):
+            self.assertIn(required, self.text)
 
     def test_mutable_inputs_are_revalidated_before_receipt(self):
         for required in (
@@ -291,6 +302,28 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "proposed/not-exercised adversarial cases, with reason each remains unexecuted",
             self.text,
         )
+
+    def test_exercised_cases_require_exact_input_and_replay_identity(self):
+        for required in (
+            "exact input digest or immutable locator",
+            "a descriptive case name alone is insufficient",
+            "generation seed/configuration needed for replay",
+            "reduced/minimized example identity or bounded example value/locator",
+            "cases actually exercised, each with exact input digest or immutable locator",
+            "generated-case replay provenance when applicable",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_owner_conflict_is_not_missing_owner_unknown(self):
+        for required in (
+            "CONFLICT` and reason code `REVIEW_OWNER_CONFLICT",
+            "Preserve the conflicting source references",
+            "owner disagreement is instead `CONFLICT / REVIEW_OWNER_CONFLICT`",
+        ):
+            self.assertIn(required, self.text)
+        conflict = next(case for case in self.evals if case["id"] == "owner-conflict-negative")
+        self.assertIn("CONFLICT", conflict["expected_output"])
+        self.assertIn("REVIEW_OWNER_CONFLICT", conflict["expected_output"])
 
     def test_external_validation_requires_immutable_provenance(self):
         for required in (

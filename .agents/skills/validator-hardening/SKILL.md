@@ -57,7 +57,9 @@ Identify exactly:
 - target-owned result vocabulary;
 - current tests and validation surfaces relevant to that claim.
 
-If the owning project/domain cannot be established from current evidence, stop with review disposition `UNKNOWN` and reason code `REVIEW_BLOCKED_UNKNOWN_OWNER`. Do not continue by guessing an owner.
+If current authoritative-looking owner evidence materially disagrees and the owning contracts do not resolve the disagreement, stop with review disposition `CONFLICT` and reason code `REVIEW_OWNER_CONFLICT`. Preserve the conflicting source references; do not collapse disagreement into missing ownership.
+
+If the owning project/domain is genuinely unavailable after checking for conflict, stop with review disposition `UNKNOWN` and reason code `REVIEW_BLOCKED_UNKNOWN_OWNER`. Do not continue by guessing an owner.
 
 If the owner is established but the requested semantic claim is missing, ambiguous, or cannot be bounded, stop with review disposition `UNKNOWN` and reason code `REVIEW_BLOCKED_UNKNOWN_CLAIM`. Do not mislabel claim ambiguity as an ownership failure.
 
@@ -68,14 +70,17 @@ Record the target's accepted input classes, evidence sources, explicit uncertain
 Capture the exact reviewed source identity before interpreting results:
 
 - for Git-backed repository work, record the exact commit object ID that anchors the review;
-- record worktree state as `CLEAN` or `DIRTY`;
+- prefer an immutable snapshot/object-read path that neutralizes replacement-object substitution and does not depend on checkout clean/smudge filter output for source identity;
+- record worktree state as `CLEAN` or `DIRTY`, but never treat `CLEAN` alone as byte identity;
+- for every Git-backed contributing file actually read from a checkout/worktree, record the digest or exact immutable object/byte identity of the actual bytes inspected even when the worktree reports `CLEAN`; this covers filter-normalized or otherwise transformed checkout bytes;
 - when the worktree is dirty relative to that commit, identify every dirty input that contributes to the review, including target source, imported helpers/modules, tests, fixtures, and owner-contract files actually relied upon;
 - record an immutable digest or bounded diff identity for each such dirty reviewed/executed input, not only for the target file;
 - if dirty contributing inputs cannot be bounded and identified completely, preserve `UNKNOWN` rather than claiming `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`;
 - for a non-Git artifact, record the owner-defined immutable artifact digest or equivalent exact identity;
 - if the reviewed bytes cannot be attributed to an immutable identity, preserve `UNKNOWN` rather than claiming `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`;
 - prefer reading and executing from an immutable snapshot when available;
-- when any contributing evidence comes from a mutable source, including a Git checkout/worktree or a non-Git mutable path, immediately before emitting the final receipt revalidate its immutable identity: commit/worktree state for Git-backed inputs and the recorded digest/equivalent exact identity for every mutable non-Git input;
+- when any contributing evidence comes from a mutable source, including a Git checkout/worktree or a non-Git mutable path, immediately before emitting the final receipt revalidate the exact identity of the bytes actually inspected: commit identity plus every recorded checkout-byte digest/object identity for Git-backed inputs, and the recorded digest/equivalent exact identity for every mutable non-Git input;
+- revalidation must not rely on `git status` cleanliness as a substitute for byte identity, and Git object reads used for identity must neutralize replacement-object substitution where the owning environment permits;
 - the final barrier covers every contributing source, helper, test, fixture, owner-contract, and executed-input identity recorded for the review regardless of storage mechanism;
 - if any contributing input changed during the review, stop with `UNKNOWN / REVIEW_INPUT_CHANGED_DURING_REVIEW`; never attribute observations to the earlier identity.
 
@@ -213,6 +218,9 @@ When a separately authorized execution-capable surface exists:
 - execute focused deterministic cases only inside that proven effect/resource containment plus an isolated temporary workspace/copy or an existing owner-provided temporary harness;
 - never edit the repository checkout under review merely to create review cases;
 - preserve the exact source/input identities used by that isolated execution;
+- for every exercised adversarial case, record the exact input digest or immutable locator; a descriptive case name alone is insufficient;
+- for generated/property-based cases, also record the generation seed/configuration needed for replay and the exact reduced/minimized example identity or bounded example value/locator when reduction occurs;
+- if an exercised input cannot be reproduced or attributed to an exact identity, keep that execution evidence `UNKNOWN` rather than promoting it to `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`;
 - for every exercised case, record the bounded execution-surface identity: operating system/filesystem semantics when relevant, interpreter/parser/runtime version, Git and other material tool versions, working directory, sandbox/containment identity, and relevant sanitized environment/config overrides;
 - if material runtime/toolchain/environment identity cannot be bounded, do not claim `HARDENING_REVIEW_COMPLETE` from that execution.
 
@@ -238,7 +246,7 @@ For the review itself, use these advisory dispositions:
 
 - `HARDENING_REVIEW_COMPLETE` - all declared applicable dimensions were exercised with sufficient current evidence and no unresolved review gap remains;
 - `PARTIAL` - useful review evidence exists but one or more declared dimensions remain unexercised or insufficiently proven;
-- `UNKNOWN` - the requested review cannot be resolved from current owner/evidence; use bounded reason codes such as `REVIEW_BLOCKED_UNKNOWN_OWNER` for unavailable ownership and `REVIEW_BLOCKED_UNKNOWN_CLAIM` for an unresolved requested claim;
+- `UNKNOWN` - the requested review cannot be resolved from current owner/evidence; use bounded reason codes such as `REVIEW_BLOCKED_UNKNOWN_OWNER` for unavailable ownership and `REVIEW_BLOCKED_UNKNOWN_CLAIM` for an unresolved requested claim; owner disagreement is instead `CONFLICT / REVIEW_OWNER_CONFLICT`;
 - `CONFLICT` - current authoritative-looking owner evidence materially disagrees.
 
 A review disposition does not rewrite the target validator's own result.
@@ -267,7 +275,8 @@ worktree state: CLEAN | DIRTY | NOT_APPLICABLE
 dirty reviewed/executed input identities (digest or bounded diff identity) when applicable
 applicability by dimension A-G
 proposed/not-exercised adversarial cases, with reason each remains unexecuted
-cases actually exercised
+cases actually exercised, each with exact input digest or immutable locator
+generated-case replay provenance when applicable: seed/configuration plus reduced/minimized example identity or bounded value/locator
 owner tests / commands actually used
 execution surface/runtime/toolchain identity for each exercised case, or NOT_APPLICABLE when no execution occurred
 relevant sanitized environment/config identity and effect/resource containment identity for exercised cases

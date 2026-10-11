@@ -396,8 +396,8 @@ test('fixed Windows transport has no caller interpolation surface', () => {
   assert.doesNotMatch(source, /childProcess\.exec/);
 });
 
-test('v1 schema and receipt field shape remain compatible', () => {
-  assert.equal(owner.SCHEMA, 'mcl-l-rdc-session-evidence.v1');
+test('v2 schema marks the global-safe producer generation while field shape stays stable', () => {
+  assert.equal(owner.SCHEMA, 'mcl-l-rdc-session-evidence.v2');
   assert.equal(owner.OWNER, 'mcl-l-rdc-session-evidence');
   assert.deepEqual(Object.keys(owner.receipt({
     sessionState: 'ABSENT',

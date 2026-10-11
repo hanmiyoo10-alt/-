@@ -5,11 +5,10 @@ import os
 import re
 import stat
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any
 
-from registry import DOMAIN_REGISTRY_PATH, load_domain_registry, registry_sha256
+from registry import DOMAIN_REGISTRY_PATH, registry_sha256, validate_domain_registry_data
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 FROZEN_FIXTURE_ROOT = PACKAGE_ROOT / "tests" / "fixtures"
@@ -112,7 +111,7 @@ def _validate_request(request: Any) -> tuple[str, dict[str, str], list[str]] | N
             return None
     else:
         return None
-    if not isinstance(reference.get("value"), str) or not reference["value"].strip():
+    if not isinstance(reference.get("value"), str) or len(reference["value"]) < 1:
         return None
     if len(reference["value"]) > 256:
         return None
@@ -226,11 +225,11 @@ def _read_package_relative_regular_file(
 
 def _validate_registry_bytes(raw: bytes) -> dict[str, Any]:
     text = raw.decode("utf-8")
-    json.loads(text, object_pairs_hook=_reject_duplicate_keys)
-    with tempfile.TemporaryDirectory() as temp_dir:
-        snapshot = Path(temp_dir) / "registry.json"
-        snapshot.write_bytes(raw)
-        return load_domain_registry(snapshot)
+    data = json.loads(text, object_pairs_hook=_reject_duplicate_keys)
+    if not isinstance(data, dict):
+        raise ValueError("registry must be a JSON object")
+    validate_domain_registry_data(data)
+    return data
 
 
 def _bounded_registry_snapshot(path: Path) -> dict[str, Any]:

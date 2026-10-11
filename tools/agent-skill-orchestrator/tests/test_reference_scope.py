@@ -19,6 +19,7 @@ from reference_scope import (
     _read_bounded_regular_file,
     _read_cli_input,
     _read_package_relative_regular_file,
+    _validate_registry_bytes,
     classify_reference,
 )
 from registry import load_domain_registry, registry_sha256, validate_domain_registry_data
@@ -263,6 +264,42 @@ class ReferenceScopeTests(unittest.TestCase):
         self.assertTrue(out["live"]["scope_present"])
         self.assertTrue(out["live"]["match"])
         self.assertIsNotNone(out["live"]["registry_sha256"])
+
+    def test_whitespace_only_reference_value_matches_schema_contract(self):
+        with mock.patch(
+            "reference_scope._load_live_registry",
+            return_value={
+                "schema_version": 1,
+                "domains": [{
+                    "domain_id": "whitespace-reference",
+                    "scope": "plugin:whitespace-reference",
+                    "name": "Whitespace reference",
+                    "lifecycle": "test",
+                    "primary_path": " ",
+                    "authority_refs": [],
+                    "guidelines_path": "docs/WHITESPACE.md",
+                    "registration_semantics": "domain_metadata_only_no_skill_promotion",
+                }],
+            },
+        ):
+            out = classify_reference(self.request(
+                "plugin:whitespace-reference",
+                "primary_path",
+                " ",
+                frozen=[],
+            ))
+        self.assertEqual(out["disposition"], "LIVE_CURRENT_ONLY")
+
+    def test_registry_validation_does_not_write_temporary_snapshot(self):
+        raw = (PACKAGE / "domains" / "registry.json").read_bytes()
+        with mock.patch.object(
+            Path,
+            "write_bytes",
+            side_effect=AssertionError("registry validation must not write"),
+        ):
+            validated = _validate_registry_bytes(raw)
+        self.assertEqual(validated["schema_version"], 1)
+        self.assertTrue(validated["domains"])
 
     def test_scope_must_match_domain_registry_scope_contract(self):
         for scope in ("voyage-token-check", "scope:repo", "plugin:Bad", "plugin:"):

@@ -177,14 +177,12 @@ def _extract_expressions(source: str, field: str) -> list[dict[str, Any]]:
         if not isinstance(parents_attr, ast.Attribute) or parents_attr.attr != "parents":
             continue
 
-        is_literal, index = _literal_integer(node.slice)
-        if not is_literal:
-            continue
-
         if not _is_canonical_file_resolve(parents_attr.value):
             unsupported.append("UNSUPPORTED_FIXED_PARENT_BASE")
             continue
-        if index is None or index < 0 or index > MAX_PARENT_INDEX:
+
+        is_literal, index = _literal_integer(node.slice)
+        if not is_literal or index is None or index < 0 or index > MAX_PARENT_INDEX:
             unsupported.append("UNSUPPORTED_PARENT_INDEX")
             continue
 

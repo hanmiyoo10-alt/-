@@ -223,7 +223,7 @@ def check_reference(
             "expected_new_reference": expected,
             "candidate_resolved_target": candidate_target,
             "filesystem_name_max_bytes": name_max,
-            "working_directory_tree_proof": "VERIFIED",
+            "working_directory_tree_proof": "SUPPLIED_EVIDENCE_ACCEPTED",
             "working_dir_depth_delta": (
                 len(PurePosixPath(new_dir).parts)
                 - len(PurePosixPath(old_dir).parts)

@@ -2449,3 +2449,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3c1afc2a4ddf817dd451b6f6ee3c826b5d1dd1a9)
 - Event ID: `cf808829e0895492ed38e38a8fe3aca73e242bf935a9706609327b89bec6c7a7`
 <!-- canonical-main-doc-promoted:cf808829e0895492ed38e38a8fe3aca73e242bf935a9706609327b89bec6c7a7 -->
+
+### 2026-10-11 — refactor(termux): move large doc editor into product family (#3540)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `2ab6408a9fa13eb07fa092076b8d806b49019852`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2ab6408a9fa13eb07fa092076b8d806b49019852)
+- Event ID: `baf9a2ad4b8a0e0e7bfe01d2dc2c96e9a7422647963db6f3c780a2381d350528`
+<!-- canonical-main-doc-promoted:baf9a2ad4b8a0e0e7bfe01d2dc2c96e9a7422647963db6f3c780a2381d350528 -->

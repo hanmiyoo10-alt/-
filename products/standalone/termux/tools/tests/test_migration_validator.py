@@ -245,22 +245,115 @@ class MigrationValidatorTests(unittest.TestCase):
         with self.assertRaises(mv.ValidationUnknown):
             mv._zlist(b"good\x00bad-\xff\x00", "git path")
 
-    def test_git_disables_lazy_fetch_and_terminal_prompt(self):
+    def test_git_disables_lazy_fetch_replacements_and_ambient_repo_overrides(self):
         completed = subprocess.CompletedProcess(
             args=[],
             returncode=0,
             stdout=b"ok\n",
             stderr=b"",
         )
-        with mock.patch.object(
-            mv.subprocess,
-            "run",
-            return_value=completed,
-        ) as run:
-            self.assertEqual(mv._git(self.repo, "status"), "ok\n")
+        ambient = {
+            "GIT_DIR": "/tmp/wrong.git",
+            "GIT_WORK_TREE": "/tmp/wrong-tree",
+            "GIT_COMMON_DIR": "/tmp/wrong-common",
+            "GIT_INDEX_FILE": "/tmp/wrong-index",
+            "GIT_OBJECT_DIRECTORY": "/tmp/wrong-objects",
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES": "/tmp/alternate",
+            "GIT_NAMESPACE": "wrong",
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "diff.renameLimit",
+            "GIT_CONFIG_VALUE_0": "1",
+        }
+        with mock.patch.dict(os.environ, ambient, clear=False):
+            with mock.patch.object(
+                mv.subprocess,
+                "run",
+                return_value=completed,
+            ) as run:
+                self.assertEqual(mv._git(self.repo, "status"), "ok\n")
         env = run.call_args.kwargs["env"]
         self.assertEqual(env["GIT_NO_LAZY_FETCH"], "1")
+        self.assertEqual(env["GIT_NO_REPLACE_OBJECTS"], "1")
         self.assertEqual(env["GIT_TERMINAL_PROMPT"], "0")
+        self.assertEqual(env["GIT_OPTIONAL_LOCKS"], "0")
+        for key in ambient:
+            self.assertNotIn(key, env)
+
+    def test_noncanonical_authorization_scope_is_unknown(self):
+        with self.assertRaises(mv.ValidationUnknown):
+            self.plan(
+                authorized_paths=[
+                    "plugins/termux/demo/**",
+                    "products/standalone/termux/demo/** ",
+                ]
+            )
+        with self.assertRaises(mv.ValidationUnknown):
+            self.plan(
+                authorized_paths=[
+                    "plugins/termux/demo/**",
+                    "products//standalone/termux/demo/**",
+                ]
+            )
+
+    def test_boolean_changed_file_count_is_unknown(self):
+        with self.assertRaises(mv.ValidationUnknown):
+            self.plan(changed_count=True)
+
+    def test_replacement_object_does_not_change_validation_evidence(self):
+        base = self.base_repo()
+        head = self.move_tree()
+
+        git(self.repo, "checkout", "-b", "replacement", base)
+        self.write("plugins/termux/demo/a.txt", "replacement\n")
+        replacement = self.commit("replacement")
+        git(self.repo, "replace", base, replacement)
+
+        result = mv.validate(self.repo, base, head, self.plan())
+        self.assertEqual(result["status"], "WARN")
+        self.assertFalse(
+            any(
+                f["reason"] == "BYTE_PARITY_MISMATCH"
+                for f in result["findings"]
+            )
+        )
+
+    def test_rename_detection_ignores_low_configured_limit(self):
+        for index, ch in enumerate(("A", "B", "C")):
+            self.write(
+                f"plugins/termux/demo/file-{index}.txt",
+                ch * 2000 + "\n",
+            )
+        base = self.commit("base three")
+
+        old = self.repo / "plugins/termux/demo"
+        new = self.repo / "products/standalone/termux/demo"
+        new.parent.mkdir(parents=True, exist_ok=True)
+        old.rename(new)
+        for index in range(3):
+            p = new / f"file-{index}.txt"
+            p.write_text(p.read_text(encoding="utf-8") + "edited\n", encoding="utf-8")
+        head = self.commit("edited moves")
+        git(self.repo, "config", "diff.renameLimit", "1")
+
+        plan = self.plan(
+            changed_count=3,
+            content_edit_relpaths=[
+                "file-0.txt",
+                "file-1.txt",
+                "file-2.txt",
+            ],
+            scan_paths=[],
+        )
+        result = mv.validate(self.repo, base, head, plan)
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["changed_file_count"], 3)
+        self.assertTrue(
+            all(change["status"].startswith("R") for change in result["changes"])
+        )
+
+    def test_changed_file_count_has_bounded_upper_limit(self):
+        with self.assertRaises(mv.ValidationUnknown):
+            self.plan(changed_count=mv.MAX_CHANGED_FILES + 1)
 
 
 if __name__ == "__main__":

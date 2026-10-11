@@ -142,6 +142,26 @@ class LocationRelativeSentinelTests(unittest.TestCase):
             out["files"][0]["error"],
         )
 
+    def test_nonliteral_fixed_parent_indices_are_unknown(self):
+        cases = [
+            (
+                "DEPTH = 4\nREPO = Path(__file__).resolve().parents[DEPTH]\n",
+                "DEPTH = 5\nREPO = Path(__file__).resolve().parents[DEPTH]\n",
+            ),
+            (
+                "REPO = Path(__file__).resolve().parents[2 + 2]\n",
+                "REPO = Path(__file__).resolve().parents[2 + 3]\n",
+            ),
+        ]
+        for old_source, new_source in cases:
+            with self.subTest(old_source=old_source):
+                out = classify(self.request(old_source, new_source))
+                self.assertEqual(out["status"], "UNKNOWN")
+                self.assertIn(
+                    "UNSUPPORTED_PARENT_INDEX",
+                    out["files"][0]["error"],
+                )
+
     def test_negative_fixed_parent_index_is_unknown(self):
         source = "REPO = Path(__file__).resolve().parents[-1]\n"
         out = classify(self.request(source, source))

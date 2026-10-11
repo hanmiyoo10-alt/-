@@ -18,6 +18,7 @@ MAX_PATH_CHARS = 512
 MAX_REF_CHARS = 256
 MAX_INPUT_BYTES = 64 * 1024
 MAX_GIT_OUTPUT_BYTES = 64 * 1024
+MAX_DISTINCT_TREE_LOOKUPS = 256
 OID_RE = re.compile(r"^[0-9a-fA-F]{40,64}$")
 REGULAR_BLOB_MODES = {"100644", "100755"}
 GIT_ENV_CLEAR = {
@@ -180,6 +181,15 @@ def _name_max(repo_root: Path) -> int:
     return value
 
 
+def _reject_git_reserved_components(
+    parts: list[str] | tuple[str, ...],
+    field: str,
+) -> None:
+    for part in parts:
+        if part != ".." and part.casefold() == ".git":
+            raise ValidationUnknown(f"{field}: Git-reserved .git component")
+
+
 def _repo_dir(value: Any, field: str) -> str:
     if not isinstance(value, str) or not value or len(value) > MAX_PATH_CHARS:
         raise ValidationUnknown(f"{field}: expected bounded non-empty path")
@@ -198,6 +208,7 @@ def _repo_dir(value: Any, field: str) -> str:
         raise ValidationUnknown(f"{field}: noncanonical repository directory")
     if PurePosixPath(value).as_posix() != value:
         raise ValidationUnknown(f"{field}: noncanonical repository directory")
+    _reject_git_reserved_components(parts, field)
     return value
 
 
@@ -229,6 +240,7 @@ def _relative_ref(value: Any, field: str) -> str:
             seen_path_component = True
     if not seen_path_component:
         raise ValidationUnknown(f"{field}: expected file-like path component")
+    _reject_git_reserved_components(parts, field)
     return value
 
 
@@ -279,6 +291,8 @@ def _tree_entry(
     cached = cache.get(key)
     if cached is not None:
         return cached
+    if len(cache) >= MAX_DISTINCT_TREE_LOOKUPS:
+        raise ValidationUnknown("distinct Git tree lookup budget exhausted")
     raw = _git(repo, "ls-tree", "-z", commit_oid, "--", path)
     records = [record for record in raw.split(b"\0") if record]
     if len(records) != 1:
@@ -318,12 +332,24 @@ def _verify_directory_prefixes(
             raise ValidationUnknown(f"{field}: symlink or non-tree component: {path}")
 
 
+def _verify_blob_object(
+    repo: Path,
+    oid: str,
+    verified_blobs: set[str],
+) -> None:
+    if oid in verified_blobs:
+        return
+    _git(repo, "cat-file", "-e", f"{oid}^{{blob}}")
+    verified_blobs.add(oid)
+
+
 def _verify_regular_target(
     repo: Path,
     commit_oid: str,
     target: str,
     field: str,
     cache: dict[tuple[str, str], dict[str, str]],
+    verified_blobs: set[str],
 ) -> dict[str, str]:
     parts = PurePosixPath(target).parts
     if not parts or any(part in {"", ".", ".."} for part in parts):
@@ -338,6 +364,7 @@ def _verify_regular_target(
     final = _tree_entry(repo, commit_oid, target, cache)
     if final["type"] != "blob" or final["mode"] not in REGULAR_BLOB_MODES:
         raise ValidationUnknown(f"{field}: target is not a regular file")
+    _verify_blob_object(repo, final["oid"], verified_blobs)
     return final
 
 
@@ -348,6 +375,7 @@ def check_reference(
     new_oid: str | None = None,
     name_max: int | None = None,
     tree_cache: dict[tuple[str, str], dict[str, str]] | None = None,
+    verified_blobs: set[str] | None = None,
 ) -> dict[str, Any]:
     try:
         if not isinstance(item, dict) or set(item) != {
@@ -361,6 +389,8 @@ def check_reference(
             raise ValidationUnknown("authenticated Git evidence required")
         if tree_cache is None:
             tree_cache = {}
+        if verified_blobs is None:
+            verified_blobs = set()
 
         old_dir = _repo_dir(item["old_working_dir"], "old_working_dir")
         new_dir = _repo_dir(item["new_working_dir"], "new_working_dir")
@@ -395,10 +425,10 @@ def check_reference(
         candidate_target = _resolve_repo_target(new_dir, new_ref)
 
         old_target_entry = _verify_regular_target(
-            repo, old_oid, target, "old_target", tree_cache
+            repo, old_oid, target, "old_target", tree_cache, verified_blobs
         )
         new_target_entry = _verify_regular_target(
-            repo, new_oid, target, "new_target", tree_cache
+            repo, new_oid, target, "new_target", tree_cache, verified_blobs
         )
 
         status = (
@@ -482,6 +512,7 @@ def check_batch(request: Any) -> dict[str, Any]:
         }
 
     tree_cache: dict[tuple[str, str], dict[str, str]] = {}
+    verified_blobs: set[str] = set()
     results = [
         check_reference(
             item,
@@ -490,6 +521,7 @@ def check_batch(request: Any) -> dict[str, Any]:
             new_oid,
             name_max,
             tree_cache,
+            verified_blobs,
         )
         for item in request["references"]
     ]

@@ -313,6 +313,45 @@ class WorkflowPathDepthTests(unittest.TestCase):
         self.assertEqual(out["status"], "PASS")
         self.assertLess(len(ls_tree_calls), 20)
 
+    def test_distinct_tree_lookup_budget_fails_closed(self):
+        with (
+            mock.patch.object(wpd, "MAX_DISTINCT_TREE_LOOKUPS", 2),
+            mock.patch.object(wpd, "_git", wraps=wpd._git) as git_call,
+        ):
+            out = self.batch([self.t5()])
+        ls_tree_calls = [
+            call
+            for call in git_call.call_args_list
+            if len(call.args) > 1 and call.args[1] == "ls-tree"
+        ]
+        self.assertEqual(out["status"], "UNKNOWN")
+        self.assertLessEqual(len(ls_tree_calls), 2)
+
+    def test_git_reserved_components_are_unknown(self):
+        cases = [
+            {**self.t5(), "old_reference": "../../.git/tool.py"},
+            {**self.t5(), "candidate_new_reference": "../../../.GIT/tool.py"},
+            {**self.t5(), "new_working_dir": "products/.GiT/example"},
+        ]
+        for case in cases:
+            with self.subTest(case=case):
+                self.assertEqual(self.check(case)["status"], "UNKNOWN")
+
+    def test_missing_blob_object_evidence_is_unknown(self):
+        real_git = wpd._git
+        seen = {"cat_file": 0}
+
+        def missing_blob(repo, *args):
+            if args and args[0] == "cat-file":
+                seen["cat_file"] += 1
+                raise wpd.ValidationUnknown("simulated missing blob object")
+            return real_git(repo, *args)
+
+        with mock.patch.object(wpd, "_git", side_effect=missing_blob):
+            out = self.batch([self.t5()])
+        self.assertEqual(out["status"], "UNKNOWN")
+        self.assertGreater(seen["cat_file"], 0)
+
     def test_batch_shape_ref_and_limit_fail_closed(self):
         self.assertEqual(check_batch({"schema": SCHEMA})["status"], "UNKNOWN")
         self.assertEqual(

@@ -62,6 +62,20 @@ function withAlternateAgent(rows, {
   return out;
 }
 
+function withCurrentAgentWrapper(rows, {
+  wrapperPid = 40,
+  peer = false,
+  unexpected = false,
+} = {}) {
+  const out = rows.map((item) => ({...item}));
+  const agent = out.find((item) => item.pid === 50);
+  agent.ppid = wrapperPid;
+  out.push(row(wrapperPid, 1, 'node.exe', AGENT_COMMAND));
+  if (peer) out.push(row(82, wrapperPid, 'cmd.exe', 'cmd.exe'));
+  if (unexpected) out.push(row(83, wrapperPid, 'python.exe', 'python.exe worker.py'));
+  return out;
+}
+
 test('fixed CLI admits inspect only', () => {
   assert.deepEqual(owner.parseArgs(['inspect']), {operation: 'inspect'});
   for (const argv of [
@@ -114,6 +128,52 @@ test('peer direct shell returns PRESENT without owner inference', () => {
   assert.equal(result.reasonCode, 'OTHER_RDC_COMMAND_SESSION_PRESENT');
   assert.notEqual(result.sessionState, 'LIVE');
   assert.deepEqual(result.authority, owner.FALSE_AUTHORITY);
+});
+
+
+test('same-instance marker wrapper lineage is not an alternate agent', () => {
+  const result = owner.classifyProcessTable(withCurrentAgentWrapper(fixture()), 61);
+  assert.deepEqual(result, {
+    sessionState: 'ABSENT',
+    reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+  });
+});
+
+test('same-lineage wrapper direct shell remains definite PRESENT evidence', () => {
+  const result = owner.classifyProcessTable(
+    withCurrentAgentWrapper(fixture(), {peer: true}), 61);
+  assert.deepEqual(result, {
+    sessionState: 'PRESENT',
+    reasonCode: 'OTHER_RDC_COMMAND_SESSION_PRESENT',
+  });
+});
+
+test('same-lineage wrapper unexpected sibling remains global UNKNOWN', () => {
+  const result = owner.classifyProcessTable(
+    withCurrentAgentWrapper(fixture(), {unexpected: true}), 61);
+  assert.deepEqual(result, {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS',
+  });
+});
+
+test('same-lineage wrapper does not hide a separate alternate shell agent', () => {
+  const rows = withAlternateAgent(withCurrentAgentWrapper(fixture()));
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'PRESENT',
+    reasonCode: 'OTHER_RDC_COMMAND_SESSION_PRESENT',
+  });
+});
+
+test('same-lineage wrapper does not hide an ambiguous separate alternate agent', () => {
+  const rows = withAlternateAgent(
+    withCurrentAgentWrapper(fixture()), {includeChild: false});
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS',
+  });
 });
 
 test('alternate eligible command agent with direct shell returns PRESENT', () => {
@@ -396,8 +456,8 @@ test('fixed Windows transport has no caller interpolation surface', () => {
   assert.doesNotMatch(source, /childProcess\.exec/);
 });
 
-test('v1 schema and receipt field shape remain compatible', () => {
-  assert.equal(owner.SCHEMA, 'mcl-l-rdc-session-evidence.v1');
+test('v2 schema marks the global-safe producer generation while field shape stays stable', () => {
+  assert.equal(owner.SCHEMA, 'mcl-l-rdc-session-evidence.v2');
   assert.equal(owner.OWNER, 'mcl-l-rdc-session-evidence');
   assert.deepEqual(Object.keys(owner.receipt({
     sessionState: 'ABSENT',

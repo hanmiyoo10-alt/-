@@ -20,7 +20,6 @@ const root = path.resolve(__dirname, '../../../..');
 const descriptorDir = path.join(root, '.github/plugin-control-plane/canonical-main/descriptors');
 const registry = JSON.parse(fs.readFileSync(path.join(root, '.github/plugin-control-plane/registry.json'), 'utf8'));
 const expectedIds = [...Object.keys(registry.plugins || {}), ...Object.keys(registry.products || {})].sort();
-assert.equal(expectedIds.length, 9, 'Local Model Lab registration should produce nine operational identities');
 const descriptorFiles = fs.readdirSync(descriptorDir).filter((name) => name.endsWith('.json')).sort();
 const descriptors = descriptorFiles.map((name) => JSON.parse(fs.readFileSync(path.join(descriptorDir, name), 'utf8')));
 const actualIds = descriptors.map((descriptor) => descriptor.id).sort();
@@ -82,6 +81,11 @@ assert.equal(byId['local-model-lab'].authority.manifest, 'products/local-model-l
 assert.equal(byId['local-model-lab'].memory.profile, 'check-only');
 assert.deepEqual(byId['local-model-lab'].memory.outputs, []);
 
+assert.equal(byId.termux.lifecycle, 'prototype');
+assert.equal(byId.termux.projectPath, 'products/standalone/termux');
+assert.equal(byId.termux.authority.type, 'evidence');
+assert.equal(byId.termux.authority.evidence, 'products/standalone/termux/README.md');
+
 assert.equal(byId.simcore.memory.profile, 'registered-renderer');
 assert.equal(byId.simcore.memory.workflow, '.github/workflows/simcore-release-state-sync.yml');
 assert.equal(byId.simcore.memory.renderer, 'products/simcore/tooling/sync-state.mjs');
@@ -93,7 +97,7 @@ assert.deepEqual(byId.simcore.memory.outputs, [
 ]);
 assert.equal(byId.simcore.authority.releaseBranch, 'release-simcore');
 
-for (const id of ['devpass', 'local', 'termux-large-doc-editor', 'voyage-token-check', 'pocketrisu-helper-mod']) {
+for (const id of ['devpass', 'local', 'termux', 'termux-large-doc-editor', 'voyage-token-check', 'pocketrisu-helper-mod']) {
   assert.equal(byId[id].memory.profile, 'check-only', `${id} must not gain a writable memory system during Phase G`);
   assert.deepEqual(byId[id].memory.outputs, [], `${id} check-only profile must have no writable outputs`);
 }

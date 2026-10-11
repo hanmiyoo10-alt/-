@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "termux",
+  "kind": "product",
+  "displayName": "Termux",
+  "lifecycle": "prototype",
+  "projectPath": "products/standalone/termux",
+  "guidelines": "docs/TERMUX_DEVELOPMENT_GUIDELINES.md",
+  "authority": {
+    "type": "evidence",
+    "evidence": "products/standalone/termux/README.md"
+  },
+  "memory": {
+    "profile": "check-only",
+    "outputs": []
+  },
+  "alerts": {
+    "policy": "repo-default"
+  }
+}

@@ -199,11 +199,14 @@ const screenOnLegacy = classifyPaths(['plugins/termux/screen-on/README.md'], reg
 assert.deepEqual(screenOnLegacy.labels, ['scope:unclassified']);
 assert.deepEqual(screenOnLegacy.ambiguousPaths, []);
 assert.deepEqual(screenOnLegacy.unclassifiedPaths, ['plugins/termux/screen-on/README.md']);
-for (const legacyChildPath of [
-  'plugins/termux/taskbridge/README.md',
-]) {
-  assert.deepEqual(classifyPaths([legacyChildPath], registry).labels, ['scope:unclassified'], `${legacyChildPath} must remain unclassified during staged migration`);
-}
+const taskbridgeTarget = classifyPaths(['products/standalone/termux/taskbridge/README.md'], registry);
+assert.deepEqual(taskbridgeTarget.labels, ['product:termux']);
+assert.deepEqual(taskbridgeTarget.ambiguousPaths, []);
+assert.deepEqual(taskbridgeTarget.unclassifiedPaths, []);
+const taskbridgeLegacy = classifyPaths(['plugins/termux/taskbridge/README.md'], registry);
+assert.deepEqual(taskbridgeLegacy.labels, ['scope:unclassified']);
+assert.deepEqual(taskbridgeLegacy.ambiguousPaths, []);
+assert.deepEqual(taskbridgeLegacy.unclassifiedPaths, ['plugins/termux/taskbridge/README.md']);
 const voyageLegacyPath = classifyPaths(['voyage-token-check/DESIGN_STATUS.md'], registry);
 assert.deepEqual(voyageLegacyPath.labels, ['plugin:voyage-token-check']);
 assert.deepEqual(voyageLegacyPath.ambiguousPaths, []);

@@ -3,12 +3,12 @@ name: TaskBridge Android Companion
 on:
   pull_request:
     paths:
-      - 'plugins/termux/taskbridge/android-companion/**'
+      - 'products/standalone/termux/taskbridge/android-companion/**'
       - '.github/workflows/taskbridge-android-companion.yml'
   push:
     branches: [main]
     paths:
-      - 'plugins/termux/taskbridge/android-companion/**'
+      - 'products/standalone/termux/taskbridge/android-companion/**'
       - '.github/workflows/taskbridge-android-companion.yml'
 
 permissions:
@@ -28,11 +28,11 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Unit tests
-        run: gradle -p plugins/termux/taskbridge/android-companion :app:testDebugUnitTest
+        run: gradle -p products/standalone/termux/taskbridge/android-companion :app:testDebugUnitTest
       - name: Build debug APK
-        run: gradle -p plugins/termux/taskbridge/android-companion :app:assembleDebug
+        run: gradle -p products/standalone/termux/taskbridge/android-companion :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
           name: taskbridge-chatgpt-signal-debug-apk
-          path: plugins/termux/taskbridge/android-companion/app/build/outputs/apk/debug/app-debug.apk
+          path: products/standalone/termux/taskbridge/android-companion/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

@@ -19,7 +19,7 @@ from reference_scope import (
     _read_cli_input,
     classify_reference,
 )
-from registry import load_domain_registry, registry_sha256
+from registry import load_domain_registry, registry_sha256, validate_domain_registry_data
 
 TERMUX_FROZEN = "tests/fixtures/termux-large-doc-editor-o4f0-frozen-domain-registry.json"
 VOYAGE_FROZEN = "tests/fixtures/voyage-token-check-o4h0-frozen-domain-registry.json"
@@ -311,6 +311,66 @@ class ReferenceScopeTests(unittest.TestCase):
             mock.patch.object(Path, "open", return_value=io.BytesIO(oversized)),
         ):
             with self.assertRaisesRegex(ValueError, "registry file too large"):
+                _bounded_registry_snapshot(target)
+
+    def test_registry_byte_cap_covers_schema_maximal_escaped_representation(self):
+        glyph = "😀"
+        domains = []
+        for index in range(64):
+            prefix = f"d{index:02d}"
+            domain_id = prefix + ("a" * (128 - len(prefix)))
+            authority_refs = []
+            for ref_index in range(16):
+                authority_refs.append({
+                    "kind": "release_spec_dir",
+                    "value": (glyph * 255) + chr(ord("a") + ref_index),
+                })
+            domains.append({
+                "domain_id": domain_id,
+                "scope": f"plugin:{domain_id}",
+                "name": glyph * 128,
+                "lifecycle": glyph * 64,
+                "primary_path": glyph * 256,
+                "authority_refs": authority_refs,
+                "guidelines_path": glyph * 256,
+                "registration_semantics": "domain_metadata_only_no_skill_promotion",
+            })
+        registry = {"schema_version": 1, "domains": domains}
+        validate_domain_registry_data(registry)
+        encoded = json.dumps(registry, ensure_ascii=True, indent=4).encode("utf-8")
+        self.assertLess(len(encoded), MAX_REGISTRY_BYTES)
+
+    def test_frozen_fixture_symlink_is_rejected(self):
+        with tempfile.TemporaryDirectory(dir=PACKAGE / "tests" / "fixtures") as temp:
+            target = Path(temp) / "target-frozen-domain-registry.json"
+            target.write_text(
+                (PACKAGE / VOYAGE_FROZEN).read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            link = PACKAGE / "tests" / "fixtures" / "alias-frozen-domain-registry.json"
+            try:
+                link.symlink_to(target)
+                out = classify_reference(self.request(
+                    "plugin:voyage-token-check",
+                    "guidelines_path",
+                    "docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md",
+                    frozen=[str(link)],
+                ))
+            finally:
+                link.unlink(missing_ok=True)
+        self.assertEqual(out["disposition"], "UNKNOWN")
+        self.assertEqual(out["reason_code"], "FROZEN_FIXTURE_INVALID")
+
+    def test_registry_duplicate_json_keys_fail_closed_before_loader(self):
+        raw = b'{"schema_version":1,"schema_version":1,"domains":[]}'
+        target = Path("/virtual/registry.json")
+        with (
+            mock.patch.object(Path, "lstat", return_value=mock.Mock(st_size=len(raw))),
+            mock.patch.object(Path, "is_symlink", return_value=False),
+            mock.patch.object(Path, "is_file", return_value=True),
+            mock.patch.object(Path, "open", return_value=io.BytesIO(raw)),
+        ):
+            with self.assertRaisesRegex(ValueError, "duplicate JSON key"):
                 _bounded_registry_snapshot(target)
 
     def test_cli_returns_deterministic_json(self):

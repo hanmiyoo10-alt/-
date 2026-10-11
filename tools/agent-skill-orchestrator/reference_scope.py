@@ -13,7 +13,7 @@ PACKAGE_ROOT = Path(__file__).resolve().parent
 FROZEN_FIXTURE_ROOT = PACKAGE_ROOT / "tests" / "fixtures"
 MAX_FROZEN_FIXTURES = 16
 MAX_REQUEST_BYTES = 32 * 1024
-MAX_REGISTRY_BYTES = 256 * 1024
+MAX_REGISTRY_BYTES = 4 * 1024 * 1024
 SCOPE_RE = re.compile(r"^(plugin|product):[a-z0-9][a-z0-9._-]{0,127}$")
 DISPOSITIONS = {
     "LIVE_CURRENT_ONLY",
@@ -148,7 +148,8 @@ def _bounded_registry_snapshot(path: Path) -> dict[str, Any]:
         raw = handle.read(MAX_REGISTRY_BYTES + 1)
     if len(raw) > MAX_REGISTRY_BYTES:
         raise ValueError("registry file too large")
-    raw.decode("utf-8")
+    text = raw.decode("utf-8")
+    json.loads(text, object_pairs_hook=_reject_duplicate_keys)
     with tempfile.TemporaryDirectory() as temp_dir:
         snapshot = Path(temp_dir) / "registry.json"
         snapshot.write_bytes(raw)
@@ -158,6 +159,8 @@ def _bounded_registry_snapshot(path: Path) -> dict[str, Any]:
 def _load_frozen_fixture(raw_path: str) -> tuple[str, dict[str, Any]]:
     requested = Path(raw_path)
     candidate = requested if requested.is_absolute() else PACKAGE_ROOT / requested
+    if candidate.is_symlink():
+        raise ValueError("frozen fixture symlink is not allowed")
     resolved = candidate.resolve(strict=True)
     root = FROZEN_FIXTURE_ROOT.resolve(strict=True)
     if resolved.parent != root:

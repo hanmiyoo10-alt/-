@@ -40,8 +40,9 @@ assert.equal(taxonomyById.get('pocketrisu').risu, 'yes');
 assert.equal(taxonomyById.get('pocketrisu').targetRoot, 'products/risu/pocketrisu');
 assert.equal(taxonomyById.get('app-api-mod-lab').risu, 'no');
 assert.equal(taxonomyById.get('termux').targetRoot, 'products/standalone/termux');
-assert.deepEqual(taxonomyById.get('termux').sourceRefs, ['plugin:termux-large-doc-editor', 'product:termux']);
-assert.deepEqual(taxonomyById.get('termux').sourceRoots, ['plugins/termux/**', 'products/standalone/termux/**']);
+assert.deepEqual(taxonomyById.get('termux').sourceRefs, ['product:termux']);
+assert.deepEqual(taxonomyById.get('termux').sourceRoots, ['products/standalone/termux/**']);
+assert.equal(taxonomyById.get('termux').migration, 'preserve');
 assert.equal(taxonomyById.get('mobile-coder-lab').targetRoot, 'products/standalone/mobile-coder-lab');
 assert.equal(taxonomyById.get('simcore').targetRoot, 'plugins/risu/simcore');
 assert.deepEqual(taxonomyById.get('local').sourceRefs, ['plugin:usage-dashboard', 'plugin:devpass', 'plugin:voyage-token-check']);
@@ -98,7 +99,6 @@ assert.deepEqual(Object.keys(registry.plugins).sort(), [
   'devpass',
   'local',
   'simcore',
-  'termux-large-doc-editor',
   'usage-dashboard',
   'voyage-token-check',
 ]);
@@ -172,9 +172,9 @@ assert.deepEqual(largeDocTarget.labels, ['product:termux']);
 assert.deepEqual(largeDocTarget.ambiguousPaths, []);
 assert.deepEqual(largeDocTarget.unclassifiedPaths, []);
 const largeDocLegacy = classifyPaths(['plugins/termux/large-doc-editor/README.md'], registry);
-assert.deepEqual(largeDocLegacy.labels, ['plugin:termux-large-doc-editor']);
+assert.deepEqual(largeDocLegacy.labels, ['scope:unclassified']);
 assert.deepEqual(largeDocLegacy.ambiguousPaths, []);
-assert.deepEqual(largeDocLegacy.unclassifiedPaths, []);
+assert.deepEqual(largeDocLegacy.unclassifiedPaths, ['plugins/termux/large-doc-editor/README.md']);
 assert.deepEqual(registry.products.termux.authority, {evidence: 'products/standalone/termux/README.md'});
 assert.equal(registry.products.termux.lifecycle, 'prototype');
 assert.equal(registry.products.termux.statusAdapter, 'prototype');

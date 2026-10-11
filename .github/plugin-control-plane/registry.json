@@ -71,19 +71,6 @@
         "ref": "main"
       }
     },
-    "termux-large-doc-editor": {
-      "displayName": "Termux Large Doc Editor",
-      "lifecycle": "prototype",
-      "issueValues": ["termux-large-doc-editor", "Termux Large Doc Editor"],
-      "paths": [
-        "plugins/termux/large-doc-editor/**",
-        "docs/TERMUX_*.md"
-      ],
-      "statusAdapter": "prototype",
-      "authority": {
-        "evidence": "plugins/termux/large-doc-editor/README.md"
-      }
-    },
     "voyage-token-check": {
       "displayName": "Voyage Token Check",
       "lifecycle": "design-evidence-validation",

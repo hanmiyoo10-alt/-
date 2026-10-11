@@ -2,7 +2,7 @@
 
 Date: 2026-08-24
 Status: REQUIRED · RELEASE AUTHORITY NOT YET ESTABLISHED
-Scope: `plugins/termux/` project memory and production-state synchronization
+Scope: `products/standalone/termux/` project memory and production-state synchronization
 
 ## Decision
 

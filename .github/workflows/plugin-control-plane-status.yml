@@ -11,7 +11,6 @@ on:
       - '.github/usage-dashboard/releases/**'
       - 'plugins/risu/local/**'
       - 'plugins/devpass/**'
-      - 'plugins/termux/large-doc-editor/**'
       - 'products/standalone/termux/large-doc-editor/**'
       - 'voyage-token-check/**'
       - 'products/pocketrisu-helper-mod/**'

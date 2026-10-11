@@ -286,13 +286,17 @@ def _tree_entry(
     commit_oid: str,
     path: str,
     cache: dict[tuple[str, str], dict[str, str]],
+    attempted: set[tuple[str, str]],
 ) -> dict[str, str]:
     key = (commit_oid, path)
     cached = cache.get(key)
     if cached is not None:
         return cached
-    if len(cache) >= MAX_DISTINCT_TREE_LOOKUPS:
+    if key in attempted:
+        raise ValidationUnknown(f"tree entry unavailable or ambiguous: {path}")
+    if len(attempted) >= MAX_DISTINCT_TREE_LOOKUPS:
         raise ValidationUnknown("distinct Git tree lookup budget exhausted")
+    attempted.add(key)
     raw = _git(repo, "ls-tree", "-z", commit_oid, "--", path)
     records = [record for record in raw.split(b"\0") if record]
     if len(records) != 1:
@@ -322,12 +326,13 @@ def _verify_directory_prefixes(
     directory: str,
     field: str,
     cache: dict[tuple[str, str], dict[str, str]],
+    attempted: set[tuple[str, str]],
 ) -> None:
     current: list[str] = []
     for part in PurePosixPath(directory).parts:
         current.append(part)
         path = "/".join(current)
-        entry = _tree_entry(repo, commit_oid, path, cache)
+        entry = _tree_entry(repo, commit_oid, path, cache, attempted)
         if entry["mode"] != "040000" or entry["type"] != "tree":
             raise ValidationUnknown(f"{field}: symlink or non-tree component: {path}")
 
@@ -349,6 +354,7 @@ def _verify_regular_target(
     target: str,
     field: str,
     cache: dict[tuple[str, str], dict[str, str]],
+    attempted: set[tuple[str, str]],
     verified_blobs: set[str],
 ) -> dict[str, str]:
     parts = PurePosixPath(target).parts
@@ -358,10 +364,10 @@ def _verify_regular_target(
     for part in parts[:-1]:
         current.append(part)
         path = "/".join(current)
-        entry = _tree_entry(repo, commit_oid, path, cache)
+        entry = _tree_entry(repo, commit_oid, path, cache, attempted)
         if entry["mode"] != "040000" or entry["type"] != "tree":
             raise ValidationUnknown(f"{field}: symlink or non-tree target component: {path}")
-    final = _tree_entry(repo, commit_oid, target, cache)
+    final = _tree_entry(repo, commit_oid, target, cache, attempted)
     if final["type"] != "blob" or final["mode"] not in REGULAR_BLOB_MODES:
         raise ValidationUnknown(f"{field}: target is not a regular file")
     _verify_blob_object(repo, final["oid"], verified_blobs)
@@ -375,6 +381,7 @@ def check_reference(
     new_oid: str | None = None,
     name_max: int | None = None,
     tree_cache: dict[tuple[str, str], dict[str, str]] | None = None,
+    tree_attempts: set[tuple[str, str]] | None = None,
     verified_blobs: set[str] | None = None,
 ) -> dict[str, Any]:
     try:
@@ -389,6 +396,8 @@ def check_reference(
             raise ValidationUnknown("authenticated Git evidence required")
         if tree_cache is None:
             tree_cache = {}
+        if tree_attempts is None:
+            tree_attempts = set()
         if verified_blobs is None:
             verified_blobs = set()
 
@@ -411,10 +420,10 @@ def check_reference(
         )
 
         _verify_directory_prefixes(
-            repo, old_oid, old_dir, "old_working_dir", tree_cache
+            repo, old_oid, old_dir, "old_working_dir", tree_cache, tree_attempts
         )
         _verify_directory_prefixes(
-            repo, new_oid, new_dir, "new_working_dir", tree_cache
+            repo, new_oid, new_dir, "new_working_dir", tree_cache, tree_attempts
         )
 
         target = _resolve_repo_target(old_dir, old_ref)
@@ -425,10 +434,22 @@ def check_reference(
         candidate_target = _resolve_repo_target(new_dir, new_ref)
 
         old_target_entry = _verify_regular_target(
-            repo, old_oid, target, "old_target", tree_cache, verified_blobs
+            repo,
+            old_oid,
+            target,
+            "old_target",
+            tree_cache,
+            tree_attempts,
+            verified_blobs,
         )
         new_target_entry = _verify_regular_target(
-            repo, new_oid, target, "new_target", tree_cache, verified_blobs
+            repo,
+            new_oid,
+            target,
+            "new_target",
+            tree_cache,
+            tree_attempts,
+            verified_blobs,
         )
 
         status = (
@@ -512,6 +533,7 @@ def check_batch(request: Any) -> dict[str, Any]:
         }
 
     tree_cache: dict[tuple[str, str], dict[str, str]] = {}
+    tree_attempts: set[tuple[str, str]] = set()
     verified_blobs: set[str] = set()
     results = [
         check_reference(
@@ -521,6 +543,7 @@ def check_batch(request: Any) -> dict[str, Any]:
             new_oid,
             name_max,
             tree_cache,
+            tree_attempts,
             verified_blobs,
         )
         for item in request["references"]

@@ -327,6 +327,24 @@ class WorkflowPathDepthTests(unittest.TestCase):
         self.assertEqual(out["status"], "UNKNOWN")
         self.assertLessEqual(len(ls_tree_calls), 2)
 
+    def test_distinct_failed_tree_lookups_consume_budget(self):
+        references = [
+            {**self.t5(), "old_working_dir": f"missing-{index}"}
+            for index in range(64)
+        ]
+        with (
+            mock.patch.object(wpd, "MAX_DISTINCT_TREE_LOOKUPS", 2),
+            mock.patch.object(wpd, "_git", wraps=wpd._git) as git_call,
+        ):
+            out = self.batch(references)
+        ls_tree_calls = [
+            call
+            for call in git_call.call_args_list
+            if len(call.args) > 1 and call.args[1] == "ls-tree"
+        ]
+        self.assertEqual(out["status"], "UNKNOWN")
+        self.assertLessEqual(len(ls_tree_calls), 2)
+
     def test_git_reserved_components_are_unknown(self):
         cases = [
             {**self.t5(), "old_reference": "../../.git/tool.py"},

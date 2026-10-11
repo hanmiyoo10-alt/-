@@ -2441,3 +2441,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/93aabcf254afa93458d6b3cf80ffc1a49802cc62)
 - Event ID: `5972624513bfb504a77589f3ba727e8cf3bc3db2ee79eb98f476a3529930a8c0`
 <!-- canonical-main-doc-promoted:5972624513bfb504a77589f3ba727e8cf3bc3db2ee79eb98f476a3529930a8c0 -->
+
+### 2026-10-11 — refactor(termux): move taskbridge into product family (#3537)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `3c1afc2a4ddf817dd451b6f6ee3c826b5d1dd1a9`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3c1afc2a4ddf817dd451b6f6ee3c826b5d1dd1a9)
+- Event ID: `cf808829e0895492ed38e38a8fe3aca73e242bf935a9706609327b89bec6c7a7`
+<!-- canonical-main-doc-promoted:cf808829e0895492ed38e38a8fe3aca73e242bf935a9706609327b89bec6c7a7 -->

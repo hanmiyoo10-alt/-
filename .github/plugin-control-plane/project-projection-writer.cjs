@@ -249,7 +249,7 @@ function normalizeIssue(raw, issueNumber) {
 }
 
 function itemField(item, key, allowedValues) {
-  const present = Object.hasOwn(item, key);
+  const present = Object.hasOwn(item, key) && item[key] !== null;
   if (!present) return {ok: true, present: false, value: null};
   if (typeof item[key] !== 'string' || !allowedValues.includes(item[key])) {
     return {ok: false, present: true, value: null};
@@ -396,15 +396,6 @@ function readEvidenceDefault(issueNumber, runner = defaultRunner) {
   const issue = normalizeIssue(issueRead.value, issueNumber);
   if (!issue.ok) return {ok: false, status: 'BLOCKED', reasonCodes: issue.reasonCodes};
 
-  const itemsRead = runJson(runner, 'gh', [
-    'project', 'item-list', String(PROJECT_NUMBER), '--owner', PROJECT_OWNER,
-    '--format', 'json', '--limit', String(MAX_PROJECT_ITEMS),
-    '--jq', PROJECT_ITEM_JQ,
-  ], {maxBuffer: MAX_PROJECT_ITEM_OUTPUT_BYTES});
-  if (!itemsRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: itemsRead.reasonCodes};
-  const item = normalizeProjectItemList(itemsRead.value, issueNumber);
-  if (!item.ok) return {ok: false, status: 'BLOCKED', reasonCodes: item.reasonCodes};
-
   const finalOpsRead = runJson(runner, 'gh', [
     'issue', 'view', String(OPS_ISSUE), '--repo', REPO,
     '--json', 'body,state,number,url',
@@ -440,6 +431,15 @@ function readEvidenceDefault(issueNumber, runner = defaultRunner) {
   if (finalMainSha !== mainSha) {
     return {ok: false, status: 'BLOCKED', reasonCodes: ['MAIN_CHANGED_DURING_BARRIER']};
   }
+
+  const itemsRead = runJson(runner, 'gh', [
+    'project', 'item-list', String(PROJECT_NUMBER), '--owner', PROJECT_OWNER,
+    '--format', 'json', '--limit', String(MAX_PROJECT_ITEMS),
+    '--jq', PROJECT_ITEM_JQ,
+  ], {maxBuffer: MAX_PROJECT_ITEM_OUTPUT_BYTES});
+  if (!itemsRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: itemsRead.reasonCodes};
+  const item = normalizeProjectItemList(itemsRead.value, issueNumber);
+  if (!item.ok) return {ok: false, status: 'BLOCKED', reasonCodes: item.reasonCodes};
 
   return {
     ok: true,

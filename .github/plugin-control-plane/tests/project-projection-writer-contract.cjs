@@ -222,6 +222,12 @@ assert.equal(item.ok, true);
 assert.equal(item.value.current.priority, null);
 assert.equal(item.value.presence.priority, false);
 assert.equal(item.value.current.workType, 'Work Packet');
+const projectedNullPriority = itemRaw();
+projectedNullPriority.priority = null;
+const nullPriorityItem = writer.normalizeProjectItemList(itemListRaw([projectedNullPriority]), 42);
+assert.equal(nullPriorityItem.ok, true);
+assert.equal(nullPriorityItem.value.current.priority, null);
+assert.equal(nullPriorityItem.value.presence.priority, false);
 assert.equal(writer.normalizeProjectItemList(itemListRaw([itemRaw(), itemRaw()]), 42).ok, false);
 assert.equal(writer.normalizeProjectItemList(itemListRaw([]), 42).ok, false);
 const truncatedItems = writer.normalizeProjectItemList({totalCount: 2, items: [itemRaw()]}, 42);
@@ -471,6 +477,7 @@ assert.equal(writer.buildItemEditArgs(42, {key: 'status', field: 'Status', desir
   assert.ok(fieldListCall.includes(String(writer.MAX_PROJECT_FIELDS)));
   const mainReads = calls.filter((args) => args[0] === 'gh' && args[1] === 'api');
   assert.equal(mainReads.length, 2);
+  assert.deepEqual(calls.at(-1).slice(0, 3), ['gh', 'project', 'item-list']);
 }
 
 {

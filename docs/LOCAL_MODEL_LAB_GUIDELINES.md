@@ -1,4 +1,4 @@
-# Local Model Lab — Development & Research Guidelines
+# Local Model Lab — Development & Operations Guidelines
 
 This document is the canonical bootstrap/operating contract for the `local-model-lab` scope.
 

@@ -102,6 +102,7 @@ assert.deepEqual(Object.keys(registry.plugins).sort(), [
 ]);
 assert.deepEqual(Object.keys(registry.products).sort(), [
   'app-api-mod-lab',
+  'local-model-lab',
   'pocketrisu-helper-mod',
 ]);
 assert.deepEqual((registry.scopes || []).map((scope) => scope.id).sort(), [
@@ -168,6 +169,11 @@ const voyageLegacyPath = classifyPaths(['voyage-token-check/DESIGN_STATUS.md'], 
 assert.deepEqual(voyageLegacyPath.labels, ['plugin:voyage-token-check']);
 assert.deepEqual(voyageLegacyPath.ambiguousPaths, []);
 assert.deepEqual(classifyPaths(['products/app-api-mod-lab/CURRENT.md'], registry).labels, ['product:app-api-mod-lab']);
+assert.deepEqual(registry.products['local-model-lab'].paths, ['products/local-model-lab/**', 'docs/LOCAL_MODEL_LAB_GUIDELINES.md']);
+assert.equal(registry.products['local-model-lab'].authority.evidence, 'products/local-model-lab/CURRENT.md');
+assert.equal(registry.products['local-model-lab'].authority.manifest, 'products/local-model-lab/product.json');
+assert.deepEqual(classifyPaths(['products/local-model-lab/CURRENT.md'], registry).labels, ['product:local-model-lab']);
+assert.deepEqual(classifyPaths(['docs/LOCAL_MODEL_LAB_GUIDELINES.md'], registry).labels, ['product:local-model-lab']);
 const mclBootstrap = classifyPaths(['products/chatgpt-mobile-coder-lab/device-bootstrap/bootstrap.sh'], registry);
 assert.deepEqual(mclBootstrap.labels, ['scope:research-product']);
 assert.deepEqual(mclBootstrap.unclassifiedPaths, []);
@@ -264,6 +270,7 @@ assert.deepEqual(classifyIssueBody('Scope: local', registry), {explicit: true, l
 assert.deepEqual(classifyIssueBody('Plugin: simcore', registry), {explicit: true, labels: ['plugin:simcore']});
 assert.deepEqual(classifyIssueBody('Scope: voyage-token-check', registry), {explicit: true, labels: ['plugin:voyage-token-check']});
 assert.deepEqual(classifyIssueBody('Scope: pocketrisu-helper-mod', registry), {explicit: true, labels: ['product:pocketrisu-helper-mod']});
+assert.deepEqual(classifyIssueBody('Scope: local-model-lab', registry), {explicit: true, labels: ['product:local-model-lab']});
 assert.deepEqual(classifyIssueBody('Scope: study', registry), {explicit: true, labels: ['scope:study']});
 assert.deepEqual(classifyIssueBody('Scope: local-runtime', registry), {explicit: true, labels: ['scope:local-runtime']});
 assert.deepEqual(classifyIssueBody('### Scope\n\nshared', registry), {explicit: true, labels: ['scope:shared']});
@@ -295,6 +302,7 @@ assert.match(issueTemplate, /label:\s*Scope/);
 assert.match(issueTemplate, /^        - local$/m);
 assert.match(issueTemplate, /voyage-token-check/);
 assert.match(issueTemplate, /pocketrisu-helper-mod/);
+assert.match(issueTemplate, /^        - local-model-lab$/m);
 assert.match(issueTemplate, /^        - study$/m);
 assert.match(issueTemplate, /^        - local-runtime$/m);
 assert.match(issueTemplate, /^        - custom$/m);

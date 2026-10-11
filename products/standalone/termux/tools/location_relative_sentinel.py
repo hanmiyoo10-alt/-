@@ -12,7 +12,9 @@ SCHEMA = "termux-location-relative-sentinel.v1"
 MAX_FILES = 64
 MAX_PATH_CHARS = 512
 MAX_SOURCE_BYTES = 128 * 1024
+MAX_TOTAL_SOURCE_BYTES = 512 * 1024
 MAX_INPUT_BYTES = 512 * 1024
+MAX_AST_NODES = 20_000
 MAX_EXPRESSIONS_PER_FILE = 64
 MAX_PARENT_INDEX = 256
 MAX_FINGERPRINT_CHARS = 2048
@@ -26,6 +28,8 @@ def _authority_denials() -> dict[str, Any]:
     return {
         "evidence_provenance": "CALLER_SUPPLIED",
         "authenticated_repository_evidence": False,
+        "path_resolution_model": "LEXICAL_REPOSITORY_RELATIVE",
+        "runtime_symlink_resolution_proven": False,
         "filesystem_source_discovery_used": False,
         "git_used": False,
         "github_used": False,
@@ -44,6 +48,10 @@ def _contains_surrogate(value: str) -> bool:
     return any(0xD800 <= ord(char) <= 0xDFFF for char in value)
 
 
+def _has_control(value: str) -> bool:
+    return any(ord(char) < 32 or ord(char) == 127 for char in value)
+
+
 def _repo_path(value: Any, field: str) -> str:
     if not isinstance(value, str) or not value or len(value) > MAX_PATH_CHARS:
         raise ValidationUnknown(f"{field}: expected bounded non-empty path")
@@ -55,6 +63,7 @@ def _repo_path(value: Any, field: str) -> str:
         or "//" in value
         or "\x00" in value
         or _contains_surrogate(value)
+        or _has_control(value)
     ):
         raise ValidationUnknown(f"{field}: noncanonical repository path")
     parts = value.split("/")
@@ -157,7 +166,11 @@ def _extract_expressions(source: str, field: str) -> list[dict[str, Any]]:
     expressions: list[dict[str, Any]] = []
     unsupported: list[str] = []
 
+    node_count = 0
     for node in ast.walk(tree):
+        node_count += 1
+        if node_count > MAX_AST_NODES:
+            raise ValidationUnknown(f"{field}: AST node budget exceeded")
         if not isinstance(node, ast.Subscript):
             continue
         parents_attr = node.value
@@ -243,6 +256,8 @@ def _classify_file(
 
         old_path = _repo_path(item["old_path"], "old_path")
         new_path = _repo_path(item["new_path"], "new_path")
+        if not old_path.endswith(".py") or not new_path.endswith(".py"):
+            raise ValidationUnknown("file paths must identify Python source")
         old_suffix = _relative_suffix(old_path, old_root, "old_path")
         new_suffix = _relative_suffix(new_path, new_root, "new_path")
         if old_suffix != new_suffix:
@@ -356,13 +371,31 @@ def classify(request: Any) -> dict[str, Any]:
         normalized: list[tuple[str, str, Any]] = []
         old_seen: set[str] = set()
         new_seen: set[str] = set()
-        for item in files:
-            if not isinstance(item, dict):
+        total_source_bytes = 0
+        for index, item in enumerate(files):
+            if not isinstance(item, dict) or set(item) != {
+                "old_path",
+                "new_path",
+                "old_source",
+                "new_source",
+            }:
                 raise ValidationUnknown("file item shape invalid")
             old_path = item.get("old_path")
             new_path = item.get("new_path")
             if not isinstance(old_path, str) or not isinstance(new_path, str):
                 raise ValidationUnknown("file paths must be strings")
+            old_source = _source_text(
+                item["old_source"],
+                f"files[{index}].old_source",
+            )
+            new_source = _source_text(
+                item["new_source"],
+                f"files[{index}].new_source",
+            )
+            total_source_bytes += len(old_source.encode("utf-8", "strict"))
+            total_source_bytes += len(new_source.encode("utf-8", "strict"))
+            if total_source_bytes > MAX_TOTAL_SOURCE_BYTES:
+                raise ValidationUnknown("total source evidence exceeds byte limit")
             if old_path in old_seen or new_path in new_seen:
                 raise ValidationUnknown("duplicate file path evidence")
             old_seen.add(old_path)

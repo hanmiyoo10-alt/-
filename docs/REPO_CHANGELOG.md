@@ -2401,3 +2401,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c1bfe4b4b49ff3f2804a3af37f8cc88116c76fcd)
 - Event ID: `0c779e7b6919bb0d81dfa4833a777c0ba0d2a25c4c70981ffc9bdb7a8dc0177e`
 <!-- canonical-main-doc-promoted:0c779e7b6919bb0d81dfa4833a777c0ba0d2a25c4c70981ffc9bdb7a8dc0177e -->
+
+### 2026-10-10 — fix(repo): classify root AGENTS.md as repo scope (#3529)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `2fae4a82084ff01e1f3a23990bdbaf9268aebfa7`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2fae4a82084ff01e1f3a23990bdbaf9268aebfa7)
+- Event ID: `30ecaa7bd667993290269717ab38b96ac9373c67097af9027b2256922afd19ad`
+<!-- canonical-main-doc-promoted:30ecaa7bd667993290269717ab38b96ac9373c67097af9027b2256922afd19ad -->

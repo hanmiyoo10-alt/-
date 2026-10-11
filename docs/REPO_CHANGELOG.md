@@ -2473,3 +2473,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3c88f9af7409fa942faf54a60ecc89b6701c7c34)
 - Event ID: `99cc679b8b1865467b570fef34bd3e40a3590e5136f81f92c656552ff468ad1e`
 <!-- canonical-main-doc-promoted:99cc679b8b1865467b570fef34bd3e40a3590e5136f81f92c656552ff468ad1e -->
+
+### 2026-10-11 — feat(repo): add CI-covered project projection planner (#3571)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `4a005e7f84015492c6d76138a04f354ca3ee604d`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/4a005e7f84015492c6d76138a04f354ca3ee604d)
+- Event ID: `287211e403a4c4e104183611515280251a77914215ce6d2f9ca3e8975e73e8e4`
+<!-- canonical-main-doc-promoted:287211e403a4c4e104183611515280251a77914215ce6d2f9ca3e8975e73e8e4 -->

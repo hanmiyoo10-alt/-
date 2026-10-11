@@ -18,6 +18,7 @@ from reference_scope import (
     _bounded_registry_snapshot,
     _read_bounded_regular_file,
     _read_cli_input,
+    _read_package_relative_regular_file,
     classify_reference,
 )
 from registry import load_domain_registry, registry_sha256, validate_domain_registry_data
@@ -403,15 +404,18 @@ class ReferenceScopeTests(unittest.TestCase):
             def anchored_open(path, flags, *args, **kwargs):
                 nonlocal swapped
                 fd = real_open(path, flags, *args, **kwargs)
-                if Path(path) == fixture_root and not swapped:
+                if path == "fixtures" and not swapped:
                     fixture_root.rename(backup)
                     fixture_root.symlink_to(outside, target_is_directory=True)
                     swapped = True
                 return fd
 
             with (
+                mock.patch(
+                    "reference_scope._load_live_registry",
+                    return_value=load_domain_registry(PACKAGE / "domains" / "registry.json"),
+                ),
                 mock.patch("reference_scope.PACKAGE_ROOT", package_root),
-                mock.patch("reference_scope.FROZEN_FIXTURE_ROOT", fixture_root),
                 mock.patch("reference_scope.os.open", side_effect=anchored_open),
             ):
                 out = classify_reference(self.request(
@@ -438,13 +442,11 @@ class ReferenceScopeTests(unittest.TestCase):
             outside = package_root / "outside"
             domains_root.mkdir(parents=True)
             outside.mkdir(parents=True)
-            live_path = domains_root / "registry.json"
-            live_path.write_text(
+            (domains_root / "registry.json").write_text(
                 (PACKAGE / "domains" / "registry.json").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
-            outside_live = outside / "registry.json"
-            outside_live.write_text(
+            (outside / "registry.json").write_text(
                 (PACKAGE / "domains" / "registry.json").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
@@ -456,14 +458,14 @@ class ReferenceScopeTests(unittest.TestCase):
             def anchored_open(path, flags, *args, **kwargs):
                 nonlocal swapped
                 fd = real_open(path, flags, *args, **kwargs)
-                if Path(path) == domains_root and not swapped:
+                if Path(path) == package_root and not swapped:
                     domains_root.rename(backup)
                     domains_root.symlink_to(outside, target_is_directory=True)
                     swapped = True
                 return fd
 
             with (
-                mock.patch("reference_scope.DOMAIN_REGISTRY_PATH", live_path),
+                mock.patch("reference_scope.PACKAGE_ROOT", package_root),
                 mock.patch("reference_scope.os.open", side_effect=anchored_open),
             ):
                 out = classify_reference(self.request(
@@ -473,19 +475,64 @@ class ReferenceScopeTests(unittest.TestCase):
                     frozen=[],
                 ))
 
-            self.assertEqual(out["disposition"], "LIVE_CURRENT_ONLY")
+            self.assertEqual(out["disposition"], "UNKNOWN")
+            self.assertEqual(out["reason_code"], "LIVE_REGISTRY_INVALID")
             self.assertEqual(out["scope"], "plugin:voyage-token-check")
-            self.assertEqual(
-                out["live"]["registry_sha256"],
-                registry_sha256(load_domain_registry(PACKAGE / "domains" / "registry.json")),
-            )
             self.assertTrue(swapped)
             domains_root.unlink()
             backup.rename(domains_root)
 
+    def test_package_root_walk_rejects_replaced_tests_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            package_root = Path(temp) / "package"
+            tests_root = package_root / "tests"
+            fixture_root = tests_root / "fixtures"
+            outside = package_root / "outside"
+            fixture_root.mkdir(parents=True)
+            outside.mkdir(parents=True)
+            fixture_name = "package-root-anchor-frozen-domain-registry.json"
+            (outside / fixture_name).write_text(
+                (PACKAGE / VOYAGE_FROZEN).read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            real_open = os.open
+            swapped = False
+            backup = tests_root.with_name("tests-backup")
+
+            def anchored_open(path, flags, *args, **kwargs):
+                nonlocal swapped
+                fd = real_open(path, flags, *args, **kwargs)
+                if Path(path) == package_root and not swapped:
+                    tests_root.rename(backup)
+                    tests_root.symlink_to(outside, target_is_directory=True)
+                    swapped = True
+                return fd
+
+            with (
+                mock.patch(
+                    "reference_scope._load_live_registry",
+                    return_value=load_domain_registry(PACKAGE / "domains" / "registry.json"),
+                ),
+                mock.patch("reference_scope.PACKAGE_ROOT", package_root),
+                mock.patch("reference_scope.os.open", side_effect=anchored_open),
+            ):
+                out = classify_reference(self.request(
+                    "plugin:voyage-token-check",
+                    "guidelines_path",
+                    "docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md",
+                    frozen=[f"tests/fixtures/{fixture_name}"],
+                ))
+
+            self.assertEqual(out["disposition"], "UNKNOWN")
+            self.assertEqual(out["reason_code"], "FROZEN_FIXTURE_INVALID")
+            self.assertTrue(swapped)
+            tests_root.unlink()
+            backup.rename(tests_root)
+
     def test_live_registry_failure_preserves_validated_query(self):
         with mock.patch(
-            "reference_scope._bounded_registry_snapshot",
+            "reference_scope._load_live_registry",
             side_effect=ValueError("live registry unavailable"),
         ):
             out = classify_reference(self.request(

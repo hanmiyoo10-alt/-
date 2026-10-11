@@ -175,13 +175,53 @@ def _read_bounded_regular_file(
         os.close(fd)
 
 
-def _open_directory_nofollow(path: Path) -> int:
+def _open_directory_nofollow(
+    path: Path | str,
+    *,
+    dir_fd: int | None = None,
+) -> int:
     nofollow = getattr(os, "O_NOFOLLOW", None)
     odirectory = getattr(os, "O_DIRECTORY", None)
     if nofollow is None or odirectory is None:
         raise ValueError("anchored directory reads are unsupported")
     flags = os.O_RDONLY | odirectory | getattr(os, "O_CLOEXEC", 0) | nofollow
-    return os.open(path, flags)
+    return os.open(path, flags, dir_fd=dir_fd)
+
+
+def _read_package_relative_regular_file(
+    parts: tuple[str, ...],
+    max_bytes: int,
+) -> bytes:
+    if (
+        len(parts) < 2
+        or any(
+            not isinstance(part, str)
+            or not part
+            or part in {".", ".."}
+            or "/" in part
+            or "\\" in part
+            for part in parts
+        )
+    ):
+        raise ValueError("invalid package-relative file path")
+
+    root_fd = _open_directory_nofollow(PACKAGE_ROOT)
+    directory_fds: list[int] = []
+    current_fd = root_fd
+    try:
+        for directory in parts[:-1]:
+            next_fd = _open_directory_nofollow(directory, dir_fd=current_fd)
+            directory_fds.append(next_fd)
+            current_fd = next_fd
+        return _read_bounded_regular_file(
+            parts[-1],
+            max_bytes,
+            dir_fd=current_fd,
+        )
+    finally:
+        for fd in reversed(directory_fds):
+            os.close(fd)
+        os.close(root_fd)
 
 
 def _validate_registry_bytes(raw: bytes) -> dict[str, Any]:
@@ -207,29 +247,32 @@ def _bounded_registry_snapshot(path: Path) -> dict[str, Any]:
     return _validate_registry_bytes(raw)
 
 
+def _load_live_registry() -> dict[str, Any]:
+    return _validate_registry_bytes(
+        _read_package_relative_regular_file(
+            ("domains", "registry.json"),
+            MAX_REGISTRY_BYTES,
+        )
+    )
+
+
 def _load_frozen_fixture(raw_path: str) -> tuple[str, dict[str, Any]]:
     requested = Path(raw_path)
     candidate = requested if requested.is_absolute() else PACKAGE_ROOT / requested
-    lexical_root = Path(os.path.abspath(FROZEN_FIXTURE_ROOT))
+    lexical_root = Path(os.path.abspath(PACKAGE_ROOT / "tests" / "fixtures"))
     lexical_candidate = Path(os.path.abspath(candidate))
     if lexical_candidate.parent != lexical_root:
         raise ValueError("frozen fixture must be a direct child of tests/fixtures")
     if not lexical_candidate.name.endswith("-frozen-domain-registry.json"):
         raise ValueError("unsupported frozen fixture filename")
 
-    root_fd = _open_directory_nofollow(lexical_root)
-    try:
-        raw = _read_bounded_regular_file(
-            lexical_candidate.name,
+    data = _validate_registry_bytes(
+        _read_package_relative_regular_file(
+            ("tests", "fixtures", lexical_candidate.name),
             MAX_REGISTRY_BYTES,
-            dir_fd=root_fd,
         )
-    finally:
-        os.close(root_fd)
-
-    data = _validate_registry_bytes(raw)
-    locator = (FROZEN_FIXTURE_ROOT / lexical_candidate.name).relative_to(PACKAGE_ROOT)
-    return locator.as_posix(), data
+    )
+    return f"tests/fixtures/{lexical_candidate.name}", data
 
 
 def classify_reference(request: Any) -> dict[str, Any]:
@@ -239,7 +282,7 @@ def classify_reference(request: Any) -> dict[str, Any]:
     scope, reference, frozen_paths = validated
 
     try:
-        live_registry = _bounded_registry_snapshot(DOMAIN_REGISTRY_PATH)
+        live_registry = _load_live_registry()
         live_registry_digest = registry_sha256(live_registry)
         live_domain = _domain_for_scope(live_registry, scope)
     except Exception:

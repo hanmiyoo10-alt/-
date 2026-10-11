@@ -16,6 +16,7 @@ body:
         - voyage-token-check
         - pocketrisu-helper-mod
         - local-model-lab
+        - termux
         - study
         - local-runtime
         - shared

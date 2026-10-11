@@ -495,7 +495,7 @@ class ReferenceScopeTests(unittest.TestCase):
             def anchored_open(path, flags, *args, **kwargs):
                 nonlocal swapped
                 fd = real_open(path, flags, *args, **kwargs)
-                if Path(path) == package_root and not swapped:
+                if path == package_root.name and not swapped:
                     domains_root.rename(backup)
                     domains_root.symlink_to(outside, target_is_directory=True)
                     swapped = True
@@ -540,7 +540,7 @@ class ReferenceScopeTests(unittest.TestCase):
             def anchored_open(path, flags, *args, **kwargs):
                 nonlocal swapped
                 fd = real_open(path, flags, *args, **kwargs)
-                if Path(path) == package_root and not swapped:
+                if path == package_root.name and not swapped:
                     tests_root.rename(backup)
                     tests_root.symlink_to(outside, target_is_directory=True)
                     swapped = True

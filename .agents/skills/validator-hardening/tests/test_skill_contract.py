@@ -166,7 +166,10 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         for required in (
             "prefer reading and executing from an immutable snapshot",
             "immediately before emitting the final receipt revalidate",
+            "including a Git checkout/worktree or a non-Git mutable path",
+            "recorded digest/equivalent exact identity for every mutable non-Git input",
             "every contributing source, helper, test, fixture, owner-contract, and executed-input identity",
+            "regardless of storage mechanism",
             "UNKNOWN / REVIEW_INPUT_CHANGED_DURING_REVIEW",
         ):
             self.assertIn(required, self.text)
@@ -275,10 +278,19 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "bounded host-resource containment",
             "outer wall-clock timeout plus CPU time, memory, process/thread count, filesystem growth, and output limits",
             "effect/resource containment identity for exercised cases",
-            "isolated copy/workspace or a proven no-write configuration",
-            "cannot mutate the reviewed checkout",
+            "isolated copy/workspace or proven no-write configuration",
+            "an owner test proven not to load or execute the target",
+            "any owner test that imports, invokes, loads, or otherwise executes the target under review",
+            "requires the same proven effect containment and host-resource containment",
+            "do not execute the target, including indirectly through owner tests",
         ):
             self.assertIn(required, self.text)
+
+    def test_receipt_preserves_proposed_unexecuted_cases(self):
+        self.assertIn(
+            "proposed/not-exercised adversarial cases, with reason each remains unexecuted",
+            self.text,
+        )
 
     def test_external_validation_requires_immutable_provenance(self):
         for required in (

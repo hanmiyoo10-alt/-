@@ -75,7 +75,8 @@ Capture the exact reviewed source identity before interpreting results:
 - for a non-Git artifact, record the owner-defined immutable artifact digest or equivalent exact identity;
 - if the reviewed bytes cannot be attributed to an immutable identity, preserve `UNKNOWN` rather than claiming `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`;
 - prefer reading and executing from an immutable snapshot when available;
-- when any contributing evidence comes from a mutable checkout/worktree, immediately before emitting the final receipt revalidate the commit/worktree state and every contributing source, helper, test, fixture, owner-contract, and executed-input identity recorded for the review;
+- when any contributing evidence comes from a mutable source, including a Git checkout/worktree or a non-Git mutable path, immediately before emitting the final receipt revalidate its immutable identity: commit/worktree state for Git-backed inputs and the recorded digest/equivalent exact identity for every mutable non-Git input;
+- the final barrier covers every contributing source, helper, test, fixture, owner-contract, and executed-input identity recorded for the review regardless of storage mechanism;
 - if any contributing input changed during the review, stop with `UNKNOWN / REVIEW_INPUT_CHANGED_DURING_REVIEW`; never attribute observations to the earlier identity.
 
 Separate:
@@ -206,7 +207,9 @@ When a separately authorized execution-capable surface exists:
 - direct target execution additionally requires an owner-provided sandbox or equivalent proven effect containment for writes outside the workspace, subprocesses, network access, credentials, devices, and other external state the target could reach;
 - direct adversarial execution also requires bounded host-resource containment appropriate to the target: an outer wall-clock timeout plus CPU time, memory, process/thread count, filesystem growth, and output limits where the host/harness can expose them;
 - a temporary directory alone is neither effect containment nor host-resource containment;
-- if either required containment class is unavailable, keep direct target execution static-only; existing owner tests may run only when their effect/resource boundaries are already explicitly established and permitted by the current owner **and** they execute in an isolated copy/workspace or a proven no-write configuration that cannot mutate the reviewed checkout;
+- any owner test that imports, invokes, loads, or otherwise executes the target under review requires the same proven effect containment and host-resource containment as direct adversarial target execution;
+- if either required containment class is unavailable, do not execute the target, including indirectly through owner tests; keep target-dependent validation static-only and cite already-existing immutable external validation evidence only when its owner/provenance contract permits that use;
+- an owner test proven not to load or execute the target may run only within its separately established effect/resource boundary and an isolated copy/workspace or proven no-write configuration;
 - execute focused deterministic cases only inside that proven effect/resource containment plus an isolated temporary workspace/copy or an existing owner-provided temporary harness;
 - never edit the repository checkout under review merely to create review cases;
 - preserve the exact source/input identities used by that isolated execution;
@@ -263,6 +266,7 @@ reviewed source identity (exact commit/object/artifact identity)
 worktree state: CLEAN | DIRTY | NOT_APPLICABLE
 dirty reviewed/executed input identities (digest or bounded diff identity) when applicable
 applicability by dimension A-G
+proposed/not-exercised adversarial cases, with reason each remains unexecuted
 cases actually exercised
 owner tests / commands actually used
 execution surface/runtime/toolchain identity for each exercised case, or NOT_APPLICABLE when no execution occurred

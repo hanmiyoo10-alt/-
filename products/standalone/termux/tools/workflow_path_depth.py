@@ -19,7 +19,7 @@ MAX_INPUT_BYTES = 64 * 1024
 MAX_GIT_OUTPUT_BYTES = 64 * 1024
 MAX_DISTINCT_TREE_LOOKUPS = 256
 MAX_DISTINCT_OBJECT_TYPE_LOOKUPS = 512
-OID_RE = re.compile(r"^[0-9a-fA-F]{40,64}$")
+OID_RE = re.compile(r"^[0-9a-fA-F]+$")
 REGULAR_BLOB_MODES = {"100644", "100755"}
 GIT_ENV_CLEAR = {
     "GIT_DIR",
@@ -184,15 +184,33 @@ def _require_object_type(
         )
 
 
+def _object_format(repo: Path) -> tuple[str, int]:
+    value = _decode_utf8(
+        _git(repo, "rev-parse", "--show-object-format"),
+        "repo object format",
+    ).strip()
+    lengths = {"sha1": 40, "sha256": 64}
+    if value not in lengths:
+        raise ValidationUnknown(f"unsupported Git object format: {value}")
+    return value, lengths[value]
+
+
 def _resolve_commit(
     repo: Path,
     value: Any,
     field: str,
+    oid_length: int,
     object_types: dict[str, str],
     object_attempts: set[str],
 ) -> str:
-    if not isinstance(value, str) or not OID_RE.fullmatch(value):
-        raise ValidationUnknown(f"{field}: expected full commit object ID")
+    if (
+        not isinstance(value, str)
+        or len(value) != oid_length
+        or not OID_RE.fullmatch(value)
+    ):
+        raise ValidationUnknown(
+            f"{field}: expected full {oid_length}-hex commit object ID"
+        )
     oid = value.lower()
     _require_object_type(
         repo,
@@ -676,10 +694,12 @@ def check_batch(request: Any) -> dict[str, Any]:
     try:
         repo = _repo_root(request["repo_root"])
         _validate_repository(repo)
+        object_format, oid_length = _object_format(repo)
         old_oid = _resolve_commit(
             repo,
             request["old_ref"],
             "old_ref",
+            oid_length,
             object_types,
             object_attempts,
         )
@@ -687,6 +707,7 @@ def check_batch(request: Any) -> dict[str, Any]:
             repo,
             request["new_ref"],
             "new_ref",
+            oid_length,
             object_types,
             object_attempts,
         )
@@ -725,6 +746,8 @@ def check_batch(request: Any) -> dict[str, Any]:
         "reason": f"BATCH_{status}",
         "old_ref": request["old_ref"],
         "new_ref": request["new_ref"],
+        "object_format": object_format,
+        "oid_length": oid_length,
         "old_oid": old_oid,
         "new_oid": new_oid,
         "results": results,

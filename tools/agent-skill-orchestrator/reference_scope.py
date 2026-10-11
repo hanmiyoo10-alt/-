@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import stat
 import sys
 import tempfile
 from pathlib import Path
@@ -45,6 +47,7 @@ def _result(
     frozen_registries: tuple[dict[str, Any], ...] = (),
     frozen_scope_fixtures: tuple[str, ...] = (),
     frozen_match_fixtures: tuple[str, ...] = (),
+    frozen_error_locator: str | None = None,
 ) -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -62,6 +65,7 @@ def _result(
             "registries": list(frozen_registries),
             "scope_present_fixtures": list(frozen_scope_fixtures),
             "match_fixtures": list(frozen_match_fixtures),
+            "error_locator": frozen_error_locator,
         },
         "historical_exhaustiveness_claimed": False,
         "deletion_authorized": False,
@@ -140,14 +144,34 @@ def _reference_matches(domain: dict[str, Any], reference: dict[str, str]) -> boo
     )
 
 
+def _read_bounded_regular_file(path: Path, max_bytes: int) -> bytes:
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    if nofollow is None:
+        raise ValueError("no-follow file reads are unsupported")
+    flags = os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0) | nofollow
+    fd = os.open(path, flags)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > max_bytes:
+            raise ValueError("file invalid or too large")
+        chunks: list[bytes] = []
+        total = 0
+        while total <= max_bytes:
+            chunk = os.read(fd, min(64 * 1024, max_bytes + 1 - total))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+        raw = b"".join(chunks)
+        if len(raw) > max_bytes:
+            raise ValueError("file too large")
+        return raw
+    finally:
+        os.close(fd)
+
+
 def _bounded_registry_snapshot(path: Path) -> dict[str, Any]:
-    stat = path.lstat()
-    if path.is_symlink() or not path.is_file() or stat.st_size > MAX_REGISTRY_BYTES:
-        raise ValueError("registry file invalid or too large")
-    with path.open("rb") as handle:
-        raw = handle.read(MAX_REGISTRY_BYTES + 1)
-    if len(raw) > MAX_REGISTRY_BYTES:
-        raise ValueError("registry file too large")
+    raw = _read_bounded_regular_file(path, MAX_REGISTRY_BYTES)
     text = raw.decode("utf-8")
     json.loads(text, object_pairs_hook=_reject_duplicate_keys)
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -159,16 +183,15 @@ def _bounded_registry_snapshot(path: Path) -> dict[str, Any]:
 def _load_frozen_fixture(raw_path: str) -> tuple[str, dict[str, Any]]:
     requested = Path(raw_path)
     candidate = requested if requested.is_absolute() else PACKAGE_ROOT / requested
-    if candidate.is_symlink():
-        raise ValueError("frozen fixture symlink is not allowed")
-    resolved = candidate.resolve(strict=True)
     root = FROZEN_FIXTURE_ROOT.resolve(strict=True)
-    if resolved.parent != root:
+    parent = candidate.parent.resolve(strict=True)
+    if parent != root:
         raise ValueError("frozen fixture must be a direct child of tests/fixtures")
-    if not resolved.name.endswith("-frozen-domain-registry.json"):
+    if not candidate.name.endswith("-frozen-domain-registry.json"):
         raise ValueError("unsupported frozen fixture filename")
-    data = _bounded_registry_snapshot(resolved)
-    return resolved.relative_to(PACKAGE_ROOT).as_posix(), data
+    stable_path = root / candidate.name
+    data = _bounded_registry_snapshot(stable_path)
+    return stable_path.relative_to(PACKAGE_ROOT).as_posix(), data
 
 
 def classify_reference(request: Any) -> dict[str, Any]:
@@ -185,23 +208,43 @@ def classify_reference(request: Any) -> dict[str, Any]:
         return _unknown("LIVE_REGISTRY_INVALID")
 
     frozen_by_locator: dict[str, tuple[str, dict[str, Any] | None]] = {}
-    try:
-        for raw_path in frozen_paths:
+    for raw_path in frozen_paths:
+        try:
             locator, registry = _load_frozen_fixture(raw_path)
             frozen_by_locator[locator] = (
                 registry_sha256(registry),
                 _domain_for_scope(registry, scope),
             )
-    except Exception:
-        return _result(
-            "UNKNOWN",
-            "FROZEN_FIXTURE_INVALID",
-            scope=scope,
-            reference=reference,
-            live_registry_sha256=live_registry_digest,
-            live_scope_present=live_domain is not None,
-            live_match=bool(live_domain and _reference_matches(live_domain, reference)),
-        )
+        except Exception:
+            accumulated = [
+                (locator, digest, domain)
+                for locator, (digest, domain) in sorted(frozen_by_locator.items())
+            ]
+            accumulated_registries = tuple({
+                "registry": locator,
+                "registry_sha256": digest,
+                "scope_present": domain is not None,
+                "match": bool(domain and _reference_matches(domain, reference)),
+            } for locator, digest, domain in accumulated)
+            return _result(
+                "UNKNOWN",
+                "FROZEN_FIXTURE_INVALID",
+                scope=scope,
+                reference=reference,
+                live_registry_sha256=live_registry_digest,
+                live_scope_present=live_domain is not None,
+                live_match=bool(live_domain and _reference_matches(live_domain, reference)),
+                frozen_registries=accumulated_registries,
+                frozen_scope_fixtures=tuple(
+                    locator for locator, _, domain in accumulated if domain is not None
+                ),
+                frozen_match_fixtures=tuple(
+                    locator
+                    for locator, _, domain in accumulated
+                    if domain is not None and _reference_matches(domain, reference)
+                ),
+                frozen_error_locator=raw_path,
+            )
     frozen_rows = [
         (locator, digest, domain)
         for locator, (digest, domain) in sorted(frozen_by_locator.items())
@@ -276,15 +319,7 @@ def classify_reference(request: Any) -> dict[str, Any]:
 
 def _read_cli_input(args: list[str]) -> str:
     if args:
-        target = Path(args[0])
-        stat = target.lstat()
-        if target.is_symlink() or not target.is_file() or stat.st_size > MAX_REQUEST_BYTES:
-            raise ValueError("request file invalid or too large")
-        with target.open("rb") as handle:
-            raw_bytes = handle.read(MAX_REQUEST_BYTES + 1)
-        if len(raw_bytes) > MAX_REQUEST_BYTES:
-            raise ValueError("request file too large")
-        return raw_bytes.decode("utf-8")
+        return _read_bounded_regular_file(Path(args[0]), MAX_REQUEST_BYTES).decode("utf-8")
     raw_bytes = sys.stdin.buffer.read(MAX_REQUEST_BYTES + 1)
     if len(raw_bytes) > MAX_REQUEST_BYTES:
         raise ValueError("stdin request too large")

@@ -1,6 +1,6 @@
 import copy
-import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -16,6 +16,7 @@ from reference_scope import (
     AUTHORITY_REF_KINDS,
     MAX_REGISTRY_BYTES,
     _bounded_registry_snapshot,
+    _read_bounded_regular_file,
     _read_cli_input,
     classify_reference,
 )
@@ -234,15 +235,19 @@ class ReferenceScopeTests(unittest.TestCase):
 
     def test_cli_file_read_enforces_actual_byte_ceiling(self):
         oversized = b"{" + (b" " * (32 * 1024)) + b"}"
-        target = Path("/virtual/request.json")
-        with (
-            mock.patch.object(Path, "lstat", return_value=mock.Mock(st_size=1)),
-            mock.patch.object(Path, "is_symlink", return_value=False),
-            mock.patch.object(Path, "is_file", return_value=True),
-            mock.patch.object(Path, "open", return_value=io.BytesIO(oversized)),
-        ):
-            with self.assertRaisesRegex(ValueError, "request file too large"):
-                _read_cli_input([str(target)])
+        with tempfile.NamedTemporaryFile(delete=False) as handle:
+            handle.write(oversized)
+            target = Path(handle.name)
+        try:
+            real = target.stat()
+            with mock.patch(
+                "reference_scope.os.fstat",
+                return_value=mock.Mock(st_mode=real.st_mode, st_size=1),
+            ):
+                with self.assertRaisesRegex(ValueError, "file too large"):
+                    _read_cli_input([str(target)])
+        finally:
+            target.unlink(missing_ok=True)
 
     def test_invalid_frozen_fixture_preserves_known_live_provenance(self):
         out = classify_reference(self.request(
@@ -303,15 +308,19 @@ class ReferenceScopeTests(unittest.TestCase):
 
     def test_frozen_registry_source_read_is_bounded_before_loader(self):
         oversized = b"{" + (b" " * MAX_REGISTRY_BYTES) + b"}"
-        target = Path("/virtual/frozen-domain-registry.json")
-        with (
-            mock.patch.object(Path, "lstat", return_value=mock.Mock(st_size=1)),
-            mock.patch.object(Path, "is_symlink", return_value=False),
-            mock.patch.object(Path, "is_file", return_value=True),
-            mock.patch.object(Path, "open", return_value=io.BytesIO(oversized)),
-        ):
-            with self.assertRaisesRegex(ValueError, "registry file too large"):
-                _bounded_registry_snapshot(target)
+        with tempfile.NamedTemporaryFile(delete=False) as handle:
+            handle.write(oversized)
+            target = Path(handle.name)
+        try:
+            real = target.stat()
+            with mock.patch(
+                "reference_scope.os.fstat",
+                return_value=mock.Mock(st_mode=real.st_mode, st_size=1),
+            ):
+                with self.assertRaisesRegex(ValueError, "file too large"):
+                    _bounded_registry_snapshot(target)
+        finally:
+            target.unlink(missing_ok=True)
 
     def test_registry_byte_cap_covers_schema_maximal_escaped_representation(self):
         glyph = "😀"
@@ -341,15 +350,26 @@ class ReferenceScopeTests(unittest.TestCase):
         self.assertLess(len(encoded), MAX_REGISTRY_BYTES)
 
     def test_frozen_fixture_symlink_is_rejected(self):
-        with tempfile.TemporaryDirectory(dir=PACKAGE / "tests" / "fixtures") as temp:
+        fixture_root = PACKAGE / "tests" / "fixtures"
+        with tempfile.TemporaryDirectory(dir=fixture_root) as temp:
             target = Path(temp) / "target-frozen-domain-registry.json"
             target.write_text(
                 (PACKAGE / VOYAGE_FROZEN).read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
-            link = PACKAGE / "tests" / "fixtures" / "alias-frozen-domain-registry.json"
+            handle = tempfile.NamedTemporaryFile(
+                prefix="reference-scope-",
+                suffix="-frozen-domain-registry.json",
+                dir=fixture_root,
+                delete=False,
+            )
+            link = Path(handle.name)
+            handle.close()
+            link.unlink()
+            created = False
             try:
                 link.symlink_to(target)
+                created = True
                 out = classify_reference(self.request(
                     "plugin:voyage-token-check",
                     "guidelines_path",
@@ -357,21 +377,49 @@ class ReferenceScopeTests(unittest.TestCase):
                     frozen=[str(link)],
                 ))
             finally:
-                link.unlink(missing_ok=True)
+                if created:
+                    link.unlink(missing_ok=True)
         self.assertEqual(out["disposition"], "UNKNOWN")
         self.assertEqual(out["reason_code"], "FROZEN_FIXTURE_INVALID")
 
+    def test_invalid_later_fixture_preserves_accumulated_frozen_provenance(self):
+        out = classify_reference(self.request(
+            "plugin:voyage-token-check",
+            "guidelines_path",
+            "docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md",
+            frozen=[VOYAGE_FROZEN, "domains/registry.json"],
+        ))
+        self.assertEqual(out["disposition"], "UNKNOWN")
+        self.assertEqual(out["reason_code"], "FROZEN_FIXTURE_INVALID")
+        self.assertEqual(out["frozen"]["error_locator"], "domains/registry.json")
+        self.assertEqual(len(out["frozen"]["registries"]), 1)
+        self.assertEqual(out["frozen"]["registries"][0]["registry"], VOYAGE_FROZEN)
+        self.assertIsNotNone(out["frozen"]["registries"][0]["registry_sha256"])
+
+    def test_one_descriptor_reader_rejects_fifo_and_symlink_without_blocking(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            regular = root / "regular.json"
+            regular.write_bytes(b"{}")
+            link = root / "link.json"
+            link.symlink_to(regular)
+            fifo = root / "fifo"
+            os.mkfifo(fifo)
+            with self.assertRaises((OSError, ValueError)):
+                _read_bounded_regular_file(link, 32)
+            with self.assertRaises(ValueError):
+                _read_bounded_regular_file(fifo, 32)
+
     def test_registry_duplicate_json_keys_fail_closed_before_loader(self):
         raw = b'{"schema_version":1,"schema_version":1,"domains":[]}'
-        target = Path("/virtual/registry.json")
-        with (
-            mock.patch.object(Path, "lstat", return_value=mock.Mock(st_size=len(raw))),
-            mock.patch.object(Path, "is_symlink", return_value=False),
-            mock.patch.object(Path, "is_file", return_value=True),
-            mock.patch.object(Path, "open", return_value=io.BytesIO(raw)),
-        ):
+        with tempfile.NamedTemporaryFile(delete=False) as handle:
+            handle.write(raw)
+            target = Path(handle.name)
+        try:
             with self.assertRaisesRegex(ValueError, "duplicate JSON key"):
                 _bounded_registry_snapshot(target)
+        finally:
+            target.unlink(missing_ok=True)
 
     def test_cli_returns_deterministic_json(self):
         request = self.request(

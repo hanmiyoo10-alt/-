@@ -12,6 +12,7 @@ from typing import Any
 SCHEMA = "termux-workflow-path-depth.v1"
 MAX_REFERENCES = 64
 MAX_PATH_CHARS = 512
+MAX_INPUT_BYTES = 64 * 1024
 
 
 class ValidationUnknown(ValueError):
@@ -147,6 +148,7 @@ def check_batch(request: Any) -> dict[str, Any]:
         or set(request) != {"schema", "references"}
         or request.get("schema") != SCHEMA
         or not isinstance(request.get("references"), list)
+        or not request["references"]
         or len(request["references"]) > MAX_REFERENCES
     ):
         return {
@@ -157,6 +159,12 @@ def check_batch(request: Any) -> dict[str, Any]:
             "mutation_authorized": False,
             "execution_authorized": False,
             "network_used": False,
+            "github_used": False,
+            "merge_authorized": False,
+            "release_authorized": False,
+            "production_authorized": False,
+            "runtime_authorized": False,
+            "device_authorized": False,
         }
 
     results = [check_reference(item) for item in request["references"]]
@@ -173,6 +181,26 @@ def check_batch(request: Any) -> dict[str, Any]:
     }
 
 
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValidationUnknown("duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def _read_cli_input(args: list[str]) -> str:
+    if args:
+        with open(args[0], "rb") as handle:
+            raw = handle.read(MAX_INPUT_BYTES + 1)
+    else:
+        raw = sys.stdin.buffer.read(MAX_INPUT_BYTES + 1)
+    if len(raw) > MAX_INPUT_BYTES:
+        raise ValidationUnknown("input exceeds byte limit")
+    return raw.decode("utf-8", "strict")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if len(args) > 1:
@@ -181,11 +209,22 @@ def main(argv: list[str] | None = None) -> int:
             "status": "UNKNOWN",
             "reason": "CLI_ARGUMENT_INVALID",
             "results": [],
+            "mutation_authorized": False,
+            "execution_authorized": False,
+            "network_used": False,
+            "github_used": False,
+            "merge_authorized": False,
+            "release_authorized": False,
+            "production_authorized": False,
+            "runtime_authorized": False,
+            "device_authorized": False,
         }
     else:
         try:
-            text = open(args[0], "r", encoding="utf-8").read() if args else sys.stdin.read()
-            output = check_batch(json.loads(text))
+            text = _read_cli_input(args)
+            output = check_batch(
+                json.loads(text, object_pairs_hook=_reject_duplicate_keys)
+            )
         except Exception as exc:
             output = {
                 "schema": SCHEMA,
@@ -193,6 +232,15 @@ def main(argv: list[str] | None = None) -> int:
                 "reason": "INPUT_INVALID",
                 "error": str(exc),
                 "results": [],
+                "mutation_authorized": False,
+                "execution_authorized": False,
+                "network_used": False,
+                "github_used": False,
+                "merge_authorized": False,
+                "release_authorized": False,
+                "production_authorized": False,
+                "runtime_authorized": False,
+                "device_authorized": False,
             }
     print(json.dumps(output, sort_keys=True, separators=(",", ":")))
     return 2 if output["status"] == "UNKNOWN" else (1 if output["status"] == "FAIL" else 0)

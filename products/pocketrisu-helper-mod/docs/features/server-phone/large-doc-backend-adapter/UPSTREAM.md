@@ -12,7 +12,7 @@ Deployment status: `NOT_READY`
 
 이 기능은 현재 personal PocketRisu modification 후보이며, official upstream PR 후보로 확정되지 않았다.
 
-기존 `plugins/termux/large-doc-editor/server.py`에서 검증된 document-session/chunk/workspace 경계를 참고하되, PocketRisu current architecture에 맞는 좁은 adapter가 실제로 필요한지 먼저 조사한다.
+기존 `products/standalone/termux/large-doc-editor/server.py`에서 검증된 document-session/chunk/workspace 경계를 참고하되, PocketRisu current architecture에 맞는 좁은 adapter가 실제로 필요한지 먼저 조사한다.
 
 ## PR 후보가 되기 위한 조건
 
@@ -33,7 +33,7 @@ Deployment status: `NOT_READY`
 The first candidate slice is read-only `files/open/chunk` adapter behavior with workspace/path/session/error boundaries. Write/save, DB/save optimization, Usage/DevPass integration, server-phone Android notifications, and runtime-manager changes remain outside this first slice.
 
 ## Dependencies
-The existing `plugins/termux/large-doc-editor/server.py` is reference evidence for document-session/chunk/workspace semantics. Any PocketRisu adapter must fit current PocketRisu server/API/plugin boundaries without changing the original large-doc-editor in the same PR.
+The existing `products/standalone/termux/large-doc-editor/server.py` is reference evidence for document-session/chunk/workspace semantics. Any PocketRisu adapter must fit current PocketRisu server/API/plugin boundaries without changing the original large-doc-editor in the same PR.
 
 ## Verification evidence
 The feature is still design-first. Existing evidence is the recorded INSPECT_ONLY architecture analysis and reference backend behavior; implementation, CI, deploy, and real-device adapter verification have not started.

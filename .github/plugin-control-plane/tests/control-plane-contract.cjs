@@ -167,7 +167,14 @@ const devpassLegacyReadme = classifyPaths(['plugins/devpass/README.md'], registr
 assert.deepEqual(devpassLegacyReadme.labels, ['plugin:devpass']);
 assert.deepEqual(devpassLegacyReadme.ambiguousPaths, []);
 assert.deepEqual(classifyPaths(['plugins/devpass/latest.js'], registry).labels, ['plugin:devpass']);
-assert.deepEqual(classifyPaths(['plugins/termux/large-doc-editor/server.py'], registry).labels, ['plugin:termux-large-doc-editor']);
+const largeDocTarget = classifyPaths(['products/standalone/termux/large-doc-editor/README.md'], registry);
+assert.deepEqual(largeDocTarget.labels, ['product:termux']);
+assert.deepEqual(largeDocTarget.ambiguousPaths, []);
+assert.deepEqual(largeDocTarget.unclassifiedPaths, []);
+const largeDocLegacy = classifyPaths(['plugins/termux/large-doc-editor/README.md'], registry);
+assert.deepEqual(largeDocLegacy.labels, ['plugin:termux-large-doc-editor']);
+assert.deepEqual(largeDocLegacy.ambiguousPaths, []);
+assert.deepEqual(largeDocLegacy.unclassifiedPaths, []);
 assert.deepEqual(registry.products.termux.authority, {evidence: 'products/standalone/termux/README.md'});
 assert.equal(registry.products.termux.lifecycle, 'prototype');
 assert.equal(registry.products.termux.statusAdapter, 'prototype');

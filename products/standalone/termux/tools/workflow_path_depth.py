@@ -15,10 +15,10 @@ from typing import Any
 SCHEMA = "termux-workflow-path-depth.v1"
 MAX_REFERENCES = 64
 MAX_PATH_CHARS = 512
-MAX_REF_CHARS = 256
 MAX_INPUT_BYTES = 64 * 1024
 MAX_GIT_OUTPUT_BYTES = 64 * 1024
 MAX_DISTINCT_TREE_LOOKUPS = 256
+MAX_DISTINCT_OBJECT_TYPE_LOOKUPS = 512
 OID_RE = re.compile(r"^[0-9a-fA-F]{40,64}$")
 REGULAR_BLOB_MODES = {"100644", "100755"}
 GIT_ENV_CLEAR = {
@@ -145,30 +145,64 @@ def _validate_repository(repo: Path) -> None:
         raise ValidationUnknown("repo_root: expected exact Git work-tree root")
 
 
-def _resolve_commit(repo: Path, value: Any, field: str) -> str:
-    if (
-        not isinstance(value, str)
-        or not value
-        or len(value) > MAX_REF_CHARS
-        or value != value.strip()
-        or value.startswith("-")
-        or chr(0) in value
-        or _contains_surrogate(value)
-    ):
-        raise ValidationUnknown(f"{field}: invalid Git ref")
-    oid = _decode_utf8(
-        _git(
-            repo,
-            "rev-parse",
-            "--verify",
-            "--end-of-options",
-            f"{value}^{{commit}}",
-        ),
-        field,
+def _object_type(
+    repo: Path,
+    oid: str,
+    cache: dict[str, str],
+    attempted: set[str],
+) -> str:
+    cached = cache.get(oid)
+    if cached is not None:
+        return cached
+    if oid in attempted:
+        raise ValidationUnknown(f"object type unavailable: {oid}")
+    if len(attempted) >= MAX_DISTINCT_OBJECT_TYPE_LOOKUPS:
+        raise ValidationUnknown("distinct Git object-type lookup budget exhausted")
+    attempted.add(oid)
+    object_type = _decode_utf8(
+        _git(repo, "cat-file", "-t", oid),
+        "git object type",
     ).strip()
-    if not OID_RE.fullmatch(oid):
-        raise ValidationUnknown(f"{field}: Git did not resolve a commit object ID")
-    return oid.lower()
+    if object_type not in {"blob", "tree", "commit", "tag"}:
+        raise ValidationUnknown(f"unexpected Git object type: {object_type}")
+    cache[oid] = object_type
+    return object_type
+
+
+def _require_object_type(
+    repo: Path,
+    oid: str,
+    expected: str,
+    cache: dict[str, str],
+    attempted: set[str],
+    field: str,
+) -> None:
+    actual = _object_type(repo, oid, cache, attempted)
+    if actual != expected:
+        raise ValidationUnknown(
+            f"{field}: expected Git object type {expected}, got {actual}"
+        )
+
+
+def _resolve_commit(
+    repo: Path,
+    value: Any,
+    field: str,
+    object_types: dict[str, str],
+    object_attempts: set[str],
+) -> str:
+    if not isinstance(value, str) or not OID_RE.fullmatch(value):
+        raise ValidationUnknown(f"{field}: expected full commit object ID")
+    oid = value.lower()
+    _require_object_type(
+        repo,
+        oid,
+        "commit",
+        object_types,
+        object_attempts,
+        field,
+    )
+    return oid
 
 
 def _name_max(repo_root: Path) -> int:
@@ -327,6 +361,8 @@ def _verify_directory_prefixes(
     field: str,
     cache: dict[tuple[str, str], dict[str, str]],
     attempted: set[tuple[str, str]],
+    object_types: dict[str, str],
+    object_attempts: set[str],
 ) -> None:
     current: list[str] = []
     for part in PurePosixPath(directory).parts:
@@ -335,17 +371,14 @@ def _verify_directory_prefixes(
         entry = _tree_entry(repo, commit_oid, path, cache, attempted)
         if entry["mode"] != "040000" or entry["type"] != "tree":
             raise ValidationUnknown(f"{field}: symlink or non-tree component: {path}")
-
-
-def _verify_blob_object(
-    repo: Path,
-    oid: str,
-    verified_blobs: set[str],
-) -> None:
-    if oid in verified_blobs:
-        return
-    _git(repo, "cat-file", "-e", f"{oid}^{{blob}}")
-    verified_blobs.add(oid)
+        _require_object_type(
+            repo,
+            entry["oid"],
+            "tree",
+            object_types,
+            object_attempts,
+            field,
+        )
 
 
 def _verify_regular_target(
@@ -355,7 +388,8 @@ def _verify_regular_target(
     field: str,
     cache: dict[tuple[str, str], dict[str, str]],
     attempted: set[tuple[str, str]],
-    verified_blobs: set[str],
+    object_types: dict[str, str],
+    object_attempts: set[str],
 ) -> dict[str, str]:
     parts = PurePosixPath(target).parts
     if not parts or any(part in {"", ".", ".."} for part in parts):
@@ -367,10 +401,25 @@ def _verify_regular_target(
         entry = _tree_entry(repo, commit_oid, path, cache, attempted)
         if entry["mode"] != "040000" or entry["type"] != "tree":
             raise ValidationUnknown(f"{field}: symlink or non-tree target component: {path}")
+        _require_object_type(
+            repo,
+            entry["oid"],
+            "tree",
+            object_types,
+            object_attempts,
+            field,
+        )
     final = _tree_entry(repo, commit_oid, target, cache, attempted)
     if final["type"] != "blob" or final["mode"] not in REGULAR_BLOB_MODES:
         raise ValidationUnknown(f"{field}: target is not a regular file")
-    _verify_blob_object(repo, final["oid"], verified_blobs)
+    _require_object_type(
+        repo,
+        final["oid"],
+        "blob",
+        object_types,
+        object_attempts,
+        field,
+    )
     return final
 
 
@@ -382,7 +431,8 @@ def check_reference(
     name_max: int | None = None,
     tree_cache: dict[tuple[str, str], dict[str, str]] | None = None,
     tree_attempts: set[tuple[str, str]] | None = None,
-    verified_blobs: set[str] | None = None,
+    object_types: dict[str, str] | None = None,
+    object_attempts: set[str] | None = None,
 ) -> dict[str, Any]:
     try:
         if not isinstance(item, dict) or set(item) != {
@@ -398,8 +448,10 @@ def check_reference(
             tree_cache = {}
         if tree_attempts is None:
             tree_attempts = set()
-        if verified_blobs is None:
-            verified_blobs = set()
+        if object_types is None:
+            object_types = {}
+        if object_attempts is None:
+            object_attempts = set()
 
         old_dir = _repo_dir(item["old_working_dir"], "old_working_dir")
         new_dir = _repo_dir(item["new_working_dir"], "new_working_dir")
@@ -420,10 +472,24 @@ def check_reference(
         )
 
         _verify_directory_prefixes(
-            repo, old_oid, old_dir, "old_working_dir", tree_cache, tree_attempts
+            repo,
+            old_oid,
+            old_dir,
+            "old_working_dir",
+            tree_cache,
+            tree_attempts,
+            object_types,
+            object_attempts,
         )
         _verify_directory_prefixes(
-            repo, new_oid, new_dir, "new_working_dir", tree_cache, tree_attempts
+            repo,
+            new_oid,
+            new_dir,
+            "new_working_dir",
+            tree_cache,
+            tree_attempts,
+            object_types,
+            object_attempts,
         )
 
         target = _resolve_repo_target(old_dir, old_ref)
@@ -440,7 +506,8 @@ def check_reference(
             "old_target",
             tree_cache,
             tree_attempts,
-            verified_blobs,
+            object_types,
+            object_attempts,
         )
         new_target_entry = _verify_regular_target(
             repo,
@@ -449,7 +516,18 @@ def check_reference(
             "new_target",
             tree_cache,
             tree_attempts,
-            verified_blobs,
+            object_types,
+            object_attempts,
+        )
+        candidate_target_entry = _verify_regular_target(
+            repo,
+            new_oid,
+            candidate_target,
+            "candidate_target",
+            tree_cache,
+            tree_attempts,
+            object_types,
+            object_attempts,
         )
 
         status = (
@@ -481,6 +559,7 @@ def check_reference(
             "tree_evidence": "AUTHENTICATED_LOCAL_GIT",
             "old_target_blob": old_target_entry["oid"],
             "new_target_blob": new_target_entry["oid"],
+            "candidate_target_blob": candidate_target_entry["oid"],
             **_authority_denials(),
         }
     except ValidationUnknown as exc:
@@ -516,11 +595,25 @@ def check_batch(request: Any) -> dict[str, Any]:
             **_authority_denials(),
         }
 
+    object_types: dict[str, str] = {}
+    object_attempts: set[str] = set()
     try:
         repo = _repo_root(request["repo_root"])
         _validate_repository(repo)
-        old_oid = _resolve_commit(repo, request["old_ref"], "old_ref")
-        new_oid = _resolve_commit(repo, request["new_ref"], "new_ref")
+        old_oid = _resolve_commit(
+            repo,
+            request["old_ref"],
+            "old_ref",
+            object_types,
+            object_attempts,
+        )
+        new_oid = _resolve_commit(
+            repo,
+            request["new_ref"],
+            "new_ref",
+            object_types,
+            object_attempts,
+        )
         name_max = _name_max(repo)
     except ValidationUnknown as exc:
         return {
@@ -534,7 +627,6 @@ def check_batch(request: Any) -> dict[str, Any]:
 
     tree_cache: dict[tuple[str, str], dict[str, str]] = {}
     tree_attempts: set[tuple[str, str]] = set()
-    verified_blobs: set[str] = set()
     results = [
         check_reference(
             item,
@@ -544,7 +636,8 @@ def check_batch(request: Any) -> dict[str, Any]:
             name_max,
             tree_cache,
             tree_attempts,
-            verified_blobs,
+            object_types,
+            object_attempts,
         )
         for item in request["references"]
     ]

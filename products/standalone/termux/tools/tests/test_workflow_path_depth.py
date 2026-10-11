@@ -356,19 +356,84 @@ class WorkflowPathDepthTests(unittest.TestCase):
                 self.assertEqual(self.check(case)["status"], "UNKNOWN")
 
     def test_missing_blob_object_evidence_is_unknown(self):
+        target_oid = self.git(
+            "rev-parse",
+            f"{self.old_oid}:.github/tooling/ci-summary/phase_receipt.py",
+        ).stdout.strip()
         real_git = wpd._git
-        seen = {"cat_file": 0}
+        seen = {"target_type": 0}
 
         def missing_blob(repo, *args):
-            if args and args[0] == "cat-file":
-                seen["cat_file"] += 1
+            if args == ("cat-file", "-t", target_oid):
+                seen["target_type"] += 1
                 raise wpd.ValidationUnknown("simulated missing blob object")
             return real_git(repo, *args)
 
         with mock.patch.object(wpd, "_git", side_effect=missing_blob):
             out = self.batch([self.t5()])
         self.assertEqual(out["status"], "UNKNOWN")
-        self.assertGreater(seen["cat_file"], 0)
+        self.assertGreater(seen["target_type"], 0)
+
+    def test_candidate_symlink_is_unknown_before_mismatch(self):
+        self.git("checkout", "-q", self.new_oid)
+        (self.repo_root / "alias").symlink_to("shared", target_is_directory=True)
+        self.commit("candidate-alias")
+        alias_new = self.rev()
+        out = self.check(
+            {
+                "old_working_dir": "plugins/termux/example",
+                "new_working_dir": "products/termux/example",
+                "old_reference": "../../../shared/helper.py",
+                "candidate_new_reference": "../../../alias/helper.py",
+            },
+            new_ref=alias_new,
+        )
+        self.assertEqual(out["status"], "UNKNOWN")
+
+    def test_directory_oid_must_have_exact_tree_type(self):
+        tree_oid = self.git(
+            "rev-parse",
+            f"{self.old_oid}:plugins",
+        ).stdout.strip()
+        real_git = wpd._git
+
+        def wrong_tree_type(repo, *args):
+            if args == ("cat-file", "-t", tree_oid):
+                return b"blob\n"
+            return real_git(repo, *args)
+
+        with mock.patch.object(wpd, "_git", side_effect=wrong_tree_type):
+            out = self.batch([self.t5()])
+        self.assertEqual(out["status"], "UNKNOWN")
+
+    def test_target_oid_must_have_exact_blob_type(self):
+        target_oid = self.git(
+            "rev-parse",
+            f"{self.old_oid}:.github/tooling/ci-summary/phase_receipt.py",
+        ).stdout.strip()
+        real_git = wpd._git
+
+        def wrong_blob_type(repo, *args):
+            if args == ("cat-file", "-t", target_oid):
+                return b"tag\n"
+            return real_git(repo, *args)
+
+        with mock.patch.object(wpd, "_git", side_effect=wrong_blob_type):
+            out = self.batch([self.t5()])
+        self.assertEqual(out["status"], "UNKNOWN")
+
+    def test_revision_expression_is_rejected_without_resolution(self):
+        expression = "HEAD^{/expensive-pattern}"
+        with mock.patch.object(wpd, "_git", wraps=wpd._git) as git_call:
+            out = self.batch([self.t5()], old_ref=expression)
+        self.assertEqual(out["status"], "UNKNOWN")
+        self.assertFalse(
+            any(
+                expression in str(arg)
+                for call in git_call.call_args_list
+                for arg in call.args
+            )
+        )
 
     def test_batch_shape_ref_and_limit_fail_closed(self):
         self.assertEqual(check_batch({"schema": SCHEMA})["status"], "UNKNOWN")

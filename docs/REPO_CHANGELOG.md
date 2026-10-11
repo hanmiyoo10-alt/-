@@ -2393,3 +2393,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/bb21eb689eaaefea7b14dfda0119cf01249076b6)
 - Event ID: `fc9639aa2b7f793fbc4fa1d2ead243b6129afe8fa5c008c4d4971badc47860c1`
 <!-- canonical-main-doc-promoted:fc9639aa2b7f793fbc4fa1d2ead243b6129afe8fa5c008c4d4971badc47860c1 -->
+
+### 2026-10-10 — Add Local Model Lab product root (#2739)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `c1bfe4b4b49ff3f2804a3af37f8cc88116c76fcd`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/c1bfe4b4b49ff3f2804a3af37f8cc88116c76fcd)
+- Event ID: `0c779e7b6919bb0d81dfa4833a777c0ba0d2a25c4c70981ffc9bdb7a8dc0177e`
+<!-- canonical-main-doc-promoted:0c779e7b6919bb0d81dfa4833a777c0ba0d2a25c4c70981ffc9bdb7a8dc0177e -->

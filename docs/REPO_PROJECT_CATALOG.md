@@ -11,6 +11,7 @@
 | plugin:usage-dashboard | Local Usage Dashboard | production | plugins/usage-dashboard/** | releaseBranch=release-usage-dashboard; manifest=plugins/usage-dashboard/runtime/product-manifest.json; artifact=plugins/usage-dashboard/latest.js; releaseSpecDir=.github/usage-dashboard/releases | docs/USAGE_DASHBOARD_GUIDELINES.md |
 | plugin:voyage-token-check | Voyage Token Check | design-evidence-validation | plugins/risu/local/voyage/** | evidence=plugins/risu/local/voyage/DESIGN_STATUS.md | docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md |
 | product:app-api-mod-lab | App API Mod Lab | research-product-root | products/app-api-mod-lab/** | evidence=products/app-api-mod-lab/CURRENT.md; manifest=products/app-api-mod-lab/product.json | docs/APP_API_MOD_LAB_GUIDELINES.md |
+| product:local-model-lab | Local Model Lab | research-product-root | products/local-model-lab/** | evidence=products/local-model-lab/CURRENT.md; manifest=products/local-model-lab/product.json | docs/LOCAL_MODEL_LAB_GUIDELINES.md |
 | product:pocketrisu-helper-mod | PocketRisu Helper Mod | operations-product-root | products/pocketrisu-helper-mod/** | manifest=products/pocketrisu-helper-mod/product.json; currentState=products/pocketrisu-helper-mod/CURRENT.md | docs/POCKETRISU_HELPER_MOD_GUIDELINES.md |
 
 ## Family Navigation Projection

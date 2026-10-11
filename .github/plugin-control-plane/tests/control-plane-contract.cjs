@@ -183,8 +183,15 @@ const responseWatchLegacy = classifyPaths(['plugins/termux/response-watch/README
 assert.deepEqual(responseWatchLegacy.labels, ['scope:unclassified']);
 assert.deepEqual(responseWatchLegacy.ambiguousPaths, []);
 assert.deepEqual(responseWatchLegacy.unclassifiedPaths, ['plugins/termux/response-watch/README.md']);
+const backgroundGptTarget = classifyPaths(['products/standalone/termux/background-gpt/README.md'], registry);
+assert.deepEqual(backgroundGptTarget.labels, ['product:termux']);
+assert.deepEqual(backgroundGptTarget.ambiguousPaths, []);
+assert.deepEqual(backgroundGptTarget.unclassifiedPaths, []);
+const backgroundGptLegacy = classifyPaths(['plugins/termux/background-gpt/README.md'], registry);
+assert.deepEqual(backgroundGptLegacy.labels, ['scope:unclassified']);
+assert.deepEqual(backgroundGptLegacy.ambiguousPaths, []);
+assert.deepEqual(backgroundGptLegacy.unclassifiedPaths, ['plugins/termux/background-gpt/README.md']);
 for (const legacyChildPath of [
-  'plugins/termux/background-gpt/README.md',
   'plugins/termux/screen-on/README.md',
   'plugins/termux/taskbridge/README.md',
 ]) {

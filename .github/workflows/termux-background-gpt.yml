@@ -3,14 +3,14 @@ name: Termux Background GPT
 on:
   pull_request:
     paths:
-      - 'plugins/termux/background-gpt/**'
+      - 'products/standalone/termux/background-gpt/**'
       - '.github/tooling/ci-summary/**'
       - 'docs/TERMUX_BACKGROUND_GPT.md'
       - '.github/workflows/termux-background-gpt.yml'
   push:
     branches: [main]
     paths:
-      - 'plugins/termux/background-gpt/**'
+      - 'products/standalone/termux/background-gpt/**'
       - '.github/tooling/ci-summary/**'
       - 'docs/TERMUX_BACKGROUND_GPT.md'
       - '.github/workflows/termux-background-gpt.yml'
@@ -44,10 +44,10 @@ jobs:
             --receipt .ci-summary/termux-background-gpt-phases.json start syntax_check \
             || echo '::warning::Termux Background GPT compact phase receipt start failed; authoritative syntax gate is unchanged.'
           python -m py_compile \
-            plugins/termux/background-gpt/background_gpt.py \
-            plugins/termux/background-gpt/openai_backend.py \
-            plugins/termux/background-gpt/state_store.py \
-            plugins/termux/background-gpt/notifications.py
+            products/standalone/termux/background-gpt/background_gpt.py \
+            products/standalone/termux/background-gpt/openai_backend.py \
+            products/standalone/termux/background-gpt/state_store.py \
+            products/standalone/termux/background-gpt/notifications.py
           python3 .github/tooling/ci-summary/phase_receipt.py \
             --receipt .ci-summary/termux-background-gpt-phases.json pass syntax_check \
             || echo '::warning::Termux Background GPT compact phase receipt pass failed; authoritative syntax gate is unchanged.'
@@ -60,7 +60,7 @@ jobs:
           python3 .github/tooling/ci-summary/phase_receipt.py \
             --receipt .ci-summary/termux-background-gpt-phases.json start unit_tests \
             || echo '::warning::Termux Background GPT compact phase receipt start failed; authoritative unit-test gate is unchanged.'
-          python -m unittest discover -s plugins/termux/background-gpt/tests -v
+          python -m unittest discover -s products/standalone/termux/background-gpt/tests -v
           python3 .github/tooling/ci-summary/phase_receipt.py \
             --receipt .ci-summary/termux-background-gpt-phases.json pass unit_tests \
             || echo '::warning::Termux Background GPT compact phase receipt pass failed; authoritative unit-test gate is unchanged.'

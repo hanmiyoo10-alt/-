@@ -11,7 +11,7 @@
 | Local Usage Dashboard | `plugins/usage-dashboard/` | `release-usage-dashboard` + `.github/usage-dashboard/releases/` | `plugin:usage-dashboard` |
 | SimCore | `plugins/simcore/` | `product-manifest.json` + `release-simcore` | `plugin:simcore` |
 | DevPass | `plugins/risu/local/devpass/` | fixed `plugins/devpass/latest.js` update channel; artifact is currently missing and production version remains `UNKNOWN` | `plugin:devpass` |
-| Termux Large Doc Editor | `plugins/termux/large-doc-editor/` | prototype evidence only; no production authority | `plugin:termux-large-doc-editor` |
+| Termux Large Doc Editor | `products/standalone/termux/large-doc-editor/` | prototype evidence only; no production authority | `product:termux` source routing; legacy `plugin:termux-large-doc-editor` compatibility view pending T6 |
 
 `plugins/_template/`은 template scope, `plugins/test-a/`와 `plugins/test-b/`는 test-fixture scope로 분류하며 운영 플러그인으로 취급하지 않습니다.
 
@@ -35,9 +35,13 @@ plugins/
     install.js
   usage-dashboard/
     latest.js
-  termux/
-    large-doc-editor/
+products/
+  standalone/
+    termux/
+      large-doc-editor/
 ```
+
+Large Doc Editor의 runnable source는 `products/standalone/termux/large-doc-editor/`가 canonical이며, `plugins/termux/large-doc-editor/README.md`는 T6 전까지 legacy operational-view compatibility evidence만 유지합니다.
 
 `//@update-url`을 사용하는 플러그인은 각 프로젝트의 고정 raw HTTPS 경로를 유지합니다. 버전 값과 production 상태는 각 프로젝트의 실제 release authority에서만 판단합니다.
 

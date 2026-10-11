@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "project": "local-model-lab",
+  "status": "bootstrap",
+  "runtime_goal": "fully-local",
+  "teachers": {
+    "semantic": {
+      "provider": "voyage",
+      "model_family": "voyage-4-large",
+      "role": [
+        "semantic-retrieval",
+        "similarity-structure"
+      ],
+      "exact_api_contract": "VERIFY_AT_DATA_GENERATION"
+    },
+    "contextual": {
+      "provider": "voyage",
+      "model_family": "voyage-context-4",
+      "role": [
+        "contextual-chunk-embedding",
+        "long-document-retrieval"
+      ],
+      "exact_api_contract": "VERIFY_AT_DATA_GENERATION"
+    },
+    "reranker": {
+      "provider": "voyage",
+      "model_family": "current-best-reranker",
+      "role": [
+        "reranking",
+        "hard-negative-discrimination"
+      ],
+      "exact_model": "UNASSIGNED"
+    },
+    "judge": {
+      "provider": "jev",
+      "model_family": "jev",
+      "role": [
+        "structured-decision",
+        "probability",
+        "calibration"
+      ],
+      "exact_api_contract": "VERIFY_AT_DATA_GENERATION"
+    }
+  },
+  "student": {
+    "backbone": "UNASSIGNED",
+    "parameter_target": "UNASSIGNED",
+    "primary_embedding_dim": 1024,
+    "context_length": "UNASSIGNED",
+    "modes": [
+      "embed_query",
+      "embed_document",
+      "context_embed",
+      "rerank",
+      "judge"
+    ]
+  },
+  "secrets_policy": "environment-or-external-secret-store-only"
+}

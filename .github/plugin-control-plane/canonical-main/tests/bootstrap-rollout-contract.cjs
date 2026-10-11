@@ -20,7 +20,7 @@ const root = path.resolve(__dirname, '../../../..');
 const descriptorDir = path.join(root, '.github/plugin-control-plane/canonical-main/descriptors');
 const registry = JSON.parse(fs.readFileSync(path.join(root, '.github/plugin-control-plane/registry.json'), 'utf8'));
 const expectedIds = [...Object.keys(registry.plugins || {}), ...Object.keys(registry.products || {})].sort();
-assert.equal(expectedIds.length, 8, 'Local compatibility parent registration should produce eight operational identities');
+assert.equal(expectedIds.length, 9, 'Local Model Lab registration should produce nine operational identities');
 const descriptorFiles = fs.readdirSync(descriptorDir).filter((name) => name.endsWith('.json')).sort();
 const descriptors = descriptorFiles.map((name) => JSON.parse(fs.readFileSync(path.join(descriptorDir, name), 'utf8')));
 const actualIds = descriptors.map((descriptor) => descriptor.id).sort();
@@ -73,6 +73,14 @@ assert.equal(byId.devpass.authority.evidence, 'plugins/risu/local/devpass/README
 assert.equal(byId['voyage-token-check'].projectPath, 'plugins/risu/local/voyage');
 assert.equal(byId['voyage-token-check'].authority.type, 'evidence');
 assert.equal(byId['voyage-token-check'].authority.evidence, 'plugins/risu/local/voyage/DESIGN_STATUS.md');
+
+assert.equal(byId['local-model-lab'].lifecycle, 'research-product-root');
+assert.equal(byId['local-model-lab'].projectPath, 'products/local-model-lab');
+assert.equal(byId['local-model-lab'].authority.type, 'evidence');
+assert.equal(byId['local-model-lab'].authority.evidence, 'products/local-model-lab/CURRENT.md');
+assert.equal(byId['local-model-lab'].authority.manifest, 'products/local-model-lab/product.json');
+assert.equal(byId['local-model-lab'].memory.profile, 'check-only');
+assert.deepEqual(byId['local-model-lab'].memory.outputs, []);
 
 assert.equal(byId.simcore.memory.profile, 'registered-renderer');
 assert.equal(byId.simcore.memory.workflow, '.github/workflows/simcore-release-state-sync.yml');

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "product": "Local Model Lab",
+  "product_root": "products/local-model-lab",
+  "current_state": "products/local-model-lab/CURRENT.md",
+  "architecture": "products/local-model-lab/docs/ARCHITECTURE.md",
+  "teacher_stack": "products/local-model-lab/config/teacher-stack.json",
+  "current_priority": "TEACHER_CONTRACT_AND_BACKBONE_SELECTION",
+  "validation_status": "BOOTSTRAP",
+  "release_authority": null,
+  "runtime_authority": null
+}

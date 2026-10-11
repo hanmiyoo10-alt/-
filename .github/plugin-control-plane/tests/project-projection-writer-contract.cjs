@@ -85,6 +85,10 @@ function itemRaw(number = 42, fields = {}) {
   };
 }
 
+function itemListRaw(items) {
+  return {totalCount: items.length, items};
+}
+
 function snapshot(overrides = {}) {
   const number = overrides.issueNumber || 42;
   const issue = {
@@ -204,16 +208,22 @@ const badSchema = schemaRaw();
 badSchema.fields.find((field) => field.name === 'Status').options.pop();
 assert.equal(writer.normalizeProjectSchema(badSchema).ok, false);
 
-const item = writer.normalizeProjectItemList({items: [itemRaw()]}, 42);
+const item = writer.normalizeProjectItemList(itemListRaw([itemRaw()]), 42);
 assert.equal(item.ok, true);
 assert.equal(item.value.current.priority, null);
 assert.equal(item.value.presence.priority, false);
 assert.equal(item.value.current.workType, 'Work Packet');
-assert.equal(writer.normalizeProjectItemList({items: [itemRaw(), itemRaw()]}, 42).ok, false);
-assert.equal(writer.normalizeProjectItemList({items: []}, 42).ok, false);
+assert.equal(writer.normalizeProjectItemList(itemListRaw([itemRaw(), itemRaw()]), 42).ok, false);
+assert.equal(writer.normalizeProjectItemList(itemListRaw([]), 42).ok, false);
+const truncatedItems = writer.normalizeProjectItemList({totalCount: 2, items: [itemRaw()]}, 42);
+assert.equal(truncatedItems.ok, false);
+assert.ok(truncatedItems.reasonCodes.includes('PROJECT_ITEMS_TRUNCATED'));
+const tooManyItems = writer.normalizeProjectItemList({totalCount: writer.MAX_PROJECT_ITEMS + 1, items: []}, 42);
+assert.equal(tooManyItems.ok, false);
+assert.ok(tooManyItems.reasonCodes.includes('PROJECT_ITEMS_LIMIT_EXCEEDED'));
 const badFieldItem = itemRaw();
 badFieldItem.area = 'Unknown Area';
-assert.equal(writer.normalizeProjectItemList({items: [badFieldItem]}, 42).ok, false);
+assert.equal(writer.normalizeProjectItemList(itemListRaw([badFieldItem]), 42).ok, false);
 
 const issue = writer.normalizeIssue(issueRaw(), 42);
 assert.equal(issue.ok, true);
@@ -353,6 +363,21 @@ assert.equal(writer.buildItemEditArgs(42, {key: 'status', field: 'Status', desir
   });
   assert.equal(result.status, 'UNKNOWN');
   assert.ok(result.reasonCodes.includes('POSTWRITE_SELECTED_FIELD_MISMATCH'));
+  assert.equal(result.mutationMayHaveOccurred, true);
+}
+
+{
+  const first = snapshot({current: {status: 'Todo'}});
+  const divergent = clone(first);
+  divergent.item.current.status = 'Done';
+  const result = writer.applyProjectIssue({
+    issueNumber: 42,
+    readEvidence: sequence([evidence(first), evidence(clone(first)), evidence(divergent)]),
+    mutateField: () => ({code: 1}),
+  });
+  assert.equal(result.status, 'UNKNOWN');
+  assert.ok(result.reasonCodes.includes('POSTWRITE_SELECTED_FIELD_MISMATCH'));
+  assert.equal(result.mutationMayHaveOccurred, true);
 }
 
 {
@@ -387,7 +412,7 @@ assert.equal(writer.buildItemEditArgs(42, {key: 'status', field: 'Status', desir
     url: writer.PROJECT_URL,
   };
   const issueView = issueRaw();
-  const itemList = {items: [itemRaw()]};
+  const itemList = itemListRaw([itemRaw()]);
   const calls = [];
   const fakeRunner = (command, args) => {
     calls.push([command, ...args]);
@@ -418,6 +443,9 @@ assert.equal(writer.buildItemEditArgs(42, {key: 'status', field: 'Status', desir
   assert.equal(read.snapshot.item.presence.priority, false);
   assert.equal(calls.some((args) => args.includes('item-edit')), false);
   assert.equal(calls.some((args) => args.includes('item-add')), false);
+  const itemListCall = calls.find((args) => args[0] === 'gh' && args[1] === 'project' && args[2] === 'item-list');
+  assert.ok(itemListCall);
+  assert.ok(itemListCall.includes(String(writer.MAX_PROJECT_ITEMS)));
 }
 
 {
@@ -431,6 +459,24 @@ assert.equal(writer.buildItemEditArgs(42, {key: 'status', field: 'Status', desir
   assert.equal(read.ok, false);
   assert.equal(read.status, 'BLOCKED');
   assert.ok(read.reasonCodes.includes('LOCAL_SOURCE_NOT_CURRENT'));
+}
+
+{
+  const calls = [];
+  const fakeRunner = (command, args) => {
+    calls.push([command, ...args]);
+    if (command === 'git' && args.includes('rev-parse')) return {code: 0, stdout: HEAD + '\n'};
+    if (command === 'git' && args.includes('status')) {
+      return {code: 0, stdout: ' M .github/plugin-control-plane/canonical-main/work-system/policy.json\n'};
+    }
+    return {code: 1, stdout: ''};
+  };
+  const read = writer.readEvidenceDefault(42, fakeRunner);
+  assert.equal(read.ok, false);
+  assert.equal(read.status, 'BLOCKED');
+  assert.ok(read.reasonCodes.includes('LOCAL_SOURCE_DIRTY'));
+  const statusCall = calls.find((args) => args[0] === 'git' && args.includes('status'));
+  assert.ok(statusCall.includes('.github/plugin-control-plane/canonical-main/work-system/'));
 }
 
 const source = fs.readFileSync(path.resolve(__dirname, '../project-projection-writer.cjs'), 'utf8');

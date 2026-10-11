@@ -15,6 +15,7 @@ const PROJECT_URL = 'https://github.com/users/hanmiyoo10-alt/projects/2';
 const OPS_ISSUE = 485;
 const MODE = 'GITHUB_PROJECT_PLANNING_PROJECTION_WRITER';
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
+const MAX_PROJECT_ITEMS = 10000;
 
 const FIELD_ORDER = Object.freeze([
   Object.freeze({key: 'status', display: 'Status'}),
@@ -228,8 +229,14 @@ function itemField(item, key, allowedValues) {
 }
 
 function normalizeProjectItemList(raw, issueNumber) {
-  if (!raw || !Array.isArray(raw.items)) {
+  if (!raw || !Array.isArray(raw.items) || !Number.isSafeInteger(raw.totalCount) || raw.totalCount < 0) {
     return {ok: false, reasonCodes: ['PROJECT_ITEMS_INVALID']};
+  }
+  if (raw.totalCount > MAX_PROJECT_ITEMS) {
+    return {ok: false, reasonCodes: ['PROJECT_ITEMS_LIMIT_EXCEEDED']};
+  }
+  if (raw.items.length !== raw.totalCount) {
+    return {ok: false, reasonCodes: ['PROJECT_ITEMS_TRUNCATED']};
   }
   const expectedUrl = `https://github.com/${REPO}/issues/${issueNumber}`;
   const matches = raw.items.filter((item) => item?.content?.type === 'Issue'
@@ -304,6 +311,7 @@ function readEvidenceDefault(issueNumber, runner = defaultRunner) {
     '-C', ROOT, 'status', '--porcelain=v1', '--untracked-files=all', '--',
     '.github/plugin-control-plane/project-projection-writer.cjs',
     '.github/plugin-control-plane/project-projection.cjs',
+    '.github/plugin-control-plane/canonical-main/work-system/',
   ]);
   if (!dirtyRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: dirtyRead.reasonCodes};
   if (dirtyRead.stdout.trim()) {
@@ -348,7 +356,7 @@ function readEvidenceDefault(issueNumber, runner = defaultRunner) {
 
   const itemsRead = runJson(runner, 'gh', [
     'project', 'item-list', String(PROJECT_NUMBER), '--owner', PROJECT_OWNER,
-    '--format', 'json', '--limit', '100',
+    '--format', 'json', '--limit', String(MAX_PROJECT_ITEMS),
   ]);
   if (!itemsRead.ok) return {ok: false, status: 'UNKNOWN', reasonCodes: itemsRead.reasonCodes};
   const item = normalizeProjectItemList(itemsRead.value, issueNumber);
@@ -554,7 +562,7 @@ function applyProjectIssue({
   }
   return output('UNKNOWN', ['POSTWRITE_SELECTED_FIELD_MISMATCH'], {
     selectedField: selected,
-    mutationMayHaveOccurred: mutationCode === 0,
+    mutationMayHaveOccurred: true,
   });
 }
 
@@ -582,6 +590,7 @@ module.exports = {
   FIELD_ORDER,
   FIELD_SCHEMA,
   ITEM_KEYS,
+  MAX_PROJECT_ITEMS,
   MODE,
   OPS_ISSUE,
   PROJECT_ID,

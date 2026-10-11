@@ -519,12 +519,14 @@ async function runStatusRefreshContracts() {
     {number: 12, title: '[plugin-status:retired-owner]', state: 'open', labels: [status], body: generatedBody},
     {number: 13, title: '[plugin-status:retired-owner]', state: 'open', labels: [status], body: generatedBody},
     {number: 14, title: '[plugin-status:closed-owner]', state: 'closed', labels: [status], body: generatedBody},
+    {number: 17, title: '[plugin-status:legacy_owner]', state: 'open', labels: [status], body: generatedBody},
   ];
   const auditAttention = auditStatusRetirements(auditRows, registryForAudit);
   assert.equal(auditAttention.result, 'ATTENTION');
   assert.deepEqual(auditAttention.candidates, [
     {number: 12, kind: 'plugin', id: 'retired-owner', reason: 'OWNER_ABSENT_FROM_REGISTRY'},
     {number: 13, kind: 'plugin', id: 'retired-owner', reason: 'OWNER_ABSENT_FROM_REGISTRY'},
+    {number: 17, kind: 'plugin', id: 'legacy_owner', reason: 'OWNER_ABSENT_FROM_REGISTRY'},
   ]);
   assert.deepEqual(auditAttention.ambiguous, []);
   assert.deepEqual(auditAttention.authority, {
@@ -536,7 +538,7 @@ async function runStatusRefreshContracts() {
   const auditUnknown = auditStatusRetirements([
     ...auditRows,
     {number: 15, title: '[plugin-status:missing-marker]', state: 'open', labels: [status], body: 'no generated marker'},
-    {number: 16, title: '[plugin-status:Bad_ID]', state: 'open', labels: [status], body: generatedBody},
+    {number: 16, title: '[plugin-status:]', state: 'open', labels: [status], body: generatedBody},
   ], registryForAudit);
   assert.equal(auditUnknown.result, 'UNKNOWN');
   assert.deepEqual(auditUnknown.ambiguous, [

@@ -330,7 +330,7 @@ function auditStatusRetirements(issues, registry) {
     if (issue?.pull_request || issue?.state !== 'open') continue;
     if (!statusIssueLabels(issue).includes('control-plane:status')) continue;
 
-    const match = String(issue.title || '').match(/^\[(plugin|product)-status:([a-z0-9]+(?:-[a-z0-9]+)*)\]$/);
+    const match = String(issue.title || '').match(/^\[(plugin|product)-status:(.+)\]$/);
     if (!match) {
       ambiguous.push({number: issue.number ?? null, reason: 'STATUS_IDENTITY_MALFORMED'});
       continue;

@@ -65,10 +65,12 @@
       "family": "product",
       "risu": "no",
       "sourceRefs": [
-        "plugin:termux-large-doc-editor"
+        "plugin:termux-large-doc-editor",
+        "product:termux"
       ],
       "sourceRoots": [
-        "plugins/termux/**"
+        "plugins/termux/**",
+        "products/standalone/termux/**"
       ],
       "targetRoot": "products/standalone/termux",
       "migration": "reclassify"

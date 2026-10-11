@@ -16,6 +16,7 @@ from typing import Any
 SCHEMA = "termux-migration-plan.v1"
 MAX_CHANGED_FILES = 1000
 MAX_RENAME_CANDIDATES = 2000
+MAX_SCAN_BYTES = 262_144
 GIT_ENV_CLEAR = {
     "GIT_DIR",
     "GIT_WORK_TREE",
@@ -131,12 +132,14 @@ def _git(repo: Path, *args: str, text: bool = True) -> str | bytes:
             key in GIT_ENV_CLEAR
             or key.startswith("GIT_CONFIG_KEY_")
             or key.startswith("GIT_CONFIG_VALUE_")
+            or key.startswith("GIT_TRACE")
         ):
             env.pop(key, None)
     env["GIT_NO_LAZY_FETCH"] = "1"
     env["GIT_NO_REPLACE_OBJECTS"] = "1"
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GIT_OPTIONAL_LOCKS"] = "0"
+    env["GIT_LITERAL_PATHSPECS"] = "1"
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
         stdout=subprocess.PIPE,
@@ -265,6 +268,19 @@ def _show_text(
         entry = _tree_entry(repo, ref_oid, path)
         if entry["type"] != "blob":
             raise ValidationUnknown(f"scan path is not a blob: {path}")
+        size_text = str(_git(repo, "cat-file", "-s", entry["oid"])).strip()
+        try:
+            size = int(size_text)
+        except ValueError as exc:
+            raise ValidationUnknown(
+                f"scan path {path}: invalid blob size {size_text!r}"
+            ) from exc
+        if size > MAX_SCAN_BYTES:
+            if required:
+                raise ValidationUnknown(
+                    f"scan path {path}: blob size {size} exceeds {MAX_SCAN_BYTES}"
+                )
+            return None
         data = _git(repo, "cat-file", "blob", entry["oid"], text=False)
         return _decode_utf8(data, f"scan path {path}")
     except ValidationUnknown:

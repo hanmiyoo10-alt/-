@@ -36,7 +36,8 @@ Every Git subprocess:
   `GIT_CONFIG_*` parameter variables;
 - sets `GIT_NO_LAZY_FETCH=1` so a partial clone cannot demand-fetch missing objects;
 - sets `GIT_NO_REPLACE_OBJECTS=1` so `refs/replace` cannot substitute evidence;
-- sets `GIT_TERMINAL_PROMPT=0` and `GIT_OPTIONAL_LOCKS=0`;
+- clears inherited `GIT_TRACE*` destinations and ambient Git pathspec-mode overrides;
+- sets `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`, and `GIT_LITERAL_PATHSPECS=1`;
 - uses an explicit bounded rename-candidate policy and disables external diff helpers.
 
 The supplied `--repo-root` must resolve to the exact Git work-tree root.
@@ -97,10 +98,7 @@ including declared content edits.
 `allowed_old_root_relpaths` is an exact residue allowlist. Use an empty list
 when the old root must disappear.
 
-`scan_paths` is optional. When supplied, every listed path must be present and
-UTF-8 readable at the head ref or the result is `UNKNOWN`. If omitted, the
-validator performs a best-effort bounded scan of changed new-root, workflow,
-Python, and shell paths that exist at the head.
+`scan_paths` is optional. When supplied, every listed path must be present, be a blob, be no larger than 256 KiB, and be UTF-8 readable at the head ref or the result is `UNKNOWN`. If omitted, the validator performs a best-effort bounded scan of changed new-root, workflow, Python, and shell paths. Oversized or non-text auto-scan blobs are skipped without reading their bodies.
 
 ## Command
 

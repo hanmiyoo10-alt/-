@@ -263,6 +263,9 @@ class MigrationValidatorTests(unittest.TestCase):
             "GIT_CONFIG_COUNT": "1",
             "GIT_CONFIG_KEY_0": "diff.renameLimit",
             "GIT_CONFIG_VALUE_0": "1",
+            "GIT_TRACE": "/tmp/trace.log",
+            "GIT_TRACE2_EVENT": "/tmp/trace2.json",
+            "GIT_GLOB_PATHSPECS": "1",
         }
         with mock.patch.dict(os.environ, ambient, clear=False):
             with mock.patch.object(
@@ -276,8 +279,70 @@ class MigrationValidatorTests(unittest.TestCase):
         self.assertEqual(env["GIT_NO_REPLACE_OBJECTS"], "1")
         self.assertEqual(env["GIT_TERMINAL_PROMPT"], "0")
         self.assertEqual(env["GIT_OPTIONAL_LOCKS"], "0")
+        self.assertEqual(env["GIT_LITERAL_PATHSPECS"], "1")
         for key in ambient:
             self.assertNotIn(key, env)
+
+    def test_colon_prefixed_paths_are_treated_as_literal_pathspecs(self):
+        self.write(":old/a.txt", "alpha\n")
+        base = self.commit("colon base")
+        (self.repo / ":old").rename(self.repo / ":new")
+        head = self.commit("colon move")
+        plan = mv._validate_plan(
+            {
+                "schema": "termux-migration-plan.v1",
+                "old_root": ":old",
+                "new_root": ":new",
+                "authorized_paths": [":old/**", ":new/**"],
+                "expected_changed_file_count": 1,
+                "content_edit_relpaths": [],
+                "allowed_old_root_relpaths": [],
+                "scan_paths": [],
+            }
+        )
+        result = mv.validate(self.repo, base, head, plan)
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["base_old_inventory"], ["a.txt"])
+        self.assertEqual(result["head_new_inventory"], ["a.txt"])
+
+    def test_automatic_scan_skips_oversized_blob_without_reading_body(self):
+        self.write(
+            "plugins/termux/demo/large.py",
+            "x" * (mv.MAX_SCAN_BYTES + 1),
+        )
+        base = self.commit("base with large blob")
+        old = self.repo / "plugins/termux/demo"
+        new = self.repo / "products/standalone/termux/demo"
+        new.parent.mkdir(parents=True, exist_ok=True)
+        old.rename(new)
+        head = self.commit("move with large scan candidate")
+        plan = self.plan(changed_count=3, scan_paths=[])
+        result = mv.validate(self.repo, base, head, plan)
+        self.assertEqual(result["status"], "WARN")
+        self.assertFalse(
+            any(
+                f.get("path") == "products/standalone/termux/demo/large.py"
+                for f in result["findings"]
+            )
+        )
+
+    def test_explicit_oversized_scan_path_is_unknown(self):
+        self.write(
+            "plugins/termux/demo/large.py",
+            "x" * (mv.MAX_SCAN_BYTES + 1),
+        )
+        base = self.commit("base with large blob")
+        old = self.repo / "plugins/termux/demo"
+        new = self.repo / "products/standalone/termux/demo"
+        new.parent.mkdir(parents=True, exist_ok=True)
+        old.rename(new)
+        head = self.commit("move with large scan candidate")
+        plan = self.plan(
+            changed_count=3,
+            scan_paths=["products/standalone/termux/demo/large.py"],
+        )
+        with self.assertRaises(mv.ValidationUnknown):
+            mv.validate(self.repo, base, head, plan)
 
     def test_noncanonical_authorization_scope_is_unknown(self):
         with self.assertRaises(mv.ValidationUnknown):

@@ -29,6 +29,19 @@ Child relocation is separately staged under #2801:
 
 Each later stage requires its own fresh authority, impact, consumer, validation, and compatibility review. T0 authorizes no child physical move.
 
+## Migration tooling
+
+For future bounded child-path moves, use the read-only repository validator:
+
+- `products/standalone/termux/tools/migration_validator.py`
+- contract and example plan: `products/standalone/termux/tools/README.md`
+
+The validator checks authorized changed-file ceilings, old/new inventories,
+byte-parity expectations, old-root residue, and location-sensitive path-depth
+references. It is advisory validation only and does not replace Work System,
+Required, Control Plane, merge, release, production, runtime, or device
+authority.
+
 ## Operating guidance
 
 Repository and Termux work must follow:

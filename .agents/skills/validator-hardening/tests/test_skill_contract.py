@@ -329,11 +329,11 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_exercised_cases_require_exact_input_and_replay_identity(self):
         for required in (
-            "exact input identity that binds both bytes and every owner-relevant structural property",
+            "record an exact owner-relevant input identity",
             "A descriptive case name alone is insufficient",
             "generation seed/configuration needed for replay",
             "reduced/minimized example identity or bounded example value/locator",
-            "cases actually exercised, each binding exact byte+structural input identity and exact invocation identity to expected owner-defined behavior, observed status/result, reason code, exit result when applicable, and an output digest or immutable result locator; a mutable result locator alone is insufficient",
+            "cases actually exercised, each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not) and exact invocation identity to expected owner-defined behavior, observed status/result, owner-defined reason code when applicable or NOT_APPLICABLE when the owner defines none, exit result when applicable, and an output digest or immutable result locator; a mutable result locator alone is insufficient",
             "generated-case replay provenance when applicable",
         ):
             self.assertIn(required, self.text)
@@ -365,9 +365,9 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_exercised_case_receipt_binds_expected_and_observed_outcome(self):
         for required in (
-            "each binding exact byte+structural input identity and exact invocation identity to expected owner-defined behavior",
+            "each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not) and exact invocation identity to expected owner-defined behavior",
             "observed status/result",
-            "reason code",
+            "owner-defined reason code when applicable or NOT_APPLICABLE when the owner defines none",
             "exit result when applicable",
             "output digest or immutable result locator",
         ):
@@ -424,7 +424,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         for required in (
             "when APPLICABLE, the exact exercised evidence/result that covers that dimension or an explicit unresolved reason",
             "if basis or required evidence mapping is missing, that dimension remains UNKNOWN",
-            "every APPLICABLE dimension is mapped to its exercised evidence/result or remains explicitly unresolved",
+            "every APPLICABLE dimension is mapped to sufficient exercised evidence/result",
         ):
             self.assertIn(required, self.text)
 
@@ -444,7 +444,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "ordered arguments/flags",
             "stdin versus file/input-channel mapping",
             "material per-invocation configuration/settings",
-            "each binding exact byte+structural input identity and exact invocation identity",
+            "each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not) and exact invocation identity",
         ):
             self.assertIn(required, self.text)
 
@@ -471,10 +471,10 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_exercised_input_identity_includes_structural_metadata(self):
         for required in (
-            "binds both bytes and every owner-relevant structural property",
+            "When bytes are part of the target's input contract, bind the exact bytes or byte digest plus every owner-relevant structural property",
             "A bare content digest is insufficient",
             "path, filename, file mode/executable bit, symlink/gitlink/tree-entry mode, Git object type, directory/tree structure, container shape",
-            "exact byte+structural input identity",
+            "exact owner-relevant input identity",
         ):
             self.assertIn(required, self.text)
 
@@ -606,6 +606,30 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         self.assertIn("input://owner-source-b", owner["prompt"])
         self.assertIn("input://contract-a", contract["prompt"])
         self.assertIn("input://contract-b", contract["prompt"])
+
+    def test_unresolved_applicable_dimension_blocks_completion(self):
+        for required in (
+            "every APPLICABLE dimension is mapped to sufficient exercised evidence/result",
+            "any APPLICABLE dimension that remains unresolved forces `PARTIAL` or `UNKNOWN`",
+            "blocks `HARDENING_REVIEW_COMPLETE`",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_reason_code_is_conditional_on_owner_semantics(self):
+        for required in (
+            "owner-defined reason code when applicable or NOT_APPLICABLE when the owner defines none",
+            "Preserve the target owner's result vocabulary and semantics",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_object_inputs_can_use_value_type_structure_identity_without_fake_bytes(self):
+        for required in (
+            "When the target consumes an in-memory value/object and bytes are not part of its contract",
+            "bind the exact owner-relevant type plus value/shape/structure",
+            "without inventing a JSON/pickle/repr encoding the target never observed",
+            "byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not",
+        ):
+            self.assertIn(required, self.text)
 
     def test_no_runtime_helper_is_required(self):
         self.assertFalse((SKILL_ROOT / "scripts").exists())

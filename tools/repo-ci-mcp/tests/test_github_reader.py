@@ -8,7 +8,14 @@ from email.message import Message
 from urllib.error import HTTPError
 from urllib.request import Request
 
-from repo_ci_mcp.github_reader import CODE_QUALITY_API_VERSION, DEFAULT_API_VERSION, GitHubReadError, GitHubReader, _SafeRedirectHandler
+from repo_ci_mcp.github_reader import (
+    CODE_QUALITY_API_VERSION,
+    DEFAULT_API_VERSION,
+    MAX_RELEASE_LIST_BYTES,
+    GitHubReadError,
+    GitHubReader,
+    _SafeRedirectHandler,
+)
 
 
 class ReaderTests(unittest.TestCase):
@@ -408,11 +415,27 @@ class ReaderTests(unittest.TestCase):
         }]
         with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
             result = reader.list_repository_releases(limit=7)
-        get_value.assert_called_once_with("/repos/owner/repo/releases", {"per_page": 7})
+        get_value.assert_called_once_with(
+            "/repos/owner/repo/releases",
+            {"per_page": 7},
+            max_bytes=MAX_RELEASE_LIST_BYTES,
+        )
         self.assertEqual(result[0]["id"], 7)
         self.assertNotIn("must-not-pass-reader-boundary", repr(result))
         self.assertNotIn("example.invalid", repr(result))
         self.assertNotIn("private", repr(result))
+
+    def test_58f2_release_list_uses_endpoint_specific_bounded_raw_limit(self):
+        reader = GitHubReader(repository="owner/repo")
+        with patch.object(GitHubReader, "_get_json_value", return_value=[]) as get_value:
+            self.assertEqual(reader.list_repository_releases(limit=50), [])
+        self.assertGreater(MAX_RELEASE_LIST_BYTES, 2 * 1024 * 1024)
+        self.assertLessEqual(MAX_RELEASE_LIST_BYTES, 64 * 1024 * 1024)
+        get_value.assert_called_once_with(
+            "/repos/owner/repo/releases",
+            {"per_page": 50},
+            max_bytes=MAX_RELEASE_LIST_BYTES,
+        )
 
     def test_58g_tags_use_fixed_bounded_endpoint_and_strip_urls(self):
         reader = GitHubReader(repository="owner/repo")

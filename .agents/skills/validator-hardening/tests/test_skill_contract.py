@@ -323,7 +323,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_receipt_preserves_proposed_unexecuted_cases(self):
         self.assertIn(
-            "proposed/not-exercised adversarial cases, each with concrete bounded input identity/structure, expected owner-defined outcome or uncertainty behavior, and reason it remains unexecuted",
+            "proposed/not-exercised adversarial cases, each with concrete bounded input identity/structure, expected owner-defined outcome or uncertainty behavior plus the exact current owner-contract clause/basis locator defining that expectation, and reason it remains unexecuted",
             self.text,
         )
 
@@ -333,7 +333,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "A descriptive case name alone is insufficient",
             "generation seed/configuration needed for replay",
             "reduced/minimized example identity or bounded example value/locator",
-            "cases actually exercised, each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not), exact invocation identity, and the authorization identity/scope covering that invocation to expected owner-defined behavior, observed status/result, owner-defined reason code when applicable or NOT_APPLICABLE when the owner defines none, exit result when applicable, and exact owner-relevant result identity",
+            "cases actually exercised, each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not), exact invocation identity, and the authorization identity/scope covering that invocation to expected owner-defined behavior plus the exact current owner-contract clause/basis locator defining that expectation, observed status/result, owner-defined reason code when applicable or NOT_APPLICABLE when the owner defines none, exit result when applicable, and exact owner-relevant result identity",
             "generated-case replay provenance when applicable",
         ):
             self.assertIn(required, self.text)
@@ -660,7 +660,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
     def test_every_evidence_bearing_owner_command_has_runtime_identity(self):
         for required in (
             "owner tests / commands actually executed, each with exact test/command identity plus exact invocation",
-            "every evidence-bearing owner command is mapped to current invocation-scoped authorization, binds its exact ordered invocation and input/configuration mapping, proves the intended checks actually ran, and has exact runtime/toolchain",
+            "every evidence-bearing owner command is mapped to current invocation-scoped authorization, binds its exact ordered invocation and input/configuration mapping, proves the intended checks actually ran, and has exact runtime/toolchain plus immutable implementation identities",
         ):
             self.assertIn(required, self.text)
 
@@ -884,7 +884,60 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "response/input files, feature flags",
             "Preserve an immutable mapping from those material inputs/configuration values to the relevant check/step result",
             "immutable mapping of all material remote invocation inputs/configuration that selected or parameterized the relevant validation",
-            "preserves an immutable mapping of all material remote invocation inputs/configuration that selected or parameterized the validation to that relevant-step result",
+            "preserves a secret-safe immutable mapping of all material remote invocation inputs/configuration that selected or parameterized the validation to that relevant-step result",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_remote_configuration_identity_is_secret_safe(self):
+        for required in (
+            "secret, credential, private payload, or other sensitive values must never be embedded raw",
+            "owner-backed opaque secret version/reference",
+            "immutable secret-manager version identifier",
+            "equivalent immutable redacted identity that is non-secret-bearing, auditable by the owner, and bound to that exact run",
+            "secret-safe immutable mapping of all material remote invocation inputs/configuration",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_every_case_expectation_binds_exact_owner_contract_basis(self):
+        for required in (
+            "For every proposed or exercised positive control and every proposed or exercised adversarial case",
+            "exact current owner-contract clause or basis locator that defines that expectation",
+            "A generic dimension-level basis is not enough",
+            "missing per-case expectation provenance keeps that case unresolved",
+            "expected owner-defined successful result plus the exact current owner-contract clause/basis locator defining that expectation",
+            "expected owner-defined outcome or uncertainty behavior plus the exact current owner-contract clause/basis locator defining that expectation",
+            "expected owner-defined behavior plus the exact current owner-contract clause/basis locator defining that expectation",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_digest_identity_requires_collision_resistant_sha256_or_stronger(self):
+        for required in (
+            "owner-approved collision-resistant cryptographic hash at least as strong as SHA-256",
+            "record the algorithm plus full digest over explicitly identified bytes",
+            "MD5, SHA-1",
+            "deprecated/non-collision-resistant algorithms",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_local_toolchains_bind_immutable_implementation_identity(self):
+        for required in (
+            "bind every material interpreter, executable, analyzer, imported module, package, image, and dependency",
+            "immutable implementation identity",
+            "immutable package/image/artifact identity or collision-resistant content digest",
+            "Executable resolution path, package name, or self-reported version alone is insufficient",
+            "exact runtime/toolchain identity plus immutable implementation identities for every material interpreter/executable/module/package/image/dependency",
+            "immutable analyzer/tool/dependency implementation identities",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_local_result_locators_require_durable_retention_or_digest(self):
+        for required in (
+            "durable retrievable immutable result locator with an owner-defined retention guarantee covering the review's audit horizon",
+            "mutable, temporary, expiring, or retention-unproven locator alone is insufficient",
+            "when durable retrievability is not guaranteed preserve the exact collision-resistant content digest",
+            "temporary, expiring, or retention-unproven locator alone is insufficient and requires the exact collision-resistant content digest",
+            "temporary, expiring, or retention-unproven analyzer-result locator alone is insufficient",
+            "durable retrievable immutable locator with an owner-defined retention guarantee or algorithm-qualified full collision-resistant digest",
         ):
             self.assertIn(required, self.text)
 

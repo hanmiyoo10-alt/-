@@ -167,7 +167,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         for required in (
             "neutralizes replacement-object substitution",
             "never treat `CLEAN` alone as byte identity",
-            "actual bytes inspected even when the worktree reports `CLEAN`",
+            "actual bytes plus every owner-relevant structural property relied upon by the review",
             "filter-normalized or otherwise transformed checkout bytes",
             "must not rely on `git status` cleanliness",
         ):
@@ -178,7 +178,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "prefer reading and executing from an immutable snapshot",
             "immediately before emitting the final receipt revalidate",
             "including a Git checkout/worktree or a non-Git mutable path",
-            "recorded digest/equivalent exact identity for every mutable non-Git input",
+            "recorded digest/equivalent exact identity plus claim-relevant structure for every mutable non-Git input",
             "every contributing source, helper, test, fixture, owner-contract, and executed-input identity",
             "regardless of storage mechanism",
             "UNKNOWN / REVIEW_INPUT_CHANGED_DURING_REVIEW",
@@ -192,7 +192,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "every dirty input that contributes to the review",
             "record an immutable digest or bounded diff identity for each such dirty reviewed/executed input",
             "dirty contributing inputs cannot be bounded and identified completely",
-            "contributing-byte identity set must include every source",
+            "contributing-input identity set must include every source",
             "regardless of CLEAN/DIRTY state",
             "reviewed source identity (exact commit/object/artifact identity)",
             "worktree state: CLEAN | DIRTY | NOT_APPLICABLE",
@@ -311,7 +311,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "do not claim `HARDENING_REVIEW_COMPLETE` from that execution",
             "execution surface/runtime/toolchain identity for each exercised case",
             "bounded host-resource containment",
-            "outer wall-clock timeout plus CPU time, memory, process/thread count, filesystem growth, and output limits",
+            "outer wall-clock timeout plus every owner-relevant CPU-time, memory, process/thread-count, filesystem-growth, output, recursion/depth",
             "effect/resource containment identity for exercised cases",
             "isolated copy/workspace or proven no-write configuration",
             "an owner test proven not to load or execute the target",
@@ -509,7 +509,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
     def test_owner_test_command_proves_tests_ran_and_preserves_containment(self):
         for required in (
             "owner-defined positive execution marker or bounded collection/execution count proving the intended tests actually ran",
-            "if no positive execution marker/count exists, that command evidence remains unresolved",
+            "if no positive execution marker/count or required isolation/reset proof exists, that command evidence remains unresolved",
             "for target-executing owner tests the exact runtime/toolchain plus effect/resource-containment identity",
             "every executed owner-test command proves the intended tests actually ran",
         ):

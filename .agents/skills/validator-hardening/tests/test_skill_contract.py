@@ -974,6 +974,42 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, self.text)
 
+    def test_sensitive_exercised_inputs_use_opaque_nonsecret_identity(self):
+        for required in (
+            "when an exercised case input itself is a credential, secret, private payload, low-entropy token, or other sensitive value",
+            "never use a guessable content digest of the sensitive value as its identity",
+            "owner-backed opaque secret/input version or reference",
+            "immutable secret-manager/artifact version identity",
+            "sensitive exercised-input identity",
+            "every sensitive exercised input binds an owner-backed opaque input version/reference",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_effect_attempt_telemetry_is_immutable_and_loss_audited(self):
+        for required in (
+            "audit producer/collector implementation and configuration identity",
+            "durable immutable telemetry artifact locator",
+            "algorithm-qualified full collision-resistant digest over the exact telemetry bytes",
+            "dropped/truncated/overflow counters",
+            "telemetry without loss/completeness proof cannot close dimension G",
+            "effect-attempt telemetry integrity",
+            "every dimension-G telemetry source binds audit producer/configuration identity",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_remote_validation_binds_owner_approved_ci_trust_domain(self):
+        for required in (
+            "owner-approved remote validation trust domain",
+            "CI provider/service endpoint",
+            "owning repository/project and organization/tenant identity",
+            "event/ref trust context",
+            "exact current owner-contract clause/basis that permits this remote surface",
+            "fork, lookalike project, different tenant/provider endpoint",
+            "external validation trust-domain provenance",
+            "every external validation result binds an owner-approved CI trust domain",
+        ):
+            self.assertIn(required, self.text)
+
     def test_no_runtime_helper_is_required(self):
         self.assertFalse((SKILL_ROOT / "scripts").exists())
 

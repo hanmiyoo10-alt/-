@@ -76,6 +76,30 @@ function withCurrentAgentWrapper(rows, {
   return out;
 }
 
+function withOuterParentChain(rows, {
+  wrapperPid = 40,
+  count,
+  startPid = 200,
+  terminalPpid = 0,
+} = {}) {
+  const out = withCurrentAgentWrapper(rows, {wrapperPid});
+  let child = out.find((item) => item.pid === wrapperPid);
+  for (let index = 0; index < count; index += 1) {
+    const parent = row(
+      startPid + index,
+      0,
+      'runtimebroker.exe',
+      'runtimebroker.exe',
+      1000,
+    );
+    child.ppid = parent.pid;
+    out.push(parent);
+    child = parent;
+  }
+  child.ppid = terminalPpid;
+  return out;
+}
+
 test('fixed CLI admits inspect only', () => {
   assert.deepEqual(owner.parseArgs(['inspect']), {operation: 'inspect'});
   for (const argv of [
@@ -254,6 +278,108 @@ test('missing ancestor above verified agent does not invalidate direct relation'
   assert.deepEqual(result, {
     sessionState: 'ABSENT',
     reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+  });
+});
+
+test('stale unrelated outer ancestor stops discovery without poisoning valid wrapper lineage', () => {
+  const rows = withCurrentAgentWrapper(fixture(), {wrapperPid: 40});
+  rows.push(row(30, 0, 'runtimebroker.exe', 'runtimebroker.exe', 2000));
+  const wrapper = rows.find((item) => item.pid === 40);
+  wrapper.ppid = 30;
+  wrapper.creationTimeMs = 1000;
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'ABSENT',
+    reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+  });
+});
+
+test('outer ancestor PID cycle remains fail closed', () => {
+  const rows = withCurrentAgentWrapper(fixture(), {wrapperPid: 40});
+  rows.push(row(30, 40, 'runtimebroker.exe', 'runtimebroker.exe', 900));
+  const wrapper = rows.find((item) => item.pid === 40);
+  wrapper.ppid = 30;
+  wrapper.creationTimeMs = 1000;
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_TOPOLOGY_AMBIGUOUS',
+  });
+});
+
+test('outer PID cycle is caught even when the first outer edge is stale', () => {
+  const rows = withCurrentAgentWrapper(fixture(), {wrapperPid: 40});
+  rows.push(row(30, 40, 'runtimebroker.exe', 'runtimebroker.exe', 2000));
+  const wrapper = rows.find((item) => item.pid === 40);
+  wrapper.ppid = 30;
+  wrapper.creationTimeMs = 1000;
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_TOPOLOGY_AMBIGUOUS',
+  });
+});
+
+test('longer outer PID cycle remains fail closed before stale-edge stopping', () => {
+  const rows = withCurrentAgentWrapper(fixture(), {wrapperPid: 40});
+  rows.push(row(30, 20, 'runtimebroker.exe', 'runtimebroker.exe', 2000));
+  rows.push(row(20, 40, 'services.exe', 'services.exe', 1500));
+  const wrapper = rows.find((item) => item.pid === 40);
+  wrapper.ppid = 30;
+  wrapper.creationTimeMs = 1000;
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_TOPOLOGY_AMBIGUOUS',
+  });
+});
+
+test('cycle closing on the 16th parent lookup remains UNKNOWN', () => {
+  const rows = withOuterParentChain(fixture(), {count: 12, terminalPpid: 61});
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_TOPOLOGY_AMBIGUOUS',
+  });
+});
+
+test('exact bounded parent chain ending at root remains eligible for ABSENT', () => {
+  const rows = withOuterParentChain(fixture(), {count: 13, terminalPpid: 0});
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'ABSENT',
+    reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+  });
+});
+
+test('known ancestry beyond the bounded parent probe remains UNKNOWN', () => {
+  const rows = withOuterParentChain(fixture(), {count: 14, terminalPpid: 0});
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_TOPOLOGY_AMBIGUOUS',
+  });
+});
+
+test('missing parent on the final bounded lookup remains a normal stop', () => {
+  const rows = withOuterParentChain(fixture(), {count: 12, terminalPpid: 9999});
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'ABSENT',
+    reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+  });
+});
+
+test('stale current-agent to marker-wrapper relation remains UNKNOWN', () => {
+  const rows = withCurrentAgentWrapper(fixture(), {wrapperPid: 40});
+  const wrapper = rows.find((item) => item.pid === 40);
+  const agent = rows.find((item) => item.pid === 50);
+  wrapper.creationTimeMs = 2000;
+  agent.creationTimeMs = 1000;
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS',
   });
 });
 

@@ -161,6 +161,8 @@ def repo_permission_probe(reader: GitHubReader, operation: str) -> dict[str, Any
         "variables",
         "security_advisories",
         "code_quality",
+        "releases",
+        "tags",
     } else None
     if safe_operation is None:
         return {

@@ -18,6 +18,8 @@ const {
   renderGuidelines,
 } = require('../bootstrap.cjs');
 const {latestRelevantRun} = require('../adapters.cjs');
+const {workflowRunsForPushHeadPath} = require('../infra/actions-store.cjs');
+const {selectCurrentMainPushRun} = require('../observers/required-ci.cjs');
 const {
   buildAlertEnvelope,
   envelopeMarker,
@@ -187,6 +189,42 @@ const historical = {id: 1, event: 'workflow_dispatch', conclusion: 'failure', cr
 const current = {id: 2, event: 'workflow_dispatch', conclusion: 'success', created_at: '2026-08-24T20:38:00Z'};
 assert.equal(latestRelevantRun([historical], ['workflow_dispatch'], policy.adapters.observationEpoch), undefined, 'pre-adapter historical failures must not open new incidents');
 assert.equal(latestRelevantRun([historical, current], ['workflow_dispatch'], policy.adapters.observationEpoch).id, 2);
+
+const requiredHeadSha = 'a'.repeat(40);
+const requiredRunsPath = workflowRunsForPushHeadPath('simcore-ci.yml', requiredHeadSha, 100);
+const requiredRunsUrl = new URL(requiredRunsPath, 'https://api.github.test');
+assert.equal(requiredRunsUrl.pathname, '/actions/workflows/simcore-ci.yml/runs');
+assert.equal(requiredRunsUrl.searchParams.get('per_page'), '100');
+assert.equal(requiredRunsUrl.searchParams.get('head_sha'), requiredHeadSha);
+assert.equal(requiredRunsUrl.searchParams.get('event'), 'push');
+assert.equal(requiredRunsUrl.searchParams.has('status'), false);
+assert.throws(() => workflowRunsForPushHeadPath('simcore-ci.yml', requiredHeadSha, 101), /perPage/);
+assert.throws(() => workflowRunsForPushHeadPath('simcore-ci.yml', 'short', 100), /headSha/);
+
+const unrelatedRuns = Array.from({length: 75}, (_, index) => ({
+  id: index + 1,
+  head_sha: String(index).padStart(40, '0').slice(-40),
+  event: 'pull_request',
+  status: 'completed',
+  conclusion: 'success',
+}));
+const exactMainPush = {
+  id: 999,
+  head_sha: requiredHeadSha,
+  event: 'push',
+  status: 'completed',
+  conclusion: 'success',
+};
+assert.equal(
+  selectCurrentMainPushRun([...unrelatedRuns, exactMainPush], requiredHeadSha).id,
+  exactMainPush.id,
+  'unrelated workflow-run volume must not change exact main push selection',
+);
+assert.equal(selectCurrentMainPushRun(unrelatedRuns, requiredHeadSha), null);
+
+const requiredCiObserverSource = fs.readFileSync(path.join(__dirname, '../observers/required-ci.cjs'), 'utf8');
+assert.match(requiredCiObserverSource, /workflowRunsForPushHead\(config\.workflow,\s*context\.mainSha,\s*100\)/);
+assert.doesNotMatch(requiredCiObserverSource, /workflowRuns\(config\.workflow,\s*50\)/);
 
 const workflow = fs.readFileSync(path.join(root, '.github/workflows/canonical-main-ops.yml'), 'utf8');
 assert.match(workflow, /schedule:/);

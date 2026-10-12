@@ -249,10 +249,12 @@ class GitHubReader:
             if any(not isinstance(item, dict) for item in environments):
                 raise GitHubReadError("environment item invalid")
             items.extend(environments)
-            if len(environments) < 100:
-                if len(items) != expected_total:
-                    raise GitHubReadError("environment inventory incomplete")
+            if len(items) > expected_total:
+                raise GitHubReadError("environment inventory exceeds total_count")
+            if len(items) == expected_total:
                 return items
+            if len(environments) < 100:
+                raise GitHubReadError("environment inventory incomplete")
         raise GitHubReadError("environment pagination exceeds bounded page limit")
 
     def list_deployments(self, *, limit: int) -> list[dict[str, Any]]:

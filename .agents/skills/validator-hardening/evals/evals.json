@@ -64,12 +64,14 @@
     {
       "id": "narrow-validator-negative",
       "prompt": "Target: tools/agent-skill-eval/prepare_eval.py::_normalize_output_fixture. Owner: Agent Platform (repository scope from docs/REPO_PROJECT_CATALOG.md). Guideline/contract: current tools/agent-skill-eval source and tests. Result vocabulary: return a normalized case list on valid input; raise EvalPreparationError on malformed output fixtures. Claim: review only the closed output-fixture shape contract (top-level object, non-empty cases/evals, case id/prompt, string assertions). Do not broaden into Git, filesystem, network, AST, subprocess, or unrelated project validation without current owner evidence.",
-      "expected_output": "A read-only static hardening review that proposes the applicable adversarial matrix from current source/contract evidence, explicitly states that no owner tests or adversarial cases were executed on this surface, preserves all unresolved execution evidence, and returns review disposition PARTIAL unless the requested claim is already completely provable without execution. A compact review that marks unrelated dimensions NOT_APPLICABLE_WITH_OWNER_BASIS from current Agent Platform owner evidence, preserves the existing output-fixture normalizer contract, and avoids broad repository archaeology or new dependencies.",
+      "expected_output": "A read-only static hardening review that proposes the applicable adversarial matrix from current source/contract evidence, explicitly states that no owner tests or adversarial cases were executed on this surface, preserves all unresolved execution evidence, and returns review disposition PARTIAL unless the requested claim is already completely provable without execution. Dimension B structured-data shape validation remains APPLICABLE to the locked _normalize_output_fixture contract, including malformed top-level container, cases/evals list shape, and field-type checks. Raw JSON text decoding/parser concerns outside this function may be OUT_OF_SCOPE_FOR_CLAIM_WITH_OWNER_BASIS. Unrelated Git, filesystem, network, AST, and subprocess dimensions are not broadened into the review without current owner evidence.",
       "assertions": [
-        "Does not force Git-object, filesystem, JSON or network checks when owner evidence proves them not applicable.",
+        "Keeps dimension B structured-data shape validation APPLICABLE for the locked output-fixture normalization claim.",
+        "Proposes checks for malformed top-level container type, missing or invalid cases/evals list shape, and malformed case field types required by the owner contract.",
+        "Distinguishes raw JSON text decoding/parser concerns outside _normalize_output_fixture from JSON-derived shape validation handled by the function.",
+        "Does not force Git-object, filesystem, network, AST, or subprocess checks when owner evidence places them outside the locked claim.",
         "Does not force Hypothesis or another testing framework.",
         "Preserves the existing narrow validator boundary.",
-        "Does not broaden the validator merely because the skill lists seven dimensions.",
         "Does not claim owner tests, commands, fuzzing, or adversarial inputs were executed on the read-only eval surface.",
         "Uses PARTIAL when execution is still needed to prove the requested hardening claim."
       ]

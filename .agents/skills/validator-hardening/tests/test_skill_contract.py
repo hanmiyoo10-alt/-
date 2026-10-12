@@ -866,6 +866,28 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, self.text)
 
+    def test_mutable_input_hold_preserves_auditable_provenance(self):
+        for required in (
+            "Preserve the exact hold/lease/lock identity, owner approval/provenance, covered input identities, acquisition point, release point",
+            "immutable hold-state receipt or equivalent evidence that binds each covered read/execution to the hold interval",
+            "missing read/invocation-to-hold provenance keeps that evidence unresolved",
+            "mutable-input hold/lease/lock provenance when used instead of an immutable snapshot/copy",
+            "explicit mapping from each evidence-bearing read/execution to the hold that covered its full operation window",
+            "exact hold/lease/lock identity, owner approval, acquisition/release interval, immutable hold-state evidence",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_remote_validation_binds_material_invocation_configuration(self):
+        for required in (
+            "material remote invocation configuration that selected or parameterized the validation",
+            "workflow-dispatch inputs, matrix values, event payload fields, job/step environment",
+            "response/input files, feature flags",
+            "Preserve an immutable mapping from those material inputs/configuration values to the relevant check/step result",
+            "immutable mapping of all material remote invocation inputs/configuration that selected or parameterized the relevant validation",
+            "preserves an immutable mapping of all material remote invocation inputs/configuration that selected or parameterized the validation to that relevant-step result",
+        ):
+            self.assertIn(required, self.text)
+
     def test_no_runtime_helper_is_required(self):
         self.assertFalse((SKILL_ROOT / "scripts").exists())
 

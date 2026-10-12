@@ -165,6 +165,14 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(len(result), 100)
         self.assertEqual(get_json.call_count, 1)
 
+    def test_57de_environments_reject_duplicate_ids_across_pages(self):
+        reader = GitHubReader(repository="owner/repo")
+        first = {"total_count": 101, "environments": [{"id": index} for index in range(100)]}
+        second = {"total_count": 101, "environments": [{"id": 99}]}
+        with patch.object(GitHubReader, "_get_json", side_effect=[first, second]):
+            with self.assertRaisesRegex(GitHubReadError, "duplicate environment id"):
+                reader.list_environments()
+
     def test_57e_environments_reject_incomplete_total(self):
         reader = GitHubReader(repository="owner/repo")
         with patch.object(

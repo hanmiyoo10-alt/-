@@ -12,6 +12,7 @@
 | product:app-api-mod-lab | App API Mod Lab | research-product-root | products/app-api-mod-lab/** | evidence=products/app-api-mod-lab/CURRENT.md; manifest=products/app-api-mod-lab/product.json | docs/APP_API_MOD_LAB_GUIDELINES.md |
 | product:local-model-lab | Local Model Lab | research-product-root | products/local-model-lab/** | evidence=products/local-model-lab/CURRENT.md; manifest=products/local-model-lab/product.json | docs/LOCAL_MODEL_LAB_GUIDELINES.md |
 | product:pocketrisu-helper-mod | PocketRisu Helper Mod | operations-product-root | products/pocketrisu-helper-mod/** | manifest=products/pocketrisu-helper-mod/product.json; currentState=products/pocketrisu-helper-mod/CURRENT.md | docs/POCKETRISU_HELPER_MOD_GUIDELINES.md |
+| product:simcore-risu | SimCore Risu | research-product-root | products/simcore-risu/** | evidence=products/simcore-risu/CURRENT.md; manifest=products/simcore-risu/product.json | docs/SIMCORE-RISU_GUIDELINES.md |
 | product:termux | Termux | prototype | products/standalone/termux/** | evidence=products/standalone/termux/README.md | docs/TERMUX_DEVELOPMENT_GUIDELINES.md |
 
 ## Family Navigation Projection

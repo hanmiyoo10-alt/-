@@ -20,9 +20,16 @@ DEFAULT_TIMEOUT_SECONDS = 20.0
 class GitHubReadError(RuntimeError):
     """Bounded read-only GitHub transport failure."""
 
-    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        accepted_permissions: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.accepted_permissions = accepted_permissions
 
 
 class _SafeRedirectHandler(HTTPRedirectHandler):
@@ -111,6 +118,19 @@ class GitHubReader:
             url += "?" + urlencode(query)
         return url
 
+    @staticmethod
+    def _accepted_permissions(headers: object) -> str | None:
+        getter = getattr(headers, "get", None)
+        if not callable(getter):
+            return None
+        value = getter("X-Accepted-GitHub-Permissions")
+        if not isinstance(value, str):
+            return None
+        value = value.strip()
+        if not value or len(value) > 1000 or any(ch in value for ch in "\r\n\x00"):
+            return None
+        return value
+
     def _open_bytes(self, url: str, *, limit: int) -> bytes:
         request = self._request(url)
         try:
@@ -127,7 +147,9 @@ class GitHubReader:
             raise
         except HTTPError as exc:
             raise GitHubReadError(
-                f"GitHub HTTP {exc.code}: {self._redact(exc.reason)}", status_code=exc.code
+                f"GitHub HTTP {exc.code}: {self._redact(exc.reason)}",
+                status_code=exc.code,
+                accepted_permissions=self._accepted_permissions(exc.headers),
             ) from None
         except URLError as exc:
             raise GitHubReadError(f"GitHub transport error: {self._redact(exc.reason)}") from None
@@ -137,12 +159,15 @@ class GitHubReader:
             raise GitHubReadError(f"response exceeds {limit} byte bound")
         return data
 
-    def _get_json(self, path: str, query: dict[str, str | int] | None = None) -> dict[str, Any]:
+    def _get_json_value(self, path: str, query: dict[str, str | int] | None = None) -> Any:
         raw = self._open_bytes(self._absolute_url(path, query), limit=2 * 1024 * 1024)
         try:
-            value = json.loads(raw.decode("utf-8"))
+            return json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise GitHubReadError(f"GitHub JSON decode failed: {self._redact(exc)}") from None
+
+    def _get_json(self, path: str, query: dict[str, str | int] | None = None) -> dict[str, Any]:
+        value = self._get_json_value(path, query)
         if not isinstance(value, dict):
             raise GitHubReadError("GitHub JSON response root must be an object")
         return value
@@ -159,6 +184,75 @@ class GitHubReader:
     def get_branch_protection(self, branch: str) -> dict[str, Any]:
         name = self._branch_name(branch)
         return self._get_json(f"{self._repo_api_prefix}/branches/{quote(name, safe='')}/protection")
+
+
+    def list_repository_rulesets(self) -> list[dict[str, Any]]:
+        value = self._get_json_value(f"{self._repo_api_prefix}/rulesets", {"per_page": 100})
+        if not isinstance(value, list) or len(value) > 100:
+            raise GitHubReadError("rulesets response must be a bounded array")
+        if any(not isinstance(item, dict) for item in value):
+            raise GitHubReadError("rulesets response item invalid")
+        return list(value)
+
+    def list_actions_secret_metadata(self) -> list[dict[str, Any]]:
+        value = self._get_json(f"{self._repo_api_prefix}/actions/secrets", {"per_page": 100})
+        secrets = value.get("secrets")
+        total = value.get("total_count")
+        if isinstance(total, bool) or not isinstance(total, int) or total < 0:
+            raise GitHubReadError("secrets total_count invalid")
+        if not isinstance(secrets, list) or len(secrets) > 100:
+            raise GitHubReadError("secrets response must be a bounded array")
+        if any(not isinstance(item, dict) for item in secrets):
+            raise GitHubReadError("secret metadata item invalid")
+        return list(secrets)
+
+    def list_security_alerts(self, kind: str, *, per_page: int) -> list[dict[str, Any]]:
+        paths = {
+            "code_scanning": "code-scanning/alerts",
+            "dependabot": "dependabot/alerts",
+            "secret_scanning": "secret-scanning/alerts",
+        }
+        if kind not in paths:
+            raise ValueError("unsupported security alert kind")
+        if isinstance(per_page, bool) or not isinstance(per_page, int) or not 1 <= per_page <= 50:
+            raise ValueError("per_page must be an integer in 1..50")
+        value = self._get_json_value(
+            f"{self._repo_api_prefix}/{paths[kind]}", {"per_page": per_page}
+        )
+        if not isinstance(value, list) or len(value) > per_page:
+            raise GitHubReadError("security alerts response must be a bounded array")
+        if any(not isinstance(item, dict) for item in value):
+            raise GitHubReadError("security alert item invalid")
+        return list(value)
+
+    def probe_accepted_permissions(self, operation: str) -> dict[str, Any]:
+        paths = {
+            "repository": self._repo_api_prefix,
+            "rulesets": f"{self._repo_api_prefix}/rulesets",
+            "actions_secrets": f"{self._repo_api_prefix}/actions/secrets",
+            "code_scanning": f"{self._repo_api_prefix}/code-scanning/alerts",
+            "dependabot": f"{self._repo_api_prefix}/dependabot/alerts",
+            "secret_scanning": f"{self._repo_api_prefix}/secret-scanning/alerts",
+        }
+        if operation not in paths:
+            raise ValueError("unsupported permission probe operation")
+        query = {"per_page": 1} if operation != "repository" else None
+        request = self._request(self._absolute_url(paths[operation], query))
+        try:
+            with self._opener.open(request, timeout=self.timeout_seconds) as response:
+                return {
+                    "http_status": int(getattr(response, "status", 200)),
+                    "accepted_permissions": self._accepted_permissions(response.headers),
+                }
+        except HTTPError as exc:
+            return {
+                "http_status": exc.code,
+                "accepted_permissions": self._accepted_permissions(exc.headers),
+            }
+        except URLError as exc:
+            raise GitHubReadError(f"GitHub transport error: {self._redact(exc.reason)}") from None
+        except OSError as exc:
+            raise GitHubReadError(f"GitHub transport error: {self._redact(exc)}") from None
 
     def get_run(self, run_id: int) -> dict[str, Any]:
         return self._get_json(f"{self._repo_api_prefix}/actions/runs/{run_id}")

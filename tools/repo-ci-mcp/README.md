@@ -10,6 +10,10 @@ repo_ci_overview(workflows, ref?)
 repo_ci_exact_sha(sha, workflow?, event?, ref?, before_sha?)
 repo_notebook_read(path, ref?, start_cell=0, max_cells=20, include_outputs=false)
 repo_branch_protection(branch="main")
+repo_rulesets()
+repo_permission_probe(operation="repository")
+repo_secret_metadata()
+repo_security_alerts(kind, limit=20)
 canonical_main_status()
 ```
 
@@ -42,6 +46,8 @@ The overview uses the existing latest-per-workflow ref semantics. It is not an a
 
 `repo_branch_protection` reads the requested branch summary first, then requests full GitHub branch-protection detail only when the summary says the branch is protected. A protected branch whose detail endpoint returns HTTP 403 remains `PARTIAL / DETAIL_READ_BLOCKED_PERMISSION` with its protected summary preserved; it is never reported as unprotected. `UNPROTECTED / NOT_CONFIGURED` is reserved for an explicit live branch summary with `protected=false`. Other transport or malformed-detail failures remain `UNKNOWN`. Returned detail is bounded and counts restriction principals rather than serializing user/team/app identities.
 
+Repository read observability also exposes four fixed GET-only surfaces: ruleset inventory, accepted-permission header observation, Actions secret metadata, and targeted security alerts. The permission probe reports only the observed X-Accepted-GitHub-Permissions header and HTTP status; it never infers credential grants from success. Secret metadata is limited to names/timestamps. Security alerts are allowlisted to code_scanning, dependabot, or secret_scanning and bounded to 1-50 projected rows.
+
 `canonical_main_status` implements the canonical-main `STATUS_SESSION` read plan as one user-visible MCP call. Internally it reads direct `main`, reads issue #485, then re-reads direct `main` as a capture-coherence barrier. Direct `main` remains repository authority and #485 remains a derived operator projection. A mismatch returns `SETTLING_OR_STALE`; main movement, invalid/missing capsule data, or read failure returns `UNKNOWN` rather than green-by-absence.
 
 The same captured #485 body also contributes a bounded triage index for `Active P0/P1 incidents` and `Attention queue (P2)`. The index returns only severity, state, incident issue number, reason code, known/count/truncation metadata, and explicit triage parse reason codes when the section is missing, unknown, or malformed. It does not fetch incident bodies automatically. Detailed evidence remains a targeted incident-issue drill-down, so routine non-clear orientation does not require a second visible #485 read.
@@ -50,6 +56,10 @@ The same captured #485 body also contributes a bounded triage index for `Active 
 
 - GitHub reads only
 - branch-protection detail is summary-first and preserves permission-blocked partial evidence without requesting or exposing token material
+- rulesets, permission diagnostics, secret metadata, and security alerts are fixed allowlisted GET-only repository reads
+- permission diagnostics report only observed accepted-permissions headers and never infer credential grants
+- secret reads expose names/timestamps only; no secret value/public-key/ciphertext material is returned
+- security alert reads are targeted, bounded to 50, and omit raw alert payloads
 - notebook paths are repository-relative `.ipynb` only and refs are pinned to an exact commit before content retrieval
 - notebook source is <=1 MiB; each read returns 1–50 cells with bounded source/output text
 - notebook saved outputs are source-only by default; binary/image, HTML, JavaScript, and attachment payloads are omitted

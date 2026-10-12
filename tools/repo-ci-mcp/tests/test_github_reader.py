@@ -4,6 +4,7 @@ import base64
 import os
 import unittest
 from unittest.mock import patch
+from email.message import Message
 from urllib.error import HTTPError
 from urllib.request import Request
 
@@ -101,6 +102,43 @@ class ReaderTests(unittest.TestCase):
             paths, complete = reader.compare_changed_paths("b" * 40, "a" * 40)
         self.assertEqual(len(paths), 300)
         self.assertFalse(complete)
+
+
+    def test_57_rulesets_and_secret_metadata_use_fixed_repository_endpoints(self):
+        reader = GitHubReader(repository="owner/repo")
+        with patch.object(GitHubReader, "_get_json_value", return_value=[]) as get_value:
+            self.assertEqual(reader.list_repository_rulesets(), [])
+        get_value.assert_called_once_with("/repos/owner/repo/rulesets", {"per_page": 100})
+        with patch.object(GitHubReader, "_get_json", return_value={"total_count": 0, "secrets": []}) as get_json:
+            self.assertEqual(reader.list_actions_secret_metadata(), [])
+        get_json.assert_called_once_with("/repos/owner/repo/actions/secrets", {"per_page": 100})
+
+    def test_58_security_alert_kind_is_allowlisted_and_bounded(self):
+        reader = GitHubReader(repository="owner/repo")
+        with self.assertRaisesRegex(ValueError, "unsupported security alert kind"):
+            reader.list_security_alerts("advisories", per_page=10)
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_security_alerts("code_scanning", per_page=51)
+
+    def test_59_permission_probe_reads_header_without_inferring_grant(self):
+        reader = GitHubReader(repository="owner/repo")
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {"X-Accepted-GitHub-Permissions": "metadata=read"}
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with patch.object(reader._opener, "open", return_value=response):
+            observed = reader.probe_accepted_permissions("repository")
+        self.assertEqual(observed, {"http_status": 200, "accepted_permissions": "metadata=read"})
+
+    def test_60_permission_probe_preserves_header_on_http_error(self):
+        reader = GitHubReader(repository="owner/repo")
+        headers = Message()
+        headers["X-Accepted-GitHub-Permissions"] = "administration=read"
+        error = HTTPError("https://api.github.com/x", 403, "Forbidden", headers, None)
+        with patch.object(reader._opener, "open", side_effect=error):
+            observed = reader.probe_accepted_permissions("rulesets")
+        self.assertEqual(observed, {"http_status": 403, "accepted_permissions": "administration=read"})
 
 
 if __name__ == "__main__":

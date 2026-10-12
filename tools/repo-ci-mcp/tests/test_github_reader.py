@@ -211,5 +211,28 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(observed, {"http_status": 403, "accepted_permissions": "administration=read"})
 
 
+    def test_61_deployment_permission_probes_use_fixed_endpoints(self):
+        reader = GitHubReader(repository="owner/repo")
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {"X-Accepted-GitHub-Permissions": "deployments=read"}
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            reader.probe_accepted_permissions("environments")
+        self.assertEqual(
+            opened.call_args.args[0].full_url,
+            "https://api.github.com/repos/owner/repo/environments?per_page=1",
+        )
+
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            reader.probe_accepted_permissions("deployments")
+        self.assertEqual(
+            opened.call_args.args[0].full_url,
+            "https://api.github.com/repos/owner/repo/deployments?per_page=1",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

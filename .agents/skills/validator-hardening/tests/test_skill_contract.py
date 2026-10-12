@@ -330,7 +330,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
     def test_exercised_cases_require_exact_input_and_replay_identity(self):
         for required in (
             "exact input identity that binds both bytes and every owner-relevant structural property",
-            "a descriptive case name alone is insufficient",
+            "A descriptive case name alone is insufficient",
             "generation seed/configuration needed for replay",
             "reduced/minimized example identity or bounded example value/locator",
             "cases actually exercised, each binding exact input identity and exact invocation identity to expected owner-defined behavior, observed status/result, reason code, exit result when applicable, and bounded output/artifact locator",

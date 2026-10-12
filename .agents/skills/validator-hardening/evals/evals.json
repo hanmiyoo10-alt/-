@@ -95,6 +95,17 @@
         "Preserves the conflicting source references.",
         "Does not guess or choose the convenient owner."
       ]
+    },
+    {
+      "id": "contract-conflict-negative",
+      "prompt": "One current owner is clearly established for the validator, but two current authoritative contracts from that same owner materially disagree about the validator result vocabulary and resource ceiling. The owner contract does not resolve the disagreement. Review only conflict classification; do not guess which contract wins.",
+      "expected_output": "Stop with review disposition CONFLICT and reason code REVIEW_CONTRACT_CONFLICT, preserving both conflicting contract source references. Do not emit REVIEW_OWNER_CONFLICT because owner identity itself is not disputed.",
+      "assertions": [
+        "Uses CONFLICT for unresolved material contract disagreement inside an established owner.",
+        "Includes reason code REVIEW_CONTRACT_CONFLICT.",
+        "Does not use REVIEW_OWNER_CONFLICT when owner identity is not disputed.",
+        "Preserves the conflicting contract source references."
+      ]
     }
   ]
 }

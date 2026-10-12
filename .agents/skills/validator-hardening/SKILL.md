@@ -108,6 +108,8 @@ For every dimension below, classify applicability **relative to the locked reque
 
 Do not mark a dimension not applicable or out of scope merely because the current implementation does not test it. Cite the current owner/contract basis. A narrow claim must not expand into unrelated validator behavior just because another dimension applies to the target elsewhere.
 
+Every A-G applicability entry in the final receipt must carry the current owner/contract basis that justifies that label. If the basis for `APPLICABLE`, `OUT_OF_SCOPE_FOR_CLAIM_WITH_OWNER_BASIS`, or `NOT_APPLICABLE_WITH_OWNER_BASIS` cannot be established from current owner evidence, record that dimension as `UNKNOWN` rather than emitting an unsupported applicability label.
+
 ### 4. Build the adversarial matrix
 
 Exercise the applicable dimensions with the narrowest deterministic cases that can prove the contract.
@@ -201,7 +203,7 @@ Verify the target remains within its declared effect surface:
 
 ### 5. Preserve read-only review, then use bounded adversarial execution only when separately authorized
 
-Inspect or cite the current owner tests first.
+Inspect the contents of the current owner tests before relying on their coverage, semantics, fixtures, or expected outcomes. A path/name citation alone is insufficient. If current test contents are unavailable, do not infer what they cover; preserve `PARTIAL` or `UNKNOWN` according to whether the locked claim can still be bounded from the remaining current owner evidence.
 
 On a read-only surface that lacks execution capability:
 
@@ -221,8 +223,8 @@ When a separately authorized execution-capable surface exists:
 - execute focused deterministic cases only inside that proven effect/resource containment plus an isolated temporary workspace/copy or an existing owner-provided temporary harness;
 - never edit the repository checkout under review merely to create review cases;
 - preserve the exact source/input identities used by that isolated execution;
-- before attributing executed behavior to the reviewed validator, verify that the executed target plus every executed/imported contributing module/helper identity equals the corresponding reviewed identity, or matches an explicit owner-approved transformation/relation whose provenance is recorded;
-- if an executed target or contributing module/helper cannot be related exactly to the reviewed identity under that rule, preserve `UNKNOWN / REVIEW_EXECUTED_SOURCE_MISMATCH`; do not use that execution to claim `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`;
+- before attributing executed behavior to the reviewed validator, verify that every executed contributing input equals its corresponding reviewed identity, or matches an explicit owner-approved transformation/relation whose provenance is recorded; this includes the target, imported modules/helpers, owner tests, fixtures, wrappers, temporary harnesses, and any other executable or data input that materially contributes to the result;
+- if any executed contributing input cannot be related exactly to the reviewed identity under that rule, preserve `UNKNOWN / REVIEW_EXECUTED_SOURCE_MISMATCH`; do not use that execution to claim `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`;
 - for every exercised adversarial case, record the exact input digest or immutable locator; a descriptive case name alone is insufficient;
 - for generated/property-based cases, also record the generation seed/configuration needed for replay and the exact reduced/minimized example identity or bounded example value/locator when reduction occurs;
 - if an exercised input cannot be reproduced or attributed to an exact identity, keep that execution evidence `UNKNOWN` rather than promoting it to `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`;
@@ -264,7 +266,7 @@ When CI, Required, or another remote validation result contributes to the reques
 - record the exact tested source/head SHA and conclusion;
 - preserve an immutable or stable result locator;
 - verify that the tested identity matches the reviewed source identity or the owning contract's explicitly allowed relation;
-- stale, mismatched, or unattributable remote validation evidence remains `UNKNOWN` or `CONFLICT`; never reuse it as current proof.
+- stale, mismatched, or unattributable remote validation evidence remains `UNKNOWN`; never reuse it as current proof. Use `CONFLICT` only when current authoritative evidence on the relevant matched identity materially disagrees and the owning contract does not resolve the disagreement.
 
 ### 7. Emit a bounded review receipt
 
@@ -277,13 +279,13 @@ requested claim
 owner result vocabulary
 reviewed source identity (exact commit/object/artifact identity)
 worktree state: CLEAN | DIRTY | NOT_APPLICABLE
-all contributing checkout-byte identities actually relied upon, including clean and dirty inputs
+all contributing input identities actually relied upon regardless of storage mechanism, including immutable snapshot/object reads, checkout bytes, mutable non-Git sources, tests, fixtures, helpers/modules, and owner-contract inputs
 dirty reviewed/executed input identities (digest or bounded diff identity) when applicable
-applicability by dimension A-G
+applicability by dimension A-G, with the current owner/contract basis locator for every label; if the basis cannot be established, that dimension remains UNKNOWN
 proposed/not-exercised adversarial cases, with reason each remains unexecuted
 cases actually exercised, each binding exact input identity to expected owner-defined behavior, observed status/result, reason code, exit result when applicable, and bounded output/artifact locator
 generated-case replay provenance when applicable: seed/configuration plus reduced/minimized example identity or bounded value/locator
-reviewed-to-executed source identity relation for target and contributing modules/helpers when execution occurred
+reviewed-to-executed identity relation for every executed contributing input when execution occurred, including target, modules/helpers, tests, fixtures, wrappers, and harnesses
 owner tests / commands actually used
 execution surface/runtime/toolchain identity for each exercised case, or NOT_APPLICABLE when no execution occurred
 relevant sanitized environment/config identity and effect/resource containment identity for exercised cases

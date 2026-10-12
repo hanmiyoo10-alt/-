@@ -117,7 +117,8 @@ Build the matrix with owner-defined valid controls as well as adversarial cases.
 - For every applicable accepted-input class, include at least one representative owner-defined valid positive control and require its expected successful owner-defined result before a completed hardening review can rely on adversarial outcomes.
 - When an owner-defined size/count/depth/length ceiling is part of the locked claim, include the exact valid boundary value as a positive control and the nearest meaningful invalid boundary case when the contract defines one.
 - On a read-only surface, propose these positive controls explicitly and mark them not exercised. On an execution-capable surface, exercise the positive controls under the same identity/containment/provenance rules as adversarial cases.
-- If required positive-control behavior is unavailable, unexercised where execution is needed, or does not reach the owner-defined successful result, preserve `PARTIAL`, `UNKNOWN`, or a proven owner-defined failure as appropriate; do not claim `HARDENING_REVIEW_COMPLETE`.
+- If required positive-control behavior is unavailable or unexercised where execution is needed, preserve `PARTIAL` or `UNKNOWN`.
+- If a fully attributed/exercised positive control definitively fails its owner-defined expected successful result, record that failure as a `PROVEN_GAP`. That failed control must not be used to validate adversarial conclusions that assume a healthy supported path, but the review itself may still reach `HARDENING_REVIEW_COMPLETE` once all applicable dimensions, control coverage, provenance, and unresolved-gap requirements are otherwise satisfied.
 
 Exercise the applicable dimensions with the narrowest deterministic cases that can prove the contract.
 
@@ -222,6 +223,7 @@ On a read-only surface that lacks execution capability:
 When a separately authorized execution-capable surface exists:
 
 - direct target execution additionally requires an owner-provided sandbox or equivalent proven effect containment for writes outside the workspace, subprocesses, network access, credentials, devices, and other external state the target could reach;
+- containment protects external state but does not prove that prohibited effects were never attempted. When dimension G authority/effect denial is APPLICABLE and execution contributes evidence, require observable sandbox/audit telemetry for attempted denied writes, subprocesses, network connections, credential reads, device access, or other owner-relevant effects, or use separate static proof that covers those effect paths. Silent containment alone cannot mark dimension G exercised/clean; missing attempt telemetry or static proof remains unresolved.
 - direct adversarial execution also requires bounded host-resource containment appropriate to the target: an outer wall-clock timeout plus CPU time, memory, process/thread count, filesystem growth, and output limits where the host/harness can expose them;
 - a temporary directory alone is neither effect containment nor host-resource containment;
 - any owner test that imports, invokes, loads, or otherwise executes the target under review requires the same proven effect containment and host-resource containment as direct adversarial target execution;
@@ -233,6 +235,8 @@ When a separately authorized execution-capable surface exists:
 - before attributing executed behavior to the reviewed validator, verify that every executed contributing input equals its corresponding reviewed identity, or matches an explicit owner-approved transformation/relation whose provenance is recorded; this includes the target, imported modules/helpers, owner tests, fixtures, wrappers, temporary harnesses, and any other executable or data input that materially contributes to the result;
 - if any executed contributing input cannot be related exactly to the reviewed identity under that rule, preserve `UNKNOWN / REVIEW_EXECUTED_SOURCE_MISMATCH`; do not use that execution to claim `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`;
 - for every exercised adversarial case, record the exact input digest or immutable locator; a descriptive case name alone is insufficient;
+- bind every exercised case to its exact invocation identity: entrypoint/subcommand/function, ordered arguments/flags, stdin versus file/input-channel mapping, material per-invocation configuration/settings, and other owner-relevant invocation parameters needed to reproduce what actually executed;
+- isolate mutable case state by using a fresh process and clean isolated workspace/copy for each exercised case by default; if the owner contract requires shared state, explicitly identify every owner-defined shared-state dependency, capture its pre-case identity/state, reset or reconstruct it deterministically between cases, and test that the reset succeeded before attributing later case results;
 - for generated/property-based cases, also record the generation seed/configuration needed for replay and the exact reduced/minimized example identity or bounded example value/locator when reduction occurs;
 - if an exercised input cannot be reproduced or attributed to an exact identity, keep that execution evidence `UNKNOWN` rather than promoting it to `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`;
 - for every exercised case, record the bounded execution-surface identity: operating system/filesystem semantics when relevant, interpreter/parser/runtime version, Git and other material tool versions, working directory, sandbox/containment identity, and relevant sanitized environment/config overrides;
@@ -290,12 +294,13 @@ all contributing input identities actually relied upon regardless of storage mec
 dirty reviewed/executed input identities (digest or bounded diff identity) when applicable
 applicability by dimension A-G, each entry binding its label to the current owner/contract basis locator and, when APPLICABLE, the exact exercised evidence/result that covers that dimension or an explicit unresolved reason; if basis or required evidence mapping is missing, that dimension remains UNKNOWN and cannot support HARDENING_REVIEW_COMPLETE
 proposed/not-exercised adversarial cases, with reason each remains unexecuted
-cases actually exercised, each binding exact input identity to expected owner-defined behavior, observed status/result, reason code, exit result when applicable, and bounded output/artifact locator
+cases actually exercised, each binding exact input identity and exact invocation identity to expected owner-defined behavior, observed status/result, reason code, exit result when applicable, and bounded output/artifact locator
+per-case state isolation evidence: fresh process + clean isolated workspace identity, or explicit owner-defined shared-state capture/reset/revalidation proof
 generated-case replay provenance when applicable: seed/configuration plus reduced/minimized example identity or bounded value/locator
 reviewed-to-executed identity relation for every executed contributing input when execution occurred, including target, modules/helpers, tests, fixtures, wrappers, and harnesses
 owner tests / commands actually executed, each with exact test/command identity, exit status or conclusion, bounded collected/passed/failed/skipped/error counts when the runner reports them, and a bounded output/artifact locator
 execution surface/runtime/toolchain identity for each exercised case, or NOT_APPLICABLE when no execution occurred
-relevant sanitized environment/config identity and effect/resource containment identity for exercised cases
+relevant sanitized environment/config identity and effect/resource containment identity for exercised cases, plus denied-effect attempt telemetry or separate static effect proof when dimension G is applicable
 external validation evidence used, if any: exact run/check/job identity, tested source/head SHA, conclusion, attempt when relevant, and immutable result locator
 observations with source/evidence basis
 PROVEN_GAP findings, if any

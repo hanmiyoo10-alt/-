@@ -61,7 +61,7 @@ This root does **not** currently own:
 - current state: `products/simcore-risu/CURRENT.md`
 - roadmap: `products/simcore-risu/ROADMAP.md`
 - boundaries: `products/simcore-risu/BOUNDARIES.md`
-- guidelines: `docs/SIMCORE_RISU_GUIDELINES.md`
+- guidelines: `products/simcore-risu/GUIDELINES.md`
 
 Tracking:
 - Fusion architecture: #2961

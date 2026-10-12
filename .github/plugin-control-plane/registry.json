@@ -145,8 +145,7 @@
       "lifecycle": "research-product-root",
       "issueValues": ["simcore-risu", "SimCore Risu", "심코어 리스"],
       "paths": [
-        "products/simcore-risu/**",
-        "docs/SIMCORE_RISU_GUIDELINES.md"
+        "products/simcore-risu/**"
       ],
       "statusAdapter": "prototype",
       "authority": {

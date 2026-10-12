@@ -257,6 +257,45 @@ test('missing ancestor above verified agent does not invalidate direct relation'
   });
 });
 
+test('stale unrelated outer ancestor stops discovery without poisoning valid wrapper lineage', () => {
+  const rows = withCurrentAgentWrapper(fixture(), {wrapperPid: 40});
+  rows.push(row(30, 0, 'runtimebroker.exe', 'runtimebroker.exe', 2000));
+  const wrapper = rows.find((item) => item.pid === 40);
+  wrapper.ppid = 30;
+  wrapper.creationTimeMs = 1000;
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'ABSENT',
+    reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+  });
+});
+
+test('outer ancestor PID cycle remains fail closed', () => {
+  const rows = withCurrentAgentWrapper(fixture(), {wrapperPid: 40});
+  rows.push(row(30, 40, 'runtimebroker.exe', 'runtimebroker.exe', 900));
+  const wrapper = rows.find((item) => item.pid === 40);
+  wrapper.ppid = 30;
+  wrapper.creationTimeMs = 1000;
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_TOPOLOGY_AMBIGUOUS',
+  });
+});
+
+test('stale current-agent to marker-wrapper relation remains UNKNOWN', () => {
+  const rows = withCurrentAgentWrapper(fixture(), {wrapperPid: 40});
+  const wrapper = rows.find((item) => item.pid === 40);
+  const agent = rows.find((item) => item.pid === 50);
+  wrapper.creationTimeMs = 2000;
+  agent.creationTimeMs = 1000;
+  const result = owner.classifyProcessTable(rows, 61);
+  assert.deepEqual(result, {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS',
+  });
+});
+
 test('agent marker requires direct shell-child relation', () => {
   const rows = fixture();
   rows.find((item) => item.pid === 60).name = 'node.exe';

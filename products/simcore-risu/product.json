@@ -8,7 +8,7 @@
   "current_state": "products/simcore-risu/CURRENT.md",
   "roadmap": "products/simcore-risu/ROADMAP.md",
   "boundaries": "products/simcore-risu/BOUNDARIES.md",
-  "guideline": "products/simcore-risu/GUIDELINES.md",
+  "guideline": "docs/SIMCORE-RISU_GUIDELINES.md",
   "candidate_upstream": "PocketRisu/PocketRisu",
   "candidate_owner_trunk": "hanmiyoo10-alt/PocketRisu",
   "architecture_issue": 2961,

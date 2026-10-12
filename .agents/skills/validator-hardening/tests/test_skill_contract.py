@@ -196,7 +196,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "regardless of CLEAN/DIRTY state",
             "reviewed source identity (exact commit/object/artifact identity)",
             "worktree state: CLEAN | DIRTY | NOT_APPLICABLE",
-            "all contributing checkout-byte identities actually relied upon, including clean and dirty inputs",
+            "all contributing input identities actually relied upon regardless of storage mechanism",
             "dirty reviewed/executed input identities (digest or bounded diff identity) when applicable",
         ):
             self.assertIn(required, self.text)
@@ -260,6 +260,21 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             self.assertTrue(
                 any("Does not claim owner tests" in assertion for assertion in case["assertions"])
             )
+
+    def test_current_tests_must_be_inspected_before_reliance(self):
+        for required in (
+            "Inspect the contents of the current owner tests before relying on their coverage",
+            "A path/name citation alone is insufficient",
+            "If current test contents are unavailable",
+            "preserve `PARTIAL` or `UNKNOWN`",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_source_ast_eval_keeps_unproven_environment_checks_out_of_scope(self):
+        case = next(case for case in self.evals if case["id"] == "source-ast-adversarial")
+        joined = "\n".join(case["assertions"])
+        self.assertIn("OUT_OF_SCOPE_FOR_CLAIM_WITH_OWNER_BASIS", joined)
+        self.assertIn("unless current owner evidence shows that state is material", joined)
 
     def test_read_only_review_never_edits_target_checkout_for_cases(self):
         for required in (
@@ -336,10 +351,11 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_executed_source_must_match_reviewed_source(self):
         for required in (
-            "verify that the executed target plus every executed/imported contributing module/helper identity equals the corresponding reviewed identity",
+            "verify that every executed contributing input equals its corresponding reviewed identity",
+            "owner tests, fixtures, wrappers, temporary harnesses",
             "explicit owner-approved transformation/relation",
             "REVIEW_EXECUTED_SOURCE_MISMATCH",
-            "reviewed-to-executed source identity relation for target and contributing modules/helpers",
+            "reviewed-to-executed identity relation for every executed contributing input",
         ):
             self.assertIn(required, self.text)
 
@@ -359,7 +375,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "exact tested source/head SHA and conclusion",
             "immutable or stable result locator",
             "tested identity matches the reviewed source identity",
-            "stale, mismatched, or unattributable remote validation evidence",
+            "stale, mismatched, or unattributable remote validation evidence remains `UNKNOWN`",
             "external validation evidence used, if any",
         ):
             self.assertIn(required, self.text)
@@ -370,6 +386,8 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "OUT_OF_SCOPE_FOR_CLAIM_WITH_OWNER_BASIS",
             "must not be exercised merely to broaden the review",
             "A narrow claim must not expand into unrelated validator behavior",
+            "with the current owner/contract basis locator for every label",
+            "record that dimension as `UNKNOWN` rather than emitting an unsupported applicability label",
         ):
             self.assertIn(required, self.text)
 

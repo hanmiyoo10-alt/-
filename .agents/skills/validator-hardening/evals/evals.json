@@ -89,7 +89,7 @@
     },
     {
       "id": "owner-conflict-negative",
-      "prompt": "Two current authoritative-looking repository owner sources materially disagree about which project/domain owns the validator, and the current owning contracts do not resolve the disagreement. Review only the ownership-locking step; do not guess which owner wins.",
+      "prompt": "Supplied conflicting owner evidence: locator `input://owner-source-a` says `project/domain = product:termux`; locator `input://owner-source-b` says `project/domain = scope:repo/Agent Platform`. Both are current authoritative-looking sources for the same unnamed validator, and the supplied owning contracts do not resolve which owner identity applies. Review only the ownership-locking step; preserve both supplied locators and do not guess which owner wins.",
       "expected_output": "Stop with review disposition CONFLICT and reason code REVIEW_OWNER_CONFLICT, preserving both conflicting owner source references. Do not downgrade the disagreement to REVIEW_BLOCKED_UNKNOWN_OWNER.",
       "assertions": [
         "Uses CONFLICT rather than UNKNOWN for materially disagreeing current owner evidence.",
@@ -100,7 +100,7 @@
     },
     {
       "id": "contract-conflict-negative",
-      "prompt": "One current owner is clearly established for the validator, but two current authoritative contracts from that same owner materially disagree about the validator result vocabulary and resource ceiling. The owner contract does not resolve the disagreement. Review only conflict classification; do not guess which contract wins.",
+      "prompt": "Supplied established owner: `product:termux`. Supplied conflicting current owner contracts: locator `input://contract-a` says result vocabulary `PASS/FAIL/UNKNOWN` with max-input 1 MiB; locator `input://contract-b` says result vocabulary `PASS/WARN/FAIL/UNKNOWN` with max-input 4 MiB. The supplied owner contract does not resolve the disagreement. Review only contract-conflict classification; preserve both supplied locators and do not guess which contract wins.",
       "expected_output": "Stop with review disposition CONFLICT and reason code REVIEW_CONTRACT_CONFLICT, preserving both conflicting contract source references. Do not emit REVIEW_OWNER_CONFLICT because owner identity itself is not disputed.",
       "assertions": [
         "Uses CONFLICT for unresolved material contract disagreement inside an established owner.",

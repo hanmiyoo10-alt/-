@@ -16,6 +16,8 @@ DEFAULT_REPOSITORY = "hanmiyoo10-alt/-"
 DEFAULT_API = "https://api.github.com"
 DEFAULT_API_VERSION = "2022-11-28"
 CODE_QUALITY_API_VERSION = "2026-03-10"
+DEFAULT_JSON_RESPONSE_BYTES = 2 * 1024 * 1024
+MAX_RELEASE_LIST_BYTES = 64 * 1024 * 1024
 DEFAULT_TIMEOUT_SECONDS = 20.0
 MAX_RULESET_PAGES = 10
 MAX_ENVIRONMENT_PAGES = 10
@@ -179,10 +181,13 @@ class GitHubReader:
         query: dict[str, str | int] | None = None,
         *,
         api_version: str = DEFAULT_API_VERSION,
+        max_bytes: int = DEFAULT_JSON_RESPONSE_BYTES,
     ) -> Any:
+        if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or not 1 <= max_bytes <= MAX_RELEASE_LIST_BYTES:
+            raise ValueError("max_bytes must be a bounded positive integer")
         raw = self._open_bytes(
             self._absolute_url(path, query),
-            limit=2 * 1024 * 1024,
+            limit=max_bytes,
             api_version=api_version,
         )
         try:
@@ -441,6 +446,7 @@ class GitHubReader:
         value = self._get_json_value(
             f"{self._repo_api_prefix}/releases",
             {"per_page": safe_limit},
+            max_bytes=MAX_RELEASE_LIST_BYTES,
         )
         if not isinstance(value, list) or len(value) > safe_limit:
             raise GitHubReadError("releases response must be a bounded array")

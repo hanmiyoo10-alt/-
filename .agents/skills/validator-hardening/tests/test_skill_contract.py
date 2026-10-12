@@ -226,7 +226,11 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             )
         )
         negative = next(case for case in self.evals if case["id"] == "narrow-validator-negative")
-        self.assertIn("NOT_APPLICABLE_WITH_OWNER_BASIS", negative["expected_output"])
+        self.assertIn("Dimension B structured-data shape validation remains APPLICABLE", negative["expected_output"])
+        self.assertIn("Raw JSON text decoding/parser concerns", negative["expected_output"])
+        self.assertTrue(
+            any("malformed top-level container type" in assertion for assertion in negative["assertions"])
+        )
         grounded_ids = {
             "path-ref-adversarial",
             "json-schema-adversarial",
@@ -386,10 +390,50 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "OUT_OF_SCOPE_FOR_CLAIM_WITH_OWNER_BASIS",
             "must not be exercised merely to broaden the review",
             "A narrow claim must not expand into unrelated validator behavior",
-            "with the current owner/contract basis locator for every label",
+            "Every A-G applicability entry in the final receipt must carry the current owner/contract basis",
             "record that dimension as `UNKNOWN` rather than emitting an unsupported applicability label",
+            "each entry binding its label to the current owner/contract basis locator",
+            "the exact exercised evidence/result that covers that dimension or an explicit unresolved reason",
+            "cannot support HARDENING_REVIEW_COMPLETE",
         ):
             self.assertIn(required, self.text)
+
+    def test_positive_controls_are_required_for_applicable_input_classes(self):
+        for required in (
+            "at least one representative owner-defined valid positive control",
+            "expected successful owner-defined result",
+            "exact valid boundary value as a positive control",
+            "do not claim `HARDENING_REVIEW_COMPLETE`",
+            "required owner-defined positive controls are represented and proven",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_owner_test_command_receipt_records_outcomes(self):
+        for required in (
+            "owner tests / commands actually executed",
+            "exit status or conclusion",
+            "bounded collected/passed/failed/skipped/error counts",
+            "bounded output/artifact locator",
+            "every executed owner-test command has bounded outcome provenance",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_each_applicable_dimension_maps_to_evidence_or_unresolved_reason(self):
+        for required in (
+            "when APPLICABLE, the exact exercised evidence/result that covers that dimension or an explicit unresolved reason",
+            "if basis or required evidence mapping is missing, that dimension remains UNKNOWN",
+            "every APPLICABLE dimension is mapped to its exercised evidence/result or remains explicitly unresolved",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_narrow_output_fixture_eval_keeps_shape_validation_applicable(self):
+        case = next(case for case in self.evals if case["id"] == "narrow-validator-negative")
+        self.assertIn("Dimension B structured-data shape validation remains APPLICABLE", case["expected_output"])
+        self.assertIn("Raw JSON text decoding/parser concerns", case["expected_output"])
+        joined = "\n".join(case["assertions"])
+        self.assertIn("structured-data shape validation APPLICABLE", joined)
+        self.assertIn("malformed top-level container type", joined)
+        self.assertIn("raw JSON text decoding/parser concerns", joined)
 
     def test_no_runtime_helper_is_required(self):
         self.assertFalse((SKILL_ROOT / "scripts").exists())

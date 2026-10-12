@@ -14,11 +14,7 @@ function selectCurrentMainPushRun(runs, mainSha) {
 
 async function observe(context) {
   const config = context.policy.adapters.requiredCi;
-  const runs = await context.actions.workflowRunsFiltered(config.workflow, {
-    perPage: 100,
-    headSha: context.mainSha,
-    event: 'push',
-  });
+  const runs = await context.actions.workflowRunsForPushHead(config.workflow, context.mainSha, 100);
   const run = selectCurrentMainPushRun(runs, context.mainSha);
   if (!run) return {known: false, summary: 'UNKNOWN — no SimCore CI push run found for current main', events: [], data: null};
   if (run.status !== 'completed') return {known: false, summary: `PENDING — run ${run.id}`, events: [], data: {run}};

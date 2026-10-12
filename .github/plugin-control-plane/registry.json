@@ -139,6 +139,20 @@
       "authority": {
         "evidence": "products/standalone/termux/README.md"
       }
+    },
+    "simcore-risu": {
+      "displayName": "SimCore Risu",
+      "lifecycle": "research-product-root",
+      "issueValues": ["simcore-risu", "SimCore Risu", "심코어 리스"],
+      "paths": [
+        "products/simcore-risu/**",
+        "docs/SIMCORE-RISU_GUIDELINES.md"
+      ],
+      "statusAdapter": "prototype",
+      "authority": {
+        "evidence": "products/simcore-risu/CURRENT.md",
+        "manifest": "products/simcore-risu/product.json"
+      }
     }
   },
   "scopes": [

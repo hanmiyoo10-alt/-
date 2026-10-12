@@ -333,7 +333,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "A descriptive case name alone is insufficient",
             "generation seed/configuration needed for replay",
             "reduced/minimized example identity or bounded example value/locator",
-            "cases actually exercised, each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not), exact invocation identity, and the authorization identity/scope covering that invocation to expected owner-defined behavior plus the exact current owner-contract clause/basis locator defining that expectation, observed status/result, owner-defined reason code when applicable or NOT_APPLICABLE when the owner defines none, exit result when applicable, and exact owner-relevant result identity",
+            "cases actually exercised, each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not), exact invocation identity, an owner-defined target-execution marker/invocation-bound trace or bounded target call/entry count proving the case actually reached the target logic",
             "generated-case replay provenance when applicable",
         ):
             self.assertIn(required, self.text)
@@ -1007,6 +1007,54 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "fork, lookalike project, different tenant/provider endpoint",
             "external validation trust-domain provenance",
             "every external validation result binds an owner-approved CI trust domain",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_sensitive_exercised_results_use_opaque_nonsecret_identity(self):
+        for required in (
+            "when an exercised case result itself is a credential, secret, private payload, low-entropy token, or other sensitive value",
+            "never use a guessable content digest of the sensitive result as its identity",
+            "owner-backed opaque result version/reference",
+            "immutable secret-manager/artifact version identity",
+            "sensitive exercised-result identity",
+            "sensitive/private/low-entropy results use an owner-backed opaque result version/reference",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_direct_exercised_cases_prove_target_execution(self):
+        for required in (
+            "prove that each exercised case actually reached the target logic being attributed",
+            "owner-defined target-execution marker",
+            "invocation-bound trace/receipt",
+            "bounded target call/entry count tied to that exact case and observed result",
+            "wrapper/harness success, selected-case label, or synthetic/no-op result is insufficient",
+            "proving the case actually reached the target logic",
+            "every exercised case proves it actually reached the attributed target logic",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_mutable_authorization_currentness_is_bound_to_execution(self):
+        for required in (
+            "when authorization comes from any mutable source",
+            "non-expiring but revocable grant",
+            "invocation-scoped authorization lease/CAS token",
+            "immutable authorization-state generation/version",
+            "if revocation/currentness cannot be tied to execution, keep the evidence unresolved",
+            "for any mutable/revocable authorization source an invocation-scoped lease/CAS identity",
+            "every mutable/revocable authorization source is bound to an invocation-scoped lease/CAS identity",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_runtime_contributing_input_discovery_is_complete(self):
+        for required in (
+            "prove that the discovered contributing-input set is complete for the exact invocation",
+            "dynamic loading, plugin/module discovery, configuration-file reads, ambient environment/state",
+            "enforced hermetic read/import/config allowlist",
+            "invocation-bound file/module/config/environment-read telemetry",
+            "positive dropped/truncated/overflow or equivalent completeness/loss proof",
+            "If undeclared runtime inputs can exist without being observed, keep the execution evidence unresolved",
+            "runtime contributing-input discovery completeness",
+            "proves completeness of runtime contributing-input discovery",
         ):
             self.assertIn(required, self.text)
 

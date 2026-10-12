@@ -7,6 +7,7 @@ from .github_reader import GitHubReadError, GitHubReader
 
 MAX_TEXT = 200
 MAX_ENVIRONMENT_NAME = 255
+MAX_DEPLOYMENT_REF = 4096
 DEPLOYMENT_STATES = {"error", "failure", "inactive", "in_progress", "queued", "pending", "success"}
 
 
@@ -27,6 +28,14 @@ def _environment_name(value: object, *, required: bool = False) -> str | None:
         raise ValueError("invalid environment name")
     if any(ch in value for ch in "\r\n\x00"):
         raise ValueError("invalid environment name")
+    return value
+
+
+def _deployment_ref(value: object) -> str:
+    if not isinstance(value, str) or not value or len(value) > MAX_DEPLOYMENT_REF:
+        raise ValueError("invalid deployment ref")
+    if any(ch in value for ch in "\r\n\x00"):
+        raise ValueError("invalid deployment ref")
     return value
 
 
@@ -94,7 +103,7 @@ def _project_environment(item: dict[str, Any]) -> dict[str, Any]:
 def _project_deployment(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": _positive_integer(item.get("id")),
-        "ref": _text(item.get("ref"), required=True),
+        "ref": _deployment_ref(item.get("ref")),
         "sha": _sha(item.get("sha")),
         "environment": _environment_name(item.get("environment"), required=True),
         "task": _text(item.get("task")),

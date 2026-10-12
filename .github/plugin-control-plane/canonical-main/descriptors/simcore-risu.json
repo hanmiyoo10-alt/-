@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "simcore-risu",
+  "kind": "product",
+  "displayName": "SimCore Risu",
+  "lifecycle": "research-product-root",
+  "projectPath": "products/simcore-risu",
+  "guidelines": "products/simcore-risu/GUIDELINES.md",
+  "authority": {
+    "type": "evidence",
+    "evidence": "products/simcore-risu/CURRENT.md",
+    "manifest": "products/simcore-risu/product.json"
+  },
+  "memory": {
+    "profile": "check-only",
+    "outputs": []
+  },
+  "alerts": {
+    "policy": "repo-default"
+  }
+}

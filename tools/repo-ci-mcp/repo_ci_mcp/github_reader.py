@@ -195,7 +195,7 @@ class GitHubReader:
         for page in range(1, MAX_RULESET_PAGES + 1):
             value = self._get_json_value(
                 f"{self._repo_api_prefix}/rulesets",
-                {"per_page": VARIABLE_PAGE_SIZE, "page": page},
+                {"per_page": 100, "page": page},
             )
             if not isinstance(value, list) or len(value) > 100:
                 raise GitHubReadError("rulesets response must be a bounded array")
@@ -225,7 +225,7 @@ class GitHubReader:
         for page in range(1, MAX_VARIABLE_PAGES + 1):
             value = self._get_json(
                 f"{self._repo_api_prefix}/actions/variables",
-                {"per_page": 100, "page": page},
+                {"per_page": VARIABLE_PAGE_SIZE, "page": page},
             )
             total = value.get("total_count")
             variables = value.get("variables")

@@ -40,7 +40,7 @@
         "Proposes checks for aliasing, indirection, imports or generated forms when relevant to the owner contract.",
         "Treats unsupported syntax and parse failures as explicit uncertainty or owner-defined failure, never as safe-by-no-match.",
         "Separates semantically similar forms whose source text differs.",
-        "Proposes checks for non-Git ambient execution poisoning such as PATH, PYTHONPATH/module search path, HOME/tool configuration, working directory, locale/encoding, and other owner-relevant environment state.",
+        "Keeps PATH, PYTHONPATH/module search path, HOME/tool configuration, working directory, locale/encoding, and other ambient execution state OUT_OF_SCOPE_FOR_CLAIM_WITH_OWNER_BASIS unless current owner evidence shows that state is material to this locked source/AST classification claim.",
         "Does not introduce an automatic source rewriter.",
         "Does not claim owner tests, commands, fuzzing, or adversarial inputs were executed on the read-only eval surface.",
         "Uses PARTIAL when execution is still needed to prove the requested hardening claim."

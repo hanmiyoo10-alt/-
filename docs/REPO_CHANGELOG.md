@@ -2489,3 +2489,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f07fdc69cfb41367c7636aa9a17aa725c05bfd43)
 - Event ID: `1e12d7ff2460c1da7ae35fe4b540d177f31e2772ddd125f998c3d675304ebf66`
 <!-- canonical-main-doc-promoted:1e12d7ff2460c1da7ae35fe4b540d177f31e2772ddd125f998c3d675304ebf66 -->
+
+### 2026-10-12 — fix(canonical-main): filter exact Required run discovery (#3589)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `569fa824edf2bda2548cc54c5be535e53d4e1b68`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/569fa824edf2bda2548cc54c5be535e53d4e1b68)
+- Event ID: `78fd36bea9c9f361a2cd2ad34d8235fe6da997c118baf1f62e4b7445b37bad04`
+<!-- canonical-main-doc-promoted:78fd36bea9c9f361a2cd2ad34d8235fe6da997c118baf1f62e4b7445b37bad04 -->

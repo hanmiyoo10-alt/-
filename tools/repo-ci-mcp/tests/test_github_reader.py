@@ -157,6 +157,14 @@ class ReaderTests(unittest.TestCase):
             ("/repos/owner/repo/environments", {"per_page": 100, "page": 2}),
         )
 
+    def test_57dd_environments_accept_full_page_when_total_is_complete(self):
+        reader = GitHubReader(repository="owner/repo")
+        page = {"total_count": 100, "environments": [{"id": index} for index in range(100)]}
+        with patch.object(GitHubReader, "_get_json", return_value=page) as get_json:
+            result = reader.list_environments()
+        self.assertEqual(len(result), 100)
+        self.assertEqual(get_json.call_count, 1)
+
     def test_57e_environments_reject_incomplete_total(self):
         reader = GitHubReader(repository="owner/repo")
         with patch.object(

@@ -393,7 +393,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "Every A-G applicability entry in the final receipt must carry the current owner/contract basis",
             "record that dimension as `UNKNOWN` rather than emitting an unsupported applicability label",
             "each entry binding its label to the current owner/contract basis locator",
-            "the exact exercised evidence/result that covers that dimension or an explicit unresolved reason",
+            "the exact exercised evidence/result or qualifying owner-permitted static proof that covers that dimension, or an explicit unresolved reason",
             "cannot support HARDENING_REVIEW_COMPLETE",
         ):
             self.assertIn(required, self.text)
@@ -424,7 +424,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         for required in (
             "when APPLICABLE, the exact exercised evidence/result that covers that dimension or an explicit unresolved reason",
             "if basis or required evidence mapping is missing, that dimension remains UNKNOWN",
-            "every APPLICABLE dimension is mapped to sufficient exercised evidence/result",
+            "every APPLICABLE dimension is mapped to sufficient exercised evidence/result or qualifying owner-permitted static proof",
         ):
             self.assertIn(required, self.text)
 
@@ -484,7 +484,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "who/what authorized it",
             "allowed effect/resource boundary",
             "absent, expired, ambiguous, or narrower than the intended invocation",
-            "invocation-to-authorization mapping for every executed case and every target-executing owner-test command",
+            "invocation-to-authorization mapping for every executed case, every evidence-bearing owner-test/command, and every executable static analyzer",
         ):
             self.assertIn(required, self.text)
 
@@ -509,7 +509,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
     def test_owner_test_command_proves_tests_ran_and_preserves_containment(self):
         for required in (
             "owner-defined positive execution marker or bounded collection/execution count proving the intended tests actually ran",
-            "if runtime/toolchain identity, material environment identity, positive execution marker/count, required target-execution authorization, or required isolation/reset proof is missing, that command evidence remains unresolved",
+            "if authorization identity/scope, runtime/toolchain identity, material environment identity, positive execution marker/count, required target-execution containment, or required isolation/reset proof is missing, that command evidence remains unresolved",
             "target-executing owner tests additionally bind the authorization identity/scope covering that exact command, the effect/resource-containment identity",
             "every evidence-bearing owner command proves the intended checks actually ran",
         ):
@@ -609,7 +609,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_unresolved_applicable_dimension_blocks_completion(self):
         for required in (
-            "every APPLICABLE dimension is mapped to sufficient exercised evidence/result",
+            "every APPLICABLE dimension is mapped to sufficient exercised evidence/result or qualifying owner-permitted static proof",
             "any APPLICABLE dimension that remains unresolved forces `PARTIAL` or `UNKNOWN`",
             "blocks `HARDENING_REVIEW_COMPLETE`",
         ):
@@ -644,16 +644,16 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
     def test_authorization_is_bound_to_each_execution(self):
         for required in (
             "preserve authorization provenance and scope per executed invocation",
-            "every exercised case and every target-executing owner-test entry must bind an authorization identity/scope",
+            "every exercised case and every evidence-bearing owner-test/command entry must bind an authorization identity/scope",
             "explicit invocation-to-authorization mapping",
             "A review-level authorization record alone is insufficient",
-            "invocation-to-authorization mapping for every executed case and every target-executing owner-test command",
+            "invocation-to-authorization mapping for every executed case, every evidence-bearing owner-test/command, and every executable static analyzer",
         ):
             self.assertIn(required, self.text)
 
     def test_every_evidence_bearing_owner_command_has_runtime_identity(self):
         for required in (
-            "each with exact test/command identity, exact runtime/toolchain identity for that evidence-bearing command",
+            "each with exact test/command identity, the authorization identity/scope covering that exact command, exact runtime/toolchain identity for that evidence-bearing command",
             "every evidence-bearing owner command proves the intended checks actually ran and has exact runtime/toolchain",
         ):
             self.assertIn(required, self.text)
@@ -707,6 +707,70 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         for required in (
             "any executable analyzer must also satisfy the same current authorization, effect/resource containment, isolated-copy/no-write, environment identity, and invocation-bound provenance safeguards",
             "every executable analyzer satisfies the same authorization/effect/resource/isolated-copy safeguards as other executable review evidence",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_reviewed_input_digests_are_algorithm_qualified(self):
+        for required in (
+            "algorithm-qualified full cryptographic digest over explicitly identified bytes",
+            "bare, truncated, algorithm-ambiguous, or unspecified-bytes digests are insufficient",
+            "owner-defined algorithm-qualified full cryptographic artifact digest over explicitly identified artifact bytes",
+            "recorded algorithm-qualified full cryptographic digest/equivalent exact identity",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_every_evidence_bearing_owner_command_requires_authorization(self):
+        for required in (
+            "before any evidence-bearing execution, including an exercised case, owner test/command, or executable static analyzer",
+            "every exercised case and every evidence-bearing owner-test/command entry must bind an authorization identity/scope",
+            "owner test proven not to load or execute the target may run only after verifying current invocation-scoped authorization",
+            "owner tests / commands actually executed, each with exact test/command identity, the authorization identity/scope covering that exact command",
+            "every evidence-bearing owner command is mapped to current invocation-scoped authorization",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_remote_validation_preserves_reviewed_to_tested_relation(self):
+        for required in (
+            "record the exact reviewed-to-tested identity relation and the current owner-contract provenance",
+            "missing relation provenance keeps the remote evidence `UNKNOWN`",
+            "exact reviewed-to-tested identity relation plus owner-contract provenance when the tested identity differs",
+            "any reviewed-to-tested identity mismatch records its exact owner-approved relation and contract provenance",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_static_proof_can_close_applicable_dimensions(self):
+        for required in (
+            "every declared applicable dimension is closed by sufficient exercised evidence or qualifying owner-permitted static proof",
+            "lack sufficient exercised evidence or qualifying owner-permitted static proof",
+            "exact exercised evidence/result or qualifying owner-permitted static proof that covers that dimension",
+            "every APPLICABLE dimension is mapped to sufficient exercised evidence/result or qualifying owner-permitted static proof",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_executed_positive_controls_bind_accepted_input_class(self):
+        for required in (
+            "Classify each exercised positive control explicitly as `EXECUTED_POSITIVE_CONTROL`",
+            "bind it to its accepted-input class",
+            "executed positive controls, each classified as EXECUTED_POSITIVE_CONTROL",
+            "every exercised positive control is classified as `EXECUTED_POSITIVE_CONTROL` and mapped to its accepted-input class",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_resource_containment_termination_is_not_validator_result(self):
+        for required in (
+            "record whether any configured resource limit or containment mechanism fired",
+            "specific limit, termination signal/exit/wrapper reason, and output truncation/kill telemetry",
+            "A containment-terminated observation is not the validator's owner-defined result",
+            "keep it unresolved unless the owner contract explicitly defines that containment termination as the expected outcome",
+            "per-invocation resource-limit hit/termination telemetry",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_proven_gap_binds_contract_clause_and_immutable_evidence(self):
+        for required in (
+            "bind that finding to the exact violated owner-contract clause/basis plus the immutable observation, case, and result evidence identities",
+            "PROVEN_GAP findings, if any, each binding the exact violated owner-contract clause/basis",
+            "every `PROVEN_GAP` binds the exact violated owner-contract clause/basis to immutable proving evidence identities",
         ):
             self.assertIn(required, self.text)
 

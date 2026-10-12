@@ -8,6 +8,11 @@ from .branch_protection import repo_branch_protection as build_repo_branch_prote
 from .canonical_main_status import canonical_main_status as build_canonical_main_status
 from .exact_sha import repo_ci_exact_sha as build_repo_ci_exact_sha
 from .github_reader import GitHubReader
+from .github_deployments import (
+    repo_deployment_statuses as build_repo_deployment_statuses,
+    repo_deployments as build_repo_deployments,
+    repo_environments as build_repo_environments,
+)
 from .github_observability import (
     repo_permission_probe as build_repo_permission_probe,
     repo_rulesets as build_repo_rulesets,
@@ -95,6 +100,24 @@ def repo_secret_metadata() -> dict[str, Any]:
 def repo_security_alerts(kind: str, limit: int = 20) -> dict[str, Any]:
     """Read a bounded projection of one allowlisted repository security-alert family."""
     return build_repo_security_alerts(GitHubReader(), kind, limit)
+
+
+@mcp.tool()
+def repo_environments() -> dict[str, Any]:
+    """Read bounded GitHub environment control-plane metadata without production authority."""
+    return build_repo_environments(GitHubReader())
+
+
+@mcp.tool()
+def repo_deployments(limit: int = 20) -> dict[str, Any]:
+    """Read a bounded recent GitHub deployment projection without deployment authority."""
+    return build_repo_deployments(GitHubReader(), limit)
+
+
+@mcp.tool()
+def repo_deployment_statuses(deployment_id: int, limit: int = 20) -> dict[str, Any]:
+    """Read bounded recent statuses for one validated GitHub deployment id."""
+    return build_repo_deployment_statuses(GitHubReader(), deployment_id, limit)
 
 
 @mcp.tool()

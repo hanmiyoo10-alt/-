@@ -2481,3 +2481,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/4a005e7f84015492c6d76138a04f354ca3ee604d)
 - Event ID: `287211e403a4c4e104183611515280251a77914215ce6d2f9ca3e8975e73e8e4`
 <!-- canonical-main-doc-promoted:287211e403a4c4e104183611515280251a77914215ce6d2f9ca3e8975e73e8e4 -->
+
+### 2026-10-11 — feat(repo): add bounded project projection writer (#3576)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `f07fdc69cfb41367c7636aa9a17aa725c05bfd43`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f07fdc69cfb41367c7636aa9a17aa725c05bfd43)
+- Event ID: `1e12d7ff2460c1da7ae35fe4b540d177f31e2772ddd125f998c3d675304ebf66`
+<!-- canonical-main-doc-promoted:1e12d7ff2460c1da7ae35fe4b540d177f31e2772ddd125f998c3d675304ebf66 -->

@@ -41,8 +41,26 @@ class GithubDeploymentsTests(unittest.TestCase):
         env = result["environments"][0]
         self.assertEqual(env["protection_rule_count"], 2)
         self.assertEqual(env["protection_rule_types"], ["required_reviewers", "wait_timer"])
-        self.assertNotIn("reviewers", repr(result))
+        self.assertNotIn("reviewers", env)
         self.assertNotIn("private", repr(result))
+
+    def test_environment_name_accepts_github_255_character_bound(self):
+        reader = Mock()
+        name = "e" * 255
+        reader.list_environments.return_value = [{"id": 11, "name": name}]
+        result = repo_environments(reader)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["environments"][0]["name"], name)
+
+        reader.list_deployments.return_value = [{
+            "id": 12,
+            "ref": "main",
+            "sha": "a" * 40,
+            "environment": name,
+        }]
+        result = repo_deployments(reader, 1)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["deployments"][0]["environment"], name)
 
     def test_deployment_projection_omits_payload_and_actor_data(self):
         reader = Mock()
@@ -83,6 +101,7 @@ class GithubDeploymentsTests(unittest.TestCase):
         reader.list_deployment_statuses.return_value = [{
             "id": 88,
             "state": "success",
+            "environment": "production-canary",
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:01:00Z",
             "description": "raw",
@@ -95,6 +114,7 @@ class GithubDeploymentsTests(unittest.TestCase):
         self.assertEqual(result["statuses"], [{
             "id": 88,
             "state": "success",
+            "environment": "production-canary",
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:01:00Z",
         }])

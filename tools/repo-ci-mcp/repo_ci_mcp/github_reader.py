@@ -18,6 +18,7 @@ DEFAULT_TIMEOUT_SECONDS = 20.0
 MAX_RULESET_PAGES = 10
 MAX_ENVIRONMENT_PAGES = 10
 MAX_VARIABLE_PAGES = 10
+VARIABLE_PAGE_SIZE = 30
 
 
 class GitHubReadError(RuntimeError):
@@ -194,7 +195,7 @@ class GitHubReader:
         for page in range(1, MAX_RULESET_PAGES + 1):
             value = self._get_json_value(
                 f"{self._repo_api_prefix}/rulesets",
-                {"per_page": 100, "page": page},
+                {"per_page": VARIABLE_PAGE_SIZE, "page": page},
             )
             if not isinstance(value, list) or len(value) > 100:
                 raise GitHubReadError("rulesets response must be a bounded array")
@@ -234,7 +235,7 @@ class GitHubReader:
                 expected_total = total
             elif total != expected_total:
                 raise GitHubReadError("variables total_count changed during pagination")
-            if not isinstance(variables, list) or len(variables) > 100:
+            if not isinstance(variables, list) or len(variables) > VARIABLE_PAGE_SIZE:
                 raise GitHubReadError("variables response must be a bounded array")
             if any(not isinstance(item, dict) for item in variables):
                 raise GitHubReadError("variable metadata item invalid")
@@ -259,7 +260,7 @@ class GitHubReader:
                 raise GitHubReadError("variable inventory exceeds total_count")
             if len(items) == expected_total:
                 return items
-            if len(variables) < 100:
+            if len(variables) < VARIABLE_PAGE_SIZE:
                 raise GitHubReadError("variable inventory incomplete")
         raise GitHubReadError("variable pagination exceeds bounded page limit")
 

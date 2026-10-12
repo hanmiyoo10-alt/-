@@ -10,6 +10,7 @@ Product ownership is separated under:
 - `products/chatgpt-mobile-coder-lab/`
 - `products/app-api-mod-lab/`
 - `products/local-model-lab/`
+- `products/simcore-risu/`
 
 The product roots define ownership and release boundaries. Existing runtime/install paths remain unchanged for compatibility.
 
@@ -18,6 +19,8 @@ The product roots define ownership and release boundaries. Existing runtime/inst
 `products/app-api-mod-lab/` is an **independent app/API modification research root**. Until a concrete target declares its own authority, it does not create source, runtime, deployment, or release authority for any external app or service.
 
 `products/local-model-lab/` is an **independent local-model research root**. Its goal is to distill semantic retrieval, contextual embedding, reranking, and calibrated decision behavior into a fully local model. Teacher APIs are research inputs only and this root does not create production, deployment, runtime, or release authority.
+
+`products/simcore-risu/` is an **independent native-app research product root** for a Risu-lineage flagship with SimCore Fusion integrated at host level. It starts DESIGN_ONLY and does not inherit SimCore or PocketRisu production/release authority.
 
 Isolation phase 1 keeps all compatibility paths stable while product ownership and main-write serialization are established.
 
@@ -39,5 +42,6 @@ Release channels remain independent:
 - ChatGPT Mobile Coder Lab → experiment/research documentation only; no release channel and no runtime authority
 - App API Mod Lab → research/modification product root; no release channel and no external runtime authority until a concrete target contract declares one
 - Local Model Lab → research/model-distillation product root; no release channel and no production/runtime authority
+- SimCore Risu → native-app research product root; no release channel and no production/runtime authority until separately promoted
 
 Do not move or merge release-channel ownership across product roots.

@@ -9,6 +9,11 @@ from .canonical_main_status import canonical_main_status as build_canonical_main
 from .exact_sha import repo_ci_exact_sha as build_repo_ci_exact_sha
 from .github_reader import GitHubReader
 from .github_code_quality import repo_code_quality as build_repo_code_quality
+from .github_releases import (
+    repo_release_assets as build_repo_release_assets,
+    repo_releases as build_repo_releases,
+    repo_tags as build_repo_tags,
+)
 from .github_security_advisories import repo_security_advisories as build_repo_security_advisories
 from .github_variables import repo_variable_metadata as build_repo_variable_metadata
 from .github_deployments import (
@@ -121,6 +126,24 @@ def repo_security_advisories(limit: int = 20) -> dict[str, Any]:
 def repo_code_quality(limit: int = 20) -> dict[str, Any]:
     """Read one bounded first page of repository Code Quality finding metadata."""
     return build_repo_code_quality(GitHubReader(), limit)
+
+
+@mcp.tool()
+def repo_releases(limit: int = 20) -> dict[str, Any]:
+    """Read one bounded first page of repository release metadata."""
+    return build_repo_releases(GitHubReader(), limit)
+
+
+@mcp.tool()
+def repo_tags(limit: int = 20) -> dict[str, Any]:
+    """Read one bounded first page of repository tag names and commit SHAs."""
+    return build_repo_tags(GitHubReader(), limit)
+
+
+@mcp.tool()
+def repo_release_assets(release_id: int, limit: int = 20) -> dict[str, Any]:
+    """Read one bounded first page of metadata for one validated release id."""
+    return build_repo_release_assets(GitHubReader(), release_id, limit)
 
 
 @mcp.tool()

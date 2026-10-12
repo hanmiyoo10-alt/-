@@ -165,7 +165,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_git_backed_actual_bytes_have_identity_beyond_clean_status(self):
         for required in (
-            "neutralizes replacement-object substitution",
+            "replacement-neutral immutable snapshot/object-read path",
             "never treat `CLEAN` alone as byte identity",
             "actual bytes plus every owner-relevant structural property relied upon by the review",
             "filter-normalized or otherwise transformed checkout bytes",
@@ -516,7 +516,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "command effect/resource-boundary identity",
             "isolated-copy/no-write identity",
             "target-executing owner tests additionally bind the stronger target-execution effect/resource-containment identity",
-            "every evidence-bearing owner command is mapped to current invocation-scoped authorization, proves the intended checks actually ran",
+            "every evidence-bearing owner command is mapped to current invocation-scoped authorization, binds its exact ordered invocation and input/configuration mapping, proves the intended checks actually ran",
             "target-executing commands additionally preserve required target containment/state-isolation provenance",
         ):
             self.assertIn(required, self.text)
@@ -659,8 +659,8 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_every_evidence_bearing_owner_command_has_runtime_identity(self):
         for required in (
-            "each with exact test/command identity, the authorization identity/scope covering that exact command, exact runtime/toolchain identity for that evidence-bearing command",
-            "every evidence-bearing owner command is mapped to current invocation-scoped authorization, proves the intended checks actually ran, and has exact runtime/toolchain",
+            "owner tests / commands actually executed, each with exact test/command identity plus exact invocation",
+            "every evidence-bearing owner command is mapped to current invocation-scoped authorization, binds its exact ordered invocation and input/configuration mapping, proves the intended checks actually ran, and has exact runtime/toolchain",
         ):
             self.assertIn(required, self.text)
 
@@ -671,7 +671,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "exact invocation/configuration",
             "exact analyzed input identity",
             "algorithm-qualified full cryptographic digest over explicitly identified analyzer-output bytes",
-            "every evidence-bearing static analysis has equivalent analyzer/toolchain/invocation/input/immutable-result provenance",
+            "every executable evidence-bearing static analysis has equivalent analyzer/toolchain/invocation/input/immutable-result provenance",
         ):
             self.assertIn(required, self.text)
 
@@ -733,7 +733,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "before any evidence-bearing execution, including an exercised case, owner test/command, or executable static analyzer",
             "every exercised case and every evidence-bearing owner-test/command entry must bind an authorization identity/scope",
             "owner test proven not to load or execute the target may run only after verifying current invocation-scoped authorization",
-            "owner tests / commands actually executed, each with exact test/command identity, the authorization identity/scope covering that exact command",
+            "owner tests / commands actually executed, each with exact test/command identity plus exact invocation",
             "every evidence-bearing owner command is mapped to current invocation-scoped authorization",
         ):
             self.assertIn(required, self.text)
@@ -798,6 +798,71 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "the enclosing run/job conclusion separately",
             "never substitute the enclosing run/job conclusion",
             "raw outcome/conclusion and bounded result separately from the enclosing run/job conclusion",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_time_bounded_authorization_is_bound_to_execution_time(self):
+        for required in (
+            "when authorization has an expiry, validity window, generation, lease epoch, or another time-bounded currentness constraint",
+            "trustworthy execution timestamp or another immutable temporal/currentness relation",
+            "Recording the expiry alone is insufficient",
+            "proving the invocation occurred while that authorization was current",
+            "every time-bounded authorization is paired with a trustworthy execution timestamp",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_containment_termination_telemetry_covers_commands_and_analyzers(self):
+        for required in (
+            "for every evidence-bearing executed invocation, record whether any configured resource limit or containment mechanism fired",
+            "per-invocation resource-limit/containment hit and termination telemetry",
+            "executable evidence-bearing static analysis, if any",
+            "a containment-terminated analyzer observation remains unresolved",
+            "per-invocation resource-limit/containment hit and termination telemetry, every executable analyzer satisfies",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_non_executable_static_proof_has_its_own_provenance_shape(self):
+        for required in (
+            "non-executable static proof, if any",
+            "exact owner permission/contract basis allowing static closure",
+            "exact covered claim/dimension",
+            "exact reviewed input identities",
+            "proof method",
+            "immutable proof artifact or observation identity",
+            "do not fabricate analyzer identity, invocation, execution marker, runtime, or analyzer-output bytes",
+            "every qualifying non-executable static proof binds owner permission",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_owner_command_receipt_binds_full_invocation(self):
+        for required in (
+            "for every evidence-bearing owner test/command, bind the exact invocation",
+            "entrypoint/subcommand, ordered argv/arguments/flags",
+            "stdin/file/response-file or other input-channel mapping",
+            "material per-invocation configuration/settings",
+            "A command or test name alone is insufficient",
+            "exact test/command identity plus exact invocation",
+            "binds its exact ordered invocation and input/configuration mapping",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_remote_validation_binds_validation_implementation_identity(self):
+        for required in (
+            "immutable identities for the relevant workflow definition and material scripts/actions/toolchain",
+            "explicit owner provenance proving the immutable run identity already binds those exact validation-implementation inputs",
+            "every external validation result proves the exact relevant check/step actually ran",
+            "binds immutable identities for the relevant workflow definition and material scripts/actions/toolchain",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_git_replacement_objects_fail_closed_without_neutral_proof(self):
+        for required in (
+            "use a replacement-neutral immutable snapshot/object-read path for every Git object read",
+            "If replacement-neutral reads are unavailable, preserve `UNKNOWN`",
+            "actual substituted object bytes, object type/mode, and replacement provenance",
+            "never attribute substituted bytes to the unreplaced object ID",
+            "If replacement-neutral revalidation cannot be proven, preserve `UNKNOWN`",
+            "every Git object read contributing identity/evidence is replacement-neutral",
         ):
             self.assertIn(required, self.text)
 

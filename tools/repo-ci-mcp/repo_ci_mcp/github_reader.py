@@ -15,6 +15,7 @@ MAX_JOB_LOG_BYTES = 8 * 1024 * 1024
 DEFAULT_REPOSITORY = "hanmiyoo10-alt/-"
 DEFAULT_API = "https://api.github.com"
 DEFAULT_TIMEOUT_SECONDS = 20.0
+MAX_RULESET_PAGES = 10
 
 
 class GitHubReadError(RuntimeError):
@@ -187,12 +188,20 @@ class GitHubReader:
 
 
     def list_repository_rulesets(self) -> list[dict[str, Any]]:
-        value = self._get_json_value(f"{self._repo_api_prefix}/rulesets", {"per_page": 100})
-        if not isinstance(value, list) or len(value) > 100:
-            raise GitHubReadError("rulesets response must be a bounded array")
-        if any(not isinstance(item, dict) for item in value):
-            raise GitHubReadError("rulesets response item invalid")
-        return list(value)
+        items: list[dict[str, Any]] = []
+        for page in range(1, MAX_RULESET_PAGES + 1):
+            value = self._get_json_value(
+                f"{self._repo_api_prefix}/rulesets",
+                {"per_page": 100, "page": page},
+            )
+            if not isinstance(value, list) or len(value) > 100:
+                raise GitHubReadError("rulesets response must be a bounded array")
+            if any(not isinstance(item, dict) for item in value):
+                raise GitHubReadError("rulesets response item invalid")
+            items.extend(value)
+            if len(value) < 100:
+                return items
+        raise GitHubReadError("rulesets pagination exceeds bounded page limit")
 
     def list_actions_secret_metadata(self) -> list[dict[str, Any]]:
         value = self._get_json(f"{self._repo_api_prefix}/actions/secrets", {"per_page": 100})

@@ -108,10 +108,38 @@ class ReaderTests(unittest.TestCase):
         reader = GitHubReader(repository="owner/repo")
         with patch.object(GitHubReader, "_get_json_value", return_value=[]) as get_value:
             self.assertEqual(reader.list_repository_rulesets(), [])
-        get_value.assert_called_once_with("/repos/owner/repo/rulesets", {"per_page": 100})
+        get_value.assert_called_once_with("/repos/owner/repo/rulesets", {"per_page": 100, "page": 1})
         with patch.object(GitHubReader, "_get_json", return_value={"total_count": 0, "secrets": []}) as get_json:
             self.assertEqual(reader.list_actions_secret_metadata(), [])
         get_json.assert_called_once_with("/repos/owner/repo/actions/secrets", {"per_page": 100})
+
+    def test_57b_rulesets_paginate_until_short_page(self):
+        reader = GitHubReader(repository="owner/repo")
+        first = [{"id": index} for index in range(100)]
+        second = [{"id": 100}]
+        with patch.object(GitHubReader, "_get_json_value", side_effect=[first, second]) as get_value:
+            result = reader.list_repository_rulesets()
+        self.assertEqual(len(result), 101)
+        self.assertEqual(
+            get_value.call_args_list[0].args,
+            ("/repos/owner/repo/rulesets", {"per_page": 100, "page": 1}),
+        )
+        self.assertEqual(
+            get_value.call_args_list[1].args,
+            ("/repos/owner/repo/rulesets", {"per_page": 100, "page": 2}),
+        )
+
+    def test_57c_rulesets_fail_closed_at_pagination_ceiling(self):
+        reader = GitHubReader(repository="owner/repo")
+        full_page = [{"id": index} for index in range(100)]
+        with patch.object(
+            GitHubReader,
+            "_get_json_value",
+            side_effect=[full_page] * 10,
+        ) as get_value:
+            with self.assertRaisesRegex(GitHubReadError, "bounded page limit"):
+                reader.list_repository_rulesets()
+        self.assertEqual(get_value.call_count, 10)
 
     def test_58_security_alert_kind_is_allowlisted_and_bounded(self):
         reader = GitHubReader(repository="owner/repo")

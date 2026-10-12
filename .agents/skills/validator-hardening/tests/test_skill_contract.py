@@ -450,9 +450,10 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
     def test_dimension_g_requires_attempt_telemetry_or_static_effect_proof(self):
         for required in (
             "containment protects external state but does not prove that prohibited effects were never attempted",
-            "observable sandbox/audit telemetry for attempted denied writes",
-            "Silent containment alone cannot mark dimension G exercised/clean",
-            "denied-effect attempt telemetry or separate static effect proof when dimension G is applicable",
+            "telemetry for every contract-prohibited effect attempt, whether the attempt is denied or succeeds",
+            "every owner-contract-prohibited effect is denied before it can occur",
+            "Silent containment or denied-only telemetry cannot mark dimension G exercised/clean",
+            "missing all-attempt telemetry or static proof remains unresolved",
         ):
             self.assertIn(required, self.text)
 

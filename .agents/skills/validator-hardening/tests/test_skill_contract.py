@@ -941,6 +941,39 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, self.text)
 
+    def test_target_executing_owner_tests_bind_all_effect_attempts(self):
+        for required in (
+            "every target-executing owner-test/command must also bind the same per-invocation telemetry for every owner-contract-prohibited effect attempt",
+            "whether denied or successful",
+            "explicit immutable mapping to separate qualifying static/effect proof covering that exact invocation",
+            "Containment identity or resource-limit telemetry alone is insufficient",
+            "target-executing owner-command effect-attempt provenance",
+            "every target-executing owner command used for dimension G binds all prohibited-effect attempt telemetry",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_local_sensitive_configuration_uses_secret_safe_identity(self):
+        for required in (
+            "whenever material local execution environment/configuration for an owner command, exercised case, or executable analyzer includes a secret",
+            "never use a guessable digest of a low-entropy secret as its identity",
+            "owner-backed opaque secret version/reference",
+            "immutable secret-manager version identifier",
+            "local execution secret-safe configuration identity",
+            "every local execution whose material configuration includes sensitive values binds owner-backed opaque secret versions/references",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_remote_evidence_binds_realized_runner_identity(self):
+        for required in (
+            "bind remote evidence to the realized runner/execution-surface identity",
+            "immutable runner image/artifact identity or equivalent owner-backed execution-surface identity",
+            "OS, filesystem, shell, locale, preinstalled libraries",
+            "mutable label such as `ubuntu-latest`",
+            "external validation execution-surface provenance",
+            "every external validation result material to OS/filesystem/runtime semantics binds an immutable runner image/artifact",
+        ):
+            self.assertIn(required, self.text)
+
     def test_no_runtime_helper_is_required(self):
         self.assertFalse((SKILL_ROOT / "scripts").exists())
 

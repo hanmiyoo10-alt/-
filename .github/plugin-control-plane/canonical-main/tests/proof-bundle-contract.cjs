@@ -8,7 +8,7 @@ const path = require('path');
 const {composeProofBundle, MODE} = require('../proof-bundle.cjs');
 const {readGitHubCliJson} = require('../infra/github-cli-read.cjs');
 const {attachReadFailures, parseOps, writeBundle} = require('../orchestrator/proof-bundle.cjs');
-const {exactShaWorkflowApplicability, pluginWorkflowEvidence} = require('../orchestrator/pr-workflow-applicability.cjs');
+const {exactShaWorkflowApplicability, pluginWorkflowEvidence, resolveMergeBase} = require('../orchestrator/pr-workflow-applicability.cjs');
 
 function sample() {
   return {
@@ -115,28 +115,43 @@ assert.equal(parsed.attentionKnown, true);
 assert.equal(parsed.attentionCount, 0);
 const pluginPr = {headSha: 'b'.repeat(40), baseSha: 'c'.repeat(40), baseRef: 'main'};
 let classifyCalls = 0;
-const directPlugin = pluginWorkflowEvidence('owner/repo', pluginPr, [], () => ({runId: 71, conclusion: 'success'}), () => {classifyCalls += 1; return {disposition: 'UNKNOWN', reasonCodes: [], inventoryComplete: false, evidence: {}};});
+const directPlugin = pluginWorkflowEvidence('owner/repo', pluginPr, 'd'.repeat(40), [], () => ({runId: 71, conclusion: 'success'}), () => {classifyCalls += 1; return {disposition: 'UNKNOWN', reasonCodes: [], inventoryComplete: false, evidence: {}};});
 assert.equal(directPlugin.runId, 71);
 assert.equal(directPlugin.applicability, 'RAN');
 assert.equal(classifyCalls, 0, 'direct completed evidence must not invoke absence classification');
 
-const pathFilteredPlugin = pluginWorkflowEvidence('owner/repo', pluginPr, [], () => null, () => ({disposition: 'EXPECTED_NO_RUN_PATH_FILTER', reasonCodes: ['PATH_FILTERED'], inventoryComplete: true, evidence: {beforeSha: pluginPr.baseSha, changedPathCount: 6}}));
+let classifyInput = null;
+const pathFilteredPlugin = pluginWorkflowEvidence(
+  'owner/repo', pluginPr, 'd'.repeat(40), [], () => null,
+  (input) => {classifyInput = input; return {disposition: 'EXPECTED_NO_RUN_PATH_FILTER', reasonCodes: ['PATH_FILTERED'], inventoryComplete: true, evidence: {beforeSha: 'e'.repeat(40), workflowRef: 'd'.repeat(40), changedPathCount: 6}};},
+  () => 'e'.repeat(40),
+);
 assert.equal(pathFilteredPlugin.applicability, 'EXPECTED_NO_RUN_PATH_FILTER');
 assert.deepEqual(pathFilteredPlugin.reasonCodes, ['PATH_FILTERED']);
 assert.equal(pathFilteredPlugin.applicabilityEvidence.changedPathCount, 6);
+assert.equal(classifyInput.beforeSha, 'e'.repeat(40));
+assert.equal(classifyInput.workflowRef, 'd'.repeat(40));
+assert.equal(classifyInput.sha, pluginPr.headSha);
 
-const missingBasePlugin = pluginWorkflowEvidence('owner/repo', {headSha: pluginPr.headSha}, [], () => null, () => {throw new Error('classifier must not run without exact base identity');});
+const missingBasePlugin = pluginWorkflowEvidence('owner/repo', {headSha: pluginPr.headSha}, 'd'.repeat(40), [], () => null, () => {throw new Error('classifier must not run without exact base identity');});
 assert.equal(missingBasePlugin.applicability, 'UNKNOWN');
 assert.deepEqual(missingBasePlugin.reasonCodes, ['PR_BASE_IDENTITY_UNKNOWN']);
 
+const resolvedMergeBase = resolveMergeBase(
+  'owner/repo', 'c'.repeat(40), 'b'.repeat(40), [],
+  () => ({value: {merge_base_commit: {sha: 'e'.repeat(40)}}, failure: null}),
+);
+assert.equal(resolvedMergeBase, 'e'.repeat(40));
+
 const ownerProjection = exactShaWorkflowApplicability(
   {repo: 'owner/repo', sha: 'a'.repeat(40), workflow: '.github/workflows/x.yml', event: 'pull_request', ref: 'main', beforeSha: 'b'.repeat(40)},
-  () => JSON.stringify({disposition: 'EXPECTED_NO_RUN_PATH_FILTER', reason_codes: ['PATH_FILTERED', 'bad reason', 'X'.repeat(101)], inventory_complete: true, evidence: {workflow_blob_sha: 'c'.repeat(40), before_sha: 'b'.repeat(40), changed_path_count: 6}}),
+  () => JSON.stringify({disposition: 'EXPECTED_NO_RUN_PATH_FILTER', reason_codes: ['PATH_FILTERED', 'bad reason', 'X'.repeat(101)], inventory_complete: true, evidence: {workflow_blob_sha: 'c'.repeat(40), before_sha: 'b'.repeat(40), workflow_ref: 'd'.repeat(40), changed_path_count: 6}}),
 );
 assert.equal(ownerProjection.disposition, 'EXPECTED_NO_RUN_PATH_FILTER');
 assert.deepEqual(ownerProjection.reasonCodes, ['PATH_FILTERED']);
 assert.equal(ownerProjection.inventoryComplete, true);
 assert.equal(ownerProjection.evidence.changedPathCount, 6);
+assert.equal(ownerProjection.evidence.workflowRef, 'd'.repeat(40));
 
 const unknownOwnerVocabulary = exactShaWorkflowApplicability({repo: 'owner/repo'}, () => JSON.stringify({disposition: 'FUTURE_UNREVIEWED_STATE', reason_codes: []}));
 assert.equal(unknownOwnerVocabulary.disposition, 'UNKNOWN');
@@ -157,13 +172,14 @@ const exactFixtureScript = [
   "    return {'content': raw, 'blob_sha': 'd' * 40, 'size': len(raw)}",
   '  def compare_changed_paths(self, before, sha):',
   "    return (['tools/repo-ci-mcp/README.md','tools/repo-ci-mcp/repo_ci_mcp/github_observability.py','tools/repo-ci-mcp/repo_ci_mcp/github_reader.py','tools/repo-ci-mcp/repo_ci_mcp/server.py','tools/repo-ci-mcp/tests/test_github_observability.py','tools/repo-ci-mcp/tests/test_github_reader.py'], True)",
-  "result = repo_ci_exact_sha(Reader(), 'fca76cda388b3f8bb4b70cc32d4fbecd801ddf42', '.github/workflows/plugin-control-plane-ci.yml', event='pull_request', ref='main', before_sha='dc564aa008d9bd116103ccde773a13730a0a26fe')",
+  "result = repo_ci_exact_sha(Reader(), 'fca76cda388b3f8bb4b70cc32d4fbecd801ddf42', '.github/workflows/plugin-control-plane-ci.yml', event='pull_request', ref='main', before_sha='dc564aa008d9bd116103ccde773a13730a0a26fe', workflow_ref='d142386866ce9e1ba685ee97c3aa99918621776c')",
   'print(json.dumps(result))',
 ].join('\n');
 const exactFixture = JSON.parse(execFileSync('python3', ['-c', exactFixtureScript], {cwd: repoRoot, encoding: 'utf8', maxBuffer: 512 * 1024, stdio: ['ignore', 'pipe', 'inherit']}));
 assert.equal(exactFixture.disposition, 'EXPECTED_NO_RUN_PATH_FILTER');
 assert.deepEqual(exactFixture.reason_codes, ['PATH_FILTERED']);
 assert.equal(exactFixture.evidence.changed_path_count, 6);
+assert.equal(exactFixture.evidence.workflow_ref, 'd142386866ce9e1ba685ee97c3aa99918621776c');
 
 function sequenceExec(steps) {
   let index = 0;

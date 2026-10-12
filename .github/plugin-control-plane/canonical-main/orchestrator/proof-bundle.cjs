@@ -120,7 +120,7 @@ function attachReadFailures(bundle, readFailures) {
 function collectOnce(repo, targetSha) {
   const readFailures = [];
   const pr = associatedMergedPr(repo, targetSha, readFailures) || {};
-  const plugin = pr.headSha ? pluginWorkflowEvidence(repo, pr, readFailures, workflowEvidence) : {};
+  const plugin = pr.headSha ? pluginWorkflowEvidence(repo, pr, targetSha, readFailures, workflowEvidence) : {};
   const simcoreHead = pr.headSha ? workflowEvidence(repo, 'simcore-ci.yml', pr.headSha, 'pull_request', true, readFailures) : null;
   const simcoreMain = workflowEvidence(repo, 'simcore-ci.yml', targetSha, 'push', true, readFailures);
   const opsIssue = ghJson([`repos/${repo}/issues/485`], readFailures) || {};

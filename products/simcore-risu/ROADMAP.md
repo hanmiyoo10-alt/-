@@ -1,31 +1,48 @@
 # SimCore Risu Roadmap
 
-Status: **DESIGN ROADMAP · NO RELEASE AUTHORITY**
+Status: **FINAL TARGET ROADMAP / PRE-IMPLEMENTATION / NO RELEASE AUTHORITY**
 
 ```text
-R0  Product root bootstrap
-R1  Host baseline audit
-R2  Native Fusion host-fit spike
-R3  Trunk/upstream strategy freeze
-R4  Native shell + migration skeleton
-R5  Fusion core native adapter
-R6  Memory/Knowledge/Reference service integration
-R7  LightBoard + Private/Public Wiki native UI
-R8  Canon Alignment native surface
-R9  import/backup/migration qualification
-R10 bounded real-device acceptance
-R11 release-system design
-R12 first qualified SimCore Risu release
+R0  Independent product-root bootstrap                         DONE
+R1  Final target design record                                DONE
+R2  MYANG existing-content relocation                         REQUIRED / NOT PROVEN
+R3  MYANG product authority bootstrap                         BLOCKED BY R2
+R4  Host baseline audit                                       BLOCKED BY R3
+R5  Native Fusion host-fit spike                              BLOCKED BY R4
+R6  Trunk/upstream strategy freeze                            BLOCKED BY R5
+R7  Native shell + migration skeleton                         BLOCKED BY R6
+R8  Fusion core native adapter                                BLOCKED BY R7
+R9  Memory / Knowledge / Reference / Canon Alignment          BLOCKED BY R8
+R10 LightBoard + Private/Public Wiki native UI                BLOCKED BY R9
+R11 Unified UI / diagnostics / import / backup                BLOCKED BY R10
+R12 Fixture / replay qualification                            BLOCKED BY R11
+R13 Bounded real-device acceptance                            BLOCKED BY R12
+R14 Release-system design                                     BLOCKED BY R13
+R15 First qualified SimCore Risu release                      BLOCKED BY R14
 ```
 
-## R0 — Product root bootstrap
+## R2 - MYANG existing-content relocation
 
-Goal:
-- isolate product ownership;
-- define manifest/current/boundaries;
-- register the root without creating runtime or release authority.
+Owner prerequisite:
+- existing MYANG content is moved out before SimCore Risu work begins there.
 
-## R1 — Host baseline audit
+Do not interpret repository sparsity as permission to delete or overwrite existing content.
+
+After relocation, re-read MYANG and prove the destination state before R3.
+
+## R3 - MYANG product authority bootstrap
+
+Create only after R2:
+- repository common rules / operating guidance;
+- SimCore Risu product manifest;
+- current-state authority;
+- source/release/deployment boundaries;
+- license/provenance policy;
+- CI/bootstrap rules.
+
+The current `products/simcore-risu/` root in `hanmiyoo10-alt/-` becomes a thin locator only after the migration is proven.
+
+## R4 - Host baseline audit
 
 Compare:
 - official PocketRisu;
@@ -35,8 +52,8 @@ Compare:
 
 Focus:
 - request lifecycle;
-- edit/delete/reroll/branch identity;
-- save/load/checkpoint behavior;
+- edit/delete/reroll/branch identities;
+- save/load/checkpoints;
 - database/storage abstraction;
 - background jobs/model broker;
 - plugin v3 compatibility;
@@ -44,7 +61,7 @@ Focus:
 - upstream maintenance cost;
 - GPL/provenance obligations.
 
-## R2 — Native Fusion host-fit spike
+## R5 - Native Fusion host-fit spike
 
 Prove native bindings for:
 - `HostTurnSnapshot.v1`;
@@ -55,4 +72,6 @@ No full Fusion implementation before this proof.
 
 ## Preservation rule
 
-The compatibility Fusion Plugin path remains valid even if the native SimCore Risu product becomes the flagship.
+The compatibility Fusion Plugin path remains valid even when native SimCore Risu becomes the flagship.
+
+No required stage is complete until its stated evidence gate is satisfied.

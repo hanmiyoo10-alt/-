@@ -14,8 +14,13 @@
   "architecture_issue": 2961,
   "host_strategy_issue": 3600,
   "bootstrap_issue": 3601,
-  "current_priority": "HOST_BASELINE_AUDIT",
+  "current_priority": "WAIT_MYANG_EXISTING_CONTENT_RELOCATION",
   "validation_status": "DESIGN_ONLY",
   "release_authority": null,
-  "production_authority": null
+  "production_authority": null,
+  "final_target_design": "products/simcore-risu/FINAL_TARGET_DESIGN_V1_2026-10-12.md",
+  "target_repository": "hanmiyoo10-alt/myang",
+  "target_repository_role": "flagship_application_repository_after_migration_gate",
+  "upstream_integration_repository": "hanmiyoo10-alt/PocketRisu",
+  "migration_gate": "MYANG_EXISTING_CONTENT_RELOCATION_REQUIRED"
 }

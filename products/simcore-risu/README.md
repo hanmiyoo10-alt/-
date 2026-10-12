@@ -55,6 +55,12 @@ This root does **not** currently own:
 - official PocketRisu upstream;
 - any third-party donor runtime or code.
 
+## Final target design
+
+- `products/simcore-risu/FINAL_TARGET_DESIGN_V1_2026-10-12.md`
+- target flagship repository after prerequisite migration: `hanmiyoo10-alt/myang`
+- current implementation gate: move existing MYANG contents first
+
 ## Current authority
 
 - manifest: `products/simcore-risu/product.json`

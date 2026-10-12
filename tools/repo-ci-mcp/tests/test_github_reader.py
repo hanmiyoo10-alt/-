@@ -119,7 +119,7 @@ class ReaderTests(unittest.TestCase):
         second = [{"id": 100}]
         with patch.object(GitHubReader, "_get_json_value", side_effect=[first, second]) as get_value:
             result = reader.list_repository_rulesets()
-        self.assertEqual(len(result), 31)
+        self.assertEqual(len(result), 101)
         self.assertEqual(
             get_value.call_args_list[0].args,
             ("/repos/owner/repo/rulesets", {"per_page": 100, "page": 1}),
@@ -208,7 +208,7 @@ class ReaderTests(unittest.TestCase):
         second = {"total_count": 31, "variables": [{"name": "VAR_30"}]}
         with patch.object(GitHubReader, "_get_json", side_effect=[first, second]) as get_json:
             result = reader.list_actions_variable_metadata()
-        self.assertEqual(len(result), 101)
+        self.assertEqual(len(result), 31)
         self.assertEqual(
             get_json.call_args_list[0].args,
             ("/repos/owner/repo/actions/variables", {"per_page": 30, "page": 1}),

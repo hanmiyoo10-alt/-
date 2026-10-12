@@ -329,7 +329,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_exercised_cases_require_exact_input_and_replay_identity(self):
         for required in (
-            "exact input digest or immutable locator",
+            "exact input identity that binds both bytes and every owner-relevant structural property",
             "a descriptive case name alone is insufficient",
             "generation seed/configuration needed for replay",
             "reduced/minimized example identity or bounded example value/locator",
@@ -444,7 +444,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "ordered arguments/flags",
             "stdin versus file/input-channel mapping",
             "material per-invocation configuration/settings",
-            "each binding exact input identity and exact invocation identity",
+            "each binding exact byte+structural input identity and exact invocation identity",
         ):
             self.assertIn(required, self.text)
 

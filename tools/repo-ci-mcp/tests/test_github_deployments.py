@@ -102,6 +102,18 @@ class GithubDeploymentsTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["deployments"][0]["ref"], ref)
 
+    def test_deployment_environment_preserves_null(self):
+        reader = Mock()
+        reader.list_deployments.return_value = [{
+            "id": 79,
+            "ref": "main",
+            "sha": "a" * 40,
+            "environment": None,
+        }]
+        result = repo_deployments(reader, 1)
+        self.assertTrue(result["ok"])
+        self.assertIsNone(result["deployments"][0]["environment"])
+
     def test_empty_deployment_list_is_known_zero(self):
         reader = Mock()
         reader.list_deployments.return_value = []

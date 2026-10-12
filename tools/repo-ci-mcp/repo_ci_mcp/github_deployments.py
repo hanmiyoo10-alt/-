@@ -105,7 +105,7 @@ def _project_deployment(item: dict[str, Any]) -> dict[str, Any]:
         "id": _positive_integer(item.get("id")),
         "ref": _deployment_ref(item.get("ref")),
         "sha": _sha(item.get("sha")),
-        "environment": _environment_name(item.get("environment"), required=True),
+        "environment": _environment_name(item.get("environment")),
         "task": _text(item.get("task")),
         "transient_environment": _optional_bool(item.get("transient_environment")),
         "production_environment": _optional_bool(item.get("production_environment")),

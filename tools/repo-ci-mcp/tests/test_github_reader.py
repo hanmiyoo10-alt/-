@@ -199,6 +199,59 @@ class ReaderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "1..50"):
             reader.list_deployments(limit=51)
 
+    def test_57g_variables_paginate_and_prove_complete_inventory(self):
+        reader = GitHubReader(repository="owner/repo")
+        first = {
+            "total_count": 101,
+            "variables": [{"name": f"VAR_{index}"} for index in range(100)],
+        }
+        second = {"total_count": 101, "variables": [{"name": "VAR_100"}]}
+        with patch.object(GitHubReader, "_get_json", side_effect=[first, second]) as get_json:
+            result = reader.list_actions_variable_metadata()
+        self.assertEqual(len(result), 101)
+        self.assertEqual(
+            get_json.call_args_list[0].args,
+            ("/repos/owner/repo/actions/variables", {"per_page": 100, "page": 1}),
+        )
+        self.assertEqual(
+            get_json.call_args_list[1].args,
+            ("/repos/owner/repo/actions/variables", {"per_page": 100, "page": 2}),
+        )
+
+    def test_57ga_variables_strip_value_at_reader_boundary(self):
+        reader = GitHubReader(repository="owner/repo")
+        payload = {
+            "total_count": 1,
+            "variables": [{
+                "name": "VISIBLE_NAME",
+                "value": "READER_MUST_DROP_THIS_VALUE",
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-02T00:00:00Z",
+            }],
+        }
+        with patch.object(GitHubReader, "_get_json", return_value=payload):
+            result = reader.list_actions_variable_metadata()
+        self.assertEqual(result, [{
+            "name": "VISIBLE_NAME",
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-02T00:00:00Z",
+        }])
+        self.assertNotIn("READER_MUST_DROP_THIS_VALUE", repr(result))
+
+    def test_57h_variables_reject_duplicate_names_case_insensitively(self):
+        reader = GitHubReader(repository="owner/repo")
+        payload = {"total_count": 2, "variables": [{"name": "ONE"}, {"name": "one"}]}
+        with patch.object(GitHubReader, "_get_json", return_value=payload):
+            with self.assertRaisesRegex(GitHubReadError, "duplicate variable name"):
+                reader.list_actions_variable_metadata()
+
+    def test_57i_variables_reject_incomplete_inventory(self):
+        reader = GitHubReader(repository="owner/repo")
+        payload = {"total_count": 2, "variables": [{"name": "ONE"}]}
+        with patch.object(GitHubReader, "_get_json", return_value=payload):
+            with self.assertRaisesRegex(GitHubReadError, "inventory incomplete"):
+                reader.list_actions_variable_metadata()
+
     def test_58_security_alert_kind_is_allowlisted_and_bounded(self):
         reader = GitHubReader(repository="owner/repo")
         with self.assertRaisesRegex(ValueError, "unsupported security alert kind"):
@@ -226,6 +279,21 @@ class ReaderTests(unittest.TestCase):
             observed = reader.probe_accepted_permissions("rulesets")
         self.assertEqual(observed, {"http_status": 403, "accepted_permissions": "administration=read"})
 
+
+    def test_60_variables_permission_probe_uses_fixed_endpoint(self):
+        reader = GitHubReader(repository="owner/repo")
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {"X-Accepted-GitHub-Permissions": "variables=read"}
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            result = reader.probe_accepted_permissions("variables")
+        self.assertEqual(result["accepted_permissions"], "variables=read")
+        self.assertEqual(
+            opened.call_args.args[0].full_url,
+            "https://api.github.com/repos/owner/repo/actions/variables?per_page=1",
+        )
 
     def test_61_deployment_permission_probes_use_fixed_endpoints(self):
         reader = GitHubReader(repository="owner/repo")

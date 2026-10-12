@@ -17,6 +17,7 @@ DEFAULT_API = "https://api.github.com"
 DEFAULT_TIMEOUT_SECONDS = 20.0
 MAX_RULESET_PAGES = 10
 MAX_ENVIRONMENT_PAGES = 10
+MAX_VARIABLE_PAGES = 10
 
 
 class GitHubReadError(RuntimeError):
@@ -216,6 +217,52 @@ class GitHubReader:
             raise GitHubReadError("secret metadata item invalid")
         return list(secrets)
 
+    def list_actions_variable_metadata(self) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        seen_names: set[str] = set()
+        expected_total: int | None = None
+        for page in range(1, MAX_VARIABLE_PAGES + 1):
+            value = self._get_json(
+                f"{self._repo_api_prefix}/actions/variables",
+                {"per_page": 100, "page": page},
+            )
+            total = value.get("total_count")
+            variables = value.get("variables")
+            if isinstance(total, bool) or not isinstance(total, int) or total < 0:
+                raise GitHubReadError("variables total_count invalid")
+            if expected_total is None:
+                expected_total = total
+            elif total != expected_total:
+                raise GitHubReadError("variables total_count changed during pagination")
+            if not isinstance(variables, list) or len(variables) > 100:
+                raise GitHubReadError("variables response must be a bounded array")
+            if any(not isinstance(item, dict) for item in variables):
+                raise GitHubReadError("variable metadata item invalid")
+            page_items = []
+            for item in variables:
+                name = item.get("name")
+                if not isinstance(name, str) or not name or len(name) > 256:
+                    raise GitHubReadError("variable name invalid")
+                if any(ch in name for ch in "\r\n\x00"):
+                    raise GitHubReadError("variable name invalid")
+                duplicate_key = name.casefold()
+                if duplicate_key in seen_names:
+                    raise GitHubReadError("duplicate variable name")
+                seen_names.add(duplicate_key)
+                page_items.append({
+                    "name": name,
+                    "created_at": item.get("created_at"),
+                    "updated_at": item.get("updated_at"),
+                })
+            items.extend(page_items)
+            if len(items) > expected_total:
+                raise GitHubReadError("variable inventory exceeds total_count")
+            if len(items) == expected_total:
+                return items
+            if len(variables) < 100:
+                raise GitHubReadError("variable inventory incomplete")
+        raise GitHubReadError("variable pagination exceeds bounded page limit")
+
     @staticmethod
     def _recent_limit(limit: int) -> int:
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 50:
@@ -319,6 +366,7 @@ class GitHubReader:
             "secret_scanning": f"{self._repo_api_prefix}/secret-scanning/alerts",
             "environments": f"{self._repo_api_prefix}/environments",
             "deployments": f"{self._repo_api_prefix}/deployments",
+            "variables": f"{self._repo_api_prefix}/actions/variables",
         }
         if operation not in paths:
             raise ValueError("unsupported permission probe operation")

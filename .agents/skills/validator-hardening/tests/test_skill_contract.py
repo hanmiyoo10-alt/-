@@ -377,7 +377,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         for required in (
             "exact run/check/job identity",
             "exact tested source/head SHA and conclusion",
-            "immutable or stable result locator",
+            "immutable result locator or a content digest that binds the exact result bytes",
             "tested identity matches the reviewed source identity",
             "stale, mismatched, or unattributable remote validation evidence remains `UNKNOWN`",
             "external validation evidence used, if any",
@@ -519,6 +519,45 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         for required in (
             "all contract-prohibited effect-attempt telemetry whether denied or successful",
             "dimension G execution evidence preserves all prohibited-effect attempt telemetry",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_all_reviewed_inputs_bind_structural_metadata_and_revalidate_it(self):
+        for required in (
+            "record an identity that binds the actual bytes plus every owner-relevant structural property",
+            "path/name, file mode/executable bit, symlink versus regular-file identity, Git object/tree-entry type and mode, directory/tree layout",
+            "contributing-input identity set must include every source",
+            "revalidate the exact identity of every relied-upon input",
+            "both bytes and every owner-relevant structural property recorded for Git-backed inputs",
+            "every reviewed/executed contributing input binds owner-relevant structural metadata",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_execution_requires_every_owner_relevant_resource_limit(self):
+        for required in (
+            "every owner-relevant CPU-time, memory, process/thread-count, filesystem-growth, output, recursion/depth",
+            "If any owner-relevant required limit cannot be enforced",
+            "treat host-resource containment as unavailable",
+            "keep target-dependent execution static-only",
+            "complete owner-relevant effect/resource-containment identity",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_remote_validation_requires_immutable_locator_or_content_digest(self):
+        for required in (
+            "immutable result locator or a content digest that binds the exact result bytes",
+            "a merely stable, mutable, rerunnable, or expiring URL/page is insufficient",
+        ):
+            self.assertIn(required, self.text)
+        self.assertNotIn("immutable or stable result locator", self.text)
+
+    def test_owner_tests_require_state_isolation_or_reset_proof(self):
+        for required in (
+            "per-evidence-bearing-test state-isolation proof",
+            "fresh process/workspace per relevant test",
+            "owner-defined shared-state capture/reset/revalidation plus order-independence evidence",
+            "required isolation/reset proof",
+            "required containment and state-isolation provenance",
         ):
             self.assertIn(required, self.text)
 

@@ -365,7 +365,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_exercised_case_receipt_binds_expected_and_observed_outcome(self):
         for required in (
-            "each binding exact input identity and exact invocation identity to expected owner-defined behavior",
+            "each binding exact byte+structural input identity and exact invocation identity to expected owner-defined behavior",
             "observed status/result",
             "reason code",
             "exit result when applicable",
@@ -405,7 +405,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "exact valid boundary value as a positive control",
             "record that failure as a `PROVEN_GAP`",
             "may still reach `HARDENING_REVIEW_COMPLETE` once all applicable dimensions",
-            "required owner-defined positive controls are represented and proven",
+            "required owner-defined positive controls are represented in the receipt and proven",
         ):
             self.assertIn(required, self.text)
 

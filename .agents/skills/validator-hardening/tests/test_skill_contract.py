@@ -687,6 +687,29 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, self.text)
 
+    def test_input_digests_are_algorithm_qualified_and_full(self):
+        for required in (
+            "algorithm-qualified full cryptographic digest over explicitly identified input bytes",
+            "sha256:<full-hex>",
+            "A bare, truncated, algorithm-ambiguous, or unspecified-bytes digest is insufficient",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_static_analysis_requires_claim_relevant_coverage_proof(self):
+        for required in (
+            "owner-defined positive coverage/execution marker or bounded count tied to the relevant rule and analyzed input",
+            "proving claim-relevant analysis actually ran",
+            "positive claim-relevant coverage proof",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_executable_static_analyzers_use_execution_safeguards(self):
+        for required in (
+            "any executable analyzer must also satisfy the same current authorization, effect/resource containment, isolated-copy/no-write, environment identity, and invocation-bound provenance safeguards",
+            "every executable analyzer satisfies the same authorization/effect/resource/isolated-copy safeguards as other executable review evidence",
+        ):
+            self.assertIn(required, self.text)
+
     def test_no_runtime_helper_is_required(self):
         self.assertFalse((SKILL_ROOT / "scripts").exists())
 

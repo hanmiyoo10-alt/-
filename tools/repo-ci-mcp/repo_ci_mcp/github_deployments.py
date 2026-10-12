@@ -112,6 +112,7 @@ def _project_status(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": _positive_integer(item.get("id")),
         "state": state,
+        "environment": _environment_name(item.get("environment")),
         "created_at": _text(item.get("created_at")),
         "updated_at": _text(item.get("updated_at")),
     }

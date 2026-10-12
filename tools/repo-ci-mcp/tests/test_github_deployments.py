@@ -89,6 +89,19 @@ class GithubDeploymentsTests(unittest.TestCase):
         self.assertNotIn("raw arbitrary", rendered)
         self.assertFalse(result["production_authority"])
 
+    def test_deployment_ref_accepts_bounded_value_over_200_characters(self):
+        reader = Mock()
+        ref = "r" * 512
+        reader.list_deployments.return_value = [{
+            "id": 78,
+            "ref": ref,
+            "sha": "a" * 40,
+            "environment": "production",
+        }]
+        result = repo_deployments(reader, 1)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["deployments"][0]["ref"], ref)
+
     def test_empty_deployment_list_is_known_zero(self):
         reader = Mock()
         reader.list_deployments.return_value = []

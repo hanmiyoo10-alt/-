@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "product": "SimCore Risu",
+  "product_root": "products/simcore-risu",
+  "lifecycle": "research-product-root",
+  "status": "DESIGN_ONLY",
+  "manifest_authority": "products/simcore-risu/product.json",
+  "current_state": "products/simcore-risu/CURRENT.md",
+  "roadmap": "products/simcore-risu/ROADMAP.md",
+  "boundaries": "products/simcore-risu/BOUNDARIES.md",
+  "guideline": "docs/SIMCORE-RISU_GUIDELINES.md",
+  "candidate_upstream": "PocketRisu/PocketRisu",
+  "candidate_owner_trunk": "hanmiyoo10-alt/PocketRisu",
+  "architecture_issue": 2961,
+  "host_strategy_issue": 3600,
+  "bootstrap_issue": 3601,
+  "current_priority": "HOST_BASELINE_AUDIT",
+  "validation_status": "DESIGN_ONLY",
+  "release_authority": null,
+  "production_authority": null
+}

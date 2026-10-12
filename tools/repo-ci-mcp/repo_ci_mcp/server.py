@@ -8,6 +8,12 @@ from .branch_protection import repo_branch_protection as build_repo_branch_prote
 from .canonical_main_status import canonical_main_status as build_canonical_main_status
 from .exact_sha import repo_ci_exact_sha as build_repo_ci_exact_sha
 from .github_reader import GitHubReader
+from .github_observability import (
+    repo_permission_probe as build_repo_permission_probe,
+    repo_rulesets as build_repo_rulesets,
+    repo_secret_metadata as build_repo_secret_metadata,
+    repo_security_alerts as build_repo_security_alerts,
+)
 from .notebook import repo_notebook_read as build_repo_notebook_read
 from .overview import repo_ci_overview as build_repo_ci_overview
 from .summary import repo_ci_summary as build_repo_ci_summary
@@ -65,6 +71,30 @@ def repo_notebook_read(
 def repo_branch_protection(branch: str = "main") -> dict[str, Any]:
     """Read bounded branch-protection detail while preserving permission-blocked partial evidence."""
     return build_repo_branch_protection(GitHubReader(), branch=branch)
+
+
+@mcp.tool()
+def repo_rulesets() -> dict[str, Any]:
+    """Read a bounded projection of repository rulesets without admin mutation authority."""
+    return build_repo_rulesets(GitHubReader())
+
+
+@mcp.tool()
+def repo_permission_probe(operation: str = "repository") -> dict[str, Any]:
+    """Observe GitHub accepted-permissions header for one allowlisted read operation."""
+    return build_repo_permission_probe(GitHubReader(), operation)
+
+
+@mcp.tool()
+def repo_secret_metadata() -> dict[str, Any]:
+    """List repository Actions secret names/timestamps only; secret values are never exposed."""
+    return build_repo_secret_metadata(GitHubReader())
+
+
+@mcp.tool()
+def repo_security_alerts(kind: str, limit: int = 20) -> dict[str, Any]:
+    """Read a bounded projection of one allowlisted repository security-alert family."""
+    return build_repo_security_alerts(GitHubReader(), kind, limit)
 
 
 @mcp.tool()

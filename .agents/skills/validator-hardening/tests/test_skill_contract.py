@@ -333,7 +333,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "A descriptive case name alone is insufficient",
             "generation seed/configuration needed for replay",
             "reduced/minimized example identity or bounded example value/locator",
-            "cases actually exercised, each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not), exact invocation identity, and the authorization identity/scope covering that invocation to expected owner-defined behavior, observed status/result, owner-defined reason code when applicable or NOT_APPLICABLE when the owner defines none, exit result when applicable, and either an immutable result locator or an algorithm-qualified full cryptographic digest over explicitly identified result bytes; a mutable result locator, truncated/unqualified digest, or digest over unspecified bytes is insufficient",
+            "cases actually exercised, each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not), exact invocation identity, and the authorization identity/scope covering that invocation to expected owner-defined behavior, observed status/result, owner-defined reason code when applicable or NOT_APPLICABLE when the owner defines none, exit result when applicable, and exact owner-relevant result identity",
             "generated-case replay provenance when applicable",
         ):
             self.assertIn(required, self.text)
@@ -376,7 +376,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
     def test_external_validation_requires_immutable_provenance(self):
         for required in (
             "exact run/check/job identity",
-            "exact tested source/head SHA and conclusion",
+            "record the exact tested source/head SHA, the identified relevant check/step's raw outcome/conclusion and bounded result, and the enclosing run/job conclusion separately",
             "immutable result locator or an algorithm-qualified full cryptographic digest over explicitly identified result bytes",
             "tested identity matches the reviewed source identity",
             "stale, mismatched, unattributable, or execution-unproven remote validation evidence remains `UNKNOWN`",
@@ -416,7 +416,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "owner-defined positive execution marker or bounded collection/execution count proving the intended tests actually ran",
             "bounded passed/failed/skipped/error counts when available",
             "immutable result locator or an algorithm-qualified full cryptographic digest over explicitly identified result bytes",
-            "target-executing owner tests additionally bind the authorization identity/scope covering that exact command, the effect/resource-containment identity",
+            "target-executing owner tests additionally bind the stronger target-execution effect/resource-containment identity",
         ):
             self.assertIn(required, self.text)
 
@@ -563,7 +563,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "fresh process/workspace per relevant test",
             "owner-defined shared-state capture/reset/revalidation plus order-independence evidence",
             "required isolation/reset proof",
-            "required containment/state-isolation provenance",
+            "target-executing commands additionally preserve required target containment/state-isolation provenance",
         ):
             self.assertIn(required, self.text)
 
@@ -797,7 +797,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "the identified relevant check/step's raw outcome/conclusion and bounded result",
             "the enclosing run/job conclusion separately",
             "never substitute the enclosing run/job conclusion",
-            "the relevant check/step's raw outcome/conclusion and bounded result separately from the enclosing run/job conclusion",
+            "raw outcome/conclusion and bounded result separately from the enclosing run/job conclusion",
         ):
             self.assertIn(required, self.text)
 

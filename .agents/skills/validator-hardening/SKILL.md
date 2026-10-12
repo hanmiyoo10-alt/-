@@ -57,9 +57,11 @@ Identify exactly:
 - target-owned result vocabulary;
 - current tests and validation surfaces relevant to that claim.
 
-If current authoritative-looking owner evidence materially disagrees and the owning contracts do not resolve the disagreement, stop with review disposition `CONFLICT` and reason code `REVIEW_OWNER_CONFLICT`. Preserve the conflicting source references; do not collapse disagreement into missing ownership.
+If current authoritative-looking evidence names materially different owning projects/domains and the owning contracts do not resolve which owner identity applies, stop with review disposition `CONFLICT` and reason code `REVIEW_OWNER_CONFLICT`. Preserve the conflicting owner source references; do not collapse owner-identity disagreement into missing ownership.
 
-If the owning project/domain is genuinely unavailable after checking for conflict, stop with review disposition `UNKNOWN` and reason code `REVIEW_BLOCKED_UNKNOWN_OWNER`. Do not continue by guessing an owner.
+If the owner identity is established but current authoritative owner contracts materially disagree about target semantics, result vocabulary, resource ceilings, or another claim-relevant contract and the owner does not resolve the disagreement, stop with review disposition `CONFLICT` and reason code `REVIEW_CONTRACT_CONFLICT`. Preserve the conflicting contract source references; do not mislabel semantic/contract disagreement as an owner-identity conflict.
+
+If the owning project/domain is genuinely unavailable after checking for owner-identity conflict, stop with review disposition `UNKNOWN` and reason code `REVIEW_BLOCKED_UNKNOWN_OWNER`. Do not continue by guessing an owner.
 
 If the owner is established but the requested semantic claim is missing, ambiguous, or cannot be bounded, stop with review disposition `UNKNOWN` and reason code `REVIEW_BLOCKED_UNKNOWN_CLAIM`. Do not mislabel claim ambiguity as an ownership failure.
 
@@ -73,6 +75,7 @@ Capture the exact reviewed source identity before interpreting results:
 - prefer an immutable snapshot/object-read path that neutralizes replacement-object substitution and does not depend on checkout clean/smudge filter output for source identity;
 - record worktree state as `CLEAN` or `DIRTY`, but never treat `CLEAN` alone as byte identity;
 - for every Git-backed contributing file actually read from a checkout/worktree, record the digest or exact immutable object/byte identity of the actual bytes inspected even when the worktree reports `CLEAN`; this covers filter-normalized or otherwise transformed checkout bytes;
+- the contributing-byte identity set must include every source, imported helper/module, test, fixture, owner-contract file, and other checkout byte input actually relied upon by the review, regardless of CLEAN/DIRTY state;
 - when the worktree is dirty relative to that commit, identify every dirty input that contributes to the review, including target source, imported helpers/modules, tests, fixtures, and owner-contract files actually relied upon;
 - record an immutable digest or bounded diff identity for each such dirty reviewed/executed input, not only for the target file;
 - if dirty contributing inputs cannot be bounded and identified completely, preserve `UNKNOWN` rather than claiming `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`;
@@ -218,6 +221,8 @@ When a separately authorized execution-capable surface exists:
 - execute focused deterministic cases only inside that proven effect/resource containment plus an isolated temporary workspace/copy or an existing owner-provided temporary harness;
 - never edit the repository checkout under review merely to create review cases;
 - preserve the exact source/input identities used by that isolated execution;
+- before attributing executed behavior to the reviewed validator, verify that the executed target plus every executed/imported contributing module/helper identity equals the corresponding reviewed identity, or matches an explicit owner-approved transformation/relation whose provenance is recorded;
+- if an executed target or contributing module/helper cannot be related exactly to the reviewed identity under that rule, preserve `UNKNOWN / REVIEW_EXECUTED_SOURCE_MISMATCH`; do not use that execution to claim `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`;
 - for every exercised adversarial case, record the exact input digest or immutable locator; a descriptive case name alone is insufficient;
 - for generated/property-based cases, also record the generation seed/configuration needed for replay and the exact reduced/minimized example identity or bounded example value/locator when reduction occurs;
 - if an exercised input cannot be reproduced or attributed to an exact identity, keep that execution evidence `UNKNOWN` rather than promoting it to `HARDENING_REVIEW_COMPLETE` or `PROVEN_GAP`;
@@ -246,8 +251,8 @@ For the review itself, use these advisory dispositions:
 
 - `HARDENING_REVIEW_COMPLETE` - all declared applicable dimensions were exercised with sufficient current evidence and no unresolved review gap remains;
 - `PARTIAL` - useful review evidence exists but one or more declared dimensions remain unexercised or insufficiently proven;
-- `UNKNOWN` - the requested review cannot be resolved from current owner/evidence; use bounded reason codes such as `REVIEW_BLOCKED_UNKNOWN_OWNER` for unavailable ownership and `REVIEW_BLOCKED_UNKNOWN_CLAIM` for an unresolved requested claim; owner disagreement is instead `CONFLICT / REVIEW_OWNER_CONFLICT`;
-- `CONFLICT` - current authoritative-looking owner evidence materially disagrees.
+- `UNKNOWN` - the requested review cannot be resolved from current owner/evidence; use bounded reason codes such as `REVIEW_BLOCKED_UNKNOWN_OWNER` for unavailable ownership and `REVIEW_BLOCKED_UNKNOWN_CLAIM` for an unresolved requested claim;
+- `CONFLICT` - current authoritative-looking evidence materially disagrees; use `REVIEW_OWNER_CONFLICT` only for unresolved owner-identity disagreement and `REVIEW_CONTRACT_CONFLICT` for unresolved claim-relevant disagreement inside an established owner contract.
 
 A review disposition does not rewrite the target validator's own result.
 
@@ -272,11 +277,13 @@ requested claim
 owner result vocabulary
 reviewed source identity (exact commit/object/artifact identity)
 worktree state: CLEAN | DIRTY | NOT_APPLICABLE
+all contributing checkout-byte identities actually relied upon, including clean and dirty inputs
 dirty reviewed/executed input identities (digest or bounded diff identity) when applicable
 applicability by dimension A-G
 proposed/not-exercised adversarial cases, with reason each remains unexecuted
-cases actually exercised, each with exact input digest or immutable locator
+cases actually exercised, each binding exact input identity to expected owner-defined behavior, observed status/result, reason code, exit result when applicable, and bounded output/artifact locator
 generated-case replay provenance when applicable: seed/configuration plus reduced/minimized example identity or bounded value/locator
+reviewed-to-executed source identity relation for target and contributing modules/helpers when execution occurred
 owner tests / commands actually used
 execution surface/runtime/toolchain identity for each exercised case, or NOT_APPLICABLE when no execution occurred
 relevant sanitized environment/config identity and effect/resource containment identity for exercised cases

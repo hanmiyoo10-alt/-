@@ -557,7 +557,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "fresh process/workspace per relevant test",
             "owner-defined shared-state capture/reset/revalidation plus order-independence evidence",
             "required isolation/reset proof",
-            "required containment and state-isolation provenance",
+            "required containment/state-isolation provenance",
         ):
             self.assertIn(required, self.text)
 

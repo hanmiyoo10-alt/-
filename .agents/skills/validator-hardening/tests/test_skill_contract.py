@@ -333,7 +333,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "a descriptive case name alone is insufficient",
             "generation seed/configuration needed for replay",
             "reduced/minimized example identity or bounded example value/locator",
-            "cases actually exercised, each binding exact input identity to expected owner-defined behavior, observed status/result, reason code, exit result when applicable, and bounded output/artifact locator",
+            "cases actually exercised, each binding exact input identity and exact invocation identity to expected owner-defined behavior, observed status/result, reason code, exit result when applicable, and bounded output/artifact locator",
             "generated-case replay provenance when applicable",
         ):
             self.assertIn(required, self.text)
@@ -403,7 +403,8 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "at least one representative owner-defined valid positive control",
             "expected successful owner-defined result",
             "exact valid boundary value as a positive control",
-            "do not claim `HARDENING_REVIEW_COMPLETE`",
+            "record that failure as a `PROVEN_GAP`",
+            "may still reach `HARDENING_REVIEW_COMPLETE` once all applicable dimensions",
             "required owner-defined positive controls are represented and proven",
         ):
             self.assertIn(required, self.text)
@@ -434,6 +435,37 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         self.assertIn("structured-data shape validation APPLICABLE", joined)
         self.assertIn("malformed top-level container type", joined)
         self.assertIn("raw JSON text decoding/parser concerns", joined)
+
+    def test_exercised_case_records_exact_invocation_identity(self):
+        for required in (
+            "bind every exercised case to its exact invocation identity",
+            "entrypoint/subcommand/function",
+            "ordered arguments/flags",
+            "stdin versus file/input-channel mapping",
+            "material per-invocation configuration/settings",
+            "each binding exact input identity and exact invocation identity",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_dimension_g_requires_attempt_telemetry_or_static_effect_proof(self):
+        for required in (
+            "containment protects external state but does not prove that prohibited effects were never attempted",
+            "observable sandbox/audit telemetry for attempted denied writes",
+            "Silent containment alone cannot mark dimension G exercised/clean",
+            "denied-effect attempt telemetry or separate static effect proof when dimension G is applicable",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_exercised_cases_isolate_mutable_state_between_cases(self):
+        for required in (
+            "fresh process and clean isolated workspace/copy for each exercised case",
+            "identify every owner-defined shared-state dependency",
+            "capture its pre-case identity/state",
+            "reset or reconstruct it deterministically between cases",
+            "test that the reset succeeded",
+            "per-case state isolation evidence",
+        ):
+            self.assertIn(required, self.text)
 
     def test_no_runtime_helper_is_required(self):
         self.assertFalse((SKILL_ROOT / "scripts").exists())

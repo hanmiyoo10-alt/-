@@ -137,6 +137,26 @@ class GithubObservabilityTests(unittest.TestCase):
         self.assertFalse(result["granted_permissions_inferred"])
         reader.probe_accepted_permissions.assert_called_once_with("code_quality")
 
+    def test_release_permission_operations_are_allowlisted(self):
+        reader = Mock()
+        reader.probe_accepted_permissions.return_value = {
+            "http_status": 200,
+            "accepted_permissions": None,
+        }
+        result = repo_permission_probe(reader, "releases")
+        self.assertEqual(result["status"], "UNAVAILABLE")
+        reader.probe_accepted_permissions.assert_called_once_with("releases")
+
+        reader.reset_mock()
+        reader.probe_accepted_permissions.return_value = {
+            "http_status": 200,
+            "accepted_permissions": "metadata=read",
+        }
+        result = repo_permission_probe(reader, "tags")
+        self.assertEqual(result["status"], "OBSERVED")
+        self.assertFalse(result["granted_permissions_inferred"])
+        reader.probe_accepted_permissions.assert_called_once_with("tags")
+
     def test_invalid_permission_probe_operation_is_not_echoed(self):
         reader = Mock()
         operation = "x" * 5000 + chr(10) + "secret"

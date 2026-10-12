@@ -16,6 +16,8 @@ DEFAULT_REPOSITORY = "hanmiyoo10-alt/-"
 DEFAULT_API = "https://api.github.com"
 DEFAULT_API_VERSION = "2022-11-28"
 CODE_QUALITY_API_VERSION = "2026-03-10"
+DEFAULT_JSON_RESPONSE_BYTES = 2 * 1024 * 1024
+MAX_RELEASE_LIST_BYTES = 64 * 1024 * 1024
 DEFAULT_TIMEOUT_SECONDS = 20.0
 MAX_RULESET_PAGES = 10
 MAX_ENVIRONMENT_PAGES = 10
@@ -179,10 +181,13 @@ class GitHubReader:
         query: dict[str, str | int] | None = None,
         *,
         api_version: str = DEFAULT_API_VERSION,
+        max_bytes: int = DEFAULT_JSON_RESPONSE_BYTES,
     ) -> Any:
+        if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or not 1 <= max_bytes <= MAX_RELEASE_LIST_BYTES:
+            raise ValueError("max_bytes must be a bounded positive integer")
         raw = self._open_bytes(
             self._absolute_url(path, query),
-            limit=2 * 1024 * 1024,
+            limit=max_bytes,
             api_version=api_version,
         )
         try:
@@ -430,6 +435,76 @@ class GitHubReader:
             })
         return findings
 
+    @staticmethod
+    def _release_id(release_id: int) -> int:
+        if isinstance(release_id, bool) or not isinstance(release_id, int) or release_id <= 0:
+            raise ValueError("release_id must be a positive integer")
+        return release_id
+
+    def list_repository_releases(self, *, limit: int) -> list[dict[str, Any]]:
+        safe_limit = self._recent_limit(limit)
+        value = self._get_json_value(
+            f"{self._repo_api_prefix}/releases",
+            {"per_page": safe_limit},
+            max_bytes=MAX_RELEASE_LIST_BYTES,
+        )
+        if not isinstance(value, list) or len(value) > safe_limit:
+            raise GitHubReadError("releases response must be a bounded array")
+        if any(not isinstance(item, dict) for item in value):
+            raise GitHubReadError("release item invalid")
+        return [{
+            "id": item.get("id"),
+            "tag_name": item.get("tag_name"),
+            "target_commitish": item.get("target_commitish"),
+            "name": item.get("name"),
+            "draft": item.get("draft"),
+            "prerelease": item.get("prerelease"),
+            "immutable": item.get("immutable"),
+            "created_at": item.get("created_at"),
+            "published_at": item.get("published_at"),
+        } for item in value]
+
+    def list_repository_tags(self, *, limit: int) -> list[dict[str, Any]]:
+        safe_limit = self._recent_limit(limit)
+        value = self._get_json_value(
+            f"{self._repo_api_prefix}/tags",
+            {"per_page": safe_limit},
+        )
+        if not isinstance(value, list) or len(value) > safe_limit:
+            raise GitHubReadError("tags response must be a bounded array")
+        if any(not isinstance(item, dict) for item in value):
+            raise GitHubReadError("tag item invalid")
+        tags = []
+        for item in value:
+            commit = item.get("commit")
+            if not isinstance(commit, dict):
+                raise GitHubReadError("tag commit metadata invalid")
+            tags.append({"name": item.get("name"), "sha": commit.get("sha")})
+        return tags
+
+    def list_release_assets(self, release_id: int, *, limit: int) -> list[dict[str, Any]]:
+        safe_id = self._release_id(release_id)
+        safe_limit = self._recent_limit(limit)
+        value = self._get_json_value(
+            f"{self._repo_api_prefix}/releases/{safe_id}/assets",
+            {"per_page": safe_limit},
+        )
+        if not isinstance(value, list) or len(value) > safe_limit:
+            raise GitHubReadError("release assets response must be a bounded array")
+        if any(not isinstance(item, dict) for item in value):
+            raise GitHubReadError("release asset item invalid")
+        return [{
+            "id": item.get("id"),
+            "name": item.get("name"),
+            "state": item.get("state"),
+            "content_type": item.get("content_type"),
+            "size": item.get("size"),
+            "digest": item.get("digest"),
+            "download_count": item.get("download_count"),
+            "created_at": item.get("created_at"),
+            "updated_at": item.get("updated_at"),
+        } for item in value]
+
     def probe_accepted_permissions(self, operation: str) -> dict[str, Any]:
         paths = {
             "repository": self._repo_api_prefix,
@@ -443,6 +518,8 @@ class GitHubReader:
             "variables": f"{self._repo_api_prefix}/actions/variables",
             "security_advisories": f"{self._repo_api_prefix}/security-advisories",
             "code_quality": f"{self._repo_api_prefix}/code-quality/findings",
+            "releases": f"{self._repo_api_prefix}/releases",
+            "tags": f"{self._repo_api_prefix}/tags",
         }
         if operation not in paths:
             raise ValueError("unsupported permission probe operation")

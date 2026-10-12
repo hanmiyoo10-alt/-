@@ -112,6 +112,13 @@ Every A-G applicability entry in the final receipt must carry the current owner/
 
 ### 4. Build the adversarial matrix
 
+Build the matrix with owner-defined valid controls as well as adversarial cases.
+
+- For every applicable accepted-input class, include at least one representative owner-defined valid positive control and require its expected successful owner-defined result before a completed hardening review can rely on adversarial outcomes.
+- When an owner-defined size/count/depth/length ceiling is part of the locked claim, include the exact valid boundary value as a positive control and the nearest meaningful invalid boundary case when the contract defines one.
+- On a read-only surface, propose these positive controls explicitly and mark them not exercised. On an execution-capable surface, exercise the positive controls under the same identity/containment/provenance rules as adversarial cases.
+- If required positive-control behavior is unavailable, unexercised where execution is needed, or does not reach the owner-defined successful result, preserve `PARTIAL`, `UNKNOWN`, or a proven owner-defined failure as appropriate; do not claim `HARDENING_REVIEW_COMPLETE`.
+
 Exercise the applicable dimensions with the narrowest deterministic cases that can prove the contract.
 
 #### A. Text, path, and ref inputs
@@ -281,12 +288,12 @@ reviewed source identity (exact commit/object/artifact identity)
 worktree state: CLEAN | DIRTY | NOT_APPLICABLE
 all contributing input identities actually relied upon regardless of storage mechanism, including immutable snapshot/object reads, checkout bytes, mutable non-Git sources, tests, fixtures, helpers/modules, and owner-contract inputs
 dirty reviewed/executed input identities (digest or bounded diff identity) when applicable
-applicability by dimension A-G, with the current owner/contract basis locator for every label; if the basis cannot be established, that dimension remains UNKNOWN
+applicability by dimension A-G, each entry binding its label to the current owner/contract basis locator and, when APPLICABLE, the exact exercised evidence/result that covers that dimension or an explicit unresolved reason; if basis or required evidence mapping is missing, that dimension remains UNKNOWN and cannot support HARDENING_REVIEW_COMPLETE
 proposed/not-exercised adversarial cases, with reason each remains unexecuted
 cases actually exercised, each binding exact input identity to expected owner-defined behavior, observed status/result, reason code, exit result when applicable, and bounded output/artifact locator
 generated-case replay provenance when applicable: seed/configuration plus reduced/minimized example identity or bounded value/locator
 reviewed-to-executed identity relation for every executed contributing input when execution occurred, including target, modules/helpers, tests, fixtures, wrappers, and harnesses
-owner tests / commands actually used
+owner tests / commands actually executed, each with exact test/command identity, exit status or conclusion, bounded collected/passed/failed/skipped/error counts when the runner reports them, and a bounded output/artifact locator
 execution surface/runtime/toolchain identity for each exercised case, or NOT_APPLICABLE when no execution occurred
 relevant sanitized environment/config identity and effect/resource containment identity for exercised cases
 external validation evidence used, if any: exact run/check/job identity, tested source/head SHA, conclusion, attempt when relevant, and immutable result locator
@@ -303,6 +310,6 @@ Keep the receipt bounded. Point to larger logs or artifacts instead of embedding
 
 ## Completion criterion
 
-The skill is complete for one review only when current owner evidence has been read, the reviewed bytes have an exact immutable source identity or have passed the final mutable-input revalidation barrier, worktree dirtiness is explicit, applicability for all seven dimensions is explicit relative to the locked requested claim, exercised cases and unresolved gaps are separated, every exercised case has bounded runtime/toolchain/environment plus effect/resource-containment identity, every external validation result used has immutable run/head/conclusion provenance, uncertainty has not been normalized away, and the final receipt states what it does and does not prove.
+The skill is complete for one review only when current owner evidence has been read, the reviewed bytes have an exact immutable source identity or have passed the final mutable-input revalidation barrier, worktree dirtiness is explicit, applicability for all seven dimensions is explicit relative to the locked requested claim, every APPLICABLE dimension is mapped to its exercised evidence/result or remains explicitly unresolved, required owner-defined positive controls are represented and proven at the required proof surface, exercised cases and unresolved gaps are separated, every executed owner-test command has bounded outcome provenance, every exercised case has bounded runtime/toolchain/environment plus effect/resource-containment identity, every external validation result used has immutable run/head/conclusion provenance, uncertainty has not been normalized away, and the final receipt states what it does and does not prove.
 
 A clean review never certifies every future input or implementation as secure or correct.

@@ -14,6 +14,8 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 MAX_JOB_LOG_BYTES = 8 * 1024 * 1024
 DEFAULT_REPOSITORY = "hanmiyoo10-alt/-"
 DEFAULT_API = "https://api.github.com"
+DEFAULT_API_VERSION = "2022-11-28"
+CODE_QUALITY_API_VERSION = "2026-03-10"
 DEFAULT_TIMEOUT_SECONDS = 20.0
 MAX_RULESET_PAGES = 10
 MAX_ENVIRONMENT_PAGES = 10
@@ -104,11 +106,13 @@ class GitHubReader:
             text = text.replace(self.token, "[REDACTED]")
         return text
 
-    def _request(self, url: str) -> Request:
+    def _request(self, url: str, *, api_version: str = DEFAULT_API_VERSION) -> Request:
+        if api_version not in {DEFAULT_API_VERSION, CODE_QUALITY_API_VERSION}:
+            raise ValueError("unsupported GitHub API version")
         headers = {
             "Accept": "application/vnd.github+json",
             "User-Agent": "repo-ci-mcp/0.1",
-            "X-GitHub-Api-Version": "2022-11-28",
+            "X-GitHub-Api-Version": api_version,
         }
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
@@ -135,8 +139,14 @@ class GitHubReader:
             return None
         return value
 
-    def _open_bytes(self, url: str, *, limit: int) -> bytes:
-        request = self._request(url)
+    def _open_bytes(
+        self,
+        url: str,
+        *,
+        limit: int,
+        api_version: str = DEFAULT_API_VERSION,
+    ) -> bytes:
+        request = self._request(url, api_version=api_version)
         try:
             with self._opener.open(request, timeout=self.timeout_seconds) as response:
                 length = response.headers.get("Content-Length")
@@ -163,8 +173,18 @@ class GitHubReader:
             raise GitHubReadError(f"response exceeds {limit} byte bound")
         return data
 
-    def _get_json_value(self, path: str, query: dict[str, str | int] | None = None) -> Any:
-        raw = self._open_bytes(self._absolute_url(path, query), limit=2 * 1024 * 1024)
+    def _get_json_value(
+        self,
+        path: str,
+        query: dict[str, str | int] | None = None,
+        *,
+        api_version: str = DEFAULT_API_VERSION,
+    ) -> Any:
+        raw = self._open_bytes(
+            self._absolute_url(path, query),
+            limit=2 * 1024 * 1024,
+            api_version=api_version,
+        )
         try:
             return json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -378,6 +398,38 @@ class GitHubReader:
             "withdrawn_at": item.get("withdrawn_at"),
         } for item in value]
 
+    def list_code_quality_findings(self, *, limit: int) -> list[dict[str, Any]]:
+        safe_limit = self._recent_limit(limit)
+        value = self._get_json_value(
+            f"{self._repo_api_prefix}/code-quality/findings",
+            {"per_page": safe_limit, "direction": "desc"},
+            api_version=CODE_QUALITY_API_VERSION,
+        )
+        if not isinstance(value, list) or len(value) > safe_limit:
+            raise GitHubReadError("code quality findings response must be a bounded array")
+        if any(not isinstance(item, dict) for item in value):
+            raise GitHubReadError("code quality finding item invalid")
+        findings = []
+        for item in value:
+            rule = item.get("rule")
+            location = item.get("location")
+            if not isinstance(rule, dict) or not isinstance(location, dict):
+                raise GitHubReadError("code quality finding nested metadata invalid")
+            findings.append({
+                "number": item.get("number"),
+                "state": item.get("state"),
+                "rule_id": rule.get("id"),
+                "severity": rule.get("severity"),
+                "category": rule.get("category"),
+                "path": location.get("path"),
+                "start_line": location.get("start_line"),
+                "start_column": location.get("start_column"),
+                "end_line": location.get("end_line"),
+                "end_column": location.get("end_column"),
+                "created_at": item.get("created_at"),
+            })
+        return findings
+
     def probe_accepted_permissions(self, operation: str) -> dict[str, Any]:
         paths = {
             "repository": self._repo_api_prefix,
@@ -390,11 +442,16 @@ class GitHubReader:
             "deployments": f"{self._repo_api_prefix}/deployments",
             "variables": f"{self._repo_api_prefix}/actions/variables",
             "security_advisories": f"{self._repo_api_prefix}/security-advisories",
+            "code_quality": f"{self._repo_api_prefix}/code-quality/findings",
         }
         if operation not in paths:
             raise ValueError("unsupported permission probe operation")
         query = {"per_page": 1} if operation != "repository" else None
-        request = self._request(self._absolute_url(paths[operation], query))
+        api_version = CODE_QUALITY_API_VERSION if operation == "code_quality" else DEFAULT_API_VERSION
+        request = self._request(
+            self._absolute_url(paths[operation], query),
+            api_version=api_version,
+        )
         try:
             with self._opener.open(request, timeout=self.timeout_seconds) as response:
                 return {

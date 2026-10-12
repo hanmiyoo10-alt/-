@@ -16,6 +16,7 @@ repo_secret_metadata()
 repo_variable_metadata()
 repo_security_alerts(kind, limit=20)
 repo_security_advisories(limit=20)
+repo_code_quality(limit=20)
 repo_environments()
 repo_deployments(limit=20)
 repo_deployment_statuses(deployment_id, limit=20)
@@ -55,6 +56,8 @@ Repository read observability also exposes four fixed GET-only surfaces: ruleset
 
 Repository security advisory observability is a targeted metadata-only drill-down. `repo_security_advisories(limit=20)` returns recently updated advisory identifiers, state/severity, and lifecycle timestamps only. It omits advisory summary/description, vulnerability/package details, credits/collaborator identities, private-fork data, arbitrary URLs, and raw payloads. Non-empty `count` is the number of returned recent rows, not a repository-wide advisory total.
 
+Repository Code Quality observability is a targeted first-page metadata drill-down. `repo_code_quality(limit=20)` uses the Code Quality endpoint's required GitHub API version `2026-03-10` without changing the reader's default `2022-11-28` version for unrelated endpoints. It exposes bounded finding identity/state, rule id/severity/category, repository-relative location, and creation timestamp only. Finding URLs, rule title/description/help, message text/markdown, and raw nested payloads are omitted. Non-empty `count` is the number of returned first-page rows, never a repository-wide total. HTTP 403/404/503 remain `UNKNOWN`; in particular, 404 is not converted into zero findings or inferred feature/permission state.
+
 Repository Actions variable observability is metadata-only. `repo_variable_metadata` returns bounded variable names and created/updated timestamps, proves a complete known-zero inventory when empty, and deliberately discards GitHub's variable `value` field. Variable metadata never becomes configuration, release, production, or runtime authority.
 
 Deployment/environment observability is a separate GitHub control-plane projection. `repo_environments` proves a bounded complete environment inventory or returns `UNKNOWN`; a proven empty repository returns `OK / count=0`. `repo_deployments` and `repo_deployment_statuses` return only explicitly bounded recent records. Deployment payloads, reviewer/actor identities, arbitrary descriptions, and status URLs are omitted. These records never become project release, production, runtime, or deployment authority.
@@ -74,6 +77,8 @@ The same captured #485 body also contributes a bounded triage index for `Active 
 - variable metadata is configuration observability only and grants no configuration/production authority
 - security alert reads are targeted, bounded to 50, and omit raw alert payloads
 - repository security advisory reads are targeted, bounded to 50 recent rows, metadata-only, and excluded from routine repo snapshot
+- Code Quality reads are targeted, bounded to one first page of 1-50 rows, use endpoint-specific API versioning, and are excluded from routine repo snapshot
+- Code Quality finding URLs, rule prose/help, message text/markdown, and raw nested payloads are omitted; 404 remains UNKNOWN rather than known zero
 - advisory descriptions, vulnerability/package details, credits/collaborator identities, private-fork data, arbitrary URLs, and raw payloads are omitted
 - environment/deployment reads are fixed-repository GET-only projections with bounded pagination/limits
 - deployment payloads, actor/reviewer identities, arbitrary descriptions, and status URLs are omitted

@@ -192,8 +192,11 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "every dirty input that contributes to the review",
             "record an immutable digest or bounded diff identity for each such dirty reviewed/executed input",
             "dirty contributing inputs cannot be bounded and identified completely",
+            "contributing-byte identity set must include every source",
+            "regardless of CLEAN/DIRTY state",
             "reviewed source identity (exact commit/object/artifact identity)",
             "worktree state: CLEAN | DIRTY | NOT_APPLICABLE",
+            "all contributing checkout-byte identities actually relied upon, including clean and dirty inputs",
             "dirty reviewed/executed input identities (digest or bounded diff identity) when applicable",
         ):
             self.assertIn(required, self.text)
@@ -211,6 +214,8 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
                 "git-object-adversarial",
                 "narrow-validator-negative",
                 "unknown-owner-negative",
+                "owner-conflict-negative",
+                "contract-conflict-negative",
             }.issubset(ids)
         )
         ast_case = next(case for case in self.evals if case["id"] == "source-ast-adversarial")
@@ -314,16 +319,39 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, self.text)
 
-    def test_owner_conflict_is_not_missing_owner_unknown(self):
+    def test_owner_and_contract_conflicts_have_distinct_provenance(self):
         for required in (
-            "CONFLICT` and reason code `REVIEW_OWNER_CONFLICT",
-            "Preserve the conflicting source references",
-            "owner disagreement is instead `CONFLICT / REVIEW_OWNER_CONFLICT`",
+            "materially different owning projects/domains",
+            "REVIEW_OWNER_CONFLICT",
+            "REVIEW_CONTRACT_CONFLICT",
+            "do not mislabel semantic/contract disagreement as an owner-identity conflict",
+            "use `REVIEW_OWNER_CONFLICT` only for unresolved owner-identity disagreement",
         ):
             self.assertIn(required, self.text)
-        conflict = next(case for case in self.evals if case["id"] == "owner-conflict-negative")
-        self.assertIn("CONFLICT", conflict["expected_output"])
-        self.assertIn("REVIEW_OWNER_CONFLICT", conflict["expected_output"])
+        owner_conflict = next(case for case in self.evals if case["id"] == "owner-conflict-negative")
+        self.assertIn("REVIEW_OWNER_CONFLICT", owner_conflict["expected_output"])
+        contract_conflict = next(case for case in self.evals if case["id"] == "contract-conflict-negative")
+        self.assertIn("REVIEW_CONTRACT_CONFLICT", contract_conflict["expected_output"])
+        self.assertIn("Do not emit REVIEW_OWNER_CONFLICT", contract_conflict["expected_output"])
+
+    def test_executed_source_must_match_reviewed_source(self):
+        for required in (
+            "verify that the executed target plus every executed/imported contributing module/helper identity equals the corresponding reviewed identity",
+            "explicit owner-approved transformation/relation",
+            "REVIEW_EXECUTED_SOURCE_MISMATCH",
+            "reviewed-to-executed source identity relation for target and contributing modules/helpers",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_exercised_case_receipt_binds_expected_and_observed_outcome(self):
+        for required in (
+            "each binding exact input identity to expected owner-defined behavior",
+            "observed status/result",
+            "reason code",
+            "exit result when applicable",
+            "bounded output/artifact locator",
+        ):
+            self.assertIn(required, self.text)
 
     def test_external_validation_requires_immutable_provenance(self):
         for required in (

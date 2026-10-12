@@ -259,6 +259,53 @@ class ReaderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "1..50"):
             reader.list_security_alerts("code_scanning", per_page=51)
 
+    def test_58a_security_advisories_use_fixed_bounded_recent_endpoint(self):
+        reader = GitHubReader(repository="owner/repo")
+        raw = [{
+            "ghsa_id": "GHSA-aaaa-bbbb-cccc",
+            "cve_id": "CVE-2026-0001",
+            "state": "published",
+            "severity": "high",
+            "published_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-02T00:00:00Z",
+            "closed_at": None,
+            "withdrawn_at": None,
+            "summary": "must-not-pass-reader-boundary",
+            "description": "must-not-pass-reader-boundary",
+            "vulnerabilities": [{"package": {"name": "private"}}],
+            "credits": [{"user": {"login": "private"}}],
+            "private_fork": {"full_name": "owner/private-fork"},
+            "html_url": "https://example.invalid/private",
+        }]
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_security_advisories(limit=7)
+        get_value.assert_called_once_with(
+            "/repos/owner/repo/security-advisories",
+            {"per_page": 7, "sort": "updated", "direction": "desc"},
+        )
+        self.assertEqual(result, [{
+            "ghsa_id": "GHSA-aaaa-bbbb-cccc",
+            "cve_id": "CVE-2026-0001",
+            "state": "published",
+            "severity": "high",
+            "published_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-02T00:00:00Z",
+            "closed_at": None,
+            "withdrawn_at": None,
+        }])
+        rendered = repr(result)
+        self.assertNotIn("must-not-pass-reader-boundary", rendered)
+        self.assertNotIn("private-fork", rendered)
+        self.assertNotIn("example.invalid", rendered)
+
+    def test_58b_security_advisories_validate_limit_and_shape(self):
+        reader = GitHubReader(repository="owner/repo")
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_security_advisories(limit=51)
+        with patch.object(GitHubReader, "_get_json_value", return_value=[{"ghsa_id": "x"}] * 3):
+            with self.assertRaisesRegex(GitHubReadError, "bounded array"):
+                reader.list_security_advisories(limit=2)
+
     def test_59_permission_probe_reads_header_without_inferring_grant(self):
         reader = GitHubReader(repository="owner/repo")
         response = unittest.mock.MagicMock()
@@ -293,6 +340,21 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(
             opened.call_args.args[0].full_url,
             "https://api.github.com/repos/owner/repo/actions/variables?per_page=1",
+        )
+
+    def test_60_security_advisories_permission_probe_uses_fixed_endpoint(self):
+        reader = GitHubReader(repository="owner/repo")
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {"X-Accepted-GitHub-Permissions": "security_advisories=read"}
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            result = reader.probe_accepted_permissions("security_advisories")
+        self.assertEqual(result["accepted_permissions"], "security_advisories=read")
+        self.assertEqual(
+            opened.call_args.args[0].full_url,
+            "https://api.github.com/repos/owner/repo/security-advisories?per_page=1",
         )
 
     def test_61_deployment_permission_probes_use_fixed_endpoints(self):

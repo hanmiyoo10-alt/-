@@ -8,6 +8,7 @@ from .branch_protection import repo_branch_protection as build_repo_branch_prote
 from .canonical_main_status import canonical_main_status as build_canonical_main_status
 from .exact_sha import repo_ci_exact_sha as build_repo_ci_exact_sha
 from .github_reader import GitHubReader
+from .github_security_advisories import repo_security_advisories as build_repo_security_advisories
 from .github_variables import repo_variable_metadata as build_repo_variable_metadata
 from .github_deployments import (
     repo_deployment_statuses as build_repo_deployment_statuses,
@@ -107,6 +108,12 @@ def repo_variable_metadata() -> dict[str, Any]:
 def repo_security_alerts(kind: str, limit: int = 20) -> dict[str, Any]:
     """Read a bounded projection of one allowlisted repository security-alert family."""
     return build_repo_security_alerts(GitHubReader(), kind, limit)
+
+
+@mcp.tool()
+def repo_security_advisories(limit: int = 20) -> dict[str, Any]:
+    """Read bounded recently-updated repository security advisory metadata only."""
+    return build_repo_security_advisories(GitHubReader(), limit)
 
 
 @mcp.tool()

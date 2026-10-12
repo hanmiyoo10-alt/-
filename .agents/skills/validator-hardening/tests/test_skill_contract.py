@@ -369,7 +369,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "observed status/result",
             "reason code",
             "exit result when applicable",
-            "bounded output/artifact locator",
+            "output digest or immutable result locator",
         ):
             self.assertIn(required, self.text)
 
@@ -413,9 +413,10 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         for required in (
             "owner tests / commands actually executed",
             "exit status or conclusion",
-            "bounded collected/passed/failed/skipped/error counts",
-            "bounded output/artifact locator",
-            "every executed owner-test command has bounded outcome provenance",
+            "owner-defined positive execution marker or bounded collection/execution count proving the intended tests actually ran",
+            "bounded passed/failed/skipped/error counts when available",
+            "output digest or immutable result locator",
+            "for target-executing owner tests the exact runtime/toolchain plus effect/resource-containment identity",
         ):
             self.assertIn(required, self.text)
 
@@ -465,6 +466,59 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "reset or reconstruct it deterministically between cases",
             "test that the reset succeeded",
             "per-case state isolation evidence",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_exercised_input_identity_includes_structural_metadata(self):
+        for required in (
+            "binds both bytes and every owner-relevant structural property",
+            "A bare content digest is insufficient",
+            "path, filename, file mode/executable bit, symlink/gitlink/tree-entry mode, Git object type, directory/tree structure, container shape",
+            "exact byte+structural input identity",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_execution_requires_current_authorization_provenance(self):
+        for required in (
+            "verify current authorization provenance and exact execution scope",
+            "who/what authorized it",
+            "allowed effect/resource boundary",
+            "absent, expired, ambiguous, or narrower than the intended invocation",
+            "execution authorization provenance/scope for every executable review using runtime evidence",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_proposed_positive_controls_are_preserved_in_receipt(self):
+        for required in (
+            "proposed/not-exercised positive controls",
+            "accepted-input class",
+            "expected owner-defined successful result",
+            "reason it remains unexecuted",
+            "required owner-defined positive controls are represented in the receipt",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_exercised_case_result_evidence_is_immutable(self):
+        for required in (
+            "output digest or immutable result locator",
+            "a mutable result locator alone is insufficient",
+            "exercised-case results have immutable result evidence",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_owner_test_command_proves_tests_ran_and_preserves_containment(self):
+        for required in (
+            "owner-defined positive execution marker or bounded collection/execution count proving the intended tests actually ran",
+            "if no positive execution marker/count exists, that command evidence remains unresolved",
+            "for target-executing owner tests the exact runtime/toolchain plus effect/resource-containment identity",
+            "every executed owner-test command proves the intended tests actually ran",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_dimension_g_receipt_preserves_all_prohibited_effect_attempts(self):
+        for required in (
+            "all contract-prohibited effect-attempt telemetry whether denied or successful",
+            "dimension G execution evidence preserves all prohibited-effect attempt telemetry",
         ):
             self.assertIn(required, self.text)
 

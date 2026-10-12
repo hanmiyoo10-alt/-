@@ -1,6 +1,6 @@
 # CURRENT — 포켓리스 보조 개조
 
-최종 갱신 기준: **2026-09-25**
+최종 갱신 기준: **2026-10-13**
 
 새 채팅이나 작업 재개 시 가장 먼저 읽는 현재 상태 체크포인트.
 
@@ -22,6 +22,22 @@
 - pluginCustomStorage depth-3 incremental hash + selective clone.
 - reconnect watcher 구축 및 실전 `DOWN → UP` 복구 알림 성공.
 - 서버폰 Android 알림 금지.
+
+## PocketRisu v1.14.0 Termux update — LIVE_PROVEN
+
+- official PocketRisu `v1.14.0`을 검증된 fork 배포선에 통합하고 서버폰 live에 배포했다.
+- fork deploy target은 `fe068e038d74f49d0632dac302fbcce75f9020b1`, 서버폰 live overlay HEAD는 `fef7d4b0888c6a9280e50335bcca4ad6c943ca33`이다.
+- 기존 local-only Firefox 3커밋과 의도적 untracked `generic_mock_bridge.cjs`를 보존했다.
+- cutover 직전 source/runtime/data rollback 백업을 만들었고, save 약 6.5G + dist + node_modules를 보존했다.
+- candidate server suite 154/154, v1.14 model-binding 48/48, svelte-check 0 errors, production build PASS.
+- cutover 후 `risuai.db`, `logs.db`, `request-logs.db`, `model-jobs.db` 모두 `quick_check(1)=ok`.
+- controlled restart 후 `/api/health=ready` 재확인.
+- 메인폰 core SSH tunnel에서 새 서버 health가 정상 전달됨을 확인했다.
+- 실제 메인폰 Firefox chat/generation과 completion notification smoke까지 사용자 확인으로 PASS했다.
+- 업데이트 중 별도 기존 문제인 main-phone notify relay/tunnel supervisor 부재를 재관찰했고 one-shot 복구했다. durable owner는 #3513이며 v1.14 서버 회귀로 취급하지 않는다.
+
+다음 한 단계:
+- v1.14 배포는 추가 변경 없이 자연 운용을 관찰한다. notify relay supervisor durability는 #3513, 전화/이어폰 sound 문제는 기존 P0 owner에서 계속 추적한다.
 
 
 ## main-ssh-tunnel supervisor hardening — LIVE_PROVEN

@@ -23,6 +23,15 @@ def _integer(value: object) -> int | None:
     return value
 
 
+def _optional_list_count(value: dict[str, Any], key: str) -> int | None:
+    if key not in value or value[key] is None:
+        return None
+    items = value[key]
+    if not isinstance(items, list) or len(items) > 1000:
+        raise ValueError(f"{key} invalid")
+    return len(items)
+
+
 def repo_rulesets(reader: GitHubReader) -> dict[str, Any]:
     try:
         raw = reader.list_repository_rulesets()
@@ -37,8 +46,8 @@ def repo_rulesets(reader: GitHubReader) -> dict[str, Any]:
                 "source": _text(item.get("source")),
                 "created_at": _text(item.get("created_at")),
                 "updated_at": _text(item.get("updated_at")),
-                "bypass_actor_count": len(item.get("bypass_actors", [])) if isinstance(item.get("bypass_actors", []), list) else None,
-                "rule_count": len(item.get("rules", [])) if isinstance(item.get("rules", []), list) else None,
+                "bypass_actor_count": _optional_list_count(item, "bypass_actors"),
+                "rule_count": _optional_list_count(item, "rules"),
             })
         return {"schema": "repo-rulesets.v1", "ok": True, "status": "OK", "count": len(items), "rulesets": items}
     except (GitHubReadError, ValueError):
@@ -140,14 +149,32 @@ def repo_security_alerts(reader: GitHubReader, kind: str, limit: int = 20) -> di
 
 
 def repo_permission_probe(reader: GitHubReader, operation: str) -> dict[str, Any]:
+    safe_operation = operation if operation in {
+        "repository",
+        "rulesets",
+        "actions_secrets",
+        "code_scanning",
+        "dependabot",
+        "secret_scanning",
+    } else None
+    if safe_operation is None:
+        return {
+            "schema": "repo-permission-probe.v1",
+            "ok": False,
+            "status": "UNKNOWN",
+            "operation": None,
+            "http_status": None,
+            "accepted_permissions": None,
+            "granted_permissions_inferred": False,
+        }
     try:
-        observed = reader.probe_accepted_permissions(operation)
+        observed = reader.probe_accepted_permissions(safe_operation)
         accepted = observed.get("accepted_permissions")
         return {
             "schema": "repo-permission-probe.v1",
             "ok": accepted is not None,
             "status": "OBSERVED" if accepted is not None else "UNAVAILABLE",
-            "operation": operation,
+            "operation": safe_operation,
             "http_status": observed.get("http_status"),
             "accepted_permissions": accepted,
             "granted_permissions_inferred": False,
@@ -157,7 +184,7 @@ def repo_permission_probe(reader: GitHubReader, operation: str) -> dict[str, Any
             "schema": "repo-permission-probe.v1",
             "ok": False,
             "status": "UNKNOWN",
-            "operation": operation,
+            "operation": safe_operation,
             "http_status": None,
             "accepted_permissions": None,
             "granted_permissions_inferred": False,

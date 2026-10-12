@@ -23,7 +23,20 @@ class GithubObservabilityTests(unittest.TestCase):
         result = repo_rulesets(reader)
         self.assertTrue(result["ok"])
         self.assertEqual(result["rulesets"][0]["rule_count"], 1)
+        self.assertEqual(result["rulesets"][0]["bypass_actor_count"], 1)
         self.assertNotIn("rules", result["rulesets"][0])
+
+    def test_rulesets_preserve_omitted_detail_counts_as_unknown(self):
+        reader = Mock()
+        reader.list_repository_rulesets.return_value = [{
+            "id": 8, "name": "summary-only", "target": "branch", "enforcement": "active",
+            "source_type": "Repository", "source": "owner/repo",
+            "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-02T00:00:00Z",
+        }]
+        result = repo_rulesets(reader)
+        self.assertTrue(result["ok"])
+        self.assertIsNone(result["rulesets"][0]["rule_count"])
+        self.assertIsNone(result["rulesets"][0]["bypass_actor_count"])
 
     def test_secret_projection_exposes_metadata_only(self):
         reader = Mock()
@@ -69,6 +82,14 @@ class GithubObservabilityTests(unittest.TestCase):
         result = repo_security_alerts(reader, "advisories", 20)
         self.assertEqual(result["status"], "UNKNOWN")
         self.assertFalse(result["ok"])
+
+    def test_invalid_permission_probe_operation_is_not_echoed(self):
+        reader = Mock()
+        operation = "x" * 5000 + chr(10) + "secret"
+        result = repo_permission_probe(reader, operation)
+        self.assertEqual(result["status"], "UNKNOWN")
+        self.assertIsNone(result["operation"])
+        reader.probe_accepted_permissions.assert_not_called()
 
 
 if __name__ == "__main__":

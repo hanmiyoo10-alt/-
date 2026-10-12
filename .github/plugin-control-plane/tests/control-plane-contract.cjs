@@ -225,11 +225,11 @@ assert.deepEqual(registry.products['local-model-lab'].paths, ['products/local-mo
 assert.equal(registry.products['local-model-lab'].authority.evidence, 'products/local-model-lab/CURRENT.md');
 assert.equal(registry.products['local-model-lab'].authority.manifest, 'products/local-model-lab/product.json');
 assert.deepEqual(classifyPaths(['products/local-model-lab/CURRENT.md'], registry).labels, ['product:local-model-lab']);
-assert.deepEqual(registry.products['simcore-risu'].paths, ['products/simcore-risu/**']);
+assert.deepEqual(registry.products['simcore-risu'].paths, ['products/simcore-risu/**', 'docs/SIMCORE-RISU_GUIDELINES.md']);
 assert.equal(registry.products['simcore-risu'].authority.evidence, 'products/simcore-risu/CURRENT.md');
 assert.equal(registry.products['simcore-risu'].authority.manifest, 'products/simcore-risu/product.json');
 assert.deepEqual(classifyPaths(['products/simcore-risu/CURRENT.md'], registry).labels, ['product:simcore-risu']);
-assert.deepEqual(classifyPaths(['products/simcore-risu/GUIDELINES.md'], registry).labels, ['product:simcore-risu']);
+assert.deepEqual(classifyPaths(['docs/SIMCORE-RISU_GUIDELINES.md'], registry).labels, ['product:simcore-risu']);
 assert.deepEqual(classifyPaths(['docs/LOCAL_MODEL_LAB_GUIDELINES.md'], registry).labels, ['product:local-model-lab']);
 const mclBootstrap = classifyPaths(['products/chatgpt-mobile-coder-lab/device-bootstrap/bootstrap.sh'], registry);
 assert.deepEqual(mclBootstrap.labels, ['scope:research-product']);

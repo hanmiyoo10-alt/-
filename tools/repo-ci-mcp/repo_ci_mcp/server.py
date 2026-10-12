@@ -8,6 +8,7 @@ from .branch_protection import repo_branch_protection as build_repo_branch_prote
 from .canonical_main_status import canonical_main_status as build_canonical_main_status
 from .exact_sha import repo_ci_exact_sha as build_repo_ci_exact_sha
 from .github_reader import GitHubReader
+from .github_variables import repo_variable_metadata as build_repo_variable_metadata
 from .github_deployments import (
     repo_deployment_statuses as build_repo_deployment_statuses,
     repo_deployments as build_repo_deployments,
@@ -94,6 +95,12 @@ def repo_permission_probe(operation: str = "repository") -> dict[str, Any]:
 def repo_secret_metadata() -> dict[str, Any]:
     """List repository Actions secret names/timestamps only; secret values are never exposed."""
     return build_repo_secret_metadata(GitHubReader())
+
+
+@mcp.tool()
+def repo_variable_metadata() -> dict[str, Any]:
+    """List repository Actions variable names/timestamps only; variable values are never exposed."""
+    return build_repo_variable_metadata(GitHubReader())
 
 
 @mcp.tool()

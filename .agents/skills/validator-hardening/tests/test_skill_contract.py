@@ -188,14 +188,14 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
     def test_review_receipt_requires_exact_source_identity(self):
         for required in (
             "exact commit object ID",
-            "worktree state as `CLEAN` or `DIRTY`",
+            "record worktree state as `CLEAN`, `DIRTY`, or `UNKNOWN`",
             "every dirty input that contributes to the review",
             "record an immutable digest or bounded diff identity for each such dirty reviewed/executed input",
             "dirty contributing inputs cannot be bounded and identified completely",
             "contributing-input identity set must include every source",
             "regardless of CLEAN/DIRTY state",
             "reviewed source identity (exact commit/object/artifact identity)",
-            "worktree state: CLEAN | DIRTY | NOT_APPLICABLE",
+            "worktree state: CLEAN | DIRTY | UNKNOWN | NOT_APPLICABLE",
             "all contributing input identities actually relied upon regardless of storage mechanism",
             "dirty reviewed/executed input identities (digest or bounded diff identity) when applicable",
         ):
@@ -333,7 +333,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "A descriptive case name alone is insufficient",
             "generation seed/configuration needed for replay",
             "reduced/minimized example identity or bounded example value/locator",
-            "cases actually exercised, each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not) and exact invocation identity to expected owner-defined behavior, observed status/result, owner-defined reason code when applicable or NOT_APPLICABLE when the owner defines none, exit result when applicable, and an output digest or immutable result locator; a mutable result locator alone is insufficient",
+            "cases actually exercised, each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not), exact invocation identity, and the authorization identity/scope covering that invocation to expected owner-defined behavior, observed status/result, owner-defined reason code when applicable or NOT_APPLICABLE when the owner defines none, exit result when applicable, and either an immutable result locator or an algorithm-qualified full cryptographic digest over explicitly identified result bytes; a mutable result locator, truncated/unqualified digest, or digest over unspecified bytes is insufficient",
             "generated-case replay provenance when applicable",
         ):
             self.assertIn(required, self.text)
@@ -365,11 +365,11 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_exercised_case_receipt_binds_expected_and_observed_outcome(self):
         for required in (
-            "each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not) and exact invocation identity to expected owner-defined behavior",
+            "each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not), exact invocation identity, and the authorization identity/scope covering that invocation to expected owner-defined behavior",
             "observed status/result",
             "owner-defined reason code when applicable or NOT_APPLICABLE when the owner defines none",
             "exit result when applicable",
-            "output digest or immutable result locator",
+            "immutable result locator or an algorithm-qualified full cryptographic digest over explicitly identified result bytes",
         ):
             self.assertIn(required, self.text)
 
@@ -377,9 +377,9 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         for required in (
             "exact run/check/job identity",
             "exact tested source/head SHA and conclusion",
-            "immutable result locator or a content digest that binds the exact result bytes",
+            "immutable result locator or an algorithm-qualified full cryptographic digest over explicitly identified result bytes",
             "tested identity matches the reviewed source identity",
-            "stale, mismatched, or unattributable remote validation evidence remains `UNKNOWN`",
+            "stale, mismatched, unattributable, or execution-unproven remote validation evidence remains `UNKNOWN`",
             "external validation evidence used, if any",
         ):
             self.assertIn(required, self.text)
@@ -415,8 +415,8 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "exit status or conclusion",
             "owner-defined positive execution marker or bounded collection/execution count proving the intended tests actually ran",
             "bounded passed/failed/skipped/error counts when available",
-            "output digest or immutable result locator",
-            "for target-executing owner tests the exact runtime/toolchain plus effect/resource-containment identity",
+            "immutable result locator or an algorithm-qualified full cryptographic digest over explicitly identified result bytes",
+            "target-executing owner tests additionally bind the authorization identity/scope covering that exact command, the effect/resource-containment identity",
         ):
             self.assertIn(required, self.text)
 
@@ -444,7 +444,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "ordered arguments/flags",
             "stdin versus file/input-channel mapping",
             "material per-invocation configuration/settings",
-            "each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not) and exact invocation identity",
+            "each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not), exact invocation identity, and the authorization identity/scope covering that invocation",
         ):
             self.assertIn(required, self.text)
 
@@ -484,7 +484,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "who/what authorized it",
             "allowed effect/resource boundary",
             "absent, expired, ambiguous, or narrower than the intended invocation",
-            "execution authorization provenance/scope for every executable review using runtime evidence",
+            "invocation-to-authorization mapping for every executed case and every target-executing owner-test command",
         ):
             self.assertIn(required, self.text)
 
@@ -500,18 +500,18 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_exercised_case_result_evidence_is_immutable(self):
         for required in (
-            "output digest or immutable result locator",
-            "a mutable result locator alone is insufficient",
-            "exercised-case results have immutable result evidence",
+            "immutable result locator or an algorithm-qualified full cryptographic digest over explicitly identified result bytes",
+            "a mutable result locator, truncated/unqualified digest, or digest over unspecified bytes is insufficient",
+            "exercised-case results have immutable algorithm-qualified result evidence",
         ):
             self.assertIn(required, self.text)
 
     def test_owner_test_command_proves_tests_ran_and_preserves_containment(self):
         for required in (
             "owner-defined positive execution marker or bounded collection/execution count proving the intended tests actually ran",
-            "if material environment identity, positive execution marker/count, or required isolation/reset proof is missing, that command evidence remains unresolved",
-            "for target-executing owner tests the exact runtime/toolchain plus effect/resource-containment identity",
-            "every executed owner-test command proves the intended tests actually ran",
+            "if runtime/toolchain identity, material environment identity, positive execution marker/count, required target-execution authorization, or required isolation/reset proof is missing, that command evidence remains unresolved",
+            "target-executing owner tests additionally bind the authorization identity/scope covering that exact command, the effect/resource-containment identity",
+            "every evidence-bearing owner command proves the intended checks actually ran",
         ):
             self.assertIn(required, self.text)
 
@@ -545,8 +545,8 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_remote_validation_requires_immutable_locator_or_content_digest(self):
         for required in (
-            "immutable result locator or a content digest that binds the exact result bytes",
-            "a merely stable, mutable, rerunnable, or expiring URL/page is insufficient",
+            "immutable result locator or an algorithm-qualified full cryptographic digest over explicitly identified result bytes",
+            "A merely stable, mutable, rerunnable, expiring URL/page",
         ):
             self.assertIn(required, self.text)
         self.assertNotIn("immutable or stable result locator", self.text)
@@ -557,7 +557,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "fresh process/workspace per relevant test",
             "owner-defined shared-state capture/reset/revalidation plus order-independence evidence",
             "required isolation/reset proof",
-            "required containment/state-isolation provenance",
+            "required authorization/containment/state-isolation provenance",
         ):
             self.assertIn(required, self.text)
 
@@ -595,7 +595,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_remote_validation_receipt_allows_immutable_locator_or_exact_digest(self):
         self.assertIn(
-            "either an immutable result locator or an exact-result content digest that binds the result bytes",
+            "either an immutable result locator or an algorithm-qualified full cryptographic digest over explicitly identified result bytes",
             self.text,
         )
 
@@ -628,6 +628,62 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "bind the exact owner-relevant type plus value/shape/structure",
             "without inventing a JSON/pickle/repr encoding the target never observed",
             "byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_unknown_worktree_state_is_fail_closed(self):
+        for required in (
+            "record worktree state as `CLEAN`, `DIRTY`, or `UNKNOWN`",
+            "use `NOT_APPLICABLE` only when no worktree state is relevant",
+            "route the review to `PARTIAL` or `UNKNOWN`",
+            "worktree state: CLEAN | DIRTY | UNKNOWN | NOT_APPLICABLE",
+            "UNKNOWN is unresolved and cannot support HARDENING_REVIEW_COMPLETE",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_authorization_is_bound_to_each_execution(self):
+        for required in (
+            "preserve authorization provenance and scope per executed invocation",
+            "every exercised case and every target-executing owner-test entry must bind an authorization identity/scope",
+            "explicit invocation-to-authorization mapping",
+            "A review-level authorization record alone is insufficient",
+            "invocation-to-authorization mapping for every executed case and every target-executing owner-test command",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_every_evidence_bearing_owner_command_has_runtime_identity(self):
+        for required in (
+            "each with exact test/command identity, exact runtime/toolchain identity for that evidence-bearing command",
+            "every evidence-bearing owner command proves the intended checks actually ran and has exact runtime/toolchain",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_static_analysis_preserves_equivalent_provenance(self):
+        for required in (
+            "evidence-bearing static analysis, if any",
+            "exact analyzer/tool identity and version",
+            "exact invocation/configuration",
+            "exact analyzed input identity",
+            "algorithm-qualified full cryptographic digest over explicitly identified analyzer-output bytes",
+            "every evidence-bearing static analysis has equivalent analyzer/toolchain/invocation/input/immutable-result provenance",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_remote_validation_proves_relevant_check_executed(self):
+        for required in (
+            "exact relevant check/step identity for the locked claim",
+            "owner-defined positive execution marker or bounded collection/execution count",
+            "successful job with the relevant step skipped, no tests collected, or a no-op wrapper cannot close an APPLICABLE dimension",
+            "every external validation result proves the exact relevant check/step actually ran",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_result_digests_are_algorithm_qualified_and_full(self):
+        for required in (
+            "algorithm-qualified full cryptographic digest over explicitly identified result bytes",
+            "sha256:<full-hex>",
+            "record the canonical encoding/serialization used",
+            "truncated digest, unqualified digest value, or digest over unspecified bytes is insufficient",
         ):
             self.assertIn(required, self.text)
 

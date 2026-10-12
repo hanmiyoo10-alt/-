@@ -9,6 +9,7 @@ from repo_ci_mcp.github_reader import GitHubReadError
 SHA = "a" * 40
 BEFORE = "b" * 40
 BLOB = "c" * 40
+WORKFLOW_REF = "d" * 40
 WORKFLOW = ".github/workflows/product-simcore-candidate-materialize.yml"
 
 
@@ -93,6 +94,34 @@ class ExactShaTests(unittest.TestCase):
         result = repo_ci_exact_sha(value, SHA, WORKFLOW, event="push", ref="main")
         self.assertEqual(result["disposition"], "UNKNOWN")
         self.assertEqual(result["reason_codes"], ["TRANSITION_IDENTITY_REQUIRED"])
+
+    def test_workflow_ref_is_distinct_from_inventory_and_transition_head(self):
+        value = reader()
+        value.get_repository_file.return_value = workflow_source(
+            "  pull_request:\n    paths: [docs/**]\n"
+        )
+        value.compare_changed_paths.return_value = (["src/app.py"], True)
+        result = repo_ci_exact_sha(
+            value, SHA, WORKFLOW, event="pull_request", ref="main",
+            before_sha=BEFORE, workflow_ref=WORKFLOW_REF,
+        )
+        self.assertEqual(result["disposition"], "EXPECTED_NO_RUN_PATH_FILTER")
+        self.assertEqual(result["evidence"]["workflow_ref"], WORKFLOW_REF)
+        value.list_runs_exact_sha.assert_called_once_with(SHA)
+        value.get_repository_file.assert_called_once_with(
+            WORKFLOW, WORKFLOW_REF, max_bytes=128 * 1024,
+        )
+        value.compare_changed_paths.assert_called_once_with(BEFORE, SHA)
+
+    def test_invalid_workflow_ref_preserves_unknown(self):
+        value = reader()
+        result = repo_ci_exact_sha(
+            value, SHA, WORKFLOW, event="pull_request", ref="main",
+            before_sha=BEFORE, workflow_ref="not-a-sha",
+        )
+        self.assertEqual(result["disposition"], "UNKNOWN")
+        self.assertEqual(result["reason_codes"], ["WORKFLOW_REF_INVALID"])
+        value.get_repository_file.assert_not_called()
 
     def test_permission_block_is_not_missing(self):
         value = reader()

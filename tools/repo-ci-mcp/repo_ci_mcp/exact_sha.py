@@ -209,6 +209,7 @@ def _decode_workflow(source: dict[str, Any]) -> str:
 def repo_ci_exact_sha(
     reader: GitHubReader, sha: str, workflow: str | None = None,
     event: str | None = None, ref: str | None = None, before_sha: str | None = None,
+    workflow_ref: str | None = None,
 ) -> dict[str, Any]:
     out = _base(reader, sha, workflow)
     exact_sha = _valid_sha(sha)
@@ -247,8 +248,12 @@ def repo_ci_exact_sha(
         return _finish(out, "RAN")
     if event is None:
         return _finish(out, "UNKNOWN", _reason("EVENT_REQUIRED_FOR_ABSENCE"))
+    exact_workflow_ref = exact_sha if workflow_ref is None else _valid_sha(workflow_ref)
+    if exact_workflow_ref is None:
+        return _finish(out, "UNKNOWN", _reason("WORKFLOW_REF_INVALID"))
+    out["evidence"]["workflow_ref"] = exact_workflow_ref
     try:
-        source = reader.get_repository_file(workflow_path, exact_sha, max_bytes=MAX_WORKFLOW_BYTES)
+        source = reader.get_repository_file(workflow_path, exact_workflow_ref, max_bytes=MAX_WORKFLOW_BYTES)
         triggers = _parse_triggers(_decode_workflow(source))
     except GitHubReadError as exc:
         if exc.status_code == 403:

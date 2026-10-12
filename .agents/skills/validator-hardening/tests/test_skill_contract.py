@@ -314,7 +314,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "a descriptive case name alone is insufficient",
             "generation seed/configuration needed for replay",
             "reduced/minimized example identity or bounded example value/locator",
-            "cases actually exercised, each with exact input digest or immutable locator",
+            "cases actually exercised, each binding exact input identity to expected owner-defined behavior, observed status/result, reason code, exit result when applicable, and bounded output/artifact locator",
             "generated-case replay provenance when applicable",
         ):
             self.assertIn(required, self.text)

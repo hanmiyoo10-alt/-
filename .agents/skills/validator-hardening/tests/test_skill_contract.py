@@ -498,20 +498,26 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, self.text)
 
-    def test_exercised_case_result_evidence_is_immutable(self):
+    def test_exercised_case_result_identity_supports_byte_and_nonbyte_contracts(self):
         for required in (
+            "When result bytes are part of the target's result contract",
             "immutable result locator or an algorithm-qualified full cryptographic digest over explicitly identified result bytes",
-            "a mutable result locator, truncated/unqualified digest, or digest over unspecified bytes is insufficient",
-            "exercised-case results have immutable algorithm-qualified result evidence",
+            "When the target returns an in-memory value/object and bytes are not part of its result contract",
+            "exact owner-relevant result type plus value/shape/structure",
+            "without inventing a JSON/pickle/repr encoding the target never produced",
+            "exact owner-relevant result identity",
+            "when bytes are not part of the result contract",
         ):
             self.assertIn(required, self.text)
 
     def test_owner_test_command_proves_tests_ran_and_preserves_containment(self):
         for required in (
             "owner-defined positive execution marker or bounded collection/execution count proving the intended tests actually ran",
-            "if authorization identity/scope, runtime/toolchain identity, material environment identity, positive execution marker/count, required target-execution containment, or required isolation/reset proof is missing, that command evidence remains unresolved",
-            "target-executing owner tests additionally bind the authorization identity/scope covering that exact command, the effect/resource-containment identity",
+            "command effect/resource-boundary identity",
+            "isolated-copy/no-write identity",
+            "target-executing owner tests additionally bind the stronger target-execution effect/resource-containment identity",
             "every evidence-bearing owner command is mapped to current invocation-scoped authorization, proves the intended checks actually ran",
+            "target-executing commands additionally preserve required target containment/state-isolation provenance",
         ):
             self.assertIn(required, self.text)
 
@@ -673,7 +679,10 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
         for required in (
             "exact relevant check/step identity for the locked claim",
             "owner-defined positive execution marker or bounded collection/execution count",
-            "successful job with the relevant step skipped, no tests collected, or a no-op wrapper cannot close an APPLICABLE dimension",
+            "raw outcome/conclusion and bounded passed/failed/skipped/error result",
+            "successful enclosing run/job with the relevant step skipped, soft-failed, normalized by a wrapper",
+            "never substitute the enclosing run/job conclusion for the relevant check/step's actual outcome",
+            "the relevant check/step's raw outcome/conclusion and bounded passed/failed/skipped/error result",
             "every external validation result proves the exact relevant check/step actually ran",
         ):
             self.assertIn(required, self.text)
@@ -771,6 +780,24 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "bind that finding to the exact violated owner-contract clause/basis plus the immutable observation, case, and result evidence identities",
             "PROVEN_GAP findings, if any, each binding the exact violated owner-contract clause/basis",
             "every `PROVEN_GAP` binds the exact violated owner-contract clause/basis to immutable proving evidence identities",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_non_target_owner_commands_preserve_boundary_and_isolation_identity(self):
+        for required in (
+            "the effect/resource-boundary identity used for that command",
+            "the isolated copy/workspace identity or proven no-write configuration used for that command",
+            "command effect/resource-boundary identity, isolated-copy/no-write identity",
+            "the command's required effect/resource-boundary plus isolated-copy/no-write provenance",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_remote_step_outcome_is_distinct_from_enclosing_job_conclusion(self):
+        for required in (
+            "the identified relevant check/step's raw outcome/conclusion and bounded result",
+            "the enclosing run/job conclusion separately",
+            "never substitute the enclosing run/job conclusion",
+            "the relevant check/step's raw outcome/conclusion and bounded result separately from the enclosing run/job conclusion",
         ):
             self.assertIn(required, self.text)
 

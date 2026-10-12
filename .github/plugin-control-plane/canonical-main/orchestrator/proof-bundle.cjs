@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const {composeProofBundle} = require('../proof-bundle.cjs');
+const {pluginWorkflowEvidence} = require('./pr-workflow-applicability.cjs');
 const {readGitHubCliJson} = require('../infra/github-cli-read.cjs');
 
 const DEFAULT_ATTEMPTS = 30;
@@ -60,6 +61,8 @@ function associatedMergedPr(repo, targetSha, readFailures = null) {
   return {
     number: Number(candidate.number),
     headSha: String(candidate.head?.sha || ''),
+    baseSha: String(candidate.base?.sha || ''),
+    baseRef: String(candidate.base?.ref || ''),
     mergeSha: String(candidate.merge_commit_sha || ''),
   };
 }
@@ -117,7 +120,7 @@ function attachReadFailures(bundle, readFailures) {
 function collectOnce(repo, targetSha) {
   const readFailures = [];
   const pr = associatedMergedPr(repo, targetSha, readFailures) || {};
-  const plugin = pr.headSha ? workflowEvidence(repo, 'plugin-control-plane-ci.yml', pr.headSha, 'pull_request', false, readFailures) : null;
+  const plugin = pr.headSha ? pluginWorkflowEvidence(repo, pr, readFailures, workflowEvidence) : {};
   const simcoreHead = pr.headSha ? workflowEvidence(repo, 'simcore-ci.yml', pr.headSha, 'pull_request', true, readFailures) : null;
   const simcoreMain = workflowEvidence(repo, 'simcore-ci.yml', targetSha, 'push', true, readFailures);
   const opsIssue = ghJson([`repos/${repo}/issues/485`], readFailures) || {};
@@ -131,7 +134,7 @@ function collectOnce(repo, targetSha) {
   return attachReadFailures(composeProofBundle({
     targetSha,
     pr,
-    prHead: {plugin: plugin || {}, simcore: simcoreHead || {}},
+    prHead: {plugin, simcore: simcoreHead || {}},
     mergedMain: simcoreMain || {},
     ops,
     protection,

@@ -15,6 +15,7 @@ repo_permission_probe(operation="repository")
 repo_secret_metadata()
 repo_variable_metadata()
 repo_security_alerts(kind, limit=20)
+repo_security_advisories(limit=20)
 repo_environments()
 repo_deployments(limit=20)
 repo_deployment_statuses(deployment_id, limit=20)
@@ -52,6 +53,8 @@ The overview uses the existing latest-per-workflow ref semantics. It is not an a
 
 Repository read observability also exposes four fixed GET-only surfaces: ruleset inventory, accepted-permission header observation, Actions secret metadata, and targeted security alerts. The permission probe reports only the observed X-Accepted-GitHub-Permissions header and HTTP status; it never infers credential grants from success. Secret metadata is limited to names/timestamps. Security alerts are allowlisted to code_scanning, dependabot, or secret_scanning and bounded to 1-50 projected rows.
 
+Repository security advisory observability is a targeted metadata-only drill-down. `repo_security_advisories(limit=20)` returns recently updated advisory identifiers, state/severity, and lifecycle timestamps only. It omits advisory summary/description, vulnerability/package details, credits/collaborator identities, private-fork data, arbitrary URLs, and raw payloads. Non-empty `count` is the number of returned recent rows, not a repository-wide advisory total.
+
 Repository Actions variable observability is metadata-only. `repo_variable_metadata` returns bounded variable names and created/updated timestamps, proves a complete known-zero inventory when empty, and deliberately discards GitHub's variable `value` field. Variable metadata never becomes configuration, release, production, or runtime authority.
 
 Deployment/environment observability is a separate GitHub control-plane projection. `repo_environments` proves a bounded complete environment inventory or returns `UNKNOWN`; a proven empty repository returns `OK / count=0`. `repo_deployments` and `repo_deployment_statuses` return only explicitly bounded recent records. Deployment payloads, reviewer/actor identities, arbitrary descriptions, and status URLs are omitted. These records never become project release, production, runtime, or deployment authority.
@@ -70,6 +73,8 @@ The same captured #485 body also contributes a bounded triage index for `Active 
 - variable reads expose names/timestamps only; GitHub variable values are deliberately omitted
 - variable metadata is configuration observability only and grants no configuration/production authority
 - security alert reads are targeted, bounded to 50, and omit raw alert payloads
+- repository security advisory reads are targeted, bounded to 50 recent rows, metadata-only, and excluded from routine repo snapshot
+- advisory descriptions, vulnerability/package details, credits/collaborator identities, private-fork data, arbitrary URLs, and raw payloads are omitted
 - environment/deployment reads are fixed-repository GET-only projections with bounded pagination/limits
 - deployment payloads, actor/reviewer identities, arbitrary descriptions, and status URLs are omitted
 - GitHub deployment/environment observations never replace project-owned release, production, runtime, or deployment authority

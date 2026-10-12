@@ -357,6 +357,27 @@ class GitHubReader:
             raise GitHubReadError("security alert item invalid")
         return list(value)
 
+    def list_security_advisories(self, *, limit: int) -> list[dict[str, Any]]:
+        safe_limit = self._recent_limit(limit)
+        value = self._get_json_value(
+            f"{self._repo_api_prefix}/security-advisories",
+            {"per_page": safe_limit, "sort": "updated", "direction": "desc"},
+        )
+        if not isinstance(value, list) or len(value) > safe_limit:
+            raise GitHubReadError("security advisories response must be a bounded array")
+        if any(not isinstance(item, dict) for item in value):
+            raise GitHubReadError("security advisory item invalid")
+        return [{
+            "ghsa_id": item.get("ghsa_id"),
+            "cve_id": item.get("cve_id"),
+            "state": item.get("state"),
+            "severity": item.get("severity"),
+            "published_at": item.get("published_at"),
+            "updated_at": item.get("updated_at"),
+            "closed_at": item.get("closed_at"),
+            "withdrawn_at": item.get("withdrawn_at"),
+        } for item in value]
+
     def probe_accepted_permissions(self, operation: str) -> dict[str, Any]:
         paths = {
             "repository": self._repo_api_prefix,
@@ -368,6 +389,7 @@ class GitHubReader:
             "environments": f"{self._repo_api_prefix}/environments",
             "deployments": f"{self._repo_api_prefix}/deployments",
             "variables": f"{self._repo_api_prefix}/actions/variables",
+            "security_advisories": f"{self._repo_api_prefix}/security-advisories",
         }
         if operation not in paths:
             raise ValueError("unsupported permission probe operation")

@@ -18,7 +18,7 @@ const {
   renderGuidelines,
 } = require('../bootstrap.cjs');
 const {latestRelevantRun} = require('../adapters.cjs');
-const {workflowRunsPath} = require('../infra/actions-store.cjs');
+const {workflowRunsForPushHeadPath} = require('../infra/actions-store.cjs');
 const {selectCurrentMainPushRun} = require('../observers/required-ci.cjs');
 const {
   buildAlertEnvelope,
@@ -191,19 +191,15 @@ assert.equal(latestRelevantRun([historical], ['workflow_dispatch'], policy.adapt
 assert.equal(latestRelevantRun([historical, current], ['workflow_dispatch'], policy.adapters.observationEpoch).id, 2);
 
 const requiredHeadSha = 'a'.repeat(40);
-const requiredRunsPath = workflowRunsPath('simcore-ci.yml', {
-  perPage: 100,
-  headSha: requiredHeadSha,
-  event: 'push',
-});
+const requiredRunsPath = workflowRunsForPushHeadPath('simcore-ci.yml', requiredHeadSha, 100);
 const requiredRunsUrl = new URL(requiredRunsPath, 'https://api.github.test');
 assert.equal(requiredRunsUrl.pathname, '/actions/workflows/simcore-ci.yml/runs');
 assert.equal(requiredRunsUrl.searchParams.get('per_page'), '100');
 assert.equal(requiredRunsUrl.searchParams.get('head_sha'), requiredHeadSha);
 assert.equal(requiredRunsUrl.searchParams.get('event'), 'push');
 assert.equal(requiredRunsUrl.searchParams.has('status'), false);
-assert.throws(() => workflowRunsPath('simcore-ci.yml', {perPage: 101, headSha: requiredHeadSha, event: 'push'}), /perPage/);
-assert.throws(() => workflowRunsPath('simcore-ci.yml', {perPage: 100, headSha: 'short', event: 'push'}), /headSha/);
+assert.throws(() => workflowRunsForPushHeadPath('simcore-ci.yml', requiredHeadSha, 101), /perPage/);
+assert.throws(() => workflowRunsForPushHeadPath('simcore-ci.yml', 'short', 100), /headSha/);
 
 const unrelatedRuns = Array.from({length: 75}, (_, index) => ({
   id: index + 1,
@@ -227,9 +223,7 @@ assert.equal(
 assert.equal(selectCurrentMainPushRun(unrelatedRuns, requiredHeadSha), null);
 
 const requiredCiObserverSource = fs.readFileSync(path.join(__dirname, '../observers/required-ci.cjs'), 'utf8');
-assert.match(requiredCiObserverSource, /workflowRunsFiltered\(config\.workflow/);
-assert.match(requiredCiObserverSource, /headSha:\s*context\.mainSha/);
-assert.match(requiredCiObserverSource, /event:\s*'push'/);
+assert.match(requiredCiObserverSource, /workflowRunsForPushHead\(config\.workflow,\s*context\.mainSha,\s*100\)/);
 assert.doesNotMatch(requiredCiObserverSource, /workflowRuns\(config\.workflow,\s*50\)/);
 
 const workflow = fs.readFileSync(path.join(root, '.github/workflows/canonical-main-ops.yml'), 'utf8');

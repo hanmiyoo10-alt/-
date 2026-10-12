@@ -178,7 +178,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "evidence-bearing reads and execution must consume a captured immutable snapshot/copy",
             "immediately before emitting the final receipt revalidate",
             "including a Git checkout/worktree or a non-Git mutable path",
-            "recorded digest/equivalent exact identity plus claim-relevant structure for every mutable non-Git input",
+            "recorded algorithm-qualified full cryptographic digest/equivalent exact identity plus claim-relevant structure for every mutable non-Git input",
             "every contributing source, helper, test, fixture, owner-contract, and executed-input identity",
             "regardless of storage mechanism",
             "UNKNOWN / REVIEW_INPUT_CHANGED_DURING_REVIEW",
@@ -190,7 +190,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "exact commit object ID",
             "record worktree state as `CLEAN`, `DIRTY`, or `UNKNOWN`",
             "every dirty input that contributes to the review",
-            "record an immutable digest or bounded diff identity for each such dirty reviewed/executed input",
+            "record an algorithm-qualified full cryptographic digest over explicitly identified bytes",
             "dirty contributing inputs cannot be bounded and identified completely",
             "contributing-input identity set must include every source",
             "regardless of CLEAN/DIRTY state",
@@ -422,7 +422,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_each_applicable_dimension_maps_to_evidence_or_unresolved_reason(self):
         for required in (
-            "when APPLICABLE, the exact exercised evidence/result that covers that dimension or an explicit unresolved reason",
+            "when APPLICABLE, the exact exercised evidence/result or qualifying owner-permitted static proof that covers that dimension, or an explicit unresolved reason",
             "if basis or required evidence mapping is missing, that dimension remains UNKNOWN",
             "every APPLICABLE dimension is mapped to sufficient exercised evidence/result or qualifying owner-permitted static proof",
         ):
@@ -511,7 +511,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "owner-defined positive execution marker or bounded collection/execution count proving the intended tests actually ran",
             "if authorization identity/scope, runtime/toolchain identity, material environment identity, positive execution marker/count, required target-execution containment, or required isolation/reset proof is missing, that command evidence remains unresolved",
             "target-executing owner tests additionally bind the authorization identity/scope covering that exact command, the effect/resource-containment identity",
-            "every evidence-bearing owner command proves the intended checks actually ran",
+            "every evidence-bearing owner command is mapped to current invocation-scoped authorization, proves the intended checks actually ran",
         ):
             self.assertIn(required, self.text)
 
@@ -557,7 +557,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "fresh process/workspace per relevant test",
             "owner-defined shared-state capture/reset/revalidation plus order-independence evidence",
             "required isolation/reset proof",
-            "required authorization/containment/state-isolation provenance",
+            "required containment/state-isolation provenance",
         ):
             self.assertIn(required, self.text)
 
@@ -654,7 +654,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
     def test_every_evidence_bearing_owner_command_has_runtime_identity(self):
         for required in (
             "each with exact test/command identity, the authorization identity/scope covering that exact command, exact runtime/toolchain identity for that evidence-bearing command",
-            "every evidence-bearing owner command proves the intended checks actually ran and has exact runtime/toolchain",
+            "every evidence-bearing owner command is mapped to current invocation-scoped authorization, proves the intended checks actually ran, and has exact runtime/toolchain",
         ):
             self.assertIn(required, self.text)
 

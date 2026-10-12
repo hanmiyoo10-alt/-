@@ -212,3 +212,17 @@ git diff --check
 The focused fixtures prove classification and privacy contracts. A live L
 Windows `inspect` remains required by #3486 acceptance before IMPLEMENTATION_PR
 is considered complete.
+
+## Outer ancestor PID-reuse boundary
+
+Before CreationTime validity can stop semantic ancestor discovery, the owner runs a bounded deny-only structural PID→PPID cycle probe from the evidence process over the already-collected process table. Any repeated PID in that bounded walk fails closed to `UNKNOWN`; a missing parent ends only the structural probe. This probe does not validate process identity, admit an agent or wrapper, or manufacture `PRESENT`/`ABSENT` evidence.
+
+Ancestor discovery remains bounded and fail-closed for PID cycles. A missing parent
+ends the upward walk normally. If a claimed parent was created after its child,
+the owner does not admit that stale parent edge and stops climbing at the child.
+
+This does not weaken CreationTime protection on any relation used to prove the
+current command agent, current shell, same-instance marker wrapper, peer shell,
+or alternate agent. Those relations still require parent CreationTime less than
+or equal to child CreationTime through the existing classifiers. The full bounded
+process table also remains available for global alternate-agent inventory.

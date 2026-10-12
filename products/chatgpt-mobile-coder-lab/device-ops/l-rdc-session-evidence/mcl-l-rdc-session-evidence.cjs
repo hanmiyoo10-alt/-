@@ -143,6 +143,19 @@ function validParentLink(parent, child) {
     && parent.creationTimeMs <= child.creationTimeMs);
 }
 
+function hasAncestorPidCycle(byPid, self) {
+  const seen = new Set([self.pid]);
+  let current = self;
+  for (let depth = 1; depth < MAX_ANCESTOR_DEPTH && current.ppid > 0; depth += 1) {
+    const parent = byPid.get(current.ppid);
+    if (!parent) return false;
+    if (seen.has(parent.pid)) return true;
+    seen.add(parent.pid);
+    current = parent;
+  }
+  return false;
+}
+
 function directChildrenForAgent(rows, agent) {
   const children = rows.filter((row) => row.ppid === agent.pid);
   if (children.some((row) => !validParentLink(agent, row))) {
@@ -248,15 +261,19 @@ function classifyProcessTable(rows, selfPid) {
   if (!self) {
     return topologyResult('UNKNOWN', 'RDC_AGENT_TOPOLOGY_AMBIGUOUS');
   }
+  if (hasAncestorPidCycle(byPid, self)) {
+    return topologyResult('UNKNOWN', 'RDC_AGENT_TOPOLOGY_AMBIGUOUS');
+  }
   const chain = [self];
   const seen = new Set([self.pid]);
   let current = self;
   for (let depth = 1; depth < MAX_ANCESTOR_DEPTH && current.ppid > 0; depth += 1) {
     const parent = byPid.get(current.ppid);
     if (!parent) break;
-    if (seen.has(parent.pid) || !validParentLink(parent, current)) {
+    if (seen.has(parent.pid)) {
       return topologyResult('UNKNOWN', 'RDC_AGENT_TOPOLOGY_AMBIGUOUS');
     }
+    if (!validParentLink(parent, current)) break;
     seen.add(parent.pid);
     chain.push(parent);
     current = parent;

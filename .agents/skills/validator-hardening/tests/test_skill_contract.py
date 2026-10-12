@@ -471,7 +471,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_exercised_input_identity_includes_structural_metadata(self):
         for required in (
-            "When bytes are part of the target's input contract, bind the exact bytes or byte digest plus every owner-relevant structural property",
+            "When bytes are part of the target's input contract, bind the exact bytes or an algorithm-qualified full cryptographic digest plus every owner-relevant structural property",
             "A bare content digest is insufficient",
             "path, filename, file mode/executable bit, symlink/gitlink/tree-entry mode, Git object type, directory/tree structure, container shape",
             "exact owner-relevant input identity",

@@ -16,6 +16,7 @@ DEFAULT_REPOSITORY = "hanmiyoo10-alt/-"
 DEFAULT_API = "https://api.github.com"
 DEFAULT_TIMEOUT_SECONDS = 20.0
 MAX_RULESET_PAGES = 10
+MAX_ENVIRONMENT_PAGES = 10
 
 
 class GitHubReadError(RuntimeError):
@@ -215,6 +216,80 @@ class GitHubReader:
             raise GitHubReadError("secret metadata item invalid")
         return list(secrets)
 
+    @staticmethod
+    def _recent_limit(limit: int) -> int:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 50:
+            raise ValueError("limit must be an integer in 1..50")
+        return limit
+
+    @staticmethod
+    def _deployment_id(deployment_id: int) -> int:
+        if isinstance(deployment_id, bool) or not isinstance(deployment_id, int) or deployment_id <= 0:
+            raise ValueError("deployment_id must be a positive integer")
+        return deployment_id
+
+    def list_environments(self) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        seen_ids: set[int] = set()
+        expected_total: int | None = None
+        for page in range(1, MAX_ENVIRONMENT_PAGES + 1):
+            value = self._get_json(
+                f"{self._repo_api_prefix}/environments",
+                {"per_page": 100, "page": page},
+            )
+            total = value.get("total_count")
+            environments = value.get("environments")
+            if isinstance(total, bool) or not isinstance(total, int) or total < 0:
+                raise GitHubReadError("environments total_count invalid")
+            if expected_total is None:
+                expected_total = total
+            elif total != expected_total:
+                raise GitHubReadError("environments total_count changed during pagination")
+            if not isinstance(environments, list) or len(environments) > 100:
+                raise GitHubReadError("environments response must be a bounded array")
+            if any(not isinstance(item, dict) for item in environments):
+                raise GitHubReadError("environment item invalid")
+            for item in environments:
+                environment_id = item.get("id")
+                if isinstance(environment_id, bool) or not isinstance(environment_id, int) or environment_id < 0:
+                    raise GitHubReadError("environment id invalid")
+                if environment_id in seen_ids:
+                    raise GitHubReadError("duplicate environment id")
+                seen_ids.add(environment_id)
+            items.extend(environments)
+            if len(items) > expected_total:
+                raise GitHubReadError("environment inventory exceeds total_count")
+            if len(items) == expected_total:
+                return items
+            if len(environments) < 100:
+                raise GitHubReadError("environment inventory incomplete")
+        raise GitHubReadError("environment pagination exceeds bounded page limit")
+
+    def list_deployments(self, *, limit: int) -> list[dict[str, Any]]:
+        safe_limit = self._recent_limit(limit)
+        value = self._get_json_value(
+            f"{self._repo_api_prefix}/deployments",
+            {"per_page": safe_limit},
+        )
+        if not isinstance(value, list) or len(value) > safe_limit:
+            raise GitHubReadError("deployments response must be a bounded array")
+        if any(not isinstance(item, dict) for item in value):
+            raise GitHubReadError("deployment item invalid")
+        return list(value)
+
+    def list_deployment_statuses(self, deployment_id: int, *, limit: int) -> list[dict[str, Any]]:
+        safe_id = self._deployment_id(deployment_id)
+        safe_limit = self._recent_limit(limit)
+        value = self._get_json_value(
+            f"{self._repo_api_prefix}/deployments/{safe_id}/statuses",
+            {"per_page": safe_limit},
+        )
+        if not isinstance(value, list) or len(value) > safe_limit:
+            raise GitHubReadError("deployment statuses response must be a bounded array")
+        if any(not isinstance(item, dict) for item in value):
+            raise GitHubReadError("deployment status item invalid")
+        return list(value)
+
     def list_security_alerts(self, kind: str, *, per_page: int) -> list[dict[str, Any]]:
         paths = {
             "code_scanning": "code-scanning/alerts",
@@ -242,6 +317,8 @@ class GitHubReader:
             "code_scanning": f"{self._repo_api_prefix}/code-scanning/alerts",
             "dependabot": f"{self._repo_api_prefix}/dependabot/alerts",
             "secret_scanning": f"{self._repo_api_prefix}/secret-scanning/alerts",
+            "environments": f"{self._repo_api_prefix}/environments",
+            "deployments": f"{self._repo_api_prefix}/deployments",
         }
         if operation not in paths:
             raise ValueError("unsupported permission probe operation")

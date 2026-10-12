@@ -14,6 +14,9 @@ repo_rulesets()
 repo_permission_probe(operation="repository")
 repo_secret_metadata()
 repo_security_alerts(kind, limit=20)
+repo_environments()
+repo_deployments(limit=20)
+repo_deployment_statuses(deployment_id, limit=20)
 canonical_main_status()
 ```
 
@@ -48,6 +51,8 @@ The overview uses the existing latest-per-workflow ref semantics. It is not an a
 
 Repository read observability also exposes four fixed GET-only surfaces: ruleset inventory, accepted-permission header observation, Actions secret metadata, and targeted security alerts. The permission probe reports only the observed X-Accepted-GitHub-Permissions header and HTTP status; it never infers credential grants from success. Secret metadata is limited to names/timestamps. Security alerts are allowlisted to code_scanning, dependabot, or secret_scanning and bounded to 1-50 projected rows.
 
+Deployment/environment observability is a separate GitHub control-plane projection. `repo_environments` proves a bounded complete environment inventory or returns `UNKNOWN`; a proven empty repository returns `OK / count=0`. `repo_deployments` and `repo_deployment_statuses` return only explicitly bounded recent records. Deployment payloads, reviewer/actor identities, arbitrary descriptions, and status URLs are omitted. These records never become project release, production, runtime, or deployment authority.
+
 `canonical_main_status` implements the canonical-main `STATUS_SESSION` read plan as one user-visible MCP call. Internally it reads direct `main`, reads issue #485, then re-reads direct `main` as a capture-coherence barrier. Direct `main` remains repository authority and #485 remains a derived operator projection. A mismatch returns `SETTLING_OR_STALE`; main movement, invalid/missing capsule data, or read failure returns `UNKNOWN` rather than green-by-absence.
 
 The same captured #485 body also contributes a bounded triage index for `Active P0/P1 incidents` and `Attention queue (P2)`. The index returns only severity, state, incident issue number, reason code, known/count/truncation metadata, and explicit triage parse reason codes when the section is missing, unknown, or malformed. It does not fetch incident bodies automatically. Detailed evidence remains a targeted incident-issue drill-down, so routine non-clear orientation does not require a second visible #485 read.
@@ -60,6 +65,9 @@ The same captured #485 body also contributes a bounded triage index for `Active 
 - permission diagnostics report only observed accepted-permissions headers and never infer credential grants
 - secret reads expose names/timestamps only; no secret value/public-key/ciphertext material is returned
 - security alert reads are targeted, bounded to 50, and omit raw alert payloads
+- environment/deployment reads are fixed-repository GET-only projections with bounded pagination/limits
+- deployment payloads, actor/reviewer identities, arbitrary descriptions, and status URLs are omitted
+- GitHub deployment/environment observations never replace project-owned release, production, runtime, or deployment authority
 - notebook paths are repository-relative `.ipynb` only and refs are pinned to an exact commit before content retrieval
 - notebook source is <=1 MiB; each read returns 1–50 cells with bounded source/output text
 - notebook saved outputs are source-only by default; binary/image, HTML, JavaScript, and attachment payloads are omitted

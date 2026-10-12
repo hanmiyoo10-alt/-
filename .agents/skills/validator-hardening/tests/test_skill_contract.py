@@ -365,7 +365,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_exercised_case_receipt_binds_expected_and_observed_outcome(self):
         for required in (
-            "each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not), exact invocation identity, and the authorization identity/scope covering that invocation to expected owner-defined behavior",
+            "each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not), exact invocation identity, an owner-defined target-execution marker/invocation-bound trace or bounded target call/entry count proving the case actually reached the target logic",
             "observed status/result",
             "owner-defined reason code when applicable or NOT_APPLICABLE when the owner defines none",
             "exit result when applicable",
@@ -444,7 +444,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "ordered arguments/flags",
             "stdin versus file/input-channel mapping",
             "material per-invocation configuration/settings",
-            "each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not), exact invocation identity, and the authorization identity/scope covering that invocation",
+            "each binding exact owner-relevant input identity (byte+structural when bytes are part of the target contract; type+value/shape/structure when they are not), exact invocation identity, an owner-defined target-execution marker/invocation-bound trace or bounded target call/entry count proving the case actually reached the target logic",
         ):
             self.assertIn(required, self.text)
 

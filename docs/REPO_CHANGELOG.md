@@ -2497,3 +2497,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/569fa824edf2bda2548cc54c5be535e53d4e1b68)
 - Event ID: `78fd36bea9c9f361a2cd2ad34d8235fe6da997c118baf1f62e4b7445b37bad04`
 <!-- canonical-main-doc-promoted:78fd36bea9c9f361a2cd2ad34d8235fe6da997c118baf1f62e4b7445b37bad04 -->
+
+### 2026-10-12 — Merge pull request #3612 from hanmiyoo10-alt/repo/canonical-proof-applicability-3611
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `9955753a610dd9817b3f1a063033169dda9c5c15`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/9955753a610dd9817b3f1a063033169dda9c5c15)
+- Event ID: `e33b989e9e59fdc7b8dcd339b1f9ea5de146a736fee02897b64a58ace0c95902`
+<!-- canonical-main-doc-promoted:e33b989e9e59fdc7b8dcd339b1f9ea5de146a736fee02897b64a58ace0c95902 -->

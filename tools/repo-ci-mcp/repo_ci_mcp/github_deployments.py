@@ -6,6 +6,7 @@ from typing import Any
 from .github_reader import GitHubReadError, GitHubReader
 
 MAX_TEXT = 200
+MAX_ENVIRONMENT_NAME = 255
 DEPLOYMENT_STATES = {"error", "failure", "inactive", "in_progress", "queued", "pending", "success"}
 
 
@@ -16,6 +17,16 @@ def _text(value: object, *, required: bool = False) -> str | None:
         raise ValueError("invalid bounded text")
     if any(ch in value for ch in "\r\n\x00"):
         raise ValueError("invalid bounded text")
+    return value
+
+
+def _environment_name(value: object, *, required: bool = False) -> str | None:
+    if value is None and not required:
+        return None
+    if not isinstance(value, str) or not value or len(value) > MAX_ENVIRONMENT_NAME:
+        raise ValueError("invalid environment name")
+    if any(ch in value for ch in "\r\n\x00"):
+        raise ValueError("invalid environment name")
     return value
 
 
@@ -71,7 +82,7 @@ def _project_environment(item: dict[str, Any]) -> dict[str, Any]:
     count, types = _protection_summary(item)
     return {
         "id": _positive_integer(item.get("id")),
-        "name": _text(item.get("name"), required=True),
+        "name": _environment_name(item.get("name"), required=True),
         "created_at": _text(item.get("created_at")),
         "updated_at": _text(item.get("updated_at")),
         "protection_rule_count": count,
@@ -85,7 +96,7 @@ def _project_deployment(item: dict[str, Any]) -> dict[str, Any]:
         "id": _positive_integer(item.get("id")),
         "ref": _text(item.get("ref"), required=True),
         "sha": _sha(item.get("sha")),
-        "environment": _text(item.get("environment"), required=True),
+        "environment": _environment_name(item.get("environment"), required=True),
         "task": _text(item.get("task")),
         "transient_environment": _optional_bool(item.get("transient_environment")),
         "production_environment": _optional_bool(item.get("production_environment")),

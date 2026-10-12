@@ -175,7 +175,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_mutable_inputs_are_revalidated_before_receipt(self):
         for required in (
-            "prefer reading and executing from an immutable snapshot",
+            "evidence-bearing reads and execution must consume a captured immutable snapshot/copy",
             "immediately before emitting the final receipt revalidate",
             "including a Git checkout/worktree or a non-Git mutable path",
             "recorded digest/equivalent exact identity plus claim-relevant structure for every mutable non-Git input",
@@ -323,7 +323,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_receipt_preserves_proposed_unexecuted_cases(self):
         self.assertIn(
-            "proposed/not-exercised adversarial cases, with reason each remains unexecuted",
+            "proposed/not-exercised adversarial cases, each with concrete bounded input identity/structure, expected owner-defined outcome or uncertainty behavior, and reason it remains unexecuted",
             self.text,
         )
 
@@ -509,7 +509,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
     def test_owner_test_command_proves_tests_ran_and_preserves_containment(self):
         for required in (
             "owner-defined positive execution marker or bounded collection/execution count proving the intended tests actually ran",
-            "if no positive execution marker/count or required isolation/reset proof exists, that command evidence remains unresolved",
+            "if material environment identity, positive execution marker/count, or required isolation/reset proof is missing, that command evidence remains unresolved",
             "for target-executing owner tests the exact runtime/toolchain plus effect/resource-containment identity",
             "every executed owner-test command proves the intended tests actually ran",
         ):
@@ -560,6 +560,52 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
             "required containment and state-isolation provenance",
         ):
             self.assertIn(required, self.text)
+
+    def test_mutable_inputs_close_aba_window(self):
+        for required in (
+            "captured immutable snapshot/copy of every mutable contributing input",
+            "owner-approved read lock/lease/hold or equivalent mechanism",
+            "keeps that identity stable for the full evidence-bearing read/execution window",
+            "A final end-of-review identity check alone is insufficient",
+            "A→B→A mutable-input race",
+            "consumed from an immutable snapshot/copy or held stable across the evidence-bearing operation",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_proposed_adversarial_cases_preserve_concrete_input_and_expected_outcome(self):
+        for required in (
+            "proposed/not-exercised adversarial cases",
+            "concrete bounded input identity/structure",
+            "expected owner-defined outcome or uncertainty behavior",
+            "reason it remains unexecuted",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_owner_test_receipt_preserves_material_environment(self):
+        for required in (
+            "material working-directory identity",
+            "sanitized material environment/config identity",
+            "PATH/PYTHONPATH/module search path",
+            "HOME/tool config",
+            "locale/encoding/timezone",
+            "executable resolution and proxy/network settings",
+            "material working-directory/environment identity",
+        ):
+            self.assertIn(required, self.text)
+
+    def test_remote_validation_receipt_allows_immutable_locator_or_exact_digest(self):
+        self.assertIn(
+            "either an immutable result locator or an exact-result content digest that binds the result bytes",
+            self.text,
+        )
+
+    def test_conflict_evals_supply_source_locators(self):
+        owner = next(case for case in self.evals if case["id"] == "owner-conflict-negative")
+        contract = next(case for case in self.evals if case["id"] == "contract-conflict-negative")
+        self.assertIn("input://owner-source-a", owner["prompt"])
+        self.assertIn("input://owner-source-b", owner["prompt"])
+        self.assertIn("input://contract-a", contract["prompt"])
+        self.assertIn("input://contract-b", contract["prompt"])
 
     def test_no_runtime_helper_is_required(self):
         self.assertFalse((SKILL_ROOT / "scripts").exists())

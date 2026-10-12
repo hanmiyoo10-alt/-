@@ -230,6 +230,7 @@ class GitHubReader:
 
     def list_environments(self) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
+        seen_ids: set[int] = set()
         expected_total: int | None = None
         for page in range(1, MAX_ENVIRONMENT_PAGES + 1):
             value = self._get_json(
@@ -248,6 +249,13 @@ class GitHubReader:
                 raise GitHubReadError("environments response must be a bounded array")
             if any(not isinstance(item, dict) for item in environments):
                 raise GitHubReadError("environment item invalid")
+            for item in environments:
+                environment_id = item.get("id")
+                if isinstance(environment_id, bool) or not isinstance(environment_id, int) or environment_id < 0:
+                    raise GitHubReadError("environment id invalid")
+                if environment_id in seen_ids:
+                    raise GitHubReadError("duplicate environment id")
+                seen_ids.add(environment_id)
             items.extend(environments)
             if len(items) > expected_total:
                 raise GitHubReadError("environment inventory exceeds total_count")

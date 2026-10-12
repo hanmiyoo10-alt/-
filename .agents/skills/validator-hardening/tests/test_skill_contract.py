@@ -365,7 +365,7 @@ class ValidatorHardeningSkillContractTests(unittest.TestCase):
 
     def test_exercised_case_receipt_binds_expected_and_observed_outcome(self):
         for required in (
-            "each binding exact input identity to expected owner-defined behavior",
+            "each binding exact input identity and exact invocation identity to expected owner-defined behavior",
             "observed status/result",
             "reason code",
             "exit result when applicable",

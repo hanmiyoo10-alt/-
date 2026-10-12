@@ -8,7 +8,7 @@ from email.message import Message
 from urllib.error import HTTPError
 from urllib.request import Request
 
-from repo_ci_mcp.github_reader import GitHubReadError, GitHubReader, _SafeRedirectHandler
+from repo_ci_mcp.github_reader import CODE_QUALITY_API_VERSION, DEFAULT_API_VERSION, GitHubReadError, GitHubReader, _SafeRedirectHandler
 
 
 class ReaderTests(unittest.TestCase):
@@ -85,6 +85,18 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(caught.exception.status_code, 403)
         self.assertNotIn("topsecret", str(caught.exception))
 
+
+    def test_54a_request_api_version_default_and_override_are_bounded(self):
+        reader = GitHubReader(repository="owner/repo")
+        default_request = reader._request("https://api.github.com/repos/owner/repo")
+        code_quality_request = reader._request(
+            "https://api.github.com/repos/owner/repo/code-quality/findings",
+            api_version=CODE_QUALITY_API_VERSION,
+        )
+        self.assertEqual(default_request.get_header("X-github-api-version"), DEFAULT_API_VERSION)
+        self.assertEqual(code_quality_request.get_header("X-github-api-version"), CODE_QUALITY_API_VERSION)
+        with self.assertRaisesRegex(ValueError, "unsupported GitHub API version"):
+            reader._request("https://api.github.com/repos/owner/repo", api_version="2099-01-01")
 
     def test_55_exact_sha_run_inventory_uses_head_sha_without_event_filter(self):
         reader = GitHubReader(repository="owner/repo")
@@ -306,6 +318,85 @@ class ReaderTests(unittest.TestCase):
             with self.assertRaisesRegex(GitHubReadError, "bounded array"):
                 reader.list_security_advisories(limit=2)
 
+    def test_58c_code_quality_uses_versioned_fixed_endpoint_and_strips_payload(self):
+        reader = GitHubReader(repository="owner/repo")
+        raw = [{
+            "number": 42,
+            "state": "open",
+            "url": "https://api.github.com/private",
+            "rule": {
+                "id": "java/useless-null-check",
+                "title": "must-not-pass-reader-boundary",
+                "description": "must-not-pass-reader-boundary",
+                "help": "must-not-pass-reader-boundary",
+                "severity": "warning",
+                "category": "maintainability",
+            },
+            "location": {
+                "path": "src/example.py",
+                "start_line": 9,
+                "start_column": 4,
+                "end_line": 9,
+                "end_column": 18,
+            },
+            "message": {
+                "text": "must-not-pass-reader-boundary",
+                "markdown": "must-not-pass-reader-boundary",
+            },
+            "created_at": "2026-01-23T12:34:56Z",
+        }]
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_code_quality_findings(limit=7)
+        get_value.assert_called_once_with(
+            "/repos/owner/repo/code-quality/findings",
+            {"per_page": 7, "direction": "desc"},
+            api_version=CODE_QUALITY_API_VERSION,
+        )
+        self.assertEqual(result, [{
+            "number": 42,
+            "state": "open",
+            "rule_id": "java/useless-null-check",
+            "severity": "warning",
+            "category": "maintainability",
+            "path": "src/example.py",
+            "start_line": 9,
+            "start_column": 4,
+            "end_line": 9,
+            "end_column": 18,
+            "created_at": "2026-01-23T12:34:56Z",
+        }])
+        rendered = repr(result)
+        self.assertNotIn("must-not-pass-reader-boundary", rendered)
+        self.assertNotIn("api.github.com/private", rendered)
+
+    def test_58d_code_quality_validates_limit_and_nested_shape(self):
+        reader = GitHubReader(repository="owner/repo")
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_code_quality_findings(limit=51)
+        with patch.object(GitHubReader, "_get_json_value", return_value=[{"number": 1}]):
+            with self.assertRaisesRegex(GitHubReadError, "nested metadata invalid"):
+                reader.list_code_quality_findings(limit=1)
+
+    def test_58e_code_quality_http_404_preserves_status_and_version(self):
+        reader = GitHubReader(repository="owner/repo")
+        error = HTTPError(
+            "https://api.github.com/repos/owner/repo/code-quality/findings",
+            404,
+            "Not Found",
+            Message(),
+            None,
+        )
+        with patch.object(reader._opener, "open", side_effect=error) as opened:
+            with self.assertRaises(GitHubReadError) as caught:
+                reader.list_code_quality_findings(limit=1)
+        self.assertEqual(caught.exception.status_code, 404)
+        request = opened.call_args.args[0]
+        self.assertEqual(request.get_header("X-github-api-version"), CODE_QUALITY_API_VERSION)
+        self.assertEqual(
+            request.full_url,
+            "https://api.github.com/repos/owner/repo/code-quality/findings?per_page=1&direction=desc",
+        )
+
     def test_59_permission_probe_reads_header_without_inferring_grant(self):
         reader = GitHubReader(repository="owner/repo")
         response = unittest.mock.MagicMock()
@@ -356,6 +447,23 @@ class ReaderTests(unittest.TestCase):
             opened.call_args.args[0].full_url,
             "https://api.github.com/repos/owner/repo/security-advisories?per_page=1",
         )
+
+    def test_60_code_quality_permission_probe_uses_versioned_fixed_endpoint(self):
+        reader = GitHubReader(repository="owner/repo")
+        response = unittest.mock.MagicMock()
+        response.status = 404
+        response.headers = {}
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            result = reader.probe_accepted_permissions("code_quality")
+        self.assertEqual(result, {"http_status": 404, "accepted_permissions": None})
+        request = opened.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://api.github.com/repos/owner/repo/code-quality/findings?per_page=1",
+        )
+        self.assertEqual(request.get_header("X-github-api-version"), CODE_QUALITY_API_VERSION)
 
     def test_61_deployment_permission_probes_use_fixed_endpoints(self):
         reader = GitHubReader(repository="owner/repo")

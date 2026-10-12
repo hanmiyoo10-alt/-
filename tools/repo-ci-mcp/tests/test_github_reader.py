@@ -141,6 +141,48 @@ class ReaderTests(unittest.TestCase):
                 reader.list_repository_rulesets()
         self.assertEqual(get_value.call_count, 10)
 
+    def test_57d_environments_paginate_and_prove_complete_inventory(self):
+        reader = GitHubReader(repository="owner/repo")
+        first = {"total_count": 101, "environments": [{"id": index} for index in range(100)]}
+        second = {"total_count": 101, "environments": [{"id": 100}]}
+        with patch.object(GitHubReader, "_get_json", side_effect=[first, second]) as get_json:
+            result = reader.list_environments()
+        self.assertEqual(len(result), 101)
+        self.assertEqual(
+            get_json.call_args_list[0].args,
+            ("/repos/owner/repo/environments", {"per_page": 100, "page": 1}),
+        )
+        self.assertEqual(
+            get_json.call_args_list[1].args,
+            ("/repos/owner/repo/environments", {"per_page": 100, "page": 2}),
+        )
+
+    def test_57e_environments_reject_incomplete_total(self):
+        reader = GitHubReader(repository="owner/repo")
+        with patch.object(
+            GitHubReader,
+            "_get_json",
+            return_value={"total_count": 2, "environments": [{"id": 1}]},
+        ):
+            with self.assertRaisesRegex(GitHubReadError, "inventory incomplete"):
+                reader.list_environments()
+
+    def test_57f_deployments_and_statuses_use_fixed_bounded_endpoints(self):
+        reader = GitHubReader(repository="owner/repo")
+        with patch.object(GitHubReader, "_get_json_value", return_value=[]) as get_value:
+            self.assertEqual(reader.list_deployments(limit=7), [])
+        get_value.assert_called_once_with("/repos/owner/repo/deployments", {"per_page": 7})
+        with patch.object(GitHubReader, "_get_json_value", return_value=[]) as get_value:
+            self.assertEqual(reader.list_deployment_statuses(42, limit=3), [])
+        get_value.assert_called_once_with(
+            "/repos/owner/repo/deployments/42/statuses",
+            {"per_page": 3},
+        )
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            reader.list_deployment_statuses(0, limit=3)
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_deployments(limit=51)
+
     def test_58_security_alert_kind_is_allowlisted_and_bounded(self):
         reader = GitHubReader(repository="owner/repo")
         with self.assertRaisesRegex(ValueError, "unsupported security alert kind"):

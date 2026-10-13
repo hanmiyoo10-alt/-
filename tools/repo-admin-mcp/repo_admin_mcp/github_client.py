@@ -47,8 +47,14 @@ class EnvironmentPublicKey:
 
 
 class GitHubAdminClient:
-    def __init__(self, token_provider: TokenProvider | None = None, timeout: int = 20) -> None:
-        self._token_provider = token_provider or token_provider_from_env()
+    def __init__(
+        self,
+        token_provider: TokenProvider | None = None,
+        timeout: int = 20,
+        *,
+        require_app: bool = False,
+    ) -> None:
+        self._token_provider = token_provider or token_provider_from_env(require_app=require_app)
         self._timeout = timeout
 
     def _request(self, method: str, url: str, payload: dict[str, Any] | None = None) -> tuple[int, Any, dict[str, str]]:
@@ -154,8 +160,4 @@ class GitHubAdminClient:
         env = urllib.parse.quote(ENVIRONMENT_NAME, safe="")
         secret = urllib.parse.quote(SECRET_NAME, safe="")
         url = f"{GITHUB_API}/repos/{owner}/{repo}/environments/{env}/secrets/{secret}"
-        try:
-            self._request("DELETE", url)
-        except GitHubAdminError as exc:
-            if exc.http_status != 404:
-                raise
+        self._request("DELETE", url)

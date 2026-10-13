@@ -552,6 +552,37 @@ Broad Risu fork/mod ecosystem discovery is tracked by #3645.
 
 The owner's private Google Drive `포켓리스` folder is an additional donor source. Artifacts and repository links intentionally placed there enter the donor-candidate inventory, with deduplication and explicit provenance. Private Drive locators remain outside the public repository. Drive snapshot intake is tracked by #3647.
 
+Owner placement is product-intent evidence. The artifact does not need to contribute to Fusion core.
+
+### Product Feature & Experience donor lane
+
+SimCore Risu is the target home application, so donors may contribute optional first-class product experiences in addition to core architecture.
+
+Examples include:
+- RPG/game systems;
+- fishing/gacha/card systems;
+- music/rhythm/interactive entertainment;
+- NPC/entity managers;
+- readers/editors/search tools;
+- lorebook and import/export utilities;
+- provider/model-management tools;
+- other owner-selected Risu ecosystem features.
+
+Target boundary:
+
+```text
+Fusion Core / Host Truth
+        |
+        | typed read projections + action/promotion gates
+        v
+Product Feature & Experience Modules
+        |
+        v
+SimCore Risu integrated UI
+```
+
+Feature modules may remain optional and independently enabled. They do not gain direct authority over canonical Runtime/Knowledge merely because they are built into the app. World-affecting results must cross explicit Control/Runtime/Knowledge boundaries.
+
 | Donor | Target contribution |
 | --- | --- |
 | Current SimCore | Control semantics, host safety, current behavioral baseline |
@@ -621,6 +652,13 @@ Canon Alignment
 └ Canon Progression
 
 Surfaces / LightBoard
+
+Experiences / Tools
+├ Games / RPG
+├ Social / Community
+├ Creative / Media
+├ Editors / Readers
+└ Utilities
 
 Worldlines / Saves
 

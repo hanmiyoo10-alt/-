@@ -37,8 +37,12 @@ Create only after R2:
 - SimCore Risu product manifest;
 - current-state authority;
 - source/release/deployment boundaries;
-- license/provenance policy;
+- private donor-source/provenance policy;
+- MYANG donor/upstream registry authority;
+- owner-controlled plugin/module update routing;
 - CI/bootstrap rules.
+
+At this stage, migrate operational donor-watch/update routing toward MYANG while preserving original upstream identities and leaving `hanmiyoo10-alt/-` as a thin cross-project locator.
 
 The current `products/simcore-risu/` root in `hanmiyoo10-alt/-` becomes a thin locator only after the migration is proven.
 

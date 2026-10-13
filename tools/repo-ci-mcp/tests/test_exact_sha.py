@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import Mock
 
-from repo_ci_mcp.exact_sha import repo_ci_exact_sha
+from repo_ci_mcp.exact_sha import repo_ci_exact_sha, repo_ci_runs_exact_sha
 from repo_ci_mcp.github_reader import GitHubReadError
 
 SHA = "a" * 40
@@ -36,6 +36,73 @@ def reader() -> Mock:
     )
     value.compare_changed_paths.return_value = (["docs/readme.md"], True)
     return value
+
+
+class RunInventoryTests(unittest.TestCase):
+    def test_event_filtered_inventory_preserves_bounded_run_identity(self):
+        value = reader()
+        value.list_runs_exact_sha.return_value = (1, [run("push", 7)])
+        result = repo_ci_runs_exact_sha(value, SHA, event="push")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["schema"], "repo-ci-runs-exact-sha.v1")
+        self.assertTrue(result["inventory_complete"])
+        self.assertEqual(result["total_count"], 1)
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["runs"][0]["id"], 7)
+        self.assertEqual(result["runs"][0]["event"], "push")
+        self.assertEqual(result["runs"][0]["head_sha"], SHA)
+        self.assertEqual(result["runs"][0]["head_branch"], "main")
+        self.assertEqual(result["runs"][0]["html_url"], "https://example.invalid/7")
+        value.list_runs_exact_sha.assert_called_once_with(SHA, event="push")
+
+    def test_event_omitted_preserves_all_event_inventory(self):
+        value = reader()
+        value.list_runs_exact_sha.return_value = (
+            2, [run("push", 1), run("pull_request", 2)],
+        )
+        result = repo_ci_runs_exact_sha(value, SHA)
+        self.assertTrue(result["ok"])
+        self.assertEqual(
+            [item["event"] for item in result["runs"]],
+            ["push", "pull_request"],
+        )
+        value.list_runs_exact_sha.assert_called_once_with(SHA, event=None)
+
+    def test_filtered_known_zero_is_complete_not_missing_inference(self):
+        result = repo_ci_runs_exact_sha(reader(), SHA, event="push")
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["inventory_complete"])
+        self.assertEqual(result["total_count"], 0)
+        self.assertEqual(result["count"], 0)
+        self.assertEqual(result["runs"], [])
+        self.assertEqual(result["reason_codes"], [])
+
+    def test_invalid_and_inconsistent_filtered_inventory_fail_closed(self):
+        value = reader()
+        result = repo_ci_runs_exact_sha(value, SHA, event="push-invalid!")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["reason_codes"], ["EVENT_INVALID"])
+        value.list_runs_exact_sha.assert_not_called()
+
+        value = reader()
+        value.list_runs_exact_sha.return_value = (2, [run("push", 1)])
+        result = repo_ci_runs_exact_sha(value, SHA, event="push")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["reason_codes"], ["RUN_INVENTORY_INCOMPLETE"])
+
+        value = reader()
+        value.list_runs_exact_sha.return_value = (1, [run("workflow_dispatch", 1)])
+        result = repo_ci_runs_exact_sha(value, SHA, event="push")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["reason_codes"], ["RUN_INVENTORY_EVENT_MISMATCH"])
+
+        value = reader()
+        wrong_sha = run("push", 1)
+        wrong_sha["head_sha"] = "b" * 40
+        value.list_runs_exact_sha.return_value = (1, [wrong_sha])
+        result = repo_ci_runs_exact_sha(value, SHA, event="push")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["reason_codes"], ["RUN_INVENTORY_SHA_MISMATCH"])
 
 
 class ExactShaTests(unittest.TestCase):

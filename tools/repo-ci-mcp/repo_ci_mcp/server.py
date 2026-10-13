@@ -6,7 +6,10 @@ from mcp.server import MCPServer
 
 from .branch_protection import repo_branch_protection as build_repo_branch_protection
 from .canonical_main_status import canonical_main_status as build_canonical_main_status
-from .exact_sha import repo_ci_exact_sha as build_repo_ci_exact_sha
+from .exact_sha import (
+    repo_ci_exact_sha as build_repo_ci_exact_sha,
+    repo_ci_runs_exact_sha as build_repo_ci_runs_exact_sha,
+)
 from .github_reader import GitHubReader
 from .github_attestations import repo_attestations as build_repo_attestations
 from .github_code_quality import repo_code_quality as build_repo_code_quality
@@ -68,6 +71,12 @@ def repo_ci_overview(workflows: list[str], ref: str | None = None) -> dict[str, 
 def repo_ci_exact_sha(sha: str, workflow: str | None = None, event: str | None = None, ref: str | None = None, before_sha: str | None = None) -> dict[str, Any]:
     """Inventory all-event exact-SHA workflow runs and explain a proven workflow absence conservatively."""
     return build_repo_ci_exact_sha(GitHubReader(), sha=sha, workflow=workflow, event=event, ref=ref, before_sha=before_sha)
+
+
+@mcp.tool()
+def repo_ci_runs_exact_sha(sha: str, event: str | None = None) -> dict[str, Any]:
+    """Inventory exact-SHA workflow runs, optionally filtered to one GitHub Actions event."""
+    return build_repo_ci_runs_exact_sha(GitHubReader(), sha=sha, event=event)
 
 
 @mcp.tool()

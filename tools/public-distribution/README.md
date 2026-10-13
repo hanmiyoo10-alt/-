@@ -12,4 +12,6 @@ Channels:
 
 The CLI accepts only the fixed channels above. It does not accept a caller-selected repository, source ref, target branch, or file path.
 
+This packet does not cut consumers over to myang. Mirrored product bytes intentionally keep their current canonical public URLs until the separately owned URL-migration step completes. The canonical repository must remain publicly readable until that later cutover is proven.
+
 V1 is manual-only through `.github/workflows/public-distribution-publish.yml`.

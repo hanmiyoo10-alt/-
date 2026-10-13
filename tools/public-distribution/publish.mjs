@@ -189,6 +189,7 @@ function publicReadme(policy) {
     '',
     'Canonical source/control-plane authority: ' + policy.sourceRepository + '.',
     'Published branches mirror already-authoritative bytes and are not release authorities.',
+    'Consumer URL cutover is intentionally pending; canonical public URLs remain in mirrored bytes until the separate migration completes.',
     '',
     '- main: Termux local-stack bootstrap/runtime distribution',
     '- release-simcore: SimCore install/update artifacts',
@@ -432,8 +433,8 @@ export async function publishChannel({
     disposition = 'PUBLISHED';
   }
 
-  assertSourceCurrentness(sourceRepo, plan);
   assertRemoteCurrentness(targetDir, plan);
+  assertSourceCurrentness(sourceRepo, plan);
 
   if (disposition === 'PUBLISHED') {
     git(targetDir, ['push', 'origin', 'HEAD:refs/heads/' + plan.targetBranch], {

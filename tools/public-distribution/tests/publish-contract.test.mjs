@@ -329,6 +329,14 @@ test('plan mode reads source/target identities without publishing', async () => 
   }
 });
 
+test('source freshness is the final network currentness check before push', () => {
+  const source = fs.readFileSync(new URL('../publish.mjs', import.meta.url), 'utf8');
+  const targetCheck = source.indexOf('assertRemoteCurrentness(targetDir, plan);');
+  const sourceCheck = source.indexOf('assertSourceCurrentness(sourceRepo, plan);');
+  const push = source.indexOf("git(targetDir, ['push', 'origin'", sourceCheck);
+  assert.ok(targetCheck >= 0 && sourceCheck > targetCheck && push > sourceCheck);
+});
+
 test('implementation contains no force publication primitive and emits bounded error receipts', () => {
   const source = fs.readFileSync(new URL('../publish.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /--force|force-with-lease|\+refs\/heads/);

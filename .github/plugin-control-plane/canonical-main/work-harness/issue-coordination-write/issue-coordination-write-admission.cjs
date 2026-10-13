@@ -125,7 +125,7 @@ function validateRequest(request) {
   if (!isObject(request.target)) {
     reasons.push('TARGET_OBJECT_REQUIRED');
   } else {
-    if (unexpectedKeys(request.target, ['issueNumber', 'kind', 'surface']).length) {
+    if (unexpectedKeys(request.target, ['issueNumber', 'kind', 'surface', 'pairedPacketIssue']).length) {
       reasons.push('TARGET_FIELDS_INVALID');
     }
     if (!Number.isSafeInteger(request.target.issueNumber) || request.target.issueNumber <= 0) {
@@ -133,6 +133,12 @@ function validateRequest(request) {
     }
     if (!TARGET_KINDS.includes(request.target.kind)) reasons.push('TARGET_KIND_INVALID');
     if (!TARGET_SURFACES.includes(request.target.surface)) reasons.push('TARGET_SURFACE_INVALID');
+    if (Object.hasOwn(request.target, 'pairedPacketIssue')
+        && (!Number.isSafeInteger(request.target.pairedPacketIssue)
+          || request.target.pairedPacketIssue <= 0
+          || request.target.pairedPacketIssue === 293)) {
+      reasons.push('PAIRED_PACKET_ISSUE_INVALID');
+    }
   }
 
   if (!isObject(request.operation)) {
@@ -234,14 +240,21 @@ function specializedRoute(request) {
 
   if (surface === 'CANONICAL_AUDIT') {
     if (type === 'STAGE_CHECKPOINT') {
+      if (!Number.isSafeInteger(request.target.pairedPacketIssue)) {
+        return unknown(request, 'PAIRED_PACKET_IDENTITY_REQUIRED', 'SPECIALIZED_OWNER_REQUIRED');
+      }
       return makeResult({
         request,
         disposition: 'ROUTE_SPECIALIZED_OWNER',
-        ownerRoute: 'CANONICAL_STAGE_CHECKPOINT_AUDIT',
+        ownerRoute: 'CANONICAL_STAGE_CHECKPOINT',
         confirmationRequired: true,
-        requiredEvidence: ['issue #293 identity', 'paired checkpoint contract'],
+        requiredEvidence: [
+          'issue #293 identity',
+          'exact paired packet issue identity',
+          'paired packet/audit checkpoint contract',
+        ],
         postEffectReadbackRequired: true,
-        reasonCodes: ['SPECIALIZED_AUDIT_CHECKPOINT_OWNER'],
+        reasonCodes: ['SPECIALIZED_PAIRED_STAGE_CHECKPOINT_OWNER'],
       });
     }
     return unknown(request, 'SPECIALIZED_OWNER_REQUIRED');

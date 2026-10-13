@@ -22,6 +22,7 @@ function request({
   issueNumber = 100,
   kind = 'ISSUE',
   surface = 'ORDINARY_ISSUE',
+  pairedPacketIssue,
   type = 'COMMENT',
   body = 'bounded comment',
 } = {}) {
@@ -29,7 +30,7 @@ function request({
   if (type === 'COMMENT') operation.body = body;
   return {
     schemaVersion: 1,
-    target: {issueNumber, kind, surface},
+    target: {issueNumber, kind, surface, ...(pairedPacketIssue === undefined ? {} : {pairedPacketIssue})},
     operation,
   };
 }
@@ -157,22 +158,43 @@ test('work queue body update is bound to issue 465', () => {
   hasReason(conflict, 'WORK_QUEUE_IDENTITY_CONFLICT');
 });
 
-test('audit checkpoint is bound to issue 293 and its specialized owner', () => {
-  const pass = owner.classifyIssueCoordinationWrite(request({
+test('audit checkpoint requires paired packet identity and routes to the real paired owner', () => {
+  const missing = owner.classifyIssueCoordinationWrite(request({
     issueNumber: 293,
     surface: 'CANONICAL_AUDIT',
     type: 'STAGE_CHECKPOINT',
   }));
+  assert.equal(missing.disposition, 'UNKNOWN');
+  hasReason(missing, 'PAIRED_PACKET_IDENTITY_REQUIRED');
+  hasReason(missing, 'SPECIALIZED_OWNER_REQUIRED');
+
+  const pass = owner.classifyIssueCoordinationWrite(request({
+    issueNumber: 293,
+    surface: 'CANONICAL_AUDIT',
+    pairedPacketIssue: 3643,
+    type: 'STAGE_CHECKPOINT',
+  }));
   assert.equal(pass.disposition, 'ROUTE_SPECIALIZED_OWNER');
-  assert.equal(pass.ownerRoute, 'CANONICAL_STAGE_CHECKPOINT_AUDIT');
+  assert.equal(pass.ownerRoute, 'CANONICAL_STAGE_CHECKPOINT');
+  hasReason(pass, 'SPECIALIZED_PAIRED_STAGE_CHECKPOINT_OWNER');
 
   const conflict = owner.classifyIssueCoordinationWrite(request({
     issueNumber: 294,
     surface: 'CANONICAL_AUDIT',
+    pairedPacketIssue: 3643,
     type: 'STAGE_CHECKPOINT',
   }));
   assert.equal(conflict.disposition, 'CONFLICT');
   hasReason(conflict, 'AUDIT_IDENTITY_CONFLICT');
+
+  const invalidPair = owner.classifyIssueCoordinationWrite(request({
+    issueNumber: 293,
+    surface: 'CANONICAL_AUDIT',
+    pairedPacketIssue: 293,
+    type: 'STAGE_CHECKPOINT',
+  }));
+  assert.equal(invalidPair.disposition, 'UNKNOWN');
+  hasReason(invalidPair, 'PAIRED_PACKET_ISSUE_INVALID');
 });
 
 test('ordinary classification cannot disguise queue or audit identities', () => {

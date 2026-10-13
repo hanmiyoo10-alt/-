@@ -48,10 +48,10 @@ V1 preserves existing owners instead of generalizing them:
 | canonical work-packet body update | `ROUTE_SPECIALIZED_OWNER` | `CANONICAL_COORDINATION_BODY_PATCH` |
 | #465 work-queue body update | `ROUTE_SPECIALIZED_OWNER` | `CANONICAL_COORDINATION_BODY_PATCH` |
 | paired packet stage checkpoint | `ROUTE_SPECIALIZED_OWNER` | `CANONICAL_STAGE_CHECKPOINT` |
-| #293 paired audit checkpoint | `ROUTE_SPECIALIZED_OWNER` | `CANONICAL_STAGE_CHECKPOINT_AUDIT` |
+| #293 paired audit checkpoint with exact paired packet identity | `ROUTE_SPECIALIZED_OWNER` | `CANONICAL_STAGE_CHECKPOINT` |
 | terminal packet close-sync | `ROUTE_SPECIALIZED_OWNER` | `CANONICAL_PACKET_CLOSURE_OWNER` |
 
-Other operations on reserved canonical surfaces fail closed with
+An audit checkpoint request must also supply the exact paired packet issue identity because the existing stage-checkpoint owner writes packet + audit as one operation; audit-only checkpoint routing is forbidden. Other operations on reserved canonical surfaces fail closed with
 `SPECIALIZED_OWNER_REQUIRED`. The caller must not downgrade a reserved surface
 to `ORDINARY_ISSUE` merely to obtain the comment lane.
 

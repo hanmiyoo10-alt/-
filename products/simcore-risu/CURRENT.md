@@ -27,6 +27,14 @@ Roles:
 
 `WAIT_MYANG_EXISTING_CONTENT_RELOCATION`
 
+A future MYANG donor/update hub policy is now recorded at:
+
+`products/simcore-risu/DONOR_UPDATE_HUB_POLICY_V1_2026-10-13.md`
+
+After MYANG is cleared and bootstrapped, MYANG is intended to become the canonical private intake/update/distribution hub for owner-adapted donor/plugin builds. Original upstream links remain preserved as provenance.
+
+No update URL is rewritten before the MYANG gate completes.
+
 The owner requires all existing MYANG content to be moved out before SimCore Risu work begins there.
 
 Point-in-time MYANG evidence observed on 2026-10-12:
@@ -64,7 +72,8 @@ Until MYANG existing-content relocation is proven complete:
 - Current SimCore production remains owned by `plugin:simcore` and `release-simcore`.
 - Current PocketRisu device/operations work remains owned by PocketRisu Helper Mod.
 - This root has no release branch, updater, deployment authority or production artifact.
-- Third-party GPL/provenance obligations remain a gate before code transplant.
+- Owner-supplied donor artifacts may be inspected/adapted/transplanted at source level for the owner's private build under the recorded private-source policy.
+- Public/shared redistribution remains separately license/provenance-gated.
 - Final design recorded does not mean implementation complete.
 
 ## Tracking

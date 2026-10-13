@@ -248,7 +248,27 @@ No host-donor update auto-merges into MYANG.
 
 After MYANG bootstrap, operational host-donor version/update tracking moves to MYANG with the rest of the donor hub. Until then, #3131 and #3642 remain coordination records.
 
-## 11. SocialRisu
+## 11. Owner Google Drive donor snapshot intake
+
+The owner's private Google Drive folder named `포켓리스` is an explicit donor-intake source.
+
+Rules:
+- items placed there by the owner are donor candidates unless clearly unrelated;
+- private Drive IDs and private Drive URLs are not committed into the public coordination repository;
+- record logical donor identity, version/hash where available, public upstream URL when known, capability role, and provenance class `OWNER_DRIVE_SNAPSHOT`;
+- duplicate copies of the same logical artifact are one donor family, not separate donors;
+- unknown upstream stays `UNKNOWN` until proven;
+- public repository links stored by the owner in that folder are valid donor-discovery seeds;
+- raw Drive snapshots are not mirrored into MYANG until the MYANG relocation/bootstrap gate completes.
+
+Tracking:
+- Drive snapshot intake: #3647
+- broad Risu fork/mod discovery: #3645
+- host donor lane: #3642
+
+After MYANG bootstrap, this Drive folder should feed the MYANG donor registry as an owner-private intake source.
+
+## 12. SocialRisu
 
 SocialRisu is included in this policy as an owner-supplied private-use donor.
 
@@ -265,7 +285,7 @@ Its current embedded third-party update URL is provenance/upstream evidence only
 
 Any future owner-adapted SocialRisu-derived private plugin or native capability should update through MYANG after the update hub is qualified.
 
-## 12. Safety / authority boundary
+## 13. Safety / authority boundary
 
 This policy does not authorize:
 
@@ -276,7 +296,7 @@ This policy does not authorize:
 - automatic release/deployment;
 - a second canonical Runtime/Memory/Knowledge/Presentation owner.
 
-## 13. Current gate
+## 14. Current gate
 
 Current product priority remains:
 

@@ -41,6 +41,8 @@ Donor discovery priority is now:
 
 Broad Risu fork/mod donor discovery is tracked by #3645.
 
+The owner's private Google Drive `포켓리스` folder is also now an explicit donor-intake source, tracked by #3647. Private Drive IDs/URLs are not committed here; only donor identity, public upstream/provenance and capability classification are recorded.
+
 The owner requires all existing MYANG content to be moved out before SimCore Risu work begins there.
 
 Point-in-time MYANG evidence observed on 2026-10-12:

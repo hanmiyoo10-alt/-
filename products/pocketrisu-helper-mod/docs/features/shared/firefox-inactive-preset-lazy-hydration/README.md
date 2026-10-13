@@ -2,7 +2,7 @@
 
 Feature-ID: `firefox-inactive-preset-lazy-hydration`
 Area: `shared`
-Status: **DESIGN / EVIDENCE_READY**
+Status: **IMPLEMENTED_LOCAL / STATIC_GREEN / DEPLOY_VERIFY_PENDING**
 
 ## 목적
 Android Firefox LMKD 회수를 줄이기 위해, client reactive runtime이 항상 보유하는 `botPresets` 전체 full object를 줄인다.
@@ -106,3 +106,68 @@ Design consequence:
   6. hydration failure must leave the prior active preset and server data untouched.
 
 This remains DESIGN only. No source mutation until the merge/persistence contract is specified and tested.
+
+
+## 구현 후보
+source branch:
+- `feat/firefox-inactive-preset-lazy-hydration`
+- commit: `d6a68402558949a0fd550e6e7beb5f86a8ee65d8`
+- parent: `fef7d4b0888c6a9280e50335bcca4ad6c943ca33`
+- one Feature-ID only.
+- unrelated `generic_mock_bridge.cjs` untouched.
+
+Server:
+- `dbCache` remains the browser-facing stripped view.
+- new authoritative preset side-store keeps full prompt presets by stable id.
+- initial `/api/read` keeps the active preset full and replaces inactive presets with metadata stubs.
+- stub metadata: `id/name/image/folderId/_presetStub`.
+- `GET /api/preset-content/:presetId` hydrates a full preset on demand.
+- patch persist, background persist and full-write fallback reassemble inactive stubs from authoritative full bodies before writing disk.
+- missing authoritative body fails closed instead of persisting a stub.
+- after successful disk commit the preset side-store is rebuilt from the exact full snapshot.
+
+Client:
+- async hydration deduplicated by preset id.
+- after fetch, target slot is re-resolved by stable id so reorder races cannot hydrate the wrong index.
+- stub metadata edits override the returned full body.
+- hydration transition is suppressed from botPreset dirty tracking through the Svelte apply tick.
+- existing synchronous `changeToPreset()` remains synchronous and refuses an unhydrated stub as defense in depth.
+- selection/editor/copy/export/diff/bound-preset activation/preset-chain generation hydrate before requiring full preset data.
+- a hydrated preset remains full for the rest of the browser session.
+- partial local backup hydrates every preset first or aborts; server-backed full/settings backups stay authoritative and need no client-side hydrate-all.
+
+## 구현 검증
+Feature-owned:
+- preset side-store pure tests: **7/7 PASS**.
+- client preset hydration tests: **6/6 PASS**.
+- NodeStorage preset endpoint tests: **3/3 PASS**.
+- existing botPreset ID/reorder tests: **13/13 PASS**.
+- real server integration: **4/4 PASS**:
+  1. active full + inactive stubs on initial read;
+  2. hydrate inactive preset by stable id;
+  3. metadata patch preserves inactive full body on disk;
+  4. full-write fallback carrying stubs preserves full bodies.
+- `node --check server/node/server.cjs`: PASS.
+- `svelte-check`: **0 errors**, existing 4 a11y warnings.
+- production build: PASS.
+- full server suite: **158/158 PASS**.
+- compatibility suite: **125/125 PASS**, 5 skipped.
+
+Broad client-suite baseline control:
+- exact-base worktree at `fef7d4b0` reproduces the same remaining 84 failures seen in the candidate isolated run.
+- 83 are Node v26 localStorage-environment failures in Gemini context-cache tests.
+- 1 is the pre-existing 5s huge-lorebook timeout on this device.
+- jobRecovery broad-run timeout disappears when isolated and also passes on exact base.
+- no unrelated code was changed to manufacture a green full-client result.
+
+## 배포 전 남은 gate
+- current live service still runs the pre-feature server process until controlled restart.
+- predeploy database integrity check must complete.
+- create database rollback snapshot.
+- restart runit service and verify health.
+- main-phone Firefox reload once.
+- verify initial preset count: 1 full active + inactive stubs.
+- measure database transfer size and Gecko tab PSS/RSS before/after.
+- smoke inactive selection, generation, edit/copy/export/diff and persistence.
+- verify disk still holds full inactive preset bodies after save/restart.
+

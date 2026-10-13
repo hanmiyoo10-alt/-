@@ -160,21 +160,34 @@ class GitHubAdminClient:
     def get_environment_secret(self) -> SecretMetadata | None:
         owner, repo = CANONICAL_REPOSITORY.split("/", 1)
         env = urllib.parse.quote(ENVIRONMENT_NAME, safe="")
-        secret = urllib.parse.quote(SECRET_NAME, safe="")
-        url = f"{GITHUB_API}/repos/{owner}/{repo}/environments/{env}/secrets/{secret}"
-        try:
-            _, row, _ = self._request("GET", url, token_provider=self._canonical_token_provider)
-        except GitHubAdminError as exc:
-            if exc.http_status == 404:
-                return None
-            raise
-        if not isinstance(row, dict) or row.get("name") != SECRET_NAME:
-            raise GitHubAdminError("ENVIRONMENT_SECRET_RESPONSE_INVALID")
-        return SecretMetadata(
-            name=SECRET_NAME,
-            created_at=row.get("created_at") if isinstance(row.get("created_at"), str) else None,
-            updated_at=row.get("updated_at") if isinstance(row.get("updated_at"), str) else None,
+        url = f"{GITHUB_API}/repos/{owner}/{repo}/environments/{env}/secrets?per_page=100"
+        _, payload, headers = self._request(
+            "GET",
+            url,
+            token_provider=self._canonical_token_provider,
         )
+        if not isinstance(payload, dict):
+            raise GitHubAdminError("ENVIRONMENT_SECRET_LIST_RESPONSE_INVALID")
+        total_count = payload.get("total_count")
+        rows = payload.get("secrets")
+        if not isinstance(total_count, int) or total_count < 0 or not isinstance(rows, list):
+            raise GitHubAdminError("ENVIRONMENT_SECRET_LIST_RESPONSE_INVALID")
+        if total_count != len(rows) or 'rel="next"' in headers.get("link", ""):
+            raise GitHubAdminError("ENVIRONMENT_SECRET_INVENTORY_TRUNCATED")
+
+        match: SecretMetadata | None = None
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get("name"), str):
+                raise GitHubAdminError("ENVIRONMENT_SECRET_LIST_RESPONSE_INVALID")
+            if row["name"] == SECRET_NAME:
+                if match is not None:
+                    raise GitHubAdminError("ENVIRONMENT_SECRET_IDENTITY_CONFLICT")
+                match = SecretMetadata(
+                    name=SECRET_NAME,
+                    created_at=row.get("created_at") if isinstance(row.get("created_at"), str) else None,
+                    updated_at=row.get("updated_at") if isinstance(row.get("updated_at"), str) else None,
+                )
+        return match
 
     def put_environment_secret(self, encrypted_value: str, key_id: str) -> None:
         owner, repo = CANONICAL_REPOSITORY.split("/", 1)

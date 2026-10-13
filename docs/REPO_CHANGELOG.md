@@ -2505,3 +2505,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/9955753a610dd9817b3f1a063033169dda9c5c15)
 - Event ID: `e33b989e9e59fdc7b8dcd339b1f9ea5de146a736fee02897b64a58ace0c95902`
 <!-- canonical-main-doc-promoted:e33b989e9e59fdc7b8dcd339b1f9ea5de146a736fee02897b64a58ace0c95902 -->
+
+### 2026-10-13 — Route private donor updates through future MYANG hub (#3637)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `b475ef9b4e57b2f1529b97281b67aaa7009d7620`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/b475ef9b4e57b2f1529b97281b67aaa7009d7620)
+- Event ID: `dcc0b6a70c88c477171bc0b469097971a8320ac7f1da68b1c2e6d799b9cd645b`
+<!-- canonical-main-doc-promoted:dcc0b6a70c88c477171bc0b469097971a8320ac7f1da68b1c2e6d799b9cd645b -->

@@ -48,12 +48,29 @@ def _b64url(value: bytes) -> str:
 
 
 class GitHubAppInstallationTokenProvider:
-    def __init__(self, app_id: str, installation_id: str, private_key_pem: str) -> None:
+    def __init__(
+        self,
+        app_id: str,
+        installation_id: str,
+        private_key_pem: str,
+        *,
+        repositories: tuple[str, ...],
+        permissions: dict[str, str],
+    ) -> None:
         if not app_id.isdigit() or not installation_id.isdigit():
             raise AuthError("INVALID_GITHUB_APP_IDENTITY")
+        if not repositories or not all(isinstance(name, str) and name for name in repositories):
+            raise AuthError("INVALID_GITHUB_APP_REPOSITORY_SCOPE")
+        if not permissions or not all(
+            isinstance(name, str) and name and level in {"read", "write"}
+            for name, level in permissions.items()
+        ):
+            raise AuthError("INVALID_GITHUB_APP_PERMISSION_SCOPE")
         self._app_id = app_id
         self._installation_id = installation_id
         self._private_key_pem = private_key_pem
+        self._repositories = repositories
+        self._permissions = dict(permissions)
         self._cached_token: str | None = None
         self._expires_epoch = 0.0
         self._lock = threading.Lock()
@@ -82,8 +99,8 @@ class GitHubAppInstallationTokenProvider:
                 f"{GITHUB_API}/app/installations/{self._installation_id}/access_tokens",
                 method="POST",
                 data=json.dumps({
-                    "repositories": ["-", "myang"],
-                    "permissions": {"administration": "write", "environments": "write"},
+                    "repositories": list(self._repositories),
+                    "permissions": self._permissions,
                 }, separators=(",", ":")).encode("utf-8"),
                 headers={
                     "Accept": "application/vnd.github+json",
@@ -113,7 +130,7 @@ class GitHubAppInstallationTokenProvider:
             return token
 
 
-def token_provider_from_env(require_app: bool = False) -> TokenProvider:
+def token_providers_from_env(*, require_app: bool = False) -> tuple[TokenProvider, TokenProvider]:
     app_values = [
         os.environ.get(GITHUB_APP_ID_ENV),
         os.environ.get(GITHUB_APP_INSTALLATION_ID_ENV),
@@ -122,14 +139,27 @@ def token_provider_from_env(require_app: bool = False) -> TokenProvider:
     if any(app_values):
         if not all(app_values):
             raise AuthError("PARTIAL_GITHUB_APP_CONFIGURATION")
-        return GitHubAppInstallationTokenProvider(
+        access = "write" if require_app else "read"
+        mirror = GitHubAppInstallationTokenProvider(
             app_values[0] or "",
             app_values[1] or "",
             app_values[2] or "",
+            repositories=("myang",),
+            permissions={"administration": access},
         )
+        canonical = GitHubAppInstallationTokenProvider(
+            app_values[0] or "",
+            app_values[1] or "",
+            app_values[2] or "",
+            repositories=("-",),
+            permissions={"environments": access},
+        )
+        return mirror, canonical
+
     token = os.environ.get(GITHUB_TOKEN_ENV, "")
     if token:
         if require_app:
             raise AuthError("MUTATION_REQUIRES_GITHUB_APP")
-        return StaticTokenProvider(token)
+        provider = StaticTokenProvider(token)
+        return provider, provider
     raise AuthError("GITHUB_CREDENTIAL_NOT_CONFIGURED")

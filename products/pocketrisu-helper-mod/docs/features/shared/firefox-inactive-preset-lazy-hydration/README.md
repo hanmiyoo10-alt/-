@@ -71,3 +71,38 @@ lazy hydration은 다음 semantics를 보존해야 한다.
 
 ## 다음 한 단계
 현재 v1.14 source에서 botPreset read/write/edit/copy/delete/reorder/import/export/diff 호출면을 INSPECT_ONLY로 맵핑하고, hydration owner를 어디에 둘지 설계한다.
+
+
+## INSPECT_ONLY source map
+
+Current active selection:
+- `db.botPresetsId`.
+- `getActiveBotPreset()` returns `db.botPresets[botPresetsId]`.
+- `changeToPreset(index)` reads the selected array element as a full preset and copies it into top-level DB fields.
+
+Full-object consumers:
+- `changeToPreset(index)`.
+- `copyPreset(index)`.
+- prompt diff modal.
+- preset export/download.
+- editor open.
+- duplicate.
+- reorder path spreads each preset object.
+- active preset generation reads `db.botPresets[db.botPresetsId]`.
+
+Critical save hazard:
+- `saveCurrentPreset()` reconstructs only the active preset from top-level settings.
+- every inactive `db.botPresets[i]` is otherwise preserved as-is in the array.
+- therefore replacing inactive entries in `DBState.db.botPresets` with metadata stubs and then performing an ordinary botPreset save would persist those stubs over the authoritative full preset data.
+
+Design consequence:
+- client-only stubbing inside `DBState.db.botPresets` is unsafe unless the save layer/server has explicit knowledge of stubs.
+- safer owner is likely the server read/patch boundary, analogous to chat stripping:
+  1. server remains authoritative for full inactive presets;
+  2. initial client read receives active full preset + inactive metadata stubs;
+  3. on-demand preset endpoint returns a full preset by stable id;
+  4. preset save/patch must merge untouched inactive authoritative preset bodies instead of persisting stubs;
+  5. selection/edit/copy/diff/export hydrate the target first;
+  6. hydration failure must leave the prior active preset and server data untouched.
+
+This remains DESIGN only. No source mutation until the merge/persistence contract is specified and tested.

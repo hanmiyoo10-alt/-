@@ -22,5 +22,10 @@
   "target_repository": "hanmiyoo10-alt/myang",
   "target_repository_role": "flagship_application_repository_after_migration_gate",
   "upstream_integration_repository": "hanmiyoo10-alt/PocketRisu",
-  "migration_gate": "MYANG_EXISTING_CONTENT_RELOCATION_REQUIRED"
+  "migration_gate": "MYANG_EXISTING_CONTENT_RELOCATION_REQUIRED",
+  "donor_update_policy": "products/simcore-risu/DONOR_UPDATE_HUB_POLICY_V1_2026-10-13.md",
+  "donor_update_hub_target": "hanmiyoo10-alt/myang",
+  "private_donor_source_policy": "OWNER_SUPPLIED_PRIVATE_SOURCE_ADAPTATION_ALLOWED",
+  "public_redistribution_policy": "LICENSE_PROVENANCE_REVIEW_REQUIRED",
+  "update_routing_gate": "MYANG_EXISTING_CONTENT_RELOCATION_REQUIRED"
 }

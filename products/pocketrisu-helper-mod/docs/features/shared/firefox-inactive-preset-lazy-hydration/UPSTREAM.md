@@ -4,7 +4,7 @@ Feature-ID: `firefox-inactive-preset-lazy-hydration`
 Area: `shared`
 PR status: `NOT_PREPARED`
 Isolation status: `CLEAN_LOCAL_COMMIT`
-Deployment status: `STATIC_GREEN / LIVE_VERIFY_PENDING`
+Deployment status: `LIVE_INITIAL_PASS / MEMORY_EFFECT_UNPROVEN / UI_SMOKE_PENDING`
 
 ## Problem / motivation
 Android LMKD can reclaim the PocketRisu Firefox content process even when the active chat is small. Current evidence points to globally retained client state, especially all prompt presets, as a major persistent payload.
@@ -66,3 +66,18 @@ PR boundary:
 - fork-only by default: `hanmiyoo10-alt/PocketRisu`.
 - no PR until live memory/persistence A/B completes.
 - official `PocketRisu/PocketRisu` submission remains unauthorized unless explicitly requested by the user.
+
+
+## Live initial result
+- deployed local candidate `d6a68402558949a0fd550e6e7beb5f86a8ee65d8`.
+- controlled restart + health: PASS.
+- rollback DB snapshot created before restart.
+- 99/99 authoritative preset bodies preserved across reload and two persisted patches.
+- disk stub count remains 0.
+- live initial client representation calculates to 1 full active + 98 inactive stubs.
+- preset-array payload shrinks 24,579,229 → 630,510 JSON bytes (97.43%).
+- production hydrate endpoint returned a full inactive preset with HTTP 200.
+- no 423/session-deactivated in the validation window.
+- no Firefox process kill during first >10 minutes after reload.
+- Gecko memory reduction is not proven: one large Firefox child remained hundreds of MB and URL↔PID is not strictly mapped.
+- do not prepare a fork PR until real UI select/switch-back persistence smoke completes and natural-use memory behavior is observed.

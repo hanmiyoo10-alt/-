@@ -8,6 +8,7 @@ from .branch_protection import repo_branch_protection as build_repo_branch_prote
 from .canonical_main_status import canonical_main_status as build_canonical_main_status
 from .exact_sha import repo_ci_exact_sha as build_repo_ci_exact_sha
 from .github_reader import GitHubReader
+from .github_attestations import repo_attestations as build_repo_attestations
 from .github_code_quality import repo_code_quality as build_repo_code_quality
 from .github_releases import (
     repo_release_assets as build_repo_release_assets,
@@ -130,6 +131,12 @@ def repo_security_advisories(limit: int = 20) -> dict[str, Any]:
 def repo_code_quality(limit: int = 20) -> dict[str, Any]:
     """Read one bounded first page of repository Code Quality finding metadata."""
     return build_repo_code_quality(GitHubReader(), limit)
+
+
+@mcp.tool()
+def repo_attestations(subject_digest: str, limit: int = 20) -> dict[str, Any]:
+    """Read bounded repository attestation metadata for one explicit SHA256 subject digest."""
+    return build_repo_attestations(GitHubReader(), subject_digest, limit)
 
 
 @mcp.tool()

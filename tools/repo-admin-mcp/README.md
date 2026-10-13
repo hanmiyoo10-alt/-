@@ -58,10 +58,12 @@ Revocation requires exact current metadata. It deletes the environment secret fi
 
 ## Authentication
 
-Production preference is a GitHub App installed only on the two fixed repositories. Installation tokens are minted server-side with a second restriction to repository names `-` and `myang` and only:
+Production preference is a GitHub App installed only on the two fixed repositories. The server mints **separate installation tokens** so each runtime request carries only the permission required by its owner:
 
-- `administration: write`
-- `environments: write`
+- mirror token: repository `myang` only, `administration: read` for status or `administration: write` for mutation;
+- canonical token: repository `-` only, `environments: read` for status or `environments: write` for mutation.
+
+No single runtime installation token carries both repository write permissions.
 
 A separately authorized fine-grained token may be supplied through `REPO_ADMIN_GITHUB_TOKEN` for **status/read-only diagnostics only**. Bootstrap, rotation, and revocation require GitHub App authentication. This prevents durable deploy keys from being coupled to the lifetime of a personal access token. Credential material belongs in the runtime secret store, never in Git, plugin archives, tests, issues, or MCP results.
 

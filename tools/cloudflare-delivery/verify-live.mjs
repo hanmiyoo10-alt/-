@@ -59,52 +59,90 @@ async function readBytes(response) {
   return Buffer.from(await response.arrayBuffer());
 }
 
-export async function verifyLive({stage, policy = loadPolicy(), fetchImpl = fetch}) {
+const RETRYABLE_LIVE_CODES = new Set([
+  'LIVE_STATUS_MISMATCH',
+  'LIVE_DIGEST_MISMATCH',
+  'LIVE_RANGE_STATUS_MISMATCH',
+  'LIVE_CONTENT_RANGE_MISMATCH',
+  'LIVE_RANGE_BYTES_MISMATCH',
+]);
+
+function errorCode(error) {
+  return String(error?.message || error || 'UNKNOWN_ERROR').split(':', 1)[0];
+}
+
+async function verifyOne({row, base, fetchImpl}) {
+  const url = new URL('/' + row.publicPath, base);
+  const response = await fetchImpl(url, {method: 'GET', redirect: 'error', cache: 'no-store'});
+  if (response.status !== 200) fail('LIVE_STATUS_MISMATCH', `${row.publicPath}:${response.status}`);
+  if (response.headers.get('access-control-allow-origin') !== '*') fail('LIVE_CORS_MISMATCH', row.publicPath);
+  if (String(response.headers.get('content-type') || '').toLowerCase() !== row.contentType.toLowerCase()) {
+    fail('LIVE_CONTENT_TYPE_MISMATCH', row.publicPath);
+  }
+  const bytes = await readBytes(response);
+  if (sha256(bytes) !== row.sha256) fail('LIVE_DIGEST_MISMATCH', row.publicPath);
+
+  let range = null;
+  if (row.rangeProof) {
+    const end = Math.min(15, Math.max(0, bytes.length - 1));
+    const rangeResponse = await fetchImpl(url, {
+      method: 'GET',
+      headers: {Range: `bytes=0-${end}`},
+      redirect: 'error',
+      cache: 'no-store',
+    });
+    if (rangeResponse.status !== 206) fail('LIVE_RANGE_STATUS_MISMATCH', `${row.publicPath}:${rangeResponse.status}`);
+    if (rangeResponse.headers.get('access-control-allow-origin') !== '*') fail('LIVE_RANGE_CORS_MISMATCH', row.publicPath);
+    const contentRange = String(rangeResponse.headers.get('content-range') || '');
+    const match = /^bytes 0-(\d+)\/(\d+)$/.exec(contentRange);
+    if (!match || Number(match[1]) !== end || Number(match[2]) !== bytes.length) {
+      fail('LIVE_CONTENT_RANGE_MISMATCH', row.publicPath);
+    }
+    const rangeBytes = await readBytes(rangeResponse);
+    if (!rangeBytes.equals(bytes.subarray(0, end + 1))) fail('LIVE_RANGE_BYTES_MISMATCH', row.publicPath);
+    range = {status: 206, contentRange};
+  }
+  return {
+    publicPath: row.publicPath,
+    status: 200,
+    sha256: row.sha256,
+    cors: 'PASS',
+    contentType: row.contentType,
+    range,
+  };
+}
+
+export async function verifyLive({
+  stage,
+  policy = loadPolicy(),
+  fetchImpl = fetch,
+  maxAttempts = 5,
+  delayMs = 2000,
+  sleepFn = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+}) {
   validateStageReport(stage, policy);
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) fail('INVALID_MAX_ATTEMPTS');
+  if (!Number.isInteger(delayMs) || delayMs < 0 || delayMs > 10000) fail('INVALID_RETRY_DELAY');
   const base = new URL(policy.publicBaseUrl);
   if (base.protocol !== 'https:' || base.pathname !== '/' || base.search || base.hash) fail('INVALID_FIXED_PUBLIC_BASE_URL');
 
   const results = [];
   for (const row of stage.files) {
-    const url = new URL('/' + row.publicPath, base);
-    const response = await fetchImpl(url, {method: 'GET', redirect: 'error', cache: 'no-store'});
-    if (response.status !== 200) fail('LIVE_STATUS_MISMATCH', `${row.publicPath}:${response.status}`);
-    if (response.headers.get('access-control-allow-origin') !== '*') fail('LIVE_CORS_MISMATCH', row.publicPath);
-    if (String(response.headers.get('content-type') || '').toLowerCase() !== row.contentType.toLowerCase()) {
-      fail('LIVE_CONTENT_TYPE_MISMATCH', row.publicPath);
-    }
-    const bytes = await readBytes(response);
-    if (sha256(bytes) !== row.sha256) fail('LIVE_DIGEST_MISMATCH', row.publicPath);
-
-    let range = null;
-    if (row.rangeProof) {
-      const end = Math.min(15, Math.max(0, bytes.length - 1));
-      const rangeResponse = await fetchImpl(url, {
-        method: 'GET',
-        headers: {Range: `bytes=0-${end}`},
-        redirect: 'error',
-        cache: 'no-store',
-      });
-      if (rangeResponse.status !== 206) fail('LIVE_RANGE_STATUS_MISMATCH', `${row.publicPath}:${rangeResponse.status}`);
-      if (rangeResponse.headers.get('access-control-allow-origin') !== '*') fail('LIVE_RANGE_CORS_MISMATCH', row.publicPath);
-      const contentRange = String(rangeResponse.headers.get('content-range') || '');
-      const match = /^bytes 0-(\d+)\/(\d+)$/.exec(contentRange);
-      if (!match || Number(match[1]) !== end || Number(match[2]) !== bytes.length) {
-        fail('LIVE_CONTENT_RANGE_MISMATCH', row.publicPath);
+    let verified = null;
+    let lastError = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        verified = await verifyOne({row, base, fetchImpl});
+        verified.attempts = attempt;
+        break;
+      } catch (error) {
+        lastError = error;
+        if (!RETRYABLE_LIVE_CODES.has(errorCode(error)) || attempt === maxAttempts) throw error;
+        await sleepFn(delayMs);
       }
-      const rangeBytes = await readBytes(rangeResponse);
-      if (!rangeBytes.equals(bytes.subarray(0, end + 1))) fail('LIVE_RANGE_BYTES_MISMATCH', row.publicPath);
-      range = {status: 206, contentRange};
     }
-
-    results.push({
-      publicPath: row.publicPath,
-      status: 200,
-      sha256: row.sha256,
-      cors: 'PASS',
-      contentType: row.contentType,
-      range,
-    });
+    if (!verified) throw lastError || new Error('LIVE_VERIFY_UNRESOLVED');
+    results.push(verified);
   }
 
   return {

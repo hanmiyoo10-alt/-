@@ -35,5 +35,10 @@
   "selective_host_donors": [
     "nevaeh5379/HaejeokRisuai",
     "rpaddict/RisuBard"
-  ]
+  ],
+  "risu_ecosystem_donor_watch_issue": 3645,
+  "donor_discovery_priority": {
+    "risu_forks_mods": "DEFAULT_DISCOVERY_AND_CANDIDATE_REGISTRATION",
+    "standalone_plugins": "SELECTIVE_REQUIREMENT_DRIVEN"
+  }
 }

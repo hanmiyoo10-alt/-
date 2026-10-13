@@ -40,5 +40,8 @@
   "donor_discovery_priority": {
     "risu_forks_mods": "DEFAULT_DISCOVERY_AND_CANDIDATE_REGISTRATION",
     "standalone_plugins": "SELECTIVE_REQUIREMENT_DRIVEN"
-  }
+  },
+  "owner_drive_donor_intake_issue": 3647,
+  "owner_drive_donor_source": "PRIVATE_GOOGLE_DRIVE_FOLDER_POCKETRISU",
+  "owner_drive_private_locator_policy": "DO_NOT_COMMIT_PRIVATE_DRIVE_IDS_OR_URLS"
 }

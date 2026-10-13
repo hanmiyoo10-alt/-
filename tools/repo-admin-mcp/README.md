@@ -50,7 +50,7 @@ If the secret write fails after creating the deploy key, the server deletes that
 
 Rotation requires the exact currently observed deploy-key ID and secret `updated_at` value. It creates the replacement key, updates the environment secret, proves secret metadata advanced and the replacement key is visible, and only then deletes the prior key.
 
-If the secret update fails and readback proves the old secret metadata is unchanged, the replacement key is removed. Once the secret write may have succeeded, ambiguous or failed readback preserves the replacement and returns `PARTIAL` rather than risking a broken secret/key pairing. If the secret update succeeds but old-key deletion fails, the result is `PARTIAL / OLD_KEY_REVOCATION_PENDING`. Final rotation returns `PASS` only after a fresh status read proves exactly one replacement key and the advanced secret metadata.
+Once the secret PUT is attempted, **any request exception preserves the replacement key and returns `PARTIAL`**. A transport error cannot prove whether GitHub applied the write, and whole-second metadata timestamps cannot disambiguate a same-second update. If the secret update succeeds but old-key deletion fails, the result is `PARTIAL / OLD_KEY_REVOCATION_PENDING`. Final rotation returns `PASS` only after a fresh status read proves exactly one replacement key and the advanced secret metadata.
 
 ### Revocation
 
@@ -63,7 +63,7 @@ Production preference is a GitHub App installed only on the two fixed repositori
 - `administration: write`
 - `environments: write`
 
-A separately authorized fine-grained token can be supplied through `REPO_ADMIN_GITHUB_TOKEN` for bounded transitional use. Credential material belongs in the runtime secret store, never in Git, plugin archives, tests, issues, or MCP results.
+A separately authorized fine-grained token may be supplied through `REPO_ADMIN_GITHUB_TOKEN` for **status/read-only diagnostics only**. Bootstrap, rotation, and revocation require GitHub App authentication. This prevents durable deploy keys from being coupled to the lifetime of a personal access token. Credential material belongs in the runtime secret store, never in Git, plugin archives, tests, issues, or MCP results.
 
 GitHub App runtime variables:
 
@@ -73,11 +73,13 @@ REPO_ADMIN_GITHUB_INSTALLATION_ID
 REPO_ADMIN_GITHUB_APP_PRIVATE_KEY
 ```
 
-Transitional fixed token variable:
+Status-only diagnostic token variable:
 
 ```text
 REPO_ADMIN_GITHUB_TOKEN
 ```
+
+The status-only token is never accepted for credential mutation.
 
 ## Transport and Railway
 
@@ -121,3 +123,10 @@ python -m unittest discover -s tools/repo-admin-mcp/tests -v
 ```
 
 Tests use an injected fake GitHub client and synthetic key material only. No live GitHub mutation is part of the source test suite.
+
+
+### Fail-closed delete and authentication semantics
+
+- a secret DELETE `404` is not treated as proof of absence because GitHub may use `404` to conceal private resources when authentication or permission is insufficient;
+- revocation therefore keeps the deploy key whenever secret deletion is not positively confirmed;
+- missing/partial GitHub App configuration is returned as a sanitized MCP `UNKNOWN` or `BLOCKED` result rather than an unhandled tool exception.

@@ -9,11 +9,16 @@ export const REPO = 'hanmiyoo10-alt/-';
 export const API = `https://api.github.com/repos/${REPO}`;
 export const ISSUE_485 = `${API}/issues/485`;
 export const BRANCH_MAIN = `${API}/branches/main`;
+export const ACTION_RUNS = `${API}/actions/runs`;
 export const MAX_BODY = 64 * 1024;
 export const MCP_PROTOCOL_VERSION = '2025-06-18';
 export const DEFAULT_SNAPSHOT_MAX_PER_WINDOW = 6;
 export const DEFAULT_SNAPSHOT_WINDOW_MS = 60 * 1000;
+export const DEFAULT_PUSH_RUN_MAX_PER_WINDOW = 6;
+export const DEFAULT_PUSH_RUN_WINDOW_MS = 60 * 1000;
+export const MAX_PUSH_RUNS = 100;
 const SHA40_RE = /^[0-9a-f]{40}$/;
+const SHA40_INPUT_RE = /^[0-9a-fA-F]{40}$/;
 
 class RepoCockpitError extends Error {
   constructor(code) {
@@ -236,6 +241,236 @@ function createSnapshotRateLimiter({
   };
 }
 
+function pushRunReadError(error, observedAt, sha, sources) {
+  const code = error instanceof RepoCockpitError
+    ? error.code
+    : 'GITHUB_READ_FAILED';
+  const authBlocked = new Set([
+    'GITHUB_READ_AUTH_REQUIRED',
+    'GITHUB_HTTP_401',
+    'GITHUB_HTTP_403'
+  ]).has(code);
+  return {
+    schemaVersion: 1,
+    contract: 'repo_push_runs:v1',
+    serviceVersion: VERSION,
+    kind: 'REPO_PUSH_RUNS',
+    repository: REPO,
+    observedAt,
+    sha,
+    event: 'push',
+    inventoryComplete: false,
+    totalCount: null,
+    count: 0,
+    runs: [],
+    authority: authBlocked ? 'BLOCKED_CAPABILITY' : 'UNKNOWN',
+    unknown: [authBlocked ? 'github-read-auth' : 'github-push-runs'],
+    error: code,
+    sources
+  };
+}
+
+function pushRunFailure(code, observedAt, sha, sources) {
+  return {
+    schemaVersion: 1,
+    contract: 'repo_push_runs:v1',
+    serviceVersion: VERSION,
+    kind: 'REPO_PUSH_RUNS',
+    repository: REPO,
+    observedAt,
+    sha,
+    event: 'push',
+    inventoryComplete: false,
+    totalCount: null,
+    count: 0,
+    runs: [],
+    authority: 'UNKNOWN',
+    unknown: ['github-push-runs'],
+    error: code,
+    sources
+  };
+}
+
+function rateLimitedPushRuns(sha, observedAt = new Date().toISOString()) {
+  return {
+    schemaVersion: 1,
+    contract: 'repo_push_runs:v1',
+    serviceVersion: VERSION,
+    kind: 'REPO_PUSH_RUNS',
+    repository: REPO,
+    observedAt,
+    sha: sha ?? null,
+    event: 'push',
+    inventoryComplete: false,
+    totalCount: null,
+    count: 0,
+    runs: [],
+    authority: 'BLOCKED_CAPABILITY',
+    unknown: ['github-push-run-rate-limit'],
+    error: 'GITHUB_PUSH_RUN_READ_RATE_LIMITED',
+    sources: [BRANCH_MAIN, ACTION_RUNS]
+  };
+}
+
+function pushRunsUrl(sha) {
+  const query = new URLSearchParams({
+    head_sha: sha,
+    event: 'push',
+    per_page: String(MAX_PUSH_RUNS)
+  });
+  return `${ACTION_RUNS}?${query}`;
+}
+
+function validBoundedText(value, maxLength) {
+  return typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= maxLength &&
+    !/[\r\n\0]/.test(value);
+}
+
+function projectPushRun(run, sha) {
+  if (!isJsonObject(run)) return null;
+  if (!Number.isInteger(run.id) || run.id <= 0) return null;
+  if (!validBoundedText(run.name, 500)) return null;
+  if (!validBoundedText(run.path, 500)) return null;
+  if (run.event !== 'push') return null;
+  if (run.head_sha !== sha) return null;
+  if (run.head_branch !== null &&
+      run.head_branch !== undefined &&
+      !validBoundedText(run.head_branch, 300)) return null;
+  if (!validBoundedText(run.status, 64)) return null;
+  if (run.conclusion !== null &&
+      run.conclusion !== undefined &&
+      !validBoundedText(run.conclusion, 64)) return null;
+  if (!Number.isInteger(run.run_number) || run.run_number <= 0) return null;
+  if (!Number.isInteger(run.run_attempt) || run.run_attempt <= 0) return null;
+  if (!validBoundedText(run.html_url, 1000) ||
+      !run.html_url.startsWith(`https://github.com/${REPO}/actions/runs/`)) {
+    return null;
+  }
+
+  return {
+    id: run.id,
+    workflowName: run.name,
+    workflowPath: run.path,
+    headSha: run.head_sha,
+    headBranch: run.head_branch ?? null,
+    event: run.event,
+    status: run.status,
+    conclusion: run.conclusion ?? null,
+    runNumber: run.run_number,
+    runAttempt: run.run_attempt,
+    url: run.html_url
+  };
+}
+
+export async function repoPushRuns({ githubJson, sha } = {}) {
+  const observedAt = new Date().toISOString();
+  const sources = [];
+  if (typeof githubJson !== 'function') {
+    return pushRunReadError(
+      new RepoCockpitError('GITHUB_READ_AUTH_REQUIRED'),
+      observedAt,
+      null,
+      [ACTION_RUNS]
+    );
+  }
+
+  let exactSha;
+  if (sha === undefined) {
+    let currentMain;
+    try {
+      currentMain = await githubJson(BRANCH_MAIN);
+    } catch (error) {
+      return pushRunReadError(error, observedAt, null, [BRANCH_MAIN]);
+    }
+    const candidate = currentMain?.commit?.sha;
+    if (!SHA40_RE.test(String(candidate || ''))) {
+      return pushRunFailure(
+        'DIRECT_MAIN_SHA_INVALID',
+        observedAt,
+        null,
+        [BRANCH_MAIN]
+      );
+    }
+    exactSha = candidate;
+    sources.push(BRANCH_MAIN);
+  } else if (typeof sha === 'string' && SHA40_INPUT_RE.test(sha)) {
+    exactSha = sha.toLowerCase();
+  } else {
+    return pushRunFailure('SHA_INVALID', observedAt, null, []);
+  }
+
+  const runSource = pushRunsUrl(exactSha);
+  sources.push(runSource);
+
+  let payload;
+  try {
+    payload = await githubJson(runSource);
+  } catch (error) {
+    return pushRunReadError(error, observedAt, exactSha, sources);
+  }
+
+  const total = payload?.total_count;
+  const rawRuns = payload?.workflow_runs;
+  if (!Number.isInteger(total) || total < 0 || !Array.isArray(rawRuns)) {
+    return pushRunFailure(
+      'RUN_INVENTORY_MALFORMED', observedAt, exactSha, sources
+    );
+  }
+  if (total > MAX_PUSH_RUNS || rawRuns.length > MAX_PUSH_RUNS) {
+    return pushRunFailure(
+      'RUN_INVENTORY_BOUND_EXCEEDED', observedAt, exactSha, sources
+    );
+  }
+  if (rawRuns.length !== total) {
+    return pushRunFailure(
+      'RUN_INVENTORY_INCOMPLETE', observedAt, exactSha, sources
+    );
+  }
+  if (rawRuns.some((run) => run?.head_sha !== exactSha)) {
+    return pushRunFailure(
+      'RUN_INVENTORY_SHA_MISMATCH', observedAt, exactSha, sources
+    );
+  }
+  if (rawRuns.some((run) => run?.event !== 'push')) {
+    return pushRunFailure(
+      'RUN_INVENTORY_EVENT_MISMATCH', observedAt, exactSha, sources
+    );
+  }
+
+  const runs = rawRuns.map((run) => projectPushRun(run, exactSha));
+  if (runs.some((run) => run === null)) {
+    return pushRunFailure(
+      'RUN_INVENTORY_MALFORMED', observedAt, exactSha, sources
+    );
+  }
+
+  return {
+    schemaVersion: 1,
+    contract: 'repo_push_runs:v1',
+    serviceVersion: VERSION,
+    kind: 'REPO_PUSH_RUNS',
+    repository: REPO,
+    observedAt,
+    sha: exactSha,
+    event: 'push',
+    inventoryComplete: true,
+    totalCount: total,
+    count: runs.length,
+    runs,
+    authority: 'PASS',
+    unknown: [],
+    sources,
+    semantics: {
+      source: 'direct GitHub Actions exact-SHA push-run inventory',
+      requiredAuthority: 'unchanged',
+      persistence: 'none',
+      mutation: 'none'
+    }
+  };
+}
+
 export async function repoSnapshot({ githubJson } = {}) {
   const observedAt = new Date().toISOString();
   if (typeof githubJson !== 'function') {
@@ -416,9 +651,18 @@ function validJsonRpcRequest(msg) {
   return true;
 }
 
-function validToolArguments(value) {
+function validSnapshotArguments(value) {
   if (value === undefined) return true;
   return isJsonObject(value) && Object.keys(value).length === 0;
+}
+
+function validPushRunArguments(value) {
+  if (value === undefined) return true;
+  if (!isJsonObject(value)) return false;
+  const keys = Object.keys(value);
+  if (keys.some((key) => key !== 'sha')) return false;
+  if (!Object.prototype.hasOwnProperty.call(value, 'sha')) return true;
+  return typeof value.sha === 'string' && SHA40_INPUT_RE.test(value.sha);
 }
 
 function validInitializeParams(params) {
@@ -475,7 +719,7 @@ function rpcError(id, code, message) {
   return { jsonrpc: '2.0', id, error: { code, message } };
 }
 
-const TOOL = {
+const SNAPSHOT_TOOL = {
   name: 'repo_snapshot',
   title: 'Repository Snapshot',
   description:
@@ -493,10 +737,34 @@ const TOOL = {
   }
 };
 
+const PUSH_RUN_TOOL = {
+  name: 'repo_push_runs',
+  title: 'Repository Push Runs',
+  description:
+    'Read-only bounded inventory of push-triggered GitHub Actions runs for one exact commit SHA in hanmiyoo10-alt/-. Omit sha to resolve current main once. Never dispatches, reruns, cancels, or mutates workflows or repository state.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      sha: {
+        type: 'string',
+        pattern: '^[0-9a-fA-F]{40}$',
+        description: 'Optional exact commit SHA. Omit to use direct current main.'
+      }
+    },
+    additionalProperties: false
+  },
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: true
+  }
+};
+
 async function handleRequest(
   req,
   res,
-  { readSnapshot, publicDomain }
+  { readSnapshot, readPushRuns, publicDomain }
 ) {
   if (req.method === 'GET' && req.url === '/healthz') {
     return sendJson(res, 200, {
@@ -591,36 +859,63 @@ async function handleRequest(
   }
 
   if (msg.method === 'tools/list') {
-    return sendJson(res, 200, rpcResult(id, { tools: [TOOL] }));
+    return sendJson(
+      res,
+      200,
+      rpcResult(id, { tools: [SNAPSHOT_TOOL, PUSH_RUN_TOOL] })
+    );
   }
 
   if (msg.method === 'tools/call') {
     if (!isJsonObject(msg.params)) {
       return sendJson(res, 200, rpcError(id, -32602, 'Invalid params'));
     }
-    if (msg.params.name !== 'repo_snapshot') {
-      return sendJson(res, 200, rpcError(id, -32602, 'unknown_tool'));
-    }
-    if (!validToolArguments(msg.params.arguments)) {
+
+    if (msg.params.name === 'repo_snapshot') {
+      if (!validSnapshotArguments(msg.params.arguments)) {
+        return sendJson(
+          res,
+          200,
+          rpcError(id, -32602, 'invalid_tool_arguments')
+        );
+      }
+      const snapshot = await readSnapshot();
       return sendJson(
         res,
         200,
-        rpcError(id, -32602, 'invalid_tool_arguments')
+        rpcResult(id, {
+          content: [
+            { type: 'text', text: JSON.stringify(snapshot) }
+          ],
+          structuredContent: snapshot,
+          isError: snapshot.authority === 'BLOCKED_CAPABILITY'
+        })
       );
     }
 
-    const snapshot = await readSnapshot();
-    return sendJson(
-      res,
-      200,
-      rpcResult(id, {
-        content: [
-          { type: 'text', text: JSON.stringify(snapshot) }
-        ],
-        structuredContent: snapshot,
-        isError: snapshot.authority === 'BLOCKED_CAPABILITY'
-      })
-    );
+    if (msg.params.name === 'repo_push_runs') {
+      if (!validPushRunArguments(msg.params.arguments)) {
+        return sendJson(
+          res,
+          200,
+          rpcError(id, -32602, 'invalid_tool_arguments')
+        );
+      }
+      const pushRuns = await readPushRuns(msg.params.arguments?.sha);
+      return sendJson(
+        res,
+        200,
+        rpcResult(id, {
+          content: [
+            { type: 'text', text: JSON.stringify(pushRuns) }
+          ],
+          structuredContent: pushRuns,
+          isError: pushRuns.authority !== 'PASS'
+        })
+      );
+    }
+
+    return sendJson(res, 200, rpcError(id, -32602, 'unknown_tool'));
   }
 
   return sendJson(res, 200, rpcError(id, -32601, 'Method not found'));
@@ -632,6 +927,8 @@ export function createRepoCockpitServer({
   publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || null,
   snapshotMaxPerWindow = DEFAULT_SNAPSHOT_MAX_PER_WINDOW,
   snapshotWindowMs = DEFAULT_SNAPSHOT_WINDOW_MS,
+  pushRunMaxPerWindow = DEFAULT_PUSH_RUN_MAX_PER_WINDOW,
+  pushRunWindowMs = DEFAULT_PUSH_RUN_WINDOW_MS,
   now = Date.now
 } = {}) {
   const readToken = typeof token === 'string' ? token.trim() : '';
@@ -647,9 +944,20 @@ export function createRepoCockpitServer({
     }
     return repoSnapshot({ githubJson });
   };
+  const allowPushRunRead = createSnapshotRateLimiter({
+    maxPerWindow: pushRunMaxPerWindow,
+    windowMs: pushRunWindowMs,
+    now
+  });
+  const readPushRuns = async (sha) => {
+    if (readToken && !allowPushRunRead()) {
+      return rateLimitedPushRuns(sha);
+    }
+    return repoPushRuns({ githubJson, sha });
+  };
 
   return createServer((req, res) => {
-    void handleRequest(req, res, { readSnapshot, publicDomain })
+    void handleRequest(req, res, { readSnapshot, readPushRuns, publicDomain })
       .catch(() => {
         if (!res.headersSent) {
           sendJson(res, 500, { error: 'internal_error' });

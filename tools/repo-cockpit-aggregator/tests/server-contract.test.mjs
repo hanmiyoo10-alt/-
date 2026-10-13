@@ -3,12 +3,14 @@ import { once } from 'node:events';
 import test from 'node:test';
 
 import {
+  ACTION_RUNS,
   BRANCH_MAIN,
   ISSUE_485,
   MCP_PROTOCOL_VERSION,
   createGitHubJson,
   createRepoCockpitServer,
   readJson,
+  repoPushRuns,
   repoSnapshot
 } from '../src/server.mjs';
 
@@ -97,6 +99,38 @@ function okJson(value) {
     status: 200,
     json: async () => value
   };
+}
+
+function pushRun({
+  id = 1,
+  sha = SHA,
+  event = 'push',
+  name = 'SimCore CI'
+} = {}) {
+  return {
+    id,
+    name,
+    path: '.github/workflows/simcore-ci.yml',
+    event,
+    head_sha: sha,
+    head_branch: 'main',
+    status: 'completed',
+    conclusion: 'success',
+    run_number: id,
+    run_attempt: 1,
+    html_url: `https://github.com/hanmiyoo10-alt/-/actions/runs/${id}`
+  };
+}
+
+function pushInventory(runs) {
+  return {
+    total_count: runs.length,
+    workflow_runs: runs
+  };
+}
+
+function pushRunsUrl(sha = SHA) {
+  return `${ACTION_RUNS}?head_sha=${sha}&event=push&per_page=100`;
 }
 
 async function listeningServer(options = {}) {
@@ -375,6 +409,119 @@ test('non-NONE operator unknown evidence prevents PASS', async () => {
   assert.ok(result.unknown.includes('PENDING'));
 });
 
+test('push-run explicit SHA skips main and returns bounded PASS inventory', async () => {
+  const runs = [pushRun({ id: 11 }), pushRun({ id: 12, name: 'Proof Bundle' })];
+  const { reader, calls } = sequence([pushInventory(runs)]);
+  const result = await repoPushRuns({ githubJson: reader, sha: SHA.toUpperCase() });
+
+  assert.deepEqual(calls, [pushRunsUrl()]);
+  assert.equal(result.authority, 'PASS');
+  assert.equal(result.sha, SHA);
+  assert.equal(result.event, 'push');
+  assert.equal(result.inventoryComplete, true);
+  assert.equal(result.totalCount, 2);
+  assert.equal(result.count, 2);
+  assert.deepEqual(result.unknown, []);
+  assert.deepEqual(result.runs.map((run) => run.id), [11, 12]);
+  assert.deepEqual(result.runs.map((run) => run.event), ['push', 'push']);
+  assert.ok(result.runs.every((run) => run.headSha === SHA));
+  assert.equal(result.runs[0].workflowName, 'SimCore CI');
+  assert.equal(result.runs[0].workflowPath, '.github/workflows/simcore-ci.yml');
+  assert.equal(result.runs[0].url, 'https://github.com/hanmiyoo10-alt/-/actions/runs/11');
+});
+
+test('push-run omitted SHA resolves current main once before exact inventory', async () => {
+  const { reader, calls } = sequence([
+    branch(SHA),
+    pushInventory([pushRun({ id: 21 })])
+  ]);
+  const result = await repoPushRuns({ githubJson: reader });
+
+  assert.deepEqual(calls, [BRANCH_MAIN, pushRunsUrl()]);
+  assert.equal(result.authority, 'PASS');
+  assert.equal(result.sha, SHA);
+  assert.equal(result.count, 1);
+  assert.deepEqual(result.sources, [BRANCH_MAIN, pushRunsUrl()]);
+});
+
+test('push-run complete zero inventory is known zero', async () => {
+  const { reader } = sequence([pushInventory([])]);
+  const result = await repoPushRuns({ githubJson: reader, sha: SHA });
+
+  assert.equal(result.authority, 'PASS');
+  assert.equal(result.inventoryComplete, true);
+  assert.equal(result.totalCount, 0);
+  assert.equal(result.count, 0);
+  assert.deepEqual(result.runs, []);
+  assert.deepEqual(result.unknown, []);
+});
+
+test('push-run invalid input and malformed inventory fail closed', async () => {
+  let calls = 0;
+  const invalid = await repoPushRuns({
+    sha: 'not-a-sha',
+    githubJson: async () => {
+      calls += 1;
+      return {};
+    }
+  });
+  assert.equal(calls, 0);
+  assert.equal(invalid.authority, 'UNKNOWN');
+  assert.equal(invalid.error, 'SHA_INVALID');
+
+  const cases = [
+    {
+      label: 'incomplete',
+      payload: { total_count: 2, workflow_runs: [pushRun()] },
+      error: 'RUN_INVENTORY_INCOMPLETE'
+    },
+    {
+      label: 'sha-mismatch',
+      payload: pushInventory([pushRun({ sha: SHA2 })]),
+      error: 'RUN_INVENTORY_SHA_MISMATCH'
+    },
+    {
+      label: 'event-mismatch',
+      payload: pushInventory([pushRun({ event: 'pull_request' })]),
+      error: 'RUN_INVENTORY_EVENT_MISMATCH'
+    },
+    {
+      label: 'malformed-run',
+      payload: pushInventory([{ ...pushRun(), html_url: 'https://evil.example/run/1' }]),
+      error: 'RUN_INVENTORY_MALFORMED'
+    },
+    {
+      label: 'bound',
+      payload: { total_count: 101, workflow_runs: [] },
+      error: 'RUN_INVENTORY_BOUND_EXCEEDED'
+    }
+  ];
+
+  for (const row of cases) {
+    const { reader } = sequence([row.payload]);
+    const result = await repoPushRuns({ githubJson: reader, sha: SHA });
+    assert.equal(result.authority, 'UNKNOWN', row.label);
+    assert.equal(result.inventoryComplete, false, row.label);
+    assert.equal(result.error, row.error, row.label);
+  }
+});
+
+test('push-run auth denial is BLOCKED_CAPABILITY and server errors stay UNKNOWN', async () => {
+  for (const [status, expected] of [
+    [403, 'BLOCKED_CAPABILITY'],
+    [500, 'UNKNOWN']
+  ]) {
+    const githubJson = createGitHubJson({
+      token: 'test-only-secret',
+      fetchImpl: async () => ({ ok: false, status })
+    });
+    const result = await repoPushRuns({ githubJson, sha: SHA });
+    assert.equal(result.authority, expected, status);
+    assert.equal(result.error, `GITHUB_HTTP_${status}`, status);
+    assert.doesNotMatch(JSON.stringify(result), /test-only-secret/);
+  }
+});
+
 test('readJson preserves multibyte UTF-8 split across chunks', async () => {
   const raw = Buffer.from(JSON.stringify({
     jsonrpc: '2.0',
@@ -410,7 +557,7 @@ test('health endpoint works without GitHub token or fetch', async (t) => {
   assert.deepEqual(await response.json(), {
     ok: true,
     service: 'hanmiyoo-repo-cockpit-aggregator',
-    version: '0.3.3'
+    version: '0.3.4'
   });
   assert.equal(fetchCalls, 0);
 });
@@ -517,7 +664,7 @@ test('untrusted MCP Origin is rejected before request dispatch', async (t) => {
     })
   });
   assert.equal(trusted.status, 200);
-  assert.equal((await trusted.json()).result.tools.length, 1);
+  assert.equal((await trusted.json()).result.tools.length, 2);
   assert.equal(fetchCalls, 0);
 });
 
@@ -554,6 +701,77 @@ test('tool arguments must match the advertised empty-object schema before reads'
   assert.equal(valid.response.status, 200);
   assert.equal(valid.body.result.structuredContent.authority, 'PASS');
   assert.equal(fetchCalls, 3);
+});
+
+test('push-run MCP validates arguments, routes reads, and rate-limits independently', async (t) => {
+  let fetchCalls = 0;
+  const fetchImpl = async (url) => {
+    fetchCalls += 1;
+    if (url === BRANCH_MAIN) return okJson(branch(SHA));
+    if (url === ISSUE_485) return okJson(issue());
+    if (url === pushRunsUrl()) return okJson(pushInventory([pushRun({ id: 31 })]));
+    throw new Error(`unexpected url: ${url}`);
+  };
+  const { server, base } = await listeningServer({
+    token: 'test-only-token',
+    fetchImpl,
+    snapshotMaxPerWindow: 1,
+    pushRunMaxPerWindow: 1,
+    snapshotWindowMs: 60_000,
+    pushRunWindowMs: 60_000,
+    now: () => 0
+  });
+  t.after(() => server.close());
+
+  for (const argumentsValue of [
+    null,
+    [],
+    'bad',
+    { extra: true },
+    { sha: 'bad' }
+  ]) {
+    const invalid = await postJson(base, {
+      jsonrpc: '2.0',
+      id: 76,
+      method: 'tools/call',
+      params: { name: 'repo_push_runs', arguments: argumentsValue }
+    });
+    assert.equal(invalid.response.status, 200);
+    assert.equal(invalid.body.error.code, -32602);
+    assert.equal(invalid.body.error.message, 'invalid_tool_arguments');
+    assert.equal(fetchCalls, 0);
+  }
+
+  const first = await postJson(base, {
+    jsonrpc: '2.0',
+    id: 77,
+    method: 'tools/call',
+    params: { name: 'repo_push_runs', arguments: {} }
+  });
+  assert.equal(first.response.status, 200);
+  assert.equal(first.body.result.isError, false);
+  assert.equal(first.body.result.structuredContent.authority, 'PASS');
+  assert.equal(first.body.result.structuredContent.count, 1);
+  assert.equal(fetchCalls, 2);
+
+  const second = await postJson(base, {
+    jsonrpc: '2.0',
+    id: 78,
+    method: 'tools/call',
+    params: { name: 'repo_push_runs', arguments: { sha: SHA } }
+  });
+  assert.equal(second.response.status, 200);
+  assert.equal(second.body.result.isError, true);
+  assert.equal(
+    second.body.result.structuredContent.error,
+    'GITHUB_PUSH_RUN_READ_RATE_LIMITED'
+  );
+  assert.equal(fetchCalls, 2);
+
+  const snapshot = await fetch(`${base}/snapshot`);
+  assert.equal(snapshot.status, 200);
+  assert.equal((await snapshot.json()).authority, 'PASS');
+  assert.equal(fetchCalls, 5);
 });
 
 test('unsupported MCP protocol header is rejected before snapshot reads', async (t) => {
@@ -598,11 +816,11 @@ test('unsupported MCP protocol header is rejected before snapshot reads', async 
     })
   });
   assert.equal(allowed.status, 200);
-  assert.equal((await allowed.json()).result.tools.length, 1);
+  assert.equal((await allowed.json()).result.tools.length, 2);
   assert.equal(fetchCalls, 0);
 });
 
-test('public MCP tool surface remains one fixed read-only tool', async (t) => {
+test('public MCP tool surface exposes exactly two fixed read-only tools', async (t) => {
   const { server, base } = await listeningServer({ token: '' });
   t.after(() => server.close());
 
@@ -612,16 +830,28 @@ test('public MCP tool surface remains one fixed read-only tool', async (t) => {
     method: 'tools/list'
   });
   assert.equal(response.status, 200);
-  assert.equal(body.result.tools.length, 1);
-  const tool = body.result.tools[0];
-  assert.equal(tool.name, 'repo_snapshot');
-  assert.deepEqual(tool.inputSchema, {
+  assert.deepEqual(
+    body.result.tools.map((tool) => tool.name),
+    ['repo_snapshot', 'repo_push_runs']
+  );
+
+  const snapshot = body.result.tools[0];
+  assert.deepEqual(snapshot.inputSchema, {
     type: 'object',
     properties: {},
     additionalProperties: false
   });
-  assert.equal(tool.annotations.readOnlyHint, true);
-  assert.equal(tool.annotations.destructiveHint, false);
+
+  const pushRuns = body.result.tools[1];
+  assert.equal(pushRuns.inputSchema.type, 'object');
+  assert.equal(pushRuns.inputSchema.additionalProperties, false);
+  assert.equal(pushRuns.inputSchema.properties.sha.type, 'string');
+  assert.equal(pushRuns.inputSchema.properties.sha.pattern, '^[0-9a-fA-F]{40}$');
+
+  for (const tool of body.result.tools) {
+    assert.equal(tool.annotations.readOnlyHint, true);
+    assert.equal(tool.annotations.destructiveHint, false);
+  }
 });
 
 test('initialize counter-offers only the supported handshake version', async (t) => {

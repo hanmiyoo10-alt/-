@@ -2521,3 +2521,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/244fc958e3544809235b9d9777dedb436f47f2fe)
 - Event ID: `c625859e5d102878fa0e9adb204f9d3b66b6a7f9d7b272a4616d62bb1ebb3ce8`
 <!-- canonical-main-doc-promoted:c625859e5d102878fa0e9adb204f9d3b66b6a7f9d7b272a4616d62bb1ebb3ce8 -->
+
+### 2026-10-13 — Add product feature and experience donor lane to SimCore Risu (#3649)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `02f41adbb451507c5e8c5effc3213564fbc81e5e`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/02f41adbb451507c5e8c5effc3213564fbc81e5e)
+- Event ID: `99a536371f93364d9a191e3e37e4f7768b9818baf731b2af5d0f3ef845f0f922`
+<!-- canonical-main-doc-promoted:99a536371f93364d9a191e3e37e4f7768b9818baf731b2af5d0f3ef845f0f922 -->

@@ -536,6 +536,18 @@ Vector indexes do not own semantic truth.
 
 Every intentionally selected donor keeps a traceable destination until proven equal-or-better supersession.
 
+### Future donor acquisition priority
+
+SimCore Risu is intended to become the owner's primary Risu environment. Accordingly, future donor discovery prioritizes the host ecosystem:
+
+- materially distinct RisuAI/PocketRisu forks, modified distributions, forks-of-forks and Risu-derived applications enter the donor-candidate registry by default when discovered;
+- host/mobile/server/Termux/storage/performance/save/context/memory/UI/product-integration variants are in scope;
+- unrelated new standalone plugins are discovered selectively when they address a proven product gap;
+- this priority does not demote already selected plugin donors;
+- donor registration is inventory/provenance first, not automatic integration.
+
+Broad Risu fork/mod ecosystem discovery is tracked by #3645.
+
 | Donor | Target contribution |
 | --- | --- |
 | Current SimCore | Control semantics, host safety, current behavioral baseline |

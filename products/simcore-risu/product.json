@@ -43,5 +43,16 @@
   },
   "owner_drive_donor_intake_issue": 3647,
   "owner_drive_donor_source": "PRIVATE_GOOGLE_DRIVE_FOLDER_POCKETRISU",
-  "owner_drive_private_locator_policy": "DO_NOT_COMMIT_PRIVATE_DRIVE_IDS_OR_URLS"
+  "owner_drive_private_locator_policy": "DO_NOT_COMMIT_PRIVATE_DRIVE_IDS_OR_URLS",
+  "donor_role_taxonomy": [
+    "CORE_FUSION_DONOR",
+    "HOST_PLATFORM_DONOR",
+    "PRODUCT_FEATURE_DONOR",
+    "EXPERIENCE_GAME_DONOR",
+    "UX_TOOL_DONOR",
+    "OPS_DONOR",
+    "SUPPORTING_REFERENCE"
+  ],
+  "owner_drive_selection_semantics": "OWNER_PLACEMENT_IS_PRODUCT_FEATURE_INTENT",
+  "product_feature_module_policy": "OPTIONAL_NATIVE_MODULES_WITH_TYPED_WORLD_EFFECT_GATES"
 }

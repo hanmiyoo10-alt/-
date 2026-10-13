@@ -9,6 +9,7 @@ from urllib.error import HTTPError
 from urllib.request import Request
 
 from repo_ci_mcp.github_reader import (
+    ATTESTATIONS_API_VERSION,
     CODE_QUALITY_API_VERSION,
     DEFAULT_API_VERSION,
     MAX_RELEASE_LIST_BYTES,
@@ -536,6 +537,64 @@ class ReaderTests(unittest.TestCase):
         with patch.object(GitHubReader, "_get_json_value", return_value=[{}] * 3):
             with self.assertRaisesRegex(GitHubReadError, "bounded array"):
                 reader.list_repository_webhooks(limit=2)
+
+    def test_58m_attestations_use_fixed_bounded_endpoint_and_strip_bundle_url(self):
+        reader = GitHubReader(repository="owner/repo")
+        digest = "sha256:" + "A" * 64
+        normalized = "sha256:" + "a" * 64
+        raw = {
+            "attestations": [{
+                "repository_id": 7,
+                "initiator": "github-actions",
+                "bundle_url": "https://signed.invalid/bundle?sig=private",
+                "raw": {"private": True},
+            }],
+        }
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_repository_attestations(digest, limit=2)
+        get_value.assert_called_once_with(
+            "/repos/owner/repo/attestations/sha256%3A" + "a" * 64,
+            {"per_page": 2},
+            api_version=ATTESTATIONS_API_VERSION,
+        )
+        self.assertEqual(
+            result,
+            [{"repository_id": 7, "initiator": "github-actions"}],
+        )
+        self.assertNotIn("signed.invalid", repr(result))
+        self.assertNotIn("bundle_url", repr(result))
+        self.assertNotIn("private", repr(result))
+        self.assertEqual(reader._subject_digest(digest), normalized)
+
+    def test_58ma_attestation_reader_uses_bundle_free_api_version(self):
+        reader = GitHubReader(repository="owner/repo")
+        digest = "sha256:" + "a" * 64
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {}
+        response.read.return_value = b'{"attestations":[]}'
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            self.assertEqual(reader.list_repository_attestations(digest, limit=1), [])
+        request = opened.call_args.args[0]
+        self.assertEqual(request.get_header("X-github-api-version"), ATTESTATIONS_API_VERSION)
+
+    def test_58n_attestation_reads_validate_digest_limit_and_bounds(self):
+        reader = GitHubReader(repository="owner/repo")
+        with self.assertRaisesRegex(ValueError, "sha256"):
+            reader.list_repository_attestations("sha256:short", limit=1)
+        with self.assertRaisesRegex(ValueError, "sha256"):
+            reader.list_repository_attestations("sha512:" + "a" * 64, limit=1)
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_repository_attestations("sha256:" + "a" * 64, limit=0)
+        with patch.object(
+            GitHubReader,
+            "_get_json_value",
+            return_value={"attestations": [{}] * 3},
+        ):
+            with self.assertRaisesRegex(GitHubReadError, "bounded array"):
+                reader.list_repository_attestations("sha256:" + "a" * 64, limit=2)
 
     def test_59_permission_probe_reads_header_without_inferring_grant(self):
         reader = GitHubReader(repository="owner/repo")

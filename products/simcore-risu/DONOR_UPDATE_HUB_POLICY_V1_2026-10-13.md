@@ -182,6 +182,28 @@ No donor disappears silently.
 
 SimCore Risu tracks a dedicated host-level donor lane alongside plugin/feature donors.
 
+### Risu fork/mod discovery priority
+
+Because SimCore Risu is intended to become the owner's primary Risu environment, future donor discovery is intentionally asymmetric:
+
+```text
+Risu forks / Risu-derived apps / host modifications
+    = DEFAULT DISCOVERY + DONOR CANDIDATE REGISTRATION
+
+new standalone plugins
+    = SELECTIVE / REQUIREMENT-DRIVEN DISCOVERY
+```
+
+Materially distinct RisuAI/PocketRisu forks, forks-of-forks, modified distributions, mobile/server/Termux variants, storage/performance forks, save/branch/context/memory forks, and integrated Risu-derived applications should be registered as donor candidates when discovered.
+
+Registration does not imply code adoption. Thin/no-op forks may be classified and retained only as lineage evidence.
+
+Broad donor acquisition remains frozen for unrelated plugin hunting, but is explicitly OPEN for the Risu fork/mod host lane.
+
+Tracking:
+- broad Risu ecosystem discovery: #3645
+- current host donor lane: #3642
+
 Direct lineage:
 
 ```text

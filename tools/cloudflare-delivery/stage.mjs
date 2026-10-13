@@ -197,6 +197,72 @@ function validateProvenance({provenance, policy, channel, sourceSha, canonicalRo
   if (JSON.stringify(provenance.files) !== JSON.stringify(expected)) fail('PROVENANCE_FILE_SET_MISMATCH', channel.name);
 }
 
+function validateStageForCurrentness(stage, policy) {
+  if (!stage || stage.schemaVersion !== 1 || stage.kind !== 'CLOUDFLARE_DELIVERY_STAGE' || stage.status !== 'PASS') {
+    fail('INVALID_STAGE_REPORT');
+  }
+  if (stage.workerName !== policy.workerName) fail('STAGE_WORKER_MISMATCH');
+  if (stage.publicBaseUrl !== policy.publicBaseUrl) fail('STAGE_PUBLIC_BASE_URL_MISMATCH');
+  if (stage.sourceRepository !== policy.sourceRepository) fail('STAGE_SOURCE_REPOSITORY_MISMATCH');
+  if (stage.mirrorRepository !== policy.mirrorRepository) fail('STAGE_MIRROR_REPOSITORY_MISMATCH');
+  if (!Array.isArray(stage.channels) || stage.channels.length !== policy.channels.length) {
+    fail('STAGE_CHANNEL_COUNT_MISMATCH');
+  }
+  const byName = new Map();
+  for (const row of stage.channels) {
+    if (!row || typeof row.channel !== 'string' || byName.has(row.channel)) fail('STAGE_CHANNEL_IDENTITY_INVALID');
+    byName.set(row.channel, row);
+  }
+  return byName;
+}
+
+export function verifyStageCurrentness({
+  sourceRepo,
+  mirrorDir,
+  stage,
+  policy = loadPolicy(),
+  enforceRepositoryIdentity = true,
+}) {
+  validatePolicy(policy);
+  if (enforceRepositoryIdentity) {
+    assertRepository(sourceRepo, policy.sourceRepository);
+    assertRepository(mirrorDir, policy.mirrorRepository);
+  }
+  const byName = validateStageForCurrentness(stage, policy);
+  const channels = [];
+  for (const channel of policy.channels) {
+    const recorded = byName.get(channel.name);
+    if (!recorded) fail('STAGE_CHANNEL_MISSING', channel.name);
+    if (recorded.sourceRef !== channel.sourceRef || recorded.mirrorBranch !== channel.mirrorBranch) {
+      fail('STAGE_CHANNEL_POLICY_MISMATCH', channel.name);
+    }
+    if (!SHA_RE.test(recorded.sourceSha) || !SHA_RE.test(recorded.mirrorSha)) {
+      fail('STAGE_CHANNEL_SHA_INVALID', channel.name);
+    }
+    const sourceRemoteSha = remoteBranchSha(sourceRepo, channel.sourceRef);
+    if (sourceRemoteSha !== recorded.sourceSha) {
+      fail('SOURCE_REF_MOVED', `${channel.sourceRef}:${recorded.sourceSha}->${sourceRemoteSha}`);
+    }
+    const mirrorRemoteSha = remoteBranchSha(mirrorDir, channel.mirrorBranch);
+    if (mirrorRemoteSha !== recorded.mirrorSha) {
+      fail('MIRROR_BRANCH_MOVED', `${channel.mirrorBranch}:${recorded.mirrorSha}->${mirrorRemoteSha}`);
+    }
+    channels.push({
+      channel: channel.name,
+      sourceRef: channel.sourceRef,
+      sourceSha: recorded.sourceSha,
+      mirrorBranch: channel.mirrorBranch,
+      mirrorSha: recorded.mirrorSha,
+    });
+  }
+  return {
+    schemaVersion: 1,
+    kind: 'CLOUDFLARE_DELIVERY_CURRENTNESS',
+    status: 'PASS',
+    channels,
+  };
+}
+
 async function clearOutput(outputDir) {
   await fsp.rm(outputDir, {recursive: true, force: true});
   await fsp.mkdir(outputDir, {recursive: true});

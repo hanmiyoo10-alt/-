@@ -16,6 +16,24 @@ class Delete404Client(GitHubAdminClient):
         raise GitHubAdminError("GITHUB_API_REQUEST_FAILED", 404)
 
 
+class SecretList404Client(GitHubAdminClient):
+    def __init__(self) -> None:
+        super().__init__(token_provider=StaticTokenProvider("synthetic-token"))
+
+    def _request(self, method, url, payload=None, *, token_provider=None):
+        raise GitHubAdminError("GITHUB_API_REQUEST_FAILED", 404)
+
+
+class SecretListClient(GitHubAdminClient):
+    def __init__(self, payload, headers=None) -> None:
+        super().__init__(token_provider=StaticTokenProvider("synthetic-token"))
+        self.payload = payload
+        self.headers = headers or {}
+
+    def _request(self, method, url, payload=None, *, token_provider=None):
+        return 200, self.payload, self.headers
+
+
 class AuthAndClientTests(unittest.TestCase):
     def test_pat_is_read_only_fallback_not_mutation_auth(self):
         with patch.dict(os.environ, {"REPO_ADMIN_GITHUB_TOKEN": "synthetic-token"}, clear=True):
@@ -59,6 +77,25 @@ class AuthAndClientTests(unittest.TestCase):
             mirror, canonical = token_providers_from_env()
         self.assertEqual(mirror._permissions, {"administration": "read"})
         self.assertEqual(canonical._permissions, {"environments": "read"})
+
+    def test_secret_list_404_is_not_treated_as_absence(self):
+        client = SecretList404Client()
+        with self.assertRaises(GitHubAdminError) as ctx:
+            client.get_environment_secret()
+        self.assertEqual(ctx.exception.http_status, 404)
+
+    def test_complete_empty_secret_inventory_proves_absence(self):
+        client = SecretListClient({"total_count": 0, "secrets": []})
+        self.assertIsNone(client.get_environment_secret())
+
+    def test_incomplete_secret_inventory_fails_closed(self):
+        client = SecretListClient(
+            {"total_count": 2, "secrets": [{"name": "OTHER", "created_at": None, "updated_at": None}]},
+            {"link": '<next>; rel="next"'},
+        )
+        with self.assertRaises(GitHubAdminError) as ctx:
+            client.get_environment_secret()
+        self.assertEqual(ctx.exception.code, "ENVIRONMENT_SECRET_INVENTORY_TRUNCATED")
 
     def test_secret_delete_404_is_not_treated_as_absence(self):
         client = Delete404Client()

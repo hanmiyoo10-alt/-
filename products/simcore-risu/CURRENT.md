@@ -35,6 +35,12 @@ After MYANG is cleared and bootstrapped, MYANG is intended to become the canonic
 
 No update URL is rewritten before the MYANG gate completes.
 
+Donor discovery priority is now:
+- Risu forks / Risu-derived apps / host modifications: **default donor-candidate intake**;
+- new standalone plugins: **selective / requirement-driven intake**.
+
+Broad Risu fork/mod donor discovery is tracked by #3645.
+
 The owner requires all existing MYANG content to be moved out before SimCore Risu work begins there.
 
 Point-in-time MYANG evidence observed on 2026-10-12:

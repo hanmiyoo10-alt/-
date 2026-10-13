@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cloudflare-workers-static-publish
+  group: public-distribution-publish
   cancel-in-progress: false
 
 jobs:
@@ -90,7 +90,7 @@ jobs:
           set -euo pipefail
           tools/cloudflare-delivery/node_modules/.bin/wrangler deploy             --config tools/cloudflare-delivery/wrangler.jsonc             --dry-run             --outdir "$RUNNER_TEMP/cloudflare-delivery-dry-run"
 
-      - name: Publish Workers Static Assets
+      - name: Revalidate currentness and publish Workers Static Assets
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -99,7 +99,12 @@ jobs:
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
-          tools/cloudflare-delivery/node_modules/.bin/wrangler deploy             --config tools/cloudflare-delivery/wrangler.jsonc
+          node tools/cloudflare-delivery/currentness.mjs \
+            --mirror-dir "$RUNNER_TEMP/myang-delivery" \
+            --stage-report "$RUNNER_TEMP/cloudflare-delivery-stage.json" \
+            --report "$RUNNER_TEMP/cloudflare-delivery-currentness.json"
+          tools/cloudflare-delivery/node_modules/.bin/wrangler deploy \
+            --config tools/cloudflare-delivery/wrangler.jsonc
 
       - name: Verify fixed public delivery endpoint
         shell: bash
@@ -114,6 +119,7 @@ jobs:
           name: cloudflare-delivery-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/cloudflare-delivery-stage.json
+            ${{ runner.temp }}/cloudflare-delivery-currentness.json
             ${{ runner.temp }}/cloudflare-delivery-live.json
           if-no-files-found: warn
           retention-days: 90

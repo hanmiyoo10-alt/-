@@ -473,6 +473,70 @@ class ReaderTests(unittest.TestCase):
             with self.assertRaisesRegex(GitHubReadError, "bounded array"):
                 reader.list_repository_releases(limit=2)
 
+    def test_58j_webhooks_use_fixed_bounded_endpoint_and_strip_config(self):
+        reader = GitHubReader(repository="owner/repo")
+        raw = [{
+            "id": 7,
+            "name": "web",
+            "active": True,
+            "events": ["push"],
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-02T00:00:00Z",
+            "config": {"url": "https://secret.invalid", "secret": "hidden"},
+            "ping_url": "private",
+            "deliveries_url": "private",
+            "last_response": {"code": 200, "status": "ok", "message": "private"},
+        }]
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_repository_webhooks(limit=2)
+        get_value.assert_called_once_with("/repos/owner/repo/hooks", {"per_page": 2})
+        self.assertEqual(result[0]["id"], 7)
+        self.assertEqual(result[0]["last_response"], {"code": 200, "status": "ok"})
+        self.assertNotIn("secret.invalid", repr(result))
+        self.assertNotIn("hidden", repr(result))
+        self.assertNotIn("message", repr(result))
+
+    def test_58k_webhook_deliveries_use_fixed_endpoint_and_strip_sensitive_payloads(self):
+        reader = GitHubReader(repository="owner/repo")
+        raw = [{
+            "id": 9,
+            "guid": "private-guid",
+            "delivered_at": "2026-01-03T00:00:00Z",
+            "redelivery": False,
+            "duration": 0.25,
+            "status": "OK",
+            "status_code": 200,
+            "event": "issues",
+            "action": "opened",
+            "installation_id": 123,
+            "repository_id": 456,
+            "url": "https://secret.invalid",
+            "throttled_at": None,
+            "request": {"headers": {"X-Hub-Signature-256": "secret"}, "payload": {"private": True}},
+            "response": {"headers": {"X": "secret"}, "payload": "private"},
+        }]
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_webhook_deliveries(5, limit=2)
+        get_value.assert_called_once_with("/repos/owner/repo/hooks/5/deliveries", {"per_page": 2})
+        self.assertEqual(result[0]["id"], 9)
+        self.assertNotIn("private-guid", repr(result))
+        self.assertNotIn("secret.invalid", repr(result))
+        self.assertNotIn("installation_id", repr(result))
+        self.assertNotIn("request", repr(result))
+        self.assertNotIn("response", repr(result))
+
+    def test_58l_webhook_reads_validate_ids_limits_and_bounds(self):
+        reader = GitHubReader(repository="owner/repo")
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_repository_webhooks(limit=0)
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            reader.list_webhook_deliveries(0, limit=1)
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_webhook_deliveries(1, limit=51)
+        with patch.object(GitHubReader, "_get_json_value", return_value=[{}] * 3):
+            with self.assertRaisesRegex(GitHubReadError, "bounded array"):
+                reader.list_repository_webhooks(limit=2)
+
     def test_59_permission_probe_reads_header_without_inferring_grant(self):
         reader = GitHubReader(repository="owner/repo")
         response = unittest.mock.MagicMock()
@@ -564,6 +628,21 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(
             opened.call_args.args[0].full_url,
             "https://api.github.com/repos/owner/repo/tags?per_page=1",
+        )
+
+    def test_60_webhook_permission_probe_uses_fixed_endpoint(self):
+        reader = GitHubReader(repository="owner/repo")
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {"X-Accepted-GitHub-Permissions": "webhooks=read"}
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            result = reader.probe_accepted_permissions("webhooks")
+        self.assertEqual(result["accepted_permissions"], "webhooks=read")
+        self.assertEqual(
+            opened.call_args.args[0].full_url,
+            "https://api.github.com/repos/owner/repo/hooks?per_page=1",
         )
 
     def test_61_deployment_permission_probes_use_fixed_endpoints(self):

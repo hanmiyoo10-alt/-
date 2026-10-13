@@ -157,6 +157,17 @@ class GithubObservabilityTests(unittest.TestCase):
         self.assertFalse(result["granted_permissions_inferred"])
         reader.probe_accepted_permissions.assert_called_once_with("tags")
 
+    def test_webhook_permission_operation_is_allowlisted(self):
+        reader = Mock()
+        reader.probe_accepted_permissions.return_value = {
+            "http_status": 200,
+            "accepted_permissions": None,
+        }
+        result = repo_permission_probe(reader, "webhooks")
+        self.assertEqual(result["status"], "UNAVAILABLE")
+        self.assertFalse(result["granted_permissions_inferred"])
+        reader.probe_accepted_permissions.assert_called_once_with("webhooks")
+
     def test_invalid_permission_probe_operation_is_not_echoed(self):
         reader = Mock()
         operation = "x" * 5000 + chr(10) + "secret"

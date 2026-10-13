@@ -27,5 +27,13 @@
   "donor_update_hub_target": "hanmiyoo10-alt/myang",
   "private_donor_source_policy": "OWNER_SUPPLIED_PRIVATE_SOURCE_ADAPTATION_ALLOWED",
   "public_redistribution_policy": "LICENSE_PROVENANCE_REVIEW_REQUIRED",
-  "update_routing_gate": "MYANG_EXISTING_CONTENT_RELOCATION_REQUIRED"
+  "update_routing_gate": "MYANG_EXISTING_CONTENT_RELOCATION_REQUIRED",
+  "host_donor_lane_issue": 3642,
+  "parent_host_lineage": "kwaroran/RisuAI",
+  "primary_host_upstream": "PocketRisu/PocketRisu",
+  "host_integration_staging": "hanmiyoo10-alt/PocketRisu",
+  "selective_host_donors": [
+    "nevaeh5379/HaejeokRisuai",
+    "rpaddict/RisuBard"
+  ]
 }

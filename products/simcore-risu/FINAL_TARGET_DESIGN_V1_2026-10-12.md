@@ -549,7 +549,8 @@ Every intentionally selected donor keeps a traceable destination until proven eq
 | LightBoard family | Presentation, COMMUNITY, Reaction, Public Wiki |
 | LoreQAcustom | Canon Alignment, AU divergence, temporal guard, canon progression |
 | HaejeokRisu | host performance, SQL/storage, lazy-loading, Termux/cross-platform lessons |
-| PocketRisu | upstream ecosystem compatibility and host lineage |
+| RisuAI | parent Risu host lineage, ecosystem/data/plugin compatibility reference |
+| PocketRisu | primary self-hosted upstream, ecosystem compatibility and host lineage |
 | hanmiyoo10-alt/PocketRisu | owner integration/staging fork and proven local host modifications |
 | Legacy Core_Ruleset | original product intent and migration requirements |
 | SocialRisu | interactive social client, Surface-to-World promotion, world-native social network, Media/Asset Pipeline, social privacy and migration durability |

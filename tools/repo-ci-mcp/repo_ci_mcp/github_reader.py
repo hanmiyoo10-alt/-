@@ -505,6 +505,64 @@ class GitHubReader:
             "updated_at": item.get("updated_at"),
         } for item in value]
 
+    @staticmethod
+    def _hook_id(hook_id: int) -> int:
+        if isinstance(hook_id, bool) or not isinstance(hook_id, int) or hook_id <= 0:
+            raise ValueError("hook_id must be a positive integer")
+        return hook_id
+
+    def list_repository_webhooks(self, *, limit: int) -> list[dict[str, Any]]:
+        safe_limit = self._recent_limit(limit)
+        value = self._get_json_value(
+            f"{self._repo_api_prefix}/hooks",
+            {"per_page": safe_limit},
+        )
+        if not isinstance(value, list) or len(value) > safe_limit:
+            raise GitHubReadError("webhooks response must be a bounded array")
+        if any(not isinstance(item, dict) for item in value):
+            raise GitHubReadError("webhook item invalid")
+        hooks = []
+        for item in value:
+            last_response = item.get("last_response")
+            if last_response is not None and not isinstance(last_response, dict):
+                raise GitHubReadError("webhook last_response metadata invalid")
+            hooks.append({
+                "id": item.get("id"),
+                "name": item.get("name"),
+                "active": item.get("active"),
+                "events": item.get("events"),
+                "created_at": item.get("created_at"),
+                "updated_at": item.get("updated_at"),
+                "last_response": None if last_response is None else {
+                    "code": last_response.get("code"),
+                    "status": last_response.get("status"),
+                },
+            })
+        return hooks
+
+    def list_webhook_deliveries(self, hook_id: int, *, limit: int) -> list[dict[str, Any]]:
+        safe_id = self._hook_id(hook_id)
+        safe_limit = self._recent_limit(limit)
+        value = self._get_json_value(
+            f"{self._repo_api_prefix}/hooks/{safe_id}/deliveries",
+            {"per_page": safe_limit},
+        )
+        if not isinstance(value, list) or len(value) > safe_limit:
+            raise GitHubReadError("webhook deliveries response must be a bounded array")
+        if any(not isinstance(item, dict) for item in value):
+            raise GitHubReadError("webhook delivery item invalid")
+        return [{
+            "id": item.get("id"),
+            "delivered_at": item.get("delivered_at"),
+            "redelivery": item.get("redelivery"),
+            "duration": item.get("duration"),
+            "status": item.get("status"),
+            "status_code": item.get("status_code"),
+            "event": item.get("event"),
+            "action": item.get("action"),
+            "throttled_at": item.get("throttled_at"),
+        } for item in value]
+
     def probe_accepted_permissions(self, operation: str) -> dict[str, Any]:
         paths = {
             "repository": self._repo_api_prefix,
@@ -520,6 +578,7 @@ class GitHubReader:
             "code_quality": f"{self._repo_api_prefix}/code-quality/findings",
             "releases": f"{self._repo_api_prefix}/releases",
             "tags": f"{self._repo_api_prefix}/tags",
+            "webhooks": f"{self._repo_api_prefix}/hooks",
         }
         if operation not in paths:
             raise ValueError("unsupported permission probe operation")

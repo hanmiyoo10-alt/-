@@ -9,6 +9,7 @@ from urllib.error import HTTPError
 from urllib.request import Request
 
 from repo_ci_mcp.github_reader import (
+    ATTESTATIONS_API_VERSION,
     CODE_QUALITY_API_VERSION,
     DEFAULT_API_VERSION,
     MAX_RELEASE_LIST_BYTES,
@@ -554,6 +555,7 @@ class ReaderTests(unittest.TestCase):
         get_value.assert_called_once_with(
             "/repos/owner/repo/attestations/sha256%3A" + "a" * 64,
             {"per_page": 2},
+            api_version=ATTESTATIONS_API_VERSION,
         )
         self.assertEqual(
             result,
@@ -563,6 +565,20 @@ class ReaderTests(unittest.TestCase):
         self.assertNotIn("bundle_url", repr(result))
         self.assertNotIn("private", repr(result))
         self.assertEqual(reader._subject_digest(digest), normalized)
+
+    def test_58ma_attestation_reader_uses_bundle_free_api_version(self):
+        reader = GitHubReader(repository="owner/repo")
+        digest = "sha256:" + "a" * 64
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {}
+        response.read.return_value = b'{"attestations":[]}'
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            self.assertEqual(reader.list_repository_attestations(digest, limit=1), [])
+        request = opened.call_args.args[0]
+        self.assertEqual(request.get_header("X-github-api-version"), ATTESTATIONS_API_VERSION)
 
     def test_58n_attestation_reads_validate_digest_limit_and_bounds(self):
         reader = GitHubReader(repository="owner/repo")

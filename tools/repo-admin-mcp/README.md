@@ -44,7 +44,7 @@ status
 → best-effort scrub app-owned plaintext bytearray
 ```
 
-If the secret write fails after creating the deploy key, the server deletes that newly-created key when its identity is unambiguous. Ambiguous or failed compensation remains `PARTIAL`; it is never replayed blindly.
+Before the secret PUT is attempted, a later failure may roll back the newly-created deploy key when its identity is unambiguous. **Once the secret PUT is attempted, any request exception is treated as an unknown write outcome:** the deploy key is preserved and bootstrap returns `PARTIAL / SECRET_WRITE_OUTCOME_UNKNOWN`. The operator must reconcile that retained-key state from fresh metadata before retrying; it is never replayed blindly.
 
 ### Rotation
 

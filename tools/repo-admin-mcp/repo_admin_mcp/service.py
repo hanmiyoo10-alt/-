@@ -136,16 +136,54 @@ def private_mirror_writer_bootstrap(
 
         material = key_factory(DEPLOY_KEY_TITLE_PREFIX)
         created: DeployKey | None = None
+        secret_write_attempted = False
         try:
             created = client.create_write_deploy_key(_timestamp_title(now), material.public_key)
             encrypted = sealer(env_key.key, material.private_key)
-            client.put_environment_secret(encrypted, env_key.key_id)
+            secret_write_attempted = True
+            try:
+                client.put_environment_secret(encrypted, env_key.key_id)
+            except Exception as exc:
+                try:
+                    observed_secret = client.get_environment_secret()
+                except Exception:
+                    return {
+                        "schemaVersion": 1,
+                        "kind": kind,
+                        "status": "PARTIAL",
+                        "reasonCode": "SECRET_WRITE_OUTCOME_UNKNOWN",
+                        "newKeyId": created.id,
+                    }
+                if observed_secret is not None:
+                    return {
+                        "schemaVersion": 1,
+                        "kind": kind,
+                        "status": "PARTIAL",
+                        "reasonCode": "SECRET_WRITE_OUTCOME_UNKNOWN",
+                        "newKeyId": created.id,
+                        "observedSecretUpdatedAt": observed_secret.updated_at,
+                    }
+                try:
+                    client.delete_deploy_key(created.id)
+                except Exception:
+                    return {
+                        "schemaVersion": 1,
+                        "kind": kind,
+                        "status": "PARTIAL",
+                        "reasonCode": "SECRET_WRITE_FAILED_ROLLBACK_DELETE_FAILED",
+                        "newKeyId": created.id,
+                    }
+                result = _error_result(kind, exc, "BLOCKED")
+                result["rollback"] = "DEPLOY_KEY_DELETED"
+                return result
+
             final = private_mirror_writer_status(client)
             if (
                 final.get("status") != "PASS" or
                 final.get("configurationState") != "CONFIGURED_METADATA_ONLY" or
                 final.get("deployKeyCount") != 1 or
-                final["deployKeys"][0]["id"] != created.id
+                final.get("deployKeys", [{}])[0].get("id") != created.id or
+                not final.get("secret", {}).get("present")
             ):
                 return {
                     "schemaVersion": 1,
@@ -153,6 +191,11 @@ def private_mirror_writer_bootstrap(
                     "status": "PARTIAL",
                     "reasonCode": "POSTWRITE_READBACK_NOT_CONVERGED",
                     "newKeyId": created.id,
+                    "observedStatus": final.get("status"),
+                    "observedConfigurationState": final.get("configurationState"),
+                    "observedKeyCount": final.get("deployKeyCount"),
+                    "observedSecretUpdatedAt": final.get("secret", {}).get("updatedAt"),
+                    "finalReasonCode": final.get("reasonCode"),
                 }
             return {
                 "schemaVersion": 1,
@@ -163,22 +206,29 @@ def private_mirror_writer_bootstrap(
                 "secret": final["secret"],
             }
         except Exception as exc:
-            rollback = "NOT_NEEDED"
-            if created is not None:
+            if created is not None and not secret_write_attempted:
                 try:
                     client.delete_deploy_key(created.id)
-                    rollback = "DEPLOY_KEY_DELETED"
                 except Exception:
                     return {
                         "schemaVersion": 1,
                         "kind": kind,
                         "status": "PARTIAL",
-                        "reasonCode": "SECRET_WRITE_FAILED_ROLLBACK_DELETE_FAILED",
+                        "reasonCode": "PRESECRET_FAILURE_ROLLBACK_DELETE_FAILED",
                         "newKeyId": created.id,
                     }
-            result = _error_result(kind, exc, "BLOCKED")
-            result["rollback"] = rollback
-            return result
+                result = _error_result(kind, exc, "BLOCKED")
+                result["rollback"] = "DEPLOY_KEY_DELETED"
+                return result
+            if created is not None:
+                return {
+                    "schemaVersion": 1,
+                    "kind": kind,
+                    "status": "PARTIAL",
+                    "reasonCode": "POSTSECRET_EFFECT_UNKNOWN",
+                    "newKeyId": created.id,
+                }
+            return _error_result(kind, exc, "BLOCKED")
         finally:
             material.destroy()
 
@@ -218,11 +268,63 @@ def private_mirror_writer_rotate(
 
         material = key_factory(DEPLOY_KEY_TITLE_PREFIX)
         replacement: DeployKey | None = None
+        secret_write_attempted = False
         try:
             replacement = client.create_write_deploy_key(_timestamp_title(now), material.public_key)
             encrypted = sealer(env_key.key, material.private_key)
-            client.put_environment_secret(encrypted, env_key.key_id)
-            changed = _wait_secret_changed(client, expected_secret_updated_at, sleep=sleep)
+            secret_write_attempted = True
+            try:
+                client.put_environment_secret(encrypted, env_key.key_id)
+            except Exception as exc:
+                try:
+                    observed_secret = client.get_environment_secret()
+                except Exception:
+                    return {
+                        "schemaVersion": 1,
+                        "kind": kind,
+                        "status": "PARTIAL",
+                        "reasonCode": "SECRET_WRITE_OUTCOME_UNKNOWN",
+                        "oldKeyId": expected_key_id,
+                        "newKeyId": replacement.id,
+                    }
+                if observed_secret is None or observed_secret.updated_at != expected_secret_updated_at:
+                    return {
+                        "schemaVersion": 1,
+                        "kind": kind,
+                        "status": "PARTIAL",
+                        "reasonCode": "SECRET_WRITE_OUTCOME_UNKNOWN",
+                        "oldKeyId": expected_key_id,
+                        "newKeyId": replacement.id,
+                        "observedSecretUpdatedAt": None if observed_secret is None else observed_secret.updated_at,
+                    }
+                try:
+                    client.delete_deploy_key(replacement.id)
+                except Exception:
+                    return {
+                        "schemaVersion": 1,
+                        "kind": kind,
+                        "status": "PARTIAL",
+                        "reasonCode": "ROTATION_WRITE_FAILED_REPLACEMENT_DELETE_FAILED",
+                        "oldKeyId": expected_key_id,
+                        "newKeyId": replacement.id,
+                    }
+                result = _error_result(kind, exc, "BLOCKED")
+                result["oldKeyId"] = expected_key_id
+                result["rollback"] = "REPLACEMENT_KEY_DELETED"
+                return result
+
+            try:
+                changed = _wait_secret_changed(client, expected_secret_updated_at, sleep=sleep)
+            except Exception as exc:
+                return {
+                    "schemaVersion": 1,
+                    "kind": kind,
+                    "status": "PARTIAL",
+                    "reasonCode": "SECRET_METADATA_READBACK_UNKNOWN",
+                    "oldKeyId": expected_key_id,
+                    "newKeyId": replacement.id,
+                    "readbackReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
+                }
             if changed is None:
                 return {
                     "schemaVersion": 1,
@@ -232,7 +334,19 @@ def private_mirror_writer_rotate(
                     "oldKeyId": expected_key_id,
                     "newKeyId": replacement.id,
                 }
-            keys = _matching_keys(client)
+            try:
+                keys = _matching_keys(client)
+            except Exception as exc:
+                return {
+                    "schemaVersion": 1,
+                    "kind": kind,
+                    "status": "PARTIAL",
+                    "reasonCode": "REPLACEMENT_KEY_READBACK_UNKNOWN",
+                    "oldKeyId": expected_key_id,
+                    "newKeyId": replacement.id,
+                    "secretUpdatedAt": changed.updated_at,
+                    "readbackReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
+                }
             if not any(key.id == replacement.id and not key.read_only for key in keys):
                 return {
                     "schemaVersion": 1,
@@ -255,7 +369,34 @@ def private_mirror_writer_rotate(
                     "newKeyId": replacement.id,
                     "secretUpdatedAt": changed.updated_at,
                 }
+
             final = private_mirror_writer_status(client)
+            final_keys = final.get("deployKeys", [])
+            final_secret = final.get("secret", {})
+            if (
+                final.get("status") != "PASS" or
+                final.get("configurationState") != "CONFIGURED_METADATA_ONLY" or
+                final.get("deployKeyCount") != 1 or
+                len(final_keys) != 1 or
+                final_keys[0].get("id") != replacement.id or
+                not final_secret.get("present") or
+                final_secret.get("updatedAt") != changed.updated_at
+            ):
+                return {
+                    "schemaVersion": 1,
+                    "kind": kind,
+                    "status": "PARTIAL",
+                    "reasonCode": "POSTROTATE_READBACK_NOT_CONVERGED",
+                    "oldKeyId": expected_key_id,
+                    "newKeyId": replacement.id,
+                    "expectedSecretUpdatedAt": changed.updated_at,
+                    "observedStatus": final.get("status"),
+                    "observedConfigurationState": final.get("configurationState"),
+                    "observedKeyCount": final.get("deployKeyCount"),
+                    "observedKeyId": final_keys[0].get("id") if len(final_keys) == 1 else None,
+                    "observedSecretUpdatedAt": final_secret.get("updatedAt"),
+                    "finalReasonCode": final.get("reasonCode"),
+                }
             return {
                 "schemaVersion": 1,
                 "kind": kind,
@@ -263,10 +404,10 @@ def private_mirror_writer_rotate(
                 "effect": "ROTATED",
                 "oldKeyId": expected_key_id,
                 "newKeyId": replacement.id,
-                "secretUpdatedAt": final.get("secret", {}).get("updatedAt"),
+                "secretUpdatedAt": final_secret["updatedAt"],
             }
         except Exception as exc:
-            if replacement is not None:
+            if replacement is not None and not secret_write_attempted:
                 try:
                     client.delete_deploy_key(replacement.id)
                 except Exception:
@@ -274,10 +415,23 @@ def private_mirror_writer_rotate(
                         "schemaVersion": 1,
                         "kind": kind,
                         "status": "PARTIAL",
-                        "reasonCode": "ROTATION_WRITE_FAILED_REPLACEMENT_DELETE_FAILED",
+                        "reasonCode": "PRESECRET_FAILURE_REPLACEMENT_DELETE_FAILED",
                         "oldKeyId": expected_key_id,
                         "newKeyId": replacement.id,
                     }
+                result = _error_result(kind, exc, "BLOCKED")
+                result["oldKeyId"] = expected_key_id
+                result["rollback"] = "REPLACEMENT_KEY_DELETED"
+                return result
+            if replacement is not None:
+                return {
+                    "schemaVersion": 1,
+                    "kind": kind,
+                    "status": "PARTIAL",
+                    "reasonCode": "POSTSECRET_EFFECT_UNKNOWN",
+                    "oldKeyId": expected_key_id,
+                    "newKeyId": replacement.id,
+                }
             result = _error_result(kind, exc, "BLOCKED")
             result["oldKeyId"] = expected_key_id
             return result

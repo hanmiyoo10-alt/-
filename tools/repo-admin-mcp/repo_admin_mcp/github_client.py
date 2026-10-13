@@ -7,7 +7,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-from .auth import TokenProvider, token_provider_from_env
+from .auth import TokenProvider, token_providers_from_env
 from .config import (
     CANONICAL_REPOSITORY,
     ENVIRONMENT_NAME,
@@ -54,14 +54,27 @@ class GitHubAdminClient:
         *,
         require_app: bool = False,
     ) -> None:
-        self._token_provider = token_provider or token_provider_from_env(require_app=require_app)
+        if token_provider is not None:
+            self._mirror_token_provider = token_provider
+            self._canonical_token_provider = token_provider
+        else:
+            self._mirror_token_provider, self._canonical_token_provider = token_providers_from_env(
+                require_app=require_app
+            )
         self._timeout = timeout
 
-    def _request(self, method: str, url: str, payload: dict[str, Any] | None = None) -> tuple[int, Any, dict[str, str]]:
+    def _request(
+        self,
+        method: str,
+        url: str,
+        payload: dict[str, Any] | None = None,
+        *,
+        token_provider: TokenProvider,
+    ) -> tuple[int, Any, dict[str, str]]:
         data = None if payload is None else json.dumps(payload, separators=(",", ":")).encode("utf-8")
         headers = {
             "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {self._token_provider.token()}",
+            "Authorization": f"Bearer {token_provider.token()}",
             "X-GitHub-Api-Version": GITHUB_API_VERSION,
             "User-Agent": "nyang-repo-admin-mcp/0.1",
         }
@@ -80,7 +93,11 @@ class GitHubAdminClient:
 
     def list_deploy_keys(self) -> list[DeployKey]:
         owner, repo = MIRROR_REPOSITORY.split("/", 1)
-        _, payload, headers = self._request("GET", f"{GITHUB_API}/repos/{owner}/{repo}/keys?per_page=100")
+        _, payload, headers = self._request(
+            "GET",
+            f"{GITHUB_API}/repos/{owner}/{repo}/keys?per_page=100",
+            token_provider=self._mirror_token_provider,
+        )
         if 'rel="next"' in headers.get("link", ""):
             raise GitHubAdminError("DEPLOY_KEY_INVENTORY_TRUNCATED")
         if not isinstance(payload, list):
@@ -99,11 +116,16 @@ class GitHubAdminClient:
 
     def create_write_deploy_key(self, title: str, public_key: str) -> DeployKey:
         owner, repo = MIRROR_REPOSITORY.split("/", 1)
-        _, row, _ = self._request("POST", f"{GITHUB_API}/repos/{owner}/{repo}/keys", {
-            "title": title,
-            "key": public_key,
-            "read_only": False,
-        })
+        _, row, _ = self._request(
+            "POST",
+            f"{GITHUB_API}/repos/{owner}/{repo}/keys",
+            {
+                "title": title,
+                "key": public_key,
+                "read_only": False,
+            },
+            token_provider=self._mirror_token_provider,
+        )
         if not isinstance(row, dict) or not isinstance(row.get("id"), int):
             raise GitHubAdminError("DEPLOY_KEY_CREATE_RESPONSE_INVALID")
         return DeployKey(
@@ -117,12 +139,20 @@ class GitHubAdminClient:
         if not isinstance(key_id, int) or key_id <= 0:
             raise GitHubAdminError("INVALID_DEPLOY_KEY_ID")
         owner, repo = MIRROR_REPOSITORY.split("/", 1)
-        self._request("DELETE", f"{GITHUB_API}/repos/{owner}/{repo}/keys/{key_id}")
+        self._request(
+            "DELETE",
+            f"{GITHUB_API}/repos/{owner}/{repo}/keys/{key_id}",
+            token_provider=self._mirror_token_provider,
+        )
 
     def get_environment_public_key(self) -> EnvironmentPublicKey:
         owner, repo = CANONICAL_REPOSITORY.split("/", 1)
         env = urllib.parse.quote(ENVIRONMENT_NAME, safe="")
-        _, row, _ = self._request("GET", f"{GITHUB_API}/repos/{owner}/{repo}/environments/{env}/secrets/public-key")
+        _, row, _ = self._request(
+            "GET",
+            f"{GITHUB_API}/repos/{owner}/{repo}/environments/{env}/secrets/public-key",
+            token_provider=self._canonical_token_provider,
+        )
         if not isinstance(row, dict) or not isinstance(row.get("key_id"), str) or not isinstance(row.get("key"), str):
             raise GitHubAdminError("ENVIRONMENT_PUBLIC_KEY_RESPONSE_INVALID")
         return EnvironmentPublicKey(key_id=row["key_id"], key=row["key"])
@@ -133,7 +163,7 @@ class GitHubAdminClient:
         secret = urllib.parse.quote(SECRET_NAME, safe="")
         url = f"{GITHUB_API}/repos/{owner}/{repo}/environments/{env}/secrets/{secret}"
         try:
-            _, row, _ = self._request("GET", url)
+            _, row, _ = self._request("GET", url, token_provider=self._canonical_token_provider)
         except GitHubAdminError as exc:
             if exc.http_status == 404:
                 return None
@@ -150,14 +180,19 @@ class GitHubAdminClient:
         owner, repo = CANONICAL_REPOSITORY.split("/", 1)
         env = urllib.parse.quote(ENVIRONMENT_NAME, safe="")
         secret = urllib.parse.quote(SECRET_NAME, safe="")
-        self._request("PUT", f"{GITHUB_API}/repos/{owner}/{repo}/environments/{env}/secrets/{secret}", {
-            "encrypted_value": encrypted_value,
-            "key_id": key_id,
-        })
+        self._request(
+            "PUT",
+            f"{GITHUB_API}/repos/{owner}/{repo}/environments/{env}/secrets/{secret}",
+            {
+                "encrypted_value": encrypted_value,
+                "key_id": key_id,
+            },
+            token_provider=self._canonical_token_provider,
+        )
 
     def delete_environment_secret(self) -> None:
         owner, repo = CANONICAL_REPOSITORY.split("/", 1)
         env = urllib.parse.quote(ENVIRONMENT_NAME, safe="")
         secret = urllib.parse.quote(SECRET_NAME, safe="")
         url = f"{GITHUB_API}/repos/{owner}/{repo}/environments/{env}/secrets/{secret}"
-        self._request("DELETE", url)
+        self._request("DELETE", url, token_provider=self._canonical_token_provider)

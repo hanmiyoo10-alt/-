@@ -50,7 +50,7 @@ If the secret write fails after creating the deploy key, the server deletes that
 
 Rotation requires the exact currently observed deploy-key ID and secret `updated_at` value. It creates the replacement key, updates the environment secret, proves secret metadata advanced and the replacement key is visible, and only then deletes the prior key.
 
-If the secret update fails, the replacement key is removed. If the secret update succeeds but old-key deletion fails, the result is `PARTIAL / OLD_KEY_REVOCATION_PENDING`.
+If the secret update fails and readback proves the old secret metadata is unchanged, the replacement key is removed. Once the secret write may have succeeded, ambiguous or failed readback preserves the replacement and returns `PARTIAL` rather than risking a broken secret/key pairing. If the secret update succeeds but old-key deletion fails, the result is `PARTIAL / OLD_KEY_REVOCATION_PENDING`. Final rotation returns `PASS` only after a fresh status read proves exactly one replacement key and the advanced secret metadata.
 
 ### Revocation
 

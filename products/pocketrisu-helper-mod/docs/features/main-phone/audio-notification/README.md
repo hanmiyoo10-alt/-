@@ -50,3 +50,26 @@
 8. 이어폰 실검증
 
 reconnect notification은 sound 없이 구성한 상태.
+
+## 전용 relay supervisor 내구성 계약 (#3513)
+
+이 절은 위의 notification sound 문제와 별개인 **메인폰 relay supervision plane**을 다룬다. `#3269`의 sound/channel 동작을 바꾸지 않고, shared Termux `runsvdir` 없이 `pocketrisu-notify-relay` 하나만 전용 `runsv`로 복구한다.
+
+- repository owner: `files/22-pocketrisu-notify-relay-supervisor`
+- source mode: `100644`
+- live Boot target은 merge/postmerge 이후에만 `~/.termux/boot/22-pocketrisu-notify-relay-supervisor` mode `0700`으로 설치한다. Termux:Boot의 no-argument 실행은 bounded `--ensure`이며, read-only 진단은 명시적 `--check`로 분리한다.
+- receiver와 service `run`은 기존 device-local bytes를 **소유하거나 덮어쓰지 않는다**. 현재 승인된 hash/mode와 exact regular-file identity를 admission gate로만 사용한다.
+- `--check`는 read-only다. `identity`, `supervision`, `receiver`, `health`, `recovery`, `effect`, `details=withheld`만 출력하고 PID, command line, endpoint, payload, token, address, raw process output은 출력하지 않는다.
+- `--ensure`는 `missing supervisor + receiver absent`인 exact eligible state에서만 fixed service directory에 dedicated `runsv` 하나를 시작한다.
+- service `down` marker와 이미 인식된 `run:`/`down:` supervision은 새 supervisor 시작 권한이 아니다.
+- supervisor가 없고 exact receiver 하나가 PID 1에 붙어 있으며 fixed localhost health가 ready면 `orphan_present`로 보존한다. receiver를 죽이거나 재시작해서 `sv` 상태를 예쁘게 만들지 않는다.
+- duplicate receiver, alternate/wrapped/relative `receiver.cjs` command line, non-PID1 unsupervised receiver, ambiguous supervisor/process evidence, identity drift, unreadable process evidence는 fail-closed다.
+- ensure lock은 fixed kernel advisory `flock` 하나만 사용한다. PID/start-time metadata나 stale-directory reclaim owner를 만들지 않으며 lock owner가 사라지면 kernel이 lock을 해제한다. concurrent lock conflict는 fresh readback이 이미 `orphan_present|not_needed`인 accepted no-op일 때만 성공이고 그 외에는 fail-closed다.
+- fixed localhost health probe는 user curl config/proxy 영향을 받지 않도록 `curl -q ... --noproxy '*'`로 강제한다.
+- PocketRisu product CI는 `ci/validate_docs.py`에서 focused `tests/test-notify-relay-supervisor.sh`를 직접 실행하므로 lock/signal/duplicate-process 회귀를 green CI가 건너뛸 수 없다.
+- start 뒤에는 bounded readback으로 `run supervision + exactly one receiver parented by that runsv + health ready`를 모두 확인해야 성공한다.
+- health failure 단독으로 supervised receiver를 kill/restart/replace하지 않는다.
+- V1은 persistent guard loop나 independent anchor를 만들지 않는다. 전용 `runsv` 자체의 장기 생존성에 추가 owner가 필요하다는 실증이 생기면 별도 scope로 다룬다.
+- `service-daemon`, shared top-level `runsvdir`, PocketRisu core SSH tunnel, M RDC/Tailscale, Android settings/channel/package/network state는 이 owner의 effect surface가 아니다.
+
+IMPLEMENTATION_PR에서는 repository source/tests/docs만 만든다. 실제 메인폰 설치와 one-shot ensure는 reviewed merge + postmerge convergence 이후 EXPERIMENT_CLOSE에서 fresh identity/readback을 다시 통과한 뒤에만 수행한다.

@@ -178,7 +178,25 @@ A donor may be superseded only when:
 
 No donor disappears silently.
 
-## 10. Host / Risu-Lineage Donor Lane
+## 10. Donor role taxonomy
+
+Donor status is broader than "contributes to Fusion core."
+
+A donor may target one or more of these lanes:
+
+- `CORE_FUSION_DONOR`: Control, Runtime, Memory/Knowledge, Composer, Presentation or canonical semantic contracts.
+- `HOST_PLATFORM_DONOR`: Risu/PocketRisu host, storage, lifecycle, mobile, server, updater or packaging behavior.
+- `PRODUCT_FEATURE_DONOR`: a user-facing capability the owner wants inside the final SimCore Risu product even when it is not part of Fusion core.
+- `EXPERIENCE_GAME_DONOR`: games, RPG systems, fishing, gacha, cards, music/rhythm, simulation or other optional interactive experiences.
+- `UX_TOOL_DONOR`: editors, search/replace, readers, managers, import/export, lorebook tools, provider managers and similar product tooling.
+- `OPS_DONOR`: deployment, Termux, remote-access, backup, recovery and operational management patterns.
+- `SUPPORTING_REFERENCE`: guides/assets/reference material that may inform implementation but is not itself a source module.
+
+One donor may occupy multiple lanes.
+
+A Product Feature / Experience donor does not become a canonical Fusion truth owner. If it needs to affect the roleplay world, it must use typed Control/Runtime/Knowledge action/promotion boundaries rather than silently mutate canonical state.
+
+## 11. Host / Risu-Lineage Donor Lane
 
 SimCore Risu tracks a dedicated host-level donor lane alongside plugin/feature donors.
 
@@ -248,17 +266,20 @@ No host-donor update auto-merges into MYANG.
 
 After MYANG bootstrap, operational host-donor version/update tracking moves to MYANG with the rest of the donor hub. Until then, #3131 and #3642 remain coordination records.
 
-## 11. Owner Google Drive donor snapshot intake
+## 12. Owner Google Drive donor snapshot intake
 
 The owner's private Google Drive folder named `포켓리스` is an explicit donor-intake source.
 
 Rules:
-- items placed there by the owner are donor candidates unless clearly unrelated;
+- items placed there by the owner are explicit donor candidates;
+- owner placement in this folder is itself product-intent evidence: an item does NOT need to relate to SimCore/Fusion core to qualify;
+- game/RPG/fishing/gacha/card/music and similar plugins are retained as `PRODUCT_FEATURE_DONOR` / `EXPERIENCE_GAME_DONOR` candidates for the final SimCore Risu product rather than discarded as "unrelated";
 - private Drive IDs and private Drive URLs are not committed into the public coordination repository;
 - record logical donor identity, version/hash where available, public upstream URL when known, capability role, and provenance class `OWNER_DRIVE_SNAPSHOT`;
 - duplicate copies of the same logical artifact are one donor family, not separate donors;
 - unknown upstream stays `UNKNOWN` until proven;
 - public repository links stored by the owner in that folder are valid donor-discovery seeds;
+- "obviously unrelated" means unrelated to the final SimCore Risu product itself, not merely unrelated to Fusion core;
 - raw Drive snapshots are not mirrored into MYANG until the MYANG relocation/bootstrap gate completes.
 
 Tracking:
@@ -268,7 +289,7 @@ Tracking:
 
 After MYANG bootstrap, this Drive folder should feed the MYANG donor registry as an owner-private intake source.
 
-## 12. SocialRisu
+## 13. SocialRisu
 
 SocialRisu is included in this policy as an owner-supplied private-use donor.
 
@@ -285,7 +306,7 @@ Its current embedded third-party update URL is provenance/upstream evidence only
 
 Any future owner-adapted SocialRisu-derived private plugin or native capability should update through MYANG after the update hub is qualified.
 
-## 13. Safety / authority boundary
+## 14. Safety / authority boundary
 
 This policy does not authorize:
 
@@ -296,7 +317,7 @@ This policy does not authorize:
 - automatic release/deployment;
 - a second canonical Runtime/Memory/Knowledge/Presentation owner.
 
-## 14. Current gate
+## 15. Current gate
 
 Current product priority remains:
 

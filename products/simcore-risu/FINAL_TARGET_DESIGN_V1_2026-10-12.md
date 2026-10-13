@@ -552,8 +552,31 @@ Every intentionally selected donor keeps a traceable destination until proven eq
 | PocketRisu | upstream ecosystem compatibility and host lineage |
 | hanmiyoo10-alt/PocketRisu | owner integration/staging fork and proven local host modifications |
 | Legacy Core_Ruleset | original product intent and migration requirements |
+| SocialRisu | interactive social client, Surface-to-World promotion, world-native social network, Media/Asset Pipeline, social privacy and migration durability |
 
-Third-party code reuse remains license/provenance-gated.
+### Owner private donor-source policy
+
+For owner-supplied plugin/donor artifacts used only in the owner's private SimCore Risu build, the owner has explicitly authorized source-level inspection, adaptation and selective transplant.
+
+Private adaptation does not make donor code a second canonical owner. Reused code must be moved under the correct Fusion/SimCore Risu semantic owner.
+
+This project policy does not assert public redistribution rights. Original provenance, author/project identity, upstream links and applicable license/copyright notices remain recorded. Any future public/shared distribution remains separately license/provenance-gated.
+
+### MYANG donor/update hub
+
+After the MYANG existing-content relocation prerequisite and MYANG authority bootstrap:
+
+- MYANG becomes the private donor intake/update/distribution hub;
+- original upstream URLs remain preserved for provenance and release comparison;
+- owner-facing update/install URLs for adapted private plugin builds should point to MYANG-controlled endpoints/manifests;
+- upstream releases are compared and integrated into MYANG before reaching the private build;
+- native SimCore Risu capabilities use the unified SimCore Risu updater rather than retaining independent donor self-updaters;
+- operational donor version/update state must not be duplicated between MYANG and `hanmiyoo10-alt/-`.
+
+Full policy:
+`products/simcore-risu/DONOR_UPDATE_HUB_POLICY_V1_2026-10-13.md`
+
+Public/shared distribution remains license/provenance-gated.
 
 ## 20. Unified product UI
 

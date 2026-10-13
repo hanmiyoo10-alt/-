@@ -2513,3 +2513,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/b475ef9b4e57b2f1529b97281b67aaa7009d7620)
 - Event ID: `dcc0b6a70c88c477171bc0b469097971a8320ac7f1da68b1c2e6d799b9cd645b`
 <!-- canonical-main-doc-promoted:dcc0b6a70c88c477171bc0b469097971a8320ac7f1da68b1c2e6d799b9cd645b -->
+
+### 2026-10-13 — Prioritize Risu fork and mod donors for SimCore Risu (#3646)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `244fc958e3544809235b9d9777dedb436f47f2fe`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/244fc958e3544809235b9d9777dedb436f47f2fe)
+- Event ID: `c625859e5d102878fa0e9adb204f9d3b66b6a7f9d7b272a4616d62bb1ebb3ce8`
+<!-- canonical-main-doc-promoted:c625859e5d102878fa0e9adb204f9d3b66b6a7f9d7b272a4616d62bb1ebb3ce8 -->

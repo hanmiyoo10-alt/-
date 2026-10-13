@@ -24,6 +24,9 @@ This guideline does not create release, deployment or production authority.
 - One semantic field still has one canonical writer.
 - Do not keep donor hook/database/model owners after their capability has been transplanted into the proper Fusion owner.
 - Every selected donor capability needs a traceable destination or explicit proven supersession.
+- Treat materially distinct RisuAI/PocketRisu forks, modified distributions and Risu-derived host applications as default donor candidates for discovery and inventory.
+- Prefer Risu fork/mod host discovery over broad new standalone-plugin hunting; standalone plugin discovery remains selective and requirement-driven.
+- Donor-candidate registration is not automatic adoption: duplicate/thin forks may remain provenance-only, and no donor update bypasses review, ownership or validation.
 - For owner-supplied donor artifacts explicitly designated for the owner's private build, source-level inspection, adaptation and selective transplant are permitted under the recorded private-source policy.
 - Preserve donor provenance, upstream identity, attribution and applicable notices even when private source reuse is permitted.
 - Public/shared redistribution remains license/provenance-gated and must not be inferred from private-use authorization.

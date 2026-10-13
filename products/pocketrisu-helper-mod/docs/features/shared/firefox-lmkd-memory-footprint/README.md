@@ -2,7 +2,7 @@
 
 Feature-ID: `firefox-lmkd-memory-footprint`
 Area: `shared`
-Status: **IMPLEMENTED_LOCAL / DEPLOY_DIST_READY / LIVE_VERIFY_PENDING**
+Status: **LIVE_REPRO / FIRST_MITIGATION_INSUFFICIENT / FOLLOWUP_SPLIT**
 
 ## 목적
 Android 메모리 압박 시 LMKD가 PocketRisu의 Firefox Gecko content process를 회수해 visible reconstruction이 발생하는 경로를 줄인다.
@@ -106,3 +106,51 @@ hydrated chat 예시:
 
 ## 다음 한 단계
 메인폰 Firefox에서 새 dist를 1회 로드하고, 큰 chat 상태로 10초 이상 background → foreground A/B를 수행해 memory-guard 로그와 Gecko RSS/PSS를 검증한다.
+
+
+## 2026-10-13 17:24 재현 — 1차 완화 범위 한계 확인
+Lifecycle:
+- 17:23:28 새 document `bootId=0b903007`, `navType=back_forward`, `pageshow.persisted=false`.
+- 해당 document hidden 후 약 62초 뒤 Gecko tab process가 LMKD에 의해 회수됨.
+- 17:24:44 새 document `bootId=13015103`, 다시 `navType=back_forward`, `pageshow.persisted=false`.
+- Firefox main process는 계속 생존.
+
+Android LMKD:
+- 17:24:37.703 KST `tab32` PID 10092 reclaim.
+- `oom_score_adj=925`.
+- RSS 약 470,596KB.
+- anon RSS 약 421,720KB.
+- swap 약 72,360KB.
+- reason: `low watermark is breached or filecache is low`.
+- 직후 Firefox `EngineAction$KillEngineSessionAction` 기록.
+
+1차 active-chat dehydrate가 발동하지 않은 이유:
+- 현재 활성 chat은 84 messages.
+- dehydrate threshold는 200 messages 이상.
+- 2026-10-13 당일 `memory-guard` 성공 로그 0건.
+- 따라서 이번 케이스는 1차 완화의 대상이 아니었다.
+
+복원 직후 PocketRisu-correlated tab13:
+- PSS 약 488MB.
+- RSS 약 388MB.
+- swap PSS 약 177MB.
+- Java/Native heap은 작고 대부분 `Unknown / Private Other`.
+
+현재 v1.14 client-shape 재측정:
+- full DB JSON 약 146.0MB.
+- chats stub 추정 client shape 약 39.1MB.
+- `botPresets` 약 24.58MB.
+- `plugins` 약 8.92MB.
+- `modules` 약 2.28MB.
+- chats-stripped `characters` 약 1.12MB.
+- 활성 preset 하나는 약 467KB.
+- inactive preset 98개는 약 24.11MB.
+- 활성 preset만 full + inactive metadata stub 가상 계산은 약 629KB.
+
+결론:
+- active long-chat hydration은 LMKD 위험 요인 중 하나일 수 있으나 유일 원인이 아니다.
+- 이번 재현은 84-message active chat에서도 약 470MB RSS tab이 LMKD 회수될 수 있음을 증명했다.
+- 다음 완화는 기존 문서에 적어둔 `inactive bot-preset lazy hydration`을 별도 Feature-ID로 분리해 다룬다.
+
+다음 한 단계:
+- `firefox-inactive-preset-lazy-hydration` Feature-ID에서 preset edit/copy/diff/export/save semantics를 먼저 설계하고, active preset 하나만 full-hydrate하는 최소 안전 경계를 구현한다.

@@ -26,11 +26,19 @@ class FakeClient:
         self.next_id = 7
         self.events: list[str] = []
         self.fail_secret_put = False
+        self.apply_secret_before_failure = False
+        self.fail_secret_get_after_put = False
+        self.fail_key_list_after_put = False
+        self.fail_key_list_after_old_delete = False
         self.fail_key_delete_ids: set[int] = set()
         self.fail_secret_delete = False
         self.advance_secret_metadata = True
 
     def list_deploy_keys(self) -> list[DeployKey]:
+        if self.fail_key_list_after_old_delete and "delete_key:7" in self.events:
+            raise GitHubAdminError("SYNTHETIC_FINAL_KEY_READ_FAILURE", 503)
+        if self.fail_key_list_after_put and "put_secret" in self.events:
+            raise GitHubAdminError("SYNTHETIC_REPLACEMENT_KEY_READ_FAILURE", 503)
         return list(self.keys)
 
     def create_write_deploy_key(self, title: str, public_key: str) -> DeployKey:
@@ -51,19 +59,23 @@ class FakeClient:
         return self.public_key
 
     def get_environment_secret(self) -> SecretMetadata | None:
+        if self.fail_secret_get_after_put and "put_secret" in self.events:
+            raise GitHubAdminError("SYNTHETIC_SECRET_READ_FAILURE", 503)
         return self.secret
 
     def put_environment_secret(self, encrypted_value: str, key_id: str) -> None:
         self.events.append("put_secret")
-        if self.fail_secret_put:
-            raise GitHubAdminError("SYNTHETIC_SECRET_WRITE_FAILURE", 500)
         if self.secret is None:
             updated = NEW_UPDATED
             created = NEW_UPDATED
         else:
             created = self.secret.created_at
             updated = NEW_UPDATED if self.advance_secret_metadata else self.secret.updated_at
+        if self.fail_secret_put and not self.apply_secret_before_failure:
+            raise GitHubAdminError("SYNTHETIC_SECRET_WRITE_FAILURE", 500)
         self.secret = SecretMetadata("MYANG_DISTRIBUTION_SSH_KEY", created, updated)
+        if self.fail_secret_put:
+            raise GitHubAdminError("SYNTHETIC_SECRET_WRITE_FAILURE_AFTER_APPLY", 500)
 
     def delete_environment_secret(self) -> None:
         self.events.append("delete_secret")
@@ -194,6 +206,77 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual([key.id for key in client.keys], [7])
         self.assertIn("delete_key:8", client.events)
         self.assertEqual(bytes(material.private_key), b"\x00" * len(SENTINEL))
+
+    def test_bootstrap_ambiguous_secret_write_preserves_created_key(self):
+        client = FakeClient()
+        client.fail_secret_put = True
+        client.apply_secret_before_failure = True
+        material, factory = material_holder()
+        result = private_mirror_writer_bootstrap(client, key_factory=factory, sealer=sealer)
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "SECRET_WRITE_OUTCOME_UNKNOWN")
+        self.assertEqual([key.id for key in client.keys], [7])
+        self.assertIsNotNone(client.secret)
+        self.assertNotIn("delete_key:7", client.events)
+        self.assertEqual(bytes(material.private_key), b"\x00" * len(SENTINEL))
+
+    def test_rotate_ambiguous_secret_write_preserves_replacement(self):
+        client = FakeClient()
+        configured(client)
+        client.fail_secret_put = True
+        client.apply_secret_before_failure = True
+        material, factory = material_holder()
+        result = private_mirror_writer_rotate(
+            client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
+        )
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "SECRET_WRITE_OUTCOME_UNKNOWN")
+        self.assertEqual([key.id for key in client.keys], [7, 8])
+        self.assertEqual(client.secret.updated_at, NEW_UPDATED)
+        self.assertNotIn("delete_key:8", client.events)
+        self.assertNotIn("delete_key:7", client.events)
+        self.assertEqual(bytes(material.private_key), b"\x00" * len(SENTINEL))
+
+    def test_rotate_secret_metadata_read_failure_preserves_replacement(self):
+        client = FakeClient()
+        configured(client)
+        client.fail_secret_get_after_put = True
+        material, factory = material_holder()
+        result = private_mirror_writer_rotate(
+            client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
+        )
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "SECRET_METADATA_READBACK_UNKNOWN")
+        self.assertEqual([key.id for key in client.keys], [7, 8])
+        self.assertNotIn("delete_key:8", client.events)
+        self.assertNotIn("delete_key:7", client.events)
+
+    def test_rotate_replacement_key_read_failure_preserves_replacement(self):
+        client = FakeClient()
+        configured(client)
+        client.fail_key_list_after_put = True
+        material, factory = material_holder()
+        result = private_mirror_writer_rotate(
+            client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
+        )
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "REPLACEMENT_KEY_READBACK_UNKNOWN")
+        self.assertEqual([key.id for key in client.keys], [7, 8])
+        self.assertNotIn("delete_key:8", client.events)
+        self.assertNotIn("delete_key:7", client.events)
+
+    def test_rotate_final_readback_failure_is_partial_not_pass(self):
+        client = FakeClient()
+        configured(client)
+        client.fail_key_list_after_old_delete = True
+        material, factory = material_holder()
+        result = private_mirror_writer_rotate(
+            client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
+        )
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "POSTROTATE_READBACK_NOT_CONVERGED")
+        self.assertEqual([key.id for key in client.keys], [8])
+        self.assertEqual(result["finalReasonCode"], "SYNTHETIC_FINAL_KEY_READ_FAILURE")
 
     def test_rotate_preserves_both_keys_when_secret_metadata_does_not_advance(self):
         client = FakeClient()

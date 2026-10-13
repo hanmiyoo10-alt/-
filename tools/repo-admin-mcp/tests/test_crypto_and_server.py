@@ -3,12 +3,20 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import os
 import unittest
+from unittest.mock import patch
 
 from nacl.public import PrivateKey, SealedBox
 
 from repo_admin_mcp.crypto import generate_ed25519_keypair, seal_for_github
-from repo_admin_mcp.server import ProtectedMCPApp, build_http_app, mcp
+from repo_admin_mcp.server import (
+    ProtectedMCPApp,
+    build_http_app,
+    mcp,
+    private_mirror_writer_bootstrap,
+    private_mirror_writer_status,
+)
 
 
 async def run_asgi(app, path: str, authorization: bytes | None = None):
@@ -80,6 +88,20 @@ class CryptoAndServerTests(unittest.TestCase):
             "private_mirror_writer_rotate",
             "private_mirror_writer_status",
         ])
+
+    def test_status_auth_misconfiguration_returns_sanitized_unknown(self):
+        with patch.dict(os.environ, {}, clear=True):
+            result = private_mirror_writer_status()
+        self.assertEqual(result["status"], "UNKNOWN")
+        self.assertEqual(result["reasonCode"], "GITHUB_CREDENTIAL_NOT_CONFIGURED")
+        self.assertNotIn("token", repr(result).lower())
+
+    def test_mutation_rejects_pat_with_sanitized_blocked_result(self):
+        with patch.dict(os.environ, {"REPO_ADMIN_GITHUB_TOKEN": "synthetic-token"}, clear=True):
+            result = private_mirror_writer_bootstrap()
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["reasonCode"], "MUTATION_REQUIRES_GITHUB_APP")
+        self.assertNotIn("synthetic-token", repr(result))
 
     def test_streamable_http_requires_access_token(self):
         with self.assertRaisesRegex(RuntimeError, "MCP_ACCESS_TOKEN_REQUIRED"):

@@ -16,6 +16,7 @@ DEFAULT_REPOSITORY = "hanmiyoo10-alt/-"
 DEFAULT_API = "https://api.github.com"
 DEFAULT_API_VERSION = "2022-11-28"
 CODE_QUALITY_API_VERSION = "2026-03-10"
+ATTESTATIONS_API_VERSION = "2026-03-10"
 DEFAULT_JSON_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_RELEASE_LIST_BYTES = 64 * 1024 * 1024
 DEFAULT_TIMEOUT_SECONDS = 20.0
@@ -109,7 +110,7 @@ class GitHubReader:
         return text
 
     def _request(self, url: str, *, api_version: str = DEFAULT_API_VERSION) -> Request:
-        if api_version not in {DEFAULT_API_VERSION, CODE_QUALITY_API_VERSION}:
+        if api_version not in {DEFAULT_API_VERSION, CODE_QUALITY_API_VERSION, ATTESTATIONS_API_VERSION}:
             raise ValueError("unsupported GitHub API version")
         headers = {
             "Accept": "application/vnd.github+json",
@@ -562,6 +563,32 @@ class GitHubReader:
             "action": item.get("action"),
             "throttled_at": item.get("throttled_at"),
         } for item in value]
+
+    @staticmethod
+    def _subject_digest(subject_digest: str) -> str:
+        if not isinstance(subject_digest, str) or not re.fullmatch(r"sha256:[0-9a-fA-F]{64}", subject_digest):
+            raise ValueError("subject_digest must be sha256:<64 hex>")
+        return "sha256:" + subject_digest[7:].lower()
+
+    def list_repository_attestations(self, subject_digest: str, *, limit: int) -> list[dict[str, Any]]:
+        safe_digest = self._subject_digest(subject_digest)
+        safe_limit = self._recent_limit(limit)
+        value = self._get_json_value(
+            f"{self._repo_api_prefix}/attestations/{quote(safe_digest, safe='')}",
+            {"per_page": safe_limit},
+            api_version=ATTESTATIONS_API_VERSION,
+        )
+        if not isinstance(value, dict):
+            raise GitHubReadError("attestations response root must be an object")
+        items = value.get("attestations")
+        if not isinstance(items, list) or len(items) > safe_limit:
+            raise GitHubReadError("attestations response must be a bounded array")
+        if any(not isinstance(item, dict) for item in items):
+            raise GitHubReadError("attestation item invalid")
+        return [{
+            "repository_id": item.get("repository_id"),
+            "initiator": item.get("initiator"),
+        } for item in items]
 
     def probe_accepted_permissions(self, operation: str) -> dict[str, Any]:
         paths = {

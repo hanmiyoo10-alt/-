@@ -113,7 +113,7 @@ class GitHubAppInstallationTokenProvider:
             return token
 
 
-def token_provider_from_env() -> TokenProvider:
+def token_provider_from_env(require_app: bool = False) -> TokenProvider:
     app_values = [
         os.environ.get(GITHUB_APP_ID_ENV),
         os.environ.get(GITHUB_APP_INSTALLATION_ID_ENV),
@@ -129,5 +129,7 @@ def token_provider_from_env() -> TokenProvider:
         )
     token = os.environ.get(GITHUB_TOKEN_ENV, "")
     if token:
+        if require_app:
+            raise AuthError("MUTATION_REQUIRES_GITHUB_APP")
         return StaticTokenProvider(token)
     raise AuthError("GITHUB_CREDENTIAL_NOT_CONFIGURED")

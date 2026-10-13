@@ -1,0 +1,130 @@
+name: Cloudflare Workers Static Publish
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-distribution-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    environment: cloudflare-public-delivery
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout canonical repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tools/cloudflare-delivery/package-lock.json
+
+      - name: Fetch current canonical authorities
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin             'refs/heads/main:refs/remotes/origin/main'             'refs/heads/release-simcore:refs/remotes/origin/release-simcore'             'refs/heads/release-usage-dashboard:refs/remotes/origin/release-usage-dashboard'
+
+      - name: Configure private myang read credential
+        shell: bash
+        env:
+          MYANG_DISTRIBUTION_READ_SSH_KEY: ${{ secrets.MYANG_DISTRIBUTION_READ_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$MYANG_DISTRIBUTION_READ_SSH_KEY"
+          install -d -m 700 "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$MYANG_DISTRIBUTION_READ_SSH_KEY" > "$HOME/.ssh/myang_distribution_read"
+          curl -fsSL https://api.github.com/meta             | jq -r '.ssh_keys[] | "github.com " + .'             > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          cat > "$HOME/.ssh/config" <<'EOF'
+          Host github.com
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/myang_distribution_read
+            IdentitiesOnly yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 "$HOME/.ssh/config"
+
+      - name: Clone fixed private promotion mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/myang-delivery"
+          git clone --no-tags git@github.com:hanmiyoo10-alt/myang.git "$RUNNER_TEMP/myang-delivery"
+          git -C "$RUNNER_TEMP/myang-delivery" fetch --no-tags origin             'refs/heads/main:refs/remotes/origin/main'             'refs/heads/release-simcore:refs/remotes/origin/release-simcore'             'refs/heads/release-usage-dashboard:refs/remotes/origin/release-usage-dashboard'
+
+      - name: Install exact delivery toolchain
+        shell: bash
+        run: npm ci --prefix tools/cloudflare-delivery
+
+      - name: Validate delivery source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test --prefix tools/cloudflare-delivery
+          npm run check --prefix tools/cloudflare-delivery
+
+      - name: Stage exact nine public artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tools/cloudflare-delivery/stage.mjs             --mirror-dir "$RUNNER_TEMP/myang-delivery"             --output-dir tools/cloudflare-delivery/dist             --report "$RUNNER_TEMP/cloudflare-delivery-stage.json"
+
+      - name: Prove Wrangler build without external effect
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools/cloudflare-delivery/node_modules/.bin/wrangler deploy             --config tools/cloudflare-delivery/wrangler.jsonc             --dry-run             --outdir "$RUNNER_TEMP/cloudflare-delivery-dry-run"
+
+      - name: Revalidate currentness and publish Workers Static Assets
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          node tools/cloudflare-delivery/currentness.mjs \
+            --mirror-dir "$RUNNER_TEMP/myang-delivery" \
+            --stage-report "$RUNNER_TEMP/cloudflare-delivery-stage.json" \
+            --report "$RUNNER_TEMP/cloudflare-delivery-currentness.json"
+          tools/cloudflare-delivery/node_modules/.bin/wrangler deploy \
+            --config tools/cloudflare-delivery/wrangler.jsonc
+
+      - name: Verify fixed public delivery endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tools/cloudflare-delivery/verify-live.mjs             --stage-report "$RUNNER_TEMP/cloudflare-delivery-stage.json"             --report "$RUNNER_TEMP/cloudflare-delivery-live.json"
+
+      - name: Upload bounded delivery receipts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cloudflare-delivery-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/cloudflare-delivery-stage.json
+            ${{ runner.temp }}/cloudflare-delivery-currentness.json
+            ${{ runner.temp }}/cloudflare-delivery-live.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Remove private myang key
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/myang_distribution_read"

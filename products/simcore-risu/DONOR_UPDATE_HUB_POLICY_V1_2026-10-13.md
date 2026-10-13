@@ -178,7 +178,55 @@ A donor may be superseded only when:
 
 No donor disappears silently.
 
-## 10. SocialRisu
+## 10. Host / Risu-Lineage Donor Lane
+
+SimCore Risu tracks a dedicated host-level donor lane alongside plugin/feature donors.
+
+Direct lineage:
+
+```text
+kwaroran/RisuAI
+      |
+      | parent lineage
+      v
+PocketRisu/PocketRisu
+      |
+      | primary upstream
+      v
+hanmiyoo10-alt/PocketRisu
+      |
+      | owner integration / staging
+      v
+hanmiyoo10-alt/myang
+      |
+      v
+SimCore Risu
+```
+
+Selective sibling host donors:
+- `nevaeh5379/HaejeokRisuai`
+- `rpaddict/RisuBard`
+
+Roles:
+
+- **RisuAI**: parent Risu lineage, ecosystem/data/plugin compatibility reference.
+- **PocketRisu official**: primary self-hosted upstream and official host update stream.
+- **owner PocketRisu fork**: integration/staging fork and proven owner-specific host modifications.
+- **HaejeokRisu**: performance, lazy loading, SQL/PostgreSQL, Termux/cross-platform, low-memory donor.
+- **RisuBard**: bounded context/composer, Wiki/product UX, save/load, durability/migration donor.
+
+Update classification for host donors should use:
+- `UPSTREAM_REQUIRED`
+- `DONOR_CAPABILITY_CANDIDATE`
+- `ALREADY_SUPERSEDED`
+- `IRRELEVANT`
+- `CONFLICT_REVIEW`
+
+No host-donor update auto-merges into MYANG.
+
+After MYANG bootstrap, operational host-donor version/update tracking moves to MYANG with the rest of the donor hub. Until then, #3131 and #3642 remain coordination records.
+
+## 11. SocialRisu
 
 SocialRisu is included in this policy as an owner-supplied private-use donor.
 
@@ -195,7 +243,7 @@ Its current embedded third-party update URL is provenance/upstream evidence only
 
 Any future owner-adapted SocialRisu-derived private plugin or native capability should update through MYANG after the update hub is qualified.
 
-## 11. Safety / authority boundary
+## 12. Safety / authority boundary
 
 This policy does not authorize:
 
@@ -206,7 +254,7 @@ This policy does not authorize:
 - automatic release/deployment;
 - a second canonical Runtime/Memory/Knowledge/Presentation owner.
 
-## 12. Current gate
+## 13. Current gate
 
 Current product priority remains:
 

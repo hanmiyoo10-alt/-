@@ -146,24 +146,42 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(result["status"], "CONFLICT")
         self.assertEqual(result["reasonCode"], "PARTIAL_OR_AMBIGUOUS_PREEXISTING_STATE")
 
-    def test_bootstrap_secret_failure_removes_created_key(self):
+    def test_bootstrap_secret_write_exception_preserves_created_key(self):
         client = FakeClient()
         client.fail_secret_put = True
-        material, factory = material_holder()
-        result = private_mirror_writer_bootstrap(client, key_factory=factory, sealer=sealer)
-        self.assertEqual(result["status"], "BLOCKED")
-        self.assertEqual(result["rollback"], "DEPLOY_KEY_DELETED")
-        self.assertEqual(client.keys, [])
-        self.assertEqual(bytes(material.private_key), b"\x00" * len(SENTINEL))
-
-    def test_bootstrap_failed_compensation_is_partial(self):
-        client = FakeClient()
-        client.fail_secret_put = True
-        client.fail_key_delete_ids.add(7)
         material, factory = material_holder()
         result = private_mirror_writer_bootstrap(client, key_factory=factory, sealer=sealer)
         self.assertEqual(result["status"], "PARTIAL")
-        self.assertEqual(result["reasonCode"], "SECRET_WRITE_FAILED_ROLLBACK_DELETE_FAILED")
+        self.assertEqual(result["reasonCode"], "SECRET_WRITE_OUTCOME_UNKNOWN")
+        self.assertEqual([key.id for key in client.keys], [7])
+        self.assertNotIn("delete_key:7", client.events)
+        self.assertEqual(bytes(material.private_key), b"\x00" * len(SENTINEL))
+
+    def test_bootstrap_presecret_failure_rolls_back_created_key(self):
+        client = FakeClient()
+        material, factory = material_holder()
+
+        def failing_sealer(_public, _private):
+            raise GitHubAdminError("SYNTHETIC_SEAL_FAILURE", 500)
+
+        result = private_mirror_writer_bootstrap(client, key_factory=factory, sealer=failing_sealer)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["rollback"], "DEPLOY_KEY_DELETED")
+        self.assertEqual(client.keys, [])
+        self.assertIn("delete_key:7", client.events)
+        self.assertEqual(bytes(material.private_key), b"\x00" * len(SENTINEL))
+
+    def test_bootstrap_presecret_rollback_failure_is_partial(self):
+        client = FakeClient()
+        client.fail_key_delete_ids.add(7)
+        material, factory = material_holder()
+
+        def failing_sealer(_public, _private):
+            raise GitHubAdminError("SYNTHETIC_SEAL_FAILURE", 500)
+
+        result = private_mirror_writer_bootstrap(client, key_factory=factory, sealer=failing_sealer)
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "PRESECRET_FAILURE_ROLLBACK_DELETE_FAILED")
         self.assertEqual([key.id for key in client.keys], [7])
         self.assertEqual(bytes(material.private_key), b"\x00" * len(SENTINEL))
 
@@ -194,7 +212,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(result["reasonCode"], "EXPECTED_METADATA_MISMATCH")
         self.assertEqual([key.id for key in client.keys], [7])
 
-    def test_rotate_secret_failure_removes_replacement(self):
+    def test_rotate_secret_write_exception_preserves_replacement(self):
         client = FakeClient()
         configured(client)
         client.fail_secret_put = True
@@ -202,9 +220,11 @@ class ServiceTests(unittest.TestCase):
         result = private_mirror_writer_rotate(
             client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
         )
-        self.assertEqual(result["status"], "BLOCKED")
-        self.assertEqual([key.id for key in client.keys], [7])
-        self.assertIn("delete_key:8", client.events)
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "SECRET_WRITE_OUTCOME_UNKNOWN")
+        self.assertEqual([key.id for key in client.keys], [7, 8])
+        self.assertNotIn("delete_key:8", client.events)
+        self.assertNotIn("delete_key:7", client.events)
         self.assertEqual(bytes(material.private_key), b"\x00" * len(SENTINEL))
 
     def test_bootstrap_ambiguous_secret_write_preserves_created_key(self):
@@ -220,11 +240,12 @@ class ServiceTests(unittest.TestCase):
         self.assertNotIn("delete_key:7", client.events)
         self.assertEqual(bytes(material.private_key), b"\x00" * len(SENTINEL))
 
-    def test_rotate_ambiguous_secret_write_preserves_replacement(self):
+    def test_rotate_same_second_applied_write_exception_preserves_replacement(self):
         client = FakeClient()
         configured(client)
         client.fail_secret_put = True
         client.apply_secret_before_failure = True
+        client.advance_secret_metadata = False
         material, factory = material_holder()
         result = private_mirror_writer_rotate(
             client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
@@ -232,7 +253,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(result["status"], "PARTIAL")
         self.assertEqual(result["reasonCode"], "SECRET_WRITE_OUTCOME_UNKNOWN")
         self.assertEqual([key.id for key in client.keys], [7, 8])
-        self.assertEqual(client.secret.updated_at, NEW_UPDATED)
+        self.assertEqual(client.secret.updated_at, OLD_UPDATED)
         self.assertNotIn("delete_key:8", client.events)
         self.assertNotIn("delete_key:7", client.events)
         self.assertEqual(bytes(material.private_key), b"\x00" * len(SENTINEL))

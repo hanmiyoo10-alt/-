@@ -23,11 +23,14 @@ concurrency:
 
 jobs:
   publish:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    environment: public-distribution-publisher
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout canonical repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Fetch current distribution authorities
@@ -50,7 +53,7 @@ jobs:
           umask 077
           printf '%s\n' "$MYANG_DISTRIBUTION_SSH_KEY" > "$HOME/.ssh/myang_distribution"
           curl -fsSL https://api.github.com/meta \
-            | jq -r '.ssh_keys[]' \
+            | jq -r '.ssh_keys[] | "github.com " + .' \
             > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
           cat > "$HOME/.ssh/config" <<'EOF'
@@ -92,6 +95,7 @@ jobs:
             --report "$RUNNER_TEMP/public-distribution-report.json"
 
       - name: Upload publication receipts
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: public-distribution-${{ github.run_id }}

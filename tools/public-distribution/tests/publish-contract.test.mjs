@@ -38,28 +38,45 @@ function configureIdentity(repo) {
 }
 
 async function initSource(root) {
+  const bare = path.join(root, 'source.git');
+  const seed = path.join(root, 'source-seed');
   const source = path.join(root, 'source');
-  await fsp.mkdir(source, { recursive: true });
-  git(source, ['init', '-b', 'main']);
-  configureIdentity(source);
+  await fsp.mkdir(bare, { recursive: true });
+  git(bare, ['init', '--bare']);
 
-  await write(source, 'local/termux/00-update-local-stack', '#!/bin/sh\necho update\n');
-  await write(source, 'local/termux/10-start-local-stack', '#!/bin/sh\necho start\n');
-  await write(source, 'plugins/simcore/latest.js', 'console.log("simcore");\n');
-  await write(source, 'plugins/simcore/install.js', 'console.log("simcore");\n');
-  await write(source, 'plugins/usage-dashboard/latest.js', 'console.log("usage");\n');
-  await write(source, 'plugins/usage-dashboard/runtime/product-manifest.json', '{"product":"fixture"}\n');
-  await write(source, 'plugins/usage-dashboard/runtime/bridge-engine.mjs', 'export const engine=1;\n');
-  await write(source, 'plugins/usage-dashboard/runtime/bridge-manager.cjs', 'module.exports={manager:1};\n');
-  await write(source, 'plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh', '#!/bin/sh\necho bridge\n');
+  await fsp.mkdir(seed, { recursive: true });
+  git(seed, ['init', '-b', 'main']);
+  configureIdentity(seed);
 
-  git(source, ['add', '.']);
-  git(source, ['commit', '-m', 'fixture source']);
-  const sha = gitText(source, ['rev-parse', 'HEAD']);
-  for (const ref of ['main', 'release-simcore', 'release-usage-dashboard']) {
-    git(source, ['update-ref', 'refs/remotes/origin/' + ref, sha]);
+  await write(seed, 'local/termux/00-update-local-stack', '#!/bin/sh\necho update\n');
+  await write(seed, 'local/termux/10-start-local-stack', '#!/bin/sh\necho start\n');
+  await write(seed, 'plugins/simcore/latest.js', 'console.log("simcore");\n');
+  await write(seed, 'plugins/simcore/install.js', 'console.log("simcore");\n');
+  await write(seed, 'plugins/usage-dashboard/latest.js', 'console.log("usage");\n');
+  await write(seed, 'plugins/usage-dashboard/runtime/product-manifest.json', '{"product":"fixture"}\n');
+  await write(seed, 'plugins/usage-dashboard/runtime/bridge-engine.mjs', 'export const engine=1;\n');
+  await write(seed, 'plugins/usage-dashboard/runtime/bridge-manager.cjs', 'module.exports={manager:1};\n');
+  await write(seed, 'plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh', '#!/bin/sh\necho bridge\n');
+  for (const file of [
+    'local/termux/00-update-local-stack',
+    'local/termux/10-start-local-stack',
+    'plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh',
+  ]) {
+    await fsp.chmod(path.join(seed, file), 0o755);
   }
-  return { source, sha };
+
+  git(seed, ['add', '.']);
+  git(seed, ['commit', '-m', 'fixture source']);
+  git(seed, ['branch', 'release-simcore']);
+  git(seed, ['branch', 'release-usage-dashboard']);
+  git(seed, ['remote', 'add', 'origin', bare]);
+  git(seed, ['push', 'origin', 'main', 'release-simcore', 'release-usage-dashboard']);
+  git(bare, ['symbolic-ref', 'HEAD', 'refs/heads/main']);
+
+  git(root, ['clone', bare, source]);
+  configureIdentity(source);
+  git(source, ['fetch', 'origin']);
+  return { source, sourceBare: bare, sha: gitText(source, ['rev-parse', 'refs/remotes/origin/main']) };
 }
 
 async function initTarget(root) {
@@ -111,6 +128,20 @@ function branchFiles(bare, branch) {
     .sort();
 }
 
+function branchModes(bare, branch) {
+  const sha = branchSha(bare, branch);
+  return Object.fromEntries(
+    gitText(bare, ['ls-tree', '-r', sha])
+      .split('\n')
+      .filter(Boolean)
+      .map(line => {
+        const match = line.match(/^(100644|100755)\s+blob\s+[0-9a-f]{40}\t(.+)$/);
+        assert.ok(match, 'unexpected tree row: ' + line);
+        return [match[2], match[1]];
+      }),
+  );
+}
+
 test('policy is fixed to the reviewed repositories, refs, branches, and file allowlists', () => {
   const policy = validatePolicy(loadPolicy());
   assert.equal(policy.sourceRepository, 'hanmiyoo10-alt/-');
@@ -135,6 +166,25 @@ test('CLI rejects unknown options and caller-selected channel values', () => {
   );
 });
 
+test('production source-repository guard rejects an arbitrary git remote', async () => {
+  const fx = await fixture();
+  try {
+    assert.throws(
+      () => planChannel({
+        sourceRepo: fx.source,
+        targetDir: fx.clone,
+        policy: loadPolicy(),
+        channelName: 'termux',
+        enforceSourceRepository: true,
+        enforceTargetRepository: false,
+      }),
+      /SOURCE_REPOSITORY_MISMATCH/,
+    );
+  } finally {
+    await fx.cleanup();
+  }
+});
+
 test('production target-repository guard rejects an arbitrary git remote', async () => {
   const fx = await fixture();
   try {
@@ -144,6 +194,7 @@ test('production target-repository guard rejects an arbitrary git remote', async
         targetDir: fx.clone,
         policy: loadPolicy(),
         channelName: 'termux',
+        enforceSourceRepository: false,
         enforceTargetRepository: true,
       }),
       /TARGET_REPOSITORY_MISMATCH/,
@@ -161,14 +212,17 @@ test('source ref movement after planning fails closed before publication', async
       targetDir: fx.clone,
       policy: loadPolicy(),
       channelName: 'termux',
+      enforceSourceRepository: false,
       enforceTargetRepository: false,
     });
 
-    await write(fx.source, 'local/termux/00-update-local-stack', '#!/bin/sh\necho moved\n');
-    git(fx.source, ['add', 'local/termux/00-update-local-stack']);
-    git(fx.source, ['commit', '-m', 'move source ref']);
-    const moved = gitText(fx.source, ['rev-parse', 'HEAD']);
-    git(fx.source, ['update-ref', 'refs/remotes/origin/main', moved]);
+    const writer = path.join(fx.root, 'source-writer');
+    git(fx.root, ['clone', fx.sourceBare, writer]);
+    configureIdentity(writer);
+    await write(writer, 'local/termux/00-update-local-stack', '#!/bin/sh\necho moved\n');
+    git(writer, ['add', 'local/termux/00-update-local-stack']);
+    git(writer, ['commit', '-m', 'move source ref']);
+    git(writer, ['push', 'origin', 'HEAD:refs/heads/main']);
 
     assert.throws(
       () => assertSourceCurrentness(fx.source, plan),
@@ -191,6 +245,7 @@ test('all channels publish exact bounded trees and second publish is a NOOP', as
       mode: 'publish',
       selectedChannel: 'all',
       policy,
+      enforceSourceRepository: false,
       enforceTargetRepository: false,
     });
 
@@ -215,6 +270,14 @@ test('all channels publish exact bounded trees and second publish is a NOOP', as
       'plugins/usage-dashboard/runtime/product-manifest.json',
     ]);
 
+    const termuxModes = branchModes(fx.bare, 'main');
+    assert.equal(termuxModes['local/termux/00-update-local-stack'], '100755');
+    assert.equal(termuxModes['local/termux/10-start-local-stack'], '100755');
+    assert.equal(termuxModes['README.md'], '100644');
+    assert.equal(termuxModes['.distribution/provenance.json'], '100644');
+    const usageModes = branchModes(fx.bare, 'release-usage-dashboard');
+    assert.equal(usageModes['plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh'], '100755');
+
     for (const [branch, ref, files] of [
       ['main', 'main', policy.channels.termux.files],
       ['release-simcore', 'release-simcore', policy.channels.simcore.files],
@@ -234,6 +297,7 @@ test('all channels publish exact bounded trees and second publish is a NOOP', as
       mode: 'publish',
       selectedChannel: 'all',
       policy,
+      enforceSourceRepository: false,
       enforceTargetRepository: false,
     });
     assert.deepEqual(second.results.map(row => row.disposition), ['NOOP', 'NOOP', 'NOOP']);
@@ -253,6 +317,7 @@ test('plan mode reads source/target identities without publishing', async () => 
       mode: 'plan',
       selectedChannel: 'all',
       policy: loadPolicy(),
+      enforceSourceRepository: false,
       enforceTargetRepository: false,
     });
     assert.equal(report.results.length, 3);
@@ -264,10 +329,13 @@ test('plan mode reads source/target identities without publishing', async () => 
   }
 });
 
-test('implementation contains no force publication primitive', () => {
+test('implementation contains no force publication primitive and emits bounded error receipts', () => {
   const source = fs.readFileSync(new URL('../publish.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /--force|force-with-lease|\+refs\/heads/);
   assert.match(source, /\['push', 'origin'/);
+  assert.match(source, /ls-remote', '--heads', 'origin'/);
+  assert.match(source, /status: 'ERROR'/);
+  assert.match(source, /targetObservation: observeTargetBranches/);
 });
 
 test('workflow is manual-only and keeps canonical permissions read-only', () => {
@@ -277,8 +345,13 @@ test('workflow is manual-only and keeps canonical permissions read-only', () => 
   assert.doesNotMatch(workflow, /^\s*push:\s*$/m);
   assert.doesNotMatch(workflow, /^\s*pull_request:\s*$/m);
   assert.match(workflow, /permissions:\s*\n\s*contents:\s*read/);
+  assert.match(workflow, /if:\s*\$\{\{ github\.ref == 'refs\/heads\/main' \}\}/);
+  assert.match(workflow, /environment:\s*public-distribution-publisher/);
+  assert.match(workflow, /with:\s*\n\s*ref:\s*main\s*\n\s*fetch-depth:\s*0/);
+  assert.match(workflow, /\.ssh_keys\[\] \| "github\.com " \+ \./);
   assert.match(workflow, /MYANG_DISTRIBUTION_SSH_KEY/);
   assert.match(workflow, /git clone --no-tags git@github\.com:hanmiyoo10-alt\/myang\.git/);
+  assert.match(workflow, /Upload publication receipts\s*\n\s*if:\s*\$\{\{ !cancelled\(\) \}\}/);
   assert.doesNotMatch(workflow, /\\\$\{\{/);
   assert.doesNotMatch(workflow, /contents:\s*write/);
 });

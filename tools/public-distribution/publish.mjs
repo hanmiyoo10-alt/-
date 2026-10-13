@@ -123,6 +123,12 @@ function normalizeGithubRemote(value) {
   return raw;
 }
 
+function assertSourceRepository(sourceRepo, policy, enforceSourceRepository) {
+  if (!enforceSourceRepository) return;
+  const remote = gitText(sourceRepo, ['config', '--get', 'remote.origin.url']);
+  if (normalizeGithubRemote(remote) !== policy.sourceRepository) fail('SOURCE_REPOSITORY_MISMATCH', remote);
+}
+
 function assertTargetRepository(targetDir, policy, enforceTargetRepository) {
   if (!enforceTargetRepository) return;
   const remote = gitText(targetDir, ['config', '--get', 'remote.origin.url']);
@@ -137,6 +143,23 @@ function resolveSourceSha(sourceRepo, sourceRef) {
 
 function readSourceFile(sourceRepo, sourceSha, file) {
   return git(sourceRepo, ['show', sourceSha + ':' + file], { encoding: null });
+}
+
+function sourceFileMode(sourceRepo, sourceSha, file) {
+  const line = gitText(sourceRepo, ['ls-tree', sourceSha, '--', file]);
+  const match = line.match(/^(100644|100755)\s+blob\s+[0-9a-f]{40}\t/);
+  if (!match) fail('INVALID_SOURCE_MODE', file);
+  return match[1];
+}
+
+function lsRemoteSourceBranch(sourceRepo, branch) {
+  const out = gitText(sourceRepo, ['ls-remote', '--heads', 'origin', 'refs/heads/' + branch]);
+  if (!out) fail('SOURCE_BRANCH_MISSING', branch);
+  const rows = out.split('\n').filter(Boolean);
+  if (rows.length !== 1) fail('SOURCE_BRANCH_AMBIGUOUS', branch);
+  const sha = rows[0].split(/\s+/)[0];
+  if (!SHA_RE.test(sha)) fail('INVALID_SOURCE_REMOTE_SHA', branch + '@' + sha);
+  return sha;
 }
 
 function lsRemoteBranch(targetDir, branch) {
@@ -187,7 +210,7 @@ function provenanceBytes(policy, channelName, sourceSha, productFiles) {
     sourceCommit: sourceSha,
     targetRepository: policy.targetRepository,
     targetBranch: channel.targetBranch,
-    files: productFiles.map(row => ({ path: row.path, sha256: row.sha256 })),
+    files: productFiles.map(row => ({ path: row.path, mode: row.mode, sha256: row.sha256 })),
   }, null, 2) + '\n');
 }
 
@@ -195,17 +218,19 @@ function desiredBytesForChannel(sourceRepo, policy, channelName, sourceSha) {
   const channel = policy.channels[channelName];
   const rows = channel.files.map(file => {
     const bytes = readSourceFile(sourceRepo, sourceSha, file);
-    return { path: file, bytes, sha256: sha256(bytes), generated: false };
+    const mode = sourceFileMode(sourceRepo, sourceSha, file);
+    return { path: file, bytes, mode, sha256: sha256(bytes), generated: false };
   });
-  const productFiles = rows.map(row => ({ path: row.path, sha256: row.sha256 }));
+  const productFiles = rows.map(row => ({ path: row.path, mode: row.mode, sha256: row.sha256 }));
   if (channelName === 'termux') {
     const bytes = publicReadme(policy);
-    rows.push({ path: 'README.md', bytes, sha256: sha256(bytes), generated: true });
+    rows.push({ path: 'README.md', bytes, mode: '100644', sha256: sha256(bytes), generated: true });
   }
   const provenance = provenanceBytes(policy, channelName, sourceSha, productFiles);
   rows.push({
     path: policy.provenancePath,
     bytes: provenance,
+    mode: '100644',
     sha256: sha256(provenance),
     generated: true,
   });
@@ -243,7 +268,8 @@ async function writeDesiredTree(targetDir, rows) {
   for (const row of rows) {
     const dest = path.join(targetDir, row.path);
     await fsp.mkdir(path.dirname(dest), { recursive: true });
-    await fsp.writeFile(dest, row.bytes);
+    await fsp.writeFile(dest, row.bytes, { mode: row.mode === '100755' ? 0o755 : 0o644 });
+    await fsp.chmod(dest, row.mode === '100755' ? 0o755 : 0o644);
   }
 }
 
@@ -254,8 +280,11 @@ async function verifyWorktree(targetDir, rows) {
     fail('TARGET_INVENTORY_MISMATCH', JSON.stringify({ expected, actual }));
   }
   for (const row of rows) {
-    const bytes = await fsp.readFile(path.join(targetDir, row.path));
+    const filePath = path.join(targetDir, row.path);
+    const bytes = await fsp.readFile(filePath);
     if (sha256(bytes) !== row.sha256) fail('TARGET_DIGEST_MISMATCH', row.path);
+    const statMode = (await fsp.stat(filePath)).mode & 0o111 ? '100755' : '100644';
+    if (statMode !== row.mode) fail('TARGET_MODE_MISMATCH', row.path + ':' + statMode);
   }
 }
 
@@ -269,6 +298,9 @@ function verifyCommitTree(targetDir, commitSha, rows) {
     fail('POST_PUSH_INVENTORY_MISMATCH', JSON.stringify({ expected, actual }));
   }
   for (const row of rows) {
+    const treeLine = gitText(targetDir, ['ls-tree', commitSha, '--', row.path]);
+    const match = treeLine.match(/^(100644|100755)\s+blob\s+[0-9a-f]{40}\t/);
+    if (!match || match[1] !== row.mode) fail('POST_PUSH_MODE_MISMATCH', row.path);
     const bytes = git(targetDir, ['show', commitSha + ':' + row.path], { encoding: null });
     if (sha256(bytes) !== row.sha256) fail('POST_PUSH_DIGEST_MISMATCH', row.path);
   }
@@ -301,8 +333,16 @@ function targetBase(targetDir, channel) {
   return { targetBefore: null, baseSha: mainSha, createdFromMain: mainSha };
 }
 
-export function planChannel({ sourceRepo, targetDir, policy, channelName, enforceTargetRepository = true }) {
+export function planChannel({
+  sourceRepo,
+  targetDir,
+  policy,
+  channelName,
+  enforceSourceRepository = true,
+  enforceTargetRepository = true,
+}) {
   validatePolicy(policy);
+  assertSourceRepository(sourceRepo, policy, enforceSourceRepository);
   assertTargetRepository(targetDir, policy, enforceTargetRepository);
   const channel = policy.channels[channelName];
   if (!channel) fail('UNKNOWN_CHANNEL', channelName);
@@ -319,6 +359,7 @@ export function planChannel({ sourceRepo, targetDir, policy, channelName, enforc
     createdFromMain: base.createdFromMain,
     files: rows.map(row => ({
       path: row.path,
+      mode: row.mode,
       sha256: row.sha256,
       generated: row.generated,
     })),
@@ -326,7 +367,7 @@ export function planChannel({ sourceRepo, targetDir, policy, channelName, enforc
 }
 
 export function assertSourceCurrentness(sourceRepo, plan) {
-  const now = resolveSourceSha(sourceRepo, plan.sourceRef);
+  const now = lsRemoteSourceBranch(sourceRepo, plan.sourceRef);
   if (now !== plan.sourceSha) {
     fail('SOURCE_REF_MOVED', plan.sourceRef + ':' + plan.sourceSha + '->' + now);
   }
@@ -357,6 +398,7 @@ export async function publishChannel({
   targetDir,
   policy,
   channelName,
+  enforceSourceRepository = true,
   enforceTargetRepository = true,
 }) {
   const plan = planChannel({
@@ -364,6 +406,7 @@ export async function publishChannel({
     targetDir,
     policy,
     channelName,
+    enforceSourceRepository,
     enforceTargetRepository,
   });
   const rows = desiredBytesForChannel(sourceRepo, policy, channelName, plan.sourceSha);
@@ -430,6 +473,7 @@ export async function runPublisher({
   mode,
   selectedChannel,
   policy = loadPolicy(),
+  enforceSourceRepository = true,
   enforceTargetRepository = true,
 }) {
   validatePolicy(policy);
@@ -441,6 +485,7 @@ export async function runPublisher({
         targetDir,
         policy,
         channelName,
+        enforceSourceRepository,
         enforceTargetRepository,
       }));
     } else {
@@ -449,6 +494,7 @@ export async function runPublisher({
         targetDir,
         policy,
         channelName,
+        enforceSourceRepository,
         enforceTargetRepository,
       }));
     }
@@ -463,24 +509,59 @@ export async function runPublisher({
   };
 }
 
+function boundedErrorCode(error) {
+  const message = String(error && error.message ? error.message : error || 'UNKNOWN_ERROR');
+  return message.split(':', 1)[0].slice(0, 120);
+}
+
+function observeTargetBranches(targetDir, policy, selectedChannel) {
+  return channelNames(policy, selectedChannel).map(channelName => {
+    const targetBranch = policy.channels[channelName].targetBranch;
+    try {
+      return { channel: channelName, targetBranch, targetSha: lsRemoteBranch(targetDir, targetBranch), readError: null };
+    } catch (error) {
+      return { channel: channelName, targetBranch, targetSha: null, readError: boundedErrorCode(error) };
+    }
+  });
+}
+
+async function writeReport(reportPath, report) {
+  await fsp.mkdir(path.dirname(reportPath), { recursive: true });
+  await fsp.writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const sourceRepo = process.cwd();
   const targetDir = path.resolve(args.targetDir);
   const reportPath = path.resolve(args.report);
 
-  const report = await runPublisher({
-    sourceRepo,
-    targetDir,
-    mode: args.mode,
-    selectedChannel: args.channel,
-    policy: loadPolicy(),
-    enforceTargetRepository: true,
-  });
-
-  await fsp.mkdir(path.dirname(reportPath), { recursive: true });
-  await fsp.writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
-  process.stdout.write(JSON.stringify(report) + '\n');
+  const policy = loadPolicy();
+  try {
+    const report = await runPublisher({
+      sourceRepo,
+      targetDir,
+      mode: args.mode,
+      selectedChannel: args.channel,
+      policy,
+      enforceSourceRepository: true,
+      enforceTargetRepository: true,
+    });
+    await writeReport(reportPath, { ...report, status: 'PASS' });
+    process.stdout.write(JSON.stringify(report) + '\n');
+  } catch (error) {
+    await writeReport(reportPath, {
+      schemaVersion: 1,
+      mode: args.mode,
+      status: 'ERROR',
+      sourceRepository: policy.sourceRepository,
+      targetRepository: policy.targetRepository,
+      selectedChannel: args.channel,
+      errorCode: boundedErrorCode(error),
+      targetObservation: observeTargetBranches(targetDir, policy, args.channel),
+    });
+    throw error;
+  }
 }
 
 const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : '';

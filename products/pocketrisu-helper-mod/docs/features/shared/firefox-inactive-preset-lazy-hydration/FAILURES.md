@@ -27,3 +27,15 @@ Origin:
   - base `jobRecovery.test.ts` also PASS.
 - conclusion: these REDs pre-exist the feature and are environment/performance limitations, not preset-lazy regressions.
 - action: do not modify unrelated Gemini cache, lorebook patcher, or job-recovery code inside this Feature-ID. Targeted preset tests, server integration, svelte-check, production build, and server suite remain the feature-owned gates.
+
+
+### 2026-10-13 — memory reduction not demonstrated in first live A/B
+- stage: `POST_DEPLOY_VERIFY`.
+- preset-array payload reduction itself is real: 24.58 MB → 0.63 MB, 98 inactive stubs / 1 active full.
+- authoritative disk safety passed: 99 presets, 0 disk stubs, 0 changed preset hashes vs rollback snapshot after reload + persisted patches.
+- live hydrate endpoint passed.
+- however Firefox/Gecko process memory did not show a comparable drop.
+- same large child PID 21638 had pre-reload cached-state PSS records around 110–148 MB and post-reload service-state records around 730→569 MB.
+- state differs and URL↔PID mapping is still not strict, so neither improvement nor regression is attributed to the feature from this metric alone.
+- first >10 minute post-reload window had no LMKD kill.
+- conclusion: keep the feature active for data/protocol validation, but do not claim LMKD resolution or memory win until UI smoke + longer natural observation.

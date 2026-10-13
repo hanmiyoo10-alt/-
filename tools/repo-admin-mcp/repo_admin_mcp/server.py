@@ -27,32 +27,60 @@ mcp = MCPServer(
 )
 
 
-def _client() -> GitHubAdminClient:
-    return GitHubAdminClient()
+def _client(*, require_app: bool = False) -> GitHubAdminClient:
+    return GitHubAdminClient(require_app=require_app)
+
+
+def _client_failure(kind: str, error: Exception, status: str) -> dict[str, Any]:
+    code = str(getattr(error, "code", "CLIENT_CONFIGURATION_ERROR"))[:120]
+    http_status = getattr(error, "http_status", None)
+    return {
+        "schemaVersion": 1,
+        "kind": kind,
+        "status": status,
+        "reasonCode": code,
+        "httpStatus": http_status if isinstance(http_status, int) else None,
+    }
 
 
 @mcp.tool()
 def private_mirror_writer_status() -> dict[str, Any]:
     """Read sanitized metadata for the fixed private-mirror writer credential; never returns secret or key material."""
-    return build_status(_client())
+    try:
+        client = _client()
+    except Exception as exc:
+        return _client_failure("PRIVATE_MIRROR_WRITER_STATUS", exc, "UNKNOWN")
+    return build_status(client)
 
 
 @mcp.tool()
 def private_mirror_writer_bootstrap() -> dict[str, Any]:
     """Create the fixed private-mirror writer only when metadata proves a clean absent state."""
-    return build_bootstrap(_client())
+    try:
+        client = _client(require_app=True)
+    except Exception as exc:
+        return _client_failure("PRIVATE_MIRROR_WRITER_BOOTSTRAP", exc, "BLOCKED")
+    return build_bootstrap(client)
 
 
 @mcp.tool()
 def private_mirror_writer_rotate(expected_key_id: int, expected_secret_updated_at: str) -> dict[str, Any]:
     """Rotate the fixed writer credential using exact expected metadata and fail closed on drift."""
-    return build_rotate(_client(), expected_key_id, expected_secret_updated_at)
+    try:
+        client = _client(require_app=True)
+    except Exception as exc:
+        return _client_failure("PRIVATE_MIRROR_WRITER_ROTATE", exc, "BLOCKED")
+    return build_rotate(client, expected_key_id, expected_secret_updated_at)
 
 
 @mcp.tool()
 def private_mirror_writer_revoke(expected_key_id: int, expected_secret_updated_at: str) -> dict[str, Any]:
     """Revoke the fixed writer credential using exact expected metadata; no wildcard deletion is possible."""
-    return build_revoke(_client(), expected_key_id, expected_secret_updated_at)
+    try:
+        client = _client(require_app=True)
+    except Exception as exc:
+        return _client_failure("PRIVATE_MIRROR_WRITER_REVOKE", exc, "BLOCKED")
+    return build_revoke(client, expected_key_id, expected_secret_updated_at)
 
 
 class ProtectedMCPApp:

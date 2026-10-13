@@ -2,7 +2,7 @@
 
 Feature-ID: `firefox-inactive-preset-lazy-hydration`
 Area: `shared`
-Status: **IMPLEMENTED_LOCAL / STATIC_GREEN / DEPLOY_VERIFY_PENDING**
+Status: **LIVE_INITIAL_PASS / DATA_SAFE / MEMORY_EFFECT_UNPROVEN / UI_SMOKE_PENDING**
 
 ## 목적
 Android Firefox LMKD 회수를 줄이기 위해, client reactive runtime이 항상 보유하는 `botPresets` 전체 full object를 줄인다.
@@ -171,3 +171,73 @@ Broad client-suite baseline control:
 - smoke inactive selection, generation, edit/copy/export/diff and persistence.
 - verify disk still holds full inactive preset bodies after save/restart.
 
+
+
+## 2026-10-13 live initial A/B
+
+Deployment:
+- source commit: `d6a68402558949a0fd550e6e7beb5f86a8ee65d8`.
+- rollback snapshot: `migration-backup/pre-preset-lazy-1791886614565.bin`, logical size 142,275,655 bytes.
+- predeploy SQLite `quick_check`: risuai/logs/request-logs/model-jobs all `ok`.
+- controlled service restart: PID 12649 → 12656.
+- server health after restart: `ready`.
+- main-phone core SSH tunnel remained healthy.
+
+Client reload:
+- new lifecycle boot at 19:22:48 KST.
+- bootId `ead19939`.
+- `navType=back_forward`.
+- `pageshow.persisted=false`.
+- writer session prefix `ffda6f58`.
+- post-reload patch generations 1 and 2 both committed successfully.
+- no 423 / `Session deactivated` observed.
+
+Authoritative data safety:
+- predeploy snapshot presets: 99.
+- current disk presets after reload/save: 99.
+- disk `_presetStub` count: 0.
+- changed preset hashes vs predeploy snapshot: 0.
+- missing preset IDs: 0.
+- therefore client stubs did not leak into authoritative disk state and no preset body was overwritten.
+
+Strip result on the live v1.14 database:
+- active preset index: 97.
+- client full preset count: 1.
+- client inactive stub count: 98.
+- full `botPresets` JSON: 24,579,229 bytes.
+- stripped `botPresets` JSON: 630,510 bytes.
+- reduction: 23,948,719 bytes / **97.43%** for the preset array.
+
+Live hydrate route:
+- production `GET /api/preset-content/:presetId` smoke with an internally generated short-lived JWT: HTTP 200.
+- target inactive preset: index 0, `사육푸스`.
+- response: 8,372 bytes.
+- decoded ID matched.
+- full `mainPrompt` and `regex` present.
+- returned object was not a stub.
+- JWT secret/token were not printed or persisted outside the normal server secret.
+
+Firefox observation after reload:
+- no Firefox process death/LMKD event in the first >10 minutes.
+- process set remained stable.
+- total Firefox RSS peaked near 1.48 GB immediately after reload, then fell to ~954 MB by 19:33.
+- largest Gecko child `tab19` remained large; Android PSS records after reload: ~730 MB → 715 MB → 569 MB.
+- pre-reload same PID had cached-state PSS records ~110–148 MB.
+- these values are **not apples-to-apples** because Android state changed from cached-style state 17 to service state 10 and the exact URL↔PID mapping is still unproven.
+- therefore this feature has **not yet demonstrated a Gecko PSS/RSS reduction**, despite the 97.43% preset payload reduction.
+- static reinspection found no path that eagerly hydrates all 98 inactive presets during ordinary list rendering. Full hydration occurs only at explicit full-data consumers.
+
+Current interpretation:
+- protocol/data-safety goal: PASS.
+- client preset payload reduction: PASS.
+- first >10 min no-LMKD observation: PASS but not sufficient long-term proof.
+- memory-effect goal: UNPROVEN.
+- do not claim this feature solves LMKD yet.
+- next suspected retained-memory owners remain plugins/modules/other Gecko state if live UI smoke also passes.
+
+Remaining live gate:
+1. actual Firefox UI selects one inactive preset, exercising the real client hydration path.
+2. switch back to the original active preset.
+3. verify server disk still has 99 full presets, 0 stubs, unchanged bodies except intentional selection metadata if any.
+4. verify patch persistence and no 423.
+5. then continue natural-use LMKD observation.

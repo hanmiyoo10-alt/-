@@ -1,0 +1,108 @@
+name: Public Distribution Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Distribution channel to publish
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - termux
+          - simcore
+          - usage-dashboard
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-distribution-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout canonical repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+
+      - name: Fetch current distribution authorities
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            'refs/heads/main:refs/remotes/origin/main' \
+            'refs/heads/release-simcore:refs/remotes/origin/release-simcore' \
+            'refs/heads/release-usage-dashboard:refs/remotes/origin/release-usage-dashboard'
+
+      - name: Configure myang-only SSH writer
+        shell: bash
+        env:
+          MYANG_DISTRIBUTION_SSH_KEY: ${{ secrets.MYANG_DISTRIBUTION_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$MYANG_DISTRIBUTION_SSH_KEY"
+          install -d -m 700 "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$MYANG_DISTRIBUTION_SSH_KEY" > "$HOME/.ssh/myang_distribution"
+          curl -fsSL https://api.github.com/meta \
+            | jq -r '.ssh_keys[]' \
+            > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          cat > "$HOME/.ssh/config" <<'EOF'
+          Host github.com
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/myang_distribution
+            IdentitiesOnly yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 "$HOME/.ssh/config"
+
+      - name: Clone fixed distribution repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/myang-distribution"
+          git clone --no-tags git@github.com:hanmiyoo10-alt/myang.git "$RUNNER_TEMP/myang-distribution"
+
+      - name: Plan exact publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tools/public-distribution/publish.mjs \
+            --mode plan \
+            --channel '${{ inputs.channel }}' \
+            --target-dir "$RUNNER_TEMP/myang-distribution" \
+            --report "$RUNNER_TEMP/public-distribution-plan.json"
+
+      - name: Publish exact fast-forward mirrors
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tools/public-distribution/publish.mjs \
+            --mode publish \
+            --channel '${{ inputs.channel }}' \
+            --target-dir "$RUNNER_TEMP/myang-distribution" \
+            --report "$RUNNER_TEMP/public-distribution-report.json"
+
+      - name: Upload publication receipts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public-distribution-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/public-distribution-plan.json
+            ${{ runner.temp }}/public-distribution-report.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Remove publisher private key
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$HOME/.ssh/myang_distribution"

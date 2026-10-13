@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "publisherVersion": "1.0.0",
+  "sourceRepository": "hanmiyoo10-alt/-",
+  "targetRepository": "hanmiyoo10-alt/myang",
+  "targetSshUrl": "git@github.com:hanmiyoo10-alt/myang.git",
+  "provenancePath": ".distribution/provenance.json",
+  "channelOrder": ["termux", "simcore", "usage-dashboard"],
+  "channels": {
+    "termux": {
+      "sourceRef": "main",
+      "targetBranch": "main",
+      "files": [
+        "local/termux/00-update-local-stack",
+        "local/termux/10-start-local-stack"
+      ],
+      "generated": ["README.md", ".distribution/provenance.json"]
+    },
+    "simcore": {
+      "sourceRef": "release-simcore",
+      "targetBranch": "release-simcore",
+      "files": [
+        "plugins/simcore/latest.js",
+        "plugins/simcore/install.js"
+      ],
+      "generated": [".distribution/provenance.json"]
+    },
+    "usage-dashboard": {
+      "sourceRef": "release-usage-dashboard",
+      "targetBranch": "release-usage-dashboard",
+      "files": [
+        "plugins/usage-dashboard/latest.js",
+        "plugins/usage-dashboard/runtime/product-manifest.json",
+        "plugins/usage-dashboard/runtime/bridge-engine.mjs",
+        "plugins/usage-dashboard/runtime/bridge-manager.cjs",
+        "plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh"
+      ],
+      "generated": [".distribution/provenance.json"]
+    }
+  }
+}

@@ -644,12 +644,21 @@ class GitHubReader:
             raise GitHubReadError("workflow_runs must be an array")
         return [item for item in runs if isinstance(item, dict)]
 
-    def list_runs_exact_sha(self, commit_sha: str) -> tuple[int, list[dict[str, Any]]]:
+    def list_runs_exact_sha(
+        self, commit_sha: str, event: str | None = None,
+    ) -> tuple[int, list[dict[str, Any]]]:
         if not isinstance(commit_sha, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha):
             raise GitHubReadError("commit_sha must be a full 40-hex SHA")
+        if event is not None and (
+            not isinstance(event, str) or not re.fullmatch(r"[A-Za-z0-9_]+", event)
+        ):
+            raise GitHubReadError("event must be a GitHub Actions event name")
+        query: dict[str, str | int] = {"head_sha": commit_sha.lower(), "per_page": 100}
+        if event is not None:
+            query["event"] = event
         value = self._get_json(
             f"{self._repo_api_prefix}/actions/runs",
-            {"head_sha": commit_sha.lower(), "per_page": 100},
+            query,
         )
         total = value.get("total_count")
         runs = value.get("workflow_runs")

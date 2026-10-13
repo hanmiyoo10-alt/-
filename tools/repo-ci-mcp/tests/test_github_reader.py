@@ -114,6 +114,19 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual((total, len(runs)), (2, 2))
         get_json.assert_called_once_with("/repos/owner/repo/actions/runs", {"head_sha": "a" * 40, "per_page": 100})
 
+    def test_55a_exact_sha_run_inventory_applies_optional_event_filter(self):
+        reader = GitHubReader(repository="owner/repo")
+        payload = {"total_count": 1, "workflow_runs": [{"id": 1}]}
+        with patch.object(GitHubReader, "_get_json", return_value=payload) as get_json:
+            total, runs = reader.list_runs_exact_sha("a" * 40, event="push")
+        self.assertEqual((total, len(runs)), (1, 1))
+        get_json.assert_called_once_with(
+            "/repos/owner/repo/actions/runs",
+            {"head_sha": "a" * 40, "per_page": 100, "event": "push"},
+        )
+        with self.assertRaisesRegex(GitHubReadError, "event must be a GitHub Actions event name"):
+            reader.list_runs_exact_sha("a" * 40, event="push-invalid!")
+
     def test_56_compare_changed_paths_requires_ancestor_and_marks_300_incomplete(self):
         reader = GitHubReader(repository="owner/repo")
         payload = {"base_commit": {"sha": "b" * 40}, "merge_base_commit": {"sha": "b" * 40}, "status": "ahead",

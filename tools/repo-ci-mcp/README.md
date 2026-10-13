@@ -7,6 +7,7 @@ Read-only MCP surface for bounded repository result retrieval.
 ```text
 repo_ci_summary(workflow?, ref?, run_id?)
 repo_ci_overview(workflows, ref?)
+repo_ci_runs_exact_sha(sha, event?)
 repo_ci_exact_sha(sha, workflow?, event?, ref?, before_sha?)
 repo_notebook_read(path, ref?, start_cell=0, max_cells=20, include_outputs=false)
 repo_branch_protection(branch="main")
@@ -46,6 +47,8 @@ The raw compact-summary text is deliberately omitted from the normal GPT-facing 
 `repo_ci_overview` accepts an explicit ordered list of 2–5 supported workflow families and projects their existing `repo_ci_summary` results into one bounded first-pass response. It preserves each workflow's CI result, completeness, run identity, source locator, and bounded errors without embedding every full compact-summary text block. `ok` means all requested summaries were retrieved and validated. Mixed `FAIL`, `INFRA_ERROR`, `CANCELLED`, `UNKNOWN`, incomplete summaries, or retrieval failures remain visible through `attention_required`, `attention_workflows`, and deterministic result counts. There is deliberately no aggregate green `PASS` label. Use `repo_ci_summary` for one workflow or targeted drill-down.
 
 The overview uses the existing latest-per-workflow ref semantics. It is not an atomic exact-current-main snapshot across independently triggered workflow families and does not substitute older green runs.
+
+`repo_ci_runs_exact_sha` is the direct exact-SHA workflow-run inventory surface. It applies GitHub's `head_sha` filter and, when supplied, one explicit Actions `event` filter such as `push` or `pull_request`. Event omission preserves the all-event inventory. A complete filtered zero-result response is valid known-zero observation for that SHA/event pair; it does not infer that any particular workflow should have run. The returned bounded projection preserves run/workflow identity, event, exact head SHA, head branch, status/conclusion, run number/attempt, and the GitHub run locator. This tool is read-only derived observability and does not replace Required, release, or production authority.
 
 `repo_ci_exact_sha` inventories GitHub Actions runs at one full commit SHA with the repository-wide `head_sha` filter and no event restriction. Optional workflow absence classification is fail-closed: `RAN`, `EXPECTED_NO_RUN_PATH_FILTER`, `TRIGGER_NOT_APPLICABLE`, `BLOCKED_CAPABILITY`, `MISSING_UNEXPECTED`, or `UNKNOWN`. Strong no-run reasons require exact workflow source plus applicable event/ref evidence; path-filter reasons additionally require an exact `before_sha` transition and complete changed-path evidence. Unsupported trigger syntax, ambiguous transition identity, transport failure, or configured bounds preserve `UNKNOWN` rather than guessing.
 

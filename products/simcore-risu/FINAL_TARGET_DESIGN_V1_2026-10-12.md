@@ -548,6 +548,10 @@ SimCore Risu is intended to become the owner's primary Risu environment. Accordi
 
 Broad Risu fork/mod ecosystem discovery is tracked by #3645.
 
+### Owner-private snapshot intake
+
+The owner's private Google Drive `포켓리스` folder is an additional donor source. Artifacts and repository links intentionally placed there enter the donor-candidate inventory, with deduplication and explicit provenance. Private Drive locators remain outside the public repository. Drive snapshot intake is tracked by #3647.
+
 | Donor | Target contribution |
 | --- | --- |
 | Current SimCore | Control semantics, host safety, current behavioral baseline |

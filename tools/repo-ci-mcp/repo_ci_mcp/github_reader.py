@@ -16,6 +16,7 @@ DEFAULT_REPOSITORY = "hanmiyoo10-alt/-"
 DEFAULT_API = "https://api.github.com"
 DEFAULT_API_VERSION = "2022-11-28"
 CODE_QUALITY_API_VERSION = "2026-03-10"
+ATTESTATIONS_API_VERSION = "2026-03-10"
 DEFAULT_JSON_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_RELEASE_LIST_BYTES = 64 * 1024 * 1024
 DEFAULT_TIMEOUT_SECONDS = 20.0
@@ -109,7 +110,7 @@ class GitHubReader:
         return text
 
     def _request(self, url: str, *, api_version: str = DEFAULT_API_VERSION) -> Request:
-        if api_version not in {DEFAULT_API_VERSION, CODE_QUALITY_API_VERSION}:
+        if api_version not in {DEFAULT_API_VERSION, CODE_QUALITY_API_VERSION, ATTESTATIONS_API_VERSION}:
             raise ValueError("unsupported GitHub API version")
         headers = {
             "Accept": "application/vnd.github+json",
@@ -575,6 +576,7 @@ class GitHubReader:
         value = self._get_json_value(
             f"{self._repo_api_prefix}/attestations/{quote(safe_digest, safe='')}",
             {"per_page": safe_limit},
+            api_version=ATTESTATIONS_API_VERSION,
         )
         if not isinstance(value, dict):
             raise GitHubReadError("attestations response root must be an object")

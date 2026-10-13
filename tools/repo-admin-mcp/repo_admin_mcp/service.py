@@ -144,38 +144,15 @@ def private_mirror_writer_bootstrap(
             try:
                 client.put_environment_secret(encrypted, env_key.key_id)
             except Exception as exc:
-                try:
-                    observed_secret = client.get_environment_secret()
-                except Exception:
-                    return {
-                        "schemaVersion": 1,
-                        "kind": kind,
-                        "status": "PARTIAL",
-                        "reasonCode": "SECRET_WRITE_OUTCOME_UNKNOWN",
-                        "newKeyId": created.id,
-                    }
-                if observed_secret is not None:
-                    return {
-                        "schemaVersion": 1,
-                        "kind": kind,
-                        "status": "PARTIAL",
-                        "reasonCode": "SECRET_WRITE_OUTCOME_UNKNOWN",
-                        "newKeyId": created.id,
-                        "observedSecretUpdatedAt": observed_secret.updated_at,
-                    }
-                try:
-                    client.delete_deploy_key(created.id)
-                except Exception:
-                    return {
-                        "schemaVersion": 1,
-                        "kind": kind,
-                        "status": "PARTIAL",
-                        "reasonCode": "SECRET_WRITE_FAILED_ROLLBACK_DELETE_FAILED",
-                        "newKeyId": created.id,
-                    }
-                result = _error_result(kind, exc, "BLOCKED")
-                result["rollback"] = "DEPLOY_KEY_DELETED"
-                return result
+                return {
+                    "schemaVersion": 1,
+                    "kind": kind,
+                    "status": "PARTIAL",
+                    "reasonCode": "SECRET_WRITE_OUTCOME_UNKNOWN",
+                    "newKeyId": created.id,
+                    "writeReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
+                    "httpStatus": getattr(exc, "http_status", None),
+                }
 
             final = private_mirror_writer_status(client)
             if (
@@ -276,42 +253,16 @@ def private_mirror_writer_rotate(
             try:
                 client.put_environment_secret(encrypted, env_key.key_id)
             except Exception as exc:
-                try:
-                    observed_secret = client.get_environment_secret()
-                except Exception:
-                    return {
-                        "schemaVersion": 1,
-                        "kind": kind,
-                        "status": "PARTIAL",
-                        "reasonCode": "SECRET_WRITE_OUTCOME_UNKNOWN",
-                        "oldKeyId": expected_key_id,
-                        "newKeyId": replacement.id,
-                    }
-                if observed_secret is None or observed_secret.updated_at != expected_secret_updated_at:
-                    return {
-                        "schemaVersion": 1,
-                        "kind": kind,
-                        "status": "PARTIAL",
-                        "reasonCode": "SECRET_WRITE_OUTCOME_UNKNOWN",
-                        "oldKeyId": expected_key_id,
-                        "newKeyId": replacement.id,
-                        "observedSecretUpdatedAt": None if observed_secret is None else observed_secret.updated_at,
-                    }
-                try:
-                    client.delete_deploy_key(replacement.id)
-                except Exception:
-                    return {
-                        "schemaVersion": 1,
-                        "kind": kind,
-                        "status": "PARTIAL",
-                        "reasonCode": "ROTATION_WRITE_FAILED_REPLACEMENT_DELETE_FAILED",
-                        "oldKeyId": expected_key_id,
-                        "newKeyId": replacement.id,
-                    }
-                result = _error_result(kind, exc, "BLOCKED")
-                result["oldKeyId"] = expected_key_id
-                result["rollback"] = "REPLACEMENT_KEY_DELETED"
-                return result
+                return {
+                    "schemaVersion": 1,
+                    "kind": kind,
+                    "status": "PARTIAL",
+                    "reasonCode": "SECRET_WRITE_OUTCOME_UNKNOWN",
+                    "oldKeyId": expected_key_id,
+                    "newKeyId": replacement.id,
+                    "writeReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
+                    "httpStatus": getattr(exc, "http_status", None),
+                }
 
             try:
                 changed = _wait_secret_changed(client, expected_secret_updated_at, sleep=sleep)

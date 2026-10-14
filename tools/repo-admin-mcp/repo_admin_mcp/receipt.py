@@ -31,7 +31,7 @@ class RotationCleanupEvidence:
     old_key_id: int
     new_key_id: int
     previous_secret_updated_at: str
-    post_secret_updated_at: str | None
+    post_secret_updated_at: str
 
 
 class RotationCleanupReceiptSigner:
@@ -50,14 +50,14 @@ class RotationCleanupReceiptSigner:
         old_key_id: int,
         new_key_id: int,
         previous_secret_updated_at: str,
-        post_secret_updated_at: str | None,
+        post_secret_updated_at: str,
     ) -> str:
         if (
             old_key_id <= 0 or
             new_key_id <= 0 or
             old_key_id == new_key_id or
             not previous_secret_updated_at or
-            (post_secret_updated_at is not None and not post_secret_updated_at)
+            not post_secret_updated_at
         ):
             raise ReceiptError("INVALID_ROTATION_CLEANUP_EVIDENCE")
         payload = {
@@ -95,7 +95,7 @@ class RotationCleanupReceiptSigner:
             not isinstance(payload.get("oldKeyId"), int) or
             not isinstance(payload.get("newKeyId"), int) or
             not isinstance(payload.get("previousSecretUpdatedAt"), str) or
-            (post is not None and not isinstance(post, str))
+            not isinstance(post, str)
         ):
             raise ReceiptError("INVALID_CLEANUP_RECEIPT_PAYLOAD")
         evidence = RotationCleanupEvidence(
@@ -109,7 +109,7 @@ class RotationCleanupReceiptSigner:
             evidence.new_key_id <= 0 or
             evidence.old_key_id == evidence.new_key_id or
             not evidence.previous_secret_updated_at or
-            (evidence.post_secret_updated_at is not None and not evidence.post_secret_updated_at)
+            not evidence.post_secret_updated_at
         ):
             raise ReceiptError("INVALID_CLEANUP_RECEIPT_PAYLOAD")
         return evidence

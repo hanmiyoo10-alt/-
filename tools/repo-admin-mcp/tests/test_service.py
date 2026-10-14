@@ -27,6 +27,9 @@ class FakeClient:
         self.events: list[str] = []
         self.fail_secret_put = False
         self.apply_secret_before_failure = False
+        self.fail_create_after_apply = False
+        self.drift_secret_after_create = False
+        self._secret_drifted = False
         self.fail_secret_get_after_put = False
         self.fail_key_list_after_put = False
         self.fail_key_list_after_old_delete = False
@@ -46,6 +49,8 @@ class FakeClient:
         key = DeployKey(self.next_id, title, False, "2026-10-13T09:59:00Z")
         self.next_id += 1
         self.keys.append(key)
+        if self.fail_create_after_apply:
+            raise GitHubAdminError("SYNTHETIC_CREATE_RESPONSE_LOST", 503)
         return key
 
     def delete_deploy_key(self, key_id: int) -> None:
@@ -59,6 +64,19 @@ class FakeClient:
         return self.public_key
 
     def get_environment_secret(self) -> SecretMetadata | None:
+        if (
+            self.drift_secret_after_create and
+            not self._secret_drifted and
+            "create_key" in self.events and
+            "put_secret" not in self.events and
+            self.secret is not None
+        ):
+            self._secret_drifted = True
+            self.secret = SecretMetadata(
+                "MYANG_DISTRIBUTION_SSH_KEY",
+                self.secret.created_at,
+                "2026-10-13T10:00:30Z",
+            )
         if self.fail_secret_get_after_put and "put_secret" in self.events:
             raise GitHubAdminError("SYNTHETIC_SECRET_READ_FAILURE", 503)
         return self.secret
@@ -323,6 +341,129 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(result["status"], "PARTIAL")
         self.assertEqual(result["reasonCode"], "OLD_KEY_REVOCATION_PENDING")
         self.assertEqual([key.id for key in client.keys], [7, 8])
+
+    def test_bootstrap_key_generation_failure_is_sanitized(self):
+        client = FakeClient()
+
+        def failing_factory(_comment):
+            raise RuntimeError("SYNTHETIC_KEYGEN_SECRET_PAYLOAD")
+
+        result = private_mirror_writer_bootstrap(client, key_factory=failing_factory)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["reasonCode"], "UNEXPECTED_ERROR")
+        self.assertNotIn("SYNTHETIC_KEYGEN_SECRET_PAYLOAD", repr(result))
+        self.assertEqual(client.keys, [])
+
+    def test_rotate_key_generation_failure_is_sanitized(self):
+        client = FakeClient()
+        configured(client)
+
+        def failing_factory(_comment):
+            raise RuntimeError("SYNTHETIC_KEYGEN_SECRET_PAYLOAD")
+
+        result = private_mirror_writer_rotate(client, 7, OLD_UPDATED, key_factory=failing_factory)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["reasonCode"], "UNEXPECTED_ERROR")
+        self.assertNotIn("SYNTHETIC_KEYGEN_SECRET_PAYLOAD", repr(result))
+        self.assertEqual([key.id for key in client.keys], [7])
+
+    def test_bootstrap_lost_create_response_is_partial_and_reconciles_exact_title(self):
+        client = FakeClient()
+        client.fail_create_after_apply = True
+        material, factory = material_holder()
+        result = private_mirror_writer_bootstrap(
+            client,
+            key_factory=factory,
+            sealer=sealer,
+            now=lambda: datetime(2026, 10, 13, 10, 2, 3, 456789, tzinfo=timezone.utc),
+        )
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "DEPLOY_KEY_CREATE_OUTCOME_UNKNOWN")
+        self.assertEqual(result["observedExactTitleCount"], 1)
+        self.assertEqual(result["rollback"], "DEPLOY_KEY_DELETED")
+        self.assertEqual(client.keys, [])
+        self.assertEqual(bytes(material.private_key), b"\x00" * len(SENTINEL))
+
+    def test_rotate_lost_create_response_is_partial_and_reconciles_exact_title(self):
+        client = FakeClient()
+        configured(client)
+        client.fail_create_after_apply = True
+        material, factory = material_holder()
+        result = private_mirror_writer_rotate(
+            client,
+            7,
+            OLD_UPDATED,
+            key_factory=factory,
+            sealer=sealer,
+            now=lambda: datetime(2026, 10, 13, 10, 2, 3, 456789, tzinfo=timezone.utc),
+        )
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "DEPLOY_KEY_CREATE_OUTCOME_UNKNOWN")
+        self.assertEqual(result["rollback"], "DEPLOY_KEY_DELETED")
+        self.assertEqual([key.id for key in client.keys], [7])
+        self.assertEqual(bytes(material.private_key), b"\x00" * len(SENTINEL))
+
+    def test_rotate_revalidates_secret_metadata_immediately_before_put(self):
+        client = FakeClient()
+        configured(client)
+        client.drift_secret_after_create = True
+        material, factory = material_holder()
+        result = private_mirror_writer_rotate(
+            client,
+            7,
+            OLD_UPDATED,
+            key_factory=factory,
+            sealer=sealer,
+        )
+        self.assertEqual(result["status"], "CONFLICT")
+        self.assertEqual(result["reasonCode"], "EXPECTED_METADATA_CHANGED_BEFORE_SECRET_WRITE")
+        self.assertEqual(result["rollback"], "REPLACEMENT_KEY_DELETED")
+        self.assertEqual([key.id for key in client.keys], [7])
+        self.assertNotIn("put_secret", client.events)
+
+    def test_rotate_pending_old_key_delete_can_be_retried_by_exact_ids(self):
+        client = FakeClient()
+        configured(client)
+        client.fail_key_delete_ids.add(7)
+        material, factory = material_holder()
+        first = private_mirror_writer_rotate(
+            client,
+            7,
+            OLD_UPDATED,
+            key_factory=factory,
+            sealer=sealer,
+            sleep=lambda _delay: None,
+        )
+        self.assertEqual(first["status"], "PARTIAL")
+        self.assertEqual(first["reasonCode"], "OLD_KEY_REVOCATION_PENDING")
+        self.assertEqual([key.id for key in client.keys], [7, 8])
+
+        client.fail_key_delete_ids.clear()
+        second = private_mirror_writer_rotate(
+            client,
+            7,
+            first["secretUpdatedAt"],
+            pending_new_key_id=first["newKeyId"],
+        )
+        self.assertEqual(second["status"], "PASS")
+        self.assertEqual(second["effect"], "ROTATION_CLEANUP_COMPLETED")
+        self.assertEqual([key.id for key in client.keys], [8])
+
+    def test_revoke_pending_key_delete_can_be_retried(self):
+        client = FakeClient()
+        configured(client)
+        client.fail_key_delete_ids.add(7)
+        first = private_mirror_writer_revoke(client, 7, OLD_UPDATED)
+        self.assertEqual(first["status"], "PARTIAL")
+        self.assertEqual(first["reasonCode"], "DEPLOY_KEY_REVOCATION_PENDING")
+        self.assertIsNone(client.secret)
+        self.assertEqual([key.id for key in client.keys], [7])
+
+        client.fail_key_delete_ids.clear()
+        second = private_mirror_writer_revoke(client, 7, OLD_UPDATED)
+        self.assertEqual(second["status"], "PASS")
+        self.assertEqual(second["effect"], "REVOCATION_CLEANUP_COMPLETED")
+        self.assertEqual(client.keys, [])
 
     def test_revoke_deletes_secret_before_key(self):
         client = FakeClient()

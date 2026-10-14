@@ -31,6 +31,7 @@ class DeployKey:
     title: str
     read_only: bool
     created_at: str | None
+    enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -104,13 +105,20 @@ class GitHubAdminClient:
             raise GitHubAdminError("DEPLOY_KEY_RESPONSE_INVALID")
         result: list[DeployKey] = []
         for row in payload:
-            if not isinstance(row, dict) or not isinstance(row.get("id"), int) or not isinstance(row.get("title"), str):
+            if (
+                not isinstance(row, dict) or
+                not isinstance(row.get("id"), int) or
+                not isinstance(row.get("title"), str) or
+                not isinstance(row.get("read_only"), bool) or
+                not isinstance(row.get("enabled"), bool)
+            ):
                 raise GitHubAdminError("DEPLOY_KEY_RESPONSE_INVALID")
             result.append(DeployKey(
                 id=row["id"],
                 title=row["title"],
-                read_only=bool(row.get("read_only", True)),
+                read_only=row["read_only"],
                 created_at=row.get("created_at") if isinstance(row.get("created_at"), str) else None,
+                enabled=row["enabled"],
             ))
         return result
 
@@ -126,13 +134,19 @@ class GitHubAdminClient:
             },
             token_provider=self._mirror_token_provider,
         )
-        if not isinstance(row, dict) or not isinstance(row.get("id"), int):
+        if (
+            not isinstance(row, dict) or
+            not isinstance(row.get("id"), int) or
+            not isinstance(row.get("read_only"), bool) or
+            not isinstance(row.get("enabled"), bool)
+        ):
             raise GitHubAdminError("DEPLOY_KEY_CREATE_RESPONSE_INVALID")
         return DeployKey(
             id=row["id"],
             title=row.get("title") if isinstance(row.get("title"), str) else title,
-            read_only=bool(row.get("read_only", False)),
+            read_only=row["read_only"],
             created_at=row.get("created_at") if isinstance(row.get("created_at"), str) else None,
+            enabled=row["enabled"],
         )
 
     def delete_deploy_key(self, key_id: int) -> None:

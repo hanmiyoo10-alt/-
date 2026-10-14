@@ -1,0 +1,1001 @@
+#!/usr/bin/env node
+'use strict';
+
+const childProcess = require('node:child_process');
+const sessionEvidence = require('../l-rdc-session-evidence/mcl-l-rdc-session-evidence.cjs');
+
+const SCHEMA = 'mcl-l-rdc-peer-session-cleanup.v1';
+const OWNER = 'mcl-l-rdc-peer-session-cleanup';
+const POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+const CONFIRM_FLAG = '--confirm-no-other-intentional-l-rdc-work';
+const MAX_ANCESTOR_DEPTH = 16;
+const EFFECT_TIMEOUT_MS = 7000;
+const EFFECT_MAX_BUFFER = 128 * 1024;
+const WINDOWS_EPOCH_FILETIME = 116444736000000000n;
+const FILETIME_TICKS_PER_MS = 10000n;
+
+const PRIVATE_OBSERVER_SOURCE = [
+  "$ErrorActionPreference='Stop'",
+  "$utf8=New-Object System.Text.UTF8Encoding($false)",
+  "[Console]::OutputEncoding=$utf8",
+  "$OutputEncoding=$utf8",
+  "$rows=@(Get-CimInstance Win32_Process | Where-Object {$_.ProcessId -gt 0} | ForEach-Object {$created=[DateTimeOffset]$_.CreationDate; [pscustomobject]@{ProcessId=$_.ProcessId;ParentProcessId=$_.ParentProcessId;Name=$_.Name;CommandLine=$_.CommandLine;CreationTimeMs=$created.ToUnixTimeMilliseconds();CreationFileTime=([string]$created.UtcDateTime.ToFileTimeUtc())}})",
+  "$rows | ConvertTo-Json -Compress -Depth 3",
+].join(';');
+const PRIVATE_OBSERVER_ARGS = Object.freeze([
+  '-NoLogo',
+  '-NoProfile',
+  '-NonInteractive',
+  '-EncodedCommand',
+  Buffer.from(PRIVATE_OBSERVER_SOURCE, 'utf16le').toString('base64'),
+]);
+
+const HANDLE_HELPER_CSHARP = String.raw`
+using System;
+using System.ComponentModel;
+using System.Globalization;
+using System.Runtime.InteropServices;
+
+public static class MclPeerCleanupNative {
+  [StructLayout(LayoutKind.Sequential)]
+  public struct FILETIME {
+    public uint dwLowDateTime;
+    public uint dwHighDateTime;
+  }
+
+  [DllImport("kernel32.dll", SetLastError=true)]
+  public static extern IntPtr OpenProcess(uint desiredAccess, bool inheritHandle, int processId);
+
+  [DllImport("kernel32.dll", SetLastError=true)]
+  public static extern bool GetProcessTimes(
+    IntPtr process,
+    out FILETIME creation,
+    out FILETIME exit,
+    out FILETIME kernel,
+    out FILETIME user);
+
+  [DllImport("kernel32.dll", SetLastError=true)]
+  public static extern bool TerminateProcess(IntPtr process, uint exitCode);
+
+  [DllImport("kernel32.dll", SetLastError=true)]
+  public static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+
+  [DllImport("kernel32.dll", SetLastError=true)]
+  public static extern bool CloseHandle(IntPtr handle);
+
+  public static string CreationFileTime(IntPtr handle) {
+    FILETIME creation, exit, kernel, user;
+    if (!GetProcessTimes(handle, out creation, out exit, out kernel, out user)) {
+      throw new Win32Exception(Marshal.GetLastWin32Error());
+    }
+    ulong value = ((ulong)creation.dwHighDateTime << 32) | creation.dwLowDateTime;
+    value = (value / 10UL) * 10UL;
+    return value.ToString(CultureInfo.InvariantCulture);
+  }
+}
+`;
+const HANDLE_HELPER_CSHARP_B64 = Buffer.from(HANDLE_HELPER_CSHARP, 'utf8').toString('base64');
+const HANDLE_HELPER_SOURCE = [
+  "$ErrorActionPreference='Stop'",
+  "$utf8=New-Object System.Text.UTF8Encoding($false)",
+  "[Console]::OutputEncoding=$utf8",
+  "$OutputEncoding=$utf8",
+  "$src=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + HANDLE_HELPER_CSHARP_B64 + "'))",
+  "Add-Type -TypeDefinition $src -Language CSharp -ErrorAction Stop",
+  "$payload=([Console]::In.ReadToEnd() | ConvertFrom-Json)",
+  "$opened=New-Object System.Collections.ArrayList",
+  "$result=$null",
+  "try {",
+  "  $items=@()",
+  "  foreach($g in @($payload.anchors)) {$items += [pscustomobject]@{Guard=$g;Target=$false}}",
+  "  foreach($g in @($payload.targets)) {$items += [pscustomobject]@{Guard=$g;Target=$true}}",
+  "  foreach($item in $items) {",
+  "    $access=[uint32](0x00100000 -bor 0x00001000)",
+  "    if($item.Target){$access=[uint32]($access -bor 0x00000001)}",
+  "    $h=[MclPeerCleanupNative]::OpenProcess($access,$false,[int]$item.Guard.pid)",
+  "    if($h -eq [IntPtr]::Zero){$result=[ordered]@{status='BLOCKED';reasonCode='HANDLE_OPEN_FAILED';attemptedCount=0;terminatedCount=0};break}",
+  "    $actual=[MclPeerCleanupNative]::CreationFileTime($h)",
+  "    if($actual -ne [string]$item.Guard.creationFileTime){[void][MclPeerCleanupNative]::CloseHandle($h);$result=[ordered]@{status='BLOCKED';reasonCode='HANDLE_IDENTITY_MISMATCH';attemptedCount=0;terminatedCount=0};break}",
+  "    [void]$opened.Add([pscustomobject]@{Handle=$h;Target=$item.Target;Depth=[int]$item.Guard.depth})",
+  "  }",
+  "  if($null -eq $result){",
+  "    $attempted=0;$terminated=0",
+  "    foreach($entry in @($opened | Where-Object {$_.Target} | Sort-Object Depth -Descending)){",
+  "      $attempted++",
+  "      if(-not [MclPeerCleanupNative]::TerminateProcess($entry.Handle,1)){",
+  "        $result=[ordered]@{status='PARTIAL';reasonCode='HANDLE_TERMINATE_FAILED';attemptedCount=$attempted;terminatedCount=$terminated};break",
+  "      }",
+  "      $terminated++",
+  "      $wait=[MclPeerCleanupNative]::WaitForSingleObject($entry.Handle,2000)",
+  "      if($wait -ne 0){$result=[ordered]@{status='PARTIAL';reasonCode='HANDLE_TERMINATION_WAIT_TIMEOUT';attemptedCount=$attempted;terminatedCount=$terminated};break}",
+  "    }",
+  "    if($null -eq $result){$result=[ordered]@{status='COMPLETE';reasonCode='HANDLE_TREE_TERMINATION_COMPLETE';attemptedCount=$attempted;terminatedCount=$terminated}}",
+  "  }",
+  "} catch {",
+  "  $result=[ordered]@{status='UNKNOWN';reasonCode='HANDLE_HELPER_FAILED';attemptedCount=0;terminatedCount=0}",
+  "} finally {",
+  "  foreach($entry in $opened){[void][MclPeerCleanupNative]::CloseHandle($entry.Handle)}",
+  "}",
+  "$result | ConvertTo-Json -Compress -Depth 3",
+].join(';');
+const HANDLE_HELPER_ARGS = Object.freeze([
+  '-NoLogo',
+  '-NoProfile',
+  '-NonInteractive',
+  '-EncodedCommand',
+  Buffer.from(HANDLE_HELPER_SOURCE, 'utf16le').toString('base64'),
+]);
+const FALSE_AUTHORITY = Object.freeze({
+  repositoryMutationAuthorized: false,
+  deviceMutationAuthorized: false,
+  mergeAuthorized: false,
+  releaseAuthorized: false,
+  productionAuthorized: false,
+});
+
+function publicReceipt({
+  status = 'UNKNOWN',
+  operation = 'inspect',
+  effectEligibility = 'UNKNOWN',
+  effectDisposition = 'NOT_RUN',
+  peerShellCount = 0,
+  cleanupCandidateCount = 0,
+  blockedCandidateCount = 0,
+  effectCount = 0,
+  remainingPeerShellCount = 0,
+  reasonCode = 'RDC_PEER_CLEANUP_TOPOLOGY_UNKNOWN',
+} = {}) {
+  return {
+    schema: SCHEMA,
+    status,
+    executor: 'L',
+    operation,
+    effectEligibility,
+    effectDisposition,
+    peerShellCount,
+    cleanupCandidateCount,
+    blockedCandidateCount,
+    effectCount,
+    remainingPeerShellCount,
+    reasonCode,
+    owner: OWNER,
+    details: 'withheld',
+    authority: {...FALSE_AUTHORITY},
+  };
+}
+
+function unknown(reasonCode, counts = {}) {
+  return {
+    status: 'UNKNOWN',
+    effectEligibility: 'UNKNOWN',
+    reasonCode,
+    peerShellCount: counts.peerShellCount || 0,
+    cleanupCandidateCount: counts.cleanupCandidateCount || 0,
+    blockedCandidateCount: counts.blockedCandidateCount || 0,
+    context: null,
+  };
+}
+
+function blocked(reasonCode, counts = {}) {
+  return {
+    status: 'BLOCKED',
+    effectEligibility: 'BLOCKED',
+    reasonCode,
+    peerShellCount: counts.peerShellCount || 0,
+    cleanupCandidateCount: counts.cleanupCandidateCount || 0,
+    blockedCandidateCount: counts.blockedCandidateCount || 0,
+    context: null,
+  };
+}
+
+function hasAmbiguousAncestorStructure(byPid, self) {
+  const seen = new Set([self.pid]);
+  let current = self;
+  for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth += 1) {
+    if (current.ppid <= 0) return false;
+    const parent = byPid.get(current.ppid);
+    if (!parent) return false;
+    if (seen.has(parent.pid)) return true;
+    seen.add(parent.pid);
+    current = parent;
+  }
+  return current.ppid > 0 && byPid.has(current.ppid);
+}
+
+function buildCurrentContext(rows, selfPid) {
+  if (!Array.isArray(rows) || !Number.isSafeInteger(selfPid) || selfPid <= 0) {
+    return {error: 'CURRENT_CONTEXT_INVALID'};
+  }
+  const byPid = new Map();
+  for (const row of rows) {
+    if (!row || !Number.isSafeInteger(row.pid) || byPid.has(row.pid)) {
+      return {error: 'CURRENT_CONTEXT_INVALID'};
+    }
+    byPid.set(row.pid, row);
+  }
+  const self = byPid.get(selfPid);
+  if (!self || hasAmbiguousAncestorStructure(byPid, self)) {
+    return {error: 'CURRENT_CONTEXT_AMBIGUOUS'};
+  }
+
+  const chain = [self];
+  const seen = new Set([self.pid]);
+  let current = self;
+  for (let depth = 1; depth < MAX_ANCESTOR_DEPTH && current.ppid > 0; depth += 1) {
+    const parent = byPid.get(current.ppid);
+    if (!parent) break;
+    if (seen.has(parent.pid)) return {error: 'CURRENT_CONTEXT_AMBIGUOUS'};
+    if (!sessionEvidence.validParentLink(parent, current)) break;
+    seen.add(parent.pid);
+    chain.push(parent);
+    current = parent;
+  }
+
+  const candidates = [];
+  for (let index = 1; index < chain.length; index += 1) {
+    const agent = chain[index];
+    const directChild = chain[index - 1];
+    if (sessionEvidence.hasAgentMarker(agent)
+        && sessionEvidence.SHELL_NAMES.has(directChild.name)
+        && sessionEvidence.validParentLink(agent, directChild)) {
+      candidates.push({agent, currentRoot: directChild});
+    }
+  }
+  if (candidates.length !== 1) return {error: 'CURRENT_AGENT_AMBIGUOUS'};
+  return {
+    error: null,
+    byPid,
+    chain,
+    chainPids: new Set(chain.map((row) => row.pid)),
+    agent: candidates[0].agent,
+    currentRoot: candidates[0].currentRoot,
+  };
+}
+
+function sameLineageAgentPids(rows, chain, currentAgent) {
+  const currentIndex = chain.findIndex((row) => row.pid === currentAgent.pid);
+  if (currentIndex < 0) return {state: 'UNKNOWN', reasonCode: 'CURRENT_LINEAGE_AMBIGUOUS'};
+
+  const agentPids = new Set([currentAgent.pid]);
+  let expectedChild = currentAgent;
+  for (let index = currentIndex + 1; index < chain.length; index += 1) {
+    const ancestor = chain[index];
+    if (!sessionEvidence.hasAgentMarker(ancestor)) break;
+    if (!sessionEvidence.validParentLink(ancestor, expectedChild)) {
+      return {state: 'UNKNOWN', reasonCode: 'CURRENT_LINEAGE_AMBIGUOUS'};
+    }
+    const direct = sessionEvidence.directChildrenForAgent(rows, ancestor);
+    if (direct.state !== 'EXACT'
+        || direct.children.filter((child) => child.pid === expectedChild.pid).length !== 1) {
+      return {state: 'UNKNOWN', reasonCode: 'CURRENT_LINEAGE_AMBIGUOUS'};
+    }
+    for (const child of direct.children) {
+      if (child.pid === expectedChild.pid) continue;
+      if (sessionEvidence.SHELL_NAMES.has(child.name)) {
+        return {state: 'BLOCKED', reasonCode: 'WRAPPER_PEER_SESSION_PRESENT'};
+      }
+      if (sessionEvidence.BENIGN_DIRECT_CHILDREN.has(child.name)) continue;
+      return {state: 'UNKNOWN', reasonCode: 'CURRENT_LINEAGE_AMBIGUOUS'};
+    }
+    agentPids.add(ancestor.pid);
+    expectedChild = ancestor;
+  }
+  return {state: 'PASS', agentPids};
+}
+
+function descendantRows(rows, rootPid) {
+  const childrenByParent = new Map();
+  for (const row of rows) {
+    if (!childrenByParent.has(row.ppid)) childrenByParent.set(row.ppid, []);
+    childrenByParent.get(row.ppid).push(row);
+  }
+  const seen = new Set([rootPid]);
+  const queue = [rootPid];
+  const out = [];
+  while (queue.length) {
+    const pid = queue.shift();
+    for (const child of childrenByParent.get(pid) || []) {
+      if (seen.has(child.pid)) return {state: 'UNKNOWN', rows: []};
+      seen.add(child.pid);
+      out.push(child);
+      queue.push(child.pid);
+    }
+  }
+  return {state: 'EXACT', rows: out};
+}
+
+function candidateShape(rows, agent, chainPids, peer) {
+  if (!sessionEvidence.SHELL_NAMES.has(peer.name)
+      || !sessionEvidence.validParentLink(agent, peer)
+      || chainPids.has(peer.pid)) {
+    return {eligible: false, reasonCode: 'PEER_TARGET_RELATION_BLOCKED'};
+  }
+
+  const direct = rows.filter((row) => row.ppid === peer.pid);
+  if (direct.some((row) => !sessionEvidence.validParentLink(peer, row))) {
+    return {eligible: false, reasonCode: 'PEER_CHILD_RELATION_BLOCKED'};
+  }
+  const names = direct.map((row) => row.name).sort();
+  if (names.length !== 2 || names[0] !== 'conhost.exe' || names[1] !== 'wsl.exe') {
+    return {eligible: false, reasonCode: 'PEER_TREE_SHAPE_BLOCKED'};
+  }
+
+  const descendants = descendantRows(rows, peer.pid);
+  if (descendants.state !== 'EXACT') {
+    return {eligible: false, reasonCode: 'PEER_DESCENDANT_TOPOLOGY_AMBIGUOUS'};
+  }
+  const markerDescendant = descendants.rows.some((row) => sessionEvidence.hasAgentMarker(row));
+  const unreadableAgentLike = descendants.rows.some((row) => (
+    row.name === agent.name && row.commandLineReadable === false
+  ));
+  if (markerDescendant || unreadableAgentLike) {
+    return {eligible: false, reasonCode: 'PEER_DESCENDANT_AGENT_AMBIGUOUS'};
+  }
+  return {eligible: true, reasonCode: 'PEER_ELIGIBLE'};
+}
+
+function fileTimeToUnixMs(value) {
+  if (typeof value !== 'string' || !/^[0-9]{15,20}$/.test(value)) {
+    throw new Error('CREATION_FILETIME_INVALID');
+  }
+  const raw = BigInt(value);
+  if (raw < WINDOWS_EPOCH_FILETIME) throw new Error('CREATION_FILETIME_INVALID');
+  const unixMs = (raw - WINDOWS_EPOCH_FILETIME) / FILETIME_TICKS_PER_MS;
+  if (unixMs > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('CREATION_FILETIME_INVALID');
+  return Number(unixMs);
+}
+
+function parsePrivateProcessTable(text) {
+  const rows = sessionEvidence.parseProcessTable(text);
+  const body = String(text || '').replace(/^\uFEFF/, '').trim();
+  let parsed;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    throw new Error('PRIVATE_PROCESS_TABLE_JSON_INVALID');
+  }
+  const rawRows = Array.isArray(parsed) ? parsed : [parsed];
+  if (rawRows.length !== rows.length) throw new Error('PRIVATE_PROCESS_TABLE_SIZE_INVALID');
+  const rawByPid = new Map();
+  for (const raw of rawRows) {
+    const pid = Number(raw?.ProcessId);
+    if (!Number.isSafeInteger(pid) || rawByPid.has(pid)) {
+      throw new Error('PRIVATE_PROCESS_TABLE_PID_INVALID');
+    }
+    rawByPid.set(pid, raw);
+  }
+  return rows.map((row) => {
+    const raw = rawByPid.get(row.pid);
+    const creationFileTime = typeof raw?.CreationFileTime === 'string'
+      ? raw.CreationFileTime
+      : String(raw?.CreationFileTime || '');
+    if (fileTimeToUnixMs(creationFileTime) !== row.creationTimeMs) {
+      throw new Error('PRIVATE_CREATION_IDENTITY_MISMATCH');
+    }
+    const normalizedCreationFileTime = String((BigInt(creationFileTime) / 10n) * 10n);
+    return {...row, creationFileTime: normalizedCreationFileTime};
+  });
+}
+
+function defaultRunner() {
+  const result = childProcess.spawnSync(POWERSHELL, PRIVATE_OBSERVER_ARGS, {
+    encoding: 'utf8',
+    shell: false,
+    windowsHide: true,
+    timeout: EFFECT_TIMEOUT_MS,
+    maxBuffer: 4 * 1024 * 1024,
+    env: {},
+  });
+  return {
+    code: Number.isInteger(result.status) ? result.status : 127,
+    stdout: result.stdout || '',
+    stderr: result.stderr || '',
+    signal: result.signal || null,
+    error: result.error || null,
+  };
+}
+
+function guardFor(row, depth = 0) {
+  if (typeof row?.creationFileTime !== 'string') {
+    throw new Error('PRIVATE_CREATION_IDENTITY_REQUIRED');
+  }
+  return Object.freeze({
+    pid: row.pid,
+    ppid: row.ppid,
+    name: row.name,
+    creationTimeMs: row.creationTimeMs,
+    creationFileTime: row.creationFileTime,
+    depth,
+  });
+}
+
+function sameGuard(row, guard) {
+  return Boolean(row
+    && row.pid === guard.pid
+    && row.ppid === guard.ppid
+    && row.name === guard.name
+    && row.creationTimeMs === guard.creationTimeMs
+    && row.creationFileTime === guard.creationFileTime);
+}
+
+function guardKey(guard) {
+  return [
+    guard.pid,
+    guard.ppid,
+    guard.name,
+    guard.creationTimeMs,
+    guard.creationFileTime,
+  ].join(':');
+}
+
+function sameGuardSet(rows, guards) {
+  const left = rows.map((row) => guardFor(row)).map(guardKey).sort();
+  const right = guards.map(guardKey).sort();
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function candidateTree(rows, root) {
+  const byParent = new Map();
+  for (const row of rows) {
+    if (!byParent.has(row.ppid)) byParent.set(row.ppid, []);
+    byParent.get(row.ppid).push(row);
+  }
+  const queue = [{row: root, depth: 0}];
+  const seen = new Set();
+  const entries = [];
+  while (queue.length) {
+    const current = queue.shift();
+    if (seen.has(current.row.pid)) return {state: 'UNKNOWN', entries: []};
+    seen.add(current.row.pid);
+    entries.push(current);
+    for (const child of byParent.get(current.row.pid) || []) {
+      queue.push({row: child, depth: current.depth + 1});
+    }
+  }
+  return {state: 'EXACT', entries};
+}
+
+function treeGuards(tree) {
+  return tree.entries.map(({row, depth}) => guardFor(row, depth));
+}
+
+function flattenTreeGuards(trees) {
+  return trees.flatMap((tree) => tree.guards);
+}
+
+function sameTreeSet(observedTrees, expectedTrees) {
+  const observed = observedTrees.flatMap((tree) => treeGuards(tree)).map(guardKey).sort();
+  const expected = flattenTreeGuards(expectedTrees).map(guardKey).sort();
+  return observed.length === expected.length
+    && observed.every((value, index) => value === expected[index]);
+}
+
+function classifyCleanupRows(rows, selfPid) {
+  const sessionTopology = sessionEvidence.classifyProcessTable(rows, selfPid);
+  if (sessionTopology.sessionState === 'UNKNOWN') {
+    return unknown(sessionTopology.reasonCode || 'RDC_SESSION_EVIDENCE_UNKNOWN');
+  }
+
+  const current = buildCurrentContext(rows, selfPid);
+  if (current.error) return unknown(current.error);
+
+  const direct = sessionEvidence.directChildrenForAgent(rows, current.agent);
+  if (direct.state !== 'EXACT'
+      || direct.children.filter((row) => row.pid === current.currentRoot.pid).length !== 1) {
+    return unknown('CURRENT_AGENT_DIRECT_TOPOLOGY_AMBIGUOUS');
+  }
+
+  const peers = [];
+  for (const child of direct.children) {
+    if (child.pid === current.currentRoot.pid) continue;
+    if (sessionEvidence.SHELL_NAMES.has(child.name)) {
+      peers.push(child);
+      continue;
+    }
+    if (sessionEvidence.BENIGN_DIRECT_CHILDREN.has(child.name)) continue;
+    return unknown('CURRENT_AGENT_DIRECT_TOPOLOGY_AMBIGUOUS');
+  }
+
+  const lineage = sameLineageAgentPids(rows, current.chain, current.agent);
+  if (lineage.state === 'UNKNOWN') return unknown(lineage.reasonCode, {peerShellCount: peers.length});
+  if (lineage.state === 'BLOCKED') return blocked(lineage.reasonCode, {peerShellCount: peers.length});
+
+  const alternate = sessionEvidence.classifyAlternateAgents(rows, current.agent, lineage.agentPids);
+  if (alternate.sessionState === 'UNKNOWN') {
+    return unknown(alternate.reasonCode || 'ALTERNATE_AGENT_AMBIGUOUS', {peerShellCount: peers.length});
+  }
+  if (alternate.sessionState === 'PRESENT') {
+    return blocked('ALTERNATE_RDC_SESSION_PRESENT', {peerShellCount: peers.length});
+  }
+
+  const anchorRows = [
+    current.currentRoot,
+    ...rows.filter((row) => lineage.agentPids.has(row.pid)),
+  ].filter((row, index, values) => values.findIndex((item) => item.pid === row.pid) === index);
+
+  if (peers.length === 0) {
+    if (sessionTopology.sessionState !== 'ABSENT'
+        || sessionTopology.reasonCode !== 'SOLE_RDC_COMMAND_SESSION') {
+      return unknown('SESSION_EVIDENCE_CLEAN_CONTRADICTION');
+    }
+    return {
+      status: 'PASS',
+      effectEligibility: 'ALREADY_CLEAN',
+      reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+      peerShellCount: 0,
+      cleanupCandidateCount: 0,
+      blockedCandidateCount: 0,
+      context: {
+        rows,
+        agent: current.agent,
+        currentRoot: current.currentRoot,
+        anchors: anchorRows,
+        candidates: [],
+        candidateTrees: [],
+      },
+    };
+  }
+
+  if (sessionTopology.sessionState !== 'PRESENT'
+      || sessionTopology.reasonCode !== 'OTHER_RDC_COMMAND_SESSION_PRESENT') {
+    return unknown('SESSION_EVIDENCE_PRESENT_CONTRADICTION', {peerShellCount: peers.length});
+  }
+
+  const eligible = [];
+  const eligibleTrees = [];
+  let blockedCount = 0;
+  let firstBlockedReason = null;
+  for (const peer of peers) {
+    const shape = candidateShape(rows, current.agent, current.chainPids, peer);
+    const tree = candidateTree(rows, peer);
+    if (shape.eligible && tree.state === 'EXACT') {
+      eligible.push(peer);
+      eligibleTrees.push(tree);
+    } else {
+      blockedCount += 1;
+      if (!firstBlockedReason) {
+        firstBlockedReason = shape.eligible
+          ? 'PEER_DESCENDANT_TOPOLOGY_AMBIGUOUS'
+          : shape.reasonCode;
+      }
+    }
+  }
+  if (blockedCount > 0) {
+    return blocked(firstBlockedReason || 'PEER_TREE_SHAPE_BLOCKED', {
+      peerShellCount: peers.length,
+      cleanupCandidateCount: eligible.length,
+      blockedCandidateCount: blockedCount,
+    });
+  }
+
+  const order = eligible
+    .map((row, index) => ({row, tree: eligibleTrees[index]}))
+    .sort((left, right) => left.row.pid - right.row.pid);
+
+  return {
+    status: 'PASS',
+    effectEligibility: 'ELIGIBLE',
+    reasonCode: 'DIRECT_PEER_SHELLS_ELIGIBLE',
+    peerShellCount: peers.length,
+    cleanupCandidateCount: eligible.length,
+    blockedCandidateCount: 0,
+    context: {
+      rows,
+      agent: current.agent,
+      currentRoot: current.currentRoot,
+      anchors: anchorRows,
+      candidates: order.map((item) => item.row),
+      candidateTrees: order.map((item) => item.tree),
+    },
+  };
+}
+
+function observe({platform, arch, selfPid, runner}) {
+  if (platform !== 'win32' || arch !== 'x64') {
+    return {...unknown('EXECUTION_PROFILE_UNKNOWN'), rows: []};
+  }
+  let result;
+  try {
+    result = runner();
+  } catch {
+    return {...unknown('RDC_PROCESS_READ_FAILED'), rows: []};
+  }
+  if (!result || result.error || result.signal || result.code !== 0) {
+    return {...unknown('RDC_PROCESS_READ_FAILED'), rows: []};
+  }
+  try {
+    const rows = parsePrivateProcessTable(result.stdout);
+    return {...classifyCleanupRows(rows, selfPid), rows};
+  } catch {
+    return {...unknown('RDC_PEER_CLEANUP_TOPOLOGY_UNKNOWN'), rows: []};
+  }
+}
+
+function inspectLocal({
+  platform = process.platform,
+  arch = process.arch,
+  selfPid = process.pid,
+  runner = defaultRunner,
+} = {}) {
+  const observed = observe({platform, arch, selfPid, runner});
+  return publicReceipt({
+    status: observed.status,
+    operation: 'inspect',
+    effectEligibility: observed.effectEligibility,
+    effectDisposition: 'NOT_RUN',
+    peerShellCount: observed.peerShellCount,
+    cleanupCandidateCount: observed.cleanupCandidateCount,
+    blockedCandidateCount: observed.blockedCandidateCount,
+    remainingPeerShellCount: observed.peerShellCount,
+    reasonCode: observed.reasonCode,
+  });
+}
+
+function validateHelperGuard(value) {
+  return Boolean(value
+    && Number.isSafeInteger(value.pid) && value.pid > 0
+    && typeof value.creationFileTime === 'string'
+    && /^[0-9]{15,20}$/.test(value.creationFileTime)
+    && Number.isSafeInteger(value.depth) && value.depth >= 0);
+}
+
+function defaultEffectRunner({anchors, targets}) {
+  if (!Array.isArray(anchors) || !Array.isArray(targets)
+      || anchors.some((guard) => !validateHelperGuard(guard))
+      || targets.some((guard) => !validateHelperGuard(guard))) {
+    return {
+      code: 127,
+      status: 'UNKNOWN',
+      reasonCode: 'HANDLE_HELPER_INPUT_INVALID',
+      attemptedCount: 0,
+      terminatedCount: 0,
+      error: new Error('HANDLE_HELPER_INPUT_INVALID'),
+      signal: null,
+    };
+  }
+  const payload = JSON.stringify({
+    anchors: anchors.map((guard) => ({
+      pid: guard.pid,
+      creationFileTime: guard.creationFileTime,
+      depth: guard.depth,
+    })),
+    targets: targets.map((guard) => ({
+      pid: guard.pid,
+      creationFileTime: guard.creationFileTime,
+      depth: guard.depth,
+    })),
+  });
+  const result = childProcess.spawnSync(POWERSHELL, HANDLE_HELPER_ARGS, {
+    input: payload,
+    encoding: 'utf8',
+    shell: false,
+    windowsHide: true,
+    timeout: EFFECT_TIMEOUT_MS,
+    maxBuffer: EFFECT_MAX_BUFFER,
+    env: {},
+  });
+  let parsed = null;
+  try {
+    parsed = JSON.parse(String(result.stdout || '').trim());
+  } catch {}
+  return {
+    code: Number.isInteger(result.status) ? result.status : 127,
+    status: typeof parsed?.status === 'string' ? parsed.status : 'UNKNOWN',
+    reasonCode: typeof parsed?.reasonCode === 'string'
+      ? parsed.reasonCode
+      : 'HANDLE_HELPER_OUTPUT_INVALID',
+    attemptedCount: Number.isSafeInteger(Number(parsed?.attemptedCount))
+      ? Number(parsed.attemptedCount)
+      : 0,
+    terminatedCount: Number.isSafeInteger(Number(parsed?.terminatedCount))
+      ? Number(parsed.terminatedCount)
+      : 0,
+    error: result.error || null,
+    signal: result.signal || null,
+  };
+}
+
+function currentIdentityMatches(observed, anchorGuards) {
+  return Boolean(observed.context
+    && sameGuardSet(observed.context.anchors, anchorGuards));
+}
+
+function unknownEffectReceipt({
+  observed,
+  initialPeerCount,
+  initialCandidateCount,
+  effectCount,
+}) {
+  return publicReceipt({
+    status: 'UNKNOWN',
+    operation: 'cleanup',
+    effectEligibility: 'UNKNOWN',
+    effectDisposition: effectCount > 0 ? 'PARTIAL' : 'UNKNOWN',
+    peerShellCount: initialPeerCount,
+    cleanupCandidateCount: initialCandidateCount,
+    effectCount,
+    remainingPeerShellCount: observed.peerShellCount,
+    reasonCode: observed.reasonCode,
+  });
+}
+
+function cleanupLocal({
+  confirm = false,
+  platform = process.platform,
+  arch = process.arch,
+  selfPid = process.pid,
+  runner = defaultRunner,
+  effectRunner = defaultEffectRunner,
+} = {}) {
+  if (!confirm) {
+    return publicReceipt({
+      status: 'BLOCKED',
+      operation: 'cleanup',
+      effectEligibility: 'BLOCKED',
+      effectDisposition: 'BLOCKED',
+      reasonCode: 'OPERATOR_IDLE_CONFIRMATION_REQUIRED',
+    });
+  }
+
+  const initial = observe({platform, arch, selfPid, runner});
+  if (initial.effectEligibility === 'ALREADY_CLEAN') {
+    return publicReceipt({
+      status: 'PASS',
+      operation: 'cleanup',
+      effectEligibility: 'ALREADY_CLEAN',
+      effectDisposition: 'NO_EFFECT',
+      reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+    });
+  }
+  if (initial.effectEligibility !== 'ELIGIBLE' || !initial.context) {
+    return publicReceipt({
+      status: initial.status,
+      operation: 'cleanup',
+      effectEligibility: initial.effectEligibility,
+      effectDisposition: initial.status === 'UNKNOWN' ? 'UNKNOWN' : 'BLOCKED',
+      peerShellCount: initial.peerShellCount,
+      cleanupCandidateCount: initial.cleanupCandidateCount,
+      blockedCandidateCount: initial.blockedCandidateCount,
+      remainingPeerShellCount: initial.peerShellCount,
+      reasonCode: initial.reasonCode,
+    });
+  }
+
+  const initialPeerCount = initial.peerShellCount;
+  const initialCandidateCount = initial.cleanupCandidateCount;
+  const anchorGuards = initial.context.anchors.map((row) => guardFor(row));
+  const candidateTrees = initial.context.candidateTrees.map((tree) => ({
+    guards: treeGuards(tree),
+  }));
+  let effectCount = 0;
+
+  for (let index = 0; index < candidateTrees.length; index += 1) {
+    const expectedBefore = candidateTrees.slice(index);
+    const targetTree = expectedBefore[0];
+    const pre = observe({platform, arch, selfPid, runner});
+    if (pre.status === 'UNKNOWN') {
+      return unknownEffectReceipt({
+        observed: pre,
+        initialPeerCount,
+        initialCandidateCount,
+        effectCount,
+      });
+    }
+    if (pre.effectEligibility !== 'ELIGIBLE' || !pre.context
+        || !currentIdentityMatches(pre, anchorGuards)
+        || !sameTreeSet(pre.context.candidateTrees, expectedBefore)) {
+      return publicReceipt({
+        status: 'BLOCKED',
+        operation: 'cleanup',
+        effectEligibility: 'BLOCKED',
+        effectDisposition: effectCount > 0 ? 'PARTIAL' : 'BLOCKED',
+        peerShellCount: initialPeerCount,
+        cleanupCandidateCount: initialCandidateCount,
+        effectCount,
+        remainingPeerShellCount: pre.peerShellCount,
+        reasonCode: 'TARGET_GUARD_DRIFT_BEFORE_EFFECT',
+      });
+    }
+
+    const helperAnchors = [
+      ...anchorGuards,
+      ...flattenTreeGuards(expectedBefore.slice(1)),
+    ];
+    let effectResult;
+    try {
+      effectResult = effectRunner({
+        anchors: helperAnchors,
+        targets: targetTree.guards,
+      });
+    } catch (error) {
+      effectResult = {
+        code: 127,
+        status: 'UNKNOWN',
+        reasonCode: 'HANDLE_HELPER_FAILED',
+        attemptedCount: 0,
+        terminatedCount: 0,
+        error,
+        signal: null,
+      };
+    }
+
+    const post = observe({platform, arch, selfPid, runner});
+    if (post.status === 'UNKNOWN') {
+      return unknownEffectReceipt({
+        observed: post,
+        initialPeerCount,
+        initialCandidateCount,
+        effectCount,
+      });
+    }
+
+    const guardedSurvivors = targetTree.guards.filter((guard) =>
+      post.rows.some((row) => sameGuard(row, guard)));
+    if (guardedSurvivors.length > 0) {
+      return publicReceipt({
+        status: 'BLOCKED',
+        operation: 'cleanup',
+        effectEligibility: 'BLOCKED',
+        effectDisposition: effectResult?.attemptedCount > 0 || effectCount > 0
+          ? 'PARTIAL'
+          : 'BLOCKED',
+        peerShellCount: initialPeerCount,
+        cleanupCandidateCount: initialCandidateCount,
+        effectCount,
+        remainingPeerShellCount: post.peerShellCount,
+        reasonCode: 'GUARDED_TREE_STILL_PRESENT',
+      });
+    }
+
+    effectCount += 1;
+    const expectedAfter = candidateTrees.slice(index + 1);
+    if (expectedAfter.length === 0) {
+      if (post.effectEligibility !== 'ALREADY_CLEAN' || !post.context
+          || !currentIdentityMatches(post, anchorGuards)) {
+        return publicReceipt({
+          status: 'BLOCKED',
+          operation: 'cleanup',
+          effectEligibility: 'BLOCKED',
+          effectDisposition: 'PARTIAL',
+          peerShellCount: initialPeerCount,
+          cleanupCandidateCount: initialCandidateCount,
+          effectCount,
+          remainingPeerShellCount: post.peerShellCount,
+          reasonCode: 'FINAL_SESSION_EVIDENCE_NOT_ABSENT',
+        });
+      }
+    } else if (post.effectEligibility !== 'ELIGIBLE' || !post.context
+        || !currentIdentityMatches(post, anchorGuards)
+        || !sameTreeSet(post.context.candidateTrees, expectedAfter)) {
+      return publicReceipt({
+        status: 'BLOCKED',
+        operation: 'cleanup',
+        effectEligibility: 'BLOCKED',
+        effectDisposition: 'PARTIAL',
+        peerShellCount: initialPeerCount,
+        cleanupCandidateCount: initialCandidateCount,
+        effectCount,
+        remainingPeerShellCount: post.peerShellCount,
+        reasonCode: 'TOPOLOGY_DRIFT_AFTER_EFFECT',
+      });
+    }
+  }
+
+  const final = observe({platform, arch, selfPid, runner});
+  if (final.status === 'UNKNOWN') {
+    return unknownEffectReceipt({
+      observed: final,
+      initialPeerCount,
+      initialCandidateCount,
+      effectCount,
+    });
+  }
+  if (final.effectEligibility !== 'ALREADY_CLEAN' || !final.context
+      || !currentIdentityMatches(final, anchorGuards)) {
+    return publicReceipt({
+      status: 'BLOCKED',
+      operation: 'cleanup',
+      effectEligibility: 'BLOCKED',
+      effectDisposition: 'PARTIAL',
+      peerShellCount: initialPeerCount,
+      cleanupCandidateCount: initialCandidateCount,
+      effectCount,
+      remainingPeerShellCount: final.peerShellCount,
+      reasonCode: 'FINAL_SESSION_EVIDENCE_NOT_ABSENT',
+    });
+  }
+
+  const finalSession = sessionEvidence.classifyProcessTable(final.rows, selfPid);
+  if (finalSession.sessionState !== 'ABSENT'
+      || finalSession.reasonCode !== 'SOLE_RDC_COMMAND_SESSION') {
+    return publicReceipt({
+      status: 'BLOCKED',
+      operation: 'cleanup',
+      effectEligibility: 'BLOCKED',
+      effectDisposition: 'PARTIAL',
+      peerShellCount: initialPeerCount,
+      cleanupCandidateCount: initialCandidateCount,
+      effectCount,
+      remainingPeerShellCount: final.peerShellCount,
+      reasonCode: 'FINAL_SESSION_EVIDENCE_NOT_ABSENT',
+    });
+  }
+
+  return publicReceipt({
+    status: 'PASS',
+    operation: 'cleanup',
+    effectEligibility: 'ELIGIBLE',
+    effectDisposition: 'COMPLETE',
+    peerShellCount: initialPeerCount,
+    cleanupCandidateCount: initialCandidateCount,
+    effectCount,
+    remainingPeerShellCount: 0,
+    reasonCode: 'PEER_SESSION_CLEANUP_COMPLETE',
+  });
+}
+
+function parseArgs(argv = process.argv.slice(2)) {
+  if (argv.length === 1 && argv[0] === 'inspect') {
+    return {operation: 'inspect', confirm: false};
+  }
+  if (argv.length === 1 && argv[0] === 'cleanup') {
+    return {operation: 'cleanup', confirm: false};
+  }
+  if (argv.length === 2 && argv[0] === 'cleanup' && argv[1] === CONFIRM_FLAG) {
+    return {operation: 'cleanup', confirm: true};
+  }
+  throw new Error('ARGUMENT_UNSUPPORTED');
+}
+
+function runCli(argv = process.argv.slice(2), options = {}) {
+  const parsed = parseArgs(argv);
+  const value = parsed.operation === 'inspect'
+    ? inspectLocal(options)
+    : cleanupLocal({...options, confirm: parsed.confirm});
+  process.stdout.write(JSON.stringify(value) + '\n');
+  if (value.status === 'PASS') return 0;
+  if (value.status === 'BLOCKED') return 2;
+  return 3;
+}
+
+if (require.main === module) {
+  try {
+    process.exitCode = runCli();
+  } catch {
+    process.stdout.write(JSON.stringify(publicReceipt({
+      status: 'UNKNOWN',
+      operation: 'UNKNOWN',
+      effectEligibility: 'UNKNOWN',
+      effectDisposition: 'UNKNOWN',
+      reasonCode: 'ARGUMENT_UNSUPPORTED',
+    })) + '\n');
+    process.exitCode = 64;
+  }
+}
+
+module.exports = {
+  CONFIRM_FLAG,
+  FALSE_AUTHORITY,
+  OWNER,
+  SCHEMA,
+  buildCurrentContext,
+  candidateShape,
+  classifyCleanupRows,
+  cleanupLocal,
+  defaultEffectRunner,
+  defaultRunner,
+  fileTimeToUnixMs,
+  parsePrivateProcessTable,
+  candidateTree,
+  treeGuards,
+  sameTreeSet,
+  descendantRows,
+  guardFor,
+  inspectLocal,
+  parseArgs,
+  publicReceipt,
+  runCli,
+  sameGuard,
+  sameGuardSet,
+  sameLineageAgentPids,
+};

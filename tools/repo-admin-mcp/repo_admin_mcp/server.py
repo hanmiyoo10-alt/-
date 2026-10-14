@@ -10,7 +10,7 @@ from mcp.server import MCPServer
 
 from .config import MCP_ACCESS_TOKEN_ENV, RECEIPT_SIGNING_KEY_ENV, TRANSPORT_ENV
 from .github_client import GitHubAdminClient
-from .receipt import RotationCleanupReceiptSigner
+from .receipt import ReceiptError, RotationCleanupReceiptSigner
 from .service import (
     private_mirror_writer_bootstrap as build_bootstrap,
     private_mirror_writer_revoke as build_revoke,
@@ -35,7 +35,7 @@ def _client(*, require_app: bool = False) -> GitHubAdminClient:
 def _receipt_signer() -> RotationCleanupReceiptSigner:
     key = os.environ.get(RECEIPT_SIGNING_KEY_ENV, "")
     if not key:
-        raise RuntimeError("CLEANUP_RECEIPT_SIGNING_KEY_REQUIRED")
+        raise ReceiptError("CLEANUP_RECEIPT_SIGNING_KEY_REQUIRED")
     return RotationCleanupReceiptSigner(key)
 
 

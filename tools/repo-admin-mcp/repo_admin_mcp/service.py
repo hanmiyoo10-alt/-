@@ -391,10 +391,7 @@ def private_mirror_writer_rotate(
                     "observedSecretUpdatedAt": observed_timestamp,
                 }
 
-            if (
-                evidence.post_secret_updated_at is not None and
-                evidence.post_secret_updated_at != observed_timestamp
-            ):
+            if evidence.post_secret_updated_at != observed_timestamp:
                 return {
                     "schemaVersion": 1,
                     "kind": kind,
@@ -439,37 +436,44 @@ def private_mirror_writer_rotate(
                     "observedSecretUpdatedAt": observed_timestamp,
                 }
 
-            if (
-                evidence.post_secret_updated_at is None and
-                observed_timestamp != evidence.previous_secret_updated_at
-            ):
-                try:
-                    strengthened_receipt = receipt_signer.issue(
-                        old_key_id=expected_key_id,
-                        new_key_id=pending_new_key_id,
-                        previous_secret_updated_at=evidence.previous_secret_updated_at,
-                        post_secret_updated_at=observed_timestamp,
-                    )
-                except Exception as exc:
-                    return {
-                        "schemaVersion": 1,
-                        "kind": kind,
-                        "status": "PARTIAL",
-                        "reasonCode": "CLEANUP_RECEIPT_ISSUE_FAILED",
-                        "oldKeyId": expected_key_id,
-                        "newKeyId": pending_new_key_id,
-                        "secretUpdatedAt": observed_timestamp,
-                        "receiptReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
-                    }
+            try:
+                cleanup_predelete_secret = client.get_environment_secret()
+                cleanup_predelete_keys = _matching_keys(client)
+            except Exception as exc:
                 return {
                     "schemaVersion": 1,
                     "kind": kind,
                     "status": "PARTIAL",
-                    "reasonCode": "ROTATION_CLEANUP_RECEIPT_STRENGTHENED",
+                    "reasonCode": "ROTATION_CLEANUP_PREDELETE_READBACK_UNKNOWN",
                     "oldKeyId": expected_key_id,
                     "newKeyId": pending_new_key_id,
                     "secretUpdatedAt": observed_timestamp,
-                    "cleanupReceipt": strengthened_receipt,
+                    "cleanupReceipt": cleanup_receipt,
+                    "readbackReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
+                }
+
+            cleanup_predelete_ids = {key.id for key in cleanup_predelete_keys}
+            if (
+                cleanup_predelete_secret is None or
+                cleanup_predelete_secret.updated_at != observed_timestamp or
+                len(cleanup_predelete_keys) != 2 or
+                cleanup_predelete_ids != {expected_key_id, pending_new_key_id} or
+                any(key.read_only or not key.enabled for key in cleanup_predelete_keys)
+            ):
+                return {
+                    "schemaVersion": 1,
+                    "kind": kind,
+                    "status": "PARTIAL",
+                    "reasonCode": "ROTATION_CLEANUP_STATE_CHANGED_BEFORE_OLD_KEY_DELETE",
+                    "oldKeyId": expected_key_id,
+                    "newKeyId": pending_new_key_id,
+                    "secretUpdatedAt": observed_timestamp,
+                    "cleanupReceipt": cleanup_receipt,
+                    "observedSecretUpdatedAt": (
+                        None if cleanup_predelete_secret is None
+                        else cleanup_predelete_secret.updated_at
+                    ),
+                    "observedKeyIds": sorted(cleanup_predelete_ids),
                 }
 
             try:
@@ -615,25 +619,6 @@ def private_mirror_writer_rotate(
                 }
 
             try:
-                acknowledged_receipt = receipt_signer.issue(
-                    old_key_id=expected_key_id,
-                    new_key_id=replacement.id,
-                    previous_secret_updated_at=expected_secret_updated_at,
-                    post_secret_updated_at=None,
-                )
-            except Exception as exc:
-                return {
-                    "schemaVersion": 1,
-                    "kind": kind,
-                    "status": "PARTIAL",
-                    "reasonCode": "CLEANUP_RECEIPT_ISSUE_FAILED",
-                    "oldKeyId": expected_key_id,
-                    "newKeyId": replacement.id,
-                    "secretUpdatedAt": expected_secret_updated_at,
-                    "receiptReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
-                }
-
-            try:
                 changed = _wait_secret_changed(client, expected_secret_updated_at, sleep=sleep)
             except Exception as exc:
                 return {
@@ -644,7 +629,6 @@ def private_mirror_writer_rotate(
                     "oldKeyId": expected_key_id,
                     "newKeyId": replacement.id,
                     "secretUpdatedAt": expected_secret_updated_at,
-                    "cleanupReceipt": acknowledged_receipt,
                     "readbackReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
                 }
 
@@ -657,7 +641,6 @@ def private_mirror_writer_rotate(
                     "oldKeyId": expected_key_id,
                     "newKeyId": replacement.id,
                     "secretUpdatedAt": expected_secret_updated_at,
-                    "cleanupReceipt": acknowledged_receipt,
                 }
 
             try:
@@ -855,8 +838,30 @@ def private_mirror_writer_revoke(client: AdminClient, expected_key_id: int, expe
             len(keys) == 1 and
             keys[0].get("id") == expected_key_id and
             not keys[0].get("readOnly") and
+            keys[0].get("enabled") and
             not secret.get("present")
         ):
+            try:
+                cleanup_secret = client.get_environment_secret()
+                cleanup_keys = _matching_keys(client)
+            except Exception as exc:
+                return _error_result(kind, exc, "BLOCKED")
+            cleanup_ids = {key.id for key in cleanup_keys}
+            if (
+                cleanup_secret is not None or
+                len(cleanup_keys) != 1 or
+                cleanup_ids != {expected_key_id} or
+                cleanup_keys[0].read_only or
+                not cleanup_keys[0].enabled
+            ):
+                return {
+                    "schemaVersion": 1,
+                    "kind": kind,
+                    "status": "CONFLICT",
+                    "reasonCode": "REVOCATION_CLEANUP_STATE_CHANGED",
+                    "observedSecretPresent": cleanup_secret is not None,
+                    "observedKeyIds": sorted(cleanup_ids),
+                }
             try:
                 client.delete_deploy_key(expected_key_id)
             except Exception as exc:
@@ -936,6 +941,37 @@ def private_mirror_writer_revoke(client: AdminClient, expected_key_id: int, expe
                 "deleteReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
                 "httpStatus": getattr(exc, "http_status", None),
             }
+
+        try:
+            postdelete_secret = client.get_environment_secret()
+            postdelete_keys = _matching_keys(client)
+        except Exception as exc:
+            return {
+                "schemaVersion": 1,
+                "kind": kind,
+                "status": "PARTIAL",
+                "reasonCode": "REVOCATION_POSTDELETE_READBACK_UNKNOWN",
+                "keyId": expected_key_id,
+                "readbackReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
+            }
+        postdelete_ids = {key.id for key in postdelete_keys}
+        if (
+            postdelete_secret is not None or
+            len(postdelete_keys) != 1 or
+            postdelete_ids != {expected_key_id} or
+            postdelete_keys[0].read_only or
+            not postdelete_keys[0].enabled
+        ):
+            return {
+                "schemaVersion": 1,
+                "kind": kind,
+                "status": "PARTIAL",
+                "reasonCode": "REVOCATION_STATE_CHANGED_AFTER_SECRET_DELETE",
+                "keyId": expected_key_id,
+                "observedSecretPresent": postdelete_secret is not None,
+                "observedKeyIds": sorted(postdelete_ids),
+            }
+
         try:
             client.delete_deploy_key(expected_key_id)
         except Exception as exc:

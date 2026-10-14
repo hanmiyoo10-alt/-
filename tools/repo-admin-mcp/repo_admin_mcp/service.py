@@ -711,6 +711,45 @@ def private_mirror_writer_rotate(
                 }
 
             try:
+                predelete_secret = client.get_environment_secret()
+                predelete_keys = _matching_keys(client)
+            except Exception as exc:
+                return {
+                    "schemaVersion": 1,
+                    "kind": kind,
+                    "status": "PARTIAL",
+                    "reasonCode": "ROTATION_PREDELETE_READBACK_UNKNOWN",
+                    "oldKeyId": expected_key_id,
+                    "newKeyId": replacement.id,
+                    "secretUpdatedAt": changed.updated_at,
+                    "cleanupReceipt": cleanup_token,
+                    "readbackReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
+                }
+
+            predelete_ids = {key.id for key in predelete_keys}
+            if (
+                predelete_secret is None or
+                predelete_secret.updated_at != changed.updated_at or
+                predelete_ids != {expected_key_id, replacement.id} or
+                len(predelete_keys) != 2 or
+                any(key.read_only or not key.enabled for key in predelete_keys)
+            ):
+                return {
+                    "schemaVersion": 1,
+                    "kind": kind,
+                    "status": "PARTIAL",
+                    "reasonCode": "ROTATION_STATE_CHANGED_BEFORE_OLD_KEY_DELETE",
+                    "oldKeyId": expected_key_id,
+                    "newKeyId": replacement.id,
+                    "secretUpdatedAt": changed.updated_at,
+                    "cleanupReceipt": cleanup_token,
+                    "observedSecretUpdatedAt": (
+                        None if predelete_secret is None else predelete_secret.updated_at
+                    ),
+                    "observedKeyIds": sorted(predelete_ids),
+                }
+
+            try:
                 client.delete_deploy_key(expected_key_id)
             except Exception as exc:
                 return {
@@ -887,7 +926,16 @@ def private_mirror_writer_revoke(client: AdminClient, expected_key_id: int, expe
         try:
             client.delete_environment_secret()
         except Exception as exc:
-            return _error_result(kind, exc, "BLOCKED")
+            return {
+                "schemaVersion": 1,
+                "kind": kind,
+                "status": "PARTIAL",
+                "reasonCode": "SECRET_DELETE_OUTCOME_UNKNOWN",
+                "keyId": expected_key_id,
+                "expectedSecretUpdatedAt": expected_secret_updated_at,
+                "deleteReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
+                "httpStatus": getattr(exc, "http_status", None),
+            }
         try:
             client.delete_deploy_key(expected_key_id)
         except Exception as exc:

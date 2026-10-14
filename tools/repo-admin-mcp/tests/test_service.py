@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from repo_admin_mcp.crypto import KeyMaterial
 from repo_admin_mcp.github_client import DeployKey, EnvironmentPublicKey, GitHubAdminError, SecretMetadata
+from repo_admin_mcp.receipt import RotationCleanupReceiptSigner
 from repo_admin_mcp.service import (
     private_mirror_writer_bootstrap,
     private_mirror_writer_revoke,
@@ -16,6 +17,12 @@ SENTINEL = b"SUPER-SECRET-PRIVATE-MATERIAL"
 SEALED = "synthetic-sealed-value"
 OLD_UPDATED = "2026-10-13T10:00:00Z"
 NEW_UPDATED = "2026-10-13T10:01:00Z"
+
+TEST_RECEIPT_SIGNER = RotationCleanupReceiptSigner("synthetic-receipt-signing-key-" + "x" * 32)
+
+def rotate(client, *args, **kwargs):
+    kwargs.setdefault("receipt_signer", TEST_RECEIPT_SIGNER)
+    return private_mirror_writer_rotate(client, *args, **kwargs)
 
 
 class FakeClient:
@@ -241,7 +248,7 @@ class ServiceTests(unittest.TestCase):
         client = FakeClient()
         configured(client)
         material, factory = material_holder()
-        result = private_mirror_writer_rotate(
+        result = rotate(
             client,
             7,
             OLD_UPDATED,
@@ -259,7 +266,7 @@ class ServiceTests(unittest.TestCase):
     def test_rotate_rejects_stale_expected_metadata(self):
         client = FakeClient()
         configured(client)
-        result = private_mirror_writer_rotate(client, 999, OLD_UPDATED)
+        result = rotate(client, 999, OLD_UPDATED)
         self.assertEqual(result["status"], "CONFLICT")
         self.assertEqual(result["reasonCode"], "EXPECTED_METADATA_MISMATCH")
         self.assertEqual([key.id for key in client.keys], [7])
@@ -269,7 +276,7 @@ class ServiceTests(unittest.TestCase):
         configured(client)
         client.fail_secret_put = True
         material, factory = material_holder()
-        result = private_mirror_writer_rotate(
+        result = rotate(
             client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
         )
         self.assertEqual(result["status"], "PARTIAL")
@@ -299,7 +306,7 @@ class ServiceTests(unittest.TestCase):
         client.apply_secret_before_failure = True
         client.advance_secret_metadata = False
         material, factory = material_holder()
-        result = private_mirror_writer_rotate(
+        result = rotate(
             client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
         )
         self.assertEqual(result["status"], "PARTIAL")
@@ -315,7 +322,7 @@ class ServiceTests(unittest.TestCase):
         configured(client)
         client.fail_secret_get_after_put = True
         material, factory = material_holder()
-        result = private_mirror_writer_rotate(
+        result = rotate(
             client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
         )
         self.assertEqual(result["status"], "PARTIAL")
@@ -329,7 +336,7 @@ class ServiceTests(unittest.TestCase):
         configured(client)
         client.fail_key_list_after_put = True
         material, factory = material_holder()
-        result = private_mirror_writer_rotate(
+        result = rotate(
             client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
         )
         self.assertEqual(result["status"], "PARTIAL")
@@ -343,7 +350,7 @@ class ServiceTests(unittest.TestCase):
         configured(client)
         client.fail_key_list_after_old_delete = True
         material, factory = material_holder()
-        result = private_mirror_writer_rotate(
+        result = rotate(
             client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
         )
         self.assertEqual(result["status"], "PARTIAL")
@@ -356,7 +363,7 @@ class ServiceTests(unittest.TestCase):
         configured(client)
         client.advance_secret_metadata = False
         material, factory = material_holder()
-        result = private_mirror_writer_rotate(
+        result = rotate(
             client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
         )
         self.assertEqual(result["status"], "PARTIAL")
@@ -369,7 +376,7 @@ class ServiceTests(unittest.TestCase):
         configured(client)
         client.fail_key_delete_ids.add(7)
         material, factory = material_holder()
-        result = private_mirror_writer_rotate(
+        result = rotate(
             client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
         )
         self.assertEqual(result["status"], "PARTIAL")
@@ -412,7 +419,7 @@ class ServiceTests(unittest.TestCase):
         configured(client)
         client.apply_key_delete_before_failure_ids.add(7)
         material, factory = material_holder()
-        first = private_mirror_writer_rotate(
+        first = rotate(
             client,
             7,
             OLD_UPDATED,
@@ -424,11 +431,11 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(first["reasonCode"], "OLD_KEY_REVOCATION_PENDING")
         self.assertEqual([key.id for key in client.keys], [8])
 
-        second = private_mirror_writer_rotate(
+        second = rotate(
             client,
             7,
             first["secretUpdatedAt"],
-            pending_new_key_id=first["newKeyId"],
+            cleanup_receipt=first["cleanupReceipt"],
         )
         self.assertEqual(second["status"], "PASS")
         self.assertEqual(second["effect"], "ROTATION_CLEANUP_ALREADY_COMPLETED")
@@ -464,7 +471,7 @@ class ServiceTests(unittest.TestCase):
         def failing_factory(_comment):
             raise RuntimeError("SYNTHETIC_KEYGEN_SECRET_PAYLOAD")
 
-        result = private_mirror_writer_rotate(client, 7, OLD_UPDATED, key_factory=failing_factory)
+        result = rotate(client, 7, OLD_UPDATED, key_factory=failing_factory)
         self.assertEqual(result["status"], "BLOCKED")
         self.assertEqual(result["reasonCode"], "UNEXPECTED_ERROR")
         self.assertNotIn("SYNTHETIC_KEYGEN_SECRET_PAYLOAD", repr(result))
@@ -492,7 +499,7 @@ class ServiceTests(unittest.TestCase):
         configured(client)
         client.fail_create_after_apply = True
         material, factory = material_holder()
-        result = private_mirror_writer_rotate(
+        result = rotate(
             client,
             7,
             OLD_UPDATED,
@@ -511,7 +518,7 @@ class ServiceTests(unittest.TestCase):
         configured(client)
         client.drift_secret_after_create = True
         material, factory = material_holder()
-        result = private_mirror_writer_rotate(
+        result = rotate(
             client,
             7,
             OLD_UPDATED,
@@ -529,7 +536,7 @@ class ServiceTests(unittest.TestCase):
         configured(client)
         client.fail_key_delete_ids.add(7)
         material, factory = material_holder()
-        first = private_mirror_writer_rotate(
+        first = rotate(
             client,
             7,
             OLD_UPDATED,
@@ -542,7 +549,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual([key.id for key in client.keys], [7, 8])
 
         client.fail_key_delete_ids.clear()
-        second = private_mirror_writer_rotate(
+        second = rotate(
             client,
             7,
             first["secretUpdatedAt"],

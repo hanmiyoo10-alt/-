@@ -85,6 +85,52 @@ def _valid_origin_hostname(hostname: str) -> bool:
     )
 
 
+def _is_loopback_hostname(hostname: str | None) -> bool:
+    if hostname == "localhost":
+        return True
+    if not hostname:
+        return False
+    try:
+        return ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        return False
+
+
+def _redirect_uri_matches_cimd(
+    redirect_uri: str,
+    registered_uri: str,
+    *,
+    application_type: str | None,
+) -> bool:
+    if redirect_uri == registered_uri:
+        return True
+    if application_type != "native":
+        return False
+    try:
+        actual = urllib.parse.urlsplit(redirect_uri)
+        registered = urllib.parse.urlsplit(registered_uri)
+        actual_port = actual.port
+        registered_port = registered.port
+    except ValueError:
+        return False
+    return (
+        actual.scheme == "http"
+        and registered.scheme == "http"
+        and _is_loopback_hostname(registered.hostname)
+        and actual.hostname == registered.hostname
+        and registered_port is None
+        and actual_port is not None
+        and 1 <= actual_port <= 65535
+        and actual.username is None
+        and actual.password is None
+        and registered.username is None
+        and registered.password is None
+        and actual.path == registered.path
+        and actual.query == registered.query
+        and actual.fragment == registered.fragment
+    )
+
+
 def _append_query_params(uri: str, params: dict[str, str]) -> str:
     parsed = urllib.parse.urlsplit(uri)
     encoded = urllib.parse.urlencode(params)
@@ -236,11 +282,23 @@ class OAuthBroker:
 
         metadata_client_id = metadata.get("client_id")
         redirect_uris = metadata.get("redirect_uris")
+        application_type = metadata.get("application_type")
         auth_methods = metadata.get("token_endpoint_auth_methods_supported")
+        redirect_matches = (
+            isinstance(redirect_uris, list)
+            and any(
+                isinstance(registered_uri, str)
+                and _redirect_uri_matches_cimd(
+                    redirect_uri,
+                    registered_uri,
+                    application_type=application_type if isinstance(application_type, str) else None,
+                )
+                for registered_uri in redirect_uris
+            )
+        )
         if (
             metadata_client_id != client_id
-            or not isinstance(redirect_uris, list)
-            or redirect_uri not in redirect_uris
+            or not redirect_matches
             or not isinstance(auth_methods, list)
             or "none" not in auth_methods
         ):

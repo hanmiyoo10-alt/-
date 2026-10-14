@@ -23,6 +23,9 @@ BASE = "https://repo-admin-mcp-production.up.railway.app"
 RESOURCE = BASE
 CLIENT_ID = "https://chatgpt.com/oauth/client.json"
 REDIRECT = "https://chatgpt.com/connector_platform_oauth_redirect"
+CODEX_CLIENT_ID = "https://chatgpt.com/oauth/codex/client.json"
+CODEX_REGISTERED_REDIRECT = "http://127.0.0.1/callback"
+CODEX_DYNAMIC_REDIRECT = "http://127.0.0.1:51699/callback"
 VERIFIER = "A" * 64
 CHALLENGE = _pkce_s256(VERIFIER)
 
@@ -373,6 +376,49 @@ class OAuthBrokerTests(unittest.TestCase):
         })
         with self.assertRaises(OAuthError) as ctx:
             broker.begin_authorization(auth_params())
+        self.assertEqual(ctx.exception.code, "invalid_client")
+
+    def test_native_cimd_allows_only_dynamic_loopback_port_variation(self):
+        payload = {
+            "client_id": CODEX_CLIENT_ID,
+            "application_type": "native",
+            "redirect_uris": [CODEX_REGISTERED_REDIRECT, "http://localhost/callback"],
+            "token_endpoint_auth_methods_supported": ["none"],
+        }
+        broker = make_broker(cimd_payload=payload)
+
+        upstream = broker.begin_authorization(auth_params(
+            client_id=CODEX_CLIENT_ID,
+            redirect_uri=CODEX_DYNAMIC_REDIRECT,
+        ))
+        parsed = urllib.parse.urlsplit(upstream)
+        self.assertEqual((parsed.scheme, parsed.netloc, parsed.path), (
+            "https",
+            "github.com",
+            "/login/oauth/authorize",
+        ))
+
+        for redirect_uri in (
+            "http://127.0.0.2:51699/callback",
+            "http://127.0.0.1:51699/other",
+            "http://127.0.0.1:51699/callback?x=1",
+            "http://127.0.0.1:51699/callback#frag",
+            "https://127.0.0.1:51699/callback",
+        ):
+            with self.subTest(redirect_uri=redirect_uri):
+                with self.assertRaises(OAuthError) as ctx:
+                    broker.begin_authorization(auth_params(
+                        client_id=CODEX_CLIENT_ID,
+                        redirect_uri=redirect_uri,
+                    ))
+                self.assertEqual(ctx.exception.code, "invalid_client")
+
+        non_native = make_broker(cimd_payload={**payload, "application_type": "web"})
+        with self.assertRaises(OAuthError) as ctx:
+            non_native.begin_authorization(auth_params(
+                client_id=CODEX_CLIENT_ID,
+                redirect_uri=CODEX_DYNAMIC_REDIRECT,
+            ))
         self.assertEqual(ctx.exception.code, "invalid_client")
 
     def test_cimd_document_client_id_must_exactly_match_requested_url(self):

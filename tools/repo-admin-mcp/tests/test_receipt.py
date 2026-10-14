@@ -28,7 +28,7 @@ class ReceiptTests(unittest.TestCase):
                 old_key_id=7,
                 new_key_id=8,
                 previous_secret_updated_at="2026-10-13T10:00:00Z",
-                post_secret_updated_at="2026-10-13T10:01:00Z",
+                post_secret_updated_at=None,
             )
         self.assertEqual(ctx.exception.code, "INVALID_ROTATION_CLEANUP_EVIDENCE")
 
@@ -50,7 +50,7 @@ class ReceiptTests(unittest.TestCase):
                 old_key_id=7,
                 new_key_id=7,
                 previous_secret_updated_at="2026-10-13T10:00:00Z",
-                post_secret_updated_at=None,
+                post_secret_updated_at="2026-10-13T10:01:00Z",
             )
         self.assertEqual(ctx.exception.code, "INVALID_ROTATION_CLEANUP_EVIDENCE")
 

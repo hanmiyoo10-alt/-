@@ -64,13 +64,22 @@ def private_mirror_writer_bootstrap() -> dict[str, Any]:
 
 
 @mcp.tool()
-def private_mirror_writer_rotate(expected_key_id: int, expected_secret_updated_at: str) -> dict[str, Any]:
-    """Rotate the fixed writer credential using exact expected metadata and fail closed on drift."""
+def private_mirror_writer_rotate(
+    expected_key_id: int,
+    expected_secret_updated_at: str,
+    pending_new_key_id: int | None = None,
+) -> dict[str, Any]:
+    """Rotate the fixed writer credential or complete one exact pending old-key cleanup."""
     try:
         client = _client(require_app=True)
     except Exception as exc:
         return _client_failure("PRIVATE_MIRROR_WRITER_ROTATE", exc, "BLOCKED")
-    return build_rotate(client, expected_key_id, expected_secret_updated_at)
+    return build_rotate(
+        client,
+        expected_key_id,
+        expected_secret_updated_at,
+        pending_new_key_id=pending_new_key_id,
+    )
 
 
 @mcp.tool()

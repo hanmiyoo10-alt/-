@@ -8,7 +8,7 @@ from typing import Any
 import uvicorn
 from mcp.server import MCPServer
 
-from .config import MCP_ACCESS_TOKEN_ENV, RECEIPT_SIGNING_KEY_ENV, TRANSPORT_ENV
+from .config import MCP_ACCESS_TOKEN_ENV, TRANSPORT_ENV
 from .github_client import GitHubAdminClient
 from .receipt import ReceiptError, RotationCleanupReceiptSigner
 from .service import (
@@ -30,13 +30,6 @@ mcp = MCPServer(
 
 def _client(*, require_app: bool = False) -> GitHubAdminClient:
     return GitHubAdminClient(require_app=require_app)
-
-
-def _receipt_signer() -> RotationCleanupReceiptSigner:
-    key = os.environ.get(RECEIPT_SIGNING_KEY_ENV, "")
-    if not key:
-        raise ReceiptError("CLEANUP_RECEIPT_SIGNING_KEY_REQUIRED")
-    return RotationCleanupReceiptSigner(key)
 
 
 def _client_failure(kind: str, error: Exception, status: str) -> dict[str, Any]:
@@ -75,25 +68,20 @@ def private_mirror_writer_bootstrap() -> dict[str, Any]:
 def private_mirror_writer_rotate(
     expected_key_id: int,
     expected_secret_updated_at: str,
-    cleanup_receipt: str | None = None,
 ) -> dict[str, Any]:
-    """Rotate the fixed writer credential or complete one signed pending old-key cleanup."""
+    """Install a replacement writer secret and stop fail-closed before destructive old-key cleanup."""
     try:
         client = _client(require_app=True)
-        signer = _receipt_signer()
     except Exception as exc:
         return _client_failure("PRIVATE_MIRROR_WRITER_ROTATE", exc, "BLOCKED")
-    return build_rotate(
-        client,
-        expected_key_id,
-        expected_secret_updated_at,
-        cleanup_receipt=cleanup_receipt,
-        receipt_signer=signer,
-    )
+    return build_rotate(client, expected_key_id, expected_secret_updated_at)
 
 
 @mcp.tool()
-def private_mirror_writer_revoke(expected_key_id: int, expected_secret_updated_at: str) -> dict[str, Any]:
+def private_mirror_writer_revoke(
+    expected_key_id: int,
+    expected_secret_updated_at: str | None = None,
+) -> dict[str, Any]:
     """Revoke the fixed writer credential using exact expected metadata; no wildcard deletion is possible."""
     try:
         client = _client(require_app=True)

@@ -1,0 +1,704 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import fcntl
+import json
+import os
+import re
+import secrets
+import stat
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Mapping, Sequence
+
+SCHEMA = "mcl-cloudflare-aux-status-credential-rotation.v1"
+WORKER_NAME = "mcl-cloudflare-aux-status"
+SECRET_NAME = "MCL_STATUS_PASSWORD"
+AUTH_USER = "mcl"
+WRANGLER_VERSION = "4.148.0"
+NPX = "/usr/local/bin/npx"
+CURL = "/usr/bin/curl"
+FIXED_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+MAX_OUTPUT_BYTES = 1024 * 1024
+MAX_PASSWORD_BYTES = 512
+HOST_RE = re.compile(r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$")
+
+@dataclass(frozen=True)
+class Profile:
+    home: Path
+    state_dir: Path
+    current_credential: Path
+    candidate_credential: Path
+    previous_credential: Path
+    hostname_file: Path
+    rotation_lock: Path
+    source_config: Path
+
+PRODUCTION_PROFILE = Profile(
+    home=Path("/home/alsl0"),
+    state_dir=Path("/home/alsl0/.local/state/mcl/cloudflare-aux-status"),
+    current_credential=Path("/home/alsl0/.local/state/mcl/cloudflare-aux-status/MCL_STATUS_PASSWORD"),
+    candidate_credential=Path("/home/alsl0/.local/state/mcl/cloudflare-aux-status/MCL_STATUS_PASSWORD.next"),
+    previous_credential=Path("/home/alsl0/.local/state/mcl/cloudflare-aux-status/MCL_STATUS_PASSWORD.previous"),
+    hostname_file=Path("/home/alsl0/.local/state/mcl/cloudflare-aux-status/custom-domain-hostname"),
+    rotation_lock=Path("/home/alsl0/.local/state/mcl/cloudflare-aux-status/credential-rotation.lock"),
+    source_config=Path(__file__).resolve().parents[1] / "wrangler.jsonc",
+)
+
+@dataclass(frozen=True)
+class Inventory:
+    deployment_count: int
+    version_ids: frozenset[str]
+    current_version_id: str
+
+@dataclass(frozen=True)
+class Probe:
+    anonymous_status: int
+    basic_challenge: bool
+    health_status: int
+    health_contract: bool
+    capabilities_status: int
+    capabilities_contract: bool
+
+class RotationError(RuntimeError):
+    def __init__(self, reason: str, *, unknown: bool = False):
+        super().__init__(reason)
+        self.reason = reason
+        self.unknown = unknown
+
+def receipt(**overrides: object) -> dict[str, object]:
+    value = {
+        "schema": SCHEMA, "operation": "unknown", "wrangler": "unknown",
+        "local_custody": "unknown", "domain": "unknown", "certificate": "unknown",
+        "current_auth": "unknown", "new_version": "not_requested",
+        "deployment": "not_requested", "new_auth": "not_requested",
+        "old_auth": "not_requested", "custody": "preserved",
+        "result": "blocked", "reason": "UNKNOWN", "details": "withheld",
+    }
+    value.update(overrides)
+    return value
+
+def render_receipt(value: Mapping[str, object]) -> str:
+    order = (
+        "schema", "operation", "wrangler", "local_custody", "domain",
+        "certificate", "current_auth", "new_version", "deployment", "new_auth",
+        "old_auth", "custody", "result", "reason", "details",
+    )
+    return "".join(f"{key}={value[key]}\n" for key in order)
+
+def _within(child: Path, parent: Path) -> bool:
+    try:
+        child.resolve(strict=False).relative_to(parent.resolve(strict=False))
+        return True
+    except ValueError:
+        return False
+
+def _safe_chain(path: Path, profile: Profile) -> str | None:
+    if not path.is_absolute() or not _within(path, profile.home):
+        return "PATH_OUTSIDE_HOME"
+    current = profile.home
+    try:
+        st = current.lstat()
+    except OSError:
+        return "HOME_UNREADABLE"
+    if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
+        return "HOME_INVALID"
+    if st.st_uid != os.getuid() or stat.S_IMODE(st.st_mode) & (stat.S_IWGRP | stat.S_IWOTH):
+        return "HOME_UNSAFE"
+    relative = path.relative_to(profile.home)
+    for part in relative.parts[:-1]:
+        current = current / part
+        try:
+            st = current.lstat()
+        except OSError:
+            return "ANCESTOR_UNREADABLE"
+        if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
+            return "ANCESTOR_INVALID"
+        if st.st_uid != os.getuid() or stat.S_IMODE(st.st_mode) & (stat.S_IWGRP | stat.S_IWOTH):
+            return "ANCESTOR_UNSAFE"
+    return None
+
+def _private_dir(path: Path, profile: Profile) -> str | None:
+    problem = _safe_chain(path / "leaf", profile)
+    if problem:
+        return problem
+    try:
+        st = path.lstat()
+    except OSError:
+        return "MISSING"
+    if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
+        return "NOT_DIRECTORY"
+    if st.st_uid != os.getuid() or stat.S_IMODE(st.st_mode) != 0o700:
+        return "MODE_OR_OWNER_INVALID"
+    return None
+
+def _private_file(path: Path, profile: Profile, *, max_bytes: int, required: bool = True) -> str | None:
+    problem = _safe_chain(path, profile)
+    if problem:
+        return problem
+    try:
+        st = path.lstat()
+    except FileNotFoundError:
+        return "MISSING" if required else None
+    except OSError:
+        return "UNREADABLE"
+    if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+        return "NOT_REGULAR"
+    if st.st_uid != os.getuid() or stat.S_IMODE(st.st_mode) != 0o600:
+        return "MODE_OR_OWNER_INVALID"
+    if not 1 <= st.st_size <= max_bytes:
+        return "SIZE_INVALID"
+    return None
+
+def _read_private(path: Path, profile: Profile, *, max_bytes: int = MAX_PASSWORD_BYTES) -> str:
+    problem = _private_file(path, profile, max_bytes=max_bytes)
+    if problem:
+        raise RotationError("PRIVATE_FILE_" + problem)
+    data = path.read_bytes()
+    if len(data) > max_bytes:
+        raise RotationError("PRIVATE_FILE_SIZE_INVALID")
+    try:
+        value = data.decode("utf-8").strip()
+    except UnicodeDecodeError as exc:
+        raise RotationError("PRIVATE_FILE_ENCODING_INVALID") from exc
+    if not value:
+        raise RotationError("PRIVATE_FILE_EMPTY")
+    return value
+
+def _atomic_write(path: Path, value: str, profile: Profile) -> None:
+    if path.parent != profile.state_dir:
+        raise RotationError("CUSTODY_PATH_INVALID")
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        if tmp.exists() or tmp.is_symlink():
+            tmp.unlink()
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            os.write(fd, (value + "\n").encode("utf-8"))
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.replace(tmp, path)
+        os.chmod(path, 0o600)
+        dfd = os.open(profile.state_dir, os.O_RDONLY)
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+    finally:
+        if tmp.exists() or tmp.is_symlink():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+
+def _remove_private(path: Path, profile: Profile) -> None:
+    if not (path.exists() or path.is_symlink()):
+        return
+    problem = _private_file(path, profile, max_bytes=MAX_PASSWORD_BYTES)
+    if problem:
+        raise RotationError("CLEANUP_" + problem, unknown=True)
+    path.unlink()
+
+def _source_contract(profile: Profile) -> str | None:
+    try:
+        data = json.loads(profile.source_config.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return "SOURCE_CONFIG_INVALID"
+    if data.get("name") != WORKER_NAME:
+        return "SOURCE_WORKER_DRIFT"
+    if data.get("workers_dev") is not False or data.get("preview_urls") is not False:
+        return "SOURCE_PUBLIC_URL_POLICY_DRIFT"
+    if data.get("secrets", {}).get("required") != [SECRET_NAME]:
+        return "SOURCE_SECRET_CONTRACT_DRIFT"
+    for key in ("routes", "route", "account_id", "zone_id"):
+        if key in data:
+            return "SOURCE_ROUTE_OR_ACCOUNT_DRIFT"
+    return None
+
+class RealBackend:
+    def __init__(self, profile: Profile):
+        self.profile = profile
+
+    def _env(self) -> dict[str, str]:
+        return {"PATH": FIXED_PATH, "HOME": str(self.profile.home), "LANG": "C.UTF-8"}
+
+    def _run(self, args: Sequence[str], *, input_text: str | None = None, capture: bool = True) -> str:
+        if not args or args[0] not in {NPX, CURL}:
+            raise RotationError("COMMAND_IDENTITY_INVALID")
+        with tempfile.TemporaryFile() as output:
+            proc = subprocess.Popen(
+                list(args),
+                stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
+                stdout=output if capture else subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                cwd=str(self.profile.source_config.parent),
+                env=self._env(),
+                close_fds=True,
+                text=True,
+            )
+            try:
+                proc.communicate(input=input_text, timeout=45)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                raise RotationError("COMMAND_TIMEOUT")
+            if proc.returncode != 0:
+                raise RotationError("COMMAND_FAILED")
+            if not capture:
+                return ""
+            if output.tell() > MAX_OUTPUT_BYTES:
+                raise RotationError("COMMAND_OUTPUT_TOO_LARGE")
+            output.seek(0)
+            return output.read().decode("utf-8", errors="strict")
+
+    def _wrangler_json(self, args: Sequence[str]) -> object:
+        raw = self._run([NPX, "--yes", f"wrangler@{WRANGLER_VERSION}", *args])
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise RotationError("WRANGLER_JSON_INVALID") from exc
+
+    def auth(self) -> None:
+        value = self._wrangler_json(["whoami", "--json"])
+        if not isinstance(value, dict) or value.get("loggedIn") is not True:
+            raise RotationError("WRANGLER_AUTH_BLOCKED")
+        accounts = value.get("accounts")
+        if not isinstance(accounts, list) or len(accounts) != 1:
+            raise RotationError("WRANGLER_ACCOUNT_AMBIGUOUS")
+
+    def inventory(self) -> Inventory:
+        deployments = self._wrangler_json(["deployments", "list", "--name", WORKER_NAME, "--json"])
+        versions = self._wrangler_json(["versions", "list", "--name", WORKER_NAME, "--json"])
+        status = self._wrangler_json(["deployments", "status", "--name", WORKER_NAME, "--json"])
+        if not isinstance(deployments, list) or not isinstance(versions, list) or not isinstance(status, dict):
+            raise RotationError("RUNTIME_INVENTORY_INVALID")
+        ids: list[str] = []
+        for item in versions:
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+                raise RotationError("RUNTIME_VERSION_ID_INVALID")
+            ids.append(item["id"])
+        current = status.get("versions")
+        if not isinstance(current, list) or len(current) != 1 or not isinstance(current[0], dict):
+            raise RotationError("RUNTIME_DEPLOYMENT_AMBIGUOUS")
+        if current[0].get("percentage") != 100 or not isinstance(current[0].get("version_id"), str):
+            raise RotationError("RUNTIME_DEPLOYMENT_NOT_100")
+        current_id = current[0]["version_id"]
+        if current_id not in ids:
+            raise RotationError("RUNTIME_CURRENT_VERSION_UNKNOWN")
+        return Inventory(len(deployments), frozenset(ids), current_id)
+
+    def _probe_one(self, hostname: str, path: str, password: str | None) -> tuple[int, dict[str, object], str]:
+        with tempfile.TemporaryDirectory(prefix=".rotation-probe-", dir=self.profile.state_dir) as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            config = root / "curl.conf"
+            headers = root / "headers"
+            body = root / "body"
+            lines = [
+                f'url = "https://{hostname}{path}"',
+                "silent",
+                "show-error",
+                "connect-timeout = 10",
+                "max-time = 20",
+            ]
+            if password is not None:
+                lines.append(f'user = "{AUTH_USER}:{password}"')
+            fd = os.open(config, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            try:
+                os.write(fd, ("\n".join(lines) + "\n").encode("utf-8"))
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            status = self._run(
+                [CURL, "--config", str(config), "-D", str(headers), "-o", str(body), "-w", "%{http_code}"]
+            ).strip()
+            if len(status) != 3 or not status.isdigit():
+                raise RotationError("HTTP_STATUS_INVALID")
+            header_text = headers.read_text(encoding="utf-8", errors="replace").lower() if headers.exists() else ""
+            try:
+                payload = json.loads(body.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                payload = {}
+            return int(status), payload, header_text
+
+    def probe(self, hostname: str, password: str) -> Probe:
+        anonymous_status, _anonymous, anonymous_headers = self._probe_one(hostname, "/health", None)
+        health_status, health, _ = self._probe_one(hostname, "/health", password)
+        capabilities_status, capabilities, _ = self._probe_one(hostname, "/capabilities", password)
+        return Probe(
+            anonymous_status=anonymous_status,
+            basic_challenge="www-authenticate: basic" in anonymous_headers,
+            health_status=health_status,
+            health_contract=(
+                health.get("schema") == "mcl-cloudflare-aux-status.v1"
+                and health.get("profile") == "mcl-cloudflare-aux-status-v1"
+                and health.get("status") == "ok"
+            ),
+            capabilities_status=capabilities_status,
+            capabilities_contract=(
+                capabilities.get("authentication") == "http-basic"
+                and capabilities.get("outboundFetch") is False
+                and capabilities.get("repositoryWrite") is False
+                and capabilities.get("externalActions") is False
+            ),
+        )
+
+    def create_secret_version(self, password: str) -> None:
+        self._run(
+            [
+                NPX, "--yes", f"wrangler@{WRANGLER_VERSION}", "versions", "secret", "put",
+                SECRET_NAME, "--name", WORKER_NAME, "--message", "MCL bounded credential rotation",
+            ],
+            input_text=password + "\n",
+            capture=False,
+        )
+
+    def deploy_version(self, version_id: str) -> None:
+        self._run(
+            [
+                NPX, "--yes", f"wrangler@{WRANGLER_VERSION}", "versions", "deploy",
+                "--name", WORKER_NAME, "--version-id", version_id, "--percentage", "100",
+                "--message", "MCL bounded credential rotation", "--yes",
+            ],
+            capture=False,
+        )
+
+    def rollback_version(self, version_id: str) -> None:
+        self._run(
+            [
+                NPX, "--yes", f"wrangler@{WRANGLER_VERSION}", "rollback", version_id,
+                "--name", WORKER_NAME, "--message", "MCL credential rotation rollback", "--yes",
+            ],
+            capture=False,
+        )
+
+def _auth_pass(probe: Probe) -> bool:
+    return (
+        probe.anonymous_status == 401
+        and probe.basic_challenge
+        and probe.health_status == 200
+        and probe.health_contract
+        and probe.capabilities_status == 200
+        and probe.capabilities_contract
+    )
+
+def check(profile: Profile = PRODUCTION_PROFILE, backend: object | None = None) -> tuple[dict[str, object], dict[str, object] | None]:
+    backend = backend or RealBackend(profile)
+    result = receipt(operation="check")
+    source_problem = _source_contract(profile)
+    if source_problem:
+        return result | {"reason": source_problem}, None
+    state_problem = _private_dir(profile.state_dir, profile)
+    if state_problem:
+        return result | {"reason": "STATE_DIR_" + state_problem}, None
+    current_problem = _private_file(
+        profile.current_credential, profile, max_bytes=MAX_PASSWORD_BYTES
+    )
+    if current_problem:
+        return result | {"local_custody": "blocked", "reason": "CURRENT_CREDENTIAL_" + current_problem}, None
+    host_problem = _private_file(profile.hostname_file, profile, max_bytes=512)
+    if host_problem:
+        return result | {"local_custody": "blocked", "reason": "HOSTNAME_LOCATOR_" + host_problem}, None
+    for path, label in (
+        (profile.candidate_credential, "CANDIDATE"),
+        (profile.previous_credential, "PREVIOUS"),
+    ):
+        if path.exists() or path.is_symlink():
+            return result | {"local_custody": "blocked", "reason": label + "_RECOVERY_MATERIAL_PRESENT"}, None
+    password = _read_private(profile.current_credential, profile)
+    hostname = _read_private(profile.hostname_file, profile, max_bytes=512).lower()
+    if not HOST_RE.fullmatch(hostname):
+        return result | {"local_custody": "blocked", "reason": "HOSTNAME_LOCATOR_INVALID"}, None
+    try:
+        backend.auth()
+        inventory = backend.inventory()
+        probe = backend.probe(hostname, password)
+    except RotationError as error:
+        return result | {
+            "wrangler": "blocked",
+            "local_custody": "pass",
+            "reason": error.reason,
+            "result": "unknown" if error.unknown else "blocked",
+        }, None
+    if not _auth_pass(probe):
+        return result | {
+            "wrangler": "pass",
+            "local_custody": "pass",
+            "domain": "present",
+            "certificate": "present",
+            "current_auth": "blocked",
+            "reason": "CURRENT_AUTH_INVALID",
+        }, None
+    context = {
+        "password": password,
+        "hostname": hostname,
+        "inventory": inventory,
+    }
+    return result | {
+        "wrangler": "pass",
+        "local_custody": "pass",
+        "domain": "present",
+        "certificate": "present",
+        "current_auth": "pass",
+        "result": "pass",
+        "reason": "PASS",
+    }, context
+
+def _acquire_lock(profile: Profile) -> int:
+    if profile.rotation_lock.parent != profile.state_dir:
+        raise RotationError("LOCK_PATH_INVALID")
+    if profile.rotation_lock.exists() or profile.rotation_lock.is_symlink():
+        try:
+            st = profile.rotation_lock.lstat()
+        except OSError as exc:
+            raise RotationError("LOCK_FILE_UNREADABLE") from exc
+        if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+            raise RotationError("LOCK_FILE_NOT_REGULAR")
+        if st.st_uid != os.getuid() or stat.S_IMODE(st.st_mode) != 0o600:
+            raise RotationError("LOCK_FILE_MODE_OR_OWNER_INVALID")
+    fd = os.open(profile.rotation_lock, os.O_RDWR | os.O_CREAT, 0o600)
+    os.chmod(profile.rotation_lock, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        os.close(fd)
+        raise RotationError("ROTATION_ALREADY_ACTIVE") from exc
+    return fd
+
+def _pair(old_probe: Probe, new_probe: Probe) -> tuple[bool, bool]:
+    return _auth_pass(old_probe), _auth_pass(new_probe)
+
+def _rollback(
+    backend: object,
+    profile: Profile,
+    old_version: str,
+    hostname: str,
+    old_password: str,
+    new_password: str,
+    *,
+    promoted: bool,
+) -> tuple[bool, str]:
+    try:
+        backend.rollback_version(old_version)
+        old_ok, new_ok = _pair(
+            backend.probe(hostname, old_password),
+            backend.probe(hostname, new_password),
+        )
+        if not old_ok or new_ok:
+            return False, "ROLLBACK_AUTH_PROOF_FAILED"
+        if promoted:
+            _atomic_write(profile.current_credential, old_password, profile)
+        _remove_private(profile.candidate_credential, profile)
+        _remove_private(profile.previous_credential, profile)
+        return True, "ROLLBACK_PASS"
+    except (RotationError, OSError):
+        return False, "ROLLBACK_UNKNOWN"
+
+def rotate(
+    profile: Profile = PRODUCTION_PROFILE,
+    backend: object | None = None,
+    *,
+    password_factory=secrets.token_urlsafe,
+) -> dict[str, object]:
+    backend = backend or RealBackend(profile)
+    result = receipt(operation="rotate")
+    lock_fd: int | None = None
+    promoted = False
+    old_password = ""
+    new_password = ""
+    old_version = ""
+    hostname = ""
+    try:
+        lock_fd = _acquire_lock(profile)
+        preflight, context = check(profile, backend)
+        if preflight.get("result") != "pass" or context is None:
+            return preflight | {"operation": "rotate"}
+        result.update({
+            "wrangler": "pass",
+            "local_custody": "pass",
+            "domain": "present",
+            "certificate": "present",
+            "current_auth": "pass",
+        })
+        old_password = str(context["password"])
+        hostname = str(context["hostname"])
+        before = context["inventory"]
+        old_version = before.current_version_id
+
+        new_password = password_factory(48)
+        if not isinstance(new_password, str) or not new_password or new_password == old_password:
+            raise RotationError("PASSWORD_GENERATION_INVALID")
+        if len(new_password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+            raise RotationError("PASSWORD_GENERATION_TOO_LARGE")
+        if profile.candidate_credential.exists() or profile.candidate_credential.is_symlink():
+            raise RotationError("CANDIDATE_RECOVERY_MATERIAL_PRESENT")
+        _atomic_write(profile.candidate_credential, new_password, profile)
+
+        try:
+            backend.create_secret_version(new_password)
+        except RotationError:
+            after_fail = backend.inventory()
+            created = after_fail.version_ids - before.version_ids
+            if len(created) == 0 and after_fail.current_version_id == old_version:
+                _remove_private(profile.candidate_credential, profile)
+                return result | {"new_version": "blocked", "reason": "VERSION_CREATE_FAILED"}
+            return result | {
+                "new_version": "unknown",
+                "result": "unknown",
+                "reason": "VERSION_CREATE_ACK_AMBIGUOUS",
+            }
+
+        after_create = backend.inventory()
+        created = after_create.version_ids - before.version_ids
+        if (
+            len(created) != 1
+            or after_create.deployment_count != before.deployment_count
+            or after_create.current_version_id != old_version
+        ):
+            return result | {
+                "new_version": "unknown",
+                "result": "unknown",
+                "reason": "VERSION_CREATE_POSTCONDITION_UNKNOWN",
+            }
+        new_version = next(iter(created))
+        result["new_version"] = "created"
+
+        deploy_error = False
+        try:
+            backend.deploy_version(new_version)
+        except RotationError:
+            deploy_error = True
+
+        old_probe = backend.probe(hostname, old_password)
+        new_probe = backend.probe(hostname, new_password)
+        old_ok, new_ok = _pair(old_probe, new_probe)
+
+        if deploy_error and old_ok and not new_ok:
+            _remove_private(profile.candidate_credential, profile)
+            return result | {
+                "deployment": "blocked",
+                "new_auth": "blocked",
+                "old_auth": "not_requested",
+                "reason": "DEPLOY_FAILED_NO_TRAFFIC_CHANGE",
+            }
+
+        if not new_ok or old_ok:
+            rolled_back, reason = _rollback(
+                backend, profile, old_version, hostname, old_password, new_password, promoted=False
+            )
+            if rolled_back:
+                return result | {
+                    "deployment": "rolled_back",
+                    "new_auth": "blocked" if not new_ok else "pass",
+                    "old_auth": "blocked" if old_ok else "revoked",
+                    "custody": "restored",
+                    "reason": "NEW_AUTH_FAILED_ROLLED_BACK" if not new_ok else "OLD_AUTH_STILL_VALID_ROLLED_BACK",
+                }
+            return result | {
+                "deployment": "unknown",
+                "new_auth": "pass" if new_ok else "blocked",
+                "old_auth": "blocked" if old_ok else "revoked",
+                "custody": "unknown",
+                "result": "unknown",
+                "reason": reason,
+            }
+
+        result.update({"deployment": "updated", "new_auth": "pass", "old_auth": "revoked"})
+
+        _atomic_write(profile.previous_credential, old_password, profile)
+        try:
+            os.replace(profile.candidate_credential, profile.current_credential)
+            os.chmod(profile.current_credential, 0o600)
+            dfd = os.open(profile.state_dir, os.O_RDONLY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
+            promoted = True
+        except OSError:
+            rolled_back, reason = _rollback(
+                backend, profile, old_version, hostname, old_password, new_password, promoted=False
+            )
+            if rolled_back:
+                return result | {
+                    "deployment": "rolled_back",
+                    "custody": "restored",
+                    "reason": "CUSTODY_PROMOTION_FAILED_ROLLED_BACK",
+                }
+            return result | {
+                "deployment": "unknown",
+                "custody": "unknown",
+                "result": "unknown",
+                "reason": reason,
+            }
+
+        post = backend.inventory()
+        current_password = _read_private(profile.current_credential, profile)
+        post_probe = backend.probe(hostname, current_password)
+        if post.current_version_id != new_version or not _auth_pass(post_probe):
+            rolled_back, reason = _rollback(
+                backend, profile, old_version, hostname, old_password, new_password, promoted=True
+            )
+            if rolled_back:
+                return result | {
+                    "deployment": "rolled_back",
+                    "custody": "restored",
+                    "reason": "POST_ROTATION_READBACK_FAILED_ROLLED_BACK",
+                }
+            return result | {
+                "deployment": "unknown",
+                "custody": "unknown",
+                "result": "unknown",
+                "reason": reason,
+            }
+
+        _remove_private(profile.previous_credential, profile)
+        return result | {
+            "wrangler": "pass",
+            "local_custody": "pass",
+            "domain": "present",
+            "certificate": "present",
+            "current_auth": "pass",
+            "new_version": "created",
+            "deployment": "updated",
+            "new_auth": "pass",
+            "old_auth": "revoked",
+            "custody": "rotated",
+            "result": "pass",
+            "reason": "PASS",
+        }
+    except RotationError as error:
+        return result | {
+            "result": "unknown" if error.unknown else "blocked",
+            "reason": error.reason,
+        }
+    finally:
+        if lock_fd is not None:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            finally:
+                os.close(lock_fd)
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args == ["--check"]:
+        result, _ = check()
+    elif args == ["--rotate"]:
+        result = rotate()
+    else:
+        result = receipt(operation="unknown", reason="ARGUMENT_INVALID")
+        sys.stdout.write(render_receipt(result))
+        return 64
+    sys.stdout.write(render_receipt(result))
+    if result.get("result") == "pass":
+        return 0
+    if result.get("result") == "unknown":
+        return 2
+    return 3
+
+if __name__ == "__main__":
+    raise SystemExit(main())

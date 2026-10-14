@@ -14,33 +14,44 @@ class ReceiptTests(unittest.TestCase):
             old_key_id=7,
             new_key_id=8,
             previous_secret_updated_at="2026-10-13T10:00:00Z",
-            secret_updated_at="2026-10-13T10:01:00Z",
+            post_secret_updated_at="2026-10-13T10:01:00Z",
         )
         evidence = self.signer.verify(token)
         self.assertEqual(evidence.old_key_id, 7)
         self.assertEqual(evidence.new_key_id, 8)
         self.assertEqual(evidence.previous_secret_updated_at, "2026-10-13T10:00:00Z")
-        self.assertEqual(evidence.secret_updated_at, "2026-10-13T10:01:00Z")
+        self.assertEqual(evidence.post_secret_updated_at, "2026-10-13T10:01:00Z")
+
+    def test_acknowledged_put_receipt_allows_missing_post_timestamp(self):
+        token = self.signer.issue(
+            old_key_id=7,
+            new_key_id=8,
+            previous_secret_updated_at="2026-10-13T10:00:00Z",
+            post_secret_updated_at=None,
+        )
+        evidence = self.signer.verify(token)
+        self.assertEqual(evidence.previous_secret_updated_at, "2026-10-13T10:00:00Z")
+        self.assertIsNone(evidence.post_secret_updated_at)
 
     def test_tampered_receipt_is_rejected(self):
         token = self.signer.issue(
             old_key_id=7,
             new_key_id=8,
             previous_secret_updated_at="2026-10-13T10:00:00Z",
-            secret_updated_at="2026-10-13T10:01:00Z",
+            post_secret_updated_at="2026-10-13T10:01:00Z",
         )
         tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
         with self.assertRaises(ReceiptError) as ctx:
             self.signer.verify(tampered)
         self.assertEqual(ctx.exception.code, "INVALID_CLEANUP_RECEIPT_SIGNATURE")
 
-    def test_same_timestamp_evidence_is_rejected(self):
+    def test_invalid_key_identity_is_rejected(self):
         with self.assertRaises(ReceiptError) as ctx:
             self.signer.issue(
                 old_key_id=7,
-                new_key_id=8,
-                previous_secret_updated_at="same",
-                secret_updated_at="same",
+                new_key_id=7,
+                previous_secret_updated_at="2026-10-13T10:00:00Z",
+                post_secret_updated_at=None,
             )
         self.assertEqual(ctx.exception.code, "INVALID_ROTATION_CLEANUP_EVIDENCE")
 

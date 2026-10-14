@@ -3,10 +3,12 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 
 const ROOT = path.resolve(__dirname, '../../../../../..');
 const owner = require('../validation-continuation-owner.cjs');
 const stageReceipt = require('../../stage-receipt.cjs');
+const validationMerge = require('../../validation-merge/validation-merge-owner.cjs');
 
 const MAIN = '1'.repeat(40);
 const HEAD_A = '2'.repeat(40);
@@ -68,6 +70,19 @@ assert.deepEqual(owner.RESUME_DISPOSITIONS, [
   'VALIDATION_REFRESH_REQUIRED', 'NEEDS_RECOVERY_INSPECT', 'BLOCKED',
   'NEEDS_REVIEW', 'UNKNOWN',
 ]);
+
+const importedStageError = owner.normalizeContinuationError(
+  new validationMerge.OwnerError(
+    'BLOCKED', ['PACKET_STAGE_NOT_VALIDATION_MERGE'], 'issue:#2463'));
+assert.deepEqual(importedStageError, {
+  kind: 'BLOCKED',
+  reasonCodes: ['PACKET_STAGE_NOT_VALIDATION_MERGE'],
+});
+const genericError = owner.normalizeContinuationError(new Error('boom'));
+assert.deepEqual(genericError, {
+  kind: 'UNKNOWN',
+  reasonCodes: ['CONTINUATION_INTERNAL_ERROR'],
+});
 
 let decision = owner.classifyContinuationEvidence(baseEvidence());
 assert.equal(decision.resumeDisposition, 'MERGE_ADMISSION_READY');
@@ -241,6 +256,19 @@ function packetBody() {
     '- Next stage: VALIDATION_MERGE',
   ].join('\n');
 }
+function stalePacketBody() {
+  return [
+    '<!-- canonical-main-work-packet:v1 -->',
+    '## State',
+    'IN_PROGRESS',
+    '## Bounded implementation write scope',
+    '- ' + tick + 'path:src/**' + tick,
+    '## Interaction stage',
+    '- Current stage: IMPLEMENTATION_PR',
+    '- Completed stage(s): AUTHORITY_SCOPE',
+    '- Next stage: VALIDATION_MERGE',
+  ].join('\n');
+}
 function opsBody() {
   return [
     '## Canonical Operator Capsule',
@@ -290,6 +318,33 @@ const client = {
   assert.equal(result.receipt.result, 'PASS');
   assert.equal(result.receipt.nextLegalAction, 'VALIDATION_MERGE_FINALIZE');
 
+  const staleResponses = new Map([
+    ['/branches/main', {commit: {sha: MERGE}}],
+    ['/issues/485', {state: 'open', body: opsBody()}],
+    ['/issues/2463', {state: 'open', body: stalePacketBody()}],
+  ]);
+  const staleClient = {
+    async api(endpoint) {
+      if (!staleResponses.has(endpoint)) throw new Error('unexpected endpoint ' + endpoint);
+      return staleResponses.get(endpoint);
+    },
+  };
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-validation-continuation-'));
+  fs.mkdirSync(path.join(tempRoot, '.git'));
+  try {
+    const staleCli = await owner.runCli(
+      ['inspect', '--packet', '#2463', '--pr', '2464', '--format', 'receipt'],
+      {client: staleClient, root: tempRoot},
+    );
+    const staleReceipt = JSON.parse(staleCli.text);
+    assert.equal(staleReceipt.result, 'BLOCKED');
+    assert.deepEqual(staleReceipt.reasonCodes, ['PACKET_STAGE_NOT_VALIDATION_MERGE']);
+    assert.equal(staleReceipt.steps[0].evidenceLocator, 'issue:#2463');
+    assert.ok(!staleReceipt.reasonCodes.includes('CONTINUATION_INTERNAL_ERROR'));
+  } finally {
+    fs.rmSync(tempRoot, {recursive: true, force: true});
+  }
+
   const source = fs.readFileSync(path.join(
     ROOT,
     '.github/plugin-control-plane/canonical-main/work-harness/validation-continuation/validation-continuation-owner.cjs',
@@ -298,6 +353,8 @@ const client = {
   assert.doesNotMatch(source, /workflow_dispatch|git\s+push|merge_pull_request|lease-acquire|lease-release|holder\.claim/i);
   assert.match(source, /freshAdmissionRequired/);
   assert.match(source, /VALIDATION_CHECKPOINT_CONFLICT/);
+  assert.match(source, /validationMerge\.OwnerError/);
+  assert.match(source, /CONTINUATION_INTERNAL_ERROR/);
 
   console.log('validation-continuation owner contract: ok');
 })().catch((error) => {

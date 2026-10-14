@@ -104,6 +104,12 @@ No merge retry occurs.
 
 Ambiguous merge attribution routes to `NEEDS_RECOVERY_INSPECT`; unreadable merge state remains `UNKNOWN`.
 
+## Imported bounded owner errors
+
+The continuation owner reuses validation-merge read surfaces. When those reads fail with the exported `validationMerge.OwnerError`, the continuation projection preserves the bounded upstream `kind`, `reasonCodes`, and evidence locator instead of relabeling the known failure as an internal runtime error.
+
+This preserves fail-closed semantics. Packet-stage, packet-scope, and current-authority checks remain owned by validation-merge and are not inferred or repaired by continuation. Unrecognized exceptions still project as `UNKNOWN / CONTINUATION_INTERNAL_ERROR`.
+
 ## Coordination boundary
 
 Prior coordination may be projected only as `CONVERGED | NOT_APPLICABLE | UNKNOWN` from canonical evidence. An old D-013 lease, D-014 manifest capability, or holder capability is never reused.

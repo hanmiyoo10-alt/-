@@ -170,3 +170,8 @@ Tests use an injected fake GitHub client and synthetic key material only. No liv
 
 - rotation re-reads the fixed secret metadata and exact two-key enabled inventory immediately before deleting the old key; any drift preserves both keys and returns a receipt-bearing PARTIAL result;
 - a failed response from the environment-secret DELETE is always treated as an ambiguous mutation outcome, never a clean block. The tool returns `PARTIAL / SECRET_DELETE_OUTCOME_UNKNOWN`, and a fresh status determines whether revocation should retry the configured delete or complete the one-key/no-secret cleanup path.
+
+
+### Cleanup evidence boundary
+
+A successful GitHub secret PUT response by itself is not enough to authorize old-key deletion. The server must also observe a concrete post-write `updated_at` and bind it into the signed cleanup receipt. It never upgrades a receipt from a later unrelated timestamp. Both normal rotation and receipt cleanup re-read the secret timestamp plus exact enabled key inventory immediately before deleting an old key.

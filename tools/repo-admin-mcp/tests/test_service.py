@@ -46,8 +46,11 @@ class FakeClient:
         self.fail_key_list_after_old_delete = False
         self.fail_key_delete_ids: set[int] = set()
         self.fail_secret_delete = False
+        self.apply_secret_delete_before_failure = False
         self.advance_secret_metadata = True
         self.disable_replacement_after_put = False
+        self.drift_secret_before_old_delete = False
+        self._post_put_secret_reads = 0
 
     def list_deploy_keys(self) -> list[DeployKey]:
         self._list_calls += 1
@@ -125,6 +128,18 @@ class FakeClient:
                 self.secret.created_at,
                 "2026-10-13T10:00:30Z",
             )
+        if "put_secret" in self.events:
+            self._post_put_secret_reads += 1
+            if (
+                self.drift_secret_before_old_delete and
+                self._post_put_secret_reads == 2 and
+                self.secret is not None
+            ):
+                self.secret = SecretMetadata(
+                    "MYANG_DISTRIBUTION_SSH_KEY",
+                    self.secret.created_at,
+                    "2026-10-13T10:01:30Z",
+                )
         if self.fail_secret_get_after_put and "put_secret" in self.events:
             raise GitHubAdminError("SYNTHETIC_SECRET_READ_FAILURE", 503)
         return self.secret
@@ -145,6 +160,9 @@ class FakeClient:
 
     def delete_environment_secret(self) -> None:
         self.events.append("delete_secret")
+        if self.apply_secret_delete_before_failure:
+            self.secret = None
+            raise GitHubAdminError("SYNTHETIC_SECRET_DELETE_RESPONSE_LOST", 503)
         if self.fail_secret_delete:
             raise GitHubAdminError("SYNTHETIC_SECRET_DELETE_FAILURE", 500)
         self.secret = None
@@ -388,6 +406,26 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(second["status"], "PASS")
         self.assertEqual(second["effect"], "ROTATION_CLEANUP_COMPLETED")
         self.assertEqual([key.id for key in client.keys], [8])
+
+    def test_rotate_revalidates_secret_before_old_key_delete(self):
+        client = FakeClient()
+        configured(client)
+        client.drift_secret_before_old_delete = True
+        material, factory = material_holder()
+        result = rotate(
+            client,
+            7,
+            OLD_UPDATED,
+            key_factory=factory,
+            sealer=sealer,
+            sleep=lambda _delay: None,
+        )
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "ROTATION_STATE_CHANGED_BEFORE_OLD_KEY_DELETE")
+        self.assertEqual(result["observedSecretUpdatedAt"], "2026-10-13T10:01:30Z")
+        self.assertEqual([key.id for key in client.keys], [7, 8])
+        self.assertNotIn("delete_key:7", client.events)
+        self.assertIn("cleanupReceipt", result)
 
     def test_rotate_final_readback_failure_is_partial_not_pass(self):
         client = FakeClient()
@@ -683,6 +721,23 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(second["effect"], "REVOCATION_CLEANUP_COMPLETED")
         self.assertEqual(client.keys, [])
 
+    def test_revoke_lost_secret_delete_response_is_partial_and_recovers(self):
+        client = FakeClient()
+        configured(client)
+        client.apply_secret_delete_before_failure = True
+        first = private_mirror_writer_revoke(client, 7, OLD_UPDATED)
+        self.assertEqual(first["status"], "PARTIAL")
+        self.assertEqual(first["reasonCode"], "SECRET_DELETE_OUTCOME_UNKNOWN")
+        self.assertIsNone(client.secret)
+        self.assertEqual([key.id for key in client.keys], [7])
+        self.assertNotIn("delete_key:7", client.events)
+
+        client.apply_secret_delete_before_failure = False
+        second = private_mirror_writer_revoke(client, 7, OLD_UPDATED)
+        self.assertEqual(second["status"], "PASS")
+        self.assertEqual(second["effect"], "REVOCATION_CLEANUP_COMPLETED")
+        self.assertEqual(client.keys, [])
+
     def test_revoke_deletes_secret_before_key(self):
         client = FakeClient()
         configured(client)
@@ -698,7 +753,9 @@ class ServiceTests(unittest.TestCase):
         configured(client)
         client.fail_secret_delete = True
         result = private_mirror_writer_revoke(client, 7, OLD_UPDATED)
-        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "SECRET_DELETE_OUTCOME_UNKNOWN")
+        self.assertIsNotNone(client.secret)
         self.assertEqual([key.id for key in client.keys], [7])
 
 

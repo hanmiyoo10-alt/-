@@ -413,6 +413,16 @@ class OAuthBrokerTests(unittest.TestCase):
                     ))
                 self.assertEqual(ctx.exception.code, "invalid_client")
 
+        registered_with_port = make_broker(cimd_payload={
+            **payload,
+            "redirect_uris": ["http://127.0.0.1:8000/callback"],
+        })
+        upstream = registered_with_port.begin_authorization(auth_params(
+            client_id=CODEX_CLIENT_ID,
+            redirect_uri=CODEX_DYNAMIC_REDIRECT,
+        ))
+        self.assertEqual(urllib.parse.urlsplit(upstream).path, "/login/oauth/authorize")
+
         non_native = make_broker(cimd_payload={**payload, "application_type": "web"})
         with self.assertRaises(OAuthError) as ctx:
             non_native.begin_authorization(auth_params(

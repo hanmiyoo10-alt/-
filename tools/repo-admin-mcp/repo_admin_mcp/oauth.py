@@ -110,7 +110,7 @@ def _redirect_uri_matches_cimd(
         actual = urllib.parse.urlsplit(redirect_uri)
         registered = urllib.parse.urlsplit(registered_uri)
         actual_port = actual.port
-        registered_port = registered.port
+        _ = registered.port
     except ValueError:
         return False
     return (
@@ -118,7 +118,6 @@ def _redirect_uri_matches_cimd(
         and registered.scheme == "http"
         and _is_loopback_hostname(registered.hostname)
         and actual.hostname == registered.hostname
-        and registered_port is None
         and actual_port is not None
         and 1 <= actual_port <= 65535
         and actual.username is None

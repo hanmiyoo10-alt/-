@@ -47,6 +47,7 @@ class FakeClient:
         self.fail_key_delete_ids: set[int] = set()
         self.fail_secret_delete = False
         self.advance_secret_metadata = True
+        self.disable_replacement_after_put = False
 
     def list_deploy_keys(self) -> list[DeployKey]:
         self._list_calls += 1
@@ -62,6 +63,12 @@ class FakeClient:
             raise GitHubAdminError("SYNTHETIC_FINAL_KEY_READ_FAILURE", 503)
         if self.fail_key_list_after_put and "put_secret" in self.events:
             raise GitHubAdminError("SYNTHETIC_REPLACEMENT_KEY_READ_FAILURE", 503)
+        if self.disable_replacement_after_put and "put_secret" in self.events:
+            self.keys = [
+                DeployKey(key.id, key.title, key.read_only, key.created_at, False)
+                if key.id == 8 else key
+                for key in self.keys
+            ]
         return list(self.keys)
 
     def create_write_deploy_key(self, title: str, public_key: str) -> DeployKey:

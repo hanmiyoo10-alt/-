@@ -34,6 +34,15 @@ class SecretListClient(GitHubAdminClient):
         return 200, self.payload, self.headers
 
 
+class DeployKeyListClient(GitHubAdminClient):
+    def __init__(self, payload) -> None:
+        super().__init__(token_provider=StaticTokenProvider("synthetic-token"))
+        self.payload = payload
+
+    def _request(self, method, url, payload=None, *, token_provider=None):
+        return 200, self.payload, {}
+
+
 class AuthAndClientTests(unittest.TestCase):
     def test_pat_is_read_only_fallback_not_mutation_auth(self):
         with patch.dict(os.environ, {"REPO_ADMIN_GITHUB_TOKEN": "synthetic-token"}, clear=True):
@@ -96,6 +105,34 @@ class AuthAndClientTests(unittest.TestCase):
         with self.assertRaises(GitHubAdminError) as ctx:
             client.get_environment_secret()
         self.assertEqual(ctx.exception.code, "ENVIRONMENT_SECRET_INVENTORY_TRUNCATED")
+
+    def test_deploy_key_enabled_state_is_preserved(self):
+        client = DeployKeyListClient([
+            {
+                "id": 7,
+                "title": "myang-private-promotion-writer-disabled",
+                "read_only": False,
+                "enabled": False,
+                "created_at": "2026-10-13T09:00:00Z",
+            }
+        ])
+        keys = client.list_deploy_keys()
+        self.assertEqual(len(keys), 1)
+        self.assertFalse(keys[0].read_only)
+        self.assertFalse(keys[0].enabled)
+
+    def test_deploy_key_missing_enabled_fails_closed(self):
+        client = DeployKeyListClient([
+            {
+                "id": 7,
+                "title": "myang-private-promotion-writer-unknown",
+                "read_only": False,
+                "created_at": "2026-10-13T09:00:00Z",
+            }
+        ])
+        with self.assertRaises(GitHubAdminError) as ctx:
+            client.list_deploy_keys()
+        self.assertEqual(ctx.exception.code, "DEPLOY_KEY_RESPONSE_INVALID")
 
     def test_secret_delete_404_is_not_treated_as_absence(self):
         client = Delete404Client()

@@ -21,7 +21,7 @@ Callers cannot supply another repository, environment, secret name, REST path, H
 ```text
 private_mirror_writer_status()
 private_mirror_writer_bootstrap()
-private_mirror_writer_rotate(expected_key_id, expected_secret_updated_at)
+private_mirror_writer_rotate(expected_key_id, expected_secret_updated_at, cleanup_receipt?)
 private_mirror_writer_revoke(expected_key_id, expected_secret_updated_at)
 ```
 
@@ -50,7 +50,7 @@ Before the secret PUT is attempted, a later failure may roll back the newly-crea
 
 Rotation requires the exact currently observed deploy-key ID and secret `updated_at` value. It creates the replacement key, updates the environment secret, proves secret metadata advanced and the replacement key is visible, and only then deletes the prior key.
 
-Once the secret PUT is attempted, **any request exception preserves the replacement key and returns `PARTIAL`**. A transport error cannot prove whether GitHub applied the write, and whole-second metadata timestamps cannot disambiguate a same-second update. If the secret update succeeds but old-key deletion fails, the result is `PARTIAL / OLD_KEY_REVOCATION_PENDING`. Retry the same rotation with the returned `newKeyId` as `pending_new_key_id` and the returned `secretUpdatedAt`; only that exact two-key partial state permits deleting the old key without another secret write. Final rotation returns `PASS` only after a fresh status read proves exactly one replacement key and the advanced secret metadata.
+Once the secret PUT is attempted, **any request exception preserves the replacement key and returns `PARTIAL`**. A transport error cannot prove whether GitHub applied the write, and whole-second metadata timestamps cannot disambiguate a same-second update. If the secret update succeeds but old-key deletion fails, the result is `PARTIAL / OLD_KEY_REVOCATION_PENDING`. Only after the server has observed an advanced secret `updatedAt` does it issue a signed opaque `cleanupReceipt`; a failed or ambiguous secret PUT never receives that capability. Retry rotation with the returned `cleanupReceipt` plus its returned `secretUpdatedAt`. The receipt is HMAC-authenticated server evidence binding the exact old/new key IDs and pre/post secret metadata, so caller-supplied IDs alone can never authorize old-key deletion. Final rotation returns `PASS` only after a fresh status read proves exactly one enabled replacement key and the advanced secret metadata.
 
 ### Revocation
 
@@ -96,13 +96,15 @@ Railway uses streamable HTTP:
 ```text
 REPO_ADMIN_MCP_TRANSPORT=streamable-http
 REPO_ADMIN_MCP_ACCESS_TOKEN=<connection-only bearer secret>
+REPO_ADMIN_MCP_RECEIPT_SIGNING_KEY=<32+ byte server-only HMAC key>
 PORT=<provided by Railway>
 ```
 
 - `/health` is the only anonymous endpoint and returns only `{"status":"ok"}`.
 - all other HTTP paths, including `/mcp`, require the fixed bearer token;
 - deploy one Railway replica for V1 so the in-process mutation lock represents the complete mutation surface;
-- the Railway bearer secret is supplied at plugin connection time and must not be embedded in the plugin package.
+- the Railway bearer secret is supplied at plugin connection time and must not be embedded in the plugin package;
+- the receipt-signing key stays server-side in Railway variables and is never returned through MCP; only opaque signed cleanup receipts are model-visible.
 
 The existing Railway Repo Cockpit project is a separate owner and must not host this service.
 
@@ -140,7 +142,8 @@ Tests use an injected fake GitHub client and synthetic key material only. No liv
 - each deploy-key title includes UTC microseconds so an ambiguous POST can be reconciled against one exact title;
 - if a deploy-key POST response is lost, the tool returns `PARTIAL`, attempts an exact-title readback, and removes only that uniquely observed pre-secret key when possible;
 - rotation re-reads the fixed secret metadata and matching-key inventory immediately before the secret PUT; any drift aborts before the PUT and removes only the new replacement key;
-- partial old-key and revoke-key deletion states are recoverable only through exact IDs already returned by the prior sanitized receipt.
+- partial old-key rotation cleanup is recoverable only with the signed `cleanupReceipt` issued after the server itself observed an advanced secret timestamp; exact IDs without that receipt are insufficient;
+- partial revoke-key deletion remains recoverable only through the exact one-key/no-secret state.
 
 
 ### Final policy/race guards
@@ -149,3 +152,8 @@ Tests use an injected fake GitHub client and synthetic key material only. No liv
 - revocation re-reads both secret metadata and the matching-key inventory immediately before deletion and requires the exact expected enabled singleton;
 - a pending rotation cleanup accepts both the exact two-key retry state and the idempotent one-replacement-key state when the old-key DELETE already succeeded but its response was lost;
 - GitHub deploy-key `enabled` is preserved from REST responses. A disabled matching key is never classified as configured, even when it has write access and the secret exists.
+
+### Metadata validity
+
+- a matching environment secret must carry a non-empty string `updated_at`; malformed/missing timestamps fail closed instead of being classified as configured;
+- replacement-key readback after secret update requires `enabled=true` before the old key can be revoked.

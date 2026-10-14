@@ -51,6 +51,10 @@ class FakeClient:
         self.disable_replacement_after_put = False
         self.drift_secret_before_old_delete = False
         self._post_put_secret_reads = 0
+        self.drift_secret_on_second_read = False
+        self.restore_secret_on_second_read = False
+        self._all_secret_reads = 0
+        self.restore_secret_after_delete = False
 
     def list_deploy_keys(self) -> list[DeployKey]:
         self._list_calls += 1
@@ -97,6 +101,30 @@ class FakeClient:
         return self.public_key
 
     def get_environment_secret(self) -> SecretMetadata | None:
+        self._all_secret_reads += 1
+        if self.drift_secret_on_second_read and self._all_secret_reads == 2 and self.secret is not None:
+            self.secret = SecretMetadata(
+                "MYANG_DISTRIBUTION_SSH_KEY",
+                self.secret.created_at,
+                "2026-10-13T10:02:00Z",
+            )
+        if self.restore_secret_on_second_read and self._all_secret_reads == 2 and self.secret is None:
+            self.secret = SecretMetadata(
+                "MYANG_DISTRIBUTION_SSH_KEY",
+                OLD_UPDATED,
+                OLD_UPDATED,
+            )
+        if (
+            self.restore_secret_after_delete and
+            "delete_secret" in self.events and
+            self.secret is None
+        ):
+            self.restore_secret_after_delete = False
+            self.secret = SecretMetadata(
+                "MYANG_DISTRIBUTION_SSH_KEY",
+                OLD_UPDATED,
+                OLD_UPDATED,
+            )
         if (
             self.concurrent_bootstrap_after_create and
             "create_key" in self.events and
@@ -342,43 +370,20 @@ class ServiceTests(unittest.TestCase):
         self.assertNotIn("delete_key:7", client.events)
         self.assertEqual(bytes(material.private_key), b"\x00" * len(SENTINEL))
 
-    def test_rotate_readback_failure_can_strengthen_ack_receipt_and_cleanup(self):
+    def test_rotate_readback_failure_does_not_issue_cleanup_receipt(self):
         client = FakeClient()
         configured(client)
         client.fail_secret_get_after_put = True
         material, factory = material_holder()
-        first = rotate(
+        result = rotate(
             client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
         )
-        self.assertEqual(first["status"], "PARTIAL")
-        self.assertEqual(first["reasonCode"], "SECRET_METADATA_READBACK_UNKNOWN")
-        self.assertIn("cleanupReceipt", first)
-        self.assertEqual(first["secretUpdatedAt"], OLD_UPDATED)
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "SECRET_METADATA_READBACK_UNKNOWN")
+        self.assertNotIn("cleanupReceipt", result)
+        self.assertEqual(result["secretUpdatedAt"], OLD_UPDATED)
         self.assertEqual([key.id for key in client.keys], [7, 8])
         self.assertNotIn("delete_key:7", client.events)
-
-        client.fail_secret_get_after_put = False
-        second = rotate(
-            client,
-            7,
-            NEW_UPDATED,
-            cleanup_receipt=first["cleanupReceipt"],
-        )
-        self.assertEqual(second["status"], "PARTIAL")
-        self.assertEqual(second["reasonCode"], "ROTATION_CLEANUP_RECEIPT_STRENGTHENED")
-        self.assertIn("cleanupReceipt", second)
-        self.assertEqual(second["secretUpdatedAt"], NEW_UPDATED)
-        self.assertNotIn("delete_key:7", client.events)
-
-        third = rotate(
-            client,
-            7,
-            NEW_UPDATED,
-            cleanup_receipt=second["cleanupReceipt"],
-        )
-        self.assertEqual(third["status"], "PASS")
-        self.assertEqual(third["effect"], "ROTATION_CLEANUP_COMPLETED")
-        self.assertEqual([key.id for key in client.keys], [8])
 
     def test_rotate_key_read_failure_after_advanced_secret_keeps_cleanup_receipt(self):
         client = FakeClient()
@@ -440,30 +445,20 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual([key.id for key in client.keys], [8])
         self.assertEqual(result["finalReasonCode"], "SYNTHETIC_FINAL_KEY_READ_FAILURE")
 
-    def test_rotate_same_second_success_is_recoverable_with_ack_receipt(self):
+    def test_rotate_same_second_success_stays_fail_closed_without_receipt(self):
         client = FakeClient()
         configured(client)
         client.advance_secret_metadata = False
         material, factory = material_holder()
-        first = rotate(
+        result = rotate(
             client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
         )
-        self.assertEqual(first["status"], "PARTIAL")
-        self.assertEqual(first["reasonCode"], "SECRET_METADATA_NOT_ADVANCED")
-        self.assertIn("cleanupReceipt", first)
-        self.assertEqual(first["secretUpdatedAt"], OLD_UPDATED)
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "SECRET_METADATA_NOT_ADVANCED")
+        self.assertNotIn("cleanupReceipt", result)
+        self.assertEqual(result["secretUpdatedAt"], OLD_UPDATED)
         self.assertEqual([key.id for key in client.keys], [7, 8])
         self.assertNotIn("delete_key:7", client.events)
-
-        second = rotate(
-            client,
-            7,
-            OLD_UPDATED,
-            cleanup_receipt=first["cleanupReceipt"],
-        )
-        self.assertEqual(second["status"], "PASS")
-        self.assertEqual(second["effect"], "ROTATION_CLEANUP_COMPLETED")
-        self.assertEqual([key.id for key in client.keys], [8])
 
     def test_rotate_old_key_delete_failure_is_partial(self):
         client = FakeClient()
@@ -559,6 +554,27 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual([key.id for key in client.keys], [99])
         self.assertIsNotNone(client.secret)
         self.assertNotIn("put_secret", client.events)
+
+    def test_rotate_cleanup_revalidates_state_before_old_key_delete(self):
+        client = FakeClient()
+        client.keys = [
+            DeployKey(7, "myang-private-promotion-writer-old", False, "2026-10-13T09:00:00Z"),
+            DeployKey(8, "myang-private-promotion-writer-new", False, "2026-10-13T09:59:00Z"),
+        ]
+        client.secret = SecretMetadata("MYANG_DISTRIBUTION_SSH_KEY", OLD_UPDATED, NEW_UPDATED)
+        client.drift_secret_on_second_read = True
+        receipt = TEST_RECEIPT_SIGNER.issue(
+            old_key_id=7,
+            new_key_id=8,
+            previous_secret_updated_at=OLD_UPDATED,
+            post_secret_updated_at=NEW_UPDATED,
+        )
+        result = rotate(client, 7, NEW_UPDATED, cleanup_receipt=receipt)
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "ROTATION_CLEANUP_STATE_CHANGED_BEFORE_OLD_KEY_DELETE")
+        self.assertEqual(result["observedSecretUpdatedAt"], "2026-10-13T10:02:00Z")
+        self.assertEqual([key.id for key in client.keys], [7, 8])
+        self.assertNotIn("delete_key:7", client.events)
 
     def test_rotate_cleanup_accepts_lost_successful_old_key_delete_response(self):
         client = FakeClient()
@@ -720,6 +736,31 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(second["status"], "PASS")
         self.assertEqual(second["effect"], "REVOCATION_CLEANUP_COMPLETED")
         self.assertEqual(client.keys, [])
+
+    def test_revoke_cleanup_revalidates_secret_absence_before_key_delete(self):
+        client = FakeClient()
+        client.keys = [
+            DeployKey(7, "myang-private-promotion-writer-old", False, "2026-10-13T09:00:00Z")
+        ]
+        client.secret = None
+        client.restore_secret_on_second_read = True
+        result = private_mirror_writer_revoke(client, 7, OLD_UPDATED)
+        self.assertEqual(result["status"], "CONFLICT")
+        self.assertEqual(result["reasonCode"], "REVOCATION_CLEANUP_STATE_CHANGED")
+        self.assertIsNotNone(client.secret)
+        self.assertEqual([key.id for key in client.keys], [7])
+        self.assertNotIn("delete_key:7", client.events)
+
+    def test_revoke_rechecks_absence_after_successful_secret_delete(self):
+        client = FakeClient()
+        configured(client)
+        client.restore_secret_after_delete = True
+        result = private_mirror_writer_revoke(client, 7, OLD_UPDATED)
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "REVOCATION_STATE_CHANGED_AFTER_SECRET_DELETE")
+        self.assertIsNotNone(client.secret)
+        self.assertEqual([key.id for key in client.keys], [7])
+        self.assertNotIn("delete_key:7", client.events)
 
     def test_revoke_lost_secret_delete_response_is_partial_and_recovers(self):
         client = FakeClient()

@@ -167,7 +167,11 @@ async def _respond_redirect(send: Callable[..., Any], location: str) -> None:
 
 
 def _query_params(scope: dict[str, Any]) -> dict[str, str]:
-    parsed = urllib.parse.parse_qs(scope.get("query_string", b"").decode("utf-8"), keep_blank_values=True)
+    try:
+        query = scope.get("query_string", b"").decode("utf-8")
+    except UnicodeDecodeError:
+        raise OAuthError("invalid_request", "OAuth query string is not valid UTF-8.") from None
+    parsed = urllib.parse.parse_qs(query, keep_blank_values=True)
     if any(len(values) != 1 for values in parsed.values()):
         raise OAuthError("invalid_request", "Duplicate OAuth parameters are not accepted.")
     return {key: values[0] for key, values in parsed.items()}

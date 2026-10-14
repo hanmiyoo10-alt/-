@@ -105,7 +105,7 @@ async def run_asgi(
     path: str,
     method: str = "GET",
     body: bytes = b"",
-    query: str = "",
+    query: str | bytes = "",
     headers: list[tuple[bytes, bytes]] | None = None,
 ):
     sent = []
@@ -127,7 +127,7 @@ async def run_asgi(
             "method": method,
             "path": path,
             "raw_path": path.encode(),
-            "query_string": query.encode(),
+            "query_string": query if isinstance(query, bytes) else query.encode(),
             "headers": headers or [],
             "http_version": "1.1",
             "scheme": "https",
@@ -655,6 +655,14 @@ class OAuthASGITests(unittest.TestCase):
         self.assertEqual(response_status(messages), 200)
         self.assertEqual(inner.called, 1)
         self.assertEqual(inner.last_body, body)
+
+    def test_oauth_get_endpoints_reject_non_utf8_query_bytes(self):
+        app = OAuthMCPApp(InnerApp(), make_broker())
+        for path in ("/oauth/authorize", "/oauth/github/callback"):
+            with self.subTest(path=path):
+                messages = asyncio.run(run_asgi(app, path=path, query=b"state=ok&bad=\xff"))
+                self.assertEqual(response_status(messages), 400)
+                self.assertEqual(response_json(messages)["error"], "invalid_request")
 
     def test_http_disconnect_aborts_body_read_without_spinning(self):
         app = OAuthMCPApp(InnerApp(), make_broker())

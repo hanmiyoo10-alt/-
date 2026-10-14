@@ -244,8 +244,15 @@ class OAuthBrokerTests(unittest.TestCase):
             )
         self.assertEqual(ctx.exception.code, "INVALID_PUBLIC_BASE_URL")
 
-    def test_public_base_url_rejects_malformed_host_and_port(self):
-        for base_url in ("https://:", "https://host:abc", "https://host:99999"):
+    def test_public_base_url_rejects_malformed_origin_spellings(self):
+        for base_url in (
+            "https://:",
+            "https://host:abc",
+            "https://host:99999",
+            "https://host?",
+            "https://host#",
+            "https://host/?",
+        ):
             with self.subTest(base_url=base_url):
                 with self.assertRaises(OAuthError) as ctx:
                     OAuthBroker(

@@ -103,6 +103,8 @@ class OAuthBroker:
             or parsed.username is not None
             or parsed.password is not None
             or parsed.path not in {"", "/"}
+            or "?" in base_url
+            or "#" in base_url
             or parsed.query
             or parsed.fragment
         ):

@@ -388,6 +388,58 @@ class ServiceTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "PARTIAL")
         self.assertEqual(result["reasonCode"], "OLD_KEY_REVOCATION_PENDING")
+        self.assertIn("cleanupReceipt", result)
+        self.assertEqual([key.id for key in client.keys], [7, 8])
+
+    def test_failed_secret_put_does_not_issue_cleanup_receipt(self):
+        client = FakeClient()
+        configured(client)
+        client.fail_secret_put = True
+        material, factory = material_holder()
+        first = rotate(
+            client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
+        )
+        self.assertEqual(first["status"], "PARTIAL")
+        self.assertEqual(first["reasonCode"], "SECRET_WRITE_OUTCOME_UNKNOWN")
+        self.assertNotIn("cleanupReceipt", first)
+
+        retry = rotate(client, 7, OLD_UPDATED)
+        self.assertEqual(retry["status"], "CONFLICT")
+        self.assertEqual(retry["reasonCode"], "ROTATION_REQUIRES_ONE_CONFIGURED_KEY")
+        self.assertEqual([key.id for key in client.keys], [7, 8])
+
+    def test_tampered_cleanup_receipt_is_blocked(self):
+        client = FakeClient()
+        configured(client)
+        client.fail_key_delete_ids.add(7)
+        material, factory = material_holder()
+        first = rotate(
+            client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
+        )
+        self.assertEqual(first["reasonCode"], "OLD_KEY_REVOCATION_PENDING")
+        receipt = first["cleanupReceipt"]
+        tampered = receipt[:-1] + ("A" if receipt[-1] != "A" else "B")
+        second = rotate(
+            client,
+            7,
+            first["secretUpdatedAt"],
+            cleanup_receipt=tampered,
+        )
+        self.assertEqual(second["status"], "BLOCKED")
+        self.assertEqual(second["reasonCode"], "INVALID_CLEANUP_RECEIPT_SIGNATURE")
+        self.assertEqual([key.id for key in client.keys], [7, 8])
+
+    def test_disabled_replacement_never_revokes_old_key(self):
+        client = FakeClient()
+        configured(client)
+        client.disable_replacement_after_put = True
+        material, factory = material_holder()
+        result = rotate(
+            client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
+        )
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["reasonCode"], "REPLACEMENT_KEY_NOT_ENABLED")
+        self.assertNotIn("delete_key:7", client.events)
         self.assertEqual([key.id for key in client.keys], [7, 8])
 
     def test_disabled_write_key_is_not_configured(self):
@@ -560,7 +612,7 @@ class ServiceTests(unittest.TestCase):
             client,
             7,
             first["secretUpdatedAt"],
-            pending_new_key_id=first["newKeyId"],
+            cleanup_receipt=first["cleanupReceipt"],
         )
         self.assertEqual(second["status"], "PASS")
         self.assertEqual(second["effect"], "ROTATION_CLEANUP_COMPLETED")

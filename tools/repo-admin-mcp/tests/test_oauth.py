@@ -253,6 +253,9 @@ class OAuthBrokerTests(unittest.TestCase):
             "https://host?",
             "https://host#",
             "https://host/?",
+            "https://host\n",
+            "https://ho\tst",
+            "https://host\r",
         ):
             with self.subTest(base_url=base_url):
                 with self.assertRaises(OAuthError) as ctx:
@@ -940,6 +943,10 @@ class OAuthToolAndPluginContractTests(unittest.TestCase):
     def test_distribution_and_runtime_versions_match(self):
         self.assertEqual(importlib.metadata.version("repo-admin-mcp"), "0.2.0")
         self.assertEqual(__version__, "0.2.0")
+        plugin_root = Path(__file__).resolve().parents[1] / "plugin-src"
+        for relative in ("plugin.json", ".codex-plugin/plugin.json"):
+            payload = json.loads((plugin_root / relative).read_text(encoding="utf-8"))
+            self.assertEqual(payload["version"], "0.2.0")
 
     def test_plugin_mcp_source_declares_cimd_oauth_without_credentials(self):
         path = Path(__file__).resolve().parents[1] / "plugin-src" / "mcp.json"

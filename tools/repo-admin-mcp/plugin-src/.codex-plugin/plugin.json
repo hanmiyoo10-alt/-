@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "nyang-repo-admin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Operate the narrowly fixed private-mirror writer credential lifecycle through the verified Nyang Repository Admin MCP.",
   "author": {
     "name": "hanmiyoo10-alt"

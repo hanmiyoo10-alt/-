@@ -164,3 +164,9 @@ Tests use an injected fake GitHub client and synthetic key material only. No liv
 - if GitHub reports an advanced secret timestamp, a strengthened receipt binds that exact post-write timestamp before replacement-key inventory is read;
 - same-second successful PUTs remain recoverable through the acknowledged-write receipt while failed/ambiguous PUTs receive no receipt at all;
 - the server-side signing key is never returned; the opaque receipt is the only retry capability.
+
+
+### Final delete-window guards
+
+- rotation re-reads the fixed secret metadata and exact two-key enabled inventory immediately before deleting the old key; any drift preserves both keys and returns a receipt-bearing PARTIAL result;
+- a failed response from the environment-secret DELETE is always treated as an ambiguous mutation outcome, never a clean block. The tool returns `PARTIAL / SECRET_DELETE_OUTCOME_UNKNOWN`, and a fresh status determines whether revocation should retry the configured delete or complete the one-key/no-secret cleanup path.

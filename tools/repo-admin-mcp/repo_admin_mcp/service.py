@@ -32,6 +32,7 @@ def _safe_key(key: DeployKey) -> dict:
         "id": key.id,
         "title": key.title,
         "readOnly": key.read_only,
+        "enabled": key.enabled,
         "createdAt": key.created_at,
     }
 
@@ -73,7 +74,7 @@ def private_mirror_writer_status(client: AdminClient) -> dict:
         "status": "PASS",
         "configurationState": (
             "ABSENT" if not keys and secret is None else
-            "CONFIGURED_METADATA_ONLY" if len(keys) == 1 and not keys[0].read_only and secret is not None else
+            "CONFIGURED_METADATA_ONLY" if len(keys) == 1 and not keys[0].read_only and keys[0].enabled and secret is not None else
             "CONFLICT"
         ),
         "deployKeyCount": len(keys),
@@ -223,6 +224,39 @@ def private_mirror_writer_bootstrap(
                 return _ambiguous_create_result(client, kind=kind, title=title, error=exc)
 
             encrypted = sealer(env_key.key, material.private_key)
+
+            try:
+                prewrite_secret = client.get_environment_secret()
+                prewrite_keys = _matching_keys(client)
+            except Exception as exc:
+                return _delete_presecret_replacement(
+                    client,
+                    kind=kind,
+                    replacement_id=created.id,
+                    reason_code="BOOTSTRAP_PREWRITE_METADATA_READ_FAILED",
+                    status="BLOCKED",
+                    fields={"readbackReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR")},
+                )
+
+            if (
+                prewrite_secret is not None or
+                len(prewrite_keys) != 1 or
+                prewrite_keys[0].id != created.id or
+                prewrite_keys[0].read_only or
+                not prewrite_keys[0].enabled
+            ):
+                return _delete_presecret_replacement(
+                    client,
+                    kind=kind,
+                    replacement_id=created.id,
+                    reason_code="BOOTSTRAP_STATE_CHANGED_BEFORE_SECRET_WRITE",
+                    status="CONFLICT",
+                    fields={
+                        "observedSecretPresent": prewrite_secret is not None,
+                        "observedKeyIds": sorted(key.id for key in prewrite_keys),
+                    },
+                )
+
             secret_write_attempted = True
             try:
                 client.put_environment_secret(encrypted, env_key.key_id)
@@ -316,12 +350,33 @@ def private_mirror_writer_rotate(
 
         if pending_new_key_id is not None:
             ids = {row.get("id") for row in status_keys}
+
+            if (
+                status.get("configurationState") == "CONFIGURED_METADATA_ONLY" and
+                status.get("deployKeyCount") == 1 and
+                len(status_keys) == 1 and
+                status_keys[0].get("id") == pending_new_key_id and
+                not status_keys[0].get("readOnly") and
+                status_keys[0].get("enabled") and
+                status_secret.get("present") and
+                status_secret.get("updatedAt") == expected_secret_updated_at
+            ):
+                return {
+                    "schemaVersion": 1,
+                    "kind": kind,
+                    "status": "PASS",
+                    "effect": "ROTATION_CLEANUP_ALREADY_COMPLETED",
+                    "oldKeyId": expected_key_id,
+                    "newKeyId": pending_new_key_id,
+                    "secretUpdatedAt": expected_secret_updated_at,
+                }
+
             if (
                 pending_new_key_id == expected_key_id or
                 status.get("configurationState") != "CONFLICT" or
                 status.get("deployKeyCount") != 2 or
                 ids != {expected_key_id, pending_new_key_id} or
-                any(row.get("readOnly") for row in status_keys) or
+                any(row.get("readOnly") or not row.get("enabled") for row in status_keys) or
                 not status_secret.get("present") or
                 status_secret.get("updatedAt") != expected_secret_updated_at
             ):
@@ -439,7 +494,7 @@ def private_mirror_writer_rotate(
                 prewrite_secret is None or
                 prewrite_secret.updated_at != expected_secret_updated_at or
                 prewrite_ids != {expected_key_id, replacement.id} or
-                any(key.read_only for key in prewrite_keys)
+                any(key.read_only or not key.enabled for key in prewrite_keys)
             ):
                 return _delete_presecret_replacement(
                     client,
@@ -663,15 +718,25 @@ def private_mirror_writer_revoke(client: AdminClient, expected_key_id: int, expe
 
         try:
             predelete_secret = client.get_environment_secret()
+            predelete_keys = _matching_keys(client)
         except Exception as exc:
             return _error_result(kind, exc, "BLOCKED")
-        if predelete_secret is None or predelete_secret.updated_at != expected_secret_updated_at:
+        predelete_ids = {key.id for key in predelete_keys}
+        if (
+            predelete_secret is None or
+            predelete_secret.updated_at != expected_secret_updated_at or
+            len(predelete_keys) != 1 or
+            predelete_ids != {expected_key_id} or
+            predelete_keys[0].read_only or
+            not predelete_keys[0].enabled
+        ):
             return {
                 "schemaVersion": 1,
                 "kind": kind,
                 "status": "CONFLICT",
                 "reasonCode": "EXPECTED_METADATA_CHANGED_BEFORE_SECRET_DELETE",
                 "observedSecretUpdatedAt": None if predelete_secret is None else predelete_secret.updated_at,
+                "observedKeyIds": sorted(predelete_ids),
             }
 
         try:

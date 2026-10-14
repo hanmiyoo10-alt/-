@@ -147,13 +147,32 @@ case "$1" in
     [ ! -f "$root/fail-restart-$count" ] || exit 1
     if [ ! -f "$root/no-ready-$count" ]; then
       run="$root/prefix/var/service/desktop-commander-remote/run"
-      if grep -Fq -- '--require /root/.local/share/mcl-s-rdc-maintenance/device-name-shim.cjs' "$run" 2>/dev/null; then
+      if [ -f "$root/ready-name-$count" ]; then
+        ready=$(cat "$root/ready-name-$count")
+      elif grep -Fq -- '--require /root/.local/share/mcl-s-rdc-maintenance/device-name-shim.cjs' "$run" 2>/dev/null; then
         ready='S'
       else
         ready="restart-$count"
       fi
-      printf '%s\n' "2026-10-03T00:00:0"$count"Z ✅ Device ready: $ready" >> \
+      if [ -f "$root/auth-flow-$count" ]; then
+        printf '%s\n' "2026-10-03T00:00:0"$count"Z 🔐 Starting device authorization flow" >> \
+          "$root/home/.local/state/desktop-commander-remote/current"
+      fi
+      if [ -f "$root/name-before-ready-$count" ]; then
+        printf '%s\n' "2026-10-03T00:00:0"$count"Z Device Name: $ready" >> \
+          "$root/home/.local/state/desktop-commander-remote/current"
+      fi
+      printf '%s\n' "2026-10-03T00:00:0"$count"Z ✅ Device ready:" >> \
         "$root/home/.local/state/desktop-commander-remote/current"
+      if [ ! -f "$root/no-name-$count" ]; then
+        printf '%s\n' "2026-10-03T00:00:0"$count"Z Device Name: $ready" >> \
+          "$root/home/.local/state/desktop-commander-remote/current"
+      fi
+      if [ -f "$root/conflict-name-$count" ]; then
+        conflict=$(cat "$root/conflict-name-$count")
+        printf '%s\n' "2026-10-03T00:00:0"$count"Z Device Name: $conflict" >> \
+          "$root/home/.local/state/desktop-commander-remote/current"
+      fi
     fi
     ;;
   *) exit 2 ;;
@@ -340,6 +359,81 @@ capture "$root" --label-activate
 [ "$RC" -eq 0 ] || fail label-activate-idempotent-rc
 [ "$(wc -l < "$root/restarts")" -eq 1 ] || fail label-activate-idempotent-restart
 pass label-activate-success
+
+root=$(make_post_upgrade_root labellocalhost)
+write_mocks "$root"
+capture "$root" --label-stage
+printf '%s\n' localhost > "$root/ready-name-1"
+capture "$root" --label-activate
+[ "$RC" -eq 1 ] || fail label-localhost-rc
+assert_line 'result=rolled_back'
+[ "$(wc -l < "$root/restarts")" -eq 2 ] || fail label-localhost-restarts
+pass label-localhost-rejected
+
+root=$(make_post_upgrade_root labelmissingname)
+write_mocks "$root"
+capture "$root" --label-stage
+: > "$root/no-name-1"
+capture "$root" --label-activate
+[ "$RC" -eq 1 ] || fail label-missing-name-rc
+assert_line 'result=rolled_back'
+pass label-missing-name-rejected
+
+root=$(make_post_upgrade_root labelemptyname)
+write_mocks "$root"
+capture "$root" --label-stage
+: > "$root/ready-name-1"
+capture "$root" --label-activate
+[ "$RC" -eq 1 ] || fail label-empty-name-rc
+assert_line 'result=rolled_back'
+pass label-empty-name-rejected
+
+root=$(make_post_upgrade_root labelarbitraryname)
+write_mocks "$root"
+capture "$root" --label-stage
+printf '%s\n' M > "$root/ready-name-1"
+capture "$root" --label-activate
+[ "$RC" -eq 1 ] || fail label-arbitrary-name-rc
+assert_line 'result=rolled_back'
+pass label-arbitrary-name-rejected
+
+root=$(make_post_upgrade_root labelauthflow)
+write_mocks "$root"
+capture "$root" --label-stage
+: > "$root/auth-flow-1"
+capture "$root" --label-activate
+[ "$RC" -eq 1 ] || fail label-auth-flow-rc
+assert_line 'result=rolled_back'
+pass label-auth-flow-rejected
+
+root=$(make_post_upgrade_root labelreordered)
+write_mocks "$root"
+capture "$root" --label-stage
+: > "$root/name-before-ready-1"
+capture "$root" --label-activate
+[ "$RC" -eq 1 ] || fail label-reordered-rc
+assert_line 'result=rolled_back'
+pass label-reordered-rejected
+
+root=$(make_post_upgrade_root labelconflicting)
+write_mocks "$root"
+capture "$root" --label-stage
+printf '%s\n' localhost > "$root/conflict-name-1"
+capture "$root" --label-activate
+[ "$RC" -eq 1 ] || fail label-conflicting-name-rc
+assert_line 'result=rolled_back'
+pass label-conflicting-name-rejected
+
+root=$(make_post_upgrade_root labelhistorical)
+write_mocks "$root"
+capture "$root" --label-stage
+printf '%s\n' '2026-10-03T00:00:00Z ✅ Device ready:' '2026-10-03T00:00:00Z Device Name: S' >> \
+  "$root/home/.local/state/desktop-commander-remote/current"
+: > "$root/no-ready-1"
+capture "$root" --label-activate
+[ "$RC" -eq 1 ] || fail label-historical-rc
+assert_line 'result=rolled_back'
+pass label-historical-evidence-rejected
 
 root=$(make_post_upgrade_root labeldrift)
 write_mocks "$root"

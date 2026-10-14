@@ -338,19 +338,32 @@ class ServiceTests(unittest.TestCase):
         self.assertNotIn("delete_key:8", client.events)
         self.assertNotIn("delete_key:7", client.events)
 
-    def test_rotate_replacement_key_read_failure_preserves_replacement(self):
+    def test_rotate_key_read_failure_after_advanced_secret_keeps_cleanup_receipt(self):
         client = FakeClient()
         configured(client)
         client.fail_key_list_after_put = True
         material, factory = material_holder()
-        result = rotate(
+        first = rotate(
             client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
         )
-        self.assertEqual(result["status"], "PARTIAL")
-        self.assertEqual(result["reasonCode"], "REPLACEMENT_KEY_READBACK_UNKNOWN")
+        self.assertEqual(first["status"], "PARTIAL")
+        self.assertEqual(first["reasonCode"], "REPLACEMENT_KEY_READBACK_UNKNOWN")
+        self.assertIn("cleanupReceipt", first)
+        self.assertEqual(first["secretUpdatedAt"], NEW_UPDATED)
         self.assertEqual([key.id for key in client.keys], [7, 8])
         self.assertNotIn("delete_key:8", client.events)
         self.assertNotIn("delete_key:7", client.events)
+
+        client.fail_key_list_after_put = False
+        second = rotate(
+            client,
+            7,
+            NEW_UPDATED,
+            cleanup_receipt=first["cleanupReceipt"],
+        )
+        self.assertEqual(second["status"], "PASS")
+        self.assertEqual(second["effect"], "ROTATION_CLEANUP_COMPLETED")
+        self.assertEqual([key.id for key in client.keys], [8])
 
     def test_rotate_final_readback_failure_is_partial_not_pass(self):
         client = FakeClient()
@@ -365,18 +378,30 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual([key.id for key in client.keys], [8])
         self.assertEqual(result["finalReasonCode"], "SYNTHETIC_FINAL_KEY_READ_FAILURE")
 
-    def test_rotate_preserves_both_keys_when_secret_metadata_does_not_advance(self):
+    def test_rotate_same_second_success_is_recoverable_with_ack_receipt(self):
         client = FakeClient()
         configured(client)
         client.advance_secret_metadata = False
         material, factory = material_holder()
-        result = rotate(
+        first = rotate(
             client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
         )
-        self.assertEqual(result["status"], "PARTIAL")
-        self.assertEqual(result["reasonCode"], "SECRET_METADATA_NOT_ADVANCED")
+        self.assertEqual(first["status"], "PARTIAL")
+        self.assertEqual(first["reasonCode"], "SECRET_METADATA_NOT_ADVANCED")
+        self.assertIn("cleanupReceipt", first)
+        self.assertEqual(first["secretUpdatedAt"], OLD_UPDATED)
         self.assertEqual([key.id for key in client.keys], [7, 8])
         self.assertNotIn("delete_key:7", client.events)
+
+        second = rotate(
+            client,
+            7,
+            OLD_UPDATED,
+            cleanup_receipt=first["cleanupReceipt"],
+        )
+        self.assertEqual(second["status"], "PASS")
+        self.assertEqual(second["effect"], "ROTATION_CLEANUP_COMPLETED")
+        self.assertEqual([key.id for key in client.keys], [8])
 
     def test_rotate_old_key_delete_failure_is_partial(self):
         client = FakeClient()

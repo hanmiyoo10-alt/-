@@ -1,0 +1,9 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -eu
+# mcl-m-termux-job-lifeline-run:v1
+
+[ "$#" -eq 0 ] || exit 2
+
+exec /data/data/com.termux/files/usr/bin/python \
+  /data/data/com.termux/files/home/.local/lib/mcl-m-termux-job-lifeline/mcl-m-termux-job-lifeline.py \
+  --job-run

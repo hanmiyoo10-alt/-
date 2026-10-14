@@ -134,6 +134,19 @@ class AuthAndClientTests(unittest.TestCase):
             client.list_deploy_keys()
         self.assertEqual(ctx.exception.code, "DEPLOY_KEY_RESPONSE_INVALID")
 
+    def test_matching_secret_requires_updated_at(self):
+        client = SecretListClient({
+            "total_count": 1,
+            "secrets": [{
+                "name": "MYANG_DISTRIBUTION_SSH_KEY",
+                "created_at": "2026-10-13T09:00:00Z",
+                "updated_at": None,
+            }],
+        })
+        with self.assertRaises(GitHubAdminError) as ctx:
+            client.get_environment_secret()
+        self.assertEqual(ctx.exception.code, "ENVIRONMENT_SECRET_METADATA_INVALID")
+
     def test_secret_delete_404_is_not_treated_as_absence(self):
         client = Delete404Client()
         with self.assertRaises(GitHubAdminError) as ctx:

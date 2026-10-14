@@ -1,0 +1,473 @@
+from __future__ import annotations
+
+import asyncio
+import json
+import time
+import unittest
+import urllib.parse
+from pathlib import Path
+from unittest.mock import patch
+
+import jwt
+
+from repo_admin_mcp.config import EXPECTED_GITHUB_USER_ID, OAUTH_SCOPE
+from repo_admin_mcp.oauth import OAuthBroker, OAuthError, _pkce_s256
+from repo_admin_mcp.server import OAuthMCPApp, build_http_app, mcp
+
+
+BASE = "https://repo-admin-mcp-production.up.railway.app"
+RESOURCE = BASE
+CLIENT_ID = "https://chatgpt.com/oauth/client.json"
+REDIRECT = "https://chatgpt.com/connector_platform_oauth_redirect"
+VERIFIER = "A" * 64
+CHALLENGE = _pkce_s256(VERIFIER)
+
+
+def cimd(redirect: str = REDIRECT) -> dict:
+    return {
+        "redirect_uris": [redirect],
+        "token_endpoint_auth_methods_supported": ["none", "private_key_jwt"],
+    }
+
+
+def make_broker(*, now=None, user_id=EXPECTED_GITHUB_USER_ID, cimd_payload=None) -> OAuthBroker:
+    clock = now or time.time
+    return OAuthBroker(
+        base_url=BASE,
+        github_client_id="github-client-id",
+        github_client_secret="github-client-secret",
+        signing_key="S" * 64,
+        now=clock,
+        cimd_fetcher=lambda _url: cimd_payload or cimd(),
+        github_identity_fetcher=lambda _code, _redirect: (user_id, "hanmiyoo10-alt"),
+    )
+
+
+def auth_params(**overrides) -> dict[str, str]:
+    value = {
+        "response_type": "code",
+        "client_id": CLIENT_ID,
+        "redirect_uri": REDIRECT,
+        "state": "chatgpt-state",
+        "code_challenge": CHALLENGE,
+        "code_challenge_method": "S256",
+        "resource": RESOURCE,
+        "scope": OAUTH_SCOPE,
+    }
+    value.update(overrides)
+    return value
+
+
+def callback_state(location: str) -> str:
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(location).query)
+    return query["state"][0]
+
+
+def callback_code(location: str) -> str:
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(location).query)
+    return query["code"][0]
+
+
+class InnerApp:
+    def __init__(self) -> None:
+        self.called = 0
+        self.last_body = b""
+
+    async def __call__(self, scope, receive, send):
+        self.called += 1
+        body = b""
+        if scope.get("type") == "http":
+            while True:
+                message = await receive()
+                if message.get("type") == "http.request":
+                    body += message.get("body", b"")
+                    if not message.get("more_body", False):
+                        break
+        self.last_body = body
+        payload = b'{"jsonrpc":"2.0","id":1,"result":{"ok":true}}'
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [(b"content-type", b"application/json")],
+        })
+        await send({"type": "http.response.body", "body": payload})
+
+
+async def run_asgi(
+    app,
+    *,
+    path: str,
+    method: str = "GET",
+    body: bytes = b"",
+    query: str = "",
+    headers: list[tuple[bytes, bytes]] | None = None,
+):
+    sent = []
+    delivered = False
+
+    async def receive():
+        nonlocal delivered
+        if delivered:
+            return {"type": "http.request", "body": b"", "more_body": False}
+        delivered = True
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    async def send(message):
+        sent.append(message)
+
+    await app(
+        {
+            "type": "http",
+            "method": method,
+            "path": path,
+            "raw_path": path.encode(),
+            "query_string": query.encode(),
+            "headers": headers or [],
+            "http_version": "1.1",
+            "scheme": "https",
+            "server": ("test", 443),
+            "client": ("127.0.0.1", 12345),
+        },
+        receive,
+        send,
+    )
+    return sent
+
+
+def response_status(messages) -> int:
+    return next(msg["status"] for msg in messages if msg["type"] == "http.response.start")
+
+
+def response_headers(messages) -> dict[bytes, bytes]:
+    start = next(msg for msg in messages if msg["type"] == "http.response.start")
+    return {key.lower(): value for key, value in start.get("headers", [])}
+
+
+def response_json(messages) -> dict:
+    body = b"".join(msg.get("body", b"") for msg in messages if msg["type"] == "http.response.body")
+    return json.loads(body)
+
+
+class ToolsListInner:
+    def __init__(self) -> None:
+        self.called = 0
+
+    async def __call__(self, scope, receive, send):
+        self.called += 1
+        while True:
+            message = await receive()
+            if message.get("type") == "http.request" and not message.get("more_body", False):
+                break
+        payload = json.dumps({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "tools": [{
+                    "name": "private_mirror_writer_status",
+                    "inputSchema": {"type": "object", "properties": {}},
+                    "_meta": {
+                        "securitySchemes": [{
+                            "type": "oauth2",
+                            "scopes": [OAUTH_SCOPE],
+                        }]
+                    },
+                }]
+            },
+        }, separators=(",", ":")).encode()
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(payload)).encode()),
+            ],
+        })
+        await send({"type": "http.response.body", "body": payload})
+
+
+class OAuthBrokerTests(unittest.TestCase):
+    def test_metadata_is_exact_and_pkce_capable(self):
+        broker = make_broker()
+        resource = broker.protected_resource_metadata()
+        auth = broker.authorization_server_metadata()
+        self.assertEqual(resource["resource"], RESOURCE)
+        self.assertEqual(resource["authorization_servers"], [BASE])
+        self.assertEqual(resource["scopes_supported"], [OAUTH_SCOPE])
+        self.assertEqual(auth["issuer"], BASE)
+        self.assertEqual(auth["authorization_endpoint"], BASE + "/oauth/authorize")
+        self.assertEqual(auth["token_endpoint"], BASE + "/oauth/token")
+        self.assertTrue(auth["client_id_metadata_document_supported"])
+        self.assertEqual(auth["token_endpoint_auth_methods_supported"], ["none"])
+        self.assertEqual(auth["code_challenge_methods_supported"], ["S256"])
+        self.assertTrue(auth["authorization_response_iss_parameter_supported"])
+
+    def test_authorize_accepts_only_chatgpt_cimd_and_exact_resource(self):
+        broker = make_broker()
+        location = broker.begin_authorization(auth_params())
+        parsed = urllib.parse.urlsplit(location)
+        query = urllib.parse.parse_qs(parsed.query)
+        self.assertEqual((parsed.scheme, parsed.netloc, parsed.path), ("https", "github.com", "/login/oauth/authorize"))
+        self.assertEqual(query["client_id"], ["github-client-id"])
+        self.assertEqual(query["redirect_uri"], [BASE + "/oauth/github/callback"])
+        self.assertTrue(query["state"][0])
+
+        with self.assertRaises(OAuthError) as ctx:
+            broker.begin_authorization(auth_params(client_id="https://evil.example/oauth/client.json"))
+        self.assertEqual(ctx.exception.code, "invalid_client")
+
+        with self.assertRaises(OAuthError) as ctx:
+            broker.begin_authorization(auth_params(resource="https://wrong.example"))
+        self.assertEqual(ctx.exception.code, "invalid_target")
+
+    def test_cimd_must_authorize_exact_redirect_and_public_token_method(self):
+        broker = make_broker(cimd_payload={
+            "redirect_uris": ["https://chatgpt.com/wrong"],
+            "token_endpoint_auth_methods_supported": ["none"],
+        })
+        with self.assertRaises(OAuthError) as ctx:
+            broker.begin_authorization(auth_params())
+        self.assertEqual(ctx.exception.code, "invalid_client")
+
+        broker = make_broker(cimd_payload={
+            "redirect_uris": [REDIRECT],
+            "token_endpoint_auth_methods_supported": ["private_key_jwt"],
+        })
+        with self.assertRaises(OAuthError) as ctx:
+            broker.begin_authorization(auth_params())
+        self.assertEqual(ctx.exception.code, "invalid_client")
+
+    def test_authorize_rejects_non_s256_and_scope_widening(self):
+        broker = make_broker()
+        with self.assertRaises(OAuthError) as ctx:
+            broker.begin_authorization(auth_params(code_challenge_method="plain"))
+        self.assertEqual(ctx.exception.code, "invalid_request")
+
+        with self.assertRaises(OAuthError) as ctx:
+            broker.begin_authorization(auth_params(scope=OAUTH_SCOPE + " extra"))
+        self.assertEqual(ctx.exception.code, "invalid_scope")
+
+    def test_github_identity_is_fixed_to_exact_user_id(self):
+        broker = make_broker(user_id=123)
+        upstream = broker.begin_authorization(auth_params())
+        with self.assertRaises(OAuthError) as ctx:
+            broker.complete_github_callback({"state": callback_state(upstream), "code": "github-code"})
+        self.assertEqual(ctx.exception.code, "access_denied")
+        self.assertEqual(ctx.exception.http_status, 403)
+
+    def test_full_code_pkce_token_flow_and_one_time_code(self):
+        broker = make_broker()
+        upstream = broker.begin_authorization(auth_params())
+        client_redirect = broker.complete_github_callback({
+            "state": callback_state(upstream),
+            "code": "github-code",
+        })
+        parsed = urllib.parse.urlsplit(client_redirect)
+        query = urllib.parse.parse_qs(parsed.query)
+        self.assertEqual(parsed.scheme + "://" + parsed.netloc + parsed.path, REDIRECT)
+        self.assertEqual(query["state"], ["chatgpt-state"])
+        self.assertEqual(query["iss"], [BASE])
+        code = query["code"][0]
+
+        token = broker.exchange_token({
+            "grant_type": "authorization_code",
+            "code": code,
+            "client_id": CLIENT_ID,
+            "redirect_uri": REDIRECT,
+            "resource": RESOURCE,
+            "code_verifier": VERIFIER,
+        })
+        self.assertEqual(token["token_type"], "Bearer")
+        self.assertEqual(token["scope"], OAUTH_SCOPE)
+        claims = broker.verify_access_token(token["access_token"])
+        self.assertEqual(claims["iss"], BASE)
+        self.assertEqual(claims["aud"], RESOURCE)
+        self.assertEqual(claims["resource"], RESOURCE)
+        self.assertEqual(claims["sub"], f"github:{EXPECTED_GITHUB_USER_ID}")
+
+        with self.assertRaises(OAuthError) as ctx:
+            broker.exchange_token({
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": CLIENT_ID,
+                "redirect_uri": REDIRECT,
+                "resource": RESOURCE,
+                "code_verifier": VERIFIER,
+            })
+        self.assertEqual(ctx.exception.code, "invalid_grant")
+
+    def test_pkce_failure_consumes_authorization_code(self):
+        broker = make_broker()
+        upstream = broker.begin_authorization(auth_params())
+        redirect = broker.complete_github_callback({"state": callback_state(upstream), "code": "github-code"})
+        code = callback_code(redirect)
+        with self.assertRaises(OAuthError) as ctx:
+            broker.exchange_token({
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": CLIENT_ID,
+                "redirect_uri": REDIRECT,
+                "resource": RESOURCE,
+                "code_verifier": "B" * 64,
+            })
+        self.assertEqual(ctx.exception.code, "invalid_grant")
+
+        with self.assertRaises(OAuthError):
+            broker.exchange_token({
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": CLIENT_ID,
+                "redirect_uri": REDIRECT,
+                "resource": RESOURCE,
+                "code_verifier": VERIFIER,
+            })
+
+    def test_expired_or_wrong_audience_token_fails_closed(self):
+        now = [1_800_000_000.0]
+        broker = make_broker(now=lambda: now[0])
+        bad = jwt.encode({
+            "iss": BASE,
+            "aud": "https://other.example",
+            "sub": f"github:{EXPECTED_GITHUB_USER_ID}",
+            "iat": int(now[0]),
+            "nbf": int(now[0]) - 1,
+            "exp": int(now[0]) + 300,
+            "scope": OAUTH_SCOPE,
+            "resource": RESOURCE,
+        }, "S" * 64, algorithm="HS256")
+        with self.assertRaises(OAuthError) as ctx:
+            broker.verify_access_token(bad)
+        self.assertEqual(ctx.exception.code, "invalid_token")
+
+    def test_challenge_has_resource_metadata_scope_and_bounded_error(self):
+        broker = make_broker()
+        challenge = broker.challenge(error="invalid_token", description="login required")
+        self.assertIn('resource_metadata="' + BASE + '/.well-known/oauth-protected-resource"', challenge)
+        self.assertIn('scope="' + OAUTH_SCOPE + '"', challenge)
+        self.assertIn('error="invalid_token"', challenge)
+
+
+class OAuthASGITests(unittest.TestCase):
+    def test_well_known_documents_are_anonymous(self):
+        app = OAuthMCPApp(InnerApp(), make_broker())
+        resource = asyncio.run(run_asgi(app, path="/.well-known/oauth-protected-resource"))
+        auth = asyncio.run(run_asgi(app, path="/.well-known/oauth-authorization-server"))
+        self.assertEqual(response_status(resource), 200)
+        self.assertEqual(response_json(resource)["resource"], RESOURCE)
+        self.assertEqual(response_status(auth), 200)
+        self.assertEqual(response_json(auth)["issuer"], BASE)
+
+    def test_unauthenticated_discovery_reaches_inner_app(self):
+        inner = InnerApp()
+        app = OAuthMCPApp(inner, make_broker())
+        body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}).encode()
+        messages = asyncio.run(run_asgi(app, path="/mcp", method="POST", body=body))
+        self.assertEqual(response_status(messages), 200)
+        self.assertEqual(inner.called, 1)
+        self.assertEqual(inner.last_body, body)
+
+    def test_unauthenticated_tools_list_mirrors_security_schemes_at_top_level(self):
+        inner = ToolsListInner()
+        app = OAuthMCPApp(inner, make_broker())
+        body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}).encode()
+        messages = asyncio.run(run_asgi(app, path="/mcp", method="POST", body=body))
+        self.assertEqual(response_status(messages), 200)
+        self.assertEqual(inner.called, 1)
+        tool = response_json(messages)["result"]["tools"][0]
+        expected = [{"type": "oauth2", "scopes": [OAUTH_SCOPE]}]
+        self.assertEqual(tool["_meta"]["securitySchemes"], expected)
+        self.assertEqual(tool["securitySchemes"], expected)
+
+    def test_unauthenticated_tool_call_returns_oauth_challenge_without_invoking_tool(self):
+        inner = InnerApp()
+        app = OAuthMCPApp(inner, make_broker())
+        body = json.dumps({
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {"name": "private_mirror_writer_status", "arguments": {}},
+        }).encode()
+        messages = asyncio.run(run_asgi(app, path="/mcp", method="POST", body=body))
+        self.assertEqual(response_status(messages), 200)
+        self.assertEqual(inner.called, 0)
+        payload = response_json(messages)
+        challenge = payload["result"]["_meta"]["mcp/www_authenticate"][0]
+        self.assertIn("resource_metadata=", challenge)
+        self.assertTrue(payload["result"]["isError"])
+        self.assertIn(b"www-authenticate", response_headers(messages))
+
+    def test_valid_oauth_token_reaches_mcp_app(self):
+        broker = make_broker()
+        upstream = broker.begin_authorization(auth_params())
+        redirect = broker.complete_github_callback({"state": callback_state(upstream), "code": "github-code"})
+        access = broker.exchange_token({
+            "grant_type": "authorization_code",
+            "code": callback_code(redirect),
+            "client_id": CLIENT_ID,
+            "redirect_uri": REDIRECT,
+            "resource": RESOURCE,
+            "code_verifier": VERIFIER,
+        })["access_token"]
+
+        inner = InnerApp()
+        app = OAuthMCPApp(inner, broker)
+        body = json.dumps({"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {}}).encode()
+        messages = asyncio.run(run_asgi(
+            app,
+            path="/mcp",
+            method="POST",
+            body=body,
+            headers=[(b"authorization", ("Bearer " + access).encode())],
+        ))
+        self.assertEqual(response_status(messages), 200)
+        self.assertEqual(inner.called, 1)
+
+    def test_invalid_bearer_is_401_with_resource_metadata_challenge(self):
+        inner = InnerApp()
+        app = OAuthMCPApp(inner, make_broker())
+        messages = asyncio.run(run_asgi(
+            app,
+            path="/mcp",
+            method="POST",
+            body=b"{}",
+            headers=[(b"authorization", b"Bearer invalid")],
+        ))
+        self.assertEqual(response_status(messages), 401)
+        self.assertEqual(inner.called, 0)
+        challenge = response_headers(messages)[b"www-authenticate"].decode()
+        self.assertIn("resource_metadata=", challenge)
+
+    def test_partial_oauth_environment_never_falls_back_to_legacy_bearer(self):
+        env = {
+            "REPO_ADMIN_MCP_ACCESS_TOKEN": "legacy-secret",
+            "REPO_ADMIN_OAUTH_PUBLIC_BASE_URL": BASE,
+        }
+        with patch.dict("os.environ", env, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "PARTIAL_OAUTH_CONFIGURATION"):
+                build_http_app()
+
+
+class OAuthToolAndPluginContractTests(unittest.TestCase):
+    def test_exact_four_tools_advertise_oauth_security_scheme(self):
+        tools = asyncio.run(mcp.list_tools())
+        self.assertEqual(len(tools), 4)
+        for tool in tools:
+            self.assertEqual(
+                tool.meta.get("securitySchemes"),
+                [{"type": "oauth2", "scopes": [OAUTH_SCOPE]}],
+            )
+
+    def test_plugin_mcp_source_declares_cimd_oauth_without_credentials(self):
+        path = Path(__file__).resolve().parents[1] / "plugin-src" / "mcp.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        server = payload["mcpServers"]["repo-admin"]
+        self.assertEqual(server["type"], "streamable-http")
+        self.assertEqual(server["url"], BASE + "/mcp")
+        auth = server["extensions"]["com.openai"]["auth"]
+        self.assertEqual(auth, {"type": "oauth", "client": {"mode": "cimd"}})
+        rendered = path.read_text(encoding="utf-8").lower()
+        for forbidden in ("clientsecret", "client_secret", "access_token", "private key", "github_pat_", "ghp_"):
+            self.assertNotIn(forbidden, rendered)
+
+
+if __name__ == "__main__":
+    unittest.main()

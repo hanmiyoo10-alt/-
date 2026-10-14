@@ -173,3 +173,68 @@ Tests use injected fake GitHub clients and synthetic key material only. No live 
 ## Current known blocker
 
 Full destructive rotation cleanup is intentionally disabled pending #3675 behavioral proof. This does not unblock #3669 by itself; the private promotion workflow must still receive and prove the bootstrap credential in the later runtime stage.
+
+
+## OAuth front door for ChatGPT
+
+The production connection target is the same fixed Railway MCP resource:
+
+```text
+https://repo-admin-mcp-production.up.railway.app
+```
+
+The OAuth implementation is deliberately narrower than a general identity service.
+
+### Identity and client boundaries
+
+- end-user identity is upstream GitHub;
+- only GitHub user id `260735128` is accepted;
+- only ChatGPT CIMD client identifiers under `https://chatgpt.com/oauth/.../client.json` are accepted;
+- the authorization server fetches that metadata document and requires the exact redirect URI plus public-client token method `none`;
+- there is no DCR endpoint, client secret, password grant, client-credentials grant, device grant, or arbitrary OAuth client.
+
+### OAuth protocol
+
+The same HTTPS service acts as resource server and authorization server:
+
+```text
+GET  /.well-known/oauth-protected-resource
+GET  /.well-known/oauth-authorization-server
+GET  /oauth/authorize
+GET  /oauth/github/callback
+POST /oauth/token
+POST /mcp
+```
+
+The flow requires authorization code + PKCE S256 and preserves the canonical MCP resource origin `https://repo-admin-mcp-production.up.railway.app` throughout, while the streamable HTTP transport remains at `/mcp`. Successful GitHub identity verification produces a one-time, short-lived authorization code. Token exchange requires the matching `client_id`, redirect URI, resource and PKCE verifier. Access tokens are signed server-side and are accepted only when issuer, audience, resource, expiry, fixed subject and fixed scope all match.
+
+### Runtime secret variables
+
+OAuth mode is enabled only when **all** of these Railway variables are present:
+
+```text
+REPO_ADMIN_OAUTH_PUBLIC_BASE_URL
+REPO_ADMIN_OAUTH_SIGNING_KEY
+REPO_ADMIN_GITHUB_OAUTH_CLIENT_ID
+REPO_ADMIN_GITHUB_OAUTH_CLIENT_SECRET
+```
+
+The existing server-to-server GitHub App variables remain separate:
+
+```text
+REPO_ADMIN_GITHUB_APP_ID
+REPO_ADMIN_GITHUB_INSTALLATION_ID
+REPO_ADMIN_GITHUB_APP_PRIVATE_KEY
+```
+
+Do not put any value from either group into Git, plugin archives, issues, MCP results, or chat.
+
+### Migration behavior
+
+The fixed-bearer wrapper remains only as a temporary fallback when **no OAuth variable is configured**. If any OAuth variable is present but the set is incomplete, server startup fails closed with `PARTIAL_OAUTH_CONFIGURATION`; it never silently falls back to the old bearer.
+
+The plugin source under `plugin-src/mcp.json` declares OAuth + CIMD only. Updating the already-created private plugin to that source is a later live connection effect and is not part of source implementation.
+
+### Tool discovery and authentication prompt
+
+All four fixed tools advertise the same OAuth security scheme in MCP tool metadata. MCP SDK v2.3 currently serializes this extension through `_meta`, so the HTTP front door mirrors that verified list into the modern top-level `securitySchemes` field on `tools/list` responses for ChatGPT compatibility. An unauthenticated client may call only MCP discovery methods (`initialize`, `notifications/initialized`, `tools/list`). An unauthenticated `tools/call` receives a bounded MCP error result with `_meta["mcp/www_authenticate"]` and the RFC 9728 protected-resource metadata URL. Privileged tool logic is never entered before token validation.

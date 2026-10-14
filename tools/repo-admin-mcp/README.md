@@ -50,11 +50,11 @@ Before the secret PUT is attempted, a later failure may roll back the newly-crea
 
 Rotation requires the exact currently observed deploy-key ID and secret `updated_at` value. It creates the replacement key, updates the environment secret, proves secret metadata advanced and the replacement key is visible, and only then deletes the prior key.
 
-Once the secret PUT is attempted, **any request exception preserves the replacement key and returns `PARTIAL`**. A transport error cannot prove whether GitHub applied the write, and whole-second metadata timestamps cannot disambiguate a same-second update. If the secret update succeeds but old-key deletion fails, the result is `PARTIAL / OLD_KEY_REVOCATION_PENDING`. Final rotation returns `PASS` only after a fresh status read proves exactly one replacement key and the advanced secret metadata.
+Once the secret PUT is attempted, **any request exception preserves the replacement key and returns `PARTIAL`**. A transport error cannot prove whether GitHub applied the write, and whole-second metadata timestamps cannot disambiguate a same-second update. If the secret update succeeds but old-key deletion fails, the result is `PARTIAL / OLD_KEY_REVOCATION_PENDING`. Retry the same rotation with the returned `newKeyId` as `pending_new_key_id` and the returned `secretUpdatedAt`; only that exact two-key partial state permits deleting the old key without another secret write. Final rotation returns `PASS` only after a fresh status read proves exactly one replacement key and the advanced secret metadata.
 
 ### Revocation
 
-Revocation requires exact current metadata. It deletes the environment secret first and then the exact deploy key. There is no wildcard or delete-all-key operation.
+Revocation requires exact current metadata. It deletes the environment secret first and then the exact deploy key. If the secret deletion succeeds but key deletion fails, a retry with the same exact key ID may complete that one-key/no-secret partial state. There is no wildcard or delete-all-key operation.
 
 ## Authentication
 
@@ -132,3 +132,12 @@ Tests use an injected fake GitHub client and synthetic key material only. No liv
 - a secret DELETE `404` is not treated as proof of absence because GitHub may use `404` to conceal private resources when authentication or permission is insufficient;
 - revocation therefore keeps the deploy key whenever secret deletion is not positively confirmed;
 - missing/partial GitHub App configuration is returned as a sanitized MCP `UNKNOWN` or `BLOCKED` result rather than an unhandled tool exception.
+
+
+### Race and ambiguous-effect handling
+
+- key generation failures are converted to sanitized `BLOCKED` results;
+- each deploy-key title includes UTC microseconds so an ambiguous POST can be reconciled against one exact title;
+- if a deploy-key POST response is lost, the tool returns `PARTIAL`, attempts an exact-title readback, and removes only that uniquely observed pre-secret key when possible;
+- rotation re-reads the fixed secret metadata and matching-key inventory immediately before the secret PUT; any drift aborts before the PUT and removes only the new replacement key;
+- partial old-key and revoke-key deletion states are recoverable only through exact IDs already returned by the prior sanitized receipt.

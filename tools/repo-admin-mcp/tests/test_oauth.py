@@ -348,7 +348,7 @@ class OAuthBrokerTests(unittest.TestCase):
         self.assertEqual((parsed.scheme, parsed.netloc, parsed.path), ("https", "github.com", "/login/oauth/authorize"))
         self.assertEqual(query["client_id"], ["github-client-id"])
         self.assertEqual(query["redirect_uri"], [BASE + "/oauth/github/callback"])
-        self.assertEqual(query["scope"], ["read:user"])
+        self.assertNotIn("scope", query)
         self.assertTrue(query["state"][0])
 
         with self.assertRaises(OAuthError) as ctx:
@@ -498,7 +498,7 @@ class OAuthBrokerTests(unittest.TestCase):
         self.assertEqual(error_query["state"], ["chatgpt-state"])
         self.assertEqual(error_query["iss"], [BASE])
 
-    def test_github_identity_token_scope_is_exact_minimum(self):
+    def test_github_app_identity_token_has_empty_scope_and_bearer_type(self):
         broker = OAuthBroker(
             base_url=BASE,
             github_client_id="github-client-id",
@@ -522,21 +522,24 @@ class OAuthBrokerTests(unittest.TestCase):
 
         with patch("repo_admin_mcp.oauth.urllib.request.urlopen") as urlopen:
             urlopen.side_effect = [
-                JsonResponse({"access_token": "synthetic", "scope": "read:user"}),
+                JsonResponse({"access_token": "synthetic", "scope": "", "token_type": "bearer"}),
                 JsonResponse({"id": EXPECTED_GITHUB_USER_ID, "login": "hanmiyoo10-alt"}),
             ]
             user_id, login = broker._github_identity("code", BASE + "/oauth/github/callback")
         self.assertEqual(user_id, EXPECTED_GITHUB_USER_ID)
         self.assertEqual(login, "hanmiyoo10-alt")
 
-        with patch("repo_admin_mcp.oauth.urllib.request.urlopen") as urlopen:
-            urlopen.return_value = JsonResponse({
-                "access_token": "synthetic",
-                "scope": "read:user,repo",
-            })
-            with self.assertRaises(OAuthError) as ctx:
-                broker._github_identity("code", BASE + "/oauth/github/callback")
-        self.assertEqual(ctx.exception.code, "access_denied")
+        for payload in (
+            {"access_token": "synthetic", "scope": "read:user", "token_type": "bearer"},
+            {"access_token": "synthetic", "scope": "", "token_type": "mac"},
+            {"access_token": "synthetic", "scope": ""},
+        ):
+            with self.subTest(payload={key: value for key, value in payload.items() if key != "access_token"}):
+                with patch("repo_admin_mcp.oauth.urllib.request.urlopen") as urlopen:
+                    urlopen.return_value = JsonResponse(payload)
+                    with self.assertRaises(OAuthError) as ctx:
+                        broker._github_identity("code", BASE + "/oauth/github/callback")
+                self.assertEqual(ctx.exception.code, "access_denied")
 
     def test_github_callback_without_code_redirects_error_to_client(self):
         broker = make_broker()

@@ -24,8 +24,6 @@ from .config import (
     OAUTH_SCOPE,
 )
 
-GITHUB_IDENTITY_SCOPE = "read:user"
-
 
 class OAuthError(RuntimeError):
     def __init__(self, code: str, description: str, *, http_status: int = 400) -> None:
@@ -379,7 +377,6 @@ class OAuthBroker:
             "client_id": self._github_client_id,
             "redirect_uri": self.github_callback_url,
             "state": upstream_state,
-            "scope": GITHUB_IDENTITY_SCOPE,
             "allow_signup": "false",
         })
         return f"https://github.com/login/oauth/authorize?{query}"
@@ -591,12 +588,19 @@ class OAuthBroker:
 
         access_token = token_payload.get("access_token") if isinstance(token_payload, dict) else None
         granted_scope = token_payload.get("scope") if isinstance(token_payload, dict) else None
+        token_type = token_payload.get("token_type") if isinstance(token_payload, dict) else None
         if not isinstance(access_token, str) or not access_token:
             raise OAuthError("access_denied", "GitHub token exchange did not return a token.", http_status=401)
-        if not isinstance(granted_scope, str) or set(granted_scope.replace(",", " ").split()) != {GITHUB_IDENTITY_SCOPE}:
+        if granted_scope != "":
             raise OAuthError(
                 "access_denied",
-                "GitHub identity token scope is not minimally bounded.",
+                "GitHub App user token unexpectedly carried an OAuth scope.",
+                http_status=401,
+            )
+        if not isinstance(token_type, str) or token_type.lower() != "bearer":
+            raise OAuthError(
+                "access_denied",
+                "GitHub App user token type is invalid.",
                 http_status=401,
             )
 

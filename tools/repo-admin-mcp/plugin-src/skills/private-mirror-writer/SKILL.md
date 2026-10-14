@@ -16,8 +16,8 @@ Use the Nyang Repository Admin MCP only for the fixed private-mirror writer life
 2. Treat `UNKNOWN`, `PARTIAL`, or `CONFLICT` as fail-closed. Do not mutate until the exact state is resolved.
 3. Call `private_mirror_writer_bootstrap()` only when status proves `ABSENT`.
 4. `CONFIGURED_METADATA_ONLY` proves GitHub-side metadata shape only. It does not prove SSH publication behavior. The owning publication workflow remains responsible for behavioral proof.
-5. For rotation or revocation, carry the exact observed deploy-key ID and secret `updatedAt` into the mutation call. Never guess or reuse stale metadata.
-6. After any mutation, read status again before handing control to another workflow.
+5. For rotation or revocation, carry the exact observed deploy-key ID and secret `updatedAt` into the mutation call. If rotation returns `OLD_KEY_REVOCATION_PENDING`, retry only with its returned `newKeyId` as `pending_new_key_id` and its returned `secretUpdatedAt`. Never guess or reuse stale metadata.
+6. If revocation returns `DEPLOY_KEY_REVOCATION_PENDING`, retry revocation with the same exact key ID; the tool accepts only the one-key/no-secret partial state. After any mutation, read status again before handing control to another workflow.
 7. Never request, display, reconstruct, copy, persist, or log GitHub tokens, App private keys, SSH private keys, environment public-key bytes, sealed ciphertext, or Authorization headers.
 
 ## Boundaries

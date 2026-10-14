@@ -65,6 +65,11 @@ def _bounded_text(value: Any, *, limit: int = 160) -> str:
     return value[:limit]
 
 
+class _RejectRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 class OAuthBroker:
     _CIMD_PATH = re.compile(r"^/oauth/(?:client\.json|[^/?#]+/client\.json)$")
 
@@ -78,6 +83,8 @@ class OAuthBroker:
         now: Callable[[], float] = time.time,
         cimd_fetcher: Callable[[str], dict[str, Any]] | None = None,
         github_identity_fetcher: Callable[[str, str], tuple[int, str]] | None = None,
+        max_pending_authorizations: int = 128,
+        max_authorization_codes: int = 128,
     ) -> None:
         base_url = base_url.rstrip("/")
         parsed = urllib.parse.urlsplit(base_url)
@@ -95,6 +102,13 @@ class OAuthBroker:
             raise OAuthError("GITHUB_OAUTH_CONFIGURATION_MISSING", "GitHub OAuth client configuration is incomplete.")
         if len(signing_key.encode("utf-8")) < 32:
             raise OAuthError("OAUTH_SIGNING_KEY_TOO_SHORT", "OAuth signing key must contain at least 32 bytes.")
+        if (
+            not isinstance(max_pending_authorizations, int)
+            or not 1 <= max_pending_authorizations <= 4096
+            or not isinstance(max_authorization_codes, int)
+            or not 1 <= max_authorization_codes <= 4096
+        ):
+            raise OAuthError("INVALID_OAUTH_CAPACITY", "OAuth state capacity must be bounded.")
 
         self.resource = base_url
         self.issuer = base_url
@@ -106,6 +120,8 @@ class OAuthBroker:
         self._github_identity_fetcher = github_identity_fetcher or self._github_identity
         self._pending: dict[str, PendingAuthorization] = {}
         self._codes: dict[str, AuthorizationCode] = {}
+        self._max_pending_authorizations = max_pending_authorizations
+        self._max_authorization_codes = max_authorization_codes
         self._lock = threading.RLock()
 
     @property
@@ -230,6 +246,11 @@ class OAuthBroker:
         upstream_state = secrets.token_urlsafe(32)
         with self._lock:
             self._prune()
+            if len(self._pending) >= self._max_pending_authorizations:
+                return client_error(
+                    "temporarily_unavailable",
+                    "Too many authorization attempts are already in progress.",
+                )
             self._pending[upstream_state] = PendingAuthorization(
                 client_id=params["client_id"],
                 redirect_uri=params["redirect_uri"],
@@ -290,6 +311,12 @@ class OAuthBroker:
         auth_code = secrets.token_urlsafe(32)
         with self._lock:
             self._prune()
+            if len(self._codes) >= self._max_authorization_codes:
+                return self._client_redirect(
+                    pending,
+                    error="temporarily_unavailable",
+                    error_description="Too many authorization codes are awaiting exchange.",
+                )
             self._codes[auth_code] = AuthorizationCode(
                 client_id=pending.client_id,
                 redirect_uri=pending.redirect_uri,
@@ -401,9 +428,14 @@ class OAuthBroker:
             method="GET",
             headers={"Accept": "application/json", "User-Agent": "nyang-repo-admin-mcp/0.2"},
         )
+        opener = urllib.request.build_opener(_RejectRedirects())
         try:
-            with urllib.request.urlopen(request, timeout=10) as response:
+            with opener.open(request, timeout=10) as response:
+                if response.getcode() != 200:
+                    raise OAuthError("invalid_client", "Client metadata endpoint did not return HTTP 200.")
                 raw = response.read(65537)
+        except OAuthError:
+            raise
         except Exception:
             raise OAuthError("invalid_client", "Unable to fetch client metadata.") from None
         if len(raw) > 65536:

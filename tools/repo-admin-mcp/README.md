@@ -261,3 +261,10 @@ The OAuth front door also preserves service availability and client-flow converg
 ### Protected-resource identity
 
 OpenAI is configured to use the canonical Railway HTTPS origin as the OAuth resource identifier while the MCP transport remains at `/mcp`. Therefore this server publishes only the authoritative root metadata document at `/.well-known/oauth-protected-resource`. It intentionally does not publish a path-derived `/.well-known/oauth-protected-resource/mcp` document with a conflicting resource identifier.
+
+
+### OAuth state and migration bounds
+
+- CIMD metadata fetches use a redirect-rejecting HTTP opener and require the original endpoint to return HTTP 200;
+- pending authorization requests and unexchanged authorization codes each have a fixed in-memory capacity of 128 after expiry pruning; admission over the bound returns a validated `temporarily_unavailable` OAuth redirect;
+- the underlying four-tool MCP catalog carries no unconditional OAuth scheme. OAuth security metadata is injected only by the OAuth HTTP wrapper, so the temporary legacy fixed-bearer fallback cannot falsely advertise an authorization flow it does not host.

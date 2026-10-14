@@ -28,7 +28,7 @@ from .service import (
     private_mirror_writer_status as build_status,
 )
 
-_OAUTH_TOOL_META = {"securitySchemes": [{"type": "oauth2", "scopes": [OAUTH_SCOPE]}]}
+_OAUTH_SECURITY_SCHEMES = [{"type": "oauth2", "scopes": [OAUTH_SCOPE]}]
 
 mcp = MCPServer(
     "Nyang Repository Admin MCP",
@@ -56,7 +56,7 @@ def _client_failure(kind: str, error: Exception, status: str) -> dict[str, Any]:
     }
 
 
-@mcp.tool(meta=_OAUTH_TOOL_META)
+@mcp.tool()
 def private_mirror_writer_status() -> dict[str, Any]:
     """Read sanitized metadata for the fixed private-mirror writer credential; never returns secret or key material."""
     try:
@@ -66,7 +66,7 @@ def private_mirror_writer_status() -> dict[str, Any]:
     return build_status(client)
 
 
-@mcp.tool(meta=_OAUTH_TOOL_META)
+@mcp.tool()
 def private_mirror_writer_bootstrap() -> dict[str, Any]:
     """Create the fixed private-mirror writer only when metadata proves a clean absent state."""
     try:
@@ -76,7 +76,7 @@ def private_mirror_writer_bootstrap() -> dict[str, Any]:
     return build_bootstrap(client)
 
 
-@mcp.tool(meta=_OAUTH_TOOL_META)
+@mcp.tool()
 def private_mirror_writer_rotate(
     expected_key_id: int,
     expected_secret_updated_at: str,
@@ -89,7 +89,7 @@ def private_mirror_writer_rotate(
     return build_rotate(client, expected_key_id, expected_secret_updated_at)
 
 
-@mcp.tool(meta=_OAUTH_TOOL_META)
+@mcp.tool()
 def private_mirror_writer_revoke(
     expected_key_id: int,
     expected_secret_updated_at: str | None = None,
@@ -202,12 +202,17 @@ async def _forward_tools_list_with_security_schemes(
         changed = False
         if isinstance(tools, list):
             for tool in tools:
-                if not isinstance(tool, dict) or "securitySchemes" in tool:
+                if not isinstance(tool, dict):
                     continue
                 meta = tool.get("_meta")
-                schemes = meta.get("securitySchemes") if isinstance(meta, dict) else None
-                if isinstance(schemes, list):
-                    tool["securitySchemes"] = schemes
+                if not isinstance(meta, dict):
+                    meta = {}
+                    tool["_meta"] = meta
+                if meta.get("securitySchemes") != _OAUTH_SECURITY_SCHEMES:
+                    meta["securitySchemes"] = _OAUTH_SECURITY_SCHEMES
+                    changed = True
+                if tool.get("securitySchemes") != _OAUTH_SECURITY_SCHEMES:
+                    tool["securitySchemes"] = _OAUTH_SECURITY_SCHEMES
                     changed = True
         if not changed:
             raise ValueError("no rewrite required")

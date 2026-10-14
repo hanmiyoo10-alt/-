@@ -6,6 +6,7 @@ import importlib.metadata
 import json
 import time
 import unittest
+import urllib.error
 import urllib.parse
 from pathlib import Path
 from unittest.mock import patch
@@ -14,7 +15,7 @@ import jwt
 
 from repo_admin_mcp import __version__
 from repo_admin_mcp.config import EXPECTED_GITHUB_USER_ID, OAUTH_SCOPE
-from repo_admin_mcp.oauth import OAuthBroker, OAuthError, _pkce_s256
+from repo_admin_mcp.oauth import OAuthBroker, OAuthError, _RejectRedirects, _pkce_s256
 from repo_admin_mcp.server import OAuthMCPApp, build_http_app, mcp
 
 
@@ -34,7 +35,7 @@ def cimd(redirect: str = REDIRECT) -> dict:
     }
 
 
-def make_broker(*, now=None, user_id=EXPECTED_GITHUB_USER_ID, cimd_payload=None) -> OAuthBroker:
+def make_broker(*, now=None, user_id=EXPECTED_GITHUB_USER_ID, cimd_payload=None, **kwargs) -> OAuthBroker:
     clock = now or time.time
     return OAuthBroker(
         base_url=BASE,
@@ -44,6 +45,7 @@ def make_broker(*, now=None, user_id=EXPECTED_GITHUB_USER_ID, cimd_payload=None)
         now=clock,
         cimd_fetcher=lambda _url: cimd_payload or cimd(),
         github_identity_fetcher=lambda _code, _redirect: (user_id, "hanmiyoo10-alt"),
+        **kwargs,
     )
 
 
@@ -200,12 +202,6 @@ class ToolsListInner:
                 "tools": [{
                     "name": "private_mirror_writer_status",
                     "inputSchema": {"type": "object", "properties": {}},
-                    "_meta": {
-                        "securitySchemes": [{
-                            "type": "oauth2",
-                            "scopes": [OAUTH_SCOPE],
-                        }]
-                    },
                 }]
             },
         }, separators=(",", ":")).encode()
@@ -255,6 +251,60 @@ class OAuthBrokerTests(unittest.TestCase):
                 client_id="https://chatgpt.com:abc/oauth/client.json"
             ))
         self.assertEqual(ctx.exception.code, "invalid_client")
+
+    def test_cimd_fetch_rejects_redirect_responses(self):
+        broker = OAuthBroker(
+            base_url=BASE,
+            github_client_id="github-client-id",
+            github_client_secret="github-client-secret",
+            signing_key="S" * 64,
+            github_identity_fetcher=lambda _code, _redirect: (EXPECTED_GITHUB_USER_ID, "hanmiyoo10-alt"),
+        )
+        redirect_error = urllib.error.HTTPError(
+            CLIENT_ID,
+            302,
+            "Found",
+            {},
+            None,
+        )
+        with patch("repo_admin_mcp.oauth.urllib.request.build_opener") as build_opener:
+            build_opener.return_value.open.side_effect = redirect_error
+            with self.assertRaises(OAuthError) as ctx:
+                broker._fetch_json(CLIENT_ID)
+        self.assertEqual(ctx.exception.code, "invalid_client")
+        handler = build_opener.call_args.args[0]
+        self.assertIsInstance(handler, _RejectRedirects)
+
+    def test_pending_authorizations_are_capacity_bounded(self):
+        broker = make_broker(max_pending_authorizations=1)
+        first = broker.begin_authorization(auth_params(state="first-state"))
+        self.assertTrue(first.startswith("https://github.com/login/oauth/authorize?"))
+        second = broker.begin_authorization(auth_params(state="second-state"))
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(second).query)
+        self.assertEqual(query["error"], ["temporarily_unavailable"])
+        self.assertEqual(query["state"], ["second-state"])
+        self.assertEqual(query["iss"], [BASE])
+        self.assertEqual(len(broker._pending), 1)
+
+    def test_authorization_codes_are_capacity_bounded(self):
+        broker = make_broker(max_authorization_codes=1)
+        first = broker.begin_authorization(auth_params(state="first-state"))
+        first_redirect = broker.complete_github_callback({
+            "state": callback_state(first),
+            "code": "github-code-1",
+        })
+        self.assertIn("code=", first_redirect)
+
+        second = broker.begin_authorization(auth_params(state="second-state"))
+        second_redirect = broker.complete_github_callback({
+            "state": callback_state(second),
+            "code": "github-code-2",
+        })
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(second_redirect).query)
+        self.assertEqual(query["error"], ["temporarily_unavailable"])
+        self.assertEqual(query["state"], ["second-state"])
+        self.assertEqual(query["iss"], [BASE])
+        self.assertEqual(len(broker._codes), 1)
 
     def test_authorize_accepts_only_chatgpt_cimd_and_exact_resource(self):
         broker = make_broker()
@@ -691,14 +741,12 @@ class OAuthASGITests(unittest.TestCase):
 
 
 class OAuthToolAndPluginContractTests(unittest.TestCase):
-    def test_exact_four_tools_advertise_oauth_security_scheme(self):
+    def test_legacy_tool_catalog_does_not_advertise_oauth(self):
         tools = asyncio.run(mcp.list_tools())
         self.assertEqual(len(tools), 4)
         for tool in tools:
-            self.assertEqual(
-                tool.meta.get("securitySchemes"),
-                [{"type": "oauth2", "scopes": [OAUTH_SCOPE]}],
-            )
+            meta = tool.meta or {}
+            self.assertNotIn("securitySchemes", meta)
 
     def test_distribution_and_runtime_versions_match(self):
         self.assertEqual(importlib.metadata.version("repo-admin-mcp"), "0.2.0")

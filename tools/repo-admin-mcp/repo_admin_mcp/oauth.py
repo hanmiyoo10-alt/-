@@ -153,11 +153,15 @@ class OAuthBroker:
         self._codes = {key: value for key, value in self._codes.items() if value.expires_at > now}
 
     def _validate_cimd(self, client_id: str, redirect_uri: str) -> None:
-        parsed = urllib.parse.urlsplit(client_id)
+        try:
+            parsed = urllib.parse.urlsplit(client_id)
+            parsed_port = parsed.port
+        except ValueError:
+            raise OAuthError("invalid_client", "ChatGPT client identifier URL is malformed.") from None
         if (
             parsed.scheme != "https"
             or parsed.hostname != "chatgpt.com"
-            or parsed.port is not None
+            or parsed_port is not None
             or parsed.query
             or parsed.fragment
             or not self._CIMD_PATH.fullmatch(parsed.path)
@@ -261,7 +265,11 @@ class OAuthBroker:
 
         code = params.get("code", "")
         if not code:
-            raise OAuthError("invalid_request", "GitHub authorization code is missing.")
+            return self._client_redirect(
+                pending,
+                error="invalid_request",
+                error_description="GitHub authorization code is missing.",
+            )
 
         try:
             user_id, _login = self._github_identity_fetcher(code, self.github_callback_url)

@@ -256,3 +256,8 @@ The OAuth front door also preserves service availability and client-flow converg
 - a fetched ChatGPT CIMD document is accepted only when its own `client_id` exactly equals the requested Client Identifier URL;
 - only after the client metadata and redirect URI are proven may authorization-request errors be redirected back to ChatGPT, and those error callbacks preserve the original `state` plus RFC 9207 `iss`;
 - both anonymous and already-authenticated `tools/list` responses expose identical top-level `securitySchemes` metadata.
+
+
+### Protected-resource identity
+
+OpenAI is configured to use the canonical Railway HTTPS origin as the OAuth resource identifier while the MCP transport remains at `/mcp`. Therefore this server publishes only the authoritative root metadata document at `/.well-known/oauth-protected-resource`. It intentionally does not publish a path-derived `/.well-known/oauth-protected-resource/mcp` document with a conflicting resource identifier.

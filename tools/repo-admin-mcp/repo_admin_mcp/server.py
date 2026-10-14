@@ -279,10 +279,7 @@ class OAuthMCPApp:
             await _respond_json(send, 200, {"status": "ok"})
             return
 
-        if path in {
-            "/.well-known/oauth-protected-resource",
-            "/.well-known/oauth-protected-resource/mcp",
-        } and method == "GET":
+        if path == "/.well-known/oauth-protected-resource" and method == "GET":
             await _respond_json(send, 200, self._broker.protected_resource_metadata())
             return
 
@@ -361,6 +358,13 @@ class OAuthMCPApp:
                 try:
                     body = await _read_body(receive)
                 except _ClientDisconnected:
+                    return
+                except OAuthError as exc:
+                    await _respond_json(
+                        send,
+                        exc.http_status,
+                        {"error": exc.code, "error_description": exc.description},
+                    )
                     return
                 rpc_method = None
                 try:

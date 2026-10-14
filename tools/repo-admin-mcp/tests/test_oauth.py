@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import importlib.metadata
 import json
 import time
 import unittest
@@ -11,6 +12,7 @@ from unittest.mock import patch
 
 import jwt
 
+from repo_admin_mcp import __version__
 from repo_admin_mcp.config import EXPECTED_GITHUB_USER_ID, OAUTH_SCOPE
 from repo_admin_mcp.oauth import OAuthBroker, OAuthError, _pkce_s256
 from repo_admin_mcp.server import OAuthMCPApp, build_http_app, mcp
@@ -246,6 +248,14 @@ class OAuthBrokerTests(unittest.TestCase):
             )
         self.assertEqual(ctx.exception.code, "INVALID_PUBLIC_BASE_URL")
 
+    def test_malformed_cimd_port_is_invalid_client_not_runtime_error(self):
+        broker = make_broker()
+        with self.assertRaises(OAuthError) as ctx:
+            broker.begin_authorization(auth_params(
+                client_id="https://chatgpt.com:abc/oauth/client.json"
+            ))
+        self.assertEqual(ctx.exception.code, "invalid_client")
+
     def test_authorize_accepts_only_chatgpt_cimd_and_exact_resource(self):
         broker = make_broker()
         location = broker.begin_authorization(auth_params())
@@ -318,6 +328,17 @@ class OAuthBrokerTests(unittest.TestCase):
         redirect = broker.begin_authorization(auth_params(response_type="token"))
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(redirect).query)
         self.assertEqual(query["error"], ["unsupported_response_type"])
+        self.assertEqual(query["state"], ["chatgpt-state"])
+        self.assertEqual(query["iss"], [BASE])
+
+    def test_github_callback_without_code_redirects_error_to_client(self):
+        broker = make_broker()
+        upstream = broker.begin_authorization(auth_params())
+        redirect = broker.complete_github_callback({
+            "state": callback_state(upstream),
+        })
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(redirect).query)
+        self.assertEqual(query["error"], ["invalid_request"])
         self.assertEqual(query["state"], ["chatgpt-state"])
         self.assertEqual(query["iss"], [BASE])
 
@@ -453,9 +474,11 @@ class OAuthASGITests(unittest.TestCase):
     def test_well_known_documents_are_anonymous(self):
         app = OAuthMCPApp(InnerApp(), make_broker())
         resource = asyncio.run(run_asgi(app, path="/.well-known/oauth-protected-resource"))
+        path_specific = asyncio.run(run_asgi(app, path="/.well-known/oauth-protected-resource/mcp"))
         auth = asyncio.run(run_asgi(app, path="/.well-known/oauth-authorization-server"))
         self.assertEqual(response_status(resource), 200)
         self.assertEqual(response_json(resource)["resource"], RESOURCE)
+        self.assertEqual(response_status(path_specific), 404)
         self.assertEqual(response_status(auth), 200)
         self.assertEqual(response_json(auth)["issuer"], BASE)
 
@@ -616,6 +639,32 @@ class OAuthASGITests(unittest.TestCase):
         self.assertEqual(response_status(messages), 200)
         self.assertEqual(inner.called, 1)
 
+    def test_oversized_authenticated_request_returns_413(self):
+        broker = make_broker()
+        upstream = broker.begin_authorization(auth_params())
+        redirect = broker.complete_github_callback({"state": callback_state(upstream), "code": "github-code"})
+        access = broker.exchange_token({
+            "grant_type": "authorization_code",
+            "code": callback_code(redirect),
+            "client_id": CLIENT_ID,
+            "redirect_uri": REDIRECT,
+            "resource": BASE,
+            "code_verifier": VERIFIER,
+        })["access_token"]
+
+        inner = InnerApp()
+        app = OAuthMCPApp(inner, broker)
+        messages = asyncio.run(run_asgi(
+            app,
+            path="/mcp",
+            method="POST",
+            body=b"x" * 16385,
+            headers=[(b"authorization", ("Bearer " + access).encode())],
+        ))
+        self.assertEqual(response_status(messages), 413)
+        self.assertEqual(response_json(messages)["error"], "invalid_request")
+        self.assertEqual(inner.called, 0)
+
     def test_invalid_bearer_is_401_with_resource_metadata_challenge(self):
         inner = InnerApp()
         app = OAuthMCPApp(inner, make_broker())
@@ -650,6 +699,10 @@ class OAuthToolAndPluginContractTests(unittest.TestCase):
                 tool.meta.get("securitySchemes"),
                 [{"type": "oauth2", "scopes": [OAUTH_SCOPE]}],
             )
+
+    def test_distribution_and_runtime_versions_match(self):
+        self.assertEqual(importlib.metadata.version("repo-admin-mcp"), "0.2.0")
+        self.assertEqual(__version__, "0.2.0")
 
     def test_plugin_mcp_source_declares_cimd_oauth_without_credentials(self):
         path = Path(__file__).resolve().parents[1] / "plugin-src" / "mcp.json"

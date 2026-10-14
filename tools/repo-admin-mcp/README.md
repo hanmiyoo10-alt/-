@@ -50,7 +50,7 @@ Before the secret PUT is attempted, a later failure may roll back the newly-crea
 
 Rotation requires the exact currently observed deploy-key ID and secret `updated_at` value. It creates the replacement key, updates the environment secret, proves secret metadata advanced and the replacement key is visible, and only then deletes the prior key.
 
-Once the secret PUT is attempted, **any request exception preserves the replacement key and returns `PARTIAL`**. A transport error cannot prove whether GitHub applied the write, and whole-second metadata timestamps cannot disambiguate a same-second update. If the secret update succeeds but old-key deletion fails, the result is `PARTIAL / OLD_KEY_REVOCATION_PENDING`. Only after the server has observed an advanced secret `updatedAt` does it issue a signed opaque `cleanupReceipt`; a failed or ambiguous secret PUT never receives that capability. Retry rotation with the returned `cleanupReceipt` plus its returned `secretUpdatedAt`. The receipt is HMAC-authenticated server evidence binding the exact old/new key IDs and pre/post secret metadata, so caller-supplied IDs alone can never authorize old-key deletion. Final rotation returns `PASS` only after a fresh status read proves exactly one enabled replacement key and the advanced secret metadata.
+Once the secret PUT is attempted, **any request exception preserves the replacement key and returns `PARTIAL`**. A transport error cannot prove whether GitHub applied the write, and whole-second metadata timestamps cannot disambiguate a same-second update. If the secret update succeeds but old-key deletion fails, the result is `PARTIAL / OLD_KEY_REVOCATION_PENDING`. After GitHub positively acknowledges the secret PUT, the server immediately issues a signed opaque `cleanupReceipt`; a failed or ambiguous secret PUT never receives that capability. If secret metadata later advances, the receipt is strengthened by binding that observed post-write `updatedAt`. If GitHub keeps the same whole-second timestamp despite a successful PUT, the acknowledged-write receipt still provides bounded recovery evidence. Retry rotation with the returned `cleanupReceipt` plus its returned `secretUpdatedAt`. The receipt is HMAC-authenticated server evidence binding the exact old/new key IDs and pre/post secret metadata, so caller-supplied IDs alone can never authorize old-key deletion. Final rotation returns `PASS` only after a fresh status read proves exactly one enabled replacement key and the advanced secret metadata.
 
 ### Revocation
 
@@ -114,7 +114,7 @@ The implementation avoids model-visible private-key material and overwrites its 
 
 ## Private plugin source
 
-`plugin-src/` contains the portable plugin identity and operating skill only. It intentionally has **no `mcp.json` yet**. Add the verified Railway streamable-HTTP endpoint only after the hosted service exists and has passed authenticated tool discovery. Do not invent or predeclare a placeholder endpoint.
+`plugin-src/` contains the portable plugin identity and operating skill only. The canonical portable manifest remains at `plugin-src/plugin.json`, with a synchronized Codex compatibility overlay at `plugin-src/.codex-plugin/plugin.json`. It intentionally has **no `mcp.json` yet**. Add the verified Railway streamable-HTTP endpoint only after the hosted service exists and has passed authenticated tool discovery. Do not invent or predeclare a placeholder endpoint.
 
 ## Development validation
 
@@ -157,3 +157,10 @@ Tests use an injected fake GitHub client and synthetic key material only. No liv
 
 - a matching environment secret must carry a non-empty string `updated_at`; malformed/missing timestamps fail closed instead of being classified as configured;
 - replacement-key readback after secret update requires `enabled=true` before the old key can be revoked.
+
+### Cleanup receipt strength
+
+- an acknowledged successful secret PUT receives an HMAC-signed receipt before any subsequent metadata/key readback;
+- if GitHub reports an advanced secret timestamp, a strengthened receipt binds that exact post-write timestamp before replacement-key inventory is read;
+- same-second successful PUTs remain recoverable through the acknowledged-write receipt while failed/ambiguous PUTs receive no receipt at all;
+- the server-side signing key is never returned; the opaque receipt is the only retry capability.

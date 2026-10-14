@@ -230,6 +230,7 @@ class OAuthBrokerTests(unittest.TestCase):
         self.assertTrue(auth["client_id_metadata_document_supported"])
         self.assertEqual(auth["token_endpoint_auth_methods_supported"], ["none"])
         self.assertEqual(auth["code_challenge_methods_supported"], ["S256"])
+        self.assertEqual(auth["response_modes_supported"], ["query"])
         self.assertTrue(auth["authorization_response_iss_parameter_supported"])
 
     def test_public_base_url_must_be_origin_without_path(self):
@@ -338,6 +339,7 @@ class OAuthBrokerTests(unittest.TestCase):
         self.assertEqual((parsed.scheme, parsed.netloc, parsed.path), ("https", "github.com", "/login/oauth/authorize"))
         self.assertEqual(query["client_id"], ["github-client-id"])
         self.assertEqual(query["redirect_uri"], [BASE + "/oauth/github/callback"])
+        self.assertEqual(query["scope"], ["read:user"])
         self.assertTrue(query["state"][0])
 
         with self.assertRaises(OAuthError) as ctx:
@@ -390,6 +392,12 @@ class OAuthBrokerTests(unittest.TestCase):
         redirect = broker.begin_authorization(auth_params(code_challenge_method="plain"))
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(redirect).query)
         self.assertEqual(query["error"], ["invalid_request"])
+
+        redirect = broker.begin_authorization(auth_params(response_mode="fragment"))
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(redirect).query)
+        self.assertEqual(query["error"], ["unsupported_response_mode"])
+        self.assertEqual(query["state"], ["chatgpt-state"])
+        self.assertEqual(query["iss"], [BASE])
         self.assertEqual(query["state"], ["chatgpt-state"])
         self.assertEqual(query["iss"], [BASE])
 
@@ -404,6 +412,69 @@ class OAuthBrokerTests(unittest.TestCase):
         self.assertEqual(query["error"], ["unsupported_response_type"])
         self.assertEqual(query["state"], ["chatgpt-state"])
         self.assertEqual(query["iss"], [BASE])
+
+    def test_client_redirect_preserves_existing_query_parameters(self):
+        redirect_uri = REDIRECT + "?tenant=x"
+        broker = make_broker(cimd_payload=cimd(redirect_uri))
+        upstream = broker.begin_authorization(auth_params(redirect_uri=redirect_uri))
+        client_redirect = broker.complete_github_callback({
+            "state": callback_state(upstream),
+            "code": "github-code",
+        })
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(client_redirect).query)
+        self.assertEqual(query["tenant"], ["x"])
+        self.assertIn("code", query)
+        self.assertEqual(query["state"], ["chatgpt-state"])
+        self.assertEqual(query["iss"], [BASE])
+
+        error_redirect = broker.begin_authorization(
+            auth_params(redirect_uri=redirect_uri, resource="https://wrong.example")
+        )
+        error_query = urllib.parse.parse_qs(urllib.parse.urlsplit(error_redirect).query)
+        self.assertEqual(error_query["tenant"], ["x"])
+        self.assertEqual(error_query["error"], ["invalid_target"])
+        self.assertEqual(error_query["state"], ["chatgpt-state"])
+        self.assertEqual(error_query["iss"], [BASE])
+
+    def test_github_identity_token_scope_is_exact_minimum(self):
+        broker = OAuthBroker(
+            base_url=BASE,
+            github_client_id="github-client-id",
+            github_client_secret="github-client-secret",
+            signing_key="S" * 64,
+            cimd_fetcher=lambda _url: cimd(),
+        )
+
+        class JsonResponse:
+            def __init__(self, payload):
+                self._payload = payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, _exc_type, _exc, _tb):
+                return False
+
+            def read(self, _limit):
+                return json.dumps(self._payload).encode()
+
+        with patch("repo_admin_mcp.oauth.urllib.request.urlopen") as urlopen:
+            urlopen.side_effect = [
+                JsonResponse({"access_token": "synthetic", "scope": "read:user"}),
+                JsonResponse({"id": EXPECTED_GITHUB_USER_ID, "login": "hanmiyoo10-alt"}),
+            ]
+            user_id, login = broker._github_identity("code", BASE + "/oauth/github/callback")
+        self.assertEqual(user_id, EXPECTED_GITHUB_USER_ID)
+        self.assertEqual(login, "hanmiyoo10-alt")
+
+        with patch("repo_admin_mcp.oauth.urllib.request.urlopen") as urlopen:
+            urlopen.return_value = JsonResponse({
+                "access_token": "synthetic",
+                "scope": "read:user,repo",
+            })
+            with self.assertRaises(OAuthError) as ctx:
+                broker._github_identity("code", BASE + "/oauth/github/callback")
+        self.assertEqual(ctx.exception.code, "access_denied")
 
     def test_github_callback_without_code_redirects_error_to_client(self):
         broker = make_broker()

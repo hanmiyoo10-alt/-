@@ -23,6 +23,8 @@ from .config import (
     OAUTH_SCOPE,
 )
 
+GITHUB_IDENTITY_SCOPE = "read:user"
+
 
 class OAuthError(RuntimeError):
     def __init__(self, code: str, description: str, *, http_status: int = 400) -> None:
@@ -63,6 +65,13 @@ def _bounded_text(value: Any, *, limit: int = 160) -> str:
     if not isinstance(value, str):
         return ""
     return value[:limit]
+
+
+def _append_query_params(uri: str, params: dict[str, str]) -> str:
+    parsed = urllib.parse.urlsplit(uri)
+    encoded = urllib.parse.urlencode(params)
+    query = f"{parsed.query}&{encoded}" if parsed.query else encoded
+    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, parsed.fragment))
 
 
 class _RejectRedirects(urllib.request.HTTPRedirectHandler):
@@ -161,6 +170,7 @@ class OAuthBroker:
             "code_challenge_methods_supported": ["S256"],
             "scopes_supported": [OAUTH_SCOPE],
             "response_types_supported": ["code"],
+            "response_modes_supported": ["query"],
             "grant_types_supported": ["authorization_code"],
             "authorization_response_iss_parameter_supported": True,
         }
@@ -245,6 +255,11 @@ class OAuthBroker:
             return client_error("invalid_request", "Missing required OAuth authorization parameters.")
         if params["response_type"] != "code":
             return client_error("unsupported_response_type", "Only authorization-code flow is supported.")
+        if params.get("response_mode", "query") != "query":
+            return client_error(
+                "unsupported_response_mode",
+                "Only query authorization responses are supported.",
+            )
         if params["code_challenge_method"] != "S256":
             return client_error("invalid_request", "PKCE S256 is required.")
         if len(params["code_challenge"]) != 43 or not re.fullmatch(r"[A-Za-z0-9_-]{43}", params["code_challenge"]):
@@ -276,6 +291,7 @@ class OAuthBroker:
             "client_id": self._github_client_id,
             "redirect_uri": self.github_callback_url,
             "state": upstream_state,
+            "scope": GITHUB_IDENTITY_SCOPE,
             "allow_signup": "false",
         })
         return f"https://github.com/login/oauth/authorize?{query}"
@@ -338,8 +354,10 @@ class OAuthBroker:
                 expires_at=self._now() + 120,
             )
 
-        query = urllib.parse.urlencode({"code": auth_code, "state": pending.client_state, "iss": self.issuer})
-        return f"{pending.redirect_uri}?{query}"
+        return _append_query_params(
+            pending.redirect_uri,
+            {"code": auth_code, "state": pending.client_state, "iss": self.issuer},
+        )
 
     def _authorization_error_redirect(
         self,
@@ -349,13 +367,15 @@ class OAuthBroker:
         error: str,
         error_description: str,
     ) -> str:
-        query = urllib.parse.urlencode({
-            "error": error,
-            "error_description": error_description,
-            "state": client_state,
-            "iss": self.issuer,
-        })
-        return f"{redirect_uri}?{query}"
+        return _append_query_params(
+            redirect_uri,
+            {
+                "error": error,
+                "error_description": error_description,
+                "state": client_state,
+                "iss": self.issuer,
+            },
+        )
 
     def _client_redirect(self, pending: PendingAuthorization, *, error: str, error_description: str) -> str:
         return self._authorization_error_redirect(
@@ -482,8 +502,15 @@ class OAuthBroker:
             raise OAuthError("access_denied", "GitHub token exchange failed.", http_status=401) from None
 
         access_token = token_payload.get("access_token") if isinstance(token_payload, dict) else None
+        granted_scope = token_payload.get("scope") if isinstance(token_payload, dict) else None
         if not isinstance(access_token, str) or not access_token:
             raise OAuthError("access_denied", "GitHub token exchange did not return a token.", http_status=401)
+        if not isinstance(granted_scope, str) or set(granted_scope.replace(",", " ").split()) != {GITHUB_IDENTITY_SCOPE}:
+            raise OAuthError(
+                "access_denied",
+                "GitHub identity token scope is not minimally bounded.",
+                http_status=401,
+            )
 
         user_request = urllib.request.Request(
             f"{GITHUB_API}/user",

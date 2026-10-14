@@ -22,16 +22,15 @@ class ReceiptTests(unittest.TestCase):
         self.assertEqual(evidence.previous_secret_updated_at, "2026-10-13T10:00:00Z")
         self.assertEqual(evidence.post_secret_updated_at, "2026-10-13T10:01:00Z")
 
-    def test_acknowledged_put_receipt_allows_missing_post_timestamp(self):
-        token = self.signer.issue(
-            old_key_id=7,
-            new_key_id=8,
-            previous_secret_updated_at="2026-10-13T10:00:00Z",
-            post_secret_updated_at=None,
-        )
-        evidence = self.signer.verify(token)
-        self.assertEqual(evidence.previous_secret_updated_at, "2026-10-13T10:00:00Z")
-        self.assertIsNone(evidence.post_secret_updated_at)
+    def test_receipt_requires_observed_post_timestamp(self):
+        with self.assertRaises(ReceiptError) as ctx:
+            self.signer.issue(
+                old_key_id=7,
+                new_key_id=8,
+                previous_secret_updated_at="2026-10-13T10:00:00Z",
+                post_secret_updated_at="2026-10-13T10:01:00Z",
+            )
+        self.assertEqual(ctx.exception.code, "INVALID_ROTATION_CLEANUP_EVIDENCE")
 
     def test_tampered_receipt_is_rejected(self):
         token = self.signer.issue(

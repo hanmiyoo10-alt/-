@@ -141,3 +141,11 @@ Tests use an injected fake GitHub client and synthetic key material only. No liv
 - if a deploy-key POST response is lost, the tool returns `PARTIAL`, attempts an exact-title readback, and removes only that uniquely observed pre-secret key when possible;
 - rotation re-reads the fixed secret metadata and matching-key inventory immediately before the secret PUT; any drift aborts before the PUT and removes only the new replacement key;
 - partial old-key and revoke-key deletion states are recoverable only through exact IDs already returned by the prior sanitized receipt.
+
+
+### Final policy/race guards
+
+- bootstrap re-reads the fixed secret metadata and matching deploy-key inventory immediately before the first secret PUT; it requires no secret plus exactly the newly created enabled write key;
+- revocation re-reads both secret metadata and the matching-key inventory immediately before deletion and requires the exact expected enabled singleton;
+- a pending rotation cleanup accepts both the exact two-key retry state and the idempotent one-replacement-key state when the old-key DELETE already succeeded but its response was lost;
+- GitHub deploy-key `enabled` is preserved from REST responses. A disabled matching key is never classified as configured, even when it has write access and the secret exists.

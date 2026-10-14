@@ -244,6 +244,23 @@ class OAuthBrokerTests(unittest.TestCase):
             )
         self.assertEqual(ctx.exception.code, "INVALID_PUBLIC_BASE_URL")
 
+    def test_public_base_url_rejects_malformed_host_and_port(self):
+        for base_url in ("https://:", "https://host:abc", "https://host:99999"):
+            with self.subTest(base_url=base_url):
+                with self.assertRaises(OAuthError) as ctx:
+                    OAuthBroker(
+                        base_url=base_url,
+                        github_client_id="github-client-id",
+                        github_client_secret="github-client-secret",
+                        signing_key="S" * 64,
+                        cimd_fetcher=lambda _url: cimd(),
+                        github_identity_fetcher=lambda _code, _redirect: (
+                            EXPECTED_GITHUB_USER_ID,
+                            "hanmiyoo10-alt",
+                        ),
+                    )
+                self.assertEqual(ctx.exception.code, "INVALID_PUBLIC_BASE_URL")
+
     def test_malformed_cimd_port_is_invalid_client_not_runtime_error(self):
         broker = make_broker()
         with self.assertRaises(OAuthError) as ctx:
@@ -603,6 +620,40 @@ class OAuthASGITests(unittest.TestCase):
         self.assertEqual(response_status(health), 200)
         self.assertEqual(response_status(authorize_result), 302)
 
+    def test_oauth_io_admission_rejects_excess_waiters_before_gate_queue(self):
+        started = threading.Event()
+        release = threading.Event()
+        broker = make_broker()
+
+        def slow_begin(_params):
+            started.set()
+            release.wait(timeout=1.0)
+            return "https://github.com/login/oauth/authorize?client_id=x"
+
+        broker.begin_authorization = slow_begin
+        app = OAuthMCPApp(InnerApp(), broker, oauth_io_capacity=1)
+        query = urllib.parse.urlencode(auth_params())
+
+        async def scenario():
+            first = asyncio.create_task(run_asgi(app, path="/oauth/authorize", query=query))
+            deadline = asyncio.get_running_loop().time() + 0.5
+            while not started.is_set():
+                if asyncio.get_running_loop().time() >= deadline:
+                    raise AssertionError("blocking OAuth call did not start")
+                await asyncio.sleep(0.005)
+            second = await asyncio.wait_for(
+                run_asgi(app, path="/oauth/authorize", query=query),
+                timeout=0.1,
+            )
+            release.set()
+            first_result = await asyncio.wait_for(first, timeout=0.5)
+            return first_result, second
+
+        first_result, second = asyncio.run(scenario())
+        self.assertEqual(response_status(first_result), 302)
+        self.assertEqual(response_status(second), 503)
+        self.assertEqual(response_json(second)["error"], "temporarily_unavailable")
+
     def test_unauthenticated_tools_list_mirrors_security_schemes_at_top_level(self):
         inner = ToolsListInner()
         app = OAuthMCPApp(inner, make_broker())
@@ -614,6 +665,15 @@ class OAuthASGITests(unittest.TestCase):
         expected = [{"type": "oauth2", "scopes": [OAUTH_SCOPE]}]
         self.assertEqual(tool["_meta"]["securitySchemes"], expected)
         self.assertEqual(tool["securitySchemes"], expected)
+
+    def test_unauthenticated_non_string_rpc_method_is_bounded_auth_response(self):
+        inner = InnerApp()
+        app = OAuthMCPApp(inner, make_broker())
+        body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": [], "params": {}}).encode()
+        messages = asyncio.run(run_asgi(app, path="/mcp", method="POST", body=body))
+        self.assertEqual(response_status(messages), 401)
+        self.assertEqual(response_json(messages)["error"], "unauthorized")
+        self.assertEqual(inner.called, 0)
 
     def test_unauthenticated_tool_call_returns_oauth_challenge_without_invoking_tool(self):
         inner = InnerApp()
@@ -662,6 +722,57 @@ class OAuthASGITests(unittest.TestCase):
         expected = [{"type": "oauth2", "scopes": [OAUTH_SCOPE]}]
         self.assertEqual(tool["_meta"]["securitySchemes"], expected)
         self.assertEqual(tool["securitySchemes"], expected)
+
+    def test_lowercase_bearer_scheme_is_accepted(self):
+        broker = make_broker()
+        upstream = broker.begin_authorization(auth_params())
+        redirect = broker.complete_github_callback({"state": callback_state(upstream), "code": "github-code"})
+        access = broker.exchange_token({
+            "grant_type": "authorization_code",
+            "code": callback_code(redirect),
+            "client_id": CLIENT_ID,
+            "redirect_uri": REDIRECT,
+            "resource": RESOURCE,
+            "code_verifier": VERIFIER,
+        })["access_token"]
+
+        inner = InnerApp()
+        app = OAuthMCPApp(inner, broker)
+        body = json.dumps({"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {}}).encode()
+        messages = asyncio.run(run_asgi(
+            app,
+            path="/mcp",
+            method="POST",
+            body=body,
+            headers=[(b"authorization", ("bearer " + access).encode())],
+        ))
+        self.assertEqual(response_status(messages), 200)
+        self.assertEqual(inner.called, 1)
+
+    def test_token_response_includes_no_store_and_pragma_no_cache(self):
+        broker = make_broker()
+        upstream = broker.begin_authorization(auth_params())
+        redirect = broker.complete_github_callback({"state": callback_state(upstream), "code": "github-code"})
+        form = urllib.parse.urlencode({
+            "grant_type": "authorization_code",
+            "code": callback_code(redirect),
+            "client_id": CLIENT_ID,
+            "redirect_uri": REDIRECT,
+            "resource": RESOURCE,
+            "code_verifier": VERIFIER,
+        }).encode()
+        app = OAuthMCPApp(InnerApp(), broker)
+        messages = asyncio.run(run_asgi(
+            app,
+            path="/oauth/token",
+            method="POST",
+            body=form,
+        ))
+        headers = response_headers(messages)
+        self.assertEqual(response_status(messages), 200)
+        self.assertEqual(headers[b"cache-control"], b"no-store")
+        self.assertEqual(headers[b"pragma"], b"no-cache")
+        self.assertIn("access_token", response_json(messages))
 
     def test_valid_oauth_token_reaches_mcp_app(self):
         broker = make_broker()

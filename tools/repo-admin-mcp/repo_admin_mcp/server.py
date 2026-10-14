@@ -263,14 +263,30 @@ class ProtectedMCPApp:
 class OAuthMCPApp:
     _DISCOVERY_METHODS = {"server/discover", "initialize", "notifications/initialized", "tools/list"}
 
-    def __init__(self, app: Any, broker: OAuthBroker) -> None:
+    def __init__(self, app: Any, broker: OAuthBroker, *, oauth_io_capacity: int = 8) -> None:
+        if not isinstance(oauth_io_capacity, int) or not 1 <= oauth_io_capacity <= 64:
+            raise ValueError("oauth_io_capacity must be between 1 and 64")
         self._app = app
         self._broker = broker
-        self._oauth_io_gate = asyncio.Semaphore(4)
+        self._oauth_io_gate = asyncio.Semaphore(min(4, oauth_io_capacity))
+        self._oauth_io_capacity = oauth_io_capacity
+        self._oauth_io_admitted = 0
 
     async def _run_oauth_io(self, func: Callable[..., Any], *args: Any) -> Any:
-        async with self._oauth_io_gate:
-            return await asyncio.to_thread(func, *args)
+        # Admission is checked before the first await, so the event loop cannot
+        # accumulate an unbounded waiter queue behind the blocking-I/O gate.
+        if self._oauth_io_admitted >= self._oauth_io_capacity:
+            raise OAuthError(
+                "temporarily_unavailable",
+                "OAuth request capacity is exhausted.",
+                http_status=503,
+            )
+        self._oauth_io_admitted += 1
+        try:
+            async with self._oauth_io_gate:
+                return await asyncio.to_thread(func, *args)
+        finally:
+            self._oauth_io_admitted -= 1
 
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         if scope.get("type") != "http":
@@ -334,7 +350,7 @@ class OAuthMCPApp:
                     error, description, status = "invalid_request", "Token request is not valid UTF-8.", 400
                 await _respond_json(send, status, {"error": error, "error_description": description})
                 return
-            await _respond_json(send, 200, token)
+            await _respond_json(send, 200, token, headers=[(b"pragma", b"no-cache")])
             return
 
         if path != "/mcp":
@@ -343,9 +359,15 @@ class OAuthMCPApp:
 
         headers = {key.lower(): value for key, value in scope.get("headers", [])}
         auth = headers.get(b"authorization", b"")
-        if auth.startswith(b"Bearer "):
+        auth_parts = auth.split(None, 1)
+        bearer_token = (
+            auth_parts[1]
+            if len(auth_parts) == 2 and auth_parts[0].lower() == b"bearer" and auth_parts[1]
+            else None
+        )
+        if bearer_token is not None:
             try:
-                self._broker.verify_access_token(auth[7:].decode("ascii"))
+                self._broker.verify_access_token(bearer_token.decode("ascii"))
             except (UnicodeDecodeError, OAuthError):
                 challenge = self._broker.challenge(
                     error="invalid_token",
@@ -402,6 +424,8 @@ class OAuthMCPApp:
             return
 
         rpc_method = message.get("method") if isinstance(message, dict) else None
+        if not isinstance(rpc_method, str):
+            rpc_method = None
         if rpc_method in self._DISCOVERY_METHODS:
             if rpc_method == "tools/list":
                 await _forward_tools_list_with_security_schemes(self._app, scope, body, send)

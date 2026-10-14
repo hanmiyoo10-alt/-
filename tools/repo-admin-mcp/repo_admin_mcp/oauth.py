@@ -88,9 +88,18 @@ class OAuthBroker:
     ) -> None:
         base_url = base_url.rstrip("/")
         parsed = urllib.parse.urlsplit(base_url)
+        try:
+            parsed_port = parsed.port
+        except ValueError:
+            raise OAuthError(
+                "INVALID_PUBLIC_BASE_URL",
+                "OAuth public base URL must be a canonical HTTPS origin.",
+            ) from None
         if (
             parsed.scheme != "https"
             or not parsed.netloc
+            or not parsed.hostname
+            or parsed_port is not None and not 1 <= parsed_port <= 65535
             or parsed.username is not None
             or parsed.password is not None
             or parsed.path not in {"", "/"}

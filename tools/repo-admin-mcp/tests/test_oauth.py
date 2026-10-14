@@ -256,6 +256,8 @@ class OAuthBrokerTests(unittest.TestCase):
             "https://host\n",
             "https://ho\tst",
             "https://host\r",
+            "https://host ",
+            "https://ho st",
         ):
             with self.subTest(base_url=base_url):
                 with self.assertRaises(OAuthError) as ctx:

@@ -95,7 +95,7 @@ class OAuthBroker:
         max_pending_authorizations: int = 128,
         max_authorization_codes: int = 128,
     ) -> None:
-        if any(ord(char) < 0x20 or ord(char) == 0x7F for char in base_url):
+        if any(char.isspace() or ord(char) == 0x7F for char in base_url):
             raise OAuthError(
                 "INVALID_PUBLIC_BASE_URL",
                 "OAuth public base URL must be a canonical HTTPS origin.",

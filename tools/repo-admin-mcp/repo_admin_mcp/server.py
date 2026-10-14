@@ -356,7 +356,25 @@ class OAuthMCPApp:
                     headers=[(b"www-authenticate", challenge.encode("utf-8"))],
                 )
                 return
-            await self._app(scope, receive, send)
+
+            if method == "POST":
+                try:
+                    body = await _read_body(receive)
+                except _ClientDisconnected:
+                    return
+                rpc_method = None
+                try:
+                    authenticated_message = json.loads(body.decode("utf-8")) if body else {}
+                    if isinstance(authenticated_message, dict):
+                        rpc_method = authenticated_message.get("method")
+                except Exception:
+                    pass
+                if rpc_method == "tools/list":
+                    await _forward_tools_list_with_security_schemes(self._app, scope, body, send)
+                else:
+                    await self._app(scope, _replay_receive(body), send)
+            else:
+                await self._app(scope, receive, send)
             return
 
         try:

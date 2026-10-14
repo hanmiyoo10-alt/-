@@ -169,43 +169,59 @@ class OAuthBroker:
         except Exception:
             raise OAuthError("invalid_client", "Unable to verify ChatGPT client metadata.") from None
 
+        metadata_client_id = metadata.get("client_id")
         redirect_uris = metadata.get("redirect_uris")
         auth_methods = metadata.get("token_endpoint_auth_methods_supported")
         if (
-            not isinstance(redirect_uris, list)
+            metadata_client_id != client_id
+            or not isinstance(redirect_uris, list)
             or redirect_uri not in redirect_uris
             or not isinstance(auth_methods, list)
             or "none" not in auth_methods
         ):
-            raise OAuthError("invalid_client", "ChatGPT client metadata does not authorize this redirect or token method.")
+            raise OAuthError(
+                "invalid_client",
+                "ChatGPT client metadata does not match this client, redirect, or token method.",
+            )
 
     def begin_authorization(self, params: dict[str, str]) -> str:
+        minimum = {"client_id", "redirect_uri", "state"}
+        if not minimum.issubset(params):
+            raise OAuthError("invalid_request", "Missing OAuth client, redirect, or state parameters.")
+        if not params["state"] or len(params["state"]) > 2048:
+            raise OAuthError("invalid_request", "OAuth state is required and must be bounded.")
+
+        # Client metadata must be proven before we can safely redirect an
+        # authorization error back to the caller-controlled redirect URI.
+        self._validate_cimd(params["client_id"], params["redirect_uri"])
+
+        def client_error(error: str, description: str) -> str:
+            return self._authorization_error_redirect(
+                params["redirect_uri"],
+                params["state"],
+                error=error,
+                error_description=description,
+            )
+
         required = {
             "response_type",
-            "client_id",
-            "redirect_uri",
-            "state",
             "code_challenge",
             "code_challenge_method",
             "resource",
             "scope",
         }
         if not required.issubset(params):
-            raise OAuthError("invalid_request", "Missing required OAuth authorization parameters.")
+            return client_error("invalid_request", "Missing required OAuth authorization parameters.")
         if params["response_type"] != "code":
-            raise OAuthError("unsupported_response_type", "Only authorization-code flow is supported.")
+            return client_error("unsupported_response_type", "Only authorization-code flow is supported.")
         if params["code_challenge_method"] != "S256":
-            raise OAuthError("invalid_request", "PKCE S256 is required.")
+            return client_error("invalid_request", "PKCE S256 is required.")
         if len(params["code_challenge"]) != 43 or not re.fullmatch(r"[A-Za-z0-9_-]{43}", params["code_challenge"]):
-            raise OAuthError("invalid_request", "PKCE code challenge is invalid.")
+            return client_error("invalid_request", "PKCE code challenge is invalid.")
         if params["resource"] != self.resource:
-            raise OAuthError("invalid_target", "OAuth resource does not match this MCP server.")
+            return client_error("invalid_target", "OAuth resource does not match this MCP server.")
         if set(params["scope"].split()) != {OAUTH_SCOPE}:
-            raise OAuthError("invalid_scope", "Only the fixed repository-admin scope is accepted.")
-        if not params["state"] or len(params["state"]) > 2048:
-            raise OAuthError("invalid_request", "OAuth state is required and must be bounded.")
-
-        self._validate_cimd(params["client_id"], params["redirect_uri"])
+            return client_error("invalid_scope", "Only the fixed repository-admin scope is accepted.")
 
         upstream_state = secrets.token_urlsafe(32)
         with self._lock:
@@ -279,14 +295,29 @@ class OAuthBroker:
         query = urllib.parse.urlencode({"code": auth_code, "state": pending.client_state, "iss": self.issuer})
         return f"{pending.redirect_uri}?{query}"
 
-    def _client_redirect(self, pending: PendingAuthorization, *, error: str, error_description: str) -> str:
+    def _authorization_error_redirect(
+        self,
+        redirect_uri: str,
+        client_state: str,
+        *,
+        error: str,
+        error_description: str,
+    ) -> str:
         query = urllib.parse.urlencode({
             "error": error,
             "error_description": error_description,
-            "state": pending.client_state,
+            "state": client_state,
             "iss": self.issuer,
         })
-        return f"{pending.redirect_uri}?{query}"
+        return f"{redirect_uri}?{query}"
+
+    def _client_redirect(self, pending: PendingAuthorization, *, error: str, error_description: str) -> str:
+        return self._authorization_error_redirect(
+            pending.redirect_uri,
+            pending.client_state,
+            error=error,
+            error_description=error_description,
+        )
 
     def exchange_token(self, params: dict[str, str]) -> dict[str, Any]:
         if params.get("grant_type") != "authorization_code":

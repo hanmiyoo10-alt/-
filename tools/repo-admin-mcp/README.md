@@ -249,3 +249,10 @@ The OAuth front door also preserves service availability and client-flow converg
 - `REPO_ADMIN_OAUTH_PUBLIC_BASE_URL` must be a path-free HTTPS origin;
 - post-GitHub identity failures and wrong-account denials are redirected back to the already-verified ChatGPT redirect URI with the original `state` and RFC 9207 `iss`, rather than stranding the browser on local JSON;
 - unauthenticated discovery permits both legacy `initialize` and modern MCP `server/discover` plus `tools/list`; privileged `tools/call` remains OAuth-gated.
+
+
+### CIMD and authenticated discovery parity
+
+- a fetched ChatGPT CIMD document is accepted only when its own `client_id` exactly equals the requested Client Identifier URL;
+- only after the client metadata and redirect URI are proven may authorization-request errors be redirected back to ChatGPT, and those error callbacks preserve the original `state` plus RFC 9207 `iss`;
+- both anonymous and already-authenticated `tools/list` responses expose identical top-level `securitySchemes` metadata.

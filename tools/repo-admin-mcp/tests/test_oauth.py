@@ -26,6 +26,7 @@ CHALLENGE = _pkce_s256(VERIFIER)
 
 def cimd(redirect: str = REDIRECT) -> dict:
     return {
+        "client_id": CLIENT_ID,
         "redirect_uris": [redirect],
         "token_endpoint_auth_methods_supported": ["none", "private_key_jwt"],
     }
@@ -259,9 +260,11 @@ class OAuthBrokerTests(unittest.TestCase):
             broker.begin_authorization(auth_params(client_id="https://evil.example/oauth/client.json"))
         self.assertEqual(ctx.exception.code, "invalid_client")
 
-        with self.assertRaises(OAuthError) as ctx:
-            broker.begin_authorization(auth_params(resource="https://wrong.example"))
-        self.assertEqual(ctx.exception.code, "invalid_target")
+        redirect = broker.begin_authorization(auth_params(resource="https://wrong.example"))
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(redirect).query)
+        self.assertEqual(query["error"], ["invalid_target"])
+        self.assertEqual(query["state"], ["chatgpt-state"])
+        self.assertEqual(query["iss"], [BASE])
 
     def test_cimd_must_authorize_exact_redirect_and_public_token_method(self):
         broker = make_broker(cimd_payload={
@@ -280,15 +283,43 @@ class OAuthBrokerTests(unittest.TestCase):
             broker.begin_authorization(auth_params())
         self.assertEqual(ctx.exception.code, "invalid_client")
 
+    def test_cimd_document_client_id_must_exactly_match_requested_url(self):
+        broker = make_broker(cimd_payload={
+            "client_id": "https://chatgpt.com/oauth/other/client.json",
+            "redirect_uris": [REDIRECT],
+            "token_endpoint_auth_methods_supported": ["none"],
+        })
+        with self.assertRaises(OAuthError) as ctx:
+            broker.begin_authorization(auth_params())
+        self.assertEqual(ctx.exception.code, "invalid_client")
+
+        broker = make_broker(cimd_payload={
+            "redirect_uris": [REDIRECT],
+            "token_endpoint_auth_methods_supported": ["none"],
+        })
+        with self.assertRaises(OAuthError) as ctx:
+            broker.begin_authorization(auth_params())
+        self.assertEqual(ctx.exception.code, "invalid_client")
+
     def test_authorize_rejects_non_s256_and_scope_widening(self):
         broker = make_broker()
-        with self.assertRaises(OAuthError) as ctx:
-            broker.begin_authorization(auth_params(code_challenge_method="plain"))
-        self.assertEqual(ctx.exception.code, "invalid_request")
+        redirect = broker.begin_authorization(auth_params(code_challenge_method="plain"))
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(redirect).query)
+        self.assertEqual(query["error"], ["invalid_request"])
+        self.assertEqual(query["state"], ["chatgpt-state"])
+        self.assertEqual(query["iss"], [BASE])
 
-        with self.assertRaises(OAuthError) as ctx:
-            broker.begin_authorization(auth_params(scope=OAUTH_SCOPE + " extra"))
-        self.assertEqual(ctx.exception.code, "invalid_scope")
+        redirect = broker.begin_authorization(auth_params(scope=OAUTH_SCOPE + " extra"))
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(redirect).query)
+        self.assertEqual(query["error"], ["invalid_scope"])
+        self.assertEqual(query["state"], ["chatgpt-state"])
+        self.assertEqual(query["iss"], [BASE])
+
+        redirect = broker.begin_authorization(auth_params(response_type="token"))
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(redirect).query)
+        self.assertEqual(query["error"], ["unsupported_response_type"])
+        self.assertEqual(query["state"], ["chatgpt-state"])
+        self.assertEqual(query["iss"], [BASE])
 
     def test_github_identity_is_fixed_to_exact_user_id(self):
         broker = make_broker(user_id=123)
@@ -528,6 +559,36 @@ class OAuthASGITests(unittest.TestCase):
         self.assertIn("resource_metadata=", challenge)
         self.assertTrue(payload["result"]["isError"])
         self.assertIn(b"www-authenticate", response_headers(messages))
+
+    def test_authenticated_tools_list_mirrors_security_schemes_at_top_level(self):
+        broker = make_broker()
+        upstream = broker.begin_authorization(auth_params())
+        redirect = broker.complete_github_callback({"state": callback_state(upstream), "code": "github-code"})
+        access = broker.exchange_token({
+            "grant_type": "authorization_code",
+            "code": callback_code(redirect),
+            "client_id": CLIENT_ID,
+            "redirect_uri": REDIRECT,
+            "resource": BASE,
+            "code_verifier": VERIFIER,
+        })["access_token"]
+
+        inner = ToolsListInner()
+        app = OAuthMCPApp(inner, broker)
+        body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}).encode()
+        messages = asyncio.run(run_asgi(
+            app,
+            path="/mcp",
+            method="POST",
+            body=body,
+            headers=[(b"authorization", ("Bearer " + access).encode())],
+        ))
+        self.assertEqual(response_status(messages), 200)
+        self.assertEqual(inner.called, 1)
+        tool = response_json(messages)["result"]["tools"][0]
+        expected = [{"type": "oauth2", "scopes": [OAUTH_SCOPE]}]
+        self.assertEqual(tool["_meta"]["securitySchemes"], expected)
+        self.assertEqual(tool["securitySchemes"], expected)
 
     def test_valid_oauth_token_reaches_mcp_app(self):
         broker = make_broker()

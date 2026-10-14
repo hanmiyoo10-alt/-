@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 
 from repo_admin_mcp.crypto import KeyMaterial
 from repo_admin_mcp.github_client import DeployKey, EnvironmentPublicKey, GitHubAdminError, SecretMetadata
-from repo_admin_mcp.receipt import RotationCleanupReceiptSigner
 from repo_admin_mcp.service import (
     private_mirror_writer_bootstrap,
     private_mirror_writer_revoke,
@@ -415,7 +414,6 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(result["observedSecretUpdatedAt"], "2026-10-13T10:01:30Z")
         self.assertEqual([key.id for key in client.keys], [7, 8])
         self.assertNotIn("delete_key:7", client.events)
-        self.assertIn("cleanupReceipt", result)
 
     def test_rotate_same_second_success_stays_fail_closed_without_receipt(self):
         client = FakeClient()

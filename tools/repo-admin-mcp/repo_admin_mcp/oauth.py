@@ -249,7 +249,11 @@ class OAuthBroker:
                 "ChatGPT client metadata does not match this client, redirect, or token method.",
             )
 
-    def begin_authorization(self, params: dict[str, str]) -> str:
+    def begin_authorization(
+        self,
+        params: dict[str, str],
+        duplicate_fields: set[str] | None = None,
+    ) -> str:
         minimum = {"client_id", "redirect_uri", "state"}
         if not minimum.issubset(params):
             raise OAuthError("invalid_request", "Missing OAuth client, redirect, or state parameters.")
@@ -267,6 +271,9 @@ class OAuthBroker:
                 error=error,
                 error_description=description,
             )
+
+        if duplicate_fields:
+            return client_error("invalid_request", "Duplicate OAuth parameters are not accepted.")
 
         required = {
             "response_type",

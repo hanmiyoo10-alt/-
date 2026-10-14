@@ -166,15 +166,28 @@ async def _respond_redirect(send: Callable[..., Any], location: str) -> None:
     await send({"type": "http.response.body", "body": b""})
 
 
-def _query_params(scope: dict[str, Any]) -> dict[str, str]:
+def _query_values(scope: dict[str, Any]) -> dict[str, list[str]]:
     try:
         query = scope.get("query_string", b"").decode("utf-8")
     except UnicodeDecodeError:
         raise OAuthError("invalid_request", "OAuth query string is not valid UTF-8.") from None
-    parsed = urllib.parse.parse_qs(query, keep_blank_values=True)
+    return urllib.parse.parse_qs(query, keep_blank_values=True)
+
+
+def _query_params(scope: dict[str, Any]) -> dict[str, str]:
+    parsed = _query_values(scope)
     if any(len(values) != 1 for values in parsed.values()):
         raise OAuthError("invalid_request", "Duplicate OAuth parameters are not accepted.")
     return {key: values[0] for key, values in parsed.items()}
+
+
+def _authorization_query_params(scope: dict[str, Any]) -> tuple[dict[str, str], set[str]]:
+    parsed = _query_values(scope)
+    duplicate_fields = {key for key, values in parsed.items() if len(values) != 1}
+    identity_fields = {"client_id", "redirect_uri", "state"}
+    if duplicate_fields & identity_fields:
+        raise OAuthError("invalid_request", "Duplicate OAuth client, redirect, or state parameters are not accepted.")
+    return {key: values[0] for key, values in parsed.items()}, duplicate_fields
 
 
 async def _forward_tools_list_with_security_schemes(
@@ -314,7 +327,12 @@ class OAuthMCPApp:
 
         if path == "/oauth/authorize" and method == "GET":
             try:
-                location = await self._run_oauth_io(self._broker.begin_authorization, _query_params(scope))
+                params, duplicate_fields = _authorization_query_params(scope)
+                location = await self._run_oauth_io(
+                    self._broker.begin_authorization,
+                    params,
+                    duplicate_fields,
+                )
             except OAuthError as exc:
                 await _respond_json(
                     send,

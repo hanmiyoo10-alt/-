@@ -656,6 +656,33 @@ class OAuthASGITests(unittest.TestCase):
         self.assertEqual(inner.called, 1)
         self.assertEqual(inner.last_body, body)
 
+    def test_authorize_duplicate_non_identity_field_redirects_after_client_validation(self):
+        broker = make_broker()
+        app = OAuthMCPApp(InnerApp(), broker)
+        pairs = list(auth_params().items()) + [("scope", OAUTH_SCOPE)]
+        messages = asyncio.run(run_asgi(
+            app,
+            path="/oauth/authorize",
+            query=urllib.parse.urlencode(pairs),
+        ))
+        self.assertEqual(response_status(messages), 302)
+        location = response_headers(messages)[b"location"].decode()
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(location).query)
+        self.assertEqual(query["error"], ["invalid_request"])
+        self.assertEqual(query["state"], ["chatgpt-state"])
+        self.assertEqual(query["iss"], [BASE])
+
+    def test_authorize_duplicate_identity_field_stays_local_error(self):
+        app = OAuthMCPApp(InnerApp(), make_broker())
+        pairs = list(auth_params().items()) + [("redirect_uri", REDIRECT)]
+        messages = asyncio.run(run_asgi(
+            app,
+            path="/oauth/authorize",
+            query=urllib.parse.urlencode(pairs),
+        ))
+        self.assertEqual(response_status(messages), 400)
+        self.assertEqual(response_json(messages)["error"], "invalid_request")
+
     def test_oauth_get_endpoints_reject_non_utf8_query_bytes(self):
         app = OAuthMCPApp(InnerApp(), make_broker())
         for path in ("/oauth/authorize", "/oauth/github/callback"):
@@ -682,7 +709,7 @@ class OAuthASGITests(unittest.TestCase):
         release = threading.Event()
         broker = make_broker()
 
-        def slow_begin(_params):
+        def slow_begin(_params, _duplicate_fields=None):
             started.set()
             release.wait(timeout=1.0)
             return "https://github.com/login/oauth/authorize?client_id=x"
@@ -717,7 +744,7 @@ class OAuthASGITests(unittest.TestCase):
         release = threading.Event()
         broker = make_broker()
 
-        def slow_begin(_params):
+        def slow_begin(_params, _duplicate_fields=None):
             started.set()
             release.wait(timeout=1.0)
             return "https://github.com/login/oauth/authorize?client_id=x"

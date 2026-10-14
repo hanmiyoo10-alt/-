@@ -10,12 +10,10 @@ from unittest.mock import patch
 from nacl.public import PrivateKey, SealedBox
 
 from repo_admin_mcp.crypto import generate_ed25519_keypair, seal_for_github
-from repo_admin_mcp.receipt import ReceiptError
 from repo_admin_mcp.server import (
     ProtectedMCPApp,
     build_http_app,
     mcp,
-    _receipt_signer,
     private_mirror_writer_bootstrap,
     private_mirror_writer_status,
 )

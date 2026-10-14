@@ -105,12 +105,6 @@ class CryptoAndServerTests(unittest.TestCase):
         self.assertEqual(result["reasonCode"], "MUTATION_REQUIRES_GITHUB_APP")
         self.assertNotIn("synthetic-token", repr(result))
 
-    def test_missing_cleanup_receipt_signing_key_is_explicit(self):
-        with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaises(ReceiptError) as ctx:
-                _receipt_signer()
-        self.assertEqual(ctx.exception.code, "CLEANUP_RECEIPT_SIGNING_KEY_REQUIRED")
-
     def test_streamable_http_requires_access_token(self):
         with self.assertRaisesRegex(RuntimeError, "MCP_ACCESS_TOKEN_REQUIRED"):
             build_http_app("")

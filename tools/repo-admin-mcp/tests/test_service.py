@@ -324,19 +324,43 @@ class ServiceTests(unittest.TestCase):
         self.assertNotIn("delete_key:7", client.events)
         self.assertEqual(bytes(material.private_key), b"\x00" * len(SENTINEL))
 
-    def test_rotate_secret_metadata_read_failure_preserves_replacement(self):
+    def test_rotate_readback_failure_can_strengthen_ack_receipt_and_cleanup(self):
         client = FakeClient()
         configured(client)
         client.fail_secret_get_after_put = True
         material, factory = material_holder()
-        result = rotate(
+        first = rotate(
             client, 7, OLD_UPDATED, key_factory=factory, sealer=sealer, sleep=lambda _delay: None
         )
-        self.assertEqual(result["status"], "PARTIAL")
-        self.assertEqual(result["reasonCode"], "SECRET_METADATA_READBACK_UNKNOWN")
+        self.assertEqual(first["status"], "PARTIAL")
+        self.assertEqual(first["reasonCode"], "SECRET_METADATA_READBACK_UNKNOWN")
+        self.assertIn("cleanupReceipt", first)
+        self.assertEqual(first["secretUpdatedAt"], OLD_UPDATED)
         self.assertEqual([key.id for key in client.keys], [7, 8])
-        self.assertNotIn("delete_key:8", client.events)
         self.assertNotIn("delete_key:7", client.events)
+
+        client.fail_secret_get_after_put = False
+        second = rotate(
+            client,
+            7,
+            NEW_UPDATED,
+            cleanup_receipt=first["cleanupReceipt"],
+        )
+        self.assertEqual(second["status"], "PARTIAL")
+        self.assertEqual(second["reasonCode"], "ROTATION_CLEANUP_RECEIPT_STRENGTHENED")
+        self.assertIn("cleanupReceipt", second)
+        self.assertEqual(second["secretUpdatedAt"], NEW_UPDATED)
+        self.assertNotIn("delete_key:7", client.events)
+
+        third = rotate(
+            client,
+            7,
+            NEW_UPDATED,
+            cleanup_receipt=second["cleanupReceipt"],
+        )
+        self.assertEqual(third["status"], "PASS")
+        self.assertEqual(third["effect"], "ROTATION_CLEANUP_COMPLETED")
+        self.assertEqual([key.id for key in client.keys], [8])
 
     def test_rotate_key_read_failure_after_advanced_secret_keeps_cleanup_receipt(self):
         client = FakeClient()

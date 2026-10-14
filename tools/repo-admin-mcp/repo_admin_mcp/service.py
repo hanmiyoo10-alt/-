@@ -8,6 +8,7 @@ from typing import Callable, Protocol
 from .config import DEPLOY_KEY_TITLE_PREFIX, SECRET_NAME
 from .crypto import KeyMaterial, generate_ed25519_keypair, seal_for_github
 from .github_client import DeployKey, EnvironmentPublicKey, SecretMetadata
+from .receipt import RotationCleanupReceiptSigner
 
 
 class AdminClient(Protocol):
@@ -332,8 +333,9 @@ def private_mirror_writer_rotate(
     client: AdminClient,
     expected_key_id: int,
     expected_secret_updated_at: str,
-    pending_new_key_id: int | None = None,
+    cleanup_receipt: str | None = None,
     *,
+    receipt_signer: RotationCleanupReceiptSigner | None = None,
     key_factory: Callable[[str], KeyMaterial] = generate_ed25519_keypair,
     sealer: Callable[[str, bytearray], str] = seal_for_github,
     now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
@@ -341,6 +343,14 @@ def private_mirror_writer_rotate(
 ) -> dict:
     kind = "PRIVATE_MIRROR_WRITER_ROTATE"
     with _MUTATION_LOCK:
+        if receipt_signer is None:
+            return {
+                "schemaVersion": 1,
+                "kind": kind,
+                "status": "BLOCKED",
+                "reasonCode": "CLEANUP_RECEIPT_SIGNER_REQUIRED",
+            }
+
         status = private_mirror_writer_status(client)
         if status.get("status") != "PASS":
             return {**status, "kind": kind}
@@ -348,7 +358,27 @@ def private_mirror_writer_rotate(
         status_keys = status.get("deployKeys", [])
         status_secret = status.get("secret", {})
 
-        if pending_new_key_id is not None:
+        if cleanup_receipt is not None:
+            try:
+                evidence = receipt_signer.verify(cleanup_receipt)
+            except Exception as exc:
+                return _error_result(kind, exc, "BLOCKED")
+
+            if (
+                evidence.old_key_id != expected_key_id or
+                evidence.secret_updated_at != expected_secret_updated_at
+            ):
+                return {
+                    "schemaVersion": 1,
+                    "kind": kind,
+                    "status": "CONFLICT",
+                    "reasonCode": "ROTATION_CLEANUP_RECEIPT_MISMATCH",
+                    "receiptOldKeyId": evidence.old_key_id,
+                    "receiptNewKeyId": evidence.new_key_id,
+                    "receiptSecretUpdatedAt": evidence.secret_updated_at,
+                }
+
+            pending_new_key_id = evidence.new_key_id
             ids = {row.get("id") for row in status_keys}
 
             if (
@@ -359,7 +389,7 @@ def private_mirror_writer_rotate(
                 not status_keys[0].get("readOnly") and
                 status_keys[0].get("enabled") and
                 status_secret.get("present") and
-                status_secret.get("updatedAt") == expected_secret_updated_at
+                status_secret.get("updatedAt") == evidence.secret_updated_at
             ):
                 return {
                     "schemaVersion": 1,
@@ -368,17 +398,16 @@ def private_mirror_writer_rotate(
                     "effect": "ROTATION_CLEANUP_ALREADY_COMPLETED",
                     "oldKeyId": expected_key_id,
                     "newKeyId": pending_new_key_id,
-                    "secretUpdatedAt": expected_secret_updated_at,
+                    "secretUpdatedAt": evidence.secret_updated_at,
                 }
 
             if (
-                pending_new_key_id == expected_key_id or
                 status.get("configurationState") != "CONFLICT" or
                 status.get("deployKeyCount") != 2 or
                 ids != {expected_key_id, pending_new_key_id} or
                 any(row.get("readOnly") or not row.get("enabled") for row in status_keys) or
                 not status_secret.get("present") or
-                status_secret.get("updatedAt") != expected_secret_updated_at
+                status_secret.get("updatedAt") != evidence.secret_updated_at
             ):
                 return {
                     "schemaVersion": 1,
@@ -388,6 +417,7 @@ def private_mirror_writer_rotate(
                     "observedKeyIds": sorted(value for value in ids if isinstance(value, int)),
                     "observedSecretUpdatedAt": status_secret.get("updatedAt"),
                 }
+
             try:
                 client.delete_deploy_key(expected_key_id)
             except Exception as exc:
@@ -398,9 +428,11 @@ def private_mirror_writer_rotate(
                     "reasonCode": "OLD_KEY_REVOCATION_PENDING",
                     "oldKeyId": expected_key_id,
                     "newKeyId": pending_new_key_id,
-                    "secretUpdatedAt": expected_secret_updated_at,
+                    "secretUpdatedAt": evidence.secret_updated_at,
+                    "cleanupReceipt": cleanup_receipt,
                     "deleteReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
                 }
+
             final = private_mirror_writer_status(client)
             final_keys = final.get("deployKeys", [])
             final_secret = final.get("secret", {})
@@ -410,8 +442,9 @@ def private_mirror_writer_rotate(
                 final.get("deployKeyCount") != 1 or
                 len(final_keys) != 1 or
                 final_keys[0].get("id") != pending_new_key_id or
+                not final_keys[0].get("enabled") or
                 not final_secret.get("present") or
-                final_secret.get("updatedAt") != expected_secret_updated_at
+                final_secret.get("updatedAt") != evidence.secret_updated_at
             ):
                 return {
                     "schemaVersion": 1,
@@ -420,6 +453,7 @@ def private_mirror_writer_rotate(
                     "reasonCode": "ROTATION_CLEANUP_READBACK_NOT_CONVERGED",
                     "oldKeyId": expected_key_id,
                     "newKeyId": pending_new_key_id,
+                    "cleanupReceipt": cleanup_receipt,
                     "finalReasonCode": final.get("reasonCode"),
                 }
             return {
@@ -429,11 +463,12 @@ def private_mirror_writer_rotate(
                 "effect": "ROTATION_CLEANUP_COMPLETED",
                 "oldKeyId": expected_key_id,
                 "newKeyId": pending_new_key_id,
-                "secretUpdatedAt": expected_secret_updated_at,
+                "secretUpdatedAt": evidence.secret_updated_at,
             }
 
         if status.get("configurationState") != "CONFIGURED_METADATA_ONLY" or status.get("deployKeyCount") != 1:
             return {**status, "kind": kind, "status": "CONFLICT", "reasonCode": "ROTATION_REQUIRES_ONE_CONFIGURED_KEY"}
+
         current_key = status_keys[0]
         secret = status_secret
         if current_key["id"] != expected_key_id or secret.get("updatedAt") != expected_secret_updated_at:
@@ -445,6 +480,7 @@ def private_mirror_writer_rotate(
                 "observedKeyId": current_key["id"],
                 "observedSecretUpdatedAt": secret.get("updatedAt"),
             }
+
         try:
             env_key = client.get_environment_public_key()
         except Exception as exc:
@@ -545,6 +581,7 @@ def private_mirror_writer_rotate(
                     "oldKeyId": expected_key_id,
                     "newKeyId": replacement.id,
                 }
+
             try:
                 keys = _matching_keys(client)
             except Exception as exc:
@@ -558,16 +595,40 @@ def private_mirror_writer_rotate(
                     "secretUpdatedAt": changed.updated_at,
                     "readbackReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
                 }
-            if not any(key.id == replacement.id and not key.read_only for key in keys):
+            replacement_rows = [
+                key for key in keys
+                if key.id == replacement.id and not key.read_only and key.enabled
+            ]
+            if len(replacement_rows) != 1:
                 return {
                     "schemaVersion": 1,
                     "kind": kind,
                     "status": "PARTIAL",
-                    "reasonCode": "REPLACEMENT_KEY_READBACK_MISSING",
+                    "reasonCode": "REPLACEMENT_KEY_NOT_ENABLED",
                     "oldKeyId": expected_key_id,
                     "newKeyId": replacement.id,
                     "secretUpdatedAt": changed.updated_at,
                 }
+
+            try:
+                cleanup_token = receipt_signer.issue(
+                    old_key_id=expected_key_id,
+                    new_key_id=replacement.id,
+                    previous_secret_updated_at=expected_secret_updated_at,
+                    secret_updated_at=changed.updated_at,
+                )
+            except Exception as exc:
+                return {
+                    "schemaVersion": 1,
+                    "kind": kind,
+                    "status": "PARTIAL",
+                    "reasonCode": "CLEANUP_RECEIPT_ISSUE_FAILED",
+                    "oldKeyId": expected_key_id,
+                    "newKeyId": replacement.id,
+                    "secretUpdatedAt": changed.updated_at,
+                    "receiptReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
+                }
+
             try:
                 client.delete_deploy_key(expected_key_id)
             except Exception as exc:
@@ -579,6 +640,7 @@ def private_mirror_writer_rotate(
                     "oldKeyId": expected_key_id,
                     "newKeyId": replacement.id,
                     "secretUpdatedAt": changed.updated_at,
+                    "cleanupReceipt": cleanup_token,
                     "deleteReasonCode": getattr(exc, "code", "UNEXPECTED_ERROR"),
                 }
 
@@ -591,6 +653,7 @@ def private_mirror_writer_rotate(
                 final.get("deployKeyCount") != 1 or
                 len(final_keys) != 1 or
                 final_keys[0].get("id") != replacement.id or
+                not final_keys[0].get("enabled") or
                 not final_secret.get("present") or
                 final_secret.get("updatedAt") != changed.updated_at
             ):

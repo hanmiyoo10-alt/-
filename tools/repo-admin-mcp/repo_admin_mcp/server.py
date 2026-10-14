@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 import os
@@ -101,12 +102,19 @@ def private_mirror_writer_revoke(
     return build_revoke(client, expected_key_id, expected_secret_updated_at)
 
 
+class _ClientDisconnected(Exception):
+    pass
+
+
 async def _read_body(receive: Callable[..., Any], *, limit: int = 16384) -> bytes:
     chunks: list[bytes] = []
     size = 0
     while True:
         message = await receive()
-        if message.get("type") != "http.request":
+        message_type = message.get("type")
+        if message_type == "http.disconnect":
+            raise _ClientDisconnected()
+        if message_type != "http.request":
             continue
         chunk = message.get("body", b"")
         size += len(chunk)
@@ -248,11 +256,16 @@ class ProtectedMCPApp:
 
 
 class OAuthMCPApp:
-    _DISCOVERY_METHODS = {"initialize", "notifications/initialized", "tools/list"}
+    _DISCOVERY_METHODS = {"server/discover", "initialize", "notifications/initialized", "tools/list"}
 
     def __init__(self, app: Any, broker: OAuthBroker) -> None:
         self._app = app
         self._broker = broker
+        self._oauth_io_gate = asyncio.Semaphore(4)
+
+    async def _run_oauth_io(self, func: Callable[..., Any], *args: Any) -> Any:
+        async with self._oauth_io_gate:
+            return await asyncio.to_thread(func, *args)
 
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         if scope.get("type") != "http":
@@ -279,7 +292,7 @@ class OAuthMCPApp:
 
         if path == "/oauth/authorize" and method == "GET":
             try:
-                location = self._broker.begin_authorization(_query_params(scope))
+                location = await self._run_oauth_io(self._broker.begin_authorization, _query_params(scope))
             except OAuthError as exc:
                 await _respond_json(
                     send,
@@ -292,7 +305,7 @@ class OAuthMCPApp:
 
         if path == "/oauth/github/callback" and method == "GET":
             try:
-                location = self._broker.complete_github_callback(_query_params(scope))
+                location = await self._run_oauth_io(self._broker.complete_github_callback, _query_params(scope))
             except OAuthError as exc:
                 await _respond_json(
                     send,
@@ -310,6 +323,8 @@ class OAuthMCPApp:
                 if any(len(values) != 1 for values in form.values()):
                     raise OAuthError("invalid_request", "Duplicate token parameters are not accepted.")
                 token = self._broker.exchange_token({key: values[0] for key, values in form.items()})
+            except _ClientDisconnected:
+                return
             except (UnicodeDecodeError, OAuthError) as exc:
                 if isinstance(exc, OAuthError):
                     error, description, status = exc.code, exc.description, exc.http_status
@@ -347,6 +362,8 @@ class OAuthMCPApp:
         try:
             body = await _read_body(receive)
             message = json.loads(body.decode("utf-8")) if body else {}
+        except _ClientDisconnected:
+            return
         except Exception:
             challenge = self._broker.challenge(error="invalid_token", description="Authentication is required.")
             await _respond_json(

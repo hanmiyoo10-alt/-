@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import json
 import time
 import unittest
@@ -134,6 +135,37 @@ async def run_asgi(
     return sent
 
 
+async def run_disconnect_asgi(app, *, path: str, method: str = "POST"):
+    sent = []
+    receive_calls = 0
+
+    async def receive():
+        nonlocal receive_calls
+        receive_calls += 1
+        return {"type": "http.disconnect"}
+
+    async def send(message):
+        sent.append(message)
+
+    await app(
+        {
+            "type": "http",
+            "method": method,
+            "path": path,
+            "raw_path": path.encode(),
+            "query_string": b"",
+            "headers": [],
+            "http_version": "1.1",
+            "scheme": "https",
+            "server": ("test", 443),
+            "client": ("127.0.0.1", 12345),
+        },
+        receive,
+        send,
+    )
+    return sent, receive_calls
+
+
 def response_status(messages) -> int:
     return next(msg["status"] for msg in messages if msg["type"] == "http.response.start")
 
@@ -201,6 +233,18 @@ class OAuthBrokerTests(unittest.TestCase):
         self.assertEqual(auth["code_challenge_methods_supported"], ["S256"])
         self.assertTrue(auth["authorization_response_iss_parameter_supported"])
 
+    def test_public_base_url_must_be_origin_without_path(self):
+        with self.assertRaises(OAuthError) as ctx:
+            OAuthBroker(
+                base_url=BASE + "/mcp",
+                github_client_id="github-client-id",
+                github_client_secret="github-client-secret",
+                signing_key="S" * 64,
+                cimd_fetcher=lambda _url: cimd(),
+                github_identity_fetcher=lambda _code, _redirect: (EXPECTED_GITHUB_USER_ID, "hanmiyoo10-alt"),
+            )
+        self.assertEqual(ctx.exception.code, "INVALID_PUBLIC_BASE_URL")
+
     def test_authorize_accepts_only_chatgpt_cimd_and_exact_resource(self):
         broker = make_broker()
         location = broker.begin_authorization(auth_params())
@@ -249,10 +293,38 @@ class OAuthBrokerTests(unittest.TestCase):
     def test_github_identity_is_fixed_to_exact_user_id(self):
         broker = make_broker(user_id=123)
         upstream = broker.begin_authorization(auth_params())
-        with self.assertRaises(OAuthError) as ctx:
-            broker.complete_github_callback({"state": callback_state(upstream), "code": "github-code"})
-        self.assertEqual(ctx.exception.code, "access_denied")
-        self.assertEqual(ctx.exception.http_status, 403)
+        redirect = broker.complete_github_callback({
+            "state": callback_state(upstream),
+            "code": "github-code",
+        })
+        parsed = urllib.parse.urlsplit(redirect)
+        query = urllib.parse.parse_qs(parsed.query)
+        self.assertEqual(parsed.scheme + "://" + parsed.netloc + parsed.path, REDIRECT)
+        self.assertEqual(query["error"], ["access_denied"])
+        self.assertEqual(query["state"], ["chatgpt-state"])
+        self.assertEqual(query["iss"], [BASE])
+
+    def test_github_identity_exchange_failure_redirects_to_client(self):
+        broker = OAuthBroker(
+            base_url=BASE,
+            github_client_id="github-client-id",
+            github_client_secret="github-client-secret",
+            signing_key="S" * 64,
+            cimd_fetcher=lambda _url: cimd(),
+            github_identity_fetcher=lambda _code, _redirect: (_ for _ in ()).throw(
+                OAuthError("access_denied", "synthetic upstream detail", http_status=401)
+            ),
+        )
+        upstream = broker.begin_authorization(auth_params())
+        redirect = broker.complete_github_callback({
+            "state": callback_state(upstream),
+            "code": "github-code",
+        })
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(redirect).query)
+        self.assertEqual(query["error"], ["access_denied"])
+        self.assertEqual(query["state"], ["chatgpt-state"])
+        self.assertEqual(query["iss"], [BASE])
+        self.assertNotIn("synthetic upstream detail", redirect)
 
     def test_full_code_pkce_token_flow_and_one_time_code(self):
         broker = make_broker()
@@ -364,6 +436,68 @@ class OAuthASGITests(unittest.TestCase):
         self.assertEqual(response_status(messages), 200)
         self.assertEqual(inner.called, 1)
         self.assertEqual(inner.last_body, body)
+
+    def test_unauthenticated_server_discover_reaches_inner_app(self):
+        inner = InnerApp()
+        app = OAuthMCPApp(inner, make_broker())
+        body = json.dumps({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "server/discover",
+            "params": {"protocolVersion": "2026-07-28"},
+        }).encode()
+        messages = asyncio.run(run_asgi(app, path="/mcp", method="POST", body=body))
+        self.assertEqual(response_status(messages), 200)
+        self.assertEqual(inner.called, 1)
+        self.assertEqual(inner.last_body, body)
+
+    def test_http_disconnect_aborts_body_read_without_spinning(self):
+        app = OAuthMCPApp(InnerApp(), make_broker())
+
+        async def scenario():
+            return await asyncio.wait_for(
+                run_disconnect_asgi(app, path="/oauth/token"),
+                timeout=0.2,
+            )
+
+        messages, receive_calls = asyncio.run(scenario())
+        self.assertEqual(messages, [])
+        self.assertEqual(receive_calls, 1)
+
+    def test_blocking_cimd_lookup_does_not_block_health(self):
+        started = threading.Event()
+        release = threading.Event()
+        broker = make_broker()
+
+        def slow_begin(_params):
+            started.set()
+            release.wait(timeout=1.0)
+            return "https://github.com/login/oauth/authorize?client_id=x"
+
+        broker.begin_authorization = slow_begin
+        app = OAuthMCPApp(InnerApp(), broker)
+        query = urllib.parse.urlencode(auth_params())
+
+        async def scenario():
+            authorize = asyncio.create_task(
+                run_asgi(app, path="/oauth/authorize", query=query)
+            )
+            deadline = asyncio.get_running_loop().time() + 0.5
+            while not started.is_set():
+                if asyncio.get_running_loop().time() >= deadline:
+                    raise AssertionError("blocking OAuth call did not start")
+                await asyncio.sleep(0.005)
+            health = await asyncio.wait_for(
+                run_asgi(app, path="/health"),
+                timeout=0.1,
+            )
+            release.set()
+            authorize_result = await asyncio.wait_for(authorize, timeout=0.5)
+            return health, authorize_result
+
+        health, authorize_result = asyncio.run(scenario())
+        self.assertEqual(response_status(health), 200)
+        self.assertEqual(response_status(authorize_result), 302)
 
     def test_unauthenticated_tools_list_mirrors_security_schemes_at_top_level(self):
         inner = ToolsListInner()

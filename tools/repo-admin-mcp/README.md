@@ -238,3 +238,14 @@ The plugin source under `plugin-src/mcp.json` declares OAuth + CIMD only. Updati
 ### Tool discovery and authentication prompt
 
 All four fixed tools advertise the same OAuth security scheme in MCP tool metadata. MCP SDK v2.3 currently serializes this extension through `_meta`, so the HTTP front door mirrors that verified list into the modern top-level `securitySchemes` field on `tools/list` responses for ChatGPT compatibility. An unauthenticated client may call only MCP discovery methods (`initialize`, `notifications/initialized`, `tools/list`). An unauthenticated `tools/call` receives a bounded MCP error result with `_meta["mcp/www_authenticate"]` and the RFC 9728 protected-resource metadata URL. Privileged tool logic is never entered before token validation.
+
+
+### OAuth review hardening
+
+The OAuth front door also preserves service availability and client-flow convergence:
+
+- CIMD and GitHub identity network I/O is dispatched through a four-slot asynchronous worker gate, so slow upstream HTTPS calls do not block the Uvicorn event loop or `/health`;
+- request-body readers treat ASGI `http.disconnect` as terminal and never spin on repeated disconnect messages;
+- `REPO_ADMIN_OAUTH_PUBLIC_BASE_URL` must be a path-free HTTPS origin;
+- post-GitHub identity failures and wrong-account denials are redirected back to the already-verified ChatGPT redirect URI with the original `state` and RFC 9207 `iss`, rather than stranding the browser on local JSON;
+- unauthenticated discovery permits both legacy `initialize` and modern MCP `server/discover` plus `tools/list`; privileged `tools/call` remains OAuth-gated.

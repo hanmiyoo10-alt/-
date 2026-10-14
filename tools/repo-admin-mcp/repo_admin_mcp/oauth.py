@@ -81,7 +81,15 @@ class OAuthBroker:
     ) -> None:
         base_url = base_url.rstrip("/")
         parsed = urllib.parse.urlsplit(base_url)
-        if parsed.scheme != "https" or not parsed.netloc or parsed.query or parsed.fragment:
+        if (
+            parsed.scheme != "https"
+            or not parsed.netloc
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+        ):
             raise OAuthError("INVALID_PUBLIC_BASE_URL", "OAuth public base URL must be a canonical HTTPS origin.")
         if not github_client_id or not github_client_secret:
             raise OAuthError("GITHUB_OAUTH_CONFIGURATION_MISSING", "GitHub OAuth client configuration is incomplete.")
@@ -241,13 +249,19 @@ class OAuthBroker:
 
         try:
             user_id, _login = self._github_identity_fetcher(code, self.github_callback_url)
-        except OAuthError:
-            raise
         except Exception:
-            raise OAuthError("access_denied", "GitHub identity verification failed.", http_status=401) from None
+            return self._client_redirect(
+                pending,
+                error="access_denied",
+                error_description="GitHub identity verification failed.",
+            )
 
         if user_id != EXPECTED_GITHUB_USER_ID:
-            raise OAuthError("access_denied", "This MCP is restricted to its fixed GitHub owner.", http_status=403)
+            return self._client_redirect(
+                pending,
+                error="access_denied",
+                error_description="This GitHub account is not authorized for this MCP.",
+            )
 
         auth_code = secrets.token_urlsafe(32)
         with self._lock:

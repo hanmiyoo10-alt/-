@@ -10,10 +10,12 @@ from unittest.mock import patch
 from nacl.public import PrivateKey, SealedBox
 
 from repo_admin_mcp.crypto import generate_ed25519_keypair, seal_for_github
+from repo_admin_mcp.receipt import ReceiptError
 from repo_admin_mcp.server import (
     ProtectedMCPApp,
     build_http_app,
     mcp,
+    _receipt_signer,
     private_mirror_writer_bootstrap,
     private_mirror_writer_status,
 )
@@ -102,6 +104,12 @@ class CryptoAndServerTests(unittest.TestCase):
         self.assertEqual(result["status"], "BLOCKED")
         self.assertEqual(result["reasonCode"], "MUTATION_REQUIRES_GITHUB_APP")
         self.assertNotIn("synthetic-token", repr(result))
+
+    def test_missing_cleanup_receipt_signing_key_is_explicit(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(ReceiptError) as ctx:
+                _receipt_signer()
+        self.assertEqual(ctx.exception.code, "CLEANUP_RECEIPT_SIGNING_KEY_REQUIRED")
 
     def test_streamable_http_requires_access_token(self):
         with self.assertRaisesRegex(RuntimeError, "MCP_ACCESS_TOKEN_REQUIRED"):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import ipaddress
 import json
 import re
 import secrets
@@ -67,6 +68,23 @@ def _bounded_text(value: Any, *, limit: int = 160) -> str:
     return value[:limit]
 
 
+def _valid_origin_hostname(hostname: str) -> bool:
+    if len(hostname) > 253:
+        return False
+    try:
+        ipaddress.ip_address(hostname)
+        return True
+    except ValueError:
+        pass
+    labels = hostname.split(".")
+    return all(
+        label
+        and len(label) <= 63
+        and re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", label)
+        for label in labels
+    )
+
+
 def _append_query_params(uri: str, params: dict[str, str]) -> str:
     parsed = urllib.parse.urlsplit(uri)
     encoded = urllib.parse.urlencode(params)
@@ -113,6 +131,7 @@ class OAuthBroker:
             parsed.scheme != "https"
             or not parsed.netloc
             or not parsed.hostname
+            or not _valid_origin_hostname(parsed.hostname)
             or parsed_port is not None and not 1 <= parsed_port <= 65535
             or parsed.username is not None
             or parsed.password is not None

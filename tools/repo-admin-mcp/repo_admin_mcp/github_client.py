@@ -196,10 +196,12 @@ class GitHubAdminClient:
             if row["name"] == SECRET_NAME:
                 if match is not None:
                     raise GitHubAdminError("ENVIRONMENT_SECRET_IDENTITY_CONFLICT")
+                if not isinstance(row.get("updated_at"), str) or not row["updated_at"]:
+                    raise GitHubAdminError("ENVIRONMENT_SECRET_METADATA_INVALID")
                 match = SecretMetadata(
                     name=SECRET_NAME,
                     created_at=row.get("created_at") if isinstance(row.get("created_at"), str) else None,
-                    updated_at=row.get("updated_at") if isinstance(row.get("updated_at"), str) else None,
+                    updated_at=row["updated_at"],
                 )
         return match
 

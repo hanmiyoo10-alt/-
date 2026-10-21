@@ -937,6 +937,89 @@ assert.equal(resolveOverlap(['path:src/demo.js'], [{
   body: overlapPacketBody('BLOCKED', ['path:src/**']),
 }]).state, 'OVERLAP');
 
+const legacyUnscopedPacketBody = `<!-- canonical-main-work-packet:v1 -->
+## State
+\`BLOCKED\`
+## Scope
+repository source already merged; live validation remains
+## Handoff
+fixture`;
+
+const legacyNonblockingPacket = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: '#20', issueState: 'open',
+    body: legacyUnscopedPacketBody,
+    packetActivityEvidence: packetActivityEvidence('PARENT_WAITING_ON_SUCCESSOR'),
+  }],
+});
+assert.equal(legacyNonblockingPacket.state, 'DISJOINT');
+assert.equal(legacyNonblockingPacket.findings.length, 0);
+assert.equal(legacyNonblockingPacket.candidateActivity.length, 1);
+assert.equal(legacyNonblockingPacket.candidateActivity[0].state, 'NONBLOCKING_PROVEN');
+
+const legacyActiveWriterPacket = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: '#20', issueState: 'open',
+    body: legacyUnscopedPacketBody,
+    packetActivityEvidence: packetActivityEvidence(
+      'PARENT_WAITING_ON_SUCCESSOR', {repositoryMutationActive: true}),
+  }],
+});
+expectOverlapFinding(
+  legacyActiveWriterPacket, 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+assert.equal(legacyActiveWriterPacket.candidateActivity[0].state, 'ACTIVE_WRITER');
+
+for (const [overrides, expectedActivityState] of [
+  [{sequencingExplicit: false}, 'UNKNOWN'],
+  [{candidateRef: '#22'}, 'CONFLICT'],
+]) {
+  const legacyUnresolvedActivity = resolveScopeOverlap({
+    requesterRef: '#21',
+    requestedScopes: ['path:src/demo.js'],
+    discovery: 'COMPLETE',
+    candidates: [{
+      type: 'packet', ref: '#20', issueState: 'open',
+      body: legacyUnscopedPacketBody,
+      packetActivityEvidence: packetActivityEvidence('DEFERRED_OWNER', overrides),
+    }],
+  });
+  expectOverlapFinding(
+    legacyUnresolvedActivity, 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+  assert.equal(legacyUnresolvedActivity.candidateActivity[0].state, expectedActivityState);
+}
+
+expectOverlapFinding(resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: '#20', issueState: 'open',
+    body: legacyUnscopedPacketBody,
+  }],
+}), 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+
+const legacyLifecycleConflictWithNonblockingEvidence = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: '#20', issueState: 'open',
+    body: legacyUnscopedPacketBody.replace('`BLOCKED`', '`IN_PROGRESS / REVIEW`'),
+    packetActivityEvidence: packetActivityEvidence('PARENT_WAITING_ON_SUCCESSOR'),
+  }],
+});
+expectOverlapFinding(
+  legacyLifecycleConflictWithNonblockingEvidence,
+  'CONFLICT',
+  OVERLAP_REASON_CODES.PACKET_STATE_UNRESOLVED);
+assert.equal(Object.hasOwn(legacyLifecycleConflictWithNonblockingEvidence, 'candidateActivity'), false);
+
 const validationDiscoveryPacketActivity = resolveScopeOverlap({
   requesterRef: '#21',
   requestedScopes: ['path:src/demo.js'],

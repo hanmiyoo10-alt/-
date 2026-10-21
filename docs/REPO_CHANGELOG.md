@@ -2537,3 +2537,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8edbcd7b0b22e1db05bbde5ebd70d96c300d7cf5)
 - Event ID: `2403fa539f6ad2330bc9e879b9c42b9d1491b623749b4cd2bcfaf816708d393c`
 <!-- canonical-main-doc-promoted:2403fa539f6ad2330bc9e879b9c42b9d1491b623749b4cd2bcfaf816708d393c -->
+
+### 2026-10-21 — fix(repo): allow proven nonblocking packet scope bypass (#3686)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `9b276fa794033aeb0f8762abf6cca853fd439037`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/9b276fa794033aeb0f8762abf6cca853fd439037)
+- Event ID: `469e8c32b7ba65c29d9475687fa9382bd591c5bf898333f1a1ae066c5af0caba`
+<!-- canonical-main-doc-promoted:469e8c32b7ba65c29d9475687fa9382bd591c5bf898333f1a1ae066c5af0caba -->

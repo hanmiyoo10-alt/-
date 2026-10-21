@@ -28,7 +28,7 @@ stop_runsv() {
 reset_runtime() {
     stop_runsv
     rm -f "$SERVICE/sv-run" "$SERVICE/sv-down" "$SERVICE/down"
-    rm -f "$TEST_STATE/health-ready" "$TEST_STATE/fail-start" "$TEST_STATE/slow-start"
+    rm -f "$TEST_STATE/health-ready" "$TEST_STATE/fail-start" "$TEST_STATE/slow-start" "$TEST_STATE/slow-start-entered"
     rm -f "$TEST_STATE/ps-block" "$TEST_STATE/ps-entered" "$TEST_STATE/ps.calls" "$TEST_STATE/ps-fail"
     rm -f "$TEST_STATE/flock-block" "$TEST_STATE/flock-entered" "$TEST_STATE/lock-fd-leaked" "$TEST_STATE/curl.args"
     : > "$TEST_STATE/ps.out"
@@ -117,7 +117,10 @@ count="\$(cat "$TEST_STATE/runsv.count" 2>/dev/null || echo 0)"
 count=\$((count + 1))
 printf '%s\n' "\$count" > "$TEST_STATE/runsv.count"
 printf '%s\n' "\$\$" > "$TEST_STATE/runsv.pid"
-if [ -e "$TEST_STATE/slow-start" ]; then /bin/sleep 0.3; fi
+if [ -e "$TEST_STATE/slow-start" ]; then
+    touch "$TEST_STATE/slow-start-entered"
+    /bin/sleep 0.1
+fi
 if [ -e "$TEST_STATE/fail-start" ]; then
     trap 'exit 0' TERM INT HUP
     while :; do /bin/sleep 30; done
@@ -310,7 +313,12 @@ reset_runtime
 before_concurrent="$(cat "$TEST_STATE/runsv.count")"
 touch "$TEST_STATE/slow-start"
 run_subject --ensure >/dev/null & one=$!
-/bin/sleep 0.05
+i=0
+while [ "$i" -lt 40 ] && [ ! -e "$TEST_STATE/slow-start-entered" ]; do
+    /bin/sleep 0.05
+    i=$((i + 1))
+done
+[ -e "$TEST_STATE/slow-start-entered" ] || fail "concurrent fixture never entered delayed runsv"
 set +e
 run_subject --ensure >/dev/null 2>&1 & two=$!
 wait "$two"

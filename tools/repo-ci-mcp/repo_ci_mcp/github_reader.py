@@ -16,6 +16,7 @@ DEFAULT_REPOSITORY = "hanmiyoo10-alt/-"
 DEFAULT_API = "https://api.github.com"
 DEFAULT_API_VERSION = "2022-11-28"
 CODE_QUALITY_API_VERSION = "2026-03-10"
+ATTESTATIONS_API_VERSION = "2026-03-10"
 DEFAULT_JSON_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_RELEASE_LIST_BYTES = 64 * 1024 * 1024
 DEFAULT_TIMEOUT_SECONDS = 20.0
@@ -109,7 +110,7 @@ class GitHubReader:
         return text
 
     def _request(self, url: str, *, api_version: str = DEFAULT_API_VERSION) -> Request:
-        if api_version not in {DEFAULT_API_VERSION, CODE_QUALITY_API_VERSION}:
+        if api_version not in {DEFAULT_API_VERSION, CODE_QUALITY_API_VERSION, ATTESTATIONS_API_VERSION}:
             raise ValueError("unsupported GitHub API version")
         headers = {
             "Accept": "application/vnd.github+json",
@@ -505,6 +506,90 @@ class GitHubReader:
             "updated_at": item.get("updated_at"),
         } for item in value]
 
+    @staticmethod
+    def _hook_id(hook_id: int) -> int:
+        if isinstance(hook_id, bool) or not isinstance(hook_id, int) or hook_id <= 0:
+            raise ValueError("hook_id must be a positive integer")
+        return hook_id
+
+    def list_repository_webhooks(self, *, limit: int) -> list[dict[str, Any]]:
+        safe_limit = self._recent_limit(limit)
+        value = self._get_json_value(
+            f"{self._repo_api_prefix}/hooks",
+            {"per_page": safe_limit},
+        )
+        if not isinstance(value, list) or len(value) > safe_limit:
+            raise GitHubReadError("webhooks response must be a bounded array")
+        if any(not isinstance(item, dict) for item in value):
+            raise GitHubReadError("webhook item invalid")
+        hooks = []
+        for item in value:
+            last_response = item.get("last_response")
+            if last_response is not None and not isinstance(last_response, dict):
+                raise GitHubReadError("webhook last_response metadata invalid")
+            hooks.append({
+                "id": item.get("id"),
+                "name": item.get("name"),
+                "active": item.get("active"),
+                "events": item.get("events"),
+                "created_at": item.get("created_at"),
+                "updated_at": item.get("updated_at"),
+                "last_response": None if last_response is None else {
+                    "code": last_response.get("code"),
+                    "status": last_response.get("status"),
+                },
+            })
+        return hooks
+
+    def list_webhook_deliveries(self, hook_id: int, *, limit: int) -> list[dict[str, Any]]:
+        safe_id = self._hook_id(hook_id)
+        safe_limit = self._recent_limit(limit)
+        value = self._get_json_value(
+            f"{self._repo_api_prefix}/hooks/{safe_id}/deliveries",
+            {"per_page": safe_limit},
+        )
+        if not isinstance(value, list) or len(value) > safe_limit:
+            raise GitHubReadError("webhook deliveries response must be a bounded array")
+        if any(not isinstance(item, dict) for item in value):
+            raise GitHubReadError("webhook delivery item invalid")
+        return [{
+            "id": item.get("id"),
+            "delivered_at": item.get("delivered_at"),
+            "redelivery": item.get("redelivery"),
+            "duration": item.get("duration"),
+            "status": item.get("status"),
+            "status_code": item.get("status_code"),
+            "event": item.get("event"),
+            "action": item.get("action"),
+            "throttled_at": item.get("throttled_at"),
+        } for item in value]
+
+    @staticmethod
+    def _subject_digest(subject_digest: str) -> str:
+        if not isinstance(subject_digest, str) or not re.fullmatch(r"sha256:[0-9a-fA-F]{64}", subject_digest):
+            raise ValueError("subject_digest must be sha256:<64 hex>")
+        return "sha256:" + subject_digest[7:].lower()
+
+    def list_repository_attestations(self, subject_digest: str, *, limit: int) -> list[dict[str, Any]]:
+        safe_digest = self._subject_digest(subject_digest)
+        safe_limit = self._recent_limit(limit)
+        value = self._get_json_value(
+            f"{self._repo_api_prefix}/attestations/{quote(safe_digest, safe='')}",
+            {"per_page": safe_limit},
+            api_version=ATTESTATIONS_API_VERSION,
+        )
+        if not isinstance(value, dict):
+            raise GitHubReadError("attestations response root must be an object")
+        items = value.get("attestations")
+        if not isinstance(items, list) or len(items) > safe_limit:
+            raise GitHubReadError("attestations response must be a bounded array")
+        if any(not isinstance(item, dict) for item in items):
+            raise GitHubReadError("attestation item invalid")
+        return [{
+            "repository_id": item.get("repository_id"),
+            "initiator": item.get("initiator"),
+        } for item in items]
+
     def probe_accepted_permissions(self, operation: str) -> dict[str, Any]:
         paths = {
             "repository": self._repo_api_prefix,
@@ -520,6 +605,7 @@ class GitHubReader:
             "code_quality": f"{self._repo_api_prefix}/code-quality/findings",
             "releases": f"{self._repo_api_prefix}/releases",
             "tags": f"{self._repo_api_prefix}/tags",
+            "webhooks": f"{self._repo_api_prefix}/hooks",
         }
         if operation not in paths:
             raise ValueError("unsupported permission probe operation")
@@ -558,12 +644,21 @@ class GitHubReader:
             raise GitHubReadError("workflow_runs must be an array")
         return [item for item in runs if isinstance(item, dict)]
 
-    def list_runs_exact_sha(self, commit_sha: str) -> tuple[int, list[dict[str, Any]]]:
+    def list_runs_exact_sha(
+        self, commit_sha: str, event: str | None = None,
+    ) -> tuple[int, list[dict[str, Any]]]:
         if not isinstance(commit_sha, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha):
             raise GitHubReadError("commit_sha must be a full 40-hex SHA")
+        if event is not None and (
+            not isinstance(event, str) or not re.fullmatch(r"[A-Za-z0-9_]+", event)
+        ):
+            raise GitHubReadError("event must be a GitHub Actions event name")
+        query: dict[str, str | int] = {"head_sha": commit_sha.lower(), "per_page": 100}
+        if event is not None:
+            query["event"] = event
         value = self._get_json(
             f"{self._repo_api_prefix}/actions/runs",
-            {"head_sha": commit_sha.lower(), "per_page": 100},
+            query,
         )
         total = value.get("total_count")
         runs = value.get("workflow_runs")

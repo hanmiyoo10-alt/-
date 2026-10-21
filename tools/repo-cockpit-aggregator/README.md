@@ -10,7 +10,7 @@ Canonicalized from `hanmiyoo10-alt/myang@3297a5745740ebb7962d875c5fa96ba8806c7e3
 
 Repo Cockpit is a transport and presentation adapter only.
 
-It reads direct `main` and issue #485, preserves their source identities, and returns bounded derived status. It does not own repository, release, production, runtime, device, or Idea Hub truth.
+It reads direct `main` and issue #485 for repository status, and it can read a bounded exact-SHA inventory of push-triggered GitHub Actions runs. It preserves source identities and returns bounded derived status. It does not own repository, CI/Required, release, production, runtime, device, or Idea Hub truth.
 
 It exposes no GitHub write, generic GraphQL/HTTP passthrough, caller-selected repository, branch/ref mutation, workflow dispatch, merge, release, production, or device effect.
 
@@ -52,9 +52,9 @@ Main movement, closed/invalid #485, malformed/duplicate/incomplete capsule evide
 
 `GET /healthz` is local service health and does not require GitHub credentials or network access.
 
-`GET /snapshot` and MCP `repo_snapshot` use the authenticated fixed-repository reader.
+`GET /snapshot`, MCP `repo_snapshot`, and MCP `repo_push_runs` use the authenticated fixed-repository reader.
 
-Authenticated snapshot execution is bounded by one shared per-process gate across both surfaces: at most 6 snapshot executions per 60 seconds by default. Rejected excess requests perform zero additional GitHub reads. The service does not replay a cached status snapshot to satisfy this guard.
+Authenticated snapshot execution is bounded by one shared per-process gate across its HTTP and MCP surfaces: at most 6 snapshot executions per 60 seconds by default. Push-run inventory has a separate gate of at most 6 executions per 60 seconds by default. Rejected excess requests perform zero additional GitHub reads. The service does not replay cached status or run inventory to satisfy either guard.
 
 MCP request bodies are accumulated as bytes and decoded once as UTF-8, so multibyte characters remain intact across HTTP chunk boundaries. Before a body is read or dispatched, an `Origin` header, when present, must resolve to the configured public domain or a loopback host. Untrusted or malformed origins fail with HTTP 403.
 
@@ -62,7 +62,11 @@ Bodies must decode to a valid JSON-RPC 2.0 request object with a non-empty strin
 
 The initialize handshake supports protocol revision `2025-06-18`. Initialize params must include a non-empty `protocolVersion`, an object `capabilities`, and `clientInfo` with non-empty `name` and `version`; incomplete params return `-32602`. A client requesting another handshake revision receives `2025-06-18` as the server's supported counter-offer rather than an echoed unsupported value. For subsequent MCP requests, an `MCP-Protocol-Version` header may be omitted for compatibility, but when present it must equal `2025-06-18`; unsupported values fail with HTTP 400 before dispatch or GitHub reads.
 
-The only public tool is `repo_snapshot`; its arguments must be absent or exactly an empty object matching the advertised schema, otherwise the request returns `-32602` before consuming snapshot allowance or GitHub reads. Canonical convergence parsing accepts bare `STABLE` and the repository renderer's detailed `SETTLING` form, including its optional `STALE` suffix and bounded waiting/age detail.
+The public MCP tools are `repo_snapshot` and `repo_push_runs`.
+
+`repo_snapshot` arguments must be absent or exactly an empty object matching the advertised schema, otherwise the request returns `-32602` before consuming snapshot allowance or GitHub reads. Canonical convergence parsing accepts bare `STABLE` and the repository renderer's detailed `SETTLING` form, including its optional `STALE` suffix and bounded waiting/age detail.
+
+`repo_push_runs` accepts only an optional full 40-hex `sha`. When omitted, the service reads direct current `main` exactly once and then queries GitHub Actions with fixed `head_sha=<resolved-main>&event=push&per_page=100`. When supplied, no main lookup occurs. The response is a compact projection of run/workflow identity, exact head SHA, branch, push event, status/conclusion, run number/attempt, and GitHub run locator. Complete zero results are known-zero observation for that SHA; malformed, incomplete, over-bound, SHA-mismatched, or non-push inventory fails closed. This read never becomes Required, release, or production authority.
 
 ## Deployment boundary
 

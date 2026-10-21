@@ -7,6 +7,7 @@ Read-only MCP surface for bounded repository result retrieval.
 ```text
 repo_ci_summary(workflow?, ref?, run_id?)
 repo_ci_overview(workflows, ref?)
+repo_ci_runs_exact_sha(sha, event?)
 repo_ci_exact_sha(sha, workflow?, event?, ref?, before_sha?)
 repo_notebook_read(path, ref?, start_cell=0, max_cells=20, include_outputs=false)
 repo_branch_protection(branch="main")
@@ -17,6 +18,7 @@ repo_variable_metadata()
 repo_security_alerts(kind, limit=20)
 repo_security_advisories(limit=20)
 repo_code_quality(limit=20)
+repo_attestations(subject_digest, limit=20)
 repo_environments()
 repo_deployments(limit=20)
 repo_deployment_statuses(deployment_id, limit=20)
@@ -46,6 +48,8 @@ The raw compact-summary text is deliberately omitted from the normal GPT-facing 
 
 The overview uses the existing latest-per-workflow ref semantics. It is not an atomic exact-current-main snapshot across independently triggered workflow families and does not substitute older green runs.
 
+`repo_ci_runs_exact_sha` is the direct exact-SHA workflow-run inventory surface. It applies GitHub's `head_sha` filter and, when supplied, one explicit Actions `event` filter such as `push` or `pull_request`. Event omission preserves the all-event inventory. A complete filtered zero-result response is valid known-zero observation for that SHA/event pair; it does not infer that any particular workflow should have run. The returned bounded projection preserves run/workflow identity, event, exact head SHA, head branch, status/conclusion, run number/attempt, and the GitHub run locator. This tool is read-only derived observability and does not replace Required, release, or production authority.
+
 `repo_ci_exact_sha` inventories GitHub Actions runs at one full commit SHA with the repository-wide `head_sha` filter and no event restriction. Optional workflow absence classification is fail-closed: `RAN`, `EXPECTED_NO_RUN_PATH_FILTER`, `TRIGGER_NOT_APPLICABLE`, `BLOCKED_CAPABILITY`, `MISSING_UNEXPECTED`, or `UNKNOWN`. Strong no-run reasons require exact workflow source plus applicable event/ref evidence; path-filter reasons additionally require an exact `before_sha` transition and complete changed-path evidence. Unsupported trigger syntax, ambiguous transition identity, transport failure, or configured bounds preserve `UNKNOWN` rather than guessing.
 
 `repo_notebook_read` resolves the requested Git ref to one exact commit and reads one repository-relative `.ipynb` at that immutable identity. It returns a bounded cell window with markdown/code/raw source and safe notebook metadata. Saved outputs are off by default; optional output projection keeps bounded textual forms while omitting binary/image, HTML, JavaScript, and attachment payloads. This is fresh-on-call GitHub state, not a view of unsaved Colab or uncommitted remote-working-tree edits.
@@ -58,7 +62,11 @@ Repository security advisory observability is a targeted metadata-only drill-dow
 
 Repository Code Quality observability is a targeted first-page metadata drill-down. `repo_code_quality(limit=20)` uses the Code Quality endpoint's required GitHub API version `2026-03-10` without changing the reader's default `2022-11-28` version for unrelated endpoints. It exposes bounded finding identity/state, rule id/severity/category, repository-relative location, and creation timestamp only. Finding URLs, rule title/description/help, message text/markdown, and raw nested payloads are omitted. Non-empty `count` is the number of returned first-page rows, never a repository-wide total. HTTP 403/404/503 remain `UNKNOWN`; in particular, 404 is not converted into zero findings or inferred feature/permission state.
 
+Repository attestation observability is a targeted first-page metadata drill-down keyed only by an explicit caller-owned `sha256:<64-hex>` subject digest. It uses GitHub REST API version `2026-03-10` for this endpoint so legacy inline attestation bundle payloads are not returned, without changing the reader's default API version for unrelated endpoints. `repo_attestations(subject_digest, limit=20)` exposes bounded repository ID and initiator metadata only. Attestation `bundle_url`, signed storage URLs, raw bundle material, and arbitrary response fields are omitted and never followed. Non-empty `count` is returned-row count only and `total_count` remains unknown. HTTP 403/404/5xx remain `UNKNOWN`; a 404 is `RESOURCE_NOT_FOUND`, never known zero, permission certainty, feature-state certainty, or artifact-integrity failure. This metadata surface does not cryptographically verify attestation signatures/timestamps or signer identity and therefore grants no provenance-verification, signer-trust, artifact-integrity, security-acceptance, CI, Required, release, production, runtime, or deployment authority.
+
 Repository release observability is a targeted first-page metadata drill-down. `repo_releases(limit=20)` exposes bounded release identity/tag/target, draft/prerelease/immutable flags, and lifecycle timestamps; `repo_tags(limit=20)` exposes tag names plus exact commit SHAs; `repo_release_assets(release_id, limit=20)` exposes bounded asset identity/state/content type/size/digest/download count/timestamps. Release bodies, author/uploader identities, archive/download/upload URLs, nested raw asset payloads, and arbitrary response fields are omitted. Non-empty counts are returned-row counts only, `total_count` stays unknown, and these reads never become project release or production authority.
+
+Repository webhook observability is a targeted first-page configuration drill-down. `repo_webhooks(limit=20)` exposes bounded hook identity/name/active state/event names/timestamps and only `last_response.code/status`; webhook config, callback URL, secrets, ping/test/delivery URLs, and last-response messages are omitted. `repo_webhook_deliveries(hook_id, limit=20)` exposes bounded delivery timing/status/event metadata only; GUIDs, installation/repository IDs, callback URLs, signatures, request/response headers, payloads, and response bodies are omitted. The full single-delivery detail endpoint is intentionally not exposed. Counts are returned-row counts only, `total_count` stays unknown, and these reads never become notification, delivery-success, release, production, deployment, CI, or Required authority.
 
 Repository Actions variable observability is metadata-only. `repo_variable_metadata` returns bounded variable names and created/updated timestamps, proves a complete known-zero inventory when empty, and deliberately discards GitHub's variable `value` field. Variable metadata never becomes configuration, release, production, or runtime authority.
 
@@ -80,7 +88,9 @@ The same captured #485 body also contributes a bounded triage index for `Active 
 - security alert reads are targeted, bounded to 50, and omit raw alert payloads
 - repository security advisory reads are targeted, bounded to 50 recent rows, metadata-only, and excluded from routine repo snapshot
 - Code Quality reads are targeted, bounded to one first page of 1-50 rows, use endpoint-specific API versioning, and are excluded from routine repo snapshot
+- repository attestation reads require an explicit caller-owned SHA256 digest, use endpoint-specific API version `2026-03-10` to avoid legacy inline bundle payloads, are bounded to one first page of 1-50 rows, omit and never follow bundle URLs, preserve 404 as UNKNOWN rather than known zero, and grant no provenance-verification, signer-trust, artifact-integrity, security-acceptance, CI, Required, release, production, runtime, or deployment authority
 - release/tag/release-asset reads are targeted, bounded to one first page of 1-50 rows, metadata-only, omit release bodies/identities/URLs/raw payloads, and grant no release or production authority
+- repository webhook/delivery reads are targeted, bounded to one first page of 1-50 rows, metadata-only, omit callback configuration/secrets/URLs/GUIDs/request-response headers and payloads, and grant no notification, delivery-success, release, production, deployment, CI, or Required authority
 - Code Quality finding URLs, rule prose/help, message text/markdown, and raw nested payloads are omitted; 404 remains UNKNOWN rather than known zero
 - advisory descriptions, vulnerability/package details, credits/collaborator identities, private-fork data, arbitrary URLs, and raw payloads are omitted
 - environment/deployment reads are fixed-repository GET-only projections with bounded pagination/limits

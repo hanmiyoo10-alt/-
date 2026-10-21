@@ -9,6 +9,7 @@ from urllib.error import HTTPError
 from urllib.request import Request
 
 from repo_ci_mcp.github_reader import (
+    ATTESTATIONS_API_VERSION,
     CODE_QUALITY_API_VERSION,
     DEFAULT_API_VERSION,
     MAX_RELEASE_LIST_BYTES,
@@ -112,6 +113,19 @@ class ReaderTests(unittest.TestCase):
             total, runs = reader.list_runs_exact_sha("a" * 40)
         self.assertEqual((total, len(runs)), (2, 2))
         get_json.assert_called_once_with("/repos/owner/repo/actions/runs", {"head_sha": "a" * 40, "per_page": 100})
+
+    def test_55a_exact_sha_run_inventory_applies_optional_event_filter(self):
+        reader = GitHubReader(repository="owner/repo")
+        payload = {"total_count": 1, "workflow_runs": [{"id": 1}]}
+        with patch.object(GitHubReader, "_get_json", return_value=payload) as get_json:
+            total, runs = reader.list_runs_exact_sha("a" * 40, event="push")
+        self.assertEqual((total, len(runs)), (1, 1))
+        get_json.assert_called_once_with(
+            "/repos/owner/repo/actions/runs",
+            {"head_sha": "a" * 40, "per_page": 100, "event": "push"},
+        )
+        with self.assertRaisesRegex(GitHubReadError, "event must be a GitHub Actions event name"):
+            reader.list_runs_exact_sha("a" * 40, event="push-invalid!")
 
     def test_56_compare_changed_paths_requires_ancestor_and_marks_300_incomplete(self):
         reader = GitHubReader(repository="owner/repo")
@@ -473,6 +487,128 @@ class ReaderTests(unittest.TestCase):
             with self.assertRaisesRegex(GitHubReadError, "bounded array"):
                 reader.list_repository_releases(limit=2)
 
+    def test_58j_webhooks_use_fixed_bounded_endpoint_and_strip_config(self):
+        reader = GitHubReader(repository="owner/repo")
+        raw = [{
+            "id": 7,
+            "name": "web",
+            "active": True,
+            "events": ["push"],
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-02T00:00:00Z",
+            "config": {"url": "https://secret.invalid", "secret": "hidden"},
+            "ping_url": "private",
+            "deliveries_url": "private",
+            "last_response": {"code": 200, "status": "ok", "message": "private"},
+        }]
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_repository_webhooks(limit=2)
+        get_value.assert_called_once_with("/repos/owner/repo/hooks", {"per_page": 2})
+        self.assertEqual(result[0]["id"], 7)
+        self.assertEqual(result[0]["last_response"], {"code": 200, "status": "ok"})
+        self.assertNotIn("secret.invalid", repr(result))
+        self.assertNotIn("hidden", repr(result))
+        self.assertNotIn("message", repr(result))
+
+    def test_58k_webhook_deliveries_use_fixed_endpoint_and_strip_sensitive_payloads(self):
+        reader = GitHubReader(repository="owner/repo")
+        raw = [{
+            "id": 9,
+            "guid": "private-guid",
+            "delivered_at": "2026-01-03T00:00:00Z",
+            "redelivery": False,
+            "duration": 0.25,
+            "status": "OK",
+            "status_code": 200,
+            "event": "issues",
+            "action": "opened",
+            "installation_id": 123,
+            "repository_id": 456,
+            "url": "https://secret.invalid",
+            "throttled_at": None,
+            "request": {"headers": {"X-Hub-Signature-256": "secret"}, "payload": {"private": True}},
+            "response": {"headers": {"X": "secret"}, "payload": "private"},
+        }]
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_webhook_deliveries(5, limit=2)
+        get_value.assert_called_once_with("/repos/owner/repo/hooks/5/deliveries", {"per_page": 2})
+        self.assertEqual(result[0]["id"], 9)
+        self.assertNotIn("private-guid", repr(result))
+        self.assertNotIn("secret.invalid", repr(result))
+        self.assertNotIn("installation_id", repr(result))
+        self.assertNotIn("request", repr(result))
+        self.assertNotIn("response", repr(result))
+
+    def test_58l_webhook_reads_validate_ids_limits_and_bounds(self):
+        reader = GitHubReader(repository="owner/repo")
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_repository_webhooks(limit=0)
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            reader.list_webhook_deliveries(0, limit=1)
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_webhook_deliveries(1, limit=51)
+        with patch.object(GitHubReader, "_get_json_value", return_value=[{}] * 3):
+            with self.assertRaisesRegex(GitHubReadError, "bounded array"):
+                reader.list_repository_webhooks(limit=2)
+
+    def test_58m_attestations_use_fixed_bounded_endpoint_and_strip_bundle_url(self):
+        reader = GitHubReader(repository="owner/repo")
+        digest = "sha256:" + "A" * 64
+        normalized = "sha256:" + "a" * 64
+        raw = {
+            "attestations": [{
+                "repository_id": 7,
+                "initiator": "github-actions",
+                "bundle_url": "https://signed.invalid/bundle?sig=private",
+                "raw": {"private": True},
+            }],
+        }
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_repository_attestations(digest, limit=2)
+        get_value.assert_called_once_with(
+            "/repos/owner/repo/attestations/sha256%3A" + "a" * 64,
+            {"per_page": 2},
+            api_version=ATTESTATIONS_API_VERSION,
+        )
+        self.assertEqual(
+            result,
+            [{"repository_id": 7, "initiator": "github-actions"}],
+        )
+        self.assertNotIn("signed.invalid", repr(result))
+        self.assertNotIn("bundle_url", repr(result))
+        self.assertNotIn("private", repr(result))
+        self.assertEqual(reader._subject_digest(digest), normalized)
+
+    def test_58ma_attestation_reader_uses_bundle_free_api_version(self):
+        reader = GitHubReader(repository="owner/repo")
+        digest = "sha256:" + "a" * 64
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {}
+        response.read.return_value = b'{"attestations":[]}'
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            self.assertEqual(reader.list_repository_attestations(digest, limit=1), [])
+        request = opened.call_args.args[0]
+        self.assertEqual(request.get_header("X-github-api-version"), ATTESTATIONS_API_VERSION)
+
+    def test_58n_attestation_reads_validate_digest_limit_and_bounds(self):
+        reader = GitHubReader(repository="owner/repo")
+        with self.assertRaisesRegex(ValueError, "sha256"):
+            reader.list_repository_attestations("sha256:short", limit=1)
+        with self.assertRaisesRegex(ValueError, "sha256"):
+            reader.list_repository_attestations("sha512:" + "a" * 64, limit=1)
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_repository_attestations("sha256:" + "a" * 64, limit=0)
+        with patch.object(
+            GitHubReader,
+            "_get_json_value",
+            return_value={"attestations": [{}] * 3},
+        ):
+            with self.assertRaisesRegex(GitHubReadError, "bounded array"):
+                reader.list_repository_attestations("sha256:" + "a" * 64, limit=2)
+
     def test_59_permission_probe_reads_header_without_inferring_grant(self):
         reader = GitHubReader(repository="owner/repo")
         response = unittest.mock.MagicMock()
@@ -564,6 +700,21 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(
             opened.call_args.args[0].full_url,
             "https://api.github.com/repos/owner/repo/tags?per_page=1",
+        )
+
+    def test_60_webhook_permission_probe_uses_fixed_endpoint(self):
+        reader = GitHubReader(repository="owner/repo")
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {"X-Accepted-GitHub-Permissions": "webhooks=read"}
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            result = reader.probe_accepted_permissions("webhooks")
+        self.assertEqual(result["accepted_permissions"], "webhooks=read")
+        self.assertEqual(
+            opened.call_args.args[0].full_url,
+            "https://api.github.com/repos/owner/repo/hooks?per_page=1",
         )
 
     def test_61_deployment_permission_probes_use_fixed_endpoints(self):

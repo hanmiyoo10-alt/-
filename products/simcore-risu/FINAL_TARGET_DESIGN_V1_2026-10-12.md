@@ -536,6 +536,53 @@ Vector indexes do not own semantic truth.
 
 Every intentionally selected donor keeps a traceable destination until proven equal-or-better supersession.
 
+### Future donor acquisition priority
+
+SimCore Risu is intended to become the owner's primary Risu environment. Accordingly, future donor discovery prioritizes the host ecosystem:
+
+- materially distinct RisuAI/PocketRisu forks, modified distributions, forks-of-forks and Risu-derived applications enter the donor-candidate registry by default when discovered;
+- host/mobile/server/Termux/storage/performance/save/context/memory/UI/product-integration variants are in scope;
+- unrelated new standalone plugins are discovered selectively when they address a proven product gap;
+- this priority does not demote already selected plugin donors;
+- donor registration is inventory/provenance first, not automatic integration.
+
+Broad Risu fork/mod ecosystem discovery is tracked by #3645.
+
+### Owner-private snapshot intake
+
+The owner's private Google Drive `포켓리스` folder is an additional donor source. Artifacts and repository links intentionally placed there enter the donor-candidate inventory, with deduplication and explicit provenance. Private Drive locators remain outside the public repository. Drive snapshot intake is tracked by #3647.
+
+Owner placement is product-intent evidence. The artifact does not need to contribute to Fusion core.
+
+### Product Feature & Experience donor lane
+
+SimCore Risu is the target home application, so donors may contribute optional first-class product experiences in addition to core architecture.
+
+Examples include:
+- RPG/game systems;
+- fishing/gacha/card systems;
+- music/rhythm/interactive entertainment;
+- NPC/entity managers;
+- readers/editors/search tools;
+- lorebook and import/export utilities;
+- provider/model-management tools;
+- other owner-selected Risu ecosystem features.
+
+Target boundary:
+
+```text
+Fusion Core / Host Truth
+        |
+        | typed read projections + action/promotion gates
+        v
+Product Feature & Experience Modules
+        |
+        v
+SimCore Risu integrated UI
+```
+
+Feature modules may remain optional and independently enabled. They do not gain direct authority over canonical Runtime/Knowledge merely because they are built into the app. World-affecting results must cross explicit Control/Runtime/Knowledge boundaries.
+
 | Donor | Target contribution |
 | --- | --- |
 | Current SimCore | Control semantics, host safety, current behavioral baseline |
@@ -549,11 +596,35 @@ Every intentionally selected donor keeps a traceable destination until proven eq
 | LightBoard family | Presentation, COMMUNITY, Reaction, Public Wiki |
 | LoreQAcustom | Canon Alignment, AU divergence, temporal guard, canon progression |
 | HaejeokRisu | host performance, SQL/storage, lazy-loading, Termux/cross-platform lessons |
-| PocketRisu | upstream ecosystem compatibility and host lineage |
+| RisuAI | parent Risu host lineage, ecosystem/data/plugin compatibility reference |
+| PocketRisu | primary self-hosted upstream, ecosystem compatibility and host lineage |
 | hanmiyoo10-alt/PocketRisu | owner integration/staging fork and proven local host modifications |
 | Legacy Core_Ruleset | original product intent and migration requirements |
+| SocialRisu | interactive social client, Surface-to-World promotion, world-native social network, Media/Asset Pipeline, social privacy and migration durability |
 
-Third-party code reuse remains license/provenance-gated.
+### Owner private donor-source policy
+
+For owner-supplied plugin/donor artifacts used only in the owner's private SimCore Risu build, the owner has explicitly authorized source-level inspection, adaptation and selective transplant.
+
+Private adaptation does not make donor code a second canonical owner. Reused code must be moved under the correct Fusion/SimCore Risu semantic owner.
+
+This project policy does not assert public redistribution rights. Original provenance, author/project identity, upstream links and applicable license/copyright notices remain recorded. Any future public/shared distribution remains separately license/provenance-gated.
+
+### MYANG donor/update hub
+
+After the MYANG existing-content relocation prerequisite and MYANG authority bootstrap:
+
+- MYANG becomes the private donor intake/update/distribution hub;
+- original upstream URLs remain preserved for provenance and release comparison;
+- owner-facing update/install URLs for adapted private plugin builds should point to MYANG-controlled endpoints/manifests;
+- upstream releases are compared and integrated into MYANG before reaching the private build;
+- native SimCore Risu capabilities use the unified SimCore Risu updater rather than retaining independent donor self-updaters;
+- operational donor version/update state must not be duplicated between MYANG and `hanmiyoo10-alt/-`.
+
+Full policy:
+`products/simcore-risu/DONOR_UPDATE_HUB_POLICY_V1_2026-10-13.md`
+
+Public/shared distribution remains license/provenance-gated.
 
 ## 20. Unified product UI
 
@@ -581,6 +652,13 @@ Canon Alignment
 └ Canon Progression
 
 Surfaces / LightBoard
+
+Experiences / Tools
+├ Games / RPG
+├ Social / Community
+├ Creative / Media
+├ Editors / Readers
+└ Utilities
 
 Worldlines / Saves
 

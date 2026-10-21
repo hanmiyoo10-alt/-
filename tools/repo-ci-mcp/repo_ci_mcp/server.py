@@ -6,13 +6,21 @@ from mcp.server import MCPServer
 
 from .branch_protection import repo_branch_protection as build_repo_branch_protection
 from .canonical_main_status import canonical_main_status as build_canonical_main_status
-from .exact_sha import repo_ci_exact_sha as build_repo_ci_exact_sha
+from .exact_sha import (
+    repo_ci_exact_sha as build_repo_ci_exact_sha,
+    repo_ci_runs_exact_sha as build_repo_ci_runs_exact_sha,
+)
 from .github_reader import GitHubReader
+from .github_attestations import repo_attestations as build_repo_attestations
 from .github_code_quality import repo_code_quality as build_repo_code_quality
 from .github_releases import (
     repo_release_assets as build_repo_release_assets,
     repo_releases as build_repo_releases,
     repo_tags as build_repo_tags,
+)
+from .github_webhooks import (
+    repo_webhook_deliveries as build_repo_webhook_deliveries,
+    repo_webhooks as build_repo_webhooks,
 )
 from .github_security_advisories import repo_security_advisories as build_repo_security_advisories
 from .github_variables import repo_variable_metadata as build_repo_variable_metadata
@@ -63,6 +71,12 @@ def repo_ci_overview(workflows: list[str], ref: str | None = None) -> dict[str, 
 def repo_ci_exact_sha(sha: str, workflow: str | None = None, event: str | None = None, ref: str | None = None, before_sha: str | None = None) -> dict[str, Any]:
     """Inventory all-event exact-SHA workflow runs and explain a proven workflow absence conservatively."""
     return build_repo_ci_exact_sha(GitHubReader(), sha=sha, workflow=workflow, event=event, ref=ref, before_sha=before_sha)
+
+
+@mcp.tool()
+def repo_ci_runs_exact_sha(sha: str, event: str | None = None) -> dict[str, Any]:
+    """Inventory exact-SHA workflow runs, optionally filtered to one GitHub Actions event."""
+    return build_repo_ci_runs_exact_sha(GitHubReader(), sha=sha, event=event)
 
 
 @mcp.tool()
@@ -129,6 +143,12 @@ def repo_code_quality(limit: int = 20) -> dict[str, Any]:
 
 
 @mcp.tool()
+def repo_attestations(subject_digest: str, limit: int = 20) -> dict[str, Any]:
+    """Read bounded repository attestation metadata for one explicit SHA256 subject digest."""
+    return build_repo_attestations(GitHubReader(), subject_digest, limit)
+
+
+@mcp.tool()
 def repo_releases(limit: int = 20) -> dict[str, Any]:
     """Read one bounded first page of repository release metadata."""
     return build_repo_releases(GitHubReader(), limit)
@@ -144,6 +164,18 @@ def repo_tags(limit: int = 20) -> dict[str, Any]:
 def repo_release_assets(release_id: int, limit: int = 20) -> dict[str, Any]:
     """Read one bounded first page of metadata for one validated release id."""
     return build_repo_release_assets(GitHubReader(), release_id, limit)
+
+
+@mcp.tool()
+def repo_webhooks(limit: int = 20) -> dict[str, Any]:
+    """Read one bounded first page of repository webhook metadata."""
+    return build_repo_webhooks(GitHubReader(), limit)
+
+
+@mcp.tool()
+def repo_webhook_deliveries(hook_id: int, limit: int = 20) -> dict[str, Any]:
+    """Read one bounded first page of metadata for one validated repository webhook id."""
+    return build_repo_webhook_deliveries(GitHubReader(), hook_id, limit)
 
 
 @mcp.tool()

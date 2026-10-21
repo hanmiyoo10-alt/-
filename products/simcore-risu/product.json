@@ -22,5 +22,37 @@
   "target_repository": "hanmiyoo10-alt/myang",
   "target_repository_role": "flagship_application_repository_after_migration_gate",
   "upstream_integration_repository": "hanmiyoo10-alt/PocketRisu",
-  "migration_gate": "MYANG_EXISTING_CONTENT_RELOCATION_REQUIRED"
+  "migration_gate": "MYANG_EXISTING_CONTENT_RELOCATION_REQUIRED",
+  "donor_update_policy": "products/simcore-risu/DONOR_UPDATE_HUB_POLICY_V1_2026-10-13.md",
+  "donor_update_hub_target": "hanmiyoo10-alt/myang",
+  "private_donor_source_policy": "OWNER_SUPPLIED_PRIVATE_SOURCE_ADAPTATION_ALLOWED",
+  "public_redistribution_policy": "LICENSE_PROVENANCE_REVIEW_REQUIRED",
+  "update_routing_gate": "MYANG_EXISTING_CONTENT_RELOCATION_REQUIRED",
+  "host_donor_lane_issue": 3642,
+  "parent_host_lineage": "kwaroran/RisuAI",
+  "primary_host_upstream": "PocketRisu/PocketRisu",
+  "host_integration_staging": "hanmiyoo10-alt/PocketRisu",
+  "selective_host_donors": [
+    "nevaeh5379/HaejeokRisuai",
+    "rpaddict/RisuBard"
+  ],
+  "risu_ecosystem_donor_watch_issue": 3645,
+  "donor_discovery_priority": {
+    "risu_forks_mods": "DEFAULT_DISCOVERY_AND_CANDIDATE_REGISTRATION",
+    "standalone_plugins": "SELECTIVE_REQUIREMENT_DRIVEN"
+  },
+  "owner_drive_donor_intake_issue": 3647,
+  "owner_drive_donor_source": "PRIVATE_GOOGLE_DRIVE_FOLDER_POCKETRISU",
+  "owner_drive_private_locator_policy": "DO_NOT_COMMIT_PRIVATE_DRIVE_IDS_OR_URLS",
+  "donor_role_taxonomy": [
+    "CORE_FUSION_DONOR",
+    "HOST_PLATFORM_DONOR",
+    "PRODUCT_FEATURE_DONOR",
+    "EXPERIENCE_GAME_DONOR",
+    "UX_TOOL_DONOR",
+    "OPS_DONOR",
+    "SUPPORTING_REFERENCE"
+  ],
+  "owner_drive_selection_semantics": "OWNER_PLACEMENT_IS_PRODUCT_FEATURE_INTENT",
+  "product_feature_module_policy": "OPTIONAL_NATIVE_MODULES_WITH_TYPED_WORLD_EFFECT_GATES"
 }

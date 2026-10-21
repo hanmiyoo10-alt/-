@@ -17,6 +17,7 @@ const GH_READ_TIMEOUT_MS = 20_000;
 const MAX_JOB_LOG_BYTES = 1024 * 1024;
 const MAX_PR_RECOVERY_RUNS = 16;
 const SHA40_RE = /^[0-9a-f]{40}$/;
+const ADOPTION_SURFACE_RE = /^surface:repo:external-pr-adoption:pr-([1-9][0-9]*)$/;
 const PACKET_MARKER = '<!-- canonical-main-work-packet:v1 -->';
 const PACKET_ACTIVITY_EVIDENCE_MODE = 'VALIDATION_MERGE_PACKET_ACTIVITY_EVIDENCE_SET';
 const PACKET_REF_RE = /^#[1-9][0-9]*$/;
@@ -177,7 +178,29 @@ function validateImplementationReceipt(receipt, packetNumber, prNumber) {
   if (prRefs.length !== 1 || !SHA40_RE.test(String(prRefs[0].identity || ''))) {
     throw new OwnerError('UNKNOWN', ['IMPLEMENTATION_STAGE_PR_IDENTITY_MISSING']);
   }
-  return {receipt, expectedHead: prRefs[0].identity, paths: sorted(receipt.scope.paths)};
+  const adoptionGates = (receipt.requiredGates || []).filter(
+    (row) => row.name === 'external-pr-adoption-surface');
+  if (adoptionGates.length > 1) {
+    throw new OwnerError('CONFLICT', ['IMPLEMENTATION_ADOPTION_SURFACE_GATE_DUPLICATE']);
+  }
+  let adoptionSurface = null;
+  if (adoptionGates.length === 1) {
+    const gate = adoptionGates[0];
+    const match = ADOPTION_SURFACE_RE.exec(String(gate.evidenceLocator || ''));
+    if (gate.result !== 'PASS' || !match) {
+      throw new OwnerError('UNKNOWN', ['IMPLEMENTATION_ADOPTION_SURFACE_GATE_INVALID']);
+    }
+    if (Number(match[1]) !== prNumber) {
+      throw new OwnerError('CONFLICT', ['IMPLEMENTATION_ADOPTION_SURFACE_PR_MISMATCH']);
+    }
+    adoptionSurface = gate.evidenceLocator;
+  }
+  return {
+    receipt,
+    expectedHead: prRefs[0].identity,
+    paths: sorted(receipt.scope.paths),
+    adoptionSurface,
+  };
 }
 
 function parseOpsCapsule(body) {
@@ -895,6 +918,20 @@ async function inspectWithClient({
       () => readCurrentMain(client));
     const packet = await perform('packet-stage-scope', 'issue:#' + packetNumber,
       () => readPacket(client, packetNumber));
+    const packetAdoptionSurfaces = packet.scopes.filter(
+      (scope) => ADOPTION_SURFACE_RE.test(scope));
+    if (implementation.adoptionSurface) {
+      if (packetAdoptionSurfaces.length !== 1
+          || packetAdoptionSurfaces[0] !== implementation.adoptionSurface) {
+        throw new OwnerError(
+          'CONFLICT', ['IMPLEMENTATION_ADOPTION_SURFACE_PACKET_MISMATCH'],
+          'issue:#' + packetNumber);
+      }
+    } else if (packetAdoptionSurfaces.length) {
+      throw new OwnerError(
+        'CONFLICT', ['IMPLEMENTATION_ADOPTION_SURFACE_RECEIPT_MISSING'],
+        'issue:#' + packetNumber);
+    }
     if (!exactPathsWithinPacketScopes(implementation.paths, packet.pathScopes)) {
       throw new OwnerError('CONFLICT', ['IMPLEMENTATION_PACKET_SCOPE_MISMATCH'],
         'issue:#' + packetNumber);

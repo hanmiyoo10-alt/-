@@ -62,10 +62,11 @@ reconnect notification은 sound 없이 구성한 상태.
 - `--check`는 read-only다. `identity`, `supervision`, `receiver`, `health`, `recovery`, `effect`, `details=withheld`만 출력하고 PID, command line, endpoint, payload, token, address, raw process output은 출력하지 않는다.
 - `--ensure`는 `missing supervisor + receiver absent`인 exact eligible state에서만 fixed service directory에 dedicated `runsv` 하나를 시작한다.
 - service `down` marker와 이미 인식된 `run:`/`down:` supervision은 새 supervisor 시작 권한이 아니다.
-- service `down` marker가 있어도 process/health evidence를 먼저 수집하며 duplicate/alternate/non-supervised/unreadable receiver evidence는 `operator_down`보다 ambiguity가 우선한다. 또한 supervisor가 없고 exact receiver가 0인데 fixed health가 이미 ready면 숨은/다른 listener 가능성으로 fail-closed하고 `runsv`를 시작하지 않는다.
+- service `down` marker가 있어도 process/health evidence를 먼저 수집하며 duplicate/alternate/non-supervised/unreadable receiver evidence는 `operator_down`보다 ambiguity가 우선한다. `sv status`의 `down:` 상태도 exact receiver의 PPID가 해당 runsv 또는 PID 1 orphan 조건에 맞는지 검증하며, 그 외 ownership은 fail-closed한다. 또한 supervisor가 없고 exact receiver가 0인데 fixed health가 이미 ready면 숨은/다른 listener 가능성으로 fail-closed하고 `runsv`를 시작하지 않는다.
 - supervisor가 없고 exact receiver 하나가 PID 1에 붙어 있으며 fixed localhost health가 ready면 `orphan_present`로 보존한다. receiver를 죽이거나 재시작해서 `sv` 상태를 예쁘게 만들지 않는다.
 - duplicate receiver, alternate/wrapped/relative `receiver.cjs` command line, non-PID1 unsupervised receiver, ambiguous supervisor/process evidence, identity drift, unreadable process evidence는 fail-closed다.
-- ensure lock은 fixed kernel advisory `flock` 하나만 사용한다. PID/start-time metadata나 stale-directory reclaim owner를 만들지 않으며 lock owner가 사라지면 kernel이 lock을 해제한다. concurrent lock conflict는 fresh readback이 이미 `orphan_present|not_needed`인 accepted no-op일 때만 성공이고 그 외에는 fail-closed다.
+- ensure lock은 fixed kernel advisory `flock` 하나만 사용한다. state directory와 lock path는 symlink를 거부하고 lock file은 비파괴 read/write open 뒤 다시 regular-file identity를 확인한다. critical section은 flock을 가진 프로세스가 직접 실행하며 long-lived `runsv`에는 lock fd를 넘기지 않는다. PID/start-time metadata나 stale-directory reclaim owner를 만들지 않으며 lock owner가 사라지면 kernel이 lock을 해제한다. concurrent lock conflict는 fresh readback이 이미 `orphan_present|not_needed`인 accepted no-op일 때만 성공이고 그 외에는 fail-closed다.
+- dedicated `runsv`의 stdout/stderr는 `/dev/null`로 보내 장기 append-only 로그 파일을 만들지 않는다. relay 진단은 기존 bounded semantic health/state evidence로만 수행한다.
 - fixed localhost health probe는 user curl config/proxy 영향을 받지 않도록 `curl -q ... --noproxy '*'`로 강제한다.
 - PocketRisu product CI는 `ci/validate_docs.py`에서 focused `tests/test-notify-relay-supervisor.sh`를 직접 실행하므로 lock/signal/duplicate-process 회귀를 green CI가 건너뛸 수 없다.
 - start 뒤에는 bounded readback으로 `run supervision + exactly one receiver parented by that runsv + health ready`를 모두 확인해야 성공한다.

@@ -28,9 +28,11 @@ stop_runsv() {
 reset_runtime() {
     stop_runsv
     rm -f "$SERVICE/sv-run" "$SERVICE/sv-down" "$SERVICE/down"
-    rm -f "$TEST_STATE/health-ready" "$TEST_STATE/fail-start" "$TEST_STATE/slow-start" "$TEST_STATE/slow-start-entered"
+    rm -f "$TEST_STATE/health-ready" "$TEST_STATE/fail-start"
     rm -f "$TEST_STATE/ps-block" "$TEST_STATE/ps-entered" "$TEST_STATE/ps.calls" "$TEST_STATE/ps-fail"
-    rm -f "$TEST_STATE/flock-block" "$TEST_STATE/flock-entered" "$TEST_STATE/lock-fd-leaked" "$TEST_STATE/curl.args"
+    rm -f "$TEST_STATE/flock-block" "$TEST_STATE/flock-entered" "$TEST_STATE/flock.calls"
+    rm -f "$TEST_STATE/flock-hold-first" "$TEST_STATE/flock-first-acquired" "$TEST_STATE/flock-watch-second" "$TEST_STATE/flock-second-entered"
+    rm -f "$TEST_STATE/lock-fd-leaked" "$TEST_STATE/curl.args"
     : > "$TEST_STATE/ps.out"
     rm -f "$STATE/ensure.lock"
 }
@@ -101,11 +103,23 @@ EOF_PS
 REAL_FLOCK="$(command -v flock)"
 cat > "$PREFIX/bin/flock" <<EOF_FLOCK
 #!/usr/bin/env sh
+calls="\$(cat "$TEST_STATE/flock.calls" 2>/dev/null || echo 0)"
+calls=\$((calls + 1))
+printf '%s\n' "\$calls" > "$TEST_STATE/flock.calls"
 if [ -e "$TEST_STATE/flock-block" ]; then
     touch "$TEST_STATE/flock-entered"
     while [ -e "$TEST_STATE/flock-block" ]; do /bin/sleep 0.05; done
 fi
-exec "$REAL_FLOCK" "\$@"
+if [ "\$calls" -eq 2 ] && [ -e "$TEST_STATE/flock-watch-second" ]; then
+    touch "$TEST_STATE/flock-second-entered"
+fi
+"$REAL_FLOCK" "\$@"
+flock_rc=\$?
+if [ "\$flock_rc" -eq 0 ] && [ "\$calls" -eq 1 ] && [ -e "$TEST_STATE/flock-hold-first" ]; then
+    touch "$TEST_STATE/flock-first-acquired"
+    while [ -e "$TEST_STATE/flock-hold-first" ]; do /bin/sleep 0.05; done
+fi
+exit "\$flock_rc"
 EOF_FLOCK
 
 cat > "$PREFIX/bin/runsv" <<EOF_RUNSV
@@ -117,10 +131,6 @@ count="\$(cat "$TEST_STATE/runsv.count" 2>/dev/null || echo 0)"
 count=\$((count + 1))
 printf '%s\n' "\$count" > "$TEST_STATE/runsv.count"
 printf '%s\n' "\$\$" > "$TEST_STATE/runsv.pid"
-if [ -e "$TEST_STATE/slow-start" ]; then
-    touch "$TEST_STATE/slow-start-entered"
-    /bin/sleep 0.1
-fi
 if [ -e "$TEST_STATE/fail-start" ]; then
     trap 'exit 0' TERM INT HUP
     while :; do /bin/sleep 30; done
@@ -161,6 +171,13 @@ if grep -Eq 'POCKETRISU_.*=' "$SOURCE"; then
     fail "caller environment override surface present"
 fi
 grep -q 'FLOCK="$PREFIX/bin/flock"' "$SOURCE" || fail "fixed flock owner missing"
+if grep -Fq '( locked_ensure )' "$SOURCE"; then
+    fail "locked critical section detached from lock owner"
+fi
+grep -Fq '"$NOHUP" "$RUNSV" "$SERVICE" </dev/null >/dev/null 2>&1 9>&- &' "$SOURCE" || fail "runsv output/fd boundary missing"
+if grep -Eq 'RUNSV_LOG|runsv\.log' "$SOURCE"; then
+    fail "unbounded runsv log remains"
+fi
 if grep -Eq 'LOCKPID|LOCKSTART|proc_starttime|write_lock_identity|rm -rf.*ensure.lock' "$SOURCE"; then
     fail "legacy stale-lock metadata/reclamation remains"
 fi
@@ -188,6 +205,34 @@ printf '%s\n' "$out" | grep -q '^recovery=blocked$' || fail "already-live health
 [ "$(cat "$TEST_STATE/runsv.count")" = "$before_ready" ] || fail "already-live health started runsv"
 reset_runtime
 
+before_lock_symlink="$(cat "$TEST_STATE/runsv.count")"
+lock_target="$TMP/lock-target"
+printf '%s\n' preserve > "$lock_target"
+ln -s "$lock_target" "$STATE/ensure.lock"
+set +e
+run_subject --ensure >/dev/null 2>&1
+lock_symlink_rc=$?
+set -e
+[ "$lock_symlink_rc" -eq 2 ] || fail "symlinked lock file did not fail closed"
+[ "$(cat "$lock_target")" = preserve ] || fail "symlinked lock target was modified"
+[ "$(cat "$TEST_STATE/runsv.count")" = "$before_lock_symlink" ] || fail "symlinked lock file started runsv"
+rm -f "$STATE/ensure.lock"
+
+state_target="$TMP/state-target"
+mkdir -p "$state_target"
+rmdir "$STATE"
+ln -s "$state_target" "$STATE"
+set +e
+run_subject --ensure >/dev/null 2>&1
+state_symlink_rc=$?
+set -e
+[ "$state_symlink_rc" -eq 2 ] || fail "symlinked state directory did not fail closed"
+[ ! -e "$state_target/ensure.lock" ] || fail "symlinked state directory received a lock file"
+[ "$(cat "$TEST_STATE/runsv.count")" = "$before_lock_symlink" ] || fail "symlinked state directory started runsv"
+rm -f "$STATE"
+mkdir -p "$STATE"
+reset_runtime
+
 run_subject >/dev/null
 [ "$(cat "$TEST_STATE/runsv.count")" = 1 ] || fail "no-arg boot ensure did not start exactly one runsv"
 out="$(run_subject --check)"
@@ -198,6 +243,7 @@ printf '%s\n' "$out" | grep -q '^health=ready$' || fail "health readback not rea
 [ "$(sed -n '3p' "$TEST_STATE/curl.args")" = --noproxy ] || fail "curl noproxy flag missing"
 [ "$(sed -n '4p' "$TEST_STATE/curl.args")" = '*' ] || fail "curl localhost proxy bypass missing"
 [ ! -e "$TEST_STATE/lock-fd-leaked" ] || fail "runsv inherited ensure lock fd"
+[ ! -e "$STATE/runsv.log" ] || fail "unbounded runsv log file was created"
 run_subject --ensure >/dev/null
 [ "$(cat "$TEST_STATE/runsv.count")" = 1 ] || fail "idempotent ensure duplicated runsv"
 
@@ -311,19 +357,26 @@ rm -f "$SERVICE/down"
 
 reset_runtime
 before_concurrent="$(cat "$TEST_STATE/runsv.count")"
-touch "$TEST_STATE/slow-start"
+touch "$TEST_STATE/flock-hold-first" "$TEST_STATE/flock-watch-second"
 run_subject --ensure >/dev/null & one=$!
 i=0
-while [ "$i" -lt 40 ] && [ ! -e "$TEST_STATE/slow-start-entered" ]; do
+while [ "$i" -lt 40 ] && [ ! -e "$TEST_STATE/flock-first-acquired" ]; do
     /bin/sleep 0.05
     i=$((i + 1))
 done
-[ -e "$TEST_STATE/slow-start-entered" ] || fail "concurrent fixture never entered delayed runsv"
+[ -e "$TEST_STATE/flock-first-acquired" ] || fail "first concurrent ensure never acquired flock"
 set +e
 run_subject --ensure >/dev/null 2>&1 & two=$!
+i=0
+while [ "$i" -lt 40 ] && [ ! -e "$TEST_STATE/flock-second-entered" ]; do
+    /bin/sleep 0.05
+    i=$((i + 1))
+done
+[ -e "$TEST_STATE/flock-second-entered" ] || fail "second concurrent ensure never reached flock"
 wait "$two"
 two_rc=$?
 set -e
+rm -f "$TEST_STATE/flock-hold-first" "$TEST_STATE/flock-watch-second"
 wait "$one"
 after_concurrent="$(cat "$TEST_STATE/runsv.count")"
 [ "$two_rc" -eq 2 ] || fail "concurrent lock conflict reported success before accepted readback"
@@ -368,6 +421,17 @@ printf '%s %s %s\n' 5151 1 "$PREFIX/bin/runsv $SERVICE" > "$TEST_STATE/ps.out"
 out="$(run_subject --ensure)"
 printf '%s\n' "$out" | grep -q '^supervision=down$' || fail "recognized down supervision missing"
 printf '%s\n' "$out" | grep -q '^effect=none$' || fail "recognized down started another supervisor"
+
+printf '%s %s %s\n' 5151 1 "$PREFIX/bin/runsv $SERVICE" > "$TEST_STATE/ps.out"
+printf '%s %s %s\n' 5152 99 "$PREFIX/bin/node $RECEIVER" >> "$TEST_STATE/ps.out"
+set +e
+out="$(run_subject --ensure)"
+down_unsup_rc=$?
+set -e
+[ "$down_unsup_rc" -eq 2 ] || fail "down supervision accepted non-supervised receiver"
+printf '%s\n' "$out" | grep -q '^supervision=ambiguous$' || fail "down non-supervised receiver not ambiguous"
+printf '%s\n' "$out" | grep -q '^receiver=ambiguous$' || fail "down non-supervised receiver state not ambiguous"
+printf '%s\n' "$out" | grep -q '^recovery=blocked$' || fail "down non-supervised receiver not blocked"
 
 sh -n "$SOURCE"
 sh -n "$SUBJECT"

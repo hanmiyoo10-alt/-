@@ -7,7 +7,6 @@ SERVICE="$PREFIX/var/service/pocketrisu-notify-relay"
 RECEIVER="$HOME_DIR/.local/share/pocketrisu-notify-relay/receiver.cjs"
 STATE="$HOME_DIR/.local/state/pocketrisu-notify-relay-supervisor"
 LOCKFILE="$STATE/ensure.lock"
-RUNSV_LOG="$STATE/runsv.log"
 
 SV="$PREFIX/bin/sv"
 RUNSV="$PREFIX/bin/runsv"
@@ -207,8 +206,20 @@ EOF_PS
     fi
 
     if [ "$SUPERVISION" = down ]; then
-        RECEIVER_STATE=preserved
-        RECOVERY=not_needed
+        if [ "$receiver_count" -eq 0 ]; then
+            RECEIVER_STATE=absent
+            RECOVERY=not_needed
+        elif [ "$receiver_ppid" = "$runsv_pid" ]; then
+            RECEIVER_STATE=supervised
+            RECOVERY=not_needed
+        elif [ "$receiver_ppid" = 1 ] && [ "$HEALTH" = ready ]; then
+            RECEIVER_STATE=orphan_present
+            RECOVERY=not_needed
+        else
+            SUPERVISION=ambiguous
+            RECEIVER_STATE=ambiguous
+            RECOVERY=blocked
+        fi
         return 0
     fi
 
@@ -234,17 +245,32 @@ lock_release() {
 
 signal_locked() {
     TERMINATE_PENDING=1
-    [ -n "${LOCK_CHILD:-}" ] || return 0
-    kill -TERM "$LOCK_CHILD" 2>/dev/null || true
-    wait "$LOCK_CHILD" 2>/dev/null || true
     lock_release
     trap - INT TERM HUP
     exit 130
 }
 
+lock_path_safe() {
+    if [ -e "$STATE" ] || [ -L "$STATE" ]; then
+        [ -d "$STATE" ] && [ ! -L "$STATE" ] || return 1
+    else
+        "$MKDIR" -p "$STATE" || return 1
+        [ -d "$STATE" ] && [ ! -L "$STATE" ] || return 1
+    fi
+
+    if [ -e "$LOCKFILE" ] || [ -L "$LOCKFILE" ]; then
+        [ -f "$LOCKFILE" ] && [ ! -L "$LOCKFILE" ] || return 1
+    fi
+    return 0
+}
+
 lock_acquire() {
-    "$MKDIR" -p "$STATE" || return 2
-    exec 9>"$LOCKFILE" || return 2
+    lock_path_safe || return 2
+    exec 9<>"$LOCKFILE" || return 2
+    [ -f "$LOCKFILE" ] && [ ! -L "$LOCKFILE" ] || {
+        lock_release
+        return 2
+    }
     "$FLOCK" -n 9 >/dev/null 2>&1
     lock_rc=$?
     case "$lock_rc" in
@@ -261,15 +287,15 @@ locked_ensure() {
             ;;
         orphan_present|not_needed)
             emit ensure "$IDENTITY" "$SUPERVISION" "$RECEIVER_STATE" "$HEALTH" "$RECOVERY" none
-            exit 0
+            return 0
             ;;
         *)
             emit ensure "$IDENTITY" "$SUPERVISION" "$RECEIVER_STATE" "$HEALTH" "$RECOVERY" none
-            exit 2
+            return 2
             ;;
     esac
 
-    "$NOHUP" "$RUNSV" "$SERVICE" >> "$RUNSV_LOG" 2>&1 &
+    "$NOHUP" "$RUNSV" "$SERVICE" </dev/null >/dev/null 2>&1 9>&- &
     i=0
     while [ "$i" -lt 10 ]; do
         "$SLEEP" 1
@@ -277,7 +303,7 @@ locked_ensure() {
         if [ "$IDENTITY" = pass ] && [ "$SUPERVISION" = run ] \
             && [ "$RECEIVER_STATE" = supervised ] && [ "$HEALTH" = ready ]; then
             emit ensure "$IDENTITY" "$SUPERVISION" "$RECEIVER_STATE" "$HEALTH" restored started
-            exit 0
+            return 0
         fi
         if [ "$SUPERVISION" = ambiguous ] || [ "$RECEIVER_STATE" = ambiguous ]; then
             break
@@ -285,7 +311,7 @@ locked_ensure() {
         i=$((i + 1))
     done
     emit ensure "$IDENTITY" "$SUPERVISION" "$RECEIVER_STATE" "$HEALTH" failed started
-    exit 1
+    return 1
 }
 
 case "$MODE" in
@@ -309,7 +335,6 @@ case "$MODE" in
         fi
 
         TERMINATE_PENDING=0
-        LOCK_CHILD=
         trap signal_locked INT TERM HUP
         lock_acquire
         lock_rc=$?
@@ -343,14 +368,8 @@ case "$MODE" in
             trap - INT TERM HUP
             exit 130
         fi
-        ( locked_ensure ) 9>&- &
-        LOCK_CHILD=$!
-        if [ "$TERMINATE_PENDING" -ne 0 ]; then
-            signal_locked
-        fi
-        wait "$LOCK_CHILD"
+        locked_ensure
         locked_rc=$?
-        LOCK_CHILD=
         lock_release
         trap - INT TERM HUP
         exit "$locked_rc"

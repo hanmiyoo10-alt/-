@@ -1,0 +1,362 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -u
+
+PREFIX=/data/data/com.termux/files/usr
+HOME_DIR=/data/data/com.termux/files/home
+SERVICE="$PREFIX/var/service/pocketrisu-notify-relay"
+RECEIVER="$HOME_DIR/.local/share/pocketrisu-notify-relay/receiver.cjs"
+STATE="$HOME_DIR/.local/state/pocketrisu-notify-relay-supervisor"
+LOCKFILE="$STATE/ensure.lock"
+RUNSV_LOG="$STATE/runsv.log"
+
+SV="$PREFIX/bin/sv"
+RUNSV="$PREFIX/bin/runsv"
+NOHUP="$PREFIX/bin/nohup"
+SLEEP="$PREFIX/bin/sleep"
+CURL="$PREFIX/bin/curl"
+FLOCK="$PREFIX/bin/flock"
+SHA256SUM="$PREFIX/bin/sha256sum"
+STAT="$PREFIX/bin/stat"
+PS="$PREFIX/bin/ps"
+MKDIR="$PREFIX/bin/mkdir"
+
+RECEIVER_SHA=917905c0f893e62b6ece7998cebae8d4ce24aa714897618116ce963089d70d17
+RUN_SHA=99028defcd9be8e20def4675c63777977c54ed62124860fd688b65477dcbe6d2
+HEALTH_URL=http://127.0.0.1:39120/health
+MODE="${1:---ensure}"
+
+emit() {
+    printf 'schema=pocketrisu-notify-relay-supervisor.v1\n'
+    printf 'mode=%s\n' "$1"
+    printf 'identity=%s\n' "$2"
+    printf 'supervision=%s\n' "$3"
+    printf 'receiver=%s\n' "$4"
+    printf 'health=%s\n' "$5"
+    printf 'recovery=%s\n' "$6"
+    printf 'effect=%s\n' "$7"
+    printf 'details=withheld\n'
+}
+
+exact_file() {
+    file="$1"
+    expected_mode="$2"
+    expected_sha="$3"
+    [ -f "$file" ] && [ ! -L "$file" ] || return 1
+    [ "$("$STAT" -c '%a' "$file" 2>/dev/null || true)" = "$expected_mode" ] || return 1
+    [ "$("$SHA256SUM" "$file" 2>/dev/null | { IFS=' ' read -r sum _; printf '%s' "$sum"; })" = "$expected_sha" ] || return 1
+}
+
+identity_ok() {
+    [ -d "$SERVICE" ] && [ ! -L "$SERVICE" ] || return 1
+    [ -f "$SERVICE/run" ] && [ ! -L "$SERVICE/run" ] || return 1
+    exact_file "$SERVICE/run" 700 "$RUN_SHA" || return 1
+    exact_file "$RECEIVER" 600 "$RECEIVER_SHA" || return 1
+    for bin in "$SV" "$RUNSV" "$NOHUP" "$SLEEP" "$CURL" "$FLOCK" "$SHA256SUM" "$STAT" "$PS" "$MKDIR"; do
+        [ -x "$bin" ] || return 1
+    done
+}
+
+health_state() {
+    "$CURL" -q -fsS --noproxy '*' --max-time 2 "$HEALTH_URL" >/dev/null 2>&1
+}
+
+classify() {
+    IDENTITY=pass
+    SUPERVISION=unknown
+    RECEIVER_STATE=unknown
+    HEALTH=not_ready
+    RECOVERY=blocked
+
+    identity_ok || {
+        IDENTITY=drift
+        SUPERVISION=unknown
+        RECEIVER_STATE=unknown
+        RECOVERY=blocked
+        return 0
+    }
+
+    operator_down=0
+    [ -e "$SERVICE/down" ] && operator_down=1
+
+    status="$("$SV" status "$SERVICE" 2>&1 || true)"
+    case "$status" in
+        run:*) sv_state=run ;;
+        down:*) sv_state=down ;;
+        *"runsv not running"*|*"unable to open supervise/ok: file does not exist"*) sv_state=missing ;;
+        *) sv_state=unknown ;;
+    esac
+
+    psout="$("$PS" -eo pid=,ppid=,args= 2>/dev/null)" || {
+        SUPERVISION=unknown
+        RECEIVER_STATE=unknown
+        RECOVERY=blocked
+        return 0
+    }
+
+    runsv_count=0
+    receiver_count=0
+    runsv_pid=
+    receiver_pid=
+    receiver_ppid=
+    receiver_alt_count=0
+    malformed=0
+
+    while IFS=' ' read -r pid ppid args; do
+        [ -n "${pid:-}" ] || continue
+        case "$pid:$ppid" in
+            *[!0-9:]*|:*) malformed=1; continue ;;
+        esac
+        if [ "$args" = "$RUNSV $SERVICE" ]; then
+            runsv_count=$((runsv_count + 1))
+            runsv_pid="$pid"
+        fi
+        if [ "$args" = "$PREFIX/bin/node $RECEIVER" ]; then
+            receiver_count=$((receiver_count + 1))
+            receiver_pid="$pid"
+            receiver_ppid="$ppid"
+        else
+            case "$args" in
+                *receiver.cjs*) receiver_alt_count=$((receiver_alt_count + 1)) ;;
+            esac
+        fi
+    done <<EOF_PS
+$psout
+EOF_PS
+
+    [ "$malformed" -eq 0 ] || {
+        SUPERVISION=ambiguous
+        RECEIVER_STATE=ambiguous
+        RECOVERY=blocked
+        return 0
+    }
+    [ "$receiver_alt_count" -eq 0 ] || {
+        SUPERVISION=ambiguous
+        RECEIVER_STATE=ambiguous
+        RECOVERY=blocked
+        return 0
+    }
+    [ "$runsv_count" -le 1 ] && [ "$receiver_count" -le 1 ] || {
+        SUPERVISION=ambiguous
+        RECEIVER_STATE=ambiguous
+        RECOVERY=blocked
+        return 0
+    }
+
+    if health_state; then HEALTH=ready; fi
+
+    if [ "$receiver_count" -eq 0 ] && [ "$HEALTH" = ready ]; then
+        SUPERVISION=ambiguous
+        RECEIVER_STATE=ambiguous
+        RECOVERY=blocked
+        return 0
+    fi
+
+    if [ "$operator_down" -eq 1 ]; then
+        SUPERVISION=operator_down
+        if [ "$receiver_count" -eq 0 ]; then
+            RECEIVER_STATE=absent
+            RECOVERY=operator_down
+            return 0
+        fi
+        if [ "$runsv_count" -eq 1 ] && [ "$receiver_ppid" = "$runsv_pid" ]; then
+            RECEIVER_STATE=supervised
+            RECOVERY=operator_down
+            return 0
+        fi
+        if [ "$receiver_ppid" = 1 ] && [ "$HEALTH" = ready ]; then
+            RECEIVER_STATE=orphan_present
+            RECOVERY=operator_down
+            return 0
+        fi
+        SUPERVISION=ambiguous
+        RECEIVER_STATE=ambiguous
+        RECOVERY=blocked
+        return 0
+    fi
+
+    case "$sv_state:$runsv_count" in
+        run:1)
+            SUPERVISION=run
+            ;;
+        down:1)
+            SUPERVISION=down
+            ;;
+        missing:0)
+            SUPERVISION=missing
+            ;;
+        *)
+            SUPERVISION=ambiguous
+            RECEIVER_STATE=ambiguous
+            RECOVERY=blocked
+            return 0
+            ;;
+    esac
+
+    if [ "$SUPERVISION" = run ]; then
+        if [ "$receiver_count" -eq 1 ] && [ "$receiver_ppid" = "$runsv_pid" ]; then
+            RECEIVER_STATE=supervised
+            [ "$HEALTH" = ready ] && RECOVERY=not_needed || RECOVERY=blocked
+        elif [ "$receiver_count" -eq 0 ]; then
+            RECEIVER_STATE=absent
+            RECOVERY=blocked
+        else
+            RECEIVER_STATE=ambiguous
+            RECOVERY=blocked
+        fi
+        return 0
+    fi
+
+    if [ "$SUPERVISION" = down ]; then
+        RECEIVER_STATE=preserved
+        RECOVERY=not_needed
+        return 0
+    fi
+
+    if [ "$receiver_count" -eq 0 ]; then
+        RECEIVER_STATE=absent
+        RECOVERY=eligible
+        return 0
+    fi
+
+    if [ "$receiver_ppid" = 1 ] && [ "$HEALTH" = ready ]; then
+        RECEIVER_STATE=orphan_present
+        RECOVERY=orphan_present
+        return 0
+    fi
+
+    RECEIVER_STATE=ambiguous
+    RECOVERY=blocked
+}
+
+lock_release() {
+    exec 9>&-
+}
+
+signal_locked() {
+    TERMINATE_PENDING=1
+    [ -n "${LOCK_CHILD:-}" ] || return 0
+    kill -TERM "$LOCK_CHILD" 2>/dev/null || true
+    wait "$LOCK_CHILD" 2>/dev/null || true
+    lock_release
+    trap - INT TERM HUP
+    exit 130
+}
+
+lock_acquire() {
+    "$MKDIR" -p "$STATE" || return 2
+    exec 9>"$LOCKFILE" || return 2
+    "$FLOCK" -n 9 >/dev/null 2>&1
+    lock_rc=$?
+    case "$lock_rc" in
+        0) return 0 ;;
+        1) lock_release; return 1 ;;
+        *) lock_release; return 2 ;;
+    esac
+}
+
+locked_ensure() {
+    classify
+    case "$RECOVERY" in
+        eligible)
+            ;;
+        orphan_present|not_needed)
+            emit ensure "$IDENTITY" "$SUPERVISION" "$RECEIVER_STATE" "$HEALTH" "$RECOVERY" none
+            exit 0
+            ;;
+        *)
+            emit ensure "$IDENTITY" "$SUPERVISION" "$RECEIVER_STATE" "$HEALTH" "$RECOVERY" none
+            exit 2
+            ;;
+    esac
+
+    "$NOHUP" "$RUNSV" "$SERVICE" >> "$RUNSV_LOG" 2>&1 &
+    i=0
+    while [ "$i" -lt 10 ]; do
+        "$SLEEP" 1
+        classify
+        if [ "$IDENTITY" = pass ] && [ "$SUPERVISION" = run ] \
+            && [ "$RECEIVER_STATE" = supervised ] && [ "$HEALTH" = ready ]; then
+            emit ensure "$IDENTITY" "$SUPERVISION" "$RECEIVER_STATE" "$HEALTH" restored started
+            exit 0
+        fi
+        if [ "$SUPERVISION" = ambiguous ] || [ "$RECEIVER_STATE" = ambiguous ]; then
+            break
+        fi
+        i=$((i + 1))
+    done
+    emit ensure "$IDENTITY" "$SUPERVISION" "$RECEIVER_STATE" "$HEALTH" failed started
+    exit 1
+}
+
+case "$MODE" in
+    --check)
+        classify
+        emit check "$IDENTITY" "$SUPERVISION" "$RECEIVER_STATE" "$HEALTH" "$RECOVERY" none
+        case "$RECOVERY" in
+            eligible|not_needed|orphan_present|operator_down) exit 0 ;;
+            *) exit 2 ;;
+        esac
+        ;;
+    --ensure)
+        classify
+        if [ "$RECOVERY" = orphan_present ] || [ "$RECOVERY" = not_needed ]; then
+            emit ensure "$IDENTITY" "$SUPERVISION" "$RECEIVER_STATE" "$HEALTH" "$RECOVERY" none
+            exit 0
+        fi
+        if [ "$RECOVERY" != eligible ]; then
+            emit ensure "$IDENTITY" "$SUPERVISION" "$RECEIVER_STATE" "$HEALTH" "$RECOVERY" none
+            exit 2
+        fi
+
+        TERMINATE_PENDING=0
+        LOCK_CHILD=
+        trap signal_locked INT TERM HUP
+        lock_acquire
+        lock_rc=$?
+        if [ "$TERMINATE_PENDING" -ne 0 ]; then
+            [ "$lock_rc" -ne 0 ] || lock_release
+            trap - INT TERM HUP
+            exit 130
+        fi
+        if [ "$lock_rc" -eq 1 ]; then
+            trap - INT TERM HUP
+            classify
+            case "$RECOVERY" in
+                orphan_present|not_needed)
+                    emit ensure "$IDENTITY" "$SUPERVISION" "$RECEIVER_STATE" "$HEALTH" "$RECOVERY" none
+                    exit 0
+                    ;;
+                *)
+                    emit ensure "$IDENTITY" "$SUPERVISION" "$RECEIVER_STATE" "$HEALTH" "$RECOVERY" none
+                    exit 2
+                    ;;
+            esac
+        fi
+        [ "$lock_rc" -eq 0 ] || {
+            trap - INT TERM HUP
+            emit ensure "$IDENTITY" "$SUPERVISION" "$RECEIVER_STATE" "$HEALTH" blocked none
+            exit 2
+        }
+
+        if [ "$TERMINATE_PENDING" -ne 0 ]; then
+            lock_release
+            trap - INT TERM HUP
+            exit 130
+        fi
+        ( locked_ensure ) 9>&- &
+        LOCK_CHILD=$!
+        if [ "$TERMINATE_PENDING" -ne 0 ]; then
+            signal_locked
+        fi
+        wait "$LOCK_CHILD"
+        locked_rc=$?
+        LOCK_CHILD=
+        lock_release
+        trap - INT TERM HUP
+        exit "$locked_rc"
+        ;;
+    *)
+        printf 'usage: %s [--check|--ensure]\n' "$0" >&2
+        exit 2
+        ;;
+esac

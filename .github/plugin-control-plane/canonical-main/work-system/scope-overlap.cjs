@@ -373,6 +373,25 @@ function resolveScopeOverlap(input) {
         return;
       }
 
+      let packetActivity = null;
+      if (Object.prototype.hasOwnProperty.call(candidate, 'packetActivityEvidence')) {
+        packetActivity = classifyPacketActivity({
+          candidateRef: canonicalPacketActivityRef(ref),
+          requesterRef: typeof input?.requesterRef === 'string' ? input.requesterRef.trim() : '',
+          evidence: candidate.packetActivityEvidence,
+        });
+        candidateActivity.push(packetActivity);
+        if (packetActivity.state === 'NONBLOCKING_PROVEN') {
+          packetRecords.push({
+            ref,
+            active: false,
+            scopes: [],
+            linkedPrRef: typeof candidate.linkedPrRef === 'string' ? candidate.linkedPrRef.trim() : null,
+          });
+          return;
+        }
+      }
+
       const parsedScopes = extractPacketScopes(body);
       if (!parsedScopes.ok) {
         findings.push(makeFinding(
@@ -386,36 +405,20 @@ function resolveScopeOverlap(input) {
         return;
       }
 
-      if (Object.prototype.hasOwnProperty.call(candidate, 'packetActivityEvidence')) {
-        const activity = classifyPacketActivity({
-          candidateRef: canonicalPacketActivityRef(ref),
-          requesterRef: typeof input?.requesterRef === 'string' ? input.requesterRef.trim() : '',
-          evidence: candidate.packetActivityEvidence,
-        });
-        candidateActivity.push(activity);
-        if (activity.state === 'NONBLOCKING_PROVEN') {
-          packetRecords.push({
-            ref,
-            active: false,
-            scopes: parsedScopes.scopes,
-            linkedPrRef: typeof candidate.linkedPrRef === 'string' ? candidate.linkedPrRef.trim() : null,
-          });
-          return;
-        }
-        if (activity.state === 'UNKNOWN' || activity.state === 'CONFLICT') {
-          findings.push(makeFinding(
-            activity.state === 'CONFLICT'
-              ? REASON_CODES.PACKET_ACTIVITY_CONFLICT
-              : REASON_CODES.PACKET_ACTIVITY_UNKNOWN,
-            activity.state,
-            ref,
-            requested[0]?.normalized || '<unresolved>',
-            activity.reasonCode,
-            activity.sourceRefs,
-            {candidateType: 'packet', activityReasonCode: activity.reasonCode},
-          ));
-          return;
-        }
+      if (packetActivity
+          && (packetActivity.state === 'UNKNOWN' || packetActivity.state === 'CONFLICT')) {
+        findings.push(makeFinding(
+          packetActivity.state === 'CONFLICT'
+            ? REASON_CODES.PACKET_ACTIVITY_CONFLICT
+            : REASON_CODES.PACKET_ACTIVITY_UNKNOWN,
+          packetActivity.state,
+          ref,
+          requested[0]?.normalized || '<unresolved>',
+          packetActivity.reasonCode,
+          packetActivity.sourceRefs,
+          {candidateType: 'packet', activityReasonCode: packetActivity.reasonCode},
+        ));
+        return;
       }
 
       packetRecords.push({

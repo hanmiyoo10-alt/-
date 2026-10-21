@@ -112,6 +112,14 @@ cat /path/to/input.json | node .github/plugin-control-plane/canonical-main/work-
 
 CLI exit status is `0` for `DISJOINT`, `1` for `OVERLAP`, `2` for `UNKNOWN`, and `3` for `CONFLICT`. No current SHA, packet number, PR number, cache, network client, auto-close behavior, or repository-global active-work registry is embedded in the classifier.
 
+### Evidence-backed packet activity classification
+
+`work-system/packet-activity.cjs` is the pure read-only classifier for caller-supplied activity evidence about open work packets that are intentionally sequenced but no longer competing for repository mutation. Its result vocabulary is `ACTIVE_WRITER / NONBLOCKING_PROVEN / UNKNOWN / CONFLICT`.
+
+`scope-overlap.cjs` may consult packet activity after packet marker, lifecycle, and native issue-state validation. Only exact `NONBLOCKING_PROVEN` may suppress an open packet **before** deterministic write-scope parsing. This supports historical/live-stage packets whose repository mutation is proven inactive even when an older packet body lacks a currently recognized write-scope heading. The resolver records the activity result but does not infer scopes from generic `## Scope` prose.
+
+Every other packet-activity state keeps the deterministic scope requirement. `ACTIVE_WRITER`, `UNKNOWN`, and `CONFLICT` do not bypass an unresolved scope; packets without activity evidence are unchanged. Recognized deterministic scopes retain the existing overlap behavior. The bypass never changes packet lifecycle parsing, PR activity semantics, or discovery completeness, so `DISJOINT` still requires caller-supplied `COMPLETE` discovery.
+
 ### Evidence-backed PR activity classification
 
 `work-system/pr-activity.cjs` is the pure read-only activity classifier for open-PR overlap evidence. It consumes caller-supplied native PR, linked packet, and optional merged-successor evidence only; it does not fetch GitHub, close PRs, mutate packets, or maintain a PR registry.

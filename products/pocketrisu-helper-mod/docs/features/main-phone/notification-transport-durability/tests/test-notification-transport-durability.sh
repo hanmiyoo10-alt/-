@@ -360,7 +360,14 @@ relay_before="$(cat "$TEST_STATE/relay.restores")"; touch "$TEST_STATE/relay-mis
 relay_after="$(wait_for_count_gt "$TEST_STATE/relay.restores" "$relay_before")" || fail "guard did not delegate relay restore"
 [ "$relay_after" -eq $((relay_before + 1)) ] || fail "relay delegate restored more than once"
 
-target_before="$(cat "$TEST_STATE/runsv.count")"; stop_runsv; rm -f "$SERVICE/sv-run"; : > "$TEST_STATE/ps.out"; touch "$SERVICE/down"
+target_before="$(cat "$TEST_STATE/runsv.count")"
+# Establish operator intent before inducing supervisor loss. Otherwise the
+# fast synthetic guard may legitimately restore the missing supervisor in
+# the gap and make this preservation assertion timing-dependent.
+touch "$SERVICE/down"
+stop_runsv
+rm -f "$SERVICE/sv-run"
+: > "$TEST_STATE/ps.out"
 /bin/sleep 0.3
 [ "$(cat "$TEST_STATE/runsv.count")" = "$target_before" ] || fail "ring overrode notify operator down"
 rm -f "$SERVICE/down"

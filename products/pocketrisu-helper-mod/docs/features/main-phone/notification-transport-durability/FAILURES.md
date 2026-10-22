@@ -64,3 +64,25 @@ PR_REVIEW and DEPLOY failures, if any, must be appended here rather than overwri
 - feedback/fix: test-only repair establishes the `down` marker before inducing supervisor loss, matching the intended operator-down semantics. Production guard/anchor bytes remain unchanged.
 - re-validation: postmerge repair PR must pass PocketRisu helper docs, SimCore Verify/Required, and merge-main convergence before #3712 POSTMERGE_CONVERGENCE can complete.
 - rollback: revert the test-only repair commit if its replacement CI does not validate the intended contract; no physical-M effect occurred.
+
+### 2026-10-22 — POST_DEPLOY_VERIFY / terminal physical-M live proof
+- PR / commit: #3713 primary + #3714 postmerge repair / final main `e559dc09b3c030f31defc74aec6f1d19e7855a2f`.
+- stage: `POST_DEPLOY_VERIFY`
+- symptom: NONE — terminal acceptance execution.
+- failed check/job: NONE.
+- facts from logs: exact merged guard + Boot/anchor installed mode 0700; controlled guard/anchor mutual hard loss recovered; relay/notify runsv loss preserved one healthy exact PID1 orphan each without duplicate; soak preserved state; shared runsvdir absent; real S→M Android notification PASS.
+- cause: `CONFIRMED` — durability ring satisfies the reviewed selective-supervisor-loss contract.
+- feedback/fix: no further mutation for this Feature-ID.
+- re-validation: repository final CI + #485 convergence + canonical EXPERIMENT_CLOSE `LIVE_PROVEN / DONE`.
+- rollback: retain two-file rollback boundary; do not replay controlled-loss proof without a new admission.
+
+### 2026-10-22 — PR_REVIEW / terminal dossier remained stale after LIVE_PROVEN
+- PR / commit: CURRENT synchronization PR #3716.
+- stage: `PR_REVIEW`
+- symptom: CURRENT declared #3712 LIVE_PROVEN while this feature README/UPSTREAM still described IMPLEMENTATION_PR / NOT_READY / pending postmerge repair.
+- failed check/job: review barrier, thread `PRRT_kwDOT2BQls6vCyVD`.
+- facts from logs: #3712 itself is CLOSED / DONE with final EXPERIMENT_CLOSE receipt/checkpoint and physical-M live proof, so the stale dossier contradicted durable authority.
+- cause: `CONFIRMED` — terminal feature-document convergence had not been synchronized after #3712 closure.
+- feedback/fix: synchronize README status/verification/deployment/next action plus UPSTREAM PR/deployment/verification state and record terminal evidence here, in the same documentation-only PR as CURRENT.
+- re-validation: PocketRisu product validator + focused contracts + exact changed-path/diff check + fresh PR CI/Required required.
+- rollback: documentation-only; revert #3716 repair commit if evidence identity is wrong. No device/runtime effect.

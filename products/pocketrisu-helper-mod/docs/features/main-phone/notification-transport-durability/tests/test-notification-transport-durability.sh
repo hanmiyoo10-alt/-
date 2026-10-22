@@ -39,6 +39,16 @@ stop_runsv() {
     : > "$TEST_STATE/ps.out"
 }
 
+stop_ring_hard() {
+    guard_pid="$(read_pid "$STATE/guard.pid")"
+    anchor_pid="$(read_pid "$STATE/anchor.pid")"
+    [ -n "$guard_pid" ] && kill -KILL "$guard_pid" 2>/dev/null || true
+    [ -n "$anchor_pid" ] && kill -KILL "$anchor_pid" 2>/dev/null || true
+    /bin/sleep 0.1
+    rm -rf "$STATE/guard.lock" "$STATE/anchor.lock"
+    rm -f "$STATE/guard.pid" "$STATE/anchor.pid"
+}
+
 cleanup() {
     [ -n "$AMBIG_PID" ] && kill -TERM "$AMBIG_PID" 2>/dev/null || true
     if command -v pkill >/dev/null 2>&1; then
@@ -204,6 +214,46 @@ reset_notify() {
     rm -f "$STATE/notify.ensure.lock"
 }
 
+spawn_zombie() {
+    zombie_pidfile="$1"
+    zombie_parentfile="$2"
+    python - "$zombie_pidfile" "$zombie_parentfile" >/dev/null 2>&1 <<'PY_ZOMBIE' &
+import os
+import sys
+import time
+
+child = os.fork()
+if child == 0:
+    os._exit(0)
+
+with open(sys.argv[1], 'w', encoding='utf-8') as f:
+    f.write(str(child))
+with open(sys.argv[2], 'w', encoding='utf-8') as f:
+    f.write(str(os.getpid()))
+
+time.sleep(20)
+PY_ZOMBIE
+    launcher_pid=$!
+
+    i=0
+    while [ "$i" -lt 80 ]; do
+        zombie_pid="$(cat "$zombie_pidfile" 2>/dev/null || true)"
+        if [ -n "$zombie_pid" ] && [ -r "/proc/$zombie_pid/stat" ]; then
+            state="$(python -c 'import pathlib,sys; s=pathlib.Path(sys.argv[1]).read_text(); print(s[s.rfind(")")+2:].split()[0])' "/proc/$zombie_pid/stat" 2>/dev/null || true)"
+            if [ "$state" = Z ]; then
+                printf '%s
+' "$launcher_pid"
+                return 0
+            fi
+        fi
+        /bin/sleep 0.05
+        i=$((i + 1))
+    done
+
+    kill -TERM "$launcher_pid" 2>/dev/null || true
+    return 1
+}
+
 [ "$(sed -n '1p' "$SOURCE_GUARD")" = '#!/data/data/com.termux/files/usr/bin/sh' ] || fail "guard shebang"
 [ "$(sed -n '1p' "$SOURCE_LAUNCHER")" = '#!/data/data/com.termux/files/usr/bin/sh' ] || fail "launcher shebang"
 grep -q '^PREFIX=/data/data/com.termux/files/usr$' "$SOURCE_GUARD" || fail "guard fixed prefix missing"
@@ -215,6 +265,40 @@ grep -Fq '"$RELAY_LAUNCHER" --ensure' "$SOURCE_GUARD" || fail "relay delegation 
 if grep -Eiq 'service-daemon|runsvdir|pkill|killall|settings_enable_monitor_phantom_procs' "$SOURCE_GUARD" "$SOURCE_LAUNCHER"; then fail "broad process/service primitive present"; fi
 if grep -Eq 'POCKETRISU_.*=' "$SOURCE_GUARD" "$SOURCE_LAUNCHER"; then fail "caller environment override surface present"; fi
 if grep -Eq '@[A-Za-z0-9]|100\.[0-9]+\.[0-9]+\.[0-9]+' "$SOURCE_GUARD" "$SOURCE_LAUNCHER"; then fail "private notify target material present"; fi
+
+zombie_pidfile="$TEST_STATE/zombie.pid"
+zombie_parentfile="$TEST_STATE/zombie-parent.pid"
+zombie_parent="$(spawn_zombie "$zombie_pidfile" "$zombie_parentfile")" || fail "zombie fixture did not materialize"
+zombie_pid="$(cat "$zombie_pidfile")"
+mkdir -p "$STATE/guard.lock"
+printf '%s
+' "$zombie_pid" > "$STATE/guard.pid"
+run_launcher
+guard_from_zombie="$(read_pid "$STATE/guard.pid")"
+anchor_from_zombie="$(read_pid "$STATE/anchor.pid")"
+[ -n "$guard_from_zombie" ] && [ "$guard_from_zombie" != "$zombie_pid" ] && kill -0 "$guard_from_zombie" 2>/dev/null || fail "zombie guard pid was not reclaimed"
+[ -n "$anchor_from_zombie" ] && kill -0 "$anchor_from_zombie" 2>/dev/null || fail "anchor missing after zombie guard recovery"
+stop_ring_hard
+kill -TERM "$zombie_parent" 2>/dev/null || true
+rm -f "$zombie_pidfile" "$zombie_parentfile"
+
+zombie_parent="$(spawn_zombie "$zombie_pidfile" "$zombie_parentfile")" || fail "anchor zombie fixture did not materialize"
+zombie_pid="$(cat "$zombie_pidfile")"
+mkdir -p "$STATE/anchor.lock"
+printf '%s
+' "$zombie_pid" > "$STATE/anchor.pid"
+run_launcher --ensure-anchor
+anchor_from_zombie="$(read_pid "$STATE/anchor.pid")"
+[ -n "$anchor_from_zombie" ] && [ "$anchor_from_zombie" != "$zombie_pid" ] && kill -0 "$anchor_from_zombie" 2>/dev/null || fail "zombie anchor pid was not reclaimed"
+stop_ring_hard
+kill -TERM "$zombie_parent" 2>/dev/null || true
+rm -f "$zombie_pidfile" "$zombie_parentfile"
+
+reset_notify
+printf '0
+' > "$TEST_STATE/runsv.count"
+printf '0
+' > "$TEST_STATE/relay.calls"
 
 run_guard --once
 [ "$(cat "$TEST_STATE/relay.calls")" = 1 ] || fail "relay launcher not delegated"

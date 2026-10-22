@@ -2,7 +2,7 @@
 
 Feature-ID: `notification-transport-durability`
 Area: `main-phone`
-PR status: `LOCAL_VALIDATED`
+PR status: `PR_OPEN_REVIEW_REPAIRED`
 Isolation status: `CLEAN`
 Deployment status: `NOT_READY`
 
@@ -59,5 +59,5 @@ No PocketRisu application source, server source, Android policy, shared runit tr
 
 - PR URL:
 - head SHA:
-- latest result: local implementation + focused/product validation PASS; commit/PR pending.
-- next action: exact 7-path staged diff check, commit, non-closing PR, exact-head CI/Required.
+- latest result: PR #3713 P1 zombie-pid stale-lock review finding repaired locally; zombie guard/anchor regressions + full product validation PASS; repaired-head CI pending.
+- next action: commit/push P1 repair, require fresh exact-head PocketRisu CI/Verify/Required and review-thread clearance before VALIDATION_MERGE.

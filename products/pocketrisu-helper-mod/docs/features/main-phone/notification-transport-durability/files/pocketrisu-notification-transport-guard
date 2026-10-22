@@ -68,6 +68,12 @@ pid_state() {
     pid="$(cat "$pidfile" 2>/dev/null || true)"
     case "$pid" in ''|*[!0-9]*) return 1 ;; esac
     kill -0 "$pid" 2>/dev/null || return 1
+    [ -r "/proc/$pid/stat" ] || return 1
+    IFS= read -r statline < "/proc/$pid/stat" || return 2
+    stat_tail=${statline#*) }
+    proc_state=${stat_tail%% *}
+    [ -n "$proc_state" ] || return 2
+    [ "$proc_state" != Z ] || return 1
     cmdline="$("$TR" '\000' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
     case "$identity:$cmdline" in
         guard:*pocketrisu-notification-transport-guard*--loop*) return 0 ;;

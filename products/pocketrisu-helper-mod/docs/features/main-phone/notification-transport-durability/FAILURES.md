@@ -40,3 +40,15 @@ PR_REVIEW and DEPLOY failures, if any, must be appended here rather than overwri
 - feedback/fix: test fixture only rewrites the synthetic launcher first line to `#!/usr/bin/env sh`; production Android shebang and production invocation remain unchanged. A temporary zombie-PID hypothesis patch was removed because it was not the cause.
 - re-validation: focused mutual guard↔anchor recovery contract PASS after fixture correction; full product validator PASS.
 - rollback: no repository commit/push/PR or physical-M runtime effect existed during diagnosis.
+
+
+### 2026-10-22 — PR_REVIEW / P1 zombie pid stale-lock gap
+- PR / commit: PR #3713 / reviewed head `67d3ac334a6d4f4e9099b33872c1101839aa2c3e`.
+- stage: `PR_REVIEW`
+- symptom: Codex found that `kill -0` also succeeds for a zombie guard/anchor PID, while `/proc/$pid/cmdline` may be empty, causing `pid_state` to classify a stale zombie as ambiguous and refuse recovery.
+- failed check/job: review barrier, unresolved P1 thread `PRRT_kwDOT2BQls6vBXbv`.
+- facts from logs: the finding matches the temporary zombie hypothesis explored during local debugging, but that earlier local failure had a separate confirmed synthetic-shebang cause. Both cases are distinct and must be covered.
+- cause: `CONFIRMED` — production `pid_state` lacked explicit zombie classification.
+- feedback/fix: read `/proc/$pid/stat` after `kill -0`; classify process state `Z` as dead/stale before cmdline identity. Apply the same fixed rule to guard and anchor pid-state owners.
+- re-validation: explicit synthetic zombie guard + zombie anchor fixtures PASS; full focused/product/exact-head re-validation required on the repaired head.
+- rollback: pre-P1 guard/launcher/test/failure-ledger copies retained under local `/tmp/3712-*.pre-p1`; no physical-M effect.

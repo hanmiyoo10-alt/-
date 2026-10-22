@@ -33,14 +33,32 @@
 - fresh save backup은 `7,923,699 KiB`이고 `risuai.db`, `logs.db`, `request-logs.db`, `model-jobs.db` 모두 backup/live 양쪽 `quick_check=ok`를 확인했다.
 - Termux native `better_sqlite3.node` SHA-256은 검증값 `f9b4f7c886eb6d0d4b05b4061142cb44c1db7b996b685704f2ecb9161b184572`와 일치했고 in-memory SQLite smoke도 PASS했다.
 - 첫 v1.15.2 기동은 약 8초 안에 `/api/health=ready`, controlled restart는 PID `2523 -> 2972` 후 약 6초 안에 health ready로 복귀했다.
-- 메인폰 relay supervisor #3513은 merge/postmerge/live proof까지 DONE이며 dedicated runsv 1개 + supervised receiver 1개 + health ready로 유지된다.
-- 별도 기존 gap인 `pocketrisu-notify-tunnel` 부재는 #3709로 분리했고, 현재 one-shot service-specific runsv 복구 후 S의 `127.0.0.1:39120/health`가 ready이다. durable notify-tunnel 생존성은 아직 #3709 미완료다.
+- 메인폰 relay supervisor #3513은 merge/postmerge/live proof까지 DONE이다.
+- relay + notify-tunnel selective-supervisor durability는 #3712에서 guard↔independent-anchor ring으로 확장했고 physical-M LIVE_PROVEN까지 완료했다.
+- #3712 최종 main은 `e559dc09b3c030f31defc74aec6f1d19e7855a2f`; shared top-level `runsvdir` 없이 guard/anchor mutual recovery, relay/notify selective-loss recovery, duplicate 방지, 실제 S→M 알림까지 검증했다.
 - 실제 S→M notification POST는 HTTP 200이었고 메인폰 Android에서 PocketRisu smoke notification 표시를 확인했다.
 - 실제 메인폰 Firefox chat/generation smoke는 2026-10-22 사용자가 직접 PASS를 확인했다.
 - safe-updater 자동 배포는 여전히 비활성이다. 이번 성공은 수동 backup-first cutover의 live proof이지 자동 배포 활성화 증거가 아니다.
 
 다음 한 단계:
-- v1.15.2 live는 rollback 세트를 보존한 채 자연 운용을 관찰한다. 별도 미완료 축은 #2027 inactive-preset UI/persistence, #3709 notify-tunnel durability, #3269 전화/이어폰 sound 문제다.
+- v1.15.2 live와 #3712 notification transport durability는 rollback/installation evidence를 보존한 채 자연 운용을 관찰한다. 별도 미완료 축은 #3715 core exact-orphan/runit reconciliation, #3231 Android phantom-process initiating cause/policy, #2027 inactive-preset UI/persistence, #3269 전화/이어폰 sound 문제다.
+
+
+## notification transport durability — LIVE_PROVEN
+
+- 자연 운용에서 메인폰 relay dedicated runsv/receiver와 notify-tunnel dedicated runsv/reverse SSH가 반복 소실되는 failure domain을 확인했고 #3711/#3709 증거를 #3712가 durable repair owner로 받았다.
+- PR #3713의 production guard/anchor 구현 중 Codex가 zombie PID stale-lock P1을 발견했고 repaired head `0b50688000d0fd6ffd7d1b855c6854e2dfb3ddcf`에서 `/proc/$pid/stat`의 `Z`를 stale/dead로 처리하도록 수정했다.
+- primary merge `5231ad79c77f61622eb04b92665232089f5968b0` 뒤 merged-main focused test race를 별도 repair PR #3714로 고쳤고 final main은 `e559dc09b3c030f31defc74aec6f1d19e7855a2f`이다.
+- 최종 repository 상태는 PocketRisu helper docs / SimCore Verify+Required / Proof Bundle PASS, #485 CLEAR / STABLE / UNKNOWN NONE이다.
+- physical-M에 exact merged guard + Boot/anchor를 mode 0700으로 설치했고 controlled guard hard-loss는 anchor가, controlled anchor hard-loss는 guard가 복구했다.
+- controlled relay runsv loss와 notify runsv loss에서는 healthy exact PID1 orphan child를 보존하고 duplicate를 만들지 않았으며, guard interval을 넘긴 soak에서도 단일 orphan 상태를 유지했다.
+- shared top-level `runsvdir`는 끝까지 absent였고 core/RDC/Tailscale을 보존했으며 실제 S→M notification smoke도 PASS했다.
+- #3712는 `IMPLEMENTED / CONTRACT_PROVEN / LIVE_PROVEN / DONE`으로 CLOSED다.
+- 이 성공은 Android가 Termux child를 죽이는 initiating cause를 제거했다는 뜻이 아니다. 그 원인/정책은 #3231이 계속 소유한다.
+- core SSH의 exact PID1 orphan + replacement runsv down/want-up reconciliation은 #3715가 별도 소유한다.
+
+다음 한 단계:
+- #3715를 INSPECT_ONLY로 currentize한 뒤 healthy exact core orphan을 죽이지 않는 reconciliation contract가 필요한지 결정한다.
 
 
 ## main-ssh-tunnel supervisor hardening — LIVE_PROVEN
@@ -57,7 +75,7 @@
 - network toggle/reset, reboot, whole-Termux loss, broad service-tree restart, server PocketRisu/sshd mutation 없이 live proof를 완료했다.
 
 다음 한 단계:
-- 이 Feature-ID는 추가 배포 없이 자연 운용을 관찰한다. shared `runsvdir` 원인/whole-Termux 복구는 별도 incident/control-plane owner에서 계속 추적한다.
+- 기존 guard/anchor 기능은 추가 배포 없이 자연 운용을 관찰한다. exact PID1 four-forward orphan과 replacement runsv `down / want up` 상태의 reconciliation은 #3715, Android/whole-Termux initiating process-loss 원인은 #3231에서 분리 추적한다.
 
 ## 레거시 upstream rebuild 준비 — DONE
 

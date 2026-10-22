@@ -63,12 +63,16 @@ for md in ROOT.rglob('*.md'):
         if not resolved.exists(): errors.append(f'{md.relative_to(REPO)}: broken relative link: {raw}')
 if errors:
     [print(f'ERROR: {e}') for e in errors]; sys.exit(1)
-focused=ROOT/'docs/features/main-phone/audio-notification/tests/test-notify-relay-supervisor.sh'
-if not focused.is_file():
-    print(f'ERROR: missing focused regression: {focused.relative_to(REPO)}')
-    sys.exit(1)
-focused_run=subprocess.run(['sh', str(focused)], cwd=REPO)
-if focused_run.returncode != 0:
-    print('ERROR: notify relay supervisor focused regression failed')
-    sys.exit(focused_run.returncode)
-print(f'PocketRisu helper docs OK: {count} feature modules + PR lifecycle + failure ledgers + deploy gate + notify relay supervisor contract')
+focused_contracts=[
+    (ROOT/'docs/features/main-phone/audio-notification/tests/test-notify-relay-supervisor.sh', 'notify relay supervisor'),
+    (ROOT/'docs/features/main-phone/notification-transport-durability/tests/test-notification-transport-durability.sh', 'notification transport durability'),
+]
+for focused,label in focused_contracts:
+    if not focused.is_file():
+        print(f'ERROR: missing focused regression: {focused.relative_to(REPO)}')
+        sys.exit(1)
+    focused_run=subprocess.run(['sh', str(focused)], cwd=REPO)
+    if focused_run.returncode != 0:
+        print(f'ERROR: {label} focused regression failed')
+        sys.exit(focused_run.returncode)
+print(f'PocketRisu helper docs OK: {count} feature modules + PR lifecycle + failure ledgers + deploy gate + notify relay supervisor + notification transport durability contracts')

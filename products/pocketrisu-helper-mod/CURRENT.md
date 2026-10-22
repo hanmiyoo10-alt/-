@@ -1,6 +1,6 @@
 # CURRENT — 포켓리스 보조 개조
 
-최종 갱신 기준: **2026-10-13**
+최종 갱신 기준: **2026-10-22**
 
 새 채팅이나 작업 재개 시 가장 먼저 읽는 현재 상태 체크포인트.
 
@@ -23,21 +23,24 @@
 - reconnect watcher 구축 및 실전 `DOWN → UP` 복구 알림 성공.
 - 서버폰 Android 알림 금지.
 
-## PocketRisu v1.14.0 Termux update — LIVE_PROVEN
+## PocketRisu v1.15.2 Termux update — LIVE_PROVEN
 
-- official PocketRisu `v1.14.0`을 검증된 fork 배포선에 통합하고 서버폰 live에 배포했다.
-- fork deploy target은 `fe068e038d74f49d0632dac302fbcce75f9020b1`, 서버폰 live overlay HEAD는 `fef7d4b0888c6a9280e50335bcca4ad6c943ca33`이다.
-- 기존 local-only Firefox 3커밋과 의도적 untracked `generic_mock_bridge.cjs`를 보존했다.
-- cutover 직전 source/runtime/data rollback 백업을 만들었고, save 약 6.5G + dist + node_modules를 보존했다.
-- candidate server suite 154/154, v1.14 model-binding 48/48, svelte-check 0 errors, production build PASS.
-- cutover 후 `risuai.db`, `logs.db`, `request-logs.db`, `model-jobs.db` 모두 `quick_check(1)=ok`.
-- controlled restart 후 `/api/health=ready` 재확인.
-- 메인폰 core SSH tunnel에서 새 서버 health가 정상 전달됨을 확인했다.
-- 실제 메인폰 Firefox chat/generation과 completion notification smoke까지 사용자 확인으로 PASS했다.
-- 업데이트 중 별도 기존 문제인 main-phone notify relay/tunnel supervisor 부재를 재관찰했고 one-shot 복구했다. durable owner는 #3513이며 v1.14 서버 회귀로 취급하지 않는다.
+- official PocketRisu `v1.15.2`를 검증된 fork 배포선에 통합하고 서버폰 live에 배포했다.
+- fork integration PR `hanmiyoo10-alt/PocketRisu#13` merge commit은 `eee9f5afbc2df3349052292b15500c95875265c3`, 서버폰 live overlay HEAD는 `f48bd6e6474423c3f7d5fa17b921b325863313ca`이다.
+- 기존 local-only Firefox 4커밋을 v1.15.2에 재조정해 보존했고, 의도적 untracked `generic_mock_bridge.cjs`도 그대로 유지했다.
+- inactive-preset lazy-hydration 코드는 배포됐지만, 그 별도 실제 Firefox UI/persistence 완료 판정은 계속 #2027 소유이며 이번 일반 chat/generation smoke로 닫지 않는다.
+- cutover 직전 rollback root `~/.local/state/pocketrisu-v1152-live-deploy/run-20261022-093409`에 old tracked source archive, old `dist`, old `node_modules`, service run, untracked bridge, full save backup을 보존했다.
+- fresh save backup은 `7,923,699 KiB`이고 `risuai.db`, `logs.db`, `request-logs.db`, `model-jobs.db` 모두 backup/live 양쪽 `quick_check=ok`를 확인했다.
+- Termux native `better_sqlite3.node` SHA-256은 검증값 `f9b4f7c886eb6d0d4b05b4061142cb44c1db7b996b685704f2ecb9161b184572`와 일치했고 in-memory SQLite smoke도 PASS했다.
+- 첫 v1.15.2 기동은 약 8초 안에 `/api/health=ready`, controlled restart는 PID `2523 -> 2972` 후 약 6초 안에 health ready로 복귀했다.
+- 메인폰 relay supervisor #3513은 merge/postmerge/live proof까지 DONE이며 dedicated runsv 1개 + supervised receiver 1개 + health ready로 유지된다.
+- 별도 기존 gap인 `pocketrisu-notify-tunnel` 부재는 #3709로 분리했고, 현재 one-shot service-specific runsv 복구 후 S의 `127.0.0.1:39120/health`가 ready이다. durable notify-tunnel 생존성은 아직 #3709 미완료다.
+- 실제 S→M notification POST는 HTTP 200이었고 메인폰 Android에서 PocketRisu smoke notification 표시를 확인했다.
+- 실제 메인폰 Firefox chat/generation smoke는 2026-10-22 사용자가 직접 PASS를 확인했다.
+- safe-updater 자동 배포는 여전히 비활성이다. 이번 성공은 수동 backup-first cutover의 live proof이지 자동 배포 활성화 증거가 아니다.
 
 다음 한 단계:
-- v1.14 배포는 추가 변경 없이 자연 운용을 관찰한다. notify relay supervisor durability는 #3513, 전화/이어폰 sound 문제는 기존 P0 owner에서 계속 추적한다.
+- v1.15.2 live는 rollback 세트를 보존한 채 자연 운용을 관찰한다. 별도 미완료 축은 #2027 inactive-preset UI/persistence, #3709 notify-tunnel durability, #3269 전화/이어폰 sound 문제다.
 
 
 ## main-ssh-tunnel supervisor hardening — LIVE_PROVEN

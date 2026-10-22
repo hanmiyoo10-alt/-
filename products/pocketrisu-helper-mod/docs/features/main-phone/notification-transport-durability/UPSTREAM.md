@@ -2,7 +2,7 @@
 
 Feature-ID: `notification-transport-durability`
 Area: `main-phone`
-PR status: `PR_OPEN_REVIEW_REPAIRED`
+PR status: `POSTMERGE_REPAIR_PREPARED`
 Isolation status: `CLEAN`
 Deployment status: `NOT_READY`
 
@@ -59,5 +59,5 @@ No PocketRisu application source, server source, Android policy, shared runit tr
 
 - PR URL:
 - head SHA:
-- latest result: PR #3713 P1 zombie-pid stale-lock review finding repaired locally; zombie guard/anchor regressions + full product validation PASS; repaired-head CI pending.
-- next action: commit/push P1 repair, require fresh exact-head PocketRisu CI/Verify/Required and review-thread clearance before VALIDATION_MERGE.
+- latest result: PR #3713 merged, but merged-main PocketRisu helper docs run `39712291169` exposed a focused-test operator-down ordering race; production payload identity remains exact.
+- next action: merge a test-only postmerge repair that creates `service/down` before synthetic supervisor loss, then require fresh merged-main PocketRisu docs + Required convergence.

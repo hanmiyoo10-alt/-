@@ -52,3 +52,15 @@ PR_REVIEW and DEPLOY failures, if any, must be appended here rather than overwri
 - feedback/fix: read `/proc/$pid/stat` after `kill -0`; classify process state `Z` as dead/stale before cmdline identity. Apply the same fixed rule to guard and anchor pid-state owners.
 - re-validation: explicit synthetic zombie guard + zombie anchor fixtures PASS; full focused/product/exact-head re-validation required on the repaired head.
 - rollback: pre-P1 guard/launcher/test/failure-ledger copies retained under local `/tmp/3712-*.pre-p1`; no physical-M effect.
+
+
+### 2026-10-22 — CI / merged-main operator-down fixture race
+- PR / commit: PR #3713 / merge `5231ad79c77f61622eb04b92665232089f5968b0`.
+- stage: `CI`
+- symptom: merged-main PocketRisu helper docs push run failed with `FAIL: ring overrode notify operator down`.
+- failed check/job: run `39712291169` / validate job `119606178736`.
+- facts from logs: candidate and merge root tree are identical; the final focused fixture captured the runsv count, stopped/cleared the synthetic supervisor, and only then created the service `down` marker. The synthetic guard loop runs at about 50ms, so it can correctly observe an eligible missing-supervisor state in that pre-marker window and restore it before operator intent exists.
+- cause: `CONFIRMED` — test ordering race. This is not candidate→merge divergence and does not show that production ignores an already-present `down` marker.
+- feedback/fix: test-only repair establishes the `down` marker before inducing supervisor loss, matching the intended operator-down semantics. Production guard/anchor bytes remain unchanged.
+- re-validation: postmerge repair PR must pass PocketRisu helper docs, SimCore Verify/Required, and merge-main convergence before #3712 POSTMERGE_CONVERGENCE can complete.
+- rollback: revert the test-only repair commit if its replacement CI does not validate the intended contract; no physical-M effect occurred.

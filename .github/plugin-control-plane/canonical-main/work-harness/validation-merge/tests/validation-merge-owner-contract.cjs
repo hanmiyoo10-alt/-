@@ -13,6 +13,7 @@ const stageReceipt = require('../../stage-receipt.cjs');
 const {stableHash} = require('../../handoff.cjs');
 const agentView = require('../../agent-decision-view.cjs');
 const scopeOverlap = require('../../../work-system/scope-overlap.cjs');
+require('../../external-pr-adoption/tests/external-pr-adoption-owner-contract.cjs');
 
 const PACKET = 2586;
 const PR = 3000;
@@ -44,6 +45,16 @@ function packetBody(paths = PATHS, state = 'IN_PROGRESS', stage = 'VALIDATION_ME
     '- Current stage: ' + TICK + stage + TICK,
   ].join('\n');
 }
+function adoptionPacketBody(surface = 'surface:repo:external-pr-adoption:pr-' + PR) {
+  return packetBody().replace(
+    '6. ' + TICK + 'surface:repo:validation-merge-projection' + TICK,
+    [
+      '6. ' + TICK + 'surface:repo:validation-merge-projection' + TICK,
+      '7. ' + TICK + surface + TICK,
+    ].join('\n'),
+  );
+}
+
 function packetActivityEvidenceSet({
   candidateRef = '#9901',
   requesterRef = '#' + PACKET,
@@ -136,6 +147,15 @@ function implementationReceipt(overrides = {}) {
     ...overrides,
   };
   return stageReceipt.projectStageReceipt(input);
+}
+
+function adoptionReceipt(surface = 'surface:repo:external-pr-adoption:pr-' + PR) {
+  return implementationReceipt({
+    requiredGates: [
+      {name: 'focused-contracts', result: 'PASS', evidenceLocator: 'local:test'},
+      {name: 'external-pr-adoption-surface', result: 'PASS', evidenceLocator: surface},
+    ],
+  });
 }
 
 function prObject(overrides = {}) {
@@ -601,6 +621,49 @@ test('legacy PR authority shape cannot cross the producer/validation boundary', 
     () => owner.validateImplementationReceipt(legacyHistoricalParsed.value, PACKET, PR),
     /IMPLEMENTATION_STAGE_RECEIPT_IDENTITY_CONFLICT/,
   );
+});
+
+test('implementation receipt parses exact external adoption surface gate', () => {
+  const value = owner.validateImplementationReceipt(adoptionReceipt(), PACKET, PR);
+  assert.equal(value.adoptionSurface, 'surface:repo:external-pr-adoption:pr-' + PR);
+  assert.throws(
+    () => owner.validateImplementationReceipt(
+      adoptionReceipt('surface:repo:external-pr-adoption:pr-9999'), PACKET, PR),
+    /IMPLEMENTATION_ADOPTION_SURFACE_PR_MISMATCH/,
+  );
+});
+
+test('validation requires adoption receipt gate and current packet surface to agree', async () => {
+  const pass = await owner.inspectWithClient({
+    client: fixtureClient({packetBody: adoptionPacketBody()}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: adoptionReceipt(),
+  });
+  assert.equal(pass.receipt.result, 'PASS');
+
+  const changed = await owner.inspectWithClient({
+    client: fixtureClient({
+      packetBody: adoptionPacketBody(
+        'surface:repo:external-pr-adoption:pr-9999'),
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: adoptionReceipt(),
+  });
+  assert.equal(changed.receipt.result, 'CONFLICT');
+  assert.ok(changed.receipt.reasonCodes.includes(
+    'IMPLEMENTATION_ADOPTION_SURFACE_PACKET_MISMATCH'));
+
+  const missingGate = await owner.inspectWithClient({
+    client: fixtureClient({packetBody: adoptionPacketBody()}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(missingGate.receipt.result, 'CONFLICT');
+  assert.ok(missingGate.receipt.reasonCodes.includes(
+    'IMPLEMENTATION_ADOPTION_SURFACE_RECEIPT_MISSING'));
 });
 
 test('current main capture requires exact CLEAR PASS and UNKNOWN NONE', async () => {

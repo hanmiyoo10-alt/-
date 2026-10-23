@@ -13,6 +13,7 @@ const stageReceipt = require('../../stage-receipt.cjs');
 const {stableHash} = require('../../handoff.cjs');
 const agentView = require('../../agent-decision-view.cjs');
 const scopeOverlap = require('../../../work-system/scope-overlap.cjs');
+require('../../external-pr-adoption/tests/external-pr-adoption-owner-contract.cjs');
 
 const PACKET = 2586;
 const PR = 3000;

@@ -1,6 +1,6 @@
 # CURRENT — 포켓리스 보조 개조
 
-최종 갱신 기준: **2026-10-22**
+최종 갱신 기준: **2026-10-23**
 
 새 채팅이나 작업 재개 시 가장 먼저 읽는 현재 상태 체크포인트.
 
@@ -22,6 +22,25 @@
 - pluginCustomStorage depth-3 incremental hash + selective clone.
 - reconnect watcher 구축 및 실전 `DOWN → UP` 복구 알림 성공.
 - 서버폰 Android 알림 금지.
+
+## PocketRisu v1.16.0 Termux update — LIVE_PROVEN
+
+- official PocketRisu `v1.16.0` tag `8b79cbe1274a342765248c36614fc3152a39d1b7`을 검증된 Termux fork 배포선에 통합하고 physical S live에 배포했다.
+- fork integration PR `hanmiyoo10-alt/PocketRisu#14`가 merge됐고 deploy merge는 `db3b7684aaf2c58bc1f2705a2f89897b93f8bd1e`이다.
+- v1.15.x live-only Firefox 5개 변경은 blind cherry-pick하지 않고 v1.16의 cold-load/plugin-storage/nodeStorage 및 keepalive semantics에 맞춰 재조정했고, 최종 live overlay candidate와 physical S HEAD는 `f32e31690d687d48d087321246199cbfbf68e3f3`이다.
+- repository validation에서 server `206` tests PASS, compatibility `144` tests PASS(+6 skipped), focused overlay/cold-load suites PASS, Svelte check 0 errors, production build PASS를 확인했다. raw client의 환경성 실패 집합은 untouched official v1.16과 동일하게 재현되어 integration-specific regression으로 분류하지 않았다.
+- cutover 전 rollback/source anchor `fork/backup/pre-v1.16.0-live-20261023 -> f48bd6e6474423c3f7d5fa17b921b325863313ca`와 candidate remote ref를 보존했다.
+- rollback/staging root `~/.local/state/pocketrisu-v1160-live-deploy/run-20261023-164036`에 이전 tracked source, service run, intentional untracked bridge 및 staged runtime 증거를 보존했다.
+- PocketRisu 서비스를 내린 상태에서 fresh full save backup을 만들었고 live/backup 크기 `8,190,707 KiB`가 일치했다. backup의 `risuai.db`, `logs.db`, `request-logs.db`, `model-jobs.db`는 모두 `quick_check=ok`이다.
+- v1.15.2와 v1.16 candidate의 lockfile은 동일했고 기존 Termux native dependency tree를 보존했다. `better_sqlite3.node` SHA-256은 검증값 `f9b4f7c886eb6d0d4b05b4061142cb44c1db7b996b685704f2ecb9161b184572`와 일치한다.
+- physical S에서 v1.16 HEAD와 candidate identity가 일치하고 `/api/health=ready`를 확인했다. controlled restart는 PID `20698 -> 28323` 후 다시 health ready로 복귀했다.
+- 실제 S→M notification reverse tunnel과 relay를 통해 POST가 HTTP 200 / `{"ok":true}`로 성공했고, M Android notification list에서도 tag `8472`, title `PocketRisu · v1.16 live smoke` 알림 생성을 확인했다.
+- 해당 smoke 도중 M의 notification guard + independent anchor + notify-tunnel + reverse SSH가 동시에 소실된 별도 recurrence를 발견했다. 기존 설치된 Boot recovery entry로 transport를 복구했고, 이 recurrence의 initiating cause는 이번 release 완료 근거로 추측하지 않으며 #3231에 별도 기록했다.
+- 메인폰 Firefox에서 이미 열려 있던 PocketRisu 탭으로 chat/generation을 수행한 뒤 reload하여 내용 유지 여부를 확인하는 v1.16 restart-save 회귀 smoke를 2026-10-23 사용자가 직접 수행 완료했다. 이 HUMAN_EVIDENCE는 v1.16 release gate 범위이며 #2027 inactive-preset 별도 완료 판정을 대체하지 않는다.
+- safe-updater 자동 배포는 계속 비활성이다. 이번 성공은 backup-first manual cutover의 live proof이며 자동 배포 활성화 증거가 아니다.
+
+다음 한 단계:
+- v1.16 live를 보존하고 자연 운용을 관찰한다. release integration #3719를 닫은 뒤 별도 중단 작업인 #3717 core exact-orphan reconciliation로 복귀한다. Android/Termux 동시 process-loss는 #3231, inactive-preset UI/persistence는 #2027, 전화/이어폰 sound 문제는 #3269가 계속 소유한다.
 
 ## PocketRisu v1.15.2 Termux update — LIVE_PROVEN
 

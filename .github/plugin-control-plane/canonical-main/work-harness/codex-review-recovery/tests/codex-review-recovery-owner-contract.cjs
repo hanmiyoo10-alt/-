@@ -13,11 +13,15 @@ const NOW = Date.parse('2026-10-25T00:30:00Z');
 const OLD = '2026-10-25T00:00:00Z';
 const YOUNG = '2026-10-25T00:20:01Z';
 
-function pendingError(reason = 'CODEX_REVIEW_PENDING', kind = 'NEEDS_REVIEW') {
+function ownerError(reason, kind = 'BLOCKED') {
   const error = new Error(reason);
   error.kind = kind;
   error.reasonCodes = [reason];
   return error;
+}
+
+function pendingError(reason = 'CODEX_REVIEW_PENDING', kind = 'NEEDS_REVIEW') {
+  return ownerError(reason, kind);
 }
 
 function pr(overrides = {}) {
@@ -54,10 +58,25 @@ function client({firstPr = pr(), secondPr = firstPr, comments = [summary()]} = {
   };
 }
 
-function vm({review = 'pending'} = {}) {
+function vm({review = 'pending', currentness = 'current'} = {}) {
   return {
     async readCurrentMain() {
       return {mainSha: MAIN, evidenceLocator: 'issue:#485'};
+    },
+    async readStrictPrMergeState() {
+      if (currentness === 'behind') {
+        throw ownerError('PR_HEAD_BEHIND_STRICT_BASE');
+      }
+      if (currentness === 'unknown') {
+        throw ownerError('PR_MERGE_STATE_UNKNOWN', 'UNKNOWN');
+      }
+      return {mergeStateStatus: 'CLEAN'};
+    },
+    async readStrictAncestry() {
+      if (currentness === 'diverged') {
+        throw ownerError('PR_HEAD_NOT_CURRENT_MAIN_ANCESTOR');
+      }
+      return {status: 'ahead', mergeBaseSha: MAIN};
     },
     async readRequiredEvidence() {
       return {runId: 1, jobId: 2};
@@ -106,6 +125,21 @@ async function inspect(options = {}) {
   });
   assert.equal(staleBase.disposition, 'CURRENTIZE_FIRST');
 
+  const behind = await inspect({vmOptions: {currentness: 'behind'}});
+  assert.equal(behind.disposition, 'CURRENTIZE_FIRST');
+  assert.deepEqual(behind.reasonCodes, ['PR_HEAD_BEHIND_STRICT_BASE']);
+
+  const diverged = await inspect({vmOptions: {currentness: 'diverged'}});
+  assert.equal(diverged.disposition, 'CURRENTIZE_FIRST');
+  assert.deepEqual(diverged.reasonCodes, ['PR_HEAD_NOT_CURRENT_MAIN_ANCESTOR']);
+
+  await assert.rejects(
+    inspect({vmOptions: {currentness: 'unknown'}}),
+    (error) => error instanceof owner.RecoveryError
+      && error.disposition === 'UNKNOWN'
+      && error.reasonCodes.includes('PR_MERGE_STATE_UNKNOWN'),
+  );
+
   const headMove = await inspect({
     clientOptions: {
       secondPr: pr({
@@ -144,6 +178,49 @@ async function inspect(options = {}) {
   assert.equal(dedupe.disposition, 'ALREADY_RETRIGGERED');
   assert.equal(dedupe.retriggerBody, null);
 
+  const editedMarker = await inspect({
+    clientOptions: {
+      comments: [
+        summary(),
+        {
+          id: 101,
+          user: {login: owner.REPO_OWNER},
+          body: 'operator note\n\n' + exactBody + '\n\nverified later',
+        },
+      ],
+    },
+  });
+  assert.equal(editedMarker.disposition, 'ALREADY_RETRIGGERED');
+
+  const oldHeadMarker = owner.fixedRetriggerBody(NEW_HEAD);
+  const otherHeadDoesNotDedupe = await inspect({
+    clientOptions: {
+      comments: [
+        summary(),
+        {id: 102, user: {login: owner.REPO_OWNER}, body: oldHeadMarker},
+      ],
+    },
+  });
+  assert.equal(otherHeadDoesNotDedupe.disposition, 'ELIGIBLE');
+
+  await assert.rejects(
+    inspect({
+      clientOptions: {
+        comments: [
+          summary(),
+          {
+            id: 103,
+            user: {login: owner.REPO_OWNER},
+            body: '<!-- canonical-main-codex-review-recovery:v1 not-json -->',
+          },
+        ],
+      },
+    }),
+    (error) => error instanceof owner.RecoveryError
+      && error.disposition === 'UNKNOWN'
+      && error.reasonCodes.includes('RECOVERY_MARKER_INVALID'),
+  );
+
   await assert.rejects(
     inspect({clientOptions: {comments: [summary('not-a-date')]}}),
     (error) => error instanceof owner.RecoveryError
@@ -167,6 +244,8 @@ async function inspect(options = {}) {
     'utf8',
   );
   assert.match(source, /readCurrentMain\(client\)/);
+  assert.match(source, /readStrictPrMergeState\(client, prNumber, headSha\)/);
+  assert.match(source, /readStrictAncestry\(client, current\.mainSha, headSha\)/);
   assert.match(source, /readRequiredEvidence\(client, headSha, prNumber\)/);
   assert.match(source, /readReviewBarrier\(client, prNumber, headSha\)/);
   assert.doesNotMatch(source, /CODEX_REVIEW_STATE_RE/);

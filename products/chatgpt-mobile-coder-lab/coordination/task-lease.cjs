@@ -12,7 +12,7 @@ const OWNER_PACKET_REF = '#2350';
 const CONTROLLER_PATH = 'products/chatgpt-mobile-coder-lab/coordination/task-lease.cjs';
 const ROUTES = Object.freeze(['S_PRIVATE_LOCAL', 'M_VM_LAB', 'M_PRIVATE_LAB', 'S_TERMUX', 'L', 'M', 'S']);
 const EXECUTORS = new Set(ROUTES);
-const WORKSPACE_KINDS = Object.freeze(['repository', 'not_applicable', 'landing_metadata', 'landing_branch_repair']);
+const WORKSPACE_KINDS = Object.freeze(['repository', 'not_applicable', 'landing_metadata', 'landing_branch_repair', 'landing_residue_cleanup']);
 const LANDING_METADATA = Object.freeze({
   S: Object.freeze({branch: 'server/work', worktree: '/root/nyang-repo', scope: 'surface:mcl-landing-origin-main:S'}),
   M: Object.freeze({branch: 'mainphone/work', worktree: '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work', scope: 'surface:mcl-landing-origin-main:M'}),
@@ -26,6 +26,16 @@ const REPOSITORY_WORKSPACE = Object.freeze({
 const LANDING_BRANCH_REPAIR = Object.freeze({
   S: Object.freeze({branch: 'server/work', worktree: '/root/nyang-repo', scope: 'surface:mcl-landing-branch:S'}),
   M: Object.freeze({branch: 'mainphone/work', worktree: '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work', scope: 'surface:mcl-landing-branch:M'}),
+});
+const LANDING_RESIDUE_CLEANUP = Object.freeze({
+  L: Object.freeze({
+    branch: 'main',
+    worktree: '/home/alsl0/nyang-repo',
+    scopes: Object.freeze([
+      'path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc',
+      'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc',
+    ]),
+  }),
 });
 const TERMINAL_PACKET_STATES = new Set(['DONE', 'CANCELLED', 'SUPERSEDED']);
 const SHA40_RE = /^[0-9a-f]{40}$/;
@@ -101,6 +111,9 @@ function landingMetadataIdentity(executor) {
 function landingBranchRepairIdentity(executor) {
   return LANDING_BRANCH_REPAIR[executor] || null;
 }
+function landingResidueCleanupIdentity(executor) {
+  return LANDING_RESIDUE_CLEANUP[executor] || null;
+}
 function validateWorkspace(workspace, executor) {
   if (!workspace || typeof workspace !== 'object' || Array.isArray(workspace)) return ['WORKSPACE_INVALID'];
   if (!WORKSPACE_KINDS.includes(workspace.kind)) return ['WORKSPACE_KIND_INVALID'];
@@ -118,6 +131,14 @@ function validateWorkspace(workspace, executor) {
     const identity = landingBranchRepairIdentity(executor);
     if (!identity) return ['WORKSPACE_LANDING_BRANCH_REPAIR_EXECUTOR_INVALID'];
     if (workspace.branch !== identity.branch || workspace.worktree !== identity.worktree) return ['WORKSPACE_LANDING_BRANCH_REPAIR_IDENTITY_INVALID'];
+    return [];
+  }
+  if (workspace.kind === 'landing_residue_cleanup') {
+    const identity = landingResidueCleanupIdentity(executor);
+    if (!identity) return ['WORKSPACE_LANDING_RESIDUE_CLEANUP_EXECUTOR_INVALID'];
+    if (workspace.branch !== identity.branch || workspace.worktree !== identity.worktree) {
+      return ['WORKSPACE_LANDING_RESIDUE_CLEANUP_IDENTITY_INVALID'];
+    }
     return [];
   }
   const profile = REPOSITORY_WORKSPACE[executor];
@@ -149,8 +170,25 @@ function validateLandingBranchRepairBinding({workspace, route, executor, scopes,
   if (!SHA40_RE.test(observedBaseSha || '')) errors.push('LANDING_BRANCH_REPAIR_BASE_SHA_REQUIRED');
   return errors;
 }
+function validateLandingResidueCleanupBinding({workspace, route, executor, scopes, observedBaseSha}) {
+  if (workspace?.kind !== 'landing_residue_cleanup') return [];
+  const identity = landingResidueCleanupIdentity(executor);
+  const errors = [];
+  if (!identity || route !== 'L' || executor !== 'L' || route !== executor) {
+    errors.push('LANDING_RESIDUE_CLEANUP_ROUTE_EXECUTOR_INVALID');
+  }
+  if (identity && (!Array.isArray(scopes)
+      || JSON.stringify([...scopes].sort()) !== JSON.stringify([...identity.scopes].sort()))) {
+    errors.push('LANDING_RESIDUE_CLEANUP_SCOPE_INVALID');
+  }
+  if (!SHA40_RE.test(observedBaseSha || '')) errors.push('LANDING_RESIDUE_CLEANUP_BASE_SHA_REQUIRED');
+  return errors;
+}
 function isGitWorkspace(workspace) {
-  return workspace?.kind === 'repository' || workspace?.kind === 'landing_metadata' || workspace?.kind === 'landing_branch_repair';
+  return workspace?.kind === 'repository'
+    || workspace?.kind === 'landing_metadata'
+    || workspace?.kind === 'landing_branch_repair'
+    || workspace?.kind === 'landing_residue_cleanup';
 }
 
 function validateLease(lease) {
@@ -168,6 +206,7 @@ function validateLease(lease) {
   if (lease.observedBaseSha !== null && !SHA40_RE.test(lease.observedBaseSha || '')) errors.push('LEASE_BASE_SHA_INVALID');
   errors.push(...validateLandingMetadataBinding({workspace: lease.workspace, executor: lease.executor, scopes: lease.scopes, observedBaseSha: lease.observedBaseSha}));
   errors.push(...validateLandingBranchRepairBinding({workspace: lease.workspace, route: lease.route, executor: lease.executor, scopes: lease.scopes, observedBaseSha: lease.observedBaseSha}));
+  errors.push(...validateLandingResidueCleanupBinding({workspace: lease.workspace, route: lease.route, executor: lease.executor, scopes: lease.scopes, observedBaseSha: lease.observedBaseSha}));
   if (!Array.isArray(lease.sourceRefs) || lease.sourceRefs.length < 1 || lease.sourceRefs.length > 8) errors.push('LEASE_SOURCE_REFS_INVALID');
   return errors;
 }
@@ -260,11 +299,12 @@ function normalizeAcquireRequest(request) {
   };
   reasonCodes.push(...validateWorkspace(workspace, request?.executor));
   if (request?.route === 'S' && !['repository', 'landing_metadata', 'landing_branch_repair'].includes(workspace.kind)) reasonCodes.push('REQUEST_S_ROUTE_REPOSITORY_REQUIRED');
-  if (request?.route === 'L' && !['repository', 'landing_metadata'].includes(workspace.kind)) reasonCodes.push('REQUEST_L_ROUTE_REPOSITORY_REQUIRED');
+  if (request?.route === 'L' && !['repository', 'landing_metadata', 'landing_residue_cleanup'].includes(workspace.kind)) reasonCodes.push('REQUEST_L_ROUTE_REPOSITORY_REQUIRED');
   const observedBaseSha = request?.observedBaseSha || null;
   if (observedBaseSha !== null && !SHA40_RE.test(observedBaseSha)) reasonCodes.push('REQUEST_BASE_SHA_INVALID');
   reasonCodes.push(...validateLandingMetadataBinding({workspace, executor: request?.executor, scopes: scopeResult.scopes, observedBaseSha}));
   reasonCodes.push(...validateLandingBranchRepairBinding({workspace, route: request?.route, executor: request?.executor, scopes: scopeResult.scopes, observedBaseSha}));
+  reasonCodes.push(...validateLandingResidueCleanupBinding({workspace, route: request?.route, executor: request?.executor, scopes: scopeResult.scopes, observedBaseSha}));
   if (reasonCodes.length) return {ok: false, reasonCodes: uniq(reasonCodes).sort()};
 
   const profile = {
@@ -511,6 +551,7 @@ module.exports = {
   EXECUTORS,
   LANDING_BRANCH_REPAIR,
   LANDING_METADATA,
+  LANDING_RESIDUE_CLEANUP,
   LEDGER_MARKER,
   MAX_ACTIVE_LEASES,
   OWNER_PACKET_REF,
@@ -522,6 +563,7 @@ module.exports = {
   extractPacketLifecycle,
   landingBranchRepairIdentity,
   landingMetadataIdentity,
+  landingResidueCleanupIdentity,
   normalizeAcquireRequest,
   parseLedger,
   planAcquire,
@@ -534,6 +576,7 @@ module.exports = {
   run,
   validateLandingBranchRepairBinding,
   validateLandingMetadataBinding,
+  validateLandingResidueCleanupBinding,
   validateLedger,
   validateWorkspace,
 };

@@ -240,6 +240,41 @@ function compareObject(overrides = {}) {
   };
 }
 
+function codexSummary({
+  head = HEAD,
+  status = 'completed',
+  hasAnyFindings = false,
+  hasUnresolvedFindings = false,
+  id = 9001,
+  author = 'chatgpt-codex-connector[bot]',
+  payloadOverride = null,
+  bodyOverride = null,
+} = {}) {
+  const payload = payloadOverride || {
+    code_review: {
+      commit_sha: head,
+      has_any_findings: hasAnyFindings,
+      has_unresolved_findings: hasUnresolvedFindings,
+      status,
+    },
+    security_review: {
+      commit_sha: null,
+      has_any_findings: null,
+      has_unresolved_findings: null,
+      status: null,
+    },
+  };
+  return {
+    id,
+    user: {login: author},
+    body: bodyOverride || [
+      '<!-- codex-pull-request-review-summary -->',
+      '<!-- codex-review-state:v1 ' + JSON.stringify(payload) + ' -->',
+      '## Codex Review Summary',
+    ].join('\n'),
+  };
+}
+
 function fixtureClient(options = {}) {
   const calls = [];
   let branchReads = 0;
@@ -249,6 +284,7 @@ function fixtureClient(options = {}) {
   let strictProtectionReads = 0;
   let strictGraphqlReads = 0;
   let compareReads = 0;
+  let issueCommentReads = 0;
   const otherPacket = {
     number: 9901,
     state: 'open',
@@ -296,7 +332,10 @@ function fixtureClient(options = {}) {
         return options.reviews || [];
       }
       if (endpoint.startsWith('/issues/' + PR + '/comments?')) {
-        return options.issueComments || [];
+        issueCommentReads += 1;
+        return options.issueCommentsSequence?.[issueCommentReads - 1]
+          ?? options.issueComments
+          ?? [codexSummary()];
       }
       if (endpoint.startsWith('/pulls/' + PR + '/comments?')) {
         return options.reviewComments || [];
@@ -904,6 +943,147 @@ test('requested reviewer is NEEDS_REVIEW, not green by absence', async () => {
   assert.equal(result.receipt.result, 'PARTIAL');
   assert.equal(result.receipt.attentionDisposition, 'NEEDS_REVIEW');
   assert.ok(result.receipt.reasonCodes.includes('REVIEW_REQUEST_PENDING'));
+});
+
+test('Codex exact-head running state is NEEDS_REVIEW, never green by absence', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      issueComments: [codexSummary({
+        status: 'running',
+        hasAnyFindings: null,
+        hasUnresolvedFindings: null,
+      })],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PARTIAL');
+  assert.equal(result.receipt.attentionDisposition, 'NEEDS_REVIEW');
+  assert.ok(result.receipt.reasonCodes.includes('CODEX_REVIEW_PENDING'));
+});
+
+test('missing Codex summary is NEEDS_REVIEW', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({issueComments: []}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PARTIAL');
+  assert.ok(result.receipt.reasonCodes.includes('CODEX_REVIEW_NOT_OBSERVED'));
+});
+
+test('stale Codex summary head is NEEDS_REVIEW', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({issueComments: [codexSummary({head: 'e'.repeat(40)})]}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PARTIAL');
+  assert.ok(result.receipt.reasonCodes.includes('CODEX_REVIEW_HEAD_STALE'));
+});
+
+test('exact-head completed-clear Codex summary is admitted', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient(),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.codexReviewState, 'CODEX_COMPLETE_CLEAR');
+  assert.equal(result.report.codexReviewHeadSha, HEAD);
+  assert.equal(result.report.codexReviewCommentId, 9001);
+});
+
+test('completed Codex findings preserve unresolved-thread blocking', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      issueComments: [codexSummary({
+        hasAnyFindings: true,
+        hasUnresolvedFindings: true,
+      })],
+      threads: emptyThreads([{
+        isResolved: false,
+        comments: {pageInfo: {hasNextPage: false}, nodes: [{outdated: false}]},
+      }]),
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('REVIEW_THREAD_UNRESOLVED'));
+});
+
+test('completed unresolved Codex state without matching thread is UNKNOWN', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      issueComments: [codexSummary({
+        hasAnyFindings: true,
+        hasUnresolvedFindings: true,
+      })],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'UNKNOWN');
+  assert.ok(result.receipt.reasonCodes.includes('CODEX_REVIEW_FINDINGS_THREAD_MISMATCH'));
+});
+
+test('malformed or duplicate Codex summaries remain UNKNOWN', async () => {
+  const malformed = await owner.inspectWithClient({
+    client: fixtureClient({
+      issueComments: [codexSummary({
+        bodyOverride: [
+          '<!-- codex-pull-request-review-summary -->',
+          '<!-- codex-review-state:v1 {not-json} -->',
+        ].join('\n'),
+      })],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(malformed.receipt.result, 'UNKNOWN');
+  assert.ok(malformed.receipt.reasonCodes.includes('CODEX_REVIEW_STATE_INVALID'));
+
+  const duplicate = await owner.inspectWithClient({
+    client: fixtureClient({
+      issueComments: [codexSummary({id: 1}), codexSummary({id: 2})],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(duplicate.receipt.result, 'UNKNOWN');
+  assert.ok(duplicate.receipt.reasonCodes.includes('CODEX_REVIEW_SUMMARY_CONFLICT'));
+});
+
+test('final review reread cannot pass after Codex returns to running state', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      issueCommentsSequence: [
+        [codexSummary()],
+        [codexSummary({
+          status: 'running',
+          hasAnyFindings: null,
+          hasUnresolvedFindings: null,
+        })],
+      ],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PARTIAL');
+  assert.ok(result.receipt.reasonCodes.includes('CODEX_REVIEW_PENDING'));
+  assert.ok(result.receipt.steps.some((row) => (
+    row.name === 'final-review-currentness' && row.result === 'PARTIAL'
+  )));
 });
 
 test('review thread completeness failure stays UNKNOWN', async () => {

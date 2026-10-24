@@ -7,6 +7,7 @@ const STALE_THRESHOLD_MS = 20 * 60 * 1000;
 const CODEX_REVIEW_AUTHOR = 'chatgpt-codex-connector[bot]';
 const CODEX_REVIEW_SUMMARY_MARKER = '<!-- codex-pull-request-review-summary -->';
 const RECOVERY_MARKER_PREFIX = '<!-- canonical-main-codex-review-recovery:v1 ';
+const RECOVERY_MARKER_RE = /<!-- canonical-main-codex-review-recovery:v1 ([^\r\n]*?) -->/g;
 const SHA40_RE = /^[0-9a-f]{40}$/;
 const PAGE_SIZE = 100;
 const MAX_PAGES = 20;
@@ -21,6 +22,14 @@ class RecoveryError extends Error {
 
 function defaultValidationMerge() {
   return require('../validation-merge/validation-merge-owner.cjs');
+}
+
+function exactObjectKeys(value, expected) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const actual = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  return actual.length === wanted.length
+    && actual.every((key, index) => key === wanted[index]);
 }
 
 function fixedRetriggerBody(headSha) {
@@ -74,6 +83,49 @@ function classifyReviewBarrierError(error) {
     };
   }
   throw new RecoveryError('UNKNOWN', ['REVIEW_BARRIER_UNCLASSIFIED']);
+}
+
+function currentnessDisposition(error) {
+  const reasons = Array.isArray(error?.reasonCodes) ? error.reasonCodes : [];
+  if (error?.kind === 'BLOCKED'
+      && reasons.some((code) => (
+        code === 'PR_HEAD_BEHIND_STRICT_BASE'
+        || code === 'PR_HEAD_NOT_CURRENT_MAIN_ANCESTOR'
+      ))) {
+    return {currentize: true, reasonCodes: reasons};
+  }
+  if (error?.kind === 'UNKNOWN' || error?.kind === 'CONFLICT') {
+    throw new RecoveryError(error.kind, reasons.length ? reasons : ['PR_CURRENTNESS_UNKNOWN']);
+  }
+  throw new RecoveryError('UNKNOWN', reasons.length ? reasons : ['PR_CURRENTNESS_UNCLASSIFIED']);
+}
+
+function exactHeadRecoveryMarkers(comments, expectedHead) {
+  const exact = [];
+  for (const row of comments) {
+    if (row?.user?.login !== REPO_OWNER || typeof row?.body !== 'string'
+        || !row.body.includes(RECOVERY_MARKER_PREFIX)) continue;
+    const matches = [...row.body.matchAll(RECOVERY_MARKER_RE)];
+    if (matches.length !== 1) {
+      throw new RecoveryError('UNKNOWN', ['RECOVERY_MARKER_INVALID']);
+    }
+    let payload;
+    try {
+      payload = JSON.parse(matches[0][1]);
+    } catch {
+      throw new RecoveryError('UNKNOWN', ['RECOVERY_MARKER_INVALID']);
+    }
+    if (!exactObjectKeys(payload, ['schemaVersion', 'expectedHead'])
+        || payload.schemaVersion !== 1
+        || !SHA40_RE.test(String(payload.expectedHead || ''))) {
+      throw new RecoveryError('UNKNOWN', ['RECOVERY_MARKER_INVALID']);
+    }
+    if (payload.expectedHead === expectedHead) exact.push(row);
+  }
+  if (exact.length > 1) {
+    throw new RecoveryError('CONFLICT', ['RECOVERY_MARKER_DUPLICATE']);
+  }
+  return exact;
 }
 
 function baseResult(prNumber, headSha, disposition, reasonCodes, extra = {}) {
@@ -144,6 +196,16 @@ async function inspectWithClient({client, prNumber, nowMs = Date.now(), validati
     return baseResult(prNumber, headSha, 'CURRENTIZE_FIRST', ['PR_BASE_NOT_CURRENT_MAIN']);
   }
 
+  try {
+    await vm.readStrictPrMergeState(client, prNumber, headSha);
+    await vm.readStrictAncestry(client, current.mainSha, headSha);
+  } catch (error) {
+    const classified = currentnessDisposition(error);
+    if (classified.currentize) {
+      return baseResult(prNumber, headSha, 'CURRENTIZE_FIRST', classified.reasonCodes);
+    }
+  }
+
   await vm.readRequiredEvidence(client, headSha, prNumber);
 
   try {
@@ -170,12 +232,7 @@ async function inspectWithClient({client, prNumber, nowMs = Date.now(), validati
   const ageMs = nowMs - updatedMs;
 
   const exactBody = fixedRetriggerBody(headSha);
-  const prior = comments.filter((row) => (
-    row?.user?.login === REPO_OWNER && row?.body === exactBody
-  ));
-  if (prior.length > 1) {
-    throw new RecoveryError('CONFLICT', ['RECOVERY_MARKER_DUPLICATE']);
-  }
+  const prior = exactHeadRecoveryMarkers(comments, headSha);
   if (prior.length === 1) {
     return baseResult(prNumber, headSha, 'ALREADY_RETRIGGERED',
       ['EXACT_HEAD_RECOVERY_MARKER_PRESENT'], {
@@ -217,7 +274,9 @@ module.exports = {
   REPO_OWNER,
   STALE_THRESHOLD_MS,
   RECOVERY_MARKER_PREFIX,
+  Recovery_MARKER_RE: RECOVERY_MARKER_RE,
   RecoveryError,
+  exactHeadRecoveryMarkers,
   fixedRetriggerBody,
   inspectWithClient,
 };

@@ -116,10 +116,72 @@ class ContractTests(unittest.TestCase):
     def test_effect_requires_active_wifi(self):
         self.assertIn("getActiveNetwork()", self.job)
         self.assertIn("NetworkCapabilities.TRANSPORT_WIFI", self.job)
+        self.assertIn("NetworkState networkState = inspectNetworkState(this);", self.job)
         self.assertRegex(
             self.job,
-            re.compile(r"if \(!hasActiveWifi\(this\)\) \{\s*return false;", re.S),
+            re.compile(r"if \(!networkState\.wifiTransport\) \{.*?return false;", re.S),
         )
+
+    def test_diagnostics_use_fixed_bounded_vocabulary(self):
+        self.assertIn('private static final String LOG_TAG = "MclWirelessAdbRecovery";', self.receiver)
+        self.assertIn('private static final String LOG_TAG = "MclWirelessAdbRecovery";', self.job)
+        self.assertIn('event=boot_received action=', self.receiver)
+
+        for event in (
+            "event=job_network",
+            "event=job_result",
+            "event=setting_pre",
+            "event=setting_write_start",
+            "event=setting_write_result",
+            "event=setting_post",
+            "event=job_exception",
+        ):
+            self.assertIn(event, self.job)
+
+        for token in (
+            "LOCKED_BOOT_COMPLETED",
+            "BOOT_COMPLETED",
+            "outcome=no_active_wifi",
+            "result=not_needed",
+            "SECURITY_EXCEPTION",
+            "ILLEGAL_ARGUMENT_EXCEPTION",
+        ):
+            self.assertIn(token, self.receiver + self.job)
+
+    def test_diagnostic_attempt_identity_is_fixed(self):
+        self.assertIn("attemptLabel(params.getJobId())", self.job)
+        self.assertIn("if (jobId == JOB_IDS[0])", self.job)
+        self.assertIn("if (jobId == JOB_IDS[1])", self.job)
+        self.assertIn("if (jobId == JOB_IDS[2])", self.job)
+        self.assertIn('return "unmapped";', self.job)
+        self.assertNotIn('" job_id=" + params.getJobId()', self.job)
+        self.assertNotIn('" job_id=" + jobId', self.job)
+
+    def test_diagnostics_do_not_expose_network_or_exception_identity(self):
+        joined = "\n".join([self.receiver, self.job])
+        for forbidden in (
+            "getSSID(",
+            "getBSSID(",
+            "getLinkProperties(",
+            "getAllNetworks(",
+            "getTransportInfo(",
+            "InetAddress",
+            "LinkProperties",
+            "intent.getExtras(",
+            "intent.toString(",
+            "exception.getMessage(",
+            "exception.toString(",
+            "printStackTrace",
+            "Log.getStackTraceString",
+            "active.toString(",
+            "capabilities.toString(",
+        ):
+            self.assertNotIn(forbidden, joined)
+
+        self.assertIn("active_network_present=", self.job)
+        self.assertIn("wifi_transport=", self.job)
+        self.assertIn("enabled=" + '" + preEnabled', self.job)
+        self.assertIn("enabled=" + '" + (post == ENABLED)', self.job)
 
     def test_launcher_has_no_setting_effect(self):
         self.assertNotIn("Settings.", self.activity)
@@ -156,6 +218,9 @@ class ContractTests(unittest.TestCase):
         self.assertIn("Live activation is a later, separately reviewed phase", self.readme)
         self.assertIn("without adb connect, adb pair, ADB restart", self.readme)
         self.assertIn("debug APK produced by IMPLEMENTATION_PR", self.readme)
+        self.assertIn("## Bounded diagnostics contract", self.readme)
+        self.assertIn("Diagnostics never emit SSID, BSSID, IP address, port, serial", self.readme)
+        self.assertIn("does not introduce OFF→ON forcing", self.readme)
 
 
 if __name__ == "__main__":

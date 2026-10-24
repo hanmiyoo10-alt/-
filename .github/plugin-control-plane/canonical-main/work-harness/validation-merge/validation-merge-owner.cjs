@@ -21,6 +21,10 @@ const PACKET_MARKER = '<!-- canonical-main-work-packet:v1 -->';
 const PACKET_ACTIVITY_EVIDENCE_MODE = 'VALIDATION_MERGE_PACKET_ACTIVITY_EVIDENCE_SET';
 const PACKET_REF_RE = /^#[1-9][0-9]*$/;
 const MAX_PACKET_ACTIVITY_CANDIDATES = 12;
+const CODEX_REVIEW_AUTHOR = 'chatgpt-codex-connector[bot]';
+const CODEX_REVIEW_SUMMARY_MARKER = '<!-- codex-pull-request-review-summary -->';
+const CODEX_REVIEW_STATE_RE = /<!-- codex-review-state:v1 ([^\r\n]*?) -->/g;
+const MAX_CODEX_REVIEW_STATE_BYTES = 4096;
 
 const {createGitHubClient} = require(path.join(ROOT,
   '.github/plugin-control-plane/canonical-main/infra/github-client.cjs'));
@@ -77,6 +81,76 @@ function exactObjectKeys(value, expected) {
   const wanted = [...expected].sort();
   return actual.length === wanted.length
     && actual.every((key, index) => key === wanted[index]);
+}
+
+function parseCodexReviewState(issueComments, expectedHead, prNumber) {
+  const locator = 'pr:#' + prNumber;
+  const summaries = issueComments.filter((row) => (
+    row?.user?.login === CODEX_REVIEW_AUTHOR
+    && typeof row?.body === 'string'
+    && row.body.includes(CODEX_REVIEW_SUMMARY_MARKER)
+  ));
+  if (!summaries.length) {
+    throw new OwnerError('NEEDS_REVIEW', ['CODEX_REVIEW_NOT_OBSERVED'], locator);
+  }
+  if (summaries.length !== 1) {
+    throw new OwnerError('UNKNOWN', ['CODEX_REVIEW_SUMMARY_CONFLICT'], locator);
+  }
+  const comment = summaries[0];
+  const body = comment.body;
+  if (body.split(CODEX_REVIEW_SUMMARY_MARKER).length - 1 !== 1) {
+    throw new OwnerError('UNKNOWN', ['CODEX_REVIEW_SUMMARY_INVALID'], locator);
+  }
+  const matches = [...body.matchAll(CODEX_REVIEW_STATE_RE)];
+  if (matches.length !== 1
+      || Buffer.byteLength(matches[0][1], 'utf8') > MAX_CODEX_REVIEW_STATE_BYTES) {
+    throw new OwnerError('UNKNOWN', ['CODEX_REVIEW_STATE_INVALID'], locator);
+  }
+  let payload;
+  try {
+    payload = JSON.parse(matches[0][1]);
+  } catch {
+    throw new OwnerError('UNKNOWN', ['CODEX_REVIEW_STATE_INVALID'], locator);
+  }
+  if (!exactObjectKeys(payload, ['code_review', 'security_review'])) {
+    throw new OwnerError('UNKNOWN', ['CODEX_REVIEW_STATE_INVALID'], locator);
+  }
+  const codeReview = payload.code_review;
+  const securityReview = payload.security_review;
+  const reviewKeys = [
+    'commit_sha', 'has_any_findings', 'has_unresolved_findings', 'status',
+  ];
+  if (!exactObjectKeys(codeReview, reviewKeys)
+      || !exactObjectKeys(securityReview, reviewKeys)
+      || !SHA40_RE.test(String(codeReview.commit_sha || ''))) {
+    throw new OwnerError('UNKNOWN', ['CODEX_REVIEW_STATE_INVALID'], locator);
+  }
+  if (codeReview.commit_sha !== expectedHead) {
+    throw new OwnerError('NEEDS_REVIEW', ['CODEX_REVIEW_HEAD_STALE'], locator);
+  }
+  if (codeReview.status === 'running') {
+    if (codeReview.has_any_findings !== null
+        || codeReview.has_unresolved_findings !== null) {
+      throw new OwnerError('UNKNOWN', ['CODEX_REVIEW_STATE_INVALID'], locator);
+    }
+    throw new OwnerError('NEEDS_REVIEW', ['CODEX_REVIEW_PENDING'], locator);
+  }
+  if (codeReview.status !== 'completed'
+      || typeof codeReview.has_any_findings !== 'boolean'
+      || typeof codeReview.has_unresolved_findings !== 'boolean'
+      || (!codeReview.has_any_findings && codeReview.has_unresolved_findings)) {
+    throw new OwnerError('UNKNOWN', ['CODEX_REVIEW_STATE_INVALID'], locator);
+  }
+  return {
+    state: codeReview.has_any_findings
+      ? 'CODEX_COMPLETE_FINDINGS'
+      : 'CODEX_COMPLETE_CLEAR',
+    commitSha: codeReview.commit_sha,
+    hasAnyFindings: codeReview.has_any_findings,
+    hasUnresolvedFindings: codeReview.has_unresolved_findings,
+    commentId: Number.isInteger(comment.id) ? comment.id : null,
+    evidenceLocator: locator,
+  };
 }
 function normalizePacketActivityEvidenceSet(input, packetNumber) {
   if (!exactObjectKeys(input, ['schemaVersion', 'mode', 'requesterRef', 'candidates'])
@@ -377,7 +451,7 @@ const REVIEWED_MERGE_STATES = new Set([
   'BEHIND', 'BLOCKED', 'CLEAN', 'DIRTY', 'DRAFT', 'HAS_HOOKS', 'UNKNOWN', 'UNSTABLE',
 ]);
 
-async function readReviewBarrier(client, prNumber) {
+async function readReviewBarrier(client, prNumber, expectedHead) {
   const reviews = await fetchPagedArray(client,
     (page) => '/pulls/' + prNumber + '/reviews?per_page=100&page=' + page, 'REVIEWS');
   const issueComments = await fetchPagedArray(client,
@@ -437,12 +511,20 @@ async function readReviewBarrier(client, prNumber) {
   if (pending) {
     throw new OwnerError('NEEDS_REVIEW', ['REVIEW_REQUEST_PENDING'], 'pr:#' + prNumber);
   }
+  const codexReview = parseCodexReviewState(issueComments.rows, expectedHead, prNumber);
+  if (codexReview.hasUnresolvedFindings && unresolved === 0) {
+    throw new OwnerError('UNKNOWN', ['CODEX_REVIEW_FINDINGS_THREAD_MISMATCH'],
+      'pr:#' + prNumber);
+  }
   return {
     reviewCount: reviews.rows.length,
     issueCommentCount: issueComments.rows.length,
     reviewCommentCount: reviewComments.rows.length,
     unresolvedThreadCount: unresolved,
     pendingReviewerCount: pending,
+    codexReviewState: codexReview.state,
+    codexReviewHeadSha: codexReview.commitSha,
+    codexReviewCommentId: codexReview.commentId,
     evidenceLocator: 'pr:#' + prNumber,
   };
 }
@@ -907,7 +989,7 @@ async function inspectWithClient({
       expectedHead: implementation.expectedHead, perform,
     });
     const reviews = await perform('review-barrier', 'pr:#' + prNumber,
-      () => readReviewBarrier(client, prNumber));
+      () => readReviewBarrier(client, prNumber, implementation.expectedHead));
     const required = await perform('exact-head-required', 'commit:' + implementation.expectedHead,
       () => readRequiredEvidence(client, implementation.expectedHead, prNumber));
     artifacts.push(required.evidenceLocator);
@@ -925,8 +1007,8 @@ async function inspectWithClient({
       client, prNumber, mainSha: finalCurrent.mainSha,
       expectedHead: implementation.expectedHead, perform, prefix: 'final-',
     });
-    await perform('final-review-currentness', 'pr:#' + prNumber,
-      () => readReviewBarrier(client, prNumber));
+    const finalReviews = await perform('final-review-currentness', 'pr:#' + prNumber,
+      () => readReviewBarrier(client, prNumber, implementation.expectedHead));
     const finalOverlap = await perform(
       'final-overlap-currentness',
       'owner:work-system-scope-overlap',
@@ -936,6 +1018,8 @@ async function inspectWithClient({
     if (finalCurrent.mainSha !== current.mainSha
         || finalPacket.bodySha256 !== packet.bodySha256
         || finalPr.headSha !== pr.headSha || finalPr.baseSha !== pr.baseSha
+        || finalReviews.codexReviewState !== reviews.codexReviewState
+        || finalReviews.codexReviewHeadSha !== reviews.codexReviewHeadSha
         || !stableEqual(finalStrictCurrentness, strictCurrentness)) {
       throw new OwnerError('UNKNOWN', ['VALIDATION_STATE_CHANGED_DURING_CAPTURE']);
     }
@@ -983,6 +1067,9 @@ async function inspectWithClient({
         reviewCount: reviews.reviewCount,
         issueCommentCount: reviews.issueCommentCount,
         reviewCommentCount: reviews.reviewCommentCount,
+        codexReviewState: reviews.codexReviewState,
+        codexReviewHeadSha: reviews.codexReviewHeadSha,
+        codexReviewCommentId: reviews.codexReviewCommentId,
         strictProtection: strictCurrentness.strict,
         mergeStateStatus: strictCurrentness.mergeStateStatus,
         ancestryStatus: strictCurrentness.ancestryStatus,

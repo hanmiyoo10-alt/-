@@ -2553,3 +2553,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/e1e0ca609979aeb119812e049f9d491cdd2e27d3)
 - Event ID: `ce2ba9d672d46c75d21e85525ab16a3478a6f6c9acdc5950e4e4485acb0d115e`
 <!-- canonical-main-doc-promoted:ce2ba9d672d46c75d21e85525ab16a3478a6f6c9acdc5950e4e4485acb0d115e -->
+
+### 2026-10-25 — feat(repo): add bounded Codex review recovery owner (#3731)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `d275941ab0fce75f8a64e3a318d9522cfcc51a2f`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d275941ab0fce75f8a64e3a318d9522cfcc51a2f)
+- Event ID: `e5b5876941a93d905ea8eae5b80cbece5bfc4adaded48864fdad3c3a2a74bb41`
+<!-- canonical-main-doc-promoted:e5b5876941a93d905ea8eae5b80cbece5bfc4adaded48864fdad3c3a2a74bb41 -->

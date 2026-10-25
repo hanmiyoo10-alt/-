@@ -1,0 +1,17 @@
+[Reading 13 lines from start (total: 13 lines, 0 remaining)]
+
+{
+  "name": "mcl-task-lease-dispatch-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test tests/*.test.mjs"
+  }
+}
+
+[executed on device: L-Gram (a2beef8a-fa0b-4423-b6fc-8f017f907cef)]

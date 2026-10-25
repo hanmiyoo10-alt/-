@@ -1,3 +1,5 @@
+[Reading 245 lines from start (total: 245 lines, 0 remaining)]
+
 {
   "schemaVersion": 1,
   "authority": {
@@ -180,6 +182,7 @@
       "sourceRoots": [
         "tools/repo-ci-mcp/**",
         "tools/github-discussions-mcp/**",
+        "tools/mcl-task-lease-dispatch-mcp/**",
         "tools/repo-write/**",
         "tools/repo-env/**"
       ],
@@ -242,3 +245,5 @@
     }
   ]
 }
+
+[executed on device: L-Gram (a2beef8a-fa0b-4423-b6fc-8f017f907cef)]

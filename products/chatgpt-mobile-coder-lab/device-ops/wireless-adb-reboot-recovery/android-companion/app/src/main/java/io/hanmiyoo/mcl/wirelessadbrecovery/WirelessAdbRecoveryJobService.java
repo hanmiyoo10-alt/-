@@ -10,8 +10,10 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.provider.Settings;
+import android.util.Log;
 
 public final class WirelessAdbRecoveryJobService extends JobService {
+    private static final String LOG_TAG = "MclWirelessAdbRecovery";
     private static final String ADB_WIFI_ENABLED_SETTING = "adb_wifi_enabled";
     private static final int ENABLED = 1;
 
@@ -36,19 +38,45 @@ public final class WirelessAdbRecoveryJobService extends JobService {
 
     @Override
     public boolean onStartJob(JobParameters params) {
-        if (!hasActiveWifi(this)) {
+        String attempt = attemptLabel(params.getJobId());
+        NetworkState networkState = inspectNetworkState(this);
+        Log.i(
+                LOG_TAG,
+                "event=job_network attempt=" + attempt
+                        + " active_network_present=" + networkState.activeNetworkPresent
+                        + " wifi_transport=" + networkState.wifiTransport);
+
+        if (!networkState.wifiTransport) {
+            Log.i(LOG_TAG, "event=job_result attempt=" + attempt + " outcome=no_active_wifi");
             return false;
         }
 
         try {
             int current = Settings.Global.getInt(
                     getContentResolver(), ADB_WIFI_ENABLED_SETTING, 0);
+            boolean preEnabled = current == ENABLED;
+            Log.i(LOG_TAG, "event=setting_pre attempt=" + attempt + " enabled=" + preEnabled);
+
             if (current != ENABLED) {
-                Settings.Global.putInt(
+                Log.i(LOG_TAG, "event=setting_write_start attempt=" + attempt + " attempted=true");
+                boolean accepted = Settings.Global.putInt(
                         getContentResolver(), ADB_WIFI_ENABLED_SETTING, ENABLED);
+                Log.i(
+                        LOG_TAG,
+                        "event=setting_write_result attempt=" + attempt
+                                + " result=" + (accepted ? "accepted" : "rejected"));
+            } else {
+                Log.i(LOG_TAG, "event=setting_write_start attempt=" + attempt + " attempted=false");
+                Log.i(LOG_TAG, "event=setting_write_result attempt=" + attempt + " result=not_needed");
             }
-        } catch (SecurityException | IllegalArgumentException exception) {
-            // Fail closed. A later fixed job may retry if one remains scheduled.
+
+            int post = Settings.Global.getInt(
+                    getContentResolver(), ADB_WIFI_ENABLED_SETTING, 0);
+            Log.i(LOG_TAG, "event=setting_post attempt=" + attempt + " enabled=" + (post == ENABLED));
+        } catch (SecurityException exception) {
+            Log.i(LOG_TAG, "event=job_exception attempt=" + attempt + " type=SECURITY_EXCEPTION");
+        } catch (IllegalArgumentException exception) {
+            Log.i(LOG_TAG, "event=job_exception attempt=" + attempt + " type=ILLEGAL_ARGUMENT_EXCEPTION");
         }
         return false;
     }
@@ -58,19 +86,43 @@ public final class WirelessAdbRecoveryJobService extends JobService {
         return false;
     }
 
-    private static boolean hasActiveWifi(Context context) {
+    private static NetworkState inspectNetworkState(Context context) {
         ConnectivityManager manager = context.getSystemService(ConnectivityManager.class);
         if (manager == null) {
-            return false;
+            return new NetworkState(false, false);
         }
 
         Network active = manager.getActiveNetwork();
         if (active == null) {
-            return false;
+            return new NetworkState(false, false);
         }
 
         NetworkCapabilities capabilities = manager.getNetworkCapabilities(active);
-        return capabilities != null
+        boolean wifiTransport = capabilities != null
                 && capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
+        return new NetworkState(true, wifiTransport);
+    }
+
+    private static String attemptLabel(int jobId) {
+        if (jobId == JOB_IDS[0]) {
+            return "1";
+        }
+        if (jobId == JOB_IDS[1]) {
+            return "2";
+        }
+        if (jobId == JOB_IDS[2]) {
+            return "3";
+        }
+        return "unmapped";
+    }
+
+    private static final class NetworkState {
+        final boolean activeNetworkPresent;
+        final boolean wifiTransport;
+
+        NetworkState(boolean activeNetworkPresent, boolean wifiTransport) {
+            this.activeNetworkPresent = activeNetworkPresent;
+            this.wifiTransport = wifiTransport;
+        }
     }
 }

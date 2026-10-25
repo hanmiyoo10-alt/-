@@ -32,7 +32,7 @@ WirelessAdbBootReceiver accepts only the protected system actions LOCKED_BOOT_CO
 The three minimum latencies are fixed at 10 seconds, 60 seconds, and 180 seconds.
 Each job runs once. It first requires the current active network to have Android's Wi-Fi transport. Without active Wi-Fi it exits with no setting write.
 
-With active Wi-Fi, the job reads only the literal global key adb_wifi_enabled, then requests exactly one Settings.Global.putInt(..., "adb_wifi_enabled", 1) even when the pre-read already reports 1. This same-value one-write repair is deliberate: exact-M receipt evidence proved that the logical value can remain enabled across reboot while effective Wireless ADB is not re-armed. Security or runtime failure is fail-closed and the job does not broaden its authority. OFF→ON remains a broader deferred fallback and is not performed.
+With active Wi-Fi, the job reads only the literal global key adb_wifi_enabled. If the pre-read is disabled, it requests exactly one fixed Settings.Global.putInt(..., "adb_wifi_enabled", 1). If the pre-read is already enabled, it requests exactly two bounded writes on that same literal key, first 0 and then 1, with no delay or caller-selected value. Exact-M live evidence proved that same-value writes of 1 were accepted on all three fixed attempts but did not re-arm Wireless ADB, while ordinary manual recovery produced the internal true → false → true transition before adbd restarted. The final enable write is attempted even when the preceding disable write returns false. Security or runtime failure remains fail-closed and the job does not broaden its authority.
 
 Android remains responsible for whether Wireless ADB can actually start, including trusted-network checks, ADB authentication, TLS pairing, mDNS advertisement, and host attachment.
 
@@ -46,8 +46,8 @@ Allowed event vocabulary is intentionally small:
 - `job_network`: fixed attempt label plus active-network-present and Wi-Fi-transport booleans;
 - `job_result`: fixed no-active-Wi-Fi outcome;
 - `setting_pre`: whether `adb_wifi_enabled` equals the fixed enabled value;
-- `setting_write_start`: the fixed single-write attempt after the Wi-Fi gate and pre-read;
-- `setting_write_result`: `accepted | rejected` for the current job path; the persistent receipt keeps `not_needed` only as a bounded compatibility/default enum;
+- `setting_write_start`: the fixed bounded write sequence after the Wi-Fi gate and pre-read;
+- `setting_write_result`: `accepted | rejected` for the current job path; on the stale-true branch `accepted` means both the fixed 0 write and the final fixed 1 write returned accepted; the persistent receipt keeps `not_needed` only as a bounded compatibility/default enum;
 - `setting_post`: enabled-state readback;
 - `job_exception`: only `SECURITY_EXCEPTION | ILLEGAL_ARGUMENT_EXCEPTION`.
 
@@ -55,7 +55,7 @@ Attempt labels are derived only from the three fixed job IDs and render as `1 | 
 
 Diagnostics never emit SSID, BSSID, IP address, port, serial, pairing/key material, network-object identity, raw Intent extras, exception messages/stacks, arbitrary settings values, or raw Android dumps. They add no permission, component, dependency, file, persistence owner, network transport, or generic logging surface.
 
-The diagnostic revision does not introduce OFF→ON forcing, a second settings write, a retry loop, a persisted job, or any change to the active-Wi-Fi gate.
+The diagnostic revision itself did not introduce OFF→ON forcing. The later #3757 behavioral repair adds only the bounded stale-true 0 → 1 sequence described above; it adds no delay loop, persisted job, new permission, new component, or change to the active-Wi-Fi gate.
 
 ## Persistent diagnostic receipt
 

@@ -15,6 +15,7 @@ import android.util.Log;
 public final class WirelessAdbRecoveryJobService extends JobService {
     private static final String LOG_TAG = "MclWirelessAdbRecovery";
     private static final String ADB_WIFI_ENABLED_SETTING = "adb_wifi_enabled";
+    private static final int DISABLED = 0;
     private static final int ENABLED = 1;
 
     private static final int[] JOB_IDS = {372201, 372202, 372203};
@@ -62,8 +63,14 @@ public final class WirelessAdbRecoveryJobService extends JobService {
 
             Log.i(LOG_TAG, "event=setting_write_start attempt=" + attempt + " attempted=true");
             WirelessAdbDiagnosticReceipt.recordWriteStarted(this, attempt);
-            boolean accepted = Settings.Global.putInt(
+            boolean disableAccepted = true;
+            if (preEnabled) {
+                disableAccepted = Settings.Global.putInt(
+                        getContentResolver(), ADB_WIFI_ENABLED_SETTING, DISABLED);
+            }
+            boolean enableAccepted = Settings.Global.putInt(
                     getContentResolver(), ADB_WIFI_ENABLED_SETTING, ENABLED);
+            boolean accepted = disableAccepted && enableAccepted;
             Log.i(
                     LOG_TAG,
                     "event=setting_write_result attempt=" + attempt

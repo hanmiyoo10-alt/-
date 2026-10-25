@@ -95,25 +95,36 @@ class ContractTests(unittest.TestCase):
 
     def test_setting_effect_is_literal_and_single_purpose(self):
         self.assertEqual(1, self.job.count('"adb_wifi_enabled"'))
-        self.assertEqual(1, self.job.count("Settings.Global.putInt("))
+        self.assertEqual(2, self.job.count("Settings.Global.putInt("))
         self.assertNotIn("Settings.Secure", self.job)
         self.assertNotIn("Settings.System", self.job)
+        self.assertIn("private static final int DISABLED = 0;", self.job)
         self.assertIn("private static final int ENABLED = 1;", self.job)
-        self.assertNotIn("current != ENABLED", self.job)
         self.assertNotIn("recordWriteNotNeeded(this, attempt)", self.job)
+        self.assertNotIn("notifyChange(", self.job)
+        self.assertNotIn("Thread.sleep", self.job)
+        self.assertNotIn("SystemClock.sleep", self.job)
 
-    def test_stale_true_path_always_requests_one_same_value_write(self):
-        self.assertNotIn("if (current != ENABLED)", self.job)
+    def test_stale_true_path_requests_bounded_off_on_sequence(self):
+        self.assertIn("if (preEnabled)", self.job)
         self.assertNotIn("recordWriteNotNeeded(this, attempt)", self.job)
         pre = self.job.index("recordSettingPre(this, attempt, preEnabled);")
-        write = self.job.index("boolean accepted = Settings.Global.putInt(")
-        post = self.job.index("int post = Settings.Global.getInt(", write)
-        self.assertLess(pre, write)
-        self.assertLess(write, post)
-        self.assertEqual(1, self.job.count("Settings.Global.putInt("))
-        self.assertIn("ADB_WIFI_ENABLED_SETTING, ENABLED);", self.job)
-        self.assertIn("same-value one-write repair", self.readme)
-        self.assertIn("OFF→ON remains a broader deferred fallback", self.readme)
+        branch = self.job.index("if (preEnabled)", pre)
+        disable = self.job.index("ADB_WIFI_ENABLED_SETTING, DISABLED);", branch)
+        enable = self.job.index("ADB_WIFI_ENABLED_SETTING, ENABLED);", disable)
+        accepted = self.job.index("boolean accepted = disableAccepted && enableAccepted;", enable)
+        post = self.job.index("int post = Settings.Global.getInt(", accepted)
+        self.assertLess(pre, branch)
+        self.assertLess(branch, disable)
+        self.assertLess(disable, enable)
+        self.assertLess(enable, accepted)
+        self.assertLess(accepted, post)
+        self.assertEqual(2, self.job.count("Settings.Global.putInt("))
+        self.assertIn("boolean disableAccepted = true;", self.job)
+        self.assertIn("boolean enableAccepted = Settings.Global.putInt(", self.job)
+        self.assertIn("If the pre-read is already enabled", self.readme)
+        self.assertIn("first 0 and then 1", self.readme)
+        self.assertIn("final enable write is attempted even when", self.readme)
 
     def test_retry_budget_is_fixed_and_bounded(self):
         self.assertIn(
@@ -314,7 +325,7 @@ class ContractTests(unittest.TestCase):
         ):
             self.assertIn("WirelessAdbDiagnosticReceipt." + call, self.job)
 
-        self.assertEqual(1, self.job.count("Settings.Global.putInt("))
+        self.assertEqual(2, self.job.count("Settings.Global.putInt("))
         self.assertIn("if (!networkState.wifiTransport)", self.job)
         self.assertIn(".setPersisted(false)", self.job)
         self.assertNotIn("throws ", self.receipt)
@@ -371,7 +382,8 @@ class ContractTests(unittest.TestCase):
         self.assertIn("debug APK produced by IMPLEMENTATION_PR", self.readme)
         self.assertIn("## Bounded diagnostics contract", self.readme)
         self.assertIn("Diagnostics never emit SSID, BSSID, IP address, port, serial", self.readme)
-        self.assertIn("does not introduce OFF→ON forcing", self.readme)
+        self.assertIn("diagnostic revision itself did not introduce OFF→ON forcing", self.readme)
+        self.assertIn("bounded stale-true 0 → 1 sequence", self.readme)
 
 
 if __name__ == "__main__":

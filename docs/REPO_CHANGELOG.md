@@ -2561,3 +2561,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/d275941ab0fce75f8a64e3a318d9522cfcc51a2f)
 - Event ID: `e5b5876941a93d905ea8eae5b80cbece5bfc4adaded48864fdad3c3a2a74bb41`
 <!-- canonical-main-doc-promoted:e5b5876941a93d905ea8eae5b80cbece5bfc4adaded48864fdad3c3a2a74bb41 -->
+
+### 2026-10-26 — Merge pull request #3773 from hanmiyoo10-alt/repo/validation-d013-dispatch-mcp-routing-3772
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `fbb006cc45648b19275567ceea434e9d2ee2f5d8`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/fbb006cc45648b19275567ceea434e9d2ee2f5d8)
+- Event ID: `85af363afcaa19aee17ca921ff68558e5955ad641a7115088900f6cbc389db23`
+<!-- canonical-main-doc-promoted:85af363afcaa19aee17ca921ff68558e5955ad641a7115088900f6cbc389db23 -->

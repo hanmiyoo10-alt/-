@@ -432,7 +432,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual("", dependencies.group("body").strip())
 
     def test_readme_preserves_later_live_boundary(self):
-        self.assertIn("Live activation is a later, separately reviewed phase", self.readme)
+        self.assertIn("Live activation is always a later, separately reviewed phase", self.readme)
         self.assertIn("without adb connect, adb pair, ADB restart", self.readme)
         self.assertIn("debug APK produced by IMPLEMENTATION_PR", self.readme)
         self.assertIn("## Bounded diagnostics contract", self.readme)
@@ -442,6 +442,33 @@ class ContractTests(unittest.TestCase):
         self.assertIn("fixed-URI observer sequencing", self.readme)
         self.assertNotIn("Thread.sleep", self.job)
         self.assertNotIn("SystemClock.sleep", self.job)
+
+
+    def test_exact_s_persistent_activation_contract_is_bounded(self):
+        tick = chr(96)
+        self.assertIn("Exact M " + tick + "SM-S938N" + tick + " is live-proven under #3722", self.readme)
+        self.assertIn("Exact S " + tick + "SM-G998N" + tick + " is a separate persistent-activation target under #3761", self.readme)
+        self.assertIn("one ordinary user Wireless Debugging ON toggle", self.readme)
+        self.assertIn("bootstrap prerequisite", self.readme)
+        self.assertIn("That bootstrap is not acceptance evidence", self.readme)
+        self.assertIn("reboot exact S once", self.readme)
+        self.assertIn("existing paired L host rediscovers S", self.readme)
+        self.assertIn("without adb connect, adb pair, ADB restart", self.readme)
+        self.assertIn("helper may remain installed with only WRITE_SECURE_SETTINGS retained", self.readme)
+        self.assertIn("rollback is permission revoke plus helper uninstall", self.readme)
+        self.assertIn("generic L reconnect daemon", self.readme)
+        self.assertIn("M↔S symmetric Wireless ADB remains a separate design topic under #3762", self.readme)
+
+    def test_exact_s_activation_does_not_change_runtime_identity_or_effect(self):
+        runtime = "\n".join([self.activity, self.receiver, self.job, self.receipt, self.build])
+        self.assertNotIn("SM-G998N", runtime)
+        self.assertNotIn("SM-S938N", runtime)
+        self.assertNotIn("adb connect", runtime)
+        self.assertNotIn("adb pair", runtime)
+        self.assertNotIn("5555", runtime)
+        self.assertEqual(2, self.job.count("Settings.Global.putInt("))
+        self.assertEqual(2, self.job.count("getContentResolver().notifyChange("))
+        self.assertIn(".setPersisted(false)", self.job)
 
 
 if __name__ == "__main__":

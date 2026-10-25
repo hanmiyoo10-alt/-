@@ -60,21 +60,15 @@ public final class WirelessAdbRecoveryJobService extends JobService {
             Log.i(LOG_TAG, "event=setting_pre attempt=" + attempt + " enabled=" + preEnabled);
             WirelessAdbDiagnosticReceipt.recordSettingPre(this, attempt, preEnabled);
 
-            if (current != ENABLED) {
-                Log.i(LOG_TAG, "event=setting_write_start attempt=" + attempt + " attempted=true");
-                WirelessAdbDiagnosticReceipt.recordWriteStarted(this, attempt);
-                boolean accepted = Settings.Global.putInt(
-                        getContentResolver(), ADB_WIFI_ENABLED_SETTING, ENABLED);
-                Log.i(
-                        LOG_TAG,
-                        "event=setting_write_result attempt=" + attempt
-                                + " result=" + (accepted ? "accepted" : "rejected"));
-                WirelessAdbDiagnosticReceipt.recordWriteResult(this, attempt, accepted);
-            } else {
-                Log.i(LOG_TAG, "event=setting_write_start attempt=" + attempt + " attempted=false");
-                Log.i(LOG_TAG, "event=setting_write_result attempt=" + attempt + " result=not_needed");
-                WirelessAdbDiagnosticReceipt.recordWriteNotNeeded(this, attempt);
-            }
+            Log.i(LOG_TAG, "event=setting_write_start attempt=" + attempt + " attempted=true");
+            WirelessAdbDiagnosticReceipt.recordWriteStarted(this, attempt);
+            boolean accepted = Settings.Global.putInt(
+                    getContentResolver(), ADB_WIFI_ENABLED_SETTING, ENABLED);
+            Log.i(
+                    LOG_TAG,
+                    "event=setting_write_result attempt=" + attempt
+                            + " result=" + (accepted ? "accepted" : "rejected"));
+            WirelessAdbDiagnosticReceipt.recordWriteResult(this, attempt, accepted);
 
             int post = Settings.Global.getInt(
                     getContentResolver(), ADB_WIFI_ENABLED_SETTING, 0);

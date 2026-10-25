@@ -99,7 +99,21 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn("Settings.Secure", self.job)
         self.assertNotIn("Settings.System", self.job)
         self.assertIn("private static final int ENABLED = 1;", self.job)
-        self.assertIn("current != ENABLED", self.job)
+        self.assertNotIn("current != ENABLED", self.job)
+        self.assertNotIn("recordWriteNotNeeded(this, attempt)", self.job)
+
+    def test_stale_true_path_always_requests_one_same_value_write(self):
+        self.assertNotIn("if (current != ENABLED)", self.job)
+        self.assertNotIn("recordWriteNotNeeded(this, attempt)", self.job)
+        pre = self.job.index("recordSettingPre(this, attempt, preEnabled);")
+        write = self.job.index("boolean accepted = Settings.Global.putInt(")
+        post = self.job.index("int post = Settings.Global.getInt(", write)
+        self.assertLess(pre, write)
+        self.assertLess(write, post)
+        self.assertEqual(1, self.job.count("Settings.Global.putInt("))
+        self.assertIn("ADB_WIFI_ENABLED_SETTING, ENABLED);", self.job)
+        self.assertIn("same-value one-write repair", self.readme)
+        self.assertIn("OFF→ON remains a broader deferred fallback", self.readme)
 
     def test_retry_budget_is_fixed_and_bounded(self):
         self.assertIn(
@@ -144,7 +158,6 @@ class ContractTests(unittest.TestCase):
             "LOCKED_BOOT_COMPLETED",
             "BOOT_COMPLETED",
             "outcome=no_active_wifi",
-            "result=not_needed",
             "SECURITY_EXCEPTION",
             "ILLEGAL_ARGUMENT_EXCEPTION",
         ):
@@ -295,7 +308,6 @@ class ContractTests(unittest.TestCase):
             "recordSettingPre(",
             "recordWriteStarted(",
             "recordWriteResult(",
-            "recordWriteNotNeeded(",
             "recordSettingPost(",
             "recordSecurityException(",
             "recordIllegalArgumentException(",

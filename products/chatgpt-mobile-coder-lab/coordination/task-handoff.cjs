@@ -2,7 +2,11 @@
 
 const crypto = require('node:crypto');
 const { normalizeScope } = require('../../../.github/plugin-control-plane/canonical-main/work-system/scope-overlap.cjs');
-const { ROUTES, EXECUTORS, validateWorkspace: validateLeaseWorkspace, validateLandingMetadataBinding, validateLandingBranchRepairBinding } = require('./task-lease.cjs');
+const {
+  ROUTES, EXECUTORS, validateWorkspace: validateLeaseWorkspace,
+  validateLandingMetadataBinding, validateLandingBranchRepairBinding,
+  validateLandingResidueCleanupBinding,
+} = require('./task-lease.cjs');
 
 const MANIFEST_START = '<!-- mcl-task-manifest:v1 -->';
 const MANIFEST_END = '<!-- /mcl-task-manifest:v1 -->';
@@ -83,9 +87,10 @@ function validateWorkspace(workspace, executor, route, scopes, observedBaseSha) 
   if (errors.length) return errors;
   errors.push(...validateLeaseWorkspace(workspace, executor));
   if (route === 'S' && !['repository', 'landing_metadata', 'landing_branch_repair'].includes(workspace.kind)) errors.push('WORKSPACE_S_ROUTE_REPOSITORY_REQUIRED');
-  if (route === 'L' && !['repository', 'landing_metadata'].includes(workspace.kind)) errors.push('WORKSPACE_L_ROUTE_REPOSITORY_REQUIRED');
+  if (route === 'L' && !['repository', 'landing_metadata', 'landing_residue_cleanup'].includes(workspace.kind)) errors.push('WORKSPACE_L_ROUTE_REPOSITORY_REQUIRED');
   errors.push(...validateLandingMetadataBinding({workspace, executor, scopes, observedBaseSha}));
   errors.push(...validateLandingBranchRepairBinding({workspace, route, executor, scopes, observedBaseSha}));
+  errors.push(...validateLandingResidueCleanupBinding({workspace, route, executor, scopes, observedBaseSha}));
   return [...new Set(errors)].sort();
 }
 function normalizeLeaseEvidence(value, required) {

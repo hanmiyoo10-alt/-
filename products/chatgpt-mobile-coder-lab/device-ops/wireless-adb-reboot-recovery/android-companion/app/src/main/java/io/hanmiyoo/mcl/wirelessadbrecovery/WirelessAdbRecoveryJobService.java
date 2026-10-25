@@ -45,6 +45,8 @@ public final class WirelessAdbRecoveryJobService extends JobService {
                 "event=job_network attempt=" + attempt
                         + " active_network_present=" + networkState.activeNetworkPresent
                         + " wifi_transport=" + networkState.wifiTransport);
+        WirelessAdbDiagnosticReceipt.recordNetwork(
+                this, attempt, networkState.activeNetworkPresent, networkState.wifiTransport);
 
         if (!networkState.wifiTransport) {
             Log.i(LOG_TAG, "event=job_result attempt=" + attempt + " outcome=no_active_wifi");
@@ -56,26 +58,33 @@ public final class WirelessAdbRecoveryJobService extends JobService {
                     getContentResolver(), ADB_WIFI_ENABLED_SETTING, 0);
             boolean preEnabled = current == ENABLED;
             Log.i(LOG_TAG, "event=setting_pre attempt=" + attempt + " enabled=" + preEnabled);
+            WirelessAdbDiagnosticReceipt.recordSettingPre(this, attempt, preEnabled);
 
             if (current != ENABLED) {
                 Log.i(LOG_TAG, "event=setting_write_start attempt=" + attempt + " attempted=true");
+                WirelessAdbDiagnosticReceipt.recordWriteStarted(this, attempt);
                 boolean accepted = Settings.Global.putInt(
                         getContentResolver(), ADB_WIFI_ENABLED_SETTING, ENABLED);
                 Log.i(
                         LOG_TAG,
                         "event=setting_write_result attempt=" + attempt
                                 + " result=" + (accepted ? "accepted" : "rejected"));
+                WirelessAdbDiagnosticReceipt.recordWriteResult(this, attempt, accepted);
             } else {
                 Log.i(LOG_TAG, "event=setting_write_start attempt=" + attempt + " attempted=false");
                 Log.i(LOG_TAG, "event=setting_write_result attempt=" + attempt + " result=not_needed");
+                WirelessAdbDiagnosticReceipt.recordWriteNotNeeded(this, attempt);
             }
 
             int post = Settings.Global.getInt(
                     getContentResolver(), ADB_WIFI_ENABLED_SETTING, 0);
             Log.i(LOG_TAG, "event=setting_post attempt=" + attempt + " enabled=" + (post == ENABLED));
+            WirelessAdbDiagnosticReceipt.recordSettingPost(this, attempt, post == ENABLED);
         } catch (SecurityException exception) {
+            WirelessAdbDiagnosticReceipt.recordSecurityException(this, attempt);
             Log.i(LOG_TAG, "event=job_exception attempt=" + attempt + " type=SECURITY_EXCEPTION");
         } catch (IllegalArgumentException exception) {
+            WirelessAdbDiagnosticReceipt.recordIllegalArgumentException(this, attempt);
             Log.i(LOG_TAG, "event=job_exception attempt=" + attempt + " type=ILLEGAL_ARGUMENT_EXCEPTION");
         }
         return false;

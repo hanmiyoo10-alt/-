@@ -32,7 +32,7 @@ WirelessAdbBootReceiver accepts only the protected system actions LOCKED_BOOT_CO
 The three minimum latencies are fixed at 10 seconds, 60 seconds, and 180 seconds.
 Each job runs once. It first requires the current active network to have Android's Wi-Fi transport. Without active Wi-Fi it exits with no setting write.
 
-With active Wi-Fi, the job reads only the literal global key adb_wifi_enabled. If it is not already 1, it requests exactly Settings.Global.putInt(..., "adb_wifi_enabled", 1). Security or runtime failure is fail-closed and the job does not broaden its authority.
+With active Wi-Fi, the job reads only the literal global key adb_wifi_enabled, then requests exactly one Settings.Global.putInt(..., "adb_wifi_enabled", 1) even when the pre-read already reports 1. This same-value one-write repair is deliberate: exact-M receipt evidence proved that the logical value can remain enabled across reboot while effective Wireless ADB is not re-armed. Security or runtime failure is fail-closed and the job does not broaden its authority. OFF→ON remains a broader deferred fallback and is not performed.
 
 Android remains responsible for whether Wireless ADB can actually start, including trusted-network checks, ADB authentication, TLS pairing, mDNS advertisement, and host attachment.
 
@@ -46,8 +46,8 @@ Allowed event vocabulary is intentionally small:
 - `job_network`: fixed attempt label plus active-network-present and Wi-Fi-transport booleans;
 - `job_result`: fixed no-active-Wi-Fi outcome;
 - `setting_pre`: whether `adb_wifi_enabled` equals the fixed enabled value;
-- `setting_write_start`: whether the existing single write path will be attempted;
-- `setting_write_result`: `accepted | rejected | not_needed`;
+- `setting_write_start`: the fixed single-write attempt after the Wi-Fi gate and pre-read;
+- `setting_write_result`: `accepted | rejected` for the current job path; the persistent receipt keeps `not_needed` only as a bounded compatibility/default enum;
 - `setting_post`: enabled-state readback;
 - `job_exception`: only `SECURITY_EXCEPTION | ILLEGAL_ARGUMENT_EXCEPTION`.
 

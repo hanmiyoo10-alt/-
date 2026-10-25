@@ -85,7 +85,7 @@ finalization requires `repoNeutralPacket()` to pass:
 - every exact/declared path must match a compile-time reviewed neutral path rule;
 - the reviewed prefixes are `.github/plugin-control-plane/canonical-main/`,
   `tools/repo-env/`, `tools/repo-ci-mcp/`, `tools/repo-write/`,
-  `tools/github-discussions-mcp/`, and `tools/repo-cockpit-aggregator/`; each
+  `tools/github-discussions-mcp/`, `tools/mcl-task-lease-dispatch-mcp/`, and `tools/repo-cockpit-aggregator/`; each
   slash-terminated reviewed prefix admits both
   its exact normalized prefix root and descendants under that prefix, while lookalike
   siblings remain non-neutral;
@@ -133,7 +133,8 @@ semantic surface is `surface:repo:*`. The current reviewed path classes are cano
 repository-common environment tooling under `tools/repo-env/`, Repository Read MCP
 tooling under `tools/repo-ci-mcp/`, Repository Patch Write tooling under
 `tools/repo-write/`, bounded GitHub Discussions tooling under
-`tools/github-discussions-mcp/`, and read-only Repo Cockpit aggregation tooling under
+`tools/github-discussions-mcp/`, fixed D-013 workflow-dispatch tooling under
+`tools/mcl-task-lease-dispatch-mcp/`, and read-only Repo Cockpit aggregation tooling under
 `tools/repo-cockpit-aggregator/`; arbitrary repository paths are not admitted by this rule.
 
 Product/MCL coordination is never silently mapped to `NOT_APPLICABLE`.

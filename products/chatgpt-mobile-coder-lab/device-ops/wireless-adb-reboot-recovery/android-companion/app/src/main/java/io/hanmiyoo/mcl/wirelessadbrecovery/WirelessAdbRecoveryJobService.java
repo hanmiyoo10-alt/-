@@ -15,6 +15,7 @@ import android.util.Log;
 public final class WirelessAdbRecoveryJobService extends JobService {
     private static final String LOG_TAG = "MclWirelessAdbRecovery";
     private static final String ADB_WIFI_ENABLED_SETTING = "adb_wifi_enabled";
+    private static final int DISABLED = 0;
     private static final int ENABLED = 1;
 
     private static final int[] JOB_IDS = {372201, 372202, 372203};
@@ -62,16 +63,32 @@ public final class WirelessAdbRecoveryJobService extends JobService {
 
             Log.i(LOG_TAG, "event=setting_write_start attempt=" + attempt + " attempted=true");
             WirelessAdbDiagnosticReceipt.recordWriteStarted(this, attempt);
-            boolean accepted = Settings.Global.putInt(
+            boolean disableAccepted = true;
+            if (preEnabled) {
+                disableAccepted = Settings.Global.putInt(
+                        getContentResolver(), ADB_WIFI_ENABLED_SETTING, DISABLED);
+                int disabledPost = Settings.Global.getInt(
+                        getContentResolver(), ADB_WIFI_ENABLED_SETTING, ENABLED);
+                if (disabledPost == DISABLED) {
+                    getContentResolver().notifyChange(
+                            Settings.Global.getUriFor(ADB_WIFI_ENABLED_SETTING), null);
+                }
+            }
+            boolean enableAccepted = Settings.Global.putInt(
                     getContentResolver(), ADB_WIFI_ENABLED_SETTING, ENABLED);
+            int post = Settings.Global.getInt(
+                    getContentResolver(), ADB_WIFI_ENABLED_SETTING, 0);
+            if (post == ENABLED) {
+                getContentResolver().notifyChange(
+                        Settings.Global.getUriFor(ADB_WIFI_ENABLED_SETTING), null);
+            }
+
+            boolean accepted = disableAccepted && enableAccepted;
             Log.i(
                     LOG_TAG,
                     "event=setting_write_result attempt=" + attempt
                             + " result=" + (accepted ? "accepted" : "rejected"));
             WirelessAdbDiagnosticReceipt.recordWriteResult(this, attempt, accepted);
-
-            int post = Settings.Global.getInt(
-                    getContentResolver(), ADB_WIFI_ENABLED_SETTING, 0);
             Log.i(LOG_TAG, "event=setting_post attempt=" + attempt + " enabled=" + (post == ENABLED));
             WirelessAdbDiagnosticReceipt.recordSettingPost(this, attempt, post == ENABLED);
         } catch (SecurityException exception) {

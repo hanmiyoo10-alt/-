@@ -1,5 +1,3 @@
-[Reading 515 lines from start (total: 515 lines, 0 remaining)]
-
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
@@ -515,5 +513,3 @@ test('source binds existing operator and contains no generic credential or arbit
   assert.equal(server.includes('workflow:'), false);
   assert.equal(server.includes('command:'), false);
 });
-
-[executed on device: L-Gram (a2beef8a-fa0b-4423-b6fc-8f017f907cef)]

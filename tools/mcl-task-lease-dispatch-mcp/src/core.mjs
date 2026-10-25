@@ -1,5 +1,3 @@
-[Reading 549 lines from start (total: 549 lines, 0 remaining)]
-
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -549,5 +547,3 @@ export function createD013Service({
 
   return { acquire, release, github: transport };
 }
-
-[executed on device: L-Gram (a2beef8a-fa0b-4423-b6fc-8f017f907cef)]

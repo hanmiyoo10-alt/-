@@ -1,5 +1,3 @@
-[Reading 350 lines from start (total: 350 lines, 0 remaining)]
-
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -350,5 +348,3 @@ export function startD013Server({
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   startD013Server();
 }
-
-[executed on device: L-Gram (a2beef8a-fa0b-4423-b6fc-8f017f907cef)]

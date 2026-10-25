@@ -1,5 +1,3 @@
-[Reading 128 lines from start (total: 128 lines, 0 remaining)]
-
 # MCL D-013 Task-Lease Dispatch MCP
 
 Fixed-purpose sibling MCP for the canonical repository `hanmiyoo10-alt/-`.
@@ -128,5 +126,3 @@ node --check src/server.mjs
 ```
 
 Tests use fake GitHub transport only. No live workflow dispatch or credential is required.
-
-[executed on device: L-Gram (a2beef8a-fa0b-4423-b6fc-8f017f907cef)]

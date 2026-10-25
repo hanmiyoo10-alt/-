@@ -57,6 +57,28 @@ Diagnostics never emit SSID, BSSID, IP address, port, serial, pairing/key materi
 
 The diagnostic revision does not introduce OFF→ON forcing, a second settings write, a retry loop, a persisted job, or any change to the active-Wi-Fi gate.
 
+## Persistent diagnostic receipt
+
+Logcat remains best-effort redundant evidence only. The durable diagnostic owner is the package-private `WirelessAdbDiagnosticReceipt`, which stores one deterministic fixed-schema snapshot in device-protected app-private internal storage.
+
+The owner:
+- uses `Context.createDeviceProtectedStorageContext()` and framework `AtomicFile`;
+- writes only `files/mcl_wireless_adb_diagnostic_receipt_v1.txt`;
+- fully replaces the receipt on every checkpoint rather than appending;
+- is capped at 4096 UTF-8 bytes;
+- records only activation, boot booleans, and fixed attempt 1/2/3 boolean/enum slots;
+- swallows storage/parsing failures so diagnostics never branch, skip, retry, reorder, or broaden recovery behavior.
+
+It never stores timestamps, SSID, BSSID, IP address, port, serial, boot ID, package UID, pairing/key material, raw network identity, raw Intent data, arbitrary settings values, exception messages/stacks, raw Android dumps, free-form text, or caller-controlled keys/values.
+
+The launcher one-shot resets the receipt to a fresh `armed=true` default before the later reboot experiment. LOCKED_BOOT_COMPLETED and BOOT_COMPLETED update only their fixed booleans. Each fixed JobService attempt updates only its own predeclared attempt slot.
+
+For a separately authorized exact-M live proof, the fixed retrieval path must be proven readable before reboot and may be read only after the pre-existing paired ADB transport is available:
+
+`adb shell run-as io.hanmiyoo.mcl.wirelessadbrecovery cat /data/user_de/0/io.hanmiyoo.mcl.wirelessadbrecovery/files/mcl_wireless_adb_diagnostic_receipt_v1.txt`
+
+A missing, unreadable, malformed, oversized, or unexpected receipt remains an observability failure. It never counts as recovery success or failure by itself.
+
 ## One-time future activation
 
 Only after merge and postmerge convergence, a separately authorized exact-M live phase may:

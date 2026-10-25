@@ -36,6 +36,27 @@ With active Wi-Fi, the job reads only the literal global key adb_wifi_enabled. I
 
 Android remains responsible for whether Wireless ADB can actually start, including trusted-network checks, ADB authentication, TLS pairing, mDNS advertisement, and host attachment.
 
+## Bounded diagnostics contract
+
+The #3725 diagnostic revision preserves the recovery effect above and adds only fixed semantic Logcat events under tag `MclWirelessAdbRecovery`.
+
+Allowed event vocabulary is intentionally small:
+
+- `boot_received`: accepted boot action only;
+- `job_network`: fixed attempt label plus active-network-present and Wi-Fi-transport booleans;
+- `job_result`: fixed no-active-Wi-Fi outcome;
+- `setting_pre`: whether `adb_wifi_enabled` equals the fixed enabled value;
+- `setting_write_start`: whether the existing single write path will be attempted;
+- `setting_write_result`: `accepted | rejected | not_needed`;
+- `setting_post`: enabled-state readback;
+- `job_exception`: only `SECURITY_EXCEPTION | ILLEGAL_ARGUMENT_EXCEPTION`.
+
+Attempt labels are derived only from the three fixed job IDs and render as `1 | 2 | 3 | unmapped`; the numeric job ID itself is never logged.
+
+Diagnostics never emit SSID, BSSID, IP address, port, serial, pairing/key material, network-object identity, raw Intent extras, exception messages/stacks, arbitrary settings values, or raw Android dumps. They add no permission, component, dependency, file, persistence owner, network transport, or generic logging surface.
+
+The diagnostic revision does not introduce OFF→ON forcing, a second settings write, a retry loop, a persisted job, or any change to the active-Wi-Fi gate.
+
 ## One-time future activation
 
 Only after merge and postmerge convergence, a separately authorized exact-M live phase may:

@@ -1,6 +1,6 @@
 # MCL Wireless ADB reboot recovery
 
-M-only first implementation proof for #3722.
+Fixed-purpose implementation first live-proven on exact M under #3722 and separately reviewed for exact S under #3761.
 
 This owner is a fixed-purpose Android helper for one narrow post-reboot effect:
 
@@ -15,7 +15,7 @@ It is not a generic settings writer, ADB client, pairing helper, shell bridge, n
 ## Authority boundary
 
 Repository source and tests do not authorize installation or device mutation.
-Live activation is a later, separately reviewed phase on exact M only.
+Live activation is always a later, separately reviewed phase on one exact supported device. Exact M `SM-S938N` is live-proven under #3722; exact S `SM-G998N` activation is separately owned by #3761.
 
 The helper requests only:
 - android.permission.RECEIVE_BOOT_COMPLETED
@@ -73,22 +73,31 @@ It never stores timestamps, SSID, BSSID, IP address, port, serial, boot ID, pack
 
 The launcher one-shot resets the receipt to a fresh `armed=true` default before the later reboot experiment. LOCKED_BOOT_COMPLETED and BOOT_COMPLETED update only their fixed booleans. Each fixed JobService attempt updates only its own predeclared attempt slot.
 
-For a separately authorized exact-M live proof, the fixed retrieval path must be proven readable before reboot and may be read only after the pre-existing paired ADB transport is available:
+For a separately authorized exact-M or exact-S live proof, the fixed retrieval path must be proven readable before reboot and may be read only after the pre-existing paired ADB transport is available:
 
 `adb shell run-as io.hanmiyoo.mcl.wirelessadbrecovery cat /data/user_de/0/io.hanmiyoo.mcl.wirelessadbrecovery/files/mcl_wireless_adb_diagnostic_receipt_v1.txt`
 
 A missing, unreadable, malformed, oversized, or unexpected receipt remains an observability failure. It never counts as recovery success or failure by itself.
 
-## One-time future activation
+## Separately reviewed activation
 
-Only after merge and postmerge convergence, a separately authorized exact-M live phase may:
-1. install the exact merged APK;
-2. grant only android.permission.WRITE_SECURE_SETTINGS to io.hanmiyoo.mcl.wirelessadbrecovery;
-3. open the launcher activity once so the newly installed package is no longer in Android's stopped state;
-4. reboot M on a known trusted Wi-Fi;
-5. verify that Wireless ADB returns and the existing paired L host rediscovers M without adb connect, adb pair, ADB restart, or a settings-screen toggle.
+Exact M `SM-S938N` completed its one-shot live proof under #3722. That proof used the exact merged helper, one WRITE_SECURE_SETTINGS grant, one launcher activation, and one reboot; rollback removed the helper after unattended recovery was proven.
 
-Failure of any step remains evidence. Do not add a wider fallback in response.
+Exact S `SM-G998N` is a separate persistent-activation target under #3761. Repository convergence alone never authorizes S mutation. If S currently has Wireless ADB stopped, one ordinary user Wireless Debugging ON toggle may be used only as the bootstrap prerequisite that restores the existing paired L channel for initial install/grant. That bootstrap is not acceptance evidence.
+
+Only after merge and postmerge convergence, the separately authorized exact-S live phase may:
+1. require the existing paired L→S channel, restored only by the bounded bootstrap above when necessary;
+2. install the exact merged APK;
+3. grant only android.permission.WRITE_SECURE_SETTINGS to io.hanmiyoo.mcl.wirelessadbrecovery;
+4. open the launcher activity once so the newly installed package is no longer in Android's stopped state;
+5. prove the fixed run-as receipt baseline;
+6. reboot exact S once on a known trusted Wi-Fi;
+7. verify that Wireless ADB returns and the existing paired L host rediscovers S without adb connect, adb pair, ADB restart, another settings-screen toggle, or a second reboot;
+8. read the fixed receipt and require the bounded active-Wi-Fi OFF→ON sequence to complete without exception.
+
+On exact-S success, the helper may remain installed with only WRITE_SECURE_SETTINGS retained so later S reboots can recover unattended. On exact-S failure, rollback is permission revoke plus helper uninstall. The helper never owns pairing creation, adb connect, host-side reconnect loops, or a generic L reconnect daemon.
+
+M↔S symmetric Wireless ADB remains a separate design topic under #3762 and receives no authority from the exact-S activation contract.
 
 ## Implementation-stage validation
 

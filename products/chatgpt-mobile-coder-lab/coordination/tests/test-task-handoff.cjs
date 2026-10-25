@@ -217,6 +217,45 @@ test('landing_metadata manifest supports exact L identity', () => {
   assert.equal(m.workspace.kind, 'landing_metadata');
 });
 
+test('landing_residue_cleanup manifest admits exact L binding and residue hash ref', () => {
+  const m = handoff.buildManifest(manifestInput({
+    phaseId: 'landing-residue-cleanup-l',
+    route: 'L',
+    executor: 'L',
+    scopes: [
+      'path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc',
+      'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc',
+    ],
+    workspace: { kind: 'landing_residue_cleanup', branch: 'main', worktree: '/home/alsl0/nyang-repo' },
+    observedBaseSha: baseSha,
+    inputRefs: ['receipt:mcl-l-landing-residue-sha256:' + 'f'.repeat(64)],
+    expectedOutputRefs: ['path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc'],
+  }));
+  assert.equal(m.workspace.kind, 'landing_residue_cleanup');
+  assert.equal(m.inputRefs[0], 'receipt:mcl-l-landing-residue-sha256:' + 'f'.repeat(64));
+});
+test('landing_residue_cleanup manifest rejects wrong route identity scope and base', () => {
+  const exact = {
+    phaseId: 'landing-residue-cleanup-l',
+    route: 'L',
+    executor: 'L',
+    scopes: [
+      'path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc',
+      'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc',
+    ],
+    workspace: { kind: 'landing_residue_cleanup', branch: 'main', worktree: '/home/alsl0/nyang-repo' },
+    observedBaseSha: baseSha,
+  };
+  expectThrow(() => handoff.buildManifest(manifestInput({...exact, route:'S'})),
+    /MANIFEST_ROUTE_EXECUTOR_CONFLICT|LANDING_RESIDUE_CLEANUP_ROUTE_EXECUTOR_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...exact, workspace:{...exact.workspace, branch:'laptop/other'}})),
+    /WORKSPACE_LANDING_RESIDUE_CLEANUP_IDENTITY_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...exact, scopes:[exact.scopes[1]]})),
+    /LANDING_RESIDUE_CLEANUP_SCOPE_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...exact, observedBaseSha:null})),
+    /LANDING_RESIDUE_CLEANUP_BASE_SHA_REQUIRED/);
+});
+
 test('landing_metadata manifest rejects mismatched scope identity and missing observed head', () => {
   expectThrow(() => handoff.buildManifest(manifestInput({
     scopes: ['surface:mcl-landing-origin-main:M'],

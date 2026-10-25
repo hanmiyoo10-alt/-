@@ -62,6 +62,13 @@ Repository-backed S work must use a `server/*` feature branch and an isolated wo
 
 The additive `landing_metadata` kind is reserved only for reviewed fixed ordinary landing Git-metadata/object-store mutation owned by `landing-freshness`: executor `S` binds `server/work` + `/root/nyang-repo` + exact scope `surface:mcl-landing-origin-main:S`; executor `M` binds `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + exact scope `surface:mcl-landing-origin-main:M`; executor `L` binds `main` + `/home/alsl0/nyang-repo` + exact scope `surface:mcl-landing-origin-main:L`. It requires a non-null observed landing HEAD SHA and accepts no caller-selected landing identity. Route `S` may use the documented exact executor `M` fallback, which binds only the M identity. Route `L` has no executor fallback.
 
+The additive `landing_residue_cleanup` kind is reserved only for the reviewed fixed L landing generated-residue cleanup owner. It binds exact route/executor `L / L`, branch `main`, worktree `/home/alsl0/nyang-repo`, a non-null observed landing HEAD SHA, and exactly these two scopes:
+
+- `path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc`
+- `surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc`
+
+It accepts no S/M executor, route fallback, caller-selected landing identity, alternate path, wildcard, or extra scope. It is a Git-workspace reservation for conflict purposes and therefore serializes with `landing_metadata` on the same fixed L branch/worktree. The lease grants coordination state only; exact file deletion remains owned by the separate `l-landing-residue-cleanup` effect owner.
+
 The additive `landing_branch_repair` kind binds only reviewed exact S/M landing identities: route/executor `S / S` binds `server/work` + `/root/nyang-repo` + `surface:mcl-landing-branch:S`; route/executor `M / M` binds `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + `surface:mcl-landing-branch:M`. L is deliberately not admitted to `landing_branch_repair` by this contract. It requires a non-null observed landing HEAD SHA. It reserves the Git worktree for the reviewed local landing branch-repair effect only; it does not grant route fallback, remote-ref, merge, release, runtime, or production authority.
 
 Non-repository contexts use explicit `not_applicable` branch/worktree identity instead of inventing a repository path.
@@ -73,7 +80,7 @@ Acquire fails closed when the ledger, expected generation, packet evidence, rout
 It also conflicts when:
 - the same packet already holds a materially different lease profile;
 - any active MCL lease overlaps the requested normalized scopes;
-- another active Git-workspace lease (`repository`, `landing_metadata`, or `landing_branch_repair`) reserves the same branch or worktree.
+- another active Git-workspace lease (`repository`, `landing_metadata`, `landing_residue_cleanup`, or `landing_branch_repair`) reserves the same branch or worktree.
 
 The same executor may hold multiple leases when packets, normalized scopes, and workspace identities are disjoint. V1 does not lock an entire phone.
 
@@ -104,7 +111,7 @@ Supported ledger mutation is only `.github/workflows/mcl-task-lease.yml` plus th
 - checks out trusted `main`, not a caller-selected controller ref;
 - accepts only `activate`, `acquire`, or `release`;
 - cannot select another state issue or pass arbitrary shell/command text;
-- admits only the reviewed fixed workspace kinds, including S/M/L `landing_metadata` and exact S/M-only `landing_branch_repair`, without adding any new permission, state issue, or generic writer.
+- admits only the reviewed fixed workspace kinds, including S/M/L `landing_metadata`, exact L-only `landing_residue_cleanup`, and exact S/M-only `landing_branch_repair`, without adding any new permission, state issue, or generic writer.
 
 The controller re-reads #2352 and its exact generation before a PATCH, re-reads again immediately before writing, and validates post-write readback. Manual/out-of-protocol ledger edits are not serialized by GitHub itself; any body drift or malformed marker is `CONFLICT`/`UNKNOWN`, never an inferred free lease.
 

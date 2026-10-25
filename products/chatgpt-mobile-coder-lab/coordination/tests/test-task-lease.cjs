@@ -66,6 +66,19 @@ function landingAcquireRequest(executor = 'S', overrides = {}) {
     ...overrides,
   });
 }
+function landingResidueCleanupAcquireRequest(overrides = {}) {
+  const identity = lease.landingResidueCleanupIdentity('L');
+  return acquireRequest({
+    route: 'L',
+    executor: 'L',
+    scopes: [...identity.scopes],
+    workspaceKind: 'landing_residue_cleanup',
+    branch: identity.branch,
+    worktree: identity.worktree,
+    observedBaseSha: 'c'.repeat(40),
+    ...overrides,
+  });
+}
 function landingBranchRepairAcquireRequest(overrides = {}) {
   const identity = lease.landingBranchRepairIdentity('M');
   return acquireRequest({
@@ -317,6 +330,46 @@ ok('landing_metadata rejects arbitrary identity scope and missing observed head'
     assert.equal(lease.normalizeAcquireRequest(request).ok, false);
   }
 });
+ok('landing_residue_cleanup admits only exact L fixed landing and scopes', () => {
+  const exact = lease.normalizeAcquireRequest(landingResidueCleanupAcquireRequest());
+  assert.equal(exact.ok, true);
+  assert.equal(exact.lease.route, 'L');
+  assert.equal(exact.lease.executor, 'L');
+  assert.equal(exact.lease.workspace.kind, 'landing_residue_cleanup');
+  assert.equal(exact.lease.workspace.branch, 'main');
+  assert.equal(exact.lease.workspace.worktree, '/home/alsl0/nyang-repo');
+  assert.deepEqual(exact.lease.scopes, [
+    'path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc',
+    'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc',
+  ]);
+});
+ok('landing_residue_cleanup rejects route executor identity scope and base drift', () => {
+  for (const request of [
+    landingResidueCleanupAcquireRequest({route:'S'}),
+    landingResidueCleanupAcquireRequest({executor:'S'}),
+    landingResidueCleanupAcquireRequest({branch:'laptop/other'}),
+    landingResidueCleanupAcquireRequest({worktree:'/home/alsl0/nyang-worktrees/other'}),
+    landingResidueCleanupAcquireRequest({scopes:['surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc']}),
+    landingResidueCleanupAcquireRequest({scopes:[
+      'path:tools/repo-write/__pycache__/other.cpython-312.pyc',
+      'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc',
+    ]}),
+    landingResidueCleanupAcquireRequest({observedBaseSha:null}),
+  ]) {
+    assert.equal(lease.normalizeAcquireRequest(request).ok, false);
+  }
+});
+ok('landing_residue_cleanup serializes with landing_metadata on fixed L worktree', () => {
+  const first = stateFromPlan(lease.planAcquire(activeState(), landingAcquireRequest('L')));
+  const conflict = lease.planAcquire(first, landingResidueCleanupAcquireRequest({
+    expectedGeneration: 2,
+    packetRef: '#2353',
+  }));
+  assert.equal(conflict.status, 'CONFLICT');
+  assert.ok(conflict.reasonCodes.includes('ACTIVE_LEASE_WORKTREE_RESERVED')
+    || conflict.reasonCodes.includes('ACTIVE_LEASE_BRANCH_RESERVED'));
+});
+
 ok('landing_branch_repair accepts only the fixed M identity and scope', () => {
   const exact = lease.normalizeAcquireRequest(landingBranchRepairAcquireRequest());
   assert.equal(exact.ok, true);
@@ -432,7 +485,7 @@ ok('workflow is one fixed owner-only serialized issue writer', () => {
   assert.ok(workflow.includes(
     'packet_ref:\n        description: Source packet reference; required for acquire/release, omit for activate\n        required: false',
   ));
-  assert.ok(workflow.includes('options: [repository, landing_metadata, landing_branch_repair, not_applicable]'));
+  assert.ok(workflow.includes('options: [repository, landing_metadata, landing_residue_cleanup, landing_branch_repair, not_applicable]'));
   assert.equal((workflow.match(/options: \[S, M, L, S_TERMUX, M_PRIVATE_LAB, M_VM_LAB, S_PRIVATE_LOCAL\]/g) || []).length, 2);
 });
 class FakeClient {

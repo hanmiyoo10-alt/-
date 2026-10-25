@@ -19,6 +19,7 @@ EXPECTED_FILES = {
     "android-companion/app/src/main/java/io/hanmiyoo/mcl/wirelessadbrecovery/MainActivity.java",
     "android-companion/app/src/main/java/io/hanmiyoo/mcl/wirelessadbrecovery/WirelessAdbBootReceiver.java",
     "android-companion/app/src/main/java/io/hanmiyoo/mcl/wirelessadbrecovery/WirelessAdbRecoveryJobService.java",
+    "android-companion/app/src/main/java/io/hanmiyoo/mcl/wirelessadbrecovery/WirelessAdbDiagnosticReceipt.java",
     "tests/test_contract.py",
 }
 
@@ -36,6 +37,7 @@ class ContractTests(unittest.TestCase):
         self.activity = (JAVA / "MainActivity.java").read_text()
         self.receiver = (JAVA / "WirelessAdbBootReceiver.java").read_text()
         self.job = (JAVA / "WirelessAdbRecoveryJobService.java").read_text()
+        self.receipt = (JAVA / "WirelessAdbDiagnosticReceipt.java").read_text()
         self.build = (ANDROID / "app/build.gradle").read_text()
         self.readme = (OWNER / "README.md").read_text()
 
@@ -182,6 +184,127 @@ class ContractTests(unittest.TestCase):
         self.assertIn("wifi_transport=", self.job)
         self.assertIn("enabled=" + '" + preEnabled', self.job)
         self.assertIn("enabled=" + '" + (post == ENABLED)', self.job)
+
+    def test_persistent_receipt_uses_fixed_device_protected_atomic_storage(self):
+        self.assertIn("createDeviceProtectedStorageContext()", self.receipt)
+        self.assertIn("AtomicFile", self.receipt)
+        self.assertIn(
+            '"mcl_wireless_adb_diagnostic_receipt_v1.txt"', self.receipt
+        )
+        self.assertIn("private static final int MAX_BYTES = 4_096;", self.receipt)
+        self.assertIn("bytes.length > MAX_BYTES", self.receipt)
+        self.assertIn("readFully()", self.receipt)
+        self.assertIn("startWrite()", self.receipt)
+        self.assertIn("finishWrite(output)", self.receipt)
+        self.assertIn("failWrite(output)", self.receipt)
+        self.assertNotIn("SharedPreferences", self.receipt)
+        self.assertNotIn("getExternal", self.receipt)
+        self.assertNotIn("Environment.", self.receipt)
+        self.assertNotIn("RandomAccessFile", self.receipt)
+        self.assertNotIn("FileWriter", self.receipt)
+
+    def test_persistent_receipt_schema_is_fixed_and_bounded(self):
+        for token in (
+            '"schema=1"',
+            '"armed="',
+            '"locked_boot_received="',
+            '"boot_completed_received="',
+            '"seen="',
+            '"active_network="',
+            '"wifi_transport="',
+            '"setting_pre="',
+            '"write="',
+            '"setting_post="',
+            '"exception="',
+            '"not_reached"',
+            '"not_needed"',
+            '"started"',
+            '"accepted"',
+            '"rejected"',
+            '"security"',
+            '"illegal_argument"',
+        ):
+            self.assertIn(token, self.receipt)
+
+        self.assertIn("renderAttempt(lines, 4, 0, 1, state);", self.receipt)
+        self.assertIn("renderAttempt(lines, 11, 1, 2, state);", self.receipt)
+        self.assertIn("renderAttempt(lines, 18, 2, 3, state);", self.receipt)
+        self.assertIn("lines.length != 25", self.receipt)
+        self.assertIn('if ("1".equals(attempt))', self.receipt)
+        self.assertIn('if ("2".equals(attempt))', self.receipt)
+        self.assertIn('if ("3".equals(attempt))', self.receipt)
+
+    def test_receipt_privacy_surface_has_no_variable_identity_fields(self):
+        forbidden = (
+            "System.currentTimeMillis",
+            "Instant.",
+            "LocalDate",
+            "UUID",
+            "getSSID(",
+            "getBSSID(",
+            "getLinkProperties(",
+            "InetAddress",
+            "LinkProperties",
+            "getTransportInfo(",
+            "intent.getExtras(",
+            "intent.toString(",
+            "exception.getMessage(",
+            "exception.toString(",
+            "printStackTrace",
+            "Log.getStackTraceString",
+            "boot_id",
+            "serial",
+            "pairing",
+            "JSONObject",
+            "Bundle",
+            "Map<",
+        )
+        for token in forbidden:
+            self.assertNotIn(token, self.receipt)
+
+    def test_receipt_hooks_are_observational_only(self):
+        self.assertIn(
+            "WirelessAdbDiagnosticReceipt.resetForActivation(this);", self.activity
+        )
+        self.assertIn(
+            "WirelessAdbDiagnosticReceipt.recordBoot(context, lockedBoot);",
+            self.receiver,
+        )
+        self.assertLess(
+            self.receiver.index("WirelessAdbDiagnosticReceipt.recordBoot"),
+            self.receiver.index("scheduleFixedAttempts(context)"),
+        )
+        for call in (
+            "recordNetwork(",
+            "recordSettingPre(",
+            "recordWriteStarted(",
+            "recordWriteResult(",
+            "recordWriteNotNeeded(",
+            "recordSettingPost(",
+            "recordSecurityException(",
+            "recordIllegalArgumentException(",
+        ):
+            self.assertIn("WirelessAdbDiagnosticReceipt." + call, self.job)
+
+        self.assertEqual(1, self.job.count("Settings.Global.putInt("))
+        self.assertIn("if (!networkState.wifiTransport)", self.job)
+        self.assertIn(".setPersisted(false)", self.job)
+        self.assertNotIn("throws ", self.receipt)
+        self.assertIn("catch (IOException | RuntimeException ignored)", self.receipt)
+
+    def test_readme_owns_fixed_post_restore_receipt_retrieval(self):
+        self.assertIn("## Persistent diagnostic receipt", self.readme)
+        self.assertIn("device-protected app-private internal storage", self.readme)
+        self.assertIn("4096 UTF-8 bytes", self.readme)
+        self.assertIn(
+            "adb shell run-as io.hanmiyoo.mcl.wirelessadbrecovery cat "
+            "/data/user_de/0/io.hanmiyoo.mcl.wirelessadbrecovery/files/"
+            "mcl_wireless_adb_diagnostic_receipt_v1.txt",
+            self.readme,
+        )
+        self.assertIn(
+            "never counts as recovery success or failure by itself", self.readme
+        )
 
     def test_launcher_has_no_setting_effect(self):
         self.assertNotIn("Settings.", self.activity)

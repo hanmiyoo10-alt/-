@@ -16,10 +16,10 @@ public final class WirelessAdbBootReceiver extends BroadcastReceiver {
             return;
         }
 
-        String actionName = Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(action)
-                ? "LOCKED_BOOT_COMPLETED"
-                : "BOOT_COMPLETED";
+        boolean lockedBoot = Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(action);
+        String actionName = lockedBoot ? "LOCKED_BOOT_COMPLETED" : "BOOT_COMPLETED";
         Log.i(LOG_TAG, "event=boot_received action=" + actionName);
+        WirelessAdbDiagnosticReceipt.recordBoot(context, lockedBoot);
 
         WirelessAdbRecoveryJobService.scheduleFixedAttempts(context);
     }

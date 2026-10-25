@@ -9,6 +9,8 @@ public final class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        WirelessAdbDiagnosticReceipt.resetForActivation(this);
+
         TextView message = new TextView(this);
         message.setPadding(48, 48, 48, 48);
         message.setText(

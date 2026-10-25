@@ -95,25 +95,91 @@ class ContractTests(unittest.TestCase):
 
     def test_setting_effect_is_literal_and_single_purpose(self):
         self.assertEqual(1, self.job.count('"adb_wifi_enabled"'))
-        self.assertEqual(1, self.job.count("Settings.Global.putInt("))
+        self.assertEqual(2, self.job.count("Settings.Global.putInt("))
+        self.assertEqual(2, self.job.count("getContentResolver().notifyChange("))
+        self.assertEqual(
+            2, self.job.count("Settings.Global.getUriFor(ADB_WIFI_ENABLED_SETTING)")
+        )
         self.assertNotIn("Settings.Secure", self.job)
         self.assertNotIn("Settings.System", self.job)
+        self.assertIn("private static final int DISABLED = 0;", self.job)
         self.assertIn("private static final int ENABLED = 1;", self.job)
-        self.assertNotIn("current != ENABLED", self.job)
         self.assertNotIn("recordWriteNotNeeded(this, attempt)", self.job)
+        self.assertNotIn("Thread.sleep", self.job)
+        self.assertNotIn("SystemClock.sleep", self.job)
 
-    def test_stale_true_path_always_requests_one_same_value_write(self):
-        self.assertNotIn("if (current != ENABLED)", self.job)
+    def test_stale_true_path_requests_bounded_off_on_sequence(self):
+        self.assertIn("if (preEnabled)", self.job)
         self.assertNotIn("recordWriteNotNeeded(this, attempt)", self.job)
         pre = self.job.index("recordSettingPre(this, attempt, preEnabled);")
-        write = self.job.index("boolean accepted = Settings.Global.putInt(")
-        post = self.job.index("int post = Settings.Global.getInt(", write)
-        self.assertLess(pre, write)
-        self.assertLess(write, post)
-        self.assertEqual(1, self.job.count("Settings.Global.putInt("))
-        self.assertIn("ADB_WIFI_ENABLED_SETTING, ENABLED);", self.job)
-        self.assertIn("same-value one-write repair", self.readme)
-        self.assertIn("OFF→ON remains a broader deferred fallback", self.readme)
+        branch = self.job.index("if (preEnabled)", pre)
+        disable = self.job.index("ADB_WIFI_ENABLED_SETTING, DISABLED);", branch)
+        disabled_post = self.job.index("int disabledPost = Settings.Global.getInt(", disable)
+        disabled_guard = self.job.index("if (disabledPost == DISABLED)", disabled_post)
+        disabled_notify = self.job.index(
+            "getContentResolver().notifyChange(", disabled_guard
+        )
+        enable = self.job.index("ADB_WIFI_ENABLED_SETTING, ENABLED);", disabled_notify)
+        post = self.job.index("int post = Settings.Global.getInt(", enable)
+        enabled_guard = self.job.index("if (post == ENABLED)", post)
+        enabled_notify = self.job.index(
+            "getContentResolver().notifyChange(", enabled_guard
+        )
+        accepted = self.job.index(
+            "boolean accepted = disableAccepted && enableAccepted;", enabled_notify
+        )
+        self.assertLess(pre, branch)
+        self.assertLess(branch, disable)
+        self.assertLess(disable, disabled_post)
+        self.assertLess(disabled_post, disabled_guard)
+        self.assertLess(disabled_guard, disabled_notify)
+        self.assertLess(disabled_notify, enable)
+        self.assertLess(enable, post)
+        self.assertLess(post, enabled_guard)
+        self.assertLess(enabled_guard, enabled_notify)
+        self.assertLess(enabled_notify, accepted)
+        self.assertEqual(2, self.job.count("Settings.Global.putInt("))
+        self.assertEqual(2, self.job.count("getContentResolver().notifyChange("))
+        self.assertIn("boolean disableAccepted = true;", self.job)
+        self.assertIn("boolean enableAccepted = Settings.Global.putInt(", self.job)
+        self.assertIn("If the pre-read is already enabled", self.readme)
+        self.assertIn("disabled-state readback plus fixed-URI notify", self.readme)
+        self.assertIn("enabled-state readback plus the same fixed-URI notify", self.readme)
+
+    def test_explicit_notify_preserves_off_on_order_when_auto_notify_is_deferred(self):
+        logical_value = 1
+        internal_enabled = True
+        deferred = []
+        observed = []
+
+        def observer():
+            nonlocal internal_enabled
+            observed.append(logical_value)
+            requested = logical_value == 1
+            if requested != internal_enabled:
+                internal_enabled = requested
+
+        def write(value):
+            nonlocal logical_value
+            logical_value = value
+            deferred.append(observer)
+            return True
+
+        self.assertTrue(write(0))
+        self.assertEqual(0, logical_value)
+        observer()
+        self.assertFalse(internal_enabled)
+
+        self.assertTrue(write(1))
+        self.assertEqual(1, logical_value)
+        observer()
+        self.assertTrue(internal_enabled)
+
+        for callback in deferred:
+            callback()
+
+        self.assertEqual([0, 1, 1, 1], observed)
+        self.assertTrue(internal_enabled)
 
     def test_retry_budget_is_fixed_and_bounded(self):
         self.assertIn(
@@ -314,7 +380,7 @@ class ContractTests(unittest.TestCase):
         ):
             self.assertIn("WirelessAdbDiagnosticReceipt." + call, self.job)
 
-        self.assertEqual(1, self.job.count("Settings.Global.putInt("))
+        self.assertEqual(2, self.job.count("Settings.Global.putInt("))
         self.assertIn("if (!networkState.wifiTransport)", self.job)
         self.assertIn(".setPersisted(false)", self.job)
         self.assertNotIn("throws ", self.receipt)
@@ -371,7 +437,11 @@ class ContractTests(unittest.TestCase):
         self.assertIn("debug APK produced by IMPLEMENTATION_PR", self.readme)
         self.assertIn("## Bounded diagnostics contract", self.readme)
         self.assertIn("Diagnostics never emit SSID, BSSID, IP address, port, serial", self.readme)
-        self.assertIn("does not introduce OFF→ON forcing", self.readme)
+        self.assertIn("diagnostic revision itself did not introduce OFF→ON forcing", self.readme)
+        self.assertIn("bounded stale-true 0 → 1 setting sequence", self.readme)
+        self.assertIn("fixed-URI observer sequencing", self.readme)
+        self.assertNotIn("Thread.sleep", self.job)
+        self.assertNotIn("SystemClock.sleep", self.job)
 
 
 if __name__ == "__main__":

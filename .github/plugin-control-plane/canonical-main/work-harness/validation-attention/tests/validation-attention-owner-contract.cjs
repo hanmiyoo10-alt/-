@@ -1214,6 +1214,7 @@ test('reviewed repo-neutral prefix roots are admitted without widening siblings'
     'tools/repo-ci-mcp/',
     'tools/repo-write/',
     'tools/github-discussions-mcp/',
+    'tools/mcl-task-lease-dispatch-mcp/',
     'tools/repo-cockpit-aggregator/',
   ];
   for (const prefix of reviewedPrefixes) {
@@ -1240,6 +1241,31 @@ test('reviewed repo-neutral prefix roots are admitted without widening siblings'
     scopes: [
       'path:tools/github-discussions-mcp-other/**',
       'surface:repo:github-discussions-connector',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: [
+      'tools/mcl-task-lease-dispatch-mcp',
+      '.github/plugin-control-plane/taxonomy.json',
+    ],
+    scopes: [
+      'path:tools/mcl-task-lease-dispatch-mcp/**',
+      'path:.github/plugin-control-plane/taxonomy.json',
+      'surface:repo:mcl-task-lease-dispatch-mcp',
+    ],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/mcl-task-lease-dispatch-mcp/README.md'],
+    scopes: [
+      'path:tools/mcl-task-lease-dispatch-mcp/README.md',
+      'surface:mcl:task-lease-dispatch',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['tools/mcl-task-lease-dispatch-mcp-other'],
+    scopes: [
+      'path:tools/mcl-task-lease-dispatch-mcp-other/**',
+      'surface:repo:mcl-task-lease-dispatch-mcp',
     ],
   }), false);
   assert.equal(attention.repoNeutralPacket({

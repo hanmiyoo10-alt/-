@@ -364,11 +364,16 @@ export async function dispatchRestPlan({
   }
   const beforeIds = new Set(before.map((item) => item?.id).filter(Number.isSafeInteger));
 
+  let dispatchOutcomeUnknown = false;
+  let dispatchOutcomeReason = null;
   try { await github.dispatchWorkflow(plan.workflowInputs); }
   catch (error) {
-    return operator.output('DISPATCH_FAILED', [
-      error?.reasonCode || 'WORKFLOW_DISPATCH_REQUEST_FAILED'
-    ]);
+    const reason = error?.reasonCode || 'WORKFLOW_DISPATCH_REQUEST_FAILED';
+    if (reason !== 'GITHUB_NETWORK_ERROR') {
+      return operator.output('DISPATCH_FAILED', [reason]);
+    }
+    dispatchOutcomeUnknown = true;
+    dispatchOutcomeReason = reason;
   }
 
   let selected = null;
@@ -419,10 +424,14 @@ export async function dispatchRestPlan({
       const reconciled = reconcileNoRunReadback(plan, current);
       if (reconciled) return reconciled;
     }
+    const unresolvedReason = sawFresh || sawUnknown
+      ? 'DISPATCH_RUN_ATTRIBUTION_UNRESOLVED'
+      : 'DISPATCH_RUN_NOT_FOUND';
     return operator.output('UNKNOWN', [
-      sawFresh || sawUnknown
-        ? 'DISPATCH_RUN_ATTRIBUTION_UNRESOLVED'
-        : 'DISPATCH_RUN_NOT_FOUND'
+      ...(dispatchOutcomeUnknown
+        ? ['WORKFLOW_DISPATCH_OUTCOME_UNKNOWN', dispatchOutcomeReason]
+        : []),
+      unresolvedReason
     ]);
   }
 

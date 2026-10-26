@@ -180,6 +180,7 @@
       "sourceRoots": [
         "tools/repo-ci-mcp/**",
         "tools/github-discussions-mcp/**",
+        "tools/mcl-task-lease-dispatch-mcp/**",
         "tools/repo-write/**",
         "tools/repo-env/**"
       ],

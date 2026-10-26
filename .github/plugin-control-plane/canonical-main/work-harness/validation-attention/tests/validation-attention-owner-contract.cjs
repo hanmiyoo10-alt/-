@@ -1077,6 +1077,34 @@ test('repo-neutral predicate is narrow, explicit and reviewed-prefix bounded', (
     ],
   }), true);
   assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/workflows/mcl-task-lease.yml'],
+    scopes: [
+      'path:.github/workflows/mcl-task-lease.yml',
+      'surface:repo:mcl-d013-comment-dispatch',
+    ],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/workflows/mcl-task-lease.yml'],
+    scopes: [
+      'path:.github/workflows/mcl-task-lease.yml',
+      'surface:mcl:d013-comment-dispatch',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/workflows/mcl-task-lease.yml.bak'],
+    scopes: [
+      'path:.github/workflows/mcl-task-lease.yml.bak',
+      'surface:repo:mcl-d013-comment-dispatch',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/workflows/mcl-task-lease-other.yml'],
+    scopes: [
+      'path:.github/workflows/mcl-task-lease-other.yml',
+      'surface:repo:mcl-d013-comment-dispatch',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
     paths: ['.github/plugin-control-plane/taxonomy.json'],
     scopes: [
       'path:.github/plugin-control-plane/taxonomy.json',

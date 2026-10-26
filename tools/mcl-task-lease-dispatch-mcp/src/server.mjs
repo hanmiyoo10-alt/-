@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -16,6 +17,7 @@ export const MCP_PROTOCOL_VERSION = '2025-06-18';
 export const MAX_BODY = 64 * 1024;
 export const DEFAULT_EFFECT_MAX_PER_WINDOW = 3;
 export const DEFAULT_EFFECT_WINDOW_MS = 60 * 1000;
+export const CALLER_TOKEN_ENV = 'MCP_D013_CALLER_TOKEN';
 
 function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -45,12 +47,41 @@ function protocolAllowed(req) {
   return value === undefined || value === MCP_PROTOCOL_VERSION;
 }
 
-function sendJson(res, status, value) {
+function sendJson(res, status, value, extraHeaders = {}) {
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store'
+    'cache-control': 'no-store',
+    ...extraHeaders
   });
   res.end(JSON.stringify(value));
+}
+
+function callerAuthState(req, callerToken) {
+  const expected = typeof callerToken === 'string' ? callerToken.trim() : '';
+  if (!expected) return 'UNAVAILABLE';
+  const raw = req.headers.authorization;
+  if (typeof raw !== 'string') return 'DENIED';
+  const match = /^Bearer ([^\s]+)$/.exec(raw);
+  if (!match) return 'DENIED';
+  const expectedDigest = createHash('sha256').update(expected, 'utf8').digest();
+  const actualDigest = createHash('sha256').update(match[1], 'utf8').digest();
+  return timingSafeEqual(expectedDigest, actualDigest) ? 'PASS' : 'DENIED';
+}
+
+function authorizeEffectCaller(req, res, id, callerToken) {
+  const state = callerAuthState(req, callerToken);
+  if (state === 'PASS') return true;
+  if (state === 'UNAVAILABLE') {
+    sendJson(res, 503, rpcError(id, -32001, 'caller_auth_unavailable'));
+    return false;
+  }
+  sendJson(
+    res,
+    401,
+    rpcError(id, -32000, 'caller_unauthorized'),
+    { 'www-authenticate': 'Bearer realm="mcl-d013-dispatch"' }
+  );
+  return false;
 }
 
 export async function readJson(req) {
@@ -226,7 +257,8 @@ function toolResult(value) {
 export async function handleRequest(req, res, {
   service,
   allowEffect,
-  publicDomain
+  publicDomain,
+  callerToken
 }) {
   if (req.method === 'GET' && req.url === '/healthz') {
     return sendJson(res, 200, {
@@ -285,6 +317,9 @@ export async function handleRequest(req, res, {
   }
 
   const args = msg.params.arguments;
+  if (msg.params.name === 'd013_acquire' || msg.params.name === 'd013_release') {
+    if (!authorizeEffectCaller(req, res, id, callerToken)) return;
+  }
   if (msg.params.name === 'd013_acquire') {
     if (validateAcquireArgs(args).length) {
       return sendJson(res, 200, rpcError(id, -32602, 'invalid_tool_arguments'));
@@ -308,6 +343,7 @@ export async function handleRequest(req, res, {
 
 export function createD013Server({
   token = process.env[TOKEN_ENV],
+  callerToken = process.env[CALLER_TOKEN_ENV],
   fetchImpl = globalThis.fetch,
   publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || null,
   effectMaxPerWindow = DEFAULT_EFFECT_MAX_PER_WINDOW,
@@ -325,7 +361,8 @@ export function createD013Server({
     void handleRequest(req, res, {
       service: semanticService,
       allowEffect,
-      publicDomain
+      publicDomain,
+      callerToken
     }).catch(() => {
       if (!res.headersSent) sendJson(res, 500, { error: 'internal_error' });
       else if (!res.writableEnded) res.destroy();

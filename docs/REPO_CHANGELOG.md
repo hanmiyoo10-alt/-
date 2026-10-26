@@ -2577,3 +2577,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/12b1668010749ce0c51ca9c28e3c59ac1bd96883)
 - Event ID: `228e2f08943dbe873b8b742ace06f8f1b374db0b42dac09b2c3fd8449df11c3f`
 <!-- canonical-main-doc-promoted:228e2f08943dbe873b8b742ace06f8f1b374db0b42dac09b2c3fd8449df11c3f -->
+
+### 2026-10-26 — Merge pull request #3781 from hanmiyoo10-alt/repo/validation-d013-task-lease-workflow-3780
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `2ca1f0a3faa300d73abf525825b96915cfbdece5`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2ca1f0a3faa300d73abf525825b96915cfbdece5)
+- Event ID: `04566baf6489f70d4e566f531612f6fe6d7c5c26d63e73c845acc65c053d3712`
+<!-- canonical-main-doc-promoted:04566baf6489f70d4e566f531612f6fe6d7c5c26d63e73c845acc65c053d3712 -->

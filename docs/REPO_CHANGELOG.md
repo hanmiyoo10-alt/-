@@ -2585,3 +2585,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2ca1f0a3faa300d73abf525825b96915cfbdece5)
 - Event ID: `04566baf6489f70d4e566f531612f6fe6d7c5c26d63e73c845acc65c053d3712`
 <!-- canonical-main-doc-promoted:04566baf6489f70d4e566f531612f6fe6d7c5c26d63e73c845acc65c053d3712 -->
+
+### 2026-10-26 — Merge pull request #3784 from hanmiyoo10-alt/repo/mcl-d013-comment-queue-3783
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `e7e85f75611ab3098dfd9c20b4a9802ed776482e`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/e7e85f75611ab3098dfd9c20b4a9802ed776482e)
+- Event ID: `75557275f12de04e280772ae3081261cc5bb32ec9598a218f560c60b5b40f39e`
+<!-- canonical-main-doc-promoted:75557275f12de04e280772ae3081261cc5bb32ec9598a218f560c60b5b40f39e -->

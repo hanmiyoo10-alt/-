@@ -156,7 +156,20 @@ function parserContract() {
   reason(() => adapter.parseRequestBody('prefix\n' + requestBody()), 'REQUEST_EXTRANEOUS_TEXT');
   reason(() => adapter.parseRequestBody(requestBody() + '\n' + adapter.REQUEST_START), 'REQUEST_MARKER_COUNT_INVALID');
   reason(() => adapter.parseRequestBody(requestBody({...acquirePayload(), expectedGeneration: '1230'})), 'REQUEST_GENERATION_INVALID');
+  reason(() => adapter.parseRequestBody(requestBody({...acquirePayload(), packetRef: ['#3762']})), 'REQUEST_PACKET_REF_INVALID');
+  reason(() => adapter.parseRequestBody(requestBody({...releasePayload(), packetRef: ['#3762']})), 'REQUEST_PACKET_REF_INVALID');
   reason(() => adapter.parseRequestBody(requestBody({...acquirePayload(), packetBodySha256: 'ABC'})), 'REQUEST_PACKET_HASH_INVALID');
+
+  const nonRepository = adapter.parseRequestBody(requestBody(acquirePayload({
+    route: 'M_PRIVATE_LAB',
+    executor: 'M_PRIVATE_LAB',
+    scopes: ['surface:mcl:private-lab'],
+    workspaceKind: 'not_applicable',
+    branch: 'not_applicable',
+    worktree: 'not_applicable',
+    observedBaseSha: null,
+  })));
+  assert.equal(nonRepository.request.observedBaseSha, null);
   reason(() => adapter.parseRequestBody(requestBody({...acquirePayload(), scopeDisposition: 'UNKNOWN'})), 'REQUEST_SCOPE_DISPOSITION_INVALID');
   reason(() => adapter.parseRequestBody(requestBody({...acquirePayload(), scopes: [SCOPE, SCOPE]})), 'REQUEST_SCOPES_INVALID');
   reason(() => adapter.parseRequestBody(requestBody({...releasePayload(), leaseId: 'ABC'})), 'REQUEST_LEASE_ID_INVALID');
@@ -309,8 +322,14 @@ function workflowContract() {
   assert.ok(workflow.includes('workflow_dispatch:'));
   assert.ok(workflow.includes('issue_comment:'));
   assert.ok(workflow.includes('types: [created]'));
-  assert.ok(workflow.includes('group: mcl-task-lease-v1'));
-  assert.ok(workflow.includes('cancel-in-progress: false'));
+  assert.equal((workflow.match(/group: mcl-task-lease-v1/g) || []).length, 2);
+  assert.equal((workflow.match(/cancel-in-progress: false/g) || []).length, 2);
+  assert.ok(workflow.includes(`mutate-ledger:
+    if: github.actor == github.repository_owner && github.event_name == 'workflow_dispatch'
+    concurrency:`));
+  assert.ok(workflow.includes(`comment-request:
+    concurrency:
+      group: mcl-task-lease-v1`));
   assert.ok(workflow.includes("github.actor == github.repository_owner && github.event_name == 'workflow_dispatch'"));
   assert.ok(workflow.includes("github.event_name == 'issue_comment'"));
   assert.ok(workflow.includes("github.repository == 'hanmiyoo10-alt/-'"));

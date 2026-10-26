@@ -123,8 +123,12 @@ function parseAcquire(value) {
   if (!Number.isSafeInteger(value.expectedGeneration) || value.expectedGeneration < 0) {
     throw new RequestError('REQUEST_GENERATION_INVALID');
   }
-  if (!PACKET_RE.test(value.packetRef || '')) throw new RequestError('REQUEST_PACKET_REF_INVALID');
-  if (!SHA256_RE.test(value.packetBodySha256 || '')) throw new RequestError('REQUEST_PACKET_HASH_INVALID');
+  if (typeof value.packetRef !== 'string' || !PACKET_RE.test(value.packetRef)) {
+    throw new RequestError('REQUEST_PACKET_REF_INVALID');
+  }
+  if (typeof value.packetBodySha256 !== 'string' || !SHA256_RE.test(value.packetBodySha256)) {
+    throw new RequestError('REQUEST_PACKET_HASH_INVALID');
+  }
   if (!taskLease.ROUTES.includes(value.route)) throw new RequestError('REQUEST_ROUTE_INVALID');
   if (!taskLease.EXECUTORS.has(value.executor)) throw new RequestError('REQUEST_EXECUTOR_INVALID');
   if (value.scopeDisposition !== 'DISJOINT') throw new RequestError('REQUEST_SCOPE_DISPOSITION_INVALID');
@@ -141,7 +145,11 @@ function parseAcquire(value) {
   if (!boundedString(value.branch, 300) || !boundedString(value.worktree, 1024)) {
     throw new RequestError('REQUEST_WORKSPACE_INVALID');
   }
-  if (!SHA40_RE.test(value.observedBaseSha || '')) throw new RequestError('REQUEST_BASE_SHA_INVALID');
+  if (value.observedBaseSha !== null
+      && (typeof value.observedBaseSha !== 'string'
+        || !SHA40_RE.test(value.observedBaseSha))) {
+    throw new RequestError('REQUEST_BASE_SHA_INVALID');
+  }
   return {
     expectedGeneration: value.expectedGeneration,
     packetRef: value.packetRef,
@@ -164,8 +172,12 @@ function parseRelease(value) {
   if (!Number.isSafeInteger(value.expectedGeneration) || value.expectedGeneration < 0) {
     throw new RequestError('REQUEST_GENERATION_INVALID');
   }
-  if (!PACKET_RE.test(value.packetRef || '')) throw new RequestError('REQUEST_PACKET_REF_INVALID');
-  if (!SHA256_RE.test(value.leaseId || '')) throw new RequestError('REQUEST_LEASE_ID_INVALID');
+  if (typeof value.packetRef !== 'string' || !PACKET_RE.test(value.packetRef)) {
+    throw new RequestError('REQUEST_PACKET_REF_INVALID');
+  }
+  if (typeof value.leaseId !== 'string' || !SHA256_RE.test(value.leaseId)) {
+    throw new RequestError('REQUEST_LEASE_ID_INVALID');
+  }
   return {
     expectedGeneration: value.expectedGeneration,
     packetRef: value.packetRef,

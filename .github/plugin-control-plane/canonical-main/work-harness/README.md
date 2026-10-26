@@ -441,8 +441,9 @@ request it delegates directly to the existing
 
 `.github/workflows/mcl-task-lease.yml` preserves its existing
 `workflow_dispatch` path and adds one separate `issue_comment.created` job.
-Both paths share the fixed `mcl-task-lease-v1` non-canceling concurrency group.
-The comment job checks out trusted `main`, reads the event only through
+Both admitted mutation jobs share the fixed `mcl-task-lease-v1` non-canceling
+job-level concurrency group, so unrelated comments that fail admission never enter
+the D-013 mutation queue. The comment job checks out trusted `main`, reads the event only through
 `GITHUB_EVENT_PATH`, and retains only `contents: read` plus `issues: write`
 permissions. No comment body is interpolated into workflow YAML or shell arguments.
 

@@ -91,7 +91,8 @@ finalization requires `repoNeutralPacket()` to pass:
   siblings remain non-neutral;
 - reviewed exact paths are
   `.github/tooling/ci-summary/manifests/plugin-control-plane.json`,
-  `.github/workflows/canonical-main-stage-checkpoint-publish.yml`, and
+  `.github/workflows/canonical-main-stage-checkpoint-publish.yml`,
+  `.github/workflows/mcl-task-lease.yml`, and
   `.github/plugin-control-plane/taxonomy.json`; these are exact-file exceptions only
   and do not admit their directories, sibling files, near-match suffixes, the broader
   `.github/tooling/ci-summary/**` or `.github/plugin-control-plane/**` trees, or

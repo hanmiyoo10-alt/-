@@ -44,9 +44,18 @@ caller supplies exact reviewed D-013 inputs
 
 No source file patches #2352 directly.
 
-## Dedicated credential
+## Authentication and dedicated credentials
 
-Live calls require only:
+The effect surface has two independent credential boundaries:
+
+- caller authentication: `MCP_D013_CALLER_TOKEN`
+- GitHub workflow transport: `GITHUB_D013_DISPATCH_TOKEN`
+
+`initialize`, `ping`, `tools/list`, and `GET /healthz` are non-effect surfaces. Every `d013_acquire` / `d013_release` `tools/call` requires an exact Bearer caller credential before argument validation, rate limiting, or service invocation. Missing caller-auth configuration blocks effects with HTTP 503; missing or mismatched Bearer auth returns HTTP 401.
+
+The caller credential is deployment-local and must never be committed, logged, returned in MCP output, or supplied as a tool argument. If the eventual ChatGPT/plugin connection cannot provide this authenticated ingress contract directly, live activation remains blocked until a separately reviewed OAuth or equivalent authenticated front door exists. Do not weaken the server to anonymous effect access.
+
+GitHub workflow calls separately require only:
 
 `GITHUB_D013_DISPATCH_TOKEN`
 
@@ -90,14 +99,15 @@ The REST transport follows the existing operator semantics:
 
 1. inventory at most 20 recent fixed workflow-dispatch runs;
 2. dispatch exactly once;
-3. inspect only fresh runs;
-4. require exact workflow name/path, event, main ref, and the single `mutate-ledger` job;
-5. require every normalized workflow input in the bounded job log;
-6. require exactly one matching canonical `MCL_TASK_LEASE` result;
-7. perform exact fresh ledger readback;
-8. never automatically dispatch a second workflow.
+3. if the dispatch response is lost with `GITHUB_NETWORK_ERROR`, treat the acknowledgement as UNKNOWN, never redispatch, and continue the same bounded fresh-run + exact ledger reconciliation path;
+4. inspect only fresh runs;
+5. require exact workflow name/path, event, main ref, and the single `mutate-ledger` job;
+6. require every normalized workflow input in the bounded job log;
+7. require exactly one matching canonical `MCL_TASK_LEASE` result;
+8. perform exact fresh ledger readback;
+9. never automatically dispatch a second workflow.
 
-If no fresh/unknown run is observed, exact generation+1 durable-effect reconciliation is allowed only under the same acquire/release identity constraints as #3203. Ambiguity stays UNKNOWN.
+If no fresh/unknown run is observed, exact generation+1 durable-effect reconciliation is allowed only under the same acquire/release identity constraints as #3203. A lost dispatch acknowledgement that cannot be reconciled remains `UNKNOWN / WORKFLOW_DISPATCH_OUTCOME_UNKNOWN`; it is never reported as a definite failed dispatch. Ambiguity stays UNKNOWN.
 
 ## Rate limit
 

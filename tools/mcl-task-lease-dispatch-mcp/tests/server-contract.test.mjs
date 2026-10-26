@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import {
+  D013TransportError,
   OPERATOR_PATH,
   REPOSITORY,
   TOKEN_ENV,
@@ -20,6 +21,7 @@ import {
   validateReleaseArgs
 } from '../src/core.mjs';
 import {
+  CALLER_TOKEN_ENV,
   TOOLS,
   createD013Server
 } from '../src/server.mjs';
@@ -31,6 +33,7 @@ const lease = require(join(
 ));
 
 const MAIN = 'f'.repeat(40);
+const CALLER_TOKEN = 'fixture-caller-secret';
 const PACKET_REF = '#3771';
 const PACKET_BODY = [
   '<!-- canonical-main-work-packet:v1 -->',
@@ -139,11 +142,13 @@ class FakeGitHub {
     runsAfter = [{ id: 101 }],
     runConclusion = 'success',
     duplicateExactRuns = false,
+    dispatchErrorReason = null,
   } = {}) {
     this.initialState = initialState;
     this.afterState = afterState;
     this.runsAfter = duplicateExactRuns ? [{ id: 101 }, { id: 102 }] : runsAfter;
     this.runConclusion = runConclusion;
+    this.dispatchErrorReason = dispatchErrorReason;
     this.dispatched = false;
     this.dispatchCount = 0;
     this.workflowInputs = null;
@@ -168,6 +173,9 @@ class FakeGitHub {
     this.dispatched = true;
     this.dispatchCount += 1;
     this.workflowInputs = structuredClone(inputs);
+    if (this.dispatchErrorReason) {
+      throw new D013TransportError(this.dispatchErrorReason);
+    }
   }
 
   async readRun(runId) {
@@ -204,6 +212,7 @@ test('fixed identities and public tool surface stay exact', () => {
   assert.equal(WORKFLOW_NAME, 'MCL Task Lease');
   assert.equal(WORKFLOW_PATH, '.github/workflows/mcl-task-lease.yml');
   assert.equal(TOKEN_ENV, 'GITHUB_D013_DISPATCH_TOKEN');
+  assert.equal(CALLER_TOKEN_ENV, 'MCP_D013_CALLER_TOKEN');
   assert.deepEqual(TOOLS.map((item) => item.name), ['d013_acquire', 'd013_release']);
   for (const tool of TOOLS) {
     const keys = Object.keys(tool.inputSchema.properties);
@@ -284,6 +293,36 @@ test('no fresh run uses exact +1 durable acquire readback without second dispatc
   assert.equal(result.runId, null);
   assert.equal(result.observedGeneration, 8);
   assert.equal(result.leaseId, item.leaseId);
+  assert.equal(github.dispatchCount, 1);
+});
+
+test('lost dispatch acknowledgement still reconciles exact +1 durable effect without redispatch', async () => {
+  const item = expectedLease();
+  const after = ledgerState({ generation: 8, activeLeases: [item] });
+  const github = new FakeGitHub({
+    afterState: after,
+    runsAfter: [],
+    dispatchErrorReason: 'GITHUB_NETWORK_ERROR',
+  });
+  const service = createD013Service({ github, sleepFn: async () => {} });
+  const result = await service.acquire(acquireArgs(7));
+  assert.equal(result.status, 'DISPATCH_READBACK_COMPLETE');
+  assert.equal(result.observedGeneration, 8);
+  assert.equal(result.leaseId, item.leaseId);
+  assert.equal(github.dispatchCount, 1);
+});
+
+test('lost dispatch acknowledgement with no attributable effect remains UNKNOWN', async () => {
+  const github = new FakeGitHub({
+    afterState: ledgerState({ generation: 7 }),
+    runsAfter: [],
+    dispatchErrorReason: 'GITHUB_NETWORK_ERROR',
+  });
+  const service = createD013Service({ github, sleepFn: async () => {} });
+  const result = await service.acquire(acquireArgs(7));
+  assert.equal(result.status, 'UNKNOWN');
+  assert.ok(result.reasonCodes.includes('WORKFLOW_DISPATCH_OUTCOME_UNKNOWN'));
+  assert.ok(result.reasonCodes.includes('GITHUB_NETWORK_ERROR'));
   assert.equal(github.dispatchCount, 1);
 });
 
@@ -390,7 +429,10 @@ test('missing dedicated credential blocks before network and generic token names
 });
 
 async function listeningServer(options = {}) {
-  const server = createD013Server(options);
+  const server = createD013Server({
+    callerToken: CALLER_TOKEN,
+    ...options,
+  });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const { port } = server.address();
@@ -406,13 +448,15 @@ function rpc(id, method, params = undefined) {
   };
 }
 
-async function post(base, value) {
+async function post(base, value, { callerToken = CALLER_TOKEN } = {}) {
+  const headers = {
+    'content-type': 'application/json',
+    'mcp-protocol-version': '2025-06-18',
+    ...(callerToken === null ? {} : { authorization: `Bearer ${callerToken}` }),
+  };
   const response = await fetch(`${base}/mcp`, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'mcp-protocol-version': '2025-06-18',
-    },
+    headers,
     body: typeof value === 'string' ? value : JSON.stringify(value),
   });
   return { response, body: await response.json() };
@@ -442,6 +486,48 @@ test('HTTP MCP lists exactly two bounded tools and health is credential-free', a
     listed.body.result.tools.map((item) => item.name),
     ['d013_acquire', 'd013_release']
   );
+});
+
+test('effect tools require a separately configured authenticated caller', async (t) => {
+  let calls = 0;
+  const stub = {
+    acquire: async () => { calls += 1; return { status: 'DISPATCH_COMPLETE' }; },
+    release: async () => { calls += 1; return { status: 'DISPATCH_COMPLETE' }; },
+  };
+  const { server, base } = await listeningServer({ service: stub });
+  t.after(() => server.close());
+
+  const unauth = await post(base, rpc(1, 'tools/call', {
+    name: 'd013_acquire',
+    arguments: acquireArgs(),
+  }), { callerToken: null });
+  assert.equal(unauth.response.status, 401);
+  assert.equal(unauth.body.error.message, 'caller_unauthorized');
+
+  const wrong = await post(base, rpc(2, 'tools/call', {
+    name: 'd013_release',
+    arguments: {
+      packet_ref: PACKET_REF,
+      expected_generation: 8,
+      lease_id: 'a'.repeat(64),
+    },
+  }), { callerToken: 'wrong-caller-token' });
+  assert.equal(wrong.response.status, 401);
+  assert.equal(wrong.body.error.message, 'caller_unauthorized');
+  assert.equal(calls, 0);
+
+  const noAuthServer = createD013Server({ service: stub, callerToken: '' });
+  noAuthServer.listen(0, '127.0.0.1');
+  await once(noAuthServer, 'listening');
+  t.after(() => noAuthServer.close());
+  const noAuthBase = `http://127.0.0.1:${noAuthServer.address().port}`;
+  const unavailable = await post(noAuthBase, rpc(3, 'tools/call', {
+    name: 'd013_acquire',
+    arguments: acquireArgs(),
+  }));
+  assert.equal(unavailable.response.status, 503);
+  assert.equal(unavailable.body.error.message, 'caller_auth_unavailable');
+  assert.equal(calls, 0);
 });
 
 test('MCP rejects unknown acquire fields before service invocation', async (t) => {
@@ -507,6 +593,9 @@ test('source binds existing operator and contains no generic credential or arbit
   assert.ok(core.includes('operatorImpl.planRelease'));
   assert.ok(core.includes('operator.readContext'));
   assert.equal(core.includes('process.env.GITHUB_TOKEN'), false);
+  assert.ok(server.includes('MCP_D013_CALLER_TOKEN'));
+  assert.ok(server.includes('caller_unauthorized'));
+  assert.ok(server.includes('caller_auth_unavailable'));
   assert.equal(core.includes('process.env.GH_TOKEN'), false);
   assert.equal(core.includes('gh auth token'), false);
   assert.equal(server.includes('repository:'), false);

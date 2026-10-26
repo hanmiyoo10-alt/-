@@ -422,6 +422,44 @@ node .github/plugin-control-plane/canonical-main/work-harness/tests/stage-checkp
 
 Implementation owner: #3468. Design owner: #3454. Persistent queue: #3469.
 
+
+## MCL D-013 owner-comment task-lease queue
+
+The repository-native D-013 connected transport is fixed to persistent control issue
+**#3782**.
+
+A valid request is an owner-authored comment on that exact open non-PR issue. The
+trusted-main adapter `mcl-task-lease-comment-request.cjs` independently verifies
+repository, issue, event action, owner/OWNER/non-bot identity, exact request markers,
+operation-specific key sets and bounded field shapes.
+
+The adapter owns no lease semantics. For an accepted `acquire` or `release`
+request it delegates directly to the existing
+`task-lease.cjs::executeOperation()` owner and passes the result through
+`task-lease.cjs::publicResult()` before rendering any repository-visible output.
+#2352 remains the sole D-013 ledger/state authority.
+
+`.github/workflows/mcl-task-lease.yml` preserves its existing
+`workflow_dispatch` path and adds one separate `issue_comment.created` job.
+Both paths share the fixed `mcl-task-lease-v1` non-canceling concurrency group.
+The comment job checks out trusted `main`, reads the event only through
+`GITHUB_EVENT_PATH`, and retains only `contents: read` plus `issues: write`
+permissions. No comment body is interpolated into workflow YAML or shell arguments.
+
+Result comments are compact transport receipts on #3782 only. They contain request
+identity/digest, operation, bounded owner status/generation/lease identity and reason
+codes. They never echo raw scopes, worktree, packet body, event payload or request
+markers, so workflow-authored result comments cannot recursively become requests.
+
+Focused contract:
+
+```sh
+node .github/plugin-control-plane/canonical-main/work-harness/tests/mcl-task-lease-comment-request-contract.cjs
+```
+
+Implementation owner: #3783. Capability-gap source: #3770. Persistent control issue:
+#3782. First natural live consumer: #3762.
+
 ## Current non-goals
 
 The current Harness still does **not** add:

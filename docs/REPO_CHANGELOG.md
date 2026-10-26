@@ -2569,3 +2569,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/fbb006cc45648b19275567ceea434e9d2ee2f5d8)
 - Event ID: `85af363afcaa19aee17ca921ff68558e5955ad641a7115088900f6cbc389db23`
 <!-- canonical-main-doc-promoted:85af363afcaa19aee17ca921ff68558e5955ad641a7115088900f6cbc389db23 -->
+
+### 2026-10-26 — Merge pull request #3776 from hanmiyoo10-alt/repo/mcl-task-lease-dispatch-mcp-3771-r2
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `12b1668010749ce0c51ca9c28e3c59ac1bd96883`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/12b1668010749ce0c51ca9c28e3c59ac1bd96883)
+- Event ID: `228e2f08943dbe873b8b742ace06f8f1b374db0b42dac09b2c3fd8449df11c3f`
+<!-- canonical-main-doc-promoted:228e2f08943dbe873b8b742ace06f8f1b374db0b42dac09b2c3fd8449df11c3f -->

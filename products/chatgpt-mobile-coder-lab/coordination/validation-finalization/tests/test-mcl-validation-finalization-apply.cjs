@@ -111,6 +111,34 @@ function fake2786Context() {
   };
 }
 
+function fake3356State({
+  disposition = 'FINALIZATION_REQUIRED',
+  stage = 'ABSENT',
+} = {}) {
+  return {
+    workspace: {holderState: 'NOT_APPLICABLE', state: 'NOT_APPLICABLE'},
+    completion: {status: 'NOT_APPLICABLE', receiptIds: [], representativeReceiptId: null},
+    validationStage: {status: stage, receipt: stage === 'PASS' ? {} : null},
+    decision: decision2786(disposition),
+  };
+}
+function fake3356Context() {
+  return {
+    target: owner.TARGET_3356,
+    packet: 3356,
+    packetRef: '#3356',
+    runner: () => ({code: 0, stdout: '[]'}),
+    implReceipt: {
+      receiptDigest: owner.TARGET_3356.implementationReceiptDigest,
+      authorityRefs: [],
+      scope: {
+        paths: [...owner.TARGET_3356.paths],
+        diffIdentity: owner.TARGET_3356.diffIdentity,
+      },
+    },
+  };
+}
+
 test('public parser accepts only inspect/apply packet+format', () => {
   assert.deepEqual(
     owner.parseArgs(['inspect', '--packet', '#2463', '--format', 'agent-view']),
@@ -148,6 +176,10 @@ test('public parser accepts only inspect/apply packet+format', () => {
     owner.parseArgs(['inspect', '--packet', '#3149', '--format', 'agent-view']),
     {command: 'inspect', packetRef: '#3149', format: 'agent-view'},
   );
+  assert.deepEqual(
+    owner.parseArgs(['inspect', '--packet', '#3356', '--format', 'agent-view']),
+    {command: 'inspect', packetRef: '#3356', format: 'agent-view'},
+  );
   for (const argv of [
     ['apply', '--packet', '#0', '--format', 'json'],
     ['apply', '--packet', '#2463', '--format', 'json', '--repo', 'x/y'],
@@ -168,7 +200,7 @@ test('exact V1 effect pair is required', () => {
 });
 
 test('compile-time profiles include exact #2791 and #3216 targets', () => {
-  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#2791', '#3043', '#3051', '#3092', '#3099', '#3108', '#3110', '#3118', '#3126', '#3144', '#3216']);
+  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#2791', '#3043', '#3051', '#3092', '#3099', '#3108', '#3110', '#3118', '#3126', '#3144', '#3216', '#3356']);
   assert.equal(owner.TARGET_2791.packet, 2791);
   assert.equal(owner.TARGET_2791.pr, 2795);
   assert.equal(owner.TARGET_2791.candidate,
@@ -414,6 +446,87 @@ test('compile-time profiles include exact #2791 and #3216 targets', () => {
     'natural-3090-recovery-proof',
   ]);
 });
+test('#3356 exact docs-only target is compile-time fixed', () => {
+  assert.equal(owner.TARGET_3356.packet, 3356);
+  assert.equal(owner.TARGET_3356.pr, 3358);
+  assert.equal(owner.TARGET_3356.candidate,
+    '9f561293770b8c43ec54d03a0c0abe94a6974255');
+  assert.equal(owner.TARGET_3356.merge,
+    '0c341e426fd7a9df72e651cdd2c7c52b8135312e');
+  assert.equal(owner.TARGET_3356.implementationReceiptDigest,
+    '4e015551a4a2c312f63220f1c7046ab6c2bc956eb812bdefaa924c93dac48cec');
+  assert.equal(owner.TARGET_3356.diffIdentity,
+    '05f77f81554f0e30b0b037640daee79ea9654f42f97b7d9c80bb1fa04bada9a2');
+  assert.deepEqual(owner.TARGET_3356.paths,
+    ['products/chatgpt-mobile-coder-lab/CURRENT.md']);
+  assert.equal(owner.PROFILES['#3356'].mode, 'COORDINATION_NOT_APPLICABLE');
+});
+
+test('#3356 implementation receipt requires exact NOT_APPLICABLE gate and scope', () => {
+  const target = owner.TARGET_3356;
+  const requiredGates = Object.entries(target.requiredGateResults).map(([name, result]) => ({
+    name, result, evidenceLocator: 'evidence:' + name,
+  }));
+  const row = {
+    comment: {id: 1},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: target.packet,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: target.implementationReceiptDigest,
+      authorityRefs: [{kind: 'PR', locator: 'pr:#3358', identity: target.candidate}],
+      requiredGates,
+      scope: {paths: [...target.paths], diffRequired: true, diffIdentity: target.diffIdentity},
+    },
+  };
+  assert.equal(owner.select3356ImplementationReceipt(
+    [row], {head: {sha: target.candidate}}, target), row);
+  const bad = structuredClone(row);
+  bad.receipt.requiredGates.find((gate) => gate.name === 'coordination-not-applicable').result = 'PASS';
+  assert.throws(() => owner.select3356ImplementationReceipt(
+    [bad], {head: {sha: target.candidate}}, target), owner.ApplyError);
+});
+
+test('#3356 docs-only apply publishes only canonical V receipt', () => {
+  let reads = 0;
+  let publishes = 0;
+  const states = [
+    fake3356State({disposition: 'FINALIZATION_REQUIRED', stage: 'ABSENT'}),
+    fake3356State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+  ];
+  const result = owner.apply3356Packet('#3356', {
+    createContext: () => fake3356Context(),
+    readState: () => states[Math.min(reads++, states.length - 1)],
+    buildValidationStageText: () => ({text: 'stage'}),
+    publishExact(packet, body) {
+      assert.equal(packet, 3356);
+      assert.equal(body, 'stage');
+      publishes += 1;
+      return {written: 1};
+    },
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.effects.stageReceiptPublished, 1);
+  assert.equal(result.effects.holderCleaned, 0);
+  assert.equal(result.effects.d014Published, 0);
+  assert.equal(publishes, 1);
+});
+
+test('#3356 second exact apply is zero-effect', () => {
+  const result = owner.apply3356Packet('#3356', {
+    createContext: () => fake3356Context(),
+    readState: () => fake3356State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+    publishExact() { throw new Error('unexpected write'); },
+  });
+  assert.equal(result.status, 'PASS');
+  assert.deepEqual(result.effects, {
+    holderCleaned: 0,
+    d014Published: 0,
+    stageReceiptPublished: 0,
+  });
+});
+
 test('#2786 exact effect pair is stage-receipt only', () => {
   assert.equal(owner.effectPair2786Exact(decision2786('FINALIZATION_REQUIRED')), true);
   assert.equal(owner.effectPair2786Exact(decision2786('FINALIZATION_REQUIRED', {

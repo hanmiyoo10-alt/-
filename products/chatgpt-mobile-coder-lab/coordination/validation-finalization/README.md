@@ -8,7 +8,7 @@ packet finalizer and does not add caller-selected coordination semantics.
 
 ## Reviewed fixed profiles
 
-V1 contains exactly thirteen reviewed targets.
+V1 contains exactly fourteen reviewed targets.
 
 ### Profile A — #2463 / PR #2464
 
@@ -189,7 +189,21 @@ its bounded implementation publication/recovery rebind:
 For #3216 the only permitted finalization effect is publication of the missing
 canonical VALIDATION_MERGE receipt followed by read-only re-inspection.
 
-The caller supplies only one of the thirteen reviewed packet numbers and a bounded output
+### Profile N — #3356 / PR #3358
+
+The fourteenth profile is the exact merged docs-only primary-S RDC checkpoint sync:
+
+- exact candidate / merge / implementation-receipt / diff / one-path identity is fixed;
+- the implementation receipt must prove currentization preservation, review repair,
+  Verify/Required, and `coordination-not-applicable`;
+- current #2352 must prove packet #3356 has no active lease;
+- no D-014 manifest, workspace, holder or completion receipt is read, selected,
+  synthesized or mutated;
+- finalization evidence projects coordination and workspace as `NOT_APPLICABLE`;
+- the only permitted effect is one canonical `VALIDATION_MERGE` receipt comment;
+- an exact existing receipt is reused and a second apply is zero-effect.
+
+The caller supplies only one of the fourteen reviewed packet numbers and a bounded output
 format. Repository, PR, manifest, lease, run, workspace, effect, command and comment
 target remain non-selectable.
 
@@ -234,6 +248,9 @@ node mcl-validation-finalization-apply.cjs apply --packet '#2791' --format agent
 
 node mcl-validation-finalization-apply.cjs inspect --packet '#3216' --format agent-view
 node mcl-validation-finalization-apply.cjs apply --packet '#3216' --format agent-view
+
+node mcl-validation-finalization-apply.cjs inspect --packet '#3356' --format agent-view
+node mcl-validation-finalization-apply.cjs apply --packet '#3356' --format agent-view
 ~~~
 
 inspect is always read-only.
@@ -285,6 +302,10 @@ Profile L requires `currentization-scope-and-blob-preservation`,
 Profile M requires `currentization-scope-and-blob-preservation`, `d013-release`,
 `d014-completion`, `implementation-coordination-converged`,
 `exact-head-required`, `exact-head-verify` and `exact-four-path-diff`.
+Profile N requires `currentization-scope-and-blob-preservation`,
+`coordination-not-applicable=NOT_APPLICABLE`, `exact-head-required`,
+`exact-head-verify`, and `review-finding-addressed`. It has no workspace/holder/
+D-014 admission because those semantics are compile-time not applicable.
 Each profile's exact valid workspace manifest is used only to resolve the fixed
 worktree/holder location; it is never manufactured or rewritten as a
 validation-stage D-014 manifest.
@@ -389,6 +410,11 @@ Profile A may perform only:
 
 Profiles B, C, D, E, F, G, H, I, J, K, L and M may perform only:
 - one exact canonical VALIDATION_MERGE packet comment if absent.
+
+Profile N may perform only:
+- one exact canonical VALIDATION_MERGE packet comment if absent.
+
+Profile N never constructs, selects, completes or mutates D-014/workspace/holder evidence.
 
 Profiles B, C, D, E, F, G, H, I, J, K, L and M never clean a holder and never construct or publish D-014 evidence.
 

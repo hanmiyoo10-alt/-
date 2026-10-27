@@ -71,6 +71,51 @@ async def call(app, body, headers=None):
     return sent, json.loads(raw)
 
 
+async def call_inner_public_host(app):
+    sent = []
+    delivered = False
+    body = json.dumps({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}
+    }).encode()
+
+    async def receive():
+        nonlocal delivered
+        if delivered:
+            return {"type": "http.disconnect"}
+        delivered = True
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    async def send(message):
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "https",
+        "path": "/mcp",
+        "raw_path": b"/mcp",
+        "query_string": b"",
+        "root_path": "",
+        "headers": [
+            (b"host", b"l-gram.tail48930e.ts.net"),
+            (b"content-type", b"application/json"),
+            (b"accept", b"application/json, text/event-stream"),
+        ],
+        "client": ("127.0.0.1", 1234),
+        "server": ("127.0.0.1", 8766),
+        "state": {},
+    }
+    async with app.router.lifespan_context(app):
+        await app(scope, receive, send)
+    start = next(m for m in sent if m.get("type") == "http.response.start")
+    raw = b"".join(
+        m.get("body", b"") for m in sent if m.get("type") == "http.response.body"
+    )
+    return start["status"], json.loads(raw)
+
+
 class OAuthFrontdoorTests(unittest.TestCase):
     def test_anonymous_tools_list_advertises_oauth_without_entering_tool_call(self):
         app = OAuthMCPApp(ToolsApp(), Broker())
@@ -90,6 +135,18 @@ class OAuthFrontdoorTests(unittest.TestCase):
         }).encode()))
         self.assertTrue(payload["result"]["isError"])
         self.assertIn("mcp/www_authenticate", payload["result"]["_meta"])
+
+
+    def test_inner_mcp_accepts_reviewed_public_funnel_host(self):
+        with patch.object(server_module, "build_oauth_http_app", side_effect=lambda app: app):
+            app = server_module.build_http_app()
+
+        status, payload = asyncio.run(call_inner_public_host(app))
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            [tool["name"] for tool in payload["result"]["tools"]],
+            ["prepare_workspace"],
+        )
 
 
     def test_http_transport_disables_uvicorn_access_log(self):

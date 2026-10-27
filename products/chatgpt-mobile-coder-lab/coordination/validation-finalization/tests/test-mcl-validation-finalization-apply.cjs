@@ -180,6 +180,10 @@ test('public parser accepts only inspect/apply packet+format', () => {
     owner.parseArgs(['inspect', '--packet', '#3356', '--format', 'agent-view']),
     {command: 'inspect', packetRef: '#3356', format: 'agent-view'},
   );
+  assert.deepEqual(
+    owner.parseArgs(['inspect', '--packet', '#3561', '--format', 'agent-view']),
+    {command: 'inspect', packetRef: '#3561', format: 'agent-view'},
+  );
   for (const argv of [
     ['apply', '--packet', '#0', '--format', 'json'],
     ['apply', '--packet', '#2463', '--format', 'json', '--repo', 'x/y'],
@@ -200,7 +204,7 @@ test('exact V1 effect pair is required', () => {
 });
 
 test('compile-time profiles include exact #2791 and #3216 targets', () => {
-  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#2791', '#3043', '#3051', '#3092', '#3099', '#3108', '#3110', '#3118', '#3126', '#3144', '#3216', '#3356']);
+  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#2791', '#3043', '#3051', '#3092', '#3099', '#3108', '#3110', '#3118', '#3126', '#3144', '#3216', '#3356', '#3561']);
   assert.equal(owner.TARGET_2791.packet, 2791);
   assert.equal(owner.TARGET_2791.pr, 2795);
   assert.equal(owner.TARGET_2791.candidate,
@@ -462,6 +466,30 @@ test('#3356 exact docs-only target is compile-time fixed', () => {
   assert.equal(owner.PROFILES['#3356'].mode, 'COORDINATION_NOT_APPLICABLE');
 });
 
+test('#3561 exact L/L recovery-rebind target is compile-time fixed', () => {
+  const target = owner.TARGET_3561;
+  assert.equal(target.packet, 3561);
+  assert.equal(target.pr, 3794);
+  assert.equal(target.candidate, '5d7effc05a5b6de838f61d0ddd087954d7efaabf');
+  assert.equal(target.merge, 'b241af8daf446898998fdf7fa9e189e6ef8af23b');
+  assert.equal(target.workspaceManifestId,
+    '57afb70df553f987f9167fd794a3737b69a388a6a1dcafad64d7f23987721cfb');
+  assert.equal(target.workspaceRoute, 'L');
+  assert.equal(target.workspaceExecutor, 'L');
+  assert.equal(target.workspaceCompletionReceiptId,
+    'c166de034b78e29934774e7def340c7edb40dadd15ec7adcc66d19c11127d4db');
+  assert.equal(target.implementationReceiptDigest,
+    '9e613602669190f02b3cd7a2adc1db2ac2f25a6103d0fc0482dd4bdcb3e9a581');
+  assert.deepEqual(target.requiredCoordinationGates, [
+    'currentization-diff-preserved',
+    'coordination-released',
+    'exact-head-required',
+    'exact-head-verify',
+    'exact-three-path-diff',
+  ]);
+  assert.equal(owner.PROFILES['#3561'].mode, 'IMPLEMENTATION_COORDINATION');
+});
+
 test('#3356 implementation receipt requires exact NOT_APPLICABLE gate and scope', () => {
   const target = owner.TARGET_3356;
   const requiredGates = Object.entries(target.requiredGateResults).map(([name, result]) => ({
@@ -614,6 +642,110 @@ test('#2786 workspace manifest selection ignores unrelated invalid historical en
   const selected = owner.select2786WorkspaceManifest(comments, target);
   assert.equal(selected.comment.id, 2);
   assert.equal(selected.manifest.manifestId, manifest.manifestId);
+});
+
+test('#3561 L/L manifest and exact implementation completion receipt are required', () => {
+  const candidate = 'd'.repeat(40);
+  const manifest = handoff.buildManifest({
+    schemaVersion: 1,
+    mode: 'MCL_TASK_MANIFEST',
+    packetRef: '#3561',
+    packetBodySha256: 'a'.repeat(64),
+    phaseId: '3561-implementation-pr-r4-current-main',
+    phaseClass: 'REPOSITORY_MUTATION',
+    route: 'L',
+    executor: 'L',
+    scopes: ['path:products/example.txt'],
+    workspace: {
+      kind: 'repository',
+      branch: 'laptop/test-3561',
+      worktree: '/home/alsl0/nyang-worktrees/test-3561',
+    },
+    observedBaseSha: 'b'.repeat(40),
+    leaseRequirement: 'REQUIRED',
+    leaseEvidence: {
+      ledgerRef: '#2352',
+      leaseId: 'c'.repeat(64),
+      acquiredGeneration: 10,
+      acquireEvidenceRef: 'receipt:mcl-task-lease:' + 'c'.repeat(64) + ':generation:10',
+    },
+    sourceAuthorityRefs: ['#3561', 'issue:#2352'],
+    inputRefs: ['commit:' + 'b'.repeat(40)],
+    expectedOutputRefs: ['commit:' + candidate, 'pr:#3794'],
+    acceptanceRefs: ['#3561'],
+    stopCondition: 'Test exact L implementation coordination lineage.',
+    authority: {...handoff.AUTHORITY_FLAGS},
+  });
+  const completion = handoff.buildCompletionReceipt(manifest, {
+    disposition: 'COMPLETE',
+    outputRefs: ['commit:' + candidate, 'pr:#3794'],
+    validationRefs: ['pr:#3794'],
+    observedRefs: ['commit:' + candidate],
+    leaseDisposition: 'RELEASED',
+    leaseReleaseEvidence: {
+      ledgerRef: '#2352',
+      leaseId: manifest.leaseEvidence.leaseId,
+      releasedGeneration: 11,
+      evidenceRef: 'issue:#2352',
+    },
+    workspaceResult: 'clean',
+    blockerRefs: [],
+    requiredUnknownRefs: [],
+  });
+  const target = {
+    ...owner.TARGET_3561,
+    candidate,
+    workspaceManifestId: manifest.manifestId,
+    workspaceLeaseId: manifest.leaseEvidence.leaseId,
+    workspaceAcquiredGeneration: manifest.leaseEvidence.acquiredGeneration,
+    workspaceBranch: manifest.workspace.branch,
+    workspaceWorktree: manifest.workspace.worktree,
+    workspaceCompletionReceiptId: completion.receiptId,
+  };
+  const comments = [
+    {id: 1, body: handoff.renderManifest(manifest)},
+    {id: 2, body: handoff.renderCompletionReceipt(completion)},
+  ];
+  const selectedManifest = owner.select2786WorkspaceManifest(comments, target);
+  assert.equal(selectedManifest.manifest.route, 'L');
+  assert.equal(selectedManifest.manifest.executor, 'L');
+  const selectedCompletion = owner.select2786WorkspaceCompletionReceipt(
+    comments, selectedManifest.manifest, target);
+  assert.equal(selectedCompletion.receipt.receiptId, completion.receiptId);
+  const wrongRoute = {...target, workspaceRoute: 'S'};
+  assert.throws(
+    () => owner.select2786WorkspaceManifest(comments, wrongRoute),
+    owner.ApplyError,
+  );
+});
+
+test('#3561 fixed profile reuses stage-receipt-only implementation coordination path', () => {
+  let phase = 0;
+  const calls = [];
+  const ctx = {
+    ...fake2786Context(),
+    target: owner.TARGET_3561,
+    packet: 3561,
+    packetRef: '#3561',
+  };
+  const result = owner.applyPacket('#3561', {
+    createContext: () => ctx,
+    readState: () => phase === 0
+      ? fake2786State()
+      : fake2786State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+    buildValidationStageText: () => ({text: 'STAGE3561'}),
+    publishExact: (packet, body) => {
+      calls.push([packet, body]);
+      phase = 1;
+      return {written: 1, reused: 0, lostAckRecovered: false};
+    },
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.packetRef, '#3561');
+  assert.deepEqual(result.effects, {
+    holderCleaned: 0, d014Published: 0, stageReceiptPublished: 1,
+  });
+  assert.deepEqual(calls, [[3561, 'STAGE3561']]);
 });
 
 test('#2786 apply publishes only canonical stage receipt', () => {

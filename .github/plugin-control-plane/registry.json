@@ -83,6 +83,19 @@
       "authority": {
         "evidence": "plugins/risu/local/voyage/DESIGN_STATUS.md"
       }
+    },
+    "provider-balance-mini": {
+      "displayName": "Provider Balance Mini",
+      "lifecycle": "experimental",
+      "issueValues": ["provider-balance-mini", "Provider Balance Mini"],
+      "paths": [
+        "plugins/risu/local/provider-balance-monitor/**",
+        "docs/PROVIDER_BALANCE_MINI_GUIDELINES.md"
+      ],
+      "statusAdapter": "evidence",
+      "authority": {
+        "evidence": "plugins/risu/local/provider-balance-monitor/README.md"
+      }
     }
   },
   "products": {

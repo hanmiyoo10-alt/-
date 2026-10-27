@@ -1,0 +1,16 @@
+{
+  "name": "provider-balance-mini",
+  "private": true,
+  "version": "0.1.0-dev.1",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "start": "node collector.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@github/copilot-sdk": "1.0.26"
+  }
+}

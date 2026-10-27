@@ -6,12 +6,14 @@
 | --- | --- | --- | --- | --- | --- |
 | plugin:devpass | DevPass | declared-update-channel | plugins/risu/local/devpass/** | declaredBy=plugins/risu/local/devpass/README.md; artifact=plugins/devpass/latest.js; ref=main | docs/DEVPASS_GUIDELINES.md |
 | plugin:local | Local | compatibility-family | plugins/risu/local | evidence=plugins/risu/local/README.md | docs/LOCAL_PLUGIN_GUIDELINES.md |
+| plugin:provider-balance-mini | Provider Balance Mini | experimental | plugins/risu/local/provider-balance-monitor/** | evidence=plugins/risu/local/provider-balance-monitor/README.md | docs/PROVIDER_BALANCE_MINI_GUIDELINES.md |
 | plugin:simcore | SimCore | production | plugins/simcore/** | releaseBranch=release-simcore; manifest=product-manifest.json; artifact=plugins/simcore/latest.js | docs/SIMCORE_GUIDELINES.md |
 | plugin:usage-dashboard | Local Usage Dashboard | production | plugins/usage-dashboard/** | releaseBranch=release-usage-dashboard; manifest=plugins/usage-dashboard/runtime/product-manifest.json; artifact=plugins/usage-dashboard/latest.js; releaseSpecDir=.github/usage-dashboard/releases | docs/USAGE_DASHBOARD_GUIDELINES.md |
 | plugin:voyage-token-check | Voyage Token Check | design-evidence-validation | plugins/risu/local/voyage/** | evidence=plugins/risu/local/voyage/DESIGN_STATUS.md | docs/VOYAGE_TOKEN_CHECK_GUIDELINES.md |
 | product:app-api-mod-lab | App API Mod Lab | research-product-root | products/app-api-mod-lab/** | evidence=products/app-api-mod-lab/CURRENT.md; manifest=products/app-api-mod-lab/product.json | docs/APP_API_MOD_LAB_GUIDELINES.md |
 | product:local-model-lab | Local Model Lab | research-product-root | products/local-model-lab/** | evidence=products/local-model-lab/CURRENT.md; manifest=products/local-model-lab/product.json | docs/LOCAL_MODEL_LAB_GUIDELINES.md |
 | product:pocketrisu-helper-mod | PocketRisu Helper Mod | operations-product-root | products/pocketrisu-helper-mod/** | manifest=products/pocketrisu-helper-mod/product.json; currentState=products/pocketrisu-helper-mod/CURRENT.md | docs/POCKETRISU_HELPER_MOD_GUIDELINES.md |
+| product:simcore-risu | SimCore Risu | research-product-root | products/simcore-risu/** | evidence=products/simcore-risu/CURRENT.md; manifest=products/simcore-risu/product.json | docs/SIMCORE-RISU_GUIDELINES.md |
 | product:termux | Termux | prototype | products/standalone/termux/** | evidence=products/standalone/termux/README.md | docs/TERMUX_DEVELOPMENT_GUIDELINES.md |
 
 ## Family Navigation Projection
@@ -31,13 +33,13 @@
 | PRODUCT | X | Mobile Coder Lab | scope:research-product | products/chatgpt-mobile-coder-lab/** | products/standalone/mobile-coder-lab | reclassify |
 | PRODUCT | O | PocketRisu | product:pocketrisu-helper-mod | products/pocketrisu-helper-mod/** | products/risu/pocketrisu | regroup |
 | PRODUCT | X | Termux | product:termux | products/standalone/termux/** | products/standalone/termux | preserve |
-| PLUGIN | O | Local | plugin:usage-dashboard<br>plugin:devpass<br>plugin:voyage-token-check | plugins/usage-dashboard/**<br>products/usage-dashboard/**<br>plugins/risu/local/usage-dashboard/**<br>plugins/risu/local/devpass/**<br>plugins/devpass/**<br>plugins/risu/local/voyage/**<br>voyage-token-check/**<br>tools/usage-dashboard-mcp/** | plugins/risu/local | consolidate |
+| PLUGIN | O | Local | plugin:usage-dashboard<br>plugin:devpass<br>plugin:voyage-token-check<br>plugin:provider-balance-mini | plugins/usage-dashboard/**<br>products/usage-dashboard/**<br>plugins/risu/local/usage-dashboard/**<br>plugins/risu/local/devpass/**<br>plugins/devpass/**<br>plugins/risu/local/voyage/**<br>voyage-token-check/**<br>plugins/risu/local/provider-balance-monitor/**<br>tools/usage-dashboard-mcp/** | plugins/risu/local | consolidate |
 | PLUGIN | O | SimCore | plugin:simcore | plugins/simcore/**<br>products/simcore/**<br>tools/simcore-mcp/** | plugins/risu/simcore | regroup |
 | PLATFORM | X | Agent Platform | scope:repo | .agents/skills/**<br>tools/agent-skill-orchestrator/**<br>tools/agent-skill-eval/**<br>tools/agent-skill-security/** | platform/agents | regroup |
 | PLATFORM | X | Canonical Main | scope:repo | .github/plugin-control-plane/canonical-main/** | platform/canonical-main | regroup |
 | PLATFORM | X | Control Plane | scope:repo | .github/plugin-control-plane/** | platform/control-plane | regroup |
 | PLATFORM | BRIDGE | Local Runtime Plane | scope:local-runtime | local/** | local | preserve |
-| PLATFORM | X | Repository Operations | — | tools/repo-ci-mcp/**<br>tools/github-discussions-mcp/**<br>tools/repo-write/**<br>tools/repo-env/** | platform/repo-ops | regroup |
+| PLATFORM | X | Repository Operations | — | tools/repo-ci-mcp/**<br>tools/github-discussions-mcp/**<br>tools/mcl-task-lease-dispatch-mcp/**<br>tools/repo-write/**<br>tools/repo-env/** | platform/repo-ops | regroup |
 | PLATFORM | X | Sandbox and Host Tooling | — | tools/sandbox-health/**<br>tools/sandbox-ingress/**<br>tools/sandbox-toolchain/** | platform/sandbox | regroup |
 | PLATFORM | X | Web Acquisition | — | tools/web-acquisition/** | platform/web-acquisition | regroup |
 | STUDY | X | Study | scope:study | study/** | study | preserve |

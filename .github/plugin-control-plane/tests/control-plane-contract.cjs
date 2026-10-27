@@ -47,7 +47,7 @@ assert.deepEqual(taxonomyById.get('termux').sourceRoots, ['products/standalone/t
 assert.equal(taxonomyById.get('termux').migration, 'preserve');
 assert.equal(taxonomyById.get('mobile-coder-lab').targetRoot, 'products/standalone/mobile-coder-lab');
 assert.equal(taxonomyById.get('simcore').targetRoot, 'plugins/risu/simcore');
-assert.deepEqual(taxonomyById.get('local').sourceRefs, ['plugin:usage-dashboard', 'plugin:devpass', 'plugin:voyage-token-check']);
+assert.deepEqual(taxonomyById.get('local').sourceRefs, ['plugin:usage-dashboard', 'plugin:devpass', 'plugin:voyage-token-check', 'plugin:provider-balance-mini']);
 assert.deepEqual(taxonomyById.get('local').sourceRoots, [
   'plugins/usage-dashboard/**',
   'products/usage-dashboard/**',
@@ -56,6 +56,7 @@ assert.deepEqual(taxonomyById.get('local').sourceRoots, [
   'plugins/devpass/**',
   'plugins/risu/local/voyage/**',
   'voyage-token-check/**',
+  'plugins/risu/local/provider-balance-monitor/**',
   'tools/usage-dashboard-mcp/**',
 ]);
 assert.equal(taxonomyById.get('local').risu, 'yes');
@@ -79,6 +80,10 @@ assert.equal(registry.plugins.devpass.authority.artifact, 'plugins/devpass/lates
 assert.equal(registry.plugins.devpass.authority.ref, 'main');
 assert.deepEqual(registry.plugins['voyage-token-check'].paths, ['plugins/risu/local/voyage/**', 'voyage-token-check/**']);
 assert.equal(registry.plugins['voyage-token-check'].authority.evidence, 'plugins/risu/local/voyage/DESIGN_STATUS.md');
+assert.deepEqual(registry.plugins['provider-balance-mini'].paths, ['plugins/risu/local/provider-balance-monitor/**', 'docs/PROVIDER_BALANCE_MINI_GUIDELINES.md']);
+assert.equal(registry.plugins['provider-balance-mini'].lifecycle, 'experimental');
+assert.equal(registry.plugins['provider-balance-mini'].statusAdapter, 'evidence');
+assert.equal(registry.plugins['provider-balance-mini'].authority.evidence, 'plugins/risu/local/provider-balance-monitor/README.md');
 assert.equal(registry.plugins.local.statusAdapter, 'evidence');
 assert.equal(registry.plugins.local.authority.evidence, 'plugins/risu/local/README.md');
 assert.equal(taxonomyById.get('local').migration, 'consolidate');
@@ -100,6 +105,7 @@ assert.match(validateTaxonomy(badRisuTarget, registry).join('\n'), /Risu O plugi
 assert.deepEqual(Object.keys(registry.plugins).sort(), [
   'devpass',
   'local',
+  'provider-balance-mini',
   'simcore',
   'usage-dashboard',
   'voyage-token-check',
@@ -166,6 +172,12 @@ const devpassCanonicalPath = classifyPaths(['plugins/risu/local/devpass/README.m
 assert.deepEqual(devpassCanonicalPath.labels, ['plugin:devpass']);
 assert.deepEqual(devpassCanonicalPath.ambiguousPaths, []);
 assert.ok(!devpassCanonicalPath.labels.includes('plugin:local'));
+const providerBalancePath = classifyPaths(['plugins/risu/local/provider-balance-monitor/provider-balance-mini.plugin.js'], registry);
+assert.deepEqual(providerBalancePath.labels, ['plugin:provider-balance-mini']);
+assert.deepEqual(providerBalancePath.ambiguousPaths, []);
+assert.deepEqual(providerBalancePath.unclassifiedPaths, []);
+assert.ok(!providerBalancePath.labels.includes('plugin:local'));
+assert.deepEqual(classifyPaths(['docs/PROVIDER_BALANCE_MINI_GUIDELINES.md'], registry).labels, ['plugin:provider-balance-mini']);
 const devpassLegacyReadme = classifyPaths(['plugins/devpass/README.md'], registry);
 assert.deepEqual(devpassLegacyReadme.labels, ['plugin:devpass']);
 assert.deepEqual(devpassLegacyReadme.ambiguousPaths, []);
@@ -329,6 +341,7 @@ assert.deepEqual(
 assert.deepEqual(classifyIssueBody('Scope: local', registry), {explicit: true, labels: ['plugin:local']});
 assert.deepEqual(classifyIssueBody('Plugin: simcore', registry), {explicit: true, labels: ['plugin:simcore']});
 assert.deepEqual(classifyIssueBody('Scope: voyage-token-check', registry), {explicit: true, labels: ['plugin:voyage-token-check']});
+assert.deepEqual(classifyIssueBody('Scope: provider-balance-mini', registry), {explicit: true, labels: ['plugin:provider-balance-mini']});
 assert.deepEqual(classifyIssueBody('Scope: pocketrisu-helper-mod', registry), {explicit: true, labels: ['product:pocketrisu-helper-mod']});
 assert.deepEqual(classifyIssueBody('Scope: local-model-lab', registry), {explicit: true, labels: ['product:local-model-lab']});
 assert.deepEqual(classifyIssueBody('Scope: termux', registry), {explicit: true, labels: ['product:termux']});
@@ -361,6 +374,7 @@ assert.deepEqual(classifyIssueBody(customIssueBody('ops-lab'), registry, {author
 const issueTemplate = fs.readFileSync(path.join(root, '.github/ISSUE_TEMPLATE/plugin-work.yml'), 'utf8');
 assert.match(issueTemplate, /label:\s*Scope/);
 assert.match(issueTemplate, /^        - local$/m);
+assert.match(issueTemplate, /^        - provider-balance-mini$/m);
 assert.match(issueTemplate, /voyage-token-check/);
 assert.match(issueTemplate, /pocketrisu-helper-mod/);
 assert.match(issueTemplate, /^        - local-model-lab$/m);

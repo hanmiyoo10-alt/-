@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "l-workspace-prepare-mcp"
+version = "0.1.0"
+description = "Bounded L-local MCP transport for the reviewed MCL prepare-workspace owner"
+requires-python = ">=3.10"
+dependencies = [
+  "mcp>=2,<3",
+  "uvicorn>=0.30,<1",
+]
+
+[project.scripts]
+l-workspace-prepare-mcp = "l_workspace_prepare_mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["l_workspace_prepare_mcp*"]

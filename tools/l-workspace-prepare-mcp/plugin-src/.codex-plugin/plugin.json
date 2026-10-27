@@ -1,0 +1,17 @@
+{
+  "interface": {
+    "displayName": "MCL L Workspace Prepare",
+    "shortDescription": "Bounded L workspace preparation",
+    "longDescription": "Prepare only the exact L repository worktree already authorized by current D-013 and D-014 evidence. No generic shell, Git, PR, merge or cleanup authority.",
+    "developerName": "hanmiyoo10-alt",
+    "category": "Productivity",
+    "capabilities": ["Interactive"],
+    "defaultPrompt": "Inspect the owning packet and prepare only its exact authorized L workspace."
+  },
+  "name": "mcl-l-workspace-prepare",
+  "version": "0.1.0",
+  "description": "Prepare one exact MCL L repository workspace from current packet, lease and manifest evidence.",
+  "author": {"name": "hanmiyoo10-alt"},
+  "keywords": [],
+  "skills": "./skills"
+}

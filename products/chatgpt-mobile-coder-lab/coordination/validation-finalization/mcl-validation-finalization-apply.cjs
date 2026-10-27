@@ -304,6 +304,32 @@ const TARGET_3356 = Object.freeze({
     'review-finding-addressed': 'PASS',
   }),
 });
+const TARGET_3561 = Object.freeze({
+  packet: 3561,
+  packetRef: '#3561',
+  pr: 3794,
+  candidate: '5d7effc05a5b6de838f61d0ddd087954d7efaabf',
+  merge: 'b241af8daf446898998fdf7fa9e189e6ef8af23b',
+  workspaceManifestId: '57afb70df553f987f9167fd794a3737b69a388a6a1dcafad64d7f23987721cfb',
+  workspaceManifestPhaseId: '3561-implementation-pr-r4-current-main',
+  workspaceLeaseId: '3d523f16c179ebf0cb8d1de42db907902123e82565a76bb599e16326f3d30a64',
+  workspaceAcquiredGeneration: 1243,
+  workspaceBranch: 'laptop/mcl-l-interrupted-recovery-rebind-3561-r4',
+  workspaceWorktree: '/home/alsl0/nyang-worktrees/mcl-l-interrupted-recovery-rebind-3561-r4',
+  workspaceRoute: 'L',
+  workspaceExecutor: 'L',
+  workspaceCompletionReceiptId:
+    'c166de034b78e29934774e7def340c7edb40dadd15ec7adcc66d19c11127d4db',
+  implementationReceiptDigest:
+    '9e613602669190f02b3cd7a2adc1db2ac2f25a6103d0fc0482dd4bdcb3e9a581',
+  requiredCoordinationGates: Object.freeze([
+    'currentization-diff-preserved',
+    'coordination-released',
+    'exact-head-required',
+    'exact-head-verify',
+    'exact-three-path-diff',
+  ]),
+});
 const EXPECTED_EFFECTS_2786 = Object.freeze([
   'CANONICAL_VALIDATION_MERGE_RECEIPT',
 ]);
@@ -376,6 +402,11 @@ const PROFILES = Object.freeze({
   '#3356': Object.freeze({
     target: TARGET_3356,
     mode: 'COORDINATION_NOT_APPLICABLE',
+    expectedEffects: EXPECTED_EFFECTS_2786,
+  }),
+  '#3561': Object.freeze({
+    target: TARGET_3561,
+    mode: 'IMPLEMENTATION_COORDINATION',
     expectedEffects: EXPECTED_EFFECTS_2786,
   }),
 });
@@ -1032,12 +1063,14 @@ function select2786WorkspaceManifest(comments, target = TARGET_2786) {
     parsed.status === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN',
     'WORKSPACE_MANIFEST_INVALID');
   const manifest = parsed.value;
+  const expectedRoute = target.workspaceRoute || 'S';
+  const expectedExecutor = target.workspaceExecutor || 'S';
   if (manifest.manifestId !== target.workspaceManifestId
       || manifest.packetRef !== target.packetRef
       || manifest.phaseId !== target.workspaceManifestPhaseId
       || manifest.phaseClass !== 'REPOSITORY_MUTATION'
-      || manifest.route !== 'S'
-      || manifest.executor !== 'S'
+      || manifest.route !== expectedRoute
+      || manifest.executor !== expectedExecutor
       || manifest.leaseRequirement !== 'REQUIRED'
       || manifest.leaseEvidence?.leaseId !== target.workspaceLeaseId
       || manifest.leaseEvidence?.acquiredGeneration !== target.workspaceAcquiredGeneration
@@ -1047,6 +1080,40 @@ function select2786WorkspaceManifest(comments, target = TARGET_2786) {
     fail('CONFLICT', 'WORKSPACE_MANIFEST_IDENTITY_CONFLICT');
   }
   return {comment: candidates[0], manifest, text: commentBody(candidates[0])};
+}
+function select2786WorkspaceCompletionReceipt(comments, manifest, target = TARGET_2786) {
+  if (!target.workspaceCompletionReceiptId) return null;
+  const exactToken = '"receiptId": "' + target.workspaceCompletionReceiptId + '"';
+  const candidates = comments.filter((comment) => {
+    const body = commentBody(comment);
+    return body.includes('mcl-task-completion-receipt:v1') && body.includes(exactToken);
+  });
+  if (candidates.length !== 1) fail(candidates.length ? 'CONFLICT' : 'UNKNOWN',
+    candidates.length ? 'WORKSPACE_COMPLETION_RECEIPT_AMBIGUOUS'
+      : 'WORKSPACE_COMPLETION_RECEIPT_MISSING');
+  const parsed = handoff.parseCompletionReceipt(commentBody(candidates[0]));
+  if (parsed.status !== 'VALID') fail(
+    parsed.status === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN',
+    'WORKSPACE_COMPLETION_RECEIPT_INVALID');
+  const receipt = parsed.value;
+  const expectedExecutor = target.workspaceExecutor || 'S';
+  if (receipt.receiptId !== target.workspaceCompletionReceiptId
+      || receipt.manifestId !== target.workspaceManifestId
+      || receipt.manifestPayloadSha256 !== manifest.payloadSha256
+      || receipt.packetRef !== target.packetRef
+      || receipt.phaseId !== target.workspaceManifestPhaseId
+      || receipt.executor !== expectedExecutor
+      || receipt.disposition !== 'COMPLETE'
+      || !(receipt.outputRefs || []).includes('commit:' + target.candidate)
+      || !(receipt.outputRefs || []).includes('pr:#' + target.pr)
+      || receipt.leaseDisposition !== 'RELEASED'
+      || receipt.leaseReleaseEvidence?.leaseId !== target.workspaceLeaseId
+      || receipt.workspaceResult !== 'clean'
+      || (receipt.blockerRefs || []).length
+      || (receipt.requiredUnknownRefs || []).length) {
+    fail('CONFLICT', 'WORKSPACE_COMPLETION_RECEIPT_IDENTITY_CONFLICT');
+  }
+  return {comment: candidates[0], receipt, text: commentBody(candidates[0])};
 }
 function read2786Workspace(manifest, spawn = childProcess.spawnSync, target = TARGET_2786) {
   const inspected = holderOwner.inspectWorkspace(manifest);
@@ -1124,6 +1191,8 @@ function create2786LiveContext(packetRef, deps = {}) {
   const stageRows = stageReceiptsFromComments(comments);
   const impl = select2786ImplementationReceipt(stageRows, pr, target);
   const manifestRow = select2786WorkspaceManifest(comments, target);
+  const completionRow = select2786WorkspaceCompletionReceipt(
+    comments, manifestRow.manifest, target);
   return {
     target,
     packet: target.packet,
@@ -1136,6 +1205,7 @@ function create2786LiveContext(packetRef, deps = {}) {
     implCommentId: impl.comment.id,
     workspaceManifest: manifestRow.manifest,
     workspaceManifestText: manifestRow.text,
+    workspaceCompletionReceipt: completionRow?.receipt || null,
     coordinationProof: 'PROVEN',
   };
 }
@@ -2310,6 +2380,7 @@ module.exports = {
   TARGET_2791,
   TARGET_3216,
   TARGET_3356,
+  TARGET_3561,
   TARGET_3043,
   TARGET_3051,
   TARGET_3092,
@@ -2360,6 +2431,7 @@ module.exports = {
   select2786ImplementationReceipt,
   select3356ImplementationReceipt,
   select2786WorkspaceManifest,
+  select2786WorkspaceCompletionReceipt,
   selfOwnerImplementationIdentities,
   selectSelfOwnerImplementationReceipt,
   selectSelfOwnerWorkspaceManifest,

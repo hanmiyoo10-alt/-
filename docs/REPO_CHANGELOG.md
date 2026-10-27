@@ -2593,3 +2593,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/e7e85f75611ab3098dfd9c20b4a9802ed776482e)
 - Event ID: `75557275f12de04e280772ae3081261cc5bb32ec9598a218f560c60b5b40f39e`
 <!-- canonical-main-doc-promoted:75557275f12de04e280772ae3081261cc5bb32ec9598a218f560c60b5b40f39e -->
+
+### 2026-10-27 — feat(repo): register Provider Balance Mini ownership (#3791)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `68c3989f78af3b6864174b5f2c808555f357ae11`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/68c3989f78af3b6864174b5f2c808555f357ae11)
+- Event ID: `cacb56301bc47cc66698d752990029d89581a8bfeee323efbc5037593c227c54`
+<!-- canonical-main-doc-promoted:cacb56301bc47cc66698d752990029d89581a8bfeee323efbc5037593c227c54 -->

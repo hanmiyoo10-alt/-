@@ -44,6 +44,15 @@ requires exact packet-body hash, current-main base, L/L repository workspace,
 active D-013 evidence via `mcl-workspace-holder.validateEvidence`, and the
 existing L repository-owner manifest validator.
 
+The bridge never imports owner code from the possibly stale landing checkout.
+It requires the exact current-main commit object to exist in the landing Git
+object store, uses fixed read-only git archive plus fixed tar to materialize
+only the reviewed owner dependency files into a private temporary directory,
+and loads task-handoff, D-013 evidence validation, and the L repository owner
+from those exact current-main bytes. Missing current-main objects fail closed
+as CURRENT_MAIN_OBJECT_MISSING; the existing reviewed main-object materializer
+remains the separate prerequisite owner.
+
 Only after those checks does it invoke:
 
 ```text

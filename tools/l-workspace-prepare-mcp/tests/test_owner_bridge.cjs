@@ -2,6 +2,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const test = require('node:test');
 const bridge = require('../l_workspace_prepare_mcp/owner_bridge.cjs');
 
@@ -58,6 +59,21 @@ function deps(value = manifest(), ownerValue = null) {
     },
   };
 }
+
+
+test('default dependency loader is pinned to exact current-main objects', () => {
+  const source = fs.readFileSync(
+    require('node:path').resolve(__dirname, '../l_workspace_prepare_mcp/owner_bridge.cjs'),
+    'utf8');
+  assert.match(source, /cat-file', '-e', mainSha/);
+  assert.match(source, /'archive', '--format=tar', mainSha/);
+  assert.match(source, /CURRENT_OWNER_PATHS/);
+  assert.match(source, /CURRENT_MAIN_OBJECT_MISSING/);
+  assert.match(source, /FIXED_GIT = '\/usr\/bin\/git'/);
+  assert.match(source, /require\('node:child_process'\)/);
+  assert.match(source, /FIXED_TAR = '\/usr\/bin\/tar'/);
+  assert.doesNotMatch(source, /require\(path\.join\(\s*repoRoot, 'products\/chatgpt-mobile-coder-lab\/coordination\/task-handoff\.cjs'/);
+});
 
 test('exact evidence invokes only prepare-workspace and sanitizes result', () => {
   const out = bridge.run(input(), deps());

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
+const childProcess = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -53,22 +54,84 @@ function exactInput(value) {
   return value;
 }
 
-function defaultDeps(repoRoot = FIXED_REPO_ROOT) {
-  if (repoRoot !== FIXED_REPO_ROOT || process.cwd() !== FIXED_REPO_ROOT) {
-    throw new Error('REPO_ROOT_INVALID');
+const CURRENT_OWNER_PATHS = Object.freeze([
+  '.github/plugin-control-plane/canonical-main/infra/github-client.cjs',
+  '.github/plugin-control-plane/canonical-main/work-system/packet-activity.cjs',
+  '.github/plugin-control-plane/canonical-main/work-system/packet-projection.cjs',
+  '.github/plugin-control-plane/canonical-main/work-system/policy.json',
+  '.github/plugin-control-plane/canonical-main/work-system/pr-activity.cjs',
+  '.github/plugin-control-plane/canonical-main/work-system/scope-overlap.cjs',
+  'products/chatgpt-mobile-coder-lab/coordination/mcl-workspace-holder.cjs',
+  'products/chatgpt-mobile-coder-lab/coordination/task-handoff.cjs',
+  'products/chatgpt-mobile-coder-lab/coordination/task-lease.cjs',
+  'products/chatgpt-mobile-coder-lab/device-ops/l-repository-owner/mcl-l-repository-owner.cjs',
+]);
+const FIXED_GIT = '/usr/bin/git';
+const FIXED_TAR = '/usr/bin/tar';
+const ARCHIVE_MAX_BYTES = 4 * 1024 * 1024;
+
+function fixedReadCommand(command, argv, options = {}) {
+  return childProcess.spawnSync(command, argv, {
+    encoding: options.binary ? null : 'utf8',
+    input: options.input,
+    shell: false,
+    timeout: 15000,
+    maxBuffer: ARCHIVE_MAX_BYTES,
+    env: {
+      PATH: '/usr/bin:/bin',
+      HOME: process.env.HOME || '/home/alsl0',
+    },
+  });
+}
+
+function currentDeps(mainSha, repoRoot = FIXED_REPO_ROOT) {
+  if (repoRoot !== FIXED_REPO_ROOT || process.cwd() !== FIXED_REPO_ROOT
+      || !SHA40_RE.test(mainSha || '')) {
+    throw new Error('CURRENT_OWNER_CONTEXT_INVALID');
   }
-  const handoff = require(path.join(
-    repoRoot, 'products/chatgpt-mobile-coder-lab/coordination/task-handoff.cjs'));
-  const holder = require(path.join(
-    repoRoot, 'products/chatgpt-mobile-coder-lab/coordination/mcl-workspace-holder.cjs'));
-  const owner = require(path.join(
-    repoRoot, 'products/chatgpt-mobile-coder-lab/device-ops/l-repository-owner/mcl-l-repository-owner.cjs'));
-  return {
-    parseManifest: handoff.parseManifest,
-    validateEvidence: holder.validateEvidence,
-    validateManifestShape: owner.validateManifestShape,
-    ownerRunCli: owner.runCli,
-  };
+  const present = fixedReadCommand(
+    FIXED_GIT, ['-C', repoRoot, 'cat-file', '-e', mainSha + '^{commit}']);
+  if (present.error || present.signal || present.status !== 0) {
+    throw new Error('CURRENT_MAIN_OBJECT_MISSING');
+  }
+
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-current-owner-'));
+  try {
+    const archive = fixedReadCommand(
+      FIXED_GIT,
+      ['-C', repoRoot, 'archive', '--format=tar', mainSha, ...CURRENT_OWNER_PATHS],
+      {binary: true},
+    );
+    if (archive.error || archive.signal || archive.status !== 0 || !archive.stdout?.length) {
+      throw new Error('CURRENT_OWNER_ARCHIVE_FAILED');
+    }
+    const extract = fixedReadCommand(
+      FIXED_TAR, ['-xf', '-', '-C', temp], {binary: true, input: archive.stdout});
+    if (extract.error || extract.signal || extract.status !== 0) {
+      throw new Error('CURRENT_OWNER_ARCHIVE_FAILED');
+    }
+
+    const handoff = require(path.join(
+      temp, 'products/chatgpt-mobile-coder-lab/coordination/task-handoff.cjs'));
+    const holder = require(path.join(
+      temp, 'products/chatgpt-mobile-coder-lab/coordination/mcl-workspace-holder.cjs'));
+    const owner = require(path.join(
+      temp, 'products/chatgpt-mobile-coder-lab/device-ops/l-repository-owner/mcl-l-repository-owner.cjs'));
+    return {
+      deps: {
+        parseManifest: handoff.parseManifest,
+        validateEvidence: holder.validateEvidence,
+        validateManifestShape: owner.validateManifestShape,
+        ownerRunCli: owner.runCli,
+      },
+      cleanup() {
+        try { fs.rmSync(temp, {recursive: true, force: true}); } catch {}
+      },
+    };
+  } catch (error) {
+    try { fs.rmSync(temp, {recursive: true, force: true}); } catch {}
+    throw error;
+  }
 }
 
 function run(inputValue, deps = null) {
@@ -77,9 +140,21 @@ function run(inputValue, deps = null) {
   catch (error) { return result('UNKNOWN', inputValue, [String(error.message || 'INPUT_INVALID')]); }
 
   let d;
-  try { d = deps || defaultDeps(); }
-  catch { return result('UNKNOWN', input, ['OWNER_DEPENDENCY_LOAD_FAILED']); }
+  let cleanup = () => {};
+  try {
+    if (deps) d = deps;
+    else {
+      const loaded = currentDeps(input.mainSha);
+      d = loaded.deps;
+      cleanup = loaded.cleanup;
+    }
+  } catch (error) {
+    const code = error?.message === 'CURRENT_MAIN_OBJECT_MISSING'
+      ? 'CURRENT_MAIN_OBJECT_MISSING' : 'OWNER_DEPENDENCY_LOAD_FAILED';
+    return result('UNKNOWN', input, [code]);
+  }
 
+  try {
   const parsed = d.parseManifest(input.manifestText);
   if (!parsed || parsed.status !== 'VALID' || !parsed.value) {
     return result(parsed?.status === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN', input,
@@ -166,6 +241,9 @@ function run(inputValue, deps = null) {
   } finally {
     try { fs.rmSync(temp, {recursive: true, force: true}); } catch {}
   }
+  } finally {
+    cleanup();
+  }
 }
 
 function main() {
@@ -184,7 +262,12 @@ if (require.main === module) process.exitCode = main();
 
 module.exports = {
   FALSE_AUTHORITY,
+  ARCHIVE_MAX_BYTES,
+  CURRENT_OWNER_PATHS,
+  FIXED_GIT,
   FIXED_REPO_ROOT,
+  FIXED_TAR,
+  currentDeps,
   exactInput,
   result,
   run,

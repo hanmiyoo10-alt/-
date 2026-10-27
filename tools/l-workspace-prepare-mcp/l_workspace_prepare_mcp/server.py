@@ -30,7 +30,7 @@ def build_http_app():
         streamable_http_path="/mcp",
         json_response=True,
         stateless_http=True,
-        host="127.0.0.1",
+        host="0.0.0.0",
     )
     return build_oauth_http_app(inner)
 

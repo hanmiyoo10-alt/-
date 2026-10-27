@@ -225,3 +225,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3722)
 - Event ID: `eafaca3a908f8087c9d25622bde502a6fd066d0fcce47c2a44ec021aff727b7e`
 <!-- canonical-main-doc-promoted:eafaca3a908f8087c9d25622bde502a6fd066d0fcce47c2a44ec021aff727b7e -->
+
+### 2026-10-27 — Mini read-only balance monitor: Copilot + Vertex credits + AI Studio credits
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3788)
+- Event ID: `c8ca9ec02cd2467453f3f5f51cd71cec82e6a30925efc89f55fb97abce4b5b35`
+<!-- canonical-main-doc-promoted:c8ca9ec02cd2467453f3f5f51cd71cec82e6a30925efc89f55fb97abce4b5b35 -->

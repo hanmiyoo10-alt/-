@@ -43,7 +43,12 @@ def main() -> None:
     if transport != "streamable-http":
         raise RuntimeError("TRANSPORT_UNSUPPORTED")
     port = int(os.environ.get("PORT", "8766"))
-    uvicorn.run(build_http_app(), host="127.0.0.1", port=port)
+    uvicorn.run(
+        build_http_app(),
+        host="127.0.0.1",
+        port=port,
+        access_log=False,
+    )
 
 
 if __name__ == "__main__":

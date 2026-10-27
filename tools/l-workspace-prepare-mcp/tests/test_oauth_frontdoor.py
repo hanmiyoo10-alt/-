@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import json
 import unittest
+from unittest.mock import patch
 
 from l_workspace_prepare_mcp.oauth_frontdoor import OAuthMCPApp
 from l_workspace_prepare_mcp.config import OAUTH_SCOPE
+from l_workspace_prepare_mcp import server as server_module
 
 
 class Broker:
@@ -88,6 +90,27 @@ class OAuthFrontdoorTests(unittest.TestCase):
         }).encode()))
         self.assertTrue(payload["result"]["isError"])
         self.assertIn("mcp/www_authenticate", payload["result"]["_meta"])
+
+
+    def test_http_transport_disables_uvicorn_access_log(self):
+        app = object()
+        with (
+            patch.dict(
+                server_module.os.environ,
+                {server_module.TRANSPORT_ENV: "streamable-http", "PORT": "9876"},
+                clear=False,
+            ),
+            patch.object(server_module, "build_http_app", return_value=app),
+            patch.object(server_module.uvicorn, "run") as run,
+        ):
+            server_module.main()
+
+        run.assert_called_once_with(
+            app,
+            host="127.0.0.1",
+            port=9876,
+            access_log=False,
+        )
 
 
 if __name__ == "__main__":

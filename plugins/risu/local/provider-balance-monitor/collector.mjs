@@ -6,7 +6,7 @@ const HOST = '127.0.0.1';
 const DEFAULT_PORT = 39221;
 const DEFAULT_CACHE_MS = 60_000;
 
-const finiteOrNull = value => Number.isFinite(Number(value)) ? Number(value) : null;
+const finiteOrNull = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
 
 export function unknownProvider(provider, reason, { status = 'unknown', asOf = null } = {}) {
   return {

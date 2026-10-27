@@ -18,3 +18,6 @@ l-workspace-prepare-mcp = "l_workspace_prepare_mcp.server:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["l_workspace_prepare_mcp*"]
+
+[tool.setuptools.package-data]
+l_workspace_prepare_mcp = ["owner_bridge.cjs"]

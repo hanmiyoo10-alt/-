@@ -110,6 +110,8 @@ function currentDeps(mainSha, repoRoot = FIXED_REPO_ROOT) {
       fs.writeFileSync(destination, read.stdout, {mode: 0o600, flag: 'wx'});
     }
 
+    const projection = require(path.join(
+      temp, '.github/plugin-control-plane/canonical-main/work-system/packet-projection.cjs'));
     const handoff = require(path.join(
       temp, 'products/chatgpt-mobile-coder-lab/coordination/task-handoff.cjs'));
     const holder = require(path.join(
@@ -118,6 +120,7 @@ function currentDeps(mainSha, repoRoot = FIXED_REPO_ROOT) {
       temp, 'products/chatgpt-mobile-coder-lab/device-ops/l-repository-owner/mcl-l-repository-owner.cjs'));
     return {
       deps: {
+        classifyPacketProjection: projection.classifyPacketProjection,
         parseManifest: handoff.parseManifest,
         validateEvidence: holder.validateEvidence,
         validateManifestShape: owner.validateManifestShape,
@@ -154,6 +157,24 @@ function run(inputValue, deps = null) {
   }
 
   try {
+  const packetProjection = d.classifyPacketProjection(input.packetBody);
+  if (!packetProjection || typeof packetProjection !== 'object'
+      || !Array.isArray(packetProjection.reasonCodes)) {
+    return result('UNKNOWN', input, ['PACKET_PROJECTION_INVALID']);
+  }
+  if (packetProjection.disposition !== 'PASS') {
+    const status = packetProjection.disposition === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN';
+    return result(status, input,
+      packetProjection.reasonCodes.length
+        ? packetProjection.reasonCodes : ['PACKET_PROJECTION_INVALID']);
+  }
+  if (packetProjection.interactionStage !== 'IMPLEMENTATION_PR') {
+    return result('BLOCKED', input, ['PACKET_STAGE_NOT_IMPLEMENTATION_PR']);
+  }
+  if (['DONE', 'CANCELLED', 'SUPERSEDED'].includes(packetProjection.lifecycle)) {
+    return result('BLOCKED', input, ['PACKET_LIFECYCLE_TERMINAL']);
+  }
+
   const parsed = d.parseManifest(input.manifestText);
   if (!parsed || parsed.status !== 'VALID' || !parsed.value) {
     return result(parsed?.status === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN', input,
@@ -217,7 +238,16 @@ function run(inputValue, deps = null) {
         '--packet', packetPath,
         '--apply',
       ], process.env);
-    } catch {
+    } catch (error) {
+      const kind = ['BLOCKED', 'CONFLICT', 'UNKNOWN'].includes(error?.kind)
+        ? error.kind : null;
+      const reasons = Array.isArray(error?.reasonCodes)
+        ? error.reasonCodes.filter((item) => (
+          typeof item === 'string'
+          && /^[A-Za-z0-9_:+.-]{1,120}$/.test(item)
+        )).slice(0, 32)
+        : [];
+      if (kind && reasons.length) return result(kind, input, reasons);
       return result('UNKNOWN', input, ['OWNER_INVOCATION_FAILED']);
     }
     let value;

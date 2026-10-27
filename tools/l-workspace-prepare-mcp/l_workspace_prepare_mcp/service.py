@@ -29,6 +29,12 @@ _FALSE_AUTHORITY = {
     "productionAuthorized": False,
 }
 
+_PACKET_STATES = frozenset({
+    "READY", "CLAIMED", "IN_PROGRESS", "REVIEW",
+    "DONE", "BLOCKED", "CANCELLED", "SUPERSEDED",
+})
+_TERMINAL_PACKET_STATES = frozenset({"DONE", "CANCELLED", "SUPERSEDED"})
+
 
 def _result(
     status: str,
@@ -135,7 +141,9 @@ def _packet_state(body: str) -> str:
     unique = sorted(set(found))
     if len(unique) > 1:
         raise AdmissionError("CONFLICT", "PACKET_STATE_CONFLICT")
-    return unique[0] if unique else "UNKNOWN"
+    if len(unique) != 1 or unique[0] not in _PACKET_STATES:
+        raise AdmissionError("UNKNOWN", "PACKET_LIFECYCLE_UNKNOWN")
+    return unique[0]
 
 
 def _require_packet(packet: dict[str, Any], packet_number: int) -> str:
@@ -151,7 +159,7 @@ def _require_packet(packet: dict[str, Any], packet_number: int) -> str:
     if "- Current stage: `IMPLEMENTATION_PR`" not in body:
         raise AdmissionError("BLOCKED", "PACKET_STAGE_NOT_IMPLEMENTATION_PR")
     state = _packet_state(body)
-    if state in {"DONE", "CLOSED", "TERMINAL", "COMPLETE"}:
+    if state in _TERMINAL_PACKET_STATES:
         raise AdmissionError("BLOCKED", "PACKET_LIFECYCLE_TERMINAL")
     return body
 
@@ -178,6 +186,8 @@ def _select_manifest(comments: list[dict[str, Any]], manifest_id: str) -> str:
     for row in comments:
         body = row.get("body")
         if not isinstance(body, str) or manifest_id not in body:
+            continue
+        if not body.strip().startswith(_MANIFEST_START + "\n"):
             continue
         value = _parse_manifest_candidate(body)
         if value.get("manifestId") == manifest_id:

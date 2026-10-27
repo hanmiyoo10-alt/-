@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+import tomllib
 import unittest
 
 from l_workspace_prepare_mcp.service import (
@@ -93,15 +95,18 @@ class ServiceTests(unittest.TestCase):
 
     def test_wrong_stage_and_terminal_state_fail_closed(self):
         cases = [
-            ("**State: IN_PROGRESS**\n- Current stage: `AUTHORITY_SCOPE`", "PACKET_STAGE_NOT_IMPLEMENTATION_PR"),
-            ("**State: DONE**\n- Current stage: `IMPLEMENTATION_PR`", "PACKET_LIFECYCLE_TERMINAL"),
+            ("**State: IN_PROGRESS**\n- Current stage: `AUTHORITY_SCOPE`", "BLOCKED", "PACKET_STAGE_NOT_IMPLEMENTATION_PR"),
+            ("**State: DONE**\n- Current stage: `IMPLEMENTATION_PR`", "BLOCKED", "PACKET_LIFECYCLE_TERMINAL"),
+            ("**State: CANCELLED**\n- Current stage: `IMPLEMENTATION_PR`", "BLOCKED", "PACKET_LIFECYCLE_TERMINAL"),
+            ("**State: SUPERSEDED**\n- Current stage: `IMPLEMENTATION_PR`", "BLOCKED", "PACKET_LIFECYCLE_TERMINAL"),
+            ("**State: SOMETHING_NEW**\n- Current stage: `IMPLEMENTATION_PR`", "UNKNOWN", "PACKET_LIFECYCLE_UNKNOWN"),
         ]
-        for body, reason in cases:
+        for body, status, reason in cases:
             with self.subTest(reason=reason):
                 result = WorkspacePrepareService(
                     github=FakeGithub(body=body), owner=FakeOwner()
                 ).prepare_workspace(3808, MID)
-                self.assertEqual(result["status"], "BLOCKED")
+                self.assertEqual(result["status"], status)
                 self.assertIn(reason, result["reasonCodes"])
 
     def test_manifest_identity_must_be_unique(self):
@@ -119,6 +124,25 @@ class ServiceTests(unittest.TestCase):
         ).prepare_workspace(3808, MID)
         self.assertEqual(result["status"], "BLOCKED")
         self.assertIn("MANIFEST_NOT_FOUND", result["reasonCodes"])
+
+    def test_incidental_manifest_id_reference_is_ignored(self):
+        owner = FakeOwner()
+        comments = [
+            {"body": f"completion receipt references manifestId {MID}"},
+            {"body": manifest()},
+        ]
+        result = WorkspacePrepareService(
+            github=FakeGithub(comments=comments), owner=owner
+        ).prepare_workspace(3808, MID)
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(len(owner.calls), 1)
+
+    def test_owner_bridge_is_declared_as_package_data(self):
+        config = tomllib.loads(
+            (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text()
+        )
+        package_data = config["tool"]["setuptools"]["package-data"]
+        self.assertIn("owner_bridge.cjs", package_data["l_workspace_prepare_mcp"])
 
     def test_packet_state_conflict_is_fail_closed(self):
         with self.assertRaises(AdmissionError):

@@ -42,6 +42,14 @@ function input(overrides = {}) {
 
 function deps(value = manifest(), ownerValue = null) {
   return {
+    classifyPacketProjection() {
+      return {
+        disposition: 'PASS',
+        lifecycle: 'BLOCKED',
+        interactionStage: 'IMPLEMENTATION_PR',
+        reasonCodes: [],
+      };
+    },
     parseManifest() { return {status: 'VALID', value}; },
     validateManifestShape() {},
     validateEvidence() { return {ok: true}; },
@@ -86,6 +94,38 @@ test('exact evidence invokes only prepare-workspace and sanitizes result', () =>
   assert.equal(JSON.stringify(out).includes('branch'), false);
 });
 
+test('canonical terminal lifecycle blocks before owner effect', () => {
+  let called = false;
+  const d = deps();
+  d.classifyPacketProjection = () => ({
+    disposition: 'PASS',
+    lifecycle: 'CANCELLED',
+    interactionStage: 'IMPLEMENTATION_PR',
+    reasonCodes: [],
+  });
+  d.ownerRunCli = () => { called = true; throw new Error('must not run'); };
+  const out = bridge.run(input(), d);
+  assert.equal(out.status, 'BLOCKED');
+  assert.deepEqual(out.reasonCodes, ['PACKET_LIFECYCLE_TERMINAL']);
+  assert.equal(called, false);
+});
+
+test('unknown canonical lifecycle projection fails closed before owner effect', () => {
+  let called = false;
+  const d = deps();
+  d.classifyPacketProjection = () => ({
+    disposition: 'UNKNOWN',
+    lifecycle: null,
+    interactionStage: 'IMPLEMENTATION_PR',
+    reasonCodes: ['PACKET_LIFECYCLE_UNKNOWN'],
+  });
+  d.ownerRunCli = () => { called = true; throw new Error('must not run'); };
+  const out = bridge.run(input(), d);
+  assert.equal(out.status, 'UNKNOWN');
+  assert.deepEqual(out.reasonCodes, ['PACKET_LIFECYCLE_UNKNOWN']);
+  assert.equal(called, false);
+});
+
 test('packet hash mismatch blocks before effect', () => {
   let called = false;
   const d = deps(manifest({packetBodySha256: 'b'.repeat(64)}));
@@ -116,6 +156,26 @@ test('inactive or mismatched coordination evidence blocks before effect', () => 
   assert.equal(out.status, 'BLOCKED');
   assert.equal(called, false);
   assert.ok(out.reasonCodes.includes('LEASE_RELEASED'));
+});
+
+test('direct owner exceptions preserve bounded structured failures', () => {
+  const d = deps();
+  d.ownerRunCli = () => {
+    const error = new Error('private detail');
+    error.kind = 'CONFLICT';
+    error.reasonCodes = ['PROTECTED_MAIN_STALE'];
+    throw error;
+  };
+  const out = bridge.run(input(), d);
+  assert.equal(out.status, 'CONFLICT');
+  assert.deepEqual(out.reasonCodes, ['PROTECTED_MAIN_STALE']);
+  assert.equal(JSON.stringify(out).includes('private detail'), false);
+
+  d.ownerRunCli = () => { throw new Error('private surprise'); };
+  const fallback = bridge.run(input(), d);
+  assert.equal(fallback.status, 'UNKNOWN');
+  assert.deepEqual(fallback.reasonCodes, ['OWNER_INVOCATION_FAILED']);
+  assert.equal(JSON.stringify(fallback).includes('private surprise'), false);
 });
 
 test('owner failure exposes only stable reason codes', () => {

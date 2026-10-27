@@ -67,8 +67,7 @@ const CURRENT_OWNER_PATHS = Object.freeze([
   'products/chatgpt-mobile-coder-lab/device-ops/l-repository-owner/mcl-l-repository-owner.cjs',
 ]);
 const FIXED_GIT = '/usr/bin/git';
-const FIXED_TAR = '/usr/bin/tar';
-const ARCHIVE_MAX_BYTES = 4 * 1024 * 1024;
+const CURRENT_FILE_MAX_BYTES = 4 * 1024 * 1024;
 
 function fixedReadCommand(command, argv, options = {}) {
   return childProcess.spawnSync(command, argv, {
@@ -76,10 +75,11 @@ function fixedReadCommand(command, argv, options = {}) {
     input: options.input,
     shell: false,
     timeout: 15000,
-    maxBuffer: ARCHIVE_MAX_BYTES,
+    maxBuffer: CURRENT_FILE_MAX_BYTES,
     env: {
       PATH: '/usr/bin:/bin',
       HOME: process.env.HOME || '/home/alsl0',
+      GIT_NO_REPLACE_OBJECTS: '1',
     },
   });
 }
@@ -97,18 +97,17 @@ function currentDeps(mainSha, repoRoot = FIXED_REPO_ROOT) {
 
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-current-owner-'));
   try {
-    const archive = fixedReadCommand(
-      FIXED_GIT,
-      ['-C', repoRoot, 'archive', '--format=tar', mainSha, ...CURRENT_OWNER_PATHS],
-      {binary: true},
-    );
-    if (archive.error || archive.signal || archive.status !== 0 || !archive.stdout?.length) {
-      throw new Error('CURRENT_OWNER_ARCHIVE_FAILED');
-    }
-    const extract = fixedReadCommand(
-      FIXED_TAR, ['-xf', '-', '-C', temp], {binary: true, input: archive.stdout});
-    if (extract.error || extract.signal || extract.status !== 0) {
-      throw new Error('CURRENT_OWNER_ARCHIVE_FAILED');
+    for (const repoPath of CURRENT_OWNER_PATHS) {
+      const read = fixedReadCommand(
+        FIXED_GIT, ['-C', repoRoot, 'cat-file', 'blob', mainSha + ':' + repoPath],
+        {binary: true},
+      );
+      if (read.error || read.signal || read.status !== 0 || !read.stdout?.length) {
+        throw new Error('CURRENT_OWNER_BLOB_READ_FAILED');
+      }
+      const destination = path.join(temp, repoPath);
+      fs.mkdirSync(path.dirname(destination), {recursive: true, mode: 0o700});
+      fs.writeFileSync(destination, read.stdout, {mode: 0o600, flag: 'wx'});
     }
 
     const handoff = require(path.join(
@@ -262,11 +261,10 @@ if (require.main === module) process.exitCode = main();
 
 module.exports = {
   FALSE_AUTHORITY,
-  ARCHIVE_MAX_BYTES,
+  CURRENT_FILE_MAX_BYTES,
   CURRENT_OWNER_PATHS,
   FIXED_GIT,
   FIXED_REPO_ROOT,
-  FIXED_TAR,
   currentDeps,
   exactInput,
   result,

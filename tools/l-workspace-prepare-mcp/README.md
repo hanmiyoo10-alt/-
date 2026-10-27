@@ -46,10 +46,11 @@ existing L repository-owner manifest validator.
 
 The bridge never imports owner code from the possibly stale landing checkout.
 It requires the exact current-main commit object to exist in the landing Git
-object store, uses fixed read-only git archive plus fixed tar to materialize
-only the reviewed owner dependency files into a private temporary directory,
-and loads task-handoff, D-013 evidence validation, and the L repository owner
-from those exact current-main bytes. Missing current-main objects fail closed
+object store, disables Git replacement objects, and reads only the fixed
+reviewed dependency paths with raw git cat-file blob lookups into a private
+temporary directory. It then loads task-handoff, D-013 evidence validation,
+and the L repository owner from those exact current-main bytes. Missing
+current-main objects fail closed
 as CURRENT_MAIN_OBJECT_MISSING; the existing reviewed main-object materializer
 remains the separate prerequisite owner.
 

@@ -63,6 +63,17 @@ test('CLI is fixed and exposes no target selector', () => {
   }
 });
 
+test('defaultRunner has one fixed process-read timeout and no stale effect timeout reference', () => {
+  const source=fs.readFileSync(path.join(__dirname,'..','mcl-l-rdc-peer-session-cleanup.cjs'),'utf8');
+  assert.match(source,/const PROCESS_READ_TIMEOUT_MS = 7000;/);
+  assert.match(source,/timeout: PROCESS_READ_TIMEOUT_MS,/);
+  assert.equal(source.includes('EFFECT_TIMEOUT_MS'),false);
+  let result;
+  assert.doesNotThrow(()=>{ result=owner.defaultRunner(); });
+  assert.equal(typeof result,'object');
+  assert.equal(Number.isInteger(result.code),true);
+});
+
 test('classification preserves clean, peer, benign and fail-closed cases', () => {
   let r = owner.classifyCleanupRows(base(), 61);
   assert.equal(r.effectEligibility, 'ALREADY_CLEAN');

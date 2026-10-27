@@ -18,6 +18,7 @@ const EFFECT_WAIT_PER_TARGET_MS = 2000;
 const EFFECT_EVENT_DRAIN_MS = 2000;
 const EFFECT_STARTUP_MARGIN_MS = 15000;
 const EFFECT_RESULT_MARGIN_MS = 3000;
+const PROCESS_READ_TIMEOUT_MS = 7000;
 const EFFECT_MAX_BUFFER = 128 * 1024;
 const EFFECT_TEMP_PREFIX = 'mcl-rdc-peer-cleanup-';
 const WINDOWS_EPOCH_FILETIME = 116444736000000000n;
@@ -470,7 +471,7 @@ function defaultRunner() {
     encoding: 'utf8',
     shell: false,
     windowsHide: true,
-    timeout: EFFECT_TIMEOUT_MS,
+    timeout: PROCESS_READ_TIMEOUT_MS,
     maxBuffer: 4 * 1024 * 1024,
     env: {},
   });

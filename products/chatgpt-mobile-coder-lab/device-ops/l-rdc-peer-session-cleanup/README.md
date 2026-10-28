@@ -32,6 +32,39 @@ Add-Type receives only one owner-created private writable directory via `TEMP` a
 `TMP`; arbitrary inherited environment and caller temp paths are forbidden. The
 directory, handles and event subscription are cleaned on every path.
 
+## WSL single-peer-leaf pidfd profile
+
+The fixed L WSL2 profile composes the existing read-only
+`mcl-l-rdc-session-evidence.v2` admission with a deliberately smaller effect
+ceiling. It is eligible only when the current verified WSL command agent has
+exactly one current command root, exactly one additional non-benign direct peer,
+and that peer has zero descendants. Multiple peers, any peer descendant,
+unreadable/ambiguous topology, or identity drift fails closed.
+
+The WSL effect never uses a process group or session group because the natural L
+topology does not isolate the peer on those boundaries. It uses fixed
+`/usr/bin/python3` and pidfds for the exact agent, current-root, and peer
+process instances. Private guards bind PID + PPID + Linux `/proc/<pid>/stat`
+start-time identity.
+
+Immediately before termination, the helper:
+1. opens the exact pidfds and revalidates every guard;
+2. sends `SIGSTOP` only through the peer pidfd;
+3. requires the exact peer to become stopped;
+4. rechecks the same direct-child topology and zero-descendant condition while
+   the peer is frozen;
+5. sends `SIGCONT` and fails closed on any pre-kill mismatch;
+6. otherwise sends `SIGKILL` only through that exact peer pidfd and waits
+   boundedly for pidfd exit.
+
+The frozen-topology barrier prevents the exact stopped peer from creating a late
+child between the final zero-descendant proof and the pidfd termination effect.
+Missing/ambiguous helper acknowledgement cannot manufacture completion.
+
+The WSL profile accepts no caller PID, process, signal, helper, path, or timeout
+selector and exposes no generic `kill`, process-group, or session-group effect.
+A broader WSL peer tree requires a separately reviewed extension.
+
 ## Descendant-monitoring proof
 
 Every attempted termination requires a completed event drain. The helper enumerates

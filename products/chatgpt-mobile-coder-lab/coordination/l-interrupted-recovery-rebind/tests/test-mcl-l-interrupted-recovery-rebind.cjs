@@ -11,3 +11,48 @@ test('flock and current-lineage discovery',()=>{const s=fs.readFileSync(path.res
 test('fresh ledger gates stale-holder cleanup',()=>{const v=A(),st=P(v,{off:true});let n=0;a.throws(()=>o.cleanupStep(st,{cleanupStale:()=>n++},()=>P(v)),/D013_REACQUIRED_BEFORE_HOLDER_CLEANUP/);o.cleanupStep(st,{cleanupStale:(_m,l)=>{n++;a.equal(l,'fresh');return {status:'STALE_CLEANED'}}},()=>P(v,{off:true,l:'fresh'}));a.equal(n,1)});
 
 test('rebind publication binds final reacquire evidence',()=>{let v=A(),m=o.buildRebindManifest({activation:v,issueBody:'p',lease:lease(),acquiredGeneration:22,acquireEvidenceRef:'run:22',mainSha:main});a.ok(m.phaseId.endsWith('-g22'));v=A({rebindManifestId:m.manifestId,rebindManifestPayloadSha256:m.payloadSha256});a.equal(o.findRebindManifest(v,[{manifest:m}]).manifest.manifestId,m.manifestId);a.throws(()=>o.findRebindManifest(v,[{manifest:{...m,leaseEvidence:{...m.leaseEvidence,acquiredGeneration:23}}}]),/REBIND_MANIFEST_ACQUISITION_CONFLICT/);let cap,c=[];const d={buildManifest:x=>(cap=x,{manifestId:H('4'),payloadSha256:H('5'),phaseId:'3473-implementation-pr-recovery-rebind-g22'}),renderManifest:()=> 'm',renderHandoff:()=> 'h',readComments:()=>c,postComment:(_i,b)=>{let z=c.length+1;c.push({id:z,body:b});return z},updateActivation:U},fresh=P(v,{h:'ABSENT'});fresh.authority.mainSha=S('8');o.publishRebind(fresh,d,()=>fresh);a.equal(cap.acquiredGeneration,22);a.equal(cap.acquireEvidenceRef,'run:22');a.equal(cap.mainSha,main);a.equal(o.expectedGenerationForPlan({ledgerGeneration:9,reasonCodes:['LEASE_ALREADY_RELEASED']},'LEASE_ALREADY_RELEASED'),9);const s=fs.readFileSync(path.resolve(__dirname,'../mcl-l-interrupted-recovery-rebind.cjs'),'utf8');for(const q of ["'commit'","'push'","'reset'","'stash'","'rebase'"])a.ok(!s.includes(q))});
+
+
+test('session admission uses native WSL node and fixed inspect only',()=>{
+  const calls=[];
+  const receipt={schema:'mcl-l-rdc-session-evidence.v2',status:'PASS',executor:'L',
+    sessionState:'ABSENT',reasonCode:'SOLE_RDC_COMMAND_SESSION',
+    owner:'mcl-l-rdc-session-evidence',details:'withheld',
+    authority:{repositoryMutationAuthorized:false,deviceMutationAuthorized:false,
+      mergeAuthorized:false,releaseAuthorized:false,productionAuthorized:false}};
+  const deps=o.defaultDeps({client:{},binaryRunner:(args)=>{
+    calls.push(args);
+    return {code:0,stdout:JSON.stringify(receipt),stderr:''};
+  }});
+  a.deepEqual(deps.readSession(),receipt);
+  a.equal(calls.length,1);
+  a.equal(calls[0][0],process.execPath);
+  a.equal(calls[0][2],'inspect');
+  a.ok(calls[0][1].endsWith('/products/chatgpt-mobile-coder-lab/device-ops/l-rdc-session-evidence/mcl-l-rdc-session-evidence.cjs'));
+  const source=fs.readFileSync(path.resolve(__dirname,'../mcl-l-interrupted-recovery-rebind.cjs'),'utf8');
+  a.equal(source.includes("runner(['wslpath', '-w', source])"),false);
+  a.equal(source.includes("/mnt/c/Program Files/nodejs/node.exe"),false);
+});
+
+test('session admission preserves bounded semantic UNKNOWN exit 3',()=>{
+  const receipt={schema:'mcl-l-rdc-session-evidence.v2',status:'UNKNOWN',executor:'L',
+    sessionState:'UNKNOWN',reasonCode:'RDC_AGENT_TOPOLOGY_AMBIGUOUS',
+    owner:'mcl-l-rdc-session-evidence',details:'withheld',
+    authority:{repositoryMutationAuthorized:false,deviceMutationAuthorized:false,
+      mergeAuthorized:false,releaseAuthorized:false,productionAuthorized:false}};
+  const deps=o.defaultDeps({client:{},binaryRunner:()=>({
+    code:3,stdout:JSON.stringify(receipt),stderr:''
+  })});
+  a.deepEqual(deps.readSession(),receipt);
+});
+
+test('session admission rejects execution failure and invalid JSON',()=>{
+  let deps=o.defaultDeps({client:{},binaryRunner:()=>({
+    code:64,stdout:'{}',stderr:''
+  })});
+  a.throws(()=>deps.readSession(),/SESSION_OWNER_EXECUTION_FAILED/);
+  deps=o.defaultDeps({client:{},binaryRunner:()=>({
+    code:0,stdout:'not-json',stderr:''
+  })});
+  a.throws(()=>deps.readSession(),/SESSION_OWNER_EXECUTION_FAILED/);
+});

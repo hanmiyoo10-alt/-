@@ -263,14 +263,12 @@ function readPrState(branch, runner = stageEntry.runDefault) {
 }
 function runSessionEvidence(runner = defaultBinaryRunner) {
   const source = path.join(ROOT, 'products/chatgpt-mobile-coder-lab/device-ops/l-rdc-session-evidence/mcl-l-rdc-session-evidence.cjs');
-  const converted = runner(['wslpath', '-w', source]);
-  if (converted.code !== 0) throw new RecoveryError('UNKNOWN', ['SESSION_OWNER_PATH_UNAVAILABLE']);
-  const winSource = String(converted.stdout || '').trim();
-  if (!winSource) throw new RecoveryError('UNKNOWN', ['SESSION_OWNER_PATH_UNAVAILABLE']);
-  const result = runner(['/mnt/c/Program Files/nodejs/node.exe', winSource, 'inspect']);
+  const result = runner([process.execPath, source, 'inspect']);
   let value = null;
   try { value = JSON.parse(String(result.stdout || '').trim()); } catch { value = null; }
-  if (result.code !== 0 || !value) throw new RecoveryError('UNKNOWN', ['SESSION_OWNER_EXECUTION_FAILED']);
+  if (![0, 3].includes(result.code) || !value) {
+    throw new RecoveryError('UNKNOWN', ['SESSION_OWNER_EXECUTION_FAILED']);
+  }
   return value;
 }
 function buildRecoveryInput(snapshot, sessionEvidence, mainSha) {

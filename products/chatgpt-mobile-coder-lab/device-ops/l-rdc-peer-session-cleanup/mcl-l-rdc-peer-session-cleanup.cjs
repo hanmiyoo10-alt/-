@@ -23,6 +23,10 @@ const EFFECT_MAX_BUFFER = 128 * 1024;
 const EFFECT_TEMP_PREFIX = 'mcl-rdc-peer-cleanup-';
 const WINDOWS_EPOCH_FILETIME = 116444736000000000n;
 const FILETIME_TICKS_PER_MS = 10000n;
+const WSL_PYTHON = '/usr/bin/python3';
+const WSL_PROC_ROOT = '/proc';
+const WSL_HELPER_TIMEOUT_MS = 7000;
+const WSL_HELPER_MAX_BUFFER = 64 * 1024;
 
 const PRIVATE_OBSERVER_SOURCE = [
   "$ErrorActionPreference='Stop'",
@@ -207,6 +211,213 @@ const HANDLE_HELPER_ARGS = Object.freeze([
   '-EncodedCommand',
   Buffer.from(HANDLE_HELPER_SOURCE, 'utf16le').toString('base64'),
 ]);
+const WSL_PIDFD_HELPER_SOURCE = [
+  'import json',
+  'import os',
+  'import select',
+  'import signal',
+  'import sys',
+  'import time',
+  '',
+  'PROC = "/proc"',
+  'STOP_WAIT_SECONDS = 1.5',
+  'EXIT_WAIT_MS = 2000',
+  '',
+  'def emit(status, reason, attempted=0, terminated=0, monitoring=False, resumed=False):',
+  '    print(json.dumps({"status": status, "reasonCode": reason, "attemptedCount": attempted, "terminatedCount": terminated, "monitoringComplete": bool(monitoring), "resumed": bool(resumed)}, separators=(",", ":")))',
+  '    raise SystemExit(0)',
+  '',
+  'def read_stat(pid):',
+  '    with open(PROC + "/" + str(pid) + "/stat", "r", encoding="utf-8") as handle:',
+  '        value = handle.read()',
+  '    end = value.rfind(")")',
+  '    if end < 0:',
+  '        raise ValueError("STAT_INVALID")',
+  '    fields = value[end + 2:].strip().split()',
+  '    if len(fields) < 20:',
+  '        raise ValueError("STAT_INVALID")',
+  '    return {"state": fields[0], "ppid": int(fields[1]), "startTicks": fields[19]}',
+  '',
+  'def valid_guard(value):',
+  '    return isinstance(value, dict) and set(value) == {"pid", "ppid", "startTicks"} and isinstance(value["pid"], int) and value["pid"] > 0 and isinstance(value["ppid"], int) and value["ppid"] >= 0 and isinstance(value["startTicks"], str) and value["startTicks"].isdigit()',
+  '',
+  'def guard_matches(value):',
+  '    observed = read_stat(value["pid"])',
+  '    return observed["ppid"] == value["ppid"] and observed["startTicks"] == value["startTicks"]',
+  '',
+  'def direct_children(parent_pid):',
+  '    found = []',
+  '    for name in os.listdir(PROC):',
+  '        if not name.isdigit():',
+  '            continue',
+  '        pid = int(name)',
+  '        if pid <= 0:',
+  '            continue',
+  '        try:',
+  '            observed = read_stat(pid)',
+  '        except FileNotFoundError:',
+  '            continue',
+  '        if observed["ppid"] == parent_pid:',
+  '            found.append(pid)',
+  '    return sorted(found)',
+  '',
+  'try:',
+  '    payload = json.load(sys.stdin)',
+  'except Exception:',
+  '    emit("UNKNOWN", "WSL_PIDFD_HELPER_INPUT_INVALID")',
+  '',
+  'if not isinstance(payload, dict) or set(payload) != {"agent", "currentRoot", "peer"} or not all(valid_guard(payload.get(key)) for key in ("agent", "currentRoot", "peer")):',
+  '    emit("BLOCKED", "WSL_PIDFD_HELPER_INPUT_INVALID")',
+  '',
+  'agent = payload["agent"]',
+  'root = payload["currentRoot"]',
+  'peer = payload["peer"]',
+  'fds = {}',
+  'peer_stopped = False',
+  'kill_sent = False',
+  '',
+  'try:',
+  '    for key in ("agent", "currentRoot", "peer"):',
+  '        try:',
+  '            fds[key] = os.pidfd_open(payload[key]["pid"], 0)',
+  '        except Exception:',
+  '            emit("BLOCKED", "WSL_PIDFD_OPEN_FAILED")',
+  '',
+  '    try:',
+  '        if not all(guard_matches(payload[key]) for key in ("agent", "currentRoot", "peer")):',
+  '            emit("BLOCKED", "WSL_GUARD_DRIFT_BEFORE_STOP")',
+  '        if direct_children(agent["pid"]) != sorted([root["pid"], peer["pid"]]):',
+  '            emit("BLOCKED", "WSL_TOPOLOGY_DRIFT_BEFORE_STOP")',
+  '        if direct_children(peer["pid"]):',
+  '            emit("BLOCKED", "WSL_PEER_DESCENDANT_PRESENT")',
+  '    except Exception:',
+  '        emit("UNKNOWN", "WSL_GUARD_READ_FAILED")',
+  '',
+  '    try:',
+  '        signal.pidfd_send_signal(fds["peer"], signal.SIGSTOP, None, 0)',
+  '        peer_stopped = True',
+  '    except Exception:',
+  '        emit("UNKNOWN", "WSL_STOP_FAILED")',
+  '',
+  '    deadline = time.monotonic() + STOP_WAIT_SECONDS',
+  '    stopped = False',
+  '    while time.monotonic() < deadline:',
+  '        try:',
+  '            if read_stat(peer["pid"])["state"] in ("T", "t"):',
+  '                stopped = True',
+  '                break',
+  '        except FileNotFoundError:',
+  '            break',
+  '        except Exception:',
+  '            break',
+  '        time.sleep(0.02)',
+  '',
+  '    if not stopped:',
+  '        try:',
+  '            signal.pidfd_send_signal(fds["peer"], signal.SIGCONT, None, 0)',
+  '            peer_stopped = False',
+  '            emit("UNKNOWN", "WSL_STOP_NOT_OBSERVED", resumed=True)',
+  '        except Exception:',
+  '            emit("UNKNOWN", "WSL_CONTINUE_FAILED")',
+  '',
+  '    frozen_ok = False',
+  '    try:',
+  '        frozen_ok = all(guard_matches(payload[key]) for key in ("agent", "currentRoot", "peer")) and direct_children(agent["pid"]) == sorted([root["pid"], peer["pid"]]) and direct_children(peer["pid"]) == []',
+  '    except Exception:',
+  '        frozen_ok = False',
+  '',
+  '    if not frozen_ok:',
+  '        try:',
+  '            signal.pidfd_send_signal(fds["peer"], signal.SIGCONT, None, 0)',
+  '            peer_stopped = False',
+  '            emit("BLOCKED", "WSL_FROZEN_TOPOLOGY_DRIFT", resumed=True)',
+  '        except Exception:',
+  '            emit("UNKNOWN", "WSL_CONTINUE_FAILED")',
+  '',
+  '    try:',
+  '        signal.pidfd_send_signal(fds["peer"], signal.SIGKILL, None, 0)',
+  '        kill_sent = True',
+  '    except Exception:',
+  '        try:',
+  '            signal.pidfd_send_signal(fds["peer"], signal.SIGCONT, None, 0)',
+  '            peer_stopped = False',
+  '            emit("UNKNOWN", "WSL_KILL_FAILED", attempted=1, monitoring=True, resumed=True)',
+  '        except Exception:',
+  '            emit("UNKNOWN", "WSL_CONTINUE_FAILED", attempted=1, monitoring=True)',
+  '',
+  '    poller = select.poll()',
+  '    poller.register(fds["peer"], select.POLLIN)',
+  '    if not poller.poll(EXIT_WAIT_MS):',
+  '        emit("UNKNOWN", "WSL_PIDFD_EXIT_TIMEOUT", attempted=1, monitoring=True)',
+  '',
+  '    emit("COMPLETE", "WSL_PIDFD_PEER_TERMINATION_COMPLETE", attempted=1, terminated=1, monitoring=True)',
+  'except SystemExit:',
+  '    raise',
+  'except Exception:',
+  '    emit("UNKNOWN", "WSL_PIDFD_HELPER_FAILED")',
+  'finally:',
+  '    if peer_stopped and not kill_sent and "peer" in fds:',
+  '        try:',
+  '            signal.pidfd_send_signal(fds["peer"], signal.SIGCONT, None, 0)',
+  '        except Exception:',
+  '            pass',
+  '    for fd in fds.values():',
+  '        try:',
+  '            os.close(fd)',
+  '        except Exception:',
+  '            pass',
+].join('\n');
+const WSL_PIDFD_HELPER_ARGS = Object.freeze(['-c', WSL_PIDFD_HELPER_SOURCE]);
+
+const WSL_PIDFD_RESUME_SOURCE = [
+  'import json',
+  'import os',
+  'import signal',
+  'import sys',
+  '',
+  'def read_stat(pid):',
+  '    with open("/proc/" + str(pid) + "/stat", "r", encoding="utf-8") as handle:',
+  '        value = handle.read()',
+  '    end = value.rfind(")")',
+  '    if end < 0:',
+  '        raise ValueError("STAT_INVALID")',
+  '    fields = value[end + 2:].strip().split()',
+  '    if len(fields) < 20:',
+  '        raise ValueError("STAT_INVALID")',
+  '    return {"ppid": int(fields[1]), "startTicks": fields[19]}',
+  '',
+  'try:',
+  '    peer = json.load(sys.stdin)',
+  '    if not isinstance(peer, dict) or set(peer) != {"pid", "ppid", "startTicks"}:',
+  '        print(json.dumps({"status":"FAILED"}, separators=(",", ":")))',
+  '        raise SystemExit(0)',
+  '    fd = os.pidfd_open(peer["pid"], 0)',
+  'except ProcessLookupError:',
+  '    print(json.dumps({"status":"NOT_PRESENT"}, separators=(",", ":")))',
+  '    raise SystemExit(0)',
+  'except Exception:',
+  '    print(json.dumps({"status":"FAILED"}, separators=(",", ":")))',
+  '    raise SystemExit(0)',
+  '',
+  'try:',
+  '    observed = read_stat(peer["pid"])',
+  '    if observed["ppid"] != peer["ppid"] or observed["startTicks"] != peer["startTicks"]:',
+  '        print(json.dumps({"status":"DRIFT"}, separators=(",", ":")))',
+  '    else:',
+  '        signal.pidfd_send_signal(fd, signal.SIGCONT, None, 0)',
+  '        print(json.dumps({"status":"RESUMED"}, separators=(",", ":")))',
+  'except ProcessLookupError:',
+  '    print(json.dumps({"status":"NOT_PRESENT"}, separators=(",", ":")))',
+  'except Exception:',
+  '    print(json.dumps({"status":"FAILED"}, separators=(",", ":")))',
+  'finally:',
+  '    try:',
+  '        os.close(fd)',
+  '    except Exception:',
+  '        pass',
+].join('\n');
+const WSL_PIDFD_RESUME_ARGS = Object.freeze(['-c', WSL_PIDFD_RESUME_SOURCE]);
+
 const FALSE_AUTHORITY = Object.freeze({
   repositoryMutationAuthorized: false,
   deviceMutationAuthorized: false,
@@ -684,7 +895,536 @@ function classifyCleanupRows(rows, selfPid) {
   };
 }
 
-function observe({platform, arch, selfPid, runner}) {
+function parseWslStatText(text) {
+  const value = String(text || '');
+  const end = value.lastIndexOf(')');
+  if (end < 0) throw new Error('WSL_STAT_INVALID');
+  const fields = value.slice(end + 2).trim().split(/\s+/);
+  const ppid = Number(fields[1]);
+  const startTicks = fields[19];
+  const state = fields[0];
+  if (!Number.isSafeInteger(ppid) || ppid < 0
+      || typeof startTicks !== 'string' || !/^[0-9]+$/.test(startTicks)
+      || typeof state !== 'string' || state.length !== 1) {
+    throw new Error('WSL_STAT_INVALID');
+  }
+  return {ppid, startTicks, state};
+}
+
+function defaultWslStatReader(procRoot, pid) {
+  if (procRoot !== WSL_PROC_ROOT || !Number.isSafeInteger(pid) || pid <= 0) {
+    throw new Error('WSL_STAT_INPUT_INVALID');
+  }
+  return parseWslStatText(fs.readFileSync(path.join(procRoot, String(pid), 'stat'), 'utf8'));
+}
+
+function wslGuardFor(row, {
+  procRoot = WSL_PROC_ROOT,
+  statReader = defaultWslStatReader,
+} = {}) {
+  if (!row || !Number.isSafeInteger(row.pid) || row.pid <= 0
+      || !Number.isSafeInteger(row.ppid) || row.ppid < 0) {
+    throw new Error('WSL_GUARD_ROW_INVALID');
+  }
+  const observed = statReader(procRoot, row.pid);
+  if (!observed || observed.ppid !== row.ppid
+      || typeof observed.startTicks !== 'string'
+      || !/^[0-9]+$/.test(observed.startTicks)) {
+    throw new Error('WSL_GUARD_IDENTITY_MISMATCH');
+  }
+  return Object.freeze({
+    pid: row.pid,
+    ppid: row.ppid,
+    startTicks: observed.startTicks,
+  });
+}
+
+function sameWslGuard(left, right) {
+  return Boolean(left && right
+    && left.pid === right.pid
+    && left.ppid === right.ppid
+    && left.startTicks === right.startTicks);
+}
+
+function buildWslCurrentContext(rows, selfPid) {
+  const byPid = new Map();
+  for (const row of rows) {
+    if (!row || !Number.isSafeInteger(row.pid) || row.pid <= 0 || byPid.has(row.pid)) {
+      return {error: 'WSL_CURRENT_CONTEXT_INVALID'};
+    }
+    byPid.set(row.pid, row);
+  }
+  const self = byPid.get(selfPid);
+  if (!self) return {error: 'WSL_CURRENT_CONTEXT_AMBIGUOUS'};
+
+  const chain = [self];
+  const seen = new Set([self.pid]);
+  let current = self;
+  for (let depth = 1; depth < MAX_ANCESTOR_DEPTH && current.ppid > 0; depth += 1) {
+    const parent = byPid.get(current.ppid);
+    if (!parent) break;
+    if (seen.has(parent.pid)) return {error: 'WSL_CURRENT_CONTEXT_AMBIGUOUS'};
+    seen.add(parent.pid);
+    chain.push(parent);
+    current = parent;
+  }
+  if (current.ppid > 0 && byPid.has(current.ppid)) {
+    return {error: 'WSL_CURRENT_CONTEXT_AMBIGUOUS'};
+  }
+
+  const candidates = [];
+  for (let index = 1; index < chain.length; index += 1) {
+    const identity = sessionEvidence.wslAgentIdentity(chain[index], byPid);
+    if (identity) {
+      candidates.push({agent: chain[index], currentRoot: chain[index - 1]});
+    }
+  }
+  if (candidates.length !== 1) return {error: 'WSL_CURRENT_AGENT_AMBIGUOUS'};
+  return {
+    error: null,
+    byPid,
+    chain,
+    agent: candidates[0].agent,
+    currentRoot: candidates[0].currentRoot,
+  };
+}
+
+function classifyWslCleanupRows(rows, selfPid, {
+  procRoot = WSL_PROC_ROOT,
+  statReader = defaultWslStatReader,
+} = {}) {
+  let normalizedRows;
+  try {
+    normalizedRows = rows.map((row) => sessionEvidence.normalizeWslRecord(row));
+  } catch {
+    return unknown('RDC_AGENT_TOPOLOGY_AMBIGUOUS');
+  }
+  const topology = sessionEvidence.classifyWslProcessTable(normalizedRows, selfPid);
+  if (topology.sessionState === 'UNKNOWN') {
+    return unknown(topology.reasonCode || 'RDC_AGENT_TOPOLOGY_AMBIGUOUS');
+  }
+
+  const current = buildWslCurrentContext(normalizedRows, selfPid);
+  if (current.error) return unknown(current.error);
+
+  const direct = normalizedRows.filter((row) => row.ppid === current.agent.pid);
+  if (direct.filter((row) => row.pid === current.currentRoot.pid).length !== 1) {
+    return unknown('WSL_CURRENT_ROOT_AMBIGUOUS');
+  }
+  const peers = direct.filter((row) => (
+    row.pid !== current.currentRoot.pid
+    && !sessionEvidence.isWslBenignDirectChild(row)
+  ));
+
+  let agentGuard;
+  let currentRootGuard;
+  try {
+    agentGuard = wslGuardFor(current.agent, {procRoot, statReader});
+    currentRootGuard = wslGuardFor(current.currentRoot, {procRoot, statReader});
+  } catch {
+    return unknown('WSL_GUARD_EVIDENCE_UNKNOWN', {peerShellCount: peers.length});
+  }
+
+  if (topology.sessionState === 'ABSENT') {
+    if (peers.length !== 0 || topology.reasonCode !== 'SOLE_RDC_COMMAND_SESSION') {
+      return unknown('WSL_SESSION_EVIDENCE_CLEAN_CONTRADICTION');
+    }
+    return {
+      status: 'PASS',
+      effectEligibility: 'ALREADY_CLEAN',
+      reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+      peerShellCount: 0,
+      cleanupCandidateCount: 0,
+      blockedCandidateCount: 0,
+      context: {
+        rows,
+        agent: current.agent,
+        currentRoot: current.currentRoot,
+        peer: null,
+        agentGuard,
+        currentRootGuard,
+        peerGuard: null,
+      },
+    };
+  }
+
+  if (topology.sessionState !== 'PRESENT'
+      || topology.reasonCode !== 'OTHER_RDC_COMMAND_SESSION_PRESENT') {
+    return unknown('WSL_SESSION_EVIDENCE_PRESENT_CONTRADICTION', {
+      peerShellCount: peers.length,
+    });
+  }
+  if (peers.length !== 1) {
+    return blocked('WSL_PEER_CARDINALITY_BLOCKED', {
+      peerShellCount: peers.length,
+      blockedCandidateCount: peers.length,
+    });
+  }
+  if (direct.length !== 2) {
+    return blocked('WSL_DIRECT_CHILD_SET_BLOCKED', {
+      peerShellCount: peers.length,
+      blockedCandidateCount: 1,
+    });
+  }
+  const peer = peers[0];
+  if (normalizedRows.some((row) => row.ppid === peer.pid)) {
+    return blocked('WSL_PEER_DESCENDANT_PRESENT', {
+      peerShellCount: 1,
+      blockedCandidateCount: 1,
+    });
+  }
+
+  let peerGuard;
+  try {
+    peerGuard = wslGuardFor(peer, {procRoot, statReader});
+  } catch {
+    return unknown('WSL_GUARD_EVIDENCE_UNKNOWN', {peerShellCount: 1});
+  }
+
+  return {
+    status: 'PASS',
+    effectEligibility: 'ELIGIBLE',
+    reasonCode: 'WSL_SINGLE_PEER_LEAF_ELIGIBLE',
+    peerShellCount: 1,
+    cleanupCandidateCount: 1,
+    blockedCandidateCount: 0,
+    context: {
+      rows: normalizedRows,
+      agent: current.agent,
+      currentRoot: current.currentRoot,
+      peer,
+      agentGuard,
+      currentRootGuard,
+      peerGuard,
+    },
+  };
+}
+
+function observeWsl({
+  selfPid,
+  cwd,
+  osRelease,
+  procRoot,
+  wslReader,
+  wslStatReader,
+}) {
+  if (!sessionEvidence.isLWorkspaceCwd(cwd) || !sessionEvidence.isWslRelease(osRelease)) {
+    return {...unknown('EXECUTION_PROFILE_UNKNOWN'), rows: []};
+  }
+  let rows;
+  try {
+    rows = wslReader(procRoot);
+  } catch {
+    return {...unknown('RDC_PROCESS_READ_FAILED'), rows: []};
+  }
+  const classified = classifyWslCleanupRows(rows, selfPid, {
+    procRoot,
+    statReader: wslStatReader,
+  });
+  return {...classified, rows};
+}
+
+function validateWslGuard(value) {
+  return Boolean(value
+    && Number.isSafeInteger(value.pid) && value.pid > 0
+    && Number.isSafeInteger(value.ppid) && value.ppid >= 0
+    && typeof value.startTicks === 'string'
+    && /^[0-9]+$/.test(value.startTicks));
+}
+
+function resumeWslPeerGuard(peer, {
+  spawnSync = childProcess.spawnSync,
+} = {}) {
+  if (!validateWslGuard(peer)) return {status:'FAILED'};
+  const result = spawnSync(WSL_PYTHON, WSL_PIDFD_RESUME_ARGS, {
+    input: JSON.stringify(peer),
+    encoding: 'utf8',
+    shell: false,
+    timeout: 2000,
+    maxBuffer: 16 * 1024,
+    env: {},
+  });
+  if (result?.error || result?.signal || (result?.status ?? 1) !== 0) {
+    return {status:'FAILED'};
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(String(result.stdout || '').trim());
+  } catch {
+    return {status:'FAILED'};
+  }
+  if (!parsed || Object.keys(parsed).length !== 1
+      || !['RESUMED','NOT_PRESENT','DRIFT','FAILED'].includes(parsed.status)) {
+    return {status:'FAILED'};
+  }
+  return {status:parsed.status};
+}
+
+function defaultWslEffectRunner({agent, currentRoot, peer}, {
+  spawnSync = childProcess.spawnSync,
+} = {}) {
+  if (![agent, currentRoot, peer].every(validateWslGuard)) {
+    return {
+      status: 'BLOCKED',
+      reasonCode: 'WSL_PIDFD_HELPER_INPUT_INVALID',
+      attemptedCount: 0,
+      terminatedCount: 0,
+      monitoringComplete: false,
+      resumed: false,
+      error: null,
+      signal: null,
+    };
+  }
+
+  const result = spawnSync(WSL_PYTHON, WSL_PIDFD_HELPER_ARGS, {
+    input: JSON.stringify({agent, currentRoot, peer}),
+    encoding: 'utf8',
+    shell: false,
+    timeout: WSL_HELPER_TIMEOUT_MS,
+    maxBuffer: WSL_HELPER_MAX_BUFFER,
+    env: {},
+  });
+
+  const timedOut = result?.error?.code === 'ETIMEDOUT' || result?.signal === 'SIGTERM';
+  if (timedOut) {
+    const recovery = resumeWslPeerGuard(peer, {spawnSync});
+    const resumed = recovery.status === 'RESUMED';
+    return {
+      status: 'UNKNOWN',
+      reasonCode: resumed
+        ? 'WSL_PIDFD_HELPER_TIMEOUT_RESUMED'
+        : 'WSL_PIDFD_HELPER_TIMEOUT_RECOVERY_UNPROVEN',
+      attemptedCount: 0,
+      terminatedCount: 0,
+      monitoringComplete: false,
+      resumed,
+      error: result?.error || null,
+      signal: result?.signal || null,
+    };
+  }
+  if (result?.error || result?.signal) {
+    return {
+      status: 'UNKNOWN',
+      reasonCode: 'WSL_PIDFD_HELPER_FAILED',
+      attemptedCount: 0,
+      terminatedCount: 0,
+      monitoringComplete: false,
+      resumed: false,
+      error: result?.error || null,
+      signal: result?.signal || null,
+    };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(String(result?.stdout || '').trim());
+  } catch {
+    parsed = null;
+  }
+  const expectedKeys = [
+    'attemptedCount', 'monitoringComplete', 'reasonCode',
+    'resumed', 'status', 'terminatedCount',
+  ];
+  const keys = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? Object.keys(parsed).sort()
+    : [];
+  const valid = parsed
+    && JSON.stringify(keys) === JSON.stringify(expectedKeys)
+    && ['COMPLETE', 'BLOCKED', 'UNKNOWN'].includes(parsed.status)
+    && typeof parsed.reasonCode === 'string'
+    && /^WSL_[A-Z0-9_]+$/.test(parsed.reasonCode)
+    && Number.isSafeInteger(parsed.attemptedCount)
+    && parsed.attemptedCount >= 0 && parsed.attemptedCount <= 1
+    && Number.isSafeInteger(parsed.terminatedCount)
+    && parsed.terminatedCount >= 0 && parsed.terminatedCount <= 1
+    && typeof parsed.monitoringComplete === 'boolean'
+    && typeof parsed.resumed === 'boolean';
+  if (!valid) {
+    return {
+      status: 'UNKNOWN',
+      reasonCode: 'WSL_PIDFD_HELPER_OUTPUT_INVALID',
+      attemptedCount: 0,
+      terminatedCount: 0,
+      monitoringComplete: false,
+      resumed: false,
+      error: null,
+      signal: null,
+    };
+  }
+  return {...parsed, error: null, signal: null};
+}
+
+function sameWslAnchors(left, right) {
+  return Boolean(left && right
+    && sameWslGuard(left.agentGuard, right.agentGuard)
+    && sameWslGuard(left.currentRootGuard, right.currentRootGuard));
+}
+
+function cleanupWslLocal({
+  confirm = false,
+  platform = process.platform,
+  arch = process.arch,
+  selfPid = process.pid,
+  cwd = process.cwd(),
+  osRelease = os.release(),
+  procRoot = WSL_PROC_ROOT,
+  wslReader = sessionEvidence.defaultWslReader,
+  wslStatReader = defaultWslStatReader,
+  wslEffectRunner = defaultWslEffectRunner,
+} = {}) {
+  if (!confirm) {
+    return publicReceipt({
+      status: 'BLOCKED',
+      operation: 'cleanup',
+      effectEligibility: 'BLOCKED',
+      effectDisposition: 'BLOCKED',
+      reasonCode: 'OPERATOR_IDLE_CONFIRMATION_REQUIRED',
+    });
+  }
+
+  const observeNow = () => observe({
+    platform, arch, selfPid, cwd, osRelease, procRoot,
+    wslReader, wslStatReader,
+  });
+  const initial = observeNow();
+  if (initial.effectEligibility === 'ALREADY_CLEAN') {
+    return publicReceipt({
+      status: 'PASS',
+      operation: 'cleanup',
+      effectEligibility: 'ALREADY_CLEAN',
+      effectDisposition: 'NO_EFFECT',
+      reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+    });
+  }
+  if (initial.effectEligibility !== 'ELIGIBLE' || !initial.context) {
+    return publicReceipt({
+      status: initial.status,
+      operation: 'cleanup',
+      effectEligibility: initial.effectEligibility,
+      effectDisposition: initial.status === 'UNKNOWN' ? 'UNKNOWN' : 'BLOCKED',
+      peerShellCount: initial.peerShellCount,
+      cleanupCandidateCount: initial.cleanupCandidateCount,
+      blockedCandidateCount: initial.blockedCandidateCount,
+      remainingPeerShellCount: initial.peerShellCount,
+      reasonCode: initial.reasonCode,
+    });
+  }
+
+  const expected = initial.context;
+  const pre = observeNow();
+  if (pre.effectEligibility !== 'ELIGIBLE' || !pre.context
+      || !sameWslAnchors(pre.context, expected)
+      || !sameWslGuard(pre.context.peerGuard, expected.peerGuard)) {
+    return publicReceipt({
+      status: pre.status === 'UNKNOWN' ? 'UNKNOWN' : 'BLOCKED',
+      operation: 'cleanup',
+      effectEligibility: pre.status === 'UNKNOWN' ? 'UNKNOWN' : 'BLOCKED',
+      effectDisposition: pre.status === 'UNKNOWN' ? 'UNKNOWN' : 'BLOCKED',
+      peerShellCount: initial.peerShellCount,
+      cleanupCandidateCount: initial.cleanupCandidateCount,
+      remainingPeerShellCount: pre.peerShellCount,
+      reasonCode: pre.status === 'UNKNOWN'
+        ? pre.reasonCode
+        : 'TARGET_GUARD_DRIFT_BEFORE_EFFECT',
+    });
+  }
+
+  let effectResult;
+  try {
+    effectResult = wslEffectRunner({
+      agent: pre.context.agentGuard,
+      currentRoot: pre.context.currentRootGuard,
+      peer: pre.context.peerGuard,
+    });
+  } catch {
+    effectResult = {
+      status: 'UNKNOWN',
+      reasonCode: 'WSL_PIDFD_HELPER_FAILED',
+      attemptedCount: 0,
+      terminatedCount: 0,
+      monitoringComplete: false,
+      resumed: false,
+    };
+  }
+
+  const post = observeNow();
+  const completeEffect = effectResult?.status === 'COMPLETE'
+    && effectResult?.attemptedCount === 1
+    && effectResult?.terminatedCount === 1
+    && effectResult?.monitoringComplete === true;
+
+  if (!completeEffect) {
+    return publicReceipt({
+      status: effectResult?.status === 'BLOCKED' ? 'BLOCKED' : 'UNKNOWN',
+      operation: 'cleanup',
+      effectEligibility: effectResult?.status === 'BLOCKED' ? 'BLOCKED' : 'UNKNOWN',
+      effectDisposition: effectResult?.attemptedCount > 0 ? 'PARTIAL'
+        : effectResult?.status === 'BLOCKED' ? 'BLOCKED' : 'UNKNOWN',
+      peerShellCount: initial.peerShellCount,
+      cleanupCandidateCount: initial.cleanupCandidateCount,
+      effectCount: 0,
+      remainingPeerShellCount: post.peerShellCount,
+      reasonCode: effectResult?.reasonCode || 'WSL_PIDFD_HELPER_FAILED',
+    });
+  }
+
+  if (post.status === 'UNKNOWN') {
+    return publicReceipt({
+      status: 'UNKNOWN',
+      operation: 'cleanup',
+      effectEligibility: 'UNKNOWN',
+      effectDisposition: 'PARTIAL',
+      peerShellCount: initial.peerShellCount,
+      cleanupCandidateCount: initial.cleanupCandidateCount,
+      effectCount: 1,
+      remainingPeerShellCount: post.peerShellCount,
+      reasonCode: post.reasonCode,
+    });
+  }
+  if (post.effectEligibility !== 'ALREADY_CLEAN' || !post.context
+      || !sameWslAnchors(post.context, expected)) {
+    return publicReceipt({
+      status: 'BLOCKED',
+      operation: 'cleanup',
+      effectEligibility: 'BLOCKED',
+      effectDisposition: 'PARTIAL',
+      peerShellCount: initial.peerShellCount,
+      cleanupCandidateCount: initial.cleanupCandidateCount,
+      effectCount: 1,
+      remainingPeerShellCount: post.peerShellCount,
+      reasonCode: 'FINAL_SESSION_EVIDENCE_NOT_ABSENT',
+    });
+  }
+
+  return publicReceipt({
+    status: 'PASS',
+    operation: 'cleanup',
+    effectEligibility: 'ELIGIBLE',
+    effectDisposition: 'COMPLETE',
+    peerShellCount: initial.peerShellCount,
+    cleanupCandidateCount: initial.cleanupCandidateCount,
+    effectCount: 1,
+    remainingPeerShellCount: 0,
+    reasonCode: 'PEER_SESSION_CLEANUP_COMPLETE',
+  });
+}
+
+function observe({
+  platform,
+  arch,
+  selfPid,
+  runner,
+  cwd = process.cwd(),
+  osRelease = os.release(),
+  procRoot = WSL_PROC_ROOT,
+  wslReader = sessionEvidence.defaultWslReader,
+  wslStatReader = defaultWslStatReader,
+}) {
+  if (platform === 'linux' && arch === 'x64') {
+    return observeWsl({
+      selfPid, cwd, osRelease, procRoot, wslReader, wslStatReader,
+    });
+  }
   if (platform !== 'win32' || arch !== 'x64') {
     return {...unknown('EXECUTION_PROFILE_UNKNOWN'), rows: []};
   }
@@ -710,8 +1450,16 @@ function inspectLocal({
   arch = process.arch,
   selfPid = process.pid,
   runner = defaultRunner,
+  cwd = process.cwd(),
+  osRelease = os.release(),
+  procRoot = WSL_PROC_ROOT,
+  wslReader = sessionEvidence.defaultWslReader,
+  wslStatReader = defaultWslStatReader,
 } = {}) {
-  const observed = observe({platform, arch, selfPid, runner});
+  const observed = observe({
+    platform, arch, selfPid, runner, cwd, osRelease,
+    procRoot, wslReader, wslStatReader,
+  });
   return publicReceipt({
     status: observed.status,
     operation: 'inspect',
@@ -918,7 +1666,7 @@ function unknownEffectReceipt({
   });
 }
 
-function cleanupLocal({
+function cleanupWindowsLocal({
   confirm = false,
   platform = process.platform,
   arch = process.arch,
@@ -1175,6 +1923,15 @@ function cleanupLocal({
   });
 }
 
+function cleanupLocal(options = {}) {
+  const platform = options.platform ?? process.platform;
+  const arch = options.arch ?? process.arch;
+  if (platform === 'linux') {
+    return cleanupWslLocal({...options, platform, arch});
+  }
+  return cleanupWindowsLocal({...options, platform, arch});
+}
+
 function parseArgs(argv = process.argv.slice(2)) {
   if (argv.length === 1 && argv[0] === 'inspect') {
     return {operation: 'inspect', confirm: false};
@@ -1221,25 +1978,33 @@ module.exports = {
   OWNER,
   SCHEMA,
   buildCurrentContext,
+  buildWslCurrentContext,
   candidateShape,
+  candidateTree,
   classifyCleanupRows,
+  classifyWslCleanupRows,
   cleanupLocal,
+  cleanupWslLocal,
   defaultEffectRunner,
+  defaultRunner,
+  defaultWslEffectRunner,
+  defaultWslStatReader,
+  descendantRows,
   effectTempDir,
   effectTimeoutMsForTargetCount,
-  defaultRunner,
   fileTimeToUnixMs,
-  parsePrivateProcessTable,
-  candidateTree,
-  treeGuards,
-  sameTreeSet,
-  descendantRows,
   guardFor,
   inspectLocal,
   parseArgs,
+  parsePrivateProcessTable,
+  parseWslStatText,
   publicReceipt,
   runCli,
   sameGuard,
   sameGuardSet,
   sameLineageAgentPids,
+  sameTreeSet,
+  sameWslGuard,
+  treeGuards,
+  wslGuardFor,
 };

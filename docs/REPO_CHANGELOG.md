@@ -2601,3 +2601,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/68c3989f78af3b6864174b5f2c808555f357ae11)
 - Event ID: `cacb56301bc47cc66698d752990029d89581a8bfeee323efbc5037593c227c54`
 <!-- canonical-main-doc-promoted:cacb56301bc47cc66698d752990029d89581a8bfeee323efbc5037593c227c54 -->
+
+### 2026-10-28 — Merge pull request #3832 from hanmiyoo10-alt/laptop/codex-hosted-review-degraded-fallback-final-stream-3830
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `8fced60d787dc2341e1b0138a0bb6b1c8af98de9`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8fced60d787dc2341e1b0138a0bb6b1c8af98de9)
+- Event ID: `439fb60482cbc07af2d770a036aa2377d9f72c1c9f4d7bba11421c4ef63c5de7`
+<!-- canonical-main-doc-promoted:439fb60482cbc07af2d770a036aa2377d9f72c1c9f4d7bba11421c4ef63c5de7 -->

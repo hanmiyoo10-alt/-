@@ -32,6 +32,56 @@ function rawTable(rows) {
 const AGENT_COMMAND =
   'node C:\\Users\\x\\desktop-commander-remote\\node_modules\\@wonderwhy-er\\desktop-commander\\dist\\index.js';
 
+
+const WSL_SCRIPT =
+  '/home/alsl0/.npm/_npx/cache123/node_modules/@wonderwhy-er/desktop-commander/dist/index.js';
+const WSL_OTHER_SCRIPT =
+  '/home/alsl0/.npm/_npx/other456/node_modules/@wonderwhy-er/desktop-commander/dist/index.js';
+
+function wslRow(pid, ppid, name, argv = []) {
+  return {pid, ppid, name: name.toLowerCase(), argv};
+}
+
+function wslFixture({
+  peer = null,
+  benign = false,
+  secondAgent = false,
+  parentScript = WSL_SCRIPT,
+  agentScript = WSL_SCRIPT,
+  agentRemote = false,
+  parentRemote = true,
+} = {}) {
+  const agentArgv = agentRemote
+    ? ['node', agentScript, 'remote']
+    : ['node', agentScript];
+  const parentLauncher = parentScript.replace(
+    '/node_modules/@wonderwhy-er/desktop-commander/dist/index.js',
+    '/node_modules/.bin/desktop-commander');
+  const parentArgv = parentRemote
+    ? ['node', parentLauncher, 'remote']
+    : ['node', parentLauncher, 'serve'];
+  const rows = [
+    wslRow(1, 0, 'systemd', ['/sbin/init']),
+    wslRow(40, 1, 'MainThread', parentArgv),
+    wslRow(50, 40, 'MainThread', agentArgv),
+    wslRow(60, 50, 'bash', ['bash', '-lc', 'node evidence.cjs inspect']),
+    wslRow(61, 60, 'node', ['node', 'evidence.cjs', 'inspect']),
+  ];
+  if (peer) rows.push(wslRow(80, 50, peer, [peer, '-NoProfile']));
+  if (benign) rows.push(wslRow(81, 50, 'python3', ['python3', '--version']));
+  if (secondAgent) {
+    const otherLauncher = WSL_OTHER_SCRIPT.replace(
+      '/node_modules/@wonderwhy-er/desktop-commander/dist/index.js',
+      '/node_modules/.bin/desktop-commander');
+    rows.push(
+      wslRow(90, 1, 'MainThread', ['node', otherLauncher, 'remote']),
+      wslRow(91, 90, 'MainThread', ['node', WSL_OTHER_SCRIPT]),
+      wslRow(92, 91, 'bash', ['bash']),
+    );
+  }
+  return rows;
+}
+
 function fixture({peer = false, unexpected = false, duplicateAgent = false} = {}) {
   const rows = [
     row(1, 0, 'system.exe'),
@@ -113,15 +163,16 @@ test('fixed CLI admits inspect only', () => {
 });
 
 test('unsupported execution profile fails closed', () => {
-  const result = owner.inspectLocal({
-    platform: 'linux',
-    arch: 'x64',
-    selfPid: 61,
-    runner() { throw new Error('must not run'); },
-  });
-  assert.equal(result.status, 'UNKNOWN');
-  assert.equal(result.sessionState, 'UNKNOWN');
-  assert.equal(result.reasonCode, 'EXECUTION_PROFILE_UNKNOWN');
+  for (const options of [
+    {platform: 'linux', arch: 'x64', cwd: '/tmp', osRelease: 'microsoft-standard-WSL2'},
+    {platform: 'linux', arch: 'x64', cwd: '/home/alsl0/nyang-repo', osRelease: 'generic-linux'},
+    {platform: 'linux', arch: 'arm64', cwd: '/home/alsl0/nyang-repo', osRelease: 'microsoft-standard-WSL2'},
+  ]) {
+    const result = owner.inspectLocal({...options, selfPid: 61});
+    assert.equal(result.status, 'UNKNOWN');
+    assert.equal(result.sessionState, 'UNKNOWN');
+    assert.equal(result.reasonCode, 'EXECUTION_PROFILE_UNKNOWN');
+  }
 });
 
 test('verified agent with sole shell returns ABSENT', () => {
@@ -491,6 +542,169 @@ test('unreadable unrelated executable does not become an agent candidate by abse
   });
 });
 
+
+test('WSL exact npx agent with sole current root returns ABSENT', () => {
+  assert.deepEqual(owner.classifyWslProcessTable(wslFixture(), 61), {
+    sessionState: 'ABSENT',
+    reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+  });
+});
+
+test('WSL direct powershell peer returns PRESENT', () => {
+  assert.deepEqual(owner.classifyWslProcessTable(
+    wslFixture({peer: 'powershell.exe'}), 61), {
+    sessionState: 'PRESENT',
+    reasonCode: 'OTHER_RDC_COMMAND_SESSION_PRESENT',
+  });
+});
+
+test('WSL arbitrary readable peer direct child is definite PRESENT', () => {
+  assert.deepEqual(owner.classifyWslProcessTable(
+    wslFixture({peer: 'ruby'}), 61), {
+    sessionState: 'PRESENT',
+    reasonCode: 'OTHER_RDC_COMMAND_SESSION_PRESENT',
+  });
+});
+
+test('WSL exact python version probe is the only reviewed benign sibling', () => {
+  assert.deepEqual(owner.classifyWslProcessTable(wslFixture({benign: true}), 61), {
+    sessionState: 'ABSENT',
+    reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+  });
+  const near = wslFixture();
+  near.push(wslRow(81, 50, 'python3', ['python3', '-V']));
+  assert.equal(owner.classifyWslProcessTable(near, 61).sessionState, 'PRESENT');
+});
+
+test('WSL marker text embedded in caller argv cannot self-spoof agent identity', () => {
+  const rows = wslFixture();
+  rows[4].argv = ['node', 'caller.cjs',
+    '/home/alsl0/.npm/_npx/cache123/node_modules/@wonderwhy-er/desktop-commander/dist/index.js'];
+  assert.deepEqual(owner.classifyWslProcessTable(rows, 61), {
+    sessionState: 'ABSENT',
+    reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+  });
+});
+
+test('WSL near-match package path remains UNKNOWN', () => {
+  const rows = wslFixture({agentScript:
+    '/home/alsl0/desktop-commander/node_modules/@wonderwhy-er/desktop-commander/dist/index.js'});
+  assert.equal(owner.classifyWslProcessTable(rows, 61).sessionState, 'UNKNOWN');
+});
+
+test('WSL command agent with final remote is not admitted', () => {
+  assert.equal(owner.classifyWslProcessTable(
+    wslFixture({agentRemote: true}), 61).sessionState, 'UNKNOWN');
+});
+
+test('WSL remote parent requires exact final remote argument', () => {
+  assert.equal(owner.classifyWslProcessTable(
+    wslFixture({parentRemote: false}), 61).sessionState, 'UNKNOWN');
+});
+
+test('WSL remote parent must use the same npx cache identity', () => {
+  assert.equal(owner.classifyWslProcessTable(
+    wslFixture({parentScript: WSL_OTHER_SCRIPT}), 61).sessionState, 'UNKNOWN');
+});
+
+test('WSL remote parent requires the exact same-cache launcher path', () => {
+  const rows = wslFixture();
+  rows[1].argv[1] =
+    '/home/alsl0/.npm/_npx/cache123/near-match/desktop-commander';
+  assert.equal(owner.classifyWslProcessTable(rows, 61).sessionState, 'UNKNOWN');
+});
+
+test('WSL multiple globally qualifying agents remain UNKNOWN', () => {
+  const result = owner.classifyWslProcessTable(wslFixture({secondAgent: true}), 61);
+  assert.deepEqual(result, {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS',
+  });
+});
+
+test('WSL unreadable plausible node alternate blocks global ABSENT', () => {
+  const rows = wslFixture();
+  rows.push(wslRow(90, 1, 'node', []));
+  assert.deepEqual(owner.classifyWslProcessTable(rows, 61), {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS',
+  });
+});
+
+test('WSL unreadable plausible MainThread alternate blocks global ABSENT', () => {
+  const rows = wslFixture();
+  rows.push(wslRow(90, 1, 'MainThread', []));
+  assert.deepEqual(owner.classifyWslProcessTable(rows, 61), {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_GLOBAL_TOPOLOGY_AMBIGUOUS',
+  });
+});
+
+test('WSL readable nonmatching node alternate does not block safe ABSENT', () => {
+  const rows = wslFixture();
+  rows.push(wslRow(90, 1, 'node', ['node', 'unrelated-worker.js']));
+  assert.deepEqual(owner.classifyWslProcessTable(rows, 61), {
+    sessionState: 'ABSENT',
+    reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+  });
+});
+
+test('WSL unreadable unrelated executable does not become a plausible agent', () => {
+  const rows = wslFixture();
+  rows.push(wslRow(90, 1, 'python3', []));
+  assert.deepEqual(owner.classifyWslProcessTable(rows, 61), {
+    sessionState: 'ABSENT',
+    reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+  });
+});
+
+test('WSL unreadable direct peer remains fail-closed UNKNOWN', () => {
+  const rows = wslFixture();
+  rows.push(wslRow(80, 50, 'powershell.exe', []));
+  assert.deepEqual(owner.classifyWslProcessTable(rows, 61), {
+    sessionState: 'UNKNOWN',
+    reasonCode: 'RDC_AGENT_CHILD_TOPOLOGY_AMBIGUOUS',
+  });
+});
+
+test('WSL inspect profile can emit repository-owned PRESENT from injected proc evidence', () => {
+  const result = owner.inspectLocal({
+    platform: 'linux',
+    arch: 'x64',
+    cwd: '/home/alsl0/nyang-repo',
+    osRelease: '6.6.0-microsoft-standard-WSL2',
+    selfPid: 61,
+    wslReader() { return wslFixture({peer: 'powershell.exe'}); },
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.sessionState, 'PRESENT');
+  assert.equal(result.reasonCode, 'OTHER_RDC_COMMAND_SESSION_PRESENT');
+  assert.deepEqual(result.authority, owner.FALSE_AUTHORITY);
+});
+
+test('WSL proc read failure remains bounded UNKNOWN', () => {
+  const result = owner.inspectLocal({
+    platform: 'linux',
+    arch: 'x64',
+    cwd: '/home/alsl0/nyang-worktrees/example',
+    osRelease: 'microsoft-standard-WSL2',
+    selfPid: 61,
+    wslReader() { throw new Error('private proc failure'); },
+  });
+  assert.equal(result.status, 'UNKNOWN');
+  assert.equal(result.sessionState, 'UNKNOWN');
+  assert.equal(result.reasonCode, 'RDC_AGENT_TOPOLOGY_AMBIGUOUS');
+  assert.equal(JSON.stringify(result).includes('private proc failure'), false);
+});
+
+test('WSL fixed L roots and positive WSL release are both required', () => {
+  assert.equal(owner.isLWorkspaceCwd('/home/alsl0/nyang-repo'), true);
+  assert.equal(owner.isLWorkspaceCwd('/home/alsl0/nyang-worktrees/x'), true);
+  assert.equal(owner.isLWorkspaceCwd('/home/alsl0/nyang-repository'), false);
+  assert.equal(owner.isWslRelease('6.6.0-microsoft-standard-WSL2'), true);
+  assert.equal(owner.isWslRelease('6.6.0-generic'), false);
+});
+
 test('fixed PowerShell transport forces UTF-8 and projects creation time', () => {
   assert.match(owner.FIXED_POWERSHELL_SOURCE, /System\.Text\.UTF8Encoding/);
   assert.match(owner.FIXED_POWERSHELL_SOURCE, /\[Console\]::OutputEncoding=\$utf8/);
@@ -626,5 +840,10 @@ test('source has no process/session/repository/recovery mutation surface', () =>
     "['checkout'",
     "'PATCH'",
     "'POST'",
+    'fs.writeFile',
+    'fs.appendFile',
+    'fs.rmSync',
+    'fs.unlinkSync',
+    'fs.renameSync',
   ]) assert.equal(source.includes(forbidden), false, forbidden);
 });

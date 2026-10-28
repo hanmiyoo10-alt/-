@@ -226,3 +226,40 @@ current command agent, current shell, same-instance marker wrapper, peer shell,
 or alternate agent. Those relations still require parent CreationTime less than
 or equal to child CreationTime through the existing classifiers. The full bounded
 process table also remains available for global alternate-agent inventory.
+
+
+## Fixed L WSL2 ingress profile
+
+The existing Windows `win32/x64` profile remains unchanged. A second read-only
+profile is admitted only for `linux/x64` execution inside the fixed L repository
+or worktree roots and only when the kernel release positively identifies WSL.
+
+The WSL profile reads `/proc` locally and never exports raw PID, PPID, argv, npm
+cache identity, or process-tree data. It recognizes the current Desktop Commander
+command agent only from the owner process ancestry and only when all of these
+fixed conditions hold:
+
+- the command agent is `node` with exactly two argv entries;
+- its script is the exact Desktop Commander `dist/index.js` suffix under
+  `/home/alsl0/.npm/_npx/<opaque-cache>/node_modules/...`;
+- its direct parent is `node`, uses the same npx cache's exact
+  `node_modules/.bin/desktop-commander` launcher by full normalized-path equality,
+  not merely cache-prefix containment plus basename, and has final argv `remote`;
+- exactly one globally qualifying command agent exists before `ABSENT` is eligible;
+- before `ABSENT`, any other bounded WSL process named `node` or `MainThread`
+  with unavailable/empty argv is treated as a plausible unreadable alternate and
+  fails closed to global-topology `UNKNOWN`;
+- readable nonmatching plausible-agent names may be excluded normally, and an
+  unreadable unrelated executable name does not become an agent candidate solely
+  because argv is unavailable;
+- the current command root is the exact direct child on the owner ancestry.
+
+Another readable, non-benign direct child of that verified agent is definite
+`PRESENT / OTHER_RDC_COMMAND_SESSION_PRESENT`, independent of the child executable
+name. The only WSL benign direct-child exception is exact read-only
+`python|python3 --version`. Unreadable, malformed, multiple-agent, cache-binding,
+parent-shape, non-WSL, or non-L contexts remain fail-closed.
+
+This profile is evidence only. It adds no process control, session cleanup,
+age/idle inference, Git/GitHub writes, D-013/D-014/holder mutation, or recovery
+authority. The outward `mcl-l-rdc-session-evidence.v2` receipt is unchanged.

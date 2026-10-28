@@ -272,3 +272,266 @@ test('public inspect receipt withholds private identity and authority', () => {
     ft(1150),MARKER,'session id','device id']) assert.equal(text.includes(forbidden),false);
   assert.deepEqual(receipt.authority,owner.FALSE_AUTHORITY);
 });
+
+
+const WSL2_SCRIPT =
+  '/home/alsl0/.npm/_npx/cache3838/node_modules/@wonderwhy-er/desktop-commander/dist/index.js';
+const WSL2_LAUNCHER =
+  '/home/alsl0/.npm/_npx/cache3838/node_modules/.bin/desktop-commander';
+const wsl2Row = (pid, ppid, name, argv = []) => ({
+  pid, ppid, name: name.toLowerCase(), argv,
+});
+function wsl2Fixture({peers = 0, descendant = false, benign = false} = {}) {
+  const rows = [
+    wsl2Row(1, 0, 'systemd', ['/sbin/init']),
+    wsl2Row(40, 1, 'MainThread', ['node', WSL2_LAUNCHER, 'remote']),
+    wsl2Row(50, 40, 'MainThread', ['node', WSL2_SCRIPT]),
+    wsl2Row(60, 50, 'bash', ['bash', '-lc', 'node cleanup.cjs inspect']),
+    wsl2Row(61, 60, 'node', ['node', 'cleanup.cjs', 'inspect']),
+  ];
+  for (let index = 0; index < peers; index += 1) {
+    rows.push(wsl2Row(80 + index, 50, index ? 'ruby' : 'powershell.exe', ['peer']));
+  }
+  if (descendant) rows.push(wsl2Row(90, 80, 'sleep', ['sleep', '10']));
+  if (benign) rows.push(wsl2Row(95, 50, 'python3', ['python3', '--version']));
+  return rows;
+}
+function wsl2StatReader(rowsRef, drift = null) {
+  return (_procRoot, pid) => {
+    const row = rowsRef.rows.find((item) => item.pid === pid);
+    if (!row) throw Object.assign(new Error('missing'), {code:'ENOENT'});
+    if (drift && drift.pid === pid) {
+      return {ppid: drift.ppid ?? row.ppid, startTicks: drift.startTicks ?? String(100000 + pid), state:'S'};
+    }
+    return {ppid: row.ppid, startTicks: String(100000 + pid), state:'S'};
+  };
+}
+function wsl2Options(rowsRef, extra = {}) {
+  return {
+    platform:'linux',
+    arch:'x64',
+    selfPid:61,
+    cwd:'/home/alsl0/nyang-repo',
+    osRelease:'6.18.54.1-microsoft-standard-WSL2',
+    procRoot:'/proc',
+    wslReader:() => rowsRef.rows,
+    wslStatReader:wsl2StatReader(rowsRef),
+    ...extra,
+  };
+}
+
+test('WSL single-peer leaf classification is exact and clean state is no-effect', () => {
+  let ref={rows:wsl2Fixture()};
+  let receipt=owner.inspectLocal(wsl2Options(ref));
+  assert.equal(receipt.status,'PASS');
+  assert.equal(receipt.effectEligibility,'ALREADY_CLEAN');
+  assert.equal(receipt.reasonCode,'SOLE_RDC_COMMAND_SESSION');
+
+  ref={rows:wsl2Fixture({peers:1})};
+  receipt=owner.inspectLocal(wsl2Options(ref));
+  assert.equal(receipt.status,'PASS');
+  assert.equal(receipt.effectEligibility,'ELIGIBLE');
+  assert.equal(receipt.cleanupCandidateCount,1);
+  assert.equal(receipt.reasonCode,'WSL_SINGLE_PEER_LEAF_ELIGIBLE');
+  const rendered=JSON.stringify(receipt);
+  for(const forbidden of ['startTicks','ProcessId','ParentProcessId',WSL2_SCRIPT,'100080']) {
+    assert.equal(rendered.includes(forbidden),false);
+  }
+});
+
+test('WSL profile blocks cardinality, descendants, benign-plus-peer and guard drift', () => {
+  let ref={rows:wsl2Fixture({peers:2})};
+  let result=owner.inspectLocal(wsl2Options(ref));
+  assert.equal(result.status,'BLOCKED');
+  assert.equal(result.reasonCode,'WSL_PEER_CARDINALITY_BLOCKED');
+
+  ref={rows:wsl2Fixture({peers:1,descendant:true})};
+  result=owner.inspectLocal(wsl2Options(ref));
+  assert.equal(result.status,'BLOCKED');
+  assert.equal(result.reasonCode,'WSL_PEER_DESCENDANT_PRESENT');
+
+  ref={rows:wsl2Fixture({peers:1,benign:true})};
+  result=owner.inspectLocal(wsl2Options(ref));
+  assert.equal(result.status,'BLOCKED');
+  assert.equal(result.reasonCode,'WSL_DIRECT_CHILD_SET_BLOCKED');
+
+  ref={rows:wsl2Fixture({peers:1})};
+  result=owner.inspectLocal(wsl2Options(ref,{
+    wslStatReader:wsl2StatReader(ref,{pid:80,ppid:999}),
+  }));
+  assert.equal(result.status,'UNKNOWN');
+  assert.equal(result.reasonCode,'WSL_GUARD_EVIDENCE_UNKNOWN');
+});
+
+test('WSL cleanup requires confirmation and pre-effect failures remain zero-effect', () => {
+  let ref={rows:wsl2Fixture({peers:1})};
+  let result=owner.cleanupLocal(wsl2Options(ref,{confirm:false}));
+  assert.equal(result.status,'BLOCKED');
+  assert.equal(result.reasonCode,'OPERATOR_IDLE_CONFIRMATION_REQUIRED');
+
+  let calls=0;
+  result=owner.cleanupLocal(wsl2Options(ref,{
+    confirm:true,
+    wslEffectRunner:() => {
+      calls++;
+      return {status:'BLOCKED',reasonCode:'WSL_PIDFD_OPEN_FAILED',attemptedCount:0,
+        terminatedCount:0,monitoringComplete:false,resumed:false};
+    },
+  }));
+  assert.equal(calls,1);
+  assert.equal(result.status,'BLOCKED');
+  assert.equal(result.effectCount,0);
+  assert.equal(result.effectDisposition,'BLOCKED');
+
+  ref={rows:wsl2Fixture({peers:1})};
+  result=owner.cleanupLocal(wsl2Options(ref,{
+    confirm:true,
+    wslEffectRunner:() => ({status:'BLOCKED',reasonCode:'WSL_FROZEN_TOPOLOGY_DRIFT',
+      attemptedCount:0,terminatedCount:0,monitoringComplete:false,resumed:true}),
+  }));
+  assert.equal(result.status,'BLOCKED');
+  assert.equal(result.effectCount,0);
+});
+
+test('WSL lost acknowledgement cannot manufacture cleanup success', () => {
+  const ref={rows:wsl2Fixture({peers:1})};
+  const result=owner.cleanupLocal(wsl2Options(ref,{
+    confirm:true,
+    wslEffectRunner:({peer}) => {
+      ref.rows=ref.rows.filter((row)=>row.pid!==peer.pid);
+      return {status:'UNKNOWN',reasonCode:'WSL_PIDFD_HELPER_OUTPUT_INVALID',
+        attemptedCount:1,terminatedCount:0,monitoringComplete:false,resumed:false};
+    },
+  }));
+  assert.notEqual(result.status,'PASS');
+  assert.equal(result.effectDisposition,'PARTIAL');
+  assert.equal(result.effectCount,0);
+  assert.equal(result.reasonCode,'WSL_PIDFD_HELPER_OUTPUT_INVALID');
+});
+
+test('WSL exact completed pidfd effect requires final ABSENT evidence', () => {
+  const ref={rows:wsl2Fixture({peers:1})};
+  const result=owner.cleanupLocal(wsl2Options(ref,{
+    confirm:true,
+    wslEffectRunner:({peer}) => {
+      ref.rows=ref.rows.filter((row)=>row.pid!==peer.pid);
+      return {status:'COMPLETE',reasonCode:'WSL_PIDFD_PEER_TERMINATION_COMPLETE',
+        attemptedCount:1,terminatedCount:1,monitoringComplete:true,resumed:false};
+    },
+  }));
+  assert.equal(result.status,'PASS');
+  assert.equal(result.effectDisposition,'COMPLETE');
+  assert.equal(result.effectCount,1);
+  assert.equal(result.remainingPeerShellCount,0);
+  assert.equal(result.reasonCode,'PEER_SESSION_CLEANUP_COMPLETE');
+});
+
+test('WSL fixed helper invocation is selector-free and output is strictly bounded', () => {
+  const guards={
+    agent:{pid:50,ppid:40,startTicks:'100050'},
+    currentRoot:{pid:60,ppid:50,startTicks:'100060'},
+    peer:{pid:80,ppid:50,startTicks:'100080'},
+  };
+  let invocation=null;
+  let result=owner.defaultWslEffectRunner(guards,{
+    spawnSync:(exe,args,opts) => {
+      invocation={exe,args,opts};
+      return {status:0,stdout:JSON.stringify({status:'COMPLETE',
+        reasonCode:'WSL_PIDFD_PEER_TERMINATION_COMPLETE',attemptedCount:1,
+        terminatedCount:1,monitoringComplete:true,resumed:false}),stderr:'',signal:null,error:null};
+    },
+  });
+  assert.equal(result.status,'COMPLETE');
+  assert.equal(invocation.exe,'/usr/bin/python3');
+  assert.equal(invocation.args[0],'-c');
+  assert.match(invocation.args[1],/pidfd_open/);
+  assert.match(invocation.args[1],/pidfd_send_signal/);
+  assert.deepEqual(invocation.opts.env,{});
+  assert.equal(invocation.opts.shell,false);
+  assert.deepEqual(JSON.parse(invocation.opts.input),guards);
+
+  result=owner.defaultWslEffectRunner(guards,{
+    spawnSync:() => ({status:0,stdout:'{"status":"COMPLETE"}',stderr:'',signal:null,error:null}),
+  });
+  assert.equal(result.status,'UNKNOWN');
+  assert.equal(result.reasonCode,'WSL_PIDFD_HELPER_OUTPUT_INVALID');
+});
+
+test('WSL pidfd source forbids broad process and group kill surfaces', () => {
+  const source=fs.readFileSync(path.join(__dirname,'..','mcl-l-rdc-peer-session-cleanup.cjs'),'utf8');
+  for(const required of ['os.pidfd_open','signal.pidfd_send_signal','signal.SIGSTOP',
+    'signal.SIGCONT','signal.SIGKILL','WSL_SINGLE_PEER_LEAF_ELIGIBLE',
+    'WSL_PEER_DESCENDANT_PRESENT','/usr/bin/python3']) {
+    assert.ok(source.includes(required),required);
+  }
+  for(const forbidden of ['killpg','os.kill(','pkill','killall','process.kill(']) {
+    assert.equal(source.includes(forbidden),false,forbidden);
+  }
+});
+
+
+test('WSL helper timeout uses exact pidfd resume recovery and drift stays unproven', () => {
+  const guards={
+    agent:{pid:50,ppid:40,startTicks:'100050'},
+    currentRoot:{pid:60,ppid:50,startTicks:'100060'},
+    peer:{pid:80,ppid:50,startTicks:'100080'},
+  };
+  let calls=0;
+  let result=owner.defaultWslEffectRunner(guards,{
+    spawnSync:(exe,args,opts) => {
+      calls++;
+      assert.equal(exe,'/usr/bin/python3');
+      if(calls===1) {
+        assert.match(args[1],/peer_stopped/);
+        assert.match(args[1],/not kill_sent/);
+        return {status:null,stdout:'',stderr:'',signal:'SIGTERM',error:{code:'ETIMEDOUT'}};
+      }
+      assert.match(args[1],/SIGCONT/);
+      assert.deepEqual(JSON.parse(opts.input),guards.peer);
+      return {status:0,stdout:'{"status":"RESUMED"}',stderr:'',signal:null,error:null};
+    },
+  });
+  assert.equal(calls,2);
+  assert.equal(result.status,'UNKNOWN');
+  assert.equal(result.reasonCode,'WSL_PIDFD_HELPER_TIMEOUT_RESUMED');
+  assert.equal(result.resumed,true);
+  assert.equal(result.monitoringComplete,false);
+
+  calls=0;
+  result=owner.defaultWslEffectRunner(guards,{
+    spawnSync:(_exe,_args,_opts) => {
+      calls++;
+      if(calls===1) return {status:null,stdout:'',stderr:'',signal:'SIGTERM',error:{code:'ETIMEDOUT'}};
+      return {status:0,stdout:'{"status":"DRIFT"}',stderr:'',signal:null,error:null};
+    },
+  });
+  assert.equal(result.status,'UNKNOWN');
+  assert.equal(result.reasonCode,'WSL_PIDFD_HELPER_TIMEOUT_RECOVERY_UNPROVEN');
+  assert.equal(result.resumed,false);
+});
+
+
+test('WSL non-timeout helper death also uses exact pidfd resume recovery', () => {
+  const guards={
+    agent:{pid:50,ppid:40,startTicks:'100050'},
+    currentRoot:{pid:60,ppid:50,startTicks:'100060'},
+    peer:{pid:80,ppid:50,startTicks:'100080'},
+  };
+  let calls=0;
+  const result=owner.defaultWslEffectRunner(guards,{
+    spawnSync:(_exe,args,opts) => {
+      calls++;
+      if(calls===1) {
+        return {status:null,stdout:'',stderr:'',signal:'SIGKILL',error:null};
+      }
+      assert.match(args[1],/SIGCONT/);
+      assert.deepEqual(JSON.parse(opts.input),guards.peer);
+      return {status:0,stdout:'{"status":"RESUMED"}',stderr:'',signal:null,error:null};
+    },
+  });
+  assert.equal(calls,2);
+  assert.equal(result.status,'UNKNOWN');
+  assert.equal(result.reasonCode,'WSL_PIDFD_HELPER_FAILED_RESUMED');
+  assert.equal(result.resumed,true);
+  assert.equal(result.monitoringComplete,false);
+});

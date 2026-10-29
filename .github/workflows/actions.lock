@@ -138,8 +138,8 @@ workflows:
         - 'dtolnay/rust-toolchain@stable'
         - 'taiki-e/install-action@v2'
     '.github/workflows/plugin-control-plane-ci.yml':
-        - 'actions/checkout@v4'
-        - 'actions/setup-node@v4'
+        - 'actions/checkout@v7'
+        - 'actions/setup-node@v7'
     '.github/workflows/plugin-control-plane-issue.yml':
         - 'actions/checkout@v4'
     '.github/workflows/plugin-control-plane-pr-observe.yml': []

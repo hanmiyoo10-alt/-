@@ -2617,3 +2617,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/cf4216acd2a08169764a4d915d79122917dc4bea)
 - Event ID: `af07ccbe568f202b7187f6c7be3feeb8da99ecf4fc684056bffd0d22d464cc80`
 <!-- canonical-main-doc-promoted:af07ccbe568f202b7187f6c7be3feeb8da99ecf4fc684056bffd0d22d464cc80 -->
+
+### 2026-10-29 — chore(canonical-main): upgrade Delta Anchor actions to v7
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `7a957f27e80230f36485e317f23d969a9c79bfdc`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/7a957f27e80230f36485e317f23d969a9c79bfdc)
+- Event ID: `d5be76f2eb18e701b2f377bb9fd0267ec6f9e39470863f3183a8eb33cbcb86f4`
+<!-- canonical-main-doc-promoted:d5be76f2eb18e701b2f377bb9fd0267ec6f9e39470863f3183a8eb33cbcb86f4 -->

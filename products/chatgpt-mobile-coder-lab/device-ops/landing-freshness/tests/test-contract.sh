@@ -91,12 +91,25 @@ sed \
   -e "s|CANONICAL_ORIGIN='https://github.com/hanmiyoo10-alt/-.git'|CANONICAL_ORIGIN='file://$REMOTE'|" \
   -e "s|S_REPO='/root/nyang-repo'|S_REPO='$S_FIX'|" \
   -e "s|M_REPO='/data/data/com.termux/files/home/nyang-worktrees/mainphone-work'|M_REPO='$M_FIX'|" \
+  -e "s|L_REPO='/home/alsl0/nyang-repo'|L_REPO='$L_FIX'|" \
   "$SOURCE" >"$TOOL"
 chmod +x "$TOOL"
 
 run_tool status S
 assert_eq "$RC" 0
 assert_eq "$(field schema)" mcl-landing-freshness.v1
+assert_eq "$(field landing_relation)" equal
+assert_eq "$(field origin_remote_relation)" same
+assert_eq "$(field refresh)" not_requested
+pass
+
+run_tool status L
+assert_eq "$RC" 0
+assert_eq "$(field schema)" mcl-landing-freshness.v1
+assert_eq "$(field route)" L
+assert_eq "$(field intended_branch)" main
+assert_eq "$(field actual_branch)" main
+assert_eq "$(field worktree)" clean
 assert_eq "$(field landing_relation)" equal
 assert_eq "$(field origin_remote_relation)" same
 assert_eq "$(field refresh)" not_requested
@@ -122,6 +135,53 @@ assert_eq "$RC" 0
 assert_eq "$(field origin_remote_relation)" stale
 assert_eq "$(field remote_main)" "$remote_two"
 assert_eq "$(field landing_relation)" unknown
+pass
+
+git -C "$L_FIX" fetch -q --no-tags --no-write-fetch-head "file://$REMOTE" refs/heads/main
+run_tool status L
+assert_eq "$RC" 0
+assert_eq "$(field origin_remote_relation)" stale
+assert_eq "$(field remote_main)" "$remote_two"
+assert_eq "$(field landing_relation)" behind_ff
+pass
+
+l_before=$(status_fingerprint "$L_FIX")
+l_bytes_before=$(worktree_bytes "$L_FIX")
+run_tool refresh L
+assert_eq "$RC" 0
+assert_eq "$(field refresh)" refreshed
+assert_eq "$(field route)" L
+assert_eq "$(field intended_branch)" main
+assert_eq "$(field origin_main)" "$remote_two"
+assert_eq "$(field remote_main)" "$remote_two"
+assert_eq "$(field origin_remote_relation)" same
+assert_eq "$(field landing_relation)" behind_ff
+assert_eq "$(status_fingerprint "$L_FIX")" "$l_before"
+assert_eq "$(worktree_bytes "$L_FIX")" "$l_bytes_before"
+pass
+
+l_origin_before=$(origin_main "$L_FIX")
+printf 'dirty\n' >"$L_FIX/l-dirty.txt"
+l_dirty_before=$(status_fingerprint "$L_FIX")
+run_tool refresh L
+assert_eq "$RC" 3
+assert_eq "$(field worktree)" dirty
+assert_eq "$(field refresh)" blocked
+assert_eq "$(origin_main "$L_FIX")" "$l_origin_before"
+assert_eq "$(status_fingerprint "$L_FIX")" "$l_dirty_before"
+rm "$L_FIX/l-dirty.txt"
+pass
+
+git -C "$L_FIX" switch -q -c l-fixture-wrong
+l_branch_origin_before=$(origin_main "$L_FIX")
+l_branch_state_before=$(status_fingerprint "$L_FIX")
+run_tool refresh L
+assert_eq "$RC" 3
+assert_eq "$(field landing_relation)" branch_mismatch
+assert_eq "$(field refresh)" blocked
+assert_eq "$(origin_main "$L_FIX")" "$l_branch_origin_before"
+assert_eq "$(status_fingerprint "$L_FIX")" "$l_branch_state_before"
+git -C "$L_FIX" switch -q main
 pass
 
 git -C "$S_FIX" fetch -q origin refs/heads/main:refs/remotes/probe/main
@@ -153,6 +213,25 @@ assert_eq "$RC" 0
 assert_eq "$(field landing_relation)" ahead
 pass
 
+git -C "$L_FIX" config user.name fixture
+git -C "$L_FIX" config user.email fixture@example.invalid
+git -C "$L_FIX" reset -q --hard "$remote_two"
+printf 'l-local\n' >"$L_FIX/l-local.txt"
+git -C "$L_FIX" add l-local.txt
+git -C "$L_FIX" commit -q -m l-local
+run_tool status L
+assert_eq "$RC" 0
+assert_eq "$(field landing_relation)" ahead
+l_ahead_origin_before=$(origin_main "$L_FIX")
+l_ahead_state_before=$(status_fingerprint "$L_FIX")
+run_tool refresh L
+assert_eq "$RC" 3
+assert_eq "$(field landing_relation)" ahead
+assert_eq "$(field refresh)" blocked
+assert_eq "$(origin_main "$L_FIX")" "$l_ahead_origin_before"
+assert_eq "$(status_fingerprint "$L_FIX")" "$l_ahead_state_before"
+pass
+
 printf 'three\n' >>"$SEED/file.txt"
 git -C "$SEED" add file.txt
 git -C "$SEED" commit -q -m three
@@ -163,6 +242,21 @@ run_tool status S
 assert_eq "$RC" 0
 assert_eq "$(field remote_main)" "$remote_three"
 assert_eq "$(field landing_relation)" diverged
+pass
+
+git -C "$L_FIX" fetch -q --no-tags --no-write-fetch-head "file://$REMOTE" refs/heads/main
+run_tool status L
+assert_eq "$RC" 0
+assert_eq "$(field remote_main)" "$remote_three"
+assert_eq "$(field landing_relation)" diverged
+l_diverged_origin_before=$(origin_main "$L_FIX")
+l_diverged_state_before=$(status_fingerprint "$L_FIX")
+run_tool refresh L
+assert_eq "$RC" 3
+assert_eq "$(field landing_relation)" diverged
+assert_eq "$(field refresh)" blocked
+assert_eq "$(origin_main "$L_FIX")" "$l_diverged_origin_before"
+assert_eq "$(status_fingerprint "$L_FIX")" "$l_diverged_state_before"
 pass
 
 diverged_origin_before=$(origin_main "$S_FIX")
@@ -241,6 +335,7 @@ sed \
   -e "s|CANONICAL_ORIGIN='https://github.com/hanmiyoo10-alt/-.git'|CANONICAL_ORIGIN='file://$REMOTE'|" \
   -e "s|S_REPO='/root/nyang-repo'|S_REPO='$S_FIX/subdir'|" \
   -e "s|M_REPO='/data/data/com.termux/files/home/nyang-worktrees/mainphone-work'|M_REPO='$M_FIX'|" \
+  -e "s|L_REPO='/home/alsl0/nyang-repo'|L_REPO='$L_FIX'|" \
   "$SOURCE" >"$BAD_TOOL"
 chmod +x "$BAD_TOOL"
 set +e
@@ -259,6 +354,7 @@ sed \
   -e "s|CANONICAL_ORIGIN='https://github.com/hanmiyoo10-alt/-.git'|CANONICAL_ORIGIN='file://$REMOTE'|" \
   -e "s|S_REPO='/root/nyang-repo'|S_REPO='$NON_GIT'|" \
   -e "s|M_REPO='/data/data/com.termux/files/home/nyang-worktrees/mainphone-work'|M_REPO='$M_FIX'|" \
+  -e "s|L_REPO='/home/alsl0/nyang-repo'|L_REPO='$L_FIX'|" \
   "$SOURCE" >"$NON_GIT_TOOL"
 chmod +x "$NON_GIT_TOOL"
 set +e
@@ -293,6 +389,8 @@ fi
 grep -Fq 'fetch --quiet --no-tags origin refs/heads/main:refs/remotes/origin/main' "$SOURCE" || fail 'fixed fetch contract missing'
 grep -Fq "S_REPO='/root/nyang-repo'" "$SOURCE" || fail 'fixed S path missing'
 grep -Fq "M_REPO='/data/data/com.termux/files/home/nyang-worktrees/mainphone-work'" "$SOURCE" || fail 'fixed M path missing'
+grep -Fq "L_REPO='/home/alsl0/nyang-repo'" "$SOURCE" || fail 'fixed L path missing'
+grep -Fq "L_BRANCH='main'" "$SOURCE" || fail 'fixed L branch missing'
 pass
 
 # No-ref current-main object materializer contract.

@@ -85,8 +85,8 @@ workflows:
     '.github/workflows/canonical-main-protection-guard.yml':
         - 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262'
     '.github/workflows/canonical-main-rehearsal.yml':
-        - 'actions/checkout@v4'
-        - 'actions/setup-node@v4'
+        - 'actions/checkout@v7'
+        - 'actions/setup-node@v7'
     '.github/workflows/canonical-main-stage-checkpoint-publish.yml':
         - 'actions/checkout@v4'
     '.github/workflows/chatgpt-sandbox-rust-bridge.yml':

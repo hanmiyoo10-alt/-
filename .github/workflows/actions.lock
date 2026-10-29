@@ -144,7 +144,7 @@ workflows:
         - 'actions/checkout@v7'
     '.github/workflows/plugin-control-plane-pr-observe.yml': []
     '.github/workflows/plugin-control-plane-pr.yml':
-        - 'actions/checkout@v4'
+        - 'actions/checkout@v7'
     '.github/workflows/plugin-control-plane-status.yml':
         - 'actions/checkout@v4'
     '.github/workflows/pocketrisu-helper-docs.yml':

@@ -2609,3 +2609,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8fced60d787dc2341e1b0138a0bb6b1c8af98de9)
 - Event ID: `439fb60482cbc07af2d770a036aa2377d9f72c1c9f4d7bba11421c4ef63c5de7`
 <!-- canonical-main-doc-promoted:439fb60482cbc07af2d770a036aa2377d9f72c1c9f4d7bba11421c4ef63c5de7 -->
+
+### 2026-10-29 — chore(canonical-main): upgrade ops and docs actions to v7
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `cf4216acd2a08169764a4d915d79122917dc4bea`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/cf4216acd2a08169764a4d915d79122917dc4bea)
+- Event ID: `af07ccbe568f202b7187f6c7be3feeb8da99ecf4fc684056bffd0d22d464cc80`
+<!-- canonical-main-doc-promoted:af07ccbe568f202b7187f6c7be3feeb8da99ecf4fc684056bffd0d22d464cc80 -->

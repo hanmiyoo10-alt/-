@@ -2625,3 +2625,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/7a957f27e80230f36485e317f23d969a9c79bfdc)
 - Event ID: `d5be76f2eb18e701b2f377bb9fd0267ec6f9e39470863f3183a8eb33cbcb86f4`
 <!-- canonical-main-doc-promoted:d5be76f2eb18e701b2f377bb9fd0267ec6f9e39470863f3183a8eb33cbcb86f4 -->
+
+### 2026-10-29 — chore(canonical-main): upgrade Incident Rehearsal actions to v7
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `e560840fbe2e7aa5848b7af9638cd2ecd9d2d241`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/e560840fbe2e7aa5848b7af9638cd2ecd9d2d241)
+- Event ID: `a62234952ce670d0078062775854ddc4ed46969137a6cae9b4aa0b4db09bf7bd`
+<!-- canonical-main-doc-promoted:a62234952ce670d0078062775854ddc4ed46969137a6cae9b4aa0b4db09bf7bd -->

@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout pinned WIE
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: dlunch/wie
           ref: 1ed8710956e727629e67db762ddc1e6bd6151a1f
@@ -33,7 +33,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout canonical Fortune Golf overlay
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: .probe
           sparse-checkout: |
@@ -43,7 +43,7 @@ jobs:
       - name: Apply Probe 11 overlay
         run: python .probe/products/app-api-mod-lab/targets/standalone/fortune-golf/probe/apply.py .
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm

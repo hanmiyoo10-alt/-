@@ -7,6 +7,8 @@ S_REPO='/root/nyang-repo'
 S_BRANCH='server/work'
 M_REPO='/data/data/com.termux/files/home/nyang-worktrees/mainphone-work'
 M_BRANCH='mainphone/work'
+L_REPO='/home/alsl0/nyang-repo'
+L_BRANCH='main'
 
 operation=${1-}
 route=${2-}
@@ -18,6 +20,7 @@ fi
 case "$route" in
   S) REPO=$S_REPO; INTENDED_BRANCH=$S_BRANCH ;;
   M) REPO=$M_REPO; INTENDED_BRANCH=$M_BRANCH ;;
+  L) REPO=$L_REPO; INTENDED_BRANCH=$L_BRANCH ;;
   *)
     printf '%s\n' 'mcl-landing-freshness: unsupported route' >&2
     exit 64

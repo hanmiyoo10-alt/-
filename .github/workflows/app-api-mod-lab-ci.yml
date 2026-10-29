@@ -26,7 +26,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '26'
       - name: Validate App API Mod Lab targets
         run: node products/app-api-mod-lab/validate-targets.mjs
       - name: Validate legacy target candidates

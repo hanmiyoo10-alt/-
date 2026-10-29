@@ -234,3 +234,59 @@ state, or prove Step-C live L execution. Those remain separately owned gates.
 Model selection is orthogonal and remains
 `UNPINNED / TASK_SELECTED / BENCHMARK_REQUIRED` until representative L
 workloads are benchmarked.
+
+## Existing-PR review update
+
+The literal `review-update` operation is the only reviewed L effect for
+publishing a same-packet review fix to an already-open `laptop/*` PR branch.
+It does not create another PR and it does not widen normal `apply` or
+`continue-prepared`.
+
+```text
+MCL_WORKSPACE_HOLDER_CLAIM=<ephemeral-claim> \
+node mcl-l-repository-owner.cjs review-update \
+  --manifest <file> --ledger <file> --packet <file> \
+  --review-update-request <request> --patch <patch> --pr-request <pr> --apply
+```
+
+The review-update request binds the packet, bounded commit message, exact old
+PR head, exact expected paths, and exact patch SHA-256. Before effect, the
+owner requires the active L/L D-013 + D-014 + holder, the exact feature
+branch/worktree/remote ref, and exactly one open non-draft PR on that branch
+with base `main`, the supplied non-closing title/body, and the exact old head.
+Dirty, untracked, unmerged, or unexpected staged state fails closed.
+
+The supplied patch is reconstructed in a private temporary index at the exact
+old PR head. Its changed paths, ordinary `100644` modes, binary-diff digest,
+and whitespace integrity must match the request.
+
+The owner independently reads current protected main and replays the prepared
+payload against that tree before commit. Replay proof does not modify the
+feature worktree.
+
+The exactly-once state machine is:
+
+```text
+READY
+→ PREPARED
+→ COMMITTED
+→ CURRENTIZED (only when current main advanced)
+→ PUSHED
+```
+
+Observable COMMITTED, CURRENTIZED, and PUSHED states suppress duplicate effects
+after a lost acknowledgement. If current main advanced, currentization occurs
+only after replay proof and through the fixed ordinary non-force current-main
+integration. The owner then verifies the intended review-fix path/blob/mode
+payload, reruns fixed validation, performs one ordinary non-force push, and
+requires the same PR number to read back at the new exact head. If the old PR
+head already equals current main, no currentization merge is added.
+
+Workflow-file candidates reuse the existing rename-aware OAuth/push-credential
+preflight. The operation exposes no caller repository, branch, worktree, PR
+number, current-main SHA, merge strategy, Git command, retry, credential, or
+fallback selector.
+
+A successful receipt proves only bounded same-PR review-update publication.
+D-013 release, holder release, D-014 completion, PR merge, release, production,
+runtime, and device effects remain separately owned.

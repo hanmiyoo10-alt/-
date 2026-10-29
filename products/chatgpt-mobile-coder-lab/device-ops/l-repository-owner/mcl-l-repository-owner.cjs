@@ -21,6 +21,7 @@ const FIXED_BOT_NAME = 'mcl-repository-patch[bot]';
 const FIXED_BOT_EMAIL = 'mcl-repository-patch@users.noreply.github.com';
 const REQUEST_SCHEMA = 'mcl-l-repository-owner-request.v1';
 const CONTINUATION_REQUEST_SCHEMA = 'mcl-l-prepared-continuation-request.v1';
+const REVIEW_UPDATE_REQUEST_SCHEMA = 'mcl-l-review-update-request.v1';
 const PRIOR_MANIFEST_REF_PREFIX = 'receipt:mcl-task-manifest:';
 const PRIOR_BLOCKED_RECEIPT_REF_PREFIX = 'receipt:mcl-task-completion-receipt:';
 const BLOCKER_REPAIR_REF_PREFIX = 'receipt:canonical-main-stage:';
@@ -164,6 +165,44 @@ function parseRequestText(text) {
     message: value.message,
     expected_paths: [...value.expected_paths].sort(),
     patch_sha256: value.patch_sha256,
+  };
+}
+
+function parseReviewUpdateRequestText(text) {
+  let value;
+  try { value = JSON.parse(String(text)); }
+  catch { throw new OwnerError('UNKNOWN', ['REVIEW_UPDATE_REQUEST_JSON_INVALID']); }
+  exactKeys(value, new Set([
+    'schema', 'packet_ref', 'message', 'expected_old_head', 'expected_paths', 'patch_sha256',
+  ]), 'REVIEW_UPDATE_REQUEST');
+  if (value.schema !== REVIEW_UPDATE_REQUEST_SCHEMA
+      || !PACKET_REF_RE.test(value.packet_ref || '')) {
+    throw new OwnerError('UNKNOWN', ['REVIEW_UPDATE_REQUEST_SCHEMA_OR_PACKET_INVALID']);
+  }
+  if (typeof value.message !== 'string' || value.message.length < 1
+      || value.message.length > 200 || /[\u0000-\u001f\u007f]/.test(value.message)) {
+    throw new OwnerError('UNKNOWN', ['REVIEW_UPDATE_REQUEST_MESSAGE_INVALID']);
+  }
+  if (!SHA40_RE.test(value.expected_old_head || '')) {
+    throw new OwnerError('UNKNOWN', ['REVIEW_UPDATE_OLD_HEAD_INVALID']);
+  }
+  if (!Array.isArray(value.expected_paths) || value.expected_paths.length < 1
+      || value.expected_paths.length > MAX_FILES
+      || value.expected_paths.some((item) => typeof item !== 'string')
+      || new Set(value.expected_paths).size !== value.expected_paths.length) {
+    throw new OwnerError('UNKNOWN', ['REVIEW_UPDATE_REQUEST_PATHS_INVALID']);
+  }
+  for (const item of value.expected_paths) validateRepoPath(item);
+  if (!SHA256_RE.test(value.patch_sha256 || '')) {
+    throw new OwnerError('UNKNOWN', ['REVIEW_UPDATE_PATCH_SHA_INVALID']);
+  }
+  return {
+    schema:value.schema,
+    packet_ref:value.packet_ref,
+    message:value.message,
+    expected_old_head:value.expected_old_head,
+    expected_paths:[...value.expected_paths].sort(),
+    patch_sha256:value.patch_sha256,
   };
 }
 
@@ -856,6 +895,263 @@ function findExactOpenPr(runner, manifest, prRequest, expectedHead) {
   return row;
 }
 
+function readExistingReviewPr(runner, manifest, prRequest) {
+  const raw = gh(runner, [
+    'pr', 'list', '--repo', FIXED_REPO, '--state', 'open',
+    '--head', manifest.workspace.branch,
+    '--json', 'number,title,body,isDraft,headRefName,headRefOid,baseRefName',
+  ], {reason:'PR_READBACK_FAILED'});
+  let rows;
+  try { rows = JSON.parse(raw); } catch { throw new OwnerError('UNKNOWN', ['PR_READBACK_JSON_INVALID']); }
+  if (!Array.isArray(rows)) throw new OwnerError('UNKNOWN', ['PR_READBACK_JSON_INVALID']);
+  if (rows.length !== 1) throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PR_COUNT_INVALID']);
+  const row = rows[0];
+  if (!Number.isInteger(row.number) || row.isDraft !== false
+      || row.headRefName !== manifest.workspace.branch || row.baseRefName !== 'main'
+      || row.title !== prRequest.title || row.body !== prRequest.body
+      || !SHA40_RE.test(String(row.headRefOid || ''))) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PR_IDENTITY_CONFLICT']);
+  }
+  return row;
+}
+
+function expectedReviewUpdatePreparedDigest(manifest, request, patchBytes, {runner = defaultRunner} = {}) {
+  if (sha256Bytes(patchBytes) !== request.patch_sha256) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PATCH_SHA_CONFLICT']);
+  }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-review-update-index-'));
+  const indexFile = path.join(dir, 'index');
+  const env = {...safeChildEnv(), GIT_INDEX_FILE:indexFile};
+  try {
+    runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'read-tree', request.expected_old_head],
+      {env}, 'REVIEW_UPDATE_READ_TREE_FAILED');
+    runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'apply', '--cached', '--check', '-'],
+      {env, input:patchBytes}, 'REVIEW_UPDATE_PATCH_DOES_NOT_APPLY');
+    runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'apply', '--cached', '-'],
+      {env, input:patchBytes}, 'REVIEW_UPDATE_PATCH_APPLY_FAILED');
+    const paths = nulPaths(git(runner, manifest.workspace.worktree,
+      ['diff', '--cached', '--name-only', '-z', request.expected_old_head, '--'], {env}));
+    if (!same(paths, request.expected_paths)) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_CHANGED_PATH_MISMATCH']);
+    }
+    runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'diff', '--cached', '--check',
+      request.expected_old_head, '--'], {env}, 'REVIEW_UPDATE_DIFF_CHECK_FAILED');
+    for (const item of request.expected_paths) {
+      const entry = indexEntry(runner, manifest.workspace.worktree, item, env);
+      if (!entry || entry.mode !== '100644') throw new OwnerError('BLOCKED', ['SPECIAL_MODE_DENIED']);
+    }
+    const diff = git(runner, manifest.workspace.worktree,
+      ['diff', '--cached', '--binary', request.expected_old_head, '--'], {env});
+    if (!diff || Buffer.byteLength(diff, 'utf8') > MAX_PATCH_BYTES) {
+      throw new OwnerError('BLOCKED', ['REVIEW_UPDATE_PREPARED_DIFF_INVALID']);
+    }
+    return sha256Bytes(Buffer.from(diff, 'utf8'));
+  } finally {
+    try { fs.rmSync(dir, {recursive:true, force:true}); } catch {}
+  }
+}
+
+function classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest, {
+  profile = DEFAULT_PROFILE, runner = defaultRunner,
+} = {}) {
+  const worktree = manifest.workspace.worktree;
+  let real;
+  try { real = fs.realpathSync(worktree); }
+  catch { throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_WORKTREE_MISSING']); }
+  if (real !== worktree) throw new OwnerError('CONFLICT', ['WORKTREE_ALIAS_DENIED']);
+  const top = git(runner, worktree, ['rev-parse', '--show-toplevel']).trim();
+  const branch = git(runner, worktree, ['branch', '--show-current']).trim();
+  const head = git(runner, worktree, ['rev-parse', 'HEAD']).trim();
+  if (top !== worktree || branch !== manifest.workspace.branch || !SHA40_RE.test(head)) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_WORKSPACE_IDENTITY_CONFLICT']);
+  }
+  const unmerged = nulPaths(git(runner, worktree, ['diff', '--name-only', '--diff-filter=U', '-z', '--']));
+  const unstaged = nulPaths(git(runner, worktree, ['diff', '--name-only', '-z', '--']));
+  const untracked = nulPaths(git(runner, worktree, ['ls-files', '--others', '--exclude-standard', '-z']));
+  if (unmerged.length || unstaged.length || untracked.length) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_WORKTREE_RESIDUE_CONFLICT']);
+  }
+  const remoteHead = remoteBranchHead(runner, profile.landing, manifest.workspace.branch);
+  if (!remoteHead) throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_REMOTE_BRANCH_MISSING']);
+  const pr = readExistingReviewPr(runner, manifest, prRequest);
+  const staged = stagedPaths(runner, worktree);
+
+  if (head === request.expected_old_head) {
+    if (remoteHead !== request.expected_old_head || pr.headRefOid !== request.expected_old_head) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_OLD_HEAD_IDENTITY_CONFLICT']);
+    }
+    if (!staged.length) return {state:'READY', candidateHead:null, finalHead:null, remoteHead, pr};
+    if (!same(staged, request.expected_paths)) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_STAGED_PATH_CONFLICT']);
+    }
+    validateStagedModes(runner, worktree, request.expected_paths);
+    if (stagedDigest(runner, worktree) !== preparedDigest) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PREPARED_DIGEST_CONFLICT']);
+    }
+    return {state:'PREPARED', candidateHead:null, finalHead:null, remoteHead, pr};
+  }
+
+  if (staged.length) throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_INDEX_NOT_CLEAN']);
+  const replayRequest = {
+    message:request.message, expected_paths:request.expected_paths, prepared_digest:preparedDigest,
+  };
+  const parents = git(runner, worktree, ['rev-list', '--parents', '-n', '1', head]).trim().split(/\s+/);
+  let candidateHead;
+  let finalHead;
+  let state;
+  if (parents.length === 2) {
+    candidateHead = head;
+    finalHead = head;
+    assertCandidateCommit(runner, {...manifest, observedBaseSha:request.expected_old_head},
+      replayRequest, candidateHead);
+    state = 'COMMITTED';
+  } else if (parents.length === 3) {
+    candidateHead = parents[1];
+    const mergedMain = parents[2];
+    if (mergedMain !== currentMain) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_CURRENTIZATION_MAIN_CONFLICT']);
+    }
+    assertCandidateCommit(runner, {...manifest, observedBaseSha:request.expected_old_head},
+      replayRequest, candidateHead);
+    assertCurrentizedPayload(runner, {...manifest, observedBaseSha:request.expected_old_head},
+      replayRequest, candidateHead, currentMain, head);
+    finalHead = head;
+    state = 'CURRENTIZED';
+  } else {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_HEAD_SHAPE_CONFLICT']);
+  }
+
+  if (remoteHead === finalHead && pr.headRefOid === finalHead) {
+    return {state:'PUSHED', candidateHead, finalHead, remoteHead, pr};
+  }
+  if (remoteHead === request.expected_old_head && pr.headRefOid === request.expected_old_head) {
+    return {state, candidateHead, finalHead, remoteHead, pr};
+  }
+  throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_REMOTE_PR_HEAD_CONFLICT']);
+}
+
+function executeReviewUpdate(context, request, patchBytes, prRequest, {
+  profile = DEFAULT_PROFILE, runner = defaultRunner, env = process.env, root = ROOT,
+} = {}) {
+  const {manifest} = context;
+  if (request.packet_ref !== manifest.packetRef) throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PACKET_CONFLICT']);
+  if (manifest.observedBaseSha !== request.expected_old_head) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_MANIFEST_OLD_HEAD_CONFLICT']);
+  }
+  if (!same(request.expected_paths, manifestPathScopes(manifest))) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_SCOPE_CONFLICT']);
+  }
+  holderCheck(context, env);
+  const currentMain = continuationCurrentMain(manifest, {profile, runner});
+  const preparedDigest = expectedReviewUpdatePreparedDigest(manifest, request, patchBytes, {runner});
+  let state = classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest,
+    {profile, runner});
+  const oldPrNumber = state.pr.number;
+
+  if (state.state === 'READY') {
+    const patchFile = path.join(manifest.workspace.worktree, '.git-mcl-l-review-update.patch.tmp');
+    if (fs.existsSync(patchFile)) throw new OwnerError('CONFLICT', ['PATCH_TEMP_ALREADY_EXISTS']);
+    fs.writeFileSync(patchFile, patchBytes, {mode:0o600, flag:'wx'});
+    try {
+      runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'apply', '--check', patchFile],
+        {}, 'REVIEW_UPDATE_PATCH_DOES_NOT_APPLY');
+      runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'apply', '--index', patchFile],
+        {}, 'REVIEW_UPDATE_PATCH_APPLY_FAILED');
+    } finally {
+      try { fs.unlinkSync(patchFile); } catch {}
+    }
+    state = classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest,
+      {profile, runner});
+  }
+
+  const replayRequest = {
+    message:request.message, expected_paths:request.expected_paths, prepared_digest:preparedDigest,
+  };
+  const candidatePaths = state.state === 'PUSHED' ? []
+    : state.state === 'PREPARED'
+      ? candidatePathsFromStagedDiff(runner, manifest.workspace.worktree)
+      : candidatePathsFromCommitDiff(runner, manifest.workspace.worktree,
+        request.expected_old_head, state.candidateHead);
+  if (state.state !== 'PUSHED') {
+    requireGithubWorkflowPushCredential(candidatePaths, manifest.workspace.worktree, {runner});
+  }
+
+  let replay = null;
+  let checks = [];
+  if (state.state === 'PREPARED') {
+    replay = verifyReplayAgainstCurrent(
+      {...manifest, observedBaseSha:request.expected_old_head}, replayRequest, currentMain, {runner});
+    checks = runContinuationValidation(manifest, replayRequest, {runner, root});
+    holderCheck(context, env);
+    if (continuationCurrentMain(manifest, {profile, runner}) !== currentMain) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_MAIN_CHANGED']);
+    }
+    runChecked(runner, 'git', [
+      '-C', manifest.workspace.worktree,
+      '-c', 'user.name=' + FIXED_BOT_NAME,
+      '-c', 'user.email=' + FIXED_BOT_EMAIL,
+      'commit', '-m', request.message,
+    ], {}, 'REVIEW_UPDATE_COMMIT_FAILED');
+    state = classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest,
+      {profile, runner});
+  }
+
+  if (state.state === 'COMMITTED' && currentMain !== request.expected_old_head) {
+    if (!replay) {
+      replay = verifyReplayAgainstCurrent(
+        {...manifest, observedBaseSha:request.expected_old_head}, replayRequest, currentMain,
+        {runner, candidateHead:state.candidateHead});
+    }
+    holderCheck(context, env);
+    if (continuationCurrentMain(manifest, {profile, runner}) !== currentMain) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_MAIN_CHANGED']);
+    }
+    runChecked(runner, 'git', [
+      '-C', manifest.workspace.worktree,
+      '-c', 'user.name=' + FIXED_BOT_NAME,
+      '-c', 'user.email=' + FIXED_BOT_EMAIL,
+      'merge', '--no-ff', '--no-edit', currentMain,
+    ], {}, 'REVIEW_UPDATE_CURRENTIZATION_MERGE_FAILED');
+    state = classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest,
+      {profile, runner});
+    checks = runContinuationValidation(manifest, replayRequest, {runner, root});
+  }
+  if (state.state === 'COMMITTED' && currentMain === request.expected_old_head) {
+    checks = checks.length ? checks : runContinuationValidation(manifest, replayRequest, {runner, root});
+  }
+
+  if (state.state === 'CURRENTIZED' || state.state === 'COMMITTED') {
+    holderCheck(context, env);
+    if (continuationCurrentMain(manifest, {profile, runner}) !== currentMain) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_MAIN_CHANGED']);
+    }
+    pushExactCandidate(runner, manifest.workspace.worktree, state.finalHead,
+      manifest.workspace.branch, candidatePaths);
+    state = classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest,
+      {profile, runner});
+  }
+  if (state.state !== 'PUSHED') throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_STATE_UNSUPPORTED']);
+  if (state.pr.number !== oldPrNumber) throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PR_NUMBER_CHANGED']);
+  holderCheck(context, env);
+  return output('PASS', [], {
+    route:manifest.route,
+    executor:manifest.executor,
+    base_sha:request.expected_old_head,
+    current_main:currentMain,
+    branch:manifest.workspace.branch,
+    changed_paths:request.expected_paths,
+    patch_sha256:request.patch_sha256,
+    prepared_digest:preparedDigest,
+    replay_patch_id:replay?.patchId || null,
+    candidate_head:state.candidateHead,
+    new_head:state.finalHead,
+    currentized:currentMain !== request.expected_old_head,
+    pr_number:state.pr.number,
+    validation_checks:checks,
+    next_legal_action:'RELEASE_D013_THEN_RELEASE_HOLDER_THEN_D014_COMPLETE',
+  });
+}
+
 function executePreparedContinuation(context, request, prRequest, {profile = DEFAULT_PROFILE, runner = defaultRunner, env = process.env, root = ROOT} = {}) {
   const {manifest} = context;
   validatePreparedContinuationManifestBinding(manifest, request);
@@ -1105,6 +1401,7 @@ function parseArgs(argv) {
     inspect: new Set(['manifest','ledger','packet']),
     'prepare-workspace': new Set(['manifest','ledger','packet']),
     apply: new Set(['manifest','ledger','packet','request','patch','pr-request']),
+    'review-update': new Set(['manifest','ledger','packet','review-update-request','patch','pr-request']),
     'continue-prepared': new Set(['manifest','ledger','packet','continuation-request','pr-request']),
   };
   if (!allowedByOperation[operation]) throw new OwnerError('UNKNOWN', ['OPERATION_UNSUPPORTED']);
@@ -1159,6 +1456,17 @@ function runCli(argv = process.argv.slice(2), env = process.env, options = {}) {
     const request = parseRequestText(requestBytes.toString('utf8'));
     const prRequest = parsePrRequestText(prBytes.toString('utf8'), request.packet_ref);
     result = executeApply(context, request, patchBytes, prRequest, {...options, env});
+  } else if (operation === 'review-update') {
+    if (!apply) throw new OwnerError('BLOCKED', ['APPLY_FLAG_REQUIRED']);
+    for (const key of ['review-update-request', 'patch', 'pr-request']) {
+      if (!values[key]) throw new OwnerError('UNKNOWN', ['ARGUMENT_REQUIRED:' + key]);
+    }
+    const requestBytes = readRegular(values['review-update-request'], 'REVIEW_UPDATE_REQUEST_FILE');
+    const patchBytes = readRegular(values.patch, 'PATCH_FILE', MAX_PATCH_BYTES);
+    const prBytes = readRegular(values['pr-request'], 'PR_REQUEST_FILE');
+    const request = parseReviewUpdateRequestText(requestBytes.toString('utf8'));
+    const prRequest = parsePrRequestText(prBytes.toString('utf8'), request.packet_ref);
+    result = executeReviewUpdate(context, request, patchBytes, prRequest, {...options, env});
   } else if (operation === 'continue-prepared') {
     if (!apply) throw new OwnerError('BLOCKED', ['APPLY_FLAG_REQUIRED']);
     for (const key of ['continuation-request', 'pr-request']) {
@@ -1192,6 +1500,7 @@ if (require.main === module) {
 module.exports = {
   BLOCKER_REPAIR_REF_PREFIX,
   CONTINUATION_REQUEST_SCHEMA,
+  REVIEW_UPDATE_REQUEST_SCHEMA,
   DEFAULT_PROFILE,
   FALSE_AUTHORITY,
   FIXED_BOT_EMAIL,
@@ -1211,9 +1520,11 @@ module.exports = {
   candidatePathsFromNameStatus,
   candidatePathsFromStagedDiff,
   classifyPreparedContinuationState,
+  classifyReviewUpdateState,
   continuationCurrentMain,
   executeApply,
   executePreparedContinuation,
+  executeReviewUpdate,
   fixedValidationChecks,
   inspect,
   inspectLanding,
@@ -1222,6 +1533,7 @@ module.exports = {
   output,
   parseArgs,
   parsePreparedContinuationRequestText,
+  parseReviewUpdateRequestText,
   parseManifestText,
   parsePrRequestText,
   parseRequestText,
@@ -1233,6 +1545,8 @@ module.exports = {
   requiresWorkflowOauthScope,
   protectedMain,
   runContinuationValidation,
+  readExistingReviewPr,
+  expectedReviewUpdatePreparedDigest,
   runCli,
   sha256Bytes,
   validateBranch,

@@ -613,3 +613,209 @@ test('prepared replay preserves identity across PREPARED COMMITTED CURRENTIZED a
 });
 
 console.log('ALL_TESTS_PASS', passed);
+
+
+test('review-update request and CLI bind exact old-head contract', () => {
+  const value = owner.parseReviewUpdateRequestText(JSON.stringify({
+    schema:owner.REVIEW_UPDATE_REQUEST_SCHEMA,
+    packet_ref:'#9001',
+    message:'fix: bounded review update',
+    expected_old_head:'a'.repeat(40),
+    expected_paths:['z/file.md','a/file.cjs'],
+    patch_sha256:'b'.repeat(64),
+  }));
+  assert.deepEqual(value.expected_paths, ['a/file.cjs','z/file.md']);
+  assert.equal(value.expected_old_head, 'a'.repeat(40));
+  expectReason(() => owner.parseReviewUpdateRequestText(JSON.stringify({
+    ...value, schema:'wrong',
+  })), 'REVIEW_UPDATE_REQUEST_SCHEMA_OR_PACKET_INVALID');
+  expectReason(() => owner.parseReviewUpdateRequestText(JSON.stringify({
+    ...value, expected_old_head:'bad',
+  })), 'REVIEW_UPDATE_OLD_HEAD_INVALID');
+
+  const parsed = owner.parseArgs([
+    'review-update','--manifest','m','--ledger','l','--packet','p',
+    '--review-update-request','r','--patch','x','--pr-request','pr','--apply',
+  ]);
+  assert.equal(parsed.operation, 'review-update');
+  assert.equal(parsed.apply, true);
+  assert.deepEqual(Object.keys(parsed.values).sort(),
+    ['ledger','manifest','packet','patch','pr-request','review-update-request']);
+  expectReason(() => owner.parseArgs([
+    'review-update','--manifest','m','--ledger','l','--packet','p',
+    '--review-update-request','r','--patch','x','--pr-request','pr',
+    '--branch','laptop/other','--apply',
+  ]), 'ARGUMENT_UNSUPPORTED:branch');
+});
+
+
+test('review-update PR readback requires one exact non-draft main PR', () => {
+  const m = manifest({
+    workspace:{kind:'repository',branch:'laptop/task-9001',worktree:'/tmp/review-fixture'},
+  });
+  const prRequest={title:'fix: bounded review',body:'Refs #9001'};
+  const row={
+    number:4001,title:prRequest.title,body:prRequest.body,isDraft:false,
+    headRefName:m.workspace.branch,headRefOid:'a'.repeat(40),baseRefName:'main',
+  };
+  const runner = () => ({
+    code:0,stdout:JSON.stringify([row]),stderr:'',signal:null,error:null,
+  });
+  assert.equal(owner.readExistingReviewPr(runner,m,prRequest).number,4001);
+  expectReason(() => owner.readExistingReviewPr(
+    () => ({code:0,stdout:'[]',stderr:'',signal:null,error:null}),m,prRequest),
+  'REVIEW_UPDATE_PR_COUNT_INVALID');
+  expectReason(() => owner.readExistingReviewPr(
+    () => ({
+      code:0,stdout:JSON.stringify([{...row,isDraft:true}]),
+      stderr:'',signal:null,error:null,
+    }),m,prRequest),
+  'REVIEW_UPDATE_PR_IDENTITY_CONFLICT');
+});
+
+function reviewRunner(remote, branch, prRequest, overrides = {}) {
+  return (command, args, options = {}) => {
+    if (command === 'gh') {
+      const head = gitExec(remote, ['rev-parse','refs/heads/' + branch]).trim();
+      const row = {
+        number:4001,title:prRequest.title,body:prRequest.body,isDraft:false,
+        headRefName:branch,headRefOid:head,baseRefName:'main',...overrides,
+      };
+      return {code:0,stdout:JSON.stringify([row]),stderr:'',signal:null,error:null};
+    }
+    const cp = childProcess.spawnSync(command, args, {
+      cwd:options.cwd,encoding:'utf8',input:options.input,
+      env:options.env || process.env,shell:false,
+    });
+    return {
+      code:cp.status ?? 1,stdout:cp.stdout || '',stderr:cp.stderr || '',
+      signal:cp.signal || null,error:cp.error || null,
+    };
+  };
+}
+
+
+test('review-update replay preserves READY PREPARED COMMITTED CURRENTIZED and PUSHED', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-review-update-'));
+  const remote = path.join(tmp, 'remote.git');
+  const landing = path.join(tmp, 'landing');
+  const feature = path.join(tmp, 'feature');
+  try {
+    gitExec(tmp, ['init','--bare',remote]);
+    gitExec(tmp, ['clone',remote,landing]);
+    gitExec(landing, ['config','user.name','fixture']);
+    gitExec(landing, ['config','user.email','fixture@example.invalid']);
+    fs.writeFileSync(path.join(landing, 'base.txt'), 'base\n');
+    gitExec(landing, ['add','base.txt']);
+    gitExec(landing, ['commit','-m','base']);
+    gitExec(landing, ['branch','-M','main']);
+    gitExec(landing, ['push','-u','origin','main']);
+    const base = gitExec(landing, ['rev-parse','HEAD']).trim();
+    gitExec(landing, ['worktree','add','-b','laptop/task-9001',feature,base]);
+    gitExec(landing, ['push','origin',base + ':refs/heads/laptop/task-9001']);
+
+    fs.writeFileSync(path.join(landing, 'main.txt'), 'main advance\n');
+    gitExec(landing, ['add','main.txt']);
+    gitExec(landing, ['commit','-m','main advance']);
+    gitExec(landing, ['push','origin','main']);
+    const currentMain = gitExec(landing, ['rev-parse','HEAD']).trim();
+
+    fs.appendFileSync(path.join(feature, 'base.txt'), 'review fix\n');
+    const patch = gitExec(feature, ['diff','--binary','--','base.txt']);
+    gitExec(feature, ['restore','--','base.txt']);
+
+    const request = {
+      schema:owner.REVIEW_UPDATE_REQUEST_SCHEMA,
+      packet_ref:'#9001',
+      message:'fix: fixture review update',
+      expected_old_head:base,
+      expected_paths:['base.txt'],
+      patch_sha256:owner.sha256Bytes(Buffer.from(patch,'utf8')),
+    };
+    const prRequest={title:'fix: fixture PR',body:'Refs #9001'};
+    const m = manifest({
+      packetRef:'#9001',
+      workspace:{kind:'repository',branch:'laptop/task-9001',worktree:feature},
+      observedBaseSha:base,
+      scopes:['path:base.txt','surface:mcl:test'],
+    });
+    const profile={...owner.DEFAULT_PROFILE,landing,worktreeRoot:tmp};
+    const runner=reviewRunner(remote,m.workspace.branch,prRequest);
+    const preparedDigest=owner.expectedReviewUpdatePreparedDigest(
+      m,request,Buffer.from(patch,'utf8'),{runner});
+
+    assert.equal(owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,preparedDigest,{profile,runner}).state,'READY');
+
+    fs.writeFileSync(path.join(feature,'unexpected.tmp'),'x\n');
+    expectReason(() => owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,preparedDigest,{profile,runner}),
+    'REVIEW_UPDATE_WORKTREE_RESIDUE_CONFLICT');
+    fs.unlinkSync(path.join(feature,'unexpected.tmp'));
+
+    gitExec(feature, ['apply','--index','-'], {input:patch});
+    assert.equal(owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,preparedDigest,{profile,runner}).state,'PREPARED');
+
+
+    const replay=owner.verifyReplayAgainstCurrent(
+      m,{message:request.message,expected_paths:request.expected_paths,
+        prepared_digest:preparedDigest},
+      currentMain,{runner});
+    assert.equal(replay.currentMain,currentMain);
+
+    gitExec(feature, ['-c','user.name=' + owner.FIXED_BOT_NAME,
+      '-c','user.email=' + owner.FIXED_BOT_EMAIL,
+      'commit','-m',request.message]);
+    const committed=owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,preparedDigest,{profile,runner});
+    assert.equal(committed.state,'COMMITTED');
+
+    const replayAfterLostCommitAck=owner.verifyReplayAgainstCurrent(
+      m,{message:request.message,expected_paths:request.expected_paths,
+        prepared_digest:preparedDigest},
+      currentMain,{runner,candidateHead:committed.candidateHead});
+    assert.equal(replayAfterLostCommitAck.patchId,replay.patchId);
+
+    gitExec(feature, ['-c','user.name=' + owner.FIXED_BOT_NAME,
+      '-c','user.email=' + owner.FIXED_BOT_EMAIL,
+      'merge','--no-ff','--no-edit',currentMain]);
+    const currentized=owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,preparedDigest,{profile,runner});
+    assert.equal(currentized.state,'CURRENTIZED');
+    assert.match(fs.readFileSync(path.join(feature,'base.txt'),'utf8'),/review fix/);
+    assert.equal(fs.readFileSync(path.join(feature,'main.txt'),'utf8'),'main advance\n');
+
+    gitExec(feature, ['push','origin','HEAD:refs/heads/laptop/task-9001']);
+    const pushed=owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,preparedDigest,{profile,runner});
+    assert.equal(pushed.state,'PUSHED');
+    assert.equal(pushed.pr.number,4001);
+    assert.equal(pushed.candidateHead,committed.candidateHead);
+  } finally {
+    try { gitExec(landing, ['worktree','remove',feature,'--force']); } catch {}
+    fs.rmSync(tmp,{recursive:true,force:true});
+  }
+});
+
+
+test('review-update effect stays same-PR non-force and current-main replay bound', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../mcl-l-repository-owner.cjs'), 'utf8');
+  const start = source.indexOf('function executeReviewUpdate(');
+  const end = source.indexOf('function executePreparedContinuation(', start);
+  assert.ok(start >= 0 && end > start);
+  const block = source.slice(start,end);
+  assert.ok(block.includes('verifyReplayAgainstCurrent('));
+  assert.ok(block.includes('requireGithubWorkflowPushCredential('));
+  assert.ok(block.includes("'merge', '--no-ff', '--no-edit', currentMain"));
+  assert.ok(block.includes('pushExactCandidate('));
+  assert.ok(block.includes('state.pr.number !== oldPrNumber'));
+  assert.ok(block.includes("state.state === 'COMMITTED' && currentMain !== request.expected_old_head"));
+  assert.ok(block.includes("state.state === 'COMMITTED' && currentMain === request.expected_old_head"));
+  assert.equal(block.includes("'pr', 'create'"),false);
+  for (const forbidden of ["'reset'","'rebase'","'stash'","'cherry-pick'","'--force'"]) {
+    assert.equal(block.includes(forbidden),false,forbidden);
+  }
+});
+
+console.log('REVIEW_UPDATE_TESTS_PASS', passed);

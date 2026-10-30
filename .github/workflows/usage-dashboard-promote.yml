@@ -34,7 +34,7 @@ jobs:
       release_control_changed: ${{ steps.classify.outputs.release_control_changed }}
     steps:
       - name: Checkout immutable merged commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           fetch-depth: 2
@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout immutable merged commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           fetch-depth: 1
@@ -90,7 +90,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout immutable merged release
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           fetch-depth: 1

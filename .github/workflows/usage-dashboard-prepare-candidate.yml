@@ -41,7 +41,7 @@ jobs:
       coordination_work_issue: ${{ steps.request.outputs.coordination_work_issue }}
     steps:
       - name: Checkout immutable trusted fallback control plane
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
@@ -87,7 +87,7 @@ jobs:
           echo "CANDIDATE_PREP_FALLBACK_REQUEST:$TARGET_BRANCH:${EXPECTED_HEAD_SHA,,}:$RELEASE_SPEC:work_issue=${COORDINATION_WORK_ISSUE:-none}"
 
       - name: Checkout exact fallback candidate head
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.request.outputs.expected_head_sha }}
           fetch-depth: 0
@@ -167,7 +167,7 @@ jobs:
 
       - name: Upload immutable fallback payload
         if: steps.materialize.outputs.has_changes == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: usage-dashboard-candidate-payload
           path: |
@@ -187,13 +187,13 @@ jobs:
       gate_ready: ${{ steps.gate.outputs.gate_ready }}
     steps:
       - name: Checkout trusted current-main Harness gate
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: ${{ needs.prepare.outputs.coordination_work_issue != '' }}
         with:
           node-version: 22
@@ -244,14 +244,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout immutable trusted fallback writer
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: true
 
       - name: Download immutable fallback payload
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: usage-dashboard-candidate-payload
           path: ${{ runner.temp }}/usage-dashboard-candidate-payload

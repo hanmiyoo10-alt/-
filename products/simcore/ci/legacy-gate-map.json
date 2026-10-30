@@ -25,8 +25,11 @@
         {"responsibilityId":"m2-2.architecture","disposition":"PERMANENT_CONTRACT","permanentOwners":["GATE_ARCH"],"permanentSuiteIds":[]},
         {"responsibilityId":"m2-2.patch-and-push","disposition":"RELEASE_GLUE","permanentOwners":[],"permanentSuiteIds":[]}
       ],
-      "writeDisposition": "RS2_4_PENDING",
-      "normalInvocation": "FORBIDDEN_AFTER_VALIDATION_REPLACEMENT"
+      "writeDisposition": "RETIRED_AFTER_PERMANENT_REPLACEMENT",
+      "priorNormalInvocation": "FORBIDDEN_AFTER_VALIDATION_REPLACEMENT",
+      "normalInvocation": "RETIRED",
+      "physicalDisposition": "RETIRED_TO_ARCHIVE",
+      "archivePath": "products/simcore/releases/legacy-workflows.json"
     },
     {
       "legacyWorkflow": ".github/workflows/simcore-06404-community-reaction-attribution.yml",
@@ -37,8 +40,11 @@
         {"responsibilityId":"06404.structure-and-frozen-surfaces","disposition":"PERMANENT_CONTRACT","permanentOwners":["GATE_ARCH","GATE_REGRESSION"],"permanentSuiteIds":[]},
         {"responsibilityId":"06404.patch-and-push","disposition":"RELEASE_GLUE","permanentOwners":[],"permanentSuiteIds":[]}
       ],
-      "writeDisposition": "RS2_4_PENDING",
-      "normalInvocation": "FORBIDDEN_AFTER_VALIDATION_REPLACEMENT"
+      "writeDisposition": "RETIRED_AFTER_PERMANENT_REPLACEMENT",
+      "priorNormalInvocation": "FORBIDDEN_AFTER_VALIDATION_REPLACEMENT",
+      "normalInvocation": "RETIRED",
+      "physicalDisposition": "RETIRED_TO_ARCHIVE",
+      "archivePath": "products/simcore/releases/legacy-workflows.json"
     },
     {
       "legacyWorkflow": ".github/workflows/simcore-06405-community-multiline-reaction-unit.yml",
@@ -49,15 +55,20 @@
         {"responsibilityId":"06405.frozen-surfaces","disposition":"PERMANENT_CONTRACT","permanentOwners":["GATE_ARCH","GATE_REGRESSION"],"permanentSuiteIds":[]},
         {"responsibilityId":"06405.patch-and-push","disposition":"RELEASE_GLUE","permanentOwners":[],"permanentSuiteIds":[]}
       ],
-      "writeDisposition": "RS2_4_PENDING",
-      "normalInvocation": "FORBIDDEN_AFTER_VALIDATION_REPLACEMENT"
+      "writeDisposition": "RETIRED_AFTER_PERMANENT_REPLACEMENT",
+      "priorNormalInvocation": "FORBIDDEN_AFTER_VALIDATION_REPLACEMENT",
+      "normalInvocation": "RETIRED",
+      "physicalDisposition": "RETIRED_TO_ARCHIVE",
+      "archivePath": "products/simcore/releases/legacy-workflows.json"
     },
     {
       "legacyWorkflow": ".github/workflows/simcore-06406-post-bend-c-clock-handoff.yml",
       "class": "SUPERSEDED_HARNESS_OR_BUILD",
       "status": "SUPERSEDED_NO_AUTHORITY",
       "replacementWorkflow": ".github/workflows/simcore-06406-post-bend-c-clock-handoff-v2.yml",
-      "notes": "Earlier harness revision retained only as provenance; no independent current verification authority."
+      "notes": "Earlier harness revision retained only as provenance; no independent current verification authority.",
+      "physicalDisposition": "RETIRED_TO_ARCHIVE",
+      "archivePath": "products/simcore/releases/legacy-workflows.json"
     },
     {
       "legacyWorkflow": ".github/workflows/simcore-06406-post-bend-c-clock-handoff-v2.yml",
@@ -68,15 +79,20 @@
         {"responsibilityId":"06406.summary-scope","disposition":"LEGACY_COMPAT_TRANSITIONAL","permanentOwners":["GATE_LEGACY_COMPAT"],"permanentSuiteIds":[]},
         {"responsibilityId":"06406.patch-and-push","disposition":"RELEASE_GLUE","permanentOwners":[],"permanentSuiteIds":[]}
       ],
-      "writeDisposition": "RS2_4_PENDING",
-      "normalInvocation": "FORBIDDEN_AFTER_VALIDATION_REPLACEMENT"
+      "writeDisposition": "RETIRED_AFTER_PERMANENT_REPLACEMENT",
+      "priorNormalInvocation": "FORBIDDEN_AFTER_VALIDATION_REPLACEMENT",
+      "normalInvocation": "RETIRED",
+      "physicalDisposition": "RETIRED_TO_ARCHIVE",
+      "archivePath": "products/simcore/releases/legacy-workflows.json"
     },
     {
       "legacyWorkflow": ".github/workflows/simcore-06406-closure-completion-gate.yml",
       "class": "SUPERSEDED_HARNESS_OR_BUILD",
       "status": "SUPERSEDED_NO_AUTHORITY",
       "replacementWorkflow": ".github/workflows/simcore-06406-closure-completion-gate-v2.yml",
-      "notes": "Known earlier loader/harness path superseded by robust v2 evidence."
+      "notes": "Known earlier loader/harness path superseded by robust v2 evidence.",
+      "physicalDisposition": "RETIRED_TO_ARCHIVE",
+      "archivePath": "products/simcore/releases/legacy-workflows.json"
     },
     {
       "legacyWorkflow": ".github/workflows/simcore-06406-closure-completion-gate-v2.yml",
@@ -87,8 +103,11 @@
         {"responsibilityId":"06406.current-retained-controls","disposition":"PERMANENT_TEST","permanentOwners":["GATE_REGRESSION"],"permanentSuiteIds":["representation-fast","genuine-edit","community-reaction","broadcast-closure","diagnostic-copy"]},
         {"responsibilityId":"06406.patch-and-push","disposition":"RELEASE_GLUE","permanentOwners":[],"permanentSuiteIds":[]}
       ],
-      "writeDisposition": "RS2_4_PENDING",
-      "normalInvocation": "FORBIDDEN_AFTER_VALIDATION_REPLACEMENT"
+      "writeDisposition": "RETIRED_AFTER_PERMANENT_REPLACEMENT",
+      "priorNormalInvocation": "FORBIDDEN_AFTER_VALIDATION_REPLACEMENT",
+      "normalInvocation": "RETIRED",
+      "physicalDisposition": "RETIRED_TO_ARCHIVE",
+      "archivePath": "products/simcore/releases/legacy-workflows.json"
     },
     {
       "legacyWorkflow": ".github/workflows/simcore-memory-sync-06359.yml",

@@ -40,7 +40,7 @@
     "rulesetRequiredCheckVerified": false,
     "status": "UNAVAILABLE_RESIDUAL_DEFER"
   },
-  "legacyGateMapSha256": "732ee4e82fab3cb8c9d8fc12f7be1f34764411684420fe298ac03f1ea894cb75",
+  "legacyGateMapSha256": "d4424c2b17c71355a2c6f3abb7433eb3e8d6fa2c027877ebbbb08a026883682e",
   "shadowEquivalenceSha256": "d3a961ced4899f9453fb2909389f57ef7857f4b067526a0598e185c810c82dca",
   "pureCheckPredecessorsRetired": [],
   "pureCheckPredecessorsRetirementEligible": [

@@ -148,7 +148,7 @@ workflows:
     '.github/workflows/plugin-control-plane-status.yml':
         - 'actions/checkout@v7'
     '.github/workflows/pocketrisu-helper-docs.yml':
-        - 'actions/checkout@v4'
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/product-simcore-candidate-materialize.yml':
         - 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262'
         - 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093'

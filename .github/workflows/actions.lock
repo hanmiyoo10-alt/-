@@ -131,7 +131,7 @@ workflows:
     '.github/workflows/mcl-wireless-adb-ui.yml':
         - 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262'
     '.github/workflows/mobile-coder-webview-shell.yml':
-        - 'actions/checkout@v4'
+        - 'actions/checkout@v7'
         - 'actions/setup-java@v6'
         - 'actions/setup-python@v7'
         - 'actions/upload-artifact@v4'

@@ -18,8 +18,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Python wrapper tests
@@ -28,17 +28,17 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
         with:
           packages: ''
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.9'
       - name: Android unit tests
         run: gradle -p products/standalone/termux/screen-on/android-companion :app:testDebugUnitTest
       - name: Build debug APK
         run: gradle -p products/standalone/termux/screen-on/android-companion :app:assembleDebug
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: termux-screen-on-companion-debug-apk
           path: products/standalone/termux/screen-on/android-companion/app/build/outputs/apk/debug/app-debug.apk

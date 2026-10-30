@@ -133,7 +133,7 @@ workflows:
     '.github/workflows/mobile-coder-webview-shell.yml':
         - 'actions/checkout@v4'
         - 'actions/setup-java@v6'
-        - 'actions/setup-python@v5'
+        - 'actions/setup-python@v7'
         - 'actions/upload-artifact@v4'
         - 'dtolnay/rust-toolchain@stable'
         - 'taiki-e/install-action@v2'
@@ -370,6 +370,11 @@ dependencies:
     'actions/setup-python@v5':
         ref: 'v5'
         commit: 'sha1-a26af69be951a213d495a4c3e4e4022e16d87065'
+        owner_id: 44036562
+        repo_id: 192625525
+    'actions/setup-python@v7':
+        ref: 'v7'
+        commit: 'sha1-6d4fd22b20465ccc0f7354476588e8df7c9ca0e0'
         owner_id: 44036562
         repo_id: 192625525
     'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a':

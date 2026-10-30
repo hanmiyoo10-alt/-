@@ -199,9 +199,6 @@ workflows:
         - 'actions/checkout@v4'
     '.github/workflows/simcore-r2-7-status-projection.yml':
         - 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262'
-    '.github/workflows/simcore-release-command.yml':
-        - 'actions/checkout@v4'
-        - 'actions/upload-artifact@v4'
     '.github/workflows/simcore-release-permanent.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'

@@ -2648,3 +2648,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/502)
 - Event ID: `8f202f61760222b74e8d1adfc2f87e339800160992049709fe18e6ee13c4bedb`
 <!-- canonical-main-doc-promoted:8f202f61760222b74e8d1adfc2f87e339800160992049709fe18e6ee13c4bedb -->
+
+### 2026-10-31 — chore(canonical-main): currentize SimCore release adapter (#3948)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `f1427ae17a2279f6088ae0900466c8998a495aff`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f1427ae17a2279f6088ae0900466c8998a495aff)
+- Event ID: `b102ffb05b8604829b8c999cf51ec2189bc50270f4f5541fd38146129a7709b1`
+<!-- canonical-main-doc-promoted:b102ffb05b8604829b8c999cf51ec2189bc50270f4f5541fd38146129a7709b1 -->

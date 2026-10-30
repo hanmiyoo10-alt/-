@@ -25,7 +25,7 @@ jobs:
       failure_reason: ${{ steps.resolve.outputs.failure_reason }}
     steps:
       - name: Checkout immutable trusted validation control plane
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1

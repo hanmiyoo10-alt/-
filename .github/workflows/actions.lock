@@ -134,7 +134,7 @@ workflows:
         - 'actions/checkout@v7'
         - 'actions/setup-java@v6'
         - 'actions/setup-python@v7'
-        - 'actions/upload-artifact@v4'
+        - 'actions/upload-artifact@v7'
         - 'dtolnay/rust-toolchain@stable'
         - 'taiki-e/install-action@v2'
     '.github/workflows/plugin-control-plane-ci.yml':

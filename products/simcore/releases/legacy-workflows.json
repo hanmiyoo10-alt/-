@@ -57,9 +57,16 @@
       "classification": "MIXED_BUILD_VALIDATOR",
       "priorStatus": "VALIDATION_REPLACED",
       "reason": "timeline, broadcast, representation and community validation is permanently owned; historical title-gated work-branch mutation is retired"
+    },
+    {
+      "path": ".github/workflows/simcore-release-command.yml",
+      "blobSha": "b51cfdefe214ef285bb0912fe4e0bf2ff6d6a674",
+      "classification": "RELEASE_WRITER",
+      "priorStatus": "OUTSIDE_RS2_3",
+      "retirementIssue": 3951,
+      "sourceMainCommit": "323d3233f55a019ea39cd34ec1eeca1e18bd7803",
+      "reason": "SIMCORE_RELEASE adapter migrated to permanent workflow in #3947; historical v0.63.54 title-gated release writer retired"
     }
   ],
-  "explicitExclusions": [
-    ".github/workflows/simcore-release-command.yml"
-  ]
+  "explicitExclusions": []
 }

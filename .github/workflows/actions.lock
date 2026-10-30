@@ -190,18 +190,6 @@ workflows:
         - 'actions/upload-artifact@v7'
         - 'android-actions/setup-android@v4'
         - 'gradle/actions@v6'
-    '.github/workflows/simcore-06404-community-reaction-attribution.yml':
-        - 'actions/checkout@v4'
-    '.github/workflows/simcore-06405-community-multiline-reaction-unit.yml':
-        - 'actions/checkout@v4'
-    '.github/workflows/simcore-06406-closure-completion-gate-v2.yml':
-        - 'actions/checkout@v4'
-    '.github/workflows/simcore-06406-closure-completion-gate.yml':
-        - 'actions/checkout@v4'
-    '.github/workflows/simcore-06406-post-bend-c-clock-handoff-v2.yml':
-        - 'actions/checkout@v4'
-    '.github/workflows/simcore-06406-post-bend-c-clock-handoff.yml':
-        - 'actions/checkout@v4'
     '.github/workflows/simcore-architecture-contracts.yml':
         - 'actions/checkout@v7'
     '.github/workflows/simcore-ci.yml':
@@ -209,8 +197,6 @@ workflows:
         - 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'
         - 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0'
         - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-    '.github/workflows/simcore-m2-2-representation.yml':
-        - 'actions/checkout@v4'
     '.github/workflows/simcore-memory-sync-06359.yml':
         - 'actions/checkout@v4'
     '.github/workflows/simcore-r2-7-status-projection.yml':

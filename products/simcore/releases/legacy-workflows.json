@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "program": "SIMCORE_HISTORICAL_BUILD_WORKFLOW_RETIREMENT",
+  "trackingIssue": 3944,
+  "sourceMainCommit": "cf121ac4dcd5507210efe0bd0e04e3eba5346c1f",
+  "replacementAuthorities": {
+    "validation": ".github/workflows/simcore-ci.yml",
+    "candidateMaterialization": ".github/workflows/product-simcore-candidate-materialize.yml",
+    "releaseOrchestration": ".github/workflows/simcore-release-permanent.yml"
+  },
+  "retired": [
+    {
+      "path": ".github/workflows/simcore-m2-2-representation.yml",
+      "blobSha": "303fbd2ff898ef19b2beadbe95ed408e49f6b957",
+      "classification": "MIXED_BUILD_VALIDATOR",
+      "priorStatus": "VALIDATION_REPLACED",
+      "reason": "permanent regression and architecture owners replaced validation; historical title-gated work-branch mutation is no longer normal authority"
+    },
+    {
+      "path": ".github/workflows/simcore-06404-community-reaction-attribution.yml",
+      "blobSha": "4459684b0736323dbf576e7669ead816e85eea56",
+      "classification": "MIXED_BUILD_VALIDATOR",
+      "priorStatus": "VALIDATION_REPLACED",
+      "reason": "community-reaction and architecture contracts are permanently owned; historical title-gated work-branch mutation is retired"
+    },
+    {
+      "path": ".github/workflows/simcore-06405-community-multiline-reaction-unit.yml",
+      "blobSha": "8c808c278878148576eb1793c25ff0ed4b7a424f",
+      "classification": "MIXED_BUILD_VALIDATOR",
+      "priorStatus": "VALIDATION_REPLACED",
+      "reason": "community-reaction regression coverage is permanently owned; historical title-gated work-branch mutation is retired"
+    },
+    {
+      "path": ".github/workflows/simcore-06406-closure-completion-gate.yml",
+      "blobSha": "b6b77b2dfd0959d6e478ec7cca1ac94702496b6f",
+      "classification": "SUPERSEDED_HARNESS_OR_BUILD",
+      "priorStatus": "SUPERSEDED_NO_AUTHORITY",
+      "reason": "earlier closure harness revision has no independent current authority"
+    },
+    {
+      "path": ".github/workflows/simcore-06406-closure-completion-gate-v2.yml",
+      "blobSha": "7e4c6c03a49ac838bc7d111b3fd230f0e1cd6f26",
+      "classification": "MIXED_BUILD_VALIDATOR",
+      "priorStatus": "VALIDATION_REPLACED",
+      "reason": "closure, representation, community, diagnostic and legacy-compat coverage is permanently owned; historical title-gated work-branch mutation is retired"
+    },
+    {
+      "path": ".github/workflows/simcore-06406-post-bend-c-clock-handoff.yml",
+      "blobSha": "e77e34dca09a478b2bb5940dd73da82da288c3a9",
+      "classification": "SUPERSEDED_HARNESS_OR_BUILD",
+      "priorStatus": "SUPERSEDED_NO_AUTHORITY",
+      "reason": "earlier post-B_END clock handoff harness revision has no independent current authority"
+    },
+    {
+      "path": ".github/workflows/simcore-06406-post-bend-c-clock-handoff-v2.yml",
+      "blobSha": "7f90e091c6a9d050fa79d9e7832e68ba79837307",
+      "classification": "MIXED_BUILD_VALIDATOR",
+      "priorStatus": "VALIDATION_REPLACED",
+      "reason": "timeline, broadcast, representation and community validation is permanently owned; historical title-gated work-branch mutation is retired"
+    }
+  ],
+  "explicitExclusions": [
+    ".github/workflows/simcore-release-command.yml"
+  ]
+}

@@ -43,4 +43,3 @@
 - `product-simcore-candidate-materialize.yml` — `active`
 - `usage-dashboard-project-memory.yml` — `active`
 - `simcore-release-command.yml` — `legacy-dormant`
-- `repo-main-write-coordination-migration.yml` — `one-shot-migration`

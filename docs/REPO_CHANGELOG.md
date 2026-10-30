@@ -2656,3 +2656,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f1427ae17a2279f6088ae0900466c8998a495aff)
 - Event ID: `b102ffb05b8604829b8c999cf51ec2189bc50270f4f5541fd38146129a7709b1`
 <!-- canonical-main-doc-promoted:b102ffb05b8604829b8c999cf51ec2189bc50270f4f5541fd38146129a7709b1 -->
+
+### 2026-10-31 — chore(repo): retire completed main-write migration trigger (#3950)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `323d3233f55a019ea39cd34ec1eeca1e18bd7803`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/323d3233f55a019ea39cd34ec1eeca1e18bd7803)
+- Event ID: `88dc61401b5b808701758a682083a8b162130a616ee5190ebbc03c58d7309690`
+<!-- canonical-main-doc-promoted:88dc61401b5b808701758a682083a8b162130a616ee5190ebbc03c58d7309690 -->

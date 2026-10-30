@@ -2633,3 +2633,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/e560840fbe2e7aa5848b7af9638cd2ecd9d2d241)
 - Event ID: `a62234952ce670d0078062775854ddc4ed46969137a6cae9b4aa0b4db09bf7bd`
 <!-- canonical-main-doc-promoted:a62234952ce670d0078062775854ddc4ed46969137a6cae9b4aa0b4db09bf7bd -->
+
+### 2026-10-30 — chore(canonical-main): upgrade checkpoint publisher checkout to v7
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `94a18b6037c6cbbd215bc9995ed269ae09900c7c`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/94a18b6037c6cbbd215bc9995ed269ae09900c7c)
+- Event ID: `5eb19aa3b4f958b8c7b6703e70d05a4c3f9ce71e29dd42960ea354a4b6e7a5d4`
+<!-- canonical-main-doc-promoted:5eb19aa3b4f958b8c7b6703e70d05a4c3f9ce71e29dd42960ea354a4b6e7a5d4 -->

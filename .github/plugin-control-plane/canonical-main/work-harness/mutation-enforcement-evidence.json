@@ -70,9 +70,9 @@
       "capability": "SIMCORE_RELEASE",
       "mutationClass": "RELEASE_CHANNEL",
       "targetKind": "GITHUB_WORKFLOW",
-      "target": ".github/workflows/simcore-release-command.yml",
+      "target": ".github/workflows/simcore-release-permanent.yml",
       "enforcementState": "UNGATED",
-      "enforcementSurface": ".github/workflows/simcore-release-command.yml",
+      "enforcementSurface": ".github/workflows/simcore-release-permanent.yml",
       "requiredMarkers": [],
       "proofRefs": [],
       "note": "Release-channel authority remains intentionally outside the proven candidate canary scope."

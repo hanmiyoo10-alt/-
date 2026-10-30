@@ -42,4 +42,3 @@
 - `product-simcore-terminal-convergence-r2-8.yml` — `active`
 - `product-simcore-candidate-materialize.yml` — `active`
 - `usage-dashboard-project-memory.yml` — `active`
-- `simcore-release-command.yml` — `legacy-dormant`

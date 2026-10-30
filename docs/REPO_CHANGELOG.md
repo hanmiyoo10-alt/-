@@ -2664,3 +2664,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/323d3233f55a019ea39cd34ec1eeca1e18bd7803)
 - Event ID: `88dc61401b5b808701758a682083a8b162130a616ee5190ebbc03c58d7309690`
 <!-- canonical-main-doc-promoted:88dc61401b5b808701758a682083a8b162130a616ee5190ebbc03c58d7309690 -->
+
+### 2026-10-31 — chore(simcore): retire legacy release command (#3952)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `74de51aadb2b8321b2ab2c706e345375e902aea5`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/74de51aadb2b8321b2ab2c706e345375e902aea5)
+- Event ID: `f6400e41cd0e6145278b9cc4690380cdeb5e6494964b50ce3644977d940db971`
+<!-- canonical-main-doc-promoted:f6400e41cd0e6145278b9cc4690380cdeb5e6494964b50ce3644977d940db971 -->

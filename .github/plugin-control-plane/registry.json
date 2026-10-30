@@ -226,7 +226,6 @@
   "sharedPaths": [
     "README.md",
     "products/README.md",
-    ".vscode/**",
-    ".github/workflows/repo-main-write-coordination-migration.yml"
+    ".vscode/**"
   ]
 }

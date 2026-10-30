@@ -185,7 +185,7 @@ workflows:
         - 'actions/checkout@v4'
     '.github/workflows/screen-on-android-companion.yml':
         - 'actions/checkout@v4'
-        - 'actions/setup-java@v4'
+        - 'actions/setup-java@v6'
         - 'actions/setup-python@v5'
         - 'actions/upload-artifact@v4'
         - 'android-actions/setup-android@v3'

@@ -96,6 +96,32 @@ ok('legacy-workflow-classification', () => {
   expect(r.labels.includes('LEGACY_VERIFICATION'), JSON.stringify(r));
 });
 
+ok('historical-workflow-retirement-archive', () => {
+  const archive = JSON.parse(fs.readFileSync('products/simcore/releases/legacy-workflows.json', 'utf8'));
+  const legacyMap = JSON.parse(fs.readFileSync('products/simcore/ci/legacy-gate-map.json', 'utf8'));
+  const expectedPaths = [
+    '.github/workflows/simcore-m2-2-representation.yml',
+    '.github/workflows/simcore-06404-community-reaction-attribution.yml',
+    '.github/workflows/simcore-06405-community-multiline-reaction-unit.yml',
+    '.github/workflows/simcore-06406-closure-completion-gate.yml',
+    '.github/workflows/simcore-06406-closure-completion-gate-v2.yml',
+    '.github/workflows/simcore-06406-post-bend-c-clock-handoff.yml',
+    '.github/workflows/simcore-06406-post-bend-c-clock-handoff-v2.yml',
+  ];
+  expect(archive.schemaVersion === 1, 'legacy workflow archive schema');
+  expect(/^[0-9a-f]{40}$/.test(archive.sourceMainCommit || ''), 'legacy workflow source-main identity');
+  expect(JSON.stringify(archive.retired.map((row) => row.path).sort()) === JSON.stringify([...expectedPaths].sort()), 'legacy workflow archive path set');
+  for (const row of archive.retired) {
+    expect(/^[0-9a-f]{40}$/.test(row.blobSha || ''), `legacy workflow blob identity: ${row.path}`);
+    expect(!fs.existsSync(row.path), `retired workflow must stay absent: ${row.path}`);
+    const mapped = legacyMap.workflows.find((item) => item.legacyWorkflow === row.path);
+    expect(mapped?.physicalDisposition === 'RETIRED_TO_ARCHIVE', `retirement disposition missing: ${row.path}`);
+    expect(mapped?.archivePath === 'products/simcore/releases/legacy-workflows.json', `archive pointer missing: ${row.path}`);
+  }
+  expect(archive.explicitExclusions.includes('.github/workflows/simcore-release-command.yml'), 'release-command exclusion must remain explicit');
+  expect(fs.existsSync('.github/workflows/simcore-release-command.yml'), 'release-command is a separate retirement lane');
+});
+
 ok('workflow-read-only-trust-boundary', () => {
   const workflow = fs.readFileSync('.github/workflows/simcore-ci.yml', 'utf8');
   const forbidden = ['contents: write','pull_request_target:','${{ secrets.','repo-main-write.py','sync-state.mjs --write','git push','id-token: write'];
@@ -301,7 +327,8 @@ ok('legacy-map-complete', () => {
   expect(pure?.status === 'SHADOW_VERIFIED' && pure?.retirementEligibility === 'YES', 'pure predecessor is not retirement-eligible');
   for (const row of map.workflows.filter((x) => x.class === 'MIXED_BUILD_VALIDATOR')) {
     expect(row.status === 'VALIDATION_REPLACED', `mixed validator not validation-replaced: ${row.legacyWorkflow}`);
-    expect(row.writeDisposition === 'RS2_4_PENDING', `mixed validator write disposition changed: ${row.legacyWorkflow}`);
+    expect(row.writeDisposition === 'RETIRED_AFTER_PERMANENT_REPLACEMENT', `mixed validator retirement disposition missing: ${row.legacyWorkflow}`);
+    expect(row.physicalDisposition === 'RETIRED_TO_ARCHIVE', `mixed validator physical retirement missing: ${row.legacyWorkflow}`);
   }
 });
 

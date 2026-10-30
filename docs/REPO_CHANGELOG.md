@@ -2641,3 +2641,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/94a18b6037c6cbbd215bc9995ed269ae09900c7c)
 - Event ID: `5eb19aa3b4f958b8c7b6703e70d05a4c3f9ce71e29dd42960ea354a4b6e7a5d4`
 <!-- canonical-main-doc-promoted:5eb19aa3b4f958b8c7b6703e70d05a4c3f9ce71e29dd42960ea354a4b6e7a5d4 -->
+
+### 2026-10-30 — [repo-incident:P1] REQUIRED_CHECK_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/502)
+- Event ID: `8f202f61760222b74e8d1adfc2f87e339800160992049709fe18e6ee13c4bedb`
+<!-- canonical-main-doc-promoted:8f202f61760222b74e8d1adfc2f87e339800160992049709fe18e6ee13c4bedb -->

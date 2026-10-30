@@ -268,17 +268,17 @@ workflows:
         - 'android-actions/setup-android@v4'
         - 'gradle/actions@v6'
     '.github/workflows/termux-background-gpt.yml':
-        - 'actions/checkout@v4'
-        - 'actions/setup-python@v5'
+        - 'actions/checkout@v7'
+        - 'actions/setup-python@v7'
     '.github/workflows/termux-large-doc-prototype.yml':
-        - 'actions/checkout@v4'
-        - 'actions/setup-python@v5'
+        - 'actions/checkout@v7'
+        - 'actions/setup-python@v7'
     '.github/workflows/termux-response-watch.yml':
-        - 'actions/checkout@v4'
-        - 'actions/setup-python@v5'
+        - 'actions/checkout@v7'
+        - 'actions/setup-python@v7'
     '.github/workflows/termux-taskbridge.yml':
-        - 'actions/checkout@v4'
-        - 'actions/setup-python@v5'
+        - 'actions/checkout@v7'
+        - 'actions/setup-python@v7'
     '.github/workflows/usage-dashboard-597-materialize.yml':
         - 'actions/checkout@v4'
     '.github/workflows/usage-dashboard-candidate-ready.yml':

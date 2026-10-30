@@ -163,8 +163,6 @@ workflows:
     '.github/workflows/release-usage-dashboard-567-diagnostics-workspace.yml': []
     '.github/workflows/release-usage-dashboard-568-diagnostics-capture-identity.yml': []
     '.github/workflows/release-usage-dashboard-569-engine-source-modularization.yml': []
-    '.github/workflows/repo-main-write-coordination-migration.yml':
-        - 'actions/checkout@v4'
     '.github/workflows/repo-patch-write.yml':
         - 'actions/checkout@v4'
         - 'actions/setup-python@v5'

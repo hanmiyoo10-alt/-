@@ -65,7 +65,7 @@ jobs:
           apk_path=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-debug.apk' -type f -print -quit)
           test -n "$apk_path"
           cp "$apk_path" apk-output/chatgpt-webview-nologin-smoke.apk
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: chatgpt-webview-nologin-smoke
           path: products/chatgpt-mobile-coder-lab/webview-shell/apk-output/

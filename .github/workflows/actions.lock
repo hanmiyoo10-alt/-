@@ -180,9 +180,9 @@ workflows:
         - 'actions/setup-node@v7'
         - 'actions/upload-artifact@v4'
     '.github/workflows/reusable-usage-dashboard-promote.yml':
-        - 'actions/checkout@v4'
+        - 'actions/checkout@v7'
     '.github/workflows/reusable-usage-dashboard-validate.yml':
-        - 'actions/checkout@v4'
+        - 'actions/checkout@v7'
     '.github/workflows/screen-on-android-companion.yml':
         - 'actions/checkout@v7'
         - 'actions/setup-java@v6'
@@ -239,7 +239,7 @@ workflows:
         - 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093'
         - 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02'
     '.github/workflows/stage-local-usage-53-engine.yml':
-        - 'actions/checkout@v4'
+        - 'actions/checkout@v7'
     '.github/workflows/stage-usage-dashboard-536-multi-org.yml': []
     '.github/workflows/stage-usage-dashboard-537-engine-reconcile.yml': []
     '.github/workflows/stage-usage-dashboard-538-connection-lifecycle.yml': []
@@ -280,33 +280,33 @@ workflows:
         - 'actions/checkout@v7'
         - 'actions/setup-python@v7'
     '.github/workflows/usage-dashboard-597-materialize.yml':
-        - 'actions/checkout@v4'
+        - 'actions/checkout@v7'
     '.github/workflows/usage-dashboard-candidate-ready.yml':
-        - 'actions/checkout@v4'
+        - 'actions/checkout@v7'
     '.github/workflows/usage-dashboard-e9-release-reconcile.yml':
-        - 'actions/checkout@v4'
+        - 'actions/checkout@v7'
     '.github/workflows/usage-dashboard-e9-validate.yml':
-        - 'actions/checkout@v4'
+        - 'actions/checkout@v7'
     '.github/workflows/usage-dashboard-prepare-candidate.yml':
-        - 'actions/checkout@v4'
-        - 'actions/download-artifact@v4'
-        - 'actions/setup-node@v4'
-        - 'actions/upload-artifact@v4'
+        - 'actions/checkout@v7'
+        - 'actions/download-artifact@v8'
+        - 'actions/setup-node@v7'
+        - 'actions/upload-artifact@v7'
     '.github/workflows/usage-dashboard-project-memory.yml':
-        - 'actions/checkout@v4'
+        - 'actions/checkout@v7'
     '.github/workflows/usage-dashboard-promote.yml':
-        - 'actions/checkout@v4'
+        - 'actions/checkout@v7'
     '.github/workflows/usage-dashboard-stage-e7.yml':
-        - 'actions/checkout@v4'
-        - 'actions/download-artifact@v4'
-        - 'actions/upload-artifact@v4'
+        - 'actions/checkout@v7'
+        - 'actions/download-artifact@v8'
+        - 'actions/upload-artifact@v7'
     '.github/workflows/usage-dashboard-stage-request-self-heal.yml':
-        - 'actions/checkout@v4'
+        - 'actions/checkout@v7'
     '.github/workflows/usage-dashboard-upstream-idea-intake-contract.yml':
-        - 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262'
-        - 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020'
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'
     '.github/workflows/usage-dashboard-validate-exact.yml':
-        - 'actions/checkout@v4'
+        - 'actions/checkout@v7'
     '.github/workflows/usage-dashboard-validate.yml': []
     '.github/workflows/web-acquisition-ci.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
@@ -337,9 +337,9 @@ dependencies:
         commit: 'sha1-d3f86a106a0bac45b974a628896c90dbdf5c8093'
         owner_id: 44036562
         repo_id: 192626254
-    'actions/download-artifact@v4':
-        ref: 'v4'
-        commit: 'sha1-d3f86a106a0bac45b974a628896c90dbdf5c8093'
+    'actions/download-artifact@v8':
+        ref: 'v8'
+        commit: 'sha1-9000827ccba6bdab643e8b6fd33ac0654aef8333'
         owner_id: 44036562
         repo_id: 192626254
     'actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad':

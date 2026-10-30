@@ -40,7 +40,7 @@ jobs:
       failure_reason: ${{ steps.resolve.outputs.failure_reason }}
     steps:
       - name: Checkout immutable trusted control plane
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -160,7 +160,7 @@ jobs:
       failure_diagnostic_code: ${{ steps.materialize.outputs.failure_diagnostic_code }}
     steps:
       - name: Checkout frozen trusted main base
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.resolve_stage.outputs.trusted_base_sha }}
           fetch-depth: 0
@@ -431,7 +431,7 @@ jobs:
           echo "E7_CANDIDATE_BUNDLE_READY:$CANDIDATE_BRANCH:$CANDIDATE_PARENT_SHA:$PAYLOAD_SHA"
 
       - name: Upload immutable derived candidate payload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: usage-dashboard-e7-candidate-payload
           path: |
@@ -451,14 +451,14 @@ jobs:
       failure_reason: ${{ steps.write.outputs.failure_reason }}
     steps:
       - name: Checkout immutable trusted writer control plane
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.resolve_stage.outputs.trusted_base_sha }}
           fetch-depth: 1
           persist-credentials: true
 
       - name: Download candidate bundle only
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: usage-dashboard-e7-candidate-payload
           path: ${{ runner.temp }}/usage-dashboard-e7-candidate-payload
@@ -534,7 +534,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout canonical reducer wake helper
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 1
@@ -591,7 +591,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout trusted E25 failure projection
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1

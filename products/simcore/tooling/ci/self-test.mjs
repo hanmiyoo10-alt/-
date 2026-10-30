@@ -107,6 +107,7 @@ ok('historical-workflow-retirement-archive', () => {
     '.github/workflows/simcore-06406-closure-completion-gate-v2.yml',
     '.github/workflows/simcore-06406-post-bend-c-clock-handoff.yml',
     '.github/workflows/simcore-06406-post-bend-c-clock-handoff-v2.yml',
+    '.github/workflows/simcore-release-command.yml',
   ];
   expect(archive.schemaVersion === 1, 'legacy workflow archive schema');
   expect(/^[0-9a-f]{40}$/.test(archive.sourceMainCommit || ''), 'legacy workflow source-main identity');
@@ -118,8 +119,7 @@ ok('historical-workflow-retirement-archive', () => {
     expect(mapped?.physicalDisposition === 'RETIRED_TO_ARCHIVE', `retirement disposition missing: ${row.path}`);
     expect(mapped?.archivePath === 'products/simcore/releases/legacy-workflows.json', `archive pointer missing: ${row.path}`);
   }
-  expect(archive.explicitExclusions.includes('.github/workflows/simcore-release-command.yml'), 'release-command exclusion must remain explicit');
-  expect(fs.existsSync('.github/workflows/simcore-release-command.yml'), 'release-command is a separate retirement lane');
+  expect(!archive.explicitExclusions.includes('.github/workflows/simcore-release-command.yml'), 'retired release-command must not remain excluded from archive');
 });
 
 ok('workflow-read-only-trust-boundary', () => {

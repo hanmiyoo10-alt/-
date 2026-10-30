@@ -124,7 +124,9 @@
         {"responsibilityId":"release.generic-static-validation","disposition":"PERMANENT_CONTRACT","permanentOwners":["GATE_STATIC","GATE_ARCH"],"permanentSuiteIds":[]},
         {"responsibilityId":"release.transaction-write","disposition":"RELEASE_GLUE","permanentOwners":[],"permanentSuiteIds":[]}
       ],
-      "writeDisposition": "RS2_4_PENDING"
+      "writeDisposition": "RETIRED_AFTER_PERMANENT_REPLACEMENT",
+      "physicalDisposition": "RETIRED_TO_ARCHIVE",
+      "archivePath": "products/simcore/releases/legacy-workflows.json"
     },
     {
       "legacyWorkflow": ".github/workflows/simcore-release-state-sync.yml",

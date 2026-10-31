@@ -112,10 +112,12 @@ The shim accepts only the already-exported label `S` and overrides
 `--label-activate` requires exact 0.2.52 active bundle, exact 0.2.48 rollback
 bundle, running service, healthy watchdog, fresh persisted session and readable
 log. It preserves the exact original run, promotes the exact staged run and
-requests one restart. Success requires a new `Device ready: S` observation and
-no new authorization flow. Failure restores the exact original run and requests
-at most one rollback restart. Repeating an already exact successful state is a
-no-op.
+requests one restart. Success requires one fresh post-restart ready block containing exact
+`✅ Device ready:` followed by exact `Device Name: S`, with no new authorization
+flow before that proof. A missing, reordered, empty, arbitrary, `localhost`, or
+conflicting name does not prove success. Failure restores the exact original run
+and requests at most one rollback restart. Repeating an already exact successful
+state is a no-op.
 
 ## Evidence boundary
 

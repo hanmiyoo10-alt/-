@@ -26,6 +26,7 @@ const NOT_APPLICABLE_STAGES = Object.freeze([
   'VALIDATION_MERGE',
   'POSTMERGE_CONVERGENCE',
 ]);
+const TERMINAL_LIFECYCLES = new Set(['DONE', 'CANCELLED', 'SUPERSEDED']);
 const INSPECT_MODE = 'CANONICAL_MAIN_STAGE_CHECKPOINT_INSPECT';
 const CHECKPOINT_MARKER_TOKEN = 'canonical-main-stage-checkpoint:v1';
 const CHECKPOINT_MARKER_RE = /^<!-- canonical-main-stage-checkpoint:v1 packet=([1-9][0-9]*) stage=(AUTHORITY_SCOPE|IMPLEMENTATION_PR|VALIDATION_MERGE|POSTMERGE_CONVERGENCE|EXPERIMENT_CLOSE) digest=([0-9a-f]{64}) surface=(packet|audit) -->$/;
@@ -402,14 +403,16 @@ async function inspectCheckpoint({ client, packetNumber }) {
 
   if (!conflict && !unknown) {
     if (nativeState === 'closed') {
-      if (lifecycle === 'DONE') {
+      if (TERMINAL_LIFECYCLES.has(lifecycle)) {
         rebindDisposition = 'STOP_TERMINAL';
-        nextLegalAction = 'NONE_TERMINAL_PACKET_COMPLETE';
+        nextLegalAction = lifecycle === 'DONE'
+          ? 'NONE_TERMINAL_PACKET_COMPLETE'
+          : 'NONE_TERMINAL_PACKET_CLOSED';
       } else {
         conflict = true;
         reasonCodes.push('PACKET_LIFECYCLE_NATIVE_CONFLICT');
       }
-    } else if (lifecycle === 'DONE') {
+    } else if (TERMINAL_LIFECYCLES.has(lifecycle)) {
       rebindDisposition = 'CONTINUE_TRANSACTION_CLOSURE';
       nextLegalAction = 'SELF_CLOSE_SYNC_CURRENT_PACKET';
     } else if (lifecycle !== 'IN_PROGRESS') {

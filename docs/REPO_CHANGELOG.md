@@ -2688,3 +2688,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/dfe53c5632d198cd9d17728bd0bc1c4f3b902430)
 - Event ID: `d8fa784815ec9bf3a1eb84cc25808dc66d73cf274c8900f46414224bc3d97d5e`
 <!-- canonical-main-doc-promoted:d8fa784815ec9bf3a1eb84cc25808dc66d73cf274c8900f46414224bc3d97d5e -->
+
+### 2026-10-31 — chore(repo): modernize protection guard checkout (#3985)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `7635b236a8a8b12f237695dda0bebc70e852f546`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/7635b236a8a8b12f237695dda0bebc70e852f546)
+- Event ID: `0374713bd306a41ea06c5673b4e089303e91b18e8ab298008652a1910df721d1`
+<!-- canonical-main-doc-promoted:0374713bd306a41ea06c5673b4e089303e91b18e8ab298008652a1910df721d1 -->

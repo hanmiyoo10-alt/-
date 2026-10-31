@@ -40,7 +40,7 @@ class ModelRegistryTests(unittest.TestCase):
 
     def test_registered_model_identity_matches_its_frozen_proof_surface(self):
         zero_credit_workflow = (REPO_ROOT / ".github/workflows/agent-skill-zero-credit-eval.yml").read_text(encoding="utf-8")
-        smoke_workflow = (REPO_ROOT / ".github/workflows/agent-skill-orchestrator-model-family-smoke.yml").read_text(encoding="utf-8")
+        smoke_workflow = (REPO_ROOT / "tools/agent-skill-orchestrator/tests/fixtures/historical-workflows/agent-skill-orchestrator-model-family-smoke.yml").read_text(encoding="utf-8")
         candidate = json.loads(
             (PACKAGE / "models/candidates/ministral-3-3b-instruct-2512-q4_k_m.json").read_text(encoding="utf-8")
         )
@@ -62,7 +62,7 @@ class ModelRegistryTests(unittest.TestCase):
                 self.assertEqual(profile[key], candidate[key])
             self.assertEqual(profile["license"], candidate["license"])
             self.assertEqual(profile["access"]["class"], candidate["access"]["target_class"])
-            self.assertIn("agent-skill-orchestrator-model-family-smoke.yml", profile["access"]["source"])
+            self.assertIn("tests/fixtures/historical-workflows/agent-skill-orchestrator-model-family-smoke.yml", profile["access"]["source"])
             self.assertIn("model_family_smoke.py resolve", smoke_workflow)
             self.assertIn("candidate-resolved.json", smoke_workflow)
 

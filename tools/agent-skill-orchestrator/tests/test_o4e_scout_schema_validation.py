@@ -245,7 +245,7 @@ class O4EScoutSchemaValidationTests(unittest.TestCase):
             self.assertTrue((Path(temp) / "result.json").exists())
 
     def test_workflow_is_request_only_zero_credit_and_ordinary_ci_covers_it(self):
-        workflow_path = REPO_ROOT / ".github" / "workflows" / "agent-skill-orchestrator-o4e-scout-schema-validation.yml"
+        workflow_path = REPO_ROOT / "tools" / "agent-skill-orchestrator" / "tests" / "fixtures" / "historical-workflows" / "agent-skill-orchestrator-o4e-scout-schema-validation.yml"
         workflow = workflow_path.read_text(encoding="utf-8")
         self.assertIn("agent-skill-o4e-request/**", workflow)
         self.assertIn(".agent-skill-o4e-requests/*.json", workflow)
@@ -257,7 +257,8 @@ class O4EScoutSchemaValidationTests(unittest.TestCase):
 
         ci = (REPO_ROOT / ".github" / "workflows" / "agent-skills-ci.yml").read_text(encoding="utf-8")
         path = ".github/workflows/agent-skill-orchestrator-o4e-scout-schema-validation.yml"
-        self.assertGreaterEqual(ci.count(path), 2)
+        self.assertEqual(ci.count(path), 0)
+        self.assertGreaterEqual(ci.count("tools/agent-skill-orchestrator/**"), 2)
         self.assertNotIn("huggingface.co", ci)
         self.assertNotIn("llama-server", ci)
 

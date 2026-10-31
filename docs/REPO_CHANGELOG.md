@@ -2680,3 +2680,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ce2f91ed4b4e21dfb99969bfa016f3ea1f4ab439)
 - Event ID: `c0998c4ad8d2c3a82db609f6e5da8dc7208fb4f9b6e18b0a1860f3b56a6b83d5`
 <!-- canonical-main-doc-promoted:c0998c4ad8d2c3a82db609f6e5da8dc7208fb4f9b6e18b0a1860f3b56a6b83d5 -->
+
+### 2026-10-31 — chore(harness): modernize shadow artifact upload (#3979)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `dfe53c5632d198cd9d17728bd0bc1c4f3b902430`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/dfe53c5632d198cd9d17728bd0bc1c4f3b902430)
+- Event ID: `d8fa784815ec9bf3a1eb84cc25808dc66d73cf274c8900f46414224bc3d97d5e`
+<!-- canonical-main-doc-promoted:d8fa784815ec9bf3a1eb84cc25808dc66d73cf274c8900f46414224bc3d97d5e -->

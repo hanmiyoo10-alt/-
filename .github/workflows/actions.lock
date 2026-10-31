@@ -146,7 +146,7 @@ workflows:
     '.github/workflows/repository-work-harness-receipt-sync.yml':
         - 'actions/checkout@v7'
         - 'actions/setup-node@v7'
-        - 'actions/upload-artifact@v4'
+        - 'actions/upload-artifact@v7'
     '.github/workflows/repository-work-harness-shadow.yml':
         - 'actions/checkout@v7'
         - 'actions/setup-node@v7'
@@ -340,11 +340,6 @@ dependencies:
         repo_id: 192625955
     'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02':
         ref: 'v4.6.2'
-        commit: 'sha1-ea165f8d65b6e75b540449e92b4886f43607fa02'
-        owner_id: 44036562
-        repo_id: 192625955
-    'actions/upload-artifact@v4':
-        ref: 'v4'
         commit: 'sha1-ea165f8d65b6e75b540449e92b4886f43607fa02'
         owner_id: 44036562
         repo_id: 192625955

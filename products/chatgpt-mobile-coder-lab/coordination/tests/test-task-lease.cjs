@@ -79,6 +79,10 @@ function landingResidueCleanupAcquireRequest(overrides = {}) {
     ...overrides,
   });
 }
+function landingMultiResidueCleanupAcquireRequest(overrides = {}) {
+  const identity = lease.landingResidueCleanupIdentity('L');
+  return landingResidueCleanupAcquireRequest({scopes:[...identity.profiles[1]], ...overrides});
+}
 function landingBranchRepairAcquireRequest(overrides = {}) {
   const identity = lease.landingBranchRepairIdentity('M');
   return acquireRequest({
@@ -342,6 +346,21 @@ ok('landing_residue_cleanup admits only exact L fixed landing and scopes', () =>
     'path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc',
     'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc',
   ]);
+});
+ok('landing_residue_cleanup admits exact multi-owner validation bytecode profile only', () => {
+  const exact = lease.normalizeAcquireRequest(landingMultiResidueCleanupAcquireRequest());
+  assert.equal(exact.ok, true);
+  const expected = [...lease.landingResidueCleanupIdentity('L').profiles[1]].sort();
+  assert.deepEqual(exact.lease.scopes, expected);
+  assert.equal(expected.length, 9);
+  for (const scopes of [
+    expected.slice(1),
+    [...expected, 'path:extra.pyc'],
+    expected.map((item) => item === 'surface:mcl:l-landing-residue-cleanup-multi-owner-validation-pyc'
+      ? 'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc' : item),
+  ]) {
+    assert.equal(lease.normalizeAcquireRequest(landingMultiResidueCleanupAcquireRequest({scopes})).ok, false);
+  }
 });
 ok('landing_residue_cleanup rejects route executor identity scope and base drift', () => {
   for (const request of [

@@ -18,7 +18,27 @@ const FIXED_PATH = 'tools/repo-write/__pycache__/currentness_replay.cpython-312.
 const FIXED_PATH_SCOPE = 'path:' + FIXED_PATH;
 const FIXED_SURFACE = 'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc';
 const FIXED_SCOPES = Object.freeze([FIXED_PATH_SCOPE, FIXED_SURFACE].sort());
+const MULTI_PATHS = Object.freeze([
+  'products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/__pycache__/mcl_gui.cpython-312.pyc',
+  'products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/tests/__pycache__/test_contract.cpython-312.pyc',
+  'products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/tests/__pycache__/test_mcl_gui.cpython-312.pyc',
+  'products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/termux/__pycache__/heartbeat-client.cpython-312.pyc',
+  'products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/tests/__pycache__/test_contract.cpython-312.pyc',
+  'products/standalone/termux/screen-on/__pycache__/screen_on.cpython-312.pyc',
+  'products/standalone/termux/screen-on/tests/__pycache__/test_android_companion_contract.cpython-312.pyc',
+  'products/standalone/termux/screen-on/tests/__pycache__/test_screen_on.cpython-312.pyc',
+]);
+const MULTI_PATH_SCOPES = Object.freeze(MULTI_PATHS.map((item) => 'path:' + item).sort());
+const MULTI_SURFACE = 'surface:mcl:l-landing-residue-cleanup-multi-owner-validation-pyc';
+const MULTI_SCOPES = Object.freeze([...MULTI_PATH_SCOPES, MULTI_SURFACE].sort());
 const RESIDUE_REF_PREFIX = 'receipt:mcl-l-landing-residue-sha256:';
+const RESIDUE_SET_REF_PREFIX = 'receipt:mcl-l-landing-residue-set-sha256:';
+const CLEANUP_PROFILES = Object.freeze([
+  Object.freeze({id:'currentness-replay',paths:Object.freeze([FIXED_PATH]),pathScopes:Object.freeze([FIXED_PATH_SCOPE]),
+    scopes:FIXED_SCOPES,evidencePrefix:RESIDUE_REF_PREFIX,requireMainBranch:true}),
+  Object.freeze({id:'multi-owner-validation-pyc',paths:MULTI_PATHS,pathScopes:MULTI_PATH_SCOPES,
+    scopes:MULTI_SCOPES,evidencePrefix:RESIDUE_SET_REF_PREFIX,requireMainBranch:false}),
+]);
 const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const MAX_EVIDENCE_BYTES = 128 * 1024;
@@ -61,13 +81,15 @@ function gitReadEnv(env = process.env) {
   return {...env, GIT_OPTIONAL_LOCKS: '0'};
 }
 function output(operation, status, reasonCodes = [], extra = {}) {
+  const cleanupPaths = extra.cleanupPaths || [FIXED_PATH];
   return {
     schema: SCHEMA,
     operation,
     status,
     reasonCodes: [...new Set(reasonCodes)].sort(),
     stateChanged: Boolean(extra.stateChanged),
-    cleanupPath: FIXED_PATH,
+    cleanupPath: cleanupPaths.length === 1 ? cleanupPaths[0] : null,
+    cleanupPaths,
     details: 'withheld',
     authority: {...FALSE_AUTHORITY},
     ...extra,
@@ -141,12 +163,23 @@ function repositorySnapshot(profile) {
     fetchHead: fileSnapshot(resolveGitPath(profile, 'FETCH_HEAD')),
   };
 }
-function exactResidueRef(manifest) {
-  const rows = manifest.inputRefs.filter((ref) => ref.startsWith(RESIDUE_REF_PREFIX));
-  if (rows.length !== 1) throw new CleanupError('BLOCKED', ['RESIDUE_SHA_REF_REQUIRED']);
-  const digest = rows[0].slice(RESIDUE_REF_PREFIX.length);
+function cleanupProfileForScopes(scopes) {
+  const normalized = [...scopes].sort();
+  return CLEANUP_PROFILES.find((profile) => same(normalized, profile.scopes)) || null;
+}
+function exactResidueEvidence(manifest, cleanupProfile) {
+  const rows = manifest.inputRefs.filter((ref) => ref.startsWith(cleanupProfile.evidencePrefix));
+  if (rows.length !== 1 || manifest.inputRefs.length !== 1) {
+    throw new CleanupError('BLOCKED', ['RESIDUE_SHA_REF_REQUIRED']);
+  }
+  const digest = rows[0].slice(cleanupProfile.evidencePrefix.length);
   if (!SHA256_RE.test(digest)) throw new CleanupError('BLOCKED', ['RESIDUE_SHA_REF_INVALID']);
   return digest;
+}
+function canonicalResidueSetDigest(entries) {
+  const bytes = entries.slice().sort((a,b)=>a.path.localeCompare(b.path))
+    .map((entry) => entry.path + '\0' + entry.sha256 + '\n').join('');
+  return sha256(Buffer.from(bytes));
 }
 function validateEvidence({manifestText, ledgerText, packetText}) {
   const parsedManifest = handoff.parseManifest(manifestText);
@@ -170,13 +203,14 @@ function validateEvidence({manifestText, ledgerText, packetText}) {
   if (!ledger.ok || ledger.state.status !== 'ACTIVE') {
     throw new CleanupError('UNKNOWN', ['LEDGER_INVALID', ...(ledger.reasonCodes || [])]);
   }
+  const cleanupProfile = cleanupProfileForScopes(manifest.scopes);
   if (manifest.route !== 'L' || manifest.executor !== 'L' || manifest.phaseClass !== 'REPOSITORY_MUTATION'
       || manifest.workspace.kind !== 'landing_residue_cleanup'
       || manifest.workspace.branch !== FIXED_BRANCH || manifest.workspace.worktree !== FIXED_LANDING
       || !SHA40_RE.test(manifest.observedBaseSha || '')
-      || !same([...manifest.scopes].sort(), FIXED_SCOPES)
+      || !cleanupProfile
       || manifest.leaseRequirement !== 'REQUIRED'
-      || !same(manifest.expectedOutputRefs, [FIXED_PATH_SCOPE])) {
+      || !same(manifest.expectedOutputRefs, cleanupProfile.pathScopes)) {
     throw new CleanupError('CONFLICT', ['MANIFEST_BINDING_CONFLICT']);
   }
   if (taskLease.digest(packetText) !== manifest.packetBodySha256) {
@@ -194,7 +228,10 @@ function validateEvidence({manifestText, ledgerText, packetText}) {
       || lease.observedBaseSha !== manifest.observedBaseSha) {
     throw new CleanupError('CONFLICT', ['LEASE_MANIFEST_CONFLICT']);
   }
-  return {manifest, lease, projection, expectedSha256: exactResidueRef(manifest)};
+  return {
+    manifest, lease, projection, cleanupProfile,
+    expectedDigest: exactResidueEvidence(manifest, cleanupProfile),
+  };
 }
 function inspectPhysical(evidence, {profile = DEFAULT_PROFILE} = {}) {
   let real;
@@ -205,7 +242,11 @@ function inspectPhysical(evidence, {profile = DEFAULT_PROFILE} = {}) {
   if (top !== profile.landing) throw new CleanupError('CONFLICT', ['LANDING_TOPLEVEL_CONFLICT']);
   const branch = git(profile, ['branch', '--show-current'], 'BRANCH_READ_FAILED').trim();
   const head = git(profile, ['rev-parse', 'HEAD'], 'HEAD_READ_FAILED').trim();
-  if (branch !== FIXED_BRANCH) throw new CleanupError('BLOCKED', ['LANDING_BRANCH_INVALID']);
+  if (evidence.cleanupProfile.requireMainBranch) {
+    if (branch !== FIXED_BRANCH) throw new CleanupError('BLOCKED', ['LANDING_BRANCH_INVALID']);
+  } else if (![FIXED_BRANCH, ''].includes(branch)) {
+    throw new CleanupError('BLOCKED', ['LANDING_BRANCH_INVALID']);
+  }
   if (head !== evidence.manifest.observedBaseSha) throw new CleanupError('CONFLICT', ['LANDING_HEAD_CONFLICT']);
   const configured = git(profile, ['config', '--get', 'remote.origin.url'], 'ORIGIN_READ_FAILED').trim();
   const effective = git(profile, ['remote', 'get-url', 'origin'], 'ORIGIN_READ_FAILED').trim();
@@ -216,8 +257,10 @@ function inspectPhysical(evidence, {profile = DEFAULT_PROFILE} = {}) {
   if (configPresent(profile, 'remote.origin.uploadpack') || configPresent(profile, 'remote.origin.proxy')) {
     throw new CleanupError('BLOCKED', ['ORIGIN_OVERRIDE_DENIED']);
   }
-  const status = git(profile, ['status', '--porcelain=v1', '-uall'], 'STATUS_READ_FAILED');
-  if (status !== `?? ${FIXED_PATH}\n`) {
+  const actualStatus = git(profile, ['status', '--porcelain=v1', '-uall'], 'STATUS_READ_FAILED')
+    .trimEnd().split('\n').filter(Boolean).sort();
+  const expectedStatus = evidence.cleanupProfile.paths.map((item) => '?? ' + item).sort();
+  if (!same(actualStatus, expectedStatus)) {
     throw new CleanupError('BLOCKED', ['WORKTREE_STATUS_NOT_EXACT_RESIDUE']);
   }
   if (git(profile, ['diff-files', '--binary', '--'], 'TRACKED_DIFF_READ_FAILED') !== '') {
@@ -226,54 +269,78 @@ function inspectPhysical(evidence, {profile = DEFAULT_PROFILE} = {}) {
   if (git(profile, ['diff', '--cached', '--binary', '--'], 'STAGED_DIFF_READ_FAILED') !== '') {
     throw new CleanupError('BLOCKED', ['STAGED_DIFF_PRESENT']);
   }
-  const target = path.join(profile.landing, FIXED_PATH);
-  const parent = path.dirname(target);
-  let stat;
-  try { stat = fs.lstatSync(target); }
-  catch { throw new CleanupError('BLOCKED', ['RESIDUE_MISSING']); }
-  if (!stat.isFile() || stat.isSymbolicLink()) throw new CleanupError('BLOCKED', ['RESIDUE_TYPE_INVALID']);
-  if ((stat.mode & 0o777) !== 0o644) throw new CleanupError('BLOCKED', ['RESIDUE_MODE_INVALID']);
-  if (sha256(fs.readFileSync(target)) !== evidence.expectedSha256) {
+  const targets = [];
+  const parentEntries = new Map();
+  const residueEntries = [];
+  for (const relative of evidence.cleanupProfile.paths) {
+    const target = path.join(profile.landing, relative);
+    const parent = path.dirname(target);
+    let stat;
+    try { stat = fs.lstatSync(target); }
+    catch { throw new CleanupError('BLOCKED', ['RESIDUE_MISSING']); }
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new CleanupError('BLOCKED', ['RESIDUE_TYPE_INVALID']);
+    if ((stat.mode & 0o777) !== 0o644) throw new CleanupError('BLOCKED', ['RESIDUE_MODE_INVALID']);
+    const fileSha = sha256(fs.readFileSync(target));
+    residueEntries.push({path: relative, sha256: fileSha});
+    const tracked = run('git', ['-C', profile.landing, 'ls-files', '--error-unmatch', '--', relative],
+      {env: gitReadEnv()});
+    if (tracked.error || tracked.signal || ![0, 1].includes(tracked.code)) {
+      throw new CleanupError('UNKNOWN', ['TRACKED_IDENTITY_READ_FAILED']);
+    }
+    if (tracked.code === 0) throw new CleanupError('CONFLICT', ['RESIDUE_TRACKED']);
+    const headEntry = run('git', ['-C', profile.landing, 'cat-file', '-e', 'HEAD:' + relative],
+      {env: gitReadEnv()});
+    if (headEntry.error || headEntry.signal) throw new CleanupError('UNKNOWN', ['HEAD_ENTRY_READ_FAILED']);
+    if (headEntry.code === 0) throw new CleanupError('CONFLICT', ['RESIDUE_PRESENT_IN_HEAD']);
+    targets.push(target);
+    if (!parentEntries.has(parent)) parentEntries.set(parent, []);
+    parentEntries.get(parent).push(path.basename(target));
+  }
+  const actualDigest = evidence.cleanupProfile.paths.length === 1
+    ? residueEntries[0].sha256 : canonicalResidueSetDigest(residueEntries);
+  if (actualDigest !== evidence.expectedDigest) {
     throw new CleanupError('CONFLICT', ['RESIDUE_HASH_MISMATCH']);
   }
-  const tracked = run('git', ['-C', profile.landing, 'ls-files', '--error-unmatch', '--', FIXED_PATH],
-    {env: gitReadEnv()});
-  if (tracked.error || tracked.signal || ![0, 1].includes(tracked.code)) {
-    throw new CleanupError('UNKNOWN', ['TRACKED_IDENTITY_READ_FAILED']);
+  for (const [parent, expected] of parentEntries.entries()) {
+    let parentStat;
+    try { parentStat = fs.lstatSync(parent); }
+    catch { throw new CleanupError('BLOCKED', ['PARENT_DIR_MISSING']); }
+    if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) {
+      throw new CleanupError('BLOCKED', ['PARENT_DIR_INVALID']);
+    }
+    if (!same(fs.readdirSync(parent).sort(), expected.sort())) {
+      throw new CleanupError('BLOCKED', ['PARENT_DIR_NOT_EXACT']);
+    }
   }
-  if (tracked.code === 0) throw new CleanupError('CONFLICT', ['RESIDUE_TRACKED']);
-  const headEntry = run('git', ['-C', profile.landing, 'cat-file', '-e', 'HEAD:' + FIXED_PATH],
-    {env: gitReadEnv()});
-  if (headEntry.error || headEntry.signal) throw new CleanupError('UNKNOWN', ['HEAD_ENTRY_READ_FAILED']);
-  if (headEntry.code === 0) throw new CleanupError('CONFLICT', ['RESIDUE_PRESENT_IN_HEAD']);
-  let parentStat;
-  try { parentStat = fs.lstatSync(parent); }
-  catch { throw new CleanupError('BLOCKED', ['PARENT_DIR_MISSING']); }
-  if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) {
-    throw new CleanupError('BLOCKED', ['PARENT_DIR_INVALID']);
-  }
-  const entries = fs.readdirSync(parent).sort();
-  if (!same(entries, [path.basename(target)])) throw new CleanupError('BLOCKED', ['PARENT_DIR_NOT_EXACT']);
-  return {target, parent, before: repositorySnapshot(profile)};
+  return {
+    targets,
+    parents: [...parentEntries.keys()].sort((a,b) => b.length - a.length),
+    before: repositorySnapshot(profile),
+    actualDigest,
+  };
 }
 function inspectEvidence(input, options = {}) {
   const evidence = validateEvidence(input);
   const physical = inspectPhysical(evidence, options);
   return output('inspect', 'ELIGIBLE', [], {
+    cleanupPaths: [...evidence.cleanupProfile.paths],
     packetRef: evidence.manifest.packetRef,
     leaseId: evidence.lease.leaseId,
     observedBaseSha: evidence.manifest.observedBaseSha,
-    expectedResidueSha256: evidence.expectedSha256,
+    expectedResidueSha256: evidence.cleanupProfile.paths.length === 1 ? evidence.expectedDigest : null,
+    expectedResidueSetSha256: evidence.cleanupProfile.paths.length > 1 ? evidence.expectedDigest : null,
     snapshot: physical.before,
     nextLegalAction: 'APPLY_EXACT_RESIDUE_CLEANUP',
   });
 }
-function postcheck(before, {profile = DEFAULT_PROFILE} = {}) {
-  if (fs.existsSync(path.join(profile.landing, FIXED_PATH))) {
-    throw new CleanupError('CONFLICT', ['RESIDUE_STILL_PRESENT'], true);
+function postcheck(before, cleanupProfile, {profile = DEFAULT_PROFILE} = {}) {
+  for (const relative of cleanupProfile.paths) {
+    if (fs.existsSync(path.join(profile.landing, relative))) {
+      throw new CleanupError('CONFLICT', ['RESIDUE_STILL_PRESENT'], true);
+    }
   }
-  if (fs.existsSync(path.dirname(path.join(profile.landing, FIXED_PATH)))) {
-    throw new CleanupError('CONFLICT', ['PARENT_DIR_STILL_PRESENT'], true);
+  for (const parent of new Set(cleanupProfile.paths.map((item) => path.dirname(path.join(profile.landing, item))))) {
+    if (fs.existsSync(parent)) throw new CleanupError('CONFLICT', ['PARENT_DIR_STILL_PRESENT'], true);
   }
   if (git(profile, ['status', '--porcelain=v1', '-uall'], 'POST_STATUS_READ_FAILED') !== '') {
     throw new CleanupError('CONFLICT', ['POST_WORKTREE_NOT_CLEAN'], true);
@@ -291,19 +358,25 @@ function applyEvidence(input, options = {}) {
   const physical = inspectPhysical(evidence, options);
   let changed = false;
   try {
-    fs.unlinkSync(physical.target);
-    changed = true;
-    if (fs.readdirSync(physical.parent).length !== 0) {
-      throw new CleanupError('CONFLICT', ['PARENT_DIR_CHANGED_AFTER_UNLINK'], true);
+    for (const target of physical.targets) {
+      fs.unlinkSync(target);
+      changed = true;
     }
-    fs.rmdirSync(physical.parent);
-    const after = postcheck(physical.before, options);
+    for (const parent of physical.parents) {
+      if (fs.readdirSync(parent).length !== 0) {
+        throw new CleanupError('CONFLICT', ['PARENT_DIR_CHANGED_AFTER_UNLINK'], true);
+      }
+      fs.rmdirSync(parent);
+    }
+    const after = postcheck(physical.before, evidence.cleanupProfile, options);
     return output('apply', 'PASS', [], {
+      cleanupPaths: [...evidence.cleanupProfile.paths],
       stateChanged: true,
       packetRef: evidence.manifest.packetRef,
       leaseId: evidence.lease.leaseId,
       observedBaseSha: evidence.manifest.observedBaseSha,
-      expectedResidueSha256: evidence.expectedSha256,
+      expectedResidueSha256: evidence.cleanupProfile.paths.length === 1 ? evidence.expectedDigest : null,
+      expectedResidueSetSha256: evidence.cleanupProfile.paths.length > 1 ? evidence.expectedDigest : null,
       snapshotPreserved: same(physical.before, after),
       nextLegalAction: 'RELEASE_D013_THEN_D014_COMPLETE',
     });
@@ -390,9 +463,17 @@ module.exports = {
   FIXED_REPO,
   FIXED_SCOPES,
   FIXED_SURFACE,
+  MULTI_PATHS,
+  MULTI_PATH_SCOPES,
+  MULTI_SCOPES,
+  MULTI_SURFACE,
+  CLEANUP_PROFILES,
   RESIDUE_REF_PREFIX,
+  RESIDUE_SET_REF_PREFIX,
   SCHEMA,
   applyEvidence,
+  canonicalResidueSetDigest,
+  cleanupProfileForScopes,
   inspectEvidence,
   inspectPhysical,
   output,

@@ -2696,3 +2696,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/7635b236a8a8b12f237695dda0bebc70e852f546)
 - Event ID: `0374713bd306a41ea06c5673b4e089303e91b18e8ab298008652a1910df721d1`
 <!-- canonical-main-doc-promoted:0374713bd306a41ea06c5673b4e089303e91b18e8ab298008652a1910df721d1 -->
+
+### 2026-10-31 — fix(canonical-main): reconcile terminal packet lifecycles (#4019)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `274d746dfdf165081c213e1a5d19d537bb314160`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/274d746dfdf165081c213e1a5d19d537bb314160)
+- Event ID: `39f6d9b0d669ff05465e831806db435ef0d3c293fd4b18640f332c87078c3fdf`
+<!-- canonical-main-doc-promoted:39f6d9b0d669ff05465e831806db435ef0d3c293fd4b18640f332c87078c3fdf -->

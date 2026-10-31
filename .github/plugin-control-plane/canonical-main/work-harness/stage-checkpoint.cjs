@@ -405,9 +405,7 @@ async function inspectCheckpoint({ client, packetNumber }) {
     if (nativeState === 'closed') {
       if (TERMINAL_LIFECYCLES.has(lifecycle)) {
         rebindDisposition = 'STOP_TERMINAL';
-        nextLegalAction = lifecycle === 'DONE'
-          ? 'NONE_TERMINAL_PACKET_COMPLETE'
-          : 'NONE_TERMINAL_PACKET_CLOSED';
+        nextLegalAction = 'NONE_TERMINAL_PACKET_COMPLETE';
       } else {
         conflict = true;
         reasonCodes.push('PACKET_LIFECYCLE_NATIVE_CONFLICT');

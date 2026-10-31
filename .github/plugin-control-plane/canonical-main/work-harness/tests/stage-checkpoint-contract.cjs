@@ -612,7 +612,7 @@ assert.throws(
     const closedTerminalResult = await inspectCheckpoint({client: closedTerminal, packetNumber: PACKET});
     assert.equal(closedTerminalResult.disposition, 'PASS', terminalLifecycle);
     assert.equal(closedTerminalResult.rebindDisposition, 'STOP_TERMINAL', terminalLifecycle);
-    assert.equal(closedTerminalResult.nextLegalAction, 'NONE_TERMINAL_PACKET_CLOSED', terminalLifecycle);
+    assert.equal(closedTerminalResult.nextLegalAction, 'NONE_TERMINAL_PACKET_COMPLETE', terminalLifecycle);
   }
 
   const closedActive = fakeClient({

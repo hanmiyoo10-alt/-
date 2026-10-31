@@ -131,7 +131,20 @@ node .github/plugin-control-plane/canonical-main/work-system/pr-authoring-prefli
   --body-file /path/to/pr-body.md
 ```
 
-The preflight requires an exact `Refs #<packet>` body line and rejects closing-keyword issue references in title or body for any issue number. Do not bypass a non-PASS result by calling `gh pr create`, a connector, or another external publisher directly. The repository does not claim to intercept every external GitHub PR-creation surface; the producer owns this prepublication check. `PASS` grants no publication or other effect authority. Intentionally terminal PRs whose merge satisfies every required acceptance item keep GitHub's normal closing semantics and do not require the non-closing preflight.
+The preflight requires an exact `Refs #<packet>` body line and rejects closing-keyword issue references in title or body for any issue number. Do not bypass a non-PASS result by calling `gh pr create`, a connector, or another external publisher directly.
+
+For ordinary CLI-capable same-repository publication, prefer the repository-owned guarded adapter so the required ordering is structural rather than memory-based:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/pr-publication.cjs \
+  --packet '#<N>' \
+  --head '<same-repository-branch>' \
+  --expected-head '<40-hex-candidate-sha>' \
+  --title-file /path/to/pr-title.txt \
+  --body-file /path/to/pr-body.md
+```
+
+That adapter reuses the same preflight semantic owner, fixes repository/base to `hanmiyoo10-alt/-` / `main`, calls the existing GitHub CLI publisher only after `PASS`, and verifies exact title/body/head readback. It does not grant merge/release/production authority and does not claim to intercept every external GitHub PR-creation surface. When the adapter is unavailable or inapplicable, the explicit preflight above remains mandatory before the external publisher; a post-hoc `PASS` is not equivalent to prepublication enforcement. `PASS` grants no publication or other effect authority. Intentionally terminal PRs whose merge satisfies every required acceptance item keep GitHub's normal closing semantics and do not require the non-closing preflight.
 
 ## Stop condition
 

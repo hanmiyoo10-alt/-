@@ -157,7 +157,7 @@ class O4CScoutServiceTierBenchmarkTests(unittest.TestCase):
 
     def test_benchmark_workflow_is_manual_only_and_secret_free(self) -> None:
         workflow = (
-            REPO_ROOT / ".github" / "workflows" / "agent-skill-orchestrator-o4c-scout-benchmark.yml"
+            REPO_ROOT / "tools" / "agent-skill-orchestrator" / "tests" / "fixtures" / "historical-workflows" / "agent-skill-orchestrator-o4c-scout-benchmark.yml"
         ).read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", workflow)
         self.assertNotIn("pull_request:", workflow)
@@ -174,9 +174,10 @@ class O4CScoutServiceTierBenchmarkTests(unittest.TestCase):
     def test_agent_skills_ci_mechanically_covers_benchmark_workflow_without_executing_it(self) -> None:
         ci = (REPO_ROOT / ".github" / "workflows" / "agent-skills-ci.yml").read_text(encoding="utf-8")
         benchmark_path = ".github/workflows/agent-skill-orchestrator-o4c-scout-benchmark.yml"
-        self.assertEqual(ci.count(benchmark_path), 2)
+        self.assertEqual(ci.count(benchmark_path), 0)
+        self.assertGreaterEqual(ci.count("tools/agent-skill-orchestrator/**"), 2)
         self.assertNotIn("workflow_call", (
-            REPO_ROOT / ".github" / "workflows" / "agent-skill-orchestrator-o4c-scout-benchmark.yml"
+            REPO_ROOT / "tools" / "agent-skill-orchestrator" / "tests" / "fixtures" / "historical-workflows" / "agent-skill-orchestrator-o4c-scout-benchmark.yml"
         ).read_text(encoding="utf-8"))
 
 

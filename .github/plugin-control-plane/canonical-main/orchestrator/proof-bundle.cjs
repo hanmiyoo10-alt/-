@@ -177,7 +177,12 @@ function writeBundle(bundle) {
   return file;
 }
 
+function validateInvocationContext({eventName, ref} = {}) {
+  const blocked = String(eventName || '').trim() === 'workflow_dispatch' && String(ref || '').trim() !== 'refs/heads/main';
+  return blocked ? {disposition: 'BLOCKED', reasonCode: 'MANUAL_DISPATCH_REQUIRES_MAIN'} : {disposition: 'PASS', reasonCode: null}; }
 function run() {
+  const admission = validateInvocationContext({eventName: process.env.GITHUB_EVENT_NAME, ref: process.env.GITHUB_REF}); if (admission.disposition !== 'PASS') throw new Error(`proof-bundle invocation blocked: ${admission.reasonCode}`);
+
   const repo = String(process.env.GITHUB_REPOSITORY || '').trim();
   const targetSha = String(process.env.TARGET_SHA || process.env.GITHUB_SHA || '').trim();
   if (!repo) throw new Error('proof-bundle missing GITHUB_REPOSITORY');
@@ -208,7 +213,7 @@ module.exports = {
   collectOnce,
   incidentProjection,
   parseOps,
-  renderSummary,
+  renderSummary, validateInvocationContext,
   workflowEvidence,
   writeBundle,
 };

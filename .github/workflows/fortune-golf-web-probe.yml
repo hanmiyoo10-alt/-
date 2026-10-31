@@ -93,7 +93,7 @@ jobs:
           (root / 'probe-build.json').write_text(json.dumps(info, indent=2) + '\n')
           PY
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: fortune-golf-probe11-web
           path: wie-web/dist/

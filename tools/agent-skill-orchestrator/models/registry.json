@@ -56,7 +56,7 @@
       },
       "access": {
         "class": "public_unauthenticated_https",
-        "source": ".github/workflows/agent-skill-orchestrator-model-family-smoke.yml#Download and verify frozen Ministral GGUF without credentials"
+        "source": "tools/agent-skill-orchestrator/tests/fixtures/historical-workflows/agent-skill-orchestrator-model-family-smoke.yml#Download and verify frozen Ministral GGUF without credentials"
       },
       "execution_surface": "LOCAL_GITHUB_HOSTED_CPU_ZERO_AI_CREDITS",
       "enabled": true

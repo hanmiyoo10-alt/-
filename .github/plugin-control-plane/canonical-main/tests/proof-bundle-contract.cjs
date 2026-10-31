@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 const {composeProofBundle, MODE} = require('../proof-bundle.cjs');
 const {readGitHubCliJson} = require('../infra/github-cli-read.cjs');
-const {attachReadFailures, parseOps, writeBundle} = require('../orchestrator/proof-bundle.cjs');
+const {attachReadFailures, parseOps, validateInvocationContext, writeBundle} = require('../orchestrator/proof-bundle.cjs');
 const {exactShaWorkflowApplicability, pluginWorkflowEvidence, resolveMergeBase} = require('../orchestrator/pr-workflow-applicability.cjs');
 
 function sample() {
@@ -263,14 +263,74 @@ try {
   fs.rmSync(artifactRoot, {recursive: true, force: true});
 }
 
+assert.deepEqual(
+  validateInvocationContext({eventName: 'workflow_dispatch', ref: 'refs/heads/main'}),
+  {disposition: 'PASS', reasonCode: null},
+);
+assert.deepEqual(
+  validateInvocationContext({eventName: 'workflow_dispatch', ref: 'refs/heads/candidate'}),
+  {disposition: 'BLOCKED', reasonCode: 'MANUAL_DISPATCH_REQUIRES_MAIN'},
+);
+assert.deepEqual(
+  validateInvocationContext({eventName: 'workflow_dispatch', ref: 'refs/tags/v1'}),
+  {disposition: 'BLOCKED', reasonCode: 'MANUAL_DISPATCH_REQUIRES_MAIN'},
+);
+assert.deepEqual(
+  validateInvocationContext({eventName: 'push', ref: 'refs/heads/main'}),
+  {disposition: 'PASS', reasonCode: null},
+);
+assert.deepEqual(
+  validateInvocationContext({eventName: '', ref: ''}),
+  {disposition: 'PASS', reasonCode: null},
+);
+assert.deepEqual(
+  validateInvocationContext({eventName: 'workflow_dispatch', ref: ''}),
+  {disposition: 'BLOCKED', reasonCode: 'MANUAL_DISPATCH_REQUIRES_MAIN'},
+);
+
+const collectorCli = path.join(__dirname, '..', 'orchestrator', 'proof-bundle.cjs');
+let offMainCliError = null;
+try {
+  execFileSync(process.execPath, [collectorCli, 'compose'], {
+    env: {
+      ...process.env,
+      GITHUB_EVENT_NAME: 'workflow_dispatch',
+      GITHUB_REF: 'refs/heads/candidate',
+      GITHUB_REPOSITORY: '',
+      TARGET_SHA: '',
+      GH_TOKEN: '',
+    },
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+} catch (error) {
+  offMainCliError = error;
+}
+assert(offMainCliError, 'off-main manual dispatch must fail before collection');
+assert(String(offMainCliError.stderr || '').includes('MANUAL_DISPATCH_REQUIRES_MAIN'),
+  'off-main manual dispatch must fail on invocation admission before repository/token validation');
+
 const githubDir = path.resolve(__dirname, '..', '..', '..');
 const collector = fs.readFileSync(path.join(__dirname, '..', 'orchestrator', 'proof-bundle.cjs'), 'utf8');
 const workflow = fs.readFileSync(path.join(githubDir, 'workflows', 'canonical-main-proof-bundle.yml'), 'utf8');
+const canonicalMainReadme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8');
+const runStart = collector.indexOf('function run()');
+const admissionInRun = collector.indexOf('validateInvocationContext({', runStart);
+const collectionInRun = collector.indexOf('collectOnce(repo, targetSha)', runStart);
+assert(runStart >= 0 && admissionInRun > runStart && collectionInRun > admissionInRun,
+  'manual dispatch admission must run before proof collection');
 assert(!/--method['",\s]+(?:POST|PATCH|PUT|DELETE)/i.test(collector), 'collector must not issue write API methods');
 assert(!/^\s*[a-z-]+:\s*write\s*$/mi.test(workflow), 'proof workflow permissions must be read-only');
 assert(/push:\s*\n\s*branches:\s*\[main\]/m.test(workflow), 'proof bundle must run automatically on main push');
 assert(/canonical-main-proof-bundle\.json/.test(workflow), 'workflow must upload the JSON bundle');
 assert(/if-no-files-found:\s*error/.test(workflow), 'missing proof artifact must remain a workflow error');
 assert(/orchestrator\/proof-bundle\.cjs compose/.test(workflow), 'workflow must invoke the trusted composer');
+assert(/workflow_dispatch:/m.test(workflow), 'manual refresh trigger must remain available');
+assert(/current-main-only manual refresh/i.test(canonicalMainReadme));
+assert(/repository-actions-compat-proof\.yml/.test(canonicalMainReadme),
+  'candidate action-runtime proof must point to the generic read-only harness');
+assert(/workflow execution success/i.test(canonicalMainReadme)
+  && /acceptanceReady/i.test(canonicalMainReadme),
+  'docs must distinguish workflow execution from semantic proof acceptance');
 
 console.log('canonical-main proof-bundle-contract: ok');

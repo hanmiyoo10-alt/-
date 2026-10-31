@@ -1,8 +1,24 @@
 # Agent Skill Orchestrator
 
-This package is being introduced incrementally under the O0–O7 roadmap.
+## Current authority and lifecycle locator
 
-## Current stage: O1-B2 synthetic budget, deterministic judge, and zero-model receipt
+Current navigation/lifecycle authority: issue #4008.
+
+This README is a current entrypoint plus historical technical foundation. It does not replace immutable phase evidence. The current body of issue #1120 is unrelated `plugin-impact-scope` work and **must not** be treated as current Agent Skill Orchestrator program authority. Historical frozen docs that cite `Tracking authority: issue #1120` refer to the exact historical #1120 comments recorded for those phases.
+
+Retained request-only operational surfaces:
+
+- O2-A Scout Pilot: acceptance #1120 comment `5505064286`; stable Scout v3 baseline #1120 comment `5506216154`.
+- O2-D Sequential Pilot: acceptance #1120 comment `5507048794`; mechanical live PASS #1120 comment `5507400734`; retained as the sequential rollback baseline.
+- O3-D Parallel Pilot: acceptance #1120 comment `5508665786`; live-validated PASS #1120 comment `5508878728`.
+
+O4-B model-family smoke is retired through #3962 / PR #3963 and is not a retained operational workflow. Live Agent Skill/Copilot eval remains separately owned by #3581. GitHub Actions modernization coordination is #3860 / #3958. Do not create synthetic request JSON or model runs merely to prove Actions compatibility.
+
+The detailed O0/O1 material below is preserved as historical foundation for the package architecture. It is **not** the current program-stage locator.
+
+## Historical foundation: O1-B2 synthetic budget, deterministic judge, and zero-model receipt
+
+This package was introduced incrementally under the O0–O7 roadmap.
 
 O0 established typed interchange contracts, deterministic canonical JSON serialization/SHA-256 helpers, and metadata registries. O1-A added an **inert deterministic control plane** from a normalized typed task request through routing, explicit repository-authority adaptation, and bounded immutable evidence packaging. O1-B1 added a **synthetic-only typed evidence bus and deterministic unresolved-conflict derivation**. O1-B2 adds deterministic synthetic role-attempt budgeting, final analysis judging, and a separate zero-model receipt hash chain. It still does **not** execute or download models, run production role workers, schedule concurrency, assign models, mutate repository content, release software, or claim device truth.
 

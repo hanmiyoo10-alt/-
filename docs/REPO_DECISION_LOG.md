@@ -232,3 +232,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3788)
 - Event ID: `c8ca9ec02cd2467453f3f5f51cd71cec82e6a30925efc89f55fb97abce4b5b35`
 <!-- canonical-main-doc-promoted:c8ca9ec02cd2467453f3f5f51cd71cec82e6a30925efc89f55fb97abce4b5b35 -->
+
+### 2026-10-31 — [repo-ops] Read-only exact-head GitHub Actions compatibility proof harness for effect-capable workflows
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3990)
+- Event ID: `1ce64ddb1d83a202f0e836574e3eccabe35aa49cf2191bfbaae50ab560bf762b`
+<!-- canonical-main-doc-promoted:1ce64ddb1d83a202f0e836574e3eccabe35aa49cf2191bfbaae50ab560bf762b -->

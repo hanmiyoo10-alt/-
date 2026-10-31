@@ -20,7 +20,7 @@ for (const required of [
   'work-harness/scan.cjs',
   'work-harness/report.cjs',
   'GITHUB_STEP_SUMMARY',
-  'actions/upload-artifact@v4',
+  'actions/upload-artifact@v7',
 ]) assert.ok(workflow.includes(required), `workflow missing: ${required}`);
 
 for (const forbidden of ['issues: write', 'contents: write', 'pull-requests: write']) {

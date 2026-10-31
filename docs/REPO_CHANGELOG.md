@@ -2712,3 +2712,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2c0fbdd68d651e4a42e93f045d1e3488464811af)
 - Event ID: `6081bdf1a75a0ddc145cb71ca61182490274d5f50fa578baa35fffe300d09212`
 <!-- canonical-main-doc-promoted:6081bdf1a75a0ddc145cb71ca61182490274d5f50fa578baa35fffe300d09212 -->
+
+### 2026-10-31 — fix(canonical-main): guard proof bundle manual refresh (#4036)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `67c723d3d9156efba8c971a2cc2566c4cfb076ed`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/67c723d3d9156efba8c971a2cc2566c4cfb076ed)
+- Event ID: `f8a366958afab222ada2312747c09eee07b638836e1cb234136fce79f96a0eb9`
+<!-- canonical-main-doc-promoted:f8a366958afab222ada2312747c09eee07b638836e1cb234136fce79f96a0eb9 -->

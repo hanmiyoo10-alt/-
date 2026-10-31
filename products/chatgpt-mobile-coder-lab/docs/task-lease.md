@@ -62,12 +62,12 @@ Repository-backed S work must use a `server/*` feature branch and an isolated wo
 
 The additive `landing_metadata` kind is reserved only for reviewed fixed ordinary landing Git-metadata/object-store mutation owned by `landing-freshness`: executor `S` binds `server/work` + `/root/nyang-repo` + exact scope `surface:mcl-landing-origin-main:S`; executor `M` binds `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + exact scope `surface:mcl-landing-origin-main:M`; executor `L` binds `main` + `/home/alsl0/nyang-repo` + exact scope `surface:mcl-landing-origin-main:L`. It requires a non-null observed landing HEAD SHA and accepts no caller-selected landing identity. Route `S` may use the documented exact executor `M` fallback, which binds only the M identity. Route `L` has no executor fallback.
 
-The additive `landing_residue_cleanup` kind is reserved only for the reviewed fixed L landing generated-residue cleanup owner. It binds exact route/executor `L / L`, branch `main`, worktree `/home/alsl0/nyang-repo`, a non-null observed landing HEAD SHA, and exactly these two scopes:
+The additive `landing_residue_cleanup` kind is reserved only for the reviewed fixed L landing generated-residue cleanup owner. It binds exact route/executor `L / L`, branch `main`, worktree `/home/alsl0/nyang-repo`, a non-null observed landing HEAD SHA, and exactly one reviewed scope profile:
 
-- `path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc`
-- `surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc`
+- legacy currentness-replay: `path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc` + `surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc`;
+- multi-owner validation bytecode: the exact eight #4000 MCL/Termux `.pyc` path scopes + `surface:mcl:l-landing-residue-cleanup-multi-owner-validation-pyc`.
 
-It accepts no S/M executor, route fallback, caller-selected landing identity, alternate path, wildcard, or extra scope. It is a Git-workspace reservation for conflict purposes and therefore serializes with `landing_metadata` on the same fixed L branch/worktree. The lease grants coordination state only; exact file deletion remains owned by the separate `l-landing-residue-cleanup` effect owner.
+It accepts no S/M executor, route fallback, caller-selected landing identity, alternate path, wildcard, subset, superset, cross-profile mix, or extra scope. It is a Git-workspace reservation for conflict purposes and therefore serializes with `landing_metadata` on the same fixed L branch/worktree. The lease grants coordination state only; exact file deletion remains owned by the separate `l-landing-residue-cleanup` effect owner.
 
 The additive `landing_branch_repair` kind binds only reviewed exact S/M landing identities: route/executor `S / S` binds `server/work` + `/root/nyang-repo` + `surface:mcl-landing-branch:S`; route/executor `M / M` binds `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + `surface:mcl-landing-branch:M`. L is deliberately not admitted to `landing_branch_repair` by this contract. It requires a non-null observed landing HEAD SHA. It reserves the Git worktree for the reviewed local landing branch-repair effect only; it does not grant route fallback, remote-ref, merge, release, runtime, or production authority.
 

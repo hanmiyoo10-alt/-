@@ -234,6 +234,44 @@ test('landing_residue_cleanup manifest admits exact L binding and residue hash r
   assert.equal(m.workspace.kind, 'landing_residue_cleanup');
   assert.equal(m.inputRefs[0], 'receipt:mcl-l-landing-residue-sha256:' + 'f'.repeat(64));
 });
+test('landing_residue_cleanup manifest admits exact multi-owner profile and set digest ref', () => {
+  const scopes = [
+    'path:products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/__pycache__/mcl_gui.cpython-312.pyc',
+    'path:products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/tests/__pycache__/test_contract.cpython-312.pyc',
+    'path:products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/tests/__pycache__/test_mcl_gui.cpython-312.pyc',
+    'path:products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/termux/__pycache__/heartbeat-client.cpython-312.pyc',
+    'path:products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/tests/__pycache__/test_contract.cpython-312.pyc',
+    'path:products/standalone/termux/screen-on/__pycache__/screen_on.cpython-312.pyc',
+    'path:products/standalone/termux/screen-on/tests/__pycache__/test_android_companion_contract.cpython-312.pyc',
+    'path:products/standalone/termux/screen-on/tests/__pycache__/test_screen_on.cpython-312.pyc',
+    'surface:mcl:l-landing-residue-cleanup-multi-owner-validation-pyc',
+  ];
+  const expectedOutputRefs = scopes.filter((item) => item.startsWith('path:'));
+  const m = handoff.buildManifest(manifestInput({
+    phaseId: 'landing-residue-cleanup-multi-owner-l', route: 'L', executor: 'L', scopes,
+    workspace: {kind:'landing_residue_cleanup',branch:'main',worktree:'/home/alsl0/nyang-repo'},
+    observedBaseSha: baseSha,
+    inputRefs: ['receipt:mcl-l-landing-residue-set-sha256:' + 'e'.repeat(64)],
+    expectedOutputRefs,
+  }));
+  assert.equal(m.workspace.kind, 'landing_residue_cleanup');
+  assert.equal(m.inputRefs[0], 'receipt:mcl-l-landing-residue-set-sha256:' + 'e'.repeat(64));
+  assert.deepEqual(m.expectedOutputRefs, [...expectedOutputRefs].sort());
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    phaseId: 'landing-residue-cleanup-multi-owner-l', route: 'L', executor: 'L', scopes: scopes.slice(1),
+    workspace: {kind:'landing_residue_cleanup',branch:'main',worktree:'/home/alsl0/nyang-repo'},
+    observedBaseSha: baseSha,
+    inputRefs: ['receipt:mcl-l-landing-residue-set-sha256:' + 'e'.repeat(64)],
+    expectedOutputRefs: expectedOutputRefs.slice(1),
+  })), /LANDING_RESIDUE_CLEANUP_SCOPE_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    phaseId: 'landing-residue-cleanup-multi-owner-l', route: 'L', executor: 'L', scopes,
+    workspace: {kind:'landing_residue_cleanup',branch:'main',worktree:'/home/alsl0/nyang-repo'},
+    observedBaseSha: baseSha,
+    inputRefs: ['receipt:mcl-l-landing-residue-sha256:' + 'e'.repeat(64)],
+    expectedOutputRefs,
+  })), /LANDING_RESIDUE_CLEANUP_EVIDENCE_REF_INVALID/);
+});
 test('landing_residue_cleanup manifest rejects wrong route identity scope and base', () => {
   const exact = {
     phaseId: 'landing-residue-cleanup-l',

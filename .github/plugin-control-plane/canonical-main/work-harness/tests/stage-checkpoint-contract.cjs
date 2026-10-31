@@ -583,6 +583,37 @@ assert.throws(
   const closedDoneResult = await inspectCheckpoint({client: closedDone, packetNumber: PACKET});
   assert.equal(closedDoneResult.disposition, 'PASS');
   assert.equal(closedDoneResult.rebindDisposition, 'STOP_TERMINAL');
+  assert.equal(closedDoneResult.nextLegalAction, 'NONE_TERMINAL_PACKET_COMPLETE');
+
+  for (const terminalLifecycle of ['CANCELLED', 'SUPERSEDED']) {
+    const openTerminal = fakeClient({
+      packetIssue: {
+        number: PACKET,
+        state: 'open',
+        body: inspectPacketBody(terminalLifecycle, 'EXPERIMENT_CLOSE'),
+      },
+      packetComments: packetAll,
+      auditComments: auditAll,
+    });
+    const openTerminalResult = await inspectCheckpoint({client: openTerminal, packetNumber: PACKET});
+    assert.equal(openTerminalResult.disposition, 'PASS', terminalLifecycle);
+    assert.equal(openTerminalResult.rebindDisposition, 'CONTINUE_TRANSACTION_CLOSURE', terminalLifecycle);
+    assert.equal(openTerminalResult.nextLegalAction, 'SELF_CLOSE_SYNC_CURRENT_PACKET', terminalLifecycle);
+
+    const closedTerminal = fakeClient({
+      packetIssue: {
+        number: PACKET,
+        state: 'closed',
+        body: inspectPacketBody(terminalLifecycle, 'EXPERIMENT_CLOSE'),
+      },
+      packetComments: packetAll,
+      auditComments: auditAll,
+    });
+    const closedTerminalResult = await inspectCheckpoint({client: closedTerminal, packetNumber: PACKET});
+    assert.equal(closedTerminalResult.disposition, 'PASS', terminalLifecycle);
+    assert.equal(closedTerminalResult.rebindDisposition, 'STOP_TERMINAL', terminalLifecycle);
+    assert.equal(closedTerminalResult.nextLegalAction, 'NONE_TERMINAL_PACKET_COMPLETE', terminalLifecycle);
+  }
 
   const closedActive = fakeClient({
     packetIssue: {

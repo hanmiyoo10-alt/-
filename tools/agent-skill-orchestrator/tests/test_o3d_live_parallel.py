@@ -37,9 +37,22 @@ from runtime.run_parallel_pilot import (
 TARGET_SHA = "a" * 40
 RELEASE_SHA = "b" * 40
 HEX64 = "1" * 64
+REPO_ROOT = Path(__file__).resolve().parents[3]
+AGENT_CI = REPO_ROOT / ".github" / "workflows" / "agent-skills-ci.yml"
+RETAINED_REQUEST_WORKFLOWS = (
+    ".github/workflows/agent-skill-orchestrator-scout-pilot.yml",
+    ".github/workflows/agent-skill-orchestrator-sequential-pilot.yml",
+    ".github/workflows/agent-skill-orchestrator-parallel-pilot.yml",
+)
 
 
 class O3DLiveParallelTests(unittest.TestCase):
+    def test_agent_skills_ci_watches_all_retained_request_only_workflows(self):
+        ci = AGENT_CI.read_text(encoding="utf-8")
+        for workflow in RETAINED_REQUEST_WORKFLOWS:
+            with self.subTest(workflow=workflow):
+                self.assertIn(workflow, ci)
+
     def evidence(self):
         plan = route_task({
             "schema_version": 1,

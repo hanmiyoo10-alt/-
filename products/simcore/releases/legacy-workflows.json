@@ -66,6 +66,16 @@
       "retirementIssue": 3951,
       "sourceMainCommit": "323d3233f55a019ea39cd34ec1eeca1e18bd7803",
       "reason": "SIMCORE_RELEASE adapter migrated to permanent workflow in #3947; historical v0.63.54 title-gated release writer retired"
+    },
+    {
+      "path": ".github/workflows/simcore-memory-sync-06359.yml",
+      "blobSha": "5536f44b16228003e94f6a5f4d7efadfcf1d2c83",
+      "classification": "ADMIN_STATE_WRITER",
+      "priorStatus": "OUTSIDE_RS2_3",
+      "retirementIssue": 3981,
+      "anomalyIssue": 3980,
+      "sourceMainCommit": "dfe53c5632d198cd9d17728bd0bc1c4f3b902430",
+      "reason": "v0.63.59 release-specific historical admin writer retired after current SimCore state authority moved to the permanent project gateway"
     }
   ],
   "explicitExclusions": []

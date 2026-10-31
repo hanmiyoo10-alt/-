@@ -114,7 +114,10 @@
       "class": "ADMIN_STATE_WRITER",
       "status": "OUTSIDE_RS2_3",
       "responsibilities": [{"responsibilityId":"memory.admin-write","disposition":"RELEASE_GLUE","permanentOwners":[],"permanentSuiteIds":[]}],
-      "writeDisposition": "HISTORICAL_ADMIN"
+      "writeDisposition": "HISTORICAL_ADMIN",
+      "normalInvocation": "RETIRED",
+      "physicalDisposition": "RETIRED_TO_ARCHIVE",
+      "archivePath": "products/simcore/releases/legacy-workflows.json"
     },
     {
       "legacyWorkflow": ".github/workflows/simcore-release-command.yml",

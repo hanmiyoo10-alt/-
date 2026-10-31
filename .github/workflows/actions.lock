@@ -144,7 +144,7 @@ workflows:
     '.github/workflows/repository-work-harness-shadow.yml':
         - 'actions/checkout@v7'
         - 'actions/setup-node@v7'
-        - 'actions/upload-artifact@v4'
+        - 'actions/upload-artifact@v7'
     '.github/workflows/reusable-usage-dashboard-promote.yml':
         - 'actions/checkout@v7'
     '.github/workflows/reusable-usage-dashboard-validate.yml':

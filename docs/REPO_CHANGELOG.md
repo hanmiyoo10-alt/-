@@ -2672,3 +2672,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/74de51aadb2b8321b2ab2c706e345375e902aea5)
 - Event ID: `f6400e41cd0e6145278b9cc4690380cdeb5e6494964b50ce3644977d940db971`
 <!-- canonical-main-doc-promoted:f6400e41cd0e6145278b9cc4690380cdeb5e6494964b50ce3644977d940db971 -->
+
+### 2026-10-31 — chore(canonical-main): modernize proof bundle actions (#3969)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `ce2f91ed4b4e21dfb99969bfa016f3ea1f4ab439`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ce2f91ed4b4e21dfb99969bfa016f3ea1f4ab439)
+- Event ID: `c0998c4ad8d2c3a82db609f6e5da8dc7208fb4f9b6e18b0a1860f3b56a6b83d5`
+<!-- canonical-main-doc-promoted:c0998c4ad8d2c3a82db609f6e5da8dc7208fb4f9b6e18b0a1860f3b56a6b83d5 -->

@@ -107,6 +107,7 @@ ok('historical-workflow-retirement-archive', () => {
     '.github/workflows/simcore-06406-closure-completion-gate-v2.yml',
     '.github/workflows/simcore-06406-post-bend-c-clock-handoff.yml',
     '.github/workflows/simcore-06406-post-bend-c-clock-handoff-v2.yml',
+    '.github/workflows/simcore-memory-sync-06359.yml',
     '.github/workflows/simcore-release-command.yml',
   ];
   expect(archive.schemaVersion === 1, 'legacy workflow archive schema');

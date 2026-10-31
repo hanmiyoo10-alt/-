@@ -58,7 +58,7 @@ workflows:
     '.github/workflows/canonical-main-stage-checkpoint-publish.yml':
         - 'actions/checkout@v7'
     '.github/workflows/chatgpt-sandbox-rust-bridge.yml':
-        - 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262'
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a'
     '.github/workflows/cloudflare-workers-static-publish.yml':
         - 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262'

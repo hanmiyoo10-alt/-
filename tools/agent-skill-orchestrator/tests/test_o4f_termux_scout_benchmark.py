@@ -231,7 +231,7 @@ class O4FTermuxScoutBenchmarkTests(unittest.TestCase):
             self.assertEqual({row["assignment_basis"] for row in summary["rows"]}, {"HISTORICAL_TERMINAL_ONLY"})
 
     def test_workflow_is_one_shot_zero_credit_and_ordinary_ci_covers_it(self):
-        workflow_path = REPO_ROOT / ".github" / "workflows" / "agent-skill-orchestrator-o4f-termux-scout-benchmark.yml"
+        workflow_path = REPO_ROOT / "tools" / "agent-skill-orchestrator" / "tests" / "fixtures" / "historical-workflows" / "agent-skill-orchestrator-o4f-termux-scout-benchmark.yml"
         workflow = workflow_path.read_text(encoding="utf-8")
         self.assertIn("agent-skill-o4f-request/**", workflow)
         self.assertIn(".agent-skill-o4f-requests/*.json", workflow)
@@ -244,7 +244,8 @@ class O4FTermuxScoutBenchmarkTests(unittest.TestCase):
 
         ci = (REPO_ROOT / ".github" / "workflows" / "agent-skills-ci.yml").read_text(encoding="utf-8")
         path = ".github/workflows/agent-skill-orchestrator-o4f-termux-scout-benchmark.yml"
-        self.assertGreaterEqual(ci.count(path), 2)
+        self.assertEqual(ci.count(path), 0)
+        self.assertGreaterEqual(ci.count("tools/agent-skill-orchestrator/**"), 2)
         self.assertNotIn("huggingface.co", ci)
         self.assertNotIn("llama-server", ci)
 

@@ -11,13 +11,6 @@ on:
       - '.github/workflows/agent-skill-zero-credit-eval.yml'
       - '.github/workflows/agent-skill-orchestrator-scout-pilot.yml'
       - '.github/workflows/agent-skill-orchestrator-sequential-pilot.yml'
-      - '.github/workflows/agent-skill-orchestrator-o4c-scout-benchmark.yml'
-      - '.github/workflows/agent-skill-orchestrator-o4c-scout-continuation.yml'
-      - '.github/workflows/agent-skill-orchestrator-o4c-scout-timeout-recovery.yml'
-      - '.github/workflows/agent-skill-orchestrator-o4d-scout-schema-validation.yml'
-      - '.github/workflows/agent-skill-orchestrator-o4e-scout-schema-validation.yml'
-      - '.github/workflows/agent-skill-orchestrator-o4f-termux-scout-benchmark.yml'
-      - '.github/workflows/agent-skill-orchestrator-o4g-termux-scout-uniqueness-diagnostic.yml'
       - '.github/workflows/agent-skills-ci.yml'
   push:
     branches: [main]
@@ -30,13 +23,6 @@ on:
       - '.github/workflows/agent-skill-zero-credit-eval.yml'
       - '.github/workflows/agent-skill-orchestrator-scout-pilot.yml'
       - '.github/workflows/agent-skill-orchestrator-sequential-pilot.yml'
-      - '.github/workflows/agent-skill-orchestrator-o4c-scout-benchmark.yml'
-      - '.github/workflows/agent-skill-orchestrator-o4c-scout-continuation.yml'
-      - '.github/workflows/agent-skill-orchestrator-o4c-scout-timeout-recovery.yml'
-      - '.github/workflows/agent-skill-orchestrator-o4d-scout-schema-validation.yml'
-      - '.github/workflows/agent-skill-orchestrator-o4e-scout-schema-validation.yml'
-      - '.github/workflows/agent-skill-orchestrator-o4f-termux-scout-benchmark.yml'
-      - '.github/workflows/agent-skill-orchestrator-o4g-termux-scout-uniqueness-diagnostic.yml'
       - '.github/workflows/agent-skills-ci.yml'
 
 permissions:

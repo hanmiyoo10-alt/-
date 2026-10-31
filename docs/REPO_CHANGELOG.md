@@ -2704,3 +2704,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/274d746dfdf165081c213e1a5d19d537bb314160)
 - Event ID: `39f6d9b0d669ff05465e831806db435ef0d3c293fd4b18640f332c87078c3fdf`
 <!-- canonical-main-doc-promoted:39f6d9b0d669ff05465e831806db435ef0d3c293fd4b18640f332c87078c3fdf -->
+
+### 2026-10-31 — fix(canonical-main): guard non-closing PR publication (#4022)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `2c0fbdd68d651e4a42e93f045d1e3488464811af`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2c0fbdd68d651e4a42e93f045d1e3488464811af)
+- Event ID: `6081bdf1a75a0ddc145cb71ca61182490274d5f50fa578baa35fffe300d09212`
+<!-- canonical-main-doc-promoted:6081bdf1a75a0ddc145cb71ca61182490274d5f50fa578baa35fffe300d09212 -->

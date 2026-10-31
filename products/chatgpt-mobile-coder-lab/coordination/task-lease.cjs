@@ -35,6 +35,23 @@ const LANDING_RESIDUE_CLEANUP = Object.freeze({
       'path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc',
       'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc',
     ]),
+    profiles: Object.freeze([
+      Object.freeze([
+        'path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc',
+        'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc',
+      ]),
+      Object.freeze([
+        'path:products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/__pycache__/mcl_gui.cpython-312.pyc',
+        'path:products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/tests/__pycache__/test_contract.cpython-312.pyc',
+        'path:products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/tests/__pycache__/test_mcl_gui.cpython-312.pyc',
+        'path:products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/termux/__pycache__/heartbeat-client.cpython-312.pyc',
+        'path:products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/tests/__pycache__/test_contract.cpython-312.pyc',
+        'path:products/standalone/termux/screen-on/__pycache__/screen_on.cpython-312.pyc',
+        'path:products/standalone/termux/screen-on/tests/__pycache__/test_android_companion_contract.cpython-312.pyc',
+        'path:products/standalone/termux/screen-on/tests/__pycache__/test_screen_on.cpython-312.pyc',
+        'surface:mcl:l-landing-residue-cleanup-multi-owner-validation-pyc',
+      ]),
+    ]),
   }),
 });
 const TERMINAL_PACKET_STATES = new Set(['DONE', 'CANCELLED', 'SUPERSEDED']);
@@ -177,8 +194,10 @@ function validateLandingResidueCleanupBinding({workspace, route, executor, scope
   if (!identity || route !== 'L' || executor !== 'L' || route !== executor) {
     errors.push('LANDING_RESIDUE_CLEANUP_ROUTE_EXECUTOR_INVALID');
   }
+  const admittedProfiles = identity?.profiles || (identity?.scopes ? [identity.scopes] : []);
   if (identity && (!Array.isArray(scopes)
-      || JSON.stringify([...scopes].sort()) !== JSON.stringify([...identity.scopes].sort()))) {
+      || !admittedProfiles.some((profileScopes) =>
+        JSON.stringify([...scopes].sort()) === JSON.stringify([...profileScopes].sort())))) {
     errors.push('LANDING_RESIDUE_CLEANUP_SCOPE_INVALID');
   }
   if (!SHA40_RE.test(observedBaseSha || '')) errors.push('LANDING_RESIDUE_CLEANUP_BASE_SHA_REQUIRED');

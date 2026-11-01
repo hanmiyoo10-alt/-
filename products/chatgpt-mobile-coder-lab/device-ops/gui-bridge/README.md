@@ -72,7 +72,7 @@ No fallback to coordinates, DOM automation, login automation, or access-control 
 ## Build and test
 
 ```sh
-python3 -m unittest discover -s products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/tests -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/tests -v
 gradle -p products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/android-companion :app:testDebugUnitTest
 gradle -p products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/android-companion :app:assembleDebug
 ```

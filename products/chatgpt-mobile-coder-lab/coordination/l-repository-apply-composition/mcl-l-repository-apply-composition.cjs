@@ -61,6 +61,25 @@ reasonCodes: [...new Set(reasonCodes)].sort(),
 authority: {...FALSE_AUTHORITY},
 };
 }
+function defaultOwnerReadRunner(command, argv, options = {}) {
+const result = childProcess.spawnSync(command, argv, {
+cwd: options.cwd,
+input: options.input,
+encoding: 'utf8',
+timeout: options.timeoutMs || 120000,
+maxBuffer: 64 * 1024,
+shell: false,
+env: options.env || ownerChildEnv(),
+});
+return {
+code: Number.isInteger(result.status) ? result.status : 127,
+stdout: result.stdout || '',
+stderr: result.stderr || '',
+signal: result.signal || null,
+error: result.error || null,
+};
+}
+
 function readRegular(filePath, field, maxBytes) {
 const resolved = path.resolve(filePath);
 let stat;
@@ -442,6 +461,7 @@ return {issue, ledger};
 }
 function defaultDeps(overrides = {}) {
 const runner = overrides.runner || stageEntry.runDefault;
+const ownerReadRunner = overrides.ownerReadRunner || defaultOwnerReadRunner;
 return {
 runner,
 readCurrent: overrides.readCurrent || ((packetNumber) => defaultReadCurrent(packetNumber, runner)),
@@ -454,6 +474,8 @@ validateEvidence: overrides.validateEvidence || workspaceHolder.validateEvidence
 claimHolder: overrides.claimHolder || workspaceHolder.claimHolder,
 checkHolder: overrides.checkHolder || workspaceHolder.checkHolder,
 releaseHolder: overrides.releaseHolder || workspaceHolder.releaseHolder,
+reviewUpdateInspect: overrides.reviewUpdateInspect
+|| ((input) => inspectReviewUpdatePrepared(input, {runner: ownerReadRunner})),
 ownerRunCli: overrides.ownerRunCli || lOwner.runCli,
 preflight: overrides.preflight || prPreflight.classifyNonClosingPrAuthoring,
 buildCompletionReceipt: overrides.buildCompletionReceipt || taskHandoff.buildCompletionReceipt,
@@ -686,6 +708,46 @@ throw new CompositionError('BLOCKED', ['HOLDER_NOT_ABSENT_BEFORE_COMPOSITION']);
 }
 return parsed.value;
 }
+function inspectReviewUpdatePrepared({manifest, request, patchBytes, prRequest}, {
+runner = stageEntry.runDefault,
+currentMain = lOwner.reviewUpdateCurrentMain,
+preparedDigest = lOwner.expectedReviewUpdatePreparedDigest,
+classifyState = lOwner.classifyReviewUpdateState,
+inspectWorkspace = workspaceHolder.inspectWorkspace,
+readHolder = workspaceHolder.readHolder,
+} = {}) {
+let state;
+try {
+const main = currentMain(manifest, {runner});
+const digest = preparedDigest(manifest, request, patchBytes, {runner});
+state = classifyState(manifest, request, prRequest, main, digest, {runner});
+} catch (error) {
+if (error instanceof lOwner.OwnerError) {
+throw new CompositionError(error.kind, error.reasonCodes || ['REVIEW_UPDATE_PREFLIGHT_FAILED']);
+}
+throw error;
+}
+if (!state || typeof state.state !== 'string') {
+throw new CompositionError('UNKNOWN', ['REVIEW_UPDATE_STATE_UNOBSERVED']);
+}
+const workspace = inspectWorkspace(manifest);
+if (!workspace?.ok || typeof workspace.holderPath !== 'string') {
+throw new CompositionError('BLOCKED', [
+...(workspace?.reasonCodes || ['WORKSPACE_HOLDER_INSPECT_FAILED']),
+]);
+}
+const holder = readHolder(workspace.holderPath);
+if (!holder?.missing) {
+if (!holder?.ok) {
+throw new CompositionError('BLOCKED', [
+...(holder?.reasonCodes || ['HOLDER_READ_FAILED']),
+]);
+}
+throw new CompositionError('BLOCKED', ['HOLDER_NOT_ABSENT_BEFORE_COMPOSITION']);
+}
+return state;
+}
+
 function completionBody({
 manifest, owner, release, deps, effectOperation = 'apply',
 }) {
@@ -940,7 +1002,11 @@ prRequest,
 }, deps.tempRoot);
 let claim = null;
 try {
+if (effectOperation === 'review-update') {
+deps.reviewUpdateInspect({manifest, request, patchBytes, prRequest});
+} else {
 inspectPrepared(files, deps);
+}
 binding = refreshLiveBinding({args, manifest, manifestText, files, deps});
 const claimed = deps.claimHolder(files);
 if (claimed?.result?.status !== 'CLAIMED'
@@ -1093,6 +1159,7 @@ executeFinalize,
 finalizeFromActivation,
 exitCodeFor,
 inspectPrepared,
+inspectReviewUpdatePrepared,
 listComments,
 output,
 parseArgs,
@@ -1100,6 +1167,7 @@ parseManifest,
 parseOwnerCliResult,
 parseReviewUpdateRequestStructure,
 normalizeActivation,
+defaultOwnerReadRunner,
 postCompletionOnce,
 preflightRequest,
 requireBinding,

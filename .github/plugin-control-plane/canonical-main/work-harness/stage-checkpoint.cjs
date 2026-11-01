@@ -34,7 +34,7 @@ const NOT_APPLICABLE_MARKER_TOKEN = 'canonical-main-stage-not-applicable:v1';
 const NOT_APPLICABLE_MARKER_RE = /^<!-- canonical-main-stage-not-applicable:v1 scope=([0-9a-f]{64}) -->$/;
 
 const ISSUE_GET_RE = /^\/issues\/([1-9][0-9]*)$/;
-const COMMENTS_GET_RE = /^\/issues\/([1-9][0-9]*)\/comments\?per_page=100&page=([1-9][0-9]*)$/;
+const COMMENTS_GET_RE = /^\/issues\/([1-9][0-9]*)\/comments\?per_page=100&page=([1-9][0-9]*)(?:&since=([^&]+))?$/;
 const COMMENTS_POST_RE = /^\/issues\/([1-9][0-9]*)\/comments$/;
 
 function validRepo(repo) {
@@ -93,9 +93,22 @@ function createGhCheckpointClient({
       }
 
       if (commentsGet) {
-        if (!allowedCommentIssues.has(Number(commentsGet[1]))) throw new Error('GH_API_ENDPOINT_INVALID');
+        const issueNumber = Number(commentsGet[1]);
+        if (!allowedCommentIssues.has(issueNumber)) throw new Error('GH_API_ENDPOINT_INVALID');
         if (options && Object.keys(options).length > 0) throw new Error('GH_API_OPTIONS_INVALID');
         if (Number(commentsGet[2]) > MAX_COMMENT_PAGES) throw new Error('GH_API_COMMENT_PAGE_INVALID');
+        if (commentsGet[3]) {
+          if (issueNumber !== AUDIT_ISSUE) throw new Error('GH_API_COMMENT_SINCE_INVALID');
+          let since;
+          try {
+            since = decodeURIComponent(commentsGet[3]);
+          } catch {
+            throw new Error('GH_API_COMMENT_SINCE_INVALID');
+          }
+          if (encodeURIComponent(normalizeCommentSince(since)) !== commentsGet[3]) {
+            throw new Error('GH_API_COMMENT_SINCE_INVALID');
+          }
+        }
         return parseGhJson(runner(baseArgs(endpoint, 'GET')), 'array');
       }
 
@@ -154,10 +167,19 @@ function validateInput({ packetNumber, stage, body }) {
   return reasons;
 }
 
-async function listIssueComments(client, issueNumber, maxPages = MAX_COMMENT_PAGES) {
+function normalizeCommentSince(value) {
+  const since = String(value || '');
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(since) || Number.isNaN(Date.parse(since))) {
+    throw new Error('COMMENT_SINCE_INVALID');
+  }
+  return since;
+}
+
+async function listIssueComments(client, issueNumber, {maxPages = MAX_COMMENT_PAGES, since = null} = {}) {
   const rows = [];
+  const sinceQuery = since === null ? '' : `&since=${encodeURIComponent(normalizeCommentSince(since))}`;
   for (let page = 1; page <= maxPages; page += 1) {
-    const batch = await client.api(`/issues/${issueNumber}/comments?per_page=100&page=${page}`);
+    const batch = await client.api(`/issues/${issueNumber}/comments?per_page=100&page=${page}${sinceQuery}`);
     if (!Array.isArray(batch)) throw new Error(`comments for #${issueNumber} were not an array`);
     rows.push(...batch);
     if (batch.length < 100) return rows;
@@ -280,11 +302,13 @@ async function inspectCheckpoint({ client, packetNumber }) {
   let packetComments;
   let auditComments;
   try {
-    [issue, packetComments, auditComments] = await Promise.all([
+    [issue, packetComments] = await Promise.all([
       client.api(`/issues/${packetNumber}`),
       listIssueComments(client, packetNumber),
-      listIssueComments(client, AUDIT_ISSUE),
     ]);
+    auditComments = await listIssueComments(client, AUDIT_ISSUE, {
+      since: normalizeCommentSince(issue?.created_at),
+    });
   } catch {
     return inspectionResult({
       packetNumber,
@@ -496,15 +520,17 @@ function resultBase(packetNumber, stage, digest, packet, audit, reasonCodes = []
 async function validatePacketIssue(client, packetNumber, expectedBodySha256 = null) {
   const issue = await client.api(`/issues/${packetNumber}`);
   const body = String(issue?.body || '');
-  if (!issue || issue.pull_request) return ['PACKET_TARGET_NOT_ISSUE'];
-  if (issue.state !== 'open') return ['PACKET_TARGET_NOT_OPEN'];
+  if (!issue || issue.pull_request) return {issue, reasonCodes: ['PACKET_TARGET_NOT_ISSUE']};
+  if (issue.state !== 'open') return {issue, reasonCodes: ['PACKET_TARGET_NOT_OPEN']};
   const count = body.split(/\r?\n/).filter((line) => line.trim() === PACKET_MARKER).length;
-  if (count !== 1) return [count === 0 ? 'PACKET_MARKER_MISSING' : 'PACKET_MARKER_DUPLICATE'];
+  if (count !== 1) {
+    return {issue, reasonCodes: [count === 0 ? 'PACKET_MARKER_MISSING' : 'PACKET_MARKER_DUPLICATE']};
+  }
   if (expectedBodySha256) {
     const observed = crypto.createHash('sha256').update(body, 'utf8').digest('hex');
-    if (observed !== expectedBodySha256) return ['PACKET_BODY_DRIFT'];
+    if (observed !== expectedBodySha256) return {issue, reasonCodes: ['PACKET_BODY_DRIFT']};
   }
-  return [];
+  return {issue, reasonCodes: []};
 }
 
 function renderNotApplicableBody(stage, scopeFingerprint) {
@@ -616,10 +642,10 @@ async function recordCheckpoint({
       destination(packetNumber), destination(AUDIT_ISSUE), inputReasons, 'FAILED');
   }
 
-  const packetReasons = await validatePacketIssue(client, packetNumber, expectedPacketBodySha256);
-  if (packetReasons.length) {
+  const packetValidation = await validatePacketIssue(client, packetNumber, expectedPacketBodySha256);
+  if (packetValidation.reasonCodes.length) {
     return resultBase(packetNumber, stage, null,
-      destination(packetNumber), destination(AUDIT_ISSUE), packetReasons, 'FAILED');
+      destination(packetNumber), destination(AUDIT_ISSUE), packetValidation.reasonCodes, 'FAILED');
   }
 
   const digest = checkpointDigest(packetNumber, stage, body.trim());
@@ -630,7 +656,9 @@ async function recordCheckpoint({
   try {
     [packetComments, auditComments] = await Promise.all([
       listIssueComments(client, packetNumber),
-      listIssueComments(client, AUDIT_ISSUE),
+      listIssueComments(client, AUDIT_ISSUE, {
+        since: normalizeCommentSince(packetValidation.issue?.created_at),
+      }),
     ]);
   } catch (error) {
     return resultBase(packetNumber, stage, digest,

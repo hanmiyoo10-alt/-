@@ -211,3 +211,17 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3522)
 - Event ID: `a7a4394af4f85e48051b4ca565a3ebd4ca45ab8b532df6690fca6125991e337e`
 <!-- canonical-main-doc-promoted:a7a4394af4f85e48051b4ca565a3ebd4ca45ab8b532df6690fca6125991e337e -->
+
+### 2026-10-12 — REPO-GITHUB-PROJECT-PROJECTION-WRITER-01 — one-field existing-item reconciler
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3572)
+- Event ID: `a29c436da8fbb72d210408aae8854d3d9faaad686ffac10cf3f8d8c5652f5e7a`
+<!-- canonical-main-doc-promoted:a29c436da8fbb72d210408aae8854d3d9faaad686ffac10cf3f8d8c5652f5e7a -->
+
+### 2026-10-25 — Wireless ADB reboot auto-recovery — least-privilege options
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3722)
+- Event ID: `eafaca3a908f8087c9d25622bde502a6fd066d0fcce47c2a44ec021aff727b7e`
+<!-- canonical-main-doc-promoted:eafaca3a908f8087c9d25622bde502a6fd066d0fcce47c2a44ec021aff727b7e -->

@@ -9,6 +9,7 @@ Current posture: `compatibility-family / evidence-only / non-production`.
 - Local Usage Dashboard: `plugin:usage-dashboard` → `plugins/usage-dashboard/**`
 - DevPass: `plugin:devpass` → `plugins/risu/local/devpass/**` (canonical project/evidence)
 - Voyage Token Check: `plugin:voyage-token-check` → `plugins/risu/local/voyage/**`
+- Provider Balance Mini: `plugin:provider-balance-mini` → `plugins/risu/local/provider-balance-monitor/**` (experimental / non-production)
 
 Those child authorities remain authoritative until a separately reviewed migration proves replacement.
 
@@ -32,6 +33,7 @@ Current bridge:
 - `plugins/risu/local/devpass/**` → `plugin:devpass` (canonical project/evidence)
 - `plugins/devpass/**` → `plugin:devpass` (fixed update-channel compatibility; artifact target remains `plugins/devpass/latest.js`)
 - `plugins/risu/local/voyage/**` → `plugin:voyage-token-check` (canonical)
+- `plugins/risu/local/provider-balance-monitor/**` → `plugin:provider-balance-mini` (experimental child)
 - `voyage-token-check/**` → `plugin:voyage-token-check` (legacy compatibility stubs)
 
 The Local parent owns only its own direct compatibility surfaces. A nested child path must not be interpreted as authority collapse into `plugin:local`.

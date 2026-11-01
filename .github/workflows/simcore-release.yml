@@ -30,7 +30,7 @@ jobs:
       spec_path: ${{ steps.spec.outputs.spec_path }}
     steps:
       - name: Checkout canonical release policy
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: main
           fetch-depth: 0
@@ -99,7 +99,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout canonical release policy
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: main
           fetch-depth: 0
@@ -136,7 +136,7 @@ jobs:
           PY
 
       - name: Upload bounded shadow plan
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: simcore-release-shadow-${{ needs.resolve.outputs.release_id }}
           path: .simcore-release/shadow-plan.json
@@ -150,14 +150,14 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout canonical release policy
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: main
           fetch-depth: 0
           persist-credentials: false
 
       - name: Download exact candidate-required report
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: simcore-ci-report-${{ github.run_id }}
           path: .simcore-release/ci-report
@@ -275,7 +275,7 @@ jobs:
           echo 'RS2_4D_SHADOW_PRODUCTION_UNCHANGED_PASS'
 
       - name: Upload bounded post-publish shadow evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: simcore-post-publish-state-shadow-${{ needs.resolve.outputs.release_id }}
           path: |

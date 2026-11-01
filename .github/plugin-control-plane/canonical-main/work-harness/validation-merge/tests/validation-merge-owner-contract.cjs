@@ -9,6 +9,7 @@ const test = require('node:test');
 
 const ROOT = path.resolve(__dirname, '../../../../../..');
 const owner = require('../validation-merge-owner.cjs');
+const degraded = require('../../codex-review-degraded-fallback/codex-review-degraded-fallback-owner.cjs');
 const stageReceipt = require('../../stage-receipt.cjs');
 const {stableHash} = require('../../handoff.cjs');
 const agentView = require('../../agent-decision-view.cjs');
@@ -23,6 +24,48 @@ const RECOVERY_RUN = 701;
 const RECOVERY_VERIFY = 801;
 const RECOVERY_REQUIRED = 802;
 const TICK = String.fromCharCode(96);
+function degradedComments(extra = {}) {
+  const receipt = degraded.createReceipt({prNumber: PR, headSha: HEAD, baseSha: BASE,
+    codexCliVersion: '0.1', provider: 'openai', model: 'codex', result: 'CLEAR',
+    findingsCount: 0, reportSha256: 'd'.repeat(64), recoveryMarkerCommentId: 123, ...extra});
+  return [
+    codexSummary({status: 'running', hasAnyFindings: null, hasUnresolvedFindings: null}),
+    {id: 123, user: {login: 'hanmiyoo10-alt'}, body: '<!-- canonical-main-codex-review-recovery:v1 ' + JSON.stringify({schemaVersion: 1, expectedHead: HEAD}) + ' -->'},
+    {id: 124, user: {login: 'hanmiyoo10-alt'}, body: degraded.renderReceipt(receipt)},
+  ];
+}
+test('degraded clear only clears exact pending Codex sub-gate', async () => {
+  const client = fixtureClient({issueComments: degradedComments()});
+  assert.equal((await owner.readReviewBarrier(client, PR, HEAD, BASE)).codexReviewState, 'CODEX_DEGRADED_COMPLETE_CLEAR');
+  const result = await owner.inspectWithClient({client, packetNumber: PACKET, prNumber: PR, implementationReceipt: implementationReceipt()});
+  assert.equal(result.receipt.result, 'PASS');
+  await assert.rejects(owner.readReviewBarrier(client, PR, HEAD), /CODEX_REVIEW_PENDING/);
+  await assert.rejects(owner.readReviewBarrier(fixtureClient({issueComments: degradedComments().filter((r) => r.id !== 123)}), PR, HEAD, BASE), /CODEX_REVIEW_PENDING/);
+});
+test('degraded adverse, malformed, duplicate and stale evidence fails closed', async () => {
+  for (const extra of [{result: 'FINDINGS', findingsCount: 1}, {result: 'FAILED', findingsCount: null},
+    {result: 'UNKNOWN', findingsCount: null}, {headSha: BASE}, {baseSha: HEAD}, {prNumber: PR + 1}]) {
+    const result = await owner.inspectWithClient({client: fixtureClient({issueComments: degradedComments(extra)}),
+      packetNumber: PACKET, prNumber: PR, implementationReceipt: implementationReceipt()});
+    assert.equal(result.receipt.result, extra.result === 'FINDINGS' ? 'BLOCKED' : extra.result ? 'UNKNOWN' : 'CONFLICT');
+  }
+  const rows = degradedComments();
+  for (const comments of [[...rows, rows[2]], [rows[0], rows[1], {...rows[2], body: '<!-- ' + degraded.MARKER + ' bad -->'}]]) {
+    await assert.rejects(owner.readReviewBarrier(fixtureClient({issueComments: comments}), PR, HEAD, BASE));
+  }
+});
+test('terminal hosted evidence ignores degraded evidence completely', async () => {
+  for (const findings of [false, true]) {
+    const comments = degradedComments({result: 'FINDINGS', findingsCount: 2});
+    comments[0] = codexSummary({hasAnyFindings: findings});
+    comments.push(comments[2]);
+    const barrier = await owner.readReviewBarrier(fixtureClient({issueComments: comments}), PR, HEAD, BASE);
+    assert.equal(barrier.codexReviewState, findings ? 'CODEX_COMPLETE_FINDINGS' : 'CODEX_COMPLETE_CLEAR');
+  }
+  const comments = degradedComments();
+  comments[0] = codexSummary({hasAnyFindings: true, hasUnresolvedFindings: true});
+  await assert.rejects(owner.readReviewBarrier(fixtureClient({issueComments: comments}), PR, HEAD, BASE), /CODEX_REVIEW_FINDINGS_THREAD_MISMATCH/);
+});
 const PATHS = [
   '.github/plugin-control-plane/canonical-main/tests/work-system-contract.cjs',
   '.github/plugin-control-plane/canonical-main/work-harness/validation-merge/README.md',

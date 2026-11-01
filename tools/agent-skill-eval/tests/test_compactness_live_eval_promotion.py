@@ -35,6 +35,7 @@ class CompactnessLiveEvalPromotionTests(unittest.TestCase):
                     "plugin-authority-scan",
                     "plugin-impact-scope",
                     "agent-execution-compactness",
+                    "validator-hardening",
                 }
             ),
         )

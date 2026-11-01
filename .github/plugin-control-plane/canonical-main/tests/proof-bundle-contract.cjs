@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 const {composeProofBundle, MODE} = require('../proof-bundle.cjs');
 const {readGitHubCliJson} = require('../infra/github-cli-read.cjs');
-const {attachReadFailures, parseOps, writeBundle} = require('../orchestrator/proof-bundle.cjs');
+const {attachReadFailures, parseOps, validateInvocationContext, writeBundle} = require('../orchestrator/proof-bundle.cjs');
 const {exactShaWorkflowApplicability, pluginWorkflowEvidence, resolveMergeBase} = require('../orchestrator/pr-workflow-applicability.cjs');
 
 function sample() {
@@ -175,7 +175,16 @@ const exactFixtureScript = [
   "result = repo_ci_exact_sha(Reader(), 'fca76cda388b3f8bb4b70cc32d4fbecd801ddf42', '.github/workflows/plugin-control-plane-ci.yml', event='pull_request', ref='main', before_sha='dc564aa008d9bd116103ccde773a13730a0a26fe', workflow_ref='d142386866ce9e1ba685ee97c3aa99918621776c')",
   'print(json.dumps(result))',
 ].join('\n');
-const exactFixture = JSON.parse(execFileSync('python3', ['-c', exactFixtureScript], {cwd: repoRoot, encoding: 'utf8', maxBuffer: 512 * 1024, stdio: ['ignore', 'pipe', 'inherit']}));
+const exactFixtureCacheDir = path.join(repoRoot, 'tools', 'repo-ci-mcp', 'repo_ci_mcp', '__pycache__');
+assert.equal(fs.existsSync(exactFixtureCacheDir), false, 'exact-SHA fixture must start without repo-local bytecode residue');
+const exactFixture = JSON.parse(execFileSync('python3', ['-c', exactFixtureScript], {
+  cwd: repoRoot,
+  encoding: 'utf8',
+  env: {...process.env, PYTHONDONTWRITEBYTECODE: '1'},
+  maxBuffer: 512 * 1024,
+  stdio: ['ignore', 'pipe', 'inherit'],
+}));
+assert.equal(fs.existsSync(exactFixtureCacheDir), false, 'exact-SHA fixture must not create repo-local bytecode residue');
 assert.equal(exactFixture.disposition, 'EXPECTED_NO_RUN_PATH_FILTER');
 assert.deepEqual(exactFixture.reason_codes, ['PATH_FILTERED']);
 assert.equal(exactFixture.evidence.changed_path_count, 6);
@@ -263,14 +272,74 @@ try {
   fs.rmSync(artifactRoot, {recursive: true, force: true});
 }
 
+assert.deepEqual(
+  validateInvocationContext({eventName: 'workflow_dispatch', ref: 'refs/heads/main'}),
+  {disposition: 'PASS', reasonCode: null},
+);
+assert.deepEqual(
+  validateInvocationContext({eventName: 'workflow_dispatch', ref: 'refs/heads/candidate'}),
+  {disposition: 'BLOCKED', reasonCode: 'MANUAL_DISPATCH_REQUIRES_MAIN'},
+);
+assert.deepEqual(
+  validateInvocationContext({eventName: 'workflow_dispatch', ref: 'refs/tags/v1'}),
+  {disposition: 'BLOCKED', reasonCode: 'MANUAL_DISPATCH_REQUIRES_MAIN'},
+);
+assert.deepEqual(
+  validateInvocationContext({eventName: 'push', ref: 'refs/heads/main'}),
+  {disposition: 'PASS', reasonCode: null},
+);
+assert.deepEqual(
+  validateInvocationContext({eventName: '', ref: ''}),
+  {disposition: 'PASS', reasonCode: null},
+);
+assert.deepEqual(
+  validateInvocationContext({eventName: 'workflow_dispatch', ref: ''}),
+  {disposition: 'BLOCKED', reasonCode: 'MANUAL_DISPATCH_REQUIRES_MAIN'},
+);
+
+const collectorCli = path.join(__dirname, '..', 'orchestrator', 'proof-bundle.cjs');
+let offMainCliError = null;
+try {
+  execFileSync(process.execPath, [collectorCli, 'compose'], {
+    env: {
+      ...process.env,
+      GITHUB_EVENT_NAME: 'workflow_dispatch',
+      GITHUB_REF: 'refs/heads/candidate',
+      GITHUB_REPOSITORY: '',
+      TARGET_SHA: '',
+      GH_TOKEN: '',
+    },
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+} catch (error) {
+  offMainCliError = error;
+}
+assert(offMainCliError, 'off-main manual dispatch must fail before collection');
+assert(String(offMainCliError.stderr || '').includes('MANUAL_DISPATCH_REQUIRES_MAIN'),
+  'off-main manual dispatch must fail on invocation admission before repository/token validation');
+
 const githubDir = path.resolve(__dirname, '..', '..', '..');
 const collector = fs.readFileSync(path.join(__dirname, '..', 'orchestrator', 'proof-bundle.cjs'), 'utf8');
 const workflow = fs.readFileSync(path.join(githubDir, 'workflows', 'canonical-main-proof-bundle.yml'), 'utf8');
+const canonicalMainReadme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8');
+const runStart = collector.indexOf('function run()');
+const admissionInRun = collector.indexOf('validateInvocationContext({', runStart);
+const collectionInRun = collector.indexOf('collectOnce(repo, targetSha)', runStart);
+assert(runStart >= 0 && admissionInRun > runStart && collectionInRun > admissionInRun,
+  'manual dispatch admission must run before proof collection');
 assert(!/--method['",\s]+(?:POST|PATCH|PUT|DELETE)/i.test(collector), 'collector must not issue write API methods');
 assert(!/^\s*[a-z-]+:\s*write\s*$/mi.test(workflow), 'proof workflow permissions must be read-only');
 assert(/push:\s*\n\s*branches:\s*\[main\]/m.test(workflow), 'proof bundle must run automatically on main push');
 assert(/canonical-main-proof-bundle\.json/.test(workflow), 'workflow must upload the JSON bundle');
 assert(/if-no-files-found:\s*error/.test(workflow), 'missing proof artifact must remain a workflow error');
 assert(/orchestrator\/proof-bundle\.cjs compose/.test(workflow), 'workflow must invoke the trusted composer');
+assert(/workflow_dispatch:/m.test(workflow), 'manual refresh trigger must remain available');
+assert(/current-main-only manual refresh/i.test(canonicalMainReadme));
+assert(/repository-actions-compat-proof\.yml/.test(canonicalMainReadme),
+  'candidate action-runtime proof must point to the generic read-only harness');
+assert(/workflow execution success/i.test(canonicalMainReadme)
+  && /acceptanceReady/i.test(canonicalMainReadme),
+  'docs must distinguish workflow execution from semantic proof acceptance');
 
 console.log('canonical-main proof-bundle-contract: ok');

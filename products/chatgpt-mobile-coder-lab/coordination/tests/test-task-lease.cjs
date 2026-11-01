@@ -79,6 +79,10 @@ function landingResidueCleanupAcquireRequest(overrides = {}) {
     ...overrides,
   });
 }
+function landingMultiResidueCleanupAcquireRequest(overrides = {}) {
+  const identity = lease.landingResidueCleanupIdentity('L');
+  return landingResidueCleanupAcquireRequest({scopes:[...identity.profiles[1]], ...overrides});
+}
 function landingBranchRepairAcquireRequest(overrides = {}) {
   const identity = lease.landingBranchRepairIdentity('M');
   return acquireRequest({
@@ -95,6 +99,12 @@ function landingBranchRepairAcquireRequest(overrides = {}) {
 function landingBranchRepairAcquireRequestS(overrides = {}) {
   const identity = lease.landingBranchRepairIdentity('S');
   return acquireRequest({ route:'S', executor:'S', scopes:[identity.scope],
+    workspaceKind:'landing_branch_repair', branch:identity.branch,
+    worktree:identity.worktree, observedBaseSha:'c'.repeat(40), ...overrides });
+}
+function landingBranchRepairAcquireRequestL(overrides = {}) {
+  const identity = lease.landingBranchRepairIdentity('L');
+  return acquireRequest({ route:'L', executor:'L', scopes:[identity.scope],
     workspaceKind:'landing_branch_repair', branch:identity.branch,
     worktree:identity.worktree, observedBaseSha:'c'.repeat(40), ...overrides });
 }
@@ -343,6 +353,21 @@ ok('landing_residue_cleanup admits only exact L fixed landing and scopes', () =>
     'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc',
   ]);
 });
+ok('landing_residue_cleanup admits exact multi-owner validation bytecode profile only', () => {
+  const exact = lease.normalizeAcquireRequest(landingMultiResidueCleanupAcquireRequest());
+  assert.equal(exact.ok, true);
+  const expected = [...lease.landingResidueCleanupIdentity('L').profiles[1]].sort();
+  assert.deepEqual(exact.lease.scopes, expected);
+  assert.equal(expected.length, 9);
+  for (const scopes of [
+    expected.slice(1),
+    [...expected, 'path:extra.pyc'],
+    expected.map((item) => item === 'surface:mcl:l-landing-residue-cleanup-multi-owner-validation-pyc'
+      ? 'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc' : item),
+  ]) {
+    assert.equal(lease.normalizeAcquireRequest(landingMultiResidueCleanupAcquireRequest({scopes})).ok, false);
+  }
+});
 ok('landing_residue_cleanup rejects route executor identity scope and base drift', () => {
   for (const request of [
     landingResidueCleanupAcquireRequest({route:'S'}),
@@ -401,14 +426,27 @@ ok('landing_branch_repair rejects route fallback arbitrary identity scope and mi
     assert.equal(lease.normalizeAcquireRequest(request).ok, false);
   }
 });
-ok('L is not admitted to landing_branch_repair', () => {
-  const request = acquireRequest({
-    route:'L', executor:'L', scopes:['surface:mcl-landing-branch:L'],
-    workspaceKind:'landing_branch_repair', branch:'main', worktree:'/home/alsl0/nyang-repo',
-  });
-  const result = lease.normalizeAcquireRequest(request);
-  assert.equal(result.ok, false);
-  assert.ok(result.reasonCodes.includes('WORKSPACE_LANDING_BRANCH_REPAIR_EXECUTOR_INVALID'));
+ok('landing_branch_repair accepts the fixed L identity and scope', () => {
+  const exact = lease.normalizeAcquireRequest(landingBranchRepairAcquireRequestL());
+  assert.equal(exact.ok, true);
+  assert.equal(exact.lease.route, 'L');
+  assert.equal(exact.lease.executor, 'L');
+  assert.equal(exact.lease.workspace.kind, 'landing_branch_repair');
+  assert.equal(exact.lease.workspace.branch, 'main');
+  assert.equal(exact.lease.workspace.worktree, '/home/alsl0/nyang-repo');
+  assert.deepEqual(exact.lease.scopes, ['surface:mcl-landing-branch:L']);
+});
+ok('landing_branch_repair rejects wrong L route executor identity scope and missing observed head', () => {
+  for (const request of [
+    landingBranchRepairAcquireRequestL({route:'M'}),
+    landingBranchRepairAcquireRequestL({executor:'M'}),
+    landingBranchRepairAcquireRequestL({branch:'laptop/other'}),
+    landingBranchRepairAcquireRequestL({worktree:'/home/alsl0/nyang-worktrees/other'}),
+    landingBranchRepairAcquireRequestL({scopes:['surface:mcl-landing-origin-main:L']}),
+    landingBranchRepairAcquireRequestL({observedBaseSha:null}),
+  ]) {
+    assert.equal(lease.normalizeAcquireRequest(request).ok, false);
+  }
 });
 
 ok('L route rejects not_applicable workspace', () => {
@@ -418,6 +456,14 @@ ok('L route rejects not_applicable workspace', () => {
   }));
   assert.equal(result.ok, false);
   assert.ok(result.reasonCodes.includes('REQUEST_L_ROUTE_REPOSITORY_REQUIRED'));
+});
+
+ok('landing metadata and landing branch repair serialize on the fixed L worktree', () => {
+  const first = stateFromPlan(lease.planAcquire(activeState(), landingAcquireRequest('L')));
+  const conflict = lease.planAcquire(first, landingBranchRepairAcquireRequestL({expectedGeneration:2, packetRef:'#2353'}));
+  assert.equal(conflict.status, 'CONFLICT');
+  assert.ok(conflict.reasonCodes.includes('ACTIVE_LEASE_WORKTREE_RESERVED')
+    || conflict.reasonCodes.includes('ACTIVE_LEASE_BRANCH_RESERVED'));
 });
 
 ok('landing metadata and landing branch repair serialize on the fixed M worktree', () => {

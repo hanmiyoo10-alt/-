@@ -73,6 +73,12 @@ assert.equal(byId['voyage-token-check'].projectPath, 'plugins/risu/local/voyage'
 assert.equal(byId['voyage-token-check'].authority.type, 'evidence');
 assert.equal(byId['voyage-token-check'].authority.evidence, 'plugins/risu/local/voyage/DESIGN_STATUS.md');
 
+assert.equal(byId['provider-balance-mini'].lifecycle, 'experimental');
+assert.equal(byId['provider-balance-mini'].projectPath, 'plugins/risu/local/provider-balance-monitor');
+assert.equal(byId['provider-balance-mini'].authority.type, 'evidence');
+assert.equal(byId['provider-balance-mini'].authority.evidence, 'plugins/risu/local/provider-balance-monitor/README.md');
+assert.equal(byId['provider-balance-mini'].guidelines, 'docs/PROVIDER_BALANCE_MINI_GUIDELINES.md');
+
 assert.equal(byId['local-model-lab'].lifecycle, 'research-product-root');
 assert.equal(byId['local-model-lab'].projectPath, 'products/local-model-lab');
 assert.equal(byId['local-model-lab'].authority.type, 'evidence');
@@ -97,7 +103,7 @@ assert.deepEqual(byId.simcore.memory.outputs, [
 ]);
 assert.equal(byId.simcore.authority.releaseBranch, 'release-simcore');
 
-for (const id of ['devpass', 'local', 'termux', 'voyage-token-check', 'pocketrisu-helper-mod']) {
+for (const id of ['devpass', 'local', 'provider-balance-mini', 'termux', 'voyage-token-check', 'pocketrisu-helper-mod']) {
   assert.equal(byId[id].memory.profile, 'check-only', `${id} must not gain a writable memory system during Phase G`);
   assert.deepEqual(byId[id].memory.outputs, [], `${id} check-only profile must have no writable outputs`);
 }

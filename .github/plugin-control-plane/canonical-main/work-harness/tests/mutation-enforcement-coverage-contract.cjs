@@ -55,7 +55,7 @@ const missingEvidence = clone(evidence);
 missingEvidence.rows = missingEvidence.rows.filter((row) => row.capability !== 'SIMCORE_RELEASE');
 assert.throws(
   () => evaluateCoverage({ registry, evidence: missingEvidence, readSurface }),
-  /COVERAGE_EVIDENCE_MISSING:simcore::SIMCORE_RELEASE::RELEASE_CHANNEL::GITHUB_WORKFLOW::\.github\/workflows\/simcore-release-command\.yml/,
+  /COVERAGE_EVIDENCE_MISSING:simcore::SIMCORE_RELEASE::RELEASE_CHANNEL::GITHUB_WORKFLOW::\.github\/workflows\/simcore-release-permanent\.yml/,
 );
 
 const registryDrift = clone(registry);

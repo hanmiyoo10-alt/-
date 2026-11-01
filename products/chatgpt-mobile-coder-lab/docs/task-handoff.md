@@ -39,7 +39,7 @@ A manifest binds one phase to:
 - caller-stable `phaseId` and bounded `phaseClass`;
 - D-012 route plus one exact executor, never `either`;
 - normalized Work System `path:` / `surface:` scopes;
-- D-013 workspace identity: isolated `repository`, fixed S/M/L `landing_metadata`, fixed exact L-only `landing_residue_cleanup`, fixed exact S/M-only `landing_branch_repair`, or explicit non-repository `not_applicable`;
+- D-013 workspace identity: isolated `repository`, fixed S/M/L `landing_metadata`, fixed exact L-only `landing_residue_cleanup`, fixed exact S/M/L `landing_branch_repair`, or explicit non-repository `not_applicable`;
 - optional observed base SHA as historical evidence only;
 - whether D-013 lease evidence is required and, when required, the exact lease identity/acquisition generation;
 - bounded source-authority, input, expected-output, and acceptance locators;
@@ -90,10 +90,10 @@ The implementation reuses Work System scope normalization and the public D-013 r
 - repository-backed M work uses `mainphone/*` under `/data/data/com.termux/files/home/nyang-worktrees/`;
 - repository-backed L work uses exact `L / L`, `laptop/*`, and an absolute normalized worktree strictly below `/home/alsl0/nyang-worktrees/`; the `main` landing branch and `/home/alsl0/nyang-repo` landing/read clone are not feature workspaces;
 - fixed landing Git-metadata phases use the exact D-013 `landing_metadata` identity and matching `surface:mcl-landing-origin-main:<executor>` scope, including exact L identity `main` + `/home/alsl0/nyang-repo` + `surface:mcl-landing-origin-main:L`; arbitrary landing paths remain invalid;
-- fixed L landing residue-cleanup phases use exact route/executor `L / L`, branch `main`, worktree `/home/alsl0/nyang-repo`, a non-null observed landing HEAD SHA, and exactly `path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc` plus `surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc`;
-- fixed landing branch-repair phases remain S/M-only and use exact route/executor identity: `S / S` with `server/work` + `/root/nyang-repo` + `surface:mcl-landing-branch:S`, or `M / M` with `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + `surface:mcl-landing-branch:M`; L has no `landing_branch_repair` admission;
+- fixed L landing residue-cleanup phases use exact route/executor `L / L`, branch `main`, worktree `/home/alsl0/nyang-repo`, a non-null observed landing HEAD SHA, and exactly one reviewed cleanup profile; the legacy profile binds one `receipt:mcl-l-landing-residue-sha256:<sha256>` input to its one expected path, while the multi-owner validation-bytecode profile binds one `receipt:mcl-l-landing-residue-set-sha256:<sha256>` input to its exact eight expected path refs; subsets, supersets, mixed evidence and arbitrary paths remain invalid;
+- fixed landing branch-repair phases use exact route/executor identity only: `S / S` with `server/work` + `/root/nyang-repo` + `surface:mcl-landing-branch:S`, `M / M` with `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + `surface:mcl-landing-branch:M`, or `L / L` with `main` + `/home/alsl0/nyang-repo` + `surface:mcl-landing-branch:L`; the L profile is only the exact reviewed branch-repair phase and does not absorb current-main object materialization or landing-metadata refresh;
 - route `S` requires `repository`, `landing_metadata`, or exact S/S `landing_branch_repair`; the documented executor `M` fallback remains valid only for existing repository/landing-metadata cases and is not branch-repair authority;
-- route `L` requires exact executor `L` and one of `repository`, exact L `landing_metadata`, or exact L `landing_residue_cleanup`; it has no S/M fallback and no branch-repair authority;
+- route `L` requires exact executor `L` and one of `repository`, exact L `landing_metadata`, exact L `landing_residue_cleanup`, or exact L `landing_branch_repair`; it has no S/M fallback and the branch-repair profile grants only the dedicated fixed-L local repair effect;
 - non-repository semantic contexts use explicit `not_applicable` repository identity.
 
 A valid manifest does not prove the workspace currently exists, is clean, or is current. Those remain execution-time owner checks.

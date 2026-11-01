@@ -26,6 +26,7 @@ const REPOSITORY_WORKSPACE = Object.freeze({
 const LANDING_BRANCH_REPAIR = Object.freeze({
   S: Object.freeze({branch: 'server/work', worktree: '/root/nyang-repo', scope: 'surface:mcl-landing-branch:S'}),
   M: Object.freeze({branch: 'mainphone/work', worktree: '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work', scope: 'surface:mcl-landing-branch:M'}),
+  L: Object.freeze({branch: 'main', worktree: '/home/alsl0/nyang-repo', scope: 'surface:mcl-landing-branch:L'}),
 });
 const LANDING_RESIDUE_CLEANUP = Object.freeze({
   L: Object.freeze({
@@ -34,6 +35,23 @@ const LANDING_RESIDUE_CLEANUP = Object.freeze({
     scopes: Object.freeze([
       'path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc',
       'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc',
+    ]),
+    profiles: Object.freeze([
+      Object.freeze([
+        'path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc',
+        'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc',
+      ]),
+      Object.freeze([
+        'path:products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/__pycache__/mcl_gui.cpython-312.pyc',
+        'path:products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/tests/__pycache__/test_contract.cpython-312.pyc',
+        'path:products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/tests/__pycache__/test_mcl_gui.cpython-312.pyc',
+        'path:products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/termux/__pycache__/heartbeat-client.cpython-312.pyc',
+        'path:products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/tests/__pycache__/test_contract.cpython-312.pyc',
+        'path:products/standalone/termux/screen-on/__pycache__/screen_on.cpython-312.pyc',
+        'path:products/standalone/termux/screen-on/tests/__pycache__/test_android_companion_contract.cpython-312.pyc',
+        'path:products/standalone/termux/screen-on/tests/__pycache__/test_screen_on.cpython-312.pyc',
+        'surface:mcl:l-landing-residue-cleanup-multi-owner-validation-pyc',
+      ]),
     ]),
   }),
 });
@@ -165,7 +183,7 @@ function validateLandingBranchRepairBinding({workspace, route, executor, scopes,
   if (workspace?.kind !== 'landing_branch_repair') return [];
   const identity = landingBranchRepairIdentity(executor);
   const errors = [];
-  if (!identity || route !== executor || !['S', 'M'].includes(route)) errors.push('LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID');
+  if (!identity || route !== executor || !['S', 'M', 'L'].includes(route)) errors.push('LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID');
   if (identity && (!Array.isArray(scopes) || scopes.length !== 1 || scopes[0] !== identity.scope)) errors.push('LANDING_BRANCH_REPAIR_SCOPE_INVALID');
   if (!SHA40_RE.test(observedBaseSha || '')) errors.push('LANDING_BRANCH_REPAIR_BASE_SHA_REQUIRED');
   return errors;
@@ -177,8 +195,10 @@ function validateLandingResidueCleanupBinding({workspace, route, executor, scope
   if (!identity || route !== 'L' || executor !== 'L' || route !== executor) {
     errors.push('LANDING_RESIDUE_CLEANUP_ROUTE_EXECUTOR_INVALID');
   }
+  const admittedProfiles = identity?.profiles || (identity?.scopes ? [identity.scopes] : []);
   if (identity && (!Array.isArray(scopes)
-      || JSON.stringify([...scopes].sort()) !== JSON.stringify([...identity.scopes].sort()))) {
+      || !admittedProfiles.some((profileScopes) =>
+        JSON.stringify([...scopes].sort()) === JSON.stringify([...profileScopes].sort())))) {
     errors.push('LANDING_RESIDUE_CLEANUP_SCOPE_INVALID');
   }
   if (!SHA40_RE.test(observedBaseSha || '')) errors.push('LANDING_RESIDUE_CLEANUP_BASE_SHA_REQUIRED');
@@ -299,7 +319,7 @@ function normalizeAcquireRequest(request) {
   };
   reasonCodes.push(...validateWorkspace(workspace, request?.executor));
   if (request?.route === 'S' && !['repository', 'landing_metadata', 'landing_branch_repair'].includes(workspace.kind)) reasonCodes.push('REQUEST_S_ROUTE_REPOSITORY_REQUIRED');
-  if (request?.route === 'L' && !['repository', 'landing_metadata', 'landing_residue_cleanup'].includes(workspace.kind)) reasonCodes.push('REQUEST_L_ROUTE_REPOSITORY_REQUIRED');
+  if (request?.route === 'L' && !['repository', 'landing_metadata', 'landing_residue_cleanup', 'landing_branch_repair'].includes(workspace.kind)) reasonCodes.push('REQUEST_L_ROUTE_REPOSITORY_REQUIRED');
   const observedBaseSha = request?.observedBaseSha || null;
   if (observedBaseSha !== null && !SHA40_RE.test(observedBaseSha)) reasonCodes.push('REQUEST_BASE_SHA_INVALID');
   reasonCodes.push(...validateLandingMetadataBinding({workspace, executor: request?.executor, scopes: scopeResult.scopes, observedBaseSha}));

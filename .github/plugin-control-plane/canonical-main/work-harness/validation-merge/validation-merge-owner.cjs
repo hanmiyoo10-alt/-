@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const degradedReview = require('../codex-review-degraded-fallback/codex-review-degraded-fallback-owner.cjs');
 
 const ROOT = path.resolve(__dirname, '../../../../..');
 const REPO = 'hanmiyoo10-alt/-';
@@ -451,7 +452,7 @@ const REVIEWED_MERGE_STATES = new Set([
   'BEHIND', 'BLOCKED', 'CLEAN', 'DIRTY', 'DRAFT', 'HAS_HOOKS', 'UNKNOWN', 'UNSTABLE',
 ]);
 
-async function readReviewBarrier(client, prNumber, expectedHead) {
+async function readReviewBarrier(client, prNumber, expectedHead, expectedBase = null) {
   const reviews = await fetchPagedArray(client,
     (page) => '/pulls/' + prNumber + '/reviews?per_page=100&page=' + page, 'REVIEWS');
   const issueComments = await fetchPagedArray(client,
@@ -511,7 +512,23 @@ async function readReviewBarrier(client, prNumber, expectedHead) {
   if (pending) {
     throw new OwnerError('NEEDS_REVIEW', ['REVIEW_REQUEST_PENDING'], 'pr:#' + prNumber);
   }
-  const codexReview = parseCodexReviewState(issueComments.rows, expectedHead, prNumber);
+  let codexReview;
+  try {
+    codexReview = parseCodexReviewState(issueComments.rows, expectedHead, prNumber);
+  } catch (error) {
+    if (expectedBase === null || error.kind !== 'NEEDS_REVIEW'
+        || error.reasonCodes.length !== 1 || error.reasonCodes[0] !== 'CODEX_REVIEW_PENDING') throw error;
+    let receipt;
+    try {
+      receipt = degradedReview.classifyReceipts(issueComments.rows, prNumber, expectedHead, expectedBase);
+    } catch (degradedError) {
+      throw new OwnerError(degradedError.kind || 'UNKNOWN',
+        degradedError.reasonCodes || ['CODEX_DEGRADED_RECEIPT_INVALID'], 'pr:#' + prNumber);
+    }
+    if (!receipt) throw error;
+    codexReview = {state: 'CODEX_DEGRADED_COMPLETE_CLEAR', commitSha: expectedHead,
+      commentId: null, hasUnresolvedFindings: false};
+  }
   if (codexReview.hasUnresolvedFindings && unresolved === 0) {
     throw new OwnerError('UNKNOWN', ['CODEX_REVIEW_FINDINGS_THREAD_MISMATCH'],
       'pr:#' + prNumber);
@@ -989,7 +1006,7 @@ async function inspectWithClient({
       expectedHead: implementation.expectedHead, perform,
     });
     const reviews = await perform('review-barrier', 'pr:#' + prNumber,
-      () => readReviewBarrier(client, prNumber, implementation.expectedHead));
+      () => readReviewBarrier(client, prNumber, implementation.expectedHead, current.mainSha));
     const required = await perform('exact-head-required', 'commit:' + implementation.expectedHead,
       () => readRequiredEvidence(client, implementation.expectedHead, prNumber));
     artifacts.push(required.evidenceLocator);
@@ -1008,7 +1025,7 @@ async function inspectWithClient({
       expectedHead: implementation.expectedHead, perform, prefix: 'final-',
     });
     const finalReviews = await perform('final-review-currentness', 'pr:#' + prNumber,
-      () => readReviewBarrier(client, prNumber, implementation.expectedHead));
+      () => readReviewBarrier(client, prNumber, implementation.expectedHead, finalCurrent.mainSha));
     const finalOverlap = await perform(
       'final-overlap-currentness',
       'owner:work-system-scope-overlap',

@@ -125,3 +125,13 @@ node .github/plugin-control-plane/canonical-main/bootstrap.cjs render \
 `policy.json` keeps `operations.eventAdaptersComplete=true` after the proven Phase B adapter activation. Notification bridge availability and branch-protection governance are rendered separately from product/release authority.
 
 `CLEAR` means only that configured repository feedback coverage is current and has no unresolved actionable incident. It is not a claim that every product is bug-free, and it is not a claim that GitHub branch protection is enabled. Read the dedicated `Protected main` section for that fact.
+
+## Canonical Main Proof Bundle manual refresh
+
+The `Canonical Main Proof Bundle` collector owns merged/current-main acceptance evidence. Its natural `push: main` path remains the canonical automatic proof path.
+
+`workflow_dispatch` is a **current-main-only manual refresh**. The orchestrator rejects a manual dispatch whose GitHub ref is not exactly `refs/heads/main` before collection begins. This keeps manual refresh aligned with the collector's merged-PR, merged-main Required, #485, protection, and incident evidence model instead of inventing a second candidate acceptance mode.
+
+A workflow execution success is not, by itself, Canonical Main acceptance. Semantic acceptance comes from the persisted bundle's `state`, `acceptanceReady`, `missing`, and `failures` fields.
+
+Exact candidate-head GitHub Actions runtime compatibility is a different claim. Use the repository-owned read-only `.github/workflows/repository-actions-compat-proof.yml` harness for that proof; it does not make an open candidate Canonical Main acceptance-ready and grants no merge, release, production, runtime, or mutation authority.

@@ -276,8 +276,35 @@ executable, credential, publisher, or GitHub effect input. It requires an exact
 either title or body, including cross-issue references. `PASS` grants no PR
 publication, mutation, merge, release, runtime, device, or production authority.
 
-This is a producer prepublication check, not a second PR publisher and not a
-claim that external GitHub creation surfaces are globally intercepted. A
+The preflight remains a producer prepublication check, not a second PR publisher and not a
+claim that external GitHub creation surfaces are globally intercepted.
+
+When an ordinary CLI-capable packet producer uses the repository's existing
+GitHub CLI publisher, prefer the guarded composition adapter:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/pr-publication.cjs \
+  --packet '#<N>' \
+  --head '<same-repository-branch>' \
+  --expected-head '<40-hex-candidate-sha>' \
+  --title-file /path/to/pr-title.txt \
+  --body-file /path/to/pr-body.md
+```
+
+The adapter materializes the exact publication payload, calls the existing
+`classifyNonClosingPrAuthoring()` semantic owner first, and only a `PASS`
+reaches the existing `gh pr create` publisher. Repository and base are fixed to
+`hanmiyoo10-alt/-` and `main`; the caller cannot select a fork, repository,
+base, merge method, reviewer, label, project, release or other effect. Successful
+creation is read back and must match the exact title, body, same-repository head
+branch and expected head SHA. The adapter grants no merge/release/production or
+runtime authority.
+
+The adapter is a producer-side composition, not a replacement semantic owner and not a
+claim that external GitHub creation surfaces are globally intercepted. When the guarded
+adapter is unavailable or inapplicable, the explicit read-only preflight
+above remains mandatory before a connector or other external publisher. A
+post-hoc `PASS` does not satisfy the prepublication ordering contract, and a
 non-PASS result must not be bypassed by selecting another external publisher.
 
 Applicability remains packet-owned. When merge itself satisfies every required

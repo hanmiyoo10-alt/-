@@ -10,22 +10,27 @@ cache sweeper, or repository writer.
 
 ## Fixed effect
 
-V1 is permanently bound to:
+V1 is permanently bound to exact `L / L`, intended landing identity `main + /home/alsl0/nyang-repo`, and exactly one reviewed profile.
+
+Legacy currentness-replay profile:
 
 ```text
-route/executor = L / L
-landing        = /home/alsl0/nyang-repo
-branch         = main
-cleanup path   = tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc
-surface        = surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc
+cleanup path = tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc
+surface      = surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc
+evidence     = receipt:mcl-l-landing-residue-sha256:<64-lowercase-hex>
 ```
 
-The expected residue SHA-256 is carried only by one D-014 input ref:
+Multi-owner validation-bytecode profile:
 
-`receipt:mcl-l-landing-residue-sha256:<64-lowercase-hex>`
+```text
+cleanup paths = exact eight #4000 MCL/Termux .pyc paths
+surface       = surface:mcl:l-landing-residue-cleanup-multi-owner-validation-pyc
+evidence      = receipt:mcl-l-landing-residue-set-sha256:<64-lowercase-hex>
+```
 
-No CLI argument selects the repository, landing, branch, path, hash, glob,
-shell command, force mode, or alternate effect.
+The multi-owner digest is SHA-256 of path-sorted `path + NUL + file_sha256 + LF`. It may run while the physical landing is detached or on `main`; the observed branch state is data that must be preserved exactly. The legacy profile keeps its existing physical `main` requirement.
+
+No CLI argument selects the repository, landing, branch, path, parent, hash, glob, shell command, force mode, or alternate effect.
 
 ## Authority composition
 

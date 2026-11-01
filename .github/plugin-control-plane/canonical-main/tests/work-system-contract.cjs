@@ -2124,6 +2124,12 @@ assert.match(template, /pr-authoring-preflight\.cjs/);
 assert.match(template, /Do not bypass a non-PASS result by calling `gh pr create`/);
 assert.match(template, /does not claim to intercept every external GitHub PR-creation surface/);
 assert.match(template, /Intentionally terminal PRs/);
+assert.match(readme, /pr-publication\.cjs/);
+assert.match(readme, /guarded composition adapter/);
+assert.match(readme, /post-hoc `PASS` does not satisfy the prepublication ordering contract/);
+assert.match(template, /pr-publication\.cjs/);
+assert.match(template, /required ordering is structural rather than memory-based/);
+assert.match(template, /post-hoc `PASS` is not equivalent to prepublication enforcement/);
 for (const forbidden of ['http://', 'https://', 'gh api', 'fetch(', 'child_process', 'execSync', 'spawnSync', 'writeFile', 'appendFile', 'createWriteStream', 'process.env']) {
   assert.equal(prAuthoringSource.includes(forbidden), false, `PR authoring preflight must not contain ${forbidden}`);
 }
@@ -2157,5 +2163,130 @@ prCli = runPrAuthoringCli('issue:#9001');
 assert.equal(prCli.status, 3);
 assert.equal(prCli.output.disposition, 'UNKNOWN');
 fs.rmSync(prCliDir, {recursive: true, force: true});
+
+const prPublication = require(path.join(dir, 'pr-publication.cjs'));
+const prPublicationSource = fs.readFileSync(path.join(dir, 'pr-publication.cjs'), 'utf8');
+const publicationHead = 'a'.repeat(40);
+const publicationBranch = 'chore/guarded-pr-publication';
+const publicationInput = {
+  packetRef: '#9001',
+  head: publicationBranch,
+  expectedHead: publicationHead,
+  title: 'fix(repo): safe guarded change',
+  body: 'Summary\n\nRefs #9001',
+};
+const publicationEvents = [];
+const publicationRunner = (command, args) => {
+  assert.equal(command, 'gh');
+  if (args[0] === 'pr' && args[1] === 'create') {
+    publicationEvents.push('publisher');
+    assert.deepEqual(args, [
+      'pr', 'create',
+      '--repo', prPublication.FIXED_REPO,
+      '--base', prPublication.FIXED_BASE,
+      '--head', publicationBranch,
+      '--title', publicationInput.title,
+      '--body', publicationInput.body,
+    ]);
+    return {code: 0, stdout: 'https://github.com/hanmiyoo10-alt/-/pull/77\n', stderr: ''};
+  }
+  if (args[0] === 'api' && args[1] === 'repos/hanmiyoo10-alt/-/pulls/77') {
+    publicationEvents.push('readback');
+    return {code: 0, stdout: JSON.stringify({
+      number: 77,
+      state: 'open',
+      draft: false,
+      title: publicationInput.title,
+      body: publicationInput.body,
+      html_url: 'https://github.com/hanmiyoo10-alt/-/pull/77',
+      base: {ref: 'main'},
+      head: {
+        ref: publicationBranch,
+        sha: publicationHead,
+        repo: {full_name: 'hanmiyoo10-alt/-'},
+      },
+    }), stderr: ''};
+  }
+  throw new Error('unexpected publication runner call: ' + args.join(' '));
+};
+const orderedPreflight = (input) => {
+  publicationEvents.push('preflight');
+  return classifyNonClosingPrAuthoring(input);
+};
+let publication = prPublication.publishNonClosingPr(
+  publicationInput, {runner: publicationRunner, preflightFn: orderedPreflight});
+assert.equal(publication.disposition, 'PASS');
+assert.equal(publication.publicationState, 'CREATED');
+assert.equal(publication.prNumber, 77);
+assert.deepEqual(publicationEvents, ['preflight', 'publisher', 'readback']);
+assert.deepEqual(publication.authority, prPublication.FALSE_AUTHORITY);
+
+let blockedPublisherCalls = 0;
+publication = prPublication.publishNonClosingPr({
+  ...publicationInput,
+  body: 'Fixes #9001',
+}, {
+  runner: () => {
+    blockedPublisherCalls += 1;
+    return {code: 1, stdout: '', stderr: ''};
+  },
+});
+assert.equal(publication.disposition, 'BLOCKED');
+assert.equal(publication.publicationState, 'NOT_RUN');
+assert.equal(blockedPublisherCalls, 0);
+
+let unknownPublisherCalls = 0;
+publication = prPublication.publishNonClosingPr({
+  ...publicationInput,
+  packetRef: 'issue:#9001',
+}, {
+  runner: () => {
+    unknownPublisherCalls += 1;
+    return {code: 1, stdout: '', stderr: ''};
+  },
+});
+assert.equal(publication.disposition, 'UNKNOWN');
+assert.equal(publication.publicationState, 'NOT_RUN');
+assert.equal(unknownPublisherCalls, 0);
+
+const conflictRunner = (command, args) => {
+  if (args[0] === 'pr') {
+    return {code: 0, stdout: 'https://github.com/hanmiyoo10-alt/-/pull/78\n', stderr: ''};
+  }
+  return {code: 0, stdout: JSON.stringify({
+    number: 78,
+    state: 'open',
+    draft: false,
+    title: publicationInput.title,
+    body: 'different body',
+    base: {ref: 'main'},
+    head: {
+      ref: publicationBranch,
+      sha: publicationHead,
+      repo: {full_name: 'hanmiyoo10-alt/-'},
+    },
+  }), stderr: ''};
+};
+publication = prPublication.publishNonClosingPr(publicationInput, {runner: conflictRunner});
+assert.equal(publication.disposition, 'CONFLICT');
+assert.equal(publication.publicationState, 'CREATED');
+assert.deepEqual(publication.reasonCodes, ['PR_READBACK_CONFLICT']);
+
+assert.equal(prPublication.validHead('main'), false);
+assert.equal(prPublication.validHead('owner:branch'), false);
+assert.equal(prPublication.validHead(publicationBranch), true);
+assert.throws(() => prPublication.parseArgs([
+  '--packet', '#9001',
+  '--head', publicationBranch,
+  '--expected-head', publicationHead,
+  '--title-file', 'title.txt',
+  '--repo', 'other/repo',
+]), /ARGUMENT_UNSUPPORTED_OR_DUPLICATE/);
+
+assert.match(prPublicationSource, /require\('\.\/pr-authoring-preflight\.cjs'\)/);
+assert.match(prPublicationSource, /'pr', 'create'/);
+assert.match(prPublicationSource, /shell: false/);
+assert.match(prPublicationSource, /FIXED_REPO = 'hanmiyoo10-alt\/-'/);
+assert.match(prPublicationSource, /FIXED_BASE = 'main'/);
 
 console.log('work-system-contract: ok');

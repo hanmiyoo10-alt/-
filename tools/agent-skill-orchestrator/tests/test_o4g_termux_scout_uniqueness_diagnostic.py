@@ -222,8 +222,11 @@ class O4GTermuxScoutUniquenessDiagnosticTests(unittest.TestCase):
     def test_workflow_is_one_shot_zero_credit_diagnostic_and_ci_covers_it(self):
         workflow_path = (
             REPO_ROOT
-            / ".github"
-            / "workflows"
+            / "tools"
+            / "agent-skill-orchestrator"
+            / "tests"
+            / "fixtures"
+            / "historical-workflows"
             / "agent-skill-orchestrator-o4g-termux-scout-uniqueness-diagnostic.yml"
         )
         workflow = workflow_path.read_text(encoding="utf-8")
@@ -238,7 +241,8 @@ class O4GTermuxScoutUniquenessDiagnosticTests(unittest.TestCase):
 
         ci = (REPO_ROOT / ".github" / "workflows" / "agent-skills-ci.yml").read_text(encoding="utf-8")
         path = ".github/workflows/agent-skill-orchestrator-o4g-termux-scout-uniqueness-diagnostic.yml"
-        self.assertGreaterEqual(ci.count(path), 2)
+        self.assertEqual(ci.count(path), 0)
+        self.assertGreaterEqual(ci.count("tools/agent-skill-orchestrator/**"), 2)
         self.assertNotIn("huggingface.co", ci)
         self.assertNotIn("llama-server", ci)
 

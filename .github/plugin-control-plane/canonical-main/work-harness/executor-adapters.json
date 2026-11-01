@@ -22,7 +22,7 @@
       "scopeKinds": ["plugin"],
       "capabilities": ["SIMCORE_VALIDATE", "SIMCORE_HARNESS_SELF_TEST", "SIMCORE_CANDIDATE", "SIMCORE_STATE", "SIMCORE_RELEASE"],
       "entrypoints": ["products/simcore/tooling/check.mjs", "products/simcore/tooling/test.mjs", "products/simcore/tooling/candidate-materialize.mjs", "products/simcore/tooling/admin-state-transition.mjs", "products/simcore/tooling/release-publish.mjs", "products/simcore/tooling/declare-production.mjs"],
-      "workflows": [".github/workflows/simcore-ci.yml", ".github/workflows/simcore-release.yml", ".github/workflows/simcore-release-command.yml"],
+      "workflows": [".github/workflows/simcore-ci.yml", ".github/workflows/simcore-release.yml", ".github/workflows/simcore-release-permanent.yml"],
       "possibleMutationClasses": ["PROJECT_STATE", "CANDIDATE_STATE", "RELEASE_CHANNEL"],
       "receiptRequiredFor": ["PROJECT_STATE", "CANDIDATE_STATE", "RELEASE_CHANNEL"],
       "verificationHooks": [".github/workflows/simcore-ci.yml"],
@@ -31,7 +31,7 @@
         {"capability":"SIMCORE_HARNESS_SELF_TEST","targetKind":"LOCAL_NODE","target":"products/simcore/tooling/test.mjs","fixedArgs":["--self-test"],"executionClass":"READ_ONLY","mutationClass":null,"invokePolicy":"READ_ONLY_LOCAL"},
         {"capability":"SIMCORE_CANDIDATE","targetKind":"LOCAL_NODE","target":"products/simcore/tooling/candidate-materialize.mjs","fixedArgs":[],"executionClass":"MUTATING","mutationClass":"CANDIDATE_STATE","invokePolicy":"HANDOFF_ONLY"},
         {"capability":"SIMCORE_STATE","targetKind":"LOCAL_NODE","target":"products/simcore/tooling/admin-state-transition.mjs","fixedArgs":[],"executionClass":"MUTATING","mutationClass":"PROJECT_STATE","invokePolicy":"HANDOFF_ONLY"},
-        {"capability":"SIMCORE_RELEASE","targetKind":"GITHUB_WORKFLOW","target":".github/workflows/simcore-release-command.yml","fixedArgs":[],"executionClass":"MUTATING","mutationClass":"RELEASE_CHANNEL","invokePolicy":"HANDOFF_ONLY"}
+        {"capability":"SIMCORE_RELEASE","targetKind":"GITHUB_WORKFLOW","target":".github/workflows/simcore-release-permanent.yml","fixedArgs":[],"executionClass":"MUTATING","mutationClass":"RELEASE_CHANNEL","invokePolicy":"HANDOFF_ONLY"}
       ]
     },
     {

@@ -2728,3 +2728,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ea0cb402e06f364baa0377c0e42a2ea817934f1c)
 - Event ID: `cdf30e4db7674e9a5383e281ce5ebbef6cfd97a074ee94b1ce539a29c7ae5d62`
 <!-- canonical-main-doc-promoted:cdf30e4db7674e9a5383e281ce5ebbef6cfd97a074ee94b1ce539a29c7ae5d62 -->
+
+### 2026-11-01 — test(canonical-main): prevent proof bundle bytecode residue (#4077)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `f67b38e328448b69b96df4afa7f2b2a1c5542ed2`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f67b38e328448b69b96df4afa7f2b2a1c5542ed2)
+- Event ID: `f818553c40df4fb13464fc39f28ad8a7745a551937aaf003a5233d5717a28198`
+<!-- canonical-main-doc-promoted:f818553c40df4fb13464fc39f28ad8a7745a551937aaf003a5233d5717a28198 -->

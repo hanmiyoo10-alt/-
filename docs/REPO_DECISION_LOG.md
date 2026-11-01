@@ -239,3 +239,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3990)
 - Event ID: `1ce64ddb1d83a202f0e836574e3eccabe35aa49cf2191bfbaae50ab560bf762b`
 <!-- canonical-main-doc-promoted:1ce64ddb1d83a202f0e836574e3eccabe35aa49cf2191bfbaae50ab560bf762b -->
+
+### 2026-11-01 — AGENT-GITHUB-CONTEXT-AB-V1 — broad vs bounded vs patch-only context diagnostic
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2447)
+- Event ID: `3b9e3787dbbd5f3c794f566d9f123198855640fb1f7c73c554c5b8e54baefe81`
+<!-- canonical-main-doc-promoted:3b9e3787dbbd5f3c794f566d9f123198855640fb1f7c73c554c5b8e54baefe81 -->

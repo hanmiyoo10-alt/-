@@ -34,6 +34,10 @@ public final class LifelineService extends Service {
         "/data/data/com.termux/files/home/.local/lib/mcl-m-termux-lifeline/heartbeat-client.py";
     static final String RECOVERY_PATH =
         "/data/data/com.termux/files/home/.local/bin/mcl-m-termux-lifeline-recover";
+    static final String RDC_GUARD_LAUNCHER_PATH =
+        "/data/data/com.termux/files/home/.termux/boot/31-mcl-m-rdc-supervisor-guard";
+    static final String TAILSCALE_GUARD_LAUNCHER_PATH =
+        "/data/data/com.termux/files/home/.termux/boot/32-mcl-m-tailscale-supervisor-guard";
     static final String TERMUX_HOME = "/data/data/com.termux/files/home";
     static final long WATCHDOG_INTERVAL_MS = 5_000L;
     static final long PROBE_INTERVAL_MS = 10_000L;
@@ -47,6 +51,8 @@ public final class LifelineService extends Service {
     private static final String CALLBACK_AUTHORITY = "callback";
     private static final String KIND_PROBE = "probe";
     private static final String KIND_RECOVERY = "recovery";
+    private static final String KIND_DURABILITY_RDC = "durability-rdc";
+    private static final String KIND_DURABILITY_TAILSCALE = "durability-tailscale";
 
     private final AtomicLong lastHeartbeatMs = new AtomicLong(0L);
     private final AtomicLong lastRecoveryReceiptMs = new AtomicLong(0L);
@@ -54,6 +60,10 @@ public final class LifelineService extends Service {
     private volatile boolean recoveryPending;
     private volatile boolean attemptedForCurrentLoss;
     private volatile boolean failedForCurrentLoss;
+    private volatile boolean postRecoveryDurabilityPending;
+    private volatile boolean postRecoveryDurabilityAttempted;
+    private volatile boolean rdcDurabilityRearmed;
+    private volatile long recoveredAtMs;
     private volatile long lastAttemptMs;
     private volatile long lastProbeDispatchMs;
     private volatile String status = "WAITING_FOR_FIRST_HEARTBEAT";
@@ -134,7 +144,11 @@ public final class LifelineService extends Service {
             return;
         }
         if (hasPendingOperation()) {
-            if (recoveryPending) setStatus("RECOVERY_VERIFYING");
+            if (recoveryPending) {
+                setStatus("RECOVERY_VERIFYING");
+            } else if (postRecoveryDurabilityPending) {
+                setStatus("POST_RECOVERY_DURABILITY_REARMING");
+            }
             return;
         }
 
@@ -149,7 +163,11 @@ public final class LifelineService extends Service {
                 recoveryPending = false;
                 attemptedForCurrentLoss = false;
                 failedForCurrentLoss = false;
-                setStatus("RECOVERED");
+                postRecoveryDurabilityPending = true;
+                postRecoveryDurabilityAttempted = false;
+                rdcDurabilityRearmed = false;
+                recoveredAtMs = now;
+                setStatus("RECOVERED_SETTLING");
                 return;
             }
             if (outcome == RecoveryOutcome.State.FAILED) {
@@ -172,6 +190,11 @@ public final class LifelineService extends Service {
                 }
             }
             setStatus("RECOVERY_VERIFYING");
+            return;
+        }
+
+        if (postRecoveryDurabilityPending) {
+            tickPostRecoveryDurability(now);
             return;
         }
 
@@ -230,6 +253,10 @@ public final class LifelineService extends Service {
         }
 
         attemptedForCurrentLoss = true;
+        postRecoveryDurabilityPending = false;
+        postRecoveryDurabilityAttempted = false;
+        rdcDurabilityRearmed = false;
+        recoveredAtMs = 0L;
         lastAttemptMs = now;
         recoveryPending = true;
         if (dispatchFixedRecovery(now)) {
@@ -258,6 +285,63 @@ public final class LifelineService extends Service {
 
     private boolean dispatchFixedRecovery(long now) {
         return dispatchFixedRunCommand(RECOVERY_PATH, new String[0], KIND_RECOVERY, now);
+    }
+
+    private void tickPostRecoveryDurability(long now) {
+        if (!recoveryProbePrerequisitesSatisfied()) {
+            stopPostRecoveryDurability();
+            return;
+        }
+
+        long heartbeat = lastHeartbeatMs.get();
+        if (heartbeat <= 0L || now - heartbeat >= LifelinePolicy.STALE_AFTER_MS) {
+            stopPostRecoveryDurability();
+            return;
+        }
+
+        if (now - recoveredAtMs < LifelinePolicy.COOLDOWN_MS) {
+            if (probeDue(now) && !dispatchFixedProbe(now)) {
+                failPostRecoveryDurability();
+                return;
+            }
+            setStatus("POST_RECOVERY_SETTLING");
+            return;
+        }
+
+        if (heartbeat < recoveredAtMs + LifelinePolicy.COOLDOWN_MS) {
+            if (probeDue(now) && !dispatchFixedProbe(now)) {
+                failPostRecoveryDurability();
+                return;
+            }
+            setStatus("POST_RECOVERY_SETTLING");
+            return;
+        }
+
+        if (postRecoveryDurabilityAttempted) {
+            failPostRecoveryDurability();
+            return;
+        }
+
+        postRecoveryDurabilityAttempted = true;
+        if (!dispatchFixedRunCommand(
+                RDC_GUARD_LAUNCHER_PATH,
+                new String[0],
+                KIND_DURABILITY_RDC,
+                now)) {
+            failPostRecoveryDurability();
+            return;
+        }
+        setStatus("POST_RECOVERY_DURABILITY_REARMING");
+    }
+
+    private void stopPostRecoveryDurability() {
+        postRecoveryDurabilityPending = false;
+        rdcDurabilityRearmed = false;
+    }
+
+    private void failPostRecoveryDurability() {
+        stopPostRecoveryDurability();
+        setStatus("POST_RECOVERY_DURABILITY_FAILED");
     }
 
     private synchronized boolean dispatchFixedRunCommand(
@@ -327,10 +411,52 @@ public final class LifelineService extends Service {
         if (KIND_PROBE.equals(kind)) {
             if (success) {
                 lastHeartbeatMs.set(now);
-                if (!recoveryPending) setStatus("HEALTHY");
-            } else if (!recoveryPending && lastHeartbeatMs.get() == 0L) {
+                if (!recoveryPending && !postRecoveryDurabilityPending) {
+                    setStatus("HEALTHY");
+                }
+            } else if (!recoveryPending
+                    && !postRecoveryDurabilityPending
+                    && lastHeartbeatMs.get() == 0L) {
                 setStatus("WAITING_FOR_FIRST_HEARTBEAT");
             }
+            return;
+        }
+
+        if (KIND_DURABILITY_RDC.equals(kind)) {
+            if (!postRecoveryDurabilityPending || !postRecoveryDurabilityAttempted) return;
+            if (!success) {
+                failPostRecoveryDurability();
+                return;
+            }
+            if (!recoveryProbePrerequisitesSatisfied()) {
+                stopPostRecoveryDurability();
+                return;
+            }
+            rdcDurabilityRearmed = true;
+            if (!dispatchFixedRunCommand(
+                    TAILSCALE_GUARD_LAUNCHER_PATH,
+                    new String[0],
+                    KIND_DURABILITY_TAILSCALE,
+                    now)) {
+                failPostRecoveryDurability();
+                return;
+            }
+            setStatus("POST_RECOVERY_DURABILITY_REARMING");
+            return;
+        }
+
+        if (KIND_DURABILITY_TAILSCALE.equals(kind)) {
+            if (!postRecoveryDurabilityPending || !rdcDurabilityRearmed) return;
+            if (!success) {
+                failPostRecoveryDurability();
+                return;
+            }
+            if (!recoveryProbePrerequisitesSatisfied()) {
+                stopPostRecoveryDurability();
+                return;
+            }
+            postRecoveryDurabilityPending = false;
+            setStatus("POST_RECOVERY_DURABILITY_REARMED");
             return;
         }
 
@@ -410,7 +536,12 @@ public final class LifelineService extends Service {
             recoveryPending = false;
             failedForCurrentLoss = true;
             setStatus("RECOVERY_FAILED");
-        } else if (!recoveryPending && lastHeartbeatMs.get() == 0L) {
+        } else if (KIND_DURABILITY_RDC.equals(kind)
+                || KIND_DURABILITY_TAILSCALE.equals(kind)) {
+            failPostRecoveryDurability();
+        } else if (!recoveryPending
+                && !postRecoveryDurabilityPending
+                && lastHeartbeatMs.get() == 0L) {
             setStatus("WAITING_FOR_FIRST_HEARTBEAT");
         }
     }

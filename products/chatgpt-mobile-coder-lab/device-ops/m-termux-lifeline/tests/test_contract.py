@@ -60,6 +60,8 @@ class LifelineContractTest(unittest.TestCase):
             'RESULT_ERROR_CODE = "err"',
             '"/data/data/com.termux/files/home/.local/lib/mcl-m-termux-lifeline/heartbeat-client.py"',
             '"/data/data/com.termux/files/home/.local/bin/mcl-m-termux-lifeline-recover"',
+            '"/data/data/com.termux/files/home/.termux/boot/31-mcl-m-rdc-supervisor-guard"',
+            '"/data/data/com.termux/files/home/.termux/boot/32-mcl-m-tailscale-supervisor-guard"',
             'new String[] {"--status"}',
             "new String[0]",
             "PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_MUTABLE",
@@ -114,6 +116,63 @@ class LifelineContractTest(unittest.TestCase):
         recheck = source.index("recoveryProbePrerequisitesSatisfied()", recovery_branch)
         probe = source.index("dispatchFixedProbe(now)", recheck)
         self.assertLess(recheck, probe)
+
+    def test_post_recovery_durability_rearm_is_bounded_and_single_attempt(self):
+        source = (JAVA / "LifelineService.java").read_text()
+
+        recovered = source.index("outcome == RecoveryOutcome.State.RECOVERED")
+        pending = source.index("postRecoveryDurabilityPending = true;", recovered)
+        recovered_at = source.index("recoveredAtMs = now;", pending)
+        self.assertLess(recovered, pending)
+        self.assertLess(pending, recovered_at)
+
+        helper = source.index("private void tickPostRecoveryDurability(long now)")
+        helper_text = source[helper:]
+        self.assertIn("recoveryProbePrerequisitesSatisfied()", helper_text)
+        self.assertIn("LifelinePolicy.COOLDOWN_MS", helper_text)
+        self.assertIn("LifelinePolicy.STALE_AFTER_MS", helper_text)
+        self.assertIn("postRecoveryDurabilityAttempted = true;", helper_text)
+        self.assertIn("RDC_GUARD_LAUNCHER_PATH", helper_text)
+        self.assertIn("TAILSCALE_GUARD_LAUNCHER_PATH", helper_text)
+        self.assertIn("KIND_DURABILITY_RDC", source)
+        self.assertIn("KIND_DURABILITY_TAILSCALE", source)
+
+        attempt = source.index("postRecoveryDurabilityAttempted = true;", helper)
+        rdc_dispatch = source.index("RDC_GUARD_LAUNCHER_PATH", attempt)
+        rdc_handler = source.index('if (KIND_DURABILITY_RDC.equals(kind))')
+        tailscale_dispatch = source.index("TAILSCALE_GUARD_LAUNCHER_PATH", rdc_handler)
+        tailscale_handler = source.index('if (KIND_DURABILITY_TAILSCALE.equals(kind))')
+        self.assertLess(attempt, rdc_dispatch)
+        self.assertLess(rdc_handler, tailscale_dispatch)
+        self.assertLess(tailscale_dispatch, tailscale_handler)
+
+        self.assertIn('setStatus("POST_RECOVERY_SETTLING")', source)
+        self.assertIn('setStatus("POST_RECOVERY_DURABILITY_REARMING")', source)
+        self.assertIn('setStatus("POST_RECOVERY_DURABILITY_REARMED")', source)
+        self.assertIn('setStatus("POST_RECOVERY_DURABILITY_FAILED")', source)
+
+        stale = source.index(
+            "heartbeat <= 0L || now - heartbeat >= LifelinePolicy.STALE_AFTER_MS",
+            helper,
+        )
+        stale_stop = source.index("stopPostRecoveryDurability();", stale)
+        probe_due = source.index("if (probeDue(now))", helper)
+        cooldown = source.index(
+            "now - recoveredAtMs < LifelinePolicy.COOLDOWN_MS",
+            helper,
+        )
+        attempt = source.index("postRecoveryDurabilityAttempted = true;", stale)
+        self.assertLess(stale, probe_due)
+        self.assertLess(stale, cooldown)
+        self.assertLess(stale_stop, attempt)
+        self.assertNotIn(
+            'setStatus("POST_RECOVERY_DURABILITY_VERIFYING")',
+            source[stale:attempt],
+        )
+
+        recovery = (TERMUX / "mcl-m-termux-lifeline-recover").read_text()
+        self.assertNotIn("31-mcl-m-rdc-supervisor-guard", recovery)
+        self.assertNotIn("32-mcl-m-tailscale-supervisor-guard", recovery)
 
     def test_force_stop_is_separate_domain_and_prerequisites_are_manual(self):
         policy = (JAVA / "LifelinePolicy.java").read_text()

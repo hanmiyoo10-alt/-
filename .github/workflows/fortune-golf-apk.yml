@@ -70,7 +70,15 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: wasm-pack,tauri-cli
+          tool: wasm-pack,tauri-cli@2.12.4
+
+      - name: Align Tauri library toolchain for hosted simulation
+        run: |
+          cargo update -p tauri --precise 2.12.5
+          cargo update -p tauri-build --precise 2.7.4
+          cargo tree -p tauri --depth 0
+          cargo tree -p tauri-build --depth 0
+          cargo tauri --version
 
       - name: Select Android NDK
         run: |

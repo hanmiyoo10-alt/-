@@ -17,6 +17,7 @@ import {
   validatePolicy,
 } from '../stage.mjs';
 import {parseArgs as parseLiveArgs, verifyLive} from '../verify-live.mjs';
+import worker, {RANGE_PATHS, parseSingleByteRange} from '../worker.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOL = path.dirname(HERE);
@@ -207,9 +208,12 @@ test('deploy currentness check fails closed when a recorded source head moves', 
   }), /SOURCE_REF_MOVED/);
 });
 
-test('wrangler config is static-assets-only with no route or storage owner', () => {
+test('wrangler config routes only the three range paths through the Worker+ASSETS adapter', () => {
   const config = JSON.parse(fs.readFileSync(path.join(TOOL, 'wrangler.jsonc'), 'utf8'));
+  const expected = POLICY.channels.flatMap((channel) => channel.files)
+    .filter((file) => file.rangeProof).map((file) => `/${file.publicPath}`);
   assert.equal(config.name, 'myang-public-delivery');
+  assert.equal(config.main, './worker.mjs');
   assert.equal(config.compatibility_date, '2026-10-13');
   assert.equal(config.workers_dev, false);
   assert.equal(config.preview_urls, false);
@@ -217,10 +221,151 @@ test('wrangler config is static-assets-only with no route or storage owner', () 
     directory: './dist',
     html_handling: 'none',
     not_found_handling: 'none',
+    binding: 'ASSETS',
+    run_worker_first: expected,
   });
-  for (const forbidden of ['main', 'routes', 'r2_buckets', 'kv_namespaces', 'd1_databases', 'durable_objects', 'services']) {
+  assert.deepEqual(RANGE_PATHS, expected);
+  for (const forbidden of ['routes', 'r2_buckets', 'kv_namespaces', 'd1_databases', 'durable_objects', 'services']) {
     assert.equal(Object.hasOwn(config, forbidden), false, forbidden);
   }
+});
+
+test('range parser accepts only bounded explicit single byte ranges', () => {
+  assert.deepEqual(parseSingleByteRange('bytes=2-5', 10), {kind: 'range', start: 2, end: 5});
+  assert.deepEqual(parseSingleByteRange('bytes=8-99', 10), {kind: 'range', start: 8, end: 9});
+  for (const value of [
+    'bytes=5-2',
+    'bytes=0-1,4-5',
+    'bytes=-5',
+    'bytes=5-',
+    'items=0-1',
+    'bytes=9007199254740992-9007199254740993',
+  ]) {
+    assert.equal(parseSingleByteRange(value, 10).kind, 'invalid', value);
+  }
+  assert.equal(parseSingleByteRange('bytes=10-12', 10).kind, 'unsatisfiable');
+});
+
+test('range worker returns exact partial bytes and preserves asset metadata', async () => {
+  const source = Buffer.from('0123456789abcdef');
+  let backingRequest;
+  const env = {ASSETS: {fetch: async (request) => {
+    backingRequest = request;
+    return new Response(source, {status: 200, headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'public, max-age=300',
+      'Content-Type': 'application/javascript; charset=utf-8',
+      ETag: '"fixture"',
+    }});
+  }}};
+  const response = await worker.fetch(new Request(
+    'https://update.myang.link/simcore/latest.js',
+    {headers: {Range: 'bytes=2-5'}},
+  ), env);
+  assert.equal(response.status, 206);
+  assert.equal(Buffer.from(await response.arrayBuffer()).toString(), '2345');
+  assert.equal(response.headers.get('content-range'), 'bytes 2-5/16');
+  assert.equal(response.headers.get('content-length'), '4');
+  assert.equal(response.headers.get('accept-ranges'), 'bytes');
+  assert.equal(response.headers.get('access-control-allow-origin'), '*');
+  assert.equal(response.headers.get('content-type'), 'application/javascript; charset=utf-8');
+  assert.equal(response.headers.get('cache-control'), 'public, max-age=300');
+  assert.equal(response.headers.get('etag'), '"fixture"');
+  assert.equal(backingRequest.headers.get('range'), null);
+});
+
+test('range worker honors If-Range before returning partial bytes', async () => {
+  const source = Buffer.from('0123456789abcdef');
+  const lastModified = 'Sat, 01 Nov 2025 12:00:00 GMT';
+  const responseDate = 'Sat, 01 Nov 2025 12:00:02 GMT';
+  const seen = [];
+  const makeEnv = (date = responseDate) => ({ASSETS: {fetch: async (request) => {
+    seen.push({
+      range: request.headers.get('range'),
+      ifRange: request.headers.get('if-range'),
+    });
+    return new Response(source, {status: 200, headers: {
+      'Content-Type': 'application/javascript; charset=utf-8',
+      Date: date,
+      ETag: '"current"',
+      'Last-Modified': lastModified,
+    }});
+  }}});
+
+  const request = (ifRange, env = makeEnv()) => worker.fetch(new Request(
+    'https://update.myang.link/simcore/latest.js',
+    {headers: {Range: 'bytes=0-3', 'If-Range': ifRange}},
+  ), env);
+
+  const matchingTag = await request('"current"');
+  assert.equal(matchingTag.status, 206);
+  assert.equal(Buffer.from(await matchingTag.arrayBuffer()).toString(), '0123');
+
+  for (const validator of ['"stale"', 'W/"current"']) {
+    const response = await request(validator);
+    assert.equal(response.status, 200, validator);
+    assert.equal(Buffer.from(await response.arrayBuffer()).toString(), source.toString());
+  }
+
+  const matchingDate = await request(lastModified);
+  assert.equal(matchingDate.status, 206);
+  assert.equal(Buffer.from(await matchingDate.arrayBuffer()).toString(), '0123');
+
+  const staleDate = await request('Sat, 01 Nov 2025 11:59:59 GMT');
+  assert.equal(staleDate.status, 200);
+  assert.equal(Buffer.from(await staleDate.arrayBuffer()).toString(), source.toString());
+
+  const weakDate = await request(lastModified, makeEnv(lastModified));
+  assert.equal(weakDate.status, 200);
+  assert.equal(Buffer.from(await weakDate.arrayBuffer()).toString(), source.toString());
+
+  assert(seen.length >= 6);
+  assert(seen.every((row) => row.range === null));
+  assert(seen.every((row) => row.ifRange === null));
+});
+
+test('range worker delegates non-owned, non-range, and non-GET requests unchanged', async () => {
+  const seen = [];
+  const env = {ASSETS: {fetch: async (request) => {
+    seen.push({method: request.method, path: new URL(request.url).pathname, range: request.headers.get('range')});
+    return new Response('delegated', {status: 202, headers: {'X-Delegated': 'yes'}});
+  }}};
+  const requests = [
+    new Request('https://update.myang.link/termux/00-update-local-stack', {headers: {Range: 'bytes=0-1'}}),
+    new Request('https://update.myang.link/simcore/latest.js'),
+    new Request('https://update.myang.link/simcore/latest.js', {method: 'POST', body: 'x', headers: {Range: 'bytes=0-1'}}),
+  ];
+  for (const request of requests) {
+    const response = await worker.fetch(request, env);
+    assert.equal(response.status, 202);
+    assert.equal(response.headers.get('x-delegated'), 'yes');
+  }
+  assert.deepEqual(seen.map((row) => row.range), ['bytes=0-1', null, 'bytes=0-1']);
+});
+
+test('range worker fails closed on invalid ranges and preserves upstream failure', async () => {
+  const bytes = Buffer.from('abcdef');
+  const env = {ASSETS: {fetch: async () => new Response(bytes, {
+    status: 200,
+    headers: {'Content-Type': 'application/javascript; charset=utf-8'},
+  })}};
+  for (const value of ['bytes=4-2', 'bytes=0-1,3-4', 'bytes=6-8']) {
+    const response = await worker.fetch(new Request(
+      'https://update.myang.link/simcore/install.js',
+      {headers: {Range: value}},
+    ), env);
+    assert.equal(response.status, 416, value);
+    assert.equal(response.headers.get('content-range'), 'bytes */6');
+    assert.equal(response.headers.get('content-length'), '0');
+  }
+
+  const missing = {ASSETS: {fetch: async () => new Response('missing', {status: 404})}};
+  const response = await worker.fetch(new Request(
+    'https://update.myang.link/usage-dashboard/latest.js',
+    {headers: {Range: 'bytes=0-2'}},
+  ), missing);
+  assert.equal(response.status, 404);
+  assert.equal(await response.text(), 'missing');
 });
 
 test('live verifier proves exact bytes, CORS, MIME, and three Risu range paths', async () => {

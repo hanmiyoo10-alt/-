@@ -282,6 +282,18 @@ test('settling requiredCoverage projects Required as UNKNOWN while preserving ru
   assert.ok(result.unknown.includes('writers, requiredCoverage'));
 });
 
+test('settling requiredCoverage survives renderer overflow suffix', async () => {
+  const settling = issue({
+    requiredState: 'FAIL',
+    requiredRun: '41065303011',
+    unknownValue: 'productionAuthority, writers, bootstrap, requiredCoverage (+1 more)',
+    convergenceLine: 'Convergence: `SETTLING` — waiting for requiredCi (30s)'
+  });
+  const { reader } = sequence([branch(), settling, branch()]);
+  const result = await repoSnapshot({ githubJson: reader });
+  assert.deepEqual(result.required, {state: 'UNKNOWN', run: '41065303011'});
+});
+
 test('settling unrelated coverage preserves terminal Required state', async () => {
   const settling = issue({
     requiredState: 'FAIL',

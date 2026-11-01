@@ -40,7 +40,7 @@ function unquoteCode(value) {
 function containsUnknownToken(value, token) {
   return String(value || '')
     .split(',')
-    .map((item) => item.trim())
+    .map((item) => item.trim().replace(/\s+\(\+\d+ more\)$/, ''))
     .includes(token);
 }
 

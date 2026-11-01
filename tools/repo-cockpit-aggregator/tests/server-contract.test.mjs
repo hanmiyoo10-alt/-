@@ -26,7 +26,10 @@ function capsule({
   convergence = true,
   production = true,
   unknown = true,
-  unknownValue = 'NONE'
+  unknownValue = 'NONE',
+  requiredState = 'PASS',
+  requiredRun = '123',
+  convergenceLine = 'Convergence: `STABLE`'
 } = {}) {
   const authority = [
     ...(production
@@ -38,7 +41,7 @@ function capsule({
   ].join('; ') || 'NONE';
   const rows = [
     ...(state ? [`- STATE: \`${stateValue}\``] : []),
-    ...(main ? [`- MAIN: \`${mainSha}\` / Required PASS — run 123`] : []),
+    ...(main ? [`- MAIN: \`${mainSha}\` / Required ${requiredState} — run ${requiredRun}`] : []),
     '- CHANGE: LOW — fixture',
     '- WHY: `NONE`',
     '- NEXT: `NONE`',
@@ -48,7 +51,7 @@ function capsule({
   const compat = convergence
     ? [
         '<!-- canonical-main-summary-compat:v1',
-        'Convergence: `STABLE`',
+        convergenceLine,
         '-->'
       ].join('\n')
     : '<!-- canonical-main-summary-compat:v1\n-->';
@@ -263,6 +266,39 @@ test('canonical SETTLING convergence forms remain parseable', async () => {
     assert.equal(result.convergence, 'SETTLING', line);
     assert.equal(result.unknown.includes('convergence'), false, line);
   }
+});
+
+test('settling requiredCoverage projects Required as UNKNOWN while preserving run identity', async () => {
+  const settling = issue({
+    requiredState: 'FAIL',
+    requiredRun: '41065303011',
+    unknownValue: 'writers, requiredCoverage',
+    convergenceLine: 'Convergence: `SETTLING` — waiting for writers, requiredCi (30s)'
+  });
+  const { reader } = sequence([branch(), settling, branch()]);
+  const result = await repoSnapshot({ githubJson: reader });
+  assert.equal(result.authority, 'UNKNOWN');
+  assert.deepEqual(result.required, {state: 'UNKNOWN', run: '41065303011'});
+  assert.ok(result.unknown.includes('writers, requiredCoverage'));
+});
+
+test('settling unrelated coverage preserves terminal Required state', async () => {
+  const settling = issue({
+    requiredState: 'FAIL',
+    unknownValue: 'writers',
+    convergenceLine: 'Convergence: `SETTLING` — waiting for writers (30s)'
+  });
+  const { reader } = sequence([branch(), settling, branch()]);
+  const result = await repoSnapshot({ githubJson: reader });
+  assert.deepEqual(result.required, {state: 'FAIL', run: '123'});
+});
+
+test('stable complete terminal Required FAIL remains FAIL', async () => {
+  const terminal = issue({requiredState: 'FAIL'});
+  const { reader } = sequence([branch(), terminal, branch()]);
+  const result = await repoSnapshot({ githubJson: reader });
+  assert.equal(result.authority, 'PASS');
+  assert.deepEqual(result.required, {state: 'FAIL', run: '123'});
 });
 
 test('main movement during capture is UNKNOWN', async () => {

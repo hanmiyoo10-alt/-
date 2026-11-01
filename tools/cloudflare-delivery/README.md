@@ -16,7 +16,7 @@ canonical release/main refs
 → update.myang.link
 ```
 
-V1 now has one narrow Worker script because live #3669 evidence proved direct Static Assets does not satisfy the mandatory single-range contract. The Worker runs first only for the three policy `rangeProof=true` paths, delegates ordinary requests to the `ASSETS` binding, and handles only explicit `bytes=start-end` GET ranges. R2, KV, D1, Durable Objects, service bindings, caller-selected repository/ref/path/hostname, and automatic release hooks remain absent.
+V1 now has one narrow Worker script because live #3669 evidence proved direct Static Assets does not satisfy the mandatory single-range contract. The Worker runs first only for the three policy `rangeProof=true` paths, delegates ordinary requests to the `ASSETS` binding, and handles only explicit `bytes=start-end` GET ranges. `If-Range` is evaluated against the selected asset before slicing: only an exact strong ETag match, or an exact Last-Modified match with a conservatively strong date validator, may return `206`; otherwise the complete upstream response is returned. R2, KV, D1, Durable Objects, service bindings, caller-selected repository/ref/path/hostname, and automatic release hooks remain absent.
 
 `wrangler.jsonc` deliberately has no route. The fixed Worker name and Custom Domain remain unchanged. After `update.myang.link` is attached to the fixed Worker, the manual workflow can publish later asset revisions without changing routing.
 

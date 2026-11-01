@@ -38,8 +38,29 @@ function partialHeaders(upstream, length, range) {
 async function fetchWholeAsset(request, env) {
   const headers = new Headers(request.headers);
   headers.delete('range');
+  headers.delete('if-range');
   const fullRequest = new Request(request, {headers});
   return env.ASSETS.fetch(fullRequest);
+}
+
+function ifRangeMatches(value, upstream) {
+  if (value === null) return true;
+  const validator = value.trim();
+
+  if (validator.startsWith('"')) {
+    const etag = upstream.headers.get('etag');
+    return etag !== null && !etag.startsWith('W/') && validator === etag;
+  }
+
+  const lastModified = upstream.headers.get('last-modified');
+  const responseDate = upstream.headers.get('date');
+  if (lastModified === null || responseDate === null || validator !== lastModified) return false;
+
+  const lastModifiedMs = Date.parse(lastModified);
+  const responseDateMs = Date.parse(responseDate);
+  return Number.isFinite(lastModifiedMs)
+    && Number.isFinite(responseDateMs)
+    && responseDateMs - lastModifiedMs >= 1000;
 }
 
 export default {
@@ -54,6 +75,7 @@ export default {
 
     const upstream = await fetchWholeAsset(request, env);
     if (!upstream.ok) return upstream;
+    if (!ifRangeMatches(request.headers.get("if-range"), upstream)) return upstream;
 
     const bytes = new Uint8Array(await upstream.arrayBuffer());
     const range = parseSingleByteRange(rangeHeader, bytes.byteLength);

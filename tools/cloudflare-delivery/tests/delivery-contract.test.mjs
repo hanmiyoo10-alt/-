@@ -274,6 +274,56 @@ test('range worker returns exact partial bytes and preserves asset metadata', as
   assert.equal(backingRequest.headers.get('range'), null);
 });
 
+test('range worker honors If-Range before returning partial bytes', async () => {
+  const source = Buffer.from('0123456789abcdef');
+  const lastModified = 'Sat, 01 Nov 2025 12:00:00 GMT';
+  const responseDate = 'Sat, 01 Nov 2025 12:00:02 GMT';
+  const seen = [];
+  const makeEnv = (date = responseDate) => ({ASSETS: {fetch: async (request) => {
+    seen.push({
+      range: request.headers.get('range'),
+      ifRange: request.headers.get('if-range'),
+    });
+    return new Response(source, {status: 200, headers: {
+      'Content-Type': 'application/javascript; charset=utf-8',
+      Date: date,
+      ETag: '"current"',
+      'Last-Modified': lastModified,
+    }});
+  }}});
+
+  const request = (ifRange, env = makeEnv()) => worker.fetch(new Request(
+    'https://update.myang.link/simcore/latest.js',
+    {headers: {Range: 'bytes=0-3', 'If-Range': ifRange}},
+  ), env);
+
+  const matchingTag = await request('"current"');
+  assert.equal(matchingTag.status, 206);
+  assert.equal(Buffer.from(await matchingTag.arrayBuffer()).toString(), '0123');
+
+  for (const validator of ['"stale"', 'W/"current"']) {
+    const response = await request(validator);
+    assert.equal(response.status, 200, validator);
+    assert.equal(Buffer.from(await response.arrayBuffer()).toString(), source.toString());
+  }
+
+  const matchingDate = await request(lastModified);
+  assert.equal(matchingDate.status, 206);
+  assert.equal(Buffer.from(await matchingDate.arrayBuffer()).toString(), '0123');
+
+  const staleDate = await request('Sat, 01 Nov 2025 11:59:59 GMT');
+  assert.equal(staleDate.status, 200);
+  assert.equal(Buffer.from(await staleDate.arrayBuffer()).toString(), source.toString());
+
+  const weakDate = await request(lastModified, makeEnv(lastModified));
+  assert.equal(weakDate.status, 200);
+  assert.equal(Buffer.from(await weakDate.arrayBuffer()).toString(), source.toString());
+
+  assert(seen.length >= 6);
+  assert(seen.every((row) => row.range === null));
+  assert(seen.every((row) => row.ifRange === null));
+});
+
 test('range worker delegates non-owned, non-range, and non-GET requests unchanged', async () => {
   const seen = [];
   const env = {ASSETS: {fetch: async (request) => {

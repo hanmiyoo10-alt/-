@@ -40,7 +40,16 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Python CLI and contract tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
         run: python3 -m unittest discover -s products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/tests -v
+      - name: Assert Python validation leaves no bytecode
+        run: |
+          if find products/chatgpt-mobile-coder-lab/device-ops/gui-bridge \
+            \( -type d -name '__pycache__' -o -type f -name '*.pyc' \) -print -quit | grep -q .; then
+            echo 'GUI bridge Python validation left source-tree bytecode' >&2
+            exit 1
+          fi
       - name: Android JVM unit tests
         run: gradle -p products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/android-companion :app:testDebugUnitTest
       - name: Build debug APK

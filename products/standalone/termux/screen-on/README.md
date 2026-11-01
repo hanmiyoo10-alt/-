@@ -51,7 +51,7 @@ On the tested Android 16 device, `pm path` / `cmd package` can transiently fail 
 ## Tests
 
 ```bash
-python -m unittest discover -s products/standalone/termux/screen-on/tests -p 'test_*.py'
+PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s products/standalone/termux/screen-on/tests -p 'test_*.py'
 ```
 
 The companion workflow runs Python regression tests, Android unit tests, and a debug APK build.

@@ -159,7 +159,7 @@ The status surface may report states including `HEALTHY`,
 Repository contract tests:
 
 ```sh
-python3 -m unittest discover \
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
   -s products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/tests -v
 
 python3 -c "from pathlib import Path; p=Path('products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/termux/heartbeat-client.py'); compile(p.read_text(), str(p), 'exec')"

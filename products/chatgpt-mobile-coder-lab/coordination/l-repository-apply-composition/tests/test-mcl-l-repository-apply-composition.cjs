@@ -108,6 +108,7 @@ claimHolder(){events.push('holder-claim');return {result:{status:'CLAIMED',reaso
 checkHolder(_f,claim){events.push('holder-check');assert.equal(claim,CLAIM);return {status:'CHECK_PASS',reasonCodes:[]};},
 releaseLease(){events.push('release-lease');return {ok:true,value:{evidenceRef:'run:202',observedGeneration:11}};},
 releaseHolder(_f,claim){events.push('holder-release');assert.equal(claim,CLAIM);return {status:'RELEASED',reasonCodes:[]};},
+reviewUpdateInspect(){events.push('review-update-inspect');return {state:'READY'};},
 writeActivation(_m,value){events.push('write-activation');activation=structuredClone(value);return structuredClone(activation);},
 readActivation(){events.push('read-activation');if(!activation)throw new owner.CompositionError('BLOCKED',['ACTIVATION_MISSING']);return structuredClone(activation);},
 removeActivation(){events.push('remove-activation');activation=null;},
@@ -909,6 +910,162 @@ assert.ok(source.includes("args.includes('merge')"));
 assert.ok(source.includes("effectOperation === 'review-update'"));
 assert.ok(source.includes("'--review-update-request'"));
 assert.equal(source.includes('review-update-fallback'),false);
+});
+
+test('t34 stale/diverged review-update skips generic inspect and uses review-specific preflight', () => {
+const files=fixtureFiles();
+const patch=fs.readFileSync(files.args.patchFile);
+fs.writeFileSync(files.args.requestFile,JSON.stringify({
+schema:'mcl-l-review-update-request.v1',
+packet_ref:PACKET_REF,
+message:TITLE,
+expected_old_head:BASE,
+expected_paths:PATHS,
+patch_sha256:require('node:crypto').createHash('sha256').update(patch).digest('hex'),
+}));
+files.args.operation='review-update';
+const state=baseDeps(files,{
+reviewUpdateInspect(input){
+state.events.push('review-update-inspect');
+assert.equal(input.manifest.observedBaseSha,BASE);
+assert.equal(input.request.expected_old_head,BASE);
+assert.deepEqual(input.request.expected_paths,[...PATHS].sort());
+assert.deepEqual(input.patchBytes,patch);
+return {state:'READY'};
+},
+ownerRunCli(argv,env){
+if(argv[0]==='inspect'){
+state.events.push('owner-inspect');
+return {code:2,text:JSON.stringify({
+status:'BLOCKED',
+reason_codes:['LANDING_HEAD_NOT_ANCESTOR_OF_BASE','PROTECTED_MAIN_STALE','REMOTE_MAIN_STALE'],
+})+'\n'};
+}
+state.events.push('owner-review-update');
+assert.equal(argv[0],'review-update');
+assert.equal(env[holder.CLAIM_ENV],CLAIM);
+return {code:0,text:JSON.stringify({
+status:'PASS',reason_codes:[],new_head:HEAD,pr_number:4001,
+next_legal_action:'RELEASE_D013_THEN_RELEASE_HOLDER_THEN_D014_COMPLETE',
+})+'\n'};
+},
+});
+const out=owner.executeComposition(files.args,state.deps);
+assert.equal(out.status,'PASS');
+no(state,'owner-inspect');
+assert.ok(state.events.indexOf('review-update-inspect')<state.events.indexOf('holder-claim'));
+assert.ok(state.events.indexOf('holder-claim')<state.events.indexOf('owner-review-update'));
+});
+
+test('t35 review-specific preflight composes current-main, replay state, and holder absence', () => {
+const m=manifest();
+const patch=Buffer.from('review-patch\n');
+const request={
+schema:'mcl-l-review-update-request.v1',
+packet_ref:PACKET_REF,
+message:TITLE,
+expected_old_head:BASE,
+expected_paths:PATHS,
+patch_sha256:require('node:crypto').createHash('sha256').update(patch).digest('hex'),
+};
+const prRequest={schema:'mcl-l-pr-publication-request.v1',title:TITLE,body:PR_BODY};
+const calls=[];
+const result=owner.inspectReviewUpdatePrepared({
+manifest:m,request,patchBytes:patch,prRequest,
+},{
+runner(){throw new Error('runner should remain delegated');},
+currentMain(manifestValue){
+calls.push('current-main');
+assert.equal(manifestValue.observedBaseSha,BASE);
+return HEAD;
+},
+preparedDigest(manifestValue,requestValue,patchValue){
+calls.push('prepared-digest');
+assert.equal(manifestValue.manifestId,m.manifestId);
+assert.equal(requestValue.expected_old_head,BASE);
+assert.deepEqual(patchValue,patch);
+return 'e'.repeat(64);
+},
+classifyState(manifestValue,requestValue,prValue,main,digest){
+calls.push('classify-state');
+assert.equal(manifestValue.manifestId,m.manifestId);
+assert.equal(requestValue.expected_old_head,BASE);
+assert.equal(prValue.title,TITLE);
+assert.equal(main,HEAD);
+assert.equal(digest,'e'.repeat(64));
+return {state:'READY'};
+},
+inspectWorkspace(manifestValue){
+calls.push('inspect-holder-workspace');
+assert.equal(manifestValue.manifestId,m.manifestId);
+return {ok:true,reasonCodes:[],holderPath:'/fixture/holder'};
+},
+readHolder(holderPath){
+calls.push('read-holder');
+assert.equal(holderPath,'/fixture/holder');
+return {ok:false,missing:true,reasonCodes:['HOLDER_MISSING'],value:null};
+},
+});
+assert.equal(result.state,'READY');
+assert.deepEqual(calls,[
+'current-main','prepared-digest','classify-state','inspect-holder-workspace','read-holder',
+]);
+assert.throws(
+()=>owner.inspectReviewUpdatePrepared({
+manifest:m,request,patchBytes:patch,prRequest,
+},{
+currentMain(){return HEAD;},
+preparedDigest(){return 'e'.repeat(64);},
+classifyState(){return {state:'READY'};},
+inspectWorkspace(){return {ok:true,reasonCodes:[],holderPath:'/fixture/holder'};},
+readHolder(){return {ok:true,missing:false,reasonCodes:[],value:{}};},
+}),
+(error)=>error.reasonCodes.includes('HOLDER_NOT_ABSENT_BEFORE_COMPOSITION')
+);
+assert.throws(
+()=>owner.inspectReviewUpdatePrepared({
+manifest:m,request,patchBytes:patch,prRequest,
+},{
+currentMain(){throw new lOwner.OwnerError('CONFLICT',['REVIEW_UPDATE_MAIN_IDENTITY_CONFLICT']);},
+}),
+(error)=>error instanceof owner.CompositionError
+&& error.kind==='CONFLICT'
+&& error.reasonCodes.includes('REVIEW_UPDATE_MAIN_IDENTITY_CONFLICT')
+);
+const source=fs.readFileSync(path.join(__dirname,'../mcl-l-repository-apply-composition.cjs'),'utf8');
+for(const needle of [
+'lOwner.reviewUpdateCurrentMain',
+'lOwner.expectedReviewUpdatePreparedDigest',
+'lOwner.classifyReviewUpdateState',
+'workspaceHolder.inspectWorkspace',
+'workspaceHolder.readHolder',
+]) assert.ok(source.includes(needle),needle);
+});
+
+test('t36 stage-entry runner adapter preserves owner argv and options', () => {
+let seen=null;
+const stageRunner=(argv,options)=>{
+seen={argv,options};
+return {code:0,stdout:'ok',stderr:''};
+};
+const adapted=owner.ownerRunnerFromStageRunner(stageRunner);
+const options={
+cwd:'/tmp/fixture',
+input:'payload',
+env:{HOME:'/tmp/home'},
+timeoutMs:123,
+};
+const result=adapted('git',['status','--short'],options);
+assert.deepEqual(seen.argv,['git','status','--short']);
+assert.equal(seen.options,options);
+assert.deepEqual(result,{
+code:0,stdout:'ok',stderr:'',signal:null,error:null,
+});
+const deps=owner.defaultDeps({runner:stageRunner});
+assert.ok(typeof deps.reviewUpdateInspect==='function');
+const source=fs.readFileSync(path.join(__dirname,'../mcl-l-repository-apply-composition.cjs'),'utf8');
+assert.ok(source.includes('ownerRunnerFromStageRunner(runner)'));
+assert.ok(source.includes('runner: ownerReadRunner'));
 });
 
 test('t26',()=>{

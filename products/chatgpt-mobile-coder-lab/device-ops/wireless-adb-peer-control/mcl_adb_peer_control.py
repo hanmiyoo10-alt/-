@@ -207,8 +207,9 @@ def candidates_from_packets(packets: list[bytes]) -> list[dict[str, str]]:
 def discover() -> list[dict[str, str]]:
     query = build_query()
     packets: list[bytes] = []
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock = None
     try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.settimeout(0.2)
         sock.sendto(query, (MDNS_GROUP, MDNS_PORT))
         deadline = time.monotonic() + DISCOVERY_SECONDS
@@ -220,8 +221,14 @@ def discover() -> list[dict[str, str]]:
             if len(packet) > MAX_PACKET:
                 raise PeerError("DNS_PACKET_SIZE")
             packets.append(packet)
+    except OSError as exc:
+        raise PeerError("MDNS_IO_FAILED") from exc
     finally:
-        sock.close()
+        if sock is not None:
+            try:
+                sock.close()
+            except OSError:
+                pass
     return candidates_from_packets(packets)
 
 
@@ -391,10 +398,21 @@ def connected_s(runner=_run) -> list[str]:
     for line in lines:
         fields = line.split()
         if len(fields) >= 2 and fields[1] == "device":
-            endpoint = fields[0]
-            if _model(endpoint, runner) == TARGET_MODEL:
-                result.append(endpoint)
+            transport = fields[0]
+            if _model(transport, runner) == TARGET_MODEL:
+                result.append(transport)
     return result
+
+
+def _transport_matches(candidate: dict[str, str], transport: str) -> bool:
+    if transport == candidate["endpoint"]:
+        return True
+    try:
+        serial = norm_name(transport)
+        instance = norm_name(candidate["instance"])
+    except PeerError:
+        return False
+    return serial == instance or serial + ".local" == instance
 
 
 def bootstrap(*, discoverer=discover, host_reader=known_hosts, runner=_run, pin_writer=write_pin) -> dict:
@@ -403,7 +421,8 @@ def bootstrap(*, discoverer=discover, host_reader=known_hosts, runner=_run, pin_
     connected = connected_s(runner)
     eligible = [
         row for row in candidates
-        if _service_token(row["instance"]) in hosts and row["endpoint"] in connected
+        if _service_token(row["instance"]) in hosts
+        and any(_transport_matches(row, transport) for transport in connected)
     ]
     if len(eligible) != 1 or len(connected) != 1:
         raise PeerError("BOOTSTRAP_CORRELATION_NOT_EXACT")

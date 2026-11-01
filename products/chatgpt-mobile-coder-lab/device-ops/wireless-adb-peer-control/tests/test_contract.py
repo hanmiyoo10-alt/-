@@ -110,6 +110,40 @@ def dns_record_limit_fails_closed():
 
 
 @case
+def discovery_socket_failures_become_bounded_peer_errors():
+    original = peer.socket.socket
+    class BrokenSocket:
+        def __init__(self, *args):
+            self.closed = False
+        def settimeout(self, _value):
+            pass
+        def sendto(self, _data, _peer):
+            raise OSError("offline")
+        def close(self):
+            self.closed = True
+    try:
+        peer.socket.socket = BrokenSocket
+        expect_reason(peer.discover, "MDNS_IO_FAILED")
+        peer.socket.socket = lambda *args: (_ for _ in ()).throw(OSError("no route"))
+        expect_reason(peer.discover, "MDNS_IO_FAILED")
+        class RecvBrokenSocket:
+            def __init__(self, *args):
+                pass
+            def settimeout(self, _value):
+                pass
+            def sendto(self, _data, _peer):
+                return 1
+            def recvfrom(self, _size):
+                raise OSError("link lost")
+            def close(self):
+                pass
+        peer.socket.socket = RecvBrokenSocket
+        expect_reason(peer.discover, "MDNS_IO_FAILED")
+    finally:
+        peer.socket.socket = original
+
+
+@case
 def protobuf_known_host_strings_are_bounded():
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "hosts.pb"
@@ -203,6 +237,26 @@ def bootstrap_correlates_one_connected_exact_s_and_withholds_identifiers():
 
 
 @case
+def bootstrap_accepts_exact_service_name_transport():
+    serial = INSTANCE.removesuffix(".local")
+    pinned = []
+    def runner(argv, timeout=10):
+        if argv == [peer.ADB, "devices"]:
+            return "List of devices attached\n" + serial + "\tdevice\n"
+        if argv == [peer.ADB, "-s", serial, "shell", "getprop", "ro.product.model"]:
+            return peer.TARGET_MODEL + "\n"
+        raise AssertionError(argv)
+    result = peer.bootstrap(
+        discoverer=lambda: [{"instance": INSTANCE, "endpoint": ENDPOINT}],
+        host_reader=lambda: {TOKEN},
+        runner=runner,
+        pin_writer=pinned.append,
+    )
+    assert result["status"] == "PINNED"
+    assert pinned == [INSTANCE]
+
+
+@case
 def reconnect_uses_only_fixed_connect_and_model_argv():
     calls = []
     def runner(argv, timeout=10):
@@ -246,7 +300,7 @@ def cli_and_source_expose_no_generic_effect_surface():
 
 
 def main() -> int:
-    assert len(TESTS) == 18, len(TESTS)
+    assert len(TESTS) == 20, len(TESTS)
     passed = 0
     for fn in TESTS:
         fn()

@@ -36,9 +36,18 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Contract tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
         run: python3 -m unittest discover -s products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/tests -v
       - name: Heartbeat client syntax
-        run: python3 -m py_compile products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/termux/heartbeat-client.py
+        run: python3 -c "from pathlib import Path; p=Path('products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/termux/heartbeat-client.py'); compile(p.read_text(), str(p), 'exec')"
+      - name: Assert Python validation leaves no bytecode
+        run: |
+          if find products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline \
+            \( -type d -name '__pycache__' -o -type f -name '*.pyc' \) -print -quit | grep -q .; then
+            echo 'M Termux lifeline Python validation left source-tree bytecode' >&2
+            exit 1
+          fi
       - name: Android JVM unit tests
         run: gradle -p products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/android-companion :app:testDebugUnitTest
       - name: Build debug APK

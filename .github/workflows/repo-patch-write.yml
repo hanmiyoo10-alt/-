@@ -14,6 +14,8 @@ on:
   push:
     branches: [main]
     paths:
+      - 'tools/repo-write/**'
+      - '.github/workflows/repo-patch-write.yml'
       - 'products/chatgpt-mobile-coder-lab/device-ops/repository-patch/mcl-worktree-patch.py'
       - 'products/chatgpt-mobile-coder-lab/device-ops/repository-patch/mcl-repository-patch-owner-invoke.cjs'
       - 'products/chatgpt-mobile-coder-lab/device-ops/repository-patch/tests/test-worktree-patch.py'

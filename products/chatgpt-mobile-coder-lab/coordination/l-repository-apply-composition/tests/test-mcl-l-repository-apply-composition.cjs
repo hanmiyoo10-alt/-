@@ -748,6 +748,169 @@ no(state,'post-completion');
 childProcess.spawnSync=original;
 }
 });
+test('t29 review-update parser is fixed and rejects mixed request surfaces', () => {
+const parsed=owner.parseArgs([
+'review-update','--packet','#3525','--manifest','m',
+'--review-update-request','r','--patch','p','--pr-request','pr','--apply',
+]);
+assert.equal(parsed.operation,'review-update');
+assert.equal(parsed.requestFile,'r');
+assert.throws(
+()=>owner.parseArgs([
+'review-update','--packet','#3525','--manifest','m',
+'--review-update-request','r','--request','ordinary',
+'--patch','p','--pr-request','pr','--apply',
+]),
+(error)=>error.reasonCodes.includes('ARGUMENT_UNSUPPORTED_OR_DUPLICATE:request')
+);
+const patch=Buffer.from('review-patch\n');
+const request=owner.parseReviewUpdateRequestStructure(JSON.stringify({
+schema:'mcl-l-review-update-request.v1',
+packet_ref:PACKET_REF,
+message:'fix: review fixture',
+expected_old_head:BASE,
+expected_paths:PATHS,
+patch_sha256:require('node:crypto').createHash('sha256').update(patch).digest('hex'),
+}));
+assert.equal(request.expected_old_head,BASE);
+assert.deepEqual(request.expected_paths,[...PATHS].sort());
+assert.throws(
+()=>owner.parseReviewUpdateRequestStructure(JSON.stringify({
+...request,extra:true,
+})),
+(error)=>error.reasonCodes.includes('REVIEW_UPDATE_REQUEST_FIELDS_INVALID')
+);
+});
+
+test('t30 review-update keeps holder process-local and completes with operation evidence', () => {
+const files=fixtureFiles();
+const patch=fs.readFileSync(files.args.patchFile);
+fs.writeFileSync(files.args.requestFile,JSON.stringify({
+schema:'mcl-l-review-update-request.v1',
+packet_ref:PACKET_REF,
+message:TITLE,
+expected_old_head:BASE,
+expected_paths:PATHS,
+patch_sha256:require('node:crypto').createHash('sha256').update(patch).digest('hex'),
+}));
+files.args.operation='review-update';
+const state=baseDeps(files,{
+ownerRunCli(argv,env){
+if(argv[0]==='inspect'){
+state.events.push('owner-inspect');
+return inspectPass();
+}
+state.events.push('owner-review-update');
+assert.equal(argv[0],'review-update');
+assert.ok(argv.includes('--review-update-request'));
+assert.equal(argv.includes('--request'),false);
+assert.equal(env[holder.CLAIM_ENV],CLAIM);
+return {code:0,text:JSON.stringify({
+status:'PASS',reason_codes:[],new_head:HEAD,pr_number:4001,
+next_legal_action:'RELEASE_D013_THEN_RELEASE_HOLDER_THEN_D014_COMPLETE',
+})+'\n'};
+},
+});
+const out=owner.executeComposition(files.args,state.deps);
+assert.equal(out.status,'PASS');
+assert.equal(JSON.stringify(out).includes(CLAIM),false);
+assert.equal(state.getActivation().effectOperation,'review-update');
+assert.ok(state.events.includes('owner-review-update'));
+assert.ok(state.events.includes('release-lease'));
+assert.ok(state.events.includes('holder-release'));
+const row=state.comments.find((x)=>x.id===out.completionCommentId);
+const receipt=handoff.parseCompletionReceipt(row.body);
+assert.equal(receipt.status,'VALID');
+assert.ok(receipt.value.validationRefs.includes(
+'receipt:mcl-l-repository-owner:review-update:'+files.manifestText.match(/"manifestId": "([0-9a-f]{64})"/)[1]));
+});
+
+test('t31 legacy activation without effect operation remains apply-compatible', () => {
+const files=fixtureFiles();
+const state=baseDeps(files);
+const m=manifest();
+const current=owner.buildActivation({
+manifest:m,manifestCommentId:1,
+owner:{new_head:HEAD,pr_number:4001},
+prRequest:{title:TITLE,body:PR_BODY},
+releaseGeneration:11,
+releaseEvidenceRef:'run:202',
+});
+const core={...current};
+delete core.effectOperation;
+delete core.recordDigest;
+const legacy={...core,recordDigest:require('node:crypto').createHash('sha256')
+.update(JSON.stringify(handoff.stable(core))).digest('hex')};
+assert.equal(owner.activationEffectOperation(owner.normalizeActivation(legacy,m)),'apply');
+state.setActivation(legacy);
+state.deps.readCurrent=()=>({
+issue:{state:'open',body:PACKET_BODY},
+ledger:{body:'released-ledger'},
+});
+state.deps.validateEvidence=(input)=>({
+ok:!input.requireActiveLease,
+reasonCodes:input.requireActiveLease?['LEASE_NOT_ACTIVE']:[],
+state:{generation:12},
+});
+const out=finalize(files,state);
+assert.equal(out.status,'PASS');
+const row=state.comments.find((x)=>x.id===out.completionCommentId);
+const receipt=handoff.parseCompletionReceipt(row.body);
+assert.equal(receipt.status,'VALID');
+assert.ok(receipt.value.validationRefs.includes(
+'receipt:mcl-l-repository-owner:apply:'+m.manifestId));
+});
+
+test('t32 unknown activation operation and unsupported owner review-update fail closed', () => {
+const m=manifest();
+const bad=owner.buildActivation({
+manifest:m,manifestCommentId:1,
+owner:{new_head:HEAD,pr_number:4001},
+prRequest:{title:TITLE,body:PR_BODY},
+});
+bad.effectOperation='generic-owner';
+assert.throws(
+()=>owner.normalizeActivation(bad,m),
+(error)=>error.reasonCodes.includes('ACTIVATION_EFFECT_OPERATION_INVALID')
+);
+const files=fixtureFiles();
+const patch=fs.readFileSync(files.args.patchFile);
+fs.writeFileSync(files.args.requestFile,JSON.stringify({
+schema:'mcl-l-review-update-request.v1',
+packet_ref:PACKET_REF,
+message:TITLE,
+expected_old_head:BASE,
+expected_paths:PATHS,
+patch_sha256:require('node:crypto').createHash('sha256').update(patch).digest('hex'),
+}));
+files.args.operation='review-update';
+const state=baseDeps(files,{
+ownerRunCli(argv){
+if(argv[0]==='inspect'){
+state.events.push('owner-inspect');
+return inspectPass();
+}
+state.events.push('owner-review-update');
+return {code:3,text:JSON.stringify({
+status:'UNKNOWN',reason_codes:['OPERATION_UNSUPPORTED'],
+next_legal_action:'TARGETED_RECOVERY_REQUIRED',
+})+'\n'};
+},
+});
+const out=owner.executeComposition(files.args,state.deps);
+assert.equal(out.status,'UNKNOWN');
+assert.ok(out.reasonCodes.includes('OPERATION_UNSUPPORTED'));
+no(state,'release-lease','holder-release','post-completion');
+});
+
+test('t33 review-update mutation boundary includes currentization merge', () => {
+const source=fs.readFileSync(path.join(__dirname,'../mcl-l-repository-apply-composition.cjs'),'utf8');
+assert.ok(source.includes("args.includes('merge')"));
+assert.ok(source.includes("effectOperation === 'review-update'"));
+assert.ok(source.includes("'--review-update-request'"));
+assert.equal(source.includes('review-update-fallback'),false);
+});
+
 test('t26',()=>{
 const s=fs.readFileSync(path.join(__dirname,'../mcl-l-repository-apply-composition.cjs'),'utf8');
 for(const x of ["execSync(","pr', 'create","gh pr merge","gitRead(manifest.workspace.worktree, ['push'","gitRead(manifest.workspace.worktree, ['commit'","gitRead(manifest.workspace.worktree, ['merge'","gitRead(manifest.workspace.worktree, ['reset'","gitRead(manifest.workspace.worktree, ['stash'","gitRead(manifest.workspace.worktree, ['clean'","process.kill","fetch("])assert.ok(!s.includes(x),x);

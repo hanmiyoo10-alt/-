@@ -11,6 +11,7 @@ on:
           - plugin-authority-scan
           - plugin-impact-scope
           - agent-execution-compactness
+          - validator-hardening
       eval_kind:
         description: Evaluation fixture kind
         required: true

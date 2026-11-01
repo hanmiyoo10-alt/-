@@ -2720,3 +2720,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/67c723d3d9156efba8c971a2cc2566c4cfb076ed)
 - Event ID: `f8a366958afab222ada2312747c09eee07b638836e1cb234136fce79f96a0eb9`
 <!-- canonical-main-doc-promoted:f8a366958afab222ada2312747c09eee07b638836e1cb234136fce79f96a0eb9 -->
+
+### 2026-11-01 — fix(canonical-main): bound checkpoint audit discovery (#4076)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `ea0cb402e06f364baa0377c0e42a2ea817934f1c`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ea0cb402e06f364baa0377c0e42a2ea817934f1c)
+- Event ID: `cdf30e4db7674e9a5383e281ce5ebbef6cfd97a074ee94b1ce539a29c7ae5d62`
+<!-- canonical-main-doc-promoted:cdf30e4db7674e9a5383e281ce5ebbef6cfd97a074ee94b1ce539a29c7ae5d62 -->

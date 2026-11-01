@@ -37,19 +37,39 @@ heartbeat-client.py --status
                          fixed --status probe
                                   |
                          existing recovery outcome
+                                  |
+                         RECOVERED
+                                  |
+                  LifelinePolicy.COOLDOWN_MS settle
+                                  |
+              fresh prerequisite + heartbeat recheck
+                                  |
+          fixed RDC guard launcher (zero arguments)
+                                  |
+      fixed Tailscale guard launcher (zero arguments)
+                                  |
+                 post-recovery durability re-armed
 ```
 
-The companion is the only initiator of liveness and recovery IPC. Termux does
+The companion is the only initiator of liveness, recovery, and the bounded
+post-recovery durability IPC. Termux does
 not send a broadcast, ContentProvider call, local socket request, or network
 message back to the companion.
 
 ## RUN_COMMAND result boundary
 
 The Android companion already owns one fixed Termux `RUN_COMMAND` permission and
-service path. V1 reuses that same reviewed transport for two fixed commands only:
+service path. V1 reuses that same reviewed transport for four fixed commands only:
 
 - `~/.local/lib/mcl-m-termux-lifeline/heartbeat-client.py --status`;
-- `~/.local/bin/mcl-m-termux-lifeline-recover` with zero arguments.
+- `~/.local/bin/mcl-m-termux-lifeline-recover` with zero arguments;
+- `~/.termux/boot/31-mcl-m-rdc-supervisor-guard` with zero arguments;
+- `~/.termux/boot/32-mcl-m-tailscale-supervisor-guard` with zero arguments.
+
+The two Boot launchers are not part of the emergency recovery script. They are
+eligible only after the companion has independently verified `RECOVERED`, waited
+the already-reviewed `LifelinePolicy.COOLDOWN_MS` settling window, rechecked
+package/permission/policy prerequisites, and observed a fresh heartbeat.
 
 Each invocation creates a fresh one-shot mutable PendingIntent that targets the
 same non-exported `LifelineService`. Mutability exists only so Termux can fill
@@ -111,6 +131,53 @@ entry exited successfully. The companion then requires a separate fresh
 `heartbeat-client.py --status` result before the existing recovery outcome may
 be accepted.
 
+## Post-recovery guard-ring durability
+
+Emergency recovery stays target-only exactly as above. After the companion
+classifies that same recovery generation as `RECOVERED`, it enters a separate
+bounded durability phase instead of immediately recreating the long-lived
+guard/anchor rings inside the phantom-pressure window.
+
+The durability phase:
+
+1. records the local recovered time for that recovery generation;
+2. reuses `LifelinePolicy.COOLDOWN_MS` as the settling window and adds no new
+   timing threshold;
+3. continues bounded heartbeat probes while the cooldown settling window is
+   still open;
+4. fails closed if package state, RUN_COMMAND permission, or the explicit Termux
+   policy acknowledgement becomes invalid;
+5. if the heartbeat becomes stale during settling, exits the durability phase
+   without a durability effect so the ordinary LifelinePolicy cooldown/recovery
+   path can handle the new loss on the next watchdog tick;
+6. after the cooldown boundary, requires one successful heartbeat timestamp at
+   or after that boundary; if it is still missing, dispatches/waits only for the
+   needed status probe;
+7. once that post-settle heartbeat is present and fresh, gives the durability
+   launcher sequence priority over the next periodic probe cycle;
+8. makes exactly one durability attempt for that recovery generation;
+9. invokes the fixed RDC Boot launcher with zero arguments, waits for its
+   existing result callback, then invokes the fixed Tailscale Boot launcher with
+   zero arguments;
+10. accepts success only after both existing launchers return success.
+
+Those launchers remain the owners of their fixed guard-service supervisor and
+anchor convergence. The lifeline does not reimplement their runit logic, start a
+global `runsvdir`, add a generic command/path surface, or retry the whole-Termux
+loss/recovery event.
+
+The bounded status vocabulary adds:
+
+- `RECOVERED_SETTLING`;
+- `POST_RECOVERY_SETTLING`;
+- `POST_RECOVERY_DURABILITY_REARMING`;
+- `POST_RECOVERY_DURABILITY_REARMED`;
+- `POST_RECOVERY_DURABILITY_FAILED`.
+
+A failed durability attempt is explicit and does not trigger another recovery
+attempt or another loss stimulus. A later independent real loss may create a new
+recovery generation and therefore a new one-shot durability phase.
+
 ## Force-stop separation
 
 The watchdog checks `ApplicationInfo.FLAG_STOPPED` before issuing a probe or
@@ -152,7 +219,10 @@ The status surface may report states including `HEALTHY`,
 `WAITING_FOR_FIRST_HEARTBEAT`, `NEEDS_MANUAL_RUN_COMMAND_PERMISSION`,
 `NEEDS_MANUAL_TERMUX_POLICY`, `BLOCKED_FORCE_STOP_DOMAIN`,
 `UNKNOWN_PACKAGE_STATE`, `RECOVERY_DISPATCHED`, `RECOVERY_VERIFYING`,
-`RECOVERED`, and `RECOVERY_FAILED`.
+`RECOVERED_SETTLING`, `POST_RECOVERY_SETTLING`,
+`POST_RECOVERY_DURABILITY_REARMING`,
+`POST_RECOVERY_DURABILITY_REARMED`,
+`POST_RECOVERY_DURABILITY_FAILED`, and `RECOVERY_FAILED`.
 
 ## Validation
 

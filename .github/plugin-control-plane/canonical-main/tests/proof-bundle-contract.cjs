@@ -175,7 +175,16 @@ const exactFixtureScript = [
   "result = repo_ci_exact_sha(Reader(), 'fca76cda388b3f8bb4b70cc32d4fbecd801ddf42', '.github/workflows/plugin-control-plane-ci.yml', event='pull_request', ref='main', before_sha='dc564aa008d9bd116103ccde773a13730a0a26fe', workflow_ref='d142386866ce9e1ba685ee97c3aa99918621776c')",
   'print(json.dumps(result))',
 ].join('\n');
-const exactFixture = JSON.parse(execFileSync('python3', ['-c', exactFixtureScript], {cwd: repoRoot, encoding: 'utf8', maxBuffer: 512 * 1024, stdio: ['ignore', 'pipe', 'inherit']}));
+const exactFixtureCacheDir = path.join(repoRoot, 'tools', 'repo-ci-mcp', 'repo_ci_mcp', '__pycache__');
+assert.equal(fs.existsSync(exactFixtureCacheDir), false, 'exact-SHA fixture must start without repo-local bytecode residue');
+const exactFixture = JSON.parse(execFileSync('python3', ['-c', exactFixtureScript], {
+  cwd: repoRoot,
+  encoding: 'utf8',
+  env: {...process.env, PYTHONDONTWRITEBYTECODE: '1'},
+  maxBuffer: 512 * 1024,
+  stdio: ['ignore', 'pipe', 'inherit'],
+}));
+assert.equal(fs.existsSync(exactFixtureCacheDir), false, 'exact-SHA fixture must not create repo-local bytecode residue');
 assert.equal(exactFixture.disposition, 'EXPECTED_NO_RUN_PATH_FILTER');
 assert.deepEqual(exactFixture.reason_codes, ['PATH_FILTERED']);
 assert.equal(exactFixture.evidence.changed_path_count, 6);

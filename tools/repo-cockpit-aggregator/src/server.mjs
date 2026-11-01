@@ -37,6 +37,13 @@ function unquoteCode(value) {
   return value ? value.replace(/`/g, '').trim() : value;
 }
 
+function containsUnknownToken(value, token) {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim().replace(/\s+\(\+\d+ more\)$/, ''))
+    .includes(token);
+}
+
 function extractCanonicalCapsule(body) {
   const text = String(body || '').replace(/\r\n/g, '\n');
   const headings = [...text.matchAll(/^## Canonical Operator Capsule$/gm)];
@@ -536,6 +543,12 @@ export async function repoSnapshot({ githubJson } = {}) {
 
   const projectedProtected =
     capsule.nativeProtectionProjection?.protected;
+  const projectedRequired =
+    capsule.required &&
+    capsule.convergence === 'SETTLING' &&
+    containsUnknownToken(capsule.unknown, 'requiredCoverage')
+      ? {...capsule.required, state: 'UNKNOWN'}
+      : capsule.required;
   let authority = unknown.length ? 'UNKNOWN' : 'PASS';
 
   if (
@@ -566,7 +579,7 @@ export async function repoSnapshot({ githubJson } = {}) {
     main: directMain,
     health: capsule.state ?? 'UNKNOWN',
     convergence: capsule.convergence ?? 'UNKNOWN',
-    required: capsule.required ?? { state: 'UNKNOWN', run: null },
+    required: projectedRequired ?? { state: 'UNKNOWN', run: null },
     production: capsule.production ?? { state: 'UNKNOWN', detail: null },
     protection: {
       protected: directProtected,

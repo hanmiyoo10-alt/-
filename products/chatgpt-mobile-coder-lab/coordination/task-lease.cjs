@@ -26,6 +26,7 @@ const REPOSITORY_WORKSPACE = Object.freeze({
 const LANDING_BRANCH_REPAIR = Object.freeze({
   S: Object.freeze({branch: 'server/work', worktree: '/root/nyang-repo', scope: 'surface:mcl-landing-branch:S'}),
   M: Object.freeze({branch: 'mainphone/work', worktree: '/data/data/com.termux/files/home/nyang-worktrees/mainphone-work', scope: 'surface:mcl-landing-branch:M'}),
+  L: Object.freeze({branch: 'main', worktree: '/home/alsl0/nyang-repo', scope: 'surface:mcl-landing-branch:L'}),
 });
 const LANDING_RESIDUE_CLEANUP = Object.freeze({
   L: Object.freeze({
@@ -182,7 +183,7 @@ function validateLandingBranchRepairBinding({workspace, route, executor, scopes,
   if (workspace?.kind !== 'landing_branch_repair') return [];
   const identity = landingBranchRepairIdentity(executor);
   const errors = [];
-  if (!identity || route !== executor || !['S', 'M'].includes(route)) errors.push('LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID');
+  if (!identity || route !== executor || !['S', 'M', 'L'].includes(route)) errors.push('LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID');
   if (identity && (!Array.isArray(scopes) || scopes.length !== 1 || scopes[0] !== identity.scope)) errors.push('LANDING_BRANCH_REPAIR_SCOPE_INVALID');
   if (!SHA40_RE.test(observedBaseSha || '')) errors.push('LANDING_BRANCH_REPAIR_BASE_SHA_REQUIRED');
   return errors;
@@ -318,7 +319,7 @@ function normalizeAcquireRequest(request) {
   };
   reasonCodes.push(...validateWorkspace(workspace, request?.executor));
   if (request?.route === 'S' && !['repository', 'landing_metadata', 'landing_branch_repair'].includes(workspace.kind)) reasonCodes.push('REQUEST_S_ROUTE_REPOSITORY_REQUIRED');
-  if (request?.route === 'L' && !['repository', 'landing_metadata', 'landing_residue_cleanup'].includes(workspace.kind)) reasonCodes.push('REQUEST_L_ROUTE_REPOSITORY_REQUIRED');
+  if (request?.route === 'L' && !['repository', 'landing_metadata', 'landing_residue_cleanup', 'landing_branch_repair'].includes(workspace.kind)) reasonCodes.push('REQUEST_L_ROUTE_REPOSITORY_REQUIRED');
   const observedBaseSha = request?.observedBaseSha || null;
   if (observedBaseSha !== null && !SHA40_RE.test(observedBaseSha)) reasonCodes.push('REQUEST_BASE_SHA_INVALID');
   reasonCodes.push(...validateLandingMetadataBinding({workspace, executor: request?.executor, scopes: scopeResult.scopes, observedBaseSha}));

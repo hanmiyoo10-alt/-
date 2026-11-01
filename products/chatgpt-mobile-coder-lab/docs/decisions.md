@@ -375,7 +375,7 @@ L-Gram의 Ubuntu 24.04 WSL2 repository identity는 D-012 routing, D-013 lease, D
 
 계약 identity는 `main`의 `/home/alsl0/nyang-repo` landing/read clone, `laptop/*` feature namespace, `/home/alsl0/nyang-worktrees/*` isolated feature worktrees로 고정한다. `main`과 landing clone은 feature workspace가 아니다.
 
-L `landing_metadata`는 exact `main + /home/alsl0/nyang-repo + surface:mcl-landing-origin-main:L`만 표현할 수 있다. L `landing_branch_repair`는 허용하지 않는다.
+L `landing_metadata`는 exact `main + /home/alsl0/nyang-repo + surface:mcl-landing-origin-main:L`만 표현할 수 있다. L `landing_branch_repair`는 #3999/#4054에서 리뷰된 exact `L / L + main + /home/alsl0/nyang-repo + surface:mcl-landing-branch:L` 프로필만 허용하며, current-main object materialization과 `origin/main` refresh는 각각 기존 별도 owner에 남긴다.
 
 초기 coordination-only admission의 필수 후속 조건은 별도 operational L owner와 #3235 natural mutable LIVE_PROVEN으로 충족됐다. 따라서 D-012는 ordinary repository default를 L로 선택할 수 있다. 이 결정은 L identity를 보존하는 것이며 merge/release/runtime/device/production authority를 추가하지 않는다. L route 내부 executor fallback도 만들지 않는다.
 

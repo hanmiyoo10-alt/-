@@ -69,7 +69,7 @@ The additive `landing_residue_cleanup` kind is reserved only for the reviewed fi
 
 It accepts no S/M executor, route fallback, caller-selected landing identity, alternate path, wildcard, subset, superset, cross-profile mix, or extra scope. It is a Git-workspace reservation for conflict purposes and therefore serializes with `landing_metadata` on the same fixed L branch/worktree. The lease grants coordination state only; exact file deletion remains owned by the separate `l-landing-residue-cleanup` effect owner.
 
-The additive `landing_branch_repair` kind binds only reviewed exact S/M landing identities: route/executor `S / S` binds `server/work` + `/root/nyang-repo` + `surface:mcl-landing-branch:S`; route/executor `M / M` binds `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + `surface:mcl-landing-branch:M`. L is deliberately not admitted to `landing_branch_repair` by this contract. It requires a non-null observed landing HEAD SHA. It reserves the Git worktree for the reviewed local landing branch-repair effect only; it does not grant route fallback, remote-ref, merge, release, runtime, or production authority.
+The additive `landing_branch_repair` kind binds only reviewed exact S/M/L landing identities: route/executor `S / S` binds `server/work` + `/root/nyang-repo` + `surface:mcl-landing-branch:S`; route/executor `M / M` binds `mainphone/work` + `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` + `surface:mcl-landing-branch:M`; route/executor `L / L` binds `main` + `/home/alsl0/nyang-repo` + `surface:mcl-landing-branch:L`. It requires a non-null observed landing HEAD SHA. The L profile is only coordination admission for the exact dedicated fixed-L repair owner and does not authorize object materialization or `origin/main` refresh. It reserves the Git worktree for the reviewed local landing branch-repair effect only; it does not grant route fallback, remote-ref, merge, release, runtime, or production authority.
 
 Non-repository contexts use explicit `not_applicable` branch/worktree identity instead of inventing a repository path.
 
@@ -111,7 +111,7 @@ Supported ledger mutation is only `.github/workflows/mcl-task-lease.yml` plus th
 - checks out trusted `main`, not a caller-selected controller ref;
 - accepts only `activate`, `acquire`, or `release`;
 - cannot select another state issue or pass arbitrary shell/command text;
-- admits only the reviewed fixed workspace kinds, including S/M/L `landing_metadata`, exact L-only `landing_residue_cleanup`, and exact S/M-only `landing_branch_repair`, without adding any new permission, state issue, or generic writer.
+- admits only the reviewed fixed workspace kinds, including S/M/L `landing_metadata`, exact L-only `landing_residue_cleanup`, and exact S/M/L `landing_branch_repair`, without adding any new permission, state issue, or generic writer.
 
 The controller re-reads #2352 and its exact generation before a PATCH, re-reads again immediately before writing, and validates post-write readback. Manual/out-of-protocol ledger edits are not serialized by GitHub itself; any body drift or malformed marker is `CONFLICT`/`UNKNOWN`, never an inferred free lease.
 

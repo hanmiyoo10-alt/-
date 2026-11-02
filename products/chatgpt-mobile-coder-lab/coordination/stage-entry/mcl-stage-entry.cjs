@@ -428,6 +428,14 @@ function classifyLanding(mainSha, landing, stageProfile = STAGE_PROFILES.S) {
     const kind = landing.remote_main === 'unknown' ? 'UNKNOWN' : 'BLOCKED';
     throw new StageError(kind, ['LANDING_REMOTE_MAIN_MISMATCH']);
   }
+  if (stageProfile.route === 'L') {
+    if (landing.landing_relation === 'unknown' || landing.landing_relation === undefined) {
+      throw new StageError('UNKNOWN', ['LANDING_HEAD_RELATION_UNRESOLVED']);
+    }
+    if (!['equal', 'behind_ff'].includes(landing.landing_relation)) {
+      throw new StageError('BLOCKED', ['LANDING_HEAD_RELATION_NOT_READY']);
+    }
+  }
   if (landing.origin_main === mainSha && landing.origin_remote_relation === 'same') {
     return {state: 'CURRENT', normalizationRequired: false};
   }
@@ -1010,6 +1018,7 @@ function applyRepositoryContext(context, {
       }
       return receiptFor({
         packetNumber: context.packetNumber,
+        route: (context.stageProfile || STAGE_PROFILES.S).route,
         packetBodySha256: context.packetBodySha256,
         result,
         reasonCodes: reasons,
@@ -1131,9 +1140,11 @@ function applyContext(context, {
 
 function run(argv = process.argv.slice(2), deps = {}) {
   let parsed;
+  let route = 'S';
   try {
     parsed = parseArgs(argv);
     const plan = parsePlan(readRegularJson(parsed.planFile));
+    route = plan.route;
     const packetActivityEvidence = parsed.packetActivityEvidenceFile
       ? normalizePacketActivityEvidenceSet(
         readRegularJson(parsed.packetActivityEvidenceFile), parsed.packetNumber)
@@ -1174,7 +1185,7 @@ function run(argv = process.argv.slice(2), deps = {}) {
     }
     return applyContext(context, {runner: deps.runner || runDefault, profile: deps.profile});
   } catch (error) {
-    return errorReceipt(parsed?.packetNumber || 'unknown', error);
+    return errorReceipt(parsed?.packetNumber || 'unknown', error, 'UNKNOWN', {route});
   }
 }
 

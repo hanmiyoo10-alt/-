@@ -1036,6 +1036,65 @@ test('workspace precondition failure after manifest still releases lease when st
   } finally { f.close(); }
 });
 
+test('L workspace preparation failure preserves L execution surface', () => {
+  const f = gitFixture();
+  let releaseCalls = 0;
+  let comments = 0;
+  const lProfile = {...f.profile, branchPrefix:'laptop/mcl-packet-', targetPrefix:'mcl-packet-'};
+  try {
+    const inspected = workspace.inspectWorkspace({packetNumber: 82, baseSha: f.base, profile: lProfile});
+    assert.equal(inspected.status, 'READY');
+    const context = {
+      packetNumber: 82, packetRef: '#82', plan: lPlan(), stageProfile: stage.STAGE_PROFILES.L,
+      mainSha: f.base, packetBody: PACKET_BODY, packetBodySha256: 'a'.repeat(64),
+      requestedScopes: ['path:docs/demo.md'], workspace: inspected,
+    };
+    const runner = (args, options) => {
+      if (args[0] === process.execPath && args.includes('lease-acquire')) {
+        return response(0, {status:'DISPATCH_COMPLETE',leaseId:'b'.repeat(64),
+          observedGeneration:21,runId:801,runConclusion:'success'});
+      }
+      if (args[0] === process.execPath && args.includes('lease-release')) {
+        releaseCalls += 1;
+        return response(0, {status:'DISPATCH_COMPLETE',leaseId:'b'.repeat(64),
+          observedGeneration:22,runId:802,runConclusion:'success'});
+      }
+      if (args[0] === 'gh' && args[1] === 'api' && args.includes('--method')) {
+        comments += 1;
+        return response(0, {id: 820 + comments});
+      }
+      return workspace.runDefault(args, options);
+    };
+    const receipt = stage.applyContext(context, {
+      runner, profile: lProfile,
+      manifestBuilder: () => ({manifestId:'c'.repeat(64)}),
+      manifestRenderer: () => {
+        childProcess.spawnSync('git', ['-C', lProfile.control, 'branch',
+          'laptop/mcl-packet-82', f.base], {encoding:'utf8'});
+        return 'manifest-fixture';
+      },
+      lateBarrier: () => {},
+    });
+    assert.equal(receipt.result, 'BLOCKED');
+    assert.equal(receipt.executionSurface, 'RDC:L:repository-owned-stage-entry');
+    assert(receipt.reasonCodes.includes('LOCAL_BRANCH_EXISTS'));
+    assert.equal(releaseCalls, 1);
+  } finally { f.close(); }
+});
+
+test('L run inspection failure preserves L execution surface', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-stage-entry-l-run-'));
+  const planFile = path.join(root, 'plan.json');
+  try {
+    fs.writeFileSync(planFile, JSON.stringify(lPlan()));
+    const receipt = stage.run(['inspect','--packet','#77','--plan',planFile], {
+      runner: () => ({code:1,stdout:'',stderr:'read failed'}),
+    });
+    assert.equal(receipt.result, 'UNKNOWN');
+    assert.equal(receipt.executionSurface, 'RDC:L:repository-owned-stage-entry');
+  } finally { fs.rmSync(root, {recursive:true, force:true}); }
+});
+
 test('apply PASS prepares workspace/ref but does not invoke holder or source effect owner', () => {
   const f = gitFixture();
   let comments = 0;
@@ -1177,13 +1236,20 @@ test('packet discovery ignores quoted marker prose but keeps malformed real pack
   }).state, 'UNKNOWN');
 });
 
-test('L landing profile validates exact route/main identity', () => {
+test('L landing profile validates exact route/main identity and ancestry', () => {
   const base = {schema:'mcl-landing-freshness.v1',operation:'status',route:'L',
-    actual_branch:'main',worktree:'clean',landing_head:'b'.repeat(40),remote_main:MAIN,details:'withheld'};
+    actual_branch:'main',worktree:'clean',landing_head:'b'.repeat(40),remote_main:MAIN,
+    landing_relation:'behind_ff',details:'withheld'};
   assert.deepEqual(stage.classifyLanding(MAIN, {...base,origin_main:MAIN,origin_remote_relation:'same'},
     stage.STAGE_PROFILES.L), {state:'CURRENT',normalizationRequired:false});
   assert.deepEqual(stage.classifyLanding(MAIN, {...base,origin_main:'c'.repeat(40),origin_remote_relation:'stale'},
     stage.STAGE_PROFILES.L), {state:'NORMALIZATION_REQUIRED',normalizationRequired:true});
+  for (const landing_relation of ['ahead','diverged','unrelated']) {
+    assert.throws(() => stage.classifyLanding(MAIN, {...base,landing_relation,origin_main:MAIN,origin_remote_relation:'same'},
+      stage.STAGE_PROFILES.L), /LANDING_HEAD_RELATION_NOT_READY/);
+  }
+  assert.throws(() => stage.classifyLanding(MAIN, {...base,landing_relation:'unknown',origin_main:MAIN,origin_remote_relation:'same'},
+    stage.STAGE_PROFILES.L), /LANDING_HEAD_RELATION_UNRESOLVED/);
   assert.throws(() => stage.classifyLanding(MAIN, {...base,route:'S',origin_main:MAIN,origin_remote_relation:'same'},
     stage.STAGE_PROFILES.L), /LANDING_RECEIPT_INVALID/);
   assert.throws(() => stage.classifyLanding(MAIN, {...base,actual_branch:'server/work',origin_main:MAIN,origin_remote_relation:'same'},

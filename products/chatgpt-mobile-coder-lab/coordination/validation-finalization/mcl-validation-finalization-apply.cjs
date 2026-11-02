@@ -330,6 +330,33 @@ const TARGET_3561 = Object.freeze({
     'exact-three-path-diff',
   ]),
 });
+const TARGET_3762 = Object.freeze({
+  packet: 3762,
+  packetRef: '#3762',
+  pr: 3786,
+  candidate: '8d4a7cc78c1e246f55a1a056990087ec39990710',
+  merge: '5be8a5322b3271a480388478fec88ff72c53eba8',
+  workspaceManifestId: 'ecf0cbc275addc5431bd606ba33c41f2646f036287d34e817d5420a0514fe746',
+  workspaceManifestPhaseId: '3762-implementation-pr-pin-write-review-update-recovery-rebind-r9',
+  workspaceLeaseId: '06fcd5ea839f9c9aecb450a1af83df52b5ca9c664f52c00b65883e3168e2b553',
+  workspaceAcquiredGeneration: 1410,
+  workspaceBranch: 'laptop/mcl-wireless-adb-peer-control-3762',
+  workspaceWorktree: '/home/alsl0/nyang-worktrees/mcl-wireless-adb-peer-control-3762',
+  workspaceRoute: 'L',
+  workspaceExecutor: 'L',
+  workspaceCompletionReceiptId:
+    'c216486066f0d394d711bdb4deb923c99870cd94e0f7e3f5209dce09774f315f',
+  implementationReceiptDigest:
+    '0c331ce0f2bf6616c0347c75af38e8dcd5e83063e880fd4759bdca776db94cc3',
+  requiredCoordinationGates: Object.freeze([
+    'codex-exact-head-review-clear',
+    'coordination-released',
+    'currentization-scope-and-blob-preservation',
+    'exact-head-required',
+    'exact-head-verify',
+    'exact-three-path-scope',
+  ]),
+});
 const EXPECTED_EFFECTS_2786 = Object.freeze([
   'CANONICAL_VALIDATION_MERGE_RECEIPT',
 ]);
@@ -406,6 +433,11 @@ const PROFILES = Object.freeze({
   }),
   '#3561': Object.freeze({
     target: TARGET_3561,
+    mode: 'IMPLEMENTATION_COORDINATION',
+    expectedEffects: EXPECTED_EFFECTS_2786,
+  }),
+  '#3762': Object.freeze({
+    target: TARGET_3762,
     mode: 'IMPLEMENTATION_COORDINATION',
     expectedEffects: EXPECTED_EFFECTS_2786,
   }),
@@ -2381,6 +2413,7 @@ module.exports = {
   TARGET_3216,
   TARGET_3356,
   TARGET_3561,
+  TARGET_3762,
   TARGET_3043,
   TARGET_3051,
   TARGET_3092,

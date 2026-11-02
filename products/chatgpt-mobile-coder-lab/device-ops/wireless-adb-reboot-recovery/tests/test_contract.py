@@ -459,6 +459,22 @@ class ContractTests(unittest.TestCase):
         self.assertIn("generic L reconnect daemon", self.readme)
         self.assertIn("M↔S symmetric Wireless ADB remains a separate design topic under #3762", self.readme)
 
+    def test_exact_m_persistent_activation_contract_is_bounded(self):
+        tick = chr(96)
+        self.assertIn("### Exact-M persistent retention under #4124", self.readme)
+        self.assertIn("Exact M " + tick + "SM-S938N" + tick + " may use the same helper", self.readme)
+        self.assertIn("preserves the exact runtime implementation already live-proven under #3722", self.readme)
+        self.assertIn("existing user-approved paired L Windows-ADB relationship", self.readme)
+        self.assertIn("bootstrap prerequisite", self.readme)
+        self.assertIn("That bootstrap is not acceptance evidence", self.readme)
+        self.assertIn("reboot exact M once", self.readme)
+        self.assertIn("existing paired L Windows ADB must return unattended", self.readme)
+        self.assertIn("no adb pair, adb connect, ADB server or daemon restart", self.readme)
+        self.assertIn("fixed persistent receipt must be the first post-recovery forensic read", self.readme)
+        self.assertIn("retain the helper installed with only WRITE_SECURE_SETTINGS retained", self.readme)
+        self.assertIn("rollback is permission revoke plus helper uninstall", self.readme)
+        self.assertIn("Persistent retention adds no INTERNET permission", self.readme)
+
     def test_exact_s_activation_does_not_change_runtime_identity_or_effect(self):
         runtime = "\n".join([self.activity, self.receiver, self.job, self.receipt, self.build])
         self.assertNotIn("SM-G998N", runtime)

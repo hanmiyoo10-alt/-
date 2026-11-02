@@ -111,6 +111,28 @@ function activation() {
   });
 }
 
+function externalOverlapRunner(issues) {
+  return (command, args) => {
+    if (command === 'gh' && args[0] === 'api'
+        && args[1].startsWith('repos/hanmiyoo10-alt/-/issues?state=open&per_page=100&page=')) {
+      return {code: 0, stdout: JSON.stringify(issues), stderr: ''};
+    }
+    return {code: 1, stdout: '', stderr: 'fixture denied'};
+  };
+}
+
+test('external overlap ignores quoted marker prose and preserves malformed packet failure', () => {
+  const quoted = owner.discoverExternalOverlap(activation(), {runner: externalOverlapRunner([
+    {number: 9991, state: 'open', body: 'Docs quote `<!-- canonical-main-work-packet:v1 -->` inline.'},
+  ])});
+  assert.equal(quoted.state, 'DISJOINT');
+  const malformed = owner.discoverExternalOverlap(activation(), {runner: externalOverlapRunner([
+    {number: 9992, state: 'open', body: '<!-- canonical-main-work-packet:v1 -->\n## State\n`IN_PROGRESS`'},
+  ])});
+  assert.equal(malformed.state, 'UNKNOWN');
+  assert.ok(malformed.findings.some((item) => item.code === 'PACKET_SCOPE_UNRESOLVED'));
+});
+
 test('CLI surface is fixed and apply requires literal flag', () => {
   assert.deepEqual(
     owner.parseArgs(['inspect', '--packet', '#2887', '--format', 'agent-view']),

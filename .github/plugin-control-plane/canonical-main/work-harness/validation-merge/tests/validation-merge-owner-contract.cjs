@@ -1324,6 +1324,28 @@ test('exact packet activity evidence can prove one overlapping parent nonblockin
   assert.equal(result.report.output.overlap, 'DISJOINT');
 });
 
+test('quoted packet marker prose is ignored by overlap discovery', async () => {
+  const quoted = {number: 9904, state: 'open',
+    body: 'Docs quote `<!-- canonical-main-work-packet:v1 -->` inline.'};
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({packets: [quoted]}),
+    packetNumber: PACKET, prNumber: PR, implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PASS');
+});
+
+test('standalone-marker malformed packet remains fail-closed', async () => {
+  const malformed = {number: 9904, state: 'open', body: [
+    '<!-- canonical-main-work-packet:v1 -->', '## State', TICK + 'IN_PROGRESS' + TICK,
+  ].join('\n')};
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({packets: [malformed]}),
+    packetNumber: PACKET, prNumber: PR, implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'UNKNOWN');
+  assert.ok(result.receipt.reasonCodes.includes('OVERLAP_UNKNOWN'));
+});
+
 test('late competing packet is caught by final overlap barrier', async () => {
   const latePacket = {
     number: 9903,

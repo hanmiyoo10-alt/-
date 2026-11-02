@@ -97,7 +97,17 @@ Only after merge and postmerge convergence, the separately authorized exact-S li
 
 On exact-S success, the helper may remain installed with only WRITE_SECURE_SETTINGS retained so later S reboots can recover unattended. On exact-S failure, rollback is permission revoke plus helper uninstall. The helper never owns pairing creation, adb connect, host-side reconnect loops, or a generic L reconnect daemon.
 
-M↔S symmetric Wireless ADB remains a separate design topic under #3762 and receives no authority from the exact-S activation contract.
+### Exact-M persistent retention under #4124
+
+Exact M `SM-S938N` may use the same helper as a separately reviewed persistent-retention activation only after #4124 repository merge and postmerge convergence. This preserves the exact runtime implementation already live-proven under #3722; no runtime Java, AndroidManifest, or Gradle change is part of the activation contract.
+
+Before exact-M activation, require the existing user-approved paired L Windows-ADB relationship. If Wireless Debugging is currently stopped, one ordinary user Wireless Debugging ON toggle may be used only as a bootstrap prerequisite to restore that existing paired channel. That bootstrap is not acceptance evidence.
+
+The exact-M live acceptance must install the exact merged APK, grant only android.permission.WRITE_SECURE_SETTINGS, open the fixed launcher once, prove the fixed run-as receipt baseline, and reboot exact M once. During the acceptance interval the existing paired L Windows ADB must return unattended with no adb pair, adb connect, ADB server or daemon restart, fixed-port fallback, second reboot, privilege bypass, or manual Wireless Debugging toggle.
+
+The fixed persistent receipt must be the first post-recovery forensic read and must show the reviewed bounded active-Wi-Fi recovery sequence without exception. On exact-M success, retain the helper installed with only WRITE_SECURE_SETTINGS retained. On exact-M failure, rollback is permission revoke plus helper uninstall. Persistent retention adds no INTERNET permission, foreground service, watcher, daemon, fixed TCP port, or host-side retry loop.
+
+M↔S symmetric Wireless ADB remains a separate design topic under #3762 and receives no authority from either persistent-activation contract.
 
 ## Implementation-stage validation
 

@@ -428,20 +428,26 @@ function classifyLanding(mainSha, landing, stageProfile = STAGE_PROFILES.S) {
     const kind = landing.remote_main === 'unknown' ? 'UNKNOWN' : 'BLOCKED';
     throw new StageError(kind, ['LANDING_REMOTE_MAIN_MISMATCH']);
   }
-  if (stageProfile.route === 'L') {
-    if (landing.landing_relation === 'unknown' || landing.landing_relation === undefined) {
-      throw new StageError('UNKNOWN', ['LANDING_HEAD_RELATION_UNRESOLVED']);
-    }
-    if (!['equal', 'behind_ff'].includes(landing.landing_relation)) {
-      throw new StageError('BLOCKED', ['LANDING_HEAD_RELATION_NOT_READY']);
-    }
-  }
+  const originKnown = landing.origin_main === 'missing' || SHA40_RE.test(landing.origin_main || '');
   if (landing.origin_main === mainSha && landing.origin_remote_relation === 'same') {
+    if (stageProfile.route === 'L') {
+      if (landing.landing_relation === 'unknown' || landing.landing_relation === undefined) {
+        throw new StageError('UNKNOWN', ['LANDING_HEAD_RELATION_UNRESOLVED']);
+      }
+      if (!['equal', 'behind_ff'].includes(landing.landing_relation)) {
+        throw new StageError('BLOCKED', ['LANDING_HEAD_RELATION_NOT_READY']);
+      }
+    }
     return {state: 'CURRENT', normalizationRequired: false};
   }
-  const originKnown = landing.origin_main === 'missing' || SHA40_RE.test(landing.origin_main || '');
   if (originKnown && landing.origin_main !== mainSha && landing.origin_remote_relation === 'stale') {
     if (!SHA40_RE.test(landing.landing_head || '')) throw new StageError('UNKNOWN', ['LANDING_HEAD_INVALID']);
+    if (stageProfile.route === 'L'
+        && landing.landing_relation !== 'unknown'
+        && landing.landing_relation !== undefined
+        && !['equal', 'behind_ff'].includes(landing.landing_relation)) {
+      throw new StageError('BLOCKED', ['LANDING_HEAD_RELATION_NOT_READY']);
+    }
     return {state: 'NORMALIZATION_REQUIRED', normalizationRequired: true};
   }
   throw new StageError('BLOCKED', ['LANDING_CURRENTNESS_NOT_NORMALIZABLE']);

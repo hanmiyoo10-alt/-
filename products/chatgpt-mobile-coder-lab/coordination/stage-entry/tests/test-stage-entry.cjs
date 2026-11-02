@@ -1244,6 +1244,9 @@ test('L landing profile validates exact route/main identity and ancestry', () =>
     stage.STAGE_PROFILES.L), {state:'CURRENT',normalizationRequired:false});
   assert.deepEqual(stage.classifyLanding(MAIN, {...base,origin_main:'c'.repeat(40),origin_remote_relation:'stale'},
     stage.STAGE_PROFILES.L), {state:'NORMALIZATION_REQUIRED',normalizationRequired:true});
+  assert.deepEqual(stage.classifyLanding(MAIN, {
+    ...base, landing_relation:'unknown', origin_main:'c'.repeat(40), origin_remote_relation:'stale',
+  }, stage.STAGE_PROFILES.L), {state:'NORMALIZATION_REQUIRED',normalizationRequired:true});
   for (const landing_relation of ['ahead','diverged','unrelated']) {
     assert.throws(() => stage.classifyLanding(MAIN, {...base,landing_relation,origin_main:MAIN,origin_remote_relation:'same'},
       stage.STAGE_PROFILES.L), /LANDING_HEAD_RELATION_NOT_READY/);

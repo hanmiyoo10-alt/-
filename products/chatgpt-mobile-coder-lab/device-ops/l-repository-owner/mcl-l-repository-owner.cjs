@@ -1167,6 +1167,20 @@ function classifyReviewUpdateState(manifest, request, prRequest, currentMain, pr
   const pr = readExistingReviewPr(runner, manifest, prRequest);
   const staged = reviewUpdateStagedPaths(runner, worktree);
 
+  if (head !== request.expected_old_head
+      && remoteHead === request.expected_old_head
+      && pr.headRefOid === request.expected_old_head
+      && !staged.length) {
+    const ancestry = gitResult(
+      runner, worktree, ['merge-base', '--is-ancestor', head, request.expected_old_head]);
+    if (ancestry.error || ancestry.signal || ![0, 1].includes(ancestry.code)) {
+      throw new OwnerError('UNKNOWN', ['REVIEW_UPDATE_LOCAL_ANCESTRY_READ_FAILED']);
+    }
+    if (ancestry.code === 0) {
+      return {state:'LOCAL_BEHIND', candidateHead:null, finalHead:null, remoteHead, pr};
+    }
+  }
+
   if (head === request.expected_old_head) {
     if (remoteHead !== request.expected_old_head || pr.headRefOid !== request.expected_old_head) {
       throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_OLD_HEAD_IDENTITY_CONFLICT']);
@@ -1238,6 +1252,21 @@ function executeReviewUpdate(context, request, patchBytes, prRequest, {
   let state = classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest,
     {profile, runner});
   const oldPrNumber = state.pr.number;
+
+  if (state.state === 'LOCAL_BEHIND') {
+    holderCheck(context, env);
+    if (reviewUpdateCurrentMain(manifest, {profile, runner}) !== currentMain) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_MAIN_CHANGED']);
+    }
+    runChecked(runner, 'git', [
+      '-C', manifest.workspace.worktree, 'merge', '--ff-only', request.expected_old_head,
+    ], {env:safeChildEnv()}, 'REVIEW_UPDATE_LOCAL_FAST_FORWARD_FAILED');
+    state = classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest,
+      {profile, runner});
+    if (state.state !== 'READY') {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_LOCAL_FAST_FORWARD_READBACK_CONFLICT']);
+    }
+  }
 
   if (state.state === 'READY') {
     const patchFile = path.join(manifest.workspace.worktree, '.git-mcl-l-review-update.patch.tmp');

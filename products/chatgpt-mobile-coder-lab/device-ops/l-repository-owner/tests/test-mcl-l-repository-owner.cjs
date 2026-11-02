@@ -767,6 +767,87 @@ test('review-update current-main reader permits a divergent unmerged PR head', (
 });
 
 
+test('review-update classifies clean local ancestor as LOCAL_BEHIND then READY after exact fast-forward', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-review-local-behind-'));
+  const remote = path.join(tmp, 'remote.git');
+  const landing = path.join(tmp, 'landing');
+  const feature = path.join(tmp, 'feature');
+  const updater = path.join(tmp, 'updater');
+  try {
+    gitExec(tmp, ['init','--bare',remote]);
+    gitExec(tmp, ['clone',remote,landing]);
+    gitExec(landing, ['config','user.name','fixture']);
+    gitExec(landing, ['config','user.email','fixture@example.invalid']);
+    fs.writeFileSync(path.join(landing,'base.txt'),'base\n');
+    gitExec(landing, ['add','base.txt']);
+    gitExec(landing, ['commit','-m','base']);
+    gitExec(landing, ['branch','-M','main']);
+    gitExec(landing, ['push','-u','origin','main']);
+    const base = gitExec(landing, ['rev-parse','HEAD']).trim();
+
+    gitExec(landing, ['worktree','add','-b','laptop/task-9001',feature,base]);
+    fs.writeFileSync(path.join(feature,'base.txt'),'feature\n');
+    gitExec(feature, ['add','base.txt']);
+    gitExec(feature, ['-c','user.name=fixture','-c','user.email=fixture@example.invalid',
+      'commit','-m','feature']);
+    const localOldHead = gitExec(feature, ['rev-parse','HEAD']).trim();
+    gitExec(feature, ['push','origin','HEAD:refs/heads/laptop/task-9001']);
+
+    fs.writeFileSync(path.join(landing,'main.txt'),'main advance\n');
+    gitExec(landing, ['add','main.txt']);
+    gitExec(landing, ['commit','-m','main advance']);
+    gitExec(landing, ['push','origin','main']);
+    const currentMain = gitExec(landing, ['rev-parse','HEAD']).trim();
+
+    gitExec(tmp, ['clone',remote,updater]);
+    gitExec(updater, ['config','user.name','fixture']);
+    gitExec(updater, ['config','user.email','fixture@example.invalid']);
+    gitExec(updater, ['checkout','-b','laptop/task-9001','origin/laptop/task-9001']);
+    gitExec(updater, ['merge','--no-ff','--no-edit','origin/main']);
+    const expectedOldHead = gitExec(updater, ['rev-parse','HEAD']).trim();
+    gitExec(updater, ['push','origin','HEAD:refs/heads/laptop/task-9001']);
+
+    gitExec(landing, ['fetch','origin',
+      'refs/heads/laptop/task-9001:refs/remotes/origin/task-9001']);
+    assert.equal(gitExec(feature, ['rev-parse','HEAD']).trim(),localOldHead);
+
+    const request={
+      schema:owner.REVIEW_UPDATE_REQUEST_SCHEMA,
+      packet_ref:'#9001',
+      message:'fix: local-behind fixture',
+      expected_old_head:expectedOldHead,
+      expected_paths:['base.txt'],
+      patch_sha256:'a'.repeat(64),
+    };
+    const prRequest={title:'fix: fixture PR',body:'Refs #9001'};
+    const m=manifest({
+      packetRef:'#9001',
+      workspace:{kind:'repository',branch:'laptop/task-9001',worktree:feature},
+      observedBaseSha:expectedOldHead,
+      scopes:['path:base.txt','surface:mcl:test'],
+    });
+    const profile={...owner.DEFAULT_PROFILE,landing,worktreeRoot:tmp};
+    const runner=reviewRunner(remote,m.workspace.branch,prRequest);
+
+    const before=owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,'b'.repeat(64),{profile,runner});
+    assert.equal(before.state,'LOCAL_BEHIND');
+    assert.equal(before.remoteHead,expectedOldHead);
+    assert.equal(before.pr.headRefOid,expectedOldHead);
+
+    gitExec(feature, ['merge','--ff-only',expectedOldHead]);
+    assert.equal(gitExec(feature, ['rev-parse','HEAD']).trim(),expectedOldHead);
+
+    const after=owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,'b'.repeat(64),{profile,runner});
+    assert.equal(after.state,'READY');
+  } finally {
+    try { gitExec(landing,['worktree','remove',feature,'--force']); } catch {}
+    fs.rmSync(tmp,{recursive:true,force:true});
+  }
+});
+
+
 test('candidate path parser accepts an explicitly allowed empty diff only', () => {
   assert.deepEqual(owner.candidatePathsFromNameStatus('', {allowEmpty:true}), []);
   expectReason(() => owner.candidatePathsFromNameStatus(''),
@@ -1154,13 +1235,15 @@ test('review-update effect stays same-PR non-force and current-main replay bound
   assert.ok(resumedReplay > resumed && resumedValidation > resumedReplay);
   assert.ok(pushGate > resumedValidation);
   assert.ok(finalHolder > pushGate && finalMain > finalHolder && push > finalMain);
+  assert.ok(block.includes("state.state === 'LOCAL_BEHIND'"));
+  assert.ok(block.includes("'merge', '--ff-only', request.expected_old_head"));
   assert.ok(block.includes("'merge', '--no-ff', '--no-edit', currentMain"));
   assert.ok(block.includes('pushExactCandidate('));
   assert.ok(block.includes('state.pr.number !== oldPrNumber'));
   assert.ok(block.includes("state.state === 'COMMITTED' && currentMain !== request.expected_old_head"));
   assert.ok(block.includes("state.state === 'COMMITTED' && currentMain === request.expected_old_head"));
   assert.equal(block.includes("'pr', 'create'"),false);
-  for (const forbidden of ["'reset'","'rebase'","'stash'","'cherry-pick'","'--force'"]) {
+  for (const forbidden of ["'reset'","'pull'","'rebase'","'stash'","'checkout'","'switch'","'cherry-pick'","'--force'"]) {
     assert.equal(block.includes(forbidden),false,forbidden);
   }
 });

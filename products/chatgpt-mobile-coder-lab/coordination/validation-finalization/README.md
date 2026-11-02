@@ -8,7 +8,7 @@ packet finalizer and does not add caller-selected coordination semantics.
 
 ## Reviewed fixed profiles
 
-V1 contains exactly fifteen reviewed targets.
+V1 contains exactly sixteen reviewed targets.
 
 ### Profile A — #2463 / PR #2464
 
@@ -220,7 +220,24 @@ The fifteenth profile is the exact merged L interrupted-recovery rebind owner:
 For #3561 the live #3473 recovery transaction remains separately owned and is never
 performed by this finalization profile.
 
-The caller supplies only one of the fifteen reviewed packet numbers and a bounded output
+### Profile P — #3762 / PR #3786
+
+The sixteenth profile is the exact merged M→S Wireless ADB peer-controller packet:
+
+- exact canonical IMPLEMENTATION_PR receipt and merged candidate attribution;
+- exact L/L implementation D-014 manifest, released lease, clean worktree and holder absence;
+- exact implementation D-014 COMPLETE receipt identity is compile-time fixed and revalidated;
+- fixed PASS gates for currentization scope/blob preservation, coordination release,
+  Codex exact-head clear, exact-head Verify/Required, and exact three-path scope;
+- current #2352 must prove packet #3762 has no active lease;
+- no validation-stage D-014 manifest is created;
+- the only permitted effect is one canonical `VALIDATION_MERGE` receipt comment;
+- an exact existing receipt is reused and a second apply is zero-effect.
+
+This profile finalizes repository validation only. It grants no M/S device, ADB,
+pairing, bootstrap-pin, reconnect, persistence, release or production authority.
+
+The caller supplies only one of the sixteen reviewed packet numbers and a bounded output
 format. Repository, PR, manifest, lease, run, workspace, effect, command and comment
 target remain non-selectable.
 
@@ -271,6 +288,9 @@ node mcl-validation-finalization-apply.cjs apply --packet '#3356' --format agent
 
 node mcl-validation-finalization-apply.cjs inspect --packet '#3561' --format agent-view
 node mcl-validation-finalization-apply.cjs apply --packet '#3561' --format agent-view
+
+node mcl-validation-finalization-apply.cjs inspect --packet '#3762' --format agent-view
+node mcl-validation-finalization-apply.cjs apply --packet '#3762' --format agent-view
 ~~~
 
 inspect is always read-only.
@@ -331,6 +351,12 @@ Profile O requires `currentization-diff-preserved`, `coordination-released`,
 It additionally binds the exact L/L implementation D-014 manifest and exact D-014
 COMPLETE receipt before the existing implementation-coordination finalization path
 may publish a canonical validation receipt.
+Profile P requires `codex-exact-head-review-clear`, `coordination-released`,
+`currentization-scope-and-blob-preservation`, `exact-head-required`,
+`exact-head-verify`, and `exact-three-path-scope`.
+It additionally binds the exact #3762 L/L review-update D-014 manifest and exact
+D-014 COMPLETE receipt before the existing implementation-coordination finalization
+path may publish a canonical validation receipt.
 Each profile's exact valid workspace manifest is used only to resolve the fixed
 worktree/holder location; it is never manufactured or rewritten as a
 validation-stage D-014 manifest.
@@ -394,6 +420,10 @@ FINALIZATION_REQUIRED / PASS / ACTION_REQUIRED
 #3561:
 FINALIZATION_REQUIRED / PASS / ACTION_REQUIRED
 + CANONICAL_VALIDATION_MERGE_RECEIPT
+
+#3762:
+FINALIZATION_REQUIRED / PASS / ACTION_REQUIRED
++ CANONICAL_VALIDATION_MERGE_RECEIPT
 ~~~
 
 Any other pre-effect state fails closed, except an exact ALREADY_FINALIZED state,
@@ -414,7 +444,7 @@ exact stale holder cleanup if present
 → STOP
 ~~~
 
-Profiles B through M and O share the smaller effect order:
+Profiles B through M, O and P share the smaller effect order:
 
 ~~~
 prove exact fixed packet lease absent

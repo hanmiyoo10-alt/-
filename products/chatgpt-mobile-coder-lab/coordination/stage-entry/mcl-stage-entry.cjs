@@ -622,6 +622,7 @@ function normalizeLandingCurrentness(context, {
   const overlap = overlapResolver({
     packetNumber: context.packetNumber,
     requestedScopes: [(context.stageProfile || STAGE_PROFILES.S).landingScope],
+    packetActivityEvidence: context.packetActivityEvidence,
     runner,
   });
   if (overlap.state === 'CONFLICT') throw new StageError('CONFLICT', ['LANDING_NORMALIZATION_OVERLAP_CONFLICT']);

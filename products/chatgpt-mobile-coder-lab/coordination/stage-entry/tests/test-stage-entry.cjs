@@ -1277,9 +1277,11 @@ test('L landing D-013 and D-014 identity is exact L/L', () => {
 });
 
 test('L normalization invokes exactly refresh L and validates L readback', () => {
+  const packetActivityEvidence=stage.normalizePacketActivityEvidenceSet(
+    packetActivityEvidenceSet({requesterRef:'#77'}),77);
   const context={packetNumber:77,packetRef:'#77',mainSha:MAIN,packetBodySha256:'4'.repeat(64),
     stageProfile:stage.STAGE_PROFILES.L,normalizationRequired:true,landingState:'NORMALIZATION_REQUIRED',
-    landing:{landing_head:'b'.repeat(40)}};
+    packetActivityEvidence,landing:{landing_head:'b'.repeat(40)}};
   const seen=[];
   const runner=(args)=>{
     seen.push(args);
@@ -1297,7 +1299,14 @@ test('L normalization invokes exactly refresh L and validates L readback', () =>
     throw new Error(args.join(' '));
   };
   const value=stage.normalizeLandingCurrentness(context,{
-    runner,overlapResolver:()=>({state:'DISJOINT'}),authorityBarrier:()=>{}});
+    runner,
+    overlapResolver:(input)=>{
+      assert.equal(input.packetActivityEvidence,packetActivityEvidence);
+      assert.deepEqual(input.requestedScopes,['surface:mcl-landing-origin-main:L']);
+      return {state:'DISJOINT'};
+    },
+    authorityBarrier:()=>{},
+  });
   assert.equal(value.normalized,true); assert.equal(value.count,1);
   assert(seen.some((args)=>String(args[0]).endsWith('/mcl-landing-freshness')&&args[1]==='refresh'&&args[2]==='L'));
 });

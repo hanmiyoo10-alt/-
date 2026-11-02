@@ -70,14 +70,19 @@ function classifyReviewBarrierError(error) {
   if (error?.kind === 'NEEDS_REVIEW'
       && reasons.length === 1
       && reasons[0] === 'CODEX_REVIEW_PENDING') {
-    return {pending: true};
+    return {recoveryClass: 'pending'};
+  }
+  if (error?.kind === 'NEEDS_REVIEW'
+      && reasons.length === 1
+      && reasons[0] === 'CODEX_REVIEW_HEAD_STALE') {
+    return {recoveryClass: 'head-stale'};
   }
   if (error?.kind === 'UNKNOWN' || error?.kind === 'CONFLICT') {
     throw new RecoveryError(error.kind, reasons.length ? reasons : ['REVIEW_BARRIER_UNKNOWN']);
   }
   if (error?.kind === 'BLOCKED' || error?.kind === 'FAIL' || error?.kind === 'NEEDS_REVIEW') {
     return {
-      pending: false,
+      recoveryClass: null,
       disposition: 'NO_EFFECT',
       reasonCodes: reasons.length ? reasons : ['REVIEW_NOT_RECOVERY_ELIGIBLE'],
     };
@@ -208,14 +213,16 @@ async function inspectWithClient({client, prNumber, nowMs = Date.now(), validati
 
   await vm.readRequiredEvidence(client, headSha, prNumber);
 
+  let reviewRecoveryClass = null;
   try {
     await vm.readReviewBarrier(client, prNumber, headSha);
     return baseResult(prNumber, headSha, 'NO_EFFECT', ['CODEX_REVIEW_TERMINAL']);
   } catch (error) {
     const classified = classifyReviewBarrierError(error);
-    if (!classified.pending) {
+    if (!classified.recoveryClass) {
       return baseResult(prNumber, headSha, classified.disposition, classified.reasonCodes);
     }
+    reviewRecoveryClass = classified.recoveryClass;
   }
 
   const comments = await fetchPagedComments(client, prNumber);
@@ -228,11 +235,13 @@ async function inspectWithClient({client, prNumber, nowMs = Date.now(), validati
     throw new RecoveryError('UNKNOWN', ['CODEX_SUMMARY_METADATA_CONFLICT']);
   }
   const summary = summaries[0];
-  const updatedMs = parseUpdatedAt(summary.updated_at, nowMs);
-  const ageMs = nowMs - updatedMs;
-
   const exactBody = fixedRetriggerBody(headSha);
   const prior = exactHeadRecoveryMarkers(comments, headSha);
+  let ageMs = null;
+  if (reviewRecoveryClass === 'pending') {
+    const updatedMs = parseUpdatedAt(summary.updated_at, nowMs);
+    ageMs = nowMs - updatedMs;
+  }
   if (prior.length === 1) {
     return baseResult(prNumber, headSha, 'ALREADY_RETRIGGERED',
       ['EXACT_HEAD_RECOVERY_MARKER_PRESENT'], {
@@ -242,7 +251,7 @@ async function inspectWithClient({client, prNumber, nowMs = Date.now(), validati
       });
   }
 
-  if (ageMs < STALE_THRESHOLD_MS) {
+  if (reviewRecoveryClass === 'pending' && ageMs < STALE_THRESHOLD_MS) {
     return baseResult(prNumber, headSha, 'TOO_YOUNG',
       ['CODEX_REVIEW_PENDING_BELOW_STALE_THRESHOLD'], {
         summaryCommentId: Number.isInteger(summary.id) ? summary.id : null,
@@ -261,7 +270,9 @@ async function inspectWithClient({client, prNumber, nowMs = Date.now(), validati
       ['PR_IDENTITY_CHANGED_DURING_INSPECTION']);
   }
 
-  return baseResult(prNumber, headSha, 'ELIGIBLE', ['CODEX_REVIEW_PENDING_STALE'], {
+  const eligibleReason = reviewRecoveryClass === 'head-stale'
+    ? 'CODEX_REVIEW_HEAD_STALE' : 'CODEX_REVIEW_PENDING_STALE';
+  return baseResult(prNumber, headSha, 'ELIGIBLE', [eligibleReason], {
     summaryCommentId: Number.isInteger(summary.id) ? summary.id : null,
     summaryUpdatedAt: summary.updated_at,
     staleAgeMs: ageMs,

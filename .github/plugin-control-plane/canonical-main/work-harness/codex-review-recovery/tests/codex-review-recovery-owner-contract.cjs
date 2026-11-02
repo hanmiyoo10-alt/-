@@ -83,6 +83,7 @@ function vm({review = 'pending', currentness = 'current'} = {}) {
     },
     async readReviewBarrier() {
       if (review === 'pending') throw pendingError();
+      if (review === 'head-stale') throw pendingError('CODEX_REVIEW_HEAD_STALE');
       if (review === 'findings') {
         throw pendingError('REVIEW_THREAD_UNRESOLVED', 'BLOCKED');
       }
@@ -117,6 +118,36 @@ async function inspect(options = {}) {
   });
   assert.equal(tooYoung.disposition, 'TOO_YOUNG');
   assert.equal(tooYoung.retriggerBody, null);
+
+  const headStale = await inspect({
+    vmOptions: {review: 'head-stale'},
+    clientOptions: {comments: [summary(YOUNG)]},
+  });
+  assert.equal(headStale.disposition, 'ELIGIBLE');
+  assert.deepEqual(headStale.reasonCodes, ['CODEX_REVIEW_HEAD_STALE']);
+  assert.equal(headStale.retriggerBody, owner.fixedRetriggerBody(HEAD));
+  assert.equal(headStale.staleAgeMs, null);
+
+  const headStaleDedupe = await inspect({
+    vmOptions: {review: 'head-stale'},
+    clientOptions: {comments: [
+      summary(YOUNG),
+      {id: 98, user: {login: owner.REPO_OWNER}, body: owner.fixedRetriggerBody(HEAD)},
+    ]},
+  });
+  assert.equal(headStaleDedupe.disposition, 'ALREADY_RETRIGGERED');
+  assert.equal(headStaleDedupe.retriggerBody, null);
+  assert.equal(headStaleDedupe.staleAgeMs, null);
+
+  const headStaleMove = await inspect({
+    vmOptions: {review: 'head-stale'},
+    clientOptions: {
+      comments: [summary(YOUNG)],
+      secondPr: pr({head: {sha: NEW_HEAD, repo: {full_name: owner.REPO}}}),
+    },
+  });
+  assert.equal(headStaleMove.disposition, 'NO_EFFECT');
+  assert.deepEqual(headStaleMove.reasonCodes, ['PR_IDENTITY_CHANGED_DURING_INSPECTION']);
 
   const staleBase = await inspect({
     clientOptions: {

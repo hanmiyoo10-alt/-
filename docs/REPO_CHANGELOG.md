@@ -2736,3 +2736,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f67b38e328448b69b96df4afa7f2b2a1c5542ed2)
 - Event ID: `f818553c40df4fb13464fc39f28ad8a7745a551937aaf003a5233d5717a28198`
 <!-- canonical-main-doc-promoted:f818553c40df4fb13464fc39f28ad8a7745a551937aaf003a5233d5717a28198 -->
+
+### 2026-11-02 — fix(repo): allow stale-head Codex review recovery (#4113)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `75e96efc17f732aab68a0e92c7926c8fda8be0a3`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/75e96efc17f732aab68a0e92c7926c8fda8be0a3)
+- Event ID: `20fac42cb3bb60a974cf67e5c213cdf7cb1966dbb3fa3493c50362600049a7ba`
+<!-- canonical-main-doc-promoted:20fac42cb3bb60a974cf67e5c213cdf7cb1966dbb3fa3493c50362600049a7ba -->

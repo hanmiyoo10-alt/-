@@ -2,9 +2,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {classifyPrActivity} = require('./pr-activity.cjs');
 const {classifyPacketActivity} = require('./packet-activity.cjs');
-const {parseLifecycle} = require('./packet-projection.cjs');
+const {hasCanonicalPacketMarker, parseLifecycle} = require('./packet-projection.cjs');
 
-const PACKET_MARKER = '<!-- canonical-main-work-packet:v1 -->';
 const TERMINAL_PACKET_STATES = new Set(['DONE', 'CANCELLED', 'SUPERSEDED']);
 const PACKET_SCOPE_HEADINGS = Object.freeze([
   'Bounded write scope',
@@ -330,7 +329,7 @@ function resolveScopeOverlap(input) {
     if (candidate.type === 'packet') {
       const issueState = typeof candidate.issueState === 'string' ? candidate.issueState.toLowerCase() : '';
       const body = typeof candidate.body === 'string' ? candidate.body : '';
-      if (!body.includes(PACKET_MARKER)) {
+      if (!hasCanonicalPacketMarker(body)) {
         findings.push(makeFinding(
           REASON_CODES.PACKET_BODY_UNSUPPORTED,
           'UNKNOWN',

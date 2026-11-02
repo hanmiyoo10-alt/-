@@ -18,7 +18,6 @@ const GH_READ_TIMEOUT_MS = 20_000;
 const MAX_JOB_LOG_BYTES = 1024 * 1024;
 const MAX_PR_RECOVERY_RUNS = 16;
 const SHA40_RE = /^[0-9a-f]{40}$/;
-const PACKET_MARKER = '<!-- canonical-main-work-packet:v1 -->';
 const PACKET_ACTIVITY_EVIDENCE_MODE = 'VALIDATION_MERGE_PACKET_ACTIVITY_EVIDENCE_SET';
 const PACKET_REF_RE = /^#[1-9][0-9]*$/;
 const MAX_PACKET_ACTIVITY_CANDIDATES = 12;
@@ -831,7 +830,7 @@ async function discoverOverlap(
   const seenEvidence = new Set();
   const candidates = issueInventory.rows
     .filter((row) => !row?.pull_request && Number(row?.number) !== packetNumber
-      && String(row?.body || '').includes(PACKET_MARKER))
+      && packetProjection.hasCanonicalPacketMarker(row?.body))
     .map((row) => {
       const canonicalRef = '#' + row.number;
       const evidence = evidenceByCandidate.get(canonicalRef);

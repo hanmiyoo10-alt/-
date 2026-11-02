@@ -24,6 +24,8 @@ const holder = require('../mcl-workspace-holder.cjs');
 const operator = require('../mcl-coordination-operator.cjs');
 const scopeOverlap = require(path.join(
   ROOT, '.github/plugin-control-plane/canonical-main/work-system/scope-overlap.cjs'));
+const packetProjection = require(path.join(
+  ROOT, '.github/plugin-control-plane/canonical-main/work-system/packet-projection.cjs'));
 const executionReceipt = require(path.join(
   ROOT, '.github/plugin-control-plane/canonical-main/work-harness/execution-receipt.cjs'));
 const agentDecisionView = require(path.join(
@@ -677,8 +679,7 @@ function discoverExternalOverlap(activation, deps = {}) {
       continue;
     }
     if (item.number === packetNumber) continue;
-    if (typeof item.body === 'string'
-        && item.body.includes('<!-- canonical-main-work-packet:v1 -->')) {
+    if (packetProjection.hasCanonicalPacketMarker(item.body)) {
       candidates.push({
         type: 'packet', ref: '#' + item.number,
         issueState: item.state, body: item.body,

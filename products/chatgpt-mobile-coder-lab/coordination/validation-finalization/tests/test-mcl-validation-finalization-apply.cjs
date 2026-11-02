@@ -184,6 +184,10 @@ test('public parser accepts only inspect/apply packet+format', () => {
     owner.parseArgs(['inspect', '--packet', '#3561', '--format', 'agent-view']),
     {command: 'inspect', packetRef: '#3561', format: 'agent-view'},
   );
+  assert.deepEqual(
+    owner.parseArgs(['inspect', '--packet', '#3762', '--format', 'agent-view']),
+    {command: 'inspect', packetRef: '#3762', format: 'agent-view'},
+  );
   for (const argv of [
     ['apply', '--packet', '#0', '--format', 'json'],
     ['apply', '--packet', '#2463', '--format', 'json', '--repo', 'x/y'],
@@ -204,7 +208,7 @@ test('exact V1 effect pair is required', () => {
 });
 
 test('compile-time profiles include exact #2791 and #3216 targets', () => {
-  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#2791', '#3043', '#3051', '#3092', '#3099', '#3108', '#3110', '#3118', '#3126', '#3144', '#3216', '#3356', '#3561']);
+  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#2791', '#3043', '#3051', '#3092', '#3099', '#3108', '#3110', '#3118', '#3126', '#3144', '#3216', '#3356', '#3561', '#3762']);
   assert.equal(owner.TARGET_2791.packet, 2791);
   assert.equal(owner.TARGET_2791.pr, 2795);
   assert.equal(owner.TARGET_2791.candidate,
@@ -490,6 +494,39 @@ test('#3561 exact L/L recovery-rebind target is compile-time fixed', () => {
   assert.equal(owner.PROFILES['#3561'].mode, 'IMPLEMENTATION_COORDINATION');
 });
 
+test('#3762 exact L/L peer-control target is compile-time fixed', () => {
+  const target = owner.TARGET_3762;
+  assert.equal(target.packet, 3762);
+  assert.equal(target.pr, 3786);
+  assert.equal(target.candidate, '8d4a7cc78c1e246f55a1a056990087ec39990710');
+  assert.equal(target.merge, '5be8a5322b3271a480388478fec88ff72c53eba8');
+  assert.equal(target.workspaceManifestId,
+    'ecf0cbc275addc5431bd606ba33c41f2646f036287d34e817d5420a0514fe746');
+  assert.equal(target.workspaceManifestPhaseId,
+    '3762-implementation-pr-pin-write-review-update-recovery-rebind-r9');
+  assert.equal(target.workspaceLeaseId,
+    '06fcd5ea839f9c9aecb450a1af83df52b5ca9c664f52c00b65883e3168e2b553');
+  assert.equal(target.workspaceAcquiredGeneration, 1410);
+  assert.equal(target.workspaceBranch, 'laptop/mcl-wireless-adb-peer-control-3762');
+  assert.equal(target.workspaceWorktree,
+    '/home/alsl0/nyang-worktrees/mcl-wireless-adb-peer-control-3762');
+  assert.equal(target.workspaceRoute, 'L');
+  assert.equal(target.workspaceExecutor, 'L');
+  assert.equal(target.workspaceCompletionReceiptId,
+    'c216486066f0d394d711bdb4deb923c99870cd94e0f7e3f5209dce09774f315f');
+  assert.equal(target.implementationReceiptDigest,
+    '0c331ce0f2bf6616c0347c75af38e8dcd5e83063e880fd4759bdca776db94cc3');
+  assert.deepEqual(target.requiredCoordinationGates, [
+    'codex-exact-head-review-clear',
+    'coordination-released',
+    'currentization-scope-and-blob-preservation',
+    'exact-head-required',
+    'exact-head-verify',
+    'exact-three-path-scope',
+  ]);
+  assert.equal(owner.PROFILES['#3762'].mode, 'IMPLEMENTATION_COORDINATION');
+});
+
 test('#3356 implementation receipt requires exact NOT_APPLICABLE gate and scope', () => {
   const target = owner.TARGET_3356;
   const requiredGates = Object.entries(target.requiredGateResults).map(([name, result]) => ({
@@ -746,6 +783,35 @@ test('#3561 fixed profile reuses stage-receipt-only implementation coordination 
     holderCleaned: 0, d014Published: 0, stageReceiptPublished: 1,
   });
   assert.deepEqual(calls, [[3561, 'STAGE3561']]);
+});
+
+test('#3762 fixed profile reuses stage-receipt-only implementation coordination path', () => {
+  let phase = 0;
+  const calls = [];
+  const ctx = {
+    ...fake2786Context(),
+    target: owner.TARGET_3762,
+    packet: 3762,
+    packetRef: '#3762',
+  };
+  const result = owner.applyPacket('#3762', {
+    createContext: () => ctx,
+    readState: () => phase === 0
+      ? fake2786State()
+      : fake2786State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+    buildValidationStageText: () => ({text: 'STAGE3762'}),
+    publishExact: (packet, body) => {
+      calls.push([packet, body]);
+      phase = 1;
+      return {written: 1, reused: 0, lostAckRecovered: false};
+    },
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.packetRef, '#3762');
+  assert.deepEqual(result.effects, {
+    holderCleaned: 0, d014Published: 0, stageReceiptPublished: 1,
+  });
+  assert.deepEqual(calls, [[3762, 'STAGE3762']]);
 });
 
 test('#2786 apply publishes only canonical stage receipt', () => {

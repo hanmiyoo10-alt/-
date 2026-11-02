@@ -324,3 +324,34 @@ node --check products/chatgpt-mobile-coder-lab/coordination/stage-entry/tests/te
 ```
 
 No real source/effect-owner invocation is part of the V1 contract test suite.
+
+
+## Fixed L/L stage-entry profile
+
+Stage-entry additionally admits one exact ordinary repository profile for route/executor `L / L`.
+It is additive; the existing S/S profile remains unchanged.
+
+```text
+plan route/executor = L / L
+preflight_owner = not_applicable
+next_gate = scope_overlap
+landing = /home/alsl0/nyang-repo on main
+landing scope = surface:mcl-landing-origin-main:L
+feature branch = laptop/mcl-packet-<N>
+feature worktree = /home/alsl0/nyang-worktrees/mcl-packet-<N>
+```
+
+L performs no S preflight call and manufactures no aggregate readiness signal. It consumes the reviewed
+`mcl-landing-freshness status L` and optional one-shot `refresh L` owner, with exact L/L
+`landing_metadata` D-013/D-014 identity. Dirty, branch-mismatched, remote-main-mismatched,
+ahead/diverged/unrelated landing states remain fail-closed. `S_candidate` is advisory only and never
+causes automatic route/executor fallback.
+
+Packet discovery uses the canonical standalone-marker predicate from `packet-projection.cjs`; prose
+that merely quotes the marker is not a packet candidate, while malformed real packets with an exact
+standalone marker remain fail-closed.
+
+Repository preparation reuses `workspace-prepare.cjs` through its fixed profile-injection boundary.
+Stage-entry still prepares coordination only; the existing L repository owner performs any later source
+effect. No L branch repair, landing HEAD movement, caller-selected path/ref/remote, merge, release,
+production, runtime, or device authority is added.

@@ -197,6 +197,32 @@ def pin_non_object_json_fails_closed():
 
 
 @case
+def pin_write_failures_are_bounded_and_cleaned_up():
+    with tempfile.TemporaryDirectory() as tmp:
+        blocked_parent = Path(tmp) / "blocked"
+        blocked_parent.write_text("not a directory")
+        expect_reason(
+            lambda: peer._write_pin(INSTANCE, blocked_parent / "m-to-s.v1"),
+            "PIN_WRITE_FAILED",
+        )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "state" / "m-to-s.v1"
+        original_write = peer.os.write
+        closed = []
+        original_close = peer.os.close
+        try:
+            peer.os.write = lambda _fd, _payload: (_ for _ in ()).throw(OSError("full"))
+            peer.os.close = lambda fd: (closed.append(fd), original_close(fd))[1]
+            expect_reason(lambda: peer._write_pin(INSTANCE, path), "PIN_WRITE_FAILED")
+        finally:
+            peer.os.write = original_write
+            peer.os.close = original_close
+        assert closed
+        assert not list(path.parent.glob(".mcl-pin-*"))
+
+
+@case
 def exact_pin_and_known_host_select_one_candidate():
     row = {"instance": INSTANCE, "endpoint": ENDPOINT}
     assert peer.select_candidate(peer._pin_payload(INSTANCE), {TOKEN}, [row]) == row
@@ -310,7 +336,7 @@ def cli_and_source_expose_no_generic_effect_surface():
 
 
 def main() -> int:
-    assert len(TESTS) == 21, len(TESTS)
+    assert len(TESTS) == 22, len(TESTS)
     passed = 0
     for fn in TESTS:
         fn()

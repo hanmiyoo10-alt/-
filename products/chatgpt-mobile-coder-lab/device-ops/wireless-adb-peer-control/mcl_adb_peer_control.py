@@ -315,11 +315,13 @@ def _pin_payload(instance: str) -> dict:
 
 
 def _write_pin(instance: str, path: Path) -> None:
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    os.chmod(path.parent, 0o700)
-    payload = (json.dumps(_pin_payload(instance), separators=(",", ":"), sort_keys=True) + "\n").encode()
-    fd, tmp = tempfile.mkstemp(prefix=".mcl-pin-", dir=path.parent)
+    fd = -1
+    tmp = None
     try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(path.parent, 0o700)
+        payload = (json.dumps(_pin_payload(instance), separators=(",", ":"), sort_keys=True) + "\n").encode()
+        fd, tmp = tempfile.mkstemp(prefix=".mcl-pin-", dir=path.parent)
         os.fchmod(fd, 0o600)
         os.write(fd, payload)
         os.fsync(fd)
@@ -327,13 +329,19 @@ def _write_pin(instance: str, path: Path) -> None:
         fd = -1
         os.replace(tmp, path)
         os.chmod(path, 0o600)
+    except OSError as exc:
+        raise PeerError("PIN_WRITE_FAILED") from exc
     finally:
         if fd >= 0:
-            os.close(fd)
-        try:
-            os.unlink(tmp)
-        except FileNotFoundError:
-            pass
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 def write_pin(instance: str) -> None:

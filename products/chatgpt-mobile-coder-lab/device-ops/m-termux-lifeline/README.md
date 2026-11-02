@@ -209,6 +209,38 @@ Live activation therefore remains explicit:
 The watchdog will not probe Termux until package state is readable/not-stopped,
 RUN_COMMAND permission is present, and the user policy acknowledgement is set.
 
+## Explicit reboot auto re-arm
+
+The Android companion has one separate durable user opt-in for reboot persistence.
+Ordinary `Lifeline arm` starts only the current foreground service and does not
+silently enable reboot persistence. The app exposes explicit enable/disable
+controls for the `boot_auto_rearm_v1` preference, and `Lifeline disarm` clears
+that preference before stopping the service so a deliberate disarm cannot
+resurrect on the next reboot.
+
+The manifest receiver accepts only `android.intent.action.BOOT_COMPLETED`. It is
+not exported and there is no `LOCKED_BOOT_COMPLETED`, arbitrary broadcast, path,
+command, package, or argv surface. Before requesting the fixed `LifelineService`,
+the receiver requires all of the following current evidence:
+
+- the explicit reboot auto-rearm preference is enabled;
+- Termux is installed and not `FLAG_STOPPED`;
+- the companion still holds `com.termux.permission.RUN_COMMAND`;
+- the companion still holds `POST_NOTIFICATIONS`;
+- the existing explicit Termux-policy acknowledgement is still set.
+
+Any missing, stopped, denied, or unreadable prerequisite causes zero service
+start effect. The receiver never grants a permission, writes Termux policy,
+clears stopped state, changes Android settings, or invokes a recovery command.
+
+Boot receiver dispatch is not health proof. The existing `LifelineService`
+heartbeat and recovery state machine remains the only owner of `HEALTHY`; after
+boot it must still obtain fresh fixed heartbeat evidence through the existing
+RUN_COMMAND path. Phone reboot is also not #2756 process-loss acceptance.
+
+Repository implementation/build proof does not install this APK or perform a
+reboot. Live reboot persistence remains a later reviewed postmerge observation.
+
 ## Bounded observability
 
 Normal durable evidence contains only semantic state. The companion never

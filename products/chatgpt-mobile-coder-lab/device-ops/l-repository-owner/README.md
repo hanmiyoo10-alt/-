@@ -256,6 +256,15 @@ branch/worktree/remote ref, and exactly one open non-draft PR on that branch
 with base `main`, the supplied non-closing title/body, and the exact old head.
 Dirty, untracked, unmerged, or unexpected staged state fails closed.
 
+One narrow local reconciliation is allowed when an external reviewed currentizer
+has already advanced the exact remote branch and same PR to the request's old
+head while the fixed clean local feature worktree still points to an older
+ancestor. The owner requires remote head == PR head == request old head, proves
+the clean local head is an ancestor of that exact commit, then performs only a
+local `git merge --ff-only <old-head>` and requires exact readback before entering
+READY. It never fetches, pulls, resets, rebases, stashes, cleans, checks out,
+switches, force-pushes, or changes the remote/PR during this reconciliation.
+
 The supplied patch is reconstructed in a private temporary index at the exact
 old PR head. Its changed paths, ordinary `100644` modes, binary-diff digest,
 and whitespace integrity must match the request.
@@ -284,7 +293,8 @@ feature worktree.
 The exactly-once state machine is:
 
 ```text
-READY
+LOCAL_BEHIND (only clean exact ancestor of remote/PR old head)
+→ READY
 → PREPARED
 → COMMITTED
 → CURRENTIZED (only when current main advanced)

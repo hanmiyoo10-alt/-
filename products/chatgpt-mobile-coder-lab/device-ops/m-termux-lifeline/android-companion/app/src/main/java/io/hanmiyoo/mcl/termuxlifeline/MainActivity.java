@@ -16,6 +16,7 @@ import android.widget.TextView;
 public final class MainActivity extends Activity {
     private static final String PREFS = "mcl_m_termux_lifeline";
     private static final String POLICY_ACK = "allow_external_apps_user_ack_v1";
+    private static final String BOOT_AUTO_REARM = "boot_auto_rearm_v1";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,6 +61,16 @@ public final class MainActivity extends Activity {
         policyRevoke.setOnClickListener(v -> setPolicyAcknowledged(this, false));
         root.addView(policyRevoke);
 
+        Button bootAutoRearmEnable = new Button(this);
+        bootAutoRearmEnable.setText("재부팅 후 Lifeline 자동 재무장 사용");
+        bootAutoRearmEnable.setOnClickListener(v -> setBootAutoRearmEnabled(this, true));
+        root.addView(bootAutoRearmEnable);
+
+        Button bootAutoRearmDisable = new Button(this);
+        bootAutoRearmDisable.setText("재부팅 후 Lifeline 자동 재무장 사용 안 함");
+        bootAutoRearmDisable.setOnClickListener(v -> setBootAutoRearmEnabled(this, false));
+        root.addView(bootAutoRearmDisable);
+
         Button arm = new Button(this);
         arm.setText("Lifeline arm");
         arm.setOnClickListener(v ->
@@ -69,12 +80,16 @@ public final class MainActivity extends Activity {
 
         Button disarm = new Button(this);
         disarm.setText("Lifeline disarm");
-        disarm.setOnClickListener(v -> stopService(new Intent(this, LifelineService.class)));
+        disarm.setOnClickListener(v -> {
+            setBootAutoRearmEnabled(this, false);
+            stopService(new Intent(this, LifelineService.class));
+        });
         root.addView(disarm);
 
         TextView note = new TextView(this);
         note.setText(
             "정책 확인은 실제 Termux 설정을 변경하거나 읽지 않습니다. " +
+            "재부팅 자동 재무장은 별도 opt-in이며 Lifeline disarm 시 함께 해제됩니다. " +
             "실제 복구 성공은 heartbeat와 고정 recovery receipt가 둘 다 돌아온 경우에만 인정됩니다."
         );
         note.setPadding(0, pad, 0, 0);
@@ -108,6 +123,18 @@ public final class MainActivity extends Activity {
         context.getSharedPreferences(PREFS, MODE_PRIVATE)
             .edit()
             .putBoolean(POLICY_ACK, value)
+            .apply();
+    }
+
+    static boolean isBootAutoRearmEnabled(Context context) {
+        return context.getSharedPreferences(PREFS, MODE_PRIVATE)
+            .getBoolean(BOOT_AUTO_REARM, false);
+    }
+
+    static void setBootAutoRearmEnabled(Context context, boolean value) {
+        context.getSharedPreferences(PREFS, MODE_PRIVATE)
+            .edit()
+            .putBoolean(BOOT_AUTO_REARM, value)
             .apply();
     }
 }

@@ -27,6 +27,7 @@ class LifelineContractTest(unittest.TestCase):
                 "android.permission.FOREGROUND_SERVICE",
                 "android.permission.FOREGROUND_SERVICE_SPECIAL_USE",
                 "android.permission.POST_NOTIFICATIONS",
+                "android.permission.RECEIVE_BOOT_COMPLETED",
                 "com.termux.permission.RUN_COMMAND",
             },
         )
@@ -46,7 +47,22 @@ class LifelineContractTest(unittest.TestCase):
         root = ET.parse(MANIFEST).getroot()
         service = root.find("application/service")
         self.assertIsNotNone(service)
-        self.assertIsNone(root.find("application/receiver"))
+        receivers = root.findall("application/receiver")
+        self.assertEqual(len(receivers), 1)
+        receiver = receivers[0]
+        self.assertEqual(receiver.attrib[ANDROID_NS + "name"], ".BootReceiver")
+        self.assertEqual(receiver.attrib[ANDROID_NS + "enabled"], "true")
+        self.assertEqual(receiver.attrib[ANDROID_NS + "exported"], "false")
+        filters = receiver.findall("intent-filter")
+        self.assertEqual(len(filters), 1)
+        actions = filters[0].findall("action")
+        self.assertEqual(len(actions), 1)
+        self.assertEqual(
+            actions[0].attrib[ANDROID_NS + "name"],
+            "android.intent.action.BOOT_COMPLETED",
+        )
+        self.assertEqual(filters[0].findall("category"), [])
+        self.assertEqual(filters[0].findall("data"), [])
         self.assertIsNone(root.find("application/provider"))
         self.assertEqual(service.attrib[ANDROID_NS + "exported"], "false")
 
@@ -86,6 +102,50 @@ class LifelineContractTest(unittest.TestCase):
             "Runtime.getRuntime",
         ):
             self.assertNotIn(forbidden, source)
+
+    def test_boot_rearm_surface_is_fixed_and_fail_closed(self):
+        receiver = (JAVA / "BootReceiver.java").read_text()
+        policy = (JAVA / "BootRearmPolicy.java").read_text()
+        activity = (JAVA / "MainActivity.java").read_text()
+
+        for required in (
+            "Intent.ACTION_BOOT_COMPLETED",
+            "MainActivity.isBootAutoRearmEnabled(context)",
+            "LifelineService.RUN_COMMAND_PERMISSION",
+            "Manifest.permission.POST_NOTIFICATIONS",
+            "ApplicationInfo.FLAG_STOPPED",
+            "MainActivity.isPolicyAcknowledged(context)",
+            "context.startForegroundService(new Intent(context, LifelineService.class))",
+        ):
+            self.assertIn(required, receiver)
+
+        for forbidden in (
+            "LOCKED_BOOT_COMPLETED",
+            "RUN_COMMAND_PATH",
+            "RUN_COMMAND_ARGUMENTS",
+            "getStringExtra",
+            "getSerializableExtra",
+            "Settings.Global",
+            "Settings.Secure",
+            "device_config",
+            "force-stop",
+            "runsvdir",
+        ):
+            self.assertNotIn(forbidden, receiver)
+
+        self.assertIn("termuxPackageState == LifelinePolicy.PackageState.INSTALLED_NOT_STOPPED", policy)
+        self.assertIn('BOOT_AUTO_REARM = "boot_auto_rearm_v1"', activity)
+        self.assertIn('bootAutoRearmEnable.setText("재부팅 후 Lifeline 자동 재무장 사용")', activity)
+        self.assertIn('bootAutoRearmDisable.setText("재부팅 후 Lifeline 자동 재무장 사용 안 함")', activity)
+        arm = activity.index('arm.setText("Lifeline arm")')
+        disarm = activity.index('disarm.setText("Lifeline disarm")')
+        self.assertNotIn("setBootAutoRearmEnabled", activity[arm:disarm])
+        disarm_block = activity[disarm:activity.index("TextView note", disarm)]
+        self.assertIn("setBootAutoRearmEnabled(this, false);", disarm_block)
+        self.assertLess(
+            disarm_block.index("setBootAutoRearmEnabled(this, false);"),
+            disarm_block.index("stopService("),
+        )
 
     def test_run_command_review_findings_are_fail_closed(self):
         source = (JAVA / "LifelineService.java").read_text()

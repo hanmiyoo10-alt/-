@@ -187,6 +187,16 @@ def pin_wrong_mode_fails_closed():
 
 
 @case
+def pin_non_object_json_fails_closed():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "m-to-s.v1"
+        for value in (None, 1, [], "pin"):
+            path.write_text(json.dumps(value))
+            os.chmod(path, 0o600)
+            expect_reason(lambda: peer._read_pin(path), "PIN_SCHEMA_INVALID")
+
+
+@case
 def exact_pin_and_known_host_select_one_candidate():
     row = {"instance": INSTANCE, "endpoint": ENDPOINT}
     assert peer.select_candidate(peer._pin_payload(INSTANCE), {TOKEN}, [row]) == row
@@ -300,7 +310,7 @@ def cli_and_source_expose_no_generic_effect_surface():
 
 
 def main() -> int:
-    assert len(TESTS) == 20, len(TESTS)
+    assert len(TESTS) == 21, len(TESTS)
     passed = 0
     for fn in TESTS:
         fn()

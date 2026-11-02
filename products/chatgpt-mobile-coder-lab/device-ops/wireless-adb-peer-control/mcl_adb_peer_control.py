@@ -351,6 +351,8 @@ def _read_pin(path: Path) -> dict:
         value = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise PeerError("PIN_JSON_INVALID") from exc
+    if not isinstance(value, dict):
+        raise PeerError("PIN_SCHEMA_INVALID")
     if set(value) != {"schemaVersion", "targetModel", "instanceDigest"} or value.get("schemaVersion") != 1 or value.get("targetModel") != TARGET_MODEL:
         raise PeerError("PIN_SCHEMA_INVALID")
     digest = value.get("instanceDigest")

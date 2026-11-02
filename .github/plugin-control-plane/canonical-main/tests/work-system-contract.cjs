@@ -18,6 +18,7 @@ const {
   REASON_CODES: PACKET_PROJECTION_REASON_CODES,
   classifyPacketProjection,
   extractPacketLifecycle,
+  hasCanonicalPacketMarker,
 } = require(path.join(dir, 'packet-projection.cjs'));
 const pluginManifest = JSON.parse(fs.readFileSync(path.join(root, '.github/tooling/ci-summary/manifests/plugin-control-plane.json'), 'utf8'));
 const permanentCommands = pluginManifest.checks.map((check) => check.command.join(' ')).join('\n');
@@ -37,6 +38,11 @@ assert.ok(policy.packetStates.includes('BLOCKED'));
 
 
 assert.deepEqual(PACKET_STATES, policy.packetStates);
+assert.equal(hasCanonicalPacketMarker('<!-- canonical-main-work-packet:v1 -->'), true);
+assert.equal(hasCanonicalPacketMarker('  <!-- canonical-main-work-packet:v1 -->  \r\n'), true);
+assert.equal(hasCanonicalPacketMarker('Docs quote `<!-- canonical-main-work-packet:v1 -->` inline.'), false);
+assert.equal(hasCanonicalPacketMarker('> <!-- canonical-main-work-packet:v1 -->'), false);
+assert.equal(hasCanonicalPacketMarker('<!-- canonical-main-work-packet:v1 -->\n<!-- canonical-main-work-packet:v1 -->'), true);
 const packetFixture = (stateLine, currentStage = 'AUTHORITY_SCOPE') => [
   '<!-- canonical-main-work-packet:v1 -->',
   '',
@@ -888,6 +894,15 @@ const disjointPacket = {
   body: overlapPacketBody('IN_PROGRESS', ['path:docs/**']),
 };
 assert.equal(resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [disjointPacket]).state, 'DISJOINT');
+
+const quotedMarkerCandidate = {
+  type: 'packet',
+  ref: '#11',
+  issueState: 'open',
+  body: 'Docs quote `<!-- canonical-main-work-packet:v1 -->` inline.',
+};
+const quotedMarkerResult = resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [quotedMarkerCandidate]);
+expectOverlapFinding(quotedMarkerResult, 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_BODY_UNSUPPORTED);
 
 const packetActivityEvidence = (relationship, overrides = {}) => ({
   schemaVersion: 1,

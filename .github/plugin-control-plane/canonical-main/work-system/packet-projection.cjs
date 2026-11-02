@@ -34,6 +34,17 @@ function normalizeText(body) {
   return typeof body === 'string' ? body.replace(/\r\n/g, '\n') : null;
 }
 
+function canonicalPacketMarkerCount(body) {
+  const text = normalizeText(body);
+  return text === null
+    ? 0
+    : text.split('\n').filter((line) => line.trim() === PACKET_MARKER).length;
+}
+
+function hasCanonicalPacketMarker(body) {
+  return canonicalPacketMarkerCount(body) > 0;
+}
+
 function sections(text, heading) {
   const lines = text.split('\n');
   const found = [];
@@ -108,7 +119,7 @@ function classifyPacketProjection(body) {
   if (text === null) {
     return result('UNKNOWN', null, null, [REASON_CODES.INPUT_BODY_INVALID]);
   }
-  const markerCount = text.split('\n').filter((line) => line.trim() === PACKET_MARKER).length;
+  const markerCount = canonicalPacketMarkerCount(text);
   if (markerCount === 0) reasonCodes.push(REASON_CODES.PACKET_MARKER_MISSING);
   if (markerCount > 1) {
     reasonCodes.push(REASON_CODES.PACKET_MARKER_DUPLICATE);
@@ -193,6 +204,7 @@ module.exports = {
   classifyPacketProjection,
   exitCodeFor,
   extractPacketLifecycle,
+  hasCanonicalPacketMarker,
   parseArgs,
   parseInteractionStage,
   parseLifecycle,

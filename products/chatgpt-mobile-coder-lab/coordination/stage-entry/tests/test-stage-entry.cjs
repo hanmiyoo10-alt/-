@@ -42,6 +42,16 @@ function plan(overrides = {}) {
     ...overrides,
   };
 }
+function lPlan(overrides = {}) {
+  return plan({
+    route: 'L',
+    executor: 'L',
+    preflight_owner: 'not_applicable',
+    fallback: 'S_candidate',
+    next_gate: 'scope_overlap',
+    ...overrides,
+  });
+}
 
 function opsBody(sha = MAIN) {
   return `## Canonical Operator Capsule
@@ -202,9 +212,14 @@ function gitFixture() {
   };
 }
 
-test('plan parser accepts only the reviewed S/S mutable shape', () => {
+test('plan parser preserves S/S and admits exact L/L only', () => {
   assert.equal(stage.parsePlan(plan()).route, 'S');
+  assert.equal(stage.parsePlan(lPlan()).route, 'L');
   assert.throws(() => stage.parsePlan(plan({executor: 'M'})), /PLAN_EXECUTOR_UNSUPPORTED/);
+  assert.throws(() => stage.parsePlan(lPlan({executor: 'S'})), /PLAN_EXECUTOR_UNSUPPORTED/);
+  assert.throws(() => stage.parsePlan(lPlan({preflight_owner: 'mcl-preflight'})), /PLAN_PREFLIGHT_OWNER_UNSUPPORTED/);
+  assert.throws(() => stage.parsePlan(lPlan({next_gate: 'preflight'})), /PLAN_NEXT_GATE_UNSUPPORTED/);
+  assert.throws(() => stage.parsePlan(lPlan({fallback: 'M_candidate'})), /PLAN_FALLBACK_UNSUPPORTED/);
   assert.throws(() => stage.parsePlan({...plan(), command: 'git status'}), /PLAN_UNKNOWN_FIELD/);
 });
 
@@ -1021,6 +1036,65 @@ test('workspace precondition failure after manifest still releases lease when st
   } finally { f.close(); }
 });
 
+test('L workspace preparation failure preserves L execution surface', () => {
+  const f = gitFixture();
+  let releaseCalls = 0;
+  let comments = 0;
+  const lProfile = {...f.profile, branchPrefix:'laptop/mcl-packet-', targetPrefix:'mcl-packet-'};
+  try {
+    const inspected = workspace.inspectWorkspace({packetNumber: 82, baseSha: f.base, profile: lProfile});
+    assert.equal(inspected.status, 'READY');
+    const context = {
+      packetNumber: 82, packetRef: '#82', plan: lPlan(), stageProfile: stage.STAGE_PROFILES.L,
+      mainSha: f.base, packetBody: PACKET_BODY, packetBodySha256: 'a'.repeat(64),
+      requestedScopes: ['path:docs/demo.md'], workspace: inspected,
+    };
+    const runner = (args, options) => {
+      if (args[0] === process.execPath && args.includes('lease-acquire')) {
+        return response(0, {status:'DISPATCH_COMPLETE',leaseId:'b'.repeat(64),
+          observedGeneration:21,runId:801,runConclusion:'success'});
+      }
+      if (args[0] === process.execPath && args.includes('lease-release')) {
+        releaseCalls += 1;
+        return response(0, {status:'DISPATCH_COMPLETE',leaseId:'b'.repeat(64),
+          observedGeneration:22,runId:802,runConclusion:'success'});
+      }
+      if (args[0] === 'gh' && args[1] === 'api' && args.includes('--method')) {
+        comments += 1;
+        return response(0, {id: 820 + comments});
+      }
+      return workspace.runDefault(args, options);
+    };
+    const receipt = stage.applyContext(context, {
+      runner, profile: lProfile,
+      manifestBuilder: () => ({manifestId:'c'.repeat(64)}),
+      manifestRenderer: () => {
+        childProcess.spawnSync('git', ['-C', lProfile.control, 'branch',
+          'laptop/mcl-packet-82', f.base], {encoding:'utf8'});
+        return 'manifest-fixture';
+      },
+      lateBarrier: () => {},
+    });
+    assert.equal(receipt.result, 'BLOCKED');
+    assert.equal(receipt.executionSurface, 'RDC:L:repository-owned-stage-entry');
+    assert(receipt.reasonCodes.includes('LOCAL_BRANCH_EXISTS'));
+    assert.equal(releaseCalls, 1);
+  } finally { f.close(); }
+});
+
+test('L run inspection failure preserves L execution surface', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-stage-entry-l-run-'));
+  const planFile = path.join(root, 'plan.json');
+  try {
+    fs.writeFileSync(planFile, JSON.stringify(lPlan()));
+    const receipt = stage.run(['inspect','--packet','#77','--plan',planFile], {
+      runner: () => ({code:1,stdout:'',stderr:'read failed'}),
+    });
+    assert.equal(receipt.result, 'UNKNOWN');
+    assert.equal(receipt.executionSurface, 'RDC:L:repository-owned-stage-entry');
+  } finally { fs.rmSync(root, {recursive:true, force:true}); }
+});
+
 test('apply PASS prepares workspace/ref but does not invoke holder or source effect owner', () => {
   const f = gitFixture();
   let comments = 0;
@@ -1131,4 +1205,133 @@ test('source delegates target scope grammar and contains no broader effect machi
   assert.doesNotMatch(source, /\bsetInterval\b|\bsetTimeout\b/);
   assert.doesNotMatch(source, /['"](?:reset|stash|rebase|merge|checkout|switch)['"]/);
   assert.doesNotMatch(source, /--force\b/);
+});
+
+test('packet discovery ignores quoted marker prose but keeps malformed real packet fail-closed', () => {
+  const proseRunner = (args) => {
+    const endpoint = args[2];
+    if (endpoint.startsWith('repos/' + stage.REPO + '/issues?')) {
+      return response(0, [
+        {number: 10, state: 'open', body: PACKET_BODY},
+        {number: 20, state: 'open', body: 'Documentation mentions <!-- canonical-main-work-packet:v1 --> inline only.'},
+      ]);
+    }
+    throw new Error(endpoint);
+  };
+  assert.equal(stage.discoverOverlap({
+    packetNumber: 10, requestedScopes: ['path:docs/demo.md'], runner: proseRunner,
+  }).state, 'DISJOINT');
+  const malformedRunner = (args) => {
+    const endpoint = args[2];
+    if (endpoint.startsWith('repos/' + stage.REPO + '/issues?')) {
+      return response(0, [
+        {number: 10, state: 'open', body: PACKET_BODY},
+        {number: 20, state: 'open', body: '<!-- canonical-main-work-packet:v1 -->\n## State\n\`IN_PROGRESS\`'},
+      ]);
+    }
+    throw new Error(endpoint);
+  };
+  assert.equal(stage.discoverOverlap({
+    packetNumber: 10, requestedScopes: ['path:docs/demo.md'], runner: malformedRunner,
+  }).state, 'UNKNOWN');
+});
+
+test('L landing profile validates exact route/main identity and ancestry', () => {
+  const base = {schema:'mcl-landing-freshness.v1',operation:'status',route:'L',
+    actual_branch:'main',worktree:'clean',landing_head:'b'.repeat(40),remote_main:MAIN,
+    landing_relation:'behind_ff',details:'withheld'};
+  assert.deepEqual(stage.classifyLanding(MAIN, {...base,origin_main:MAIN,origin_remote_relation:'same'},
+    stage.STAGE_PROFILES.L), {state:'CURRENT',normalizationRequired:false});
+  assert.deepEqual(stage.classifyLanding(MAIN, {...base,origin_main:'c'.repeat(40),origin_remote_relation:'stale'},
+    stage.STAGE_PROFILES.L), {state:'NORMALIZATION_REQUIRED',normalizationRequired:true});
+  assert.deepEqual(stage.classifyLanding(MAIN, {
+    ...base, landing_relation:'unknown', origin_main:'c'.repeat(40), origin_remote_relation:'stale',
+  }, stage.STAGE_PROFILES.L), {state:'NORMALIZATION_REQUIRED',normalizationRequired:true});
+  for (const landing_relation of ['ahead','diverged','unrelated']) {
+    assert.throws(() => stage.classifyLanding(MAIN, {...base,landing_relation,origin_main:MAIN,origin_remote_relation:'same'},
+      stage.STAGE_PROFILES.L), /LANDING_HEAD_RELATION_NOT_READY/);
+  }
+  assert.throws(() => stage.classifyLanding(MAIN, {...base,landing_relation:'unknown',origin_main:MAIN,origin_remote_relation:'same'},
+    stage.STAGE_PROFILES.L), /LANDING_HEAD_RELATION_UNRESOLVED/);
+  assert.throws(() => stage.classifyLanding(MAIN, {...base,route:'S',origin_main:MAIN,origin_remote_relation:'same'},
+    stage.STAGE_PROFILES.L), /LANDING_RECEIPT_INVALID/);
+  assert.throws(() => stage.classifyLanding(MAIN, {...base,actual_branch:'server/work',origin_main:MAIN,origin_remote_relation:'same'},
+    stage.STAGE_PROFILES.L), /LANDING_BRANCH_NOT_READY/);
+});
+
+test('L landing D-013 and D-014 identity is exact L/L', () => {
+  const context={packetNumber:77,packetRef:'#77',mainSha:MAIN,packetBodySha256:'d'.repeat(64),
+    stageProfile:stage.STAGE_PROFILES.L,landing:{landing_head:'b'.repeat(40)}};
+  const lease={leaseId:'e'.repeat(64),observedGeneration:20,runId:900};
+  const manifest=stage.buildLandingManifest(context,lease);
+  assert.deepEqual(manifest.scopes,['surface:mcl-landing-origin-main:L']);
+  assert.equal(manifest.route,'L'); assert.equal(manifest.executor,'L');
+  assert.equal(manifest.workspace.branch,'main');
+  assert.equal(manifest.workspace.worktree,'/home/alsl0/nyang-repo');
+  let acquireArgs;
+  stage.acquireLandingLease(context,(args)=>{acquireArgs=args;return response(0,{
+    status:'DISPATCH_COMPLETE',leaseId:lease.leaseId,observedGeneration:20,runId:900,runConclusion:'success'});});
+  assert(acquireArgs.includes('L'));
+  assert(acquireArgs.includes(JSON.stringify(['surface:mcl-landing-origin-main:L'])));
+  assert(acquireArgs.includes('main')); assert(acquireArgs.includes('/home/alsl0/nyang-repo'));
+});
+
+test('L normalization invokes exactly refresh L and validates L readback', () => {
+  const context={packetNumber:77,packetRef:'#77',mainSha:MAIN,packetBodySha256:'4'.repeat(64),
+    stageProfile:stage.STAGE_PROFILES.L,normalizationRequired:true,landingState:'NORMALIZATION_REQUIRED',
+    landing:{landing_head:'b'.repeat(40)}};
+  const seen=[];
+  const runner=(args)=>{
+    seen.push(args);
+    if(args[0]===process.execPath&&args.includes('lease-acquire')) return response(0,{
+      status:'DISPATCH_COMPLETE',leaseId:'2'.repeat(64),observedGeneration:30,runId:1001,runConclusion:'success'});
+    if(args[0]===process.execPath&&args.includes('lease-release')) return response(0,{
+      status:'DISPATCH_COMPLETE',leaseId:'2'.repeat(64),observedGeneration:31,runId:1002,runConclusion:'success'});
+    if(args[0]==='gh'&&args[1]==='api'&&args.includes('--method')) return response(0,{id:101});
+    if(String(args[0]).endsWith('/mcl-landing-freshness')){
+      assert.deepEqual(args.slice(1),['refresh','L']);
+      return response(0,['schema=mcl-landing-freshness.v1','operation=refresh','route=L','intended_branch=main',
+        'actual_branch=main','worktree=clean','landing_head='+'b'.repeat(40),'origin_main='+MAIN,'remote_main='+MAIN,
+        'origin_remote_relation=same','landing_relation=behind_ff','refresh=refreshed','details=withheld',''].join('\n'));
+    }
+    throw new Error(args.join(' '));
+  };
+  const value=stage.normalizeLandingCurrentness(context,{
+    runner,overlapResolver:()=>({state:'DISJOINT'}),authorityBarrier:()=>{}});
+  assert.equal(value.normalized,true); assert.equal(value.count,1);
+  assert(seen.some((args)=>String(args[0]).endsWith('/mcl-landing-freshness')&&args[1]==='refresh'&&args[2]==='L'));
+});
+
+test('L repository manifest handoff and receipt preserve L identity', () => {
+  const context={packetNumber:77,packetRef:'#77',plan:lPlan(),stageProfile:stage.STAGE_PROFILES.L,
+    mainSha:MAIN,packetBodySha256:'c'.repeat(64),requestedScopes:['path:docs/demo.md'],
+    workspace:{identity:{branch:'laptop/mcl-packet-77',worktree:'/home/alsl0/nyang-worktrees/mcl-packet-77'}}};
+  const lease={leaseId:'b'.repeat(64),observedGeneration:9,runId:500};
+  const manifest=stage.buildManifest(context,lease);
+  assert.equal(manifest.route,'L'); assert.equal(manifest.executor,'L');
+  const handoff=stage.buildHandoff(context,manifest,lease);
+  assert.equal(handoff.route,'L'); assert.equal(handoff.executor,'L');
+  const receipt=stage.receiptFor({packetNumber:77,route:'L',result:'PASS'});
+  assert.equal(receipt.executionSurface,'RDC:L:repository-owned-stage-entry');
+});
+
+test('L inspect skips S preflight and uses exact L workspace namespace', () => {
+  const t=tempProfile(); let sPreflightCalls=0;
+  const lProfile={...t.profile,branchPrefix:'laptop/mcl-packet-',targetPrefix:'mcl-packet-'};
+  const base=inspectRunner();
+  const runner=(args,options)=>{
+    if(String(args[0]).endsWith('/s-env-status')){sPreflightCalls+=1;throw new Error('S preflight must not run for L');}
+    if(String(args[0]).endsWith('/mcl-landing-freshness')){
+      assert.deepEqual(args.slice(1),['status','L']);
+      return response(0,['schema=mcl-landing-freshness.v1','operation=status','route=L','intended_branch=main',
+        'actual_branch=main','worktree=clean','landing_head='+'b'.repeat(40),'origin_main='+MAIN,'remote_main='+MAIN,
+        'origin_remote_relation=same','landing_relation=behind_ff','refresh=not_requested','details=withheld',''].join('\n'));
+    }
+    return base(args,options);
+  };
+  try{
+    const value=stage.inspectContext({packetNumber:77,plan:lPlan(),runner,profile:lProfile});
+    assert.equal(value.stageProfile.route,'L'); assert.equal(value.preflight,null);
+    assert.equal(value.workspace.identity.branch,'laptop/mcl-packet-77'); assert.equal(sPreflightCalls,0);
+  }finally{t.close();}
 });

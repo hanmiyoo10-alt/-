@@ -18,7 +18,6 @@ const PACKET_ACTIVITY_EVIDENCE_MODE = 'MCL_STAGE_ENTRY_PACKET_ACTIVITY_EVIDENCE_
 const PACKET_REF_RE = /^#[1-9][0-9]*$/;
 const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
-const PACKET_MARKER = '<!-- canonical-main-work-packet:v1 -->';
 
 const packetProjection = require(path.join(
   ROOT, '.github/plugin-control-plane/canonical-main/work-system/packet-projection.cjs'));
@@ -36,9 +35,31 @@ const S_PREFLIGHT = path.join(
   ROOT, 'products/chatgpt-mobile-coder-lab/device-ops/s-family-status/s-env-status');
 const LANDING = path.join(
   ROOT, 'products/chatgpt-mobile-coder-lab/device-ops/landing-freshness/mcl-landing-freshness');
-const LANDING_SCOPE = 'surface:mcl-landing-origin-main:S';
-const LANDING_BRANCH = 'server/work';
-const LANDING_WORKTREE = '/root/nyang-repo';
+const STAGE_PROFILES = Object.freeze({
+  S: Object.freeze({
+    route: 'S', executor: 'S', preflightOwner: 'mcl-preflight',
+    landingRoute: 'S', landingScope: 'surface:mcl-landing-origin-main:S',
+    landingBranch: 'server/work', landingWorktree: '/root/nyang-repo',
+    workspaceProfile: workspacePrepare.DEFAULT_PROFILE,
+    executionSurface: 'RDC:S:repository-owned-stage-entry',
+  }),
+  L: Object.freeze({
+    route: 'L', executor: 'L', preflightOwner: 'not_applicable',
+    landingRoute: 'L', landingScope: 'surface:mcl-landing-origin-main:L',
+    landingBranch: 'main', landingWorktree: '/home/alsl0/nyang-repo',
+    workspaceProfile: Object.freeze({
+      control: '/home/alsl0/nyang-repo',
+      worktreeRoot: '/home/alsl0/nyang-worktrees',
+      branchPrefix: 'laptop/mcl-packet-',
+      targetPrefix: 'mcl-packet-',
+      remote: 'origin',
+    }),
+    executionSurface: 'RDC:L:repository-owned-stage-entry',
+  }),
+});
+const LANDING_SCOPE = STAGE_PROFILES.S.landingScope;
+const LANDING_BRANCH = STAGE_PROFILES.S.landingBranch;
+const LANDING_WORKTREE = STAGE_PROFILES.S.landingWorktree;
 
 const PLAN_FIELDS = new Set([
   'schema', 'phase', 'route', 'executor', 'preflight_owner', 'repository_effect',
@@ -142,28 +163,44 @@ function normalizePacketActivityEvidenceSet(input, packetNumber) {
 
 function parsePlan(value) {
   exactKeys(value, PLAN_FIELDS, 'PLAN');
-  const expected = {
+  const reasons = [];
+  const common = {
     schema: 'mcl-dispatch-plan.v1',
     phase: '1/1',
-    route: 'S',
-    executor: 'S',
-    preflight_owner: 'mcl-preflight',
     repository_effect: 'mutable',
     overlap_guard: 'required',
     lease_guard: 'required',
     handoff_guard: 'required',
     details: 'withheld',
   };
-  const reasons = [];
-  for (const [key, expectedValue] of Object.entries(expected)) {
-    if (value[key] !== expectedValue) reasons.push(`PLAN_${key.toUpperCase()}_UNSUPPORTED`);
+  for (const [key, expectedValue] of Object.entries(common)) {
+    if (value[key] !== expectedValue) reasons.push('PLAN_' + key.toUpperCase() + '_UNSUPPORTED');
   }
-  if (!['M_candidate', 'none'].includes(value.fallback)) reasons.push('PLAN_FALLBACK_UNSUPPORTED');
-  if (!['preflight', 'scope_overlap', 'lease_plan', 'git_currentness', 'owner_effect'].includes(value.next_gate)) {
-    reasons.push('PLAN_NEXT_GATE_UNSUPPORTED');
-  }
+  if (value.route === 'S') {
+    if (value.executor !== 'S') reasons.push('PLAN_EXECUTOR_UNSUPPORTED');
+    if (value.preflight_owner !== 'mcl-preflight') reasons.push('PLAN_PREFLIGHT_OWNER_UNSUPPORTED');
+    if (!['M_candidate', 'none'].includes(value.fallback)) reasons.push('PLAN_FALLBACK_UNSUPPORTED');
+    if (!['preflight', 'scope_overlap', 'lease_plan', 'git_currentness', 'owner_effect'].includes(value.next_gate)) {
+      reasons.push('PLAN_NEXT_GATE_UNSUPPORTED');
+    }
+  } else if (value.route === 'L') {
+    if (value.executor !== 'L') reasons.push('PLAN_EXECUTOR_UNSUPPORTED');
+    if (value.preflight_owner !== 'not_applicable') reasons.push('PLAN_PREFLIGHT_OWNER_UNSUPPORTED');
+    if (!['S_candidate', 'none'].includes(value.fallback)) reasons.push('PLAN_FALLBACK_UNSUPPORTED');
+    if (value.next_gate !== 'scope_overlap') reasons.push('PLAN_NEXT_GATE_UNSUPPORTED');
+  } else reasons.push('PLAN_ROUTE_UNSUPPORTED');
   if (reasons.length) throw new StageError('BLOCKED', reasons);
   return {...value};
+}
+
+function stageProfileForPlan(plan) {
+  if (plan && plan.route === 'S' && plan.executor === 'S' && plan.preflight_owner === 'mcl-preflight') {
+    return STAGE_PROFILES.S;
+  }
+  if (plan && plan.route === 'L' && plan.executor === 'L' && plan.preflight_owner === 'not_applicable') {
+    return STAGE_PROFILES.L;
+  }
+  throw new StageError('BLOCKED', ['PLAN_ROUTE_EXECUTOR_PROFILE_UNSUPPORTED']);
 }
 
 function parseArgs(argv) {
@@ -323,7 +360,7 @@ function discoverOverlap({
       continue;
     }
     if (item.number === packetNumber) continue;
-    if (typeof item.body === 'string' && item.body.includes(PACKET_MARKER)) {
+    if (packetProjection.hasCanonicalPacketMarker(item.body)) {
       const canonicalRef = '#' + item.number;
       const evidence = evidenceByCandidate.get(canonicalRef);
       if (evidence) seenEvidence.add(canonicalRef);
@@ -365,7 +402,8 @@ function runOwner(command, args, runner = runDefault) {
   return runner([command, ...args], {cwd: ROOT});
 }
 
-function inspectPreflight(runner = runDefault) {
+function inspectPreflight(runner = runDefault, stageProfile = STAGE_PROFILES.S) {
+  if (stageProfile.route === 'L') return null;
   const preflightRaw = runOwner(S_PREFLIGHT, ['status'], runner);
   if (preflightRaw.code !== 0) throw new StageError('BLOCKED', ['S_PREFLIGHT_FAILED']);
   const preflight = parseKeyValueReceipt(preflightRaw.stdout);
@@ -379,65 +417,68 @@ function inspectPreflight(runner = runDefault) {
   return preflight;
 }
 
-function classifyLanding(mainSha, landing) {
+function classifyLanding(mainSha, landing, stageProfile = STAGE_PROFILES.S) {
   if (landing.schema !== 'mcl-landing-freshness.v1'
       || landing.operation !== 'status'
-      || landing.route !== 'S'
-      || landing.details !== 'withheld') {
-    throw new StageError('UNKNOWN', ['LANDING_RECEIPT_INVALID']);
-  }
-  if (landing.actual_branch !== LANDING_BRANCH) {
-    throw new StageError('BLOCKED', ['LANDING_BRANCH_NOT_READY']);
-  }
-  if (landing.worktree !== 'clean') {
-    throw new StageError('BLOCKED', ['LANDING_WORKTREE_NOT_CLEAN']);
-  }
+      || landing.route !== stageProfile.landingRoute
+      || landing.details !== 'withheld') throw new StageError('UNKNOWN', ['LANDING_RECEIPT_INVALID']);
+  if (landing.actual_branch !== stageProfile.landingBranch) throw new StageError('BLOCKED', ['LANDING_BRANCH_NOT_READY']);
+  if (landing.worktree !== 'clean') throw new StageError('BLOCKED', ['LANDING_WORKTREE_NOT_CLEAN']);
   if (landing.remote_main !== mainSha) {
     const kind = landing.remote_main === 'unknown' ? 'UNKNOWN' : 'BLOCKED';
     throw new StageError(kind, ['LANDING_REMOTE_MAIN_MISMATCH']);
   }
+  const originKnown = landing.origin_main === 'missing' || SHA40_RE.test(landing.origin_main || '');
   if (landing.origin_main === mainSha && landing.origin_remote_relation === 'same') {
+    if (stageProfile.route === 'L') {
+      if (landing.landing_relation === 'unknown' || landing.landing_relation === undefined) {
+        throw new StageError('UNKNOWN', ['LANDING_HEAD_RELATION_UNRESOLVED']);
+      }
+      if (!['equal', 'behind_ff'].includes(landing.landing_relation)) {
+        throw new StageError('BLOCKED', ['LANDING_HEAD_RELATION_NOT_READY']);
+      }
+    }
     return {state: 'CURRENT', normalizationRequired: false};
   }
-  const originKnown = landing.origin_main === 'missing' || SHA40_RE.test(landing.origin_main || '');
   if (originKnown && landing.origin_main !== mainSha && landing.origin_remote_relation === 'stale') {
-    if (!SHA40_RE.test(landing.landing_head || '')) {
-      throw new StageError('UNKNOWN', ['LANDING_HEAD_INVALID']);
+    if (!SHA40_RE.test(landing.landing_head || '')) throw new StageError('UNKNOWN', ['LANDING_HEAD_INVALID']);
+    if (stageProfile.route === 'L'
+        && landing.landing_relation !== 'unknown'
+        && landing.landing_relation !== undefined
+        && !['equal', 'behind_ff'].includes(landing.landing_relation)) {
+      throw new StageError('BLOCKED', ['LANDING_HEAD_RELATION_NOT_READY']);
     }
     return {state: 'NORMALIZATION_REQUIRED', normalizationRequired: true};
   }
   throw new StageError('BLOCKED', ['LANDING_CURRENTNESS_NOT_NORMALIZABLE']);
 }
 
-function inspectLanding(mainSha, runner = runDefault) {
-  const landingRaw = runOwner(LANDING, ['status', 'S'], runner);
+function inspectLanding(mainSha, runner = runDefault, stageProfile = STAGE_PROFILES.S) {
+  const landingRaw = runOwner(LANDING, ['status', stageProfile.landingRoute], runner);
   if (landingRaw.code !== 0) throw new StageError('BLOCKED', ['LANDING_STATUS_FAILED']);
   const landing = parseKeyValueReceipt(landingRaw.stdout);
-  const classification = classifyLanding(mainSha, landing);
-  return {landing, ...classification};
+  return {landing, ...classifyLanding(mainSha, landing, stageProfile)};
 }
 
 function inspectContext({
   packetNumber, plan, sourceMain = null, packetActivityEvidence = null,
   runner = runDefault, profile,
 }) {
+  const stageProfile = stageProfileForPlan(plan);
+  const workspaceProfile = profile || stageProfile.workspaceProfile;
   const firstMain = readMainSha(runner);
-  if (sourceMain !== null && sourceMain !== firstMain) {
-    throw new StageError('CONFLICT', ['SOURCE_MAIN_CURRENT_MAIN_CONFLICT']);
-  }
-  const ops = ghJson(`repos/${REPO}/issues/${OPS_ISSUE}`, runner);
+  if (sourceMain !== null && sourceMain !== firstMain) throw new StageError('CONFLICT', ['SOURCE_MAIN_CURRENT_MAIN_CONFLICT']);
+  const ops = ghJson('repos/' + REPO + '/issues/' + OPS_ISSUE, runner);
   const secondMain = readMainSha(runner);
   if (firstMain !== secondMain) throw new StageError('UNKNOWN', ['MAIN_CHANGED_DURING_CAPTURE']);
-  parseOpsCapsule(ops?.body, firstMain);
+  parseOpsCapsule(ops && ops.body, firstMain);
 
   const issue = readIssue(packetNumber, runner);
   const projection = packetProjection.classifyPacketProjection(issue.body);
   if (projection.disposition === 'CONFLICT') throw new StageError('CONFLICT', projection.reasonCodes);
   if (projection.disposition !== 'PASS') throw new StageError('UNKNOWN', projection.reasonCodes);
   if (projection.lifecycle !== 'IN_PROGRESS') throw new StageError('BLOCKED', ['PACKET_NOT_IN_PROGRESS']);
-  if (projection.interactionStage !== 'IMPLEMENTATION_PR') {
-    throw new StageError('BLOCKED', ['PACKET_STAGE_NOT_IMPLEMENTATION_PR']);
-  }
+  if (projection.interactionStage !== 'IMPLEMENTATION_PR') throw new StageError('BLOCKED', ['PACKET_STAGE_NOT_IMPLEMENTATION_PR']);
 
   const requestedScopes = extractPacketScopes(issue.body);
   const overlap = discoverOverlap({packetNumber, requestedScopes, packetActivityEvidence, runner});
@@ -445,38 +486,23 @@ function inspectContext({
   if (overlap.state === 'UNKNOWN') throw new StageError('UNKNOWN', ['OVERLAP_UNKNOWN']);
   if (overlap.state === 'OVERLAP') throw new StageError('BLOCKED', ['OVERLAP_PRESENT']);
 
-  const preflight = inspectPreflight(runner);
-  const landingState = inspectLanding(firstMain, runner);
-  const workspace = workspacePrepare.inspectWorkspace({
-    packetNumber, baseSha: firstMain, runner, profile,
-  });
+  const preflight = inspectPreflight(runner, stageProfile);
+  const landingState = inspectLanding(firstMain, runner, stageProfile);
+  const workspace = workspacePrepare.inspectWorkspace({packetNumber, baseSha: firstMain, runner, profile: workspaceProfile});
   if (workspace.status !== 'READY') {
     const baseOnly = landingState.normalizationRequired
-      && workspace.reasonCodes.length === 1
-      && workspace.reasonCodes[0] === 'BASE_OBJECT_MISSING';
+      && workspace.reasonCodes.length === 1 && workspace.reasonCodes[0] === 'BASE_OBJECT_MISSING';
     if (!baseOnly) {
       const kind = workspace.reasonCodes.some((code) => code.endsWith('_READ_FAILED') || code === 'BASE_OBJECT_MISSING')
         ? 'UNKNOWN' : 'BLOCKED';
       throw new StageError(kind, workspace.reasonCodes, {workspace});
     }
   }
-
   return {
-    packetNumber,
-    packetRef: `#${packetNumber}`,
-    plan,
-    mainSha: firstMain,
-    sourceMain,
-    packetActivityEvidence,
-    packetBody: issue.body,
-    packetBodySha256: sha256(issue.body),
-    requestedScopes,
-    overlap,
-    preflight,
-    landing: landingState.landing,
-    landingState: landingState.state,
-    normalizationRequired: landingState.normalizationRequired,
-    workspace,
+    packetNumber, packetRef: '#' + packetNumber, plan, stageProfile, mainSha: firstMain,
+    sourceMain, packetActivityEvidence, packetBody: issue.body, packetBodySha256: sha256(issue.body),
+    requestedScopes, overlap, preflight, landing: landingState.landing,
+    landingState: landingState.state, normalizationRequired: landingState.normalizationRequired, workspace,
   };
 }
 
@@ -492,73 +518,44 @@ function invokeOperator(args, runner = runDefault) {
 }
 
 function acquireLandingLease(context, runner = runDefault) {
+  const stageProfile = context.stageProfile || STAGE_PROFILES.S;
   const value = invokeOperator([
-    'lease-acquire',
-    '--repo', REPO,
-    '--packet', context.packetRef,
-    '--route', 'S',
-    '--executor', 'S',
-    '--scopes-json', JSON.stringify([LANDING_SCOPE]),
-    '--scope-disposition', 'DISJOINT',
-    '--workspace-kind', 'landing_metadata',
-    '--branch', LANDING_BRANCH,
-    '--worktree', LANDING_WORKTREE,
-    '--observed-base-sha', context.landing.landing_head,
-    '--dispatch',
+    'lease-acquire', '--repo', REPO, '--packet', context.packetRef,
+    '--route', stageProfile.route, '--executor', stageProfile.executor,
+    '--scopes-json', JSON.stringify([stageProfile.landingScope]), '--scope-disposition', 'DISJOINT',
+    '--workspace-kind', 'landing_metadata', '--branch', stageProfile.landingBranch,
+    '--worktree', stageProfile.landingWorktree, '--observed-base-sha', context.landing.landing_head, '--dispatch',
   ], runner);
-  if (value.status !== 'DISPATCH_COMPLETE'
-      || !SHA256_RE.test(value.leaseId || '')
-      || !Number.isSafeInteger(value.observedGeneration)
-      || !Number.isSafeInteger(value.runId)
-      || value.runConclusion !== 'success') {
-    throw new StageError('BLOCKED', ['LANDING_D013_ACQUIRE_NOT_PROVEN']);
-  }
+  if (value.status !== 'DISPATCH_COMPLETE' || !SHA256_RE.test(value.leaseId || '')
+      || !Number.isSafeInteger(value.observedGeneration) || !Number.isSafeInteger(value.runId)
+      || value.runConclusion !== 'success') throw new StageError('BLOCKED', ['LANDING_D013_ACQUIRE_NOT_PROVEN']);
   return value;
 }
 
 function buildLandingManifest(context, lease) {
+  const stageProfile = context.stageProfile || STAGE_PROFILES.S;
   try {
     return taskHandoff.buildManifest({
-      schemaVersion: 1,
-      mode: 'MCL_TASK_MANIFEST',
-      packetRef: context.packetRef,
+      schemaVersion: 1, mode: 'MCL_TASK_MANIFEST', packetRef: context.packetRef,
       packetBodySha256: context.packetBodySha256,
-      phaseId: `${context.packetNumber}-stage-entry-landing-normalization`,
-      phaseClass: 'REPOSITORY_MUTATION',
-      route: 'S',
-      executor: 'S',
-      scopes: [LANDING_SCOPE],
-      workspace: {kind: 'landing_metadata', branch: LANDING_BRANCH, worktree: LANDING_WORKTREE},
-      observedBaseSha: context.landing.landing_head,
-      leaseRequirement: 'REQUIRED',
-      leaseEvidence: {
-        ledgerRef: '#2352',
-        leaseId: lease.leaseId,
-        acquiredGeneration: lease.observedGeneration,
-        acquireEvidenceRef: `run:${lease.runId}`,
-      },
-      sourceAuthorityRefs: [
-        context.packetRef,
-        'issue:#2352',
+      phaseId: context.packetNumber + '-stage-entry-landing-normalization',
+      phaseClass: 'REPOSITORY_MUTATION', route: stageProfile.route, executor: stageProfile.executor,
+      scopes: [stageProfile.landingScope],
+      workspace: {kind: 'landing_metadata', branch: stageProfile.landingBranch, worktree: stageProfile.landingWorktree},
+      observedBaseSha: context.landing.landing_head, leaseRequirement: 'REQUIRED',
+      leaseEvidence: {ledgerRef: '#2352', leaseId: lease.leaseId, acquiredGeneration: lease.observedGeneration,
+        acquireEvidenceRef: 'run:' + lease.runId},
+      sourceAuthorityRefs: [context.packetRef, 'issue:#2352',
         'doc:products/chatgpt-mobile-coder-lab/docs/task-lease.md',
         'doc:products/chatgpt-mobile-coder-lab/docs/task-handoff.md',
-        'doc:products/chatgpt-mobile-coder-lab/device-ops/landing-freshness/README.md',
-      ],
-      inputRefs: [`commit:${context.mainSha}`, `run:${lease.runId}`],
-      expectedOutputRefs: [`commit:${context.mainSha}`],
-      acceptanceRefs: [context.packetRef, 'issue:#2352'],
-      stopCondition: 'Normalize only fixed S origin/main metadata to exact current main, release D-013, record completion, and revalidate stage-entry once.',
-      authority: {
-        repositoryMutationAuthorized: false,
-        deviceMutationAuthorized: false,
-        mergeAuthorized: false,
-        releaseAuthorized: false,
-        productionAuthorized: false,
-      },
+        'doc:products/chatgpt-mobile-coder-lab/device-ops/landing-freshness/README.md'],
+      inputRefs: ['commit:' + context.mainSha, 'run:' + lease.runId],
+      expectedOutputRefs: ['commit:' + context.mainSha], acceptanceRefs: [context.packetRef, 'issue:#2352'],
+      stopCondition: 'Normalize only fixed ' + stageProfile.route + ' origin/main metadata to exact current main, release D-013, record completion, and revalidate stage-entry once.',
+      authority: {repositoryMutationAuthorized:false, deviceMutationAuthorized:false, mergeAuthorized:false,
+        releaseAuthorized:false, productionAuthorized:false},
     });
-  } catch {
-    throw new StageError('UNKNOWN', ['LANDING_D014_MANIFEST_BUILD_FAILED']);
-  }
+  } catch { throw new StageError('UNKNOWN', ['LANDING_D014_MANIFEST_BUILD_FAILED']); }
 }
 
 function revalidateBeforeLandingRefresh(context, lease, {
@@ -593,7 +590,7 @@ function revalidateBeforeLandingRefresh(context, lease, {
     'inspect',
     '--repo', REPO,
     '--packet', context.packetRef,
-    '--scopes-json', JSON.stringify([LANDING_SCOPE]),
+    '--scopes-json', JSON.stringify([(context.stageProfile || STAGE_PROFILES.S).landingScope]),
   ], runner);
   if (leaseView.status !== 'READY') {
     throw new StageError('UNKNOWN', ['LANDING_LATE_D013_INSPECT_NOT_READY']);
@@ -624,7 +621,7 @@ function normalizeLandingCurrentness(context, {
   }
   const overlap = overlapResolver({
     packetNumber: context.packetNumber,
-    requestedScopes: [LANDING_SCOPE],
+    requestedScopes: [(context.stageProfile || STAGE_PROFILES.S).landingScope],
     runner,
   });
   if (overlap.state === 'CONFLICT') throw new StageError('CONFLICT', ['LANDING_NORMALIZATION_OVERLAP_CONFLICT']);
@@ -639,13 +636,14 @@ function normalizeLandingCurrentness(context, {
     const manifestComment = postComment(
       context.packetNumber, taskHandoff.renderManifest(manifest), runner);
 
-    const refreshedRaw = runOwner(LANDING, ['refresh', 'S'], runner);
+    const stageProfile = context.stageProfile || STAGE_PROFILES.S;
+    const refreshedRaw = runOwner(LANDING, ['refresh', stageProfile.landingRoute], runner);
     if (refreshedRaw.code !== 0) throw new StageError('BLOCKED', ['LANDING_REFRESH_FAILED']);
     const refreshed = parseKeyValueReceipt(refreshedRaw.stdout);
     if (refreshed.schema !== 'mcl-landing-freshness.v1'
         || refreshed.operation !== 'refresh'
-        || refreshed.route !== 'S'
-        || refreshed.actual_branch !== LANDING_BRANCH
+        || refreshed.route !== stageProfile.landingRoute
+        || refreshed.actual_branch !== stageProfile.landingBranch
         || refreshed.worktree !== 'clean'
         || refreshed.landing_head !== context.landing.landing_head
         || refreshed.origin_main !== context.mainSha
@@ -744,24 +742,16 @@ function coordinationEvidenceRef(value, operation) {
 
 function acquireLease(context, runner = runDefault) {
   const identity = context.workspace.identity;
+  const stageProfile = context.stageProfile || STAGE_PROFILES.S;
   const value = invokeOperator([
-    'lease-acquire',
-    '--repo', REPO,
-    '--packet', context.packetRef,
-    '--route', 'S',
-    '--executor', 'S',
-    '--scopes-json', JSON.stringify(context.requestedScopes),
-    '--scope-disposition', 'DISJOINT',
-    '--workspace-kind', 'repository',
-    '--branch', identity.branch,
-    '--worktree', identity.worktree,
-    '--observed-base-sha', context.mainSha,
-    '--dispatch',
+    'lease-acquire', '--repo', REPO, '--packet', context.packetRef,
+    '--route', stageProfile.route, '--executor', stageProfile.executor,
+    '--scopes-json', JSON.stringify(context.requestedScopes), '--scope-disposition', 'DISJOINT',
+    '--workspace-kind', 'repository', '--branch', identity.branch, '--worktree', identity.worktree,
+    '--observed-base-sha', context.mainSha, '--dispatch',
   ], runner);
   const evidenceRef = coordinationEvidenceRef(value, 'acquire');
-  if (!SHA256_RE.test(value.leaseId || '')
-      || !Number.isSafeInteger(value.observedGeneration)
-      || !evidenceRef) {
+  if (!SHA256_RE.test(value.leaseId || '') || !Number.isSafeInteger(value.observedGeneration) || !evidenceRef) {
     throw new StageError('BLOCKED', ['D013_ACQUIRE_NOT_PROVEN']);
   }
   return {...value, evidenceRef};
@@ -814,74 +804,39 @@ function deterministicLeaseEvidenceRef(lease) {
 }
 
 function buildManifest(context, lease) {
+  const stageProfile = context.stageProfile || STAGE_PROFILES.S;
   try {
     const leaseEvidenceRef = deterministicLeaseEvidenceRef(lease);
     return taskHandoff.buildManifest({
-    schemaVersion: 1,
-    mode: 'MCL_TASK_MANIFEST',
-    packetRef: context.packetRef,
-    packetBodySha256: context.packetBodySha256,
-    phaseId: `${context.packetNumber}-implementation-pr-stage-entry`,
-    phaseClass: 'REPOSITORY_MUTATION',
-    route: 'S',
-    executor: 'S',
-    scopes: context.requestedScopes,
-    workspace: {
-      kind: 'repository',
-      branch: context.workspace.identity.branch,
-      worktree: context.workspace.identity.worktree,
-    },
-    observedBaseSha: context.mainSha,
-    leaseRequirement: 'REQUIRED',
-    leaseEvidence: {
-      ledgerRef: '#2352',
-      leaseId: lease.leaseId,
-      acquiredGeneration: lease.observedGeneration,
-      acquireEvidenceRef: leaseEvidenceRef,
-    },
-    sourceAuthorityRefs: [
-      context.packetRef,
-      'issue:#2352',
-      'doc:products/chatgpt-mobile-coder-lab/docs/task-lease.md',
-      'doc:products/chatgpt-mobile-coder-lab/docs/task-handoff.md',
-    ],
-    inputRefs: [
-      `commit:${context.mainSha}`,
-      'receipt:mcl-dispatch-plan:v1',
-      leaseEvidenceRef,
-    ],
-    expectedOutputRefs: context.requestedScopes.filter((scope) => scope.startsWith('path:')),
-    acceptanceRefs: [context.packetRef, 'issue:#2352'],
-    stopCondition: 'Prepare one current S repository workspace and bounded HANDOFF_READY evidence; do not execute the source effect owner.',
-    authority: {
-      repositoryMutationAuthorized: false,
-      deviceMutationAuthorized: false,
-      mergeAuthorized: false,
-      releaseAuthorized: false,
-      productionAuthorized: false,
-    },
+      schemaVersion:1, mode:'MCL_TASK_MANIFEST', packetRef:context.packetRef,
+      packetBodySha256:context.packetBodySha256, phaseId:context.packetNumber + '-implementation-pr-stage-entry',
+      phaseClass:'REPOSITORY_MUTATION', route:stageProfile.route, executor:stageProfile.executor,
+      scopes:context.requestedScopes,
+      workspace:{kind:'repository', branch:context.workspace.identity.branch, worktree:context.workspace.identity.worktree},
+      observedBaseSha:context.mainSha, leaseRequirement:'REQUIRED',
+      leaseEvidence:{ledgerRef:'#2352', leaseId:lease.leaseId, acquiredGeneration:lease.observedGeneration,
+        acquireEvidenceRef:leaseEvidenceRef},
+      sourceAuthorityRefs:[context.packetRef,'issue:#2352',
+        'doc:products/chatgpt-mobile-coder-lab/docs/task-lease.md',
+        'doc:products/chatgpt-mobile-coder-lab/docs/task-handoff.md'],
+      inputRefs:['commit:' + context.mainSha,'receipt:mcl-dispatch-plan:v1',leaseEvidenceRef],
+      expectedOutputRefs:context.requestedScopes.filter((scope)=>scope.startsWith('path:')),
+      acceptanceRefs:[context.packetRef,'issue:#2352'],
+      stopCondition:'Prepare one current ' + stageProfile.route + ' repository workspace and bounded HANDOFF_READY evidence; do not execute the source effect owner.',
+      authority:{repositoryMutationAuthorized:false,deviceMutationAuthorized:false,mergeAuthorized:false,
+        releaseAuthorized:false,productionAuthorized:false},
     });
-  } catch {
-    throw new StageError('UNKNOWN', ['D014_MANIFEST_BUILD_FAILED']);
-  }
+  } catch { throw new StageError('UNKNOWN', ['D014_MANIFEST_BUILD_FAILED']); }
 }
 
 function buildHandoff(context, manifest, lease) {
+  const stageProfile = context.stageProfile || STAGE_PROFILES.S;
   return {
-    schema: 'mcl-execution-handoff.v1',
-    status: 'HANDOFF_READY',
-    packet_ref: context.packetRef,
-    phase: context.plan.phase,
-    route: 'S',
-    executor: 'S',
-    effect_class: 'repository_mutation',
-    manifest_id: manifest.manifestId,
-    lease_id: lease.leaseId,
-    next_owner: 'existing_route_owner',
-    reason_codes: [],
-    mutation_authorized: false,
-    execution_authorized: false,
-    details: 'withheld',
+    schema:'mcl-execution-handoff.v1', status:'HANDOFF_READY', packet_ref:context.packetRef,
+    phase:context.plan.phase, route:stageProfile.route, executor:stageProfile.executor,
+    effect_class:'repository_mutation', manifest_id:manifest.manifestId, lease_id:lease.leaseId,
+    next_owner:'existing_route_owner', reason_codes:[], mutation_authorized:false,
+    execution_authorized:false, details:'withheld',
   };
 }
 
@@ -897,6 +852,7 @@ function renderHandoff(handoff) {
 
 function receiptFor({
   packetNumber,
+  route = 'S',
   packetBodySha256 = 'UNKNOWN',
   reasonCodes = [],
   steps = [],
@@ -924,7 +880,7 @@ function receiptFor({
       locator: `issue:#${packetNumber}`,
       identity: packetBodySha256 === 'UNKNOWN' ? 'UNKNOWN' : `sha256:${packetBodySha256}`,
     },
-    executionSurface: 'RDC:S:repository-owned-stage-entry',
+    executionSurface: (STAGE_PROFILES[route] || STAGE_PROFILES.S).executionSurface,
     stage: 'IMPLEMENTATION_PR',
     executionLifecycle: 'FINISHED',
     attentionDisposition: disposition,
@@ -958,6 +914,7 @@ function errorReceipt(packetNumber, error, packetBodySha256 = 'UNKNOWN', extra =
   const result = ['BLOCKED', 'CONFLICT', 'UNKNOWN'].includes(kind) ? kind : 'FAIL';
   return receiptFor({
     packetNumber,
+    route: extra.route || 'S',
     packetBodySha256,
     reasonCodes: reasons,
     result,
@@ -1048,7 +1005,7 @@ function applyRepositoryContext(context, {
       packetNumber: context.packetNumber,
       baseSha: context.mainSha,
       runner,
-      profile,
+      profile: profile || (context.stageProfile && context.stageProfile.workspaceProfile),
       ...(remoteCreate ? {remoteCreate} : {}),
     });
     workspaceStateChanged = Boolean(created.stateChanged);
@@ -1067,6 +1024,7 @@ function applyRepositoryContext(context, {
       }
       return receiptFor({
         packetNumber: context.packetNumber,
+        route: (context.stageProfile || STAGE_PROFILES.S).route,
         packetBodySha256: context.packetBodySha256,
         result,
         reasonCodes: reasons,
@@ -1085,6 +1043,7 @@ function applyRepositoryContext(context, {
     }
     return receiptFor({
       packetNumber: context.packetNumber,
+      route: (context.stageProfile || STAGE_PROFILES.S).route,
       packetBodySha256: context.packetBodySha256,
       result: 'PASS',
       workspaceStateChanged: true,
@@ -1118,12 +1077,14 @@ function applyRepositoryContext(context, {
         ? new StageError(error.kind, [...error.reasonCodes, ...extraReason])
         : new StageError('UNKNOWN', ['UNEXPECTED_ERROR', ...extraReason]);
       return errorReceipt(context.packetNumber, wrapped, context.packetBodySha256, {
+        route: (context.stageProfile || STAGE_PROFILES.S).route,
         workspaceStateChanged: false,
         artifacts: [`issue:#${context.packetNumber}`],
         nextLegalAction: cleanup.ok ? 'REPAIR_AND_RETRY' : 'EXPLICIT_D013_RECOVERY_REQUIRED',
       });
     }
     return errorReceipt(context.packetNumber, error, context.packetBodySha256, {
+      route: (context.stageProfile || STAGE_PROFILES.S).route,
       workspaceStateChanged,
       artifacts: [`issue:#${context.packetNumber}`],
       nextLegalAction: workspaceStateChanged ? 'PRESERVE_PARTIAL_STATE_AND_RECOVER' : undefined,
@@ -1151,6 +1112,7 @@ function applyContext(context, {
       const explicitRecovery = error instanceof StageError
         && error.reasonCodes.some((code) => ['LANDING_D013_RELEASE_FAILED', 'LANDING_D013_CLEANUP_RELEASE_FAILED'].includes(code));
       return errorReceipt(context.packetNumber, error, context.packetBodySha256, {
+        route: (context.stageProfile || STAGE_PROFILES.S).route,
         workspaceStateChanged: false,
         artifacts: normalization.artifacts || [],
         nextLegalAction: explicitRecovery ? 'EXPLICIT_D013_RECOVERY_REQUIRED' : undefined,
@@ -1184,9 +1146,11 @@ function applyContext(context, {
 
 function run(argv = process.argv.slice(2), deps = {}) {
   let parsed;
+  let route = 'S';
   try {
     parsed = parseArgs(argv);
     const plan = parsePlan(readRegularJson(parsed.planFile));
+    route = plan.route;
     const packetActivityEvidence = parsed.packetActivityEvidenceFile
       ? normalizePacketActivityEvidenceSet(
         readRegularJson(parsed.packetActivityEvidenceFile), parsed.packetNumber)
@@ -1200,8 +1164,13 @@ function run(argv = process.argv.slice(2), deps = {}) {
       profile: deps.profile,
     });
     if (parsed.command === 'inspect') {
+      const preflightStep = context.stageProfile.route === 'L'
+        ? {name:'l-preflight-not-applicable', result:'SKIPPED',
+          evidenceLocator:'plan:mcl-dispatch-plan.v1:preflight_owner=not_applicable'}
+        : {name:'s-preflight', result:'PASS', evidenceLocator:'owner:mcl-s-env-status'};
       return receiptFor({
         packetNumber: parsed.packetNumber,
+        route: context.stageProfile.route,
         packetBodySha256: context.packetBodySha256,
         result: 'PASS',
         counters: [
@@ -1212,7 +1181,7 @@ function run(argv = process.argv.slice(2), deps = {}) {
           {name: 'main-ops-currentness', result: 'PASS', evidenceLocator: 'issue:#485'},
           {name: 'packet-plan-scope', result: 'PASS', evidenceLocator: context.packetRef},
           {name: 'overlap-discovery', result: 'PASS', evidenceLocator: 'owner:work-system-scope-overlap'},
-          {name: 's-preflight', result: 'PASS', evidenceLocator: 'owner:mcl-s-env-status'},
+          preflightStep,
           {name: context.normalizationRequired ? 'landing-currentness-normalizable' : 'landing-currentness', result: 'PASS', evidenceLocator: 'owner:mcl-landing-freshness'},
           {name: 'workspace-absence', result: 'PASS', evidenceLocator: `receipt:mcl-stage-entry-workspace:${parsed.packetNumber}`},
         ],
@@ -1222,7 +1191,7 @@ function run(argv = process.argv.slice(2), deps = {}) {
     }
     return applyContext(context, {runner: deps.runner || runDefault, profile: deps.profile});
   } catch (error) {
-    return errorReceipt(parsed?.packetNumber || 'unknown', error);
+    return errorReceipt(parsed?.packetNumber || 'unknown', error, 'UNKNOWN', {route});
   }
 }
 
@@ -1233,6 +1202,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+  STAGE_PROFILES,
+  stageProfileForPlan,
   LANDING_BRANCH,
   LANDING_SCOPE,
   LANDING_WORKTREE,

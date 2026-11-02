@@ -2744,3 +2744,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/75e96efc17f732aab68a0e92c7926c8fda8be0a3)
 - Event ID: `20fac42cb3bb60a974cf67e5c213cdf7cb1966dbb3fa3493c50362600049a7ba`
 <!-- canonical-main-doc-promoted:20fac42cb3bb60a974cf67e5c213cdf7cb1966dbb3fa3493c50362600049a7ba -->
+
+### 2026-11-02 — fix(repo): harden canonical packet marker discovery (#4127)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `3e1a23316236ca66ac5ac3017c7b85e55ce3da0b`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3e1a23316236ca66ac5ac3017c7b85e55ce3da0b)
+- Event ID: `0ad97f1c36eeb4e1489a9dd87b7b35dd9a84fcb5e45bd5c42f1bcdb2cf877d31`
+<!-- canonical-main-doc-promoted:0ad97f1c36eeb4e1489a9dd87b7b35dd9a84fcb5e45bd5c42f1bcdb2cf877d31 -->

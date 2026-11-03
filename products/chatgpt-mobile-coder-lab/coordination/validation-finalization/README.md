@@ -603,10 +603,10 @@ deterministic packet scope is exactly the three MCL validation-finalization owne
 plus `surface:mcl:validation-finalization-effect`.
 
 Class membership is never granted by packet number alone. The owner derives the
-candidate and PR from a qualifying canonical `IMPLEMENTATION_PR` receipt, requires the
-fixed self-owner gate set, then follows that selected receipt's exact
-`d014-completion` evidence locator to one valid implementation-stage completion receipt.
-That completion receipt binds the exact stage-entry D-014 manifest ID and payload hash,
+candidate and PR from a qualifying canonical `IMPLEMENTATION_PR` receipt, requires one
+of the fixed self-owner lineage gate sets, then follows that selected lineage's exact
+D-014 completion evidence locator to one valid implementation completion receipt.
+That completion receipt binds the exact producer D-014 manifest ID and payload hash,
 which derives deterministic repository workspace/lease lineage without choosing among
 historical manifests by chronology or comment order. The owner then requires the PR to
 be merged at the selected candidate and reuses the existing lease-absence,
@@ -638,12 +638,17 @@ the comment writer. Conflicting V evidence remains conflict.
 Self-owner implementation lineage selection is also generation-aware. Immutable
 historical I receipts are preserved, but the owner reads the one merged PR and
 selects only the qualifying semantic generation whose candidate equals that PR's
-actual merged head. Both reviewed lineages are supported:
+actual merged head. Three reviewed semantic lineages are supported:
 
-- normal implementation-stage entry via `d014-completion` and
+- normal S implementation-stage entry via `d014-completion` and
   `<packet>-implementation-pr-stage-entry`;
-- packet-scoped currentization via `currentization-d014-completion` and
-  `<packet>-validation-merge-currentization`.
+- S packet-scoped currentization via `currentization-d014-completion` and
+  `<packet>-validation-merge-currentization`;
+- fixed L/L repository implementation via `d014-completion`, with exactly the
+  direct-L `<packet>-implementation-pr` or stage-entry-prepared
+  `<packet>-implementation-pr-stage-entry` phase. The manifest must bind exact
+  route/executor `L / L` and one direct-child `laptop/<target>` /
+  `/home/alsl0/nyang-worktrees/<target>` workspace identity.
 
 Distinct PR generations, missing live-head generations, bad lineage, active lease,
 holder presence, dirty/non-exact workspace, near-match scope or missing required

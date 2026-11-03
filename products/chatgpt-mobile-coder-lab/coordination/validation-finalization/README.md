@@ -543,6 +543,12 @@ validation-stage evidence.
 Profile Q has no validation-stage D-014 manifest. Its exact reviewed currentization
 manifest and COMPLETE receipt are read only as implementation-coordination evidence.
 
+## Equivalent implementation-receipt replay
+
+Fixed profiles select the canonical `IMPLEMENTATION_PR` semantic generation by exact packet, PR/candidate, and compile-time receipt digest. The same canonical receipt may appear both as its direct immutable comment and inside the paired stage checkpoint. Identical appearances of one digest are one semantic receipt, not competing generations.
+
+Selection groups eligible current-candidate receipts by digest, requires the fixed target digest, and still fails closed when distinct eligible digests coexist. Chronology, comment id, and latest-wins selection are forbidden. Required profile gate checks remain unchanged.
+
 ## Stage receipt ownership
 
 The canonical VALIDATION_MERGE receipt is constructed only by stage-receipt.cjs.

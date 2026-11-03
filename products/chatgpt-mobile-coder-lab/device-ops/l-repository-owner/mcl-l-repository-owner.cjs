@@ -22,6 +22,7 @@ const FIXED_BOT_EMAIL = 'mcl-repository-patch@users.noreply.github.com';
 const REQUEST_SCHEMA = 'mcl-l-repository-owner-request.v1';
 const CONTINUATION_REQUEST_SCHEMA = 'mcl-l-prepared-continuation-request.v1';
 const REVIEW_UPDATE_REQUEST_SCHEMA = 'mcl-l-review-update-request.v1';
+const CURRENTIZE_ONLY_REQUEST_SCHEMA = 'mcl-l-currentize-only-request.v1';
 const PRIOR_MANIFEST_REF_PREFIX = 'receipt:mcl-task-manifest:';
 const PRIOR_BLOCKED_RECEIPT_REF_PREFIX = 'receipt:mcl-task-completion-receipt:';
 const BLOCKER_REPAIR_REF_PREFIX = 'receipt:canonical-main-stage:';
@@ -203,6 +204,36 @@ function parseReviewUpdateRequestText(text) {
     expected_old_head:value.expected_old_head,
     expected_paths:[...value.expected_paths].sort(),
     patch_sha256:value.patch_sha256,
+  };
+}
+
+
+function parseCurrentizeOnlyRequestText(text) {
+  let value;
+  try { value = JSON.parse(String(text)); }
+  catch { throw new OwnerError('UNKNOWN', ['CURRENTIZE_ONLY_REQUEST_JSON_INVALID']); }
+  exactKeys(value, new Set([
+    'schema', 'packet_ref', 'expected_old_head', 'expected_paths',
+  ]), 'CURRENTIZE_ONLY_REQUEST');
+  if (value.schema !== CURRENTIZE_ONLY_REQUEST_SCHEMA
+      || !PACKET_REF_RE.test(value.packet_ref || '')) {
+    throw new OwnerError('UNKNOWN', ['CURRENTIZE_ONLY_REQUEST_SCHEMA_OR_PACKET_INVALID']);
+  }
+  if (!SHA40_RE.test(value.expected_old_head || '')) {
+    throw new OwnerError('UNKNOWN', ['CURRENTIZE_ONLY_OLD_HEAD_INVALID']);
+  }
+  if (!Array.isArray(value.expected_paths) || value.expected_paths.length < 1
+      || value.expected_paths.length > MAX_FILES
+      || value.expected_paths.some((item) => typeof item !== 'string')
+      || new Set(value.expected_paths).size !== value.expected_paths.length) {
+    throw new OwnerError('UNKNOWN', ['CURRENTIZE_ONLY_REQUEST_PATHS_INVALID']);
+  }
+  for (const item of value.expected_paths) validateRepoPath(item);
+  return {
+    schema:value.schema,
+    packet_ref:value.packet_ref,
+    expected_old_head:value.expected_old_head,
+    expected_paths:[...value.expected_paths].sort(),
   };
 }
 
@@ -930,6 +961,118 @@ function assertReviewUpdateCurrentizedPayload(
   }
 }
 
+
+function verifyCurrentizeOnlyReplayAgainstCurrent(manifest, request, currentMain, {
+  runner = defaultRunner,
+} = {}) {
+  const worktree = manifest.workspace.worktree;
+  const originalBase = reviewUpdateMergeBase(
+    runner, worktree, request.expected_old_head, currentMain);
+  const originalPaths = reviewUpdateOriginalPaths(
+    runner, worktree, originalBase, request.expected_old_head);
+  if (!same(originalPaths, request.expected_paths)) {
+    throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_ORIGINAL_PATH_CONFLICT']);
+  }
+  const originalPatch = git(runner, worktree, [
+    'diff', '--binary', '--no-ext-diff', '--no-textconv', '-M',
+    originalBase, request.expected_old_head, '--',
+  ]);
+  if (!originalPatch) {
+    throw new OwnerError('BLOCKED', ['CURRENTIZE_ONLY_ORIGINAL_PR_PATCH_MISSING']);
+  }
+  const originalPatchId = patchId(runner, worktree, originalPatch);
+  const expected = reviewUpdateExpectedChangedPaths(
+    runner, worktree, request, request.expected_old_head, currentMain, originalPaths);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-currentize-only-replay-'));
+  const indexFile = path.join(dir, 'index');
+  const env = {...safeChildEnv(), GIT_INDEX_FILE:indexFile};
+  try {
+    runChecked(runner, 'git', ['-C', worktree, 'read-tree', currentMain],
+      {env}, 'CURRENTIZE_ONLY_REPLAY_READ_TREE_FAILED');
+    runChecked(runner, 'git', ['-C', worktree, 'apply', '--cached', '--check', '-'],
+      {env, input:originalPatch}, 'CURRENTIZE_ONLY_REPLAY_CHECK_FAILED');
+    runChecked(runner, 'git', ['-C', worktree, 'apply', '--cached', '-'],
+      {env, input:originalPatch}, 'CURRENTIZE_ONLY_REPLAY_FAILED');
+    for (const item of originalPaths) {
+      const replayed = indexEntry(runner, worktree, item, env);
+      const wanted = treeEntry(runner, worktree, request.expected_old_head, item);
+      if (!same(replayed, wanted)) {
+        throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_REPLAY_BLOB_MODE_CONFLICT']);
+      }
+    }
+    const replayPaths = candidatePathsFromNameStatus(git(runner, worktree,
+      ['diff', '--cached', '--name-status', '-z', '-M', currentMain, '--'], {env}),
+    {allowEmpty:true});
+    if (!same(replayPaths, expected.changed)) {
+      throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_REPLAY_PATH_CONFLICT']);
+    }
+    const replayDiff = git(runner, worktree, [
+      'diff', '--cached', '--no-ext-diff', '--no-textconv', '-M', currentMain, '--',
+    ], {env});
+    const replayPatchId = replayDiff ? patchId(runner, worktree, replayDiff) : '';
+    if (replayPatchId !== originalPatchId) {
+      throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_REPLAY_PATCH_ID_CONFLICT']);
+    }
+    return {patchId:originalPatchId, currentMain, originalBase, originalPaths, replayPaths};
+  } finally {
+    try { fs.rmSync(dir, {recursive:true, force:true}); } catch {}
+  }
+}
+
+function assertCurrentizeOnlyCurrentizedPayload(
+  runner, manifest, request, currentMain, finalHead) {
+  return assertReviewUpdateCurrentizedPayload(
+    runner, manifest, request, request.expected_old_head, currentMain, finalHead);
+}
+
+function classifyCurrentizeOnlyState(manifest, request, prRequest, currentMain, {
+  profile = DEFAULT_PROFILE, runner = defaultRunner,
+} = {}) {
+  const worktree = manifest.workspace.worktree;
+  let real;
+  try { real = fs.realpathSync(worktree); }
+  catch { throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_WORKTREE_MISSING']); }
+  if (real !== worktree) throw new OwnerError('CONFLICT', ['WORKTREE_ALIAS_DENIED']);
+  const top = git(runner, worktree, ['rev-parse', '--show-toplevel']).trim();
+  const branch = git(runner, worktree, ['branch', '--show-current']).trim();
+  const head = git(runner, worktree, ['rev-parse', 'HEAD']).trim();
+  if (top !== worktree || branch !== manifest.workspace.branch || !SHA40_RE.test(head)) {
+    throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_WORKSPACE_IDENTITY_CONFLICT']);
+  }
+  const unmerged = nulPaths(git(runner, worktree,
+    ['diff', '--name-only', '--diff-filter=U', '-z', '--']));
+  const unstaged = nulPaths(git(runner, worktree, ['diff', '--name-only', '-z', '--']));
+  const untracked = nulPaths(git(runner, worktree,
+    ['ls-files', '--others', '--exclude-standard', '-z']));
+  const staged = reviewUpdateStagedPaths(runner, worktree);
+  if (unmerged.length || unstaged.length || untracked.length || staged.length) {
+    throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_SOURCE_DELTA_FORBIDDEN']);
+  }
+  const remoteHead = remoteBranchHead(runner, profile.landing, manifest.workspace.branch);
+  if (!remoteHead) throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_REMOTE_BRANCH_MISSING']);
+  const pr = readExistingReviewPr(runner, manifest, prRequest);
+  if (head === request.expected_old_head) {
+    if (remoteHead !== request.expected_old_head || pr.headRefOid !== request.expected_old_head) {
+      throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_OLD_HEAD_IDENTITY_CONFLICT']);
+    }
+    return {state:'READY', finalHead:null, remoteHead, pr};
+  }
+  const parents = git(runner, worktree,
+    ['rev-list', '--parents', '-n', '1', head]).trim().split(/\s+/);
+  if (parents.length !== 3 || parents[1] !== request.expected_old_head
+      || parents[2] !== currentMain) {
+    throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_HEAD_SHAPE_CONFLICT']);
+  }
+  assertCurrentizeOnlyCurrentizedPayload(runner, manifest, request, currentMain, head);
+  if (remoteHead === head && pr.headRefOid === head) {
+    return {state:'PUSHED', finalHead:head, remoteHead, pr};
+  }
+  if (remoteHead === request.expected_old_head && pr.headRefOid === request.expected_old_head) {
+    return {state:'CURRENTIZED', finalHead:head, remoteHead, pr};
+  }
+  throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_REMOTE_PR_HEAD_CONFLICT']);
+}
+
 function preparedDiff(runner, worktree) {
   const text = git(runner, worktree, ['diff', '--cached', '--binary', '--']);
   if (!text || Buffer.byteLength(text, 'utf8') > MAX_PATCH_BYTES) {
@@ -1376,6 +1519,90 @@ function executeReviewUpdate(context, request, patchBytes, prRequest, {
   });
 }
 
+
+function executeCurrentizeOnly(context, request, prRequest, {
+  profile = DEFAULT_PROFILE, runner = defaultRunner, env = process.env, root = ROOT,
+} = {}) {
+  const {manifest} = context;
+  if (request.packet_ref !== manifest.packetRef) {
+    throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_PACKET_CONFLICT']);
+  }
+  if (manifest.observedBaseSha !== request.expected_old_head) {
+    throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_MANIFEST_OLD_HEAD_CONFLICT']);
+  }
+  if (!same(request.expected_paths, manifestPathScopes(manifest))) {
+    throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_SCOPE_CONFLICT']);
+  }
+  holderCheck(context, env);
+  const currentMain = reviewUpdateCurrentMain(manifest, {profile, runner});
+  if (currentMain === request.expected_old_head) {
+    throw new OwnerError('BLOCKED', ['CURRENTIZATION_NOT_REQUIRED']);
+  }
+  let state = classifyCurrentizeOnlyState(
+    manifest, request, prRequest, currentMain, {profile, runner});
+  const oldPrNumber = state.pr.number;
+  if (state.state !== 'PUSHED') {
+    requireGithubWorkflowPushCredential(
+      request.expected_paths, manifest.workspace.worktree, {runner});
+  }
+  let replay = null;
+  let checks = [];
+  if (state.state === 'READY') {
+    replay = verifyCurrentizeOnlyReplayAgainstCurrent(
+      manifest, request, currentMain, {runner});
+    checks = runContinuationValidation(manifest, request, {runner, root});
+    holderCheck(context, env);
+    if (reviewUpdateCurrentMain(manifest, {profile, runner}) !== currentMain) {
+      throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_MAIN_CHANGED']);
+    }
+    runChecked(runner, 'git', [
+      '-C', manifest.workspace.worktree,
+      '-c', 'user.name=' + FIXED_BOT_NAME,
+      '-c', 'user.email=' + FIXED_BOT_EMAIL,
+      'merge', '--no-ff', '--no-edit', currentMain,
+    ], {}, 'CURRENTIZE_ONLY_MERGE_FAILED');
+    state = classifyCurrentizeOnlyState(
+      manifest, request, prRequest, currentMain, {profile, runner});
+  }
+  if (state.state === 'CURRENTIZED' && !replay) {
+    replay = verifyCurrentizeOnlyReplayAgainstCurrent(
+      manifest, request, currentMain, {runner});
+    checks = runContinuationValidation(manifest, request, {runner, root});
+  }
+  if (state.state === 'CURRENTIZED') {
+    holderCheck(context, env);
+    if (reviewUpdateCurrentMain(manifest, {profile, runner}) !== currentMain) {
+      throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_MAIN_CHANGED']);
+    }
+    pushExactCandidate(runner, manifest.workspace.worktree, state.finalHead,
+      manifest.workspace.branch, request.expected_paths);
+    state = classifyCurrentizeOnlyState(
+      manifest, request, prRequest, currentMain, {profile, runner});
+  }
+  if (state.state !== 'PUSHED') {
+    throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_STATE_UNSUPPORTED']);
+  }
+  if (state.pr.number !== oldPrNumber) {
+    throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_PR_NUMBER_CHANGED']);
+  }
+  holderCheck(context, env);
+  return output('PASS', [], {
+    route:manifest.route,
+    executor:manifest.executor,
+    base_sha:request.expected_old_head,
+    current_main:currentMain,
+    branch:manifest.workspace.branch,
+    changed_paths:request.expected_paths,
+    replay_patch_id:replay?.patchId || null,
+    candidate_head:request.expected_old_head,
+    new_head:state.finalHead,
+    currentized:true,
+    pr_number:state.pr.number,
+    validation_checks:checks,
+    next_legal_action:'RELEASE_D013_THEN_RELEASE_HOLDER_THEN_D014_COMPLETE',
+  });
+}
+
 function executePreparedContinuation(context, request, prRequest, {profile = DEFAULT_PROFILE, runner = defaultRunner, env = process.env, root = ROOT} = {}) {
   const {manifest} = context;
   validatePreparedContinuationManifestBinding(manifest, request);
@@ -1626,6 +1853,7 @@ function parseArgs(argv) {
     'prepare-workspace': new Set(['manifest','ledger','packet']),
     apply: new Set(['manifest','ledger','packet','request','patch','pr-request']),
     'review-update': new Set(['manifest','ledger','packet','review-update-request','patch','pr-request']),
+    'currentize-only': new Set(['manifest','ledger','packet','currentize-only-request','pr-request']),
     'continue-prepared': new Set(['manifest','ledger','packet','continuation-request','pr-request']),
   };
   if (!allowedByOperation[operation]) throw new OwnerError('UNKNOWN', ['OPERATION_UNSUPPORTED']);
@@ -1691,6 +1919,17 @@ function runCli(argv = process.argv.slice(2), env = process.env, options = {}) {
     const request = parseReviewUpdateRequestText(requestBytes.toString('utf8'));
     const prRequest = parsePrRequestText(prBytes.toString('utf8'), request.packet_ref);
     result = executeReviewUpdate(context, request, patchBytes, prRequest, {...options, env});
+  } else if (operation === 'currentize-only') {
+    if (!apply) throw new OwnerError('BLOCKED', ['APPLY_FLAG_REQUIRED']);
+    for (const key of ['currentize-only-request', 'pr-request']) {
+      if (!values[key]) throw new OwnerError('UNKNOWN', ['ARGUMENT_REQUIRED:' + key]);
+    }
+    const requestBytes = readRegular(
+      values['currentize-only-request'], 'CURRENTIZE_ONLY_REQUEST_FILE');
+    const prBytes = readRegular(values['pr-request'], 'PR_REQUEST_FILE');
+    const request = parseCurrentizeOnlyRequestText(requestBytes.toString('utf8'));
+    const prRequest = parsePrRequestText(prBytes.toString('utf8'), request.packet_ref);
+    result = executeCurrentizeOnly(context, request, prRequest, {...options, env});
   } else if (operation === 'continue-prepared') {
     if (!apply) throw new OwnerError('BLOCKED', ['APPLY_FLAG_REQUIRED']);
     for (const key of ['continuation-request', 'pr-request']) {
@@ -1725,6 +1964,7 @@ module.exports = {
   BLOCKER_REPAIR_REF_PREFIX,
   CONTINUATION_REQUEST_SCHEMA,
   REVIEW_UPDATE_REQUEST_SCHEMA,
+  CURRENTIZE_ONLY_REQUEST_SCHEMA,
   DEFAULT_PROFILE,
   FALSE_AUTHORITY,
   FIXED_BOT_EMAIL,
@@ -1745,6 +1985,7 @@ module.exports = {
   candidatePathsFromStagedDiff,
   classifyPreparedContinuationState,
   classifyReviewUpdateState,
+  classifyCurrentizeOnlyState,
   continuationCurrentMain,
   reviewUpdateCurrentMain,
   reviewUpdateMergeBase,
@@ -1752,9 +1993,12 @@ module.exports = {
   reviewUpdateExpectedChangedPaths,
   verifyReviewUpdateReplayAgainstCurrent,
   assertReviewUpdateCurrentizedPayload,
+  verifyCurrentizeOnlyReplayAgainstCurrent,
+  assertCurrentizeOnlyCurrentizedPayload,
   executeApply,
   executePreparedContinuation,
   executeReviewUpdate,
+  executeCurrentizeOnly,
   fixedValidationChecks,
   inspect,
   inspectLanding,
@@ -1764,6 +2008,7 @@ module.exports = {
   parseArgs,
   parsePreparedContinuationRequestText,
   parseReviewUpdateRequestText,
+  parseCurrentizeOnlyRequestText,
   parseManifestText,
   parsePrRequestText,
   parseRequestText,

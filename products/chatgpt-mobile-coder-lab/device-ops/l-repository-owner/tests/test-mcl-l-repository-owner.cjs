@@ -1249,3 +1249,102 @@ test('review-update effect stays same-PR non-force and current-main replay bound
 });
 
 console.log('REVIEW_UPDATE_TESTS_PASS', passed);
+
+
+test('currentize-only request and CLI reject any patch surface', () => {
+  const value = owner.parseCurrentizeOnlyRequestText(JSON.stringify({
+    schema:owner.CURRENTIZE_ONLY_REQUEST_SCHEMA,
+    packet_ref:'#9001',
+    expected_old_head:'a'.repeat(40),
+    expected_paths:['z/run.sh','a/readme.md'],
+  }));
+  assert.equal(value.expected_old_head,'a'.repeat(40));
+  assert.deepEqual(value.expected_paths,['a/readme.md','z/run.sh']);
+  expectReason(() => owner.parseCurrentizeOnlyRequestText(JSON.stringify({
+    ...value, patch_sha256:'b'.repeat(64),
+  })), 'CURRENTIZE_ONLY_REQUEST_FIELDS_INVALID');
+  const parsed = owner.parseArgs([
+    'currentize-only','--manifest','m','--ledger','l','--packet','p',
+    '--currentize-only-request','r','--pr-request','pr','--apply',
+  ]);
+  assert.equal(parsed.operation,'currentize-only');
+  assert.equal(parsed.apply,true);
+  expectReason(() => owner.parseArgs([
+    'currentize-only','--manifest','m','--ledger','l','--packet','p',
+    '--currentize-only-request','r','--patch','x','--pr-request','pr','--apply',
+  ]), 'ARGUMENT_UNSUPPORTED:patch');
+});
+
+test('currentize-only replay preserves executable blob and mode identity', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(),'mcl-l-currentize-only-'));
+  try {
+    gitExec(tmp,['init']);
+    gitExec(tmp,['config','user.name','fixture']);
+    gitExec(tmp,['config','user.email','fixture@example.invalid']);
+    fs.writeFileSync(path.join(tmp,'run.sh'),'#!/bin/sh\necho base\n',{mode:0o755});
+    gitExec(tmp,['add','run.sh']);
+    gitExec(tmp,['commit','-m','base']);
+    const base = gitExec(tmp,['rev-parse','HEAD']).trim();
+    gitExec(tmp,['branch','feature']);
+    fs.writeFileSync(path.join(tmp,'main.txt'),'main advance\n');
+    gitExec(tmp,['add','main.txt']);
+    gitExec(tmp,['commit','-m','main advance']);
+    const currentMain = gitExec(tmp,['rev-parse','HEAD']).trim();
+    gitExec(tmp,['switch','feature']);
+    fs.writeFileSync(path.join(tmp,'run.sh'),'#!/bin/sh\necho feature\n');
+    fs.chmodSync(path.join(tmp,'run.sh'),0o755);
+    gitExec(tmp,['add','run.sh']);
+    gitExec(tmp,['commit','-m','feature']);
+    const oldHead = gitExec(tmp,['rev-parse','HEAD']).trim();
+    const request = {
+      schema:owner.CURRENTIZE_ONLY_REQUEST_SCHEMA,
+      packet_ref:'#9001',
+      expected_old_head:oldHead,
+      expected_paths:['run.sh'],
+    };
+    const m = manifest({
+      packetRef:'#9001',
+      workspace:{kind:'repository',branch:'laptop/task-9001',worktree:tmp},
+      observedBaseSha:oldHead,
+      scopes:['path:run.sh','surface:mcl:test'],
+    });
+    const runner = (command,args,options={}) => {
+      const cp=childProcess.spawnSync(command,args,{
+        cwd:options.cwd,encoding:'utf8',input:options.input,
+        env:options.env || process.env,shell:false,
+      });
+      return {code:cp.status ?? 1,stdout:cp.stdout || '',stderr:cp.stderr || '',
+        signal:cp.signal || null,error:cp.error || null};
+    };
+    const replay = owner.verifyCurrentizeOnlyReplayAgainstCurrent(
+      m,request,currentMain,{runner});
+    assert.equal(replay.originalBase,base);
+    assert.deepEqual(replay.originalPaths,['run.sh']);
+    assert.deepEqual(replay.replayPaths,['run.sh']);
+    gitExec(tmp,['-c','user.name=' + owner.FIXED_BOT_NAME,
+      '-c','user.email=' + owner.FIXED_BOT_EMAIL,
+      'merge','--no-ff','--no-edit',currentMain]);
+    const finalHead = gitExec(tmp,['rev-parse','HEAD']).trim();
+    assert.doesNotThrow(() => owner.assertCurrentizeOnlyCurrentizedPayload(
+      runner,m,request,currentMain,finalHead));
+    const mode = gitExec(tmp,['ls-tree',finalHead,'--','run.sh']).trim().split(/\s+/)[0];
+    assert.equal(mode,'100755');
+    assert.match(fs.readFileSync(path.join(tmp,'run.sh'),'utf8'),/echo feature/);
+    assert.equal(fs.readFileSync(path.join(tmp,'main.txt'),'utf8'),'main advance\n');
+  } finally {
+    fs.rmSync(tmp,{recursive:true,force:true});
+  }
+});
+
+test('currentize-only effect contains no source-delta commit path', () => {
+  const source = fs.readFileSync(path.resolve(__dirname,'../mcl-l-repository-owner.cjs'),'utf8');
+  const start = source.indexOf('function executeCurrentizeOnly(');
+  const end = source.indexOf('function executePreparedContinuation(',start);
+  assert.ok(start>=0&&end>start);
+  const block = source.slice(start,end);
+  assert.ok(block.includes('verifyCurrentizeOnlyReplayAgainstCurrent('));
+  assert.ok(block.includes("'merge', '--no-ff', '--no-edit', currentMain"));
+  assert.ok(block.includes('pushExactCandidate('));
+  assert.equal(block.includes("'apply', '--index'"),false);
+  assert.equal(block.includes("'commit', '-m'"),false);
+});

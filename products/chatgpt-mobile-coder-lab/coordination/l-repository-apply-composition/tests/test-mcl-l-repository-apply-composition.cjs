@@ -109,6 +109,7 @@ checkHolder(_f,claim){events.push('holder-check');assert.equal(claim,CLAIM);retu
 releaseLease(){events.push('release-lease');return {ok:true,value:{evidenceRef:'run:202',observedGeneration:11}};},
 releaseHolder(_f,claim){events.push('holder-release');assert.equal(claim,CLAIM);return {status:'RELEASED',reasonCodes:[]};},
 reviewUpdateInspect(){events.push('review-update-inspect');return {state:'READY'};},
+currentizeOnlyInspect(){events.push('currentize-only-inspect');return {state:'READY'};},
 writeActivation(_m,value){events.push('write-activation');activation=structuredClone(value);return structuredClone(activation);},
 readActivation(){events.push('read-activation');if(!activation)throw new owner.CompositionError('BLOCKED',['ACTIVATION_MISSING']);return structuredClone(activation);},
 removeActivation(){events.push('remove-activation');activation=null;},
@@ -1098,4 +1099,64 @@ test('t26',()=>{
 const s=fs.readFileSync(path.join(__dirname,'../mcl-l-repository-apply-composition.cjs'),'utf8');
 for(const x of ["execSync(","pr', 'create","gh pr merge","gitRead(manifest.workspace.worktree, ['push'","gitRead(manifest.workspace.worktree, ['commit'","gitRead(manifest.workspace.worktree, ['merge'","gitRead(manifest.workspace.worktree, ['reset'","gitRead(manifest.workspace.worktree, ['stash'","gitRead(manifest.workspace.worktree, ['clean'","process.kill","fetch("])assert.ok(!s.includes(x),x);
 for(const x of ["childProcess.spawnSync('git'","lOwner.runCli","workspaceHolder.claimHolder","stageEntry.releaseRepositoryLease","taskHandoff.buildCompletionReceipt","fs.fsyncSync(fd)","fs.fsyncSync(dirFd)","releaseEvidenceRef = 'issue:#2352'","finalizeRecovery.RecoveryError"])assert.ok(s.includes(x),x);
+});
+
+
+test('t36 currentize-only parser accepts no patch argument', () => {
+const parsed=owner.parseArgs([
+'currentize-only','--packet','#3525','--manifest','m',
+'--currentize-only-request','r','--pr-request','pr','--apply',
+]);
+assert.equal(parsed.operation,'currentize-only');
+assert.equal(parsed.requestFile,'r');
+assert.equal(parsed.patchFile,null);
+assert.throws(
+()=>owner.parseArgs([
+'currentize-only','--packet','#3525','--manifest','m',
+'--currentize-only-request','r','--patch','x','--pr-request','pr','--apply',
+]),
+(error)=>error.reasonCodes.includes('ARGUMENT_UNSUPPORTED_OR_DUPLICATE:patch')
+);
+});
+
+test('t37 currentize-only composes holder and same-PR publication without patch', () => {
+const files=fixtureFiles();
+fs.writeFileSync(files.args.requestFile,JSON.stringify({
+schema:'mcl-l-currentize-only-request.v1',
+packet_ref:PACKET_REF,
+expected_old_head:BASE,
+expected_paths:PATHS,
+}));
+files.args.operation='currentize-only';
+files.args.patchFile=null;
+const state=baseDeps(files,{
+currentizeOnlyInspect(input){
+state.events.push('currentize-only-inspect');
+assert.equal(input.request.expected_old_head,BASE);
+assert.deepEqual(input.request.expected_paths,[...PATHS].sort());
+return {state:'READY'};
+},
+ownerRunCli(argv,env){
+state.events.push('owner-currentize-only');
+assert.equal(argv[0],'currentize-only');
+assert.ok(argv.includes('--currentize-only-request'));
+assert.equal(argv.includes('--patch'),false);
+assert.equal(env[holder.CLAIM_ENV],CLAIM);
+return {code:0,text:JSON.stringify({
+status:'PASS',reason_codes:[],new_head:HEAD,pr_number:4001,
+next_legal_action:'RELEASE_D013_THEN_RELEASE_HOLDER_THEN_D014_COMPLETE',
+})+'\n'};
+},
+});
+const out=owner.executeComposition(files.args,state.deps);
+assert.equal(out.status,'PASS');
+assert.equal(state.getActivation().effectOperation,'currentize-only');
+assert.ok(state.events.indexOf('currentize-only-inspect')<state.events.indexOf('holder-claim'));
+assert.ok(state.events.indexOf('holder-claim')<state.events.indexOf('owner-currentize-only'));
+const row=state.comments.find((x)=>x.id===out.completionCommentId);
+const receipt=handoff.parseCompletionReceipt(row.body);
+assert.equal(receipt.status,'VALID');
+assert.ok(receipt.value.validationRefs.includes(
+'receipt:mcl-l-repository-owner:currentize-only:'
++files.manifestText.match(/"manifestId": "([0-9a-f]{64})"/)[1]));
 });

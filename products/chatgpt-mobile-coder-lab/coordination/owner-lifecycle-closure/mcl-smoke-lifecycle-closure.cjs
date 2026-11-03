@@ -144,13 +144,27 @@ function classifyEphemeralTerminal(input, list) {
   return receipt(input, "PASS", "ZERO_RESIDUE_TERMINAL");
 }
 
-function classifyPreservedTerminal(input, list) {
-  const evidence = refs(input.durableEvidenceRefs, "durableEvidenceRefs");
-  if (!evidence.length || typeof input.retentionReason !== "string" || !input.retentionReason.trim()
-      || input.retirementPolicyReviewed !== true) {
+function classifyPreservationPolicy(input) {
+  let evidence;
+  try {
+    evidence = refs(input.durableEvidenceRefs, "durableEvidenceRefs");
+  } catch (_) {
     return receipt(input, "UNKNOWN", "PRESERVATION_POLICY_EVIDENCE_UNKNOWN", ["SMOKE_PRESERVATION_POLICY_EVIDENCE_UNKNOWN"]);
   }
-  text(input.retentionReason, "retentionReason", 500);
+  const reasonValid = typeof input.retentionReason === "string"
+    && input.retentionReason.trim().length > 0
+    && input.retentionReason.length <= 500;
+  const reviewed = input.retirementPolicyReviewed;
+  if (!evidence.length || !reasonValid || typeof reviewed !== "boolean") {
+    return receipt(input, "UNKNOWN", "PRESERVATION_POLICY_EVIDENCE_UNKNOWN", ["SMOKE_PRESERVATION_POLICY_EVIDENCE_UNKNOWN"]);
+  }
+  if (reviewed === false) {
+    return receipt(input, "BLOCKED", "PRESERVATION_POLICY_MISSING", ["SMOKE_PRESERVATION_POLICY_MISSING"]);
+  }
+  return receipt(input, "PASS", "PRESERVATION_POLICY_COVERED", [], {durableEvidenceRefs: evidence});
+}
+
+function classifyPreservedAssets(input, list) {
   const states = list.map((asset) => asset.retainedIdentityState);
   if (states.includes("CONFLICT")) {
     return receipt(input, "CONFLICT", "RETAINED_IDENTITY_CONFLICT", ["SMOKE_RETAINED_IDENTITY_CONFLICT"]);
@@ -164,7 +178,17 @@ function classifyPreservedTerminal(input, list) {
       affectedAssets: missing.map((a) => ({kind: a.kind, identity: a.identity})),
     });
   }
-  return receipt(input, "PASS", "EVIDENCE_PRESERVED_TERMINAL", [], {durableEvidenceRefs: evidence});
+  return receipt(input, "PASS", "PRESERVED_ASSET_IDENTITY_CURRENT");
+}
+
+function classifyPreservedTerminal(input, list) {
+  const policy = classifyPreservationPolicy(input);
+  const asset = classifyPreservedAssets(input, list);
+  const result = stronger(policy, asset);
+  if (result.result !== "PASS") return result;
+  return receipt(input, "PASS", "EVIDENCE_PRESERVED_TERMINAL", [], {
+    durableEvidenceRefs: refs(input.durableEvidenceRefs, "durableEvidenceRefs"),
+  });
 }
 
 function classifyTerminal(input, list) {

@@ -136,6 +136,42 @@ r = classify(preserved("TERMINAL", [
 assert.equal(r.result, "CONFLICT");
 assert.equal(r.classification, "RETAINED_IDENTITY_CONFLICT");
 
+// Retained-identity conflict outranks missing preservation-policy evidence.
+r = classify({
+  schema:"mcl-smoke-lifecycle-closure-input.v1",
+  checkpoint:"TERMINAL",
+  retentionMode:"EVIDENCE_PRESERVED",
+  assets:[{kind:"worktree", identity:"historical", retainedIdentityState:"CONFLICT"}],
+  coordinationState:"CONVERGED",
+  baselineState:"PRESERVED",
+  foreignResidueState:"NONE",
+});
+assert.equal(r.result, "CONFLICT");
+assert.equal(r.classification, "RETAINED_IDENTITY_CONFLICT");
+
+r = classify({
+  schema:"mcl-smoke-lifecycle-closure-input.v1",
+  checkpoint:"TERMINAL",
+  retentionMode:"EVIDENCE_PRESERVED",
+  assets:[{kind:"worktree", identity:"historical", retainedIdentityState:"CURRENT"}],
+  coordinationState:"CONVERGED",
+  baselineState:"PRESERVED",
+  foreignResidueState:"NONE",
+});
+assert.equal(r.result, "UNKNOWN");
+assert.equal(r.classification, "PRESERVATION_POLICY_EVIDENCE_UNKNOWN");
+
+r = classify(preserved("TERMINAL", [
+  {kind:"worktree", identity:"historical", retainedIdentityState:"CURRENT"},
+], {
+  coordinationState:"CONVERGED",
+  baselineState:"PRESERVED",
+  foreignResidueState:"NONE",
+  retirementPolicyReviewed:false,
+}));
+assert.equal(r.result, "BLOCKED");
+assert.equal(r.classification, "PRESERVATION_POLICY_MISSING");
+
 r = classify(ephemeral("PREFLIGHT", [{kind:"worktree", identity:"x", retirementOwnerReviewed:true}], {evidenceState:"UNKNOWN"}));
 assert.equal(r.result, "UNKNOWN");
 r = classify(ephemeral("PREFLIGHT", [{kind:"worktree", identity:"x", retirementOwnerReviewed:true}], {evidenceState:"CONFLICT"}));

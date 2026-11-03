@@ -2612,3 +2612,64 @@ test('runCli rejects unsupported selectors before any live owner call', () => {
   assert.equal(out.result.status, 'UNKNOWN');
   assert.ok(out.result.reasonCodes.length > 0);
 });
+
+
+function fixedImplementationReceiptFixture(target, digest = target.implementationReceiptDigest) {
+  const requiredGates = Array.isArray(target.requiredCoordinationGates)
+    ? target.requiredCoordinationGates.map((name) => ({
+      name, result: 'PASS', evidenceLocator: 'fixture:' + name,
+    }))
+    : Object.entries(target.requiredGateResults || {}).map(([name, result]) => ({
+      name, result, evidenceLocator: 'fixture:' + name,
+    }));
+  return {
+    stage: 'IMPLEMENTATION_PR',
+    packetNumber: target.packet,
+    status: 'PASS',
+    nextLegalAction: 'VALIDATION_MERGE',
+    receiptDigest: digest,
+    authorityRefs: [{
+      kind: 'PR',
+      locator: 'pr:#' + target.pr,
+      identity: target.candidate,
+    }],
+    requiredGates,
+    scope: {
+      paths: target.paths ? [...target.paths] : ['products/example.txt'],
+      diffRequired: true,
+      diffIdentity: target.diffIdentity || '1'.repeat(64),
+    },
+  };
+}
+
+test('fixed implementation selector collapses identical current-candidate receipt replay', () => {
+  const target = owner.TARGET_3203;
+  const receipt = fixedImplementationReceiptFixture(target);
+  const selected = owner.select2786ImplementationReceipt([
+    {receipt, comment: {id: 1}},
+    {receipt: structuredClone(receipt), comment: {id: 2}},
+  ], {head: {sha: target.candidate}}, target);
+  assert.equal(selected.comment.id, 1);
+});
+
+test('fixed implementation selector rejects distinct current-candidate receipt digests', () => {
+  const target = owner.TARGET_3203;
+  const expected = fixedImplementationReceiptFixture(target);
+  const conflicting = fixedImplementationReceiptFixture(target, 'f'.repeat(64));
+  assert.throws(() => owner.select2786ImplementationReceipt([
+    {receipt: expected, comment: {id: 1}},
+    {receipt: conflicting, comment: {id: 2}},
+  ], {head: {sha: target.candidate}}, target), (error) =>
+    error?.kind === 'CONFLICT'
+    && error?.reasonCodes?.includes('IMPLEMENTATION_RECEIPT_AMBIGUOUS'));
+});
+
+test('3356 selector also collapses identical current-candidate receipt replay', () => {
+  const target = owner.TARGET_3356;
+  const receipt = fixedImplementationReceiptFixture(target);
+  const selected = owner.select3356ImplementationReceipt([
+    {receipt, comment: {id: 11}},
+    {receipt: structuredClone(receipt), comment: {id: 12}},
+  ], {head: {sha: target.candidate}}, target);
+  assert.equal(selected.comment.id, 11);
+});

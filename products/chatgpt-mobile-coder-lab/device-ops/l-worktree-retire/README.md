@@ -19,6 +19,9 @@ It is not a garbage collector, sweeper, retention policy, arbitrary Git wrapper,
 fresh external packet / overlap / D-013 cleanup reservation
 -> inspect exact clean registered worktree
 -> prove exact branch / HEAD / local ref / remote ref
+-> reject assume-unchanged / skip-worktree tracked state that can hide local changes
+-> prove the selected branch is registered by this worktree only
+-> bind fetch and push to one exact canonical origin URL with no alternate push destination
 -> prove workspace holder absent
 -> snapshot L landing branch / HEAD / index / status / FETCH_HEAD
 -> ordinary non-force worktree remove
@@ -41,4 +44,4 @@ python3 mcl-l-worktree-retire apply --target <basename> --expected-head <40hex> 
 
 `inspect` is read-only. `apply` requires the explicit `--apply` boundary and repeats all identity/clean/holder checks before the first effect.
 
-All receipts are bounded and authority-false. Any identity movement, dirty state, holder presence, remote ambiguity, delete rejection, or landing drift remains BLOCKED.
+All receipts are bounded and authority-false. Any identity movement, dirty or hidden-index state, duplicate branch registration, remote URL/push-destination ambiguity, holder presence, delete rejection, or landing drift remains BLOCKED.

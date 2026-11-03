@@ -45,6 +45,7 @@ class Contract(unittest.TestCase):
             "worktree_root": str(self.worktrees),
             "branch_prefix": "laptop/",
             "remote": "origin",
+            "origin_url": str(self.remote),
         }
 
     def tearDown(self):
@@ -75,6 +76,41 @@ class Contract(unittest.TestCase):
         out = mod.apply_target("case", self.head, profile=self.profile)
         self.assertEqual(out["status"], "BLOCKED")
         self.assertIn("EXPLICIT_APPLY_REQUIRED", out["reasonCodes"])
+
+    def test_hidden_index_state_blocks(self):
+        run("git", "-C", str(self.target), "update-index", "--assume-unchanged", "a.txt")
+        (self.target / "a.txt").write_text("hidden\n")
+        row = mod.inspect_target("case", self.head, profile=self.profile)
+        self.assertIn("WORKTREE_ASSUME_UNCHANGED", row["reasons"])
+        run("git", "-C", str(self.target), "update-index", "--no-assume-unchanged", "a.txt")
+        run("git", "-C", str(self.target), "checkout", "--", "a.txt")
+        run("git", "-C", str(self.target), "update-index", "--skip-worktree", "a.txt")
+        (self.target / "a.txt").write_text("hidden-skip\n")
+        row = mod.inspect_target("case", self.head, profile=self.profile)
+        self.assertIn("WORKTREE_SKIP_WORKTREE", row["reasons"])
+
+    def test_distinct_pushurl_blocks_before_removal(self):
+        other_remote = self.root / "other.git"
+        run("git", "init", "--bare", str(other_remote))
+        run("git", "-C", str(self.control), "config", "remote.origin.pushurl", str(other_remote))
+        row = mod.inspect_target("case", self.head, profile=self.profile)
+        self.assertIn("REMOTE_URL_BINDING_CONFLICT", row["reasons"])
+        out = mod.apply_target("case", self.head, explicit_apply=True, profile=self.profile)
+        self.assertEqual(out["status"], "BLOCKED")
+        self.assertTrue(self.target.exists())
+        self.assertEqual(mod._remote_head(self.profile, "laptop/case"), ("PRESENT", self.head))
+
+    def test_other_worktree_on_target_branch_blocks(self):
+        other = self.worktrees / "other-case"
+        run("git", "-C", str(self.control), "worktree", "add", "--force", str(other), "laptop/case")
+        row = mod.inspect_target("case", self.head, profile=self.profile)
+        self.assertIn("BRANCH_REGISTERED_ELSEWHERE", row["reasons"])
+        out = mod.apply_target("case", self.head, explicit_apply=True, profile=self.profile)
+        self.assertEqual(out["status"], "BLOCKED")
+        self.assertTrue(self.target.exists())
+        self.assertTrue(other.exists())
+        self.assertEqual(mod._local_head(self.profile, "laptop/case"), self.head)
+        self.assertEqual(mod._remote_head(self.profile, "laptop/case"), ("PRESENT", self.head))
 
     def test_success_removes_worktree_and_both_refs(self):
         before = mod._landing_snapshot(self.profile)

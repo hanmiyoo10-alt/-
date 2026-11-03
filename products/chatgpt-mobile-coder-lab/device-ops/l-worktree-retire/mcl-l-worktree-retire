@@ -12,6 +12,7 @@ CONTROL = "/home/alsl0/nyang-repo"
 WORKTREE_ROOT = "/home/alsl0/nyang-worktrees"
 BRANCH_PREFIX = "laptop/"
 REMOTE = "origin"
+CANONICAL_ORIGIN = "https://github.com/hanmiyoo10-alt/-.git"
 HOLDER_FILE = "mcl-workspace-holder.v1.json"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 TARGET_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -43,6 +44,7 @@ def _profile(overrides=None):
         "worktree_root": WORKTREE_ROOT,
         "branch_prefix": BRANCH_PREFIX,
         "remote": REMOTE,
+        "origin_url": CANONICAL_ORIGIN,
     }
     if overrides:
         value.update(overrides)
@@ -100,9 +102,21 @@ def _local_head(profile, branch):
     value = result.stdout.strip()
     return value if result.returncode == 0 and SHA_RE.fullmatch(value) else None
 
+def _remote_binding_reasons(profile):
+    fetch = _git(profile["control"], "remote", "get-url", "--all", profile["remote"], check=False)
+    push = _git(profile["control"], "remote", "get-url", "--push", "--all", profile["remote"], check=False)
+    if fetch.returncode != 0 or push.returncode != 0:
+        return ["REMOTE_URL_READ_FAILED"]
+    fetch_urls = [line for line in fetch.stdout.splitlines() if line]
+    push_urls = [line for line in push.stdout.splitlines() if line]
+    expected = profile["origin_url"]
+    if fetch_urls != [expected] or push_urls != [expected]:
+        return ["REMOTE_URL_BINDING_CONFLICT"]
+    return []
+
 def _remote_head(profile, branch):
     ref = f"refs/heads/{branch}"
-    result = _git(profile["control"], "ls-remote", "--heads", profile["remote"], ref, check=False)
+    result = _git(profile["control"], "ls-remote", "--heads", profile["origin_url"], ref, check=False)
     if result.returncode != 0:
         return "ERROR", None
     rows = [line for line in result.stdout.splitlines() if line.strip()]
@@ -134,6 +148,18 @@ def _status_reasons(target):
                 reasons.append("WORKTREE_STAGED")
             if code[1] != " ":
                 reasons.append("WORKTREE_TRACKED_DIRTY")
+    visible = _git(target, "ls-files", "-v", "-z", "--", check=False)
+    if visible.returncode != 0:
+        reasons.append("WORKTREE_INDEX_FLAGS_READ_FAILED")
+    else:
+        for entry in visible.stdout.split("\0"):
+            if not entry:
+                continue
+            tag = entry[0]
+            if tag.islower():
+                reasons.append("WORKTREE_ASSUME_UNCHANGED")
+            elif tag == "S":
+                reasons.append("WORKTREE_SKIP_WORKTREE")
     return sorted(set(reasons))
 
 def _file_digest(path):
@@ -191,10 +217,14 @@ def inspect_target(target, expected_head, *, profile=None):
         registered = []
         reasons.append("WORKTREE_REGISTRATION_READ_FAILED")
     matches = [row for row in registered if row.get("worktree") == target_path]
+    branch_ref = f"refs/heads/{branch}"
+    branch_matches = [row for row in registered if row.get("branch") == branch_ref]
     if len(matches) != 1:
         reasons.append("TARGET_NOT_EXACT_REGISTERED_WORKTREE")
-    elif matches[0].get("branch") != f"refs/heads/{branch}":
+    elif matches[0].get("branch") != branch_ref:
         reasons.append("REGISTERED_BRANCH_CONFLICT")
+    if len(branch_matches) != 1 or branch_matches[0].get("worktree") != target_path:
+        reasons.append("BRANCH_REGISTERED_ELSEWHERE")
     if os.path.isdir(target_path):
         top = _git(target_path, "rev-parse", "--show-toplevel", check=False)
         if top.returncode or top.stdout.strip() != target_path:
@@ -219,6 +249,7 @@ def inspect_target(target, expected_head, *, profile=None):
             reasons.append("GIT_ADMIN_READ_FAILED")
         elif os.path.lexists(os.path.join(git_dir.stdout.strip(), HOLDER_FILE)):
             reasons.append("WORKSPACE_HOLDER_PRESENT")
+    reasons.extend(_remote_binding_reasons(profile))
     local_head = _local_head(profile, branch)
     if local_head is None:
         reasons.append("LOCAL_BRANCH_REF_MISSING")
@@ -243,8 +274,11 @@ def _post_worktree_remove(profile, target_path, branch, expected_head):
     if os.path.lexists(target_path):
         reasons.append("POST_REMOVE_TARGET_PRESENT")
     try:
-        if any(row.get("worktree") == target_path for row in _registered(profile["control"])):
+        registered = _registered(profile["control"])
+        if any(row.get("worktree") == target_path for row in registered):
             reasons.append("POST_REMOVE_REGISTRATION_PRESENT")
+        if any(row.get("branch") == f"refs/heads/{branch}" for row in registered):
+            reasons.append("POST_REMOVE_BRANCH_REGISTRATION_PRESENT")
     except Exception:
         reasons.append("POST_REMOVE_REGISTRATION_UNKNOWN")
     local_head = _local_head(profile, branch)
@@ -291,9 +325,14 @@ def apply_target(target, expected_head, *, explicit_apply=False, profile=None,
                         second["remoteHead"], _local_head(profile, branch))
     if before_remote_delete:
         before_remote_delete()
+    binding_reasons = _remote_binding_reasons(profile)
+    if binding_reasons:
+        return _receipt("apply", "BLOCKED", target, expected_head, binding_reasons,
+                        second["observedBranch"], second["observedHead"],
+                        second["remoteHead"], _local_head(profile, branch))
     ref = f"refs/heads/{branch}"
     lease = f"--force-with-lease={ref}:{expected_head}"
-    pushed = _git(profile["control"], "push", lease, profile["remote"], f":{ref}", check=False)
+    pushed = _git(profile["control"], "push", lease, profile["origin_url"], f":{ref}", check=False)
     if pushed.returncode:
         state, observed = _remote_head(profile, branch)
         reasons = ["REMOTE_DELETE_REJECTED"]
@@ -325,8 +364,11 @@ def apply_target(target, expected_head, *, explicit_apply=False, profile=None,
     if os.path.lexists(target_path):
         final_reasons.append("FINAL_TARGET_PRESENT")
     try:
-        if any(row.get("worktree") == target_path for row in _registered(profile["control"])):
+        registered = _registered(profile["control"])
+        if any(row.get("worktree") == target_path for row in registered):
             final_reasons.append("FINAL_REGISTRATION_PRESENT")
+        if any(row.get("branch") == f"refs/heads/{branch}" for row in registered):
+            final_reasons.append("FINAL_BRANCH_REGISTRATION_PRESENT")
     except Exception:
         final_reasons.append("FINAL_REGISTRATION_UNKNOWN")
     if _local_head(profile, branch) is not None:

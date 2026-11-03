@@ -148,7 +148,7 @@ Time passage has no semantic effect. V1 has no TTL, latest-wins rule, implicit s
 
 No automatic routing or dispatcher is introduced. No task database, mutable registry, new lease ledger, worktree creator/cleaner, device health owner, CI gate, Git writer, merge writer, release publisher, or production authority is introduced.
 
-The Work System packet remains the resumable whole-task owner. Work Harness Work Record/Executor Handoff/Coordination Receipt remain generic repository coordination owners. This MCL contract is the smaller product-local phase continuity layer between independent S/M/L workers; L contract admission remains coordination-only until a separate operational L effect owner is reviewed.
+The Work System packet remains the resumable whole-task owner. Work Harness Work Record/Executor Handoff/Coordination Receipt remain generic repository coordination owners. This MCL contract is the smaller product-local phase continuity layer between independent S/M/L workers; For exact L / L repository-backed mutable phases, the reviewed device-ops/l-repository-owner/** plus #3235 natural mutable LIVE_PROVEN satisfy the former coordination-only admission prerequisite; routing still grants no effect outside that owner's contract.
 
 ## Implementation surface
 

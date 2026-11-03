@@ -1143,24 +1143,40 @@ function coordinationGatesProven(receipt, target = TARGET_2786) {
   }
   return true;
 }
-function select2786ImplementationReceipt(stageRows, pr, target = TARGET_2786) {
-  const matches = stageRows.filter(({receipt}) =>
+function selectFixedImplementationReceiptSet(stageRows, target, {
+  missingReason,
+  ambiguousReason,
+}) {
+  const eligible = stageRows.filter(({receipt}) =>
     receipt.stage === 'IMPLEMENTATION_PR'
     && receipt.packetNumber === target.packet
     && receipt.status === 'PASS'
     && receipt.nextLegalAction === 'VALIDATION_MERGE'
-    && receipt.receiptDigest === target.implementationReceiptDigest
     && receipt.authorityRefs.some((row) =>
       row.kind === 'PR' && row.locator === 'pr:#' + target.pr
       && row.identity === target.candidate));
-  if (matches.length !== 1) {
-    fail(matches.length ? 'CONFLICT' : 'UNKNOWN',
-      matches.length ? 'IMPLEMENTATION_RECEIPT_AMBIGUOUS'
-        : 'IMPLEMENTATION_RECEIPT_MISSING');
+  const byDigest = new Map();
+  for (const row of eligible) {
+    if (!byDigest.has(row.receipt.receiptDigest)) {
+      byDigest.set(row.receipt.receiptDigest, row);
+    }
   }
+  const selected = byDigest.get(target.implementationReceiptDigest);
+  if (!selected) {
+    fail(byDigest.size > 1 ? 'CONFLICT' : 'UNKNOWN',
+      byDigest.size > 1 ? ambiguousReason : missingReason);
+  }
+  if (byDigest.size !== 1) fail('CONFLICT', ambiguousReason);
+  return selected;
+}
+function select2786ImplementationReceipt(stageRows, pr, target = TARGET_2786) {
+  const selected = selectFixedImplementationReceiptSet(stageRows, target, {
+    missingReason: 'IMPLEMENTATION_RECEIPT_MISSING',
+    ambiguousReason: 'IMPLEMENTATION_RECEIPT_AMBIGUOUS',
+  });
   if (pr?.head?.sha !== target.candidate) fail('CONFLICT', 'PR_HEAD_CONFLICT');
-  coordinationGatesProven(matches[0].receipt, target);
-  return matches[0];
+  coordinationGatesProven(selected.receipt, target);
+  return selected;
 }
 function select2786WorkspaceManifest(comments, target = TARGET_2786) {
   const exactToken = '"manifestId": "' + target.workspaceManifestId + '"';
@@ -1491,28 +1507,18 @@ function coordinationGates3356Proven(receipt, target = TARGET_3356) {
   return true;
 }
 function select3356ImplementationReceipt(stageRows, pr, target = TARGET_3356) {
-  const matches = stageRows.filter(({receipt}) =>
-    receipt.stage === 'IMPLEMENTATION_PR'
-    && receipt.packetNumber === target.packet
-    && receipt.status === 'PASS'
-    && receipt.nextLegalAction === 'VALIDATION_MERGE'
-    && receipt.receiptDigest === target.implementationReceiptDigest
-    && receipt.authorityRefs.some((row) =>
-      row.kind === 'PR' && row.locator === 'pr:#' + target.pr
-      && row.identity === target.candidate));
-  if (matches.length !== 1) {
-    fail(matches.length ? 'CONFLICT' : 'UNKNOWN',
-      matches.length ? '3356_IMPLEMENTATION_RECEIPT_AMBIGUOUS'
-        : '3356_IMPLEMENTATION_RECEIPT_MISSING');
-  }
+  const selected = selectFixedImplementationReceiptSet(stageRows, target, {
+    missingReason: '3356_IMPLEMENTATION_RECEIPT_MISSING',
+    ambiguousReason: '3356_IMPLEMENTATION_RECEIPT_AMBIGUOUS',
+  });
   if (pr?.head?.sha !== target.candidate) fail('CONFLICT', '3356_PR_HEAD_CONFLICT');
-  if (!same(matches[0].receipt.scope?.paths, target.paths)
-      || matches[0].receipt.scope?.diffRequired !== true
-      || matches[0].receipt.scope?.diffIdentity !== target.diffIdentity) {
+  if (!same(selected.receipt.scope?.paths, target.paths)
+      || selected.receipt.scope?.diffRequired !== true
+      || selected.receipt.scope?.diffIdentity !== target.diffIdentity) {
     fail('CONFLICT', '3356_IMPLEMENTATION_SCOPE_CONFLICT');
   }
-  coordinationGates3356Proven(matches[0].receipt, target);
-  return matches[0];
+  coordinationGates3356Proven(selected.receipt, target);
+  return selected;
 }
 function create3356LiveContext(packetRef, deps = {}) {
   const profile = profileFor(packetRef);

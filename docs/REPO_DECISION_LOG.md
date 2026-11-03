@@ -281,3 +281,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/4152)
 - Event ID: `a468d010c60cc2b60c924c1cc10851a9067c502c7fb69dbc52063483a984ee16`
 <!-- canonical-main-doc-promoted:a468d010c60cc2b60c924c1cc10851a9067c502c7fb69dbc52063483a984ee16 -->
+
+### 2026-11-03 — [validation-hygiene] MCL-PYTHON-VALIDATION-ZERO-RESIDUE-01 — producer-side bytecode prevention
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/4165)
+- Event ID: `44af4ea52b657f07f4450e817f8985abe37f88f9a622e3444fa88323877ba6c5`
+<!-- canonical-main-doc-promoted:44af4ea52b657f07f4450e817f8985abe37f88f9a622e3444fa88323877ba6c5 -->

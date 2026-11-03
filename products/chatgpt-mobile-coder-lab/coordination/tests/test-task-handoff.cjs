@@ -569,5 +569,12 @@ test('library contains no time-based lifetime or latest-wins primitive', () => {
   assert.doesNotMatch(source, /Date\.now|expiresAt|ttl|latestWins|latest_wins/i);
 });
 
+test('bounded manifest scope ceiling admits 18 and rejects 25', () => {
+  const scopes18 = Array.from({length:18}, (_,i) => `path:products/chatgpt-mobile-coder-lab/coordination/handoff-scope-${i}.cjs`);
+  assert.equal(handoff.buildManifest(manifestInput({scopes:scopes18})).scopes.length, 18);
+  const scopes25 = Array.from({length:25}, (_,i) => `path:products/chatgpt-mobile-coder-lab/coordination/handoff-scope-${i}.cjs`);
+  expectThrow(() => handoff.buildManifest(manifestInput({scopes:scopes25})), /MANIFEST_SCOPES_INVALID/);
+});
+
 if (process.exitCode) process.exit(process.exitCode);
 process.stdout.write(`task-handoff contract: ${passed}/${passed} PASS\n`);

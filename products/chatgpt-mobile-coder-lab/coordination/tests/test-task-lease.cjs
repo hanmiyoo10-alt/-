@@ -573,3 +573,13 @@ ok('S semantic route rejects not_applicable workspace', () => {
   assert.equal(invalid.ok, false);
   assert.ok(invalid.reasonCodes.includes('REQUEST_S_ROUTE_REPOSITORY_REQUIRED'));
 });
+
+ok('bounded scope ceiling admits 18 and rejects 25', () => {
+  const scopes18 = Array.from({length:18}, (_,i) => `path:products/chatgpt-mobile-coder-lab/coordination/scope-${i}.cjs`);
+  const accepted = lease.normalizeAcquireRequest(acquireRequest({scopes:scopes18}));
+  assert.equal(accepted.ok, true);
+  const scopes25 = Array.from({length:25}, (_,i) => `path:products/chatgpt-mobile-coder-lab/coordination/scope-${i}.cjs`);
+  const rejected = lease.normalizeAcquireRequest(acquireRequest({scopes:scopes25}));
+  assert.equal(rejected.ok, false);
+  assert.ok(rejected.reasonCodes.includes('REQUEST_SCOPES_INVALID'));
+});

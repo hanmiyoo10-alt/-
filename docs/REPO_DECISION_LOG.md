@@ -274,3 +274,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3566)
 - Event ID: `b9eba75b4fc43663df8ada0a655fc012229338171a36395dad853a7d85414c8b`
 <!-- canonical-main-doc-promoted:b9eba75b4fc43663df8ada0a655fc012229338171a36395dad853a7d85414c8b -->
+
+### 2026-11-03 — MCL-OWNER-LIFECYCLE-CLOSURE-PREFLIGHT-01 — detect self-referential bottlenecks before effect
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/4152)
+- Event ID: `a468d010c60cc2b60c924c1cc10851a9067c502c7fb69dbc52063483a984ee16`
+<!-- canonical-main-doc-promoted:a468d010c60cc2b60c924c1cc10851a9067c502c7fb69dbc52063483a984ee16 -->

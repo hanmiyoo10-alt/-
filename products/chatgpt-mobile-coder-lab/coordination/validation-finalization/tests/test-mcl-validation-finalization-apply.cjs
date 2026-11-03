@@ -207,8 +207,8 @@ test('exact V1 effect pair is required', () => {
   assert.equal(owner.effectPairExact(decision('ALREADY_FINALIZED')), false);
 });
 
-test('compile-time profiles include exact #2791 and #3216 targets', () => {
-  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#2791', '#3043', '#3051', '#3092', '#3099', '#3108', '#3110', '#3118', '#3126', '#3144', '#3203', '#3216', '#3356', '#3561', '#3762']);
+test('compile-time profiles include reviewed fixed targets including #4169', () => {
+  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#2791', '#3043', '#3051', '#3092', '#3099', '#3108', '#3110', '#3118', '#3126', '#3144', '#3203', '#3216', '#3356', '#3561', '#3762', '#4169']);
   assert.equal(owner.TARGET_2791.packet, 2791);
   assert.equal(owner.TARGET_2791.pr, 2795);
   assert.equal(owner.TARGET_2791.candidate,
@@ -1512,6 +1512,9 @@ test('arbitrary packet remains outside reviewed finalization targets', () => {
       createSelfOwnerContext: () => {
         throw new owner.ApplyError('BLOCKED', ['PACKET_NOT_REVIEWED_TARGET']);
       },
+      createExternalOwnerContext: () => {
+        throw new owner.ApplyError('BLOCKED', ['PACKET_NOT_REVIEWED_TARGET']);
+      },
       readState: () => fake2786State(),
     }),
     (error) => error instanceof owner.ApplyError
@@ -2672,4 +2675,91 @@ test('3356 selector also collapses identical current-candidate receipt replay', 
     {receipt: structuredClone(receipt), comment: {id: 12}},
   ], {head: {sha: target.candidate}}, target);
   assert.equal(selected.comment.id, 11);
+});
+
+
+test('4169 recovery profile binds exact merged implementation evidence', () => {
+  const target = owner.TARGET_4169;
+  assert.equal(target.packet, 4169);
+  assert.equal(target.pr, 4171);
+  assert.equal(target.candidate, 'bcdb9f3eb51aee4049d1e2e2e11c41965336262f');
+  assert.equal(target.merge, 'f8a7a19f2f19de6d7e169b3621099e7dad2d665a');
+  assert.equal(target.workspaceRoute, 'L');
+  assert.equal(target.workspaceExecutor, 'L');
+  assert.equal(owner.PROFILES['#4169'].target, target);
+  assert.equal(owner.PROFILES['#4169'].mode, 'IMPLEMENTATION_COORDINATION');
+});
+
+test('reviewed external L route requires explicit route evidence and exact receipt scope', () => {
+  const paths = ['products/chatgpt-mobile-coder-lab/example/a.cjs'];
+  const required = owner.EXTERNAL_OWNER_REQUIRED_GATES.map((name) => ({
+    name,
+    result: 'PASS',
+    evidenceLocator: name === owner.EXTERNAL_FINALIZATION_GATE
+      ? owner.EXTERNAL_FINALIZATION_EVIDENCE
+      : name === 'd014-completion' ? 'issue-comment:77' : 'receipt:test:' + name,
+  }));
+  const row = {
+    comment: {id: 1},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 5001,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: 'a'.repeat(64),
+      authorityRefs: [
+        {kind: 'PR', locator: 'pr:#5002', identity: 'b'.repeat(40)},
+      ],
+      requiredGates: required,
+      scope: {paths, diffRequired: true, diffIdentity: 'c'.repeat(64)},
+    },
+  };
+  const selected = owner.selectExternalOwnerImplementationReceipt([row], 5001, paths);
+  assert.equal(selected.pr, 5002);
+  assert.equal(selected.candidate, 'b'.repeat(40));
+  assert.throws(() => owner.selectExternalOwnerImplementationReceipt([{
+    ...row,
+    receipt: {...row.receipt, requiredGates: required.filter(
+      (gate) => gate.name !== owner.EXTERNAL_FINALIZATION_GATE)},
+  }], 5001, paths), (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('EXTERNAL_OWNER_REQUIRED_GATE_NOT_PASS'));
+  assert.throws(() => owner.selectExternalOwnerImplementationReceipt([{
+    ...row,
+    receipt: {...row.receipt, requiredGates: required.map((gate) =>
+      gate.name === owner.EXTERNAL_FINALIZATION_GATE
+        ? {...gate, evidenceLocator: 'issue:#9999'} : gate)},
+  }], 5001, paths), (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('EXTERNAL_OWNER_REVIEWED_ROUTE_EVIDENCE_REQUIRED'));
+  assert.throws(() => owner.selectExternalOwnerImplementationReceipt([row], 5001,
+    ['products/chatgpt-mobile-coder-lab/example/other.cjs']),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('EXTERNAL_OWNER_IMPLEMENTATION_RECEIPT_NOT_QUALIFIED'));
+});
+
+test('reviewed external L route packet scope is explicit and exact-path only', () => {
+  const tick = String.fromCharCode(96);
+  const body = [
+    '<!-- canonical-main-work-packet:v1 -->',
+    '',
+    '**State: IN_PROGRESS**',
+    '',
+    '## Interaction stage',
+    '- Current stage: ' + tick + 'VALIDATION_MERGE' + tick,
+    '',
+    '## Bounded write scope',
+    '1. ' + tick + 'path:products/chatgpt-mobile-coder-lab/example/a.cjs' + tick,
+    '2. ' + tick + 'surface:mcl:validation-finalization-effect' + tick,
+    '',
+    '## Preservation boundary',
+    'Do not widen.',
+  ].join('\n');
+  const parsed = owner.externalOwnerPacketScope(body);
+  assert.deepEqual(parsed.paths,
+    ['products/chatgpt-mobile-coder-lab/example/a.cjs']);
+  assert(parsed.scopes.includes(owner.EXTERNAL_FINALIZATION_SURFACE));
+  assert.throws(() => owner.externalOwnerPacketScope(body.replace(
+    'surface:mcl:validation-finalization-effect',
+    'surface:mcl:some-other-effect')),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('EXTERNAL_OWNER_FINALIZATION_SURFACE_REQUIRED'));
 });

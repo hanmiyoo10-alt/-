@@ -391,6 +391,34 @@ const TARGET_3762 = Object.freeze({
     'exact-three-path-scope',
   ]),
 });
+const TARGET_4169 = Object.freeze({
+  packet: 4169,
+  packetRef: '#4169',
+  pr: 4171,
+  candidate: 'bcdb9f3eb51aee4049d1e2e2e11c41965336262f',
+  merge: 'f8a7a19f2f19de6d7e169b3621099e7dad2d665a',
+  workspaceManifestId: 'dac250b51177168bf6298ecdc976f3dfba00422e73523d12a89c55936258a593',
+  workspaceManifestPhaseId: '4169-implementation-pr-review-repair-4-recovery',
+  workspaceLeaseId: '14e198739fcfd796975476f60a479b2def32e4b53c2c48597155cf11fd9f9c24',
+  workspaceAcquiredGeneration: 1524,
+  workspaceBranch: 'laptop/mcl-packet-4169',
+  workspaceWorktree: '/home/alsl0/nyang-worktrees/mcl-packet-4169',
+  workspaceRoute: 'L',
+  workspaceExecutor: 'L',
+  workspaceCompletionReceiptId:
+    'b76ff5221307a79ba5bec17c1ffd77953b89642a1df7b95fe8bf19d4b3313a5a',
+  implementationReceiptDigest:
+    '5dcbdbf915928c17818602a53eb61c119afb2f4cbf8670a3eea1271b872d068f',
+  requiredCoordinationGates: Object.freeze([
+    'codex-current-head-review',
+    'd013-release',
+    'd014-completion',
+    'exact-head-required',
+    'exact-head-verify',
+    'pr-observe',
+    'workspace-clean',
+  ]),
+});
 const EXPECTED_EFFECTS_2786 = Object.freeze([
   'CANONICAL_VALIDATION_MERGE_RECEIPT',
 ]);
@@ -480,6 +508,11 @@ const PROFILES = Object.freeze({
     mode: 'IMPLEMENTATION_COORDINATION',
     expectedEffects: EXPECTED_EFFECTS_2786,
   }),
+  '#4169': Object.freeze({
+    target: TARGET_4169,
+    mode: 'IMPLEMENTATION_COORDINATION',
+    expectedEffects: EXPECTED_EFFECTS_2786,
+  }),
 });
 const SELF_OWNER_PATHS = Object.freeze([
   'products/chatgpt-mobile-coder-lab/coordination/validation-finalization/README.md',
@@ -520,6 +553,16 @@ const SELF_OWNER_L_REQUIRED_GATES = Object.freeze([
   'workspace-clean-holder-released',
 ]);
 const PACKET_REF_RE = /^#[1-9][0-9]*$/;
+const EXTERNAL_FINALIZATION_GATE = 'validation-finalization-external-owner-reviewed';
+const EXTERNAL_FINALIZATION_EVIDENCE = 'issue:#4182';
+const EXTERNAL_FINALIZATION_SURFACE = 'surface:mcl:validation-finalization-effect';
+const EXTERNAL_OWNER_REQUIRED_GATES = Object.freeze([
+  'd013-release',
+  'd014-completion',
+  'exact-head-required',
+  'exact-head-verify',
+  EXTERNAL_FINALIZATION_GATE,
+]);
 
 function profileFor(packetRef) {
   const profile = PROFILES[packetRef];
@@ -1296,6 +1339,200 @@ function validationStageState2786(stageRows, implReceipt, pr, target = TARGET_27
   if (pr.merge_commit_sha !== target.merge) fail('CONFLICT', 'PR_MERGE_IDENTITY_CONFLICT');
   return {status: 'PASS', receipt, receiptSetStatus: selected.set.status};
 }
+
+function externalOwnerPacketScope(issueBody) {
+  let scopes;
+  try { scopes = stageEntry.extractPacketScopes(issueBody); }
+  catch (error) {
+    fail(error?.kind === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN',
+      ...(error?.reasonCodes || ['EXTERNAL_OWNER_PACKET_SCOPE_UNRESOLVED']));
+  }
+  if (!scopes.includes(EXTERNAL_FINALIZATION_SURFACE)) {
+    fail('BLOCKED', 'EXTERNAL_OWNER_FINALIZATION_SURFACE_REQUIRED');
+  }
+  const pathScopes = scopes.filter((item) => item.startsWith('path:'));
+  if (!pathScopes.length || pathScopes.some((item) => item.endsWith('/**'))) {
+    fail('BLOCKED', 'EXTERNAL_OWNER_EXACT_PATH_SCOPE_REQUIRED');
+  }
+  return {
+    scopes: [...scopes].sort(),
+    paths: pathScopes.map((item) => item.slice('path:'.length)).sort(),
+  };
+}
+function externalOwnerGateProven(receipt) {
+  if (!requiredGateNamesPass(receipt, EXTERNAL_OWNER_REQUIRED_GATES)) {
+    fail('BLOCKED', 'EXTERNAL_OWNER_REQUIRED_GATE_NOT_PASS');
+  }
+  const route = (receipt.requiredGates || []).filter(
+    (row) => row.name === EXTERNAL_FINALIZATION_GATE);
+  if (route.length !== 1
+      || route[0].result !== 'PASS'
+      || route[0].evidenceLocator !== EXTERNAL_FINALIZATION_EVIDENCE) {
+    fail(route.length > 1 ? 'CONFLICT' : 'BLOCKED',
+      'EXTERNAL_OWNER_REVIEWED_ROUTE_EVIDENCE_REQUIRED');
+  }
+  return true;
+}
+function externalOwnerReceiptIdentity(row, packet, paths) {
+  const receipt = row?.receipt;
+  if (!receipt
+      || receipt.stage !== 'IMPLEMENTATION_PR'
+      || receipt.packetNumber !== packet
+      || receipt.status !== 'PASS'
+      || receipt.nextLegalAction !== 'VALIDATION_MERGE'
+      || !same(receipt.scope?.paths, paths)
+      || receipt.scope?.diffRequired !== true) return null;
+  externalOwnerGateProven(receipt);
+  const prRefs = (receipt.authorityRefs || []).filter((item) =>
+    item.kind === 'PR'
+    && /^pr:#[1-9][0-9]*$/.test(item.locator || '')
+    && /^[0-9a-f]{40}$/.test(item.identity || ''));
+  if (prRefs.length !== 1) fail('CONFLICT', 'EXTERNAL_OWNER_IMPLEMENTATION_PR_CONFLICT');
+  return {
+    row,
+    pr: Number(prRefs[0].locator.slice('pr:#'.length)),
+    candidate: prRefs[0].identity,
+    diffIdentity: receipt.scope.diffIdentity,
+    semanticIdentity: JSON.stringify({
+      pr: prRefs[0].locator,
+      candidate: prRefs[0].identity,
+      paths: receipt.scope.paths,
+      diffIdentity: receipt.scope.diffIdentity,
+    }),
+  };
+}
+function selectExternalOwnerImplementationReceipt(stageRows, packet, paths, pr = null) {
+  const identities = stageRows.map((row) =>
+    externalOwnerReceiptIdentity(row, packet, paths)).filter(Boolean);
+  if (!identities.length) fail('BLOCKED', 'EXTERNAL_OWNER_IMPLEMENTATION_RECEIPT_NOT_QUALIFIED');
+  const prNumbers = new Set(identities.map((item) => item.pr));
+  if (prNumbers.size !== 1) fail('CONFLICT', 'EXTERNAL_OWNER_IMPLEMENTATION_PR_GENERATION_CONFLICT');
+  let selected = identities;
+  if (pr) {
+    if (pr.number !== identities[0].pr || !/^[0-9a-f]{40}$/.test(pr.head?.sha || '')) {
+      fail('CONFLICT', 'EXTERNAL_OWNER_MERGED_PR_IDENTITY_CONFLICT');
+    }
+    selected = identities.filter((item) => item.candidate === pr.head.sha);
+    if (!selected.length) fail('CONFLICT', 'EXTERNAL_OWNER_LIVE_HEAD_GENERATION_MISSING');
+  }
+  const semantic = new Set(selected.map((item) => item.semanticIdentity));
+  if (semantic.size !== 1) fail('CONFLICT', 'EXTERNAL_OWNER_IMPLEMENTATION_GENERATION_CONFLICT');
+  selected.sort((a, b) => a.row.receipt.receiptDigest.localeCompare(b.row.receipt.receiptDigest));
+  return selected[0];
+}
+function selectExternalOwnerWorkspaceManifest(comments, packet, packetRef, impl, packetScope) {
+  const gates = (impl.row.receipt.requiredGates || [])
+    .filter((row) => row.name === 'd014-completion');
+  if (gates.length !== 1 || gates[0].result !== 'PASS') {
+    fail(gates.length ? 'CONFLICT' : 'UNKNOWN',
+      gates.length ? 'EXTERNAL_OWNER_D014_COMPLETION_GATE_CONFLICT'
+        : 'EXTERNAL_OWNER_D014_COMPLETION_GATE_MISSING');
+  }
+  const locator = /^issue-comment:([1-9][0-9]*)$/.exec(gates[0].evidenceLocator || '');
+  if (!locator) fail('CONFLICT', 'EXTERNAL_OWNER_D014_COMPLETION_LOCATOR_INVALID');
+  const completionComment = comments.filter((comment) => Number(comment?.id) === Number(locator[1]));
+  if (completionComment.length !== 1) fail(completionComment.length ? 'CONFLICT' : 'UNKNOWN',
+    completionComment.length ? 'EXTERNAL_OWNER_D014_COMPLETION_COMMENT_AMBIGUOUS'
+      : 'EXTERNAL_OWNER_D014_COMPLETION_COMMENT_MISSING');
+  const parsedCompletion = handoff.parseCompletionReceipt(commentBody(completionComment[0]));
+  if (parsedCompletion.status !== 'VALID') fail(
+    parsedCompletion.status === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN',
+    'EXTERNAL_OWNER_D014_COMPLETION_INVALID');
+  const completion = parsedCompletion.value;
+  if (completion.packetRef !== packetRef
+      || completion.executor !== 'L'
+      || completion.disposition !== 'COMPLETE'
+      || completion.workspaceResult !== 'clean'
+      || (completion.blockerRefs || []).length
+      || (completion.requiredUnknownRefs || []).length
+      || !(completion.outputRefs || []).includes('pr:#' + impl.pr)
+      || !(completion.outputRefs || []).includes('commit:' + impl.candidate)) {
+    fail('CONFLICT', 'EXTERNAL_OWNER_D014_COMPLETION_IDENTITY_CONFLICT');
+  }
+  const manifests = [];
+  for (const comment of comments) {
+    const body = commentBody(comment);
+    if (!body.includes('mcl-task-manifest:v1')) continue;
+    const parsed = handoff.parseManifest(body);
+    if (parsed.status !== 'VALID' || parsed.value.manifestId !== completion.manifestId) continue;
+    manifests.push({comment, manifest: parsed.value, text: body});
+  }
+  if (manifests.length !== 1) fail(manifests.length ? 'CONFLICT' : 'UNKNOWN',
+    manifests.length ? 'EXTERNAL_OWNER_WORKSPACE_MANIFEST_AMBIGUOUS'
+      : 'EXTERNAL_OWNER_WORKSPACE_MANIFEST_MISSING');
+  const selected = manifests[0];
+  const manifest = selected.manifest;
+  if (manifest.payloadSha256 !== completion.manifestPayloadSha256
+      || manifest.packetRef !== packetRef
+      || manifest.phaseId !== completion.phaseId
+      || !String(manifest.phaseId || '').startsWith(String(packet) + '-implementation-pr')
+      || manifest.phaseClass !== 'REPOSITORY_MUTATION'
+      || manifest.route !== 'L' || manifest.executor !== 'L'
+      || manifest.leaseRequirement !== 'REQUIRED'
+      || !same([...(manifest.scopes || [])].sort(), packetScope.scopes)
+      || manifest.workspace?.kind !== 'repository'
+      || !/^laptop\/[A-Za-z0-9._-]+$/.test(manifest.workspace?.branch || '')
+      || manifest.workspace?.worktree !== '/home/alsl0/nyang-worktrees/'
+        + String(manifest.workspace.branch).slice('laptop/'.length)
+      || !/^[0-9a-f]{64}$/.test(manifest.leaseEvidence?.leaseId || '')
+      || !Number.isSafeInteger(manifest.leaseEvidence?.acquiredGeneration)) {
+    fail('CONFLICT', 'EXTERNAL_OWNER_WORKSPACE_MANIFEST_IDENTITY_CONFLICT');
+  }
+  return {...selected, completionReceipt: completion};
+}
+function createExternalOwnerLiveContext(packetRef, deps = {}) {
+  if (!PACKET_REF_RE.test(packetRef || '')) fail('BLOCKED', 'PACKET_NOT_REVIEWED_TARGET');
+  const packet = Number(packetRef.slice(1));
+  const runner = deps.runner || defaultRunner;
+  const spawn = deps.spawn || childProcess.spawnSync;
+  const issue = readIssue(packet, runner);
+  if (issue.state !== 'open') fail('BLOCKED', 'PACKET_NOT_OPEN');
+  if (!issue.body.includes('Current stage: ' + String.fromCharCode(96)
+      + 'VALIDATION_MERGE' + String.fromCharCode(96))) {
+    fail('BLOCKED', 'PACKET_VALIDATION_STAGE_NOT_COMPATIBLE');
+  }
+  const packetScope = externalOwnerPacketScope(issue.body);
+  const comments = readComments(packet, runner);
+  const stageRows = stageReceiptsFromComments(comments);
+  const prelim = selectExternalOwnerImplementationReceipt(stageRows, packet, packetScope.paths);
+  const pr = readPr(prelim.pr, runner);
+  if (pr.state !== 'closed' || !pr.merged_at
+      || !/^[0-9a-f]{40}$/.test(pr.head?.sha || '')
+      || !/^[0-9a-f]{40}$/.test(pr.merge_commit_sha || '')) {
+    fail('CONFLICT', 'EXTERNAL_OWNER_MERGED_PR_IDENTITY_CONFLICT');
+  }
+  const impl = selectExternalOwnerImplementationReceipt(
+    stageRows, packet, packetScope.paths, pr);
+  const manifestRow = selectExternalOwnerWorkspaceManifest(
+    comments, packet, packetRef, impl, packetScope);
+  const manifest = manifestRow.manifest;
+  const target = Object.freeze({
+    packet,
+    packetRef,
+    pr: impl.pr,
+    candidate: impl.candidate,
+    merge: pr.merge_commit_sha,
+    workspaceManifestId: manifest.manifestId,
+    workspaceManifestPhaseId: manifest.phaseId,
+    workspaceLeaseId: manifest.leaseEvidence.leaseId,
+    workspaceAcquiredGeneration: manifest.leaseEvidence.acquiredGeneration,
+    workspaceBranch: manifest.workspace.branch,
+    workspaceWorktree: manifest.workspace.worktree,
+    workspaceRoute: 'L',
+    workspaceExecutor: 'L',
+    implementationReceiptDigest: impl.row.receipt.receiptDigest,
+    requiredCoordinationGates: EXTERNAL_OWNER_REQUIRED_GATES,
+  });
+  return {
+    target, packet, packetRef, packetBodyDigest: sha256(issue.body),
+    runner, spawn, pr, implReceipt: impl.row.receipt,
+    implCommentId: impl.row.comment.id, workspaceManifest: manifest,
+    workspaceManifestText: manifestRow.text,
+    workspaceCompletionReceipt: manifestRow.completionReceipt,
+    coordinationProof: 'PROVEN', externalOwnerClass: true,
+  };
+}
+
 function create2786LiveContext(packetRef, deps = {}) {
   const profile = profileFor(packetRef);
   if (profile.mode !== 'IMPLEMENTATION_COORDINATION') {
@@ -2244,6 +2481,72 @@ function apply2786Packet(packetRef, deps = {}) {
     nextLegalAction: post.nextLegalAction,
   }, [], target.packetRef);
 }
+
+function inspectExternalOwnerPacket(packetRef, deps = {}) {
+  const createContext = deps.createExternalOwnerContext || createExternalOwnerLiveContext;
+  const readState = deps.readState || read2786MutableState;
+  const ctx = createContext(packetRef, deps);
+  const state = readState(ctx, deps);
+  return output(state.decision.result, {
+    operation: 'inspect',
+    ...decisionSummary(state.decision),
+    externalOwnerMode: 'REVIEWED_L_PRODUCT_PATH',
+    effects: {holderCleaned: 0, d014Published: 0, stageReceiptPublished: 0},
+  }, [], ctx.target.packetRef);
+}
+function applyExternalOwnerPacket(packetRef, deps = {}) {
+  const createContext = deps.createExternalOwnerContext || createExternalOwnerLiveContext;
+  const readState = deps.readState || read2786MutableState;
+  const publishExact = deps.publishExact || ((packet, body, ctx) =>
+    postExactComment(packet, body, ctx.runner));
+  const makeStage = deps.buildValidationStageText || build2786ValidationStageText;
+  const ctx = createContext(packetRef, deps);
+  let state = readState(ctx, deps);
+  const pre = state.decision;
+  const effects = {holderCleaned: 0, d014Published: 0, stageReceiptPublished: 0};
+  if (pre.finalizationDisposition === 'ALREADY_FINALIZED'
+      && pre.result === 'PASS'
+      && pre.nextLegalAction === 'POSTMERGE_CONVERGENCE'
+      && pre.requiredEffectClasses.length === 0) {
+    return output('PASS', {
+      operation: 'apply', pre: decisionSummary(pre), post: decisionSummary(pre),
+      externalOwnerMode: 'REVIEWED_L_PRODUCT_PATH',
+      finalizationDisposition: 'ALREADY_FINALIZED', result: 'PASS', effects,
+      nextLegalAction: 'POSTMERGE_CONVERGENCE',
+    }, [], ctx.target.packetRef);
+  }
+  if (!effectPair2786Exact(pre)) {
+    fail(pre.result === 'CONFLICT' ? 'CONFLICT' : 'BLOCKED',
+      'PRE_EFFECT_FINALIZATION_DISPOSITION_NOT_EXTERNAL_OWNER_PAIR');
+  }
+  if (state.workspace.holderState !== 'ABSENT') {
+    fail('BLOCKED', 'EXTERNAL_OWNER_HOLDER_PRESENT_NOT_AUTHORIZED');
+  }
+  if (state.workspace.state !== 'CLEAN') fail('BLOCKED', 'WORKSPACE_NOT_CLEAN');
+  if (state.validationStage.status === 'ABSENT') {
+    const built = makeStage(ctx, state, deps);
+    const posted = publishExact(ctx.target.packet, built.text, ctx, deps);
+    effects.stageReceiptPublished += posted.written || 0;
+    state = readState(ctx, deps);
+  }
+  if (state.validationStage.status !== 'PASS') fail('BLOCKED', 'VALIDATION_STAGE_RECEIPT_NOT_PROVEN');
+  const post = state.decision;
+  if (post.finalizationDisposition !== 'ALREADY_FINALIZED'
+      || post.result !== 'PASS'
+      || post.attentionDisposition !== 'COMPLETE'
+      || post.requiredEffectClasses.length !== 0
+      || post.nextLegalAction !== 'POSTMERGE_CONVERGENCE') {
+    fail(post.result === 'CONFLICT' ? 'CONFLICT' : 'BLOCKED',
+      'POST_EFFECT_REINSPECT_NOT_ALREADY_FINALIZED');
+  }
+  return output('PASS', {
+    operation: 'apply', pre: decisionSummary(pre), post: decisionSummary(post),
+    externalOwnerMode: 'REVIEWED_L_PRODUCT_PATH',
+    finalizationDisposition: post.finalizationDisposition, result: post.result,
+    effects, nextLegalAction: post.nextLegalAction,
+  }, [], ctx.target.packetRef);
+}
+
 function inspectSelfOwnerPacket(packetRef, deps = {}) {
   const createContext = deps.createSelfOwnerContext || createSelfOwnerLiveContext;
   const readState = deps.readState || read2786MutableState;
@@ -2361,7 +2664,14 @@ function applySelfOwnerPacket(packetRef, deps = {}) {
 
 function inspectPacket(packetRef, deps = {}) {
   const profile = PROFILES[packetRef];
-  if (!profile) return inspectSelfOwnerPacket(packetRef, deps);
+  if (!profile) {
+    try { return inspectSelfOwnerPacket(packetRef, deps); }
+    catch (error) {
+      if (!(error instanceof ApplyError)
+          || !error.reasonCodes.includes('PACKET_NOT_REVIEWED_TARGET')) throw error;
+      return inspectExternalOwnerPacket(packetRef, deps);
+    }
+  }
   if (profile.mode === 'COORDINATION_NOT_APPLICABLE') {
     return inspect3356Packet(packetRef, deps);
   }
@@ -2371,7 +2681,14 @@ function inspectPacket(packetRef, deps = {}) {
 }
 function applyPacket(packetRef, deps = {}) {
   const profile = PROFILES[packetRef];
-  if (!profile) return applySelfOwnerPacket(packetRef, deps);
+  if (!profile) {
+    try { return applySelfOwnerPacket(packetRef, deps); }
+    catch (error) {
+      if (!(error instanceof ApplyError)
+          || !error.reasonCodes.includes('PACKET_NOT_REVIEWED_TARGET')) throw error;
+      return applyExternalOwnerPacket(packetRef, deps);
+    }
+  }
   if (profile.mode === 'COORDINATION_NOT_APPLICABLE') {
     return apply3356Packet(packetRef, deps);
   }
@@ -2488,6 +2805,10 @@ module.exports = {
   EXPECTED_EFFECTS,
   EXPECTED_EFFECTS_2786,
   FALSE_AUTHORITY,
+  EXTERNAL_FINALIZATION_GATE,
+  EXTERNAL_FINALIZATION_EVIDENCE,
+  EXTERNAL_FINALIZATION_SURFACE,
+  EXTERNAL_OWNER_REQUIRED_GATES,
   PROFILES,
   SELF_OWNER_PATHS,
   SELF_OWNER_REQUIRED_GATES,
@@ -2502,6 +2823,7 @@ module.exports = {
   TARGET_3356,
   TARGET_3561,
   TARGET_3762,
+  TARGET_4169,
   TARGET_3043,
   TARGET_3051,
   TARGET_3092,
@@ -2514,6 +2836,7 @@ module.exports = {
   apply2463Packet,
   apply2786Packet,
   apply3356Packet,
+  applyExternalOwnerPacket,
   applySelfOwnerPacket,
   applyPacket,
   build2786ValidationStageText,
@@ -2525,6 +2848,7 @@ module.exports = {
   coordinationGates3356Proven,
   create2786LiveContext,
   create3356LiveContext,
+  createExternalOwnerLiveContext,
   createSelfOwnerLiveContext,
   createLiveContext,
   decisionSummary,
@@ -2537,6 +2861,7 @@ module.exports = {
   inspect2463Packet,
   inspect2786Packet,
   inspect3356Packet,
+  inspectExternalOwnerPacket,
   inspectSelfOwnerPacket,
   inspectPacket,
   parseArgs,
@@ -2551,6 +2876,10 @@ module.exports = {
   runCli,
   select2786ImplementationReceipt,
   select3356ImplementationReceipt,
+  selectExternalOwnerImplementationReceipt,
+  selectExternalOwnerWorkspaceManifest,
+  externalOwnerGateProven,
+  externalOwnerPacketScope,
   select2786WorkspaceManifest,
   select2786WorkspaceCompletionReceipt,
   selfOwnerImplementationIdentities,

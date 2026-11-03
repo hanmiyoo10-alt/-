@@ -660,3 +660,34 @@ actual merged head. Three reviewed semantic lineages are supported:
 Distinct PR generations, missing live-head generations, bad lineage, active lease,
 holder presence, dirty/non-exact workspace, near-match scope or missing required
 gates remain fail-closed.
+
+
+## Reviewed external L product-path finalization route
+
+The exact #4169 recovery profile records the already-merged smoke-lifecycle packet
+that exposed a missing product-path finalization route. It consumes only the existing
+canonical IMPLEMENTATION_PR receipt, exact D-014 completion lineage, released D-013
+identity, clean L workspace/holder state, merged PR identity and current validation
+evidence. It does not recreate missing coordination evidence.
+
+Future non-neutral MCL packets may use the reusable external L route only when all of
+these are true before merge:
+
+- the packet explicitly includes surface:mcl:validation-finalization-effect;
+- the canonical IMPLEMENTATION_PR receipt carries
+  validation-finalization-external-owner-reviewed=PASS with evidence issue:#4182;
+- the same receipt proves D-013 release, D-014 completion, exact-head Required and
+  exact-head Verify;
+- packet paths are exact, not prefix wildcards;
+- the completion receipt and its exact manifest bind route/executor L / L, the same
+  packet scopes, one direct-child laptop/* workspace, released lease, clean workspace,
+  exact candidate and PR;
+- the PR is actually merged at that candidate and the packet is at
+  VALIDATION_MERGE.
+
+The route publishes only the canonical VALIDATION_MERGE stage receipt and is
+idempotent on exact replay. Missing/ambiguous route evidence, near-match scopes,
+another executor, active lease, holder presence, dirty/moved workspace, PR/head
+mismatch or any UNKNOWN/CONFLICT remains fail-closed. Path location, age, packet
+number, branch naming or generic MCL membership never substitutes for the explicit
+reviewed route gate.

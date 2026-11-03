@@ -1823,7 +1823,7 @@ test('self-owner L repository lineage binds exact reviewed phases and workspace'
 
   const select = (phaseId, branch = 'laptop/mcl-packet-4150',
       worktree = '/home/alsl0/nyang-worktrees/mcl-packet-4150',
-      route = 'L', executor = 'L') => {
+      route = 'L', executor = 'L', completionPhase = phaseId) => {
     const manifest = handoff.buildManifest({
       schemaVersion: 1,
       mode: 'MCL_TASK_MANIFEST',
@@ -1850,7 +1850,7 @@ test('self-owner L repository lineage binds exact reviewed phases and workspace'
       stopCondition: 'Test exact L self-owner manifest selection.',
       authority: {...handoff.AUTHORITY_FLAGS},
     });
-    const completion = handoff.buildCompletionReceipt(manifest, {
+    let completion = handoff.buildCompletionReceipt(manifest, {
       disposition: 'COMPLETE',
       outputRefs: ['commit:' + 'd'.repeat(40), 'pr:#4151'],
       validationRefs: ['issue:#4150'],
@@ -1866,6 +1866,19 @@ test('self-owner L repository lineage binds exact reviewed phases and workspace'
       blockerRefs: [],
       requiredUnknownRefs: [],
     });
+    if (completionPhase !== phaseId) {
+      const core = {...completion, phaseId: completionPhase};
+      delete core.receiptId;
+      delete core.payloadSha256;
+      const normalized = handoff.normalizeReceiptCore(core);
+      assert.deepEqual(normalized.errors, []);
+      const payloadSha256 = handoff.digest(normalized.value);
+      completion = {
+        ...normalized.value,
+        receiptId: handoff.digest('MCL_COMPLETION_RECEIPT_V1:' + payloadSha256),
+        payloadSha256,
+      };
+    }
     return owner.selectSelfOwnerWorkspaceManifest([
       {id: 1, body: handoff.renderManifest(manifest)},
       {id: 2, body: handoff.renderCompletionReceipt(completion)},
@@ -1874,6 +1887,11 @@ test('self-owner L repository lineage binds exact reviewed phases and workspace'
 
   assert.equal(select('4150-implementation-pr').lineage.kind, 'IMPLEMENTATION_L_REPOSITORY');
   assert.equal(select('4150-implementation-pr-stage-entry').manifest.route, 'L');
+  assert.throws(() => select(
+    '4150-implementation-pr-stage-entry',
+    'laptop/mcl-packet-4150',
+    '/home/alsl0/nyang-worktrees/mcl-packet-4150',
+    'L', 'L', '4150-implementation-pr'), owner.ApplyError);
   assert.throws(() => select('4150-other-phase'), owner.ApplyError);
   assert.throws(() => select('4150-implementation-pr', 'laptop/nested/path',
     '/home/alsl0/nyang-worktrees/nested/path'), owner.ApplyError);

@@ -1046,6 +1046,7 @@ function selectSelfOwnerWorkspaceManifest(comments, packet, packetRef, impl) {
   const manifest = selected.manifest;
   if (manifest.payloadSha256 !== completion.manifestPayloadSha256
       || manifest.packetRef !== packetRef
+      || manifest.phaseId !== completion.phaseId
       || !selfOwnerPhaseMatches(lineage, packet, manifest.phaseId)
       || manifest.phaseClass !== 'REPOSITORY_MUTATION'
       || manifest.route !== selfOwnerExpectedExecutor(lineage)

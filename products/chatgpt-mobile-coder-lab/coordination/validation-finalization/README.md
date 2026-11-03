@@ -646,8 +646,9 @@ actual merged head. Three reviewed semantic lineages are supported:
   `<packet>-validation-merge-currentization`;
 - fixed L/L repository implementation via `d014-completion`, with exactly the
   direct-L `<packet>-implementation-pr` or stage-entry-prepared
-  `<packet>-implementation-pr-stage-entry` phase. The manifest must bind exact
-  route/executor `L / L` and one direct-child `laptop/<target>` /
+  `<packet>-implementation-pr-stage-entry` phase. The completion receipt and
+  selected manifest must carry the same exact phase ID. The manifest must bind
+  exact route/executor `L / L` and one direct-child `laptop/<target>` /
   `/home/alsl0/nyang-worktrees/<target>` workspace identity.
 
 Distinct PR generations, missing live-head generations, bad lineage, active lease,

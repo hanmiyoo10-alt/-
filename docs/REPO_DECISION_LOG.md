@@ -267,3 +267,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2718)
 - Event ID: `4bfcfc7a147d2e63f0c19807d0a2bce1de912586f823e057b92e08b67a53623a`
 <!-- canonical-main-doc-promoted:4bfcfc7a147d2e63f0c19807d0a2bce1de912586f823e057b92e08b67a53623a -->
+
+### 2026-11-03 — REPO-GITHUB-PROJECT-PROJECTION-SYNC-01 — validator-first derived Project field sync
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3566)
+- Event ID: `b9eba75b4fc43663df8ada0a655fc012229338171a36395dad853a7d85414c8b`
+<!-- canonical-main-doc-promoted:b9eba75b4fc43663df8ada0a655fc012229338171a36395dad853a7d85414c8b -->

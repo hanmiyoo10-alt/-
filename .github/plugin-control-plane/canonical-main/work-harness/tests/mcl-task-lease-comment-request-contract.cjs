@@ -175,6 +175,13 @@ function parserContract() {
   reason(() => adapter.parseRequestBody(requestBody({...releasePayload(), leaseId: 'ABC'})), 'REQUEST_LEASE_ID_INVALID');
 }
 
+function scopeCeilingContract() {
+  const scopes18 = Array.from({length:18}, (_,i) => `path:products/chatgpt-mobile-coder-lab/coordination/comment-scope-${i}.cjs`);
+  assert.equal(adapter.parseRequestBody(requestBody({...acquirePayload(), scopes:scopes18})).request.scopes.length, 18);
+  const scopes25 = Array.from({length:25}, (_,i) => `path:products/chatgpt-mobile-coder-lab/coordination/comment-scope-${i}.cjs`);
+  reason(() => adapter.parseRequestBody(requestBody({...acquirePayload(), scopes:scopes25})), 'REQUEST_SCOPES_INVALID');
+}
+
 function eventGuardContract() {
   assert.equal(adapter.validateEvent(eventFixture()).id, COMMENT_ID);
   reason(() => adapter.validateEvent(eventFixture({action: 'edited'})), 'EVENT_ACTION_DENIED');
@@ -378,6 +385,7 @@ async function main() {
   fixedIdentityContract();
   parserContract();
   eventGuardContract();
+  scopeCeilingContract();
   await delegationContract();
   await statusPreservationContract();
   await rejectionContract();

@@ -1348,3 +1348,69 @@ test('currentize-only effect contains no source-delta commit path', () => {
   assert.equal(block.includes("'apply', '--index'"),false);
   assert.equal(block.includes("'commit', '-m'"),false);
 });
+
+
+test('currentize-only binary replay keeps patch-id representation consistent', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(),'mcl-l-currentize-only-binary-'));
+  try {
+    gitExec(tmp,['init']);
+    gitExec(tmp,['config','user.name','fixture']);
+    gitExec(tmp,['config','user.email','fixture@example.invalid']);
+    fs.writeFileSync(path.join(tmp,'blob.bin'),Buffer.from([0,1,2,3]));
+    gitExec(tmp,['add','blob.bin']);
+    gitExec(tmp,['commit','-m','base']);
+    const base=gitExec(tmp,['rev-parse','HEAD']).trim();
+    gitExec(tmp,['branch','feature']);
+    fs.writeFileSync(path.join(tmp,'main.txt'),'main advance\n');
+    gitExec(tmp,['add','main.txt']);
+    gitExec(tmp,['commit','-m','main advance']);
+    const currentMain=gitExec(tmp,['rev-parse','HEAD']).trim();
+    gitExec(tmp,['switch','feature']);
+    fs.writeFileSync(path.join(tmp,'blob.bin'),Buffer.from([0,1,9,3]));
+    gitExec(tmp,['add','blob.bin']);
+    gitExec(tmp,['commit','-m','feature binary']);
+    const oldHead=gitExec(tmp,['rev-parse','HEAD']).trim();
+    const request={
+      schema:owner.CURRENTIZE_ONLY_REQUEST_SCHEMA,
+      packet_ref:'#9001',
+      expected_old_head:oldHead,
+      expected_paths:['blob.bin'],
+    };
+    const m=manifest({
+      packetRef:'#9001',
+      workspace:{kind:'repository',branch:'laptop/task-9001',worktree:tmp},
+      observedBaseSha:oldHead,
+      scopes:['path:blob.bin','surface:mcl:test'],
+    });
+    const runner=(command,args,options={})=>{
+      const cp=childProcess.spawnSync(command,args,{
+        cwd:options.cwd,encoding:'utf8',input:options.input,
+        env:options.env || process.env,shell:false,
+      });
+      return {code:cp.status ?? 1,stdout:cp.stdout || '',stderr:cp.stderr || '',
+        signal:cp.signal || null,error:cp.error || null};
+    };
+    const replay=owner.verifyCurrentizeOnlyReplayAgainstCurrent(
+      m,request,currentMain,{runner});
+    assert.equal(replay.originalBase,base);
+    assert.deepEqual(replay.originalPaths,['blob.bin']);
+    assert.deepEqual(replay.replayPaths,['blob.bin']);
+    assert.match(replay.patchId,/^[0-9a-f]{40}$/);
+  } finally {
+    fs.rmSync(tmp,{recursive:true,force:true});
+  }
+});
+
+test('currentize-only reruns fixed validation after current-main merge', () => {
+  const source=fs.readFileSync(path.resolve(__dirname,'../mcl-l-repository-owner.cjs'),'utf8');
+  const start=source.indexOf('function executeCurrentizeOnly(');
+  const end=source.indexOf('function executePreparedContinuation(',start);
+  assert.ok(start>=0&&end>start);
+  const block=source.slice(start,end);
+  const mergeAt=block.indexOf("'merge', '--no-ff', '--no-edit', currentMain");
+  const validateAfter=block.indexOf('checks = runContinuationValidation',mergeAt);
+  const pushAt=block.indexOf('pushExactCandidate(',mergeAt);
+  assert.ok(mergeAt>=0);
+  assert.ok(validateAfter>mergeAt);
+  assert.ok(pushAt>validateAfter);
+});

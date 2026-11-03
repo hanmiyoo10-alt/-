@@ -1007,7 +1007,7 @@ function verifyCurrentizeOnlyReplayAgainstCurrent(manifest, request, currentMain
       throw new OwnerError('CONFLICT', ['CURRENTIZE_ONLY_REPLAY_PATH_CONFLICT']);
     }
     const replayDiff = git(runner, worktree, [
-      'diff', '--cached', '--no-ext-diff', '--no-textconv', '-M', currentMain, '--',
+      'diff', '--binary', '--cached', '--no-ext-diff', '--no-textconv', '-M', currentMain, '--',
     ], {env});
     const replayPatchId = replayDiff ? patchId(runner, worktree, replayDiff) : '';
     if (replayPatchId !== originalPatchId) {
@@ -1564,9 +1564,11 @@ function executeCurrentizeOnly(context, request, prRequest, {
     state = classifyCurrentizeOnlyState(
       manifest, request, prRequest, currentMain, {profile, runner});
   }
-  if (state.state === 'CURRENTIZED' && !replay) {
-    replay = verifyCurrentizeOnlyReplayAgainstCurrent(
-      manifest, request, currentMain, {runner});
+  if (state.state === 'CURRENTIZED') {
+    if (!replay) {
+      replay = verifyCurrentizeOnlyReplayAgainstCurrent(
+        manifest, request, currentMain, {runner});
+    }
     checks = runContinuationValidation(manifest, request, {runner, root});
   }
   if (state.state === 'CURRENTIZED') {

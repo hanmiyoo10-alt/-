@@ -122,29 +122,33 @@ function terminalStateGate(input) {
   return null;
 }
 
-function classifyTerminal(input, list) {
-  const gate = terminalStateGate(input);
-  if (gate) return gate;
+function stronger(left, right) {
+  const rank = {PASS: 0, BLOCKED: 1, UNKNOWN: 2, CONFLICT: 3};
+  return rank[left.result] > rank[right.result] ? left : right;
+}
 
-  if (input.retentionMode === "EPHEMERAL_SELF_RETIRING") {
-    for (const asset of list) {
-      if (!VALID_RESIDUE.has(asset.residueState)) return receipt(input, "UNKNOWN", "RESIDUE_EVIDENCE_UNKNOWN", ["SMOKE_RESIDUE_EVIDENCE_UNKNOWN"]);
-    }
-    if (list.some((a) => a.residueState === "CONFLICT")) {
-      return receipt(input, "CONFLICT", "RESIDUE_EVIDENCE_CONFLICT", ["SMOKE_RESIDUE_EVIDENCE_CONFLICT"]);
-    }
-    if (list.some((a) => a.residueState === "UNKNOWN")) {
+function classifyEphemeralTerminal(input, list) {
+  for (const asset of list) {
+    if (!VALID_RESIDUE.has(asset.residueState)) {
       return receipt(input, "UNKNOWN", "RESIDUE_EVIDENCE_UNKNOWN", ["SMOKE_RESIDUE_EVIDENCE_UNKNOWN"]);
     }
-    const present = list.filter((a) => a.residueState === "PRESENT");
-    if (present.length) {
-      return receipt(input, "BLOCKED", "OWNED_RESIDUE_PRESENT", ["SMOKE_OWNED_RESIDUE_PRESENT"], {
-        affectedAssets: present.map((a) => ({kind: a.kind, identity: a.identity})),
-      });
-    }
-    return receipt(input, "PASS", "ZERO_RESIDUE_TERMINAL");
   }
+  if (list.some((a) => a.residueState === "CONFLICT")) {
+    return receipt(input, "CONFLICT", "RESIDUE_EVIDENCE_CONFLICT", ["SMOKE_RESIDUE_EVIDENCE_CONFLICT"]);
+  }
+  if (list.some((a) => a.residueState === "UNKNOWN")) {
+    return receipt(input, "UNKNOWN", "RESIDUE_EVIDENCE_UNKNOWN", ["SMOKE_RESIDUE_EVIDENCE_UNKNOWN"]);
+  }
+  const present = list.filter((a) => a.residueState === "PRESENT");
+  if (present.length) {
+    return receipt(input, "BLOCKED", "OWNED_RESIDUE_PRESENT", ["SMOKE_OWNED_RESIDUE_PRESENT"], {
+      affectedAssets: present.map((a) => ({kind: a.kind, identity: a.identity})),
+    });
+  }
+  return receipt(input, "PASS", "ZERO_RESIDUE_TERMINAL");
+}
 
+function classifyPreservedTerminal(input, list) {
   const evidence = refs(input.durableEvidenceRefs, "durableEvidenceRefs");
   if (!evidence.length || typeof input.retentionReason !== "string" || !input.retentionReason.trim()
       || input.retirementPolicyReviewed !== true) {
@@ -152,7 +156,9 @@ function classifyTerminal(input, list) {
   }
   text(input.retentionReason, "retentionReason", 500);
   for (const asset of list) {
-    if (!VALID_RETAINED.has(asset.retainedIdentityState)) return receipt(input, "UNKNOWN", "RETAINED_IDENTITY_UNKNOWN", ["SMOKE_RETAINED_IDENTITY_UNKNOWN"]);
+    if (!VALID_RETAINED.has(asset.retainedIdentityState)) {
+      return receipt(input, "UNKNOWN", "RETAINED_IDENTITY_UNKNOWN", ["SMOKE_RETAINED_IDENTITY_UNKNOWN"]);
+    }
   }
   if (list.some((a) => a.retainedIdentityState === "CONFLICT")) {
     return receipt(input, "CONFLICT", "RETAINED_IDENTITY_CONFLICT", ["SMOKE_RETAINED_IDENTITY_CONFLICT"]);
@@ -167,6 +173,15 @@ function classifyTerminal(input, list) {
     });
   }
   return receipt(input, "PASS", "EVIDENCE_PRESERVED_TERMINAL", [], {durableEvidenceRefs: evidence});
+}
+
+function classifyTerminal(input, list) {
+  const state = terminalStateGate(input)
+    || receipt(input, "PASS", "TERMINAL_STATE_COVERED");
+  const asset = input.retentionMode === "EPHEMERAL_SELF_RETIRING"
+    ? classifyEphemeralTerminal(input, list)
+    : classifyPreservedTerminal(input, list);
+  return stronger(state, asset);
 }
 
 function classify(input) {

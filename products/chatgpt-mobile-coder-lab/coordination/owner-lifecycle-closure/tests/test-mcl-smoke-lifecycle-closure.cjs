@@ -102,6 +102,25 @@ r = classify(ephemeral("TERMINAL", [
 assert.equal(r.result, "BLOCKED");
 assert.equal(r.classification, "BASELINE_NOT_PRESERVED");
 
+// Stronger asset evidence must not be hidden by an ordinary terminal-state blocker.
+r = classify(ephemeral("TERMINAL", [
+  {kind:"worktree", identity:"x", residueState:"CONFLICT"},
+], {coordinationState:"ACTIVE", baselineState:"PRESERVED", foreignResidueState:"NONE"}));
+assert.equal(r.result, "CONFLICT");
+assert.equal(r.classification, "RESIDUE_EVIDENCE_CONFLICT");
+
+r = classify(preserved("TERMINAL", [
+  {kind:"worktree", identity:"historical", retainedIdentityState:"CONFLICT"},
+], {coordinationState:"ACTIVE", baselineState:"PRESERVED", foreignResidueState:"NONE"}));
+assert.equal(r.result, "CONFLICT");
+assert.equal(r.classification, "RETAINED_IDENTITY_CONFLICT");
+
+r = classify(ephemeral("TERMINAL", [
+  {kind:"worktree", identity:"x", residueState:"UNKNOWN"},
+], {coordinationState:"ACTIVE", baselineState:"PRESERVED", foreignResidueState:"NONE"}));
+assert.equal(r.result, "UNKNOWN");
+assert.equal(r.classification, "RESIDUE_EVIDENCE_UNKNOWN");
+
 r = classify(ephemeral("PREFLIGHT", [{kind:"worktree", identity:"x", retirementOwnerReviewed:true}], {evidenceState:"UNKNOWN"}));
 assert.equal(r.result, "UNKNOWN");
 r = classify(ephemeral("PREFLIGHT", [{kind:"worktree", identity:"x", retirementOwnerReviewed:true}], {evidenceState:"CONFLICT"}));

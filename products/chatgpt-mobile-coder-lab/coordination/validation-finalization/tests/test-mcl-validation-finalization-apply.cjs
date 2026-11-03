@@ -208,7 +208,7 @@ test('exact V1 effect pair is required', () => {
 });
 
 test('compile-time profiles include exact #2791 and #3216 targets', () => {
-  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#2791', '#3043', '#3051', '#3092', '#3099', '#3108', '#3110', '#3118', '#3126', '#3144', '#3216', '#3356', '#3561', '#3762']);
+  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#2791', '#3043', '#3051', '#3092', '#3099', '#3108', '#3110', '#3118', '#3126', '#3144', '#3203', '#3216', '#3356', '#3561', '#3762']);
   assert.equal(owner.TARGET_2791.packet, 2791);
   assert.equal(owner.TARGET_2791.pr, 2795);
   assert.equal(owner.TARGET_2791.candidate,
@@ -454,6 +454,38 @@ test('compile-time profiles include exact #2791 and #3216 targets', () => {
     'natural-3090-recovery-proof',
   ]);
 });
+test('#3203 exact lost-sidecar finalizer target is compile-time fixed', () => {
+  const target = owner.TARGET_3203;
+  assert.equal(target.packet, 3203);
+  assert.equal(target.pr, 3204);
+  assert.equal(target.candidate, '84345d298a0752e5c2567f9d6d871b84458ae5fc');
+  assert.equal(target.merge, '6217276406f09a7a52175730ed25e741fe9185a1');
+  assert.equal(target.workspaceManifestId,
+    'b093a71cc2a6ffdfbde669551610351d04c3f9aae12ea08245b73461593cd335');
+  assert.equal(target.workspaceCompletionReceiptId,
+    '1ea0caf9972e326e26e7c3a5e8e10d94eb32debf431e2ba07f3e009951aa75b2');
+  assert.equal(target.implementationReceiptDigest,
+    '60012065b12be02f9752a5596dc8b68c47c2fe4a7c6f0573a0b829e7d6ce4458');
+  assert.deepEqual(target.requiredCoordinationGates, [
+    'currentization-d013-release',
+    'currentization-d014-complete',
+    'currentization-parent-lineage',
+    'currentization-scope-and-blob-preservation',
+    'd013-release',
+    'd014-completion',
+    'exact-head-required',
+    'exact-head-verify',
+    'exact-nine-path-diff',
+    'focused-contract-matrix',
+    'holder-workspace-convergence',
+    'non-closing-pr-authoring',
+    'packet-scoped-currentization-replay',
+    'pr-observe',
+    'repository-patch-write',
+  ]);
+  assert.equal(owner.PROFILES['#3203'].mode, 'IMPLEMENTATION_COORDINATION');
+});
+
 test('#3356 exact docs-only target is compile-time fixed', () => {
   assert.equal(owner.TARGET_3356.packet, 3356);
   assert.equal(owner.TARGET_3356.pr, 3358);

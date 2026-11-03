@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import sys
 import subprocess
 import tempfile
 import unittest
@@ -10,10 +11,20 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "currentness_replay.py"
 
-spec = importlib.util.spec_from_file_location("currentness_replay", SCRIPT)
-assert spec and spec.loader
-planner = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(planner)
+def load_planner(script: Path = SCRIPT):
+    previous = sys.dont_write_bytecode
+    try:
+        sys.dont_write_bytecode = True
+        spec = importlib.util.spec_from_file_location("currentness_replay", script)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.dont_write_bytecode = previous
+
+
+planner = load_planner()
 
 
 def git(repo: Path, *args: str, check: bool = True) -> str:
@@ -51,6 +62,23 @@ class CurrentnessReplayTests(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def test_loader_suppresses_source_bytecode_and_restores_setting(self):
+        source_dir = Path(self.tmp.name) / "loader-source"
+        source_dir.mkdir()
+        script = source_dir / "currentness_replay.py"
+        script.write_bytes(SCRIPT.read_bytes())
+        original_setting = sys.dont_write_bytecode
+        try:
+            for previous in (False, True):
+                with self.subTest(previous=previous):
+                    sys.dont_write_bytecode = previous
+                    loaded = load_planner(script)
+                    self.assertTrue(callable(loaded.plan_currentization))
+                    self.assertEqual(sys.dont_write_bytecode, previous)
+                    self.assertEqual(list(source_dir.rglob("*.pyc")), [])
+        finally:
+            sys.dont_write_bytecode = original_setting
 
     def request(self, **overrides):
         data = {

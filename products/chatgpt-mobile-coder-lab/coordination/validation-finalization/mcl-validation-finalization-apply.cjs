@@ -1387,7 +1387,14 @@ function externalOwnerReceiptIdentity(row, packet, paths) {
     item.kind === 'PR'
     && /^pr:#[1-9][0-9]*$/.test(item.locator || '')
     && /^[0-9a-f]{40}$/.test(item.identity || ''));
+  const candidateRefs = (receipt.authorityRefs || []).filter((item) =>
+    item.kind === 'COMMIT'
+    && item.locator === 'candidate-head'
+    && /^[0-9a-f]{40}$/.test(item.identity || ''));
   if (prRefs.length !== 1) fail('CONFLICT', 'EXTERNAL_OWNER_IMPLEMENTATION_PR_CONFLICT');
+  if (candidateRefs.length !== 1 || candidateRefs[0].identity !== prRefs[0].identity) {
+    fail('CONFLICT', 'EXTERNAL_OWNER_CANDIDATE_AUTHORITY_CONFLICT');
+  }
   return {
     row,
     pr: Number(prRefs[0].locator.slice('pr:#'.length)),
@@ -1400,6 +1407,18 @@ function externalOwnerReceiptIdentity(row, packet, paths) {
       diffIdentity: receipt.scope.diffIdentity,
     }),
   };
+}
+function externalOwnerPrNumber(stageRows, packet, paths) {
+  const identities = stageRows.map((row) =>
+    externalOwnerReceiptIdentity(row, packet, paths)).filter(Boolean);
+  if (!identities.length) {
+    fail('BLOCKED', 'EXTERNAL_OWNER_IMPLEMENTATION_RECEIPT_NOT_QUALIFIED');
+  }
+  const prNumbers = new Set(identities.map((item) => item.pr));
+  if (prNumbers.size !== 1) {
+    fail('CONFLICT', 'EXTERNAL_OWNER_IMPLEMENTATION_PR_GENERATION_CONFLICT');
+  }
+  return identities[0].pr;
 }
 function selectExternalOwnerImplementationReceipt(stageRows, packet, paths, pr = null) {
   const identities = stageRows.map((row) =>
@@ -1462,6 +1481,11 @@ function selectExternalOwnerWorkspaceManifest(comments, packet, packetRef, impl,
       : 'EXTERNAL_OWNER_WORKSPACE_MANIFEST_MISSING');
   const selected = manifests[0];
   const manifest = selected.manifest;
+  const completionBinding = handoff.validateReceiptAgainstManifest(completion, manifest);
+  if (completionBinding.status !== 'VALID') {
+    fail('BLOCKED', 'EXTERNAL_OWNER_D014_COMPLETION_MANIFEST_CONFLICT',
+      ...(completionBinding.errors || []));
+  }
   if (manifest.payloadSha256 !== completion.manifestPayloadSha256
       || manifest.packetRef !== packetRef
       || manifest.phaseId !== completion.phaseId
@@ -1494,8 +1518,8 @@ function createExternalOwnerLiveContext(packetRef, deps = {}) {
   const packetScope = externalOwnerPacketScope(issue.body);
   const comments = readComments(packet, runner);
   const stageRows = stageReceiptsFromComments(comments);
-  const prelim = selectExternalOwnerImplementationReceipt(stageRows, packet, packetScope.paths);
-  const pr = readPr(prelim.pr, runner);
+  const prNumber = externalOwnerPrNumber(stageRows, packet, packetScope.paths);
+  const pr = readPr(prNumber, runner);
   if (pr.state !== 'closed' || !pr.merged_at
       || !/^[0-9a-f]{40}$/.test(pr.head?.sha || '')
       || !/^[0-9a-f]{40}$/.test(pr.merge_commit_sha || '')) {
@@ -2879,6 +2903,7 @@ module.exports = {
   selectExternalOwnerImplementationReceipt,
   selectExternalOwnerWorkspaceManifest,
   externalOwnerGateProven,
+  externalOwnerPrNumber,
   externalOwnerPacketScope,
   select2786WorkspaceManifest,
   select2786WorkspaceCompletionReceipt,

@@ -2708,6 +2708,7 @@ test('reviewed external L route requires explicit route evidence and exact recei
       nextLegalAction: 'VALIDATION_MERGE',
       receiptDigest: 'a'.repeat(64),
       authorityRefs: [
+        {kind: 'COMMIT', locator: 'candidate-head', identity: 'b'.repeat(40)},
         {kind: 'PR', locator: 'pr:#5002', identity: 'b'.repeat(40)},
       ],
       requiredGates: required,
@@ -2762,4 +2763,152 @@ test('reviewed external L route packet scope is explicit and exact-path only', (
     'surface:mcl:some-other-effect')),
   (error) => error instanceof owner.ApplyError
     && error.reasonCodes.includes('EXTERNAL_OWNER_FINALIZATION_SURFACE_REQUIRED'));
+});
+
+
+test('reviewed external L route resolves live same-PR generation before candidate conflict', () => {
+  const paths = ['products/chatgpt-mobile-coder-lab/example/a.cjs'];
+  const gates = owner.EXTERNAL_OWNER_REQUIRED_GATES.map((name) => ({
+    name,
+    result: 'PASS',
+    evidenceLocator: name === owner.EXTERNAL_FINALIZATION_GATE
+      ? owner.EXTERNAL_FINALIZATION_EVIDENCE
+      : name === 'd014-completion' ? 'issue-comment:77' : 'receipt:test:' + name,
+  }));
+  const rowFor = (candidate, digest) => ({
+    comment: {id: digest === '1' ? 1 : 2},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 5001,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: digest.repeat(64),
+      authorityRefs: [
+        {kind: 'COMMIT', locator: 'candidate-head', identity: candidate},
+        {kind: 'PR', locator: 'pr:#5002', identity: candidate},
+      ],
+      requiredGates: gates,
+      scope: {paths, diffRequired: true, diffIdentity: digest.repeat(64)},
+    },
+  });
+  const oldHead = 'a'.repeat(40);
+  const mergedHead = 'b'.repeat(40);
+  const rows = [rowFor(oldHead, '1'), rowFor(mergedHead, '2')];
+  assert.equal(owner.externalOwnerPrNumber(rows, 5001, paths), 5002);
+  const selected = owner.selectExternalOwnerImplementationReceipt(
+    rows, 5001, paths, {number: 5002, head: {sha: mergedHead}});
+  assert.equal(selected.candidate, mergedHead);
+});
+
+test('reviewed external L route rejects candidate authority differing from PR authority', () => {
+  const paths = ['products/chatgpt-mobile-coder-lab/example/a.cjs'];
+  const gates = owner.EXTERNAL_OWNER_REQUIRED_GATES.map((name) => ({
+    name,
+    result: 'PASS',
+    evidenceLocator: name === owner.EXTERNAL_FINALIZATION_GATE
+      ? owner.EXTERNAL_FINALIZATION_EVIDENCE
+      : name === 'd014-completion' ? 'issue-comment:77' : 'receipt:test:' + name,
+  }));
+  const row = {
+    comment: {id: 1},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 5001,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: 'a'.repeat(64),
+      authorityRefs: [
+        {kind: 'COMMIT', locator: 'candidate-head', identity: 'a'.repeat(40)},
+        {kind: 'PR', locator: 'pr:#5002', identity: 'b'.repeat(40)},
+      ],
+      requiredGates: gates,
+      scope: {paths, diffRequired: true, diffIdentity: 'c'.repeat(64)},
+    },
+  };
+  assert.throws(() => owner.externalOwnerPrNumber([row], 5001, paths),
+    (error) => error instanceof owner.ApplyError
+      && error.reasonCodes.includes('EXTERNAL_OWNER_CANDIDATE_AUTHORITY_CONFLICT'));
+});
+
+test('reviewed external L route cross-validates D014 completion release against manifest', () => {
+  const packet = 5001;
+  const packetRef = '#5001';
+  const paths = ['products/chatgpt-mobile-coder-lab/example/a.cjs'];
+  const scopes = [
+    'path:products/chatgpt-mobile-coder-lab/example/a.cjs',
+    owner.EXTERNAL_FINALIZATION_SURFACE,
+  ].sort();
+  const manifest = handoff.buildManifest({
+    schemaVersion: 1,
+    mode: 'MCL_TASK_MANIFEST',
+    packetRef,
+    packetBodySha256: 'a'.repeat(64),
+    phaseId: '5001-implementation-pr-stage-entry',
+    phaseClass: 'REPOSITORY_MUTATION',
+    route: 'L',
+    executor: 'L',
+    scopes,
+    workspace: {
+      kind: 'repository',
+      branch: 'laptop/mcl-packet-5001',
+      worktree: '/home/alsl0/nyang-worktrees/mcl-packet-5001',
+    },
+    observedBaseSha: 'b'.repeat(40),
+    leaseRequirement: 'REQUIRED',
+    leaseEvidence: {
+      ledgerRef: '#2352',
+      leaseId: 'c'.repeat(64),
+      acquiredGeneration: 30,
+      acquireEvidenceRef: 'run:123',
+    },
+    sourceAuthorityRefs: [packetRef, 'issue:#2352'],
+    inputRefs: ['commit:' + 'b'.repeat(40)],
+    expectedOutputRefs: paths.map((repoPath) => 'path:' + repoPath),
+    acceptanceRefs: [packetRef],
+    stopCondition: 'Test external completion cross-validation.',
+    authority: {...handoff.AUTHORITY_FLAGS},
+  });
+  const completion = handoff.buildCompletionReceipt(manifest, {
+    disposition: 'COMPLETE',
+    outputRefs: ['commit:' + 'd'.repeat(40), 'pr:#5002'],
+    validationRefs: ['pr:#5002'],
+    observedRefs: ['commit:' + 'd'.repeat(40)],
+    leaseDisposition: 'RELEASED',
+    leaseReleaseEvidence: {
+      ledgerRef: '#2352',
+      leaseId: 'c'.repeat(64),
+      releasedGeneration: 31,
+      evidenceRef: 'run:456',
+    },
+    workspaceResult: 'clean',
+    blockerRefs: [],
+    requiredUnknownRefs: [],
+  });
+  const badCore = {...completion,
+    leaseReleaseEvidence: {...completion.leaseReleaseEvidence, leaseId: 'e'.repeat(64)}};
+  delete badCore.receiptId;
+  delete badCore.payloadSha256;
+  const normalized = handoff.normalizeReceiptCore(badCore);
+  assert.deepEqual(normalized.errors, []);
+  const payloadSha256 = handoff.digest(normalized.value);
+  const badCompletion = {
+    ...normalized.value,
+    receiptId: handoff.digest('MCL_COMPLETION_RECEIPT_V1:' + payloadSha256),
+    payloadSha256,
+  };
+  const comments = [
+    {id: 77, body: handoff.renderCompletionReceipt(badCompletion)},
+    {id: 78, body: handoff.renderManifest(manifest)},
+  ];
+  const impl = {
+    pr: 5002,
+    candidate: 'd'.repeat(40),
+    row: {receipt: {requiredGates: [{
+      name: 'd014-completion', result: 'PASS', evidenceLocator: 'issue-comment:77',
+    }]}},
+  };
+  assert.throws(() => owner.selectExternalOwnerWorkspaceManifest(
+    comments, packet, packetRef, impl, {scopes, paths}),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('EXTERNAL_OWNER_D014_COMPLETION_MANIFEST_CONFLICT'));
 });

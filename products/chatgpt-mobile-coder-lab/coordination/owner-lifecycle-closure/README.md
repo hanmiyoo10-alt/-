@@ -39,3 +39,27 @@ The classifier distinguishes a missing stable self-owner class from a stable cla
 ## V1 boundary
 
 This first implementation is classifier-only. Automatic stage-entry or PRE_MERGE consumer wiring is intentionally deferred to a separately reviewed packet after the classifier itself is proven in-repository.
+
+## Disposable smoke/proof lifecycle closure
+
+`mcl-smoke-lifecycle-closure.cjs` is a read-only sibling classifier for disposable proof work. It extends the closure-preflight family without changing the original owner-lifecycle V1 classifier.
+
+Input schema: `mcl-smoke-lifecycle-closure-input.v1`.
+
+Checkpoints:
+- `PREFLIGHT`: before disposable state is created;
+- `TERMINAL`: after proof and any separately authorized cleanup have completed.
+
+Retention modes:
+- `EPHEMERAL_SELF_RETIRING`: the default shape. PREFLIGHT requires every declared disposable asset to have a reviewed retirement owner. TERMINAL requires every owned asset to be absent, coordination converged, the declared baseline preserved, and foreign/unattributed residue absent.
+- `EVIDENCE_PRESERVED`: an explicit exception. PREFLIGHT requires durable evidence, a bounded retention reason, and a reviewed retirement policy. TERMINAL additionally requires retained asset identity to remain current and coordination to converge.
+
+Foreign or unattributed residue never creates cleanup authority. Missing, unknown, or conflicting identity/retirement evidence fails closed. The classifier performs no Git/GitHub/network access, D-013/D-014 mutation, workspace/ref/file cleanup, stage publication, runtime/device action, merge, release, or production effect. All authority flags remain false.
+
+Historical contract fixtures include:
+- #2391 self-retiring notebook live proof;
+- #4164 exact L stage-entry smoke with separately orchestrated cleanup;
+- #3862 pre-owner exact-L retirement gap;
+- early evidence-preserved smoke without an explicit retention policy.
+
+This classifier is an admission/terminal-evidence helper only. Actual retirement remains with the reviewed S/M/L or owner-specific cleanup surface.

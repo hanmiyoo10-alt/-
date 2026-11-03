@@ -121,6 +121,21 @@ r = classify(ephemeral("TERMINAL", [
 assert.equal(r.result, "UNKNOWN");
 assert.equal(r.classification, "RESIDUE_EVIDENCE_UNKNOWN");
 
+// Explicit asset conflict outranks missing evidence in a different asset.
+r = classify(ephemeral("TERMINAL", [
+  {kind:"worktree", identity:"conflict", residueState:"CONFLICT"},
+  {kind:"local-ref", identity:"missing"},
+], {coordinationState:"CONVERGED", baselineState:"PRESERVED", foreignResidueState:"NONE"}));
+assert.equal(r.result, "CONFLICT");
+assert.equal(r.classification, "RESIDUE_EVIDENCE_CONFLICT");
+
+r = classify(preserved("TERMINAL", [
+  {kind:"worktree", identity:"conflict", retainedIdentityState:"CONFLICT"},
+  {kind:"local-ref", identity:"missing"},
+], {coordinationState:"CONVERGED", baselineState:"PRESERVED", foreignResidueState:"NONE"}));
+assert.equal(r.result, "CONFLICT");
+assert.equal(r.classification, "RETAINED_IDENTITY_CONFLICT");
+
 r = classify(ephemeral("PREFLIGHT", [{kind:"worktree", identity:"x", retirementOwnerReviewed:true}], {evidenceState:"UNKNOWN"}));
 assert.equal(r.result, "UNKNOWN");
 r = classify(ephemeral("PREFLIGHT", [{kind:"worktree", identity:"x", retirementOwnerReviewed:true}], {evidenceState:"CONFLICT"}));

@@ -128,15 +128,11 @@ function stronger(left, right) {
 }
 
 function classifyEphemeralTerminal(input, list) {
-  for (const asset of list) {
-    if (!VALID_RESIDUE.has(asset.residueState)) {
-      return receipt(input, "UNKNOWN", "RESIDUE_EVIDENCE_UNKNOWN", ["SMOKE_RESIDUE_EVIDENCE_UNKNOWN"]);
-    }
-  }
-  if (list.some((a) => a.residueState === "CONFLICT")) {
+  const states = list.map((asset) => asset.residueState);
+  if (states.includes("CONFLICT")) {
     return receipt(input, "CONFLICT", "RESIDUE_EVIDENCE_CONFLICT", ["SMOKE_RESIDUE_EVIDENCE_CONFLICT"]);
   }
-  if (list.some((a) => a.residueState === "UNKNOWN")) {
+  if (states.some((state) => !VALID_RESIDUE.has(state) || state === "UNKNOWN")) {
     return receipt(input, "UNKNOWN", "RESIDUE_EVIDENCE_UNKNOWN", ["SMOKE_RESIDUE_EVIDENCE_UNKNOWN"]);
   }
   const present = list.filter((a) => a.residueState === "PRESENT");
@@ -155,15 +151,11 @@ function classifyPreservedTerminal(input, list) {
     return receipt(input, "UNKNOWN", "PRESERVATION_POLICY_EVIDENCE_UNKNOWN", ["SMOKE_PRESERVATION_POLICY_EVIDENCE_UNKNOWN"]);
   }
   text(input.retentionReason, "retentionReason", 500);
-  for (const asset of list) {
-    if (!VALID_RETAINED.has(asset.retainedIdentityState)) {
-      return receipt(input, "UNKNOWN", "RETAINED_IDENTITY_UNKNOWN", ["SMOKE_RETAINED_IDENTITY_UNKNOWN"]);
-    }
-  }
-  if (list.some((a) => a.retainedIdentityState === "CONFLICT")) {
+  const states = list.map((asset) => asset.retainedIdentityState);
+  if (states.includes("CONFLICT")) {
     return receipt(input, "CONFLICT", "RETAINED_IDENTITY_CONFLICT", ["SMOKE_RETAINED_IDENTITY_CONFLICT"]);
   }
-  if (list.some((a) => a.retainedIdentityState === "UNKNOWN")) {
+  if (states.some((state) => !VALID_RETAINED.has(state) || state === "UNKNOWN")) {
     return receipt(input, "UNKNOWN", "RETAINED_IDENTITY_UNKNOWN", ["SMOKE_RETAINED_IDENTITY_UNKNOWN"]);
   }
   const missing = list.filter((a) => a.retainedIdentityState === "MISSING");

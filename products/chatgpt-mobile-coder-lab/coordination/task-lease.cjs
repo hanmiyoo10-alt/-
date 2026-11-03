@@ -60,7 +60,7 @@ const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const PACKET_REF_RE = /^#([1-9][0-9]*)$/;
 const MAX_ACTIVE_LEASES = 32;
-const MAX_SCOPES = 16;
+const MAX_SCOPES = 24;
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
   if (!value || typeof value !== 'object') return value;

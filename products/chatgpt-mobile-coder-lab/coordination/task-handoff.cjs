@@ -20,7 +20,7 @@ const SAFE_REF_RE = /^(?:#[1-9][0-9]*|(?:issue|pr|ledger):#[1-9][0-9]*|run:[1-9]
 const PHASE_CLASSES = new Set(['READ_ONLY', 'REPOSITORY_MUTATION', 'DEVICE_OR_LAB_MUTATION', 'VALIDATION', 'EXPERIMENT', 'COORDINATION']);
 const DISPOSITIONS = new Set(['COMPLETE', 'BLOCKED', 'PARTIAL']);
 const MAX_REFS = 16;
-const MAX_SCOPES = 16;
+const MAX_SCOPES = 24;
 const EMPTY_SHA256 = crypto.createHash('sha256').update('').digest('hex');
 const PRESERVED_DIRTY_SURFACE_RE =
   /^surface:mcl:validation-residue-cleanup:[A-Za-z0-9._/-]+$/;

@@ -284,6 +284,40 @@ const TARGET_3216 = Object.freeze({
     'exact-four-path-diff',
   ]),
 });
+const TARGET_3203 = Object.freeze({
+  packet: 3203,
+  packetRef: '#3203',
+  pr: 3204,
+  candidate: '84345d298a0752e5c2567f9d6d871b84458ae5fc',
+  merge: '6217276406f09a7a52175730ed25e741fe9185a1',
+  workspaceManifestId: 'b093a71cc2a6ffdfbde669551610351d04c3f9aae12ea08245b73461593cd335',
+  workspaceManifestPhaseId: '3203-validation-merge-currentization-r1',
+  workspaceLeaseId: 'fd1abaafcda636ed7fb44c02039c91f043d9e809d5e0e5fb43a00134c90f2704',
+  workspaceAcquiredGeneration: 717,
+  workspaceBranch: 'server/mcl-packet-3203',
+  workspaceWorktree: '/root/nyang-worktrees/mcl-packet-3203',
+  workspaceCompletionReceiptId:
+    '1ea0caf9972e326e26e7c3a5e8e10d94eb32debf431e2ba07f3e009951aa75b2',
+  implementationReceiptDigest:
+    '60012065b12be02f9752a5596dc8b68c47c2fe4a7c6f0573a0b829e7d6ce4458',
+  requiredCoordinationGates: Object.freeze([
+    'currentization-d013-release',
+    'currentization-d014-complete',
+    'currentization-parent-lineage',
+    'currentization-scope-and-blob-preservation',
+    'd013-release',
+    'd014-completion',
+    'exact-head-required',
+    'exact-head-verify',
+    'exact-nine-path-diff',
+    'focused-contract-matrix',
+    'holder-workspace-convergence',
+    'non-closing-pr-authoring',
+    'packet-scoped-currentization-replay',
+    'pr-observe',
+    'repository-patch-write',
+  ]),
+});
 const TARGET_3356 = Object.freeze({
   packet: 3356,
   packetRef: '#3356',
@@ -423,6 +457,11 @@ const PROFILES = Object.freeze({
   }),
   '#3216': Object.freeze({
     target: TARGET_3216,
+    mode: 'IMPLEMENTATION_COORDINATION',
+    expectedEffects: EXPECTED_EFFECTS_2786,
+  }),
+  '#3203': Object.freeze({
+    target: TARGET_3203,
     mode: 'IMPLEMENTATION_COORDINATION',
     expectedEffects: EXPECTED_EFFECTS_2786,
   }),
@@ -2411,6 +2450,7 @@ module.exports = {
   TARGET_2786,
   TARGET_2791,
   TARGET_3216,
+  TARGET_3203,
   TARGET_3356,
   TARGET_3561,
   TARGET_3762,

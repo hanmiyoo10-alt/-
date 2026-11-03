@@ -237,7 +237,23 @@ The sixteenth profile is the exact merged M→S Wireless ADB peer-controller pac
 This profile finalizes repository validation only. It grants no M/S device, ADB,
 pairing, bootstrap-pin, reconnect, persistence, release or production authority.
 
-The caller supplies only one of the sixteen reviewed packet numbers and a bounded output
+### Profile Q — #3203 / PR #3204
+
+The seventeenth profile is the exact already-merged D-013 zero-run reconciliation packet whose historical validation inspect sidecar was not durably retained:
+
+- exact currentized canonical IMPLEMENTATION_PR receipt and merged candidate attribution;
+- exact S/S currentization D-014 manifest, released lease, clean historical worktree and holder absence;
+- exact currentization D-014 COMPLETE receipt identity is compile-time fixed and revalidated;
+- fixed PASS gates bind currentization release/completion/lineage, scope/blob preservation, original release/completion, exact-head Verify/Required, exact nine-path diff, focused matrix, holder/workspace convergence, non-closing PR authoring, packet-scoped replay, PR observe, and repository patch write;
+- current #2352 must prove packet #3203 has no active lease;
+- no historical validation inspect sidecar is reconstructed or claimed;
+- no merge/currentization retry is permitted;
+- the only permitted effect is one canonical `VALIDATION_MERGE` receipt comment;
+- an exact existing receipt is reused and a second apply is zero-effect.
+
+This profile repairs #3208 only. It does not rewrite #3203 source bytes or weaken generic finalization semantics.
+
+The caller supplies only one of the seventeen reviewed packet numbers and a bounded output
 format. Repository, PR, manifest, lease, run, workspace, effect, command and comment
 target remain non-selectable.
 
@@ -282,6 +298,9 @@ node mcl-validation-finalization-apply.cjs apply --packet '#2791' --format agent
 
 node mcl-validation-finalization-apply.cjs inspect --packet '#3216' --format agent-view
 node mcl-validation-finalization-apply.cjs apply --packet '#3216' --format agent-view
+
+node mcl-validation-finalization-apply.cjs inspect --packet '#3203' --format agent-view
+node mcl-validation-finalization-apply.cjs apply --packet '#3203' --format agent-view
 
 node mcl-validation-finalization-apply.cjs inspect --packet '#3356' --format agent-view
 node mcl-validation-finalization-apply.cjs apply --packet '#3356' --format agent-view
@@ -357,6 +376,15 @@ Profile P requires `codex-exact-head-review-clear`, `coordination-released`,
 It additionally binds the exact #3762 L/L review-update D-014 manifest and exact
 D-014 COMPLETE receipt before the existing implementation-coordination finalization
 path may publish a canonical validation receipt.
+Profile Q requires `currentization-d013-release`, `currentization-d014-complete`,
+`currentization-parent-lineage`, `currentization-scope-and-blob-preservation`,
+`d013-release`, `d014-completion`, `exact-head-required`, `exact-head-verify`,
+`exact-nine-path-diff`, `focused-contract-matrix`, `holder-workspace-convergence`,
+`non-closing-pr-authoring`, `packet-scoped-currentization-replay`, `pr-observe`,
+and `repository-patch-write`.
+It additionally binds the exact #3203 S/S currentization D-014 manifest and COMPLETE
+receipt before the existing implementation-coordination finalization path may publish
+a canonical validation receipt.
 Each profile's exact valid workspace manifest is used only to resolve the fixed
 worktree/holder location; it is never manufactured or rewritten as a
 validation-stage D-014 manifest.
@@ -444,7 +472,7 @@ exact stale holder cleanup if present
 → STOP
 ~~~
 
-Profiles B through M, O and P share the smaller effect order:
+Profiles B through M, O, P and Q share the smaller effect order:
 
 ~~~
 prove exact fixed packet lease absent
@@ -469,6 +497,11 @@ Profile A may perform only:
 
 Profiles B, C, D, E, F, G, H, I, J, K, L, M and O may perform only:
 - one exact canonical VALIDATION_MERGE packet comment if absent.
+
+Profile Q may perform only:
+- one exact canonical `VALIDATION_MERGE` receipt comment if absent.
+
+Profile Q never reconstructs historical validation inspect sidecars and never performs Git/PR/currentization/merge effects.
 
 Profile N may perform only:
 - one exact canonical VALIDATION_MERGE packet comment if absent.
@@ -507,6 +540,9 @@ workspace manifests are read only for fixed workspace/holder identity. The owner
 must never build, publish or retrospectively complete those manifests as
 validation-stage evidence.
 
+Profile Q has no validation-stage D-014 manifest. Its exact reviewed currentization
+manifest and COMPLETE receipt are read only as implementation-coordination evidence.
+
 ## Stage receipt ownership
 
 The canonical VALIDATION_MERGE receipt is constructed only by stage-receipt.cjs.
@@ -525,6 +561,9 @@ exact/equivalent validation D-014 completion evidence.
 Profiles B through M and O instead bind the exact canonical IMPLEMENTATION_PR receipt and
 their reviewed implementation-coordination convergence gates. They contain no
 synthetic validation D-014 gate or receipt.
+
+Profile Q likewise binds the exact canonical IMPLEMENTATION_PR receipt and its reviewed
+implementation-coordination convergence gates; it contains no synthetic validation D-014 gate.
 
 All stage-receipt authority flags remain false.
 

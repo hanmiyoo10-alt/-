@@ -97,9 +97,9 @@ function classifyPreflight(input, list) {
 }
 
 function terminalStateGate(input) {
-  const coordination = input.coordinationState;
-  const baseline = input.baselineState;
-  const foreign = input.foreignResidueState;
+  const coordination = input.coordinationState ?? "UNKNOWN";
+  const baseline = input.baselineState ?? "UNKNOWN";
+  const foreign = input.foreignResidueState ?? "UNKNOWN";
   if (!VALID_COORDINATION.has(coordination)) throw new Error("invalid coordinationState");
   if (!VALID_BASELINE.has(baseline)) throw new Error("invalid baselineState");
   if (!VALID_FOREIGN.has(foreign)) throw new Error("invalid foreignResidueState");

@@ -172,6 +172,32 @@ r = classify(preserved("TERMINAL", [
 assert.equal(r.result, "BLOCKED");
 assert.equal(r.classification, "PRESERVATION_POLICY_MISSING");
 
+// Missing terminal-state evidence is explicit UNKNOWN, not an exception.
+for (const missingKey of ["coordinationState", "baselineState", "foreignResidueState"]) {
+  const terminal = {
+    coordinationState:"CONVERGED",
+    baselineState:"PRESERVED",
+    foreignResidueState:"NONE",
+  };
+  delete terminal[missingKey];
+  r = classify(ephemeral("TERMINAL", [
+    {kind:"worktree", identity:"x", residueState:"ABSENT"},
+  ], terminal));
+  assert.equal(r.result, "UNKNOWN");
+  assert.equal(r.classification, "TERMINAL_EVIDENCE_UNKNOWN");
+}
+
+// Stronger explicit asset conflict still outranks missing terminal-state evidence.
+r = classify(ephemeral("TERMINAL", [
+  {kind:"worktree", identity:"x", residueState:"CONFLICT"},
+], {baselineState:"PRESERVED", foreignResidueState:"NONE"}));
+assert.equal(r.result, "CONFLICT");
+assert.equal(r.classification, "RESIDUE_EVIDENCE_CONFLICT");
+
+assert.throws(() => classify(ephemeral("TERMINAL", [
+  {kind:"worktree", identity:"x", residueState:"ABSENT"},
+], {coordinationState:"INVALID", baselineState:"PRESERVED", foreignResidueState:"NONE"})), /invalid coordinationState/);
+
 r = classify(ephemeral("PREFLIGHT", [{kind:"worktree", identity:"x", retirementOwnerReviewed:true}], {evidenceState:"UNKNOWN"}));
 assert.equal(r.result, "UNKNOWN");
 r = classify(ephemeral("PREFLIGHT", [{kind:"worktree", identity:"x", retirementOwnerReviewed:true}], {evidenceState:"CONFLICT"}));

@@ -253,3 +253,17 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2188)
 - Event ID: `02421797efb4d7b26dd5701800b2bbf738e830ee4bb78fa2933d7bbfef1d81fb`
 <!-- canonical-main-doc-promoted:02421797efb4d7b26dd5701800b2bbf738e830ee4bb78fa2933d7bbfef1d81fb -->
+
+### 2026-11-03 — Mobile Coder Lab: serverphone nested Android emulator feasibility
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2029)
+- Event ID: `e28fd0dc7fd0e4399f035977084194a43e1274dc42282b3818f14f1381a22848`
+<!-- canonical-main-doc-promoted:e28fd0dc7fd0e4399f035977084194a43e1274dc42282b3818f14f1381a22848 -->
+
+### 2026-11-03 — REPO-FIXED-EFFECT-VALIDATION-BINDING-V1 — precommit validator interlock
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2718)
+- Event ID: `4bfcfc7a147d2e63f0c19807d0a2bce1de912586f823e057b92e08b67a53623a`
+<!-- canonical-main-doc-promoted:4bfcfc7a147d2e63f0c19807d0a2bce1de912586f823e057b92e08b67a53623a -->

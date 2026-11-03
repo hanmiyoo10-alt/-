@@ -1791,6 +1791,118 @@ test('self-owner currentized workspace manifest follows currentization completio
   assert.equal(selected.manifest.manifestId, manifest.manifestId);
   assert.equal(selected.lineage.kind, 'VALIDATION_MERGE_CURRENTIZATION');
 });
+test('self-owner L repository lineage binds exact reviewed phases and workspace', () => {
+  const gates = owner.SELF_OWNER_L_REQUIRED_GATES.map((name) => ({
+    name,
+    result: 'PASS',
+    evidenceLocator: name === 'd014-completion' ? 'issue-comment:2' : 'issue-comment:1',
+  }));
+  const row = {
+    comment: {id: 9},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 4150,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: '9'.repeat(64),
+      authorityRefs: [
+        {kind: 'COMMIT', locator: 'candidate-head', identity: 'd'.repeat(40)},
+        {kind: 'PR', locator: 'pr:#4151', identity: 'd'.repeat(40)},
+      ],
+      requiredGates: gates,
+      scope: {
+        paths: owner.SELF_OWNER_PATHS,
+        diffRequired: true,
+        diffIdentity: 'e'.repeat(64),
+      },
+    },
+  };
+  const impl = owner.selectSelfOwnerImplementationReceipt([row], 4150);
+  assert.equal(impl.lineage.kind, 'IMPLEMENTATION_L_REPOSITORY');
+  assert.equal(impl.lineage.completionGate, 'd014-completion');
+
+  const select = (phaseId, branch = 'laptop/mcl-packet-4150',
+      worktree = '/home/alsl0/nyang-worktrees/mcl-packet-4150',
+      route = 'L', executor = 'L', completionPhase = phaseId) => {
+    const manifest = handoff.buildManifest({
+      schemaVersion: 1,
+      mode: 'MCL_TASK_MANIFEST',
+      packetRef: '#4150',
+      packetBodySha256: 'a'.repeat(64),
+      phaseId,
+      phaseClass: 'REPOSITORY_MUTATION',
+      route,
+      executor,
+      scopes: owner.SELF_OWNER_SCOPES,
+      workspace: {kind: 'repository', branch, worktree},
+      observedBaseSha: 'b'.repeat(40),
+      leaseRequirement: 'REQUIRED',
+      leaseEvidence: {
+        ledgerRef: '#2352',
+        leaseId: 'c'.repeat(64),
+        acquiredGeneration: 30,
+        acquireEvidenceRef: 'run:123',
+      },
+      sourceAuthorityRefs: ['#4150', 'issue:#2352'],
+      inputRefs: ['commit:' + 'b'.repeat(40)],
+      expectedOutputRefs: owner.SELF_OWNER_PATHS.map((repoPath) => 'path:' + repoPath),
+      acceptanceRefs: ['#4150'],
+      stopCondition: 'Test exact L self-owner manifest selection.',
+      authority: {...handoff.AUTHORITY_FLAGS},
+    });
+    let completion = handoff.buildCompletionReceipt(manifest, {
+      disposition: 'COMPLETE',
+      outputRefs: ['commit:' + 'd'.repeat(40), 'pr:#4151'],
+      validationRefs: ['issue:#4150'],
+      observedRefs: ['commit:' + 'd'.repeat(40)],
+      leaseDisposition: 'RELEASED',
+      leaseReleaseEvidence: {
+        ledgerRef: '#2352',
+        leaseId: 'c'.repeat(64),
+        releasedGeneration: 31,
+        evidenceRef: 'run:456',
+      },
+      workspaceResult: 'clean',
+      blockerRefs: [],
+      requiredUnknownRefs: [],
+    });
+    if (completionPhase !== phaseId) {
+      const core = {...completion, phaseId: completionPhase};
+      delete core.receiptId;
+      delete core.payloadSha256;
+      const normalized = handoff.normalizeReceiptCore(core);
+      assert.deepEqual(normalized.errors, []);
+      const payloadSha256 = handoff.digest(normalized.value);
+      completion = {
+        ...normalized.value,
+        receiptId: handoff.digest('MCL_COMPLETION_RECEIPT_V1:' + payloadSha256),
+        payloadSha256,
+      };
+    }
+    return owner.selectSelfOwnerWorkspaceManifest([
+      {id: 1, body: handoff.renderManifest(manifest)},
+      {id: 2, body: handoff.renderCompletionReceipt(completion)},
+    ], 4150, '#4150', impl);
+  };
+
+  assert.equal(select('4150-implementation-pr').lineage.kind, 'IMPLEMENTATION_L_REPOSITORY');
+  assert.equal(select('4150-implementation-pr-stage-entry').manifest.route, 'L');
+  assert.throws(() => select(
+    '4150-implementation-pr-stage-entry',
+    'laptop/mcl-packet-4150',
+    '/home/alsl0/nyang-worktrees/mcl-packet-4150',
+    'L', 'L', '4150-implementation-pr'), owner.ApplyError);
+  assert.throws(() => select('4150-other-phase'), owner.ApplyError);
+  assert.throws(() => select('4150-implementation-pr', 'laptop/nested/path',
+    '/home/alsl0/nyang-worktrees/nested/path'), owner.ApplyError);
+  assert.throws(() => select('4150-implementation-pr', 'laptop/mcl-packet-4150',
+    '/home/alsl0/nyang-worktrees/other'), owner.ApplyError);
+  assert.throws(() => owner.selectSelfOwnerImplementationReceipt([{
+    ...row,
+    receipt: {...row.receipt, requiredGates: gates.slice(1)},
+  }], 4150), owner.ApplyError);
+});
+
 test('late self-owner recognition is zero-effect for inspect and apply', () => {
   let writes = 0;
   const target = {

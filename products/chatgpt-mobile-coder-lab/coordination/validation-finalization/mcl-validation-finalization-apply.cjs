@@ -509,6 +509,16 @@ const SELF_OWNER_CURRENTIZED_REQUIRED_GATES = Object.freeze([
   'currentized-pr-readback',
   'exact-three-file-diff',
 ]);
+const SELF_OWNER_L_REQUIRED_GATES = Object.freeze([
+  'd013-release',
+  'd014-completion',
+  'exact-head-required',
+  'exact-head-verify',
+  'exact-three-path-diff',
+  'l-owner-fixed-validation',
+  'pr-observe',
+  'workspace-clean-holder-released',
+]);
 const PACKET_REF_RE = /^#[1-9][0-9]*$/;
 
 function profileFor(packetRef) {
@@ -863,7 +873,39 @@ function selfOwnerLineageForReceipt(receipt, packet) {
       requiredGates: SELF_OWNER_CURRENTIZED_REQUIRED_GATES,
     };
   }
+  if (requiredGateNamesPass(receipt, SELF_OWNER_L_REQUIRED_GATES)) {
+    return {
+      kind: 'IMPLEMENTATION_L_REPOSITORY',
+      completionGate: 'd014-completion',
+      phaseId: String(packet) + '-implementation-pr',
+      requiredGates: SELF_OWNER_L_REQUIRED_GATES,
+    };
+  }
   return null;
+}
+function selfOwnerPhaseMatches(lineage, packet, phaseId) {
+  if (lineage.kind === 'IMPLEMENTATION_L_REPOSITORY') {
+    return phaseId === String(packet) + '-implementation-pr'
+      || phaseId === String(packet) + '-implementation-pr-stage-entry';
+  }
+  return phaseId === lineage.phaseId;
+}
+function selfOwnerExpectedExecutor(lineage) {
+  return lineage.kind === 'IMPLEMENTATION_L_REPOSITORY' ? 'L' : 'S';
+}
+function selfOwnerWorkspaceMatches(lineage, packet, workspace) {
+  if (!workspace || workspace.kind !== 'repository') return false;
+  if (lineage.kind !== 'IMPLEMENTATION_L_REPOSITORY') {
+    return workspace.branch === 'server/mcl-packet-' + packet
+      && workspace.worktree === '/root/nyang-worktrees/mcl-packet-' + packet;
+  }
+  const branch = String(workspace.branch || '');
+  if (!/^laptop\/[A-Za-z0-9._-]+$/.test(branch)
+      || branch === 'laptop/work' || branch.includes('..')
+      || branch.endsWith('/') || branch.includes('@{')) return false;
+  const target = branch.slice('laptop/'.length);
+  if (!target || target === '.' || target === '..') return false;
+  return workspace.worktree === '/home/alsl0/nyang-worktrees/' + target;
 }
 function selfOwnerReceiptIdentity(row, packet) {
   const receipt = row?.receipt;
@@ -969,8 +1011,8 @@ function selectSelfOwnerCompletionReceipt(comments, packet, packetRef, impl) {
   }
   const receipt = parsed.value;
   if (receipt.packetRef !== packetRef
-      || receipt.phaseId !== lineage.phaseId
-      || receipt.executor !== 'S'
+      || !selfOwnerPhaseMatches(lineage, packet, receipt.phaseId)
+      || receipt.executor !== selfOwnerExpectedExecutor(lineage)
       || receipt.disposition !== 'COMPLETE'
       || receipt.workspaceResult !== 'clean'
       || (receipt.blockerRefs || []).length
@@ -1004,17 +1046,16 @@ function selectSelfOwnerWorkspaceManifest(comments, packet, packetRef, impl) {
   const manifest = selected.manifest;
   if (manifest.payloadSha256 !== completion.manifestPayloadSha256
       || manifest.packetRef !== packetRef
-      || manifest.phaseId !== lineage.phaseId
+      || manifest.phaseId !== completion.phaseId
+      || !selfOwnerPhaseMatches(lineage, packet, manifest.phaseId)
       || manifest.phaseClass !== 'REPOSITORY_MUTATION'
-      || manifest.route !== 'S'
-      || manifest.executor !== 'S'
+      || manifest.route !== selfOwnerExpectedExecutor(lineage)
+      || manifest.executor !== selfOwnerExpectedExecutor(lineage)
       || manifest.leaseRequirement !== 'REQUIRED'
       || !same([...(manifest.scopes || [])].sort(), SELF_OWNER_SCOPES)
       || !/^[0-9a-f]{64}$/.test(manifest.leaseEvidence?.leaseId || '')
       || !Number.isSafeInteger(manifest.leaseEvidence?.acquiredGeneration)
-      || manifest.workspace?.kind !== 'repository'
-      || manifest.workspace?.branch !== 'server/mcl-packet-' + packet
-      || manifest.workspace?.worktree !== '/root/nyang-worktrees/mcl-packet-' + packet) {
+      || !selfOwnerWorkspaceMatches(lineage, packet, manifest.workspace)) {
     fail('CONFLICT', 'SELF_OWNER_WORKSPACE_MANIFEST_IDENTITY_CONFLICT');
   }
   return {...selected, completionReceipt: completion, completionText: completionRow.text,
@@ -2445,6 +2486,7 @@ module.exports = {
   SELF_OWNER_PATHS,
   SELF_OWNER_REQUIRED_GATES,
   SELF_OWNER_CURRENTIZED_REQUIRED_GATES,
+  SELF_OWNER_L_REQUIRED_GATES,
   SELF_OWNER_SCOPES,
   TARGET,
   TARGET_2786,

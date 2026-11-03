@@ -143,6 +143,22 @@ class Contract(unittest.TestCase):
         self.assertEqual(mod._local_head(self.profile, "laptop/case"), self.head)
         self.assertEqual(mod._remote_head(self.profile, "laptop/case"), ("PRESENT", moved))
 
+    def test_symbolic_ref_race_preserves_referent(self):
+        main_before = run("git", "-C", str(self.control), "rev-parse", "refs/heads/main")
+        def symbolic_race():
+            run("git", "-C", str(self.control), "symbolic-ref",
+                "refs/heads/laptop/case", "refs/heads/main")
+        out = mod.apply_target("case", self.head, explicit_apply=True, profile=self.profile,
+                               before_local_delete=symbolic_race)
+        self.assertEqual(out["status"], "BLOCKED")
+        self.assertIn("LOCAL_BRANCH_SYMBOLIC_REF", out["reasonCodes"])
+        self.assertEqual(run("git", "-C", str(self.control), "rev-parse", "refs/heads/main"),
+                         main_before)
+        state = run("git", "-C", str(self.control), "symbolic-ref",
+                    "refs/heads/laptop/case")
+        self.assertEqual(state, "refs/heads/main")
+        self.assertEqual(mod._remote_head(self.profile, "laptop/case"), ("MISSING", None))
+
     def test_local_race_blocks_expected_old_delete(self):
         alt = run("git", "-C", str(self.control), "rev-parse", "HEAD")
         def race():

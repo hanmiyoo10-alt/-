@@ -22,6 +22,8 @@ fresh external packet / overlap / D-013 cleanup reservation
 -> reject assume-unchanged / skip-worktree tracked state that can hide local changes
 -> prove the selected branch is registered by this worktree only
 -> bind fetch and push to one exact canonical origin URL with no alternate push destination
+-> require the selected local branch ref to be direct, never symbolic
+-> delete the local ref with expected-old plus explicit no-dereference semantics
 -> prove workspace holder absent
 -> snapshot L landing branch / HEAD / index / status / FETCH_HEAD
 -> ordinary non-force worktree remove

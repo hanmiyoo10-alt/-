@@ -97,10 +97,24 @@ def _registered(control):
         rows.append(item)
     return rows
 
-def _local_head(profile, branch):
-    result = _git(profile["control"], "rev-parse", "--verify", f"refs/heads/{branch}", check=False)
+def _local_ref_state(profile, branch):
+    ref = f"refs/heads/{branch}"
+    symbolic = _git(profile["control"], "symbolic-ref", "-q", ref, check=False)
+    if symbolic.returncode == 0:
+        return "SYMBOLIC", None
+    if symbolic.returncode not in {1}:
+        return "ERROR", None
+    result = _git(profile["control"], "rev-parse", "--verify", ref, check=False)
+    if result.returncode != 0:
+        return "MISSING", None
     value = result.stdout.strip()
-    return value if result.returncode == 0 and SHA_RE.fullmatch(value) else None
+    if not SHA_RE.fullmatch(value):
+        return "INVALID", None
+    return "DIRECT", value
+
+def _local_head(profile, branch):
+    state, value = _local_ref_state(profile, branch)
+    return value if state == "DIRECT" else None
 
 def _remote_binding_reasons(profile):
     fetch = _git(profile["control"], "remote", "get-url", "--all", profile["remote"], check=False)
@@ -250,9 +264,13 @@ def inspect_target(target, expected_head, *, profile=None):
         elif os.path.lexists(os.path.join(git_dir.stdout.strip(), HOLDER_FILE)):
             reasons.append("WORKSPACE_HOLDER_PRESENT")
     reasons.extend(_remote_binding_reasons(profile))
-    local_head = _local_head(profile, branch)
-    if local_head is None:
+    local_state, local_head = _local_ref_state(profile, branch)
+    if local_state == "SYMBOLIC":
+        reasons.append("LOCAL_BRANCH_SYMBOLIC_REF")
+    elif local_state == "MISSING":
         reasons.append("LOCAL_BRANCH_REF_MISSING")
+    elif local_state != "DIRECT":
+        reasons.append("LOCAL_BRANCH_REF_READ_FAILED")
     elif local_head != expected_head:
         reasons.append("LOCAL_BRANCH_REF_CONFLICT")
     remote_state, remote_head = _remote_head(profile, branch)
@@ -281,8 +299,10 @@ def _post_worktree_remove(profile, target_path, branch, expected_head):
             reasons.append("POST_REMOVE_BRANCH_REGISTRATION_PRESENT")
     except Exception:
         reasons.append("POST_REMOVE_REGISTRATION_UNKNOWN")
-    local_head = _local_head(profile, branch)
-    if local_head != expected_head:
+    local_state, local_head = _local_ref_state(profile, branch)
+    if local_state == "SYMBOLIC":
+        reasons.append("POST_REMOVE_LOCAL_REF_SYMBOLIC")
+    elif local_state != "DIRECT" or local_head != expected_head:
         reasons.append("POST_REMOVE_LOCAL_REF_CONFLICT")
     state, remote_head = _remote_head(profile, branch)
     if state != "PRESENT" or remote_head != expected_head:
@@ -354,7 +374,19 @@ def apply_target(target, expected_head, *, explicit_apply=False, profile=None,
                         observed, _local_head(profile, branch))
     if before_local_delete:
         before_local_delete()
-    deleted = _git(profile["control"], "update-ref", "-d", ref, expected_head, check=False)
+    local_state, local_head = _local_ref_state(profile, branch)
+    if local_state == "SYMBOLIC":
+        return _receipt("apply", "BLOCKED", target, expected_head,
+                        ["LOCAL_BRANCH_SYMBOLIC_REF"],
+                        second["observedBranch"], second["observedHead"],
+                        None, None)
+    if local_state != "DIRECT" or local_head != expected_head:
+        return _receipt("apply", "BLOCKED", target, expected_head,
+                        ["LOCAL_DELETE_REJECTED"],
+                        second["observedBranch"], second["observedHead"],
+                        None, local_head)
+    deleted = _git(profile["control"], "update-ref", "--no-deref",
+                   "-d", ref, expected_head, check=False)
     if deleted.returncode:
         return _receipt("apply", "BLOCKED", target, expected_head,
                         ["LOCAL_DELETE_REJECTED"],

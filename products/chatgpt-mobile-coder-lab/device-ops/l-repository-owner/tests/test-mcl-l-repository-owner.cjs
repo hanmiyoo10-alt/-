@@ -1243,6 +1243,49 @@ test('review-update replay preserves original PR payload plus bounded review del
     'REVIEW_UPDATE_CURRENTIZED_PATH_CONFLICT');
 
     gitExec(feature, ['push','origin','HEAD:refs/heads/laptop/task-9001']);
+
+    const lagRunner=reviewRunner(
+      remote,m.workspace.branch,prRequest,{headRefOid:oldHead});
+    const pending=owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,preparedDigest,{profile,runner:lagRunner});
+    assert.equal(pending.state,'PR_PROJECTION_PENDING');
+    assert.equal(pending.remoteHead,pending.finalHead);
+    assert.equal(pending.pr.headRefOid,oldHead);
+
+    let projectionReads=0;
+    const projectionCommands=[];
+    const caughtUpRunner=(command,args,options={}) => {
+      projectionCommands.push(command + ' ' + args.slice(0,2).join(' '));
+      if (command !== 'gh') throw new Error('projection reconciliation attempted non-gh effect');
+      projectionReads += 1;
+      const headRefOid=projectionReads === 1 ? oldHead : pending.finalHead;
+      return reviewRunner(remote,m.workspace.branch,prRequest,{headRefOid})(
+        command,args,options);
+    };
+    const reconciled=owner.reconcileReviewUpdatePrProjection(
+      pending,m,request,prRequest,{runner:caughtUpRunner,sleep:()=>{}});
+    assert.equal(reconciled.state,'PUSHED');
+    assert.equal(reconciled.pr.number,4001);
+    assert.equal(reconciled.pr.headRefOid,pending.finalHead);
+    assert.equal(projectionReads,2);
+    assert(projectionCommands.every((row) => row.startsWith('gh pr')));
+
+    let unchangedSleeps=0;
+    const unchanged=owner.reconcileReviewUpdatePrProjection(
+      pending,m,request,prRequest,{
+        runner:lagRunner,
+        sleep:()=>{ unchangedSleeps += 1; },
+      });
+    assert.equal(unchanged.state,'PR_PROJECTION_PENDING');
+    assert.equal(unchanged.pr.headRefOid,oldHead);
+    assert.equal(unchangedSleeps,owner.REVIEW_UPDATE_PR_PROJECTION_REREAD_ATTEMPTS);
+
+    const thirdHeadRunner=reviewRunner(
+      remote,m.workspace.branch,prRequest,{headRefOid:'f'.repeat(40)});
+    expectReason(() => owner.reconcileReviewUpdatePrProjection(
+      pending,m,request,prRequest,{runner:thirdHeadRunner,sleep:()=>{}}),
+    'REVIEW_UPDATE_REMOTE_PR_HEAD_CONFLICT');
+
     const pushed=owner.classifyReviewUpdateState(
       m,request,prRequest,currentMain,preparedDigest,{profile,runner});
     assert.equal(pushed.state,'PUSHED');
@@ -1395,6 +1438,20 @@ test('review-update effect stays same-PR non-force and current-main replay bound
   assert.ok(block.includes("'merge', '--no-ff', '--no-edit', currentMain"));
   assert.ok(block.includes('pushExactCandidate('));
   assert.ok(block.includes('state.pr.number !== oldPrNumber'));
+  const initialProjectionGuard=block.indexOf("if (state.state === 'PR_PROJECTION_PENDING')");
+  const candidatePaths=block.indexOf('const candidatePaths =');
+  assert.ok(initialProjectionGuard >= 0 && initialProjectionGuard < candidatePaths);
+  assert.ok(block.includes('reconcileReviewUpdatePrProjection('));
+  assert.ok(source.includes("next_legal_action:'REREAD_SAME_PR_PROJECTION'"));
+  assert.ok(block.includes("return pendingReviewUpdateResult("));
+  const helperSource=source.slice(
+    source.indexOf('function reconcileReviewUpdatePrProjection('),
+    source.indexOf('function pendingReviewUpdateResult('));
+  assert.equal(helperSource.includes('pushExactCandidate('),false);
+  assert.equal(helperSource.includes("'commit'"),false);
+  assert.equal(helperSource.includes("'merge'"),false);
+  assert.equal(helperSource.includes("'update-ref'"),false);
+  assert.equal(helperSource.includes("'--force'"),false);
   assert.ok(block.includes("state.state === 'COMMITTED' && currentMain !== request.expected_old_head"));
   assert.ok(block.includes("state.state === 'COMMITTED' && currentMain === request.expected_old_head"));
   assert.equal(block.includes("'pr', 'create'"),false);

@@ -208,6 +208,11 @@ POST acknowledgement uncertain + row absent -> UNKNOWN / no blind second POST
 same semantic slot with distinct identity or duplicate exact rows -> CONFLICT
 ```
 
+For D-014 manifests the semantic publication slot includes the exact acquired
+D-013 generation as well as packet/phase/lease identity. Releasing and later
+reacquiring the same deterministic lease profile therefore creates a distinct
+reviewed publication slot instead of colliding with the earlier acquisition.
+
 Comment reread is evidence only and grants no broader issue-write authority.
 
 Caller-specific workflow-run identity remains execution provenance in the

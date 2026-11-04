@@ -119,13 +119,15 @@ Lease acquire/release accepts the existing successful run-backed
 The latter is valid only when its deterministic locator is exactly
 `receipt:mcl-task-lease-readback:<operation>:<leaseId>:generation:<generation>`.
 
-After a process interruption, publication may reconstruct the same no-run proof
-from current exact D-013 durable state only: old release from the matching exact
-`lastRelease` generation, and fresh acquire from the one exact active fresh lease
-at the current ledger generation before any later lease mutation. Otherwise the
-existing bounded workflow-run evidence path remains the fallback. Time passage,
-generic absence, or synthetic run ids never prove success, and lease effects are
-never replayed merely to obtain transport-shaped evidence.
+After a process interruption, old release publication may reconstruct the same
+no-run proof from the matching exact D-013 `lastRelease` generation. Fresh
+acquire publication does **not** infer acquisition generation merely from an
+active lease plus the current global ledger generation, because unrelated lease
+operations can advance that generation. A restarted fresh-acquire checkpoint
+therefore requires the existing bounded exact workflow-run evidence fallback to
+re-establish the acquisition generation. Time passage, generic absence, active
+lease presence alone, or synthetic run ids never prove success, and lease
+effects are never replayed merely to obtain transport-shaped evidence.
 
 ## Holder boundary
 

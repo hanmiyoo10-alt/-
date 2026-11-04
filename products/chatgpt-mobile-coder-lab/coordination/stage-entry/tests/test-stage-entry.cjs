@@ -1000,6 +1000,24 @@ test('exact semantic packet comments reuse, recover lost ack once, and fail clos
   assert.throws(() =>
     stage.postExactSemanticComment(77, manifestBody, 'manifest', conflictRunner),
   /COMMENT_SEMANTIC_CONFLICT/);
+
+  const retryLease = {...lease, observedGeneration: 21, evidenceRef: 'run:901'};
+  const retryBody = taskHandoff.renderManifest(stage.buildLandingManifest(context, retryLease));
+  let retryPosts = 0;
+  const retryRows = [{id: 67, body: manifestBody}];
+  const retryRunner = (args, options = {}) => {
+    if (args[0] === 'gh' && args[1] === 'api' && !args.includes('--method')) {
+      return response(0, retryRows);
+    }
+    if (args[0] === 'gh' && args[1] === 'api' && args.includes('--method')) {
+      retryPosts += 1;
+      retryRows.push({id: 68, body: JSON.parse(options.input).body});
+      return response(0, {id: 68});
+    }
+    throw new Error(args.join(' '));
+  };
+  assert.equal(stage.postExactSemanticComment(77, retryBody, 'manifest', retryRunner), 68);
+  assert.equal(retryPosts, 1);
 });
 
 test('normal acquire accepts exact ledger readback evidence without run id', () => {

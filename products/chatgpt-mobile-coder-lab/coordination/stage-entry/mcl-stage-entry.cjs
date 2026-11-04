@@ -840,7 +840,7 @@ function semanticCommentIdentity(body, kind) {
     const value = parsed.value;
     return {
       marker: taskHandoff.MANIFEST_START,
-      slot: `manifest:${value.packetRef}:${value.phaseId}:${value.leaseEvidence?.leaseId || 'none'}`,
+      slot: `manifest:${value.packetRef}:${value.phaseId}:${value.leaseEvidence?.leaseId || 'none'}:generation:${value.leaseEvidence?.acquiredGeneration ?? 'none'}`,
       semantic: `${value.manifestId}:${value.payloadSha256}`,
     };
   }

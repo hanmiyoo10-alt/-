@@ -533,16 +533,7 @@ function durableStateEvidence(state, operation, leaseId) {
         + ':generation:' + last.releasedAtGeneration,
     };
   }
-  if (operation === 'acquire') {
-    const active = (ledger.activeLeases || []).filter((item) => item.leaseId === leaseId);
-    if (active.length !== 1) return null;
-    return {
-      generation: ledger.generation,
-      runId: null,
-      evidenceRef: 'receipt:mcl-task-lease-readback:acquire:' + leaseId
-        + ':generation:' + ledger.generation,
-    };
-  }
+  if (operation === 'acquire') return null;
   return null;
 }
 

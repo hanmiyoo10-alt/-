@@ -213,15 +213,17 @@ test('durable ledger state reconstructs restart-safe release and acquire evidenc
     }},
     expectedFresh: {leaseId: freshLease},
   };
-  assert.deepEqual(owner.durableStateEvidence(acquireState, 'acquire', freshLease), {
-    generation: 22, runId: null,
-    evidenceRef: `receipt:mcl-task-lease-readback:acquire:${freshLease}:generation:22`,
-  });
+  assert.equal(owner.durableStateEvidence(acquireState, 'acquire', freshLease), null);
 
   const act = activation();
+  let fallbackCalls = 0;
   const built = owner.buildFreshManifest(act, acquireState, {
-    leaseRunEvidence: () => { throw new Error('run fallback must not execute'); },
+    leaseRunEvidence: () => {
+      fallbackCalls += 1;
+      return {generation: 22, runId: 222, evidenceRef: 'run:222'};
+    },
   });
+  assert.equal(fallbackCalls, 1);
   assert.equal(built.leaseEvidence.leaseId, freshLease);
   assert.equal(built.leaseEvidence.acquiredGeneration, 22);
 });

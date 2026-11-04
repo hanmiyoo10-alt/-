@@ -412,6 +412,46 @@ test('manifest path scopes ignore semantic surfaces and remain sorted', () => {
   assert.deepEqual(owner.manifestPathScopes(value), ['a/file','z/file']);
 });
 
+test('mode gate permits only preserved existing regular executable content edits', () => {
+  const sha = 'a'.repeat(40);
+  const runnerFor = ({indexMode='100755', treeMode='100755', summary='' } = {}) =>
+    (command, args) => {
+      assert.equal(command, 'git');
+      if (args.includes('--summary')) {
+        return {code:0, stdout:summary, stderr:'', signal:null, error:null};
+      }
+      if (args.includes('ls-files')) {
+        return {code:0, stdout:indexMode ? `${indexMode} ${sha} 0\tbin/tool\n` : '',
+          stderr:'', signal:null, error:null};
+      }
+      if (args.includes('ls-tree')) {
+        return {code:0, stdout:treeMode ? `${treeMode} blob ${sha}\tbin/tool\n` : '',
+          stderr:'', signal:null, error:null};
+      }
+      throw new Error('unexpected git args: ' + args.join(' '));
+    };
+
+  assert.doesNotThrow(() =>
+    owner.validateStagedModes(runnerFor(), '/tmp/wt', ['bin/tool']));
+  assert.doesNotThrow(() =>
+    owner.validateReviewUpdateExpectedModes(
+      runnerFor(), '/tmp/wt', 'b'.repeat(40), ['bin/tool'], {}));
+
+  expectReason(() =>
+    owner.validateStagedModes(
+      runnerFor({treeMode:'100644'}), '/tmp/wt', ['bin/tool']),
+    'SPECIAL_MODE_DENIED');
+  expectReason(() =>
+    owner.validateStagedModes(
+      runnerFor({indexMode:'120000',treeMode:'120000'}), '/tmp/wt', ['bin/tool']),
+    'SPECIAL_MODE_DENIED');
+  expectReason(() =>
+    owner.validateReviewUpdateExpectedModes(
+      runnerFor({indexMode:'100755',treeMode:'100644'}),
+      '/tmp/wt', 'b'.repeat(40), ['bin/tool'], {}),
+    'SPECIAL_MODE_DENIED');
+});
+
 test('fixed validation plan contains no caller command surface', () => {
   const checks = owner.fixedValidationChecks({
     expected_paths:['docs/a.md','src/a.cjs'],

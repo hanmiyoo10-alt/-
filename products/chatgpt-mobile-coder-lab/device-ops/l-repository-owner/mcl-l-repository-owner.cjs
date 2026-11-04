@@ -679,7 +679,14 @@ function validateStagedModes(runner, worktree, expectedPaths) {
     const index = git(runner, worktree, ['ls-files', '-s', '--', item]).trim();
     if (index) {
       const mode = index.split(/\s+/)[0];
-      if (mode !== '100644') throw new OwnerError('BLOCKED', ['SPECIAL_MODE_DENIED']);
+      if (mode === '100755') {
+        const before = treeEntry(runner, worktree, 'HEAD', item);
+        if (!before || before.mode !== '100755') {
+          throw new OwnerError('BLOCKED', ['SPECIAL_MODE_DENIED']);
+        }
+      } else if (mode !== '100644') {
+        throw new OwnerError('BLOCKED', ['SPECIAL_MODE_DENIED']);
+      }
     }
   }
 }
@@ -715,8 +722,15 @@ function treeEntry(runner, worktree, rev, repoPath) {
 function validateReviewUpdateExpectedModes(runner, worktree, oldHead, expectedPaths, env) {
   for (const item of expectedPaths) {
     const index = indexEntry(runner, worktree, item, env);
-    const entry = index || treeEntry(runner, worktree, oldHead, item);
-    if (!entry || entry.mode !== '100644') {
+    const before = treeEntry(runner, worktree, oldHead, item);
+    const entry = index || before;
+    if (!entry || !['100644', '100755'].includes(entry.mode)) {
+      throw new OwnerError('BLOCKED', ['SPECIAL_MODE_DENIED']);
+    }
+    if (index && before && index.mode !== before.mode) {
+      throw new OwnerError('BLOCKED', ['SPECIAL_MODE_DENIED']);
+    }
+    if (entry.mode === '100755' && (!before || before.mode !== '100755')) {
       throw new OwnerError('BLOCKED', ['SPECIAL_MODE_DENIED']);
     }
   }
@@ -1781,6 +1795,8 @@ module.exports = {
   sha256Bytes,
   validateBranch,
   validateManifestShape,
+  validateStagedModes,
+  validateReviewUpdateExpectedModes,
   validatePreparedContinuationManifestBinding,
   verifyReplayAgainstCurrent,
   validateRepoPath,

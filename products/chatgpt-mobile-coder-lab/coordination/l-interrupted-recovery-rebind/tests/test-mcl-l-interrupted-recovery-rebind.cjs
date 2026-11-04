@@ -56,3 +56,79 @@ test('session admission rejects execution failure and invalid JSON',()=>{
   })});
   a.throws(()=>deps.readSession(),/SESSION_OWNER_EXECUTION_FAILED/);
 });
+
+
+test('packet-activity evidence file is parsed with the stage-entry validator',()=>{
+  const root=fs.mkdtempSync('/tmp/mcl-rebind-activity-');
+  const file=path.join(root,'activity.json');
+  const evidence={
+    schemaVersion:1,
+    mode:'MCL_STAGE_ENTRY_PACKET_ACTIVITY_EVIDENCE_SET',
+    requesterRef:'#3473',
+    candidates:[{
+      candidateRef:'#3762',
+      evidence:{
+        schemaVersion:1,
+        mode:'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE',
+        candidateRef:'#3762',
+        requesterRef:'#3473',
+        relationship:'PARENT_WAITING_ON_SUCCESSOR',
+        repositoryMutationActive:false,
+        activeLease:false,
+        overlappingOpenPr:false,
+        sequencingExplicit:true,
+        sourceRefs:['issue:#3762','issue:#3473'],
+      },
+    }],
+  };
+  try{
+    fs.writeFileSync(file,JSON.stringify(evidence));
+    const parsed=o.readPacketActivityEvidenceFile(file,3473);
+    a.equal(parsed.requesterRef,'#3473');
+    a.equal(parsed.candidates[0].candidateRef,'#3762');
+    a.throws(()=>o.readPacketActivityEvidenceFile(file,3474),/PACKET_ACTIVITY_EVIDENCE_REQUESTER_CONFLICT/);
+  }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('rebind CLI accepts one packet-activity evidence file and rejects duplicates',()=>{
+  const parsed=o.parseArgs(['inspect','--target','#3473','--packet-activity-evidence-file','/tmp/activity.json']);
+  a.equal(parsed.packetActivityEvidenceFile,'/tmp/activity.json');
+  a.throws(()=>o.parseArgs([
+    'inspect','--target','#3473',
+    '--packet-activity-evidence-file','/tmp/a.json',
+    '--packet-activity-evidence-file','/tmp/b.json',
+  ]),/ARGUMENT_DUPLICATE:packet-activity-evidence-file/);
+});
+
+test('target overlap receives validated packet-activity evidence',()=>{
+  const packetBody=[
+    '<!-- canonical-main-work-packet:v1 -->',
+    '## State',
+    '`IN_PROGRESS`',
+    '## Bounded write scope',
+    '1. `path:x/y`',
+    '2. `surface:mcl:x`',
+    '## Interaction stage',
+    '- Current stage: `IMPLEMENTATION_PR`',
+    '- Completed stage(s): `AUTHORITY_SCOPE`',
+    '- Next stage: `VALIDATION_MERGE`',
+    '## Handoff',
+    'fixture',
+  ].join('\n');
+  const activity={
+    schemaVersion:1,
+    mode:'MCL_STAGE_ENTRY_PACKET_ACTIVITY_EVIDENCE_SET',
+    requesterRef:'#3473',
+    candidates:[],
+  };
+  let seen=null;
+  const deps=o.defaultDeps({
+    client:{},
+    packetActivityEvidence:activity,
+    readIssue:()=>({state:'open',body:packetBody}),
+    discoverOverlap:(input)=>(seen=input,{state:'DISJOINT',discovery:'COMPLETE'}),
+  });
+  const packet=o.readPacketContext(3473,deps);
+  a.equal(packet.packetRef,'#3473');
+  a.equal(seen.packetActivityEvidence,activity);
+});

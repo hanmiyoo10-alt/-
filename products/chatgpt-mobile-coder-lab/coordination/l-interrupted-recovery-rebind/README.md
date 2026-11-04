@@ -17,3 +17,5 @@ Windows Node. The session owner may exit 0 for PASS or 3 for bounded semantic
 UNKNOWN; both receipts are passed to the existing #3491 composition, which keeps
 UNKNOWN fail-closed. Any other exit or invalid JSON is an execution failure.
 No caller runtime, path, process, session, or command selector is exposed.
+
+When the target packet previously required bounded Work System packet-activity evidence to prove otherwise-overlapping predecessor packets noncompeting, pass that same reviewed JSON set with `--packet-activity-evidence-file <path>`. The file must be one regular non-symlink JSON file and is validated by the existing stage-entry packet-activity schema/validator for the exact target packet. Validated evidence is forwarded only to the existing complete overlap discovery. Missing evidence preserves the prior behavior; malformed, stale-requester, duplicate, `ACTIVE_WRITER`, `UNKNOWN`, or `CONFLICT` evidence remains fail-closed. This input grants no source/index/ref/PR or other effect authority.

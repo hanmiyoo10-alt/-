@@ -385,6 +385,12 @@ and `repository-patch-write`.
 It additionally binds the exact #3203 S/S currentization D-014 manifest and COMPLETE
 receipt before the existing implementation-coordination finalization path may publish
 a canonical validation receipt.
+Profile R is the exact already-merged docs-only #4214 / PR #4215 recovery profile.
+It binds the fixed candidate, merge, canonical IMPLEMENTATION_PR receipt, one-path
+diff identity and the exact PASS gates for Codex review, Required, Verify, PR
+observation, repository-patch transport and scope-overlap. Coordination/workspace/
+holder/D-014 are compile-time not applicable. It never reconstructs the missing
+historical validation-merge inspect sidecar and never retries the merge.
 Each profile's exact valid workspace manifest is used only to resolve the fixed
 worktree/holder location; it is never manufactured or rewritten as a
 validation-stage D-014 manifest.
@@ -452,6 +458,10 @@ FINALIZATION_REQUIRED / PASS / ACTION_REQUIRED
 #3762:
 FINALIZATION_REQUIRED / PASS / ACTION_REQUIRED
 + CANONICAL_VALIDATION_MERGE_RECEIPT
+
+#4214:
+FINALIZATION_REQUIRED / PASS / ACTION_REQUIRED
++ CANONICAL_VALIDATION_MERGE_RECEIPT
 ~~~
 
 Any other pre-effect state fails closed, except an exact ALREADY_FINALIZED state,
@@ -472,7 +482,7 @@ exact stale holder cleanup if present
 → STOP
 ~~~
 
-Profiles B through M, O, P and Q share the smaller effect order:
+Profiles B through M, O, P, Q and R share the smaller effect order:
 
 ~~~
 prove exact fixed packet lease absent
@@ -507,6 +517,12 @@ Profile N may perform only:
 - one exact canonical VALIDATION_MERGE packet comment if absent.
 
 Profile N never constructs, selects, completes or mutates D-014/workspace/holder evidence.
+
+Profile R may perform only:
+- one exact canonical VALIDATION_MERGE packet comment if absent.
+
+Profile R never reconstructs historical validation-merge inspect evidence and never
+performs Git/PR/currentization/merge, D-013, D-014 or holder effects.
 
 Profiles B, C, D, E, F, G, H, I, J, K, L, M and O never clean a holder and never construct or publish D-014 evidence.
 

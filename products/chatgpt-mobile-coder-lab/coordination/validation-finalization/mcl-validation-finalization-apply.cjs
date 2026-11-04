@@ -338,6 +338,27 @@ const TARGET_3356 = Object.freeze({
     'review-finding-addressed': 'PASS',
   }),
 });
+const TARGET_4214 = Object.freeze({
+  packet: 4214,
+  packetRef: '#4214',
+  pr: 4215,
+  candidate: 'a001b059ff68da1b5684d4a53df6048a40dacf05',
+  merge: '115a4bb42a7914776feedee812721c262a66ae02',
+  implementationReceiptDigest:
+    'd1219b23f8e2519de229b6a5c53f064f891f56b73a248216535a2ff6bad153ba',
+  diffIdentity: '0c313eae561804da34477817789710aa6a4f02e86f307b255d084d1f172e851a',
+  paths: Object.freeze([
+    'products/chatgpt-mobile-coder-lab/device-ops/l-rdc-peer-session-cleanup/README.md',
+  ]),
+  requiredGateResults: Object.freeze({
+    'codex-current-head-review': 'PASS',
+    'exact-head-required': 'PASS',
+    'exact-head-verify': 'PASS',
+    'pr-observe': 'PASS',
+    'repo-patch-transport': 'PASS',
+    'scope-overlap': 'PASS',
+  }),
+});
 const TARGET_3561 = Object.freeze({
   packet: 3561,
   packetRef: '#3561',
@@ -495,6 +516,11 @@ const PROFILES = Object.freeze({
   }),
   '#3356': Object.freeze({
     target: TARGET_3356,
+    mode: 'COORDINATION_NOT_APPLICABLE',
+    expectedEffects: EXPECTED_EFFECTS_2786,
+  }),
+  '#4214': Object.freeze({
+    target: TARGET_4214,
     mode: 'COORDINATION_NOT_APPLICABLE',
     expectedEffects: EXPECTED_EFFECTS_2786,
   }),
@@ -2845,6 +2871,7 @@ module.exports = {
   TARGET_3216,
   TARGET_3203,
   TARGET_3356,
+  TARGET_4214,
   TARGET_3561,
   TARGET_3762,
   TARGET_4169,

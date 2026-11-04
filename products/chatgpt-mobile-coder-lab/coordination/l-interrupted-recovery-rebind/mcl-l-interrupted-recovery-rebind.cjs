@@ -256,18 +256,24 @@ function captureWorkspace({lease, runner = defaultBinaryRunner}) {
   const branch = String(gitResult(worktree, ['branch', '--show-current'], {runner}).stdout).trim();
   const head = String(gitResult(worktree, ['rev-parse', 'HEAD'], {runner}).stdout).trim();
   const unmerged = parseNul(gitResult(worktree, ['diff', '--name-only', '--diff-filter=U', '-z'], {runner, binary: true}).stdout);
-  const staged = parseNul(gitResult(worktree, ['diff', '--cached', '--name-only', '-z'], {runner, binary: true}).stdout);
-  const dirtyPaths = unique(parseNul(gitResult(worktree, ['diff', '--name-only', '-z'], {runner, binary: true}).stdout));
+  const staged = unique(parseNul(gitResult(worktree, ['diff', '--cached', '--name-only', '-z'], {runner, binary: true}).stdout));
+  const unstaged = unique(parseNul(gitResult(worktree, ['diff', '--name-only', '-z'], {runner, binary: true}).stdout));
   const untracked = parseNul(gitResult(worktree, ['ls-files', '--others', '--exclude-standard', '-z'], {runner, binary: true}).stdout);
-  const diff = gitResult(worktree, ['diff', '--binary', '--no-ext-diff', '--no-renames'], {runner, binary: true}).stdout;
   const pathScopes = lease.scopes.filter((scope) => scope.startsWith('path:'));
   if (branch !== lease.workspace.branch || head !== lease.observedBaseSha) throw new RecoveryError('CONFLICT', ['WORKSPACE_GIT_IDENTITY_CONFLICT']);
-  if (unmerged.length || staged.length || untracked.length) throw new RecoveryError('BLOCKED', ['WORKSPACE_NON_UNSTAGED_RESIDUE']);
+  if (unmerged.length || untracked.length || (staged.length && unstaged.length)) throw new RecoveryError('BLOCKED', ['WORKSPACE_MIXED_OR_UNSUPPORTED_RESIDUE']);
+  const dirtyDisposition = staged.length ? 'STAGED_ONLY' : 'UNSTAGED_ONLY';
+  const dirtyPaths = staged.length ? staged : unstaged;
+  const diffArgs = staged.length
+    ? ['diff', '--cached', '--binary', '--no-ext-diff', '--no-renames']
+    : ['diff', '--binary', '--no-ext-diff', '--no-renames'];
+  const diff = gitResult(worktree, diffArgs, {runner, binary: true}).stdout;
   if (!dirtyPaths.length || !Buffer.isBuffer(diff) || diff.length === 0) throw new RecoveryError('BLOCKED', ['WORKSPACE_DIRTY_DIFF_REQUIRED']);
   if (!dirtyPaths.every((repoPath) => pathCovered(repoPath, pathScopes))) throw new RecoveryError('CONFLICT', ['WORKSPACE_DIRTY_SCOPE_CONFLICT']);
   return {
     branch,
     head,
+    dirtyDisposition,
     dirtyPaths,
     dirtyDiffSha256: sha256(diff),
     dirtyDiffBytes: diff.length,
@@ -376,7 +382,7 @@ function normalizeActivation(value) {
     'schemaVersion', 'mode', 'targetPacketRef', 'packetBodySha256', 'admissionMainSha',
     'ownerBlobs', 'scopes', 'workspace', 'observedBaseSha', 'leaseId',
     'oldAcquiredGeneration', 'oldManifestId', 'oldManifestPayloadSha256',
-    'classificationDigest', 'coreReceiptDigest', 'dirtyDiffSha256', 'dirtyPaths',
+    'classificationDigest', 'coreReceiptDigest', 'dirtyDisposition', 'dirtyDiffSha256', 'dirtyPaths',
     'releasePlanGeneration', 'releaseExpectedGeneration', 'releaseDispatchStarted',
     'releaseGeneration', 'releaseEvidenceRef', 'acquirePlanGeneration',
     'acquireExpectedGeneration', 'acquireDispatchStarted', 'reacquireGeneration',
@@ -398,6 +404,7 @@ function normalizeActivation(value) {
       || !SHA256_RE.test(value.oldManifestPayloadSha256 || '')
       || !SHA256_RE.test(value.classificationDigest || '')
       || !SHA256_RE.test(value.coreReceiptDigest || '')
+      || !['UNSTAGED_ONLY', 'STAGED_ONLY'].includes(value.dirtyDisposition)
       || !SHA256_RE.test(value.dirtyDiffSha256 || '')
       || !Array.isArray(value.dirtyPaths) || value.dirtyPaths.length < 1
       || !Array.isArray(value.scopes) || value.scopes.length < 1
@@ -438,6 +445,7 @@ function buildActivation(snapshot) {
     oldManifestPayloadSha256: snapshot.manifest.payloadSha256,
     classificationDigest: snapshot.classification.output.classificationDigest,
     coreReceiptDigest: snapshot.classification.output.coreReceiptDigest,
+    dirtyDisposition: snapshot.workspace.dirtyDisposition,
     dirtyDiffSha256: snapshot.workspace.dirtyDiffSha256,
     dirtyPaths: snapshot.workspace.dirtyPaths,
     releasePlanGeneration: null,
@@ -746,6 +754,7 @@ async function revalidateReleaseAdmission(activationInput, depsInput = {}) {
   if (fresh.packetBodySha256 !== activation.packetBodySha256
       || fresh.lease.leaseId !== activation.leaseId
       || fresh.manifest.manifestId !== activation.oldManifestId
+      || fresh.workspace.dirtyDisposition !== activation.dirtyDisposition
       || fresh.workspace.dirtyDiffSha256 !== activation.dirtyDiffSha256
       || !exactJson(fresh.workspace.dirtyPaths, activation.dirtyPaths)
       || !exactJson(fresh.ownerBlobs, activation.ownerBlobs)
@@ -766,7 +775,9 @@ function verifyContinuationAuthority(activation, deps) {
 }
 function verifyPreservedState(activation, lease, deps) {
   const workspaceState = deps.captureWorkspace({lease});
-  if (workspaceState.dirtyDiffSha256 !== activation.dirtyDiffSha256 || !exactJson(workspaceState.dirtyPaths, activation.dirtyPaths)) throw new RecoveryError('CONFLICT', ['DIRTY_DIFF_IDENTITY_DRIFT']);
+  if (workspaceState.dirtyDisposition !== activation.dirtyDisposition
+      || workspaceState.dirtyDiffSha256 !== activation.dirtyDiffSha256
+      || !exactJson(workspaceState.dirtyPaths, activation.dirtyPaths)) throw new RecoveryError('CONFLICT', ['DIRTY_DIFF_IDENTITY_DRIFT']);
   deps.readRemoteHead(lease);
   deps.readPrState(lease.workspace.branch);
   return workspaceState;
@@ -1125,4 +1136,5 @@ module.exports = {
   sha256,
   stateName,
   updateActivation,
+  verifyPreservedState,
 };

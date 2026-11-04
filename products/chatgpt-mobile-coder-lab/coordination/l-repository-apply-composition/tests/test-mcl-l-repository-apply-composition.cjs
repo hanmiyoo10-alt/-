@@ -1194,6 +1194,45 @@ assert.throws(()=>owner.executeComposition(files.args,state.deps),
 no(state,'holder-claim','owner-continue-prepared','release-lease','holder-release');
 });
 
+test('t41 general recovery continuation admits only native recovery lineage before holder claim',()=>{
+const prepared='7'.repeat(64), priorManifest='8'.repeat(64), classification='9'.repeat(64);
+const manifestValue=manifest({
+phaseId:'3525-implementation-pr-recovery-rebind-g12',
+phaseClass:'COORDINATION',
+inputRefs:[
+'receipt:mcl-task-manifest:'+priorManifest,
+'receipt:mcl-interrupted-recovery:'+classification,
+'receipt:mcl-dirty-diff:'+prepared,
+],
+});
+const files=fixtureFiles({manifestValue});
+const request={
+schema:lOwner.INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA,
+message:TITLE,expected_paths:PATHS,prepared_digest:prepared,
+prior_manifest_id:priorManifest,recovery_classification_digest:classification,
+};
+fs.writeFileSync(files.args.requestFile,JSON.stringify(request));
+files.args.operation='continue-prepared'; files.args.patchFile=null;
+const text=fs.readFileSync(files.args.manifestFile,'utf8');
+assert.throws(()=>owner.parseManifest(text,'apply'),
+(error)=>error.reasonCodes.includes('MANIFEST_PHASE_CLASS_INVALID'));
+const parsedManifest=owner.parseManifest(text,'continue-prepared');
+assert.doesNotThrow(()=>owner.preflightRequest({
+operation:'continue-prepared',packetRef:PACKET_REF,requestText:JSON.stringify(request),
+prRequestText:JSON.stringify({schema:'mcl-l-pr-publication-request.v1',title:TITLE,body:PR_BODY}),
+manifest:parsedManifest,
+}));
+const state=baseDeps(files,{
+continuationInspect(input){state.events.push('continuation-inspect');assert.equal(input.request.recovery_classification_digest,classification);return {state:'PREPARED'};},
+ownerRunCli(argv,env){state.events.push('owner-continue-prepared');assert.equal(env[holder.CLAIM_ENV],CLAIM);return {code:0,text:JSON.stringify({status:'PASS',reason_codes:[],new_head:HEAD,pr_number:4001,next_legal_action:'RELEASE_D013_THEN_RELEASE_HOLDER_THEN_D014_COMPLETE'})+'\n'};},
+});
+const out=owner.executeComposition(files.args,state.deps);
+assert.equal(out.status,'PASS');
+assert.ok(state.events.indexOf('continuation-inspect')<state.events.indexOf('holder-claim'));
+assert.ok(state.events.indexOf('holder-claim')<state.events.indexOf('owner-continue-prepared'));
+assert.equal(JSON.stringify(out).includes(CLAIM),false);
+});
+
 test('t40 continuation preflight delegates current-main/state and requires holder absence',()=>{
 const {files,manifestValue,prepared}=continuationFixtureFiles();
 const request=lOwner.parsePreparedContinuationRequestText(fs.readFileSync(files.args.requestFile,'utf8'));

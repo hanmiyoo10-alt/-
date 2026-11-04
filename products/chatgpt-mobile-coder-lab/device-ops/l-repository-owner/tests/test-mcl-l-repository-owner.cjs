@@ -570,6 +570,42 @@ test('prepared continuation manifest requires recovery lineage and prepared dige
     'CONTINUATION_PREPARED_DIFF_REF_REQUIRED');
 });
 
+test('general interrupted-recovery continuation consumes native recovery lineage without relabeling', () => {
+  const request = owner.parsePreparedContinuationRequestText(JSON.stringify({
+    schema:owner.INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA,
+    message:'feat: continue general recovered L candidate',
+    expected_paths:['a/file.cjs'],
+    prepared_digest:'1'.repeat(64),
+    prior_manifest_id:'2'.repeat(64),
+    recovery_classification_digest:'3'.repeat(64),
+  }));
+  const m = manifest({
+    phaseId:'9001-implementation-pr-recovery-rebind-g12',
+    phaseClass:'COORDINATION',
+    scopes:['path:a/file.cjs','surface:mcl:test'],
+    inputRefs:[
+      'commit:' + 'b'.repeat(40),
+      'receipt:mcl-task-manifest:' + request.prior_manifest_id,
+      'receipt:mcl-interrupted-recovery:' + request.recovery_classification_digest,
+      'receipt:mcl-dirty-diff:' + request.prepared_digest,
+    ],
+  });
+  expectReason(() => owner.validateManifestShape(m), 'MANIFEST_PHASE_CLASS_INVALID');
+  assert.doesNotThrow(() => owner.validateManifestShape(
+    m, owner.DEFAULT_PROFILE, ['REPOSITORY_MUTATION','COORDINATION']));
+  assert.doesNotThrow(() => owner.validatePreparedContinuationManifestBinding(m, request));
+  expectReason(() => owner.validatePreparedContinuationManifestBinding(
+    {...m, inputRefs:m.inputRefs.filter((ref) => !ref.startsWith('receipt:mcl-interrupted-recovery:'))}, request),
+  'CONTINUATION_INTERRUPTED_RECOVERY_REF_REQUIRED');
+  const legacy = {
+    schema:owner.CONTINUATION_REQUEST_SCHEMA, message:'x', expected_paths:['a/file.cjs'],
+    prepared_digest:'1'.repeat(64), prior_manifest_id:'2'.repeat(64),
+    prior_blocked_receipt_id:'4'.repeat(64), blocker_repair_receipt:'5'.repeat(64),
+  };
+  expectReason(() => owner.validatePreparedContinuationManifestBinding(m, legacy),
+    'CONTINUATION_LEGACY_PHASE_CLASS_INVALID');
+});
+
 test('CLI exposes literal continue-prepared without generic patch or command selectors', () => {
   const parsed = owner.parseArgs([
     'continue-prepared','--manifest','m','--ledger','l','--packet','p',

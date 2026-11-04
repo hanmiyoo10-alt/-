@@ -21,11 +21,14 @@ const FIXED_BOT_NAME = 'mcl-repository-patch[bot]';
 const FIXED_BOT_EMAIL = 'mcl-repository-patch@users.noreply.github.com';
 const REQUEST_SCHEMA = 'mcl-l-repository-owner-request.v1';
 const CONTINUATION_REQUEST_SCHEMA = 'mcl-l-prepared-continuation-request.v1';
+const INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA = 'mcl-l-interrupted-recovery-continuation-request.v1';
 const REVIEW_UPDATE_REQUEST_SCHEMA = 'mcl-l-review-update-request.v1';
 const PRIOR_MANIFEST_REF_PREFIX = 'receipt:mcl-task-manifest:';
 const PRIOR_BLOCKED_RECEIPT_REF_PREFIX = 'receipt:mcl-task-completion-receipt:';
 const BLOCKER_REPAIR_REF_PREFIX = 'receipt:canonical-main-stage:';
 const PREPARED_DIFF_REF_PREFIX = 'receipt:mcl-l-prepared-diff:';
+const INTERRUPTED_RECOVERY_REF_PREFIX = 'receipt:mcl-interrupted-recovery:';
+const DIRTY_DIFF_REF_PREFIX = 'receipt:mcl-dirty-diff:';
 const PR_REQUEST_SCHEMA = 'mcl-l-pr-publication-request.v1';
 const OUTPUT_SCHEMA = 'mcl-l-repository-owner.v1';
 const MAX_INPUT_BYTES = 64 * 1024;
@@ -210,13 +213,17 @@ function parsePreparedContinuationRequestText(text) {
   let value;
   try { value = JSON.parse(String(text)); }
   catch { throw new OwnerError('UNKNOWN', ['CONTINUATION_REQUEST_JSON_INVALID']); }
-  exactKeys(value, new Set([
-    'schema', 'message', 'expected_paths', 'prepared_digest', 'prior_manifest_id',
-    'prior_blocked_receipt_id', 'blocker_repair_receipt',
-  ]), 'CONTINUATION_REQUEST');
-  if (value.schema !== CONTINUATION_REQUEST_SCHEMA) {
+  const legacy = value?.schema === CONTINUATION_REQUEST_SCHEMA;
+  const generalRecovery = value?.schema === INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA;
+  if (!legacy && !generalRecovery) {
     throw new OwnerError('UNKNOWN', ['CONTINUATION_REQUEST_SCHEMA_INVALID']);
   }
+  const keys = generalRecovery
+    ? new Set(['schema', 'message', 'expected_paths', 'prepared_digest', 'prior_manifest_id',
+      'recovery_classification_digest'])
+    : new Set(['schema', 'message', 'expected_paths', 'prepared_digest', 'prior_manifest_id',
+      'prior_blocked_receipt_id', 'blocker_repair_receipt']);
+  exactKeys(value, keys, 'CONTINUATION_REQUEST');
   if (typeof value.message !== 'string' || value.message.length < 1
       || value.message.length > 200 || /[\u0000-\u001f\u007f]/.test(value.message)) {
     throw new OwnerError('UNKNOWN', ['CONTINUATION_REQUEST_MESSAGE_INVALID']);
@@ -231,6 +238,23 @@ function parsePreparedContinuationRequestText(text) {
   for (const [field, reason] of [
     ['prepared_digest', 'CONTINUATION_PREPARED_DIGEST_INVALID'],
     ['prior_manifest_id', 'CONTINUATION_PRIOR_MANIFEST_INVALID'],
+  ]) {
+    if (!SHA256_RE.test(value[field] || '')) throw new OwnerError('UNKNOWN', [reason]);
+  }
+  if (generalRecovery) {
+    if (!SHA256_RE.test(value.recovery_classification_digest || '')) {
+      throw new OwnerError('UNKNOWN', ['CONTINUATION_RECOVERY_CLASSIFICATION_DIGEST_INVALID']);
+    }
+    return {
+      schema: value.schema,
+      message: value.message,
+      expected_paths: [...value.expected_paths].sort(),
+      prepared_digest: value.prepared_digest,
+      prior_manifest_id: value.prior_manifest_id,
+      recovery_classification_digest: value.recovery_classification_digest,
+    };
+  }
+  for (const [field, reason] of [
     ['prior_blocked_receipt_id', 'CONTINUATION_PRIOR_RECEIPT_INVALID'],
     ['blocker_repair_receipt', 'CONTINUATION_BLOCKER_REPAIR_RECEIPT_INVALID'],
   ]) {
@@ -256,7 +280,18 @@ function validatePreparedContinuationManifestBinding(manifest, request) {
     reasons.push('CONTINUATION_SCOPE_CONFLICT');
   }
   const refs = manifest.inputRefs || [];
-  const expected = [
+  const generalRecovery = request.schema === INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA;
+  if (generalRecovery && manifest.phaseClass !== 'COORDINATION') {
+    reasons.push('CONTINUATION_GENERAL_PHASE_CLASS_INVALID');
+  }
+  if (!generalRecovery && manifest.phaseClass !== 'REPOSITORY_MUTATION') {
+    reasons.push('CONTINUATION_LEGACY_PHASE_CLASS_INVALID');
+  }
+  const expected = generalRecovery ? [
+    [PRIOR_MANIFEST_REF_PREFIX, request.prior_manifest_id, 'CONTINUATION_PRIOR_MANIFEST_REF'],
+    [INTERRUPTED_RECOVERY_REF_PREFIX, request.recovery_classification_digest, 'CONTINUATION_INTERRUPTED_RECOVERY_REF'],
+    [DIRTY_DIFF_REF_PREFIX, request.prepared_digest, 'CONTINUATION_DIRTY_DIFF_REF'],
+  ] : [
     [PRIOR_MANIFEST_REF_PREFIX, request.prior_manifest_id, 'CONTINUATION_PRIOR_MANIFEST_REF'],
     [PRIOR_BLOCKED_RECEIPT_REF_PREFIX, request.prior_blocked_receipt_id, 'CONTINUATION_PRIOR_RECEIPT_REF'],
     [BLOCKER_REPAIR_REF_PREFIX, request.blocker_repair_receipt, 'CONTINUATION_BLOCKER_REPAIR_REF'],
@@ -304,9 +339,9 @@ const DEFAULT_PROFILE = Object.freeze({
   executor: FIXED_EXECUTOR,
 });
 
-function validateManifestShape(manifest, profile = DEFAULT_PROFILE) {
+function validateManifestShape(manifest, profile = DEFAULT_PROFILE, allowedPhaseClasses = ['REPOSITORY_MUTATION']) {
   const reasons = [];
-  if (manifest?.phaseClass !== 'REPOSITORY_MUTATION') reasons.push('MANIFEST_PHASE_CLASS_INVALID');
+  if (!Array.isArray(allowedPhaseClasses) || !allowedPhaseClasses.includes(manifest?.phaseClass)) reasons.push('MANIFEST_PHASE_CLASS_INVALID');
   if (manifest?.route !== profile.route || manifest?.executor !== profile.executor) {
     reasons.push('MANIFEST_ROUTE_EXECUTOR_INVALID');
   }
@@ -328,11 +363,14 @@ function manifestPathScopes(manifest) {
     .map((item) => item.slice(5)))].sort();
 }
 
-function evidenceContext({manifestPath, ledgerPath, packetPath, profile = DEFAULT_PROFILE}) {
+function evidenceContext({manifestPath, ledgerPath, packetPath, profile = DEFAULT_PROFILE, operation = 'inspect'}) {
   const manifestBytes = readRegular(manifestPath, 'MANIFEST_FILE');
   const ledgerBytes = readRegular(ledgerPath, 'LEDGER_FILE');
   const packetBytes = readRegular(packetPath, 'PACKET_FILE');
-  const manifest = validateManifestShape(parseManifestText(manifestBytes.toString('utf8')), profile);
+  const phaseClasses = operation === 'continue-prepared'
+    ? ['REPOSITORY_MUTATION', 'COORDINATION'] : ['REPOSITORY_MUTATION'];
+  const manifest = validateManifestShape(
+    parseManifestText(manifestBytes.toString('utf8')), profile, phaseClasses);
   const checked = workspaceHolder.validateEvidence({
     manifest,
     ledgerBody: ledgerBytes.toString('utf8'),
@@ -1675,6 +1713,7 @@ function runCli(argv = process.argv.slice(2), env = process.env, options = {}) {
     ledgerPath: values.ledger,
     packetPath: values.packet,
     profile: options.profile || DEFAULT_PROFILE,
+    operation,
   });
   let result;
   if (operation === 'inspect') {
@@ -1738,6 +1777,7 @@ if (require.main === module) {
 module.exports = {
   BLOCKER_REPAIR_REF_PREFIX,
   CONTINUATION_REQUEST_SCHEMA,
+  INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA,
   REVIEW_UPDATE_REQUEST_SCHEMA,
   DEFAULT_PROFILE,
   FALSE_AUTHORITY,

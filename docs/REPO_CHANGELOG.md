@@ -2760,3 +2760,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/6aaee124afe3044400fbb91692f01c19340f1a84)
 - Event ID: `b02675108512971f909519b6ef250da5cf0f265a3cfac6b57cb3f3479e845549`
 <!-- canonical-main-doc-promoted:b02675108512971f909519b6ef250da5cf0f265a3cfac6b57cb3f3479e845549 -->
+
+### 2026-11-05 — Merge pull request #4223 from hanmiyoo10-alt/repo/validation-protection-guard-route-4222
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `a101c9191e9f986afa7d16ada524aca3068d3c31`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a101c9191e9f986afa7d16ada524aca3068d3c31)
+- Event ID: `ce336279498c0dd7fb2543b8fad30b076173148ea1cccd852c25fe7338946651`
+<!-- canonical-main-doc-promoted:ce336279498c0dd7fb2543b8fad30b076173148ea1cccd852c25fe7338946651 -->

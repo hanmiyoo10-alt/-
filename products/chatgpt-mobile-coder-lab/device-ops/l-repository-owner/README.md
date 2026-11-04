@@ -304,6 +304,7 @@ LOCAL_BEHIND (only clean exact ancestor of remote/PR old head)
 → PREPARED
 → COMMITTED
 → CURRENTIZED (only when current main advanced)
+→ PR_PROJECTION_PENDING (only remote=new / same exact PR=old)
 → PUSHED
 ```
 
@@ -317,10 +318,16 @@ review paths retain the reviewed candidate entry, and no other main-relative
 tree drift is accepted. If current main advanced, currentization occurs only
 after replay proof and through the fixed ordinary non-force current-main
 integration. The owner
-then verifies the intended review-fix path/blob/mode payload, performs one
-ordinary non-force push, and requires the same PR number to read back at the new
-exact head. If the old PR
-head already equals current main, no currentization merge is added.
+then verifies the intended review-fix path/blob/mode payload and performs one
+ordinary non-force push. If the remote branch reaches the exact new head while
+the same exact PR still projects the old head, the state is
+`PR_PROJECTION_PENDING`: the owner performs only a fixed bounded sequence of
+same-PR readbacks, with no commit, currentization, push, ref write, or force
+fallback. Exact new-head readback converges to `PUSHED`; an unchanged old-head
+projection returns a blocking readback-only result whose legal next action is
+`REREAD_SAME_PR_PROJECTION`. Any third PR head or PR identity drift remains
+fail-closed. Time passage alone never proves success. If the old PR head already
+equals current main, no currentization merge is added.
 
 Workflow-file candidates reuse the existing rename-aware OAuth/push-credential
 preflight. The operation exposes no caller repository, branch, worktree, PR

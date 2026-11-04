@@ -1311,14 +1311,71 @@ function classifyReviewUpdateState(manifest, request, prRequest, currentMain, pr
   if (remoteHead === finalHead && pr.headRefOid === finalHead) {
     return {state:'PUSHED', candidateHead, finalHead, remoteHead, pr};
   }
+  if (remoteHead === finalHead && pr.headRefOid === request.expected_old_head) {
+    return {state:'PR_PROJECTION_PENDING', candidateHead, finalHead, remoteHead, pr};
+  }
   if (remoteHead === request.expected_old_head && pr.headRefOid === request.expected_old_head) {
     return {state, candidateHead, finalHead, remoteHead, pr};
   }
   throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_REMOTE_PR_HEAD_CONFLICT']);
 }
 
+const REVIEW_UPDATE_PR_PROJECTION_REREAD_ATTEMPTS = 12;
+const REVIEW_UPDATE_PR_PROJECTION_REREAD_DELAY_MS = 250;
+
+function reviewUpdateProjectionSleep(ms) {
+  if (ms > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function reconcileReviewUpdatePrProjection(state, manifest, request, prRequest, {
+  runner = defaultRunner, sleep = reviewUpdateProjectionSleep,
+} = {}) {
+  if (state.state !== 'PR_PROJECTION_PENDING') return state;
+  if (state.remoteHead !== state.finalHead
+      || state.pr.headRefOid !== request.expected_old_head
+      || !SHA40_RE.test(String(state.finalHead || ''))) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PR_PROJECTION_STATE_CONFLICT']);
+  }
+  const prNumber = state.pr.number;
+  let pr = state.pr;
+  for (let attempt = 0; attempt < REVIEW_UPDATE_PR_PROJECTION_REREAD_ATTEMPTS; attempt += 1) {
+    sleep(REVIEW_UPDATE_PR_PROJECTION_REREAD_DELAY_MS);
+    pr = readExistingReviewPr(runner, manifest, prRequest);
+    if (pr.number !== prNumber) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PR_NUMBER_CHANGED']);
+    }
+    if (pr.headRefOid === state.finalHead) {
+      return {...state, state:'PUSHED', pr};
+    }
+    if (pr.headRefOid !== request.expected_old_head) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_REMOTE_PR_HEAD_CONFLICT']);
+    }
+  }
+  return {...state, pr};
+}
+
+function pendingReviewUpdateResult(state, manifest, request, preparedDigest, currentMain) {
+  return output('BLOCKED', ['REVIEW_UPDATE_PR_PROJECTION_PENDING'], {
+    route:manifest.route,
+    executor:manifest.executor,
+    base_sha:request.expected_old_head,
+    current_main:currentMain,
+    branch:manifest.workspace.branch,
+    changed_paths:request.expected_paths,
+    patch_sha256:request.patch_sha256,
+    prepared_digest:preparedDigest,
+    candidate_head:state.candidateHead,
+    new_head:state.finalHead,
+    currentized:currentMain !== request.expected_old_head,
+    pr_number:state.pr.number,
+    validation_checks:[],
+    next_legal_action:'REREAD_SAME_PR_PROJECTION',
+  });
+}
+
 function executeReviewUpdate(context, request, patchBytes, prRequest, {
   profile = DEFAULT_PROFILE, runner = defaultRunner, env = process.env, root = ROOT,
+  projectionSleep = reviewUpdateProjectionSleep,
 } = {}) {
   const {manifest} = context;
   if (request.packet_ref !== manifest.packetRef) throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PACKET_CONFLICT']);
@@ -1334,6 +1391,14 @@ function executeReviewUpdate(context, request, patchBytes, prRequest, {
   let state = classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest,
     {profile, runner});
   const oldPrNumber = state.pr.number;
+
+  if (state.state === 'PR_PROJECTION_PENDING') {
+    state = reconcileReviewUpdatePrProjection(
+      state, manifest, request, prRequest, {runner, sleep:projectionSleep});
+    if (state.state === 'PR_PROJECTION_PENDING') {
+      return pendingReviewUpdateResult(state, manifest, request, preparedDigest, currentMain);
+    }
+  }
 
   if (state.state === 'LOCAL_BEHIND') {
     holderCheck(context, env);
@@ -1435,6 +1500,13 @@ function executeReviewUpdate(context, request, patchBytes, prRequest, {
       manifest.workspace.branch, candidatePaths);
     state = classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest,
       {profile, runner});
+    if (state.state === 'PR_PROJECTION_PENDING') {
+      state = reconcileReviewUpdatePrProjection(
+        state, manifest, request, prRequest, {runner, sleep:projectionSleep});
+      if (state.state === 'PR_PROJECTION_PENDING') {
+        return pendingReviewUpdateResult(state, manifest, request, preparedDigest, currentMain);
+      }
+    }
   }
   if (state.state !== 'PUSHED') throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_STATE_UNSUPPORTED']);
   if (state.pr.number !== oldPrNumber) throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PR_NUMBER_CHANGED']);
@@ -1809,6 +1881,8 @@ module.exports = {
   CONTINUATION_REQUEST_SCHEMA,
   INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA,
   REVIEW_UPDATE_REQUEST_SCHEMA,
+  REVIEW_UPDATE_PR_PROJECTION_REREAD_ATTEMPTS,
+  REVIEW_UPDATE_PR_PROJECTION_REREAD_DELAY_MS,
   DEFAULT_PROFILE,
   FALSE_AUTHORITY,
   FIXED_BOT_EMAIL,
@@ -1829,6 +1903,7 @@ module.exports = {
   candidatePathsFromStagedDiff,
   classifyPreparedContinuationState,
   classifyReviewUpdateState,
+  reconcileReviewUpdatePrProjection,
   continuationCurrentMain,
   reviewUpdateCurrentMain,
   reviewUpdateMergeBase,

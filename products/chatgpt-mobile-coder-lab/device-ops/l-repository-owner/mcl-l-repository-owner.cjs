@@ -472,8 +472,9 @@ function candidatePathsFromStagedDiff(runner, worktree) {
   return candidatePathsFromNameStatus(result.stdout);
 }
 
-function candidatePathsFromCommitDiff(runner, worktree, base, candidateHead) {
-  const result = runner('git', ['-C', worktree, 'diff', '--name-status', '-z', '-M', base, candidateHead, '--'], {
+function candidatePathsFromCommitDiff(runner, worktree, base, candidateHead, {noRenames = false} = {}) {
+  const renameArg = noRenames ? '--no-renames' : '-M';
+  const result = runner('git', ['-C', worktree, 'diff', '--name-status', '-z', renameArg, base, candidateHead, '--'], {
     env: safeChildEnv(),
     timeoutMs: COMMAND_TIMEOUT_MS,
   });
@@ -686,8 +687,11 @@ function holderCheck(context, env = process.env) {
   return result;
 }
 
-function stagedPaths(runner, worktree) {
-  const raw = git(runner, worktree, ['diff', '--cached', '--name-only', '-z', '--']);
+function stagedPaths(runner, worktree, {noRenames = false} = {}) {
+  const args = ['diff', '--cached'];
+  if (noRenames) args.push('--no-renames');
+  args.push('--name-only', '-z', '--');
+  const raw = git(runner, worktree, args);
   return raw.split('\0').filter(Boolean).sort();
 }
 
@@ -702,8 +706,11 @@ function ensureNoResidue(runner, worktree) {
   if (unstaged || untracked) throw new OwnerError('BLOCKED', ['UNSTAGED_OR_UNTRACKED_PRESENT']);
 }
 
-function stagedDigest(runner, worktree) {
-  const raw = git(runner, worktree, ['diff', '--cached', '--binary', '--']);
+function stagedDigest(runner, worktree, {noRenames = false} = {}) {
+  const args = ['diff', '--cached'];
+  if (noRenames) args.push('--no-renames');
+  args.push('--binary', '--');
+  const raw = git(runner, worktree, args);
   if (!raw) throw new OwnerError('BLOCKED', ['PATCH_EMPTY_AFTER_APPLY']);
   return sha256Bytes(Buffer.from(raw, 'utf8'));
 }
@@ -982,8 +989,11 @@ function assertReviewUpdateCurrentizedPayload(
   }
 }
 
-function preparedDiff(runner, worktree) {
-  const text = git(runner, worktree, ['diff', '--cached', '--binary', '--']);
+function preparedDiff(runner, worktree, {noRenames = false} = {}) {
+  const args = ['diff', '--cached'];
+  if (noRenames) args.push('--no-renames');
+  args.push('--binary', '--');
+  const text = git(runner, worktree, args);
   if (!text || Buffer.byteLength(text, 'utf8') > MAX_PATCH_BYTES) {
     throw new OwnerError('BLOCKED', ['CONTINUATION_PREPARED_DIFF_INVALID']);
   }
@@ -992,18 +1002,23 @@ function preparedDiff(runner, worktree) {
 
 function verifyReplayAgainstCurrent(manifest, request, currentMain, {runner = defaultRunner, candidateHead = null} = {}) {
   const worktree = manifest.workspace.worktree;
+  const noRenames = request.schema === INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA;
+  const committedDiffArgs = ['diff'];
+  if (noRenames) committedDiffArgs.push('--no-renames');
+  committedDiffArgs.push('--binary', manifest.observedBaseSha, candidateHead, '--');
   const patch = candidateHead
-    ? git(runner, worktree, ['diff', '--binary', manifest.observedBaseSha, candidateHead, '--'])
-    : preparedDiff(runner, worktree);
+    ? git(runner, worktree, committedDiffArgs)
+    : preparedDiff(runner, worktree, {noRenames});
   if (!patch || sha256Bytes(Buffer.from(patch, 'utf8')) !== request.prepared_digest) {
     throw new OwnerError('CONFLICT', ['CONTINUATION_PREPARED_DIGEST_CONFLICT']);
   }
+  const identityRenameArg = noRenames ? '--no-renames' : '-M';
   const originalStatus = candidateHead
-    ? git(runner, worktree, ['diff', '--name-status', '-z', manifest.observedBaseSha, candidateHead, '--'])
-    : git(runner, worktree, ['diff', '--cached', '--name-status', '-z', '--']);
+    ? git(runner, worktree, ['diff', '--name-status', '-z', identityRenameArg, manifest.observedBaseSha, candidateHead, '--'])
+    : git(runner, worktree, ['diff', '--cached', '--name-status', '-z', identityRenameArg, '--']);
   const originalPatchId = patchId(runner, worktree, candidateHead
-    ? git(runner, worktree, ['diff', '--no-ext-diff', '--no-textconv', '-M', manifest.observedBaseSha, candidateHead, '--'])
-    : git(runner, worktree, ['diff', '--cached', '--no-ext-diff', '--no-textconv', '-M', '--']));
+    ? git(runner, worktree, ['diff', '--no-ext-diff', '--no-textconv', identityRenameArg, manifest.observedBaseSha, candidateHead, '--'])
+    : git(runner, worktree, ['diff', '--cached', '--no-ext-diff', '--no-textconv', identityRenameArg, '--']));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-current-replay-'));
   const indexFile = path.join(dir, 'index');
   const env = {...safeChildEnv(), GIT_INDEX_FILE:indexFile};
@@ -1011,19 +1026,24 @@ function verifyReplayAgainstCurrent(manifest, request, currentMain, {runner = de
     runChecked(runner, 'git', ['-C', worktree, 'read-tree', currentMain], {env}, 'CONTINUATION_REPLAY_READ_TREE_FAILED');
     runChecked(runner, 'git', ['-C', worktree, 'apply', '--cached', '--check', '-'], {env, input:patch}, 'CONTINUATION_REPLAY_APPLY_CHECK_FAILED');
     runChecked(runner, 'git', ['-C', worktree, 'apply', '--cached', '-'], {env, input:patch}, 'CONTINUATION_REPLAY_APPLY_FAILED');
-    const replayPaths = nulPaths(git(runner, worktree, ['diff', '--cached', '--name-only', '-z', currentMain, '--'], {env}));
+    const replayPathArgs = ['diff', '--cached'];
+    if (noRenames) replayPathArgs.push('--no-renames');
+    replayPathArgs.push('--name-only', '-z', currentMain, '--');
+    const replayPaths = nulPaths(git(runner, worktree, replayPathArgs, {env}));
     if (!same(replayPaths, request.expected_paths)) throw new OwnerError('CONFLICT', ['CONTINUATION_REPLAY_PATH_CONFLICT']);
-    const replayStatus = git(runner, worktree, ['diff', '--cached', '--name-status', '-z', currentMain, '--'], {env});
+    const replayStatus = git(runner, worktree, ['diff', '--cached', '--name-status', '-z', identityRenameArg, currentMain, '--'], {env});
     if (replayStatus !== originalStatus) throw new OwnerError('CONFLICT', ['CONTINUATION_REPLAY_CHANGE_IDENTITY_CONFLICT']);
     for (const item of request.expected_paths) {
       const original = candidateHead
         ? treeEntry(runner, worktree, candidateHead, item)
         : indexEntry(runner, worktree, item);
       const replay = indexEntry(runner, worktree, item, env);
-      if (!original || !replay || !same(original, replay)) throw new OwnerError('CONFLICT', ['CONTINUATION_REPLAY_BLOB_MODE_CONFLICT']);
+      if (noRenames ? !same(original, replay) : (!original || !replay || !same(original, replay))) {
+        throw new OwnerError('CONFLICT', ['CONTINUATION_REPLAY_BLOB_MODE_CONFLICT']);
+      }
     }
     const replayPatchId = patchId(runner, worktree,
-      git(runner, worktree, ['diff', '--cached', '--no-ext-diff', '--no-textconv', '-M', currentMain, '--'], {env}));
+      git(runner, worktree, ['diff', '--cached', '--no-ext-diff', '--no-textconv', identityRenameArg, currentMain, '--'], {env}));
     if (replayPatchId !== originalPatchId) throw new OwnerError('CONFLICT', ['CONTINUATION_REPLAY_PATCH_ID_CONFLICT']);
     return {patchId: originalPatchId, currentMain};
   } finally {
@@ -1033,12 +1053,16 @@ function verifyReplayAgainstCurrent(manifest, request, currentMain, {runner = de
 
 function assertCandidateCommit(runner, manifest, request, candidateHead) {
   const worktree = manifest.workspace.worktree;
+  const noRenames = request.schema === INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA;
   const parent = git(runner, worktree, ['rev-parse', candidateHead + '^']).trim();
   if (parent !== manifest.observedBaseSha) throw new OwnerError('CONFLICT', ['CONTINUATION_COMMIT_PARENT_CONFLICT']);
   const paths = candidatePathsFromCommitDiff(
-    runner, worktree, manifest.observedBaseSha, candidateHead);
+    runner, worktree, manifest.observedBaseSha, candidateHead, {noRenames});
   if (!same(paths, request.expected_paths)) throw new OwnerError('CONFLICT', ['CONTINUATION_COMMITTED_PATH_CONFLICT']);
-  const diff = git(runner, worktree, ['diff', '--binary', manifest.observedBaseSha, candidateHead, '--']);
+  const diffArgs = ['diff'];
+  if (noRenames) diffArgs.push('--no-renames');
+  diffArgs.push('--binary', manifest.observedBaseSha, candidateHead, '--');
+  const diff = git(runner, worktree, diffArgs);
   if (sha256Bytes(Buffer.from(diff, 'utf8')) !== request.prepared_digest) throw new OwnerError('CONFLICT', ['CONTINUATION_COMMITTED_DIGEST_CONFLICT']);
   const message = git(runner, worktree, ['log', '-1', '--format=%B', candidateHead]).replace(/\n+$/, '');
   if (message !== request.message) throw new OwnerError('CONFLICT', ['CONTINUATION_COMMIT_MESSAGE_CONFLICT']);
@@ -1051,12 +1075,17 @@ function assertCandidateCommit(runner, manifest, request, candidateHead) {
 
 function assertCurrentizedPayload(runner, manifest, request, candidateHead, currentMain, finalHead) {
   const worktree = manifest.workspace.worktree;
-  const paths = nulPaths(git(runner, worktree, ['diff', '--name-only', '-z', currentMain, finalHead, '--']));
+  const noRenames = request.schema === INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA;
+  const pathArgs = ['diff'];
+  if (noRenames) pathArgs.push('--no-renames');
+  pathArgs.push('--name-only', '-z', currentMain, finalHead, '--');
+  const paths = nulPaths(git(runner, worktree, pathArgs));
   if (!same(paths, request.expected_paths)) throw new OwnerError('CONFLICT', ['CONTINUATION_CURRENTIZED_PATH_CONFLICT']);
   for (const item of request.expected_paths) {
     const candidate = treeEntry(runner, worktree, candidateHead, item);
     const final = treeEntry(runner, worktree, finalHead, item);
-    if (!candidate || !final || !same(candidate, final)) throw new OwnerError('CONFLICT', ['CONTINUATION_CURRENTIZED_BLOB_MODE_CONFLICT']);
+    const mismatch = noRenames ? !same(candidate, final) : (!candidate || !final || !same(candidate, final));
+    if (mismatch) throw new OwnerError('CONFLICT', ['CONTINUATION_CURRENTIZED_BLOB_MODE_CONFLICT']);
   }
 }
 
@@ -1072,12 +1101,13 @@ function classifyPreparedContinuationState(manifest, request, currentMain, {runn
   if (unmerged.length || unstaged.length || untracked.length) throw new OwnerError('CONFLICT', ['CONTINUATION_WORKTREE_RESIDUE_CONFLICT']);
   const remoteHead = remoteBranchHead(runner, profile.landing, manifest.workspace.branch);
   if (!remoteHead) throw new OwnerError('CONFLICT', ['CONTINUATION_REMOTE_BRANCH_MISSING']);
-  const staged = stagedPaths(runner, worktree);
+  const noRenames = request.schema === INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA;
+  const staged = stagedPaths(runner, worktree, {noRenames});
   if (head === manifest.observedBaseSha) {
     if (remoteHead !== manifest.observedBaseSha) throw new OwnerError('CONFLICT', ['CONTINUATION_REMOTE_HEAD_CONFLICT']);
     if (!same(staged, request.expected_paths)) throw new OwnerError('CONFLICT', ['CONTINUATION_STAGED_PATH_CONFLICT']);
     validateStagedModes(runner, worktree, request.expected_paths);
-    if (stagedDigest(runner, worktree) !== request.prepared_digest) throw new OwnerError('CONFLICT', ['CONTINUATION_PREPARED_DIGEST_CONFLICT']);
+    if (stagedDigest(runner, worktree, {noRenames}) !== request.prepared_digest) throw new OwnerError('CONFLICT', ['CONTINUATION_PREPARED_DIGEST_CONFLICT']);
     return {state:'PREPARED', candidateHead:null, finalHead:null, remoteHead};
   }
   if (staged.length) throw new OwnerError('CONFLICT', ['CONTINUATION_INDEX_NOT_CLEAN']);

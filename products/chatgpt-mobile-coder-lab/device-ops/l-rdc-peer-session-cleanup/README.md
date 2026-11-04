@@ -32,38 +32,40 @@ Add-Type receives only one owner-created private writable directory via `TEMP` a
 `TMP`; arbitrary inherited environment and caller temp paths are forbidden. The
 directory, handles and event subscription are cleaned on every path.
 
-## WSL single-peer-leaf pidfd profile
+## WSL bounded direct-peer-leaf pidfd profile
 
 The fixed L WSL2 profile composes the existing read-only
-`mcl-l-rdc-session-evidence.v2` admission with a deliberately smaller effect
+`mcl-l-rdc-session-evidence.v2` admission with a bounded direct-leaf effect
 ceiling. It is eligible only when the current verified WSL command agent has
-exactly one current command root, exactly one additional non-benign direct peer,
-and that peer has zero descendants. Multiple peers, any peer descendant,
-unreadable/ambiguous topology, or identity drift fails closed.
+exactly one current command root plus between one and 32 additional non-benign
+direct peers, and every peer has zero descendants. Any descendant,
+unreadable/ambiguous topology, unexpected direct child, excess peer cardinality,
+or identity drift fails closed.
 
 The WSL effect never uses a process group or session group because the natural L
-topology does not isolate the peer on those boundaries. It uses fixed
-`/usr/bin/python3` and pidfds for the exact agent, current-root, and peer
-process instances. Private guards bind PID + PPID + Linux `/proc/<pid>/stat`
+topology does not isolate peers on those boundaries. It uses fixed
+`/usr/bin/python3` and pidfds for the exact agent, current-root, and every peer
+process instance. Private guards bind PID + PPID + Linux `/proc/<pid>/stat`
 start-time identity.
 
 Immediately before termination, the helper:
-1. opens the exact pidfds and revalidates every guard;
-2. sends `SIGSTOP` only through the peer pidfd;
-3. requires the exact peer to become stopped;
-4. rechecks the same direct-child topology and zero-descendant condition while
-   the peer is frozen;
-5. sends `SIGCONT` and fails closed on any pre-kill mismatch;
-6. otherwise sends `SIGKILL` only through that exact peer pidfd and waits
-   boundedly for pidfd exit.
+1. opens exact pidfds for the agent, current root, and every peer and revalidates all guards;
+2. proves the complete direct-child set is exactly current-root plus the reviewed peer set and every peer remains a leaf;
+3. sends `SIGSTOP` only through every exact peer pidfd and requires the full set to become stopped;
+4. while the complete peer set is frozen, rechecks all guards, the complete direct-child set, and every zero-descendant condition;
+5. resumes every stopped peer that has not received the terminal effect and fails closed on any pre-effect mismatch;
+6. only after the frozen-set barrier passes, sends the terminal signal through each exact peer pidfd and waits boundedly for all pidfd exits.
 
-The frozen-topology barrier prevents the exact stopped peer from creating a late
-child between the final zero-descendant proof and the pidfd termination effect.
-Missing/ambiguous helper acknowledgement cannot manufacture completion.
+The frozen-set topology barrier prevents any admitted peer from creating a late
+child while another peer is being removed. Missing/ambiguous helper
+acknowledgement cannot manufacture completion. Outer helper failure attempts
+exact guard-bound resume for every peer that may have been stopped and remains
+UNKNOWN even when recovery succeeds.
 
 The WSL profile accepts no caller PID, process, signal, helper, path, or timeout
-selector and exposes no generic `kill`, process-group, or session-group effect.
-A broader WSL peer tree requires a separately reviewed extension.
+selector and exposes no generic process-group or session-group effect. The
+existing exact confirmation `--confirm-no-other-intentional-l-rdc-work`
+remains mandatory before any live cleanup effect.
 
 ## Descendant-monitoring proof
 

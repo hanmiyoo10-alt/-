@@ -9,6 +9,8 @@ WSL `flock`+`cat` is process-death released. Discovery is current-lineage only.
 Cleanup/publication re-read coordination; publication uses journaled admission main.
 No source/index/ref/PR mutation or holder claim.
 
+Workspace capture accepts exactly one preserved dirty disposition: `UNSTAGED_ONLY`, using the ordinary binary diff, or `STAGED_ONLY`, using the exact cached binary diff. Mixed staged+unstaged state, untracked/unmerged residue, empty dirty state, out-of-scope paths, or later disposition/path/digest drift fail closed. The disposition is bound into the recovery activation identity so staged bytes cannot silently become unstaged bytes, or vice versa, during rebind.
+
 The fixed L session-evidence admission runs the exact repository-owned
 `mcl-l-rdc-session-evidence.v2` source with the same WSL Node runtime that is
 executing this recovery owner (`process.execPath`) and the fixed public

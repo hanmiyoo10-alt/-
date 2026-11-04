@@ -570,6 +570,42 @@ test('prepared continuation manifest requires recovery lineage and prepared dige
     'CONTINUATION_PREPARED_DIFF_REF_REQUIRED');
 });
 
+test('general interrupted-recovery continuation consumes native recovery lineage without relabeling', () => {
+  const request = owner.parsePreparedContinuationRequestText(JSON.stringify({
+    schema:owner.INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA,
+    message:'feat: continue general recovered L candidate',
+    expected_paths:['a/file.cjs'],
+    prepared_digest:'1'.repeat(64),
+    prior_manifest_id:'2'.repeat(64),
+    recovery_classification_digest:'3'.repeat(64),
+  }));
+  const m = manifest({
+    phaseId:'9001-implementation-pr-recovery-rebind-g12',
+    phaseClass:'COORDINATION',
+    scopes:['path:a/file.cjs','surface:mcl:test'],
+    inputRefs:[
+      'commit:' + 'b'.repeat(40),
+      'receipt:mcl-task-manifest:' + request.prior_manifest_id,
+      'receipt:mcl-interrupted-recovery:' + request.recovery_classification_digest,
+      'receipt:mcl-dirty-diff:' + request.prepared_digest,
+    ],
+  });
+  expectReason(() => owner.validateManifestShape(m), 'MANIFEST_PHASE_CLASS_INVALID');
+  assert.doesNotThrow(() => owner.validateManifestShape(
+    m, owner.DEFAULT_PROFILE, ['REPOSITORY_MUTATION','COORDINATION']));
+  assert.doesNotThrow(() => owner.validatePreparedContinuationManifestBinding(m, request));
+  expectReason(() => owner.validatePreparedContinuationManifestBinding(
+    {...m, inputRefs:m.inputRefs.filter((ref) => !ref.startsWith('receipt:mcl-interrupted-recovery:'))}, request),
+  'CONTINUATION_INTERRUPTED_RECOVERY_REF_REQUIRED');
+  const legacy = {
+    schema:owner.CONTINUATION_REQUEST_SCHEMA, message:'x', expected_paths:['a/file.cjs'],
+    prepared_digest:'1'.repeat(64), prior_manifest_id:'2'.repeat(64),
+    prior_blocked_receipt_id:'4'.repeat(64), blocker_repair_receipt:'5'.repeat(64),
+  };
+  expectReason(() => owner.validatePreparedContinuationManifestBinding(m, legacy),
+    'CONTINUATION_LEGACY_PHASE_CLASS_INVALID');
+});
+
 test('CLI exposes literal continue-prepared without generic patch or command selectors', () => {
   const parsed = owner.parseArgs([
     'continue-prepared','--manifest','m','--ledger','l','--packet','p',
@@ -647,6 +683,85 @@ test('prepared replay preserves identity across PREPARED COMMITTED CURRENTIZED a
     const pushed = owner.classifyPreparedContinuationState(m, request, currentMain, {profile});
     assert.equal(pushed.state, 'PUSHED');
     assert.equal(pushed.candidateHead, committed.candidateHead);
+  } finally {
+    try { gitExec(landing, ['worktree','remove',feature]); } catch {}
+    fs.rmSync(tmp, {recursive:true, force:true});
+  }
+});
+
+
+
+test('general recovery continuation preserves no-renames identity through rename lifecycle', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-general-recovery-rename-'));
+  const remote = path.join(tmp, 'remote.git');
+  const landing = path.join(tmp, 'landing');
+  const feature = path.join(tmp, 'feature');
+  try {
+    gitExec(tmp, ['init','--bare',remote]);
+    gitExec(tmp, ['clone',remote,landing]);
+    gitExec(landing, ['config','user.name','fixture']);
+    gitExec(landing, ['config','user.email','fixture@example.invalid']);
+    fs.mkdirSync(path.join(landing, 'src'), {recursive:true});
+    fs.writeFileSync(path.join(landing, 'src/old.cjs'), "'use strict';\nmodule.exports = 1;\n");
+    gitExec(landing, ['add','src/old.cjs']);
+    gitExec(landing, ['commit','-m','base']);
+    gitExec(landing, ['branch','-M','main']);
+    gitExec(landing, ['push','-u','origin','main']);
+    const base = gitExec(landing, ['rev-parse','HEAD']).trim();
+    gitExec(landing, ['worktree','add','-b','laptop/task-general-rename',feature,base]);
+    gitExec(landing, ['push','origin',base + ':refs/heads/laptop/task-general-rename']);
+
+    fs.writeFileSync(path.join(landing, 'main.txt'), 'main advance\n');
+    gitExec(landing, ['add','main.txt']);
+    gitExec(landing, ['commit','-m','main advance']);
+    gitExec(landing, ['push','origin','main']);
+    const currentMain = gitExec(landing, ['rev-parse','HEAD']).trim();
+
+    gitExec(feature, ['mv','src/old.cjs','src/new.cjs']);
+    const prepared = gitExec(feature, ['diff','--cached','--no-renames','--binary','--']);
+    const paths = gitExec(feature, ['diff','--cached','--no-renames','--name-only','-z','--'])
+      .split('\0').filter(Boolean).sort();
+    assert.deepEqual(paths, ['src/new.cjs','src/old.cjs']);
+
+    const request = {
+      schema:owner.INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA,
+      message:'feat: continue general recovery rename',
+      expected_paths:paths,
+      prepared_digest:owner.sha256Bytes(Buffer.from(prepared,'utf8')),
+      prior_manifest_id:'2'.repeat(64),
+      recovery_classification_digest:'3'.repeat(64),
+    };
+    const m = manifest({
+      phaseId:'9001-implementation-pr-recovery-rebind-g12',
+      phaseClass:'COORDINATION',
+      workspace:{kind:'repository',branch:'laptop/task-general-rename',worktree:feature},
+      observedBaseSha:base,
+      scopes:['path:src/new.cjs','path:src/old.cjs','surface:mcl:test'],
+      inputRefs:[
+        'receipt:mcl-task-manifest:' + request.prior_manifest_id,
+        'receipt:mcl-interrupted-recovery:' + request.recovery_classification_digest,
+        'receipt:mcl-dirty-diff:' + request.prepared_digest,
+      ],
+    });
+    const profile = {...owner.DEFAULT_PROFILE, landing, worktreeRoot:tmp};
+
+    assert.equal(owner.classifyPreparedContinuationState(m, request, currentMain, {profile}).state, 'PREPARED');
+    const replay = owner.verifyReplayAgainstCurrent(m, request, currentMain);
+    assert.equal(replay.currentMain, currentMain);
+
+    gitExec(feature, ['-c','user.name=' + owner.FIXED_BOT_NAME, '-c','user.email=' + owner.FIXED_BOT_EMAIL,
+      'commit','-m',request.message]);
+    const committed = owner.classifyPreparedContinuationState(m, request, currentMain, {profile});
+    assert.equal(committed.state, 'COMMITTED');
+    assert.equal(owner.verifyReplayAgainstCurrent(
+      m, request, currentMain, {candidateHead:committed.candidateHead}).patchId, replay.patchId);
+
+    gitExec(feature, ['-c','user.name=' + owner.FIXED_BOT_NAME, '-c','user.email=' + owner.FIXED_BOT_EMAIL,
+      'merge','--no-ff','--no-edit',currentMain]);
+    assert.equal(owner.classifyPreparedContinuationState(m, request, currentMain, {profile}).state, 'CURRENTIZED');
+
+    gitExec(feature, ['push','origin','HEAD:refs/heads/laptop/task-general-rename']);
+    assert.equal(owner.classifyPreparedContinuationState(m, request, currentMain, {profile}).state, 'PUSHED');
   } finally {
     try { gitExec(landing, ['worktree','remove',feature]); } catch {}
     fs.rmSync(tmp, {recursive:true, force:true});

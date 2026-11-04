@@ -1077,6 +1077,27 @@ test('repo-neutral predicate is narrow, explicit and reviewed-prefix bounded', (
     ],
   }), true);
   assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/workflows/canonical-main-protection-guard.yml'],
+    scopes: [
+      'path:.github/workflows/canonical-main-protection-guard.yml',
+      'surface:repo:canonical-main-protection-guard',
+    ],
+  }), true);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/workflows/canonical-main-protection-guard.yml'],
+    scopes: [
+      'path:.github/workflows/canonical-main-protection-guard.yml',
+      'surface:canonical-main:protection-guard',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
+    paths: ['.github/workflows/canonical-main-protection-guard.yml.bak'],
+    scopes: [
+      'path:.github/workflows/canonical-main-protection-guard.yml.bak',
+      'surface:repo:canonical-main-protection-guard',
+    ],
+  }), false);
+  assert.equal(attention.repoNeutralPacket({
     paths: ['.github/workflows/mcl-task-lease.yml'],
     scopes: [
       'path:.github/workflows/mcl-task-lease.yml',

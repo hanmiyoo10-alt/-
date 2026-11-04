@@ -99,12 +99,21 @@ function parseArgs(argv = process.argv.slice(2)) {
   }
   const operation = argv[0];
   let target = null;
+  let packetActivityEvidenceFile = null;
   let apply = false;
   for (let index = 1; index < argv.length; index += 1) {
     const token = argv[index];
     if (token === '--apply') {
       if (apply) throw new RecoveryError('UNKNOWN', ['ARGUMENT_DUPLICATE:apply']);
       apply = true;
+      continue;
+    }
+    if (token === '--packet-activity-evidence-file') {
+      if (packetActivityEvidenceFile !== null || index + 1 >= argv.length) {
+        throw new RecoveryError('UNKNOWN', [packetActivityEvidenceFile !== null
+          ? 'ARGUMENT_DUPLICATE:packet-activity-evidence-file' : 'ARGUMENT_VALUE_MISSING']);
+      }
+      packetActivityEvidenceFile = argv[++index];
       continue;
     }
     if (token !== '--target' || target !== null || index + 1 >= argv.length) {
@@ -115,7 +124,30 @@ function parseArgs(argv = process.argv.slice(2)) {
   if (!PACKET_RE.test(target || '')) throw new RecoveryError('UNKNOWN', ['TARGET_PACKET_INVALID']);
   if (operation === 'apply' && !apply) throw new RecoveryError('BLOCKED', ['EXPLICIT_APPLY_REQUIRED']);
   if (operation === 'inspect' && apply) throw new RecoveryError('UNKNOWN', ['INSPECT_APPLY_FORBIDDEN']);
-  return {operation, targetPacketRef: target, targetPacketNumber: packetNumber(target)};
+  return {
+    operation,
+    targetPacketRef: target,
+    targetPacketNumber: packetNumber(target),
+    packetActivityEvidenceFile,
+  };
+}
+function readPacketActivityEvidenceFile(filePath, packetNumber) {
+  const resolved = path.resolve(filePath);
+  let stat;
+  try { stat = fs.lstatSync(resolved); }
+  catch { throw new RecoveryError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_FILE_READ_FAILED']); }
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    throw new RecoveryError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_REGULAR_FILE_REQUIRED']);
+  }
+  if (stat.size > 32 * 1024) throw new RecoveryError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_FILE_TOO_LARGE']);
+  let value;
+  try { value = JSON.parse(fs.readFileSync(resolved, 'utf8')); }
+  catch { throw new RecoveryError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_JSON_INVALID']); }
+  try { return stageEntry.normalizePacketActivityEvidenceSet(value, packetNumber); }
+  catch (error) {
+    if (error instanceof stageEntry.StageError) throw new RecoveryError(error.kind, error.reasonCodes);
+    throw error;
+  }
 }
 function defaultBinaryRunner(args, options = {}) {
   const result = childProcess.spawnSync(args[0], args.slice(1), {
@@ -615,6 +647,7 @@ function defaultDeps(overrides = {}) {
     runner,
     binaryRunner,
     client,
+    packetActivityEvidence: overrides.packetActivityEvidence || null,
     readAuthority: overrides.readAuthority || (() => readMainAuthority(runner)),
     readOwnerBlobs: overrides.readOwnerBlobs || ((mainSha) => readOwnerBlobs(mainSha, runner)),
     readIssue: overrides.readIssue || ((number) => stageEntry.ghJson('repos/' + REPO + '/issues/' + number, runner)),
@@ -659,7 +692,11 @@ function readPacketContext(targetPacketNumber, deps) {
     if (error instanceof stageEntry.StageError) throw new RecoveryError(error.kind, error.reasonCodes);
     throw error;
   }
-  const overlap = deps.discoverOverlap({packetNumber: targetPacketNumber, requestedScopes: scopes});
+  const overlap = deps.discoverOverlap({
+    packetNumber: targetPacketNumber,
+    requestedScopes: scopes,
+    packetActivityEvidence: deps.packetActivityEvidence,
+  });
   if (overlap.discovery !== 'COMPLETE') throw new RecoveryError('UNKNOWN', ['TARGET_OVERLAP_INCOMPLETE']);
   if (overlap.state === 'CONFLICT') throw new RecoveryError('CONFLICT', ['TARGET_OVERLAP_CONFLICT']);
   if (overlap.state !== 'DISJOINT') throw new RecoveryError('BLOCKED', ['TARGET_OVERLAP_NOT_DISJOINT']);
@@ -1015,7 +1052,13 @@ function exitCodeFor(status) {
 async function runCli(argv = process.argv.slice(2), deps = {}) {
   try {
     const args = parseArgs(argv);
-    const result = args.operation === 'apply' ? await executeApply(args, deps) : await executeInspect(args, deps);
+    const packetActivityEvidence = args.packetActivityEvidenceFile
+      ? readPacketActivityEvidenceFile(args.packetActivityEvidenceFile, args.targetPacketNumber)
+      : null;
+    const runtimeDeps = {...deps, packetActivityEvidence};
+    const result = args.operation === 'apply'
+      ? await executeApply(args, runtimeDeps)
+      : await executeInspect(args, runtimeDeps);
     return {code: exitCodeFor(result.status), text: JSON.stringify(result) + '\n'};
   } catch (error) {
     const kind = error instanceof RecoveryError ? error.kind : 'UNKNOWN';
@@ -1069,6 +1112,8 @@ module.exports = {
   parseArgs,
   postOnce,
   publishRebind,
+  readPacketActivityEvidenceFile,
+  readPacketContext,
   readProgress,
   revalidateReleaseAdmission,
   runCli,

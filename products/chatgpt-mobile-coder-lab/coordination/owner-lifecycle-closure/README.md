@@ -1,6 +1,6 @@
 # MCL owner-lifecycle closure preflight
 
-Read-only V1 classifier for detecting owner-lifecycle closure debt before effectful progression.
+Read-only V1/V2 classifier for detecting owner-lifecycle closure debt before effectful progression.
 
 ## Scope
 
@@ -10,35 +10,47 @@ Checkpoints:
 - `AUTHORITY_SCOPE`
 - `PRE_MERGE`
 
-Independent obligations:
+V1 obligations remain unchanged:
 - `IMPLEMENT_SELF`
 - `REFINE_SELF`
 - `FINALIZE_SELF`
 - `RETIRE_SELF`
 
-Aggregate result precedence:
-`CONFLICT > UNKNOWN > BLOCKED > PASS`.
+V2 adds one independent obligation:
+- `RECOVER_SELF`
 
-Required-but-incomplete evidence fails closed as `UNKNOWN`. Authoritative disagreement remains `CONFLICT`. Per-obligation evidence references are provenance only and grant no authority.
+Aggregate result precedence remains `CONFLICT > UNKNOWN > BLOCKED > PASS`.
+
+## Backward compatibility
+
+`mcl-owner-lifecycle-closure-input.v1` and `mcl-owner-lifecycle-closure-receipt.v1` preserve the existing four-obligation contract. V1 callers do not receive a synthetic `RECOVER_SELF` field.
+
+`mcl-owner-lifecycle-closure-input.v2` returns `mcl-owner-lifecycle-closure-receipt.v2` and adds `RECOVER_SELF` without changing the four V1 obligations.
+
+## RECOVER_SELF V2
+
+The required V2 recovery evidence is caller-supplied and source-backed:
+
+- `naturalStates[]` contains bounded diagnostic `kind` plus boolean `routeCovered`;
+- `continuationPrerequisites[]` contains bounded diagnostic `kind` plus boolean `covered`.
+
+A missing or malformed required boolean remains `UNKNOWN`. A natural state with no reviewed route is `BLOCKED / RECOVER_ROUTE_MISSING`. A missing next-owner prerequisite is `BLOCKED / RECOVER_NEXT_OWNER_PREREQUISITE_MISSING`. If every required row is covered, the obligation is `PASS / RECOVER_SELF_COVERED`.
+
+Receipts expose only bounded missing kind identifiers and evidence references. Kind labels are provenance/diagnostics only and never create owner, route, cleanup, Git, finalization, or mutation authority.
+
+Source-backed fixture families include prepared/staged/dirty continuation, stale linked-worktree registration, stage-entry partial create, post-effect PR projection lag, current-main object locality, lost-ack reconvergence, owner effect reachability, packet-activity evidence, coordination envelope capacity, ephemeral holder composition, producer/consumer lineage, execution profile, executable mode, canonical evidence byte transport, and postmerge finalization reachability.
+
+The #4214/#4216 sequence is the direct `POSTMERGE_FINALIZATION_REACHABILITY` fixture: pre-repair coverage blocks, while the landed reviewed finalization route turns the same prerequisite into PASS.
 
 ## Historical replay contract
 
-The V1 fixture set covers:
-- #2813 / #3093 implementation bootstrap;
-- #3055 external finalizer bootstrap;
-- #3143 pre-#3149 non-decreasing self-finalization debt;
-- #3149 stable self-owner coverage;
-- #3178 late-recognition-only finalization;
-- #4046 same-PR refinement owner gap;
-- #3856/#3862 exact L retirement owner gap;
-- #4148 pre-#4150 producer-lineage gap;
-- post-#4150 reviewed L/L lineage coverage.
+The V1 fixture set remains unchanged and covers #2813/#3093 implementation bootstrap, #3055 external finalizer bootstrap, #3143/#3149 self-finalization, #3178 late recognition, #4046 same-PR refinement, #3856/#3862 retirement, and #4148/#4150 producer-lineage coverage.
 
-The classifier distinguishes a missing stable self-owner class from a stable class whose exact producer lineage is unsupported.
+V2 replay adds the source-backed recovery/prerequisite cases selected by #4194/#4195. Positive landed-owner fixtures must turn the same class to PASS where capability exists.
 
-## V1 boundary
+## V2 boundary
 
-This first implementation is classifier-only. Automatic stage-entry or PRE_MERGE consumer wiring is intentionally deferred to a separately reviewed packet after the classifier itself is proven in-repository.
+V2 remains classifier-only. It never performs recovery, cleanup, object materialization, holder/lease mutation, Git retry, evidence normalization, or finalization. Automatic stage-entry or PRE_MERGE consumer wiring remains a separately reviewed deny-only packet after known capability gaps are repaired.
 
 ## Disposable smoke/proof lifecycle closure
 

@@ -150,6 +150,48 @@ function classifyRetire(o = {}) {
   });
 }
 
+function validRecoverRows(rows, field) {
+  if (!Array.isArray(rows) || rows.length > 64) return false;
+  return rows.every((row) => row && typeof row === "object" && !Array.isArray(row)
+    && typeof row.kind === "string" && /^[A-Z0-9_:-]{1,96}$/.test(row.kind)
+    && typeof row[field] === "boolean");
+}
+
+function uniqueKinds(rows, field) {
+  return [...new Set(rows.filter((row) => row[field] === false).map((row) => row.kind))].sort();
+}
+
+function classifyRecover(o = {}) {
+  const gated = evidenceGate(o) || notApplicable(o);
+  if (gated) return gated;
+  if (o.required !== true
+      || !validRecoverRows(o.naturalStates, "routeCovered")
+      || !validRecoverRows(o.continuationPrerequisites, "covered")) return unknown(o);
+  const missingStates = uniqueKinds(o.naturalStates, "routeCovered");
+  const missingPrerequisites = uniqueKinds(o.continuationPrerequisites, "covered");
+  if (missingStates.length || missingPrerequisites.length) {
+    const reasonCodes = [];
+    if (missingStates.length) reasonCodes.push("RECOVER_ROUTE_MISSING");
+    if (missingPrerequisites.length) reasonCodes.push("RECOVER_NEXT_OWNER_PREREQUISITE_MISSING");
+    return result(o, {
+      result: "BLOCKED",
+      classification: missingStates.length
+        ? "RECOVER_ROUTE_MISSING"
+        : "RECOVER_NEXT_OWNER_PREREQUISITE_MISSING",
+      reasonCodes,
+      missingStates,
+      missingPrerequisites,
+    });
+  }
+  return result(o, {
+    result: "PASS",
+    classification: "RECOVER_SELF_COVERED",
+    reasonCodes: [],
+    missingStates: [],
+    missingPrerequisites: [],
+  });
+}
+
 function aggregate(obligations) {
   const values = Object.values(obligations).map((x) => x.result);
   if (values.includes("CONFLICT")) return "CONFLICT";
@@ -159,9 +201,9 @@ function aggregate(obligations) {
 }
 
 function classify(input) {
-  if (!input || input.schema !== "mcl-owner-lifecycle-closure-input.v1") {
-    throw new Error("unsupported schema");
-  }
+  const isV1 = input?.schema === "mcl-owner-lifecycle-closure-input.v1";
+  const isV2 = input?.schema === "mcl-owner-lifecycle-closure-input.v2";
+  if (!isV1 && !isV2) throw new Error("unsupported schema");
   if (!["AUTHORITY_SCOPE", "PRE_MERGE"].includes(input.checkpoint)) {
     throw new Error("unsupported checkpoint");
   }
@@ -171,8 +213,11 @@ function classify(input) {
     FINALIZE_SELF: classifyFinalize(input.obligations?.FINALIZE_SELF),
     RETIRE_SELF: classifyRetire(input.obligations?.RETIRE_SELF),
   };
+  if (isV2) obligations.RECOVER_SELF = classifyRecover(input.obligations?.RECOVER_SELF);
   return {
-    schema: "mcl-owner-lifecycle-closure-receipt.v1",
+    schema: isV2
+      ? "mcl-owner-lifecycle-closure-receipt.v2"
+      : "mcl-owner-lifecycle-closure-receipt.v1",
     checkpoint: input.checkpoint,
     result: aggregate(obligations),
     obligations,

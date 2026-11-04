@@ -108,6 +108,9 @@ claimHolder(){events.push('holder-claim');return {result:{status:'CLAIMED',reaso
 checkHolder(_f,claim){events.push('holder-check');assert.equal(claim,CLAIM);return {status:'CHECK_PASS',reasonCodes:[]};},
 releaseLease(){events.push('release-lease');return {ok:true,value:{evidenceRef:'run:202',observedGeneration:11}};},
 releaseHolder(_f,claim){events.push('holder-release');assert.equal(claim,CLAIM);return {status:'RELEASED',reasonCodes:[]};},
+inspectHolderWorkspace(){events.push('finalize-holder-inspect');return {ok:true,holderPath:'/fixture/holder'};},
+readHolder(){events.push('finalize-holder-read');return {missing:true,ok:false,reasonCodes:['HOLDER_MISSING']};},
+cleanupStaleHolder(){events.push('finalize-holder-cleanup');return {status:'STALE_CLEANED',reasonCodes:[]};},
 reviewUpdateInspect(){events.push('review-update-inspect');return {state:'READY'};},
 continuationInspect(){events.push('continuation-inspect');return {state:'PREPARED'};},
 writeActivation(_m,value){events.push('write-activation');activation=structuredClone(value);return structuredClone(activation);},
@@ -688,6 +691,107 @@ assert.equal(replay.completionCommentId, first.completionCommentId);
 no(state,'read-published');
 assert.ok(state.getActivation());
 });
+test('t26 released-D013 holder reconvergence covers every effect operation', () => {
+for (const effectOperation of ['apply','review-update','continue-prepared']) {
+for (const stale of [false,true]) {
+const files=fixtureFiles();
+const state=baseDeps(files);
+const m=manifest();
+state.setActivation(owner.buildActivation({
+manifest:m,manifestCommentId:1,
+owner:{new_head:HEAD,pr_number:4001},
+prRequest:{title:TITLE,body:PR_BODY},
+effectOperation,
+releaseGeneration:11,
+releaseEvidenceRef:'run:202',
+}));
+state.deps.readCurrent=()=>({
+issue:{state:'open',body:PACKET_BODY},ledger:{body:'released-ledger'},
+});
+state.deps.validateEvidence=(input)=>({
+ok:!input.requireActiveLease,
+reasonCodes:input.requireActiveLease?['LEASE_NOT_ACTIVE']:[],
+state:{generation:12},
+});
+let present=stale;
+let cleanupCalls=0;
+state.deps.readHolder=()=>{
+state.events.push('finalize-holder-read');
+if(!present)return {missing:true,ok:false,reasonCodes:['HOLDER_MISSING']};
+return {missing:false,ok:true,reasonCodes:[],value:{
+manifestId:m.manifestId,leaseId:m.leaseEvidence.leaseId,claimDigest:'a'.repeat(64),
+}};
+};
+state.deps.cleanupStaleHolder=(manifestText,ledgerBody)=>{
+cleanupCalls+=1; state.events.push('finalize-holder-cleanup');
+assert.equal(manifestText,files.manifestText);
+assert.equal(ledgerBody,'released-ledger');
+present=false;
+return {status:'STALE_CLEANED',reasonCodes:[]};
+};
+const out=finalize(files,state);
+assert.equal(out.status,'PASS',effectOperation+':'+stale);
+assert.equal(cleanupCalls,stale?1:0,effectOperation+':'+stale);
+}
+}
+});
+
+test('t26b released-D013 holder reconvergence fails closed on foreign holder', () => {
+const files=fixtureFiles();
+const state=baseDeps(files);
+const m=manifest();
+state.setActivation(owner.buildActivation({
+manifest:m,manifestCommentId:1,
+owner:{new_head:HEAD,pr_number:4001},
+prRequest:{title:TITLE,body:PR_BODY},
+effectOperation:'apply',releaseGeneration:11,releaseEvidenceRef:'run:202',
+}));
+state.deps.readCurrent=()=>({issue:{state:'open',body:PACKET_BODY},ledger:{body:'released-ledger'}});
+state.deps.validateEvidence=(input)=>({ok:!input.requireActiveLease,reasonCodes:[],state:{generation:12}});
+state.deps.readHolder=()=>({missing:false,ok:true,reasonCodes:[],value:{
+manifestId:'f'.repeat(64),leaseId:m.leaseEvidence.leaseId,claimDigest:'a'.repeat(64),
+}});
+assert.throws(()=>finalize(files,state),
+(error)=>error.reasonCodes.includes('HOLDER_IDENTITY_CONFLICT'));
+no(state,'finalize-holder-cleanup','read-published','post-completion');
+});
+
+test('t26c released-D013 holder reconvergence blocks malformed and cleanup failure states', () => {
+for (const mode of ['malformed','cleanup-failed','cleanup-not-absent']) {
+const files=fixtureFiles();
+const state=baseDeps(files);
+const m=manifest();
+state.setActivation(owner.buildActivation({
+manifest:m,manifestCommentId:1,
+owner:{new_head:HEAD,pr_number:4001},
+prRequest:{title:TITLE,body:PR_BODY},
+effectOperation:'apply',releaseGeneration:11,releaseEvidenceRef:'run:202',
+}));
+state.deps.readCurrent=()=>({issue:{state:'open',body:PACKET_BODY},ledger:{body:'released-ledger'}});
+state.deps.validateEvidence=(input)=>({ok:!input.requireActiveLease,reasonCodes:[],state:{generation:12}});
+let reads=0;
+state.deps.readHolder=()=>{
+reads+=1;
+if(mode==='malformed') return {missing:false,ok:false,reasonCodes:['HOLDER_INVALID']};
+if(mode==='cleanup-not-absent' && reads>1) return {missing:false,ok:true,reasonCodes:[],value:{
+manifestId:m.manifestId,leaseId:m.leaseEvidence.leaseId,claimDigest:'a'.repeat(64),
+}};
+return {missing:false,ok:true,reasonCodes:[],value:{
+manifestId:m.manifestId,leaseId:m.leaseEvidence.leaseId,claimDigest:'a'.repeat(64),
+}};
+};
+state.deps.cleanupStaleHolder=()=>mode==='cleanup-failed'
+? {status:'BLOCKED',reasonCodes:['LEASE_STILL_ACTIVE']}
+: {status:'STALE_CLEANED',reasonCodes:[]};
+assert.throws(()=>finalize(files,state),(error)=>{
+if(mode==='malformed') return error.reasonCodes.includes('HOLDER_INVALID');
+if(mode==='cleanup-failed') return error.reasonCodes.includes('LEASE_STILL_ACTIVE');
+return error.reasonCodes.includes('HOLDER_NOT_ABSENT_AFTER_CLEANUP');
+});
+no(state,'read-published','post-completion');
+}
+});
+
 test('t27', () => {
 const m=manifest();
 const activation=owner.buildActivation({

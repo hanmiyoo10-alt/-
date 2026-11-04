@@ -11,8 +11,8 @@ function runAtOrAfterEpoch(run, observationEpoch) {
 function latestRelevantRun(runs, allowedEvents, observationEpoch = null) {
   return runs.find((run) => allowedEvents.includes(run.event) && run.conclusion !== 'skipped' && runAtOrAfterEpoch(run, observationEpoch));
 }
-async function scanFailedRun(context, run, config = {}) {
-  const jobs = await context.actions.workflowJobs(run.id);
+async function scanFailedRun(context, run, config = {}, suppliedJobs = null) {
+  const jobs = suppliedJobs || await context.actions.workflowJobs(run.id);
   const failed = jobs.filter((job) => job.conclusion && job.conclusion !== 'success' && job.conclusion !== 'skipped');
   let text = '';
   for (const job of failed.slice(0, 8)) text += `\n${await context.actions.jobLogText(job.id)}`;
@@ -34,16 +34,36 @@ function writerEvent(config, run, reasonCode, recovered) {
 function recoverableReasons(config) {
   return [...new Set(['MAIN_WRITE_CONTENT_CONFLICT', 'MAIN_WRITE_RETRY_EXHAUSTED', 'MEMORY_SYNC_PATH_ESCAPE', config.failureReason || 'MEMORY_SYNC_FAILED'])];
 }
+function terminalJobState(jobs) {
+  if (!Array.isArray(jobs) || jobs.length === 0) return {terminal: false, passing: false};
+  if (jobs.some((job) => job?.status !== 'completed' || !job?.conclusion)) {
+    return {terminal: false, passing: false};
+  }
+  const failed = jobs.filter((job) => !['success', 'skipped'].includes(job.conclusion));
+  return {terminal: true, passing: failed.length === 0};
+}
 async function observeOne(context, config) {
   const runs = await context.actions.workflowRuns(config.workflow, 50);
   const epoch = context.policy.adapters.observationEpoch || null;
   const run = latestRelevantRun(runs, config.events, epoch);
   if (!run) return {id: config.id, known: true, passing: true, summary: `IDLE — no relevant workflow run since ${epoch || 'adapter start'}`, events: [], run: null};
-  if (run.status !== 'completed') return {id: config.id, known: false, passing: false, summary: `PENDING — run ${run.id}`, events: [], run};
-  if (run.conclusion === 'success') {
+  let jobs = null;
+  let passing = run.conclusion === 'success';
+  if (run.status !== 'completed') {
+    if (config.allowTerminalJobsBeforeRunComplete !== true) {
+      return {id: config.id, known: false, passing: false, summary: `PENDING — run ${run.id}`, events: [], run};
+    }
+    jobs = await context.actions.workflowJobs(run.id);
+    const terminal = terminalJobState(jobs);
+    if (!terminal.terminal) {
+      return {id: config.id, known: false, passing: false, summary: `PENDING — run ${run.id}`, events: [], run};
+    }
+    passing = terminal.passing;
+  }
+  if (passing) {
     return {id: config.id, known: true, passing: true, summary: `PASS — run ${run.id}`, events: recoverableReasons(config).map((reason) => writerEvent(config, run, reason, true)), run};
   }
-  const reason = await scanFailedRun(context, run, config);
+  const reason = await scanFailedRun(context, run, config, jobs);
   return {id: config.id, known: true, passing: false, summary: `FAIL — run ${run.id} — ${reason}`, events: [writerEvent(config, run, reason, false)], run};
 }
 async function observe(context) {
@@ -51,4 +71,4 @@ async function observe(context) {
   return {known: rows.every((row) => row.known), summary: rows.every((row) => row.known) ? 'KNOWN' : 'INCOMPLETE', events: rows.flatMap((row) => row.events), data: rows};
 }
 
-module.exports = {runAtOrAfterEpoch, latestRelevantRun, scanFailedRun, eventClassForReason, writerEvent, recoverableReasons, observeOne, observe};
+module.exports = {runAtOrAfterEpoch, latestRelevantRun, scanFailedRun, eventClassForReason, writerEvent, recoverableReasons, terminalJobState, observeOne, observe};

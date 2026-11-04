@@ -9,7 +9,8 @@ const {repairIncidentConsistency} = require('../orchestrator/refresh.cjs');
 const {deriveConvergence, convergenceAttention} = require('../domains/convergence.cjs');
 const {metricsFromTransitions, metricsMarker, parseIncidentMetrics, unstableAttention} = require('../domains/incident-metrics.cjs');
 const {BLOCK_CLASSES, CIRCUIT_BREAKER_STATES, decideCircuitBreaker} = require('../domains/stability.cjs');
-const {scanFailedRun, eventClassForReason, recoverableReasons} = require('../observers/writer-workflows.cjs');
+const {scanFailedRun, eventClassForReason, recoverableReasons, terminalJobState, observeOne} = require('../observers/writer-workflows.cjs');
+const {observe: observeRequiredCi} = require('../observers/required-ci.cjs');
 const {renderSummary} = require('../surfaces/summary.cjs');
 
 const policy = loadPolicy();
@@ -147,6 +148,9 @@ function event(eventId, disposition, from, to) {
   assert.equal(eventClassForReason('PROTECTION_GUARD_FAILED'), 'CONTROL_PLANE');
   assert.equal(eventClassForReason('MEMORY_SYNC_FAILED'), 'DURABLE_MEMORY_SYNC');
   assert.equal(eventClassForReason('MAIN_WRITE_CONTENT_CONFLICT'), 'MAIN_WRITE');
+  const earlyTerminalWriter = policy.adapters.writerWorkflows.find((row) => row.id === 'canonical-main-protection-guard');
+  assert.equal(earlyTerminalWriter.allowTerminalJobsBeforeRunComplete, true);
+  assert.equal(policy.adapters.writerWorkflows.filter((row) => row.allowTerminalJobsBeforeRunComplete === true).length, 1);
   const guard = {id: 'canonical-main-protection-guard', workflow: 'canonical-main-protection-guard.yml', failureReason: 'PROTECTION_GUARD_FAILED'};
   assert(recoverableReasons(guard).includes('PROTECTION_GUARD_FAILED'));
   assert(!recoverableReasons(guard).includes('MEMORY_SYNC_FAILED'));
@@ -154,6 +158,104 @@ function event(eventId, disposition, from, to) {
   assert.equal(await scanFailedRun(emptyLogContext, {id: 9}, guard), 'PROTECTION_GUARD_FAILED');
   const conflictContext = {actions: {workflowJobs: async () => [{id: 1, conclusion: 'failure'}], jobLogText: async () => 'MAIN_WRITE_CONTENT_CONFLICT'}};
   assert.equal(await scanFailedRun(conflictContext, {id: 10}, guard), 'MAIN_WRITE_CONTENT_CONFLICT', 'specific main-write evidence outranks domain fallback');
+
+  assert.deepEqual(
+    terminalJobState([{status: 'completed', conclusion: 'success'}, {status: 'completed', conclusion: 'skipped'}]),
+    {terminal: true, passing: true},
+  );
+  assert.deepEqual(
+    terminalJobState([{status: 'completed', conclusion: 'success'}, {status: 'in_progress', conclusion: null}]),
+    {terminal: false, passing: false},
+  );
+
+  const requiredMain = 'a'.repeat(40);
+  const requiredContext = {
+    policy,
+    mainSha: requiredMain,
+    actions: {
+      workflowRunsForPushHead: async () => [{
+        id: 77, head_sha: requiredMain, event: 'push',
+        status: 'in_progress', conclusion: null, run_attempt: 1,
+      }],
+      workflowJobs: async () => [{
+        id: 700, name: policy.adapters.requiredCi.requiredJob,
+        status: 'completed', conclusion: 'success',
+      }],
+    },
+  };
+  const requiredWhileWrapperPending = await observeRequiredCi(requiredContext);
+  assert.equal(requiredWhileWrapperPending.known, true);
+  assert.equal(requiredWhileWrapperPending.passing, true);
+  assert.match(requiredWhileWrapperPending.summary, /^PASS — run 77$/);
+
+  const requiredStillRunning = await observeRequiredCi({
+    ...requiredContext,
+    actions: {
+      ...requiredContext.actions,
+      workflowJobs: async () => [{
+        id: 701, name: policy.adapters.requiredCi.requiredJob,
+        status: 'in_progress', conclusion: null,
+      }],
+    },
+  });
+  assert.equal(requiredStillRunning.known, false);
+  assert.match(requiredStillRunning.summary, /^PENDING — Required job in run 77$/);
+
+  const writerConfig = {
+    id: 'canonical-main-protection-guard',
+    workflow: 'canonical-main-protection-guard.yml',
+    events: ['workflow_run'],
+    scope: ['scope:repo'],
+    failureReason: 'PROTECTION_GUARD_FAILED',
+    allowTerminalJobsBeforeRunComplete: true,
+  };
+  const writerPendingWrapper = await observeOne({
+    policy,
+    actions: {
+      workflowRuns: async () => [{
+        id: 88, event: 'workflow_run', status: 'in_progress', conclusion: null,
+        created_at: '2026-11-04T15:55:00Z', head_sha: requiredMain,
+      }],
+      workflowJobs: async () => [
+        {id: 801, status: 'completed', conclusion: 'success'},
+        {id: 802, status: 'completed', conclusion: 'skipped'},
+      ],
+      jobLogText: async () => '',
+    },
+  }, writerConfig);
+  assert.equal(writerPendingWrapper.known, true);
+  assert.equal(writerPendingWrapper.passing, true);
+
+  const writerWithoutOptIn = await observeOne({
+    policy,
+    actions: {
+      workflowRuns: async () => [{
+        id: 881, event: 'workflow_run', status: 'in_progress', conclusion: null,
+        created_at: '2026-11-04T15:55:00Z', head_sha: requiredMain,
+      }],
+      workflowJobs: async () => [
+        {id: 811, status: 'completed', conclusion: 'success'},
+      ],
+      jobLogText: async () => '',
+    },
+  }, {...writerConfig, allowTerminalJobsBeforeRunComplete: false});
+  assert.equal(writerWithoutOptIn.known, false);
+
+  const writerJobPending = await observeOne({
+    policy,
+    actions: {
+      workflowRuns: async () => [{
+        id: 89, event: 'workflow_run', status: 'in_progress', conclusion: null,
+        created_at: '2026-11-04T15:55:00Z', head_sha: requiredMain,
+      }],
+      workflowJobs: async () => [
+        {id: 803, status: 'completed', conclusion: 'success'},
+        {id: 804, status: 'queued', conclusion: null},
+      ],
+      jobLogText: async () => '',
+    },
+  }, writerConfig);
+  assert.equal(writerJobPending.known, false);
 
   const stableObservations = {requiredCi: {known: true}, productionAuthority: {known: true}, writers: {known: true}, bootstrap: {known: true}};
   assert.deepEqual(deriveConvergence(stableObservations, policy, Date.parse('2026-08-26T02:10:00Z')), {state: 'STABLE', waitingFor: [], since: null, ageSeconds: 0, stale: false});

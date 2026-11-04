@@ -12,7 +12,7 @@ on:
   workflow_run:
     workflows:
       - SimCore CI
-    types: [completed]
+    types: [requested, completed]
 
 permissions:
   contents: write
@@ -100,12 +100,63 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Resolve exact Required job result
+        id: required_result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_RUN_ID: ${{ github.event.workflow_run.id }}
+          EVENT_ACTION: ${{ github.event.action }}
+        run: |
+          set -euo pipefail
+          attempts=1
+          if [ "$EVENT_ACTION" = requested ]; then attempts=24; fi
+          for attempt in $(seq 1 "$attempts"); do
+            jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID/jobs?per_page=100")"
+            count="$(jq '[.jobs[] | select(.name == "Required")] | length' <<<"$jobs")"
+            if [ "$count" -gt 1 ]; then
+              echo "REQUIRED_JOB_CARDINALITY_CONFLICT:$count" >&2
+              exit 2
+            fi
+            if [ "$count" -eq 1 ]; then
+              status="$(jq -r '[.jobs[] | select(.name == "Required")][0].status' <<<"$jobs")"
+              conclusion="$(jq -r '[.jobs[] | select(.name == "Required")][0].conclusion // ""' <<<"$jobs")"
+              if [ "$status" = completed ] && [ -n "$conclusion" ]; then
+                if [ "$EVENT_ACTION" = requested ] && [ "$conclusion" != success ]; then
+                  echo "disposition=FAILURE_DEFERRED" >> "$GITHUB_OUTPUT"
+                else
+                  echo "disposition=RESOLVED" >> "$GITHUB_OUTPUT"
+                fi
+                echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            elif [ "$EVENT_ACTION" = completed ]; then
+              echo 'REQUIRED_JOB_MISSING_AFTER_WORKFLOW_COMPLETION' >&2
+              exit 3
+            fi
+            if [ "$attempt" -lt "$attempts" ]; then sleep 5; fi
+          done
+          if [ "$EVENT_ACTION" = completed ]; then
+            echo 'REQUIRED_JOB_NOT_TERMINAL_AFTER_WORKFLOW_COMPLETION' >&2
+            exit 4
+          fi
+          echo "disposition=DEFERRED" >> "$GITHUB_OUTPUT"
+          echo "conclusion=unknown" >> "$GITHUB_OUTPUT"
+
       - name: Enforce exact-main Required result
+        if: steps.required_result.outputs.disposition == 'RESOLVED'
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
-          CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          CI_CONCLUSION: ${{ steps.required_result.outputs.conclusion }}
           CI_RUN_ID: ${{ github.event.workflow_run.id }}
           CI_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           PROTECTION_ISSUE_NUMBER: '321'
         run: bash .github/plugin-control-plane/canonical-main/required-guard.sh
+
+      - name: Refresh canonical-main after Required observation
+        if: >-
+          steps.required_result.outputs.disposition == 'RESOLVED' ||
+          steps.required_result.outputs.disposition == 'FAILURE_DEFERRED'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run canonical-main-ops.yml --repo "$GITHUB_REPOSITORY" --ref main || true

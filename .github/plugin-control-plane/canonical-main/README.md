@@ -68,10 +68,13 @@ Runs older than that epoch are historical baseline evidence and cannot open a ne
 
 `.github/workflows/canonical-main-ops.yml` refreshes the operator surface through:
 
-- `workflow_run` completion events for Required CI and active writer workflows;
+- Required-job-driven protection feedback: `Canonical Main Protection Guard` begins on the SimCore CI `workflow_run: requested` event, boundedly observes the exact `Required` job, and requests an ops refresh as soon as that job reaches a terminal result; requested-event PASS may use the existing effect-free guard path immediately, while requested-event failure is projected early but defers recovery effects to the completed-event fallback so failure recovery remains exactly-once; the completed-event recovery path preserves the outer workflow conclusion (including `cancelled`) even though the terminal `Required` job remains authoritative for check observation;
+- `workflow_run` completion events remain the fallback/retry path for Required CI and active writer workflows;
 - selected `main` pushes;
 - a bounded schedule as self-healing fallback;
 - manual workflow dispatch.
+
+The Required observer treats the exact current-main `Required` job as authoritative once that job is terminal, even if GitHub's outer workflow-run status is still settling. Writer observation keeps wrapper-completion semantics by default; only policy-explicit owners such as `canonical-main-protection-guard` may accept an in-progress wrapper after every materialized job is terminal. Missing, still-running, ambiguous, or conflicting job evidence remains fail-closed.
 
 The same trusted job then runs the protected-main governance renderer, which updates only the bounded protection section in the existing operations issue.
 

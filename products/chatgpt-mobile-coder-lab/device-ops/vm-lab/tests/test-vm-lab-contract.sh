@@ -228,9 +228,14 @@ import sys
 import tempfile
 
 path = sys.argv[1]
-spec = importlib.util.spec_from_file_location("mcl_vm_admission", path)
-mod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(mod)
+prior_dont_write_bytecode = sys.dont_write_bytecode
+sys.dont_write_bytecode = True
+try:
+    spec = importlib.util.spec_from_file_location("mcl_vm_admission", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+finally:
+    sys.dont_write_bytecode = prior_dont_write_bytecode
 
 assert mod.GUEST_BYTES == 1024 ** 3
 assert mod.RESERVE_BYTES == 1024 ** 3
@@ -430,7 +435,14 @@ finally:
 PY
 ok 'live admission controller fails closed and continues only same prelaunch QEMU transaction'
 
-python3 -m py_compile "$CONTROLLER" || fail 'controller compile failed'
+python3 - "$CONTROLLER" <<'PY' || fail 'controller compile failed'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+compile(path.read_text(), str(path), "exec")
+PY
+if find "$HERE" -type f -name '*.pyc' -print -quit | grep -q .; then fail 'python bytecode residue found'; fi
+if find "$HERE" -type d -name '__pycache__' -print -quit | grep -q .; then fail 'python cache directory residue found'; fi
 for f in "$BOOTSTRAP" "$VERIFY" "$VMCTL" "$0"; do sh -n "$f" || fail "syntax failed: $f"; done
 ok 'shell and controller syntax pass'
 

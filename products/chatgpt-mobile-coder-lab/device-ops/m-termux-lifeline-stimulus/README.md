@@ -146,11 +146,17 @@ is non-success and still requires external proof.
 Repository implementation validation:
 
 ```sh
-python3 -m py_compile \
-  products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline-stimulus/mcl-m-termux-lifeline-stimulus.py
+python3 - <<'PY'
+from pathlib import Path
+path = Path("products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline-stimulus/mcl-m-termux-lifeline-stimulus.py")
+compile(path.read_text(), str(path), "exec")
+PY
 
-python3 -m unittest discover \
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
   -s products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline-stimulus/tests -v
+
+test -z "$(find products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline-stimulus -type f -name '*.pyc' -print -quit)"
+test -z "$(find products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline-stimulus -type d -name '__pycache__' -print -quit)"
 
 git diff --check
 ```

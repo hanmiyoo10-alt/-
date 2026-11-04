@@ -526,10 +526,10 @@ function acquireLandingLease(context, runner = runDefault) {
     '--workspace-kind', 'landing_metadata', '--branch', stageProfile.landingBranch,
     '--worktree', stageProfile.landingWorktree, '--observed-base-sha', context.landing.landing_head, '--dispatch',
   ], runner);
-  if (value.status !== 'DISPATCH_COMPLETE' || !SHA256_RE.test(value.leaseId || '')
-      || !Number.isSafeInteger(value.observedGeneration) || !Number.isSafeInteger(value.runId)
-      || value.runConclusion !== 'success') throw new StageError('BLOCKED', ['LANDING_D013_ACQUIRE_NOT_PROVEN']);
-  return value;
+  const evidenceRef = coordinationEvidenceRef(value, 'acquire');
+  if (!SHA256_RE.test(value.leaseId || '') || !Number.isSafeInteger(value.observedGeneration)
+      || !evidenceRef) throw new StageError('BLOCKED', ['LANDING_D013_ACQUIRE_NOT_PROVEN']);
+  return {...value, evidenceRef};
 }
 
 function buildLandingManifest(context, lease) {
@@ -544,12 +544,12 @@ function buildLandingManifest(context, lease) {
       workspace: {kind: 'landing_metadata', branch: stageProfile.landingBranch, worktree: stageProfile.landingWorktree},
       observedBaseSha: context.landing.landing_head, leaseRequirement: 'REQUIRED',
       leaseEvidence: {ledgerRef: '#2352', leaseId: lease.leaseId, acquiredGeneration: lease.observedGeneration,
-        acquireEvidenceRef: 'run:' + lease.runId},
+        acquireEvidenceRef: lease.evidenceRef},
       sourceAuthorityRefs: [context.packetRef, 'issue:#2352',
         'doc:products/chatgpt-mobile-coder-lab/docs/task-lease.md',
         'doc:products/chatgpt-mobile-coder-lab/docs/task-handoff.md',
         'doc:products/chatgpt-mobile-coder-lab/device-ops/landing-freshness/README.md'],
-      inputRefs: ['commit:' + context.mainSha, 'run:' + lease.runId],
+      inputRefs: ['commit:' + context.mainSha, lease.evidenceRef],
       expectedOutputRefs: ['commit:' + context.mainSha], acceptanceRefs: [context.packetRef, 'issue:#2352'],
       stopCondition: 'Normalize only fixed ' + stageProfile.route + ' origin/main metadata to exact current main, release D-013, record completion, and revalidate stage-entry once.',
       authority: {repositoryMutationAuthorized:false, deviceMutationAuthorized:false, mergeAuthorized:false,
@@ -615,6 +615,7 @@ function normalizeLandingCurrentness(context, {
   overlapResolver = discoverOverlap,
   profile,
   authorityBarrier = revalidateBeforeLandingRefresh,
+  commentPublisher = postExactSemanticComment,
 } = {}) {
   if (!context.normalizationRequired || context.landingState !== 'NORMALIZATION_REQUIRED') {
     return {normalized: false, count: 0, artifacts: []};
@@ -634,8 +635,8 @@ function normalizeLandingCurrentness(context, {
   try {
     authorityBarrier(context, lease, {runner, profile});
     const manifest = buildLandingManifest(context, lease);
-    const manifestComment = postComment(
-      context.packetNumber, taskHandoff.renderManifest(manifest), runner);
+    const manifestComment = commentPublisher(
+      context.packetNumber, taskHandoff.renderManifest(manifest), 'manifest', runner);
 
     const stageProfile = context.stageProfile || STAGE_PROFILES.S;
     const refreshedRaw = runOwner(LANDING, ['refresh', stageProfile.landingRoute], runner);
@@ -661,21 +662,21 @@ function normalizeLandingCurrentness(context, {
     const receipt = taskHandoff.buildCompletionReceipt(manifest, {
       disposition: 'COMPLETE',
       outputRefs: [`commit:${context.mainSha}`],
-      validationRefs: [`run:${lease.runId}`, `run:${released.value.runId}`],
-      observedRefs: [`commit:${context.mainSha}`, `run:${lease.runId}`, `run:${released.value.runId}`],
+      validationRefs: [lease.evidenceRef, released.value.evidenceRef],
+      observedRefs: [`commit:${context.mainSha}`, lease.evidenceRef, released.value.evidenceRef],
       leaseDisposition: 'RELEASED',
       leaseReleaseEvidence: {
         ledgerRef: '#2352',
         leaseId: lease.leaseId,
         releasedGeneration: released.value.observedGeneration,
-        evidenceRef: `run:${released.value.runId}`,
+        evidenceRef: released.value.evidenceRef,
       },
       workspaceResult: 'clean',
       blockerRefs: [],
       requiredUnknownRefs: [],
     });
-    const completionComment = postComment(
-      context.packetNumber, taskHandoff.renderCompletionReceipt(receipt), runner);
+    const completionComment = commentPublisher(
+      context.packetNumber, taskHandoff.renderCompletionReceipt(receipt), 'receipt', runner);
     return {
       normalized: true,
       count: 1,
@@ -767,8 +768,9 @@ function releaseLease(context, leaseId, runner = runDefault) {
       '--lease-id', leaseId,
       '--dispatch',
     ], runner);
-    return value.status === 'DISPATCH_COMPLETE' && value.runConclusion === 'success'
-      ? {ok: true, value} : {ok: false, value};
+    const evidenceRef = coordinationEvidenceRef(value, 'release');
+    return evidenceRef
+      ? {ok: true, value: {...value, evidenceRef}} : {ok: false, value};
   } catch (error) {
     return {ok: false, error};
   }
@@ -798,6 +800,99 @@ function postComment(packetNumber, body, runner = runDefault) {
   });
   if (!Number.isSafeInteger(value?.id)) throw new StageError('UNKNOWN', ['COMMENT_WRITE_UNPROVEN']);
   return value.id;
+}
+
+function readPacketComments(packetNumber, runner = runDefault) {
+  const result = fetchPaged(
+    (page) => `repos/${REPO}/issues/${packetNumber}/comments?per_page=${PAGE_SIZE}&page=${page}`,
+    runner,
+  );
+  if (!result.complete) throw new StageError('UNKNOWN', ['COMMENT_DISCOVERY_PARTIAL']);
+  return result.rows;
+}
+
+function parseHandoffComment(text) {
+  const start = '<!-- mcl-execution-handoff:v1 -->';
+  const end = '<!-- /mcl-execution-handoff:v1 -->';
+  const trimmed = String(text || '').trim();
+  const prefix = start + '\n```json\n';
+  const suffix = '\n```\n' + end;
+  if (!trimmed.startsWith(prefix) || !trimmed.endsWith(suffix)
+      || trimmed.split(start).length !== 2 || trimmed.split(end).length !== 2) {
+    throw new StageError('UNKNOWN', ['HANDOFF_COMMENT_INVALID_PRESENT']);
+  }
+  let value;
+  try { value = JSON.parse(trimmed.slice(prefix.length, trimmed.length - suffix.length)); }
+  catch { throw new StageError('UNKNOWN', ['HANDOFF_COMMENT_INVALID_PRESENT']); }
+  if (value?.schema !== 'mcl-execution-handoff.v1'
+      || value?.status !== 'HANDOFF_READY'
+      || typeof value?.packet_ref !== 'string'
+      || !SHA256_RE.test(value?.manifest_id || '')) {
+    throw new StageError('UNKNOWN', ['HANDOFF_COMMENT_INVALID_PRESENT']);
+  }
+  return value;
+}
+
+function semanticCommentIdentity(body, kind) {
+  if (kind === 'manifest') {
+    const parsed = taskHandoff.parseManifest(body);
+    if (parsed.status !== 'VALID') throw new StageError('UNKNOWN', ['D014_MANIFEST_COMMENT_INVALID']);
+    const value = parsed.value;
+    return {
+      marker: taskHandoff.MANIFEST_START,
+      slot: `manifest:${value.packetRef}:${value.phaseId}:${value.leaseEvidence?.leaseId || 'none'}`,
+      semantic: `${value.manifestId}:${value.payloadSha256}`,
+    };
+  }
+  if (kind === 'receipt') {
+    const parsed = taskHandoff.parseCompletionReceipt(body);
+    if (parsed.status !== 'VALID') throw new StageError('UNKNOWN', ['D014_RECEIPT_COMMENT_INVALID']);
+    const value = parsed.value;
+    return {
+      marker: taskHandoff.RECEIPT_START,
+      slot: `receipt:${value.manifestId}`,
+      semantic: `${value.receiptId}:${value.payloadSha256}`,
+    };
+  }
+  if (kind === 'handoff') {
+    const value = parseHandoffComment(body);
+    return {
+      marker: '<!-- mcl-execution-handoff:v1 -->',
+      slot: `handoff:${value.packet_ref}:${value.manifest_id}`,
+      semantic: sha256(String(body).trim()),
+    };
+  }
+  throw new StageError('UNKNOWN', ['COMMENT_KIND_UNSUPPORTED']);
+}
+
+function postExactSemanticComment(packetNumber, body, kind, runner = runDefault) {
+  const target = semanticCommentIdentity(body, kind);
+  const classify = (rows) => {
+    const matches = [];
+    for (const row of rows) {
+      if (typeof row?.body !== 'string' || !row.body.includes(target.marker)) continue;
+      const found = semanticCommentIdentity(row.body, kind);
+      if (found.slot !== target.slot) continue;
+      if (found.semantic !== target.semantic) {
+        throw new StageError('CONFLICT', ['COMMENT_SEMANTIC_CONFLICT']);
+      }
+      if (!Number.isSafeInteger(row.id)) throw new StageError('UNKNOWN', ['COMMENT_ID_INVALID']);
+      matches.push(row.id);
+    }
+    if (matches.length > 1) throw new StageError('CONFLICT', ['COMMENT_SEMANTIC_DUPLICATE']);
+    return matches[0] || null;
+  };
+  const before = classify(readPacketComments(packetNumber, runner));
+  if (before !== null) return before;
+
+  const response = runner([
+    'gh', 'api', `repos/${REPO}/issues/${packetNumber}/comments`,
+    '--method', 'POST', '--input', '-',
+  ], {input: JSON.stringify({body})});
+  const after = classify(readPacketComments(packetNumber, runner));
+  if (after !== null) return after;
+  if (response.code !== 0) throw new StageError('UNKNOWN', ['COMMENT_WRITE_ACK_UNKNOWN']);
+  throw new StageError('UNKNOWN', ['COMMENT_WRITE_READBACK_MISSING']);
 }
 
 function deterministicLeaseEvidenceRef(lease) {
@@ -986,6 +1081,7 @@ function applyRepositoryContext(context, {
   manifestBuilder = buildManifest,
   manifestRenderer = taskHandoff.renderManifest,
   lateBarrier = revalidateAfterAcquire,
+  commentPublisher = postExactSemanticComment,
 } = {}) {
   let lease = null;
   let manifest = null;
@@ -995,7 +1091,8 @@ function applyRepositoryContext(context, {
     lease = acquireLease(context, runner);
     manifest = manifestBuilder(context, lease);
     try {
-      manifestComment = postComment(context.packetNumber, manifestRenderer(manifest), runner);
+      manifestComment = commentPublisher(
+        context.packetNumber, manifestRenderer(manifest), 'manifest', runner);
     } catch {
       throw new StageError('UNKNOWN', ['D014_MANIFEST_COMMENT_FAILED']);
     }
@@ -1038,7 +1135,8 @@ function applyRepositoryContext(context, {
     const handoff = buildHandoff(context, manifest, lease);
     let handoffComment;
     try {
-      handoffComment = postComment(context.packetNumber, renderHandoff(handoff), runner);
+      handoffComment = commentPublisher(
+        context.packetNumber, renderHandoff(handoff), 'handoff', runner);
     } catch {
       throw new StageError('UNKNOWN', ['HANDOFF_COMMENT_FAILED']);
     }
@@ -1238,6 +1336,9 @@ module.exports = {
   parseOpsCapsule,
   parsePlan,
   postComment,
+  postExactSemanticComment,
+  readPacketComments,
+  semanticCommentIdentity,
   receiptFor,
   releaseLease,
   releaseRepositoryLease,

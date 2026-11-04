@@ -173,6 +173,59 @@ test('invalid CLI input does not persist fallback packet evidence', async () => 
   assert.equal(out.result.packetRef, null);
 });
 
+test('durable effect acknowledgement normalizes run and exact readback evidence', () => {
+  const leaseId = '4'.repeat(64);
+  assert.deepEqual(owner.coordinationEvidence({
+    status: 'DISPATCH_COMPLETE', leaseId, observedGeneration: 19,
+    runId: 190, runConclusion: 'success',
+  }, 'release'), {generation: 19, runId: 190, evidenceRef: 'run:190'});
+
+  const releaseRef = `receipt:mcl-task-lease-readback:release:${leaseId}:generation:20`;
+  assert.deepEqual(owner.coordinationEvidence({
+    status: 'DISPATCH_READBACK_COMPLETE', leaseId, observedGeneration: 20,
+    runId: null, runConclusion: null, evidenceRef: releaseRef,
+  }, 'release'), {generation: 20, runId: null, evidenceRef: releaseRef});
+  assert.equal(owner.coordinationEvidence({
+    status: 'DISPATCH_READBACK_COMPLETE', leaseId, observedGeneration: 20,
+    runId: null, runConclusion: null,
+    evidenceRef: `receipt:mcl-task-lease-readback:acquire:${leaseId}:generation:20`,
+  }, 'release'), null);
+});
+
+test('durable ledger state reconstructs restart-safe release and acquire evidence', () => {
+  const releaseLease = '3'.repeat(64);
+  const freshLease = '4'.repeat(64);
+  const releaseState = {
+    ledger: {state: {
+      generation: 21, activeLeases: [],
+      lastRelease: {leaseId: releaseLease, releasedAtGeneration: 20},
+    }},
+  };
+  assert.deepEqual(owner.durableStateEvidence(releaseState, 'release', releaseLease), {
+    generation: 20, runId: null,
+    evidenceRef: `receipt:mcl-task-lease-readback:release:${releaseLease}:generation:20`,
+  });
+
+  const acquireState = {
+    ledger: {state: {
+      generation: 22, activeLeases: [{leaseId: freshLease}],
+      lastRelease: {leaseId: releaseLease, releasedAtGeneration: 20},
+    }},
+    expectedFresh: {leaseId: freshLease},
+  };
+  assert.deepEqual(owner.durableStateEvidence(acquireState, 'acquire', freshLease), {
+    generation: 22, runId: null,
+    evidenceRef: `receipt:mcl-task-lease-readback:acquire:${freshLease}:generation:22`,
+  });
+
+  const act = activation();
+  const built = owner.buildFreshManifest(act, acquireState, {
+    leaseRunEvidence: () => { throw new Error('run fallback must not execute'); },
+  });
+  assert.equal(built.leaseEvidence.leaseId, freshLease);
+  assert.equal(built.leaseEvidence.acquiredGeneration, 22);
+});
+
 test('fresh rebind manifest preserves canonical validation-merge phase identity', () => {
   const act = activation();
   const freshLeaseId = '4'.repeat(64);

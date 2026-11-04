@@ -86,9 +86,17 @@ or free-form diagnostics. `details` is always `withheld`.
 ## Validation
 
 ```text
-python3 products/chatgpt-mobile-coder-lab/device-ops/worktree-cleanup/tests/test-contract.py -v
-python3 -m py_compile products/chatgpt-mobile-coder-lab/device-ops/worktree-cleanup/mcl-worktree-cleanup \
-  products/chatgpt-mobile-coder-lab/device-ops/worktree-cleanup/tests/test-contract.py
+PYTHONDONTWRITEBYTECODE=1 python3 products/chatgpt-mobile-coder-lab/device-ops/worktree-cleanup/tests/test-contract.py -v
+python3 - <<'PY'
+from pathlib import Path
+for path in (
+    Path("products/chatgpt-mobile-coder-lab/device-ops/worktree-cleanup/mcl-worktree-cleanup"),
+    Path("products/chatgpt-mobile-coder-lab/device-ops/worktree-cleanup/tests/test-contract.py"),
+):
+    compile(path.read_text(), str(path), "exec")
+PY
+test -z "$(find products/chatgpt-mobile-coder-lab/device-ops/worktree-cleanup -type f -name '*.pyc' -print -quit)"
+test -z "$(find products/chatgpt-mobile-coder-lab/device-ops/worktree-cleanup -type d -name '__pycache__' -print -quit)"
 ```
 
 ## Read-only inventory sibling
@@ -136,5 +144,5 @@ identity, credentials, environment, and free-form diagnostics.
 Validation:
 
 ```text
-python3 products/chatgpt-mobile-coder-lab/device-ops/worktree-cleanup/tests/test-inventory-contract.py
+PYTHONDONTWRITEBYTECODE=1 python3 products/chatgpt-mobile-coder-lab/device-ops/worktree-cleanup/tests/test-inventory-contract.py
 ```

@@ -171,12 +171,18 @@ These surfaces compose by semantic need and must not be collapsed into one gener
 Repository validation:
 
 ```sh
-python3 -m unittest discover \
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
   -s products/chatgpt-mobile-coder-lab/device-ops/browser-virtual-workspace/tests \
   -v
 
-python3 -m py_compile \
-  products/chatgpt-mobile-coder-lab/device-ops/browser-virtual-workspace/mcl_browser_virtual_workspace.py
+python3 - <<'PY'
+from pathlib import Path
+path = Path("products/chatgpt-mobile-coder-lab/device-ops/browser-virtual-workspace/mcl_browser_virtual_workspace.py")
+compile(path.read_text(), str(path), "exec")
+PY
+
+test -z "$(find products/chatgpt-mobile-coder-lab/device-ops/browser-virtual-workspace -type f -name '*.pyc' -print -quit)"
+test -z "$(find products/chatgpt-mobile-coder-lab/device-ops/browser-virtual-workspace -type d -name '__pycache__' -print -quit)"
 
 sh -n   products/chatgpt-mobile-coder-lab/device-ops/browser-virtual-workspace/mcl-browser-virtual-workspace
 

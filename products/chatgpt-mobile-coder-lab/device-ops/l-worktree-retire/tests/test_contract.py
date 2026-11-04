@@ -182,5 +182,101 @@ class Contract(unittest.TestCase):
         self.assertEqual(mod._remote_head(self.profile, "laptop/case"), ("MISSING", None))
         self.assertEqual(mod._local_head(self.profile, "laptop/case"), moved)
 
+    def _delete_remote(self):
+        run("git", "-C", str(self.control), "push", "origin", ":refs/heads/laptop/case")
+
+    def _make_stale(self):
+        admin = Path(run("git", "-C", str(self.target), "rev-parse", "--absolute-git-dir"))
+        shutil.rmtree(self.target)
+        run("git", "-C", str(self.control), "worktree", "list", "--porcelain")
+        return admin
+
+    def test_present_remote_absent_is_eligible_and_retires(self):
+        self._delete_remote()
+        row = mod.inspect_target("case", self.head, profile=self.profile)
+        self.assertTrue(row["eligible"])
+        self.assertEqual(row["residueProfile"], "PRESENT_REMOTE_ABSENT")
+        out = mod.apply_target("case", self.head, explicit_apply=True, profile=self.profile)
+        self.assertEqual(out["status"], "REMOVED")
+        self.assertEqual(out["residueProfile"], "PRESENT_REMOTE_ABSENT")
+        self.assertFalse(self.target.exists())
+        self.assertIsNone(mod._local_head(self.profile, "laptop/case"))
+        self.assertEqual(mod._remote_head(self.profile, "laptop/case"), ("MISSING", None))
+
+    def test_absent_stale_registration_remote_present_retires(self):
+        admin = self._make_stale()
+        row = mod.inspect_target("case", self.head, profile=self.profile)
+        self.assertTrue(row["eligible"])
+        self.assertEqual(row["residueProfile"], "ABSENT_STALE_REGISTRATION")
+        out = mod.apply_target("case", self.head, explicit_apply=True, profile=self.profile)
+        self.assertEqual(out["status"], "REMOVED")
+        self.assertEqual(out["residueProfile"], "ABSENT_STALE_REGISTRATION")
+        self.assertFalse(admin.exists())
+        self.assertIsNone(mod._local_head(self.profile, "laptop/case"))
+        self.assertEqual(mod._remote_head(self.profile, "laptop/case"), ("MISSING", None))
+
+    def test_absent_stale_registration_remote_absent_retires(self):
+        self._delete_remote()
+        self._make_stale()
+        row = mod.inspect_target("case", self.head, profile=self.profile)
+        self.assertTrue(row["eligible"])
+        self.assertEqual(row["residueProfile"], "ABSENT_STALE_REGISTRATION")
+        out = mod.apply_target("case", self.head, explicit_apply=True, profile=self.profile)
+        self.assertEqual(out["status"], "REMOVED")
+        self.assertIsNone(mod._local_head(self.profile, "laptop/case"))
+        self.assertEqual(mod._remote_head(self.profile, "laptop/case"), ("MISSING", None))
+
+    def test_stale_dirty_admin_index_blocks(self):
+        (self.target / "a.txt").write_text("dirty\n")
+        run("git", "-C", str(self.target), "add", "a.txt")
+        self._make_stale()
+        row = mod.inspect_target("case", self.head, profile=self.profile)
+        self.assertFalse(row["eligible"])
+        self.assertIn("ADMIN_INDEX_DIRTY", row["reasons"])
+
+    def test_stale_holder_blocks(self):
+        admin = Path(run("git", "-C", str(self.target), "rev-parse", "--absolute-git-dir"))
+        (admin / mod.HOLDER_FILE).write_text("{}")
+        shutil.rmtree(self.target)
+        run("git", "-C", str(self.control), "worktree", "list", "--porcelain")
+        row = mod.inspect_target("case", self.head, profile=self.profile)
+        self.assertFalse(row["eligible"])
+        self.assertIn("WORKSPACE_HOLDER_PRESENT", row["reasons"])
+
+    def test_stale_ambiguous_admin_mapping_blocks(self):
+        admin = self._make_stale()
+        duplicate = admin.parent / (admin.name + "-duplicate")
+        shutil.copytree(admin, duplicate)
+        row = mod.inspect_target("case", self.head, profile=self.profile)
+        self.assertFalse(row["eligible"])
+        self.assertTrue(
+            "ADMIN_IDENTITY_AMBIGUOUS" in row["reasons"]
+            or "TARGET_NOT_EXACT_REGISTERED_WORKTREE" in row["reasons"]
+        )
+
+    def test_locked_stale_registration_blocks(self):
+        run("git", "-C", str(self.control), "worktree", "lock", str(self.target))
+        shutil.rmtree(self.target)
+        row = mod.inspect_target("case", self.head, profile=self.profile)
+        self.assertFalse(row["eligible"])
+        self.assertTrue(
+            "REGISTRATION_LOCKED" in row["reasons"]
+            or "REGISTRATION_NOT_PRUNABLE" in row["reasons"]
+        )
+
+    def test_remote_third_head_blocks_before_retirement(self):
+        other = self.root / "remote-mover"
+        run("git", "clone", str(self.remote), str(other))
+        run("git", "-C", str(other), "config", "user.name", "test")
+        run("git", "-C", str(other), "config", "user.email", "test@example.invalid")
+        run("git", "-C", str(other), "checkout", "laptop/case")
+        (other / "remote.txt").write_text("move\n")
+        run("git", "-C", str(other), "add", "remote.txt")
+        run("git", "-C", str(other), "commit", "-m", "move")
+        run("git", "-C", str(other), "push", "origin", "laptop/case")
+        row = mod.inspect_target("case", self.head, profile=self.profile)
+        self.assertFalse(row["eligible"])
+        self.assertIn("REMOTE_HEAD_CONFLICT", row["reasons"])
+
 if __name__ == "__main__":
     unittest.main()

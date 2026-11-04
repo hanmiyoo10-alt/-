@@ -109,6 +109,7 @@ checkHolder(_f,claim){events.push('holder-check');assert.equal(claim,CLAIM);retu
 releaseLease(){events.push('release-lease');return {ok:true,value:{evidenceRef:'run:202',observedGeneration:11}};},
 releaseHolder(_f,claim){events.push('holder-release');assert.equal(claim,CLAIM);return {status:'RELEASED',reasonCodes:[]};},
 reviewUpdateInspect(){events.push('review-update-inspect');return {state:'READY'};},
+continuationInspect(){events.push('continuation-inspect');return {state:'PREPARED'};},
 writeActivation(_m,value){events.push('write-activation');activation=structuredClone(value);return structuredClone(activation);},
 readActivation(){events.push('read-activation');if(!activation)throw new owner.CompositionError('BLOCKED',['ACTIVATION_MISSING']);return structuredClone(activation);},
 removeActivation(){events.push('remove-activation');activation=null;},
@@ -1098,4 +1099,117 @@ test('t26',()=>{
 const s=fs.readFileSync(path.join(__dirname,'../mcl-l-repository-apply-composition.cjs'),'utf8');
 for(const x of ["execSync(","pr', 'create","gh pr merge","gitRead(manifest.workspace.worktree, ['push'","gitRead(manifest.workspace.worktree, ['commit'","gitRead(manifest.workspace.worktree, ['merge'","gitRead(manifest.workspace.worktree, ['reset'","gitRead(manifest.workspace.worktree, ['stash'","gitRead(manifest.workspace.worktree, ['clean'","process.kill","fetch("])assert.ok(!s.includes(x),x);
 for(const x of ["childProcess.spawnSync('git'","lOwner.runCli","workspaceHolder.claimHolder","stageEntry.releaseRepositoryLease","taskHandoff.buildCompletionReceipt","fs.fsyncSync(fd)","fs.fsyncSync(dirFd)","releaseEvidenceRef = 'issue:#2352'","finalizeRecovery.RecoveryError"])assert.ok(s.includes(x),x);
+});
+
+
+function continuationFixtureFiles({recoveryManifest=true}={}) {
+const prepared='e'.repeat(64);
+const priorManifest='f'.repeat(64);
+const priorReceipt='1'.repeat(64);
+const repairReceipt='2'.repeat(64);
+const manifestValue=recoveryManifest?manifest({
+phaseId:'3525-recovery-rebind',
+inputRefs:[
+'receipt:mcl-task-manifest:'+priorManifest,
+'receipt:mcl-task-completion-receipt:'+priorReceipt,
+'receipt:canonical-main-stage:'+repairReceipt,
+'receipt:mcl-l-prepared-diff:'+prepared,
+],
+}):manifest();
+const files=fixtureFiles({manifestValue});
+fs.writeFileSync(files.args.requestFile,JSON.stringify({
+schema:'mcl-l-prepared-continuation-request.v1',
+message:TITLE,
+expected_paths:PATHS,
+prepared_digest:prepared,
+prior_manifest_id:priorManifest,
+prior_blocked_receipt_id:priorReceipt,
+blocker_repair_receipt:repairReceipt,
+}));
+files.args.operation='continue-prepared';
+files.args.patchFile=null;
+return {files,manifestValue,prepared};
+}
+
+test('t37 continue-prepared CLI is literal and accepts no patch surface',()=>{
+const parsed=owner.parseArgs([
+'continue-prepared','--packet','#3525','--manifest','m',
+'--continuation-request','r','--pr-request','pr','--apply',
+]);
+assert.equal(parsed.operation,'continue-prepared');
+assert.equal(parsed.requestFile,'r');
+assert.equal(parsed.patchFile,null);
+assert.throws(()=>owner.parseArgs([
+'continue-prepared','--packet','#3525','--manifest','m',
+'--continuation-request','r','--patch','p','--pr-request','pr','--apply',
+]),(error)=>error.reasonCodes.includes('ARGUMENT_UNSUPPORTED_OR_DUPLICATE:patch'));
+assert.throws(()=>owner.parseArgs([
+'continue-prepared','--packet','#3525','--manifest','m',
+'--request','r','--pr-request','pr','--apply',
+]),(error)=>error.reasonCodes.includes('ARGUMENT_UNSUPPORTED_OR_DUPLICATE:request'));
+});
+
+test('t38 continue-prepared keeps holder claim process-local and finalizes operation identity',()=>{
+const {files,manifestValue,prepared}=continuationFixtureFiles();
+const state=baseDeps(files,{
+continuationInspect(input){
+state.events.push('continuation-inspect');
+assert.equal(input.manifest.manifestId,manifestValue.manifestId);
+assert.equal(input.request.prepared_digest,prepared);
+return {state:'PREPARED'};
+},
+ownerRunCli(argv,env){
+state.events.push('owner-continue-prepared');
+assert.equal(argv[0],'continue-prepared');
+assert.ok(argv.includes('--continuation-request'));
+assert.equal(argv.includes('--patch'),false);
+assert.equal(env[holder.CLAIM_ENV],CLAIM);
+return {code:0,text:JSON.stringify({
+status:'PASS',reason_codes:[],new_head:HEAD,pr_number:4001,
+next_legal_action:'RELEASE_D013_THEN_RELEASE_HOLDER_THEN_D014_COMPLETE',
+})+'\n'};
+},
+});
+const out=owner.executeComposition(files.args,state.deps);
+assert.equal(out.status,'PASS');
+assert.equal(state.getActivation().effectOperation,'continue-prepared');
+assert.ok(state.events.indexOf('continuation-inspect')<state.events.indexOf('holder-claim'));
+assert.ok(state.events.indexOf('holder-claim')<state.events.indexOf('owner-continue-prepared'));
+const completion=state.comments.find((row)=>row.id===out.completionCommentId);
+const parsed=handoff.parseCompletionReceipt(completion.body);
+assert.equal(parsed.status,'VALID');
+assert.ok(parsed.value.validationRefs.includes(
+'receipt:mcl-l-repository-owner:continue-prepared:'+manifestValue.manifestId));
+assert.equal(JSON.stringify(out).includes(CLAIM),false);
+assert.equal(JSON.stringify(state.getActivation()).includes(CLAIM),false);
+assert.equal(state.comments.some((row)=>String(row.body).includes(CLAIM)),false);
+});
+
+test('t39 continue-prepared rejects ordinary manifest before holder claim',()=>{
+const {files}=continuationFixtureFiles({recoveryManifest:false});
+const state=baseDeps(files);
+assert.throws(()=>owner.executeComposition(files.args,state.deps),
+(error)=>error instanceof owner.CompositionError
+&&error.reasonCodes.includes('CONTINUATION_RECOVERY_REBIND_REQUIRED'));
+no(state,'holder-claim','owner-continue-prepared','release-lease','holder-release');
+});
+
+test('t40 continuation preflight delegates current-main/state and requires holder absence',()=>{
+const {files,manifestValue,prepared}=continuationFixtureFiles();
+const request=lOwner.parsePreparedContinuationRequestText(fs.readFileSync(files.args.requestFile,'utf8'));
+const calls=[];
+const result=owner.inspectPreparedContinuation({manifest:manifestValue,request},{
+runner(){throw new Error('delegated runner should not be used directly');},
+currentMain(m){calls.push('current-main');assert.equal(m.manifestId,manifestValue.manifestId);return HEAD;},
+classifyState(m,r,main){calls.push('classify-state');assert.equal(r.prepared_digest,prepared);assert.equal(main,HEAD);return {state:'PREPARED'};},
+inspectWorkspace(){calls.push('inspect-workspace');return {ok:true,reasonCodes:[],holderPath:'/fixture/holder'};},
+readHolder(){calls.push('read-holder');return {ok:false,missing:true,reasonCodes:['HOLDER_MISSING'],value:null};},
+});
+assert.equal(result.state,'PREPARED');
+assert.deepEqual(calls,['current-main','classify-state','inspect-workspace','read-holder']);
+assert.throws(()=>owner.inspectPreparedContinuation({manifest:manifestValue,request},{
+currentMain(){return HEAD;},classifyState(){return {state:'PREPARED'};},
+inspectWorkspace(){return {ok:true,reasonCodes:[],holderPath:'/fixture/holder'};},
+readHolder(){return {ok:true,missing:false,reasonCodes:[],value:{}};},
+}), (error)=>error.reasonCodes.includes('HOLDER_NOT_ABSENT_BEFORE_COMPOSITION'));
 });

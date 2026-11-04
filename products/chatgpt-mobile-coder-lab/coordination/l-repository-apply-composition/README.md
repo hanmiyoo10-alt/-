@@ -8,11 +8,12 @@ writer or a second source authority.
 
 ## Supported operations
 
-Exactly three public operations exist:
+Exactly four public operations exist:
 
 ```text
 apply
 review-update
+continue-prepared
 finalize
 ```
 
@@ -26,6 +27,13 @@ repository owner remains responsible for semantic parsing, old-head/current-main
 proof, replay, validation, commit/currentization, non-force push, and same-PR
 readback. If the merged L owner does not support `review-update`, the
 composition fails closed. It never falls back to ordinary `apply`.
+
+`continue-prepared` accepts only the existing fixed
+`mcl-l-prepared-continuation-request.v1` plus a non-closing PR request. It is
+admitted only for an exact recovery-rebind manifest and delegates all prepared
+state, replay, validation, commit/currentization, push and PR semantics to the
+existing L repository owner. No patch file is accepted or replayed by this
+composition.
 
 `finalize` recovers only already-published activation state and never runs the
 source effect again.
@@ -55,7 +63,7 @@ patch application, commit, currentization merge, push, and ordinary PR creation.
 
 ## Activation compatibility
 
-New activation records bind `effectOperation=apply|review-update`. Finalization
+New activation records bind `effectOperation=apply|review-update|continue-prepared`. Finalization
 uses that exact operation when constructing completion evidence.
 
 Legacy #3525 activation records that predate `effectOperation` remain valid and
@@ -68,6 +76,7 @@ Completion validation references are operation-specific:
 ```text
 receipt:mcl-l-repository-owner:apply:<manifest-id>
 receipt:mcl-l-repository-owner:review-update:<manifest-id>
+receipt:mcl-l-repository-owner:continue-prepared:<manifest-id>
 ```
 
 ## Authority boundary

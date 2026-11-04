@@ -288,6 +288,68 @@ class WorktreePatchTests(unittest.TestCase):
         with self.assertRaisesRegex(m.PatchOwnerError, "SPECIAL_MODE_DENIED"):
             m.prepare(self.worktree, "server/demo", self.base, parsed, self.patch)
 
+    def test_existing_100755_content_only_edit_passes_prepared_and_committed_validation(self):
+        script = self.worktree / "scripts/tool.sh"
+        script.parent.mkdir()
+        script.write_text("#!/bin/sh\necho one\n", encoding="utf-8")
+        script.chmod(0o755)
+        run(self.worktree, "add", "scripts/tool.sh")
+        run(self.worktree, "commit", "-m", "fixture executable")
+        run(self.worktree, "push", "origin", "server/demo")
+        base = run(self.worktree, "rev-parse", "HEAD")
+
+        script.write_text("#!/bin/sh\necho two\n", encoding="utf-8")
+        patch_text = run(self.worktree, "diff", "--binary", "HEAD", "--", "scripts/tool.sh") + "\n"
+        run(self.worktree, "checkout", "--", "scripts/tool.sh")
+        self.patch.write_text(patch_text, encoding="utf-8")
+        request = {
+            "schema": "mcl-repository-patch-request.v1",
+            "message": "fix: update executable",
+            "expected_paths": ["scripts/tool.sh"],
+            "patch_sha256": hashlib.sha256(self.patch.read_bytes()).hexdigest(),
+        }
+        self.request_file.write_text(json.dumps(request), encoding="utf-8")
+        parsed = m.load_request(self.request_file)
+        prepared = m.prepare(self.worktree, "server/demo", base, parsed, self.patch)
+        self.assertEqual(prepared["changed_paths"], ["scripts/tool.sh"])
+        committed = m.commit(
+            self.worktree, "server/demo", base, parsed, prepared["prepared_digest"])
+        self.assertEqual(committed["changed_paths"], ["scripts/tool.sh"])
+        self.assertEqual(run(self.worktree, "ls-tree", committed["new_head"], "scripts/tool.sh").split()[0],
+                         "100755")
+
+    def test_new_100755_regular_file_passes_prepared_and_committed_validation(self):
+        script = self.worktree / "scripts/new-tool.sh"
+        script.parent.mkdir()
+        script.write_text("#!/bin/sh\necho new\n", encoding="utf-8")
+        script.chmod(0o755)
+        run(self.worktree, "add", "-N", "scripts/new-tool.sh")
+        patch_text = run(self.worktree, "diff", "--binary", "--", "scripts/new-tool.sh") + "\n"
+        run(self.worktree, "reset", "--", "scripts/new-tool.sh")
+        script.unlink()
+        self.patch.write_text(patch_text, encoding="utf-8")
+        request = {
+            "schema": "mcl-repository-patch-request.v1",
+            "message": "feat: add executable",
+            "expected_paths": ["scripts/new-tool.sh"],
+            "patch_sha256": hashlib.sha256(self.patch.read_bytes()).hexdigest(),
+        }
+        self.request_file.write_text(json.dumps(request), encoding="utf-8")
+        parsed = m.load_request(self.request_file)
+        prepared = m.prepare(self.worktree, "server/demo", self.base, parsed, self.patch)
+        self.assertEqual(prepared["changed_paths"], ["scripts/new-tool.sh"])
+        committed = m.commit(
+            self.worktree, "server/demo", self.base, parsed, prepared["prepared_digest"])
+        self.assertEqual(committed["changed_paths"], ["scripts/new-tool.sh"])
+        self.assertEqual(run(self.worktree, "ls-tree", committed["new_head"], "scripts/new-tool.sh").split()[0],
+                         "100755")
+
+    def test_100755_delete_and_rename_remain_denied(self):
+        self.assertFalse(m.regular_mode_admitted("D", "100755", None))
+        self.assertFalse(m.regular_mode_admitted("R100", "100755", "100755"))
+        self.assertFalse(m.regular_mode_admitted("M", "100644", "100755"))
+        self.assertFalse(m.regular_mode_admitted("M", "100755", "100644"))
+
     def test_push_rejects_commit_that_no_longer_matches_prepared_digest(self):
         req = m.load_request(self.request_file)
         prepared = m.prepare(self.worktree, "server/demo", self.base, req, self.patch)

@@ -32,35 +32,35 @@ Add-Type receives only one owner-created private writable directory via `TEMP` a
 `TMP`; arbitrary inherited environment and caller temp paths are forbidden. The
 directory, handles and event subscription are cleaned on every path.
 
-## WSL bounded direct-peer-leaf pidfd profile
+## WSL bounded multi-peer-tree pidfd profile
 
 The fixed L WSL2 profile composes the existing read-only
-`mcl-l-rdc-session-evidence.v2` admission with a bounded direct-leaf effect
-ceiling. It is eligible only when the current verified WSL command agent has
-exactly one current command root plus between one and 32 additional non-benign
-direct peers, and every peer has zero descendants. Any descendant,
-unreadable/ambiguous topology, unexpected direct child, excess peer cardinality,
-or identity drift fails closed.
+`mcl-l-rdc-session-evidence.v2` admission with a bounded peer-forest effect
+ceiling. It admits reviewed direct peer roots together with their fully observed
+descendants only when the complete target forest fits the source-enforced target
+ceiling. Unreadable/ambiguous topology, marker-bearing or agent-like descendants,
+unexpected direct children, excess target cardinality, or PID/PPID/start-time
+identity drift fails closed.
 
 The WSL effect never uses a process group or session group because the natural L
 topology does not isolate peers on those boundaries. It uses fixed
-`/usr/bin/python3` and pidfds for the exact agent, current-root, and every peer
-process instance. Private guards bind PID + PPID + Linux `/proc/<pid>/stat`
-start-time identity.
+`/usr/bin/python3` and pidfds for the exact agent, current root, and every
+process in the reviewed peer forest. Private guards bind PID + PPID + Linux
+`/proc/<pid>/stat` start-time identity.
 
 Immediately before termination, the helper:
-1. opens exact pidfds for the agent, current root, and every peer and revalidates all guards;
-2. proves the complete direct-child set is exactly current-root plus the reviewed peer set and every peer remains a leaf;
-3. sends `SIGSTOP` only through every exact peer pidfd and requires the full set to become stopped;
-4. while the complete peer set is frozen, rechecks all guards, the complete direct-child set, and every zero-descendant condition;
-5. resumes every stopped peer that has not received the terminal effect and fails closed on any pre-effect mismatch;
-6. only after the frozen-set barrier passes, sends the terminal signal through each exact peer pidfd and waits boundedly for all pidfd exits.
+1. opens exact pidfds for the agent, current root, and every target in the peer forest and revalidates all guards;
+2. proves the complete direct-child set is exactly current-root plus the reviewed peer roots and every target's direct-child set equals the reviewed tree;
+3. sends `SIGSTOP` only through every exact target pidfd and requires the full target forest to become stopped;
+4. while the complete target forest is frozen, rechecks all guards and the full reviewed topology;
+5. resumes every stopped target that has not received the terminal effect and fails closed on any pre-effect mismatch;
+6. only after the frozen-topology barrier passes, sends the terminal signal through exact target pidfds in deepest-first order and waits boundedly for every target pidfd to exit.
 
-The frozen-set topology barrier prevents any admitted peer from creating a late
-child while another peer is being removed. Missing/ambiguous helper
-acknowledgement cannot manufacture completion. Outer helper failure attempts
-exact guard-bound resume for every peer that may have been stopped and remains
-UNKNOWN even when recovery succeeds.
+The frozen-topology barrier prevents any admitted peer tree from expanding while
+another target is being removed. Missing/ambiguous helper acknowledgement cannot
+manufacture completion. Outer helper failure attempts exact guard-bound resume
+for every target that may have been stopped and remains UNKNOWN even when
+recovery succeeds.
 
 The WSL profile accepts no caller PID, process, signal, helper, path, or timeout
 selector and exposes no generic process-group or session-group effect. The

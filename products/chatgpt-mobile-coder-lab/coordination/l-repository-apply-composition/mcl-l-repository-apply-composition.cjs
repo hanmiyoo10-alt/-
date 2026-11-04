@@ -33,7 +33,7 @@ const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const ACTIVATION_FILE = 'mcl-l-repository-apply-composition.v1.json';
 const ACTIVATION_MODE = 'MCL_L_REPOSITORY_APPLY_ACTIVATION';
-const EFFECT_OPERATIONS = new Set(['apply', 'review-update']);
+const EFFECT_OPERATIONS = new Set(['apply', 'review-update', 'continue-prepared']);
 const REVIEW_UPDATE_REQUEST_SCHEMA = 'mcl-l-review-update-request.v1';
 const MAX_REQUEST_PATHS = 20;
 const MAX_ACTIVATION_BYTES = 16 * 1024;
@@ -92,7 +92,7 @@ if (stat.size > maxBytes) throw new CompositionError('UNKNOWN', [field + '_TOO_L
 return fs.readFileSync(resolved);
 }
 function parseArgs(argv = process.argv.slice(2)) {
-if (!Array.isArray(argv) || !['apply', 'review-update', 'finalize'].includes(argv[0])) {
+if (!Array.isArray(argv) || !['apply', 'review-update', 'continue-prepared', 'finalize'].includes(argv[0])) {
 throw new CompositionError('UNKNOWN', ['COMMAND_UNSUPPORTED']);
 }
 const operation = argv[0];
@@ -100,7 +100,9 @@ const allowed = operation === 'finalize'
 ? new Set(['packet', 'manifest'])
 : operation === 'review-update'
   ? new Set(['packet', 'manifest', 'review-update-request', 'patch', 'pr-request'])
-  : new Set(['packet', 'manifest', 'request', 'patch', 'pr-request']);
+  : operation === 'continue-prepared'
+    ? new Set(['packet', 'manifest', 'continuation-request', 'pr-request'])
+    : new Set(['packet', 'manifest', 'request', 'patch', 'pr-request']);
 const values = {};
 let apply = false;
 for (let index = 1; index < argv.length; index += 1) {
@@ -129,12 +131,12 @@ operation,
 packetRef: values.packet,
 packetNumber: Number(values.packet.slice(1)),
 manifestFile: values.manifest,
-requestFile: values.request || values['review-update-request'] || null,
+requestFile: values.request || values['review-update-request'] || values['continuation-request'] || null,
 patchFile: values.patch || null,
 prRequestFile: values['pr-request'] || null,
 };
 }
-function parseManifest(text) {
+function parseManifest(text, operation = 'apply') {
 const parsed = taskHandoff.parseManifest(text);
 if (parsed.status !== 'VALID') {
 throw new CompositionError(
@@ -142,7 +144,9 @@ parsed.status === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN',
 parsed.reasonCodes || ['MANIFEST_INVALID']
 );
 }
-try { lOwner.validateManifestShape(parsed.value); }
+const phaseClasses = ['continue-prepared', 'finalize'].includes(operation)
+? ['REPOSITORY_MUTATION', 'COORDINATION'] : ['REPOSITORY_MUTATION'];
+try { lOwner.validateManifestShape(parsed.value, undefined, phaseClasses); }
 catch (error) {
 throw new CompositionError(
 error instanceof lOwner.OwnerError ? error.kind : 'UNKNOWN',
@@ -426,10 +430,12 @@ fs.writeFileSync(manifestPath, manifestText, {mode: 0o600});
 fs.writeFileSync(ledgerPath, ledgerBody, {mode: 0o600});
 fs.writeFileSync(packetPath, packetBody, {mode: 0o600});
 fs.writeFileSync(requestPath, JSON.stringify(request), {mode: 0o600});
-fs.writeFileSync(patchPath, patchBytes, {mode: 0o600});
+if (Buffer.isBuffer(patchBytes)) fs.writeFileSync(patchPath, patchBytes, {mode: 0o600});
 fs.writeFileSync(prRequestPath, JSON.stringify(prRequest), {mode: 0o600});
 return {
-dir, manifestPath, ledgerPath, packetPath, requestPath, patchPath, prRequestPath,
+dir, manifestPath, ledgerPath, packetPath, requestPath,
+patchPath: Buffer.isBuffer(patchBytes) ? patchPath : null,
+prRequestPath,
 };
 }
 function updateEvidenceFiles(files, ledgerBody, packetBody) {
@@ -476,6 +482,8 @@ checkHolder: overrides.checkHolder || workspaceHolder.checkHolder,
 releaseHolder: overrides.releaseHolder || workspaceHolder.releaseHolder,
 reviewUpdateInspect: overrides.reviewUpdateInspect
 || ((input) => inspectReviewUpdatePrepared(input, {runner: ownerReadRunner})),
+continuationInspect: overrides.continuationInspect
+|| ((input) => inspectPreparedContinuation(input, {runner: ownerReadRunner})),
 ownerRunCli: overrides.ownerRunCli || lOwner.runCli,
 preflight: overrides.preflight || prPreflight.classifyNonClosingPrAuthoring,
 buildCompletionReceipt: overrides.buildCompletionReceipt || taskHandoff.buildCompletionReceipt,
@@ -591,7 +599,9 @@ let prRequest;
 try {
 request = operation === 'review-update'
 ? parseReviewUpdateRequestStructure(requestText)
-: lOwner.parseRequestText(requestText);
+: operation === 'continue-prepared'
+  ? lOwner.parsePreparedContinuationRequestText(requestText)
+  : lOwner.parseRequestText(requestText);
 prRequest = lOwner.parsePrRequestText(prRequestText, packetRef);
 } catch (error) {
 if (error instanceof CompositionError) throw error;
@@ -600,7 +610,15 @@ error instanceof lOwner.OwnerError ? error.kind : 'UNKNOWN',
 error instanceof lOwner.OwnerError ? error.reasonCodes : ['REQUEST_INVALID']
 );
 }
-if (request.packet_ref !== packetRef) {
+if (operation === 'continue-prepared') {
+try { lOwner.validatePreparedContinuationManifestBinding(manifest, request); }
+catch (error) {
+throw new CompositionError(
+error instanceof lOwner.OwnerError ? error.kind : 'UNKNOWN',
+error instanceof lOwner.OwnerError ? error.reasonCodes : ['CONTINUATION_MANIFEST_BINDING_INVALID']
+);
+}
+} else if (request.packet_ref !== packetRef) {
 throw new CompositionError('CONFLICT', ['REQUEST_PACKET_CONFLICT']);
 }
 const scopedPaths = lOwner.manifestPathScopes(manifest);
@@ -674,17 +692,22 @@ env: options.env || ownerChildEnv(),
 return {code:result.status??1,stdout:result.stdout||'',stderr:result.stderr||''};
 };
 const requestFlag = effectOperation === 'review-update'
-? '--review-update-request' : '--request';
-return callOwnerCli([
+? '--review-update-request'
+: effectOperation === 'continue-prepared'
+  ? '--continuation-request'
+  : '--request';
+const ownerArgs = [
 effectOperation,
 '--manifest', files.manifestPath,
 '--ledger', files.ledgerPath,
 '--packet', files.packetPath,
 requestFlag, files.requestPath,
-'--patch', files.patchPath,
-'--pr-request', files.prRequestPath,
-'--apply',
-], env, deps, {runner});
+];
+if (effectOperation !== 'continue-prepared') {
+ownerArgs.push('--patch', files.patchPath);
+}
+ownerArgs.push('--pr-request', files.prRequestPath, '--apply');
+return callOwnerCli(ownerArgs, env, deps, {runner});
 }
 function inspectPrepared(files, deps) {
 const parsed = callOwnerCli([
@@ -729,6 +752,45 @@ throw error;
 }
 if (!state || typeof state.state !== 'string') {
 throw new CompositionError('UNKNOWN', ['REVIEW_UPDATE_STATE_UNOBSERVED']);
+}
+const workspace = inspectWorkspace(manifest);
+if (!workspace?.ok || typeof workspace.holderPath !== 'string') {
+throw new CompositionError('BLOCKED', [
+...(workspace?.reasonCodes || ['WORKSPACE_HOLDER_INSPECT_FAILED']),
+]);
+}
+const holder = readHolder(workspace.holderPath);
+if (!holder?.missing) {
+if (!holder?.ok) {
+throw new CompositionError('BLOCKED', [
+...(holder?.reasonCodes || ['HOLDER_READ_FAILED']),
+]);
+}
+throw new CompositionError('BLOCKED', ['HOLDER_NOT_ABSENT_BEFORE_COMPOSITION']);
+}
+return state;
+}
+
+function inspectPreparedContinuation({manifest, request}, {
+runner = stageEntry.runDefault,
+currentMain = lOwner.continuationCurrentMain,
+classifyState = lOwner.classifyPreparedContinuationState,
+inspectWorkspace = workspaceHolder.inspectWorkspace,
+readHolder = workspaceHolder.readHolder,
+} = {}) {
+let state;
+try {
+lOwner.validatePreparedContinuationManifestBinding(manifest, request);
+const main = currentMain(manifest, {runner});
+state = classifyState(manifest, request, main, {runner});
+} catch (error) {
+if (error instanceof lOwner.OwnerError) {
+throw new CompositionError(error.kind, error.reasonCodes || ['CONTINUATION_PREFLIGHT_FAILED']);
+}
+throw error;
+}
+if (!state || !['PREPARED','COMMITTED','CURRENTIZED','PUSHED'].includes(state.state)) {
+throw new CompositionError('UNKNOWN', ['CONTINUATION_STATE_UNOBSERVED']);
 }
 const workspace = inspectWorkspace(manifest);
 if (!workspace?.ok || typeof workspace.holderPath !== 'string') {
@@ -958,8 +1020,12 @@ function executeFinalize(args, depsInput = {}) {
 const deps = defaultDeps(depsInput);
 const manifestText = readRegular(
 args.manifestFile, 'MANIFEST_FILE', MAX_MANIFEST_BYTES).toString('utf8');
-const manifest = parseManifest(manifestText);
+const manifest = parseManifest(manifestText, 'finalize');
 const activation = deps.readActivation(manifest);
+if (manifest.phaseClass === 'COORDINATION'
+&& activationEffectOperation(activation) !== 'continue-prepared') {
+throw new CompositionError('CONFLICT', ['COORDINATION_MANIFEST_OPERATION_CONFLICT']);
+}
 return finalizeFromActivation({args, manifest, manifestText, activation, deps});
 }
 function executeComposition(args, depsInput = {}) {
@@ -967,10 +1033,12 @@ const deps = defaultDeps(depsInput);
 const effectOperation = normalizeEffectOperation(args.operation || 'apply');
 const manifestText = readRegular(args.manifestFile, 'MANIFEST_FILE', MAX_MANIFEST_BYTES).toString('utf8');
 const requestText = readRegular(args.requestFile, 'REQUEST_FILE', MAX_REQUEST_BYTES).toString('utf8');
-const patchBytes = readRegular(args.patchFile, 'PATCH_FILE', lOwner.MAX_PATCH_BYTES);
+const patchBytes = effectOperation === 'continue-prepared'
+? null
+: readRegular(args.patchFile, 'PATCH_FILE', lOwner.MAX_PATCH_BYTES);
 const prRequestText = readRegular(
 args.prRequestFile, 'PR_REQUEST_FILE', MAX_PR_REQUEST_BYTES).toString('utf8');
-const manifest = parseManifest(manifestText);
+const manifest = parseManifest(manifestText, effectOperation);
 const {request, prRequest} = preflightRequest({
 operation: effectOperation,
 packetRef: args.packetRef,
@@ -978,7 +1046,8 @@ requestText,
 prRequestText,
 manifest,
 });
-if (lOwner.sha256Bytes(patchBytes) !== request.patch_sha256) {
+if (effectOperation !== 'continue-prepared'
+&& lOwner.sha256Bytes(patchBytes) !== request.patch_sha256) {
 throw new CompositionError('CONFLICT', ['PATCH_SHA_CONFLICT']);
 }
 const current = deps.readCurrent(args.packetNumber);
@@ -1004,6 +1073,8 @@ let claim = null;
 try {
 if (effectOperation === 'review-update') {
 deps.reviewUpdateInspect({manifest, request, patchBytes, prRequest});
+} else if (effectOperation === 'continue-prepared') {
+deps.continuationInspect({manifest, request, prRequest});
 } else {
 inspectPrepared(files, deps);
 }
@@ -1159,6 +1230,7 @@ executeFinalize,
 finalizeFromActivation,
 exitCodeFor,
 inspectPrepared,
+inspectPreparedContinuation,
 inspectReviewUpdatePrepared,
 listComments,
 output,

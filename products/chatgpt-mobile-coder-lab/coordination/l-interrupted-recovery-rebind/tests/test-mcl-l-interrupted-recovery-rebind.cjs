@@ -2,8 +2,8 @@
 const {test}=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),o=require('../mcl-l-interrupted-recovery-rebind.cjs');
 const H=n=>String(n).repeat(64),S=n=>String(n).repeat(40),id=H('a'),ph=o.sha256('p'),main=S('2'),base=S('3'),sc=['path:x/y','surface:mcl:x'],ws={kind:'repository',branch:'laptop/x',worktree:'/home/alsl0/nyang-worktrees/x'},lease=()=>({leaseId:id,packetRef:'#3473',packetBodySha256:ph,route:'L',executor:'L',scopes:sc,workspace:ws,observedBaseSha:base});
 const blobs=()=>Object.fromEntries(o.OWNER_BLOB_PATHS.map((p,i)=>[p,S((i%8)+1)]));
-function A(x={}){let v={schemaVersion:1,mode:'MCL_L_INTERRUPTED_RECOVERY_REBIND_ACTIVATION',targetPacketRef:'#3473',packetBodySha256:ph,admissionMainSha:main,ownerBlobs:blobs(),scopes:sc,workspace:ws,observedBaseSha:base,leaseId:id,oldAcquiredGeneration:10,oldManifestId:H('b'),oldManifestPayloadSha256:H('c'),classificationDigest:H('f'),coreReceiptDigest:H('1'),dirtyDiffSha256:H('e'),dirtyPaths:['x/y'],releasePlanGeneration:null,releaseExpectedGeneration:null,releaseDispatchStarted:false,releaseGeneration:21,releaseEvidenceRef:'run:21',acquirePlanGeneration:null,acquireExpectedGeneration:null,acquireDispatchStarted:false,reacquireGeneration:22,reacquireEvidenceRef:'run:22',rebindManifestId:null,rebindManifestPayloadSha256:null,manifestCommentId:null,handoffCommentId:null,...x};return {...v,recordDigest:o.sha256(v)}}
-function P(v=A(),x={}){return {activation:v,authority:{mainSha:main},packet:{packetNumber:3473,packetRef:'#3473',packetBodySha256:ph,scopes:sc,issue:{body:'p'}},ledger:{issue:{body:x.l||'l'},state:{generation:x.g||22}},currentLease:x.off?null:lease(),oldManifest:{manifestId:H('b')},holder:{state:x.h||'PRESENT_EXACT'},workspace:{dirtyDiffSha256:H('e'),dirtyPaths:['x/y']},rebindManifest:null}}
+function A(x={}){let v={schemaVersion:1,mode:'MCL_L_INTERRUPTED_RECOVERY_REBIND_ACTIVATION',targetPacketRef:'#3473',packetBodySha256:ph,admissionMainSha:main,ownerBlobs:blobs(),scopes:sc,workspace:ws,observedBaseSha:base,leaseId:id,oldAcquiredGeneration:10,oldManifestId:H('b'),oldManifestPayloadSha256:H('c'),classificationDigest:H('f'),coreReceiptDigest:H('1'),dirtyDisposition:'UNSTAGED_ONLY',dirtyDiffSha256:H('e'),dirtyPaths:['x/y'],releasePlanGeneration:null,releaseExpectedGeneration:null,releaseDispatchStarted:false,releaseGeneration:21,releaseEvidenceRef:'run:21',acquirePlanGeneration:null,acquireExpectedGeneration:null,acquireDispatchStarted:false,reacquireGeneration:22,reacquireEvidenceRef:'run:22',rebindManifestId:null,rebindManifestPayloadSha256:null,manifestCommentId:null,handoffCommentId:null,...x};return {...v,recordDigest:o.sha256(v)}}
+function P(v=A(),x={}){return {activation:v,authority:{mainSha:main},packet:{packetNumber:3473,packetRef:'#3473',packetBodySha256:ph,scopes:sc,issue:{body:'p'}},ledger:{issue:{body:x.l||'l'},state:{generation:x.g||22}},currentLease:x.off?null:lease(),oldManifest:{manifestId:H('b')},holder:{state:x.h||'PRESENT_EXACT'},workspace:{dirtyDisposition:v.dirtyDisposition,dirtyDiffSha256:H('e'),dirtyPaths:['x/y']},rebindManifest:null}}
 function U(v,p){let n={...v,...p};delete n.recordDigest;return o.normalizeActivation({...n,recordDigest:o.sha256(n)})}
 
 test('flock and current-lineage discovery',()=>{const s=fs.readFileSync(path.resolve(__dirname,'../mcl-l-interrupted-recovery-rebind.cjs'),'utf8');for(const q of ['/usr/bin/flock','/usr/bin/cat','await deps.acquireActivationLock(workspace)','deps.assertActivationLock(lock)'])a.ok(s.includes(q));a.ok(!s.includes("fs.openSync(file, 'wx'"));const v=A(),pkt={packetRef:'#3473',packetBodySha256:ph,scopes:sc};let seen=[];a.equal(o.findActivation('#3473',[{manifest:{packetRef:'#3473',packetBodySha256:H('9'),route:'L',executor:'L',scopes:sc,workspace:{...ws,worktree:'/gone'}}},{manifest:{packetRef:'#3473',packetBodySha256:ph,route:'L',executor:'L',scopes:sc,workspace:ws}}],pkt,w=>(seen.push(w.worktree),v)).recordDigest,v.recordDigest);a.deepEqual(seen,[ws.worktree])});
@@ -55,4 +55,107 @@ test('session admission rejects execution failure and invalid JSON',()=>{
     code:0,stdout:'not-json',stderr:''
   })});
   a.throws(()=>deps.readSession(),/SESSION_OWNER_EXECUTION_FAILED/);
+});
+
+
+test('packet-activity evidence file is parsed with the stage-entry validator',()=>{
+  const root=fs.mkdtempSync('/tmp/mcl-rebind-activity-');
+  const file=path.join(root,'activity.json');
+  const evidence={
+    schemaVersion:1,
+    mode:'MCL_STAGE_ENTRY_PACKET_ACTIVITY_EVIDENCE_SET',
+    requesterRef:'#3473',
+    candidates:[{
+      candidateRef:'#3762',
+      evidence:{
+        schemaVersion:1,
+        mode:'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE',
+        candidateRef:'#3762',
+        requesterRef:'#3473',
+        relationship:'PARENT_WAITING_ON_SUCCESSOR',
+        repositoryMutationActive:false,
+        activeLease:false,
+        overlappingOpenPr:false,
+        sequencingExplicit:true,
+        sourceRefs:['issue:#3762','issue:#3473'],
+      },
+    }],
+  };
+  try{
+    fs.writeFileSync(file,JSON.stringify(evidence));
+    const parsed=o.readPacketActivityEvidenceFile(file,3473);
+    a.equal(parsed.requesterRef,'#3473');
+    a.equal(parsed.candidates[0].candidateRef,'#3762');
+    a.throws(()=>o.readPacketActivityEvidenceFile(file,3474),/PACKET_ACTIVITY_EVIDENCE_REQUESTER_CONFLICT/);
+  }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('rebind CLI accepts one packet-activity evidence file and rejects duplicates',()=>{
+  const parsed=o.parseArgs(['inspect','--target','#3473','--packet-activity-evidence-file','/tmp/activity.json']);
+  a.equal(parsed.packetActivityEvidenceFile,'/tmp/activity.json');
+  a.throws(()=>o.parseArgs([
+    'inspect','--target','#3473',
+    '--packet-activity-evidence-file','/tmp/a.json',
+    '--packet-activity-evidence-file','/tmp/b.json',
+  ]),/ARGUMENT_DUPLICATE:packet-activity-evidence-file/);
+});
+
+test('target overlap receives validated packet-activity evidence',()=>{
+  const packetBody=[
+    '<!-- canonical-main-work-packet:v1 -->',
+    '## State',
+    '`IN_PROGRESS`',
+    '## Bounded write scope',
+    '1. `path:x/y`',
+    '2. `surface:mcl:x`',
+    '## Interaction stage',
+    '- Current stage: `IMPLEMENTATION_PR`',
+    '- Completed stage(s): `AUTHORITY_SCOPE`',
+    '- Next stage: `VALIDATION_MERGE`',
+    '## Handoff',
+    'fixture',
+  ].join('\n');
+  const activity={
+    schemaVersion:1,
+    mode:'MCL_STAGE_ENTRY_PACKET_ACTIVITY_EVIDENCE_SET',
+    requesterRef:'#3473',
+    candidates:[],
+  };
+  let seen=null;
+  const deps=o.defaultDeps({
+    client:{},
+    packetActivityEvidence:activity,
+    readIssue:()=>({state:'open',body:packetBody}),
+    discoverOverlap:(input)=>(seen=input,{state:'DISJOINT',discovery:'COMPLETE'}),
+  });
+  const packet=o.readPacketContext(3473,deps);
+  a.equal(packet.packetRef,'#3473');
+  a.equal(seen.packetActivityEvidence,activity);
+});
+
+
+test('workspace capture distinguishes staged-only and unstaged-only state',()=>{
+  const run=(staged,unstaged)=>((args,opts={})=>{
+    const key=args.slice(3).join(' ');
+    const out=(text)=>({code:0,stdout:opts.binary?Buffer.from(text):text,stderr:opts.binary?Buffer.alloc(0):''});
+    if(key==='branch --show-current') return out(ws.branch+'\n');
+    if(key==='rev-parse HEAD') return out(base+'\n');
+    if(key==='diff --name-only --diff-filter=U -z') return out('');
+    if(key==='diff --cached --name-only -z --no-renames') return out(staged?'x/y\0':'');
+    if(key==='diff --name-only -z') return out(unstaged?'x/y\0':'');
+    if(key==='ls-files --others --exclude-standard -z') return out('');
+    if(key==='diff --cached --binary --no-ext-diff --no-renames') return out('staged-diff');
+    if(key==='diff --binary --no-ext-diff --no-renames') return out('unstaged-diff');
+    throw new Error('unexpected git read '+key);
+  });
+  const staged=o.captureWorkspace({lease:lease(),runner:run(true,false)});
+  a.equal(staged.dirtyDisposition,'STAGED_ONLY');
+  a.equal(staged.dirtyDiffSha256,o.sha256(Buffer.from('staged-diff')));
+  const unstaged=o.captureWorkspace({lease:lease(),runner:run(false,true)});
+  a.equal(unstaged.dirtyDisposition,'UNSTAGED_ONLY');
+  a.equal(unstaged.dirtyDiffSha256,o.sha256(Buffer.from('unstaged-diff')));
+  a.throws(()=>o.captureWorkspace({lease:lease(),runner:run(true,true)}),/WORKSPACE_MIXED_OR_UNSUPPORTED_RESIDUE/);
+  const drift=A({dirtyDisposition:'STAGED_ONLY'}), p=P(drift);
+  p.workspace.dirtyDisposition='UNSTAGED_ONLY';
+  a.throws(()=>o.verifyPreservedState(drift,lease(),{captureWorkspace:()=>p.workspace,readRemoteHead:()=>base,readPrState:()=>null}),/DIRTY_DIFF_IDENTITY_DRIFT/);
 });

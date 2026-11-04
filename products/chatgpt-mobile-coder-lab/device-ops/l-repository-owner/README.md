@@ -114,6 +114,12 @@ for the prior manifest, prior blocked completion receipt, blocker-repair stage
 receipt, and exact prepared-diff digest. Ordinary stage-entry manifests cannot
 enter this path.
 
+That legacy lineage remains unchanged. A second exact general-interrupted-recovery
+profile accepts only the reviewed recovery-rebind `COORDINATION` manifest and
+binds its native prior-manifest, `mcl-interrupted-recovery` classification digest,
+and `mcl-dirty-diff` prepared digest. The two vocabularies are not interchangeable,
+and ordinary coordination manifests remain ineligible.
+
 The request contains only a bounded commit message, exact expected paths, the
 prepared digest and the three recovery-lineage digests. It cannot select a
 branch, worktree, base, current-main SHA, remote, executable, Git command, merge

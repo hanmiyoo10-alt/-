@@ -339,16 +339,33 @@ test('WSL single-peer leaf classification is exact and clean state is no-effect'
   }
 });
 
-test('WSL profile blocks cardinality, descendants, benign-plus-peer and guard drift', () => {
+test('WSL profile admits bounded peer trees and rejects unsupported topology', () => {
   let ref={rows:wsl2Fixture({peers:2})};
   let result=owner.inspectLocal(wsl2Options(ref));
+  assert.equal(result.status,'PASS');
+  assert.equal(result.effectEligibility,'ELIGIBLE');
+  assert.equal(result.cleanupCandidateCount,2);
+  assert.equal(result.reasonCode,'WSL_MULTI_PEER_LEAVES_ELIGIBLE');
+
+  ref={rows:wsl2Fixture({peers:33})};
+  result=owner.inspectLocal(wsl2Options(ref));
   assert.equal(result.status,'BLOCKED');
   assert.equal(result.reasonCode,'WSL_PEER_CARDINALITY_BLOCKED');
 
   ref={rows:wsl2Fixture({peers:1,descendant:true})};
   result=owner.inspectLocal(wsl2Options(ref));
+  assert.equal(result.status,'PASS');
+  assert.equal(result.effectEligibility,'ELIGIBLE');
+  assert.equal(result.cleanupCandidateCount,2);
+  assert.equal(result.reasonCode,'WSL_MULTI_PEER_TREES_ELIGIBLE');
+
+  ref={rows:wsl2Fixture({peers:1,descendant:true})};
+  ref.rows=ref.rows.map((row)=>row.pid===90
+    ? wsl2Row(90,80,'node',['node','/opt/node_modules/@wonderwhy-er/desktop-commander/dist/index.js'])
+    : row);
+  result=owner.inspectLocal(wsl2Options(ref));
   assert.equal(result.status,'BLOCKED');
-  assert.equal(result.reasonCode,'WSL_PEER_DESCENDANT_PRESENT');
+  assert.equal(result.reasonCode,'WSL_PEER_DESCENDANT_AGENT_AMBIGUOUS');
 
   ref={rows:wsl2Fixture({peers:1,benign:true})};
   result=owner.inspectLocal(wsl2Options(ref));
@@ -426,6 +443,25 @@ test('WSL exact completed pidfd effect requires final ABSENT evidence', () => {
   assert.equal(result.reasonCode,'PEER_SESSION_CLEANUP_COMPLETE');
 });
 
+test('WSL bounded multi-peer tree cleanup preserves exact target counts', () => {
+  const ref={rows:wsl2Fixture({peers:3,descendant:true})};
+  const result=owner.cleanupLocal(wsl2Options(ref,{
+    confirm:true,
+    wslEffectRunner:({targets}) => {
+      assert.equal(targets.length,4);
+      const ids=new Set(targets.map((item)=>item.pid));
+      ref.rows=ref.rows.filter((row)=>!ids.has(row.pid));
+      return {status:'COMPLETE',reasonCode:'WSL_PIDFD_PEER_TERMINATION_COMPLETE',
+        attemptedCount:4,terminatedCount:4,monitoringComplete:true,resumed:false};
+    },
+  }));
+  assert.equal(result.status,'PASS');
+  assert.equal(result.effectDisposition,'COMPLETE');
+  assert.equal(result.cleanupCandidateCount,4);
+  assert.equal(result.effectCount,4);
+  assert.equal(result.remainingPeerShellCount,0);
+});
+
 test('WSL fixed helper invocation is selector-free and output is strictly bounded', () => {
   const guards={
     agent:{pid:50,ppid:40,startTicks:'100050'},
@@ -448,7 +484,7 @@ test('WSL fixed helper invocation is selector-free and output is strictly bounde
   assert.match(invocation.args[1],/pidfd_send_signal/);
   assert.deepEqual(invocation.opts.env,{});
   assert.equal(invocation.opts.shell,false);
-  assert.deepEqual(JSON.parse(invocation.opts.input),guards);
+  assert.deepEqual(JSON.parse(invocation.opts.input),{agent:guards.agent,currentRoot:guards.currentRoot,targets:[guards.peer]});
 
   result=owner.defaultWslEffectRunner(guards,{
     spawnSync:() => ({status:0,stdout:'{"status":"COMPLETE"}',stderr:'',signal:null,error:null}),
@@ -460,8 +496,8 @@ test('WSL fixed helper invocation is selector-free and output is strictly bounde
 test('WSL pidfd source forbids broad process and group kill surfaces', () => {
   const source=fs.readFileSync(path.join(__dirname,'..','mcl-l-rdc-peer-session-cleanup.cjs'),'utf8');
   for(const required of ['os.pidfd_open','signal.pidfd_send_signal','signal.SIGSTOP',
-    'signal.SIGCONT','signal.SIGKILL','WSL_SINGLE_PEER_LEAF_ELIGIBLE',
-    'WSL_PEER_DESCENDANT_PRESENT','/usr/bin/python3']) {
+    'signal.SIGCONT','signal.SIGKILL','WSL_SINGLE_PEER_LEAF_ELIGIBLE','WSL_MULTI_PEER_LEAVES_ELIGIBLE',
+    'WSL_MULTI_PEER_TREES_ELIGIBLE','/usr/bin/python3']) {
     assert.ok(source.includes(required),required);
   }
   for(const forbidden of ['killpg','os.kill(','pkill','killall','process.kill(']) {
@@ -482,8 +518,8 @@ test('WSL helper timeout uses exact pidfd resume recovery and drift stays unprov
       calls++;
       assert.equal(exe,'/usr/bin/python3');
       if(calls===1) {
-        assert.match(args[1],/peer_stopped/);
-        assert.match(args[1],/not kill_sent/);
+        assert.ok(args[1].includes('stopped'));
+        assert.ok(args[1].includes('resume_stopped'));
         return {status:null,stdout:'',stderr:'',signal:'SIGTERM',error:{code:'ETIMEDOUT'}};
       }
       assert.match(args[1],/SIGCONT/);

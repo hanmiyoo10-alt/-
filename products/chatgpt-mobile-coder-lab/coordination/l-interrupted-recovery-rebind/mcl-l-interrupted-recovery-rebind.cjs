@@ -99,12 +99,21 @@ function parseArgs(argv = process.argv.slice(2)) {
   }
   const operation = argv[0];
   let target = null;
+  let packetActivityEvidenceFile = null;
   let apply = false;
   for (let index = 1; index < argv.length; index += 1) {
     const token = argv[index];
     if (token === '--apply') {
       if (apply) throw new RecoveryError('UNKNOWN', ['ARGUMENT_DUPLICATE:apply']);
       apply = true;
+      continue;
+    }
+    if (token === '--packet-activity-evidence-file') {
+      if (packetActivityEvidenceFile !== null || index + 1 >= argv.length) {
+        throw new RecoveryError('UNKNOWN', [packetActivityEvidenceFile !== null
+          ? 'ARGUMENT_DUPLICATE:packet-activity-evidence-file' : 'ARGUMENT_VALUE_MISSING']);
+      }
+      packetActivityEvidenceFile = argv[++index];
       continue;
     }
     if (token !== '--target' || target !== null || index + 1 >= argv.length) {
@@ -115,7 +124,30 @@ function parseArgs(argv = process.argv.slice(2)) {
   if (!PACKET_RE.test(target || '')) throw new RecoveryError('UNKNOWN', ['TARGET_PACKET_INVALID']);
   if (operation === 'apply' && !apply) throw new RecoveryError('BLOCKED', ['EXPLICIT_APPLY_REQUIRED']);
   if (operation === 'inspect' && apply) throw new RecoveryError('UNKNOWN', ['INSPECT_APPLY_FORBIDDEN']);
-  return {operation, targetPacketRef: target, targetPacketNumber: packetNumber(target)};
+  return {
+    operation,
+    targetPacketRef: target,
+    targetPacketNumber: packetNumber(target),
+    packetActivityEvidenceFile,
+  };
+}
+function readPacketActivityEvidenceFile(filePath, packetNumber) {
+  const resolved = path.resolve(filePath);
+  let stat;
+  try { stat = fs.lstatSync(resolved); }
+  catch { throw new RecoveryError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_FILE_READ_FAILED']); }
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    throw new RecoveryError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_REGULAR_FILE_REQUIRED']);
+  }
+  if (stat.size > 32 * 1024) throw new RecoveryError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_FILE_TOO_LARGE']);
+  let value;
+  try { value = JSON.parse(fs.readFileSync(resolved, 'utf8')); }
+  catch { throw new RecoveryError('UNKNOWN', ['PACKET_ACTIVITY_EVIDENCE_JSON_INVALID']); }
+  try { return stageEntry.normalizePacketActivityEvidenceSet(value, packetNumber); }
+  catch (error) {
+    if (error instanceof stageEntry.StageError) throw new RecoveryError(error.kind, error.reasonCodes);
+    throw error;
+  }
 }
 function defaultBinaryRunner(args, options = {}) {
   const result = childProcess.spawnSync(args[0], args.slice(1), {
@@ -224,18 +256,24 @@ function captureWorkspace({lease, runner = defaultBinaryRunner}) {
   const branch = String(gitResult(worktree, ['branch', '--show-current'], {runner}).stdout).trim();
   const head = String(gitResult(worktree, ['rev-parse', 'HEAD'], {runner}).stdout).trim();
   const unmerged = parseNul(gitResult(worktree, ['diff', '--name-only', '--diff-filter=U', '-z'], {runner, binary: true}).stdout);
-  const staged = parseNul(gitResult(worktree, ['diff', '--cached', '--name-only', '-z'], {runner, binary: true}).stdout);
-  const dirtyPaths = unique(parseNul(gitResult(worktree, ['diff', '--name-only', '-z'], {runner, binary: true}).stdout));
+  const staged = unique(parseNul(gitResult(worktree, ['diff', '--cached', '--name-only', '-z', '--no-renames'], {runner, binary: true}).stdout));
+  const unstaged = unique(parseNul(gitResult(worktree, ['diff', '--name-only', '-z'], {runner, binary: true}).stdout));
   const untracked = parseNul(gitResult(worktree, ['ls-files', '--others', '--exclude-standard', '-z'], {runner, binary: true}).stdout);
-  const diff = gitResult(worktree, ['diff', '--binary', '--no-ext-diff', '--no-renames'], {runner, binary: true}).stdout;
   const pathScopes = lease.scopes.filter((scope) => scope.startsWith('path:'));
   if (branch !== lease.workspace.branch || head !== lease.observedBaseSha) throw new RecoveryError('CONFLICT', ['WORKSPACE_GIT_IDENTITY_CONFLICT']);
-  if (unmerged.length || staged.length || untracked.length) throw new RecoveryError('BLOCKED', ['WORKSPACE_NON_UNSTAGED_RESIDUE']);
+  if (unmerged.length || untracked.length || (staged.length && unstaged.length)) throw new RecoveryError('BLOCKED', ['WORKSPACE_MIXED_OR_UNSUPPORTED_RESIDUE']);
+  const dirtyDisposition = staged.length ? 'STAGED_ONLY' : 'UNSTAGED_ONLY';
+  const dirtyPaths = staged.length ? staged : unstaged;
+  const diffArgs = staged.length
+    ? ['diff', '--cached', '--binary', '--no-ext-diff', '--no-renames']
+    : ['diff', '--binary', '--no-ext-diff', '--no-renames'];
+  const diff = gitResult(worktree, diffArgs, {runner, binary: true}).stdout;
   if (!dirtyPaths.length || !Buffer.isBuffer(diff) || diff.length === 0) throw new RecoveryError('BLOCKED', ['WORKSPACE_DIRTY_DIFF_REQUIRED']);
   if (!dirtyPaths.every((repoPath) => pathCovered(repoPath, pathScopes))) throw new RecoveryError('CONFLICT', ['WORKSPACE_DIRTY_SCOPE_CONFLICT']);
   return {
     branch,
     head,
+    dirtyDisposition,
     dirtyPaths,
     dirtyDiffSha256: sha256(diff),
     dirtyDiffBytes: diff.length,
@@ -344,7 +382,7 @@ function normalizeActivation(value) {
     'schemaVersion', 'mode', 'targetPacketRef', 'packetBodySha256', 'admissionMainSha',
     'ownerBlobs', 'scopes', 'workspace', 'observedBaseSha', 'leaseId',
     'oldAcquiredGeneration', 'oldManifestId', 'oldManifestPayloadSha256',
-    'classificationDigest', 'coreReceiptDigest', 'dirtyDiffSha256', 'dirtyPaths',
+    'classificationDigest', 'coreReceiptDigest', 'dirtyDisposition', 'dirtyDiffSha256', 'dirtyPaths',
     'releasePlanGeneration', 'releaseExpectedGeneration', 'releaseDispatchStarted',
     'releaseGeneration', 'releaseEvidenceRef', 'acquirePlanGeneration',
     'acquireExpectedGeneration', 'acquireDispatchStarted', 'reacquireGeneration',
@@ -366,6 +404,7 @@ function normalizeActivation(value) {
       || !SHA256_RE.test(value.oldManifestPayloadSha256 || '')
       || !SHA256_RE.test(value.classificationDigest || '')
       || !SHA256_RE.test(value.coreReceiptDigest || '')
+      || !['UNSTAGED_ONLY', 'STAGED_ONLY'].includes(value.dirtyDisposition)
       || !SHA256_RE.test(value.dirtyDiffSha256 || '')
       || !Array.isArray(value.dirtyPaths) || value.dirtyPaths.length < 1
       || !Array.isArray(value.scopes) || value.scopes.length < 1
@@ -406,6 +445,7 @@ function buildActivation(snapshot) {
     oldManifestPayloadSha256: snapshot.manifest.payloadSha256,
     classificationDigest: snapshot.classification.output.classificationDigest,
     coreReceiptDigest: snapshot.classification.output.coreReceiptDigest,
+    dirtyDisposition: snapshot.workspace.dirtyDisposition,
     dirtyDiffSha256: snapshot.workspace.dirtyDiffSha256,
     dirtyPaths: snapshot.workspace.dirtyPaths,
     releasePlanGeneration: null,
@@ -615,6 +655,7 @@ function defaultDeps(overrides = {}) {
     runner,
     binaryRunner,
     client,
+    packetActivityEvidence: overrides.packetActivityEvidence || null,
     readAuthority: overrides.readAuthority || (() => readMainAuthority(runner)),
     readOwnerBlobs: overrides.readOwnerBlobs || ((mainSha) => readOwnerBlobs(mainSha, runner)),
     readIssue: overrides.readIssue || ((number) => stageEntry.ghJson('repos/' + REPO + '/issues/' + number, runner)),
@@ -659,7 +700,11 @@ function readPacketContext(targetPacketNumber, deps) {
     if (error instanceof stageEntry.StageError) throw new RecoveryError(error.kind, error.reasonCodes);
     throw error;
   }
-  const overlap = deps.discoverOverlap({packetNumber: targetPacketNumber, requestedScopes: scopes});
+  const overlap = deps.discoverOverlap({
+    packetNumber: targetPacketNumber,
+    requestedScopes: scopes,
+    packetActivityEvidence: deps.packetActivityEvidence,
+  });
   if (overlap.discovery !== 'COMPLETE') throw new RecoveryError('UNKNOWN', ['TARGET_OVERLAP_INCOMPLETE']);
   if (overlap.state === 'CONFLICT') throw new RecoveryError('CONFLICT', ['TARGET_OVERLAP_CONFLICT']);
   if (overlap.state !== 'DISJOINT') throw new RecoveryError('BLOCKED', ['TARGET_OVERLAP_NOT_DISJOINT']);
@@ -709,6 +754,7 @@ async function revalidateReleaseAdmission(activationInput, depsInput = {}) {
   if (fresh.packetBodySha256 !== activation.packetBodySha256
       || fresh.lease.leaseId !== activation.leaseId
       || fresh.manifest.manifestId !== activation.oldManifestId
+      || fresh.workspace.dirtyDisposition !== activation.dirtyDisposition
       || fresh.workspace.dirtyDiffSha256 !== activation.dirtyDiffSha256
       || !exactJson(fresh.workspace.dirtyPaths, activation.dirtyPaths)
       || !exactJson(fresh.ownerBlobs, activation.ownerBlobs)
@@ -729,7 +775,9 @@ function verifyContinuationAuthority(activation, deps) {
 }
 function verifyPreservedState(activation, lease, deps) {
   const workspaceState = deps.captureWorkspace({lease});
-  if (workspaceState.dirtyDiffSha256 !== activation.dirtyDiffSha256 || !exactJson(workspaceState.dirtyPaths, activation.dirtyPaths)) throw new RecoveryError('CONFLICT', ['DIRTY_DIFF_IDENTITY_DRIFT']);
+  if (workspaceState.dirtyDisposition !== activation.dirtyDisposition
+      || workspaceState.dirtyDiffSha256 !== activation.dirtyDiffSha256
+      || !exactJson(workspaceState.dirtyPaths, activation.dirtyPaths)) throw new RecoveryError('CONFLICT', ['DIRTY_DIFF_IDENTITY_DRIFT']);
   deps.readRemoteHead(lease);
   deps.readPrState(lease.workspace.branch);
   return workspaceState;
@@ -1015,7 +1063,13 @@ function exitCodeFor(status) {
 async function runCli(argv = process.argv.slice(2), deps = {}) {
   try {
     const args = parseArgs(argv);
-    const result = args.operation === 'apply' ? await executeApply(args, deps) : await executeInspect(args, deps);
+    const packetActivityEvidence = args.packetActivityEvidenceFile
+      ? readPacketActivityEvidenceFile(args.packetActivityEvidenceFile, args.targetPacketNumber)
+      : null;
+    const runtimeDeps = {...deps, packetActivityEvidence};
+    const result = args.operation === 'apply'
+      ? await executeApply(args, runtimeDeps)
+      : await executeInspect(args, runtimeDeps);
     return {code: exitCodeFor(result.status), text: JSON.stringify(result) + '\n'};
   } catch (error) {
     const kind = error instanceof RecoveryError ? error.kind : 'UNKNOWN';
@@ -1069,6 +1123,8 @@ module.exports = {
   parseArgs,
   postOnce,
   publishRebind,
+  readPacketActivityEvidenceFile,
+  readPacketContext,
   readProgress,
   revalidateReleaseAdmission,
   runCli,
@@ -1080,4 +1136,5 @@ module.exports = {
   sha256,
   stateName,
   updateActivation,
+  verifyPreservedState,
 };

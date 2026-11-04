@@ -122,21 +122,24 @@ function fake3356State({
     decision: decision2786(disposition),
   };
 }
-function fake3356Context() {
+function fakeDocsContext(target = owner.TARGET_3356) {
   return {
-    target: owner.TARGET_3356,
-    packet: 3356,
-    packetRef: '#3356',
+    target,
+    packet: target.packet,
+    packetRef: target.packetRef,
     runner: () => ({code: 0, stdout: '[]'}),
     implReceipt: {
-      receiptDigest: owner.TARGET_3356.implementationReceiptDigest,
+      receiptDigest: target.implementationReceiptDigest,
       authorityRefs: [],
       scope: {
-        paths: [...owner.TARGET_3356.paths],
-        diffIdentity: owner.TARGET_3356.diffIdentity,
+        paths: [...target.paths],
+        diffIdentity: target.diffIdentity,
       },
     },
   };
+}
+function fake3356Context() {
+  return fakeDocsContext(owner.TARGET_3356);
 }
 
 test('public parser accepts only inspect/apply packet+format', () => {
@@ -208,7 +211,7 @@ test('exact V1 effect pair is required', () => {
 });
 
 test('compile-time profiles include reviewed fixed targets including #4169', () => {
-  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#2791', '#3043', '#3051', '#3092', '#3099', '#3108', '#3110', '#3118', '#3126', '#3144', '#3203', '#3216', '#3356', '#3561', '#3762', '#4169']);
+  assert.deepEqual(Object.keys(owner.PROFILES).sort(), ['#2463', '#2786', '#2791', '#3043', '#3051', '#3092', '#3099', '#3108', '#3110', '#3118', '#3126', '#3144', '#3203', '#3216', '#3356', '#3561', '#3762', '#4169', '#4214']);
   assert.equal(owner.TARGET_2791.packet, 2791);
   assert.equal(owner.TARGET_2791.pr, 2795);
   assert.equal(owner.TARGET_2791.candidate,
@@ -500,6 +503,29 @@ test('#3356 exact docs-only target is compile-time fixed', () => {
   assert.deepEqual(owner.TARGET_3356.paths,
     ['products/chatgpt-mobile-coder-lab/CURRENT.md']);
   assert.equal(owner.PROFILES['#3356'].mode, 'COORDINATION_NOT_APPLICABLE');
+});
+
+test('#4214 exact merged docs-only target is compile-time fixed', () => {
+  const target = owner.TARGET_4214;
+  assert.equal(target.packet, 4214);
+  assert.equal(target.pr, 4215);
+  assert.equal(target.candidate, 'a001b059ff68da1b5684d4a53df6048a40dacf05');
+  assert.equal(target.merge, '115a4bb42a7914776feedee812721c262a66ae02');
+  assert.equal(target.implementationReceiptDigest,
+    'd1219b23f8e2519de229b6a5c53f064f891f56b73a248216535a2ff6bad153ba');
+  assert.equal(target.diffIdentity,
+    '0c313eae561804da34477817789710aa6a4f02e86f307b255d084d1f172e851a');
+  assert.deepEqual(target.paths,
+    ['products/chatgpt-mobile-coder-lab/device-ops/l-rdc-peer-session-cleanup/README.md']);
+  assert.deepEqual(target.requiredGateResults, {
+    'codex-current-head-review': 'PASS',
+    'exact-head-required': 'PASS',
+    'exact-head-verify': 'PASS',
+    'pr-observe': 'PASS',
+    'repo-patch-transport': 'PASS',
+    'scope-overlap': 'PASS',
+  });
+  assert.equal(owner.PROFILES['#4214'].mode, 'COORDINATION_NOT_APPLICABLE');
 });
 
 test('#3561 exact L/L recovery-rebind target is compile-time fixed', () => {
@@ -2677,6 +2703,54 @@ test('3356 selector also collapses identical current-candidate receipt replay', 
   assert.equal(selected.comment.id, 11);
 });
 
+
+test('4214 docs-only selector binds exact current implementation receipt', () => {
+  const target = owner.TARGET_4214;
+  const receipt = fixedImplementationReceiptFixture(target);
+  const selected = owner.select3356ImplementationReceipt([
+    {receipt, comment: {id: 21}},
+  ], {head: {sha: target.candidate}}, target);
+  assert.equal(selected.comment.id, 21);
+  const bad = structuredClone(receipt);
+  bad.requiredGates.find((gate) => gate.name === 'repo-patch-transport').result = 'FAIL';
+  assert.throws(() => owner.select3356ImplementationReceipt([
+    {receipt: bad, comment: {id: 22}},
+  ], {head: {sha: target.candidate}}, target), owner.ApplyError);
+});
+
+test('4214 docs-only apply publishes only canonical V receipt and replay is zero-effect', () => {
+  const target = owner.TARGET_4214;
+  let reads = 0;
+  let publishes = 0;
+  const states = [
+    fake3356State({disposition: 'FINALIZATION_REQUIRED', stage: 'ABSENT'}),
+    fake3356State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+  ];
+  const first = owner.apply3356Packet('#4214', {
+    createContext: () => fakeDocsContext(target),
+    readState: () => states[Math.min(reads++, states.length - 1)],
+    buildValidationStageText: () => ({text: 'stage-4214'}),
+    publishExact(packet, body) {
+      assert.equal(packet, 4214);
+      assert.equal(body, 'stage-4214');
+      publishes += 1;
+      return {written: 1};
+    },
+  });
+  assert.equal(first.status, 'PASS');
+  assert.equal(first.effects.stageReceiptPublished, 1);
+  assert.equal(first.effects.holderCleaned, 0);
+  assert.equal(first.effects.d014Published, 0);
+  assert.equal(publishes, 1);
+
+  const replay = owner.apply3356Packet('#4214', {
+    createContext: () => fakeDocsContext(target),
+    readState: () => fake3356State({disposition: 'ALREADY_FINALIZED', stage: 'PASS'}),
+    publishExact() { throw new Error('unexpected replay write'); },
+  });
+  assert.equal(replay.status, 'PASS');
+  assert.equal(replay.effects.stageReceiptPublished, 0);
+});
 
 test('4169 recovery profile binds exact merged implementation evidence', () => {
   const target = owner.TARGET_4169;

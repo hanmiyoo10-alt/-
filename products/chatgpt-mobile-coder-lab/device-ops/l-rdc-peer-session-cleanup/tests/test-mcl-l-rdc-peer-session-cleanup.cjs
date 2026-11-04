@@ -359,6 +359,14 @@ test('WSL profile admits bounded peer trees and rejects unsupported topology', (
   assert.equal(result.cleanupCandidateCount,2);
   assert.equal(result.reasonCode,'WSL_MULTI_PEER_TREES_ELIGIBLE');
 
+  ref={rows:wsl2Fixture({peers:1,descendant:true})};
+  ref.rows=ref.rows.map((row)=>row.pid===90
+    ? wsl2Row(90,80,'node',['node','/opt/node_modules/@wonderwhy-er/desktop-commander/dist/index.js'])
+    : row);
+  result=owner.inspectLocal(wsl2Options(ref));
+  assert.equal(result.status,'BLOCKED');
+  assert.equal(result.reasonCode,'WSL_PEER_DESCENDANT_AGENT_AMBIGUOUS');
+
   ref={rows:wsl2Fixture({peers:1,benign:true})};
   result=owner.inspectLocal(wsl2Options(ref));
   assert.equal(result.status,'BLOCKED');

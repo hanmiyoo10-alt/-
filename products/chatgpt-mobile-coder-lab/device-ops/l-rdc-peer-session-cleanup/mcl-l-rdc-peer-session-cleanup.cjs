@@ -644,6 +644,15 @@ function descendantRows(rows, rootPid) {
   return {state: 'EXACT', rows: out};
 }
 
+function wslArgvHasAgentMarker(row) {
+  if (!row || !Array.isArray(row.argv)) return false;
+  return row.argv.some((arg) => {
+    const value = String(arg || '').trim().toLowerCase().replace(/\\/g, '/');
+    return value.includes(sessionEvidence.AGENT_PACKAGE_MARKER)
+      && value.includes(sessionEvidence.AGENT_ENTRY_MARKER);
+  });
+}
+
 function wslDescendantRows(rows, rootPid) {
   const byPid = new Map();
   for (const row of rows) {
@@ -1147,7 +1156,9 @@ function classifyWslCleanupRows(rows, selfPid, {
         peerShellCount: peers.length,
       });
     }
-    if (descendants.rows.some((row) => sessionEvidence.hasAgentMarker(row))) {
+    if ([peer, ...descendants.rows].some((row) => (
+      sessionEvidence.hasAgentMarker(row) || wslArgvHasAgentMarker(row)
+    ))) {
       return blocked('WSL_PEER_DESCENDANT_AGENT_AMBIGUOUS', {
         peerShellCount: peers.length,
         blockedCandidateCount: peers.length,

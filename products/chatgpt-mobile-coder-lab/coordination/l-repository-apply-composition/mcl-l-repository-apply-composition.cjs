@@ -465,6 +465,18 @@ const issue = stageEntry.ghJson('repos/' + REPO + '/issues/' + packetNumber, run
 const ledger = stageEntry.ghJson('repos/' + REPO + '/issues/' + LEDGER_ISSUE, runner);
 return {issue, ledger};
 }
+function defaultCleanupStaleHolder(manifestText, ledgerBody) {
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-finalize-stale-holder-'));
+const manifestPath = path.join(dir, 'manifest.md');
+const ledgerPath = path.join(dir, 'ledger.md');
+try {
+fs.writeFileSync(manifestPath, manifestText, {encoding:'utf8', mode:0o600});
+fs.writeFileSync(ledgerPath, ledgerBody, {encoding:'utf8', mode:0o600});
+return workspaceHolder.cleanupStale({manifestPath, ledgerPath});
+} finally {
+fs.rmSync(dir, {recursive:true, force:true});
+}
+}
 function defaultDeps(overrides = {}) {
 const runner = overrides.runner || stageEntry.runDefault;
 const ownerReadRunner = overrides.ownerReadRunner || defaultOwnerReadRunner;
@@ -480,6 +492,9 @@ validateEvidence: overrides.validateEvidence || workspaceHolder.validateEvidence
 claimHolder: overrides.claimHolder || workspaceHolder.claimHolder,
 checkHolder: overrides.checkHolder || workspaceHolder.checkHolder,
 releaseHolder: overrides.releaseHolder || workspaceHolder.releaseHolder,
+inspectHolderWorkspace: overrides.inspectHolderWorkspace || workspaceHolder.inspectWorkspace,
+readHolder: overrides.readHolder || workspaceHolder.readHolder,
+cleanupStaleHolder: overrides.cleanupStaleHolder || defaultCleanupStaleHolder,
 reviewUpdateInspect: overrides.reviewUpdateInspect
 || ((input) => inspectReviewUpdatePrepared(input, {runner: ownerReadRunner})),
 continuationInspect: overrides.continuationInspect
@@ -536,7 +551,7 @@ throw new CompositionError('BLOCKED', [
 ...(checked?.reasonCodes || []),
 ]);
 }
-return {manifestCommentId: exact.commentId, state: checked.state};
+return {manifestCommentId: exact.commentId, state: checked.state, ledgerBody: ledger.body};
 }
 function requireLiveBinding(input) {
 return requireBinding({...input, requireActiveLease: true});
@@ -960,6 +975,39 @@ throw new CompositionError('BLOCKED', ['D013_RELEASE_READBACK_STALE']);
 }
 return binding;
 }
+function reconvergeReleasedHolder({manifest, manifestText, ledgerBody, deps}) {
+const workspace = deps.inspectHolderWorkspace(manifest);
+if (!workspace?.ok || typeof workspace.holderPath !== 'string') {
+throw new CompositionError('BLOCKED', [
+...(workspace?.reasonCodes || ['WORKSPACE_HOLDER_INSPECT_FAILED']),
+]);
+}
+let holder = deps.readHolder(workspace.holderPath);
+if (holder?.missing) return {cleaned:0};
+if (!holder?.ok) {
+throw new CompositionError('BLOCKED', [
+...(holder?.reasonCodes || ['HOLDER_READ_FAILED']),
+]);
+}
+if (holder.value?.manifestId !== manifest.manifestId
+|| holder.value?.leaseId !== manifest.leaseEvidence.leaseId) {
+throw new CompositionError('BLOCKED', ['HOLDER_IDENTITY_CONFLICT']);
+}
+const cleaned = deps.cleanupStaleHolder(manifestText, ledgerBody);
+if (cleaned?.status !== 'STALE_CLEANED') {
+throw new CompositionError('BLOCKED', [
+...(cleaned?.reasonCodes || ['STALE_HOLDER_CLEANUP_FAILED']),
+]);
+}
+holder = deps.readHolder(workspace.holderPath);
+if (!holder?.missing) {
+throw new CompositionError('BLOCKED', [
+'HOLDER_NOT_ABSENT_AFTER_CLEANUP',
+...(holder?.reasonCodes || []),
+]);
+}
+return {cleaned:1};
+}
 function finalizeFromActivation({args, manifest, manifestText, activation, deps}) {
 const normalized = recoverReleaseActivation({
 args, manifest, manifestText, activation, deps,
@@ -975,6 +1023,7 @@ releaseGeneration: normalized.releaseGeneration,
 if (binding.manifestCommentId !== normalized.manifestCommentId) {
 throw new CompositionError('CONFLICT', ['FINALIZE_MANIFEST_COMMENT_CONFLICT']);
 }
+reconvergeReleasedHolder({manifest, manifestText, ledgerBody:binding.ledgerBody, deps});
 const completion = completionBody({
 manifest,
 owner: {new_head: normalized.commit, pr_number: normalized.prNumber},

@@ -2768,3 +2768,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a101c9191e9f986afa7d16ada524aca3068d3c31)
 - Event ID: `ce336279498c0dd7fb2543b8fad30b076173148ea1cccd852c25fe7338946651`
 <!-- canonical-main-doc-promoted:ce336279498c0dd7fb2543b8fad30b076173148ea1cccd852c25fe7338946651 -->
+
+### 2026-11-05 — Merge pull request #4225 from hanmiyoo10-alt/repo/canonical-main-required-feedback-4224
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `00d38c6522d2e5e83f1ef3c4ae8df8b3261ffb1a`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/00d38c6522d2e5e83f1ef3c4ae8df8b3261ffb1a)
+- Event ID: `e19ddba4325a99fc8841a9f0779df037d50063a64781ac11d93f6778eb323174`
+<!-- canonical-main-doc-promoted:e19ddba4325a99fc8841a9f0779df037d50063a64781ac11d93f6778eb323174 -->

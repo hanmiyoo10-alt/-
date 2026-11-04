@@ -84,7 +84,7 @@
       {"id": "simcore-r2-8-terminal-convergence", "workflow": "product-simcore-terminal-convergence-r2-8.yml", "scope": ["plugin:simcore"], "events": ["push"]},
       {"id": "simcore-candidate-receipt", "workflow": "product-simcore-candidate-materialize.yml", "scope": ["plugin:simcore"], "events": ["push"]},
       {"id": "usage-dashboard-project-memory", "workflow": "usage-dashboard-project-memory.yml", "scope": ["plugin:usage-dashboard"], "events": ["push"]},
-      {"id": "canonical-main-protection-guard", "workflow": "canonical-main-protection-guard.yml", "scope": ["scope:repo"], "events": ["push", "workflow_run", "workflow_dispatch"], "failureReason": "PROTECTION_GUARD_FAILED"}
+      {"id": "canonical-main-protection-guard", "workflow": "canonical-main-protection-guard.yml", "scope": ["scope:repo"], "events": ["push", "workflow_run", "workflow_dispatch"], "failureReason": "PROTECTION_GUARD_FAILED", "allowTerminalJobsBeforeRunComplete": true}
     ],
     "writerInventory": [
       {"workflow": "simcore-release-state-sync.yml", "mode": "active"},

@@ -35,36 +35,47 @@ function recoverableReasons(config) {
   return [...new Set(['MAIN_WRITE_CONTENT_CONFLICT', 'MAIN_WRITE_RETRY_EXHAUSTED', 'MEMORY_SYNC_PATH_ESCAPE', config.failureReason || 'MEMORY_SYNC_FAILED'])];
 }
 function terminalJobState(jobs) {
-  if (!Array.isArray(jobs) || jobs.length === 0) return {terminal: false, passing: false};
-  if (jobs.some((job) => job?.status !== 'completed' || !job?.conclusion)) {
-    return {terminal: false, passing: false};
+  if (!Array.isArray(jobs) || jobs.length === 0) {
+    return {terminal: false, passing: false, allSkipped: false};
   }
+  if (jobs.some((job) => job?.status !== 'completed' || !job?.conclusion)) {
+    return {terminal: false, passing: false, allSkipped: false};
+  }
+  const allSkipped = jobs.every((job) => job.conclusion === 'skipped');
   const failed = jobs.filter((job) => !['success', 'skipped'].includes(job.conclusion));
-  return {terminal: true, passing: failed.length === 0};
+  const anySuccess = jobs.some((job) => job.conclusion === 'success');
+  return {terminal: true, passing: anySuccess && failed.length === 0, allSkipped};
 }
 async function observeOne(context, config) {
   const runs = await context.actions.workflowRuns(config.workflow, 50);
   const epoch = context.policy.adapters.observationEpoch || null;
-  const run = latestRelevantRun(runs, config.events, epoch);
-  if (!run) return {id: config.id, known: true, passing: true, summary: `IDLE — no relevant workflow run since ${epoch || 'adapter start'}`, events: [], run: null};
-  let jobs = null;
-  let passing = run.conclusion === 'success';
-  if (run.status !== 'completed') {
-    if (config.allowTerminalJobsBeforeRunComplete !== true) {
-      return {id: config.id, known: false, passing: false, summary: `PENDING — run ${run.id}`, events: [], run};
+  const relevantRuns = runs.filter((run) => (
+    config.events.includes(run.event)
+    && run.conclusion !== 'skipped'
+    && runAtOrAfterEpoch(run, epoch)
+  ));
+  for (const run of relevantRuns) {
+    let jobs = null;
+    let passing = run.conclusion === 'success';
+    if (run.status !== 'completed') {
+      if (config.allowTerminalJobsBeforeRunComplete !== true) {
+        return {id: config.id, known: false, passing: false, summary: `PENDING — run ${run.id}`, events: [], run};
+      }
+      jobs = await context.actions.workflowJobs(run.id);
+      const terminal = terminalJobState(jobs);
+      if (!terminal.terminal) {
+        return {id: config.id, known: false, passing: false, summary: `PENDING — run ${run.id}`, events: [], run};
+      }
+      if (terminal.allSkipped) continue;
+      passing = terminal.passing;
     }
-    jobs = await context.actions.workflowJobs(run.id);
-    const terminal = terminalJobState(jobs);
-    if (!terminal.terminal) {
-      return {id: config.id, known: false, passing: false, summary: `PENDING — run ${run.id}`, events: [], run};
+    if (passing) {
+      return {id: config.id, known: true, passing: true, summary: `PASS — run ${run.id}`, events: recoverableReasons(config).map((reason) => writerEvent(config, run, reason, true)), run};
     }
-    passing = terminal.passing;
+    const reason = await scanFailedRun(context, run, config, jobs);
+    return {id: config.id, known: true, passing: false, summary: `FAIL — run ${run.id} — ${reason}`, events: [writerEvent(config, run, reason, false)], run};
   }
-  if (passing) {
-    return {id: config.id, known: true, passing: true, summary: `PASS — run ${run.id}`, events: recoverableReasons(config).map((reason) => writerEvent(config, run, reason, true)), run};
-  }
-  const reason = await scanFailedRun(context, run, config, jobs);
-  return {id: config.id, known: true, passing: false, summary: `FAIL — run ${run.id} — ${reason}`, events: [writerEvent(config, run, reason, false)], run};
+  return {id: config.id, known: true, passing: true, summary: `IDLE — no relevant workflow run since ${epoch || 'adapter start'}`, events: [], run: null};
 }
 async function observe(context) {
   const rows = await Promise.all(context.policy.adapters.writerWorkflows.map((config) => observeOne(context, config)));

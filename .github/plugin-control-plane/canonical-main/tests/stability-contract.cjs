@@ -161,11 +161,15 @@ function event(eventId, disposition, from, to) {
 
   assert.deepEqual(
     terminalJobState([{status: 'completed', conclusion: 'success'}, {status: 'completed', conclusion: 'skipped'}]),
-    {terminal: true, passing: true},
+    {terminal: true, passing: true, allSkipped: false},
+  );
+  assert.deepEqual(
+    terminalJobState([{status: 'completed', conclusion: 'skipped'}, {status: 'completed', conclusion: 'skipped'}]),
+    {terminal: true, passing: false, allSkipped: true},
   );
   assert.deepEqual(
     terminalJobState([{status: 'completed', conclusion: 'success'}, {status: 'in_progress', conclusion: null}]),
-    {terminal: false, passing: false},
+    {terminal: false, passing: false, allSkipped: false},
   );
 
   const requiredMain = 'a'.repeat(40);
@@ -225,6 +229,34 @@ function event(eventId, disposition, from, to) {
   }, writerConfig);
   assert.equal(writerPendingWrapper.known, true);
   assert.equal(writerPendingWrapper.passing, true);
+
+  const writerAllSkippedSettling = await observeOne({
+    policy,
+    actions: {
+      workflowRuns: async () => [
+        {
+          id: 882, event: 'workflow_run', status: 'in_progress', conclusion: null,
+          created_at: '2026-11-04T15:56:00Z', head_sha: requiredMain,
+        },
+        {
+          id: 883, event: 'workflow_run', status: 'completed', conclusion: 'failure',
+          created_at: '2026-11-04T15:55:00Z', head_sha: requiredMain,
+        },
+      ],
+      workflowJobs: async (runId) => runId === 882
+        ? [
+          {id: 821, status: 'completed', conclusion: 'skipped'},
+          {id: 822, status: 'completed', conclusion: 'skipped'},
+        ]
+        : [{id: 823, status: 'completed', conclusion: 'failure'}],
+      jobLogText: async () => 'terminal guard failure',
+    },
+  }, writerConfig);
+  assert.equal(writerAllSkippedSettling.known, true);
+  assert.equal(writerAllSkippedSettling.passing, false);
+  assert.equal(writerAllSkippedSettling.run.id, 883);
+  assert.equal(writerAllSkippedSettling.events.length, 1);
+  assert.equal(writerAllSkippedSettling.events[0].observation.reasonCode, 'PROTECTION_GUARD_FAILED');
 
   const writerWithoutOptIn = await observeOne({
     policy,

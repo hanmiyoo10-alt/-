@@ -249,13 +249,17 @@ assert.doesNotMatch(guardWorkflow, /test "\$\(git rev-parse origin\/main\)" = "\
 assert.match(guardWorkflow, /protection-activate\.sh/);
 assert.match(guardWorkflow, /id:\s*required_result/);
 assert.match(guardWorkflow, /EVENT_ACTION:\s*\$\{\{ github\.event\.action \}\}/);
+assert.match(guardWorkflow, /CI_RUN_CONCLUSION:\s*\$\{\{ github\.event\.workflow_run\.conclusion \}\}/);
 assert.match(guardWorkflow, /actions\/runs\/\$CI_RUN_ID\/jobs\?per_page=100/);
 assert.match(guardWorkflow, /select\(\.name == "Required"\)/);
 assert.match(guardWorkflow, /disposition=RESOLVED/);
 assert.match(guardWorkflow, /disposition=FAILURE_DEFERRED/);
 assert.match(guardWorkflow, /disposition=DEFERRED/);
 assert.match(guardWorkflow, /EVENT_ACTION.*requested[\s\S]*conclusion.*success[\s\S]*disposition=FAILURE_DEFERRED/);
-assert.match(guardWorkflow, /steps\.required_result\.outputs\.conclusion/);
+assert.match(guardWorkflow, /EVENT_ACTION.*completed[\s\S]*guard_conclusion=.*CI_RUN_CONCLUSION/);
+assert.match(guardWorkflow, /observed_conclusion=\$conclusion/);
+assert.match(guardWorkflow, /guard_conclusion=\$guard_conclusion/);
+assert.match(guardWorkflow, /CI_CONCLUSION:\s*\$\{\{ steps\.required_result\.outputs\.guard_conclusion \}\}/);
 assert.match(guardWorkflow, /if:\s*steps\.required_result\.outputs\.disposition == 'RESOLVED'/);
 assert.match(guardWorkflow, /required-guard\.sh/);
 assert.match(guardWorkflow, /Refresh canonical-main after Required observation[\s\S]*steps\.required_result\.outputs\.disposition == 'RESOLVED'[\s\S]*steps\.required_result\.outputs\.disposition == 'FAILURE_DEFERRED'/);

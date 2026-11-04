@@ -136,7 +136,7 @@ patchFile: values.patch || null,
 prRequestFile: values['pr-request'] || null,
 };
 }
-function parseManifest(text) {
+function parseManifest(text, operation = 'apply') {
 const parsed = taskHandoff.parseManifest(text);
 if (parsed.status !== 'VALID') {
 throw new CompositionError(
@@ -144,7 +144,9 @@ parsed.status === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN',
 parsed.reasonCodes || ['MANIFEST_INVALID']
 );
 }
-try { lOwner.validateManifestShape(parsed.value); }
+const phaseClasses = ['continue-prepared', 'finalize'].includes(operation)
+? ['REPOSITORY_MUTATION', 'COORDINATION'] : ['REPOSITORY_MUTATION'];
+try { lOwner.validateManifestShape(parsed.value, undefined, phaseClasses); }
 catch (error) {
 throw new CompositionError(
 error instanceof lOwner.OwnerError ? error.kind : 'UNKNOWN',
@@ -1018,8 +1020,12 @@ function executeFinalize(args, depsInput = {}) {
 const deps = defaultDeps(depsInput);
 const manifestText = readRegular(
 args.manifestFile, 'MANIFEST_FILE', MAX_MANIFEST_BYTES).toString('utf8');
-const manifest = parseManifest(manifestText);
+const manifest = parseManifest(manifestText, 'finalize');
 const activation = deps.readActivation(manifest);
+if (manifest.phaseClass === 'COORDINATION'
+&& activationEffectOperation(activation) !== 'continue-prepared') {
+throw new CompositionError('CONFLICT', ['COORDINATION_MANIFEST_OPERATION_CONFLICT']);
+}
 return finalizeFromActivation({args, manifest, manifestText, activation, deps});
 }
 function executeComposition(args, depsInput = {}) {
@@ -1032,7 +1038,7 @@ const patchBytes = effectOperation === 'continue-prepared'
 : readRegular(args.patchFile, 'PATCH_FILE', lOwner.MAX_PATCH_BYTES);
 const prRequestText = readRegular(
 args.prRequestFile, 'PR_REQUEST_FILE', MAX_PR_REQUEST_BYTES).toString('utf8');
-const manifest = parseManifest(manifestText);
+const manifest = parseManifest(manifestText, effectOperation);
 const {request, prRequest} = preflightRequest({
 operation: effectOperation,
 packetRef: args.packetRef,

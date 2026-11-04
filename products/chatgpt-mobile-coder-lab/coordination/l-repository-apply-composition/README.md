@@ -28,11 +28,16 @@ proof, replay, validation, commit/currentization, non-force push, and same-PR
 readback. If the merged L owner does not support `review-update`, the
 composition fails closed. It never falls back to ordinary `apply`.
 
-`continue-prepared` accepts only the existing fixed
-`mcl-l-prepared-continuation-request.v1` plus a non-closing PR request. It is
-admitted only for an exact recovery-rebind manifest and delegates all prepared
-state, replay, validation, commit/currentization, push and PR semantics to the
-existing L repository owner. No patch file is accepted or replayed by this
+`continue-prepared` accepts only one of the two fixed L-owner continuation
+request schemas plus a non-closing PR request: the existing legacy
+`mcl-l-prepared-continuation-request.v1`, or the additive
+`mcl-l-interrupted-recovery-continuation-request.v1` for the native general
+interrupted-recovery lineage. It is admitted only for the matching exact
+recovery-rebind manifest profile and delegates all prepared state, replay,
+validation, commit/currentization, push and PR semantics to the existing L
+repository owner. A `COORDINATION` manifest is admitted only for the general
+recovery continuation profile; ordinary apply/review-update remain
+`REPOSITORY_MUTATION`-only. No patch file is accepted or replayed by this
 composition.
 
 `finalize` recovers only already-published activation state and never runs the

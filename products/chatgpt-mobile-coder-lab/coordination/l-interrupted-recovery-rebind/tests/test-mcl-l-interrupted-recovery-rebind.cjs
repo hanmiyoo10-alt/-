@@ -141,7 +141,7 @@ test('workspace capture distinguishes staged-only and unstaged-only state',()=>{
     if(key==='branch --show-current') return out(ws.branch+'\n');
     if(key==='rev-parse HEAD') return out(base+'\n');
     if(key==='diff --name-only --diff-filter=U -z') return out('');
-    if(key==='diff --cached --name-only -z') return out(staged?'x/y\0':'');
+    if(key==='diff --cached --name-only -z --no-renames') return out(staged?'x/y\0':'');
     if(key==='diff --name-only -z') return out(unstaged?'x/y\0':'');
     if(key==='ls-files --others --exclude-standard -z') return out('');
     if(key==='diff --cached --binary --no-ext-diff --no-renames') return out('staged-diff');

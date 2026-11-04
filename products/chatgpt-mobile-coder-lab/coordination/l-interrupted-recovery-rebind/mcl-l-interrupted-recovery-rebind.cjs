@@ -256,7 +256,7 @@ function captureWorkspace({lease, runner = defaultBinaryRunner}) {
   const branch = String(gitResult(worktree, ['branch', '--show-current'], {runner}).stdout).trim();
   const head = String(gitResult(worktree, ['rev-parse', 'HEAD'], {runner}).stdout).trim();
   const unmerged = parseNul(gitResult(worktree, ['diff', '--name-only', '--diff-filter=U', '-z'], {runner, binary: true}).stdout);
-  const staged = unique(parseNul(gitResult(worktree, ['diff', '--cached', '--name-only', '-z'], {runner, binary: true}).stdout));
+  const staged = unique(parseNul(gitResult(worktree, ['diff', '--cached', '--name-only', '-z', '--no-renames'], {runner, binary: true}).stdout));
   const unstaged = unique(parseNul(gitResult(worktree, ['diff', '--name-only', '-z'], {runner, binary: true}).stdout));
   const untracked = parseNul(gitResult(worktree, ['ls-files', '--others', '--exclude-standard', '-z'], {runner, binary: true}).stdout);
   const pathScopes = lease.scopes.filter((scope) => scope.startsWith('path:'));

@@ -10,6 +10,7 @@ const test = require('node:test');
 
 const stage = require('../mcl-stage-entry.cjs');
 const workspace = require('../workspace-prepare.cjs');
+const taskHandoff = require('../../task-handoff.cjs');
 const patchOwner = require('../../../device-ops/repository-patch/mcl-repository-patch-owner-invoke.cjs');
 
 const MAIN = 'a'.repeat(40);
@@ -566,7 +567,7 @@ test('landing manifest and lease identity are fixed to landing_metadata S', () =
     packetBodySha256: 'd'.repeat(64),
     landing: {landing_head: 'b'.repeat(40)},
   };
-  const lease = {leaseId: 'e'.repeat(64), observedGeneration: 20, runId: 900};
+  const lease = {leaseId: 'e'.repeat(64), observedGeneration: 20, runId: 900, evidenceRef: 'run:900'};
   const manifest = stage.buildLandingManifest(context, lease);
   assert.deepEqual(manifest.scopes, [stage.LANDING_SCOPE]);
   assert.equal(manifest.workspace.kind, 'landing_metadata');
@@ -718,6 +719,7 @@ test('eligible normalization uses one fixed refresh then release and COMPLETE re
     runner,
     overlapResolver: () => ({state: 'DISJOINT'}),
     authorityBarrier: () => {},
+    commentPublisher: () => 100 + ++comments,
   });
   assert.equal(value.normalized, true);
   assert.equal(value.count, 1);
@@ -870,6 +872,152 @@ test('acquire failure is fail-closed', () => {
     throw new Error(args.join(' '));
   };
   assert.throws(() => stage.acquireLease(context, runner), /D013_ACQUIRE_NOT_PROVEN/);
+});
+
+test('landing acquire and release accept exact no-run durable readback evidence', () => {
+  const leaseId = 'f'.repeat(64);
+  const context = {
+    packetRef: '#77', packetNumber: 77, mainSha: MAIN,
+    packetBodySha256: 'd'.repeat(64), landing: {landing_head: 'b'.repeat(40)},
+  };
+  const runner = (args) => {
+    if (args[0] === process.execPath && args.includes('lease-acquire')) {
+      return response(0, {
+        status: 'DISPATCH_READBACK_COMPLETE', leaseId, observedGeneration: 20,
+        runId: null, runConclusion: null,
+        evidenceRef: `receipt:mcl-task-lease-readback:acquire:${leaseId}:generation:20`,
+      });
+    }
+    if (args[0] === process.execPath && args.includes('lease-release')) {
+      return response(0, {
+        status: 'DISPATCH_READBACK_COMPLETE', leaseId, observedGeneration: 21,
+        runId: null, runConclusion: null,
+        evidenceRef: `receipt:mcl-task-lease-readback:release:${leaseId}:generation:21`,
+      });
+    }
+    throw new Error(args.join(' '));
+  };
+  const acquired = stage.acquireLandingLease(context, runner);
+  assert.equal(acquired.runId, null);
+  assert.equal(acquired.evidenceRef,
+    `receipt:mcl-task-lease-readback:acquire:${leaseId}:generation:20`);
+  const manifest = stage.buildLandingManifest(context, acquired);
+  assert.equal(manifest.leaseEvidence.acquireEvidenceRef, acquired.evidenceRef);
+  assert(manifest.inputRefs.includes(acquired.evidenceRef));
+  const released = stage.releaseLease(context, leaseId, runner);
+  assert.equal(released.ok, true);
+  assert.equal(released.value.runId, null);
+  assert.equal(released.value.evidenceRef,
+    `receipt:mcl-task-lease-readback:release:${leaseId}:generation:21`);
+});
+
+test('exact semantic packet comments reuse, recover lost ack once, and fail closed', () => {
+  const leaseId = 'e'.repeat(64);
+  const context = {
+    packetRef: '#77', packetNumber: 77, mainSha: MAIN,
+    packetBodySha256: 'd'.repeat(64), landing: {landing_head: 'b'.repeat(40)},
+  };
+  const lease = {leaseId, observedGeneration: 20, runId: 900, evidenceRef: 'run:900'};
+  const manifest = stage.buildLandingManifest(context, lease);
+  const manifestBody = taskHandoff.renderManifest(manifest);
+  const handoffBody = stage.renderHandoff(stage.buildHandoff({
+    ...context, plan: plan(), requestedScopes: ['path:docs/demo.md'],
+    workspace: {identity: {branch: 'server/mcl-packet-77', worktree: '/root/nyang-worktrees/mcl-packet-77'}},
+  }, manifest, lease));
+  const receipt = taskHandoff.buildCompletionReceipt(manifest, {
+    disposition: 'COMPLETE',
+    outputRefs: [`commit:${MAIN}`],
+    validationRefs: ['run:900', 'run:901'],
+    observedRefs: [`commit:${MAIN}`, 'run:900', 'run:901'],
+    leaseDisposition: 'RELEASED',
+    leaseReleaseEvidence: {
+      ledgerRef: '#2352', leaseId, releasedGeneration: 21, evidenceRef: 'run:901',
+    },
+    workspaceResult: 'clean', blockerRefs: [], requiredUnknownRefs: [],
+  });
+  const receiptBody = taskHandoff.renderCompletionReceipt(receipt);
+
+  for (const [kind, body] of [
+    ['manifest', manifestBody], ['handoff', handoffBody], ['receipt', receiptBody],
+  ]) {
+    let posts = 0;
+    const rows = [{id: 44, body}];
+    const runner = (args, options = {}) => {
+      if (args[0] === 'gh' && args[1] === 'api' && !args.includes('--method')) {
+        return response(0, rows);
+      }
+      if (args[0] === 'gh' && args[1] === 'api' && args.includes('--method')) {
+        posts += 1;
+        return response(0, {id: 99});
+      }
+      throw new Error(args.join(' '));
+    };
+    assert.equal(stage.postExactSemanticComment(77, body, kind, runner), 44);
+    assert.equal(posts, 0);
+  }
+
+  let posts = 0;
+  let rows = [];
+  const lostAckRunner = (args, options = {}) => {
+    if (args[0] === 'gh' && args[1] === 'api' && !args.includes('--method')) {
+      return response(0, rows);
+    }
+    if (args[0] === 'gh' && args[1] === 'api' && args.includes('--method')) {
+      posts += 1;
+      rows = [{id: 55, body: JSON.parse(options.input).body}];
+      return response(1, '');
+    }
+    throw new Error(args.join(' '));
+  };
+  assert.equal(stage.postExactSemanticComment(77, manifestBody, 'manifest', lostAckRunner), 55);
+  assert.equal(posts, 1);
+
+  posts = 0;
+  rows = [];
+  const absentRunner = (args) => {
+    if (args[0] === 'gh' && args[1] === 'api' && !args.includes('--method')) {
+      return response(0, rows);
+    }
+    if (args[0] === 'gh' && args[1] === 'api' && args.includes('--method')) {
+      posts += 1;
+      return response(1, '');
+    }
+    throw new Error(args.join(' '));
+  };
+  assert.throws(() =>
+    stage.postExactSemanticComment(77, manifestBody, 'manifest', absentRunner),
+  /COMMENT_WRITE_ACK_UNKNOWN/);
+  assert.equal(posts, 1);
+
+  const conflictContext = {...context, mainSha: 'c'.repeat(40)};
+  const conflicting = taskHandoff.renderManifest(stage.buildLandingManifest(conflictContext, lease));
+  const conflictRunner = (args) => {
+    if (args[0] === 'gh' && args[1] === 'api' && !args.includes('--method')) {
+      return response(0, [{id: 66, body: conflicting}]);
+    }
+    throw new Error(args.join(' '));
+  };
+  assert.throws(() =>
+    stage.postExactSemanticComment(77, manifestBody, 'manifest', conflictRunner),
+  /COMMENT_SEMANTIC_CONFLICT/);
+
+  const retryLease = {...lease, observedGeneration: 21, evidenceRef: 'run:901'};
+  const retryBody = taskHandoff.renderManifest(stage.buildLandingManifest(context, retryLease));
+  let retryPosts = 0;
+  const retryRows = [{id: 67, body: manifestBody}];
+  const retryRunner = (args, options = {}) => {
+    if (args[0] === 'gh' && args[1] === 'api' && !args.includes('--method')) {
+      return response(0, retryRows);
+    }
+    if (args[0] === 'gh' && args[1] === 'api' && args.includes('--method')) {
+      retryPosts += 1;
+      retryRows.push({id: 68, body: JSON.parse(options.input).body});
+      return response(0, {id: 68});
+    }
+    throw new Error(args.join(' '));
+  };
+  assert.equal(stage.postExactSemanticComment(77, retryBody, 'manifest', retryRunner), 68);
+  assert.equal(retryPosts, 1);
 });
 
 test('normal acquire accepts exact ledger readback evidence without run id', () => {
@@ -1027,6 +1175,7 @@ test('workspace precondition failure after manifest still releases lease when st
         return 'manifest-fixture';
       },
       lateBarrier: () => {},
+      commentPublisher: () => 800 + ++comments,
     });
     assert.equal(receipt.result, 'BLOCKED');
     assert(receipt.reasonCodes.includes('LOCAL_BRANCH_EXISTS'));
@@ -1074,6 +1223,7 @@ test('L workspace preparation failure preserves L execution surface', () => {
         return 'manifest-fixture';
       },
       lateBarrier: () => {},
+      commentPublisher: () => 820 + ++comments,
     });
     assert.equal(receipt.result, 'BLOCKED');
     assert.equal(receipt.executionSurface, 'RDC:L:repository-owned-stage-entry');
@@ -1130,6 +1280,7 @@ test('apply PASS prepares workspace/ref but does not invoke holder or source eff
       manifestBuilder: () => ({manifestId: '6'.repeat(64)}),
       manifestRenderer: () => 'manifest-fixture',
       lateBarrier: () => {},
+      commentPublisher: () => 700 + ++comments,
     });
     assert.equal(receipt.result, 'PASS');
     assert.equal(receipt.counters.find((row) => row.name === 'landing_normalization_count').value, 0);
@@ -1188,6 +1339,7 @@ test('successful one-shot normalization composes into existing repository stage 
       manifestBuilder: () => ({manifestId: '7'.repeat(64)}),
       manifestRenderer: () => 'manifest-fixture',
       lateBarrier: () => {},
+      commentPublisher: () => 900 + ++comments,
     });
     assert.equal(receipt.result, 'PASS');
     assert.equal(receipt.counters.find((row) => row.name === 'landing_normalization_count').value, 1);
@@ -1262,7 +1414,7 @@ test('L landing profile validates exact route/main identity and ancestry', () =>
 test('L landing D-013 and D-014 identity is exact L/L', () => {
   const context={packetNumber:77,packetRef:'#77',mainSha:MAIN,packetBodySha256:'d'.repeat(64),
     stageProfile:stage.STAGE_PROFILES.L,landing:{landing_head:'b'.repeat(40)}};
-  const lease={leaseId:'e'.repeat(64),observedGeneration:20,runId:900};
+  const lease={leaseId:'e'.repeat(64),observedGeneration:20,runId:900,evidenceRef:'run:900'};
   const manifest=stage.buildLandingManifest(context,lease);
   assert.deepEqual(manifest.scopes,['surface:mcl-landing-origin-main:L']);
   assert.equal(manifest.route,'L'); assert.equal(manifest.executor,'L');
@@ -1306,6 +1458,7 @@ test('L normalization invokes exactly refresh L and validates L readback', () =>
       return {state:'DISJOINT'};
     },
     authorityBarrier:()=>{},
+    commentPublisher:()=>101,
   });
   assert.equal(value.normalized,true); assert.equal(value.count,1);
   assert(seen.some((args)=>String(args[0]).endsWith('/mcl-landing-freshness')&&args[1]==='refresh'&&args[2]==='L'));

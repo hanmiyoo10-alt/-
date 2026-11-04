@@ -192,7 +192,28 @@ readback form carries no run id and must expose the exact deterministic
 `receipt:mcl-task-lease-readback:<operation>:<leaseId>:generation:<generation>`
 locator. Acquire still requires the exact lease id and acquired generation.
 Normal release normalizes either evidence form behind one `evidenceRef`.
-Landing-normalization remains run-backed and is not widened by this rule.
+Landing normalization uses the same exact evidence vocabulary for acquire and
+release. Run-backed evidence remains unchanged; an exact no-run durable readback
+uses only its deterministic `evidenceRef` and never invents a workflow run id.
+
+Stage-entry immutable packet publication is also exactly-once at the semantic
+slot boundary. The landing manifest, landing completion receipt, repository
+manifest, and `HANDOFF_READY` comment are each handled as:
+
+```text
+exact semantic row already present -> reuse / zero POST
+absent -> POST once -> exact reread once
+POST acknowledgement uncertain + exact row present -> recover success
+POST acknowledgement uncertain + row absent -> UNKNOWN / no blind second POST
+same semantic slot with distinct identity or duplicate exact rows -> CONFLICT
+```
+
+For D-014 manifests the semantic publication slot includes the exact acquired
+D-013 generation as well as packet/phase/lease identity. Releasing and later
+reacquiring the same deterministic lease profile therefore creates a distinct
+reviewed publication slot instead of colliding with the earlier acquisition.
+
+Comment reread is evidence only and grants no broader issue-write authority.
 
 Caller-specific workflow-run identity remains execution provenance in the
 stage-entry receipt/report. It is not part of the normal stage-entry semantic

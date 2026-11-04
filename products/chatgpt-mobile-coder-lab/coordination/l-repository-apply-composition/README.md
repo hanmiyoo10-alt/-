@@ -41,7 +41,21 @@ recovery continuation profile; ordinary apply/review-update remain
 composition.
 
 `finalize` recovers only already-published activation state and never runs the
-source effect again.
+source effect again. After exact released-D-013 readback, it also reconverges one
+reviewed post-effect holder residue state before reading published Git/PR identity:
+
+```text
+holder already absent -> continue with zero cleanup effect
+exact same manifest + same released lease holder -> cleanupStale once -> reread absent -> continue
+foreign / malformed holder, active target lease, cleanup failure, or absent-proof failure -> BLOCKED
+```
+
+This suffix is operation-neutral for every current effect operation:
+`apply | review-update | continue-prepared`. A future effect operation that can
+claim a holder and release D-013 before D-014 completion must gain the same
+holder-absent and released-D013-stale-holder regression rows before it is
+closure-complete. No holder secret is reconstructed and no fresh holder is
+claimed during finalization.
 
 ## Holder boundary
 

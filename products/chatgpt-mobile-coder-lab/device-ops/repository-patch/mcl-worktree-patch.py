@@ -139,6 +139,17 @@ def validate_worktree(worktree: Path, branch: str, expected_head: str) -> None:
         raise PatchOwnerError("WORKTREE_HEAD_CONFLICT")
 
 
+def regular_mode_admitted(status: str, before: str | None, after: str | None) -> bool:
+    modes = {m for m in (before, after) if m is not None}
+    if not modes:
+        return False
+    if not modes - {"100644"}:
+        return True
+    if status == "A" and before is None and after == "100755":
+        return True
+    return before == "100755" and after == "100755" and status == "M"
+
+
 def validate_modes_and_paths(worktree: Path, expected_paths: list[str]) -> list[str]:
     raw = git(worktree, "diff", "--cached", "--name-status", "-z", "-M").stdout
     statuses = PATCH.parse_name_status(raw)
@@ -161,8 +172,7 @@ def validate_modes_and_paths(worktree: Path, expected_paths: list[str]) -> list[
             item = paths[0]
             before = PATCH.tree_mode(worktree, "HEAD", item)
             after = PATCH.index_mode(worktree, item)
-            modes = {m for m in (before, after) if m is not None}
-            if not modes or modes - {"100644"}:
+            if not regular_mode_admitted(status, before, after):
                 raise PatchOwnerError("SPECIAL_MODE_DENIED")
     result = sorted(actual)
     if result != sorted(expected_paths):
@@ -209,8 +219,7 @@ def validate_committed_paths(worktree: Path, base_sha: str, new_head: str, expec
             item = paths[0]
             before = PATCH.tree_mode(worktree, base_sha, item)
             after = PATCH.tree_mode(worktree, new_head, item)
-            modes = {m for m in (before, after) if m is not None}
-            if not modes or modes - {"100644"}:
+            if not regular_mode_admitted(status, before, after):
                 raise PatchOwnerError("SPECIAL_MODE_DENIED")
     result = sorted(actual)
     if result != sorted(expected_paths):

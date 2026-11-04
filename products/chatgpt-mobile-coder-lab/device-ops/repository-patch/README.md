@@ -150,7 +150,7 @@ workspace, never force-pushes, and never auto-retries.
 Requires the exact clean leased worktree at the exact base and requires the
 remote `server/*` branch to still equal that base. It validates the hash-bound
 patch, runs `git apply --check` then `git apply --index`, derives actual changed
-paths/modes from Git, requires exact expected-path equality, and runs
+paths/modes from Git, requires exact expected-path equality, admits ordinary `100644` behavior plus only content-preserving existing regular `100755 -> 100755` modifications and patch/index-derived new regular `100755` additions, rejects executable deletion/rename/copy and every `100644 <-> 100755` mode change, and runs
 `git diff --cached --check`.
 
 It does not commit or push.

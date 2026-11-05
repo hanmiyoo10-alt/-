@@ -295,3 +295,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/4194)
 - Event ID: `25acba20c60172306e72c0d6c3b98def677fe85d65be4becbc9f49f91c93650a`
 <!-- canonical-main-doc-promoted:25acba20c60172306e72c0d6c3b98def677fe85d65be4becbc9f49f91c93650a -->
+
+### 2026-11-05 — [work-system] prevent late successor packet debt
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/4249)
+- Event ID: `02aa3d6b0a56bd739e46c7fec6ea19f246822676c1380ff2cf2639ed7b5f0b4c`
+<!-- canonical-main-doc-promoted:02aa3d6b0a56bd739e46c7fec6ea19f246822676c1380ff2cf2639ed7b5f0b4c -->

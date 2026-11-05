@@ -21,9 +21,10 @@ No other argument is accepted.
 bounded semantic receipt. It does not contact the OpenAI tunnel control plane,
 create a tunnel, run \`doctor\`, start Repository Read MCP, or start tunnel-client.
 
-\`--run\` repeats the same preflight, removes only a previously validated fixed
-health URL file if one exists, emits a bounded \`starting\` receipt, then replaces
-itself with the fixed tunnel-client foreground process. The \`starting\` receipt
+\`--run\` repeats the same preflight, acquires the fixed single-instance lock,
+removes only a previously validated fixed health URL file if one exists, emits a
+bounded \`starting\` receipt, then supervises the fixed tunnel-client foreground
+child. The \`starting\` receipt
 is not readiness or tunnel-connectivity proof. Later live acceptance must inspect
 loopback readiness and perform an actual read-only MCP call separately.
 
@@ -69,7 +70,9 @@ and GitHub API URL. No GitHub token is inherited or materialized by this owner.
 This owner pins tunnel-client semantic version **0.0.15**. The version probe
 accepts only bare \`0.0.15\` or the official release form
 \`0.0.15+<40-hex-sha> (git sha: <same-40-hex-sha>)\`. Receipts retain only the
-bounded semantic version and never forward raw probe output. A missing binary,
+bounded semantic version and never forward raw probe output. The version probe
+reads at most 257 bytes and terminates the probe on overflow or timeout, so a
+misprovisioned executable cannot stream unbounded stdout into memory. A missing binary,
 symlink, foreign owner, unsafe writable mode, non-executable file, malformed
 release string, failed version probe, or any other semantic version fails closed.
 Updating the pin requires a reviewed source change.
@@ -98,11 +101,16 @@ or network configuration.
 
 Before removing any previous health URL or emitting the \`starting\` receipt,
 \`--run\` acquires a non-blocking exclusive lock on the fixed mode-0600
-\`run.lock\` file. The lock descriptor is deliberately inherited across the
-foreground exec so the advisory lock remains held for the tunnel-client lifetime.
-A concurrent run returns bounded \`RUN_ALREADY_ACTIVE\` and launches no second
-client or Repository Read MCP child. The lock file may remain after exit; file
-existence alone never means an instance is active.
+\`run.lock\` file. The Python wrapper remains the lock-holding foreground
+supervisor; its lock descriptor is non-inheritable and tunnel-client is launched
+with all unrelated file descriptors closed, so the Repository Read MCP child
+cannot inherit the lock. The Linux child also installs \`PR_SET_PDEATHSIG=SIGTERM\`
+before exec and exits if its parent already disappeared, so an abrupt wrapper death
+does not leave an unlocked tunnel-client running. SIGINT/SIGTERM/SIGHUP received by
+the wrapper are forwarded to tunnel-client. A concurrent run returns bounded
+\`RUN_ALREADY_ACTIVE\` and launches no second client or Repository Read MCP child.
+The lock file may remain after exit; file existence alone never means an instance
+is active.
 
 OpenAI currently documents Secure MCP Tunnel as outbound HTTPS from the
 customer-run tunnel-client to the OpenAI control plane, with stdio supported

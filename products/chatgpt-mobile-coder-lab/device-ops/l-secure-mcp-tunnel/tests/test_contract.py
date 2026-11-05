@@ -4,6 +4,7 @@ import importlib.machinery
 import importlib.util
 import io
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -135,6 +136,17 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn("secret-probe-output", text)
         self.assertNotIn("result=pass", text)
 
+    def test_version_probe_output_is_bounded_while_reading(self):
+        self.f.tunnel.write_text(
+            "#!/bin/sh\n"
+            "while :; do printf 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'; done\n"
+        )
+        os.chmod(self.f.tunnel, 0o700)
+        receipt, _ = M.check_profile(self.f.profile)
+        self.assertEqual(receipt["result"], "blocked")
+        self.assertEqual(receipt["tunnel_client_version"], "unknown")
+        self.assertIn("TUNNEL_CLIENT_VERSION_CHECK_FAILED", receipt["reason"])
+
     def test_group_or_world_writable_executables_are_rejected(self):
         os.chmod(self.f.tunnel, 0o775)
         receipt, _ = M.check_profile(self.f.profile)
@@ -152,6 +164,13 @@ class ContractTests(unittest.TestCase):
         receipt, _ = M.check_profile(self.f.profile)
         self.assertEqual(receipt["result"], "blocked")
         self.assertIn("TUNNEL_CLIENT_ANCESTOR_WRITABLE_BY_OTHERS", receipt["reason"])
+
+    def test_state_directory_writable_ancestor_is_rejected(self):
+        state_parent = self.f.state_dir.parent
+        os.chmod(state_parent, 0o770)
+        receipt, _ = M.check_profile(self.f.profile)
+        self.assertEqual(receipt["result"], "blocked")
+        self.assertIn("STATE_DIR_ANCESTOR_WRITABLE_BY_OTHERS", receipt["reason"])
 
     def test_runtime_key_size_is_bounded_before_read(self):
         with self.f.key.open("wb") as handle:
@@ -247,6 +266,58 @@ class ContractTests(unittest.TestCase):
             self.assertIn("reason=RUN_ALREADY_ACTIVE", output.getvalue())
         finally:
             os.close(fd)
+
+    def test_default_executor_couples_child_lifetime_to_wrapper(self):
+        captured = {}
+        original_popen = M.subprocess.Popen
+        original_signal = M.signal.signal
+        original_getsignal = M.signal.getsignal
+
+        class FakeProcess:
+            def send_signal(self, signum):
+                captured.setdefault("signals", []).append(signum)
+
+            def wait(self):
+                return 0
+
+        def fake_popen(*args, **kwargs):
+            captured["args"] = args
+            captured["kwargs"] = kwargs
+            return FakeProcess()
+
+        M.subprocess.Popen = fake_popen
+        M.signal.getsignal = lambda _signum: M.signal.SIG_DFL
+        M.signal.signal = lambda *_args: None
+        try:
+            code = M._default_executor("/fixed/tunnel-client", ["/fixed/tunnel-client", "run"], {"PATH": M.FIXED_PATH})
+        finally:
+            M.subprocess.Popen = original_popen
+            M.signal.signal = original_signal
+            M.signal.getsignal = original_getsignal
+
+        self.assertEqual(code, 0)
+        self.assertTrue(captured["kwargs"]["close_fds"])
+        self.assertIs(captured["kwargs"]["preexec_fn"], M._set_parent_death_signal)
+
+    def test_parent_death_preexec_installs_sigterm(self):
+        calls = []
+        original_cdll = M.ctypes.CDLL
+        original_getppid = M.os.getppid
+
+        class FakeLibc:
+            def prctl(self, *args):
+                calls.append(args)
+                return 0
+
+        M.ctypes.CDLL = lambda *_args, **_kwargs: FakeLibc()
+        M.os.getppid = lambda: 123
+        try:
+            M._set_parent_death_signal()
+        finally:
+            M.ctypes.CDLL = original_cdll
+            M.os.getppid = original_getppid
+
+        self.assertEqual(calls, [(M.PR_SET_PDEATHSIG, M.signal.SIGTERM, 0, 0, 0)])
 
     def test_run_lock_fd_is_close_on_exec(self):
         fd = M._acquire_run_lock(self.f.profile)

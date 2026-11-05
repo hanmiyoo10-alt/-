@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import ctypes
 import fcntl
 import os
 import re
+import selectors
 import signal
 import stat
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
@@ -19,6 +22,9 @@ OFFICIAL_RELEASE_VERSION_RE = re.compile(
 )
 TUNNEL_ID_RE = re.compile(r"^tunnel_[0-9a-f]{32}$")
 FIXED_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+VERSION_PROBE_MAX_BYTES = 256
+VERSION_PROBE_TIMEOUT_SECONDS = 5.0
+PR_SET_PDEATHSIG = 1
 
 @dataclass(frozen=True)
 class Profile:
@@ -46,15 +52,59 @@ Runner = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
 
 
 def _default_runner(argv: Sequence[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        list(argv),
-        text=True,
+    args = list(argv)
+    process = subprocess.Popen(
+        args,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
-        timeout=5,
-        check=False,
         env={"PATH": FIXED_PATH, "HOME": str(PRODUCTION_PROFILE.home), "LANG": "C.UTF-8"},
+        close_fds=True,
     )
+    if process.stdout is None:
+        process.kill()
+        process.wait()
+        return subprocess.CompletedProcess(args, 1, stdout="", stderr="")
+
+    selector = selectors.DefaultSelector()
+    data = bytearray()
+    overflow = False
+    timed_out = False
+    deadline = time.monotonic() + VERSION_PROBE_TIMEOUT_SECONDS
+    try:
+        os.set_blocking(process.stdout.fileno(), False)
+        selector.register(process.stdout, selectors.EVENT_READ)
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                timed_out = True
+                break
+            events = selector.select(remaining)
+            if not events:
+                timed_out = True
+                break
+            remaining_bytes = VERSION_PROBE_MAX_BYTES + 1 - len(data)
+            chunk = os.read(process.stdout.fileno(), min(4096, max(1, remaining_bytes)))
+            if not chunk:
+                break
+            data.extend(chunk)
+            if len(data) > VERSION_PROBE_MAX_BYTES:
+                overflow = True
+                break
+    finally:
+        selector.close()
+
+    if overflow or timed_out:
+        process.kill()
+    try:
+        returncode = process.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        returncode = process.wait()
+
+    stdout = bytes(data).decode("utf-8", errors="replace")
+    if overflow or timed_out:
+        returncode = 1
+    return subprocess.CompletedProcess(args, returncode, stdout=stdout, stderr="")
 
 
 def _receipt(**overrides: object) -> dict[str, object]:
@@ -263,10 +313,13 @@ def check_profile(profile: Profile = PRODUCTION_PROFILE, runner: Runner | None =
     if key_problem:
         reasons.append(f"RUNTIME_KEY_REF_{key_problem}")
 
+    state_ancestor = _ancestor_problem(profile.state_dir)
+    if state_ancestor:
+        reasons.append(f"STATE_DIR_ANCESTOR_{state_ancestor}")
     state_problem = _private_dir(profile.state_dir)
     if state_problem:
         reasons.append(f"STATE_DIR_{state_problem}")
-    else:
+    elif state_ancestor is None:
         if profile.health_url_file.parent != profile.state_dir:
             reasons.append("HEALTH_URL_PARENT_INVALID")
         elif profile.health_url_file.exists() or profile.health_url_file.is_symlink():
@@ -364,12 +417,21 @@ def _acquire_run_lock(profile: Profile) -> int:
         raise
 
 
+def _set_parent_death_signal() -> None:
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM, 0, 0, 0) != 0:
+        os._exit(127)
+    if os.getppid() == 1:
+        os._exit(127)
+
+
 def _default_executor(path: str, argv: Sequence[str], env: Mapping[str, str]) -> int:
     process = subprocess.Popen(
         list(argv),
         executable=path,
         env=dict(env),
         close_fds=True,
+        preexec_fn=_set_parent_death_signal,
     )
     previous_handlers: dict[int, object] = {}
 

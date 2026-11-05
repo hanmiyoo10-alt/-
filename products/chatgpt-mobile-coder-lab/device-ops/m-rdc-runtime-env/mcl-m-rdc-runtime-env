@@ -1,0 +1,192 @@
+#!/bin/sh
+set -eu
+# mcl-m-rdc-runtime-env-owner:v1
+
+EXPECTED_PRE_RUN_SHA='f0f5f85c9a5ca41572d59a8187ae94d505a33c0e9ecdee87769517ba2f81e9cc'
+EXPECTED_MANAGED_RUN_SHA='aed27a581721481a76c42e25fe137c3baf63de87fad7412f7905d473f0ddae37'
+SERVICE_NAME='desktop-commander-remote'
+
+HERE=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+SOURCE_SHIM="$HERE/runtime-env-forward-shim.cjs"
+
+if [ "${MCL_M_RDC_RUNTIME_ENV_TEST_MODE:-}" = "1" ]; then
+  ROOT=${MCL_M_RDC_RUNTIME_ENV_TEST_ROOT:?test root required}
+  PREFIX="$ROOT/prefix"
+  HOME_DIR="$ROOT/home"
+else
+  PREFIX='/data/data/com.termux/files/usr'
+  HOME_DIR='/data/data/com.termux/files/home'
+fi
+
+SERVICE="$PREFIX/var/service/$SERVICE_NAME"
+RUN="$SERVICE/run"
+DEST_DIR="$HOME_DIR/.local/share/mcl-m-rdc-runtime-env"
+DEST_SHIM="$DEST_DIR/runtime-env-forward-shim.cjs"
+SV="$PREFIX/bin/sv"
+
+hash_file() {
+  sha256sum "$1" | awk '{print $1}'
+}
+
+shim_state() {
+  if [ ! -e "$DEST_SHIM" ]; then
+    echo missing
+    return
+  fi
+  [ -f "$DEST_SHIM" ] || { echo drift; return; }
+  grep -Fq '// mcl-m-rdc-runtime-env-forward:v1' "$DEST_SHIM" || { echo drift; return; }
+  if cmp -s "$SOURCE_SHIM" "$DEST_SHIM"; then echo managed; else echo drift; fi
+}
+
+run_state() {
+  if [ ! -f "$RUN" ]; then
+    echo missing
+    return
+  fi
+  sha=$(hash_file "$RUN")
+  if [ "$sha" = "$EXPECTED_MANAGED_RUN_SHA" ]; then
+    echo managed
+  elif [ "$sha" = "$EXPECTED_PRE_RUN_SHA" ]; then
+    echo ready
+  else
+    echo drift
+  fi
+}
+
+emit() {
+  printf '%s\n' \
+    'schema=mcl-m-rdc-runtime-env.v1' \
+    "run=$1" \
+    "shim=$2" \
+    'details=withheld'
+}
+
+preflight_source() {
+  [ -f "$SOURCE_SHIM" ] || exit 2
+  grep -Fq '// mcl-m-rdc-runtime-env-forward:v1' "$SOURCE_SHIM" || exit 2
+  ! grep -Fq 'NODE_OPTIONS' "$SOURCE_SHIM" || exit 2
+}
+
+render_managed_run() {
+  cat <<'MCL_RUN_EOF'
+#!/data/data/com.termux/files/usr/bin/sh
+PREFIX=/data/data/com.termux/files/usr
+HOME=/data/data/com.termux/files/home
+INSTALL="$HOME/.local/share/desktop-commander-remote"
+ENTRY="$INSTALL/node_modules/@wonderwhy-er/desktop-commander/dist/index.js"
+# mcl-m-rdc-runtime-env:v1
+RUNTIME_ENV_SHIM="$HOME/.local/share/mcl-m-rdc-runtime-env/runtime-env-forward-shim.cjs"
+export PREFIX HOME PATH="$PREFIX/bin:$PATH"
+export DESKTOP_COMMANDER_DEVICE_NAME="M"
+"$PREFIX/bin/termux-wake-lock" >/dev/null 2>&1 || true
+child_pid=""
+watchdog_pid=""
+stop_watchdog() {
+  [ -n "$watchdog_pid" ] || return 0
+  "$PREFIX/bin/kill" -TERM -- "-$watchdog_pid" 2>/dev/null || true
+}
+stop_child() {
+  [ -n "$child_pid" ] || return 0
+  "$PREFIX/bin/kill" -TERM -- "-$child_pid" 2>/dev/null || true
+  i=0
+  while "$PREFIX/bin/kill" -0 "$child_pid" 2>/dev/null && [ "$i" -lt 20 ]; do
+    "$PREFIX/bin/sleep" 0.25
+    i=$((i + 1))
+  done
+  "$PREFIX/bin/kill" -KILL -- "-$child_pid" 2>/dev/null || true
+}
+trap 'stop_watchdog; stop_child; exit 0' TERM INT HUP
+cd "$HOME"
+"$PREFIX/bin/setsid" "$PREFIX/bin/node" --require "$RUNTIME_ENV_SHIM" "$ENTRY" remote 2>&1 &
+child_pid=$!
+"$PREFIX/bin/setsid" "$PREFIX/bin/sh" -c '
+  while :; do
+    "$HOME/.local/bin/rdc-health-watchdog" || true
+    "$PREFIX/bin/sleep" 60
+  done
+' >/dev/null 2>&1 &
+watchdog_pid=$!
+wait "$child_pid"
+rc=$?
+stop_watchdog
+trap - TERM INT HUP
+exit "$rc"
+MCL_RUN_EOF
+}
+
+check_only() {
+  preflight_source
+  r=$(run_state)
+  s=$(shim_state)
+  emit "$r" "$s"
+  if [ "$r" = managed ] && [ "$s" = managed ]; then return 0; fi
+  if [ "$r" = ready ] && [ "$s" = missing ]; then return 1; fi
+  return 2
+}
+
+apply_managed() {
+  preflight_source
+  r=$(run_state)
+  s=$(shim_state)
+
+  [ "$r" = managed ] || [ "$r" = ready ] || { emit "$r" "$s"; return 2; }
+  [ "$s" = missing ] || [ "$s" = managed ] || [ "$s" = drift ] || { emit "$r" "$s"; return 2; }
+  if [ "$s" = drift ] && ! grep -Fq '// mcl-m-rdc-runtime-env-forward:v1' "$DEST_SHIM" 2>/dev/null; then
+    emit "$r" "$s"
+    return 2
+  fi
+
+  if [ "$r" = ready ]; then
+    tmp="$SERVICE/.mcl-m-rdc-runtime-env.run.$$"
+    trap 'rm -f "$tmp"' EXIT HUP INT TERM
+    render_managed_run > "$tmp"
+    [ "$(hash_file "$tmp")" = "$EXPECTED_MANAGED_RUN_SHA" ] || exit 2
+    chmod 700 "$tmp"
+  fi
+
+  umask 077
+  mkdir -p "$DEST_DIR"
+  if [ "$s" != managed ]; then
+    tmp_shim="$DEST_DIR/.runtime-env-forward-shim.cjs.$$"
+    trap 'rm -f "${tmp:-}" "$tmp_shim"' EXIT HUP INT TERM
+    cat "$SOURCE_SHIM" > "$tmp_shim"
+    chmod 600 "$tmp_shim"
+    mv "$tmp_shim" "$DEST_SHIM"
+  fi
+
+  if [ "$r" = ready ]; then
+    mv "$tmp" "$RUN"
+  fi
+  trap - EXIT HUP INT TERM
+
+  r=$(run_state)
+  s=$(shim_state)
+  emit "$r" "$s"
+  [ "$r" = managed ] && [ "$s" = managed ]
+}
+
+activate() {
+  apply_managed >/dev/null
+  [ -x "$SV" ] || return 2
+  "$SV" restart "$SERVICE" >/dev/null
+  emit "$(run_state)" "$(shim_state)"
+}
+
+case "${1:-}" in
+  --check)
+    [ "$#" -eq 1 ] || exit 2
+    check_only
+    ;;
+  --apply)
+    [ "$#" -eq 1 ] || exit 2
+    apply_managed
+    ;;
+  --activate)
+    [ "$#" -eq 1 ] || exit 2
+    activate
+    ;;
+  *)
+    echo 'usage: sh mcl-m-rdc-runtime-env --check|--apply|--activate' >&2
+    exit 2
+    ;;
+esac

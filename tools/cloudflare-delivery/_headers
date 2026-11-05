@@ -1,0 +1,26 @@
+/*
+  Access-Control-Allow-Origin: *
+  Access-Control-Expose-Headers: Accept-Ranges, Content-Length, Content-Range, ETag
+  Cache-Control: public, max-age=300, must-revalidate
+  X-Content-Type-Options: nosniff
+
+/simcore/*.js
+  Content-Type: application/javascript; charset=utf-8
+
+/usage-dashboard/latest.js
+  Content-Type: application/javascript; charset=utf-8
+
+/usage-dashboard/runtime/*.mjs
+  Content-Type: application/javascript; charset=utf-8
+
+/usage-dashboard/runtime/*.cjs
+  Content-Type: application/javascript; charset=utf-8
+
+/usage-dashboard/runtime/product-manifest.json
+  Content-Type: application/json; charset=utf-8
+
+/usage-dashboard/runtime/*.sh
+  Content-Type: text/x-shellscript; charset=utf-8
+
+/termux/*
+  Content-Type: text/plain; charset=utf-8

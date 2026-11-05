@@ -217,6 +217,83 @@ test('landing_metadata manifest supports exact L identity', () => {
   assert.equal(m.workspace.kind, 'landing_metadata');
 });
 
+test('landing_residue_cleanup manifest admits exact L binding and residue hash ref', () => {
+  const m = handoff.buildManifest(manifestInput({
+    phaseId: 'landing-residue-cleanup-l',
+    route: 'L',
+    executor: 'L',
+    scopes: [
+      'path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc',
+      'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc',
+    ],
+    workspace: { kind: 'landing_residue_cleanup', branch: 'main', worktree: '/home/alsl0/nyang-repo' },
+    observedBaseSha: baseSha,
+    inputRefs: ['receipt:mcl-l-landing-residue-sha256:' + 'f'.repeat(64)],
+    expectedOutputRefs: ['path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc'],
+  }));
+  assert.equal(m.workspace.kind, 'landing_residue_cleanup');
+  assert.equal(m.inputRefs[0], 'receipt:mcl-l-landing-residue-sha256:' + 'f'.repeat(64));
+});
+test('landing_residue_cleanup manifest admits exact multi-owner profile and set digest ref', () => {
+  const scopes = [
+    'path:products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/__pycache__/mcl_gui.cpython-312.pyc',
+    'path:products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/tests/__pycache__/test_contract.cpython-312.pyc',
+    'path:products/chatgpt-mobile-coder-lab/device-ops/gui-bridge/tests/__pycache__/test_mcl_gui.cpython-312.pyc',
+    'path:products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/termux/__pycache__/heartbeat-client.cpython-312.pyc',
+    'path:products/chatgpt-mobile-coder-lab/device-ops/m-termux-lifeline/tests/__pycache__/test_contract.cpython-312.pyc',
+    'path:products/standalone/termux/screen-on/__pycache__/screen_on.cpython-312.pyc',
+    'path:products/standalone/termux/screen-on/tests/__pycache__/test_android_companion_contract.cpython-312.pyc',
+    'path:products/standalone/termux/screen-on/tests/__pycache__/test_screen_on.cpython-312.pyc',
+    'surface:mcl:l-landing-residue-cleanup-multi-owner-validation-pyc',
+  ];
+  const expectedOutputRefs = scopes.filter((item) => item.startsWith('path:'));
+  const m = handoff.buildManifest(manifestInput({
+    phaseId: 'landing-residue-cleanup-multi-owner-l', route: 'L', executor: 'L', scopes,
+    workspace: {kind:'landing_residue_cleanup',branch:'main',worktree:'/home/alsl0/nyang-repo'},
+    observedBaseSha: baseSha,
+    inputRefs: ['receipt:mcl-l-landing-residue-set-sha256:' + 'e'.repeat(64)],
+    expectedOutputRefs,
+  }));
+  assert.equal(m.workspace.kind, 'landing_residue_cleanup');
+  assert.equal(m.inputRefs[0], 'receipt:mcl-l-landing-residue-set-sha256:' + 'e'.repeat(64));
+  assert.deepEqual(m.expectedOutputRefs, [...expectedOutputRefs].sort());
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    phaseId: 'landing-residue-cleanup-multi-owner-l', route: 'L', executor: 'L', scopes: scopes.slice(1),
+    workspace: {kind:'landing_residue_cleanup',branch:'main',worktree:'/home/alsl0/nyang-repo'},
+    observedBaseSha: baseSha,
+    inputRefs: ['receipt:mcl-l-landing-residue-set-sha256:' + 'e'.repeat(64)],
+    expectedOutputRefs: expectedOutputRefs.slice(1),
+  })), /LANDING_RESIDUE_CLEANUP_SCOPE_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({
+    phaseId: 'landing-residue-cleanup-multi-owner-l', route: 'L', executor: 'L', scopes,
+    workspace: {kind:'landing_residue_cleanup',branch:'main',worktree:'/home/alsl0/nyang-repo'},
+    observedBaseSha: baseSha,
+    inputRefs: ['receipt:mcl-l-landing-residue-sha256:' + 'e'.repeat(64)],
+    expectedOutputRefs,
+  })), /LANDING_RESIDUE_CLEANUP_EVIDENCE_REF_INVALID/);
+});
+test('landing_residue_cleanup manifest rejects wrong route identity scope and base', () => {
+  const exact = {
+    phaseId: 'landing-residue-cleanup-l',
+    route: 'L',
+    executor: 'L',
+    scopes: [
+      'path:tools/repo-write/__pycache__/currentness_replay.cpython-312.pyc',
+      'surface:mcl:l-landing-residue-cleanup-currentness-replay-pyc',
+    ],
+    workspace: { kind: 'landing_residue_cleanup', branch: 'main', worktree: '/home/alsl0/nyang-repo' },
+    observedBaseSha: baseSha,
+  };
+  expectThrow(() => handoff.buildManifest(manifestInput({...exact, route:'S'})),
+    /MANIFEST_ROUTE_EXECUTOR_CONFLICT|LANDING_RESIDUE_CLEANUP_ROUTE_EXECUTOR_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...exact, workspace:{...exact.workspace, branch:'laptop/other'}})),
+    /WORKSPACE_LANDING_RESIDUE_CLEANUP_IDENTITY_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...exact, scopes:[exact.scopes[1]]})),
+    /LANDING_RESIDUE_CLEANUP_SCOPE_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...exact, observedBaseSha:null})),
+    /LANDING_RESIDUE_CLEANUP_BASE_SHA_REQUIRED/);
+});
+
 test('landing_metadata manifest rejects mismatched scope identity and missing observed head', () => {
   expectThrow(() => handoff.buildManifest(manifestInput({
     scopes: ['surface:mcl-landing-origin-main:M'],
@@ -250,15 +327,33 @@ test('landing_branch_repair manifest accepts exact S/S identity and scope', () =
   assert.equal(m.route,'S'); assert.equal(m.executor,'S');
   assert.equal(m.workspace.kind,'landing_branch_repair');
 });
-test('landing_branch_repair manifest rejects L because Step A does not admit an L repair owner', () => {
-  expectThrow(() => handoff.buildManifest(manifestInput({
+test('landing_branch_repair manifest accepts exact L/L identity and scope', () => {
+  const m = handoff.buildManifest(manifestInput({
     phaseId: 'landing-branch-repair-l',
     route: 'L',
     executor: 'L',
     scopes: ['surface:mcl-landing-branch:L'],
     workspace: { kind: 'landing_branch_repair', branch: 'main', worktree: '/home/alsl0/nyang-repo' },
     observedBaseSha: baseSha,
-  })), /WORKSPACE_LANDING_BRANCH_REPAIR_EXECUTOR_INVALID|LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID/);
+  }));
+  assert.equal(m.route, 'L');
+  assert.equal(m.executor, 'L');
+  assert.equal(m.workspace.kind, 'landing_branch_repair');
+});
+test('landing_branch_repair manifest rejects wrong L route executor identity scope and missing base', () => {
+  const base = {
+    phaseId: 'landing-branch-repair-l',
+    route: 'L',
+    executor: 'L',
+    scopes: ['surface:mcl-landing-branch:L'],
+    workspace: { kind: 'landing_branch_repair', branch: 'main', worktree: '/home/alsl0/nyang-repo' },
+    observedBaseSha: baseSha,
+  };
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, route:'M'})), /MANIFEST_ROUTE_EXECUTOR_CONFLICT|LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, executor:'M'})), /MANIFEST_ROUTE_EXECUTOR_CONFLICT|WORKSPACE_LANDING_BRANCH_REPAIR_IDENTITY_INVALID|LANDING_BRANCH_REPAIR_ROUTE_EXECUTOR_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, scopes:['surface:mcl-landing-origin-main:L']})), /LANDING_BRANCH_REPAIR_SCOPE_INVALID/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, observedBaseSha:null})), /LANDING_BRANCH_REPAIR_BASE_SHA_REQUIRED/);
+  expectThrow(() => handoff.buildManifest(manifestInput({...base, workspace:{...base.workspace, branch:'laptop/other'}})), /WORKSPACE_LANDING_BRANCH_REPAIR_IDENTITY_INVALID/);
 });
 
 test('landing_branch_repair manifest rejects fallback mismatched identity scope and missing base', () => {
@@ -472,6 +567,13 @@ test('library contains no GitHub network device or shell writer path', () => {
 test('library contains no time-based lifetime or latest-wins primitive', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '..', 'task-handoff.cjs'), 'utf8');
   assert.doesNotMatch(source, /Date\.now|expiresAt|ttl|latestWins|latest_wins/i);
+});
+
+test('bounded manifest scope ceiling admits 18 and rejects 25', () => {
+  const scopes18 = Array.from({length:18}, (_,i) => `path:products/chatgpt-mobile-coder-lab/coordination/handoff-scope-${i}.cjs`);
+  assert.equal(handoff.buildManifest(manifestInput({scopes:scopes18})).scopes.length, 18);
+  const scopes25 = Array.from({length:25}, (_,i) => `path:products/chatgpt-mobile-coder-lab/coordination/handoff-scope-${i}.cjs`);
+  expectThrow(() => handoff.buildManifest(manifestInput({scopes:scopes25})), /MANIFEST_SCOPES_INVALID/);
 });
 
 if (process.exitCode) process.exit(process.exitCode);

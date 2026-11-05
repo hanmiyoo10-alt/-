@@ -1,0 +1,44 @@
+# Cloudflare Delivery
+
+Bounded public delivery adapter for the exact nine artifacts already promoted into the private `hanmiyoo10-alt/myang` mirror.
+
+This tool is not a release authority. It refuses to stage when the private mirror provenance no longer matches the current canonical source refs.
+
+## V1 shape
+
+```text
+canonical release/main refs
+→ private myang promotion branches
+→ exact parity/currentness verification
+→ disposable dist/
+→ Cloudflare Workers Static Assets
+→ fixed three-path Range adapter
+→ update.myang.link
+```
+
+V1 now has one narrow Worker script because live #3669 evidence proved direct Static Assets does not satisfy the mandatory single-range contract. The Worker runs first only for the three policy `rangeProof=true` paths, delegates ordinary requests to the `ASSETS` binding, and handles only explicit `bytes=start-end` GET ranges. `If-Range` is evaluated against the selected asset before slicing: only an exact strong ETag match, or an exact Last-Modified match with a conservatively strong date validator, may return `206`; otherwise the complete upstream response is returned. R2, KV, D1, Durable Objects, service bindings, caller-selected repository/ref/path/hostname, and automatic release hooks remain absent.
+
+`wrangler.jsonc` deliberately has no route. The fixed Worker name and Custom Domain remain unchanged. After `update.myang.link` is attached to the fixed Worker, the manual workflow can publish later asset revisions without changing routing.
+
+## Commands
+
+```text
+npm ci
+node stage.mjs --mirror-dir /path/to/private-myang --output-dir ./dist --report /tmp/stage.json
+npm test
+npm run check
+npm run dry-run
+node verify-live.mjs --stage-report /tmp/stage.json --report /tmp/live.json
+```
+
+The CLI accepts no public hostname. Live verification always uses the fixed `publicBaseUrl` in `policy.json`.
+
+## Runtime secrets
+
+The checked-in workflow names secret inputs but never stores values:
+
+- `MYANG_DISTRIBUTION_READ_SSH_KEY`
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
+Provisioning those values, creating the fixed Worker, attaching the Custom Domain, and changing product consumer URLs are outside IMPLEMENTATION_PR.

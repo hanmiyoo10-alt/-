@@ -1,0 +1,416 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -u
+
+PREFIX=/data/data/com.termux/files/usr
+HOME_DIR=/data/data/com.termux/files/home
+CHECK_INTERVAL=15
+
+RELAY_LAUNCHER="$HOME_DIR/.termux/boot/22-pocketrisu-notify-relay-supervisor"
+RELAY_LAUNCHER_SHA=f1015e8dea71226bad9f3de2dda0a2102fa2a6027012ffd15ed45fdb3e227e35
+
+NOTIFY_SERVICE="$PREFIX/var/service/pocketrisu-notify-tunnel"
+NOTIFY_RUN="$NOTIFY_SERVICE/run"
+NOTIFY_RUN_SHA=91351ceddc958c609673ac28ff99a23dfd5a7b9bfc2b21ca7b35f07170ad46f3
+NOTIFY_REVERSE='-R 127.0.0.1:39120:127.0.0.1:39120'
+
+STATE="$HOME_DIR/.local/state/pocketrisu-notification-transport-guard"
+GUARD_PIDFILE="$STATE/guard.pid"
+GUARD_LOCKDIR="$STATE/guard.lock"
+NOTIFY_LOCKFILE="$STATE/notify.ensure.lock"
+LAUNCHER="$HOME_DIR/.termux/boot/23-pocketrisu-notification-transport-guard"
+
+SV="$PREFIX/bin/sv"
+RUNSV="$PREFIX/bin/runsv"
+NOHUP="$PREFIX/bin/nohup"
+SLEEP="$PREFIX/bin/sleep"
+FLOCK="$PREFIX/bin/flock"
+SHA256SUM="$PREFIX/bin/sha256sum"
+STAT="$PREFIX/bin/stat"
+PS="$PREFIX/bin/ps"
+MKDIR="$PREFIX/bin/mkdir"
+TR="$PREFIX/bin/tr"
+SSH="$PREFIX/bin/ssh"
+
+MODE="${1:---loop}"
+
+state_dir_safe() {
+    if [ -e "$STATE" ] || [ -L "$STATE" ]; then
+        [ -d "$STATE" ] && [ ! -L "$STATE" ] || return 1
+    else
+        "$MKDIR" -p "$STATE" || return 1
+        [ -d "$STATE" ] && [ ! -L "$STATE" ] || return 1
+    fi
+    return 0
+}
+
+exact_file() {
+    file="$1"
+    expected_mode="$2"
+    expected_sha="$3"
+    [ -f "$file" ] && [ ! -L "$file" ] || return 1
+    [ "$("$STAT" -c '%a' "$file" 2>/dev/null || true)" = "$expected_mode" ] || return 1
+    [ "$("$SHA256SUM" "$file" 2>/dev/null | { IFS=' ' read -r sum _; printf '%s' "$sum"; })" = "$expected_sha" ] || return 1
+}
+
+pidfile_safe() {
+    pidfile="$1"
+    if [ -e "$pidfile" ] || [ -L "$pidfile" ]; then
+        [ -f "$pidfile" ] && [ ! -L "$pidfile" ] || return 1
+    fi
+    return 0
+}
+
+pid_state() {
+    pidfile="$1"
+    identity="$2"
+    pidfile_safe "$pidfile" || return 2
+    [ -r "$pidfile" ] || return 1
+    pid="$(cat "$pidfile" 2>/dev/null || true)"
+    case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+    kill -0 "$pid" 2>/dev/null || return 1
+    [ -r "/proc/$pid/stat" ] || return 1
+    IFS= read -r statline < "/proc/$pid/stat" || return 2
+    stat_tail=${statline#*) }
+    proc_state=${stat_tail%% *}
+    [ -n "$proc_state" ] || return 2
+    [ "$proc_state" != Z ] || return 1
+    cmdline="$("$TR" '\000' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+    case "$identity:$cmdline" in
+        guard:*pocketrisu-notification-transport-guard*--loop*) return 0 ;;
+        *) return 2 ;;
+    esac
+}
+
+guard_pid_state() {
+    pid_state "$GUARD_PIDFILE" guard
+}
+
+acquire_guard_lock() {
+    state_dir_safe || return 2
+    if [ -e "$GUARD_LOCKDIR" ] || [ -L "$GUARD_LOCKDIR" ]; then
+        [ -d "$GUARD_LOCKDIR" ] && [ ! -L "$GUARD_LOCKDIR" ] || return 2
+        guard_pid_state
+        state_rc=$?
+        [ "$state_rc" -ne 0 ] || return 1
+        [ "$state_rc" -ne 2 ] || return 2
+        rmdir "$GUARD_LOCKDIR" 2>/dev/null || return 2
+    fi
+    pidfile_safe "$GUARD_PIDFILE" || return 2
+    "$MKDIR" "$GUARD_LOCKDIR" 2>/dev/null || return 1
+    printf '%s\n' "$$" > "$GUARD_PIDFILE"
+    return 0
+}
+
+release_guard_lock() {
+    current="$(cat "$GUARD_PIDFILE" 2>/dev/null || true)"
+    if [ "$current" = "$$" ]; then
+        rm -f "$GUARD_PIDFILE"
+    fi
+    rmdir "$GUARD_LOCKDIR" 2>/dev/null || true
+}
+
+guard_terminate() {
+    release_guard_lock
+    trap - EXIT INT TERM HUP
+    exit 0
+}
+
+relay_identity_ok() {
+    exact_file "$RELAY_LAUNCHER" 700 "$RELAY_LAUNCHER_SHA" || return 1
+    [ -x "$RELAY_LAUNCHER" ]
+}
+
+relay_once() {
+    relay_identity_ok || return 2
+    "$RELAY_LAUNCHER" --ensure >/dev/null 2>&1
+}
+
+notify_identity_ok() {
+    [ -d "$NOTIFY_SERVICE" ] && [ ! -L "$NOTIFY_SERVICE" ] || return 1
+    exact_file "$NOTIFY_RUN" 700 "$NOTIFY_RUN_SHA" || return 1
+    for bin in "$SV" "$RUNSV" "$NOHUP" "$SLEEP" "$FLOCK" "$SHA256SUM" "$STAT" "$PS" "$MKDIR" "$TR"; do
+        [ -x "$bin" ] || return 1
+    done
+}
+
+notify_classify() {
+    NOTIFY_IDENTITY=pass
+    NOTIFY_SUPERVISION=unknown
+    NOTIFY_PROCESS=unknown
+    NOTIFY_RECOVERY=blocked
+
+    notify_identity_ok || {
+        NOTIFY_IDENTITY=drift
+        return 0
+    }
+
+    operator_down=0
+    [ -e "$NOTIFY_SERVICE/down" ] && operator_down=1
+
+    status="$("$SV" status "$NOTIFY_SERVICE" 2>&1 || true)"
+    case "$status" in
+        run:*) sv_state=run ;;
+        down:*) sv_state=down ;;
+        *"runsv not running"*|*"unable to open supervise/ok: file does not exist"*) sv_state=missing ;;
+        *) sv_state=unknown ;;
+    esac
+
+    psout="$("$PS" -eo pid=,ppid=,args= 2>/dev/null)" || {
+        NOTIFY_SUPERVISION=unknown
+        NOTIFY_PROCESS=unknown
+        return 0
+    }
+
+    runsv_count=0
+    ssh_count=0
+    ssh_alt_count=0
+    runsv_alt_count=0
+    runsv_pid=
+    ssh_ppid=
+    malformed=0
+
+    while IFS=' ' read -r pid ppid args; do
+        [ -n "${pid:-}" ] || continue
+        case "$pid:$ppid" in
+            *[!0-9:]*|:*) malformed=1; continue ;;
+        esac
+
+        if [ "$args" = "$RUNSV $NOTIFY_SERVICE" ]; then
+            runsv_count=$((runsv_count + 1))
+            runsv_pid="$pid"
+        else
+            case "$args" in
+                *"$NOTIFY_SERVICE"*) runsv_alt_count=$((runsv_alt_count + 1)) ;;
+            esac
+        fi
+
+        case "$args" in
+            "$SSH "*|"ssh "*)
+                case " $args " in
+                    *" $NOTIFY_REVERSE "*)
+                        ssh_count=$((ssh_count + 1))
+                        ssh_ppid="$ppid"
+                        ;;
+                    *39120*)
+                        ssh_alt_count=$((ssh_alt_count + 1))
+                        ;;
+                esac
+                ;;
+        esac
+    done <<EOF_PS
+$psout
+EOF_PS
+
+    [ "$malformed" -eq 0 ] || {
+        NOTIFY_SUPERVISION=ambiguous
+        NOTIFY_PROCESS=ambiguous
+        return 0
+    }
+    [ "$runsv_alt_count" -eq 0 ] && [ "$ssh_alt_count" -eq 0 ] || {
+        NOTIFY_SUPERVISION=ambiguous
+        NOTIFY_PROCESS=ambiguous
+        return 0
+    }
+    [ "$runsv_count" -le 1 ] && [ "$ssh_count" -le 1 ] || {
+        NOTIFY_SUPERVISION=ambiguous
+        NOTIFY_PROCESS=ambiguous
+        return 0
+    }
+
+    if [ "$operator_down" -eq 1 ]; then
+        NOTIFY_SUPERVISION=operator_down
+        case "$runsv_count:$ssh_count" in
+            0:0) NOTIFY_PROCESS=absent ;;
+            1:0) NOTIFY_PROCESS=preserved ;;
+            1:1)
+                if [ "$ssh_ppid" = "$runsv_pid" ]; then
+                    NOTIFY_PROCESS=supervised
+                else
+                    NOTIFY_SUPERVISION=ambiguous
+                    NOTIFY_PROCESS=ambiguous
+                    return 0
+                fi
+                ;;
+            0:1)
+                if [ "$ssh_ppid" = 1 ]; then
+                    NOTIFY_PROCESS=orphan_present
+                else
+                    NOTIFY_SUPERVISION=ambiguous
+                    NOTIFY_PROCESS=ambiguous
+                    return 0
+                fi
+                ;;
+            *)
+                NOTIFY_SUPERVISION=ambiguous
+                NOTIFY_PROCESS=ambiguous
+                return 0
+                ;;
+        esac
+        NOTIFY_RECOVERY=operator_down
+        return 0
+    fi
+
+    case "$sv_state:$runsv_count" in
+        run:1)
+            NOTIFY_SUPERVISION=run
+            if [ "$ssh_count" -eq 0 ]; then
+                NOTIFY_PROCESS=starting
+                NOTIFY_RECOVERY=not_needed
+            elif [ "$ssh_ppid" = "$runsv_pid" ]; then
+                NOTIFY_PROCESS=supervised
+                NOTIFY_RECOVERY=not_needed
+            else
+                NOTIFY_SUPERVISION=ambiguous
+                NOTIFY_PROCESS=ambiguous
+            fi
+            return 0
+            ;;
+        down:1)
+            NOTIFY_SUPERVISION=down
+            if [ "$ssh_count" -eq 0 ]; then
+                NOTIFY_PROCESS=preserved
+                NOTIFY_RECOVERY=not_needed
+            elif [ "$ssh_ppid" = "$runsv_pid" ]; then
+                NOTIFY_PROCESS=supervised
+                NOTIFY_RECOVERY=not_needed
+            else
+                NOTIFY_SUPERVISION=ambiguous
+                NOTIFY_PROCESS=ambiguous
+            fi
+            return 0
+            ;;
+        missing:0)
+            NOTIFY_SUPERVISION=missing
+            if [ "$ssh_count" -eq 0 ]; then
+                NOTIFY_PROCESS=absent
+                NOTIFY_RECOVERY=eligible
+            elif [ "$ssh_ppid" = 1 ]; then
+                NOTIFY_PROCESS=orphan_present
+                NOTIFY_RECOVERY=orphan_present
+            else
+                NOTIFY_PROCESS=ambiguous
+            fi
+            return 0
+            ;;
+        *)
+            NOTIFY_SUPERVISION=ambiguous
+            NOTIFY_PROCESS=ambiguous
+            return 0
+            ;;
+    esac
+}
+
+notify_lock_safe() {
+    state_dir_safe || return 2
+    if [ -e "$NOTIFY_LOCKFILE" ] || [ -L "$NOTIFY_LOCKFILE" ]; then
+        [ -f "$NOTIFY_LOCKFILE" ] && [ ! -L "$NOTIFY_LOCKFILE" ] || return 2
+    fi
+    exec 8<>"$NOTIFY_LOCKFILE" || return 2
+    [ -f "$NOTIFY_LOCKFILE" ] && [ ! -L "$NOTIFY_LOCKFILE" ] || {
+        exec 8>&-
+        return 2
+    }
+    "$FLOCK" -n 8 >/dev/null 2>&1
+    lock_rc=$?
+    case "$lock_rc" in
+        0) return 0 ;;
+        1) exec 8>&-; return 1 ;;
+        *) exec 8>&-; return 2 ;;
+    esac
+}
+
+notify_locked_ensure() {
+    notify_classify
+    case "$NOTIFY_RECOVERY" in
+        eligible)
+            ;;
+        orphan_present|not_needed|operator_down)
+            return 0
+            ;;
+        *)
+            return 2
+            ;;
+    esac
+
+    "$NOHUP" "$RUNSV" "$NOTIFY_SERVICE" </dev/null >/dev/null 2>&1 8>&- &
+    i=0
+    while [ "$i" -lt 15 ]; do
+        "$SLEEP" 1
+        notify_classify
+        if [ "$NOTIFY_IDENTITY" = pass ] && [ "$NOTIFY_SUPERVISION" = run ] && [ "$NOTIFY_PROCESS" = supervised ]; then
+            return 0
+        fi
+        if [ "$NOTIFY_IDENTITY" != pass ] || [ "$NOTIFY_SUPERVISION" = ambiguous ] || [ "$NOTIFY_PROCESS" = ambiguous ]; then
+            return 2
+        fi
+        i=$((i + 1))
+    done
+    return 1
+}
+
+notify_once() {
+    notify_classify
+    case "$NOTIFY_RECOVERY" in
+        orphan_present|not_needed|operator_down) return 0 ;;
+        eligible) ;;
+        *) return 2 ;;
+    esac
+
+    notify_lock_safe
+    lock_rc=$?
+    if [ "$lock_rc" -eq 1 ]; then
+        notify_classify
+        case "$NOTIFY_RECOVERY" in
+            orphan_present|not_needed|operator_down) return 0 ;;
+            *) return 2 ;;
+        esac
+    fi
+    [ "$lock_rc" -eq 0 ] || return 2
+
+    notify_locked_ensure
+    rc=$?
+    exec 8>&-
+    return "$rc"
+}
+
+ensure_anchor() {
+    [ -f "$LAUNCHER" ] && [ ! -L "$LAUNCHER" ] && [ -x "$LAUNCHER" ] || return 1
+    "$LAUNCHER" --ensure-anchor >/dev/null 2>&1
+}
+
+transport_once() {
+    relay_rc=0
+    notify_rc=0
+    relay_once || relay_rc=$?
+    notify_once || notify_rc=$?
+    if [ "$relay_rc" -eq 2 ] || [ "$notify_rc" -eq 2 ]; then
+        return 2
+    fi
+    if [ "$relay_rc" -ne 0 ] || [ "$notify_rc" -ne 0 ]; then
+        return 1
+    fi
+    return 0
+}
+
+case "$MODE" in
+    --once)
+        transport_once
+        ;;
+    --loop)
+        acquire_guard_lock
+        lock_rc=$?
+        [ "$lock_rc" -ne 1 ] || exit 0
+        [ "$lock_rc" -ne 2 ] || exit 2
+        trap release_guard_lock EXIT
+        trap guard_terminate INT TERM HUP
+        while :; do
+            transport_once || true
+            ensure_anchor || true
+            "$SLEEP" "$CHECK_INTERVAL"
+        done
+        ;;
+    *)
+        printf 'usage: %s [--once|--loop]\n' "$0" >&2
+        exit 2
+        ;;
+esac

@@ -14,9 +14,9 @@ const allowedProductionWriters = new Set([
 const inventory = JSON.parse(fs.readFileSync('.github/usage-dashboard/legacy-release-authority.json','utf8'));
 
 assert.equal(inventory.schemaVersion, 1);
-assert.equal(inventory.retired.length, 16, 'all legacy Usage Dashboard release writers must be inventoried');
+assert.equal(inventory.retired.length, 17, 'all legacy Usage Dashboard release writers must be inventoried');
 assert.equal(inventory.retired.filter((item) => item.classification === 'ACTIVE_LEGACY_WRITER').length, 1);
-assert.equal(inventory.retired.filter((item) => item.classification === 'DORMANT_LEGACY_WRITER').length, 15);
+assert.equal(inventory.retired.filter((item) => item.classification === 'DORMANT_LEGACY_WRITER').length, 16);
 for (const item of inventory.retired) {
   assert.match(item.blobSha, /^[0-9a-f]{40}$/);
   assert.equal(fs.existsSync(item.path), false, `${item.path} must be retired from active Actions`);
@@ -44,6 +44,10 @@ for (const name of workflowNames) {
   const source = fs.readFileSync(file,'utf8');
   const touchesRelease = source.includes('release-usage-dashboard');
   const writeCapable = /contents:\s*write/.test(source) || /git\s+push[^\n]*release-usage-dashboard/.test(source) || /git\s+switch[^\n]*release-usage-dashboard/.test(source);
+  const usageDashboardRelated = /\/(?:usage-dashboard-|reusable-usage-dashboard-|stage-local-usage-)/.test(file);
+  if (usageDashboardRelated) {
+    assert.doesNotMatch(source, /git\s+push[^\n]*(?:HEAD:main|refs\/heads\/main)/, `Usage Dashboard workflow must not push directly to main: ${file}`);
+  }
   if (touchesRelease && writeCapable) {
     assert.ok(allowedProductionWriters.has(file), `unexpected Usage Dashboard production writer: ${file}`);
   }

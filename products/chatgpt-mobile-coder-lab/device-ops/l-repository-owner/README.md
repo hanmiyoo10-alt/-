@@ -114,6 +114,12 @@ for the prior manifest, prior blocked completion receipt, blocker-repair stage
 receipt, and exact prepared-diff digest. Ordinary stage-entry manifests cannot
 enter this path.
 
+That legacy lineage remains unchanged. A second exact general-interrupted-recovery
+profile accepts only the reviewed recovery-rebind `COORDINATION` manifest and
+binds its native prior-manifest, `mcl-interrupted-recovery` classification digest,
+and `mcl-dirty-diff` prepared digest. The two vocabularies are not interchangeable,
+and ordinary coordination manifests remain ineligible.
+
 The request contains only a bounded commit message, exact expected paths, the
 prepared digest and the three recovery-lineage digests. It cannot select a
 branch, worktree, base, current-main SHA, remote, executable, Git command, merge
@@ -154,6 +160,61 @@ owner and coordination contract checks run from the exact current-source snapsho
 that invoked the owner. Changed candidate CJS syntax and Git diff checks run
 against the real feature workspace.
 
+## Workflow-file OAuth preflight
+
+When the actual candidate diff touches a path below `.github/workflows/`,
+GitHub requires an OAuth credential with the `workflow` scope to add, update,
+delete, or rename that workflow through Git transport. Workflow-touch detection
+is derived from Git's rename-aware `--name-status -z -M` candidate diff and
+includes both source and destination paths for rename/copy records.
+
+Normal `apply` performs this classification after the patch has been staged
+but before commit, so a missing or unknown workflow capability fails closed in
+the existing PREPARED state. `continue-prepared` derives the same candidate
+paths from the staged PREPARED diff or from the original candidate commit
+relative to the reviewed base, never from later current-main merge noise.
+
+For workflow-touch candidates the owner reads the effective push URL with
+`git remote get-url --push --all origin`. Exactly one push URL must exist and
+it must equal `https://github.com/hanmiyoo10-alt/-.git`. The owner then probes
+OAuth scopes with fixed `/usr/bin/gh api -i user` under the sanitized child
+environment. The actual workflow-path push is explicitly bound to that same gh
+credential only after a key-name-only Git-config preflight proves there are
+no URL-specific `http.<url>.extraHeader` entries at any path depth. The owner
+never reads those header values. Generic `http.extraHeader` remains permitted
+because the workflow push clears it explicitly; any URL-specific variant fails
+closed before commit/push so longer smart-HTTP endpoint matches cannot override
+the reviewed credential binding. As defense in depth, the push also clears
+inherited generic, GitHub-host, and exact repository-URL HTTPS headers, then
+resets both host-wide and exact repository-URL credential helpers and binds
+both scopes to exactly `!/usr/bin/gh auth git-credential`.
+
+The preflight parses only the `X-OAuth-Scopes` response header and never reads,
+emits, refreshes, or changes token/password/header credential material.
+
+```text
+no workflow-touch path -> existing behavior unchanged
+workflow touch + effective push URL not exactly fixed HTTPS origin
+  -> BLOCKED / GITHUB_PUSH_CREDENTIAL_BINDING_REQUIRED
+workflow touch + push URL evidence unavailable
+  -> UNKNOWN / GITHUB_WORKFLOW_ORIGIN_UNOBSERVED
+workflow touch + known workflow scope absent
+  -> BLOCKED / GITHUB_WORKFLOW_SCOPE_REQUIRED
+workflow touch + scope evidence unavailable/ambiguous
+  -> UNKNOWN / GITHUB_AUTH_SCOPE_UNOBSERVED
+workflow touch + URL-specific http extraHeader config present
+  -> BLOCKED / GITHUB_HTTP_AUTH_HEADER_BINDING_REQUIRED
+workflow touch + config key-name evidence unavailable/malformed
+  -> UNKNOWN / GITHUB_HTTP_AUTH_HEADER_CONFIG_UNOBSERVED
+workflow touch + exact push URL + workflow scope + clean header-key preflight
+  -> continue through existing owner gates
+```
+
+The owner never runs `gh auth refresh`, opens an authorization flow, or mutates
+GitHub credentials. Adding `workflow` remains an explicit user-controlled
+prerequisite. Existing non-force push, remote-head readback, holder, D-013/D-014,
+PR, merge, release and production boundaries are unchanged.
+
 ## Fixed validation
 
 Before commit the owner always runs repository-owned checks for:
@@ -179,3 +240,100 @@ state, or prove Step-C live L execution. Those remain separately owned gates.
 Model selection is orthogonal and remains
 `UNPINNED / TASK_SELECTED / BENCHMARK_REQUIRED` until representative L
 workloads are benchmarked.
+
+## Existing-PR review update
+
+The literal `review-update` operation is the only reviewed L effect for
+publishing a same-packet review fix to an already-open `laptop/*` PR branch.
+It does not create another PR and it does not widen normal `apply` or
+`continue-prepared`.
+
+```text
+MCL_WORKSPACE_HOLDER_CLAIM=<ephemeral-claim> \
+node mcl-l-repository-owner.cjs review-update \
+  --manifest <file> --ledger <file> --packet <file> \
+  --review-update-request <request> --patch <patch> --pr-request <pr> --apply
+```
+
+The review-update request binds the packet, bounded commit message, exact old
+PR head, exact expected paths, and exact patch SHA-256. Before effect, the
+owner requires the active L/L D-013 + D-014 + holder, the exact feature
+branch/worktree/remote ref, and exactly one open non-draft PR on that branch
+with base `main`, the supplied non-closing title/body, and the exact old head.
+Dirty, untracked, unmerged, or unexpected staged state fails closed.
+
+One narrow local reconciliation is allowed when an external reviewed currentizer
+has already advanced the exact remote branch and same PR to the request's old
+head while the fixed clean local feature worktree still points to an older
+ancestor. The owner requires remote head == PR head == request old head, proves
+the clean local head is an ancestor of that exact commit, then performs only a
+local `git merge --ff-only <old-head>` and requires exact readback before entering
+READY. It never fetches, pulls, resets, rebases, stashes, cleans, checks out,
+switches, force-pushes, or changes the remote/PR during this reconciliation.
+
+The supplied patch is reconstructed in a private temporary index at the exact
+old PR head. Its changed paths, ordinary `100644` modes, binary-diff digest,
+and whitespace integrity must match the request.
+
+The owner independently reads current protected main and replays the prepared
+payload against that tree before commit. An ordinary unmerged PR head may
+diverge from main: review-update requires the exact L landing, canonical origin,
+clean landing, remote/protected-main agreement, and both required commit objects,
+but does not require the old PR head to be an ancestor of main. For a divergent
+head, replay first derives the single exact merge-base and reconstructs the
+existing PR payload on current main, then applies the bounded review delta on
+top. Original PR paths and review-fix paths are verified as separate tree-entry
+contracts, and replay fails closed on conflict, ambiguity, path drift, or
+payload drift. An empty original PR payload is valid and leaves the bounded
+review delta as the only replay payload. A review delta may delete or rename
+ordinary `100644` paths: deleted sides are mode-checked against the old PR
+head and surviving sides against the reconstructed index. If the reviewed
+payload exactly cancels the original PR change, a successful replay/currentized
+diff may resolve to the exact empty path set; it must still equal the expected
+changed-path set. Rename-aware old/new path identity is preserved through staged
+and committed review-update classification. Validation syntax-checks only changed
+CommonJS paths that still exist after the review delta; deleted paths remain
+covered by scope, mode and replay proof instead. Replay proof does not modify the
+feature worktree.
+
+The exactly-once state machine is:
+
+```text
+LOCAL_BEHIND (only clean exact ancestor of remote/PR old head)
+→ READY
+→ PREPARED
+→ COMMITTED
+→ CURRENTIZED (only when current main advanced)
+→ PR_PROJECTION_PENDING (only remote=new / same exact PR=old)
+→ PUSHED
+```
+
+Observable COMMITTED, CURRENTIZED, and PUSHED states suppress duplicate effects
+after a lost acknowledgement. If a retry starts from CURRENTIZED, it must rerun
+current-main replay and the fixed validation set before any push; the final
+holder and current-main guards are then refreshed again immediately before the
+push. Currentization readback preserves the original PR payload independently
+from the review delta: original-only paths retain the old-head tree entry,
+review paths retain the reviewed candidate entry, and no other main-relative
+tree drift is accepted. If current main advanced, currentization occurs only
+after replay proof and through the fixed ordinary non-force current-main
+integration. The owner
+then verifies the intended review-fix path/blob/mode payload and performs one
+ordinary non-force push. If the remote branch reaches the exact new head while
+the same exact PR still projects the old head, the state is
+`PR_PROJECTION_PENDING`: the owner performs only a fixed bounded sequence of
+same-PR readbacks, with no commit, currentization, push, ref write, or force
+fallback. Exact new-head readback converges to `PUSHED`; an unchanged old-head
+projection returns a blocking readback-only result whose legal next action is
+`REREAD_SAME_PR_PROJECTION`. Any third PR head or PR identity drift remains
+fail-closed. Time passage alone never proves success. If the old PR head already
+equals current main, no currentization merge is added.
+
+Workflow-file candidates reuse the existing rename-aware OAuth/push-credential
+preflight. The operation exposes no caller repository, branch, worktree, PR
+number, current-main SHA, merge strategy, Git command, retry, credential, or
+fallback selector.
+
+A successful receipt proves only bounded same-PR review-update publication.
+D-013 release, holder release, D-014 completion, PR merge, release, production,
+runtime, and device effects remain separately owned.

@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "workerName": "myang-public-delivery",
+  "publicBaseUrl": "https://update.myang.link",
+  "sourceRepository": "hanmiyoo10-alt/-",
+  "mirrorRepository": "hanmiyoo10-alt/myang",
+  "provenancePath": ".distribution/provenance.json",
+  "channels": [
+    {
+      "name": "termux",
+      "sourceRef": "main",
+      "mirrorBranch": "main",
+      "files": [
+        {
+          "sourcePath": "local/termux/00-update-local-stack",
+          "publicPath": "termux/00-update-local-stack",
+          "contentType": "text/plain; charset=utf-8",
+          "rangeProof": false
+        },
+        {
+          "sourcePath": "local/termux/10-start-local-stack",
+          "publicPath": "termux/10-start-local-stack",
+          "contentType": "text/plain; charset=utf-8",
+          "rangeProof": false
+        }
+      ]
+    },
+    {
+      "name": "simcore",
+      "sourceRef": "release-simcore",
+      "mirrorBranch": "release-simcore",
+      "files": [
+        {
+          "sourcePath": "plugins/simcore/latest.js",
+          "publicPath": "simcore/latest.js",
+          "contentType": "application/javascript; charset=utf-8",
+          "rangeProof": true
+        },
+        {
+          "sourcePath": "plugins/simcore/install.js",
+          "publicPath": "simcore/install.js",
+          "contentType": "application/javascript; charset=utf-8",
+          "rangeProof": true
+        }
+      ]
+    },
+    {
+      "name": "usage-dashboard",
+      "sourceRef": "release-usage-dashboard",
+      "mirrorBranch": "release-usage-dashboard",
+      "files": [
+        {
+          "sourcePath": "plugins/usage-dashboard/latest.js",
+          "publicPath": "usage-dashboard/latest.js",
+          "contentType": "application/javascript; charset=utf-8",
+          "rangeProof": true
+        },
+        {
+          "sourcePath": "plugins/usage-dashboard/runtime/product-manifest.json",
+          "publicPath": "usage-dashboard/runtime/product-manifest.json",
+          "contentType": "application/json; charset=utf-8",
+          "rangeProof": false
+        },
+        {
+          "sourcePath": "plugins/usage-dashboard/runtime/bridge-engine.mjs",
+          "publicPath": "usage-dashboard/runtime/bridge-engine.mjs",
+          "contentType": "application/javascript; charset=utf-8",
+          "rangeProof": false
+        },
+        {
+          "sourcePath": "plugins/usage-dashboard/runtime/bridge-manager.cjs",
+          "publicPath": "usage-dashboard/runtime/bridge-manager.cjs",
+          "contentType": "application/javascript; charset=utf-8",
+          "rangeProof": false
+        },
+        {
+          "sourcePath": "plugins/usage-dashboard/runtime/bootstrap-bridge-manager.sh",
+          "publicPath": "usage-dashboard/runtime/bootstrap-bridge-manager.sh",
+          "contentType": "text/x-shellscript; charset=utf-8",
+          "rangeProof": false
+        }
+      ]
+    }
+  ]
+}

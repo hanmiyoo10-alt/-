@@ -18,6 +18,7 @@ const {
   REASON_CODES: PACKET_PROJECTION_REASON_CODES,
   classifyPacketProjection,
   extractPacketLifecycle,
+  hasCanonicalPacketMarker,
 } = require(path.join(dir, 'packet-projection.cjs'));
 const pluginManifest = JSON.parse(fs.readFileSync(path.join(root, '.github/tooling/ci-summary/manifests/plugin-control-plane.json'), 'utf8'));
 const permanentCommands = pluginManifest.checks.map((check) => check.command.join(' ')).join('\n');
@@ -37,6 +38,11 @@ assert.ok(policy.packetStates.includes('BLOCKED'));
 
 
 assert.deepEqual(PACKET_STATES, policy.packetStates);
+assert.equal(hasCanonicalPacketMarker('<!-- canonical-main-work-packet:v1 -->'), true);
+assert.equal(hasCanonicalPacketMarker('  <!-- canonical-main-work-packet:v1 -->  \r\n'), true);
+assert.equal(hasCanonicalPacketMarker('Docs quote `<!-- canonical-main-work-packet:v1 -->` inline.'), false);
+assert.equal(hasCanonicalPacketMarker('> <!-- canonical-main-work-packet:v1 -->'), false);
+assert.equal(hasCanonicalPacketMarker('<!-- canonical-main-work-packet:v1 -->\n<!-- canonical-main-work-packet:v1 -->'), true);
 const packetFixture = (stateLine, currentStage = 'AUTHORITY_SCOPE') => [
   '<!-- canonical-main-work-packet:v1 -->',
   '',
@@ -889,6 +895,15 @@ const disjointPacket = {
 };
 assert.equal(resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [disjointPacket]).state, 'DISJOINT');
 
+const quotedMarkerCandidate = {
+  type: 'packet',
+  ref: '#11',
+  issueState: 'open',
+  body: 'Docs quote `<!-- canonical-main-work-packet:v1 -->` inline.',
+};
+const quotedMarkerResult = resolveOverlap(['path:tools/repo-ci-mcp/README.md'], [quotedMarkerCandidate]);
+expectOverlapFinding(quotedMarkerResult, 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_BODY_UNSUPPORTED);
+
 const packetActivityEvidence = (relationship, overrides = {}) => ({
   schemaVersion: 1,
   mode: 'WORK_SYSTEM_PACKET_ACTIVITY_EVIDENCE',
@@ -936,6 +951,89 @@ assert.equal(resolveOverlap(['path:src/demo.js'], [{
   type: 'packet', ref: '#20', issueState: 'open',
   body: overlapPacketBody('BLOCKED', ['path:src/**']),
 }]).state, 'OVERLAP');
+
+const legacyUnscopedPacketBody = `<!-- canonical-main-work-packet:v1 -->
+## State
+\`BLOCKED\`
+## Scope
+repository source already merged; live validation remains
+## Handoff
+fixture`;
+
+const legacyNonblockingPacket = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: '#20', issueState: 'open',
+    body: legacyUnscopedPacketBody,
+    packetActivityEvidence: packetActivityEvidence('PARENT_WAITING_ON_SUCCESSOR'),
+  }],
+});
+assert.equal(legacyNonblockingPacket.state, 'DISJOINT');
+assert.equal(legacyNonblockingPacket.findings.length, 0);
+assert.equal(legacyNonblockingPacket.candidateActivity.length, 1);
+assert.equal(legacyNonblockingPacket.candidateActivity[0].state, 'NONBLOCKING_PROVEN');
+
+const legacyActiveWriterPacket = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: '#20', issueState: 'open',
+    body: legacyUnscopedPacketBody,
+    packetActivityEvidence: packetActivityEvidence(
+      'PARENT_WAITING_ON_SUCCESSOR', {repositoryMutationActive: true}),
+  }],
+});
+expectOverlapFinding(
+  legacyActiveWriterPacket, 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+assert.equal(legacyActiveWriterPacket.candidateActivity[0].state, 'ACTIVE_WRITER');
+
+for (const [overrides, expectedActivityState] of [
+  [{sequencingExplicit: false}, 'UNKNOWN'],
+  [{candidateRef: '#22'}, 'CONFLICT'],
+]) {
+  const legacyUnresolvedActivity = resolveScopeOverlap({
+    requesterRef: '#21',
+    requestedScopes: ['path:src/demo.js'],
+    discovery: 'COMPLETE',
+    candidates: [{
+      type: 'packet', ref: '#20', issueState: 'open',
+      body: legacyUnscopedPacketBody,
+      packetActivityEvidence: packetActivityEvidence('DEFERRED_OWNER', overrides),
+    }],
+  });
+  expectOverlapFinding(
+    legacyUnresolvedActivity, 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+  assert.equal(legacyUnresolvedActivity.candidateActivity[0].state, expectedActivityState);
+}
+
+expectOverlapFinding(resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: '#20', issueState: 'open',
+    body: legacyUnscopedPacketBody,
+  }],
+}), 'UNKNOWN', OVERLAP_REASON_CODES.PACKET_SCOPE_UNRESOLVED);
+
+const legacyLifecycleConflictWithNonblockingEvidence = resolveScopeOverlap({
+  requesterRef: '#21',
+  requestedScopes: ['path:src/demo.js'],
+  discovery: 'COMPLETE',
+  candidates: [{
+    type: 'packet', ref: '#20', issueState: 'open',
+    body: legacyUnscopedPacketBody.replace('`BLOCKED`', '`IN_PROGRESS / REVIEW`'),
+    packetActivityEvidence: packetActivityEvidence('PARENT_WAITING_ON_SUCCESSOR'),
+  }],
+});
+expectOverlapFinding(
+  legacyLifecycleConflictWithNonblockingEvidence,
+  'CONFLICT',
+  OVERLAP_REASON_CODES.PACKET_STATE_UNRESOLVED);
+assert.equal(Object.hasOwn(legacyLifecycleConflictWithNonblockingEvidence, 'candidateActivity'), false);
 
 const validationDiscoveryPacketActivity = resolveScopeOverlap({
   requesterRef: '#21',
@@ -2041,6 +2139,12 @@ assert.match(template, /pr-authoring-preflight\.cjs/);
 assert.match(template, /Do not bypass a non-PASS result by calling `gh pr create`/);
 assert.match(template, /does not claim to intercept every external GitHub PR-creation surface/);
 assert.match(template, /Intentionally terminal PRs/);
+assert.match(readme, /pr-publication\.cjs/);
+assert.match(readme, /guarded composition adapter/);
+assert.match(readme, /post-hoc `PASS` does not satisfy the prepublication ordering contract/);
+assert.match(template, /pr-publication\.cjs/);
+assert.match(template, /required ordering is structural rather than memory-based/);
+assert.match(template, /post-hoc `PASS` is not equivalent to prepublication enforcement/);
 for (const forbidden of ['http://', 'https://', 'gh api', 'fetch(', 'child_process', 'execSync', 'spawnSync', 'writeFile', 'appendFile', 'createWriteStream', 'process.env']) {
   assert.equal(prAuthoringSource.includes(forbidden), false, `PR authoring preflight must not contain ${forbidden}`);
 }
@@ -2075,4 +2179,297 @@ assert.equal(prCli.status, 3);
 assert.equal(prCli.output.disposition, 'UNKNOWN');
 fs.rmSync(prCliDir, {recursive: true, force: true});
 
+const prPublication = require(path.join(dir, 'pr-publication.cjs'));
+const prPublicationSource = fs.readFileSync(path.join(dir, 'pr-publication.cjs'), 'utf8');
+const publicationHead = 'a'.repeat(40);
+const publicationBranch = 'chore/guarded-pr-publication';
+const publicationInput = {
+  packetRef: '#9001',
+  head: publicationBranch,
+  expectedHead: publicationHead,
+  title: 'fix(repo): safe guarded change',
+  body: 'Summary\n\nRefs #9001',
+};
+const publicationEvents = [];
+const publicationRunner = (command, args) => {
+  assert.equal(command, 'gh');
+  if (args[0] === 'pr' && args[1] === 'create') {
+    publicationEvents.push('publisher');
+    assert.deepEqual(args, [
+      'pr', 'create',
+      '--repo', prPublication.FIXED_REPO,
+      '--base', prPublication.FIXED_BASE,
+      '--head', publicationBranch,
+      '--title', publicationInput.title,
+      '--body', publicationInput.body,
+    ]);
+    return {code: 0, stdout: 'https://github.com/hanmiyoo10-alt/-/pull/77\n', stderr: ''};
+  }
+  if (args[0] === 'api' && args[1] === 'repos/hanmiyoo10-alt/-/pulls/77') {
+    publicationEvents.push('readback');
+    return {code: 0, stdout: JSON.stringify({
+      number: 77,
+      state: 'open',
+      draft: false,
+      title: publicationInput.title,
+      body: publicationInput.body,
+      html_url: 'https://github.com/hanmiyoo10-alt/-/pull/77',
+      base: {ref: 'main'},
+      head: {
+        ref: publicationBranch,
+        sha: publicationHead,
+        repo: {full_name: 'hanmiyoo10-alt/-'},
+      },
+    }), stderr: ''};
+  }
+  throw new Error('unexpected publication runner call: ' + args.join(' '));
+};
+const orderedPreflight = (input) => {
+  publicationEvents.push('preflight');
+  return classifyNonClosingPrAuthoring(input);
+};
+let publication = prPublication.publishNonClosingPr(
+  publicationInput, {runner: publicationRunner, preflightFn: orderedPreflight});
+assert.equal(publication.disposition, 'PASS');
+assert.equal(publication.publicationState, 'CREATED');
+assert.equal(publication.prNumber, 77);
+assert.deepEqual(publicationEvents, ['preflight', 'publisher', 'readback']);
+assert.deepEqual(publication.authority, prPublication.FALSE_AUTHORITY);
+
+let blockedPublisherCalls = 0;
+publication = prPublication.publishNonClosingPr({
+  ...publicationInput,
+  body: 'Fixes #9001',
+}, {
+  runner: () => {
+    blockedPublisherCalls += 1;
+    return {code: 1, stdout: '', stderr: ''};
+  },
+});
+assert.equal(publication.disposition, 'BLOCKED');
+assert.equal(publication.publicationState, 'NOT_RUN');
+assert.equal(blockedPublisherCalls, 0);
+
+let unknownPublisherCalls = 0;
+publication = prPublication.publishNonClosingPr({
+  ...publicationInput,
+  packetRef: 'issue:#9001',
+}, {
+  runner: () => {
+    unknownPublisherCalls += 1;
+    return {code: 1, stdout: '', stderr: ''};
+  },
+});
+assert.equal(publication.disposition, 'UNKNOWN');
+assert.equal(publication.publicationState, 'NOT_RUN');
+assert.equal(unknownPublisherCalls, 0);
+
+const conflictRunner = (command, args) => {
+  if (args[0] === 'pr') {
+    return {code: 0, stdout: 'https://github.com/hanmiyoo10-alt/-/pull/78\n', stderr: ''};
+  }
+  return {code: 0, stdout: JSON.stringify({
+    number: 78,
+    state: 'open',
+    draft: false,
+    title: publicationInput.title,
+    body: 'different body',
+    base: {ref: 'main'},
+    head: {
+      ref: publicationBranch,
+      sha: publicationHead,
+      repo: {full_name: 'hanmiyoo10-alt/-'},
+    },
+  }), stderr: ''};
+};
+publication = prPublication.publishNonClosingPr(publicationInput, {runner: conflictRunner});
+assert.equal(publication.disposition, 'CONFLICT');
+assert.equal(publication.publicationState, 'CREATED');
+assert.deepEqual(publication.reasonCodes, ['PR_READBACK_CONFLICT']);
+
+assert.equal(prPublication.validHead('main'), false);
+assert.equal(prPublication.validHead('owner:branch'), false);
+assert.equal(prPublication.validHead(publicationBranch), true);
+assert.throws(() => prPublication.parseArgs([
+  '--packet', '#9001',
+  '--head', publicationBranch,
+  '--expected-head', publicationHead,
+  '--title-file', 'title.txt',
+  '--repo', 'other/repo',
+]), /ARGUMENT_UNSUPPORTED_OR_DUPLICATE/);
+
+assert.match(prPublicationSource, /require\('\.\/pr-authoring-preflight\.cjs'\)/);
+assert.match(prPublicationSource, /'pr', 'create'/);
+assert.match(prPublicationSource, /shell: false/);
+assert.match(prPublicationSource, /FIXED_REPO = 'hanmiyoo10-alt\/-'/);
+assert.match(prPublicationSource, /FIXED_BASE = 'main'/);
+
 console.log('work-system-contract: ok');
+
+const {
+  classifyPacketizationClosure,
+  packetizationKey,
+  REASON_CODES: PACKETIZATION_REASON_CODES,
+} = require(path.join(dir, 'packetization-closure.cjs'));
+const packetizationSource = fs.readFileSync(path.join(dir, 'packetization-closure.cjs'), 'utf8');
+
+const packetizationFixture = (overrides = {}) => ({
+  sourceRoot: 'issue:#4246',
+  implementationReady: true,
+  sourceImplementationRequired: true,
+  primaryGoal: 'prevent operational currentizer bytecode residue',
+  semanticOwner: 'repo-currentization-bytecode-hygiene',
+  writableScopes: ['path:tools/repo-write/a.py', 'surface:repo:currentizer-hygiene'],
+  disposition: 'PACKETIZE_NOW',
+  effectStarted: false,
+  targetPacketKey: null,
+  existingPackets: [],
+  deferReasonRef: null,
+  ...overrides,
+});
+
+let packetization = classifyPacketizationClosure(packetizationFixture());
+assert.equal(packetization.result, 'PASS');
+assert.equal(packetization.disposition, 'PACKETIZE_NOW');
+assert.equal(packetization.latePacketDebt, false);
+assert.equal(packetization.trainFullyEnumerated, true);
+assert.match(packetization.packetizationKey, /^[0-9a-f]{64}$/);
+
+packetization = classifyPacketizationClosure(packetizationFixture({
+  disposition: 'UNKNOWN',
+}));
+assert.equal(packetization.result, 'LATE_PACKET_DEBT');
+assert.equal(packetization.latePacketDebt, true);
+assert.equal(packetization.trainFullyEnumerated, false);
+assert.deepEqual(packetization.reasonCodes, [PACKETIZATION_REASON_CODES.LATE_PACKET_DEBT]);
+
+packetization = classifyPacketizationClosure(packetizationFixture({
+  implementationReady: false,
+  sourceImplementationRequired: true,
+  primaryGoal: '',
+  semanticOwner: '',
+  writableScopes: [],
+  disposition: 'DESIGN_REQUIRED',
+}));
+assert.equal(packetization.result, 'PASS');
+assert.equal(packetization.disposition, 'DESIGN_REQUIRED');
+
+const absorbKey = packetizationKey({
+  sourceRoot: 'issue:#4243',
+  primaryGoal: 'close final D-014 generation lineage',
+  semanticOwner: 'mcl-validation-finalization',
+  scopes: ['path:mcl/finalizer.cjs'],
+});
+packetization = classifyPacketizationClosure(packetizationFixture({
+  sourceRoot: 'issue:#4243',
+  primaryGoal: 'close final D-014 generation lineage',
+  semanticOwner: 'mcl-validation-finalization',
+  writableScopes: ['path:mcl/finalizer.cjs'],
+  disposition: 'ABSORB_PRE_EFFECT',
+  targetPacketKey: absorbKey,
+  existingPackets: [{packetRef:'#4244', packetizationKey:absorbKey, effectStarted:false}],
+}));
+assert.equal(packetization.result, 'PASS');
+assert.equal(packetization.disposition, 'ABSORB_PRE_EFFECT');
+assert.equal(packetization.matchedPacketRef, '#4244');
+
+packetization = classifyPacketizationClosure(packetizationFixture({
+  sourceRoot: 'issue:#4243',
+  primaryGoal: 'close final D-014 generation lineage',
+  semanticOwner: 'mcl-validation-finalization',
+  writableScopes: ['path:mcl/finalizer.cjs'],
+  disposition: 'ABSORB_PRE_EFFECT',
+  effectStarted: true,
+  targetPacketKey: absorbKey,
+  existingPackets: [{packetRef:'#4244', packetizationKey:absorbKey, effectStarted:false}],
+}));
+assert.equal(packetization.result, 'CONFLICT');
+assert.deepEqual(packetization.reasonCodes, [PACKETIZATION_REASON_CODES.ABSORB_AFTER_EFFECT_FORBIDDEN]);
+
+const coveredKey = packetizationKey({
+  sourceRoot: 'issue:#4188',
+  primaryGoal: 'repository patch executable mode parity',
+  semanticOwner: 'repository-patch-owner',
+  scopes: ['path:repo/patch.py'],
+});
+packetization = classifyPacketizationClosure(packetizationFixture({
+  sourceRoot: 'issue:#4188',
+  primaryGoal: 'repository patch executable mode parity',
+  semanticOwner: 'repository-patch-owner',
+  writableScopes: ['path:repo/patch.py'],
+  disposition: 'COVERED_BY_EXISTING_PACKET',
+  targetPacketKey: coveredKey,
+  existingPackets: [{packetRef:'#4212', packetizationKey:coveredKey, effectStarted:false}],
+}));
+assert.equal(packetization.result, 'PASS');
+assert.equal(packetization.matchedPacketRef, '#4212');
+
+packetization = classifyPacketizationClosure(packetizationFixture({
+  sourceRoot: 'issue:#3333',
+  primaryGoal: 'historical late packetization fixture',
+  semanticOwner: 'fixture-owner',
+  writableScopes: ['path:fixture/a'],
+  disposition: 'UNKNOWN',
+}));
+assert.equal(packetization.result, 'LATE_PACKET_DEBT');
+
+const reissueKey = packetizationKey({
+  sourceRoot: 'issue:#3229',
+  primaryGoal: 'historical reissue fixture',
+  semanticOwner: 'fixture-owner',
+  scopes: ['path:fixture/b'],
+});
+packetization = classifyPacketizationClosure(packetizationFixture({
+  sourceRoot: 'issue:#3229',
+  primaryGoal: 'historical reissue fixture',
+  semanticOwner: 'fixture-owner',
+  writableScopes: ['path:fixture/b'],
+  disposition: 'PACKETIZE_NOW',
+  existingPackets: [{packetRef:'#3230', packetizationKey:reissueKey, effectStarted:false}],
+}));
+assert.equal(packetization.result, 'CONFLICT');
+assert.deepEqual(packetization.reasonCodes, [PACKETIZATION_REASON_CODES.EXISTING_PACKET_KEY_REQUIRES_REUSE]);
+
+packetization = classifyPacketizationClosure(packetizationFixture({
+  sourceRoot: 'issue:#3296',
+  implementationReady: false,
+  sourceImplementationRequired: false,
+  primaryGoal: '',
+  semanticOwner: '',
+  writableScopes: [],
+  disposition: 'CLOSE_SYNC_ONLY',
+}));
+assert.equal(packetization.result, 'PASS');
+assert.equal(packetization.disposition, 'CLOSE_SYNC_ONLY');
+
+packetization = classifyPacketizationClosure(packetizationFixture({
+  disposition: 'DEFER_EXPLICIT',
+  deferReasonRef: null,
+}));
+assert.equal(packetization.result, 'CONFLICT');
+assert.equal(packetization.latePacketDebt, true);
+assert.deepEqual(packetization.reasonCodes, [PACKETIZATION_REASON_CODES.DEFER_REASON_REQUIRED]);
+
+const stableA = packetizationKey({
+  sourceRoot:'issue:#1', primaryGoal:'goal', semanticOwner:'owner',
+  scopes:['path:b', 'path:a'], currentMain:'a'.repeat(40), timestamp:'now',
+});
+const stableB = packetizationKey({
+  sourceRoot:'issue:#1', primaryGoal:'goal', semanticOwner:'owner',
+  scopes:['path:a', 'path:b'], currentMain:'b'.repeat(40), timestamp:'later',
+});
+assert.equal(stableA, stableB);
+assert.notEqual(stableA, packetizationKey({
+  sourceRoot:'issue:#1', primaryGoal:'different goal', semanticOwner:'owner',
+  scopes:['path:a', 'path:b'],
+}));
+
+assert.match(readme, /### Packetization closure preflight/);
+assert.match(readme, /LATE_PACKET_DEBT/);
+assert.match(readme, /trainFullyEnumerated=false/);
+assert.match(readme, /packetization-closure\.cjs \/path\/to\/input\.json/);
+for (const forbidden of ['http://', 'https://', 'gh api', 'fetch(', 'child_process', 'execSync', 'spawnSync', 'Date.now', 'new Date']) {
+  assert.equal(packetizationSource.includes(forbidden), false, 'packetization closure must not contain ' + forbidden);
+}
+assert.match(packetizationSource, /require\('\.\/scope-overlap\.cjs'\)/);
+assert.doesNotMatch(packetizationSource, /create_issue|update_issue|close_issue/i);

@@ -11,7 +11,7 @@ on:
       - '.github/usage-dashboard/releases/**'
       - 'plugins/risu/local/**'
       - 'plugins/devpass/**'
-      - 'plugins/termux/large-doc-editor/**'
+      - 'products/standalone/termux/large-doc-editor/**'
       - 'voyage-token-check/**'
       - 'products/pocketrisu-helper-mod/**'
       - '.github/workflows/pocketrisu-helper-docs.yml'
@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout trusted main controller
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: main
           persist-credentials: false

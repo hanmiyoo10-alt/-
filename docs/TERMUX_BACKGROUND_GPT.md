@@ -2,7 +2,7 @@
 
 Date: 2026-08-28
 Status: PROTOTYPE · NON-PRODUCTION
-Scope: `plugins/termux/background-gpt/`
+Scope: `products/standalone/termux/background-gpt/`
 Canonical issue: `#707`
 
 ## Primary goal

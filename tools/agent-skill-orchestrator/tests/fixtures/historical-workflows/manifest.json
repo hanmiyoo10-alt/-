@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "ownerIssue": 1120,
+  "retirementIssue": 3956,
+  "sourceMainCommit": "9fcb3ee842dc040988bbb3413fa73e2978707d4f",
+  "entries": [
+    {
+      "originalPath": ".github/workflows/agent-skill-orchestrator-o4c-scout-benchmark.yml",
+      "fixturePath": "tools/agent-skill-orchestrator/tests/fixtures/historical-workflows/agent-skill-orchestrator-o4c-scout-benchmark.yml",
+      "blobSha": "06a21f585e53f1c977d0615dcb46598f3c5062a0",
+      "terminalRunId": 33643580938,
+      "classification": "IMMUTABLE_HISTORICAL_BENCHMARK"
+    },
+    {
+      "originalPath": ".github/workflows/agent-skill-orchestrator-o4c-scout-continuation.yml",
+      "fixturePath": "tools/agent-skill-orchestrator/tests/fixtures/historical-workflows/agent-skill-orchestrator-o4c-scout-continuation.yml",
+      "blobSha": "6eb555ee4a9275473315559189939b9d4ac1dedc",
+      "terminalRunId": 33646050315,
+      "classification": "IMMUTABLE_HISTORICAL_CONTINUATION"
+    },
+    {
+      "originalPath": ".github/workflows/agent-skill-orchestrator-o4c-scout-timeout-recovery.yml",
+      "fixturePath": "tools/agent-skill-orchestrator/tests/fixtures/historical-workflows/agent-skill-orchestrator-o4c-scout-timeout-recovery.yml",
+      "blobSha": "4868257686f1f42156c69c7fd06846494f010108",
+      "terminalRunId": 33649809080,
+      "classification": "IMMUTABLE_HISTORICAL_RECOVERY"
+    },
+    {
+      "originalPath": ".github/workflows/agent-skill-orchestrator-o4d-scout-schema-validation.yml",
+      "fixturePath": "tools/agent-skill-orchestrator/tests/fixtures/historical-workflows/agent-skill-orchestrator-o4d-scout-schema-validation.yml",
+      "blobSha": "c679705fd640e4a7a112578818832346f667af3b",
+      "terminalRunId": 33656712799,
+      "classification": "ONE_SHOT_DIAGNOSTIC"
+    },
+    {
+      "originalPath": ".github/workflows/agent-skill-orchestrator-o4e-scout-schema-validation.yml",
+      "fixturePath": "tools/agent-skill-orchestrator/tests/fixtures/historical-workflows/agent-skill-orchestrator-o4e-scout-schema-validation.yml",
+      "blobSha": "50c3d6f0bfeb8ccd3b3e5107accb1c5dab203add",
+      "terminalRunId": 33747002415,
+      "classification": "EXACTLY_ONCE_DIAGNOSTIC"
+    },
+    {
+      "originalPath": ".github/workflows/agent-skill-orchestrator-o4f-termux-scout-benchmark.yml",
+      "fixturePath": "tools/agent-skill-orchestrator/tests/fixtures/historical-workflows/agent-skill-orchestrator-o4f-termux-scout-benchmark.yml",
+      "blobSha": "c1cc6c6f96776bcac9f05c2dc026caed0695c34c",
+      "terminalRunId": 33763047539,
+      "classification": "IMMUTABLE_TERMINAL_BENCHMARK"
+    },
+    {
+      "originalPath": ".github/workflows/agent-skill-orchestrator-o4g-termux-scout-uniqueness-diagnostic.yml",
+      "fixturePath": "tools/agent-skill-orchestrator/tests/fixtures/historical-workflows/agent-skill-orchestrator-o4g-termux-scout-uniqueness-diagnostic.yml",
+      "blobSha": "7e546a0841a3ad12ab66cfc01a9dc95b37b2a663",
+      "terminalRunId": 33774770994,
+      "classification": "SOLE_TERMINAL_DIAGNOSTIC"
+    }
+  ]
+}

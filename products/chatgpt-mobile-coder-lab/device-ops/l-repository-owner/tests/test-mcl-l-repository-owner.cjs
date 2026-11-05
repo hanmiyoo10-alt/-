@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const owner = require('../mcl-l-repository-owner.cjs');
+const workspaceHolder = require('../../../coordination/mcl-workspace-holder.cjs');
 
 let passed = 0;
 function test(name, fn) {
@@ -178,6 +179,207 @@ test('request parser fails closed on duplicate unsafe or malformed paths', () =>
   }
 });
 
+test('workflow candidate paths are rename-aware and include both sides', () => {
+  assert.deepEqual(owner.candidatePathsFromNameStatus(
+    'R100\0.github/workflows/old.yml\0docs/new.yml\0M\0docs/a.md\0'),
+    ['.github/workflows/old.yml','docs/a.md','docs/new.yml']);
+  assert.equal(owner.requiresWorkflowOauthScope(
+    owner.candidatePathsFromNameStatus('R100\0.github/workflows/old.yml\0docs/new.yml\0')), true);
+  assert.equal(owner.requiresWorkflowOauthScope(
+    owner.candidatePathsFromNameStatus('R100\0docs/old.md\0docs/new.md\0')), false);
+  expectReason(() => owner.candidatePathsFromNameStatus('R100\0only-one-path\0'),
+    'GITHUB_WORKFLOW_DIFF_UNOBSERVED');
+});
+
+test('workflow OAuth preflight binds scope probe to exact effective push URL and fixed gh credential', () => {
+  assert.equal(owner.requiresWorkflowOauthScope(['.github/workflows/a.yml']), true);
+  assert.equal(owner.requiresWorkflowOauthScope(['.github/workflows/nested/a.yaml']), true);
+  assert.equal(owner.requiresWorkflowOauthScope(['.github/workflow/a.yml']), false);
+  assert.equal(owner.requiresWorkflowOauthScope(['docs/.github/workflows/a.yml']), false);
+
+  const calls = [];
+  const passRunner = (command, args) => {
+    calls.push([command, args]);
+    if (command === 'git' && args.includes('remote')) {
+      assert.deepEqual(args, ['-C','/tmp/wt','remote','get-url','--push','--all','origin']);
+      return {code:0, stdout:owner.FIXED_ORIGIN_URL + '\n', stderr:'', signal:null, error:null};
+    }
+    if (command === 'git' && args.includes('config')) {
+      assert.deepEqual(args, ['-C','/tmp/wt','config','--show-origin','--name-only','--list']);
+      return {code:0, stdout:'file:/tmp/config\tcredential.https://github.com.helper\n', stderr:'', signal:null, error:null};
+    }
+    assert.equal(command, owner.FIXED_GH);
+    assert.deepEqual(args, ['api','-i','user']);
+    return {
+      code:0,
+      stdout:'HTTP/2 200\r\nx-oauth-scopes: repo, workflow, read:org\r\n\r\n{}\n',
+      stderr:'', signal:null, error:null,
+    };
+  };
+  assert.equal(owner.requireGithubWorkflowPushCredential(
+    ['.github/workflows/a.yml'], '/tmp/wt', {runner:passRunner}), true);
+  assert.equal(calls.length, 3);
+
+  const missingRunner = (command) => {
+    if (command === 'git') return {code:0, stdout:owner.FIXED_ORIGIN_URL + '\n', stderr:'', signal:null, error:null};
+    return {code:0, stdout:'HTTP/2 200\r\nx-oauth-scopes: repo, read:org\r\n\r\n{}\n', stderr:'', signal:null, error:null};
+  };
+  expectReason(() => owner.requireGithubWorkflowPushCredential(
+    ['.github/workflows/a.yml'], '/tmp/wt', {runner:missingRunner}),
+    'GITHUB_WORKFLOW_SCOPE_REQUIRED');
+
+  for (const output of [
+    'git@github.com:hanmiyoo10-alt/-.git\n',
+    owner.FIXED_ORIGIN_URL + '\nhttps://mirror.invalid/repo.git\n',
+  ]) {
+    const invalidPushUrl = (command) => {
+      if (command === 'git') return {code:0, stdout:output, stderr:'', signal:null, error:null};
+      throw new Error('gh must not run after push URL mismatch');
+    };
+    expectReason(() => owner.requireGithubWorkflowPushCredential(
+      ['.github/workflows/a.yml'], '/tmp/wt', {runner:invalidPushUrl}),
+      'GITHUB_PUSH_CREDENTIAL_BINDING_REQUIRED');
+  }
+
+  const originUnknown = () => ({code:1, stdout:'', stderr:'withheld', signal:null, error:null});
+  expectReason(() => owner.requireGithubWorkflowPushCredential(
+    ['.github/workflows/a.yml'], '/tmp/wt', {runner:originUnknown}),
+    'GITHUB_WORKFLOW_ORIGIN_UNOBSERVED');
+
+  let nonWorkflowCalls = 0;
+  assert.equal(owner.requireGithubWorkflowPushCredential(
+    ['docs/a.md'], '/tmp/wt', {runner:() => { nonWorkflowCalls += 1; }}), false);
+  assert.equal(nonWorkflowCalls, 0);
+});
+
+test('workflow HTTP auth preflight rejects URL-specific extraHeader keys without reading values', () => {
+  const passRunner = () => ({
+    code:0,
+    stdout:'file:/tmp/config\thttp.extraheader\nfile:/tmp/config\tcredential.https://github.com.helper\n',
+    stderr:'', signal:null, error:null,
+  });
+  assert.equal(owner.requireNoUrlSpecificHttpExtraHeaders('/tmp/wt', {runner:passRunner}), true);
+
+  for (const name of [
+    'http.https://github.com/hanmiyoo10-alt/-.git.extraheader',
+    'http.https://github.com/hanmiyoo10-alt/-.git/info.extraheader',
+    'http.https://github.com/hanmiyoo10-alt/-.git/info/refs.extraheader',
+    'http.https://github.com/hanmiyoo10-alt/-.git/git-receive-pack.extraheader',
+    'http.https://example.invalid/other.extraheader',
+  ]) {
+    const runner = () => ({code:0, stdout:'file:/tmp/config\t' + name + '\n', stderr:'', signal:null, error:null});
+    expectReason(() => owner.requireNoUrlSpecificHttpExtraHeaders('/tmp/wt', {runner}),
+      'GITHUB_HTTP_AUTH_HEADER_BINDING_REQUIRED');
+  }
+
+  const malformed = () => ({code:0, stdout:'http.https://github.com/x.extraheader\n', stderr:'', signal:null, error:null});
+  expectReason(() => owner.requireNoUrlSpecificHttpExtraHeaders('/tmp/wt', {runner:malformed}),
+    'GITHUB_HTTP_AUTH_HEADER_CONFIG_UNOBSERVED');
+  const unavailable = () => ({code:1, stdout:'', stderr:'withheld', signal:null, error:null});
+  expectReason(() => owner.requireNoUrlSpecificHttpExtraHeaders('/tmp/wt', {runner:unavailable}),
+    'GITHUB_HTTP_AUTH_HEADER_CONFIG_UNOBSERVED');
+});
+
+test('workflow OAuth scope parser fails closed on ambiguous or unavailable evidence', () => {
+  assert.deepEqual(owner.parseGithubOauthScopes('x-oauth-scopes: workflow, repo, workflow\n'), ['repo','workflow']);
+  expectReason(() => owner.parseGithubOauthScopes('x-oauth-scopes: repo\nx-oauth-scopes: workflow\n'),
+    'GITHUB_AUTH_SCOPE_UNOBSERVED');
+  const runner = (command) => {
+    if (command === 'git') return {code:0, stdout:owner.FIXED_ORIGIN_URL + '\n', stderr:'', signal:null, error:null};
+    return {code:1, stdout:'', stderr:'withheld', signal:null, error:null};
+  };
+  expectReason(() => owner.requireGithubWorkflowPushCredential(
+    ['.github/workflows/a.yml'], '/tmp/wt', {runner}),
+    'GITHUB_AUTH_SCOPE_UNOBSERVED');
+});
+
+test('workflow push clears inherited HTTP auth and uses the same fixed gh credential helper as the scope probe', () => {
+  const calls = [];
+  const runner = (command, args) => {
+    calls.push([command, args]);
+    if (command === 'git' && args.includes('remote')) {
+      return {code:0, stdout:owner.FIXED_ORIGIN_URL + '\n', stderr:'', signal:null, error:null};
+    }
+    if (command === owner.FIXED_GH) {
+      return {code:0, stdout:'HTTP/2 200\r\nx-oauth-scopes: repo, workflow\r\n\r\n{}\n', stderr:'', signal:null, error:null};
+    }
+    return {code:0, stdout:'', stderr:'', signal:null, error:null};
+  };
+  owner.pushExactCandidate(
+    runner, '/tmp/wt', 'a'.repeat(40), 'laptop/test', ['.github/workflows/a.yml']);
+  const push = calls.find(([command, args]) => command === 'git' && args.includes('push'));
+  assert.ok(push);
+  assert.deepEqual(push[1], [
+    '-C','/tmp/wt',
+    '-c','http.extraHeader=',
+    '-c','http.https://github.com/.extraHeader=',
+    '-c','http.https://github.com/hanmiyoo10-alt/-.git.extraHeader=',
+    '-c','credential.https://github.com.helper=',
+    '-c','credential.https://github.com.helper=' + owner.FIXED_GITHUB_CREDENTIAL_HELPER,
+    '-c','credential.https://github.com/hanmiyoo10-alt/-.git.helper=',
+    '-c','credential.https://github.com/hanmiyoo10-alt/-.git.helper=' + owner.FIXED_GITHUB_CREDENTIAL_HELPER,
+    'push','origin','a'.repeat(40) + ':refs/heads/laptop/test',
+  ]);
+  assert.equal(calls.some(([command]) => command === owner.FIXED_GH), true);
+
+  calls.length = 0;
+  owner.pushExactCandidate(runner, '/tmp/wt', 'b'.repeat(40), 'laptop/test', ['docs/a.md']);
+  assert.deepEqual(calls, [[
+    'git',
+    ['-C','/tmp/wt','push','origin','b'.repeat(40) + ':refs/heads/laptop/test'],
+  ]]);
+});
+
+test('workflow candidate path extraction uses staged or original candidate diff', () => {
+  const calls = [];
+  const runner = (command, args) => {
+    calls.push([command, args]);
+    if (args.includes('--cached')) {
+      return {code:0, stdout:'R100\0.github/workflows/old.yml\0docs/new.yml\0', stderr:'', signal:null, error:null};
+    }
+    return {code:0, stdout:'R100\0.github/workflows/old.yml\0docs/new.yml\0', stderr:'', signal:null, error:null};
+  };
+  assert.deepEqual(owner.candidatePathsFromStagedDiff(runner, '/tmp/wt'),
+    ['.github/workflows/old.yml','docs/new.yml']);
+  assert.deepEqual(owner.candidatePathsFromCommitDiff(
+    runner, '/tmp/wt', 'a'.repeat(40), 'b'.repeat(40)),
+    ['.github/workflows/old.yml','docs/new.yml']);
+  assert.deepEqual(calls[0][1],
+    ['-C','/tmp/wt','diff','--cached','--name-status','-z','-M','--']);
+  assert.deepEqual(calls[1][1],
+    ['-C','/tmp/wt','diff','--name-status','-z','-M','a'.repeat(40),'b'.repeat(40),'--']);
+});
+
+test('workflow credential preflight follows staging and precedes commit/push effects', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../mcl-l-repository-owner.cjs'), 'utf8');
+  const applyStart = source.indexOf('function executeApply');
+  const applyEnd = source.indexOf('\nfunction inspect(', applyStart);
+  const applyBlock = source.slice(applyStart, applyEnd);
+  const stagedPaths = applyBlock.indexOf(
+    'const candidatePaths = candidatePathsFromStagedDiff(runner, manifest.workspace.worktree);');
+  const applyGate = applyBlock.indexOf(
+    'requireGithubWorkflowPushCredential(candidatePaths, manifest.workspace.worktree, {runner});');
+  assert.ok(stagedPaths >= 0);
+  assert.ok(stagedPaths > applyBlock.indexOf("'apply', '--index'"));
+  assert.ok(applyGate > stagedPaths);
+  assert.ok(applyGate < applyBlock.indexOf("'commit', '-m'"));
+  assert.ok(applyBlock.includes(
+    'pushExactCandidate(runner, manifest.workspace.worktree, newHead, manifest.workspace.branch, candidatePaths);'));
+
+  const contStart = source.indexOf('function executePreparedContinuation');
+  const contEnd = source.indexOf('\nfunction fixedValidationChecks', contStart);
+  const contBlock = source.slice(contStart, contEnd);
+  const candidateGate = contBlock.indexOf("const candidatePaths = state.state === 'PUSHED' ? []");
+  assert.ok(candidateGate >= 0);
+  assert.ok(candidateGate < contBlock.indexOf("if (state.state === 'PREPARED')"));
+  assert.ok(contBlock.includes('candidatePathsFromStagedDiff(runner, manifest.workspace.worktree)'));
+  assert.ok(contBlock.includes('candidatePathsFromCommitDiff(runner, manifest.workspace.worktree,'));
+  assert.ok(contBlock.includes(
+    'pushExactCandidate(runner, manifest.workspace.worktree, state.finalHead, manifest.workspace.branch, candidatePaths);'));
+  assert.equal(source.includes("'auth', 'refresh'"), false);
+  assert.equal(source.includes('gh auth refresh'), false);
+});
+
 test('request parser rejects wrong schema packet and patch hash', () => {
   for (const patch of [
     {schema:'wrong',packet_ref:'#9001',message:'x',expected_paths:['a'],patch_sha256:'f'.repeat(64)},
@@ -208,6 +410,46 @@ test('manifest path scopes ignore semantic surfaces and remain sorted', () => {
     scopes:['surface:z','path:z/file','path:a/file','path:z/file'],
   });
   assert.deepEqual(owner.manifestPathScopes(value), ['a/file','z/file']);
+});
+
+test('mode gate permits only preserved existing regular executable content edits', () => {
+  const sha = 'a'.repeat(40);
+  const runnerFor = ({indexMode='100755', treeMode='100755', summary='' } = {}) =>
+    (command, args) => {
+      assert.equal(command, 'git');
+      if (args.includes('--summary')) {
+        return {code:0, stdout:summary, stderr:'', signal:null, error:null};
+      }
+      if (args.includes('ls-files')) {
+        return {code:0, stdout:indexMode ? `${indexMode} ${sha} 0\tbin/tool\n` : '',
+          stderr:'', signal:null, error:null};
+      }
+      if (args.includes('ls-tree')) {
+        return {code:0, stdout:treeMode ? `${treeMode} blob ${sha}\tbin/tool\n` : '',
+          stderr:'', signal:null, error:null};
+      }
+      throw new Error('unexpected git args: ' + args.join(' '));
+    };
+
+  assert.doesNotThrow(() =>
+    owner.validateStagedModes(runnerFor(), '/tmp/wt', ['bin/tool']));
+  assert.doesNotThrow(() =>
+    owner.validateReviewUpdateExpectedModes(
+      runnerFor(), '/tmp/wt', 'b'.repeat(40), ['bin/tool'], {}));
+
+  expectReason(() =>
+    owner.validateStagedModes(
+      runnerFor({treeMode:'100644'}), '/tmp/wt', ['bin/tool']),
+    'SPECIAL_MODE_DENIED');
+  expectReason(() =>
+    owner.validateStagedModes(
+      runnerFor({indexMode:'120000',treeMode:'120000'}), '/tmp/wt', ['bin/tool']),
+    'SPECIAL_MODE_DENIED');
+  expectReason(() =>
+    owner.validateReviewUpdateExpectedModes(
+      runnerFor({indexMode:'100755',treeMode:'100644'}),
+      '/tmp/wt', 'b'.repeat(40), ['bin/tool'], {}),
+    'SPECIAL_MODE_DENIED');
 });
 
 test('fixed validation plan contains no caller command surface', () => {
@@ -328,6 +570,42 @@ test('prepared continuation manifest requires recovery lineage and prepared dige
     'CONTINUATION_PREPARED_DIFF_REF_REQUIRED');
 });
 
+test('general interrupted-recovery continuation consumes native recovery lineage without relabeling', () => {
+  const request = owner.parsePreparedContinuationRequestText(JSON.stringify({
+    schema:owner.INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA,
+    message:'feat: continue general recovered L candidate',
+    expected_paths:['a/file.cjs'],
+    prepared_digest:'1'.repeat(64),
+    prior_manifest_id:'2'.repeat(64),
+    recovery_classification_digest:'3'.repeat(64),
+  }));
+  const m = manifest({
+    phaseId:'9001-implementation-pr-recovery-rebind-g12',
+    phaseClass:'COORDINATION',
+    scopes:['path:a/file.cjs','surface:mcl:test'],
+    inputRefs:[
+      'commit:' + 'b'.repeat(40),
+      'receipt:mcl-task-manifest:' + request.prior_manifest_id,
+      'receipt:mcl-interrupted-recovery:' + request.recovery_classification_digest,
+      'receipt:mcl-dirty-diff:' + request.prepared_digest,
+    ],
+  });
+  expectReason(() => owner.validateManifestShape(m), 'MANIFEST_PHASE_CLASS_INVALID');
+  assert.doesNotThrow(() => owner.validateManifestShape(
+    m, owner.DEFAULT_PROFILE, ['REPOSITORY_MUTATION','COORDINATION']));
+  assert.doesNotThrow(() => owner.validatePreparedContinuationManifestBinding(m, request));
+  expectReason(() => owner.validatePreparedContinuationManifestBinding(
+    {...m, inputRefs:m.inputRefs.filter((ref) => !ref.startsWith('receipt:mcl-interrupted-recovery:'))}, request),
+  'CONTINUATION_INTERRUPTED_RECOVERY_REF_REQUIRED');
+  const legacy = {
+    schema:owner.CONTINUATION_REQUEST_SCHEMA, message:'x', expected_paths:['a/file.cjs'],
+    prepared_digest:'1'.repeat(64), prior_manifest_id:'2'.repeat(64),
+    prior_blocked_receipt_id:'4'.repeat(64), blocker_repair_receipt:'5'.repeat(64),
+  };
+  expectReason(() => owner.validatePreparedContinuationManifestBinding(m, legacy),
+    'CONTINUATION_LEGACY_PHASE_CLASS_INVALID');
+});
+
 test('CLI exposes literal continue-prepared without generic patch or command selectors', () => {
   const parsed = owner.parseArgs([
     'continue-prepared','--manifest','m','--ledger','l','--packet','p',
@@ -411,4 +689,775 @@ test('prepared replay preserves identity across PREPARED COMMITTED CURRENTIZED a
   }
 });
 
+
+
+test('general recovery continuation preserves no-renames identity through rename lifecycle', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-general-recovery-rename-'));
+  const remote = path.join(tmp, 'remote.git');
+  const landing = path.join(tmp, 'landing');
+  const feature = path.join(tmp, 'feature');
+  try {
+    gitExec(tmp, ['init','--bare',remote]);
+    gitExec(tmp, ['clone',remote,landing]);
+    gitExec(landing, ['config','user.name','fixture']);
+    gitExec(landing, ['config','user.email','fixture@example.invalid']);
+    fs.mkdirSync(path.join(landing, 'src'), {recursive:true});
+    fs.writeFileSync(path.join(landing, 'src/old.cjs'), "'use strict';\nmodule.exports = 1;\n");
+    gitExec(landing, ['add','src/old.cjs']);
+    gitExec(landing, ['commit','-m','base']);
+    gitExec(landing, ['branch','-M','main']);
+    gitExec(landing, ['push','-u','origin','main']);
+    const base = gitExec(landing, ['rev-parse','HEAD']).trim();
+    gitExec(landing, ['worktree','add','-b','laptop/task-general-rename',feature,base]);
+    gitExec(landing, ['push','origin',base + ':refs/heads/laptop/task-general-rename']);
+
+    fs.writeFileSync(path.join(landing, 'main.txt'), 'main advance\n');
+    gitExec(landing, ['add','main.txt']);
+    gitExec(landing, ['commit','-m','main advance']);
+    gitExec(landing, ['push','origin','main']);
+    const currentMain = gitExec(landing, ['rev-parse','HEAD']).trim();
+
+    gitExec(feature, ['mv','src/old.cjs','src/new.cjs']);
+    const prepared = gitExec(feature, ['diff','--cached','--no-renames','--binary','--']);
+    const paths = gitExec(feature, ['diff','--cached','--no-renames','--name-only','-z','--'])
+      .split('\0').filter(Boolean).sort();
+    assert.deepEqual(paths, ['src/new.cjs','src/old.cjs']);
+
+    const request = {
+      schema:owner.INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA,
+      message:'feat: continue general recovery rename',
+      expected_paths:paths,
+      prepared_digest:owner.sha256Bytes(Buffer.from(prepared,'utf8')),
+      prior_manifest_id:'2'.repeat(64),
+      recovery_classification_digest:'3'.repeat(64),
+    };
+    const m = manifest({
+      phaseId:'9001-implementation-pr-recovery-rebind-g12',
+      phaseClass:'COORDINATION',
+      workspace:{kind:'repository',branch:'laptop/task-general-rename',worktree:feature},
+      observedBaseSha:base,
+      scopes:['path:src/new.cjs','path:src/old.cjs','surface:mcl:test'],
+      inputRefs:[
+        'receipt:mcl-task-manifest:' + request.prior_manifest_id,
+        'receipt:mcl-interrupted-recovery:' + request.recovery_classification_digest,
+        'receipt:mcl-dirty-diff:' + request.prepared_digest,
+      ],
+    });
+    const profile = {...owner.DEFAULT_PROFILE, landing, worktreeRoot:tmp};
+
+    assert.equal(owner.classifyPreparedContinuationState(m, request, currentMain, {profile}).state, 'PREPARED');
+    const replay = owner.verifyReplayAgainstCurrent(m, request, currentMain);
+    assert.equal(replay.currentMain, currentMain);
+
+    gitExec(feature, ['-c','user.name=' + owner.FIXED_BOT_NAME, '-c','user.email=' + owner.FIXED_BOT_EMAIL,
+      'commit','-m',request.message]);
+    const committed = owner.classifyPreparedContinuationState(m, request, currentMain, {profile});
+    assert.equal(committed.state, 'COMMITTED');
+    assert.equal(owner.verifyReplayAgainstCurrent(
+      m, request, currentMain, {candidateHead:committed.candidateHead}).patchId, replay.patchId);
+
+    gitExec(feature, ['-c','user.name=' + owner.FIXED_BOT_NAME, '-c','user.email=' + owner.FIXED_BOT_EMAIL,
+      'merge','--no-ff','--no-edit',currentMain]);
+    assert.equal(owner.classifyPreparedContinuationState(m, request, currentMain, {profile}).state, 'CURRENTIZED');
+
+    gitExec(feature, ['push','origin','HEAD:refs/heads/laptop/task-general-rename']);
+    assert.equal(owner.classifyPreparedContinuationState(m, request, currentMain, {profile}).state, 'PUSHED');
+  } finally {
+    try { gitExec(landing, ['worktree','remove',feature]); } catch {}
+    fs.rmSync(tmp, {recursive:true, force:true});
+  }
+});
+
 console.log('ALL_TESTS_PASS', passed);
+
+
+test('review-update request and CLI bind exact old-head contract', () => {
+  const value = owner.parseReviewUpdateRequestText(JSON.stringify({
+    schema:owner.REVIEW_UPDATE_REQUEST_SCHEMA,
+    packet_ref:'#9001',
+    message:'fix: bounded review update',
+    expected_old_head:'a'.repeat(40),
+    expected_paths:['z/file.md','a/file.cjs'],
+    patch_sha256:'b'.repeat(64),
+  }));
+  assert.deepEqual(value.expected_paths, ['a/file.cjs','z/file.md']);
+  assert.equal(value.expected_old_head, 'a'.repeat(40));
+  expectReason(() => owner.parseReviewUpdateRequestText(JSON.stringify({
+    ...value, schema:'wrong',
+  })), 'REVIEW_UPDATE_REQUEST_SCHEMA_OR_PACKET_INVALID');
+  expectReason(() => owner.parseReviewUpdateRequestText(JSON.stringify({
+    ...value, expected_old_head:'bad',
+  })), 'REVIEW_UPDATE_OLD_HEAD_INVALID');
+
+  const parsed = owner.parseArgs([
+    'review-update','--manifest','m','--ledger','l','--packet','p',
+    '--review-update-request','r','--patch','x','--pr-request','pr','--apply',
+  ]);
+  assert.equal(parsed.operation, 'review-update');
+  assert.equal(parsed.apply, true);
+  assert.deepEqual(Object.keys(parsed.values).sort(),
+    ['ledger','manifest','packet','patch','pr-request','review-update-request']);
+  expectReason(() => owner.parseArgs([
+    'review-update','--manifest','m','--ledger','l','--packet','p',
+    '--review-update-request','r','--patch','x','--pr-request','pr',
+    '--branch','laptop/other','--apply',
+  ]), 'ARGUMENT_UNSUPPORTED:branch');
+});
+
+
+test('review-update PR readback requires one exact non-draft main PR', () => {
+  const m = manifest({
+    workspace:{kind:'repository',branch:'laptop/task-9001',worktree:'/tmp/review-fixture'},
+  });
+  const prRequest={title:'fix: bounded review',body:'Refs #9001'};
+  const row={
+    number:4001,title:prRequest.title,body:prRequest.body,isDraft:false,
+    headRefName:m.workspace.branch,headRefOid:'a'.repeat(40),baseRefName:'main',
+  };
+  const runner = () => ({
+    code:0,stdout:JSON.stringify([row]),stderr:'',signal:null,error:null,
+  });
+  assert.equal(owner.readExistingReviewPr(runner,m,prRequest).number,4001);
+  expectReason(() => owner.readExistingReviewPr(
+    () => ({code:0,stdout:'[]',stderr:'',signal:null,error:null}),m,prRequest),
+  'REVIEW_UPDATE_PR_COUNT_INVALID');
+  expectReason(() => owner.readExistingReviewPr(
+    () => ({
+      code:0,stdout:JSON.stringify([{...row,isDraft:true}]),
+      stderr:'',signal:null,error:null,
+    }),m,prRequest),
+  'REVIEW_UPDATE_PR_IDENTITY_CONFLICT');
+});
+
+function reviewRunner(remote, branch, prRequest, overrides = {}) {
+  return (command, args, options = {}) => {
+    if (command === 'gh') {
+      const head = gitExec(remote, ['rev-parse','refs/heads/' + branch]).trim();
+      const row = {
+        number:4001,title:prRequest.title,body:prRequest.body,isDraft:false,
+        headRefName:branch,headRefOid:head,baseRefName:'main',...overrides,
+      };
+      return {code:0,stdout:JSON.stringify([row]),stderr:'',signal:null,error:null};
+    }
+    const cp = childProcess.spawnSync(command, args, {
+      cwd:options.cwd,encoding:'utf8',input:options.input,
+      env:options.env || process.env,shell:false,
+    });
+    return {
+      code:cp.status ?? 1,stdout:cp.stdout || '',stderr:cp.stderr || '',
+      signal:cp.signal || null,error:cp.error || null,
+    };
+  };
+}
+
+
+
+test('review-update current-main reader permits a divergent unmerged PR head', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-review-main-'));
+  const remote = path.join(tmp, 'remote.git');
+  const landing = path.join(tmp, 'landing');
+  const feature = path.join(tmp, 'feature');
+  try {
+    gitExec(tmp, ['init','--bare',remote]);
+    gitExec(tmp, ['clone',remote,landing]);
+    gitExec(landing, ['config','user.name','fixture']);
+    gitExec(landing, ['config','user.email','fixture@example.invalid']);
+    fs.writeFileSync(path.join(landing,'base.txt'),
+      Array.from({length:20},(_,i) => 'line-' + (i + 1)).join('\n') + '\n');
+    gitExec(landing, ['add','base.txt']);
+    gitExec(landing, ['commit','-m','base']);
+    gitExec(landing, ['branch','-M','main']);
+    gitExec(landing, ['push','-u','origin','main']);
+    const base = gitExec(landing, ['rev-parse','HEAD']).trim();
+
+    gitExec(landing, ['worktree','add','-b','laptop/task-9001',feature,base]);
+    const lines = fs.readFileSync(path.join(feature,'base.txt'),'utf8').split('\n');
+    lines[0] = 'feature-line-1';
+    fs.writeFileSync(path.join(feature,'base.txt'),lines.join('\n'));
+    gitExec(feature, ['add','base.txt']);
+    gitExec(feature, ['-c','user.name=fixture','-c','user.email=fixture@example.invalid',
+      'commit','-m','feature']);
+    const oldHead = gitExec(feature, ['rev-parse','HEAD']).trim();
+    gitExec(feature, ['push','origin','HEAD:refs/heads/laptop/task-9001']);
+
+    fs.writeFileSync(path.join(landing,'main.txt'),'main advance\n');
+    gitExec(landing, ['add','main.txt']);
+    gitExec(landing, ['commit','-m','main advance']);
+    gitExec(landing, ['push','origin','main']);
+    const currentMain = gitExec(landing, ['rev-parse','HEAD']).trim();
+    gitExec(landing, ['fetch','origin',
+      'refs/heads/laptop/task-9001:refs/remotes/origin/task-9001']);
+
+    const ancestry = childProcess.spawnSync('git',
+      ['-C',landing,'merge-base','--is-ancestor',oldHead,currentMain]);
+    assert.equal(ancestry.status,1);
+
+    const m = manifest({
+      packetRef:'#9001',
+      workspace:{kind:'repository',branch:'laptop/task-9001',worktree:feature},
+      observedBaseSha:oldHead,
+      scopes:['path:base.txt','surface:mcl:test'],
+    });
+    const profile={...owner.DEFAULT_PROFILE,landing,worktreeRoot:tmp};
+    const runner = (command,args,options={}) => {
+      if (command === 'gh') {
+        return {code:0,stdout:currentMain + '\n',stderr:'',signal:null,error:null};
+      }
+      if (command === 'git'
+          && args.slice(-3).join('\0') === ['remote','get-url','origin'].join('\0')) {
+        return {code:0,stdout:owner.FIXED_ORIGIN_URL + '\n',stderr:'',signal:null,error:null};
+      }
+      const cp=childProcess.spawnSync(command,args,{
+        cwd:options.cwd,encoding:'utf8',input:options.input,
+        env:options.env || process.env,shell:false,
+      });
+      return {code:cp.status ?? 1,stdout:cp.stdout || '',stderr:cp.stderr || '',
+        signal:cp.signal || null,error:cp.error || null};
+    };
+    assert.equal(owner.reviewUpdateCurrentMain(m,{profile,runner}),currentMain);
+  } finally {
+    try { gitExec(landing,['worktree','remove',feature,'--force']); } catch {}
+    fs.rmSync(tmp,{recursive:true,force:true});
+  }
+});
+
+
+test('review-update classifies clean local ancestor as LOCAL_BEHIND then READY after exact fast-forward', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-review-local-behind-'));
+  const remote = path.join(tmp, 'remote.git');
+  const landing = path.join(tmp, 'landing');
+  const feature = path.join(tmp, 'feature');
+  const updater = path.join(tmp, 'updater');
+  try {
+    gitExec(tmp, ['init','--bare',remote]);
+    gitExec(tmp, ['clone',remote,landing]);
+    gitExec(landing, ['config','user.name','fixture']);
+    gitExec(landing, ['config','user.email','fixture@example.invalid']);
+    fs.writeFileSync(path.join(landing,'base.txt'),'base\n');
+    gitExec(landing, ['add','base.txt']);
+    gitExec(landing, ['commit','-m','base']);
+    gitExec(landing, ['branch','-M','main']);
+    gitExec(landing, ['push','-u','origin','main']);
+    const base = gitExec(landing, ['rev-parse','HEAD']).trim();
+
+    gitExec(landing, ['worktree','add','-b','laptop/task-9001',feature,base]);
+    fs.writeFileSync(path.join(feature,'base.txt'),'feature\n');
+    gitExec(feature, ['add','base.txt']);
+    gitExec(feature, ['-c','user.name=fixture','-c','user.email=fixture@example.invalid',
+      'commit','-m','feature']);
+    const localOldHead = gitExec(feature, ['rev-parse','HEAD']).trim();
+    gitExec(feature, ['push','origin','HEAD:refs/heads/laptop/task-9001']);
+
+    fs.writeFileSync(path.join(landing,'main.txt'),'main advance\n');
+    gitExec(landing, ['add','main.txt']);
+    gitExec(landing, ['commit','-m','main advance']);
+    gitExec(landing, ['push','origin','main']);
+    const currentMain = gitExec(landing, ['rev-parse','HEAD']).trim();
+
+    gitExec(tmp, ['clone',remote,updater]);
+    gitExec(updater, ['config','user.name','fixture']);
+    gitExec(updater, ['config','user.email','fixture@example.invalid']);
+    gitExec(updater, ['checkout','-b','laptop/task-9001','origin/laptop/task-9001']);
+    gitExec(updater, ['merge','--no-ff','--no-edit','origin/main']);
+    const expectedOldHead = gitExec(updater, ['rev-parse','HEAD']).trim();
+    gitExec(updater, ['push','origin','HEAD:refs/heads/laptop/task-9001']);
+
+    gitExec(landing, ['fetch','origin',
+      'refs/heads/laptop/task-9001:refs/remotes/origin/task-9001']);
+    assert.equal(gitExec(feature, ['rev-parse','HEAD']).trim(),localOldHead);
+
+    const request={
+      schema:owner.REVIEW_UPDATE_REQUEST_SCHEMA,
+      packet_ref:'#9001',
+      message:'fix: local-behind fixture',
+      expected_old_head:expectedOldHead,
+      expected_paths:['base.txt'],
+      patch_sha256:'a'.repeat(64),
+    };
+    const prRequest={title:'fix: fixture PR',body:'Refs #9001'};
+    const m=manifest({
+      packetRef:'#9001',
+      workspace:{kind:'repository',branch:'laptop/task-9001',worktree:feature},
+      observedBaseSha:expectedOldHead,
+      scopes:['path:base.txt','surface:mcl:test'],
+    });
+    const profile={...owner.DEFAULT_PROFILE,landing,worktreeRoot:tmp};
+    const runner=reviewRunner(remote,m.workspace.branch,prRequest);
+
+    const before=owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,'b'.repeat(64),{profile,runner});
+    assert.equal(before.state,'LOCAL_BEHIND');
+    assert.equal(before.remoteHead,expectedOldHead);
+    assert.equal(before.pr.headRefOid,expectedOldHead);
+
+    gitExec(feature, ['merge','--ff-only',expectedOldHead]);
+    assert.equal(gitExec(feature, ['rev-parse','HEAD']).trim(),expectedOldHead);
+
+    const after=owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,'b'.repeat(64),{profile,runner});
+    assert.equal(after.state,'READY');
+  } finally {
+    try { gitExec(landing,['worktree','remove',feature,'--force']); } catch {}
+    fs.rmSync(tmp,{recursive:true,force:true});
+  }
+});
+
+
+test('candidate path parser accepts an explicitly allowed empty diff only', () => {
+  assert.deepEqual(owner.candidatePathsFromNameStatus('', {allowEmpty:true}), []);
+  expectReason(() => owner.candidatePathsFromNameStatus(''),
+    'GITHUB_WORKFLOW_DIFF_UNOBSERVED');
+});
+
+test('review-update prepared digest accepts ordinary deletion and rename paths', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-review-delete-'));
+  try {
+    gitExec(tmp, ['init']);
+    gitExec(tmp, ['config','user.name','fixture']);
+    gitExec(tmp, ['config','user.email','fixture@example.invalid']);
+    fs.writeFileSync(path.join(tmp,'drop.txt'),'drop\n');
+    fs.writeFileSync(path.join(tmp,'old.txt'),'rename\n');
+    gitExec(tmp, ['add','drop.txt','old.txt']);
+    gitExec(tmp, ['commit','-m','base']);
+    const oldHead=gitExec(tmp,['rev-parse','HEAD']).trim();
+
+    gitExec(tmp, ['rm','drop.txt']);
+    gitExec(tmp, ['mv','old.txt','new.txt']);
+    const patch=gitExec(tmp,['diff','--cached','--binary','--']);
+    gitExec(tmp, ['reset','--hard','HEAD']);
+
+    const request={
+      schema:owner.REVIEW_UPDATE_REQUEST_SCHEMA,
+      packet_ref:'#9001',
+      message:'fix: delete and rename review paths',
+      expected_old_head:oldHead,
+      expected_paths:['drop.txt','new.txt','old.txt'],
+      patch_sha256:owner.sha256Bytes(Buffer.from(patch,'utf8')),
+    };
+    const m=manifest({
+      workspace:{kind:'repository',branch:'laptop/task-9001',worktree:tmp},
+      observedBaseSha:oldHead,
+      scopes:['path:drop.txt','path:new.txt','path:old.txt','surface:mcl:test'],
+    });
+    const digest=owner.expectedReviewUpdatePreparedDigest(
+      m,request,Buffer.from(patch,'utf8'));
+    assert.match(digest,/^[0-9a-f]{64}$/);
+  } finally {
+    fs.rmSync(tmp,{recursive:true,force:true});
+  }
+});
+
+test('review-update replay and currentized proof accept exact empty final path set', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-review-empty-final-'));
+  try {
+    gitExec(tmp, ['init']);
+    gitExec(tmp, ['config','user.name','fixture']);
+    gitExec(tmp, ['config','user.email','fixture@example.invalid']);
+    fs.writeFileSync(path.join(tmp,'base.txt'),'base\n');
+    gitExec(tmp, ['add','base.txt']);
+    gitExec(tmp, ['commit','-m','base']);
+    const base=gitExec(tmp,['rev-parse','HEAD']).trim();
+    gitExec(tmp, ['branch','feature']);
+
+    fs.writeFileSync(path.join(tmp,'main.txt'),'main advance\n');
+    gitExec(tmp, ['add','main.txt']);
+    gitExec(tmp, ['commit','-m','main advance']);
+    const currentMain=gitExec(tmp,['rev-parse','HEAD']).trim();
+
+    gitExec(tmp, ['switch','feature']);
+    fs.writeFileSync(path.join(tmp,'base.txt'),'feature\n');
+    gitExec(tmp, ['add','base.txt']);
+    gitExec(tmp, ['commit','-m','feature change']);
+    const oldHead=gitExec(tmp,['rev-parse','HEAD']).trim();
+
+    fs.writeFileSync(path.join(tmp,'base.txt'),'base\n');
+    const reviewPatch=gitExec(tmp,['diff','--binary','--','base.txt']);
+    gitExec(tmp, ['add','base.txt']);
+    gitExec(tmp, ['commit','-m','review reverts feature']);
+    const candidateHead=gitExec(tmp,['rev-parse','HEAD']).trim();
+
+    const request={
+      schema:owner.REVIEW_UPDATE_REQUEST_SCHEMA,
+      packet_ref:'#9001',
+      message:'fix: revert feature to current main',
+      expected_old_head:oldHead,
+      expected_paths:['base.txt'],
+      patch_sha256:owner.sha256Bytes(Buffer.from(reviewPatch,'utf8')),
+      prepared_digest:owner.sha256Bytes(Buffer.from(reviewPatch,'utf8')),
+    };
+    const m=manifest({
+      workspace:{kind:'repository',branch:'laptop/task-9001',worktree:tmp},
+      observedBaseSha:oldHead,
+      scopes:['path:base.txt','surface:mcl:test'],
+    });
+    const runner=(command,args,options={}) => {
+      const cp=childProcess.spawnSync(command,args,{
+        cwd:options.cwd,encoding:'utf8',input:options.input,
+        env:options.env || process.env,shell:false,
+      });
+      return {code:cp.status ?? 1,stdout:cp.stdout || '',stderr:cp.stderr || '',
+        signal:cp.signal || null,error:cp.error || null};
+    };
+
+    const replay=owner.verifyReviewUpdateReplayAgainstCurrent(
+      m,request,currentMain,{runner,candidateHead});
+    assert.deepEqual(replay.replayPaths,[]);
+
+    gitExec(tmp, ['merge','--no-ff','--no-edit',currentMain]);
+    const finalHead=gitExec(tmp,['rev-parse','HEAD']).trim();
+    assert.doesNotThrow(() => owner.assertReviewUpdateCurrentizedPayload(
+      runner,m,request,candidateHead,currentMain,finalHead));
+    assert.notEqual(base,currentMain);
+  } finally {
+    fs.rmSync(tmp,{recursive:true,force:true});
+  }
+});
+
+
+test('review-update replay preserves original PR payload plus bounded review delta', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-review-update-'));
+  const remote = path.join(tmp, 'remote.git');
+  const landing = path.join(tmp, 'landing');
+  const feature = path.join(tmp, 'feature');
+  try {
+    gitExec(tmp, ['init','--bare',remote]);
+    gitExec(tmp, ['clone',remote,landing]);
+    gitExec(landing, ['config','user.name','fixture']);
+    gitExec(landing, ['config','user.email','fixture@example.invalid']);
+    fs.writeFileSync(path.join(landing, 'base.txt'),
+      Array.from({length:20},(_,i) => 'base-line-' + (i + 1)).join('\n') + '\n');
+    gitExec(landing, ['add','base.txt']);
+    gitExec(landing, ['commit','-m','base']);
+    gitExec(landing, ['branch','-M','main']);
+    gitExec(landing, ['push','-u','origin','main']);
+    const originalBase = gitExec(landing, ['rev-parse','HEAD']).trim();
+
+    gitExec(landing, ['worktree','add','-b','laptop/task-9001',feature,originalBase]);
+    const featureLines = fs.readFileSync(path.join(feature,'base.txt'),'utf8').split('\n');
+    featureLines[0] = 'feature-line-1';
+    fs.writeFileSync(path.join(feature,'base.txt'),featureLines.join('\n'));
+    fs.writeFileSync(path.join(feature,'feature.txt'),'original feature payload\n');
+    gitExec(feature, ['add','base.txt','feature.txt']);
+    gitExec(feature, ['-c','user.name=fixture','-c','user.email=fixture@example.invalid',
+      'commit','-m','original feature']);
+    const oldHead = gitExec(feature, ['rev-parse','HEAD']).trim();
+    gitExec(feature, ['push','origin','HEAD:refs/heads/laptop/task-9001']);
+
+    fs.writeFileSync(path.join(landing, 'main.txt'), 'main advance\n');
+    gitExec(landing, ['add','main.txt']);
+    gitExec(landing, ['commit','-m','main advance']);
+    gitExec(landing, ['push','origin','main']);
+    const currentMain = gitExec(landing, ['rev-parse','HEAD']).trim();
+
+    const ancestry = childProcess.spawnSync('git',
+      ['-C',landing,'merge-base','--is-ancestor',oldHead,currentMain]);
+    assert.equal(ancestry.status,1);
+
+    const reviewLines = fs.readFileSync(path.join(feature,'base.txt'),'utf8').split('\n');
+    reviewLines[0] = 'feature-line-1-reviewed';
+    fs.writeFileSync(path.join(feature,'base.txt'),reviewLines.join('\n'));
+    const patch = gitExec(feature, ['diff','--binary','--','base.txt']);
+    gitExec(feature, ['restore','--','base.txt']);
+
+    const request = {
+      schema:owner.REVIEW_UPDATE_REQUEST_SCHEMA,
+      packet_ref:'#9001',
+      message:'fix: fixture review update',
+      expected_old_head:oldHead,
+      expected_paths:['base.txt'],
+      patch_sha256:owner.sha256Bytes(Buffer.from(patch,'utf8')),
+    };
+    const prRequest={title:'fix: fixture PR',body:'Refs #9001'};
+    const m = manifest({
+      packetRef:'#9001',
+      workspace:{kind:'repository',branch:'laptop/task-9001',worktree:feature},
+      observedBaseSha:oldHead,
+      scopes:['path:base.txt','surface:mcl:test'],
+    });
+    const profile={...owner.DEFAULT_PROFILE,landing,worktreeRoot:tmp};
+    const runner=reviewRunner(remote,m.workspace.branch,prRequest);
+    const preparedDigest=owner.expectedReviewUpdatePreparedDigest(
+      m,request,Buffer.from(patch,'utf8'),{runner});
+
+    assert.equal(owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,preparedDigest,{profile,runner}).state,'READY');
+
+    gitExec(feature, ['apply','--index','-'], {input:patch});
+    assert.equal(owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,preparedDigest,{profile,runner}).state,'PREPARED');
+
+    const replay=owner.verifyReviewUpdateReplayAgainstCurrent(
+      m,{...request,prepared_digest:preparedDigest},currentMain,{runner});
+    assert.equal(replay.currentMain,currentMain);
+    assert.equal(replay.originalBase,originalBase);
+    assert.deepEqual(replay.originalPaths,['base.txt','feature.txt']);
+    assert.deepEqual(replay.replayPaths,['base.txt','feature.txt']);
+
+    gitExec(feature, ['-c','user.name=' + owner.FIXED_BOT_NAME,
+      '-c','user.email=' + owner.FIXED_BOT_EMAIL,
+      'commit','-m',request.message]);
+    const committed=owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,preparedDigest,{profile,runner});
+    assert.equal(committed.state,'COMMITTED');
+
+    const replayAfterLostCommitAck=owner.verifyReviewUpdateReplayAgainstCurrent(
+      m,{...request,prepared_digest:preparedDigest},currentMain,
+      {runner,candidateHead:committed.candidateHead});
+    assert.equal(replayAfterLostCommitAck.patchId,replay.patchId);
+
+    gitExec(feature, ['-c','user.name=' + owner.FIXED_BOT_NAME,
+      '-c','user.email=' + owner.FIXED_BOT_EMAIL,
+      'merge','--no-ff','--no-edit',currentMain]);
+    const currentized=owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,preparedDigest,{profile,runner});
+    assert.equal(currentized.state,'CURRENTIZED');
+    assert.match(fs.readFileSync(path.join(feature,'base.txt'),'utf8'),
+      /^feature-line-1-reviewed/m);
+    assert.equal(fs.readFileSync(path.join(feature,'feature.txt'),'utf8'),
+      'original feature payload\n');
+    assert.equal(fs.readFileSync(path.join(feature,'main.txt'),'utf8'),'main advance\n');
+
+    const driftIndex=path.join(tmp,'drift.index');
+    const driftEnv={...process.env,GIT_INDEX_FILE:driftIndex};
+    const runIndex=(args,input=null) => {
+      const cp=childProcess.spawnSync('git',args,{
+        cwd:feature,encoding:'utf8',input,env:driftEnv,shell:false,
+      });
+      if (cp.status !== 0) throw new Error('git index failed: ' + args.join(' ') + '\n' + cp.stderr);
+      return cp.stdout || '';
+    };
+    runIndex(['read-tree',currentized.finalHead]);
+    const blob=gitExec(feature,['hash-object','-w','--stdin'],{input:'unrelated drift\n'}).trim();
+    runIndex(['update-index','--add','--cacheinfo','100644',blob,'unrelated.txt']);
+    const tree=runIndex(['write-tree']).trim();
+    const commitEnv={...process.env,
+      GIT_AUTHOR_NAME:'fixture',GIT_AUTHOR_EMAIL:'fixture@example.invalid',
+      GIT_COMMITTER_NAME:'fixture',GIT_COMMITTER_EMAIL:'fixture@example.invalid'};
+    const drift=childProcess.spawnSync('git',
+      ['commit-tree',tree,'-p',committed.candidateHead,'-p',currentMain],
+      {cwd:feature,encoding:'utf8',input:'drifted merge\n',env:commitEnv,shell:false});
+    assert.equal(drift.status,0,drift.stderr);
+    expectReason(() => owner.assertReviewUpdateCurrentizedPayload(
+      runner,m,{...request,prepared_digest:preparedDigest},
+      committed.candidateHead,currentMain,drift.stdout.trim()),
+    'REVIEW_UPDATE_CURRENTIZED_PATH_CONFLICT');
+
+    gitExec(feature, ['push','origin','HEAD:refs/heads/laptop/task-9001']);
+
+    const lagRunner=reviewRunner(
+      remote,m.workspace.branch,prRequest,{headRefOid:oldHead});
+    const pending=owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,preparedDigest,{profile,runner:lagRunner});
+    assert.equal(pending.state,'PR_PROJECTION_PENDING');
+    assert.equal(pending.remoteHead,pending.finalHead);
+    assert.equal(pending.pr.headRefOid,oldHead);
+
+    let projectionReads=0;
+    const projectionCommands=[];
+    const caughtUpRunner=(command,args,options={}) => {
+      projectionCommands.push(command + ' ' + args.slice(0,2).join(' '));
+      if (command !== 'gh') throw new Error('projection reconciliation attempted non-gh effect');
+      projectionReads += 1;
+      const headRefOid=projectionReads === 1 ? oldHead : pending.finalHead;
+      return reviewRunner(remote,m.workspace.branch,prRequest,{headRefOid})(
+        command,args,options);
+    };
+    const reconciled=owner.reconcileReviewUpdatePrProjection(
+      pending,m,request,prRequest,{runner:caughtUpRunner,sleep:()=>{}});
+    assert.equal(reconciled.state,'PUSHED');
+    assert.equal(reconciled.pr.number,4001);
+    assert.equal(reconciled.pr.headRefOid,pending.finalHead);
+    assert.equal(projectionReads,2);
+    assert(projectionCommands.every((row) => row.startsWith('gh pr')));
+
+    let unchangedSleeps=0;
+    const unchanged=owner.reconcileReviewUpdatePrProjection(
+      pending,m,request,prRequest,{
+        runner:lagRunner,
+        sleep:()=>{ unchangedSleeps += 1; },
+      });
+    assert.equal(unchanged.state,'PR_PROJECTION_PENDING');
+    assert.equal(unchanged.pr.headRefOid,oldHead);
+    assert.equal(unchangedSleeps,owner.REVIEW_UPDATE_PR_PROJECTION_REREAD_ATTEMPTS);
+
+    const thirdHeadRunner=reviewRunner(
+      remote,m.workspace.branch,prRequest,{headRefOid:'f'.repeat(40)});
+    expectReason(() => owner.reconcileReviewUpdatePrProjection(
+      pending,m,request,prRequest,{runner:thirdHeadRunner,sleep:()=>{}}),
+    'REVIEW_UPDATE_REMOTE_PR_HEAD_CONFLICT');
+
+    const pushed=owner.classifyReviewUpdateState(
+      m,request,prRequest,currentMain,preparedDigest,{profile,runner});
+    assert.equal(pushed.state,'PUSHED');
+    assert.equal(pushed.pr.number,4001);
+    assert.equal(pushed.candidateHead,committed.candidateHead);
+  } finally {
+    try { gitExec(landing, ['worktree','remove',feature,'--force']); } catch {}
+    fs.rmSync(tmp,{recursive:true,force:true});
+  }
+});
+
+
+test('executeReviewUpdate accepts empty original payload plus cjs rename review delta', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-review-execute-'));
+  const remote = path.join(tmp, 'remote.git');
+  const landing = path.join(tmp, 'landing');
+  const feature = path.join(tmp, 'feature');
+  const originalHolderCheck = workspaceHolder.checkHolder;
+  try {
+    gitExec(tmp, ['init','--bare',remote]);
+    gitExec(tmp, ['clone',remote,landing]);
+    gitExec(landing, ['config','user.name','fixture']);
+    gitExec(landing, ['config','user.email','fixture@example.invalid']);
+    fs.writeFileSync(path.join(landing,'base.cjs'),
+      "'use strict';\nmodule.exports = 1;\n");
+    gitExec(landing, ['add','base.cjs']);
+    gitExec(landing, ['commit','-m','base']);
+    gitExec(landing, ['branch','-M','main']);
+    gitExec(landing, ['push','-u','origin','main']);
+    const currentMain=gitExec(landing,['rev-parse','HEAD']).trim();
+
+    gitExec(landing,['worktree','add','-b','laptop/task-9001',feature,currentMain]);
+    gitExec(feature,['push','-u','origin','HEAD:refs/heads/laptop/task-9001']);
+
+    const directRunner=(command,args,options={}) => {
+      const cp=childProcess.spawnSync(command,args,{
+        cwd:options.cwd,encoding:'utf8',input:options.input,
+        env:options.env || process.env,shell:false,
+      });
+      return {code:cp.status ?? 1,stdout:cp.stdout || '',stderr:cp.stderr || '',
+        signal:cp.signal || null,error:cp.error || null};
+    };
+    assert.deepEqual(owner.reviewUpdateOriginalPaths(
+      directRunner, feature, currentMain, currentMain), []);
+
+    gitExec(feature,['mv','base.cjs','renamed.cjs']);
+    const patch=gitExec(feature,['diff','--cached','--binary','--']);
+    gitExec(feature,['reset','--hard','HEAD']);
+
+    const request={
+      schema:owner.REVIEW_UPDATE_REQUEST_SCHEMA,
+      packet_ref:'#9001',
+      message:'fix: execution-path review update',
+      expected_old_head:currentMain,
+      expected_paths:['base.cjs','renamed.cjs'],
+      patch_sha256:owner.sha256Bytes(Buffer.from(patch,'utf8')),
+    };
+    const prRequest={title:'fix: fixture PR',body:'Refs #9001'};
+    const m=manifest({
+      packetRef:'#9001',
+      workspace:{kind:'repository',branch:'laptop/task-9001',worktree:feature},
+      observedBaseSha:currentMain,
+      scopes:['path:base.cjs','path:renamed.cjs','surface:mcl:test'],
+    });
+    const profile={...owner.DEFAULT_PROFILE,landing,worktreeRoot:tmp};
+    const context={
+      manifest:m,
+      manifestPath:path.join(tmp,'manifest.txt'),
+      ledgerPath:path.join(tmp,'ledger.txt'),
+      packetPath:path.join(tmp,'packet.txt'),
+    };
+    workspaceHolder.checkHolder=() => ({status:'CHECK_PASS',reasonCodes:[]});
+
+    const runner=(command,args,options={}) => {
+      if (command === process.execPath) {
+        const deletedCheck=args[0] === '--check' && args[1] === path.join(feature,'base.cjs');
+        return {code:deletedCheck ? 1 : 0,stdout:deletedCheck ? '' : 'PASS\n',
+          stderr:'',signal:null,error:null};
+      }
+      if (command === 'gh') {
+        if (args[0] === 'api' && args[1] === 'repos/hanmiyoo10-alt/-/branches/main') {
+          return {code:0,stdout:currentMain + '\n',stderr:'',signal:null,error:null};
+        }
+        if (args[0] === 'pr' && args[1] === 'list') {
+          const head=gitExec(remote,['rev-parse','refs/heads/laptop/task-9001']).trim();
+          const row={number:4001,title:prRequest.title,body:prRequest.body,isDraft:false,
+            headRefName:'laptop/task-9001',headRefOid:head,baseRefName:'main'};
+          return {code:0,stdout:JSON.stringify([row]),stderr:'',signal:null,error:null};
+        }
+        return {code:1,stdout:'',stderr:'unexpected gh',signal:null,error:null};
+      }
+      if (command === 'git'
+          && args.slice(-3).join('\0') === ['remote','get-url','origin'].join('\0')) {
+        return {code:0,stdout:owner.FIXED_ORIGIN_URL + '\n',stderr:'',signal:null,error:null};
+      }
+      return directRunner(command,args,options);
+    };
+
+    const result=owner.executeReviewUpdate(
+      context,request,Buffer.from(patch,'utf8'),prRequest,
+      {profile,runner,env:{MCL_WORKSPACE_HOLDER_CLAIM:'fixture'},root:tmp});
+    assert.equal(result.status,'PASS');
+    assert.equal(result.pr_number,4001);
+    assert.equal(result.currentized,false);
+    assert.equal(result.base_sha,currentMain);
+    assert.equal(result.current_main,currentMain);
+    assert.equal(result.validation_checks.length,6);
+    assert.ok(result.validation_checks.includes('changed-cjs-syntax:renamed.cjs'));
+    assert.equal(result.validation_checks.includes('changed-cjs-syntax:base.cjs'),false);
+    assert.equal(gitExec(remote,['rev-parse','refs/heads/laptop/task-9001']).trim(),
+      result.new_head);
+    assert.equal(fs.existsSync(path.join(feature,'base.cjs')),false);
+    assert.match(fs.readFileSync(path.join(feature,'renamed.cjs'),'utf8'),/module\.exports = 1/);
+  } finally {
+    workspaceHolder.checkHolder=originalHolderCheck;
+    try { gitExec(landing,['worktree','remove',feature,'--force']); } catch {}
+    fs.rmSync(tmp,{recursive:true,force:true});
+  }
+});
+
+
+test('review-update effect stays same-PR non-force and current-main replay bound', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../mcl-l-repository-owner.cjs'), 'utf8');
+  const start = source.indexOf('function executeReviewUpdate(');
+  const end = source.indexOf('function executePreparedContinuation(', start);
+  assert.ok(start >= 0 && end > start);
+  const block = source.slice(start,end);
+  assert.ok(block.includes('verifyReviewUpdateReplayAgainstCurrent('));
+  assert.ok(block.includes('const replayRequest = {...request, prepared_digest:preparedDigest};'));
+  assert.equal((block.match(/manifest, replayRequest, currentMain/g) || []).length, 3);
+  assert.ok(block.includes('reviewUpdateCurrentMain('));
+  assert.ok(source.includes('assertReviewUpdateCurrentizedPayload('));
+  assert.ok(source.includes('reviewUpdateOriginalPaths('));
+  assert.ok(block.includes('requireGithubWorkflowPushCredential('));
+  const resumed = block.indexOf("if (resumedCurrentized)");
+  const resumedReplay = block.indexOf('replay = verifyReviewUpdateReplayAgainstCurrent(', resumed);
+  const resumedValidation = block.indexOf(
+    'checks = runContinuationValidation(manifest, replayRequest, {runner, root});', resumed);
+  const pushGate = block.indexOf(
+    "if (state.state === 'CURRENTIZED' || state.state === 'COMMITTED')", resumed);
+  const finalHolder = block.indexOf('holderCheck(context, env);', pushGate);
+  const finalMain = block.indexOf('reviewUpdateCurrentMain(manifest, {profile, runner})', pushGate);
+  const push = block.indexOf('pushExactCandidate(', pushGate);
+  assert.ok(resumed >= 0);
+  assert.ok(resumedReplay > resumed && resumedValidation > resumedReplay);
+  assert.ok(pushGate > resumedValidation);
+  assert.ok(finalHolder > pushGate && finalMain > finalHolder && push > finalMain);
+  assert.ok(block.includes("state.state === 'LOCAL_BEHIND'"));
+  assert.ok(block.includes("'merge', '--ff-only', request.expected_old_head"));
+  assert.ok(block.includes("'merge', '--no-ff', '--no-edit', currentMain"));
+  assert.ok(block.includes('pushExactCandidate('));
+  assert.ok(block.includes('state.pr.number !== oldPrNumber'));
+  const initialProjectionGuard=block.indexOf("if (state.state === 'PR_PROJECTION_PENDING')");
+  const candidatePaths=block.indexOf('const candidatePaths =');
+  assert.ok(initialProjectionGuard >= 0 && initialProjectionGuard < candidatePaths);
+  assert.ok(block.includes('reconcileReviewUpdatePrProjection('));
+  assert.ok(source.includes("next_legal_action:'REREAD_SAME_PR_PROJECTION'"));
+  assert.ok(block.includes("return pendingReviewUpdateResult("));
+  const helperSource=source.slice(
+    source.indexOf('function reconcileReviewUpdatePrProjection('),
+    source.indexOf('function pendingReviewUpdateResult('));
+  assert.equal(helperSource.includes('pushExactCandidate('),false);
+  assert.equal(helperSource.includes("'commit'"),false);
+  assert.equal(helperSource.includes("'merge'"),false);
+  assert.equal(helperSource.includes("'update-ref'"),false);
+  assert.equal(helperSource.includes("'--force'"),false);
+  assert.ok(block.includes("state.state === 'COMMITTED' && currentMain !== request.expected_old_head"));
+  assert.ok(block.includes("state.state === 'COMMITTED' && currentMain === request.expected_old_head"));
+  assert.equal(block.includes("'pr', 'create'"),false);
+  for (const forbidden of ["'reset'","'pull'","'rebase'","'stash'","'checkout'","'switch'","'cherry-pick'","'--force'"]) {
+    assert.equal(block.includes(forbidden),false,forbidden);
+  }
+});
+
+console.log('REVIEW_UPDATE_TESTS_PASS', passed);

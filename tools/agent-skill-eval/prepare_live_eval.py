@@ -11,6 +11,7 @@ LIVE_ALLOWED_SKILLS = frozenset(
         "plugin-authority-scan",
         "plugin-impact-scope",
         "agent-execution-compactness",
+        "validator-hardening",
     }
 )
 

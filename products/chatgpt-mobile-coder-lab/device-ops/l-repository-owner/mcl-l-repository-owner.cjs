@@ -21,10 +21,14 @@ const FIXED_BOT_NAME = 'mcl-repository-patch[bot]';
 const FIXED_BOT_EMAIL = 'mcl-repository-patch@users.noreply.github.com';
 const REQUEST_SCHEMA = 'mcl-l-repository-owner-request.v1';
 const CONTINUATION_REQUEST_SCHEMA = 'mcl-l-prepared-continuation-request.v1';
+const INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA = 'mcl-l-interrupted-recovery-continuation-request.v1';
+const REVIEW_UPDATE_REQUEST_SCHEMA = 'mcl-l-review-update-request.v1';
 const PRIOR_MANIFEST_REF_PREFIX = 'receipt:mcl-task-manifest:';
 const PRIOR_BLOCKED_RECEIPT_REF_PREFIX = 'receipt:mcl-task-completion-receipt:';
 const BLOCKER_REPAIR_REF_PREFIX = 'receipt:canonical-main-stage:';
 const PREPARED_DIFF_REF_PREFIX = 'receipt:mcl-l-prepared-diff:';
+const INTERRUPTED_RECOVERY_REF_PREFIX = 'receipt:mcl-interrupted-recovery:';
+const DIRTY_DIFF_REF_PREFIX = 'receipt:mcl-dirty-diff:';
 const PR_REQUEST_SCHEMA = 'mcl-l-pr-publication-request.v1';
 const OUTPUT_SCHEMA = 'mcl-l-repository-owner.v1';
 const MAX_INPUT_BYTES = 64 * 1024;
@@ -36,6 +40,10 @@ const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const PACKET_REF_RE = /^#[1-9][0-9]*$/;
 const BRANCH_RE = /^laptop\/[A-Za-z0-9._/-]+$/;
+const WORKFLOW_PATH_PREFIX = '.github/workflows/';
+const FIXED_GH = '/usr/bin/gh';
+const FIXED_ORIGIN_URL = 'https://github.com/hanmiyoo10-alt/-.git';
+const FIXED_GITHUB_CREDENTIAL_HELPER = '!/usr/bin/gh auth git-credential';
 const FALSE_AUTHORITY = Object.freeze({
   repositoryMutationAuthorized: false,
   deviceMutationAuthorized: false,
@@ -163,17 +171,59 @@ function parseRequestText(text) {
   };
 }
 
+function parseReviewUpdateRequestText(text) {
+  let value;
+  try { value = JSON.parse(String(text)); }
+  catch { throw new OwnerError('UNKNOWN', ['REVIEW_UPDATE_REQUEST_JSON_INVALID']); }
+  exactKeys(value, new Set([
+    'schema', 'packet_ref', 'message', 'expected_old_head', 'expected_paths', 'patch_sha256',
+  ]), 'REVIEW_UPDATE_REQUEST');
+  if (value.schema !== REVIEW_UPDATE_REQUEST_SCHEMA
+      || !PACKET_REF_RE.test(value.packet_ref || '')) {
+    throw new OwnerError('UNKNOWN', ['REVIEW_UPDATE_REQUEST_SCHEMA_OR_PACKET_INVALID']);
+  }
+  if (typeof value.message !== 'string' || value.message.length < 1
+      || value.message.length > 200 || /[\u0000-\u001f\u007f]/.test(value.message)) {
+    throw new OwnerError('UNKNOWN', ['REVIEW_UPDATE_REQUEST_MESSAGE_INVALID']);
+  }
+  if (!SHA40_RE.test(value.expected_old_head || '')) {
+    throw new OwnerError('UNKNOWN', ['REVIEW_UPDATE_OLD_HEAD_INVALID']);
+  }
+  if (!Array.isArray(value.expected_paths) || value.expected_paths.length < 1
+      || value.expected_paths.length > MAX_FILES
+      || value.expected_paths.some((item) => typeof item !== 'string')
+      || new Set(value.expected_paths).size !== value.expected_paths.length) {
+    throw new OwnerError('UNKNOWN', ['REVIEW_UPDATE_REQUEST_PATHS_INVALID']);
+  }
+  for (const item of value.expected_paths) validateRepoPath(item);
+  if (!SHA256_RE.test(value.patch_sha256 || '')) {
+    throw new OwnerError('UNKNOWN', ['REVIEW_UPDATE_PATCH_SHA_INVALID']);
+  }
+  return {
+    schema:value.schema,
+    packet_ref:value.packet_ref,
+    message:value.message,
+    expected_old_head:value.expected_old_head,
+    expected_paths:[...value.expected_paths].sort(),
+    patch_sha256:value.patch_sha256,
+  };
+}
+
 function parsePreparedContinuationRequestText(text) {
   let value;
   try { value = JSON.parse(String(text)); }
   catch { throw new OwnerError('UNKNOWN', ['CONTINUATION_REQUEST_JSON_INVALID']); }
-  exactKeys(value, new Set([
-    'schema', 'message', 'expected_paths', 'prepared_digest', 'prior_manifest_id',
-    'prior_blocked_receipt_id', 'blocker_repair_receipt',
-  ]), 'CONTINUATION_REQUEST');
-  if (value.schema !== CONTINUATION_REQUEST_SCHEMA) {
+  const legacy = value?.schema === CONTINUATION_REQUEST_SCHEMA;
+  const generalRecovery = value?.schema === INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA;
+  if (!legacy && !generalRecovery) {
     throw new OwnerError('UNKNOWN', ['CONTINUATION_REQUEST_SCHEMA_INVALID']);
   }
+  const keys = generalRecovery
+    ? new Set(['schema', 'message', 'expected_paths', 'prepared_digest', 'prior_manifest_id',
+      'recovery_classification_digest'])
+    : new Set(['schema', 'message', 'expected_paths', 'prepared_digest', 'prior_manifest_id',
+      'prior_blocked_receipt_id', 'blocker_repair_receipt']);
+  exactKeys(value, keys, 'CONTINUATION_REQUEST');
   if (typeof value.message !== 'string' || value.message.length < 1
       || value.message.length > 200 || /[\u0000-\u001f\u007f]/.test(value.message)) {
     throw new OwnerError('UNKNOWN', ['CONTINUATION_REQUEST_MESSAGE_INVALID']);
@@ -188,6 +238,23 @@ function parsePreparedContinuationRequestText(text) {
   for (const [field, reason] of [
     ['prepared_digest', 'CONTINUATION_PREPARED_DIGEST_INVALID'],
     ['prior_manifest_id', 'CONTINUATION_PRIOR_MANIFEST_INVALID'],
+  ]) {
+    if (!SHA256_RE.test(value[field] || '')) throw new OwnerError('UNKNOWN', [reason]);
+  }
+  if (generalRecovery) {
+    if (!SHA256_RE.test(value.recovery_classification_digest || '')) {
+      throw new OwnerError('UNKNOWN', ['CONTINUATION_RECOVERY_CLASSIFICATION_DIGEST_INVALID']);
+    }
+    return {
+      schema: value.schema,
+      message: value.message,
+      expected_paths: [...value.expected_paths].sort(),
+      prepared_digest: value.prepared_digest,
+      prior_manifest_id: value.prior_manifest_id,
+      recovery_classification_digest: value.recovery_classification_digest,
+    };
+  }
+  for (const [field, reason] of [
     ['prior_blocked_receipt_id', 'CONTINUATION_PRIOR_RECEIPT_INVALID'],
     ['blocker_repair_receipt', 'CONTINUATION_BLOCKER_REPAIR_RECEIPT_INVALID'],
   ]) {
@@ -213,7 +280,18 @@ function validatePreparedContinuationManifestBinding(manifest, request) {
     reasons.push('CONTINUATION_SCOPE_CONFLICT');
   }
   const refs = manifest.inputRefs || [];
-  const expected = [
+  const generalRecovery = request.schema === INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA;
+  if (generalRecovery && manifest.phaseClass !== 'COORDINATION') {
+    reasons.push('CONTINUATION_GENERAL_PHASE_CLASS_INVALID');
+  }
+  if (!generalRecovery && manifest.phaseClass !== 'REPOSITORY_MUTATION') {
+    reasons.push('CONTINUATION_LEGACY_PHASE_CLASS_INVALID');
+  }
+  const expected = generalRecovery ? [
+    [PRIOR_MANIFEST_REF_PREFIX, request.prior_manifest_id, 'CONTINUATION_PRIOR_MANIFEST_REF'],
+    [INTERRUPTED_RECOVERY_REF_PREFIX, request.recovery_classification_digest, 'CONTINUATION_INTERRUPTED_RECOVERY_REF'],
+    [DIRTY_DIFF_REF_PREFIX, request.prepared_digest, 'CONTINUATION_DIRTY_DIFF_REF'],
+  ] : [
     [PRIOR_MANIFEST_REF_PREFIX, request.prior_manifest_id, 'CONTINUATION_PRIOR_MANIFEST_REF'],
     [PRIOR_BLOCKED_RECEIPT_REF_PREFIX, request.prior_blocked_receipt_id, 'CONTINUATION_PRIOR_RECEIPT_REF'],
     [BLOCKER_REPAIR_REF_PREFIX, request.blocker_repair_receipt, 'CONTINUATION_BLOCKER_REPAIR_REF'],
@@ -261,9 +339,9 @@ const DEFAULT_PROFILE = Object.freeze({
   executor: FIXED_EXECUTOR,
 });
 
-function validateManifestShape(manifest, profile = DEFAULT_PROFILE) {
+function validateManifestShape(manifest, profile = DEFAULT_PROFILE, allowedPhaseClasses = ['REPOSITORY_MUTATION']) {
   const reasons = [];
-  if (manifest?.phaseClass !== 'REPOSITORY_MUTATION') reasons.push('MANIFEST_PHASE_CLASS_INVALID');
+  if (!Array.isArray(allowedPhaseClasses) || !allowedPhaseClasses.includes(manifest?.phaseClass)) reasons.push('MANIFEST_PHASE_CLASS_INVALID');
   if (manifest?.route !== profile.route || manifest?.executor !== profile.executor) {
     reasons.push('MANIFEST_ROUTE_EXECUTOR_INVALID');
   }
@@ -285,11 +363,14 @@ function manifestPathScopes(manifest) {
     .map((item) => item.slice(5)))].sort();
 }
 
-function evidenceContext({manifestPath, ledgerPath, packetPath, profile = DEFAULT_PROFILE}) {
+function evidenceContext({manifestPath, ledgerPath, packetPath, profile = DEFAULT_PROFILE, operation = 'inspect'}) {
   const manifestBytes = readRegular(manifestPath, 'MANIFEST_FILE');
   const ledgerBytes = readRegular(ledgerPath, 'LEDGER_FILE');
   const packetBytes = readRegular(packetPath, 'PACKET_FILE');
-  const manifest = validateManifestShape(parseManifestText(manifestBytes.toString('utf8')), profile);
+  const phaseClasses = operation === 'continue-prepared'
+    ? ['REPOSITORY_MUTATION', 'COORDINATION'] : ['REPOSITORY_MUTATION'];
+  const manifest = validateManifestShape(
+    parseManifestText(manifestBytes.toString('utf8')), profile, phaseClasses);
   const checked = workspaceHolder.validateEvidence({
     manifest,
     ledgerBody: ledgerBytes.toString('utf8'),
@@ -348,6 +429,138 @@ function git(runner, cwd, args, options = {}) {
 
 function gh(runner, args, options = {}) {
   return runChecked(runner, 'gh', args, options, options.reason || 'GH_COMMAND_FAILED');
+}
+
+function requiresWorkflowOauthScope(paths) {
+  return Array.isArray(paths)
+    && paths.some((item) => typeof item === 'string' && item.startsWith(WORKFLOW_PATH_PREFIX));
+}
+
+function candidatePathsFromNameStatus(text, {allowEmpty = false} = {}) {
+  const fields = String(text).split('\0');
+  if (fields.length && fields[fields.length - 1] === '') fields.pop();
+  if (!fields.length && allowEmpty) return [];
+  const paths = [];
+  for (let index = 0; index < fields.length;) {
+    const status = fields[index++];
+    if (!/^(?:[ACDMRTUXB]|[RC][0-9]{1,3})$/.test(status || '')) {
+      throw new OwnerError('UNKNOWN', ['GITHUB_WORKFLOW_DIFF_UNOBSERVED']);
+    }
+    const count = status.startsWith('R') || status.startsWith('C') ? 2 : 1;
+    if (index + count > fields.length) {
+      throw new OwnerError('UNKNOWN', ['GITHUB_WORKFLOW_DIFF_UNOBSERVED']);
+    }
+    for (let item = 0; item < count; item += 1) {
+      const candidate = fields[index++];
+      try { validateRepoPath(candidate); }
+      catch { throw new OwnerError('UNKNOWN', ['GITHUB_WORKFLOW_DIFF_UNOBSERVED']); }
+      paths.push(candidate);
+    }
+  }
+  if (!paths.length) throw new OwnerError('UNKNOWN', ['GITHUB_WORKFLOW_DIFF_UNOBSERVED']);
+  return [...new Set(paths)].sort();
+}
+
+function candidatePathsFromStagedDiff(runner, worktree) {
+  const result = runner('git', ['-C', worktree, 'diff', '--cached', '--name-status', '-z', '-M', '--'], {
+    env: safeChildEnv(),
+    timeoutMs: COMMAND_TIMEOUT_MS,
+  });
+  if (result.error || result.signal || result.code !== 0) {
+    throw new OwnerError('UNKNOWN', ['GITHUB_WORKFLOW_DIFF_UNOBSERVED']);
+  }
+  return candidatePathsFromNameStatus(result.stdout);
+}
+
+function candidatePathsFromCommitDiff(runner, worktree, base, candidateHead, {noRenames = false} = {}) {
+  const renameArg = noRenames ? '--no-renames' : '-M';
+  const result = runner('git', ['-C', worktree, 'diff', '--name-status', '-z', renameArg, base, candidateHead, '--'], {
+    env: safeChildEnv(),
+    timeoutMs: COMMAND_TIMEOUT_MS,
+  });
+  if (result.error || result.signal || result.code !== 0) {
+    throw new OwnerError('UNKNOWN', ['GITHUB_WORKFLOW_DIFF_UNOBSERVED']);
+  }
+  return candidatePathsFromNameStatus(result.stdout);
+}
+
+function parseGithubOauthScopes(text) {
+  const matches = [];
+  for (const line of String(text).split(/\r?\n/)) {
+    const match = /^x-oauth-scopes:\s*(.*)$/i.exec(line);
+    if (match) matches.push(match[1]);
+  }
+  if (matches.length !== 1) throw new OwnerError('UNKNOWN', ['GITHUB_AUTH_SCOPE_UNOBSERVED']);
+  return [...new Set(matches[0].split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean))].sort();
+}
+
+function requireNoUrlSpecificHttpExtraHeaders(worktree, {runner = defaultRunner} = {}) {
+  const result = runner('git', ['-C', worktree, 'config', '--show-origin', '--name-only', '--list'], {
+    env: safeChildEnv(),
+    timeoutMs: COMMAND_TIMEOUT_MS,
+  });
+  if (result.error || result.signal || result.code !== 0) {
+    throw new OwnerError('UNKNOWN', ['GITHUB_HTTP_AUTH_HEADER_CONFIG_UNOBSERVED']);
+  }
+  for (const raw of result.stdout.split(/\r?\n/)) {
+    if (!raw.trim()) continue;
+    const tab = raw.lastIndexOf('\t');
+    if (tab < 0) throw new OwnerError('UNKNOWN', ['GITHUB_HTTP_AUTH_HEADER_CONFIG_UNOBSERVED']);
+    const name = raw.slice(tab + 1).trim().toLowerCase();
+    if (!name) throw new OwnerError('UNKNOWN', ['GITHUB_HTTP_AUTH_HEADER_CONFIG_UNOBSERVED']);
+    if (name !== 'http.extraheader' && name.startsWith('http.') && name.endsWith('.extraheader')) {
+      throw new OwnerError('BLOCKED', ['GITHUB_HTTP_AUTH_HEADER_BINDING_REQUIRED']);
+    }
+  }
+  return true;
+}
+
+function requireGithubWorkflowPushCredential(paths, worktree, {runner = defaultRunner} = {}) {
+  if (!requiresWorkflowOauthScope(paths)) return false;
+  const originResult = runner('git', ['-C', worktree, 'remote', 'get-url', '--push', '--all', 'origin'], {
+    env: safeChildEnv(),
+    timeoutMs: COMMAND_TIMEOUT_MS,
+  });
+  if (originResult.error || originResult.signal || originResult.code !== 0) {
+    throw new OwnerError('UNKNOWN', ['GITHUB_WORKFLOW_ORIGIN_UNOBSERVED']);
+  }
+  const pushUrls = originResult.stdout.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+  if (pushUrls.length !== 1 || pushUrls[0] !== FIXED_ORIGIN_URL) {
+    throw new OwnerError('BLOCKED', ['GITHUB_PUSH_CREDENTIAL_BINDING_REQUIRED']);
+  }
+  const result = runner(FIXED_GH, ['api', '-i', 'user'], {
+    env: safeChildEnv(),
+    timeoutMs: COMMAND_TIMEOUT_MS,
+  });
+  if (result.error || result.signal || result.code !== 0) {
+    throw new OwnerError('UNKNOWN', ['GITHUB_AUTH_SCOPE_UNOBSERVED']);
+  }
+  const scopes = parseGithubOauthScopes(result.stdout);
+  if (!scopes.includes('workflow')) {
+    throw new OwnerError('BLOCKED', ['GITHUB_WORKFLOW_SCOPE_REQUIRED']);
+  }
+  requireNoUrlSpecificHttpExtraHeaders(worktree, {runner});
+  return true;
+}
+
+function pushExactCandidate(runner, worktree, head, branch, paths) {
+  const args = ['-C', worktree];
+  if (requiresWorkflowOauthScope(paths)) {
+    requireGithubWorkflowPushCredential(paths, worktree, {runner});
+    args.push(
+      '-c', 'http.extraHeader=',
+      '-c', 'http.https://github.com/.extraHeader=',
+      '-c', 'http.https://github.com/hanmiyoo10-alt/-.git.extraHeader=',
+      '-c', 'credential.https://github.com.helper=',
+      '-c', 'credential.https://github.com.helper=' + FIXED_GITHUB_CREDENTIAL_HELPER,
+      '-c', 'credential.https://github.com/hanmiyoo10-alt/-.git.helper=',
+      '-c', 'credential.https://github.com/hanmiyoo10-alt/-.git.helper=' + FIXED_GITHUB_CREDENTIAL_HELPER,
+    );
+  }
+  args.push('push', 'origin', head + ':refs/heads/' + branch);
+  runChecked(runner, 'git', args, {}, 'PUSH_FAILED');
 }
 
 function remoteBranchHead(runner, landing, branch) {
@@ -474,9 +687,17 @@ function holderCheck(context, env = process.env) {
   return result;
 }
 
-function stagedPaths(runner, worktree) {
-  const raw = git(runner, worktree, ['diff', '--cached', '--name-only', '-z', '--']);
+function stagedPaths(runner, worktree, {noRenames = false} = {}) {
+  const args = ['diff', '--cached'];
+  if (noRenames) args.push('--no-renames');
+  args.push('--name-only', '-z', '--');
+  const raw = git(runner, worktree, args);
   return raw.split('\0').filter(Boolean).sort();
+}
+
+function reviewUpdateStagedPaths(runner, worktree) {
+  const raw = git(runner, worktree, ['diff', '--cached', '--name-status', '-z', '-M', '--']);
+  return candidatePathsFromNameStatus(raw, {allowEmpty:true});
 }
 
 function ensureNoResidue(runner, worktree) {
@@ -485,8 +706,11 @@ function ensureNoResidue(runner, worktree) {
   if (unstaged || untracked) throw new OwnerError('BLOCKED', ['UNSTAGED_OR_UNTRACKED_PRESENT']);
 }
 
-function stagedDigest(runner, worktree) {
-  const raw = git(runner, worktree, ['diff', '--cached', '--binary', '--']);
+function stagedDigest(runner, worktree, {noRenames = false} = {}) {
+  const args = ['diff', '--cached'];
+  if (noRenames) args.push('--no-renames');
+  args.push('--binary', '--');
+  const raw = git(runner, worktree, args);
   if (!raw) throw new OwnerError('BLOCKED', ['PATCH_EMPTY_AFTER_APPLY']);
   return sha256Bytes(Buffer.from(raw, 'utf8'));
 }
@@ -500,7 +724,14 @@ function validateStagedModes(runner, worktree, expectedPaths) {
     const index = git(runner, worktree, ['ls-files', '-s', '--', item]).trim();
     if (index) {
       const mode = index.split(/\s+/)[0];
-      if (mode !== '100644') throw new OwnerError('BLOCKED', ['SPECIAL_MODE_DENIED']);
+      if (mode === '100755') {
+        const before = treeEntry(runner, worktree, 'HEAD', item);
+        if (!before || before.mode !== '100755') {
+          throw new OwnerError('BLOCKED', ['SPECIAL_MODE_DENIED']);
+        }
+      } else if (mode !== '100644') {
+        throw new OwnerError('BLOCKED', ['SPECIAL_MODE_DENIED']);
+      }
     }
   }
 }
@@ -531,6 +762,23 @@ function treeEntry(runner, worktree, rev, repoPath) {
   const fields = rows[0].split(/\s+/);
   if (fields.length < 3) throw new OwnerError('UNKNOWN', ['CONTINUATION_TREE_ENTRY_INVALID']);
   return {mode: fields[0], blob: fields[2]};
+}
+
+function validateReviewUpdateExpectedModes(runner, worktree, oldHead, expectedPaths, env) {
+  for (const item of expectedPaths) {
+    const index = indexEntry(runner, worktree, item, env);
+    const before = treeEntry(runner, worktree, oldHead, item);
+    const entry = index || before;
+    if (!entry || !['100644', '100755'].includes(entry.mode)) {
+      throw new OwnerError('BLOCKED', ['SPECIAL_MODE_DENIED']);
+    }
+    if (index && before && index.mode !== before.mode) {
+      throw new OwnerError('BLOCKED', ['SPECIAL_MODE_DENIED']);
+    }
+    if (entry.mode === '100755' && (!before || before.mode !== '100755')) {
+      throw new OwnerError('BLOCKED', ['SPECIAL_MODE_DENIED']);
+    }
+  }
 }
 
 function patchId(runner, cwd, diffText) {
@@ -567,8 +815,185 @@ function continuationCurrentMain(manifest, {profile = DEFAULT_PROFILE, runner = 
   return main;
 }
 
-function preparedDiff(runner, worktree) {
-  const text = git(runner, worktree, ['diff', '--cached', '--binary', '--']);
+function reviewUpdateCurrentMain(manifest, {profile = DEFAULT_PROFILE, runner = defaultRunner} = {}) {
+  let real;
+  try { real = fs.realpathSync(profile.landing); }
+  catch { throw new OwnerError('BLOCKED', ['LANDING_MISSING']); }
+  if (real !== profile.landing) throw new OwnerError('BLOCKED', ['LANDING_ALIAS_DENIED']);
+  const branch = git(runner, profile.landing, ['branch', '--show-current'],
+    {reason:'LANDING_BRANCH_READ_FAILED'}).trim();
+  const dirty = git(runner, profile.landing, ['status', '--porcelain=v1', '-uall'],
+    {reason:'LANDING_STATUS_READ_FAILED'});
+  if (branch !== 'main') throw new OwnerError('BLOCKED', ['LANDING_BRANCH_INVALID']);
+  if (dirty) throw new OwnerError('BLOCKED', ['LANDING_DIRTY']);
+  const origin = git(runner, profile.landing, ['remote', 'get-url', 'origin'],
+    {reason:'REVIEW_UPDATE_ORIGIN_READ_FAILED'}).trim();
+  if (origin !== FIXED_ORIGIN_URL) {
+    throw new OwnerError('BLOCKED', ['REVIEW_UPDATE_ORIGIN_INVALID']);
+  }
+  const remoteMain = remoteBranchHead(runner, profile.landing, 'main');
+  const main = protectedMain(runner);
+  if (!remoteMain || remoteMain !== main) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_MAIN_IDENTITY_CONFLICT']);
+  }
+  for (const [sha, reason] of [
+    [manifest.observedBaseSha, 'REVIEW_UPDATE_OLD_HEAD_OBJECT_MISSING'],
+    [main, 'REVIEW_UPDATE_CURRENT_MAIN_OBJECT_MISSING'],
+  ]) {
+    const object = gitResult(runner, profile.landing, ['cat-file', '-e', sha + '^{commit}']);
+    if (object.error || object.signal || object.code !== 0) {
+      throw new OwnerError('BLOCKED', [reason]);
+    }
+  }
+  return main;
+}
+
+function reviewUpdateMergeBase(runner, worktree, oldHead, currentMain) {
+  const raw = git(runner, worktree, ['merge-base', '--all', oldHead, currentMain]).trim();
+  const rows = raw.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+  if (rows.length !== 1) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_MERGE_BASE_AMBIGUOUS']);
+  }
+  if (!SHA40_RE.test(rows[0])) {
+    throw new OwnerError('UNKNOWN', ['REVIEW_UPDATE_MERGE_BASE_INVALID']);
+  }
+  return rows[0];
+}
+
+function reviewUpdateOriginalPaths(runner, worktree, originalBase, oldHead) {
+  const raw = git(runner, worktree,
+    ['diff', '--name-status', '-z', '-M', originalBase, oldHead, '--']);
+  if (!raw) return [];
+  const paths = candidatePathsFromNameStatus(raw);
+  if (paths.length > MAX_FILES) {
+    throw new OwnerError('BLOCKED', ['REVIEW_UPDATE_ORIGINAL_PR_TOO_LARGE']);
+  }
+  return paths;
+}
+
+function reviewUpdateExpectedEntry(runner, worktree, request, candidateHead, repoPath) {
+  if (request.expected_paths.includes(repoPath)) {
+    return candidateHead
+      ? treeEntry(runner, worktree, candidateHead, repoPath)
+      : indexEntry(runner, worktree, repoPath);
+  }
+  return treeEntry(runner, worktree, request.expected_old_head, repoPath);
+}
+
+function reviewUpdateExpectedChangedPaths(runner, worktree, request, candidateHead, currentMain,
+  originalPaths) {
+  const union = [...new Set([...originalPaths, ...request.expected_paths])].sort();
+  if (union.length > MAX_FILES) {
+    throw new OwnerError('BLOCKED', ['REVIEW_UPDATE_COMBINED_PATHS_TOO_LARGE']);
+  }
+  const changed = [];
+  for (const item of union) {
+    const expected = reviewUpdateExpectedEntry(runner, worktree, request, candidateHead, item);
+    const current = treeEntry(runner, worktree, currentMain, item);
+    if (!same(expected, current)) changed.push(item);
+  }
+  return {union, changed};
+}
+
+function verifyReviewUpdateReplayAgainstCurrent(manifest, request, currentMain, {
+  runner = defaultRunner, candidateHead = null,
+} = {}) {
+  const worktree = manifest.workspace.worktree;
+  const reviewPatch = candidateHead
+    ? git(runner, worktree,
+      ['diff', '--binary', request.expected_old_head, candidateHead, '--'])
+    : preparedDiff(runner, worktree);
+  if (!reviewPatch || sha256Bytes(Buffer.from(reviewPatch, 'utf8')) !== request.prepared_digest) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PREPARED_DIGEST_CONFLICT']);
+  }
+  const reviewPatchId = patchId(runner, worktree, reviewPatch);
+  const originalBase = reviewUpdateMergeBase(
+    runner, worktree, request.expected_old_head, currentMain);
+  const originalPaths = reviewUpdateOriginalPaths(
+    runner, worktree, originalBase, request.expected_old_head);
+  const originalPatch = git(runner, worktree, [
+    'diff', '--binary', '--no-ext-diff', '--no-textconv', '-M',
+    originalBase, request.expected_old_head, '--',
+  ]);
+  if (originalPaths.length && !originalPatch) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_ORIGINAL_PR_PATCH_MISSING']);
+  }
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-review-current-replay-'));
+  const indexFile = path.join(dir, 'index');
+  const env = {...safeChildEnv(), GIT_INDEX_FILE:indexFile};
+  try {
+    runChecked(runner, 'git', ['-C', worktree, 'read-tree', currentMain],
+      {env}, 'REVIEW_UPDATE_REPLAY_READ_TREE_FAILED');
+    if (originalPatch) {
+      runChecked(runner, 'git', ['-C', worktree, 'apply', '--cached', '--check', '-'],
+        {env, input:originalPatch}, 'REVIEW_UPDATE_ORIGINAL_PR_REPLAY_CHECK_FAILED');
+      runChecked(runner, 'git', ['-C', worktree, 'apply', '--cached', '-'],
+        {env, input:originalPatch}, 'REVIEW_UPDATE_ORIGINAL_PR_REPLAY_FAILED');
+    }
+    for (const item of originalPaths) {
+      const replayed = indexEntry(runner, worktree, item, env);
+      const expected = treeEntry(runner, worktree, request.expected_old_head, item);
+      if (!same(replayed, expected)) {
+        throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_ORIGINAL_PR_PAYLOAD_CONFLICT']);
+      }
+    }
+
+    runChecked(runner, 'git', ['-C', worktree, 'apply', '--cached', '--check', '-'],
+      {env, input:reviewPatch}, 'REVIEW_UPDATE_REVIEW_DELTA_REPLAY_CHECK_FAILED');
+    runChecked(runner, 'git', ['-C', worktree, 'apply', '--cached', '-'],
+      {env, input:reviewPatch}, 'REVIEW_UPDATE_REVIEW_DELTA_REPLAY_FAILED');
+
+    const expected = reviewUpdateExpectedChangedPaths(
+      runner, worktree, request, candidateHead, currentMain, originalPaths);
+    for (const item of expected.union) {
+      const replayed = indexEntry(runner, worktree, item, env);
+      const wanted = reviewUpdateExpectedEntry(runner, worktree, request, candidateHead, item);
+      if (!same(replayed, wanted)) {
+        throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_REPLAY_BLOB_MODE_CONFLICT']);
+      }
+    }
+    const replayPaths = candidatePathsFromNameStatus(git(runner, worktree,
+      ['diff', '--cached', '--name-status', '-z', '-M', currentMain, '--'], {env}),
+    {allowEmpty:true});
+    if (!same(replayPaths, expected.changed)) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_REPLAY_PATH_CONFLICT']);
+    }
+    return {patchId:reviewPatchId, currentMain, originalBase, originalPaths, replayPaths};
+  } finally {
+    try { fs.rmSync(dir, {recursive:true, force:true}); } catch {}
+  }
+}
+
+function assertReviewUpdateCurrentizedPayload(
+  runner, manifest, request, candidateHead, currentMain, finalHead) {
+  const worktree = manifest.workspace.worktree;
+  const originalBase = reviewUpdateMergeBase(
+    runner, worktree, request.expected_old_head, currentMain);
+  const originalPaths = reviewUpdateOriginalPaths(
+    runner, worktree, originalBase, request.expected_old_head);
+  const expected = reviewUpdateExpectedChangedPaths(
+    runner, worktree, request, candidateHead, currentMain, originalPaths);
+  for (const item of expected.union) {
+    const wanted = reviewUpdateExpectedEntry(runner, worktree, request, candidateHead, item);
+    const final = treeEntry(runner, worktree, finalHead, item);
+    if (!same(wanted, final)) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_CURRENTIZED_BLOB_MODE_CONFLICT']);
+    }
+  }
+  const finalPaths = candidatePathsFromNameStatus(git(runner, worktree,
+    ['diff', '--name-status', '-z', '-M', currentMain, finalHead, '--']),
+  {allowEmpty:true});
+  if (!same(finalPaths, expected.changed)) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_CURRENTIZED_PATH_CONFLICT']);
+  }
+}
+
+function preparedDiff(runner, worktree, {noRenames = false} = {}) {
+  const args = ['diff', '--cached'];
+  if (noRenames) args.push('--no-renames');
+  args.push('--binary', '--');
+  const text = git(runner, worktree, args);
   if (!text || Buffer.byteLength(text, 'utf8') > MAX_PATCH_BYTES) {
     throw new OwnerError('BLOCKED', ['CONTINUATION_PREPARED_DIFF_INVALID']);
   }
@@ -577,18 +1002,23 @@ function preparedDiff(runner, worktree) {
 
 function verifyReplayAgainstCurrent(manifest, request, currentMain, {runner = defaultRunner, candidateHead = null} = {}) {
   const worktree = manifest.workspace.worktree;
+  const noRenames = request.schema === INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA;
+  const committedDiffArgs = ['diff'];
+  if (noRenames) committedDiffArgs.push('--no-renames');
+  committedDiffArgs.push('--binary', manifest.observedBaseSha, candidateHead, '--');
   const patch = candidateHead
-    ? git(runner, worktree, ['diff', '--binary', manifest.observedBaseSha, candidateHead, '--'])
-    : preparedDiff(runner, worktree);
+    ? git(runner, worktree, committedDiffArgs)
+    : preparedDiff(runner, worktree, {noRenames});
   if (!patch || sha256Bytes(Buffer.from(patch, 'utf8')) !== request.prepared_digest) {
     throw new OwnerError('CONFLICT', ['CONTINUATION_PREPARED_DIGEST_CONFLICT']);
   }
+  const identityRenameArg = noRenames ? '--no-renames' : '-M';
   const originalStatus = candidateHead
-    ? git(runner, worktree, ['diff', '--name-status', '-z', manifest.observedBaseSha, candidateHead, '--'])
-    : git(runner, worktree, ['diff', '--cached', '--name-status', '-z', '--']);
+    ? git(runner, worktree, ['diff', '--name-status', '-z', identityRenameArg, manifest.observedBaseSha, candidateHead, '--'])
+    : git(runner, worktree, ['diff', '--cached', '--name-status', '-z', identityRenameArg, '--']);
   const originalPatchId = patchId(runner, worktree, candidateHead
-    ? git(runner, worktree, ['diff', '--no-ext-diff', '--no-textconv', '-M', manifest.observedBaseSha, candidateHead, '--'])
-    : git(runner, worktree, ['diff', '--cached', '--no-ext-diff', '--no-textconv', '-M', '--']));
+    ? git(runner, worktree, ['diff', '--no-ext-diff', '--no-textconv', identityRenameArg, manifest.observedBaseSha, candidateHead, '--'])
+    : git(runner, worktree, ['diff', '--cached', '--no-ext-diff', '--no-textconv', identityRenameArg, '--']));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-current-replay-'));
   const indexFile = path.join(dir, 'index');
   const env = {...safeChildEnv(), GIT_INDEX_FILE:indexFile};
@@ -596,19 +1026,24 @@ function verifyReplayAgainstCurrent(manifest, request, currentMain, {runner = de
     runChecked(runner, 'git', ['-C', worktree, 'read-tree', currentMain], {env}, 'CONTINUATION_REPLAY_READ_TREE_FAILED');
     runChecked(runner, 'git', ['-C', worktree, 'apply', '--cached', '--check', '-'], {env, input:patch}, 'CONTINUATION_REPLAY_APPLY_CHECK_FAILED');
     runChecked(runner, 'git', ['-C', worktree, 'apply', '--cached', '-'], {env, input:patch}, 'CONTINUATION_REPLAY_APPLY_FAILED');
-    const replayPaths = nulPaths(git(runner, worktree, ['diff', '--cached', '--name-only', '-z', currentMain, '--'], {env}));
+    const replayPathArgs = ['diff', '--cached'];
+    if (noRenames) replayPathArgs.push('--no-renames');
+    replayPathArgs.push('--name-only', '-z', currentMain, '--');
+    const replayPaths = nulPaths(git(runner, worktree, replayPathArgs, {env}));
     if (!same(replayPaths, request.expected_paths)) throw new OwnerError('CONFLICT', ['CONTINUATION_REPLAY_PATH_CONFLICT']);
-    const replayStatus = git(runner, worktree, ['diff', '--cached', '--name-status', '-z', currentMain, '--'], {env});
+    const replayStatus = git(runner, worktree, ['diff', '--cached', '--name-status', '-z', identityRenameArg, currentMain, '--'], {env});
     if (replayStatus !== originalStatus) throw new OwnerError('CONFLICT', ['CONTINUATION_REPLAY_CHANGE_IDENTITY_CONFLICT']);
     for (const item of request.expected_paths) {
       const original = candidateHead
         ? treeEntry(runner, worktree, candidateHead, item)
         : indexEntry(runner, worktree, item);
       const replay = indexEntry(runner, worktree, item, env);
-      if (!original || !replay || !same(original, replay)) throw new OwnerError('CONFLICT', ['CONTINUATION_REPLAY_BLOB_MODE_CONFLICT']);
+      if (noRenames ? !same(original, replay) : (!original || !replay || !same(original, replay))) {
+        throw new OwnerError('CONFLICT', ['CONTINUATION_REPLAY_BLOB_MODE_CONFLICT']);
+      }
     }
     const replayPatchId = patchId(runner, worktree,
-      git(runner, worktree, ['diff', '--cached', '--no-ext-diff', '--no-textconv', '-M', currentMain, '--'], {env}));
+      git(runner, worktree, ['diff', '--cached', '--no-ext-diff', '--no-textconv', identityRenameArg, currentMain, '--'], {env}));
     if (replayPatchId !== originalPatchId) throw new OwnerError('CONFLICT', ['CONTINUATION_REPLAY_PATCH_ID_CONFLICT']);
     return {patchId: originalPatchId, currentMain};
   } finally {
@@ -618,11 +1053,16 @@ function verifyReplayAgainstCurrent(manifest, request, currentMain, {runner = de
 
 function assertCandidateCommit(runner, manifest, request, candidateHead) {
   const worktree = manifest.workspace.worktree;
+  const noRenames = request.schema === INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA;
   const parent = git(runner, worktree, ['rev-parse', candidateHead + '^']).trim();
   if (parent !== manifest.observedBaseSha) throw new OwnerError('CONFLICT', ['CONTINUATION_COMMIT_PARENT_CONFLICT']);
-  const paths = nulPaths(git(runner, worktree, ['diff', '--name-only', '-z', manifest.observedBaseSha, candidateHead, '--']));
+  const paths = candidatePathsFromCommitDiff(
+    runner, worktree, manifest.observedBaseSha, candidateHead, {noRenames});
   if (!same(paths, request.expected_paths)) throw new OwnerError('CONFLICT', ['CONTINUATION_COMMITTED_PATH_CONFLICT']);
-  const diff = git(runner, worktree, ['diff', '--binary', manifest.observedBaseSha, candidateHead, '--']);
+  const diffArgs = ['diff'];
+  if (noRenames) diffArgs.push('--no-renames');
+  diffArgs.push('--binary', manifest.observedBaseSha, candidateHead, '--');
+  const diff = git(runner, worktree, diffArgs);
   if (sha256Bytes(Buffer.from(diff, 'utf8')) !== request.prepared_digest) throw new OwnerError('CONFLICT', ['CONTINUATION_COMMITTED_DIGEST_CONFLICT']);
   const message = git(runner, worktree, ['log', '-1', '--format=%B', candidateHead]).replace(/\n+$/, '');
   if (message !== request.message) throw new OwnerError('CONFLICT', ['CONTINUATION_COMMIT_MESSAGE_CONFLICT']);
@@ -635,12 +1075,17 @@ function assertCandidateCommit(runner, manifest, request, candidateHead) {
 
 function assertCurrentizedPayload(runner, manifest, request, candidateHead, currentMain, finalHead) {
   const worktree = manifest.workspace.worktree;
-  const paths = nulPaths(git(runner, worktree, ['diff', '--name-only', '-z', currentMain, finalHead, '--']));
+  const noRenames = request.schema === INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA;
+  const pathArgs = ['diff'];
+  if (noRenames) pathArgs.push('--no-renames');
+  pathArgs.push('--name-only', '-z', currentMain, finalHead, '--');
+  const paths = nulPaths(git(runner, worktree, pathArgs));
   if (!same(paths, request.expected_paths)) throw new OwnerError('CONFLICT', ['CONTINUATION_CURRENTIZED_PATH_CONFLICT']);
   for (const item of request.expected_paths) {
     const candidate = treeEntry(runner, worktree, candidateHead, item);
     const final = treeEntry(runner, worktree, finalHead, item);
-    if (!candidate || !final || !same(candidate, final)) throw new OwnerError('CONFLICT', ['CONTINUATION_CURRENTIZED_BLOB_MODE_CONFLICT']);
+    const mismatch = noRenames ? !same(candidate, final) : (!candidate || !final || !same(candidate, final));
+    if (mismatch) throw new OwnerError('CONFLICT', ['CONTINUATION_CURRENTIZED_BLOB_MODE_CONFLICT']);
   }
 }
 
@@ -656,12 +1101,13 @@ function classifyPreparedContinuationState(manifest, request, currentMain, {runn
   if (unmerged.length || unstaged.length || untracked.length) throw new OwnerError('CONFLICT', ['CONTINUATION_WORKTREE_RESIDUE_CONFLICT']);
   const remoteHead = remoteBranchHead(runner, profile.landing, manifest.workspace.branch);
   if (!remoteHead) throw new OwnerError('CONFLICT', ['CONTINUATION_REMOTE_BRANCH_MISSING']);
-  const staged = stagedPaths(runner, worktree);
+  const noRenames = request.schema === INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA;
+  const staged = stagedPaths(runner, worktree, {noRenames});
   if (head === manifest.observedBaseSha) {
     if (remoteHead !== manifest.observedBaseSha) throw new OwnerError('CONFLICT', ['CONTINUATION_REMOTE_HEAD_CONFLICT']);
     if (!same(staged, request.expected_paths)) throw new OwnerError('CONFLICT', ['CONTINUATION_STAGED_PATH_CONFLICT']);
     validateStagedModes(runner, worktree, request.expected_paths);
-    if (stagedDigest(runner, worktree) !== request.prepared_digest) throw new OwnerError('CONFLICT', ['CONTINUATION_PREPARED_DIGEST_CONFLICT']);
+    if (stagedDigest(runner, worktree, {noRenames}) !== request.prepared_digest) throw new OwnerError('CONFLICT', ['CONTINUATION_PREPARED_DIGEST_CONFLICT']);
     return {state:'PREPARED', candidateHead:null, finalHead:null, remoteHead};
   }
   if (staged.length) throw new OwnerError('CONFLICT', ['CONTINUATION_INDEX_NOT_CLEAN']);
@@ -693,7 +1139,8 @@ function runContinuationValidation(manifest, request, {runner = defaultRunner, r
     ['task-handoff-contract', ['--test', path.join(root, 'products/chatgpt-mobile-coder-lab/coordination/tests/test-task-handoff.cjs')]],
     ['workspace-holder-contract', ['--test', path.join(root, 'products/chatgpt-mobile-coder-lab/coordination/tests/test-workspace-holder.cjs')]],
   ];
-  for (const item of request.expected_paths) if (item.endsWith('.cjs')) {
+  for (const item of request.expected_paths) if (item.endsWith('.cjs')
+      && fs.existsSync(path.join(manifest.workspace.worktree, item))) {
     checks.push(['changed-cjs-syntax:' + item, ['--check', path.join(manifest.workspace.worktree, item)]]);
   }
   const passed = [];
@@ -722,6 +1169,367 @@ function findExactOpenPr(runner, manifest, prRequest, expectedHead) {
   return row;
 }
 
+function readExistingReviewPr(runner, manifest, prRequest) {
+  const raw = gh(runner, [
+    'pr', 'list', '--repo', FIXED_REPO, '--state', 'open',
+    '--head', manifest.workspace.branch,
+    '--json', 'number,title,body,isDraft,headRefName,headRefOid,baseRefName',
+  ], {reason:'PR_READBACK_FAILED'});
+  let rows;
+  try { rows = JSON.parse(raw); } catch { throw new OwnerError('UNKNOWN', ['PR_READBACK_JSON_INVALID']); }
+  if (!Array.isArray(rows)) throw new OwnerError('UNKNOWN', ['PR_READBACK_JSON_INVALID']);
+  if (rows.length !== 1) throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PR_COUNT_INVALID']);
+  const row = rows[0];
+  if (!Number.isInteger(row.number) || row.isDraft !== false
+      || row.headRefName !== manifest.workspace.branch || row.baseRefName !== 'main'
+      || row.title !== prRequest.title || row.body !== prRequest.body
+      || !SHA40_RE.test(String(row.headRefOid || ''))) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PR_IDENTITY_CONFLICT']);
+  }
+  return row;
+}
+
+function expectedReviewUpdatePreparedDigest(manifest, request, patchBytes, {runner = defaultRunner} = {}) {
+  if (sha256Bytes(patchBytes) !== request.patch_sha256) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PATCH_SHA_CONFLICT']);
+  }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-review-update-index-'));
+  const indexFile = path.join(dir, 'index');
+  const env = {...safeChildEnv(), GIT_INDEX_FILE:indexFile};
+  try {
+    runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'read-tree', request.expected_old_head],
+      {env}, 'REVIEW_UPDATE_READ_TREE_FAILED');
+    runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'apply', '--cached', '--check', '-'],
+      {env, input:patchBytes}, 'REVIEW_UPDATE_PATCH_DOES_NOT_APPLY');
+    runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'apply', '--cached', '-'],
+      {env, input:patchBytes}, 'REVIEW_UPDATE_PATCH_APPLY_FAILED');
+    const paths = candidatePathsFromNameStatus(git(runner, manifest.workspace.worktree,
+      ['diff', '--cached', '--name-status', '-z', '-M', request.expected_old_head, '--'],
+      {env}));
+    if (!same(paths, request.expected_paths)) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_CHANGED_PATH_MISMATCH']);
+    }
+    runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'diff', '--cached', '--check',
+      request.expected_old_head, '--'], {env}, 'REVIEW_UPDATE_DIFF_CHECK_FAILED');
+    validateReviewUpdateExpectedModes(
+      runner, manifest.workspace.worktree, request.expected_old_head, request.expected_paths, env);
+    const diff = git(runner, manifest.workspace.worktree,
+      ['diff', '--cached', '--binary', request.expected_old_head, '--'], {env});
+    if (!diff || Buffer.byteLength(diff, 'utf8') > MAX_PATCH_BYTES) {
+      throw new OwnerError('BLOCKED', ['REVIEW_UPDATE_PREPARED_DIFF_INVALID']);
+    }
+    return sha256Bytes(Buffer.from(diff, 'utf8'));
+  } finally {
+    try { fs.rmSync(dir, {recursive:true, force:true}); } catch {}
+  }
+}
+
+function classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest, {
+  profile = DEFAULT_PROFILE, runner = defaultRunner,
+} = {}) {
+  const worktree = manifest.workspace.worktree;
+  let real;
+  try { real = fs.realpathSync(worktree); }
+  catch { throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_WORKTREE_MISSING']); }
+  if (real !== worktree) throw new OwnerError('CONFLICT', ['WORKTREE_ALIAS_DENIED']);
+  const top = git(runner, worktree, ['rev-parse', '--show-toplevel']).trim();
+  const branch = git(runner, worktree, ['branch', '--show-current']).trim();
+  const head = git(runner, worktree, ['rev-parse', 'HEAD']).trim();
+  if (top !== worktree || branch !== manifest.workspace.branch || !SHA40_RE.test(head)) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_WORKSPACE_IDENTITY_CONFLICT']);
+  }
+  const unmerged = nulPaths(git(runner, worktree, ['diff', '--name-only', '--diff-filter=U', '-z', '--']));
+  const unstaged = nulPaths(git(runner, worktree, ['diff', '--name-only', '-z', '--']));
+  const untracked = nulPaths(git(runner, worktree, ['ls-files', '--others', '--exclude-standard', '-z']));
+  if (unmerged.length || unstaged.length || untracked.length) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_WORKTREE_RESIDUE_CONFLICT']);
+  }
+  const remoteHead = remoteBranchHead(runner, profile.landing, manifest.workspace.branch);
+  if (!remoteHead) throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_REMOTE_BRANCH_MISSING']);
+  const pr = readExistingReviewPr(runner, manifest, prRequest);
+  const staged = reviewUpdateStagedPaths(runner, worktree);
+
+  if (head !== request.expected_old_head
+      && remoteHead === request.expected_old_head
+      && pr.headRefOid === request.expected_old_head
+      && !staged.length) {
+    const ancestry = gitResult(
+      runner, worktree, ['merge-base', '--is-ancestor', head, request.expected_old_head]);
+    if (ancestry.error || ancestry.signal || ![0, 1].includes(ancestry.code)) {
+      throw new OwnerError('UNKNOWN', ['REVIEW_UPDATE_LOCAL_ANCESTRY_READ_FAILED']);
+    }
+    if (ancestry.code === 0) {
+      return {state:'LOCAL_BEHIND', candidateHead:null, finalHead:null, remoteHead, pr};
+    }
+  }
+
+  if (head === request.expected_old_head) {
+    if (remoteHead !== request.expected_old_head || pr.headRefOid !== request.expected_old_head) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_OLD_HEAD_IDENTITY_CONFLICT']);
+    }
+    if (!staged.length) return {state:'READY', candidateHead:null, finalHead:null, remoteHead, pr};
+    if (!same(staged, request.expected_paths)) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_STAGED_PATH_CONFLICT']);
+    }
+    validateStagedModes(runner, worktree, request.expected_paths);
+    if (stagedDigest(runner, worktree) !== preparedDigest) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PREPARED_DIGEST_CONFLICT']);
+    }
+    return {state:'PREPARED', candidateHead:null, finalHead:null, remoteHead, pr};
+  }
+
+  if (staged.length) throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_INDEX_NOT_CLEAN']);
+  const replayRequest = {
+    message:request.message, expected_paths:request.expected_paths, prepared_digest:preparedDigest,
+  };
+  const parents = git(runner, worktree, ['rev-list', '--parents', '-n', '1', head]).trim().split(/\s+/);
+  let candidateHead;
+  let finalHead;
+  let state;
+  if (parents.length === 2) {
+    candidateHead = head;
+    finalHead = head;
+    assertCandidateCommit(runner, {...manifest, observedBaseSha:request.expected_old_head},
+      replayRequest, candidateHead);
+    state = 'COMMITTED';
+  } else if (parents.length === 3) {
+    candidateHead = parents[1];
+    const mergedMain = parents[2];
+    if (mergedMain !== currentMain) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_CURRENTIZATION_MAIN_CONFLICT']);
+    }
+    assertCandidateCommit(runner, {...manifest, observedBaseSha:request.expected_old_head},
+      replayRequest, candidateHead);
+    assertReviewUpdateCurrentizedPayload(
+      runner, manifest, request, candidateHead, currentMain, head);
+    finalHead = head;
+    state = 'CURRENTIZED';
+  } else {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_HEAD_SHAPE_CONFLICT']);
+  }
+
+  if (remoteHead === finalHead && pr.headRefOid === finalHead) {
+    return {state:'PUSHED', candidateHead, finalHead, remoteHead, pr};
+  }
+  if (remoteHead === finalHead && pr.headRefOid === request.expected_old_head) {
+    return {state:'PR_PROJECTION_PENDING', candidateHead, finalHead, remoteHead, pr};
+  }
+  if (remoteHead === request.expected_old_head && pr.headRefOid === request.expected_old_head) {
+    return {state, candidateHead, finalHead, remoteHead, pr};
+  }
+  throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_REMOTE_PR_HEAD_CONFLICT']);
+}
+
+const REVIEW_UPDATE_PR_PROJECTION_REREAD_ATTEMPTS = 12;
+const REVIEW_UPDATE_PR_PROJECTION_REREAD_DELAY_MS = 250;
+
+function reviewUpdateProjectionSleep(ms) {
+  if (ms > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function reconcileReviewUpdatePrProjection(state, manifest, request, prRequest, {
+  runner = defaultRunner, sleep = reviewUpdateProjectionSleep,
+} = {}) {
+  if (state.state !== 'PR_PROJECTION_PENDING') return state;
+  if (state.remoteHead !== state.finalHead
+      || state.pr.headRefOid !== request.expected_old_head
+      || !SHA40_RE.test(String(state.finalHead || ''))) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PR_PROJECTION_STATE_CONFLICT']);
+  }
+  const prNumber = state.pr.number;
+  let pr = state.pr;
+  for (let attempt = 0; attempt < REVIEW_UPDATE_PR_PROJECTION_REREAD_ATTEMPTS; attempt += 1) {
+    sleep(REVIEW_UPDATE_PR_PROJECTION_REREAD_DELAY_MS);
+    pr = readExistingReviewPr(runner, manifest, prRequest);
+    if (pr.number !== prNumber) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PR_NUMBER_CHANGED']);
+    }
+    if (pr.headRefOid === state.finalHead) {
+      return {...state, state:'PUSHED', pr};
+    }
+    if (pr.headRefOid !== request.expected_old_head) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_REMOTE_PR_HEAD_CONFLICT']);
+    }
+  }
+  return {...state, pr};
+}
+
+function pendingReviewUpdateResult(state, manifest, request, preparedDigest, currentMain) {
+  return output('BLOCKED', ['REVIEW_UPDATE_PR_PROJECTION_PENDING'], {
+    route:manifest.route,
+    executor:manifest.executor,
+    base_sha:request.expected_old_head,
+    current_main:currentMain,
+    branch:manifest.workspace.branch,
+    changed_paths:request.expected_paths,
+    patch_sha256:request.patch_sha256,
+    prepared_digest:preparedDigest,
+    candidate_head:state.candidateHead,
+    new_head:state.finalHead,
+    currentized:currentMain !== request.expected_old_head,
+    pr_number:state.pr.number,
+    validation_checks:[],
+    next_legal_action:'REREAD_SAME_PR_PROJECTION',
+  });
+}
+
+function executeReviewUpdate(context, request, patchBytes, prRequest, {
+  profile = DEFAULT_PROFILE, runner = defaultRunner, env = process.env, root = ROOT,
+  projectionSleep = reviewUpdateProjectionSleep,
+} = {}) {
+  const {manifest} = context;
+  if (request.packet_ref !== manifest.packetRef) throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PACKET_CONFLICT']);
+  if (manifest.observedBaseSha !== request.expected_old_head) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_MANIFEST_OLD_HEAD_CONFLICT']);
+  }
+  if (!same(request.expected_paths, manifestPathScopes(manifest))) {
+    throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_SCOPE_CONFLICT']);
+  }
+  holderCheck(context, env);
+  const currentMain = reviewUpdateCurrentMain(manifest, {profile, runner});
+  const preparedDigest = expectedReviewUpdatePreparedDigest(manifest, request, patchBytes, {runner});
+  let state = classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest,
+    {profile, runner});
+  const oldPrNumber = state.pr.number;
+
+  if (state.state === 'PR_PROJECTION_PENDING') {
+    state = reconcileReviewUpdatePrProjection(
+      state, manifest, request, prRequest, {runner, sleep:projectionSleep});
+    if (state.state === 'PR_PROJECTION_PENDING') {
+      return pendingReviewUpdateResult(state, manifest, request, preparedDigest, currentMain);
+    }
+  }
+
+  if (state.state === 'LOCAL_BEHIND') {
+    holderCheck(context, env);
+    if (reviewUpdateCurrentMain(manifest, {profile, runner}) !== currentMain) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_MAIN_CHANGED']);
+    }
+    runChecked(runner, 'git', [
+      '-C', manifest.workspace.worktree, 'merge', '--ff-only', request.expected_old_head,
+    ], {env:safeChildEnv()}, 'REVIEW_UPDATE_LOCAL_FAST_FORWARD_FAILED');
+    state = classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest,
+      {profile, runner});
+    if (state.state !== 'READY') {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_LOCAL_FAST_FORWARD_READBACK_CONFLICT']);
+    }
+  }
+
+  if (state.state === 'READY') {
+    const patchFile = path.join(manifest.workspace.worktree, '.git-mcl-l-review-update.patch.tmp');
+    if (fs.existsSync(patchFile)) throw new OwnerError('CONFLICT', ['PATCH_TEMP_ALREADY_EXISTS']);
+    fs.writeFileSync(patchFile, patchBytes, {mode:0o600, flag:'wx'});
+    try {
+      runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'apply', '--check', patchFile],
+        {}, 'REVIEW_UPDATE_PATCH_DOES_NOT_APPLY');
+      runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'apply', '--index', patchFile],
+        {}, 'REVIEW_UPDATE_PATCH_APPLY_FAILED');
+    } finally {
+      try { fs.unlinkSync(patchFile); } catch {}
+    }
+    state = classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest,
+      {profile, runner});
+  }
+
+  const replayRequest = {...request, prepared_digest:preparedDigest};
+  const candidatePaths = state.state === 'PUSHED' ? []
+    : state.state === 'PREPARED'
+      ? candidatePathsFromStagedDiff(runner, manifest.workspace.worktree)
+      : candidatePathsFromCommitDiff(runner, manifest.workspace.worktree,
+        request.expected_old_head, state.candidateHead);
+  if (state.state !== 'PUSHED') {
+    requireGithubWorkflowPushCredential(candidatePaths, manifest.workspace.worktree, {runner});
+  }
+
+  let replay = null;
+  let checks = [];
+  const resumedCurrentized = state.state === 'CURRENTIZED';
+  if (state.state === 'PREPARED') {
+    replay = verifyReviewUpdateReplayAgainstCurrent(
+      manifest, replayRequest, currentMain, {runner});
+    checks = runContinuationValidation(manifest, replayRequest, {runner, root});
+    holderCheck(context, env);
+    if (reviewUpdateCurrentMain(manifest, {profile, runner}) !== currentMain) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_MAIN_CHANGED']);
+    }
+    runChecked(runner, 'git', [
+      '-C', manifest.workspace.worktree,
+      '-c', 'user.name=' + FIXED_BOT_NAME,
+      '-c', 'user.email=' + FIXED_BOT_EMAIL,
+      'commit', '-m', request.message,
+    ], {}, 'REVIEW_UPDATE_COMMIT_FAILED');
+    state = classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest,
+      {profile, runner});
+  }
+
+  if (state.state === 'COMMITTED' && currentMain !== request.expected_old_head) {
+    if (!replay) {
+      replay = verifyReviewUpdateReplayAgainstCurrent(
+        manifest, replayRequest, currentMain, {runner, candidateHead:state.candidateHead});
+    }
+    holderCheck(context, env);
+    if (reviewUpdateCurrentMain(manifest, {profile, runner}) !== currentMain) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_MAIN_CHANGED']);
+    }
+    runChecked(runner, 'git', [
+      '-C', manifest.workspace.worktree,
+      '-c', 'user.name=' + FIXED_BOT_NAME,
+      '-c', 'user.email=' + FIXED_BOT_EMAIL,
+      'merge', '--no-ff', '--no-edit', currentMain,
+    ], {}, 'REVIEW_UPDATE_CURRENTIZATION_MERGE_FAILED');
+    state = classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest,
+      {profile, runner});
+    checks = runContinuationValidation(manifest, replayRequest, {runner, root});
+  }
+  if (state.state === 'COMMITTED' && currentMain === request.expected_old_head) {
+    checks = checks.length ? checks : runContinuationValidation(manifest, replayRequest, {runner, root});
+  }
+
+  if (resumedCurrentized) {
+    replay = verifyReviewUpdateReplayAgainstCurrent(
+      manifest, replayRequest, currentMain, {runner, candidateHead:state.candidateHead});
+    checks = runContinuationValidation(manifest, replayRequest, {runner, root});
+  }
+
+  if (state.state === 'CURRENTIZED' || state.state === 'COMMITTED') {
+    holderCheck(context, env);
+    if (reviewUpdateCurrentMain(manifest, {profile, runner}) !== currentMain) {
+      throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_MAIN_CHANGED']);
+    }
+    pushExactCandidate(runner, manifest.workspace.worktree, state.finalHead,
+      manifest.workspace.branch, candidatePaths);
+    state = classifyReviewUpdateState(manifest, request, prRequest, currentMain, preparedDigest,
+      {profile, runner});
+    if (state.state === 'PR_PROJECTION_PENDING') {
+      state = reconcileReviewUpdatePrProjection(
+        state, manifest, request, prRequest, {runner, sleep:projectionSleep});
+      if (state.state === 'PR_PROJECTION_PENDING') {
+        return pendingReviewUpdateResult(state, manifest, request, preparedDigest, currentMain);
+      }
+    }
+  }
+  if (state.state !== 'PUSHED') throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_STATE_UNSUPPORTED']);
+  if (state.pr.number !== oldPrNumber) throw new OwnerError('CONFLICT', ['REVIEW_UPDATE_PR_NUMBER_CHANGED']);
+  holderCheck(context, env);
+  return output('PASS', [], {
+    route:manifest.route,
+    executor:manifest.executor,
+    base_sha:request.expected_old_head,
+    current_main:currentMain,
+    branch:manifest.workspace.branch,
+    changed_paths:request.expected_paths,
+    patch_sha256:request.patch_sha256,
+    prepared_digest:preparedDigest,
+    replay_patch_id:replay?.patchId || null,
+    candidate_head:state.candidateHead,
+    new_head:state.finalHead,
+    currentized:currentMain !== request.expected_old_head,
+    pr_number:state.pr.number,
+    validation_checks:checks,
+    next_legal_action:'RELEASE_D013_THEN_RELEASE_HOLDER_THEN_D014_COMPLETE',
+  });
+}
+
 function executePreparedContinuation(context, request, prRequest, {profile = DEFAULT_PROFILE, runner = defaultRunner, env = process.env, root = ROOT} = {}) {
   const {manifest} = context;
   validatePreparedContinuationManifestBinding(manifest, request);
@@ -729,6 +1537,14 @@ function executePreparedContinuation(context, request, prRequest, {profile = DEF
   holderCheck(context, env);
   let currentMain = continuationCurrentMain(manifest, {profile, runner});
   let state = classifyPreparedContinuationState(manifest, request, currentMain, {runner, profile});
+  const candidatePaths = state.state === 'PUSHED' ? []
+    : state.state === 'PREPARED'
+      ? candidatePathsFromStagedDiff(runner, manifest.workspace.worktree)
+      : candidatePathsFromCommitDiff(runner, manifest.workspace.worktree,
+        manifest.observedBaseSha, state.candidateHead);
+  if (state.state !== 'PUSHED') {
+    requireGithubWorkflowPushCredential(candidatePaths, manifest.workspace.worktree, {runner});
+  }
   let replay = null;
   let checks = [];
   if (state.state === 'PREPARED') {
@@ -759,7 +1575,7 @@ function executePreparedContinuation(context, request, prRequest, {profile = DEF
   if (state.state === 'CURRENTIZED' || state.state === 'COMMITTED') {
     holderCheck(context, env);
     if (continuationCurrentMain(manifest, {profile, runner}) !== currentMain) throw new OwnerError('CONFLICT', ['CONTINUATION_MAIN_CHANGED']);
-    runChecked(runner, 'git', ['-C', manifest.workspace.worktree, 'push', 'origin', state.finalHead + ':refs/heads/' + manifest.workspace.branch], {}, 'PUSH_FAILED');
+    pushExactCandidate(runner, manifest.workspace.worktree, state.finalHead, manifest.workspace.branch, candidatePaths);
     state = classifyPreparedContinuationState(manifest, request, currentMain, {runner, profile});
     if (state.state !== 'PUSHED') throw new OwnerError('CONFLICT', ['PUSH_READBACK_FAILED']);
   }
@@ -873,6 +1689,8 @@ function executeApply(context, request, patchBytes, prRequest, {
     {}, 'PATCH_DIFF_CHECK_FAILED');
   ensureNoResidue(runner, manifest.workspace.worktree);
   const preparedDigest = stagedDigest(runner, manifest.workspace.worktree);
+  const candidatePaths = candidatePathsFromStagedDiff(runner, manifest.workspace.worktree);
+  requireGithubWorkflowPushCredential(candidatePaths, manifest.workspace.worktree, {runner});
   holderCheck(context, env);
   const checks = runFixedValidation(manifest, request, {runner});
   holderCheck(context, env);
@@ -903,10 +1721,7 @@ function executeApply(context, request, patchBytes, prRequest, {
   if (beforePush !== manifest.observedBaseSha) {
     throw new OwnerError('CONFLICT', ['REMOTE_HEAD_MOVED']);
   }
-  runChecked(runner, 'git', [
-    '-C', manifest.workspace.worktree, 'push', 'origin',
-    newHead + ':refs/heads/' + manifest.workspace.branch,
-  ], {}, 'PUSH_FAILED');
+  pushExactCandidate(runner, manifest.workspace.worktree, newHead, manifest.workspace.branch, candidatePaths);
   const afterPush = remoteBranchHead(runner, profile.landing, manifest.workspace.branch);
   if (afterPush !== newHead) throw new OwnerError('CONFLICT', ['PUSH_READBACK_FAILED']);
   holderCheck(context, env);
@@ -964,6 +1779,7 @@ function parseArgs(argv) {
     inspect: new Set(['manifest','ledger','packet']),
     'prepare-workspace': new Set(['manifest','ledger','packet']),
     apply: new Set(['manifest','ledger','packet','request','patch','pr-request']),
+    'review-update': new Set(['manifest','ledger','packet','review-update-request','patch','pr-request']),
     'continue-prepared': new Set(['manifest','ledger','packet','continuation-request','pr-request']),
   };
   if (!allowedByOperation[operation]) throw new OwnerError('UNKNOWN', ['OPERATION_UNSUPPORTED']);
@@ -999,6 +1815,7 @@ function runCli(argv = process.argv.slice(2), env = process.env, options = {}) {
     ledgerPath: values.ledger,
     packetPath: values.packet,
     profile: options.profile || DEFAULT_PROFILE,
+    operation,
   });
   let result;
   if (operation === 'inspect') {
@@ -1018,6 +1835,17 @@ function runCli(argv = process.argv.slice(2), env = process.env, options = {}) {
     const request = parseRequestText(requestBytes.toString('utf8'));
     const prRequest = parsePrRequestText(prBytes.toString('utf8'), request.packet_ref);
     result = executeApply(context, request, patchBytes, prRequest, {...options, env});
+  } else if (operation === 'review-update') {
+    if (!apply) throw new OwnerError('BLOCKED', ['APPLY_FLAG_REQUIRED']);
+    for (const key of ['review-update-request', 'patch', 'pr-request']) {
+      if (!values[key]) throw new OwnerError('UNKNOWN', ['ARGUMENT_REQUIRED:' + key]);
+    }
+    const requestBytes = readRegular(values['review-update-request'], 'REVIEW_UPDATE_REQUEST_FILE');
+    const patchBytes = readRegular(values.patch, 'PATCH_FILE', MAX_PATCH_BYTES);
+    const prBytes = readRegular(values['pr-request'], 'PR_REQUEST_FILE');
+    const request = parseReviewUpdateRequestText(requestBytes.toString('utf8'));
+    const prRequest = parsePrRequestText(prBytes.toString('utf8'), request.packet_ref);
+    result = executeReviewUpdate(context, request, patchBytes, prRequest, {...options, env});
   } else if (operation === 'continue-prepared') {
     if (!apply) throw new OwnerError('BLOCKED', ['APPLY_FLAG_REQUIRED']);
     for (const key of ['continuation-request', 'pr-request']) {
@@ -1051,6 +1879,10 @@ if (require.main === module) {
 module.exports = {
   BLOCKER_REPAIR_REF_PREFIX,
   CONTINUATION_REQUEST_SCHEMA,
+  INTERRUPTED_RECOVERY_CONTINUATION_REQUEST_SCHEMA,
+  REVIEW_UPDATE_REQUEST_SCHEMA,
+  REVIEW_UPDATE_PR_PROJECTION_REREAD_ATTEMPTS,
+  REVIEW_UPDATE_PR_PROJECTION_REREAD_DELAY_MS,
   DEFAULT_PROFILE,
   FALSE_AUTHORITY,
   FIXED_BOT_EMAIL,
@@ -1066,10 +1898,22 @@ module.exports = {
   PR_REQUEST_SCHEMA,
   REQUEST_SCHEMA,
   evidenceContext,
+  candidatePathsFromCommitDiff,
+  candidatePathsFromNameStatus,
+  candidatePathsFromStagedDiff,
   classifyPreparedContinuationState,
+  classifyReviewUpdateState,
+  reconcileReviewUpdatePrProjection,
   continuationCurrentMain,
+  reviewUpdateCurrentMain,
+  reviewUpdateMergeBase,
+  reviewUpdateOriginalPaths,
+  reviewUpdateExpectedChangedPaths,
+  verifyReviewUpdateReplayAgainstCurrent,
+  assertReviewUpdateCurrentizedPayload,
   executeApply,
   executePreparedContinuation,
+  executeReviewUpdate,
   fixedValidationChecks,
   inspect,
   inspectLanding,
@@ -1078,18 +1922,32 @@ module.exports = {
   output,
   parseArgs,
   parsePreparedContinuationRequestText,
+  parseReviewUpdateRequestText,
   parseManifestText,
   parsePrRequestText,
   parseRequestText,
+  parseGithubOauthScopes,
   prepareWorkspace,
+  requireNoUrlSpecificHttpExtraHeaders,
+  pushExactCandidate,
+  requireGithubWorkflowPushCredential,
+  requiresWorkflowOauthScope,
   protectedMain,
   runContinuationValidation,
+  readExistingReviewPr,
+  expectedReviewUpdatePreparedDigest,
   runCli,
   sha256Bytes,
   validateBranch,
   validateManifestShape,
+  validateStagedModes,
+  validateReviewUpdateExpectedModes,
   validatePreparedContinuationManifestBinding,
   verifyReplayAgainstCurrent,
   validateRepoPath,
   validateWorktreePath,
+  WORKFLOW_PATH_PREFIX,
+  FIXED_GH,
+  FIXED_ORIGIN_URL,
+  FIXED_GITHUB_CREDENTIAL_HELPER,
 };

@@ -18,6 +18,6 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Validate PocketRisu helper product memory
         run: python3 products/pocketrisu-helper-mod/ci/validate_docs.py

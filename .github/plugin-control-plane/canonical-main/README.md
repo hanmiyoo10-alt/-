@@ -68,10 +68,13 @@ Runs older than that epoch are historical baseline evidence and cannot open a ne
 
 `.github/workflows/canonical-main-ops.yml` refreshes the operator surface through:
 
-- `workflow_run` completion events for Required CI and active writer workflows;
+- Required-job-driven protection feedback: `Canonical Main Protection Guard` begins on the SimCore CI `workflow_run: requested` event, boundedly observes the exact `Required` job, and requests an ops refresh as soon as that job reaches a terminal result; requested-event PASS may use the existing effect-free guard path immediately, while requested-event failure is projected early but defers recovery effects to the completed-event fallback so failure recovery remains exactly-once; the completed-event recovery path preserves the outer workflow conclusion (including `cancelled`) even though the terminal `Required` job remains authoritative for check observation;
+- `workflow_run` completion events remain the fallback/retry path for Required CI and active writer workflows;
 - selected `main` pushes;
 - a bounded schedule as self-healing fallback;
 - manual workflow dispatch.
+
+The Required observer treats the exact current-main `Required` job as authoritative once that job is terminal, even if GitHub's outer workflow-run status is still settling. Writer observation keeps wrapper-completion semantics by default; only policy-explicit owners such as `canonical-main-protection-guard` may accept an in-progress wrapper after every materialized job is terminal. Missing, still-running, ambiguous, or conflicting job evidence remains fail-closed.
 
 The same trusted job then runs the protected-main governance renderer, which updates only the bounded protection section in the existing operations issue.
 
@@ -125,3 +128,13 @@ node .github/plugin-control-plane/canonical-main/bootstrap.cjs render \
 `policy.json` keeps `operations.eventAdaptersComplete=true` after the proven Phase B adapter activation. Notification bridge availability and branch-protection governance are rendered separately from product/release authority.
 
 `CLEAR` means only that configured repository feedback coverage is current and has no unresolved actionable incident. It is not a claim that every product is bug-free, and it is not a claim that GitHub branch protection is enabled. Read the dedicated `Protected main` section for that fact.
+
+## Canonical Main Proof Bundle manual refresh
+
+The `Canonical Main Proof Bundle` collector owns merged/current-main acceptance evidence. Its natural `push: main` path remains the canonical automatic proof path.
+
+`workflow_dispatch` is a **current-main-only manual refresh**. The orchestrator rejects a manual dispatch whose GitHub ref is not exactly `refs/heads/main` before collection begins. This keeps manual refresh aligned with the collector's merged-PR, merged-main Required, #485, protection, and incident evidence model instead of inventing a second candidate acceptance mode.
+
+A workflow execution success is not, by itself, Canonical Main acceptance. Semantic acceptance comes from the persisted bundle's `state`, `acceptanceReady`, `missing`, and `failures` fields.
+
+Exact candidate-head GitHub Actions runtime compatibility is a different claim. Use the repository-owned read-only `.github/workflows/repository-actions-compat-proof.yml` harness for that proof; it does not make an open candidate Canonical Main acceptance-ready and grants no merge, release, production, runtime, or mutation authority.

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "local-model-lab",
+  "kind": "product",
+  "displayName": "Local Model Lab",
+  "lifecycle": "research-product-root",
+  "projectPath": "products/local-model-lab",
+  "guidelines": "docs/LOCAL_MODEL_LAB_GUIDELINES.md",
+  "authority": {
+    "type": "evidence",
+    "evidence": "products/local-model-lab/CURRENT.md",
+    "manifest": "products/local-model-lab/product.json"
+  },
+  "memory": {
+    "profile": "check-only",
+    "outputs": []
+  },
+  "alerts": {
+    "policy": "repo-default"
+  }
+}

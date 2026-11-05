@@ -29,6 +29,7 @@ const {
 } = require('../stage-checkpoint.cjs');
 
 const PACKET = 1847;
+const PACKET_CREATED_AT = '2026-10-31T10:00:00Z';
 const STAGE = 'IMPLEMENTATION_PR';
 const BODY = 'checkpoint evidence\n- exact scope: four files';
 const PACKET_BODY = '<!-- canonical-main-work-packet:v1 -->\n# packet';
@@ -87,13 +88,18 @@ function fakeClient({ packetComments = [], auditComments = [], failWrites = [], 
     async api(endpoint, options = {}) {
       calls.push({endpoint, method: options.method || 'GET'});
       if (endpoint === `/issues/${PACKET}` && (!options.method || options.method === 'GET')) {
-        return packetIssue || { number: PACKET, state: 'open', body: PACKET_BODY };
+        return packetIssue
+          ? {...packetIssue, created_at: packetIssue.created_at || PACKET_CREATED_AT}
+          : {number: PACKET, state: 'open', body: PACKET_BODY, created_at: PACKET_CREATED_AT};
       }
-      const list = endpoint.match(/^\/issues\/(\d+)\/comments\?per_page=100&page=(\d+)$/);
+      const list = endpoint.match(/^\/issues\/(\d+)\/comments\?per_page=100&page=(\d+)(?:&since=([^&]+))?$/);
       if (list && (!options.method || options.method === 'GET')) {
         const issue = Number(list[1]);
         const page = Number(list[2]);
-        const all = comments.get(issue) || [];
+        const since = list[3] ? decodeURIComponent(list[3]) : null;
+        const all = (comments.get(issue) || []).filter((row) => (
+          since === null || !row.created_at || row.created_at >= since
+        ));
         return all.slice((page - 1) * 100, page * 100);
       }
       const post = endpoint.match(/^\/issues\/(\d+)\/comments$/);
@@ -220,6 +226,46 @@ assert.throws(
   assert.equal(continueImplementation.rebindDisposition, 'CONTINUE_CURRENT_STAGE');
   assert.equal(continueImplementation.nextStage, 'IMPLEMENTATION_PR');
   assert.deepEqual(continueImplementation.completedStages, ['AUTHORITY_SCOPE']);
+
+  const boundedAudit = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: inspectPacketBody('IN_PROGRESS', 'IMPLEMENTATION_PR'),
+      created_at: PACKET_CREATED_AT,
+    },
+    packetComments: [checkpointComment('AUTHORITY_SCOPE', authDigest, 'packet', 21)],
+    auditComments: [
+      {...checkpointComment('AUTHORITY_SCOPE', authDigest, 'audit', 22), created_at: '2026-10-31T09:59:59Z'},
+      {...checkpointComment('AUTHORITY_SCOPE', authDigest, 'audit', 23), created_at: PACKET_CREATED_AT},
+    ],
+  });
+  const boundedAuditResult = await inspectCheckpoint({client: boundedAudit, packetNumber: PACKET});
+  assert.equal(boundedAuditResult.disposition, 'PASS');
+  assert.equal(boundedAuditResult.stages[0].variantCount, 1);
+  assert.ok(boundedAudit.calls.some(({endpoint}) => (
+    endpoint === `/issues/${AUDIT_ISSUE}/comments?per_page=100&page=1&since=${encodeURIComponent(PACKET_CREATED_AT)}`
+  )));
+  assert.ok(boundedAudit.calls.some(({endpoint}) => (
+    endpoint === `/issues/${PACKET}/comments?per_page=100&page=1`
+  )));
+
+  const saturatedAudit = fakeClient({
+    packetIssue: {
+      number: PACKET,
+      state: 'open',
+      body: inspectPacketBody('IN_PROGRESS', 'AUTHORITY_SCOPE'),
+      created_at: PACKET_CREATED_AT,
+    },
+    auditComments: Array.from({length: 2000}, (_, index) => ({
+      id: 30000 + index,
+      body: 'irrelevant audit history',
+      created_at: PACKET_CREATED_AT,
+    })),
+  });
+  const saturatedAuditResult = await inspectCheckpoint({client: saturatedAudit, packetNumber: PACKET});
+  assert.equal(saturatedAuditResult.disposition, 'UNKNOWN');
+  assert.deepEqual(saturatedAuditResult.reasonCodes, ['CHECKPOINT_INSPECT_READ_FAILED']);
 
   const staleAuthority = fakeClient({
     packetIssue: {
@@ -583,6 +629,37 @@ assert.throws(
   const closedDoneResult = await inspectCheckpoint({client: closedDone, packetNumber: PACKET});
   assert.equal(closedDoneResult.disposition, 'PASS');
   assert.equal(closedDoneResult.rebindDisposition, 'STOP_TERMINAL');
+  assert.equal(closedDoneResult.nextLegalAction, 'NONE_TERMINAL_PACKET_COMPLETE');
+
+  for (const terminalLifecycle of ['CANCELLED', 'SUPERSEDED']) {
+    const openTerminal = fakeClient({
+      packetIssue: {
+        number: PACKET,
+        state: 'open',
+        body: inspectPacketBody(terminalLifecycle, 'EXPERIMENT_CLOSE'),
+      },
+      packetComments: packetAll,
+      auditComments: auditAll,
+    });
+    const openTerminalResult = await inspectCheckpoint({client: openTerminal, packetNumber: PACKET});
+    assert.equal(openTerminalResult.disposition, 'PASS', terminalLifecycle);
+    assert.equal(openTerminalResult.rebindDisposition, 'CONTINUE_TRANSACTION_CLOSURE', terminalLifecycle);
+    assert.equal(openTerminalResult.nextLegalAction, 'SELF_CLOSE_SYNC_CURRENT_PACKET', terminalLifecycle);
+
+    const closedTerminal = fakeClient({
+      packetIssue: {
+        number: PACKET,
+        state: 'closed',
+        body: inspectPacketBody(terminalLifecycle, 'EXPERIMENT_CLOSE'),
+      },
+      packetComments: packetAll,
+      auditComments: auditAll,
+    });
+    const closedTerminalResult = await inspectCheckpoint({client: closedTerminal, packetNumber: PACKET});
+    assert.equal(closedTerminalResult.disposition, 'PASS', terminalLifecycle);
+    assert.equal(closedTerminalResult.rebindDisposition, 'STOP_TERMINAL', terminalLifecycle);
+    assert.equal(closedTerminalResult.nextLegalAction, 'NONE_TERMINAL_PACKET_COMPLETE', terminalLifecycle);
+  }
 
   const closedActive = fakeClient({
     packetIssue: {
@@ -679,14 +756,17 @@ assert.throws(
     const issue = target.match(new RegExp(`^repos/${FIXED_REPO}/issues/([1-9][0-9]*)$`));
     if (issue && args[3] === 'GET') {
       return {code: 0, stdout: JSON.stringify({
-        number: Number(issue[1]), state: 'open', body: PACKET_BODY,
+        number: Number(issue[1]), state: 'open', body: PACKET_BODY, created_at: PACKET_CREATED_AT,
       }), stderr: ''};
     }
     const list = target.match(new RegExp(
-      `^repos/${FIXED_REPO}/issues/([1-9][0-9]*)/comments\\?per_page=100&page=([1-9][0-9]*)$`,
+      `^repos/${FIXED_REPO}/issues/([1-9][0-9]*)/comments\\?per_page=100&page=([1-9][0-9]*)(?:&since=([^&]+))?$`,
     ));
     if (list && args[3] === 'GET') {
-      const rows = ghComments.get(Number(list[1])) || [];
+      const since = list[3] ? decodeURIComponent(list[3]) : null;
+      const rows = (ghComments.get(Number(list[1])) || []).filter((row) => (
+        since === null || !row.created_at || row.created_at >= since
+      ));
       const page = Number(list[2]);
       return {code: 0, stdout: JSON.stringify(rows.slice((page - 1) * 100, page * 100)), stderr: ''};
     }
@@ -716,6 +796,14 @@ assert.throws(
   await assert.rejects(
     ghClient.api(`/issues/${PACKET}/comments?per_page=100&page=21`),
     /GH_API_COMMENT_PAGE_INVALID/,
+  );
+  await assert.rejects(
+    ghClient.api(`/issues/${PACKET}/comments?per_page=100&page=1&since=${encodeURIComponent(PACKET_CREATED_AT)}`),
+    /GH_API_COMMENT_SINCE_INVALID/,
+  );
+  await assert.rejects(
+    ghClient.api(`/issues/${AUDIT_ISSUE}/comments?per_page=100&page=1&since=not-a-time`),
+    /COMMENT_SINCE_INVALID/,
   );
   await assert.rejects(
     ghClient.api(`/issues/${PACKET}/comments`, {
@@ -794,6 +882,9 @@ assert.throws(
     assert.equal(retryGhRun.packet.state, 'EXISTING');
     assert.equal(retryGhRun.audit.state, 'EXISTING');
     assert.equal(ghCalls.filter((call) => call.args[3] === 'POST').length, writesAfterFirst);
+    assert.ok(ghCalls.some((call) => call.args[1] === (
+      `repos/${FIXED_REPO}/issues/${AUDIT_ISSUE}/comments?per_page=100&page=1&since=${encodeURIComponent(PACKET_CREATED_AT)}`
+    )));
   } finally {
     fs.rmSync(tempDir, {recursive: true, force: true});
   }

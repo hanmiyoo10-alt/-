@@ -166,10 +166,13 @@ locate narrowly
 ### Source-read selection order
 
 1. **Unknown location:** prefer repository search, index, symbol lookup, or bounded snippet discovery before avoidable whole-file retrieval when discovery quality is equivalent.
-2. **Known file + local question:** prefer a bounded line/range read or equivalent targeted excerpt when the available tool supports it.
+2. **Known file + local question:** prefer a bounded line/range read or equivalent targeted excerpt when the available tool supports it. Use the smallest evidence-equivalent semantic window that can answer the question. Roughly 30 lines may be a useful first-pass window when the context is narrow, but 30 lines is not a WSL/filesystem speed boundary, a hard ceiling, or a repository-wide optimum. Select the initial window by semantic boundaries and line/payload width, not line count alone.
 3. **Existing bounded projection:** prefer established CI/status/summary projections for first-pass questions instead of raw logs or full bodies, then drill down only for attention, failure, ambiguity, or insufficient evidence.
 4. **Reuse captured evidence:** do not re-fetch or re-echo a full source when an already captured bounded result/resource is sufficient for the current claim.
-5. **Expand only for completeness:** whole-file/full-body reads remain valid when the question genuinely depends on global completeness, document structure, ordering, cross-section consistency, or when the source is already small enough that narrowing provides no material benefit.
+5. **Expand adaptively:** when the first bounded window is insufficient, expand with one larger evidence-equivalent read rather than serially slicing the same required context into arbitrary 30-line chunks. When the required context is already known to be larger, prefer one evidence-equivalent larger read when it lowers fan-out without weakening evidence.
+6. **Expand for completeness:** whole-file/full-body reads remain valid when the question genuinely depends on global completeness, document structure, ordering, cross-section consistency, or when the source is already small enough that narrowing provides no material benefit.
+
+For edit context, prefer the smallest uniquely identifying semantic hunk/context needed for a safe patch rather than an arbitrary line-count target. Do not physically fragment source files merely to satisfy read compactness.
 
 A shorter read is better only when it preserves the same authority and evidence needed for the claim. A bounded excerpt does not become a new truth owner merely because it is easier to display.
 

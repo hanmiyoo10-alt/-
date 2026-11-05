@@ -14,11 +14,12 @@ from router import RoutingError, route_task
 
 TARGET_SHA = "f01c2ef304656de9254191ec2fb9a2c046642f21"
 OTHER_SHA = "a" * 40
+FROZEN_DOMAIN_REGISTRY = PACKAGE / "tests" / "fixtures" / "termux-large-doc-editor-o4f0-frozen-domain-registry.json"
 
 
 class O4F0TermuxDomainAdapterTests(unittest.TestCase):
     def setUp(self):
-        self.registry = load_domain_registry()
+        self.registry = load_domain_registry(FROZEN_DOMAIN_REGISTRY)
         self.termux = next(
             item for item in self.registry["domains"]
             if item["scope"] == "plugin:termux-large-doc-editor"

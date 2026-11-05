@@ -21,6 +21,7 @@
     {"path":".github/workflows/release-local-usage-alpha401.yml","blobSha":"9ca14c3abafd1527629b60d8921d5031eddad104","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
     {"path":".github/workflows/release-local-usage-alpha402.yml","blobSha":"b2ade2b3e66a690cc0cb59df0bac73a6232f8552","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
     {"path":".github/workflows/release-local-usage-alpha403.yml","blobSha":"9ce7bb5e77c62053cd566e69757129de2d10a121","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
-    {"path":".github/workflows/release-local-usage-alpha404.yml","blobSha":"5bb70a8b060c7f5adae0cd32ef5d33b2b8ad4ce2","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"}
+    {"path":".github/workflows/release-local-usage-alpha404.yml","blobSha":"5bb70a8b060c7f5adae0cd32ef5d33b2b8ad4ce2","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable release workflow retired from Actions"},
+    {"path":".github/workflows/stage-local-usage-53-engine.yml","blobSha":"795467ac4553502d7ddc77138f58fc84b4d8529c","classification":"DORMANT_LEGACY_WRITER","reason":"historical write-capable direct-main Bridge 1.6.1 staging workflow retired after its staging fixtures were removed"}
   ]
 }

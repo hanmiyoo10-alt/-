@@ -111,6 +111,28 @@ function activation() {
   });
 }
 
+function externalOverlapRunner(issues) {
+  return (command, args) => {
+    if (command === 'gh' && args[0] === 'api'
+        && args[1].startsWith('repos/hanmiyoo10-alt/-/issues?state=open&per_page=100&page=')) {
+      return {code: 0, stdout: JSON.stringify(issues), stderr: ''};
+    }
+    return {code: 1, stdout: '', stderr: 'fixture denied'};
+  };
+}
+
+test('external overlap ignores quoted marker prose and preserves malformed packet failure', () => {
+  const quoted = owner.discoverExternalOverlap(activation(), {runner: externalOverlapRunner([
+    {number: 9991, state: 'open', body: 'Docs quote `<!-- canonical-main-work-packet:v1 -->` inline.'},
+  ])});
+  assert.equal(quoted.state, 'DISJOINT');
+  const malformed = owner.discoverExternalOverlap(activation(), {runner: externalOverlapRunner([
+    {number: 9992, state: 'open', body: '<!-- canonical-main-work-packet:v1 -->\n## State\n`IN_PROGRESS`'},
+  ])});
+  assert.equal(malformed.state, 'UNKNOWN');
+  assert.ok(malformed.findings.some((item) => item.code === 'PACKET_SCOPE_UNRESOLVED'));
+});
+
 test('CLI surface is fixed and apply requires literal flag', () => {
   assert.deepEqual(
     owner.parseArgs(['inspect', '--packet', '#2887', '--format', 'agent-view']),
@@ -149,6 +171,61 @@ test('invalid CLI input does not persist fallback packet evidence', async () => 
   assert.equal(out.code, 2);
   assert.equal(out.persisted, null);
   assert.equal(out.result.packetRef, null);
+});
+
+test('durable effect acknowledgement normalizes run and exact readback evidence', () => {
+  const leaseId = '4'.repeat(64);
+  assert.deepEqual(owner.coordinationEvidence({
+    status: 'DISPATCH_COMPLETE', leaseId, observedGeneration: 19,
+    runId: 190, runConclusion: 'success',
+  }, 'release'), {generation: 19, runId: 190, evidenceRef: 'run:190'});
+
+  const releaseRef = `receipt:mcl-task-lease-readback:release:${leaseId}:generation:20`;
+  assert.deepEqual(owner.coordinationEvidence({
+    status: 'DISPATCH_READBACK_COMPLETE', leaseId, observedGeneration: 20,
+    runId: null, runConclusion: null, evidenceRef: releaseRef,
+  }, 'release'), {generation: 20, runId: null, evidenceRef: releaseRef});
+  assert.equal(owner.coordinationEvidence({
+    status: 'DISPATCH_READBACK_COMPLETE', leaseId, observedGeneration: 20,
+    runId: null, runConclusion: null,
+    evidenceRef: `receipt:mcl-task-lease-readback:acquire:${leaseId}:generation:20`,
+  }, 'release'), null);
+});
+
+test('durable ledger state reconstructs restart-safe release and acquire evidence', () => {
+  const releaseLease = '3'.repeat(64);
+  const freshLease = '4'.repeat(64);
+  const releaseState = {
+    ledger: {state: {
+      generation: 21, activeLeases: [],
+      lastRelease: {leaseId: releaseLease, releasedAtGeneration: 20},
+    }},
+  };
+  assert.deepEqual(owner.durableStateEvidence(releaseState, 'release', releaseLease), {
+    generation: 20, runId: null,
+    evidenceRef: `receipt:mcl-task-lease-readback:release:${releaseLease}:generation:20`,
+  });
+
+  const acquireState = {
+    ledger: {state: {
+      generation: 22, activeLeases: [{leaseId: freshLease}],
+      lastRelease: {leaseId: releaseLease, releasedAtGeneration: 20},
+    }},
+    expectedFresh: {leaseId: freshLease},
+  };
+  assert.equal(owner.durableStateEvidence(acquireState, 'acquire', freshLease), null);
+
+  const act = activation();
+  let fallbackCalls = 0;
+  const built = owner.buildFreshManifest(act, acquireState, {
+    leaseRunEvidence: () => {
+      fallbackCalls += 1;
+      return {generation: 22, runId: 222, evidenceRef: 'run:222'};
+    },
+  });
+  assert.equal(fallbackCalls, 1);
+  assert.equal(built.leaseEvidence.leaseId, freshLease);
+  assert.equal(built.leaseEvidence.acquiredGeneration, 22);
 });
 
 test('fresh rebind manifest preserves canonical validation-merge phase identity', () => {

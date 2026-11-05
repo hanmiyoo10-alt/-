@@ -9,6 +9,7 @@ const test = require('node:test');
 
 const ROOT = path.resolve(__dirname, '../../../../../..');
 const owner = require('../validation-merge-owner.cjs');
+const degraded = require('../../codex-review-degraded-fallback/codex-review-degraded-fallback-owner.cjs');
 const stageReceipt = require('../../stage-receipt.cjs');
 const {stableHash} = require('../../handoff.cjs');
 const agentView = require('../../agent-decision-view.cjs');
@@ -23,6 +24,48 @@ const RECOVERY_RUN = 701;
 const RECOVERY_VERIFY = 801;
 const RECOVERY_REQUIRED = 802;
 const TICK = String.fromCharCode(96);
+function degradedComments(extra = {}) {
+  const receipt = degraded.createReceipt({prNumber: PR, headSha: HEAD, baseSha: BASE,
+    codexCliVersion: '0.1', provider: 'openai', model: 'codex', result: 'CLEAR',
+    findingsCount: 0, reportSha256: 'd'.repeat(64), recoveryMarkerCommentId: 123, ...extra});
+  return [
+    codexSummary({status: 'running', hasAnyFindings: null, hasUnresolvedFindings: null}),
+    {id: 123, user: {login: 'hanmiyoo10-alt'}, body: '<!-- canonical-main-codex-review-recovery:v1 ' + JSON.stringify({schemaVersion: 1, expectedHead: HEAD}) + ' -->'},
+    {id: 124, user: {login: 'hanmiyoo10-alt'}, body: degraded.renderReceipt(receipt)},
+  ];
+}
+test('degraded clear only clears exact pending Codex sub-gate', async () => {
+  const client = fixtureClient({issueComments: degradedComments()});
+  assert.equal((await owner.readReviewBarrier(client, PR, HEAD, BASE)).codexReviewState, 'CODEX_DEGRADED_COMPLETE_CLEAR');
+  const result = await owner.inspectWithClient({client, packetNumber: PACKET, prNumber: PR, implementationReceipt: implementationReceipt()});
+  assert.equal(result.receipt.result, 'PASS');
+  await assert.rejects(owner.readReviewBarrier(client, PR, HEAD), /CODEX_REVIEW_PENDING/);
+  await assert.rejects(owner.readReviewBarrier(fixtureClient({issueComments: degradedComments().filter((r) => r.id !== 123)}), PR, HEAD, BASE), /CODEX_REVIEW_PENDING/);
+});
+test('degraded adverse, malformed, duplicate and stale evidence fails closed', async () => {
+  for (const extra of [{result: 'FINDINGS', findingsCount: 1}, {result: 'FAILED', findingsCount: null},
+    {result: 'UNKNOWN', findingsCount: null}, {headSha: BASE}, {baseSha: HEAD}, {prNumber: PR + 1}]) {
+    const result = await owner.inspectWithClient({client: fixtureClient({issueComments: degradedComments(extra)}),
+      packetNumber: PACKET, prNumber: PR, implementationReceipt: implementationReceipt()});
+    assert.equal(result.receipt.result, extra.result === 'FINDINGS' ? 'BLOCKED' : extra.result ? 'UNKNOWN' : 'CONFLICT');
+  }
+  const rows = degradedComments();
+  for (const comments of [[...rows, rows[2]], [rows[0], rows[1], {...rows[2], body: '<!-- ' + degraded.MARKER + ' bad -->'}]]) {
+    await assert.rejects(owner.readReviewBarrier(fixtureClient({issueComments: comments}), PR, HEAD, BASE));
+  }
+});
+test('terminal hosted evidence ignores degraded evidence completely', async () => {
+  for (const findings of [false, true]) {
+    const comments = degradedComments({result: 'FINDINGS', findingsCount: 2});
+    comments[0] = codexSummary({hasAnyFindings: findings});
+    comments.push(comments[2]);
+    const barrier = await owner.readReviewBarrier(fixtureClient({issueComments: comments}), PR, HEAD, BASE);
+    assert.equal(barrier.codexReviewState, findings ? 'CODEX_COMPLETE_FINDINGS' : 'CODEX_COMPLETE_CLEAR');
+  }
+  const comments = degradedComments();
+  comments[0] = codexSummary({hasAnyFindings: true, hasUnresolvedFindings: true});
+  await assert.rejects(owner.readReviewBarrier(fixtureClient({issueComments: comments}), PR, HEAD, BASE), /CODEX_REVIEW_FINDINGS_THREAD_MISMATCH/);
+});
 const PATHS = [
   '.github/plugin-control-plane/canonical-main/tests/work-system-contract.cjs',
   '.github/plugin-control-plane/canonical-main/work-harness/validation-merge/README.md',
@@ -240,6 +283,41 @@ function compareObject(overrides = {}) {
   };
 }
 
+function codexSummary({
+  head = HEAD,
+  status = 'completed',
+  hasAnyFindings = false,
+  hasUnresolvedFindings = false,
+  id = 9001,
+  author = 'chatgpt-codex-connector[bot]',
+  payloadOverride = null,
+  bodyOverride = null,
+} = {}) {
+  const payload = payloadOverride || {
+    code_review: {
+      commit_sha: head,
+      has_any_findings: hasAnyFindings,
+      has_unresolved_findings: hasUnresolvedFindings,
+      status,
+    },
+    security_review: {
+      commit_sha: null,
+      has_any_findings: null,
+      has_unresolved_findings: null,
+      status: null,
+    },
+  };
+  return {
+    id,
+    user: {login: author},
+    body: bodyOverride || [
+      '<!-- codex-pull-request-review-summary -->',
+      '<!-- codex-review-state:v1 ' + JSON.stringify(payload) + ' -->',
+      '## Codex Review Summary',
+    ].join('\n'),
+  };
+}
+
 function fixtureClient(options = {}) {
   const calls = [];
   let branchReads = 0;
@@ -249,6 +327,7 @@ function fixtureClient(options = {}) {
   let strictProtectionReads = 0;
   let strictGraphqlReads = 0;
   let compareReads = 0;
+  let issueCommentReads = 0;
   const otherPacket = {
     number: 9901,
     state: 'open',
@@ -296,7 +375,10 @@ function fixtureClient(options = {}) {
         return options.reviews || [];
       }
       if (endpoint.startsWith('/issues/' + PR + '/comments?')) {
-        return options.issueComments || [];
+        issueCommentReads += 1;
+        return options.issueCommentsSequence?.[issueCommentReads - 1]
+          ?? options.issueComments
+          ?? [codexSummary()];
       }
       if (endpoint.startsWith('/pulls/' + PR + '/comments?')) {
         return options.reviewComments || [];
@@ -906,6 +988,147 @@ test('requested reviewer is NEEDS_REVIEW, not green by absence', async () => {
   assert.ok(result.receipt.reasonCodes.includes('REVIEW_REQUEST_PENDING'));
 });
 
+test('Codex exact-head running state is NEEDS_REVIEW, never green by absence', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      issueComments: [codexSummary({
+        status: 'running',
+        hasAnyFindings: null,
+        hasUnresolvedFindings: null,
+      })],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PARTIAL');
+  assert.equal(result.receipt.attentionDisposition, 'NEEDS_REVIEW');
+  assert.ok(result.receipt.reasonCodes.includes('CODEX_REVIEW_PENDING'));
+});
+
+test('missing Codex summary is NEEDS_REVIEW', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({issueComments: []}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PARTIAL');
+  assert.ok(result.receipt.reasonCodes.includes('CODEX_REVIEW_NOT_OBSERVED'));
+});
+
+test('stale Codex summary head is NEEDS_REVIEW', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({issueComments: [codexSummary({head: 'e'.repeat(40)})]}),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PARTIAL');
+  assert.ok(result.receipt.reasonCodes.includes('CODEX_REVIEW_HEAD_STALE'));
+});
+
+test('exact-head completed-clear Codex summary is admitted', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient(),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PASS');
+  assert.equal(result.report.codexReviewState, 'CODEX_COMPLETE_CLEAR');
+  assert.equal(result.report.codexReviewHeadSha, HEAD);
+  assert.equal(result.report.codexReviewCommentId, 9001);
+});
+
+test('completed Codex findings preserve unresolved-thread blocking', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      issueComments: [codexSummary({
+        hasAnyFindings: true,
+        hasUnresolvedFindings: true,
+      })],
+      threads: emptyThreads([{
+        isResolved: false,
+        comments: {pageInfo: {hasNextPage: false}, nodes: [{outdated: false}]},
+      }]),
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'BLOCKED');
+  assert.ok(result.receipt.reasonCodes.includes('REVIEW_THREAD_UNRESOLVED'));
+});
+
+test('completed unresolved Codex state without matching thread is UNKNOWN', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      issueComments: [codexSummary({
+        hasAnyFindings: true,
+        hasUnresolvedFindings: true,
+      })],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'UNKNOWN');
+  assert.ok(result.receipt.reasonCodes.includes('CODEX_REVIEW_FINDINGS_THREAD_MISMATCH'));
+});
+
+test('malformed or duplicate Codex summaries remain UNKNOWN', async () => {
+  const malformed = await owner.inspectWithClient({
+    client: fixtureClient({
+      issueComments: [codexSummary({
+        bodyOverride: [
+          '<!-- codex-pull-request-review-summary -->',
+          '<!-- codex-review-state:v1 {not-json} -->',
+        ].join('\n'),
+      })],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(malformed.receipt.result, 'UNKNOWN');
+  assert.ok(malformed.receipt.reasonCodes.includes('CODEX_REVIEW_STATE_INVALID'));
+
+  const duplicate = await owner.inspectWithClient({
+    client: fixtureClient({
+      issueComments: [codexSummary({id: 1}), codexSummary({id: 2})],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(duplicate.receipt.result, 'UNKNOWN');
+  assert.ok(duplicate.receipt.reasonCodes.includes('CODEX_REVIEW_SUMMARY_CONFLICT'));
+});
+
+test('final review reread cannot pass after Codex returns to running state', async () => {
+  const result = await owner.inspectWithClient({
+    client: fixtureClient({
+      issueCommentsSequence: [
+        [codexSummary()],
+        [codexSummary({
+          status: 'running',
+          hasAnyFindings: null,
+          hasUnresolvedFindings: null,
+        })],
+      ],
+    }),
+    packetNumber: PACKET,
+    prNumber: PR,
+    implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PARTIAL');
+  assert.ok(result.receipt.reasonCodes.includes('CODEX_REVIEW_PENDING'));
+  assert.ok(result.receipt.steps.some((row) => (
+    row.name === 'final-review-currentness' && row.result === 'PARTIAL'
+  )));
+});
+
 test('review thread completeness failure stays UNKNOWN', async () => {
   const result = await owner.inspectWithClient({
     client: fixtureClient({
@@ -1099,6 +1322,28 @@ test('exact packet activity evidence can prove one overlapping parent nonblockin
   assert.equal(result.report.packetActivityDecisions.length, 1);
   assert.equal(result.report.packetActivityDecisions[0].state, 'NONBLOCKING_PROVEN');
   assert.equal(result.report.output.overlap, 'DISJOINT');
+});
+
+test('quoted packet marker prose is ignored by overlap discovery', async () => {
+  const quoted = {number: 9904, state: 'open',
+    body: 'Docs quote `<!-- canonical-main-work-packet:v1 -->` inline.'};
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({packets: [quoted]}),
+    packetNumber: PACKET, prNumber: PR, implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'PASS');
+});
+
+test('standalone-marker malformed packet remains fail-closed', async () => {
+  const malformed = {number: 9904, state: 'open', body: [
+    '<!-- canonical-main-work-packet:v1 -->', '## State', TICK + 'IN_PROGRESS' + TICK,
+  ].join('\n')};
+  const result = await owner.inspectWithClient({
+    client: fixtureClientWithOverlap({packets: [malformed]}),
+    packetNumber: PACKET, prNumber: PR, implementationReceipt: implementationReceipt(),
+  });
+  assert.equal(result.receipt.result, 'UNKNOWN');
+  assert.ok(result.receipt.reasonCodes.includes('OVERLAP_UNKNOWN'));
 });
 
 test('late competing packet is caught by final overlap barrier', async () => {

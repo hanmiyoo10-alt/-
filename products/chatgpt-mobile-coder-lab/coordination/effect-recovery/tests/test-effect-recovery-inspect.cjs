@@ -9,6 +9,8 @@ const test = require('node:test');
 const owner = require('../mcl-effect-recovery-inspect.cjs');
 const ROOT = path.resolve(__dirname, '../../../../..');
 const handoff = require(path.join(ROOT, 'products/chatgpt-mobile-coder-lab/coordination/task-handoff.cjs'));
+const rdcSessionEvidence = require(path.join(
+  ROOT, 'products/chatgpt-mobile-coder-lab/device-ops/rdc-session-evidence/mcl-rdc-session-evidence.cjs'));
 
 const BASE = '1111111111111111111111111111111111111111';
 const LEASE = 'a'.repeat(64);
@@ -198,6 +200,29 @@ test('recovery inspector source consumes standalone session owner and has no dup
   assert.doesNotMatch(source, /function isCommandAgent/);
 });
 
+
+test('S effect-recovery session adapter passes verified executor to standalone owner', () => {
+  const original = rdcSessionEvidence.scanSession;
+  let observed = null;
+  rdcSessionEvidence.scanSession = (args) => {
+    observed = {...args};
+    return {
+      sessionState: 'ABSENT',
+      reasonCode: 'SOLE_RDC_COMMAND_SESSION',
+      compatibilityReason: 'SOLE_RDC_COMMAND_SESSION',
+    };
+  };
+  try {
+    const out = owner.scanLocalSession({procRoot: '/synthetic-proc', selfPid: 10});
+    assert.equal(observed.executor, 'S');
+    assert.equal(observed.procRoot, '/synthetic-proc');
+    assert.equal(observed.selfPid, 10);
+    assert.equal(out.state, 'ABSENT');
+    assert.equal(out.reason, 'SOLE_RDC_COMMAND_SESSION');
+  } finally {
+    rdcSessionEvidence.scanSession = original;
+  }
+});
 
 test('collector read failure still returns canonical UNKNOWN view', async () => {
   const out = await owner.inspectPacket(2693, {

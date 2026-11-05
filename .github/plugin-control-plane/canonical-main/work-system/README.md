@@ -112,6 +112,14 @@ cat /path/to/input.json | node .github/plugin-control-plane/canonical-main/work-
 
 CLI exit status is `0` for `DISJOINT`, `1` for `OVERLAP`, `2` for `UNKNOWN`, and `3` for `CONFLICT`. No current SHA, packet number, PR number, cache, network client, auto-close behavior, or repository-global active-work registry is embedded in the classifier.
 
+### Evidence-backed packet activity classification
+
+`work-system/packet-activity.cjs` is the pure read-only classifier for caller-supplied activity evidence about open work packets that are intentionally sequenced but no longer competing for repository mutation. Its result vocabulary is `ACTIVE_WRITER / NONBLOCKING_PROVEN / UNKNOWN / CONFLICT`.
+
+`scope-overlap.cjs` may consult packet activity after packet marker, lifecycle, and native issue-state validation. Only exact `NONBLOCKING_PROVEN` may suppress an open packet **before** deterministic write-scope parsing. This supports historical/live-stage packets whose repository mutation is proven inactive even when an older packet body lacks a currently recognized write-scope heading. The resolver records the activity result but does not infer scopes from generic `## Scope` prose.
+
+Every other packet-activity state keeps the deterministic scope requirement. `ACTIVE_WRITER`, `UNKNOWN`, and `CONFLICT` do not bypass an unresolved scope; packets without activity evidence are unchanged. Recognized deterministic scopes retain the existing overlap behavior. The bypass never changes packet lifecycle parsing, PR activity semantics, or discovery completeness, so `DISJOINT` still requires caller-supplied `COMPLETE` discovery.
+
 ### Evidence-backed PR activity classification
 
 `work-system/pr-activity.cjs` is the pure read-only activity classifier for open-PR overlap evidence. It consumes caller-supplied native PR, linked packet, and optional merged-successor evidence only; it does not fetch GitHub, close PRs, mutate packets, or maintain a PR registry.
@@ -268,8 +276,35 @@ executable, credential, publisher, or GitHub effect input. It requires an exact
 either title or body, including cross-issue references. `PASS` grants no PR
 publication, mutation, merge, release, runtime, device, or production authority.
 
-This is a producer prepublication check, not a second PR publisher and not a
-claim that external GitHub creation surfaces are globally intercepted. A
+The preflight remains a producer prepublication check, not a second PR publisher and not a
+claim that external GitHub creation surfaces are globally intercepted.
+
+When an ordinary CLI-capable packet producer uses the repository's existing
+GitHub CLI publisher, prefer the guarded composition adapter:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/pr-publication.cjs \
+  --packet '#<N>' \
+  --head '<same-repository-branch>' \
+  --expected-head '<40-hex-candidate-sha>' \
+  --title-file /path/to/pr-title.txt \
+  --body-file /path/to/pr-body.md
+```
+
+The adapter materializes the exact publication payload, calls the existing
+`classifyNonClosingPrAuthoring()` semantic owner first, and only a `PASS`
+reaches the existing `gh pr create` publisher. Repository and base are fixed to
+`hanmiyoo10-alt/-` and `main`; the caller cannot select a fork, repository,
+base, merge method, reviewer, label, project, release or other effect. Successful
+creation is read back and must match the exact title, body, same-repository head
+branch and expected head SHA. The adapter grants no merge/release/production or
+runtime authority.
+
+The adapter is a producer-side composition, not a replacement semantic owner and not a
+claim that external GitHub creation surfaces are globally intercepted. When the guarded
+adapter is unavailable or inapplicable, the explicit read-only preflight
+above remains mandatory before a connector or other external publisher. A
+post-hoc `PASS` does not satisfy the prepublication ordering contract, and a
 non-PASS result must not be bypassed by selecting another external publisher.
 
 Applicability remains packet-owned. When merge itself satisfies every required
@@ -455,3 +490,58 @@ cat /path/to/request.json | node .github/plugin-control-plane/canonical-main/wor
 ```
 
 `sourceRefs` must contain 1–16 non-empty bounded source locators, and every acceptance field is explicit rather than inferred from prose.
+
+### Packetization closure preflight
+
+`work-system/packetization-closure.cjs` is the pure read-only classifier for
+implementation-ready source findings that could otherwise remain as latent
+successor-packet debt.
+
+It consumes one caller-supplied JSON object only. It does not fetch GitHub,
+create or close issues, mutate packet bodies or source, select project authority,
+start implementation, maintain a registry, or grant Git/CI/main/release/runtime
+authority.
+
+The finite packetization dispositions are:
+
+- `DIRECT_PACKET_CAPTURE`
+- `PACKETIZE_NOW`
+- `COVERED_BY_EXISTING_PACKET`
+- `ABSORB_PRE_EFFECT`
+- `CLOSE_SYNC_ONLY`
+- `DESIGN_REQUIRED`
+- `DEFER_EXPLICIT`
+- `UNKNOWN`
+- `CONFLICT`
+
+For implementation-ready evidence, the classifier derives one stable
+`packetizationKey` from exactly the source root, primary goal, semantic owner,
+and normalized writable scopes. Current main SHA, timestamps, route/executor,
+worker/chat/account/session identity, CI state and other transient facts are not
+key inputs.
+
+A ready finding with no terminal disposition is reported as
+`LATE_PACKET_DEBT` and `trainFullyEnumerated=false`. This does not authorize
+implementation. It only prevents a campaign/root/audit from truthfully claiming
+that its implementation train is fully enumerated while the executable
+disposition remains unresolved.
+
+`COVERED_BY_EXISTING_PACKET` and `ABSORB_PRE_EFFECT` require one exact supplied
+packetization-key match. Absorption additionally requires both the finding and
+the target packet to remain pre-effect. Any owner/goal/scope/key mismatch,
+ambiguous duplicate key, or already-started effect fails closed.
+
+`CLOSE_SYNC_ONLY` is valid only when the caller explicitly proves that no source
+implementation remains. `DEFER_EXPLICIT` requires a bounded durable reason/owner
+locator. `UNKNOWN` and `CONFLICT` are preserved rather than converted into a
+packetization success.
+
+The bounded CLI accepts one JSON file:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/packetization-closure.cjs /path/to/input.json
+```
+
+Exit status is `0` for `PASS`, `2` for `LATE_PACKET_DEBT`, `3` for
+`CONFLICT`, and `4` for `UNKNOWN`. The classifier's authority flags always
+deny mutation and issue creation.

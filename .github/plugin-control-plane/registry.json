@@ -71,19 +71,6 @@
         "ref": "main"
       }
     },
-    "termux-large-doc-editor": {
-      "displayName": "Termux Large Doc Editor",
-      "lifecycle": "prototype",
-      "issueValues": ["termux-large-doc-editor", "Termux Large Doc Editor"],
-      "paths": [
-        "plugins/termux/large-doc-editor/**",
-        "docs/TERMUX_*.md"
-      ],
-      "statusAdapter": "prototype",
-      "authority": {
-        "evidence": "plugins/termux/large-doc-editor/README.md"
-      }
-    },
     "voyage-token-check": {
       "displayName": "Voyage Token Check",
       "lifecycle": "design-evidence-validation",
@@ -95,6 +82,19 @@
       "statusAdapter": "evidence",
       "authority": {
         "evidence": "plugins/risu/local/voyage/DESIGN_STATUS.md"
+      }
+    },
+    "provider-balance-mini": {
+      "displayName": "Provider Balance Mini",
+      "lifecycle": "experimental",
+      "issueValues": ["provider-balance-mini", "Provider Balance Mini"],
+      "paths": [
+        "plugins/risu/local/provider-balance-monitor/**",
+        "docs/PROVIDER_BALANCE_MINI_GUIDELINES.md"
+      ],
+      "statusAdapter": "evidence",
+      "authority": {
+        "evidence": "plugins/risu/local/provider-balance-monitor/README.md"
       }
     }
   },
@@ -113,6 +113,20 @@
         "manifest": "products/app-api-mod-lab/product.json"
       }
     },
+    "local-model-lab": {
+      "displayName": "Local Model Lab",
+      "lifecycle": "research-product-root",
+      "issueValues": ["local-model-lab", "Local Model Lab", "로컬 모델", "로컬모델"],
+      "paths": [
+        "products/local-model-lab/**",
+        "docs/LOCAL_MODEL_LAB_GUIDELINES.md"
+      ],
+      "statusAdapter": "prototype",
+      "authority": {
+        "evidence": "products/local-model-lab/CURRENT.md",
+        "manifest": "products/local-model-lab/product.json"
+      }
+    },
     "pocketrisu-helper-mod": {
       "displayName": "PocketRisu Helper Mod",
       "lifecycle": "operations-product-root",
@@ -125,6 +139,32 @@
       "authority": {
         "manifest": "products/pocketrisu-helper-mod/product.json",
         "currentState": "products/pocketrisu-helper-mod/CURRENT.md"
+      }
+    },
+    "termux": {
+      "displayName": "Termux",
+      "lifecycle": "prototype",
+      "issueValues": ["termux", "Termux"],
+      "paths": [
+        "products/standalone/termux/**"
+      ],
+      "statusAdapter": "prototype",
+      "authority": {
+        "evidence": "products/standalone/termux/README.md"
+      }
+    },
+    "simcore-risu": {
+      "displayName": "SimCore Risu",
+      "lifecycle": "research-product-root",
+      "issueValues": ["simcore-risu", "SimCore Risu", "심코어 리스"],
+      "paths": [
+        "products/simcore-risu/**",
+        "docs/SIMCORE-RISU_GUIDELINES.md"
+      ],
+      "statusAdapter": "prototype",
+      "authority": {
+        "evidence": "products/simcore-risu/CURRENT.md",
+        "manifest": "products/simcore-risu/product.json"
       }
     }
   },
@@ -179,13 +219,13 @@
     ".github/workflows/agent-skill-security-benchmark.yml",
     "tools/agent-skill-security/**",
     ".agents/skills/**",
+    "AGENTS.md",
     "docs/REPOSITORY_AGENT_EXECUTION_COMPACTNESS_V1_DESIGN_2026-09-07.md",
     "docs/REPOSITORY_PLUGIN_CONTROL_PLANE_*.md"
   ],
   "sharedPaths": [
     "README.md",
     "products/README.md",
-    ".vscode/**",
-    ".github/workflows/repo-main-write-coordination-migration.yml"
+    ".vscode/**"
   ]
 }

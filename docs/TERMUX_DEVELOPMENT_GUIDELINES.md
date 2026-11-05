@@ -4,7 +4,10 @@ This document is the durable project memory and operating contract for the Termu
 
 Canonical repository: `hanmiyoo10-alt/-`
 
-Canonical plugin path: `plugins/termux/`
+Current source layout: product-family source under #2801
+
+- Standalone Termux family root: `products/standalone/termux/`
+- Migrated children: `products/standalone/termux/response-watch/`, `products/standalone/termux/background-gpt/`, `products/standalone/termux/screen-on/`, `products/standalone/termux/taskbridge/`, `products/standalone/termux/large-doc-editor/`
 
 Production release branch: `UNKNOWN — not established yet`
 
@@ -73,9 +76,13 @@ and update the documentation.
 
 ## 1. Project scope
 
-The default development target is:
+The default development target is the current owning child path. During staged migration, current `main` uses:
 
-`plugins/termux/`
+- Response Watch: `products/standalone/termux/response-watch/`
+- Background GPT: `products/standalone/termux/background-gpt/`
+- Screen On: `products/standalone/termux/screen-on/`
+- TaskBridge: `products/standalone/termux/taskbridge/`
+- Large Doc Editor: `products/standalone/termux/large-doc-editor/`
 
 Do not modify unrelated host/application code unless evidence shows that
 the problem cannot be solved inside the plugin.

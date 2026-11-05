@@ -8,7 +8,7 @@ packet finalizer and does not add caller-selected coordination semantics.
 
 ## Reviewed fixed profiles
 
-V1 contains exactly thirteen reviewed targets.
+V1 contains exactly sixteen reviewed targets.
 
 ### Profile A — #2463 / PR #2464
 
@@ -189,7 +189,71 @@ its bounded implementation publication/recovery rebind:
 For #3216 the only permitted finalization effect is publication of the missing
 canonical VALIDATION_MERGE receipt followed by read-only re-inspection.
 
-The caller supplies only one of the thirteen reviewed packet numbers and a bounded output
+### Profile N — #3356 / PR #3358
+
+The fourteenth profile is the exact merged docs-only primary-S RDC checkpoint sync:
+
+- exact candidate / merge / implementation-receipt / diff / one-path identity is fixed;
+- the implementation receipt must prove currentization preservation, review repair,
+  Verify/Required, and `coordination-not-applicable`;
+- current #2352 must prove packet #3356 has no active lease;
+- no D-014 manifest, workspace, holder or completion receipt is read, selected,
+  synthesized or mutated;
+- finalization evidence projects coordination and workspace as `NOT_APPLICABLE`;
+- the only permitted effect is one canonical `VALIDATION_MERGE` receipt comment;
+- an exact existing receipt is reused and a second apply is zero-effect.
+
+### Profile O — #3561 / PR #3794
+
+The fifteenth profile is the exact merged L interrupted-recovery rebind owner:
+
+- exact canonical IMPLEMENTATION_PR receipt and merged candidate attribution;
+- exact L/L implementation D-014 manifest, released lease, clean worktree and holder absence;
+- exact implementation D-014 COMPLETE receipt identity is compile-time fixed and revalidated;
+- fixed PASS gates for currentization diff preservation, coordination release,
+  exact-head Verify/Required, and exact three-path scope;
+- current #2352 must prove packet #3561 has no active lease;
+- no validation-stage D-014 manifest is created;
+- the only permitted effect is one canonical `VALIDATION_MERGE` receipt comment;
+- an exact existing receipt is reused and a second apply is zero-effect.
+
+For #3561 the live #3473 recovery transaction remains separately owned and is never
+performed by this finalization profile.
+
+### Profile P — #3762 / PR #3786
+
+The sixteenth profile is the exact merged M→S Wireless ADB peer-controller packet:
+
+- exact canonical IMPLEMENTATION_PR receipt and merged candidate attribution;
+- exact L/L implementation D-014 manifest, released lease, clean worktree and holder absence;
+- exact implementation D-014 COMPLETE receipt identity is compile-time fixed and revalidated;
+- fixed PASS gates for currentization scope/blob preservation, coordination release,
+  Codex exact-head clear, exact-head Verify/Required, and exact three-path scope;
+- current #2352 must prove packet #3762 has no active lease;
+- no validation-stage D-014 manifest is created;
+- the only permitted effect is one canonical `VALIDATION_MERGE` receipt comment;
+- an exact existing receipt is reused and a second apply is zero-effect.
+
+This profile finalizes repository validation only. It grants no M/S device, ADB,
+pairing, bootstrap-pin, reconnect, persistence, release or production authority.
+
+### Profile Q — #3203 / PR #3204
+
+The seventeenth profile is the exact already-merged D-013 zero-run reconciliation packet whose historical validation inspect sidecar was not durably retained:
+
+- exact currentized canonical IMPLEMENTATION_PR receipt and merged candidate attribution;
+- exact S/S currentization D-014 manifest, released lease, clean historical worktree and holder absence;
+- exact currentization D-014 COMPLETE receipt identity is compile-time fixed and revalidated;
+- fixed PASS gates bind currentization release/completion/lineage, scope/blob preservation, original release/completion, exact-head Verify/Required, exact nine-path diff, focused matrix, holder/workspace convergence, non-closing PR authoring, packet-scoped replay, PR observe, and repository patch write;
+- current #2352 must prove packet #3203 has no active lease;
+- no historical validation inspect sidecar is reconstructed or claimed;
+- no merge/currentization retry is permitted;
+- the only permitted effect is one canonical `VALIDATION_MERGE` receipt comment;
+- an exact existing receipt is reused and a second apply is zero-effect.
+
+This profile repairs #3208 only. It does not rewrite #3203 source bytes or weaken generic finalization semantics.
+
+The caller supplies only one of the seventeen reviewed packet numbers and a bounded output
 format. Repository, PR, manifest, lease, run, workspace, effect, command and comment
 target remain non-selectable.
 
@@ -234,6 +298,18 @@ node mcl-validation-finalization-apply.cjs apply --packet '#2791' --format agent
 
 node mcl-validation-finalization-apply.cjs inspect --packet '#3216' --format agent-view
 node mcl-validation-finalization-apply.cjs apply --packet '#3216' --format agent-view
+
+node mcl-validation-finalization-apply.cjs inspect --packet '#3203' --format agent-view
+node mcl-validation-finalization-apply.cjs apply --packet '#3203' --format agent-view
+
+node mcl-validation-finalization-apply.cjs inspect --packet '#3356' --format agent-view
+node mcl-validation-finalization-apply.cjs apply --packet '#3356' --format agent-view
+
+node mcl-validation-finalization-apply.cjs inspect --packet '#3561' --format agent-view
+node mcl-validation-finalization-apply.cjs apply --packet '#3561' --format agent-view
+
+node mcl-validation-finalization-apply.cjs inspect --packet '#3762' --format agent-view
+node mcl-validation-finalization-apply.cjs apply --packet '#3762' --format agent-view
 ~~~
 
 inspect is always read-only.
@@ -255,7 +331,7 @@ Before any effect, all reviewed profiles prove:
 Profile A additionally proves the reviewed validation D-014 manifest, historical
 release provenance, exact holder relation and D-014 completion state.
 
-Profiles B, C, D, E, F, G, H, I, J, K, L and M each require their exact compile-time canonical IMPLEMENTATION_PR
+Profiles B, C, D, E, F, G, H, I, J, K, L, M and O each require their exact compile-time canonical IMPLEMENTATION_PR
 receipt digest plus their exact compile-time coordination gate set. Profile B
 requires `implementation-coordination-readback` + `implementation-d013-release`.
 Profile C requires the reviewed original implementation release/completion gates
@@ -285,6 +361,36 @@ Profile L requires `currentization-scope-and-blob-preservation`,
 Profile M requires `currentization-scope-and-blob-preservation`, `d013-release`,
 `d014-completion`, `implementation-coordination-converged`,
 `exact-head-required`, `exact-head-verify` and `exact-four-path-diff`.
+Profile N requires `currentization-scope-and-blob-preservation`,
+`coordination-not-applicable=NOT_APPLICABLE`, `exact-head-required`,
+`exact-head-verify`, and `review-finding-addressed`. It has no workspace/holder/
+D-014 admission because those semantics are compile-time not applicable.
+Profile O requires `currentization-diff-preserved`, `coordination-released`,
+`exact-head-required`, `exact-head-verify`, and `exact-three-path-diff`.
+It additionally binds the exact L/L implementation D-014 manifest and exact D-014
+COMPLETE receipt before the existing implementation-coordination finalization path
+may publish a canonical validation receipt.
+Profile P requires `codex-exact-head-review-clear`, `coordination-released`,
+`currentization-scope-and-blob-preservation`, `exact-head-required`,
+`exact-head-verify`, and `exact-three-path-scope`.
+It additionally binds the exact #3762 L/L review-update D-014 manifest and exact
+D-014 COMPLETE receipt before the existing implementation-coordination finalization
+path may publish a canonical validation receipt.
+Profile Q requires `currentization-d013-release`, `currentization-d014-complete`,
+`currentization-parent-lineage`, `currentization-scope-and-blob-preservation`,
+`d013-release`, `d014-completion`, `exact-head-required`, `exact-head-verify`,
+`exact-nine-path-diff`, `focused-contract-matrix`, `holder-workspace-convergence`,
+`non-closing-pr-authoring`, `packet-scoped-currentization-replay`, `pr-observe`,
+and `repository-patch-write`.
+It additionally binds the exact #3203 S/S currentization D-014 manifest and COMPLETE
+receipt before the existing implementation-coordination finalization path may publish
+a canonical validation receipt.
+Profile R is the exact already-merged docs-only #4214 / PR #4215 recovery profile.
+It binds the fixed candidate, merge, canonical IMPLEMENTATION_PR receipt, one-path
+diff identity and the exact PASS gates for Codex review, Required, Verify, PR
+observation, repository-patch transport and scope-overlap. Coordination/workspace/
+holder/D-014 are compile-time not applicable. It never reconstructs the missing
+historical validation-merge inspect sidecar and never retries the merge.
 Each profile's exact valid workspace manifest is used only to resolve the fixed
 worktree/holder location; it is never manufactured or rewritten as a
 validation-stage D-014 manifest.
@@ -344,6 +450,18 @@ FINALIZATION_REQUIRED / PASS / ACTION_REQUIRED
 #3216:
 FINALIZATION_REQUIRED / PASS / ACTION_REQUIRED
 + CANONICAL_VALIDATION_MERGE_RECEIPT
+
+#3561:
+FINALIZATION_REQUIRED / PASS / ACTION_REQUIRED
++ CANONICAL_VALIDATION_MERGE_RECEIPT
+
+#3762:
+FINALIZATION_REQUIRED / PASS / ACTION_REQUIRED
++ CANONICAL_VALIDATION_MERGE_RECEIPT
+
+#4214:
+FINALIZATION_REQUIRED / PASS / ACTION_REQUIRED
++ CANONICAL_VALIDATION_MERGE_RECEIPT
 ~~~
 
 Any other pre-effect state fails closed, except an exact ALREADY_FINALIZED state,
@@ -364,7 +482,7 @@ exact stale holder cleanup if present
 → STOP
 ~~~
 
-Profiles B through M share the smaller effect order:
+Profiles B through M, O, P, Q and R share the smaller effect order:
 
 ~~~
 prove exact fixed packet lease absent
@@ -387,10 +505,26 @@ Profile A may perform only:
 - one exact D-014 COMPLETE packet comment if absent;
 - one exact canonical VALIDATION_MERGE packet comment if absent.
 
-Profiles B, C, D, E, F, G, H, I, J, K, L and M may perform only:
+Profiles B, C, D, E, F, G, H, I, J, K, L, M and O may perform only:
 - one exact canonical VALIDATION_MERGE packet comment if absent.
 
-Profiles B, C, D, E, F, G, H, I, J, K, L and M never clean a holder and never construct or publish D-014 evidence.
+Profile Q may perform only:
+- one exact canonical `VALIDATION_MERGE` receipt comment if absent.
+
+Profile Q never reconstructs historical validation inspect sidecars and never performs Git/PR/currentization/merge effects.
+
+Profile N may perform only:
+- one exact canonical VALIDATION_MERGE packet comment if absent.
+
+Profile N never constructs, selects, completes or mutates D-014/workspace/holder evidence.
+
+Profile R may perform only:
+- one exact canonical VALIDATION_MERGE packet comment if absent.
+
+Profile R never reconstructs historical validation-merge inspect evidence and never
+performs Git/PR/currentization/merge, D-013, D-014 or holder effects.
+
+Profiles B, C, D, E, F, G, H, I, J, K, L, M and O never clean a holder and never construct or publish D-014 evidence.
 
 The owner has no source/index/commit/ref/PR/currentization/merge, D-013, device,
 runtime, package, service, release or production mutation surface.
@@ -417,10 +551,19 @@ against the exact selected validation manifest. Multiple COMPLETE snapshots are
 interpreted only by completion-receipt-set.cjs; there is no latest-comment-wins
 selection.
 
-Profiles B, C, D, E, F, G, H, I, J, K, L and M have no validation-stage D-014 manifest. Their exact reviewed
+Profiles B, C, D, E, F, G, H, I, J, K, L, M and O have no validation-stage D-014 manifest. Their exact reviewed
 workspace manifests are read only for fixed workspace/holder identity. The owner
 must never build, publish or retrospectively complete those manifests as
 validation-stage evidence.
+
+Profile Q has no validation-stage D-014 manifest. Its exact reviewed currentization
+manifest and COMPLETE receipt are read only as implementation-coordination evidence.
+
+## Equivalent implementation-receipt replay
+
+Fixed profiles select the canonical `IMPLEMENTATION_PR` semantic generation by exact packet, PR/candidate, and compile-time receipt digest. The same canonical receipt may appear both as its direct immutable comment and inside the paired stage checkpoint. Identical appearances of one digest are one semantic receipt, not competing generations.
+
+Selection groups eligible current-candidate receipts by digest, requires the fixed target digest, and still fails closed when distinct eligible digests coexist. Chronology, comment id, and latest-wins selection are forbidden. Required profile gate checks remain unchanged.
 
 ## Stage receipt ownership
 
@@ -437,9 +580,12 @@ All reviewed profiles bind:
 Profile A additionally binds the reviewed historical D-013 release and
 exact/equivalent validation D-014 completion evidence.
 
-Profiles B through M instead bind the exact canonical IMPLEMENTATION_PR receipt and
+Profiles B through M and O instead bind the exact canonical IMPLEMENTATION_PR receipt and
 their reviewed implementation-coordination convergence gates. They contain no
 synthetic validation D-014 gate or receipt.
+
+Profile Q likewise binds the exact canonical IMPLEMENTATION_PR receipt and its reviewed
+implementation-coordination convergence gates; it contains no synthetic validation D-014 gate.
 
 All stage-receipt authority flags remain false.
 
@@ -479,10 +625,10 @@ deterministic packet scope is exactly the three MCL validation-finalization owne
 plus `surface:mcl:validation-finalization-effect`.
 
 Class membership is never granted by packet number alone. The owner derives the
-candidate and PR from a qualifying canonical `IMPLEMENTATION_PR` receipt, requires the
-fixed self-owner gate set, then follows that selected receipt's exact
-`d014-completion` evidence locator to one valid implementation-stage completion receipt.
-That completion receipt binds the exact stage-entry D-014 manifest ID and payload hash,
+candidate and PR from a qualifying canonical `IMPLEMENTATION_PR` receipt, requires one
+of the fixed self-owner lineage gate sets, then follows that selected lineage's exact
+D-014 completion evidence locator to one valid implementation completion receipt.
+That completion receipt binds the exact producer D-014 manifest ID and payload hash,
 which derives deterministic repository workspace/lease lineage without choosing among
 historical manifests by chronology or comment order. The owner then requires the PR to
 be merged at the selected candidate and reuses the existing lease-absence,
@@ -514,13 +660,92 @@ the comment writer. Conflicting V evidence remains conflict.
 Self-owner implementation lineage selection is also generation-aware. Immutable
 historical I receipts are preserved, but the owner reads the one merged PR and
 selects only the qualifying semantic generation whose candidate equals that PR's
-actual merged head. Both reviewed lineages are supported:
+actual merged head. Three reviewed semantic lineages are supported:
 
-- normal implementation-stage entry via `d014-completion` and
+- normal S implementation-stage entry via `d014-completion` and
   `<packet>-implementation-pr-stage-entry`;
-- packet-scoped currentization via `currentization-d014-completion` and
-  `<packet>-validation-merge-currentization`.
+- S packet-scoped currentization via `currentization-d014-completion` and
+  `<packet>-validation-merge-currentization`;
+- fixed L/L repository implementation via `d014-completion`. L generations are
+  resolved by the bounded final-D-014 lineage resolver below rather than by phase-name
+  operation inference. Direct apply, operation-qualified review-update, and
+  operation-qualified continue-prepared generations may participate when their exact
+  D-014 evidence, scope/workspace identity, lease ordering and candidate ancestry are
+  proven. Strict-subset review-update and reviewed packet-currentization descendants
+  are therefore consumable without creating a successor finalizer packet.
 
 Distinct PR generations, missing live-head generations, bad lineage, active lease,
 holder presence, dirty/non-exact workspace, near-match scope or missing required
 gates remain fail-closed.
+
+
+## Bounded final-D-014 lineage resolver
+
+The L self-owner and reusable external-L routes share one read-only lineage resolver.
+It starts at the exact D-014 COMPLETE receipt named by the canonical
+`IMPLEMENTATION_PR` receipt and walks backward to one unique full-scope generation.
+The walk is bounded to 32 D-014 generations and uses only:
+
+- exact L/L D-014 `apply`, `review-update`, or `continue-prepared` owner receipts;
+- same-PR full/subset review-update ancestry;
+- exact full-packet `COORDINATION` recovery-rebind + operation-qualified
+  `continue-prepared`;
+- packet-currentization bridges only when the canonical implementation receipt proves
+  both `currentization-scope-and-blob-preservation` and
+  `packet-scoped-currentization-replay`, and Git ancestry proves the older D-014
+  candidate is an ancestor of the selected later candidate.
+
+Operation identity comes from
+`receipt:mcl-l-repository-owner:<operation>:<manifestId>`, never from phase text,
+timestamps, comment order, or a latest-wins rule. The two historical direct-L phase
+forms may retain their legacy apply meaning when no operation-qualified receipt is
+present; no review/continuation semantics are inferred from that compatibility path.
+
+Every D-014 node must remain the same packet, PR, exact direct-child `laptop/*`
+workspace, route/executor `L / L`, released lease and clean completion. Node path
+scopes may equal the packet paths or be a strict subset, but semantic surfaces must
+remain exact. A subset generation is legal only as `review-update`; its predecessor
+release generation must be lower than its acquisition generation. When the observed
+base is a currentization-only descendant with no new D-014, the currentization gates
+plus Git ancestry bridge that edge without synthesizing or rewriting D-014 evidence.
+
+The resolver fails closed on missing or ambiguous predecessors, cycles, unsupported
+phase classes, operation-evidence mismatch, packet/PR/workspace/surface drift,
+non-monotonic lease generations, candidate non-ancestry, missing currentization
+proof, or unproven Git ancestry. It grants no Git/ref/PR/currentization, D-013/D-014,
+holder, merge, runtime/device, release, or production effect authority.
+
+## Reviewed external L product-path finalization route
+
+The exact #4169 recovery profile records the already-merged smoke-lifecycle packet
+that exposed a missing product-path finalization route. It consumes only the existing
+canonical IMPLEMENTATION_PR receipt, exact D-014 completion lineage, released D-013
+identity, clean L workspace/holder state, merged PR identity and current validation
+evidence. It does not recreate missing coordination evidence.
+
+Future non-neutral MCL packets may use the reusable external L route only when all of
+these are true before merge:
+
+- the packet explicitly includes surface:mcl:validation-finalization-effect;
+- the canonical IMPLEMENTATION_PR receipt carries
+  validation-finalization-external-owner-reviewed=PASS with evidence issue:#4182;
+- the same receipt proves D-013 release, D-014 completion, exact-head Required and
+  exact-head Verify;
+- packet paths are exact, not prefix wildcards;
+- the completion receipt and its exact manifest bind route/executor L / L, the same
+  packet scopes, one direct-child laptop/* workspace, released lease, clean workspace,
+  exact candidate and PR;
+- the PR is actually merged at that candidate and the packet is at
+  VALIDATION_MERGE.
+
+The route publishes only the canonical VALIDATION_MERGE stage receipt and is
+idempotent on exact replay. Missing/ambiguous route evidence, near-match scopes,
+another executor, active lease, holder presence, dirty/moved workspace, PR/head
+mismatch or any UNKNOWN/CONFLICT remains fail-closed. Path location, age, packet
+number, branch naming or generic MCL membership never substitutes for the explicit
+reviewed route gate.
+
+The reusable external L route uses the same bounded final-D-014 lineage resolver
+as the L self-owner class. The canonical `IMPLEMENTATION_PR` receipt still owns the
+full PR diff/path identity; a subset D-014 generation never shrinks packet authority
+or adds mutation power.

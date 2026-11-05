@@ -4,10 +4,19 @@ import base64
 import os
 import unittest
 from unittest.mock import patch
+from email.message import Message
 from urllib.error import HTTPError
 from urllib.request import Request
 
-from repo_ci_mcp.github_reader import GitHubReadError, GitHubReader, _SafeRedirectHandler
+from repo_ci_mcp.github_reader import (
+    ATTESTATIONS_API_VERSION,
+    CODE_QUALITY_API_VERSION,
+    DEFAULT_API_VERSION,
+    MAX_RELEASE_LIST_BYTES,
+    GitHubReadError,
+    GitHubReader,
+    _SafeRedirectHandler,
+)
 
 
 class ReaderTests(unittest.TestCase):
@@ -85,6 +94,18 @@ class ReaderTests(unittest.TestCase):
         self.assertNotIn("topsecret", str(caught.exception))
 
 
+    def test_54a_request_api_version_default_and_override_are_bounded(self):
+        reader = GitHubReader(repository="owner/repo")
+        default_request = reader._request("https://api.github.com/repos/owner/repo")
+        code_quality_request = reader._request(
+            "https://api.github.com/repos/owner/repo/code-quality/findings",
+            api_version=CODE_QUALITY_API_VERSION,
+        )
+        self.assertEqual(default_request.get_header("X-github-api-version"), DEFAULT_API_VERSION)
+        self.assertEqual(code_quality_request.get_header("X-github-api-version"), CODE_QUALITY_API_VERSION)
+        with self.assertRaisesRegex(ValueError, "unsupported GitHub API version"):
+            reader._request("https://api.github.com/repos/owner/repo", api_version="2099-01-01")
+
     def test_55_exact_sha_run_inventory_uses_head_sha_without_event_filter(self):
         reader = GitHubReader(repository="owner/repo")
         payload = {"total_count": 2, "workflow_runs": [{"id": 1}, {"id": 2}]}
@@ -92,6 +113,19 @@ class ReaderTests(unittest.TestCase):
             total, runs = reader.list_runs_exact_sha("a" * 40)
         self.assertEqual((total, len(runs)), (2, 2))
         get_json.assert_called_once_with("/repos/owner/repo/actions/runs", {"head_sha": "a" * 40, "per_page": 100})
+
+    def test_55a_exact_sha_run_inventory_applies_optional_event_filter(self):
+        reader = GitHubReader(repository="owner/repo")
+        payload = {"total_count": 1, "workflow_runs": [{"id": 1}]}
+        with patch.object(GitHubReader, "_get_json", return_value=payload) as get_json:
+            total, runs = reader.list_runs_exact_sha("a" * 40, event="push")
+        self.assertEqual((total, len(runs)), (1, 1))
+        get_json.assert_called_once_with(
+            "/repos/owner/repo/actions/runs",
+            {"head_sha": "a" * 40, "per_page": 100, "event": "push"},
+        )
+        with self.assertRaisesRegex(GitHubReadError, "event must be a GitHub Actions event name"):
+            reader.list_runs_exact_sha("a" * 40, event="push-invalid!")
 
     def test_56_compare_changed_paths_requires_ancestor_and_marks_300_incomplete(self):
         reader = GitHubReader(repository="owner/repo")
@@ -101,6 +135,609 @@ class ReaderTests(unittest.TestCase):
             paths, complete = reader.compare_changed_paths("b" * 40, "a" * 40)
         self.assertEqual(len(paths), 300)
         self.assertFalse(complete)
+
+
+    def test_57_rulesets_and_secret_metadata_use_fixed_repository_endpoints(self):
+        reader = GitHubReader(repository="owner/repo")
+        with patch.object(GitHubReader, "_get_json_value", return_value=[]) as get_value:
+            self.assertEqual(reader.list_repository_rulesets(), [])
+        get_value.assert_called_once_with("/repos/owner/repo/rulesets", {"per_page": 100, "page": 1})
+        with patch.object(GitHubReader, "_get_json", return_value={"total_count": 0, "secrets": []}) as get_json:
+            self.assertEqual(reader.list_actions_secret_metadata(), [])
+        get_json.assert_called_once_with("/repos/owner/repo/actions/secrets", {"per_page": 100})
+
+    def test_57b_rulesets_paginate_until_short_page(self):
+        reader = GitHubReader(repository="owner/repo")
+        first = [{"id": index} for index in range(100)]
+        second = [{"id": 100}]
+        with patch.object(GitHubReader, "_get_json_value", side_effect=[first, second]) as get_value:
+            result = reader.list_repository_rulesets()
+        self.assertEqual(len(result), 101)
+        self.assertEqual(
+            get_value.call_args_list[0].args,
+            ("/repos/owner/repo/rulesets", {"per_page": 100, "page": 1}),
+        )
+        self.assertEqual(
+            get_value.call_args_list[1].args,
+            ("/repos/owner/repo/rulesets", {"per_page": 100, "page": 2}),
+        )
+
+    def test_57c_rulesets_fail_closed_at_pagination_ceiling(self):
+        reader = GitHubReader(repository="owner/repo")
+        full_page = [{"id": index} for index in range(100)]
+        with patch.object(
+            GitHubReader,
+            "_get_json_value",
+            side_effect=[full_page] * 10,
+        ) as get_value:
+            with self.assertRaisesRegex(GitHubReadError, "bounded page limit"):
+                reader.list_repository_rulesets()
+        self.assertEqual(get_value.call_count, 10)
+
+    def test_57d_environments_paginate_and_prove_complete_inventory(self):
+        reader = GitHubReader(repository="owner/repo")
+        first = {"total_count": 101, "environments": [{"id": index} for index in range(100)]}
+        second = {"total_count": 101, "environments": [{"id": 100}]}
+        with patch.object(GitHubReader, "_get_json", side_effect=[first, second]) as get_json:
+            result = reader.list_environments()
+        self.assertEqual(len(result), 101)
+        self.assertEqual(
+            get_json.call_args_list[0].args,
+            ("/repos/owner/repo/environments", {"per_page": 100, "page": 1}),
+        )
+        self.assertEqual(
+            get_json.call_args_list[1].args,
+            ("/repos/owner/repo/environments", {"per_page": 100, "page": 2}),
+        )
+
+    def test_57dd_environments_accept_full_page_when_total_is_complete(self):
+        reader = GitHubReader(repository="owner/repo")
+        page = {"total_count": 100, "environments": [{"id": index} for index in range(100)]}
+        with patch.object(GitHubReader, "_get_json", return_value=page) as get_json:
+            result = reader.list_environments()
+        self.assertEqual(len(result), 100)
+        self.assertEqual(get_json.call_count, 1)
+
+    def test_57de_environments_reject_duplicate_ids_across_pages(self):
+        reader = GitHubReader(repository="owner/repo")
+        first = {"total_count": 101, "environments": [{"id": index} for index in range(100)]}
+        second = {"total_count": 101, "environments": [{"id": 99}]}
+        with patch.object(GitHubReader, "_get_json", side_effect=[first, second]):
+            with self.assertRaisesRegex(GitHubReadError, "duplicate environment id"):
+                reader.list_environments()
+
+    def test_57e_environments_reject_incomplete_total(self):
+        reader = GitHubReader(repository="owner/repo")
+        with patch.object(
+            GitHubReader,
+            "_get_json",
+            return_value={"total_count": 2, "environments": [{"id": 1}]},
+        ):
+            with self.assertRaisesRegex(GitHubReadError, "inventory incomplete"):
+                reader.list_environments()
+
+    def test_57f_deployments_and_statuses_use_fixed_bounded_endpoints(self):
+        reader = GitHubReader(repository="owner/repo")
+        with patch.object(GitHubReader, "_get_json_value", return_value=[]) as get_value:
+            self.assertEqual(reader.list_deployments(limit=7), [])
+        get_value.assert_called_once_with("/repos/owner/repo/deployments", {"per_page": 7})
+        with patch.object(GitHubReader, "_get_json_value", return_value=[]) as get_value:
+            self.assertEqual(reader.list_deployment_statuses(42, limit=3), [])
+        get_value.assert_called_once_with(
+            "/repos/owner/repo/deployments/42/statuses",
+            {"per_page": 3},
+        )
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            reader.list_deployment_statuses(0, limit=3)
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_deployments(limit=51)
+
+    def test_57g_variables_paginate_and_prove_complete_inventory(self):
+        reader = GitHubReader(repository="owner/repo")
+        first = {
+            "total_count": 31,
+            "variables": [{"name": f"VAR_{index}"} for index in range(30)],
+        }
+        second = {"total_count": 31, "variables": [{"name": "VAR_30"}]}
+        with patch.object(GitHubReader, "_get_json", side_effect=[first, second]) as get_json:
+            result = reader.list_actions_variable_metadata()
+        self.assertEqual(len(result), 31)
+        self.assertEqual(
+            get_json.call_args_list[0].args,
+            ("/repos/owner/repo/actions/variables", {"per_page": 30, "page": 1}),
+        )
+        self.assertEqual(
+            get_json.call_args_list[1].args,
+            ("/repos/owner/repo/actions/variables", {"per_page": 30, "page": 2}),
+        )
+
+    def test_57ga_variables_strip_value_at_reader_boundary(self):
+        reader = GitHubReader(repository="owner/repo")
+        payload = {
+            "total_count": 1,
+            "variables": [{
+                "name": "VISIBLE_NAME",
+                "value": "READER_MUST_DROP_THIS_VALUE",
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-02T00:00:00Z",
+            }],
+        }
+        with patch.object(GitHubReader, "_get_json", return_value=payload):
+            result = reader.list_actions_variable_metadata()
+        self.assertEqual(result, [{
+            "name": "VISIBLE_NAME",
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-02T00:00:00Z",
+        }])
+        self.assertNotIn("READER_MUST_DROP_THIS_VALUE", repr(result))
+
+    def test_57h_variables_reject_duplicate_names_case_insensitively(self):
+        reader = GitHubReader(repository="owner/repo")
+        payload = {"total_count": 2, "variables": [{"name": "ONE"}, {"name": "one"}]}
+        with patch.object(GitHubReader, "_get_json", return_value=payload):
+            with self.assertRaisesRegex(GitHubReadError, "duplicate variable name"):
+                reader.list_actions_variable_metadata()
+
+    def test_57i_variables_reject_incomplete_inventory(self):
+        reader = GitHubReader(repository="owner/repo")
+        payload = {"total_count": 2, "variables": [{"name": "ONE"}]}
+        with patch.object(GitHubReader, "_get_json", return_value=payload):
+            with self.assertRaisesRegex(GitHubReadError, "inventory incomplete"):
+                reader.list_actions_variable_metadata()
+
+    def test_58_security_alert_kind_is_allowlisted_and_bounded(self):
+        reader = GitHubReader(repository="owner/repo")
+        with self.assertRaisesRegex(ValueError, "unsupported security alert kind"):
+            reader.list_security_alerts("advisories", per_page=10)
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_security_alerts("code_scanning", per_page=51)
+
+    def test_58a_security_advisories_use_fixed_bounded_recent_endpoint(self):
+        reader = GitHubReader(repository="owner/repo")
+        raw = [{
+            "ghsa_id": "GHSA-aaaa-bbbb-cccc",
+            "cve_id": "CVE-2026-0001",
+            "state": "published",
+            "severity": "high",
+            "published_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-02T00:00:00Z",
+            "closed_at": None,
+            "withdrawn_at": None,
+            "summary": "must-not-pass-reader-boundary",
+            "description": "must-not-pass-reader-boundary",
+            "vulnerabilities": [{"package": {"name": "private"}}],
+            "credits": [{"user": {"login": "private"}}],
+            "private_fork": {"full_name": "owner/private-fork"},
+            "html_url": "https://example.invalid/private",
+        }]
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_security_advisories(limit=7)
+        get_value.assert_called_once_with(
+            "/repos/owner/repo/security-advisories",
+            {"per_page": 7, "sort": "updated", "direction": "desc"},
+        )
+        self.assertEqual(result, [{
+            "ghsa_id": "GHSA-aaaa-bbbb-cccc",
+            "cve_id": "CVE-2026-0001",
+            "state": "published",
+            "severity": "high",
+            "published_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-02T00:00:00Z",
+            "closed_at": None,
+            "withdrawn_at": None,
+        }])
+        rendered = repr(result)
+        self.assertNotIn("must-not-pass-reader-boundary", rendered)
+        self.assertNotIn("private-fork", rendered)
+        self.assertNotIn("example.invalid", rendered)
+
+    def test_58b_security_advisories_validate_limit_and_shape(self):
+        reader = GitHubReader(repository="owner/repo")
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_security_advisories(limit=51)
+        with patch.object(GitHubReader, "_get_json_value", return_value=[{"ghsa_id": "x"}] * 3):
+            with self.assertRaisesRegex(GitHubReadError, "bounded array"):
+                reader.list_security_advisories(limit=2)
+
+    def test_58c_code_quality_uses_versioned_fixed_endpoint_and_strips_payload(self):
+        reader = GitHubReader(repository="owner/repo")
+        raw = [{
+            "number": 42,
+            "state": "open",
+            "url": "https://api.github.com/private",
+            "rule": {
+                "id": "java/useless-null-check",
+                "title": "must-not-pass-reader-boundary",
+                "description": "must-not-pass-reader-boundary",
+                "help": "must-not-pass-reader-boundary",
+                "severity": "warning",
+                "category": "maintainability",
+            },
+            "location": {
+                "path": "src/example.py",
+                "start_line": 9,
+                "start_column": 4,
+                "end_line": 9,
+                "end_column": 18,
+            },
+            "message": {
+                "text": "must-not-pass-reader-boundary",
+                "markdown": "must-not-pass-reader-boundary",
+            },
+            "created_at": "2026-01-23T12:34:56Z",
+        }]
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_code_quality_findings(limit=7)
+        get_value.assert_called_once_with(
+            "/repos/owner/repo/code-quality/findings",
+            {"per_page": 7, "direction": "desc"},
+            api_version=CODE_QUALITY_API_VERSION,
+        )
+        self.assertEqual(result, [{
+            "number": 42,
+            "state": "open",
+            "rule_id": "java/useless-null-check",
+            "severity": "warning",
+            "category": "maintainability",
+            "path": "src/example.py",
+            "start_line": 9,
+            "start_column": 4,
+            "end_line": 9,
+            "end_column": 18,
+            "created_at": "2026-01-23T12:34:56Z",
+        }])
+        rendered = repr(result)
+        self.assertNotIn("must-not-pass-reader-boundary", rendered)
+        self.assertNotIn("api.github.com/private", rendered)
+
+    def test_58d_code_quality_validates_limit_and_nested_shape(self):
+        reader = GitHubReader(repository="owner/repo")
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_code_quality_findings(limit=51)
+        with patch.object(GitHubReader, "_get_json_value", return_value=[{"number": 1}]):
+            with self.assertRaisesRegex(GitHubReadError, "nested metadata invalid"):
+                reader.list_code_quality_findings(limit=1)
+
+    def test_58e_code_quality_http_404_preserves_status_and_version(self):
+        reader = GitHubReader(repository="owner/repo")
+        error = HTTPError(
+            "https://api.github.com/repos/owner/repo/code-quality/findings",
+            404,
+            "Not Found",
+            Message(),
+            None,
+        )
+        with patch.object(reader._opener, "open", side_effect=error) as opened:
+            with self.assertRaises(GitHubReadError) as caught:
+                reader.list_code_quality_findings(limit=1)
+        self.assertEqual(caught.exception.status_code, 404)
+        request = opened.call_args.args[0]
+        self.assertEqual(request.get_header("X-github-api-version"), CODE_QUALITY_API_VERSION)
+        self.assertEqual(
+            request.full_url,
+            "https://api.github.com/repos/owner/repo/code-quality/findings?per_page=1&direction=desc",
+        )
+
+    def test_58f_releases_use_fixed_bounded_endpoint_and_strip_payload(self):
+        reader = GitHubReader(repository="owner/repo")
+        raw = [{
+            "id": 7, "tag_name": "v1", "target_commitish": "main", "name": "Release",
+            "draft": False, "prerelease": False, "immutable": False,
+            "created_at": "2026-01-01T00:00:00Z", "published_at": "2026-01-02T00:00:00Z",
+            "body": "must-not-pass-reader-boundary", "author": {"login": "private"},
+            "html_url": "https://example.invalid/release", "assets": [{"name": "raw"}],
+        }]
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_repository_releases(limit=7)
+        get_value.assert_called_once_with(
+            "/repos/owner/repo/releases",
+            {"per_page": 7},
+            max_bytes=MAX_RELEASE_LIST_BYTES,
+        )
+        self.assertEqual(result[0]["id"], 7)
+        self.assertNotIn("must-not-pass-reader-boundary", repr(result))
+        self.assertNotIn("example.invalid", repr(result))
+        self.assertNotIn("private", repr(result))
+
+    def test_58f2_release_list_uses_endpoint_specific_bounded_raw_limit(self):
+        reader = GitHubReader(repository="owner/repo")
+        with patch.object(GitHubReader, "_get_json_value", return_value=[]) as get_value:
+            self.assertEqual(reader.list_repository_releases(limit=50), [])
+        self.assertGreater(MAX_RELEASE_LIST_BYTES, 2 * 1024 * 1024)
+        self.assertLessEqual(MAX_RELEASE_LIST_BYTES, 64 * 1024 * 1024)
+        get_value.assert_called_once_with(
+            "/repos/owner/repo/releases",
+            {"per_page": 50},
+            max_bytes=MAX_RELEASE_LIST_BYTES,
+        )
+
+    def test_58g_tags_use_fixed_bounded_endpoint_and_strip_urls(self):
+        reader = GitHubReader(repository="owner/repo")
+        raw = [{"name": "v1", "commit": {"sha": "a" * 40, "url": "private"}, "zipball_url": "private"}]
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_repository_tags(limit=3)
+        get_value.assert_called_once_with("/repos/owner/repo/tags", {"per_page": 3})
+        self.assertEqual(result, [{"name": "v1", "sha": "a" * 40}])
+        self.assertNotIn("private", repr(result))
+
+    def test_58h_release_assets_use_fixed_bounded_endpoint_and_strip_identity_urls(self):
+        reader = GitHubReader(repository="owner/repo")
+        raw = [{
+            "id": 9, "name": "a.zip", "state": "uploaded", "content_type": "application/zip",
+            "size": 12, "digest": "sha256:abc", "download_count": 1,
+            "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-02T00:00:00Z",
+            "uploader": {"login": "private"}, "browser_download_url": "https://example.invalid/raw",
+        }]
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_release_assets(5, limit=2)
+        get_value.assert_called_once_with("/repos/owner/repo/releases/5/assets", {"per_page": 2})
+        self.assertEqual(result[0]["id"], 9)
+        self.assertNotIn("private", repr(result))
+        self.assertNotIn("example.invalid", repr(result))
+
+    def test_58i_release_reads_validate_ids_limits_and_bounds(self):
+        reader = GitHubReader(repository="owner/repo")
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_repository_releases(limit=0)
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_repository_tags(limit=51)
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            reader.list_release_assets(0, limit=1)
+        with patch.object(GitHubReader, "_get_json_value", return_value=[{}] * 3):
+            with self.assertRaisesRegex(GitHubReadError, "bounded array"):
+                reader.list_repository_releases(limit=2)
+
+    def test_58j_webhooks_use_fixed_bounded_endpoint_and_strip_config(self):
+        reader = GitHubReader(repository="owner/repo")
+        raw = [{
+            "id": 7,
+            "name": "web",
+            "active": True,
+            "events": ["push"],
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-02T00:00:00Z",
+            "config": {"url": "https://secret.invalid", "secret": "hidden"},
+            "ping_url": "private",
+            "deliveries_url": "private",
+            "last_response": {"code": 200, "status": "ok", "message": "private"},
+        }]
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_repository_webhooks(limit=2)
+        get_value.assert_called_once_with("/repos/owner/repo/hooks", {"per_page": 2})
+        self.assertEqual(result[0]["id"], 7)
+        self.assertEqual(result[0]["last_response"], {"code": 200, "status": "ok"})
+        self.assertNotIn("secret.invalid", repr(result))
+        self.assertNotIn("hidden", repr(result))
+        self.assertNotIn("message", repr(result))
+
+    def test_58k_webhook_deliveries_use_fixed_endpoint_and_strip_sensitive_payloads(self):
+        reader = GitHubReader(repository="owner/repo")
+        raw = [{
+            "id": 9,
+            "guid": "private-guid",
+            "delivered_at": "2026-01-03T00:00:00Z",
+            "redelivery": False,
+            "duration": 0.25,
+            "status": "OK",
+            "status_code": 200,
+            "event": "issues",
+            "action": "opened",
+            "installation_id": 123,
+            "repository_id": 456,
+            "url": "https://secret.invalid",
+            "throttled_at": None,
+            "request": {"headers": {"X-Hub-Signature-256": "secret"}, "payload": {"private": True}},
+            "response": {"headers": {"X": "secret"}, "payload": "private"},
+        }]
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_webhook_deliveries(5, limit=2)
+        get_value.assert_called_once_with("/repos/owner/repo/hooks/5/deliveries", {"per_page": 2})
+        self.assertEqual(result[0]["id"], 9)
+        self.assertNotIn("private-guid", repr(result))
+        self.assertNotIn("secret.invalid", repr(result))
+        self.assertNotIn("installation_id", repr(result))
+        self.assertNotIn("request", repr(result))
+        self.assertNotIn("response", repr(result))
+
+    def test_58l_webhook_reads_validate_ids_limits_and_bounds(self):
+        reader = GitHubReader(repository="owner/repo")
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_repository_webhooks(limit=0)
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            reader.list_webhook_deliveries(0, limit=1)
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_webhook_deliveries(1, limit=51)
+        with patch.object(GitHubReader, "_get_json_value", return_value=[{}] * 3):
+            with self.assertRaisesRegex(GitHubReadError, "bounded array"):
+                reader.list_repository_webhooks(limit=2)
+
+    def test_58m_attestations_use_fixed_bounded_endpoint_and_strip_bundle_url(self):
+        reader = GitHubReader(repository="owner/repo")
+        digest = "sha256:" + "A" * 64
+        normalized = "sha256:" + "a" * 64
+        raw = {
+            "attestations": [{
+                "repository_id": 7,
+                "initiator": "github-actions",
+                "bundle_url": "https://signed.invalid/bundle?sig=private",
+                "raw": {"private": True},
+            }],
+        }
+        with patch.object(GitHubReader, "_get_json_value", return_value=raw) as get_value:
+            result = reader.list_repository_attestations(digest, limit=2)
+        get_value.assert_called_once_with(
+            "/repos/owner/repo/attestations/sha256%3A" + "a" * 64,
+            {"per_page": 2},
+            api_version=ATTESTATIONS_API_VERSION,
+        )
+        self.assertEqual(
+            result,
+            [{"repository_id": 7, "initiator": "github-actions"}],
+        )
+        self.assertNotIn("signed.invalid", repr(result))
+        self.assertNotIn("bundle_url", repr(result))
+        self.assertNotIn("private", repr(result))
+        self.assertEqual(reader._subject_digest(digest), normalized)
+
+    def test_58ma_attestation_reader_uses_bundle_free_api_version(self):
+        reader = GitHubReader(repository="owner/repo")
+        digest = "sha256:" + "a" * 64
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {}
+        response.read.return_value = b'{"attestations":[]}'
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            self.assertEqual(reader.list_repository_attestations(digest, limit=1), [])
+        request = opened.call_args.args[0]
+        self.assertEqual(request.get_header("X-github-api-version"), ATTESTATIONS_API_VERSION)
+
+    def test_58n_attestation_reads_validate_digest_limit_and_bounds(self):
+        reader = GitHubReader(repository="owner/repo")
+        with self.assertRaisesRegex(ValueError, "sha256"):
+            reader.list_repository_attestations("sha256:short", limit=1)
+        with self.assertRaisesRegex(ValueError, "sha256"):
+            reader.list_repository_attestations("sha512:" + "a" * 64, limit=1)
+        with self.assertRaisesRegex(ValueError, "1..50"):
+            reader.list_repository_attestations("sha256:" + "a" * 64, limit=0)
+        with patch.object(
+            GitHubReader,
+            "_get_json_value",
+            return_value={"attestations": [{}] * 3},
+        ):
+            with self.assertRaisesRegex(GitHubReadError, "bounded array"):
+                reader.list_repository_attestations("sha256:" + "a" * 64, limit=2)
+
+    def test_59_permission_probe_reads_header_without_inferring_grant(self):
+        reader = GitHubReader(repository="owner/repo")
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {"X-Accepted-GitHub-Permissions": "metadata=read"}
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with patch.object(reader._opener, "open", return_value=response):
+            observed = reader.probe_accepted_permissions("repository")
+        self.assertEqual(observed, {"http_status": 200, "accepted_permissions": "metadata=read"})
+
+    def test_60_permission_probe_preserves_header_on_http_error(self):
+        reader = GitHubReader(repository="owner/repo")
+        headers = Message()
+        headers["X-Accepted-GitHub-Permissions"] = "administration=read"
+        error = HTTPError("https://api.github.com/x", 403, "Forbidden", headers, None)
+        with patch.object(reader._opener, "open", side_effect=error):
+            observed = reader.probe_accepted_permissions("rulesets")
+        self.assertEqual(observed, {"http_status": 403, "accepted_permissions": "administration=read"})
+
+
+    def test_60_variables_permission_probe_uses_fixed_endpoint(self):
+        reader = GitHubReader(repository="owner/repo")
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {"X-Accepted-GitHub-Permissions": "variables=read"}
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            result = reader.probe_accepted_permissions("variables")
+        self.assertEqual(result["accepted_permissions"], "variables=read")
+        self.assertEqual(
+            opened.call_args.args[0].full_url,
+            "https://api.github.com/repos/owner/repo/actions/variables?per_page=1",
+        )
+
+    def test_60_security_advisories_permission_probe_uses_fixed_endpoint(self):
+        reader = GitHubReader(repository="owner/repo")
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {"X-Accepted-GitHub-Permissions": "security_advisories=read"}
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            result = reader.probe_accepted_permissions("security_advisories")
+        self.assertEqual(result["accepted_permissions"], "security_advisories=read")
+        self.assertEqual(
+            opened.call_args.args[0].full_url,
+            "https://api.github.com/repos/owner/repo/security-advisories?per_page=1",
+        )
+
+    def test_60_code_quality_permission_probe_uses_versioned_fixed_endpoint(self):
+        reader = GitHubReader(repository="owner/repo")
+        response = unittest.mock.MagicMock()
+        response.status = 404
+        response.headers = {}
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            result = reader.probe_accepted_permissions("code_quality")
+        self.assertEqual(result, {"http_status": 404, "accepted_permissions": None})
+        request = opened.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://api.github.com/repos/owner/repo/code-quality/findings?per_page=1",
+        )
+        self.assertEqual(request.get_header("X-github-api-version"), CODE_QUALITY_API_VERSION)
+
+    def test_60_release_permission_probes_use_fixed_endpoints(self):
+        reader = GitHubReader(repository="owner/repo")
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {"X-Accepted-GitHub-Permissions": "contents=read"}
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            result = reader.probe_accepted_permissions("releases")
+        self.assertEqual(result["accepted_permissions"], "contents=read")
+        self.assertEqual(
+            opened.call_args.args[0].full_url,
+            "https://api.github.com/repos/owner/repo/releases?per_page=1",
+        )
+
+        response.headers = {"X-Accepted-GitHub-Permissions": "metadata=read"}
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            result = reader.probe_accepted_permissions("tags")
+        self.assertEqual(result["accepted_permissions"], "metadata=read")
+        self.assertEqual(
+            opened.call_args.args[0].full_url,
+            "https://api.github.com/repos/owner/repo/tags?per_page=1",
+        )
+
+    def test_60_webhook_permission_probe_uses_fixed_endpoint(self):
+        reader = GitHubReader(repository="owner/repo")
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {"X-Accepted-GitHub-Permissions": "webhooks=read"}
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            result = reader.probe_accepted_permissions("webhooks")
+        self.assertEqual(result["accepted_permissions"], "webhooks=read")
+        self.assertEqual(
+            opened.call_args.args[0].full_url,
+            "https://api.github.com/repos/owner/repo/hooks?per_page=1",
+        )
+
+    def test_61_deployment_permission_probes_use_fixed_endpoints(self):
+        reader = GitHubReader(repository="owner/repo")
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.headers = {"X-Accepted-GitHub-Permissions": "deployments=read"}
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            reader.probe_accepted_permissions("environments")
+        self.assertEqual(
+            opened.call_args.args[0].full_url,
+            "https://api.github.com/repos/owner/repo/environments?per_page=1",
+        )
+
+        with patch.object(reader._opener, "open", return_value=response) as opened:
+            reader.probe_accepted_permissions("deployments")
+        self.assertEqual(
+            opened.call_args.args[0].full_url,
+            "https://api.github.com/repos/owner/repo/deployments?per_page=1",
+        )
 
 
 if __name__ == "__main__":

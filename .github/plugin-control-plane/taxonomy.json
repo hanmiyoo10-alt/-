@@ -65,13 +65,13 @@
       "family": "product",
       "risu": "no",
       "sourceRefs": [
-        "plugin:termux-large-doc-editor"
+        "product:termux"
       ],
       "sourceRoots": [
-        "plugins/termux/**"
+        "products/standalone/termux/**"
       ],
       "targetRoot": "products/standalone/termux",
-      "migration": "reclassify"
+      "migration": "preserve"
     },
     {
       "id": "mobile-coder-lab",
@@ -111,7 +111,8 @@
       "sourceRefs": [
         "plugin:usage-dashboard",
         "plugin:devpass",
-        "plugin:voyage-token-check"
+        "plugin:voyage-token-check",
+        "plugin:provider-balance-mini"
       ],
       "sourceRoots": [
         "plugins/usage-dashboard/**",
@@ -121,6 +122,7 @@
         "plugins/devpass/**",
         "plugins/risu/local/voyage/**",
         "voyage-token-check/**",
+        "plugins/risu/local/provider-balance-monitor/**",
         "tools/usage-dashboard-mcp/**"
       ],
       "targetRoot": "plugins/risu/local",
@@ -179,6 +181,8 @@
       "sourceRefs": [],
       "sourceRoots": [
         "tools/repo-ci-mcp/**",
+        "tools/github-discussions-mcp/**",
+        "tools/mcl-task-lease-dispatch-mcp/**",
         "tools/repo-write/**",
         "tools/repo-env/**"
       ],

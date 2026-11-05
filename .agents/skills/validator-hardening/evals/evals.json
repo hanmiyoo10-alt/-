@@ -1,0 +1,113 @@
+{
+  "skill": "validator-hardening",
+  "cases": [
+    {
+      "id": "path-ref-adversarial",
+      "prompt": "Target: products/standalone/termux/tools/migration_validator.py. Owner: product:termux. Guideline: docs/TERMUX_DEVELOPMENT_GUIDELINES.md. Contract evidence: products/standalone/termux/tools/README.md and products/standalone/termux/tools/tests/test_migration_validator.py. Result vocabulary: PASS/WARN/FAIL/UNKNOWN. Claim: review only path/ref input hardening for the current read-only migration validator, including malformed refs and hostile path text, without changing its owner or adding a writer.",
+      "expected_output": "A read-only static hardening review that proposes the applicable adversarial matrix from current source/contract evidence, explicitly states that no owner tests or adversarial cases were executed on this surface, preserves all unresolved execution evidence, and returns review disposition PARTIAL unless the requested claim is already completely provable without execution. A bounded hardening review that covers malformed and ambiguous path/ref classes, preserves owner-defined FAIL versus UNKNOWN semantics, and performs no mutation.",
+      "assertions": [
+        "Proposes checks for empty/whitespace, NUL/control characters, Unicode surrogate or normalization-sensitive input.",
+        "Proposes checks for absolute, traversal, non-canonical, separator/platform variants and option-like refs.",
+        "Distinguishes character limits from encoded-byte or path-component ceilings when owner-defined.",
+        "Keeps missing or ambiguous evidence UNKNOWN rather than manufacturing PASS or FAIL.",
+        "Does not auto-rewrite paths, invent repository state, or replace Required.",
+        "Does not claim owner tests, commands, fuzzing, or adversarial inputs were executed on the read-only eval surface.",
+        "Uses PARTIAL when execution is still needed to prove the requested hardening claim.",
+        "Keeps validator dimensions that are outside the locked path/ref claim as OUT_OF_SCOPE_FOR_CLAIM_WITH_OWNER_BASIS instead of broadening the review."
+      ]
+    },
+    {
+      "id": "json-schema-adversarial",
+      "prompt": "Target: products/standalone/termux/tools/migration_validator.py. Owner: product:termux. Guideline: docs/TERMUX_DEVELOPMENT_GUIDELINES.md. Contract evidence: products/standalone/termux/tools/README.md and products/standalone/termux/tools/tests/test_migration_validator.py. Result vocabulary: PASS/WARN/FAIL/UNKNOWN. Claim: review only the bounded termux-migration-plan.v1 JSON parsing/schema edge classes, including duplicate-key parser ambiguity, malformed shapes, size/depth bounds and additional fields, without changing registry or migration authority.",
+      "expected_output": "A read-only static hardening review that proposes the applicable adversarial matrix from current source/contract evidence, explicitly states that no owner tests or adversarial cases were executed on this surface, preserves all unresolved execution evidence, and returns review disposition PARTIAL unless the requested claim is already completely provable without execution. A bounded structured-data hardening review covering parser ambiguity, duplicate keys, malformed shapes, size/depth limits, additional fields, and uncertainty without rewriting registry truth.",
+      "assertions": [
+        "Proposes checks for duplicate JSON keys when parser behavior matters.",
+        "Proposes checks for wrong scalar/container types, malformed shapes, oversize documents/fields and deep nesting.",
+        "Proposes checks for unknown/additional fields according to the owning schema and decode/parser failures.",
+        "Keeps parser ambiguity and insufficient evidence explicit rather than normalizing them into PASS.",
+        "Does not rewrite registry data or create a second truth store.",
+        "Does not claim owner tests, commands, fuzzing, or adversarial inputs were executed on the read-only eval surface.",
+        "Uses PARTIAL when execution is still needed to prove the requested hardening claim.",
+        "Scopes dimension applicability to the locked JSON/schema claim rather than exercising unrelated target behavior."
+      ]
+    },
+    {
+      "id": "source-ast-adversarial",
+      "prompt": "Target: products/standalone/termux/tools/location_relative_sentinel.py. Owner: product:termux. Guideline: docs/TERMUX_DEVELOPMENT_GUIDELINES.md. Contract evidence: products/standalone/termux/tools/tests/test_location_relative_sentinel.py and the current tool source. Result vocabulary: PASS/FAIL/UNKNOWN, as defined by the current classifier source/tests. Claim: review source/AST hardening for fixed parent-depth expressions, including computed expressions, aliasing/indirection, unsupported syntax and parse failures, without adding an automatic rewriter.",
+      "expected_output": "A read-only static hardening review that proposes the applicable adversarial matrix from current source/contract evidence, explicitly states that no owner tests or adversarial cases were executed on this surface, preserves all unresolved execution evidence, and returns review disposition PARTIAL unless the requested claim is already completely provable without execution. A source/AST hardening review that treats computed expressions, aliasing, indirection, generated forms, unsupported syntax and parse failures as explicit evidence classes rather than assuming unmatched source is safe.",
+      "assertions": [
+        "Proposes cases for computed or dynamic expressions that defeat literal matching.",
+        "Proposes checks for aliasing, indirection, imports or generated forms when relevant to the owner contract.",
+        "Treats unsupported syntax and parse failures as explicit uncertainty or owner-defined failure, never as safe-by-no-match.",
+        "Separates semantically similar forms whose source text differs.",
+        "Keeps PATH, PYTHONPATH/module search path, HOME/tool configuration, working directory, locale/encoding, and other ambient execution state OUT_OF_SCOPE_FOR_CLAIM_WITH_OWNER_BASIS unless current owner evidence shows that state is material to this locked source/AST classification claim.",
+        "Does not introduce an automatic source rewriter.",
+        "Does not claim owner tests, commands, fuzzing, or adversarial inputs were executed on the read-only eval surface.",
+        "Uses PARTIAL when execution is still needed to prove the requested hardening claim."
+      ]
+    },
+    {
+      "id": "git-object-adversarial",
+      "prompt": "Target: products/standalone/termux/tools/migration_validator.py. Owner: product:termux. Guideline: docs/TERMUX_DEVELOPMENT_GUIDELINES.md. Contract evidence: products/standalone/termux/tools/README.md and products/standalone/termux/tools/tests/test_migration_validator.py. Result vocabulary: PASS/WARN/FAIL/UNKNOWN. Claim: review only Git object/evidence hardening, including missing objects, object type, symlink/gitlink, lazy availability, replacement objects and ambient Git poisoning, while preserving the validator's read-only/no-network boundary.",
+      "expected_output": "A read-only static hardening review that proposes the applicable adversarial matrix from current source/contract evidence, explicitly states that no owner tests or adversarial cases were executed on this surface, preserves all unresolved execution evidence, and returns review disposition PARTIAL unless the requested claim is already completely provable without execution. A Git/object hardening review that verifies exact object types and availability, distinguishes blob/tree/symlink/gitlink cases, checks ambient Git poisoning and preserves UNKNOWN for missing evidence without mutating Git.",
+      "assertions": [
+        "Proposes checks for missing or unavailable objects and malformed or unsupported object IDs.",
+        "Distinguishes blob, tree, symlink and gitlink instead of trusting SHA-shaped text.",
+        "Proposes separate checks for Git object type and tree-entry mode, including regular/executable 100644/100755 -> blob, symlink 120000 -> blob, gitlink 160000 -> commit, and directory 040000 -> tree where applicable.",
+        "Proposes checks for partial clone/lazy availability and replacement objects where applicable.",
+        "Proposes checks for ambient Git repository, config, pathspec, trace or environment poisoning where relevant.",
+        "Does not fetch or mutate missing evidence unless the owning contract separately authorizes that effect.",
+        "Does not claim owner tests, commands, fuzzing, or adversarial inputs were executed on the read-only eval surface.",
+        "Uses PARTIAL when execution is still needed to prove the requested hardening claim."
+      ]
+    },
+    {
+      "id": "narrow-validator-negative",
+      "prompt": "Target: tools/agent-skill-eval/prepare_eval.py::_normalize_output_fixture. Owner: Agent Platform (repository scope from docs/REPO_PROJECT_CATALOG.md). Guideline/contract: current tools/agent-skill-eval source and tests. Result vocabulary: return a normalized case list on valid input; raise EvalPreparationError on malformed output fixtures. Claim: review only the closed output-fixture shape contract (top-level object, non-empty cases/evals, case id/prompt, string assertions). Do not broaden into Git, filesystem, network, AST, subprocess, or unrelated project validation without current owner evidence.",
+      "expected_output": "A read-only static hardening review that proposes the applicable adversarial matrix from current source/contract evidence, explicitly states that no owner tests or adversarial cases were executed on this surface, preserves all unresolved execution evidence, and returns review disposition PARTIAL unless the requested claim is already completely provable without execution. Dimension B structured-data shape validation remains APPLICABLE to the locked _normalize_output_fixture contract, including malformed top-level container, cases/evals list shape, and field-type checks. Raw JSON text decoding/parser concerns outside this function may be OUT_OF_SCOPE_FOR_CLAIM_WITH_OWNER_BASIS. Unrelated Git, filesystem, network, AST, and subprocess dimensions are not broadened into the review without current owner evidence.",
+      "assertions": [
+        "Keeps dimension B structured-data shape validation APPLICABLE for the locked output-fixture normalization claim.",
+        "Proposes checks for malformed top-level container type, missing or invalid cases/evals list shape, and malformed case field types required by the owner contract.",
+        "Distinguishes raw JSON text decoding/parser concerns outside _normalize_output_fixture from JSON-derived shape validation handled by the function.",
+        "Does not force Git-object, filesystem, network, AST, or subprocess checks when owner evidence places them outside the locked claim.",
+        "Does not force Hypothesis or another testing framework.",
+        "Preserves the existing narrow validator boundary.",
+        "Does not claim owner tests, commands, fuzzing, or adversarial inputs were executed on the read-only eval surface.",
+        "Uses PARTIAL when execution is still needed to prove the requested hardening claim."
+      ]
+    },
+    {
+      "id": "unknown-owner-negative",
+      "prompt": "Harden this classifier, but no current source path, project owner, guideline, or result vocabulary can be established.",
+      "expected_output": "Stop with review disposition UNKNOWN and reason code REVIEW_BLOCKED_UNKNOWN_OWNER; do not guess an owner, invent result semantics, or write a replacement validator.",
+      "assertions": [
+        "Uses UNKNOWN as the declared review disposition.",
+        "Includes reason code REVIEW_BLOCKED_UNKNOWN_OWNER.",
+        "Does not invent PASS/FAIL semantics.",
+        "Does not write or recommend a replacement validator as a way around missing ownership."
+      ]
+    },
+    {
+      "id": "owner-conflict-negative",
+      "prompt": "Supplied conflicting owner evidence: locator `input://owner-source-a` says `project/domain = product:termux`; locator `input://owner-source-b` says `project/domain = scope:repo/Agent Platform`. Both are current authoritative-looking sources for the same unnamed validator, and the supplied owning contracts do not resolve which owner identity applies. Review only the ownership-locking step; preserve both supplied locators and do not guess which owner wins.",
+      "expected_output": "Stop with review disposition CONFLICT and reason code REVIEW_OWNER_CONFLICT, preserving both conflicting owner source references. Do not downgrade the disagreement to REVIEW_BLOCKED_UNKNOWN_OWNER.",
+      "assertions": [
+        "Uses CONFLICT rather than UNKNOWN for materially disagreeing current owner evidence.",
+        "Includes reason code REVIEW_OWNER_CONFLICT.",
+        "Preserves the conflicting source references.",
+        "Does not guess or choose the convenient owner."
+      ]
+    },
+    {
+      "id": "contract-conflict-negative",
+      "prompt": "Supplied established owner: `product:termux`. Supplied conflicting current owner contracts: locator `input://contract-a` says result vocabulary `PASS/FAIL/UNKNOWN` with max-input 1 MiB; locator `input://contract-b` says result vocabulary `PASS/WARN/FAIL/UNKNOWN` with max-input 4 MiB. The supplied owner contract does not resolve the disagreement. Review only contract-conflict classification; preserve both supplied locators and do not guess which contract wins.",
+      "expected_output": "Stop with review disposition CONFLICT and reason code REVIEW_CONTRACT_CONFLICT, preserving both conflicting contract source references. Do not emit REVIEW_OWNER_CONFLICT because owner identity itself is not disputed.",
+      "assertions": [
+        "Uses CONFLICT for unresolved material contract disagreement inside an established owner.",
+        "Includes reason code REVIEW_CONTRACT_CONFLICT.",
+        "Does not use REVIEW_OWNER_CONFLICT when owner identity is not disputed.",
+        "Preserves the conflicting contract source references."
+      ]
+    }
+  ]
+}

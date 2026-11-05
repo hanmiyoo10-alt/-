@@ -193,7 +193,7 @@
         "-v"
       ],
       "options": {
-        "cwd": "${workspaceFolder}/plugins/termux/large-doc-editor"
+        "cwd": "${workspaceFolder}/products/standalone/termux/large-doc-editor"
       },
       "group": {
         "kind": "test",

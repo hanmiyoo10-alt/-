@@ -29,7 +29,7 @@ No large-doc runtime code or runit service has been installed yet. Port `8765` r
 
 The repository is the canonical source of truth.
 
-- Original large-doc backend source remains under `plugins/termux/large-doc-editor/`.
+- Original large-doc backend source remains under `products/standalone/termux/large-doc-editor/`.
 - PocketRisu adapter source belongs in the PocketRisu repository/feature branch.
 - Server-phone runtime files are deployment artifacts, not hand-maintained source.
 - Except for explicit temporary tests or device migration, do not edit the deployed runtime copy directly on the server phone.

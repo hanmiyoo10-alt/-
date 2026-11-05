@@ -316,3 +316,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3124)
 - Event ID: `8f46634b365b2a5d0eb6578634cb4035fe894d1584b93bf6edb72c29cffee9cf`
 <!-- canonical-main-doc-promoted:8f46634b365b2a5d0eb6578634cb4035fe894d1584b93bf6edb72c29cffee9cf -->
+
+### 2026-11-05 — MCL thin-phone / laptop-central topology — keep PocketRisu server on S, move generic compute/control to L
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3232)
+- Event ID: `2d5ffb7a3069a6a1479ff2550d79a392a03124150aeb64e206e891f17ec2640b`
+<!-- canonical-main-doc-promoted:2d5ffb7a3069a6a1479ff2550d79a392a03124150aeb64e206e891f17ec2640b -->

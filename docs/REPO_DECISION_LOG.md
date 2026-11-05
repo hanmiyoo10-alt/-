@@ -288,3 +288,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/4165)
 - Event ID: `44af4ea52b657f07f4450e817f8985abe37f88f9a622e3444fa88323877ba6c5`
 <!-- canonical-main-doc-promoted:44af4ea52b657f07f4450e817f8985abe37f88f9a622e3444fa88323877ba6c5 -->
+
+### 2026-11-05 — [mcl-lifecycle] RECOVER_SELF / prepared-continuation closure preflight V2
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/4194)
+- Event ID: `25acba20c60172306e72c0d6c3b98def677fe85d65be4becbc9f49f91c93650a`
+<!-- canonical-main-doc-promoted:25acba20c60172306e72c0d6c3b98def677fe85d65be4becbc9f49f91c93650a -->

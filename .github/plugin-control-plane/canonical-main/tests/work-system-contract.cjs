@@ -2305,3 +2305,171 @@ assert.match(prPublicationSource, /FIXED_REPO = 'hanmiyoo10-alt\/-'/);
 assert.match(prPublicationSource, /FIXED_BASE = 'main'/);
 
 console.log('work-system-contract: ok');
+
+const {
+  classifyPacketizationClosure,
+  packetizationKey,
+  REASON_CODES: PACKETIZATION_REASON_CODES,
+} = require(path.join(dir, 'packetization-closure.cjs'));
+const packetizationSource = fs.readFileSync(path.join(dir, 'packetization-closure.cjs'), 'utf8');
+
+const packetizationFixture = (overrides = {}) => ({
+  sourceRoot: 'issue:#4246',
+  implementationReady: true,
+  sourceImplementationRequired: true,
+  primaryGoal: 'prevent operational currentizer bytecode residue',
+  semanticOwner: 'repo-currentization-bytecode-hygiene',
+  writableScopes: ['path:tools/repo-write/a.py', 'surface:repo:currentizer-hygiene'],
+  disposition: 'PACKETIZE_NOW',
+  effectStarted: false,
+  targetPacketKey: null,
+  existingPackets: [],
+  deferReasonRef: null,
+  ...overrides,
+});
+
+let packetization = classifyPacketizationClosure(packetizationFixture());
+assert.equal(packetization.result, 'PASS');
+assert.equal(packetization.disposition, 'PACKETIZE_NOW');
+assert.equal(packetization.latePacketDebt, false);
+assert.equal(packetization.trainFullyEnumerated, true);
+assert.match(packetization.packetizationKey, /^[0-9a-f]{64}$/);
+
+packetization = classifyPacketizationClosure(packetizationFixture({
+  disposition: 'UNKNOWN',
+}));
+assert.equal(packetization.result, 'LATE_PACKET_DEBT');
+assert.equal(packetization.latePacketDebt, true);
+assert.equal(packetization.trainFullyEnumerated, false);
+assert.deepEqual(packetization.reasonCodes, [PACKETIZATION_REASON_CODES.LATE_PACKET_DEBT]);
+
+packetization = classifyPacketizationClosure(packetizationFixture({
+  implementationReady: false,
+  sourceImplementationRequired: true,
+  primaryGoal: '',
+  semanticOwner: '',
+  writableScopes: [],
+  disposition: 'DESIGN_REQUIRED',
+}));
+assert.equal(packetization.result, 'PASS');
+assert.equal(packetization.disposition, 'DESIGN_REQUIRED');
+
+const absorbKey = packetizationKey({
+  sourceRoot: 'issue:#4243',
+  primaryGoal: 'close final D-014 generation lineage',
+  semanticOwner: 'mcl-validation-finalization',
+  scopes: ['path:mcl/finalizer.cjs'],
+});
+packetization = classifyPacketizationClosure(packetizationFixture({
+  sourceRoot: 'issue:#4243',
+  primaryGoal: 'close final D-014 generation lineage',
+  semanticOwner: 'mcl-validation-finalization',
+  writableScopes: ['path:mcl/finalizer.cjs'],
+  disposition: 'ABSORB_PRE_EFFECT',
+  targetPacketKey: absorbKey,
+  existingPackets: [{packetRef:'#4244', packetizationKey:absorbKey, effectStarted:false}],
+}));
+assert.equal(packetization.result, 'PASS');
+assert.equal(packetization.disposition, 'ABSORB_PRE_EFFECT');
+assert.equal(packetization.matchedPacketRef, '#4244');
+
+packetization = classifyPacketizationClosure(packetizationFixture({
+  sourceRoot: 'issue:#4243',
+  primaryGoal: 'close final D-014 generation lineage',
+  semanticOwner: 'mcl-validation-finalization',
+  writableScopes: ['path:mcl/finalizer.cjs'],
+  disposition: 'ABSORB_PRE_EFFECT',
+  effectStarted: true,
+  targetPacketKey: absorbKey,
+  existingPackets: [{packetRef:'#4244', packetizationKey:absorbKey, effectStarted:false}],
+}));
+assert.equal(packetization.result, 'CONFLICT');
+assert.deepEqual(packetization.reasonCodes, [PACKETIZATION_REASON_CODES.ABSORB_AFTER_EFFECT_FORBIDDEN]);
+
+const coveredKey = packetizationKey({
+  sourceRoot: 'issue:#4188',
+  primaryGoal: 'repository patch executable mode parity',
+  semanticOwner: 'repository-patch-owner',
+  scopes: ['path:repo/patch.py'],
+});
+packetization = classifyPacketizationClosure(packetizationFixture({
+  sourceRoot: 'issue:#4188',
+  primaryGoal: 'repository patch executable mode parity',
+  semanticOwner: 'repository-patch-owner',
+  writableScopes: ['path:repo/patch.py'],
+  disposition: 'COVERED_BY_EXISTING_PACKET',
+  targetPacketKey: coveredKey,
+  existingPackets: [{packetRef:'#4212', packetizationKey:coveredKey, effectStarted:false}],
+}));
+assert.equal(packetization.result, 'PASS');
+assert.equal(packetization.matchedPacketRef, '#4212');
+
+packetization = classifyPacketizationClosure(packetizationFixture({
+  sourceRoot: 'issue:#3333',
+  primaryGoal: 'historical late packetization fixture',
+  semanticOwner: 'fixture-owner',
+  writableScopes: ['path:fixture/a'],
+  disposition: 'UNKNOWN',
+}));
+assert.equal(packetization.result, 'LATE_PACKET_DEBT');
+
+const reissueKey = packetizationKey({
+  sourceRoot: 'issue:#3229',
+  primaryGoal: 'historical reissue fixture',
+  semanticOwner: 'fixture-owner',
+  scopes: ['path:fixture/b'],
+});
+packetization = classifyPacketizationClosure(packetizationFixture({
+  sourceRoot: 'issue:#3229',
+  primaryGoal: 'historical reissue fixture',
+  semanticOwner: 'fixture-owner',
+  writableScopes: ['path:fixture/b'],
+  disposition: 'PACKETIZE_NOW',
+  existingPackets: [{packetRef:'#3230', packetizationKey:reissueKey, effectStarted:false}],
+}));
+assert.equal(packetization.result, 'CONFLICT');
+assert.deepEqual(packetization.reasonCodes, [PACKETIZATION_REASON_CODES.EXISTING_PACKET_KEY_REQUIRES_REUSE]);
+
+packetization = classifyPacketizationClosure(packetizationFixture({
+  sourceRoot: 'issue:#3296',
+  implementationReady: false,
+  sourceImplementationRequired: false,
+  primaryGoal: '',
+  semanticOwner: '',
+  writableScopes: [],
+  disposition: 'CLOSE_SYNC_ONLY',
+}));
+assert.equal(packetization.result, 'PASS');
+assert.equal(packetization.disposition, 'CLOSE_SYNC_ONLY');
+
+packetization = classifyPacketizationClosure(packetizationFixture({
+  disposition: 'DEFER_EXPLICIT',
+  deferReasonRef: null,
+}));
+assert.equal(packetization.result, 'CONFLICT');
+assert.equal(packetization.latePacketDebt, true);
+assert.deepEqual(packetization.reasonCodes, [PACKETIZATION_REASON_CODES.DEFER_REASON_REQUIRED]);
+
+const stableA = packetizationKey({
+  sourceRoot:'issue:#1', primaryGoal:'goal', semanticOwner:'owner',
+  scopes:['path:b', 'path:a'], currentMain:'a'.repeat(40), timestamp:'now',
+});
+const stableB = packetizationKey({
+  sourceRoot:'issue:#1', primaryGoal:'goal', semanticOwner:'owner',
+  scopes:['path:a', 'path:b'], currentMain:'b'.repeat(40), timestamp:'later',
+});
+assert.equal(stableA, stableB);
+assert.notEqual(stableA, packetizationKey({
+  sourceRoot:'issue:#1', primaryGoal:'different goal', semanticOwner:'owner',
+  scopes:['path:a', 'path:b'],
+}));
+
+assert.match(readme, /### Packetization closure preflight/);
+assert.match(readme, /LATE_PACKET_DEBT/);
+assert.match(readme, /trainFullyEnumerated=false/);
+assert.match(readme, /packetization-closure\.cjs \/path\/to\/input\.json/);
+for (const forbidden of ['http://', 'https://', 'gh api', 'fetch(', 'child_process', 'execSync', 'spawnSync', 'Date.now', 'new Date']) {
+  assert.equal(packetizationSource.includes(forbidden), false, 'packetization closure must not contain ' + forbidden);
+}
+assert.match(packetizationSource, /require\('\.\/scope-overlap\.cjs'\)/);
+assert.doesNotMatch(packetizationSource, /create_issue|update_issue|close_issue/i);

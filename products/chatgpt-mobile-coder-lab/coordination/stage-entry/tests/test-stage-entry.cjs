@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const childProcess = require('node:child_process');
+const crypto = require('node:crypto');
 const test = require('node:test');
 
 const stage = require('../mcl-stage-entry.cjs');
@@ -52,6 +53,32 @@ function lPlan(overrides = {}) {
     next_gate: 'scope_overlap',
     ...overrides,
   });
+}
+
+function sha256(text) {
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+function closureInput({recoverCovered = true, prerequisiteCovered = true, evidenceState = 'KNOWN'} = {}) {
+  return {
+    schema: 'mcl-owner-lifecycle-closure-input.v2',
+    checkpoint: 'AUTHORITY_SCOPE',
+    obligations: {
+      IMPLEMENT_SELF: {required:true,evidenceState:'KNOWN',routeCanImplementExactScope:true,bootstrapReviewed:false},
+      REFINE_SELF: {required:true,evidenceState:'KNOWN',samePrUpdateRequired:false},
+      FINALIZE_SELF: {required:true,evidenceState:'KNOWN',lateRecognitionOnly:false,externalBootstrapRequired:false,stableSelfOwnerExists:true,producerLineageCovered:true},
+      RETIRE_SELF: {required:true,evidenceState:'KNOWN',residues:[{kind:'WORKSPACE',state:'PREPARED',ownerCovered:true}]},
+      RECOVER_SELF: {required:true,evidenceState,naturalStates:[{kind:'STAGE_ENTRY_PARTIAL_CREATE',routeCovered:recoverCovered}],continuationPrerequisites:[{kind:'POSTMERGE_FINALIZATION_REACHABILITY',covered:prerequisiteCovered}]},
+    },
+  };
+}
+function closureAdmission({packetRef='#77',packetBody=PACKET_BODY,mainSha=MAIN,route='S',executor='S',checkpoint='AUTHORITY_SCOPE',input=closureInput()} = {}) {
+  return {schemaVersion:1,mode:stage.OWNER_LIFECYCLE_CLOSURE_MODE,packetRef,
+    packetBodySha256:sha256(packetBody),mainSha,route,executor,checkpoint,input};
+}
+function writeClosureFile(root, value = closureAdmission()) {
+  const file = path.join(root, 'owner-lifecycle-closure.json');
+  fs.writeFileSync(file, JSON.stringify(value));
+  return file;
 }
 
 function opsBody(sha = MAIN) {
@@ -224,18 +251,24 @@ test('plan parser preserves S/S and admits exact L/L only', () => {
   assert.throws(() => stage.parsePlan({...plan(), command: 'git status'}), /PLAN_UNKNOWN_FIELD/);
 });
 
-test('source-main and packet-activity sidecar bindings are optional and strict', () => {
-  const direct = stage.parseArgs(['inspect', '--packet', '#77', '--plan', '/tmp/plan.json']);
+test('source-main, activity and owner-lifecycle sidecars are strict', () => {
+  assert.throws(() => stage.parseArgs(['inspect', '--packet', '#77', '--plan', '/tmp/plan.json']),
+    /OWNER_LIFECYCLE_CLOSURE_FILE_REQUIRED/);
+  const direct = stage.parseArgs(['inspect', '--packet', '#77', '--plan', '/tmp/plan.json',
+    '--owner-lifecycle-closure-file', '/tmp/closure.json']);
   assert.equal(direct.sourceMain, null);
   assert.equal(direct.packetActivityEvidenceFile, null);
+  assert.equal(direct.ownerLifecycleClosureFile, '/tmp/closure.json');
   const bound = stage.parseArgs([
     'inspect', '--packet', '#77', '--plan', '/tmp/plan.json',
     '--packet-activity-evidence-file', '/tmp/activity.json', '--source-main', MAIN,
+    '--owner-lifecycle-closure-file', '/tmp/closure.json',
   ]);
   assert.equal(bound.sourceMain, MAIN);
   assert.equal(bound.packetActivityEvidenceFile, '/tmp/activity.json');
   assert.throws(() => stage.parseArgs([
     'inspect', '--packet', '#77', '--plan', '/tmp/plan.json', '--source-main', 'main',
+    '--owner-lifecycle-closure-file', '/tmp/closure.json',
   ]), /SOURCE_MAIN_INVALID/);
 });
 
@@ -612,6 +645,7 @@ test('pre-refresh C11 barrier requires unchanged source authority and exact land
     plan: plan(),
     mainSha: MAIN,
     packetBodySha256: '9'.repeat(64),
+    ownerLifecycleClosureAdmission: {...closureAdmission(), packetBodySha256:'9'.repeat(64)},
     requestedScopes: ['path:docs/demo.md'],
     overlap: {state: 'DISJOINT'},
     normalizationRequired: true,
@@ -640,7 +674,7 @@ test('pre-refresh C11 barrier requires unchanged source authority and exact land
   assert.throws(() => stage.revalidateBeforeLandingRefresh(context, lease, {
     runner,
     inspector: () => ({...context, mainSha: 'd'.repeat(40)}),
-  }), /LANDING_LATE_MAIN_SHA_CONFLICT/);
+  }), /OWNER_LIFECYCLE_CLOSURE_MAIN_SHA_CONFLICT/);
 });
 
 test('normalization release transport failure surfaces explicit recovery action', () => {
@@ -733,7 +767,9 @@ test('eligible normalization uses one fixed refresh then release and COMPLETE re
 test('normalization revalidation is one-shot and requires exact convergence', () => {
   const context = {
     packetNumber: 77, packetRef: '#77', plan: plan(), mainSha: MAIN,
-    packetBodySha256: '3'.repeat(64), requestedScopes: ['path:docs/demo.md'],
+    packetBodySha256: '3'.repeat(64),
+    ownerLifecycleClosureAdmission: {...closureAdmission(), packetBodySha256:'3'.repeat(64)},
+    requestedScopes: ['path:docs/demo.md'],
   };
   const ready = {
     ...context,
@@ -814,6 +850,7 @@ test('late barrier accepts exact fresh context and reuses packet-activity eviden
     sourceMain: null,
     packetActivityEvidence,
     packetBodySha256: 'a'.repeat(64),
+    ownerLifecycleClosureAdmission: {...closureAdmission(), packetBodySha256:'a'.repeat(64)},
     requestedScopes: ['path:docs/demo.md'],
     workspace: {identity: {branch: 'server/mcl-packet-77', worktree: '/root/nyang-worktrees/mcl-packet-77'}},
   };
@@ -848,6 +885,7 @@ test('late barrier rejects main drift before workspace effect', () => {
     plan: plan(),
     mainSha: MAIN,
     packetBodySha256: 'a'.repeat(64),
+    ownerLifecycleClosureAdmission: {...closureAdmission(), packetBodySha256:'a'.repeat(64)},
     requestedScopes: ['path:docs/demo.md'],
     workspace: {identity: {branch: 'server/mcl-packet-77', worktree: '/root/nyang-worktrees/mcl-packet-77'}},
   };
@@ -855,7 +893,7 @@ test('late barrier rejects main drift before workspace effect', () => {
     context,
     {leaseId: 'b'.repeat(64), observedGeneration: 12},
     {inspector: () => ({...context, mainSha: 'c'.repeat(40)})},
-  ), /LATE_MAIN_SHA_CONFLICT/);
+  ), /OWNER_LIFECYCLE_CLOSURE_MAIN_SHA_CONFLICT/);
 });
 
 test('acquire failure is fail-closed', () => {
@@ -1237,7 +1275,9 @@ test('L run inspection failure preserves L execution surface', () => {
   const planFile = path.join(root, 'plan.json');
   try {
     fs.writeFileSync(planFile, JSON.stringify(lPlan()));
-    const receipt = stage.run(['inspect','--packet','#77','--plan',planFile], {
+    const closureFile = writeClosureFile(root, closureAdmission({route:'L',executor:'L'}));
+    const receipt = stage.run(['inspect','--packet','#77','--plan',planFile,
+      '--owner-lifecycle-closure-file',closureFile], {
       runner: () => ({code:1,stdout:'',stderr:'read failed'}),
     });
     assert.equal(receipt.result, 'UNKNOWN');
@@ -1496,4 +1536,66 @@ test('L inspect skips S preflight and uses exact L workspace namespace', () => {
     assert.equal(value.stageProfile.route,'L'); assert.equal(value.preflight,null);
     assert.equal(value.workspace.identity.branch,'laptop/mcl-packet-77'); assert.equal(sPreflightCalls,0);
   }finally{t.close();}
+});
+
+test('owner-lifecycle closure admission requires exact V2 PASS identity', () => {
+  const base = {packetRef:'#77',packetBodySha256:sha256(PACKET_BODY),mainSha:MAIN,stageProfile:stage.STAGE_PROFILES.S};
+  const admitted = stage.qualifyOwnerLifecycleClosure(base, closureAdmission());
+  assert.equal(admitted.ownerLifecycleClosure.receipt.result, 'PASS');
+  assert.equal(admitted.ownerLifecycleClosure.receipt.obligations.RECOVER_SELF.classification, 'RECOVER_SELF_COVERED');
+  assert.match(admitted.ownerLifecycleClosure.evidenceRef, /^receipt:mcl-owner-lifecycle-closure:[0-9a-f]{64}$/);
+
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base, closureAdmission({packetRef:'#78'})),
+    /OWNER_LIFECYCLE_CLOSURE_PACKET_REF_CONFLICT/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base, closureAdmission({packetBody:'changed'})),
+    /OWNER_LIFECYCLE_CLOSURE_PACKET_BODY_DIGEST_CONFLICT/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base, closureAdmission({mainSha:'b'.repeat(40)})),
+    /OWNER_LIFECYCLE_CLOSURE_MAIN_SHA_CONFLICT/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base, closureAdmission({route:'L',executor:'L'})),
+    /OWNER_LIFECYCLE_CLOSURE_ROUTE_EXECUTOR_CONFLICT/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base, closureAdmission({checkpoint:'PRE_MERGE'})),
+    /OWNER_LIFECYCLE_CLOSURE_CHECKPOINT_CONFLICT/);
+});
+
+test('owner-lifecycle closure admission fails closed for V1, recovery gaps and classifier uncertainty', () => {
+  const base = {packetRef:'#77',packetBodySha256:sha256(PACKET_BODY),mainSha:MAIN,stageProfile:stage.STAGE_PROFILES.S};
+  const v1 = closureInput();
+  v1.schema = 'mcl-owner-lifecycle-closure-input.v1';
+  delete v1.obligations.RECOVER_SELF;
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base, closureAdmission({input:v1})),
+    /OWNER_LIFECYCLE_CLOSURE_V2_REQUIRED/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base,
+    closureAdmission({input:closureInput({recoverCovered:false})})),
+  /OWNER_LIFECYCLE_CLOSURE_RECOVER_ROUTE_MISSING/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base,
+    closureAdmission({input:closureInput({prerequisiteCovered:false})})),
+  /OWNER_LIFECYCLE_CLOSURE_RECOVER_NEXT_OWNER_PREREQUISITE_MISSING/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base,
+    closureAdmission({input:closureInput({evidenceState:'UNKNOWN'})})),
+  /OWNER_LIFECYCLE_CLOSURE_CLASSIFIER_UNKNOWN/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base,
+    closureAdmission({input:closureInput({evidenceState:'CONFLICT'})})),
+  /OWNER_LIFECYCLE_CLOSURE_CLASSIFIER_CONFLICT/);
+});
+
+test('owner-lifecycle closure file is bounded regular JSON', () => {
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'mcl-stage-entry-closure-'));
+  try {
+    const valid=writeClosureFile(root);
+    assert.equal(stage.readOwnerLifecycleClosureFile(valid).mode, stage.OWNER_LIFECYCLE_CLOSURE_MODE);
+    const symlink=path.join(root,'link.json'); fs.symlinkSync(valid,symlink);
+    assert.throws(()=>stage.readOwnerLifecycleClosureFile(symlink),/OWNER_LIFECYCLE_CLOSURE_REGULAR_FILE_REQUIRED/);
+    const bad=path.join(root,'bad.json'); fs.writeFileSync(bad,'{');
+    assert.throws(()=>stage.readOwnerLifecycleClosureFile(bad),/OWNER_LIFECYCLE_CLOSURE_JSON_INVALID/);
+    const big=path.join(root,'big.json'); fs.writeFileSync(big,'x'.repeat(stage.MAX_OWNER_LIFECYCLE_CLOSURE_BYTES+1));
+    assert.throws(()=>stage.readOwnerLifecycleClosureFile(big),/OWNER_LIFECYCLE_CLOSURE_FILE_TOO_LARGE/);
+  } finally {fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('owner-lifecycle closure late main drift invalidates the bound PASS', () => {
+  const admission=closureAdmission();
+  const base={packetRef:'#77',packetBodySha256:sha256(PACKET_BODY),mainSha:MAIN,stageProfile:stage.STAGE_PROFILES.S};
+  stage.qualifyOwnerLifecycleClosure(base, admission);
+  assert.throws(()=>stage.qualifyOwnerLifecycleClosure({...base,mainSha:'b'.repeat(40)}, admission),
+    /OWNER_LIFECYCLE_CLOSURE_MAIN_SHA_CONFLICT/);
 });

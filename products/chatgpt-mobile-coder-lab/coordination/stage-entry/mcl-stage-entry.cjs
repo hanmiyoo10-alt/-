@@ -13,8 +13,10 @@ const LEDGER_ISSUE = 2352;
 const PAGE_SIZE = 100;
 const MAX_PAGES = 5;
 const MAX_PLAN_BYTES = 16 * 1024;
+const MAX_OWNER_LIFECYCLE_CLOSURE_BYTES = 64 * 1024;
 const MAX_PACKET_ACTIVITY_CANDIDATES = 12;
 const PACKET_ACTIVITY_EVIDENCE_MODE = 'MCL_STAGE_ENTRY_PACKET_ACTIVITY_EVIDENCE_SET';
+const OWNER_LIFECYCLE_CLOSURE_MODE = 'MCL_STAGE_ENTRY_OWNER_LIFECYCLE_CLOSURE_ADMISSION';
 const PACKET_REF_RE = /^#[1-9][0-9]*$/;
 const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
@@ -27,6 +29,8 @@ const executionReceipt = require(path.join(
   ROOT, '.github/plugin-control-plane/canonical-main/work-harness/execution-receipt.cjs'));
 const taskHandoff = require(path.join(
   ROOT, 'products/chatgpt-mobile-coder-lab/coordination/task-handoff.cjs'));
+const ownerLifecycleClosure = require(path.join(
+  ROOT, 'products/chatgpt-mobile-coder-lab/coordination/owner-lifecycle-closure/mcl-owner-lifecycle-closure.cjs'));
 const workspacePrepare = require('./workspace-prepare.cjs');
 
 const OPERATOR = path.join(
@@ -109,6 +113,22 @@ function readRegularJson(filePath, maxBytes = MAX_PLAN_BYTES) {
   catch { throw new StageError('UNKNOWN', ['PLAN_JSON_INVALID']); }
 }
 
+function readOwnerLifecycleClosureFile(filePath) {
+  if (!filePath) throw new StageError('BLOCKED', ['OWNER_LIFECYCLE_CLOSURE_FILE_REQUIRED']);
+  const resolved = path.resolve(filePath);
+  let stat;
+  try { stat = fs.lstatSync(resolved); }
+  catch { throw new StageError('BLOCKED', ['OWNER_LIFECYCLE_CLOSURE_FILE_READ_FAILED']); }
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    throw new StageError('BLOCKED', ['OWNER_LIFECYCLE_CLOSURE_REGULAR_FILE_REQUIRED']);
+  }
+  if (stat.size > MAX_OWNER_LIFECYCLE_CLOSURE_BYTES) {
+    throw new StageError('BLOCKED', ['OWNER_LIFECYCLE_CLOSURE_FILE_TOO_LARGE']);
+  }
+  try { return JSON.parse(fs.readFileSync(resolved, 'utf8')); }
+  catch { throw new StageError('BLOCKED', ['OWNER_LIFECYCLE_CLOSURE_JSON_INVALID']); }
+}
+
 function exactKeys(value, allowed, prefix) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new StageError('UNKNOWN', [`${prefix}_OBJECT_REQUIRED`]);
@@ -121,6 +141,67 @@ function exactKeys(value, allowed, prefix) {
       ...missing.map((key) => `${prefix}_FIELD_REQUIRED:${key}`),
     ]);
   }
+}
+
+function qualifyOwnerLifecycleClosure(context, admission) {
+  exactKeys(admission, new Set([
+    'schemaVersion', 'mode', 'packetRef', 'packetBodySha256', 'mainSha',
+    'route', 'executor', 'checkpoint', 'input',
+  ]), 'OWNER_LIFECYCLE_CLOSURE_ADMISSION');
+  if (admission.schemaVersion !== 1 || admission.mode !== OWNER_LIFECYCLE_CLOSURE_MODE) {
+    throw new StageError('BLOCKED', ['OWNER_LIFECYCLE_CLOSURE_ADMISSION_SCHEMA_INVALID']);
+  }
+  if (admission.packetRef !== context.packetRef) {
+    throw new StageError('CONFLICT', ['OWNER_LIFECYCLE_CLOSURE_PACKET_REF_CONFLICT']);
+  }
+  if (admission.packetBodySha256 !== context.packetBodySha256) {
+    throw new StageError('CONFLICT', ['OWNER_LIFECYCLE_CLOSURE_PACKET_BODY_DIGEST_CONFLICT']);
+  }
+  if (admission.mainSha !== context.mainSha) {
+    throw new StageError('CONFLICT', ['OWNER_LIFECYCLE_CLOSURE_MAIN_SHA_CONFLICT']);
+  }
+  const stageProfile = context.stageProfile || STAGE_PROFILES.S;
+  if (admission.route !== stageProfile.route || admission.executor !== stageProfile.executor) {
+    throw new StageError('CONFLICT', ['OWNER_LIFECYCLE_CLOSURE_ROUTE_EXECUTOR_CONFLICT']);
+  }
+  if (admission.checkpoint !== 'AUTHORITY_SCOPE') {
+    throw new StageError('CONFLICT', ['OWNER_LIFECYCLE_CLOSURE_CHECKPOINT_CONFLICT']);
+  }
+  if (!admission.input || admission.input.schema !== 'mcl-owner-lifecycle-closure-input.v2') {
+    throw new StageError('BLOCKED', ['OWNER_LIFECYCLE_CLOSURE_V2_REQUIRED']);
+  }
+  if (admission.input.checkpoint !== admission.checkpoint) {
+    throw new StageError('CONFLICT', ['OWNER_LIFECYCLE_CLOSURE_INPUT_CHECKPOINT_CONFLICT']);
+  }
+  let receipt;
+  try { receipt = ownerLifecycleClosure.classify(admission.input); }
+  catch { throw new StageError('BLOCKED', ['OWNER_LIFECYCLE_CLOSURE_CLASSIFIER_INPUT_INVALID']); }
+  if (receipt?.schema !== 'mcl-owner-lifecycle-closure-receipt.v2') {
+    throw new StageError('BLOCKED', ['OWNER_LIFECYCLE_CLOSURE_V2_RECEIPT_REQUIRED']);
+  }
+  if (receipt.result === 'CONFLICT') {
+    throw new StageError('CONFLICT', ['OWNER_LIFECYCLE_CLOSURE_CLASSIFIER_CONFLICT']);
+  }
+  if (receipt.result === 'UNKNOWN') {
+    throw new StageError('UNKNOWN', ['OWNER_LIFECYCLE_CLOSURE_CLASSIFIER_UNKNOWN']);
+  }
+  if (receipt.result === 'BLOCKED') {
+    const recover = receipt.obligations?.RECOVER_SELF;
+    const codes = [];
+    for (const code of recover?.reasonCodes || []) codes.push('OWNER_LIFECYCLE_CLOSURE_' + code);
+    codes.push('OWNER_LIFECYCLE_CLOSURE_CLASSIFIER_BLOCKED');
+    throw new StageError('BLOCKED', codes);
+  }
+  const required = ['IMPLEMENT_SELF', 'REFINE_SELF', 'FINALIZE_SELF', 'RETIRE_SELF', 'RECOVER_SELF'];
+  if (receipt.result !== 'PASS' || required.some((key) => receipt.obligations?.[key]?.result !== 'PASS')) {
+    throw new StageError('BLOCKED', ['OWNER_LIFECYCLE_CLOSURE_ALL_OBLIGATIONS_PASS_REQUIRED']);
+  }
+  if (receipt.obligations.RECOVER_SELF.classification !== 'RECOVER_SELF_COVERED') {
+    throw new StageError('BLOCKED', ['OWNER_LIFECYCLE_CLOSURE_RECOVER_SELF_COVERED_REQUIRED']);
+  }
+  const evidenceRef = 'receipt:mcl-owner-lifecycle-closure:'
+    + sha256(JSON.stringify({admission, receipt}));
+  return {...context, ownerLifecycleClosureAdmission: admission, ownerLifecycleClosure: {receipt, evidenceRef}};
 }
 
 function normalizePacketActivityEvidenceSet(input, packetNumber) {
@@ -222,11 +303,14 @@ function parseArgs(argv) {
     if (values[name] !== undefined) throw new StageError('UNKNOWN', [`ARGUMENT_DUPLICATE:${name}`]);
     values[name] = value;
   }
-  const allowed = new Set(['packet', 'plan', 'source-main', 'packet-activity-evidence-file', 'apply']);
+  const allowed = new Set(['packet', 'plan', 'source-main', 'packet-activity-evidence-file', 'owner-lifecycle-closure-file', 'apply']);
   const extras = Object.keys(values).filter((key) => !allowed.has(key));
   if (extras.length) throw new StageError('UNKNOWN', extras.map((key) => `ARGUMENT_UNSUPPORTED:${key}`));
   if (!PACKET_REF_RE.test(values.packet || '')) throw new StageError('UNKNOWN', ['PACKET_REF_INVALID']);
   if (!values.plan) throw new StageError('UNKNOWN', ['PLAN_FILE_REQUIRED']);
+  if (!values['owner-lifecycle-closure-file']) {
+    throw new StageError('BLOCKED', ['OWNER_LIFECYCLE_CLOSURE_FILE_REQUIRED']);
+  }
   if (values['source-main'] !== undefined && !SHA40_RE.test(values['source-main'])) {
     throw new StageError('UNKNOWN', ['SOURCE_MAIN_INVALID']);
   }
@@ -239,6 +323,7 @@ function parseArgs(argv) {
     planFile: values.plan,
     sourceMain: values['source-main'] || null,
     packetActivityEvidenceFile: values['packet-activity-evidence-file'] || null,
+    ownerLifecycleClosureFile: values['owner-lifecycle-closure-file'],
   };
 }
 
@@ -563,14 +648,14 @@ function revalidateBeforeLandingRefresh(context, lease, {
   profile,
   inspector = inspectContext,
 } = {}) {
-  const fresh = inspector({
+  const fresh = qualifyOwnerLifecycleClosure(inspector({
     packetNumber: context.packetNumber,
     plan: context.plan,
     sourceMain: context.sourceMain,
     packetActivityEvidence: context.packetActivityEvidence,
     runner,
     profile,
-  });
+  }), context.ownerLifecycleClosureAdmission);
   const conflicts = [];
   if (fresh.mainSha !== context.mainSha) conflicts.push('LANDING_LATE_MAIN_SHA_CONFLICT');
   if (fresh.packetBodySha256 !== context.packetBodySha256) conflicts.push('LANDING_LATE_PACKET_DIGEST_CONFLICT');
@@ -704,14 +789,14 @@ function revalidateAfterNormalization(context, {
   profile,
   inspector = inspectContext,
 } = {}) {
-  const fresh = inspector({
+  const fresh = qualifyOwnerLifecycleClosure(inspector({
     packetNumber: context.packetNumber,
     plan: context.plan,
     sourceMain: context.sourceMain,
     packetActivityEvidence: context.packetActivityEvidence,
     runner,
     profile,
-  });
+  }), context.ownerLifecycleClosureAdmission);
   const conflicts = [];
   if (fresh.mainSha !== context.mainSha) conflicts.push('NORMALIZATION_MAIN_SHA_CONFLICT');
   if (fresh.packetBodySha256 !== context.packetBodySha256) conflicts.push('NORMALIZATION_PACKET_DIGEST_CONFLICT');
@@ -1030,14 +1115,14 @@ function revalidateAfterAcquire(context, lease, {
   profile,
   inspector = inspectContext,
 } = {}) {
-  const fresh = inspector({
+  const fresh = qualifyOwnerLifecycleClosure(inspector({
     packetNumber: context.packetNumber,
     plan: context.plan,
     sourceMain: context.sourceMain,
     packetActivityEvidence: context.packetActivityEvidence,
     runner,
     profile,
-  });
+  }), context.ownerLifecycleClosureAdmission);
   const conflicts = [];
   if (fresh.mainSha !== context.mainSha) conflicts.push('LATE_MAIN_SHA_CONFLICT');
   if (fresh.packetBodySha256 !== context.packetBodySha256) conflicts.push('LATE_PACKET_DIGEST_CONFLICT');
@@ -1228,6 +1313,13 @@ function applyContext(context, {
     counters.push({name: 'landing_normalization_count', value: normalization.count, status: 'KNOWN'});
   }
   const steps = [...(receipt.steps || [])];
+  if (receipt.result === 'PASS' && activeContext.ownerLifecycleClosure) {
+    steps.unshift({
+      name: 'owner-lifecycle-closure',
+      result: 'PASS',
+      evidenceLocator: activeContext.ownerLifecycleClosure.evidenceRef,
+    });
+  }
   if (normalization.normalized && receipt.result === 'PASS') {
     steps.splice(1, 0, {
       name: 'landing-currentness-normalization',
@@ -1239,7 +1331,8 @@ function applyContext(context, {
     ...receipt,
     counters,
     steps,
-    artifactLocators: unique([...(receipt.artifactLocators || []), ...normalization.artifacts]),
+    artifactLocators: unique([...(receipt.artifactLocators || []), ...normalization.artifacts,
+      ...(activeContext.ownerLifecycleClosure ? [activeContext.ownerLifecycleClosure.evidenceRef] : [])]),
   };
 }
 
@@ -1254,14 +1347,16 @@ function run(argv = process.argv.slice(2), deps = {}) {
       ? normalizePacketActivityEvidenceSet(
         readRegularJson(parsed.packetActivityEvidenceFile), parsed.packetNumber)
       : null;
-    const context = inspectContext({
+    const ownerLifecycleClosureAdmission = readOwnerLifecycleClosureFile(
+      parsed.ownerLifecycleClosureFile);
+    const context = qualifyOwnerLifecycleClosure(inspectContext({
       packetNumber: parsed.packetNumber,
       plan,
       sourceMain: parsed.sourceMain,
       packetActivityEvidence,
       runner: deps.runner || runDefault,
       profile: deps.profile,
-    });
+    }), ownerLifecycleClosureAdmission);
     if (parsed.command === 'inspect') {
       const preflightStep = context.stageProfile.route === 'L'
         ? {name:'l-preflight-not-applicable', result:'SKIPPED',
@@ -1277,6 +1372,8 @@ function run(argv = process.argv.slice(2), deps = {}) {
           {name: 'landing_normalization_required', value: context.normalizationRequired ? 1 : 0},
         ],
         steps: [
+          {name: 'owner-lifecycle-closure', result: 'PASS',
+            evidenceLocator: context.ownerLifecycleClosure.evidenceRef},
           {name: 'main-ops-currentness', result: 'PASS', evidenceLocator: 'issue:#485'},
           {name: 'packet-plan-scope', result: 'PASS', evidenceLocator: context.packetRef},
           {name: 'overlap-discovery', result: 'PASS', evidenceLocator: 'owner:work-system-scope-overlap'},
@@ -1284,7 +1381,7 @@ function run(argv = process.argv.slice(2), deps = {}) {
           {name: context.normalizationRequired ? 'landing-currentness-normalizable' : 'landing-currentness', result: 'PASS', evidenceLocator: 'owner:mcl-landing-freshness'},
           {name: 'workspace-absence', result: 'PASS', evidenceLocator: `receipt:mcl-stage-entry-workspace:${parsed.packetNumber}`},
         ],
-        artifacts: [context.packetRef, 'issue:#485', 'issue:#2352'],
+        artifacts: [context.packetRef, 'issue:#485', 'issue:#2352', context.ownerLifecycleClosure.evidenceRef],
         nextLegalAction: 'APPLY_STAGE_ENTRY_WITH_EXPLICIT_EFFECT_FLAG',
       });
     }
@@ -1309,7 +1406,9 @@ module.exports = {
   MAX_PAGES,
   PAGE_SIZE,
   MAX_PACKET_ACTIVITY_CANDIDATES,
+  MAX_OWNER_LIFECYCLE_CLOSURE_BYTES,
   PACKET_ACTIVITY_EVIDENCE_MODE,
+  OWNER_LIFECYCLE_CLOSURE_MODE,
   PLAN_FIELDS,
   REPO,
   StageError,
@@ -1331,6 +1430,8 @@ module.exports = {
   inspectPreflight,
   normalizeLandingCurrentness,
   normalizePacketActivityEvidenceSet,
+  qualifyOwnerLifecycleClosure,
+  readOwnerLifecycleClosureFile,
   parseArgs,
   parseKeyValueReceipt,
   parseOpsCapsule,

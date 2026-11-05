@@ -490,3 +490,58 @@ cat /path/to/request.json | node .github/plugin-control-plane/canonical-main/wor
 ```
 
 `sourceRefs` must contain 1–16 non-empty bounded source locators, and every acceptance field is explicit rather than inferred from prose.
+
+### Packetization closure preflight
+
+`work-system/packetization-closure.cjs` is the pure read-only classifier for
+implementation-ready source findings that could otherwise remain as latent
+successor-packet debt.
+
+It consumes one caller-supplied JSON object only. It does not fetch GitHub,
+create or close issues, mutate packet bodies or source, select project authority,
+start implementation, maintain a registry, or grant Git/CI/main/release/runtime
+authority.
+
+The finite packetization dispositions are:
+
+- `DIRECT_PACKET_CAPTURE`
+- `PACKETIZE_NOW`
+- `COVERED_BY_EXISTING_PACKET`
+- `ABSORB_PRE_EFFECT`
+- `CLOSE_SYNC_ONLY`
+- `DESIGN_REQUIRED`
+- `DEFER_EXPLICIT`
+- `UNKNOWN`
+- `CONFLICT`
+
+For implementation-ready evidence, the classifier derives one stable
+`packetizationKey` from exactly the source root, primary goal, semantic owner,
+and normalized writable scopes. Current main SHA, timestamps, route/executor,
+worker/chat/account/session identity, CI state and other transient facts are not
+key inputs.
+
+A ready finding with no terminal disposition is reported as
+`LATE_PACKET_DEBT` and `trainFullyEnumerated=false`. This does not authorize
+implementation. It only prevents a campaign/root/audit from truthfully claiming
+that its implementation train is fully enumerated while the executable
+disposition remains unresolved.
+
+`COVERED_BY_EXISTING_PACKET` and `ABSORB_PRE_EFFECT` require one exact supplied
+packetization-key match. Absorption additionally requires both the finding and
+the target packet to remain pre-effect. Any owner/goal/scope/key mismatch,
+ambiguous duplicate key, or already-started effect fails closed.
+
+`CLOSE_SYNC_ONLY` is valid only when the caller explicitly proves that no source
+implementation remains. `DEFER_EXPLICIT` requires a bounded durable reason/owner
+locator. `UNKNOWN` and `CONFLICT` are preserved rather than converted into a
+packetization success.
+
+The bounded CLI accepts one JSON file:
+
+```text
+node .github/plugin-control-plane/canonical-main/work-system/packetization-closure.cjs /path/to/input.json
+```
+
+Exit status is `0` for `PASS`, `2` for `LATE_PACKET_DEBT`, `3` for
+`CONFLICT`, and `4` for `UNKNOWN`. The classifier's authority flags always
+deny mutation and issue creation.

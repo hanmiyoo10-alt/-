@@ -346,9 +346,65 @@ class CurrentizeCandidateTests(unittest.TestCase):
         )
         self.assertEqual(observed, "candidate-change")
 
+    def test_operational_cli_leaves_no_source_bytecode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script = root / "currentize_candidate.py"
+            replay = root / "currentness_replay.py"
+            script.write_bytes(SCRIPT.read_bytes())
+            replay.write_bytes((ROOT / "currentness_replay.py").read_bytes())
+            cp = subprocess.run(
+                [sys.executable, str(script), "--help"],
+                cwd=root,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertEqual(cp.returncode, 0, cp.stderr or cp.stdout)
+            self.assertEqual(list(root.rglob("*.pyc")), [])
+            self.assertFalse((root / "__pycache__").exists())
+
+    def test_module_import_suppresses_replay_bytecode_and_restores_setting(self):
+        probe = """
+import importlib.util
+import json
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+initial = sys.argv[2] == "true"
+sys.path.insert(0, str(root))
+sys.dont_write_bytecode = initial
+spec = importlib.util.spec_from_file_location("currentize_candidate_probe", root / "currentize_candidate.py")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+print(json.dumps({
+    "dontWriteBytecode": sys.dont_write_bytecode,
+    "replayPyc": [str(path.relative_to(root)) for path in root.rglob("currentness_replay*.pyc")],
+}))
+"""
+        for initial in (False, True):
+            with self.subTest(initial=initial), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "currentize_candidate.py").write_bytes(SCRIPT.read_bytes())
+                (root / "currentness_replay.py").write_bytes((ROOT / "currentness_replay.py").read_bytes())
+                cp = subprocess.run(
+                    [sys.executable, "-c", probe, str(root), str(initial).lower()],
+                    cwd=root,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    check=False,
+                )
+                self.assertEqual(cp.returncode, 0, cp.stderr or cp.stdout)
+                observed = __import__("json").loads(cp.stdout)
+                self.assertEqual(observed["dontWriteBytecode"], initial)
+                self.assertEqual(observed["replayPyc"], [])
+
     def test_source_contract_has_fixed_non_force_effect_surface(self):
         source = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('FIXED_REMOTE = "origin"', source)
+        self.assertIn("sys.dont_write_bytecode = True", source)
         self.assertIn('"merge", "--no-ff"', source)
         self.assertIn('"push", "--no-follow-tags", FIXED_REMOTE', source)
         self.assertIn('GIT_NO_REPLACE_OBJECTS', source)

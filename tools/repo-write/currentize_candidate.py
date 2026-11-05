@@ -13,7 +13,13 @@ import sys
 import tempfile
 from typing import Any
 
-import currentness_replay as replay
+_previous_dont_write_bytecode = sys.dont_write_bytecode
+try:
+    sys.dont_write_bytecode = True
+    import currentness_replay as replay
+finally:
+    sys.dont_write_bytecode = _previous_dont_write_bytecode
+del _previous_dont_write_bytecode
 
 MODE = "CURRENTIZE_CANDIDATE_V1"
 FIXED_REMOTE = "origin"

@@ -35,6 +35,7 @@ SUPPORT_FILES='
 .github/plugin-control-plane/canonical-main/work-system/scope-overlap.cjs
 products/chatgpt-mobile-coder-lab/coordination/mcl-coordination-operator.cjs
 products/chatgpt-mobile-coder-lab/coordination/mcl-workspace-holder.cjs
+products/chatgpt-mobile-coder-lab/coordination/owner-lifecycle-closure/mcl-owner-lifecycle-closure.cjs
 products/chatgpt-mobile-coder-lab/coordination/repository-implementation/mcl-repository-implementation.cjs
 products/chatgpt-mobile-coder-lab/coordination/stage-entry/mcl-stage-entry.cjs
 products/chatgpt-mobile-coder-lab/coordination/stage-entry/workspace-prepare.cjs

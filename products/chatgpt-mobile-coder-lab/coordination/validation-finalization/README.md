@@ -666,22 +666,54 @@ actual merged head. Three reviewed semantic lineages are supported:
   `<packet>-implementation-pr-stage-entry`;
 - S packet-scoped currentization via `currentization-d014-completion` and
   `<packet>-validation-merge-currentization`;
-- fixed L/L repository implementation via `d014-completion`, with the
-  direct-L `<packet>-implementation-pr`, stage-entry-prepared
-  `<packet>-implementation-pr-stage-entry`, or one operation-qualified same-PR
-  review-update generation. A review-update generation is never admitted from phase
-  text alone: its COMPLETE receipt must carry exactly
-  `receipt:mcl-l-repository-owner:review-update:<manifestId>`, output the selected
-  canonical candidate and same PR, and its manifest must retain the full self-owner
-  scopes, exact L/L direct-child workspace, exact observed-base commit input and same
-  PR input. The completion receipt and selected manifest must carry the same exact
-  phase ID. Subset/near-match scopes, apply-qualified evidence, candidate/PR drift,
-  missing observed-base binding and foreign workspace lineage remain fail-closed.
+- fixed L/L repository implementation via `d014-completion`. L generations are
+  resolved by the bounded final-D-014 lineage resolver below rather than by phase-name
+  operation inference. Direct apply, operation-qualified review-update, and
+  operation-qualified continue-prepared generations may participate when their exact
+  D-014 evidence, scope/workspace identity, lease ordering and candidate ancestry are
+  proven. Strict-subset review-update and reviewed packet-currentization descendants
+  are therefore consumable without creating a successor finalizer packet.
 
 Distinct PR generations, missing live-head generations, bad lineage, active lease,
 holder presence, dirty/non-exact workspace, near-match scope or missing required
 gates remain fail-closed.
 
+
+## Bounded final-D-014 lineage resolver
+
+The L self-owner and reusable external-L routes share one read-only lineage resolver.
+It starts at the exact D-014 COMPLETE receipt named by the canonical
+`IMPLEMENTATION_PR` receipt and walks backward to one unique full-scope generation.
+The walk is bounded to 32 D-014 generations and uses only:
+
+- exact L/L D-014 `apply`, `review-update`, or `continue-prepared` owner receipts;
+- same-PR full/subset review-update ancestry;
+- exact full-packet `COORDINATION` recovery-rebind + operation-qualified
+  `continue-prepared`;
+- packet-currentization bridges only when the canonical implementation receipt proves
+  both `currentization-scope-and-blob-preservation` and
+  `packet-scoped-currentization-replay`, and Git ancestry proves the older D-014
+  candidate is an ancestor of the selected later candidate.
+
+Operation identity comes from
+`receipt:mcl-l-repository-owner:<operation>:<manifestId>`, never from phase text,
+timestamps, comment order, or a latest-wins rule. The two historical direct-L phase
+forms may retain their legacy apply meaning when no operation-qualified receipt is
+present; no review/continuation semantics are inferred from that compatibility path.
+
+Every D-014 node must remain the same packet, PR, exact direct-child `laptop/*`
+workspace, route/executor `L / L`, released lease and clean completion. Node path
+scopes may equal the packet paths or be a strict subset, but semantic surfaces must
+remain exact. A subset generation is legal only as `review-update`; its predecessor
+release generation must be lower than its acquisition generation. When the observed
+base is a currentization-only descendant with no new D-014, the currentization gates
+plus Git ancestry bridge that edge without synthesizing or rewriting D-014 evidence.
+
+The resolver fails closed on missing or ambiguous predecessors, cycles, unsupported
+phase classes, operation-evidence mismatch, packet/PR/workspace/surface drift,
+non-monotonic lease generations, candidate non-ancestry, missing currentization
+proof, or unproven Git ancestry. It grants no Git/ref/PR/currentization, D-013/D-014,
+holder, merge, runtime/device, release, or production effect authority.
 
 ## Reviewed external L product-path finalization route
 
@@ -713,18 +745,7 @@ mismatch or any UNKNOWN/CONFLICT remains fail-closed. Path location, age, packet
 number, branch naming or generic MCL membership never substitutes for the explicit
 reviewed route gate.
 
-A same-PR review-update may narrow its final D-014 write scope to the exact files
-actually changed by that review update without losing the packet's full-scope
-finalization lineage. This additive form is admitted only when the final L/L
-review-update manifest is a strict exact path subset with identical semantic
-surfaces and its `observedBaseSha` is proven by exactly one earlier L/L D-014
-COMPLETE generation for the same packet, PR and exact workspace whose scopes equal
-the full current packet scopes. The predecessor must be clean/released, output
-that exact predecessor commit, and its release generation must be strictly lower
-than the final review-update acquisition generation. Exact replay copies of one
-immutable predecessor completion receipt are deduplicated by receipt identity;
-distinct predecessor generations remain a conflict. Missing, foreign-workspace,
-non-subset, surface-drift, out-of-order or mismatched predecessor evidence remains
-fail-closed. The canonical
-`IMPLEMENTATION_PR` receipt still owns the full PR diff/path identity; this lineage
-rule does not let a subset manifest shrink packet authority or add mutation power.
+The reusable external L route uses the same bounded final-D-014 lineage resolver
+as the L self-owner class. The canonical `IMPLEMENTATION_PR` receipt still owns the
+full PR diff/path identity; a subset D-014 generation never shrinks packet authority
+or adds mutation power.

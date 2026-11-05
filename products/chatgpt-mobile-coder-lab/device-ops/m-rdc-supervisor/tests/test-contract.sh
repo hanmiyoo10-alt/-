@@ -311,6 +311,8 @@ if [ "${MCL_M_RDC_ADOPTION_ONLY:-0}" = "1" ]; then
     grep -Fq -- '--adopt-orphan' "$GUARD" || fail "explicit adoption mode missing"
     [ "$(grep -Fc -- '--adopt-orphan)' "$GUARD")" -eq 1 ] || fail "adoption dispatch count"
     grep -Fq 'mcl-m-rdc-guard-orphan-adopt.v1' "$GUARD" || fail "adoption schema missing"
+    grep -Fq 'cleanup_wait=$((INTERVAL + ADOPT_CLEANUP_GRACE))' "$GUARD" || fail "adoption cleanup wait not interval-aware"
+    grep -Fq 'ADOPT_CLEANUP_GRACE=8' "$GUARD" || fail "adoption cleanup grace drift"
     ! grep -Eq 'kill -KILL|pkill|killall|service-daemon|runsvdir' "$GUARD" || fail "forbidden broad adoption surface"
 
     echo 'm-rdc-supervisor orphan-adoption contract: PASS'

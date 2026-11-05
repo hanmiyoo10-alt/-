@@ -38,11 +38,13 @@ read_pid() {
 }
 cleanup() {
     force_stop_pid "$(read_pid "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid")"
+    force_stop_pid "$(read_pid "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/guard.pid")"
     force_stop_pid "$(read_pid "$TEST_STATE/guard-runsv.pid")"
     force_stop_pid "$(read_pid "$TEST_STATE/target-runsv.pid")"
     force_stop_pid "${SECOND_PID:-}"
     force_stop_pid "${LOOP_PID:-}"
     force_stop_pid "${AMBIG_PID:-}"
+    force_stop_pid "${ANCHOR_DUMMY_PID:-}"
     rm -rf "$TMP"
 }
 trap cleanup EXIT INT TERM HUP
@@ -123,6 +125,9 @@ case "$name" in
         count=$((count + 1))
         printf '%s\n' "$count" > "$count_file"
         printf '%s\n' "$$" > "$MCL_M_RDC_TEST_STATE/guard-runsv.pid"
+        if [ -e "$MCL_M_RDC_TEST_STATE/guard-runsv-fail" ]; then
+            while :; do sleep 1; done
+        fi
         while :; do
             "$service/run" &
             child=$!
@@ -178,6 +183,139 @@ stop_loop_term() {
     [ ! -e "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/guard.pid" ] || fail "pidfile survived TERM"
     [ ! -d "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/guard.lock" ] || fail "lock survived TERM"
 }
+
+if [ "${MCL_M_RDC_ADOPTION_ONLY:-0}" = "1" ]; then
+    apply_out="$(run_install --apply)"
+    printf '%s\n' "$apply_out" | grep -Fxq 'result=pass' || fail "adoption fixture install"
+    printf '%s\n' 'target-generation-stable' > "$TEST_STATE/target-generation"
+    run_guard --once
+    wait_for_file "$TEST_STATE/target-runsv.pid"
+    target_count_before="$(cat "$TEST_STATE/target-runsv.count")"
+
+    run_launcher
+    wait_for_file "$TEST_STATE/guard-runsv.pid"
+    wait_for_file "$TEST_STATE/guard-child.pid"
+    wait_for_file "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid"
+    guard_supervisor="$(read_pid "$TEST_STATE/guard-runsv.pid")"
+    orphan_guard="$(read_pid "$TEST_STATE/guard-child.pid")"
+    anchor_pid="$(read_pid "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid")"
+    kill -0 "$guard_supervisor" 2>/dev/null || fail "adoption starting supervisor"
+    kill -0 "$orphan_guard" 2>/dev/null || fail "adoption starting guard"
+    kill -0 "$anchor_pid" 2>/dev/null || fail "adoption starting anchor"
+
+    # Create the natural #3508 shape: supervisor hard-loss while its guard child
+    # survives as a PID1-owned orphan, then let the independent anchor restore a
+    # replacement guard-service supervisor.
+    count_before="$(cat "$TEST_STATE/guard-runsv.count")"
+    kill -KILL "$guard_supervisor" 2>/dev/null || fail "adoption supervisor hard-loss"
+    rm -f "$GUARD_SERVICE/supervisor-up"
+    rmdir "$GUARD_SERVICE/supervise/lock.fixture" 2>/dev/null || true
+    printf '%s\n' 1 > "$TEST_STATE/adopt-ppid-$orphan_guard"
+    i=0
+    while [ "$i" -lt 20 ]; do
+        sleep 1
+        count_now="$(cat "$TEST_STATE/guard-runsv.count")"
+        service_child="$(read_pid "$TEST_STATE/guard-child.pid")"
+        if [ "$count_now" -gt "$count_before" ] && { [ -z "$service_child" ] || [ "$service_child" != "$orphan_guard" ]; }; then
+            break
+        fi
+        i=$((i + 1))
+    done
+    [ "$(cat "$TEST_STATE/guard-runsv.count")" -gt "$count_before" ] || fail "replacement guard supervisor missing"
+
+    # Ambiguous anchor identity is a zero-effect blocker. Keep the real anchor
+    # process alive; only point its evidence pidfile at an unrelated live process.
+    saved_anchor_pid="$anchor_pid"
+    sleep 30 &
+    ANCHOR_DUMMY_PID=$!
+    printf '%s\n' "$ANCHOR_DUMMY_PID" > "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid"
+    set +e
+    blocked_out="$(run_guard --adopt-orphan 2>&1)"
+    blocked_rc=$?
+    set -e
+    [ "$blocked_rc" -eq 2 ] || fail "ambiguous anchor adoption rc=$blocked_rc"
+    printf '%s\n' "$blocked_out" | grep -Fxq 'result=blocked' || fail "ambiguous anchor result"
+    kill -0 "$orphan_guard" 2>/dev/null || fail "ambiguous anchor killed orphan"
+    printf '%s\n' "$saved_anchor_pid" > "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/anchor.pid"
+    force_stop_pid "$ANCHOR_DUMMY_PID"
+    ANCHOR_DUMMY_PID=
+
+    set +e
+    adopt_out="$(run_guard --adopt-orphan 2>&1)"
+    adopt_rc=$?
+    set -e
+    [ "$adopt_rc" -eq 0 ] || fail "orphan adoption rc=$adopt_rc output=$adopt_out"
+    for expected in \
+        'schema=mcl-m-rdc-guard-orphan-adopt.v1' \
+        'prestate=orphan_exact' \
+        'guard_service=supervised' \
+        'ownership=runsv' \
+        'target=preserved' \
+        'anchor=preserved' \
+        'rollback=not_needed' \
+        'result=pass' \
+        'details=withheld'; do
+        printf '%s\n' "$adopt_out" | grep -Fxq "$expected" || fail "adopt receipt: $expected"
+    done
+    [ "$(printf '%s\n' "$adopt_out" | wc -l | tr -d ' ')" = 9 ] || fail "adopt receipt line count"
+    ! printf '%s\n' "$adopt_out" | grep -Eq 'pid=|ppid=|cmdline|/proc/|auth|session' || fail "adopt receipt identity leak"
+    ! kill -0 "$orphan_guard" 2>/dev/null || fail "orphan survived adoption"
+    runit_guard="$(read_pid "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/guard.pid")"
+    service_child="$(read_pid "$TEST_STATE/guard-child.pid")"
+    [ -n "$runit_guard" ] && [ "$runit_guard" = "$service_child" ] || fail "runit child did not own guard lock"
+    kill -0 "$runit_guard" 2>/dev/null || fail "runit-owned guard not alive"
+    [ "$(cat "$TEST_STATE/target-runsv.count")" = "$target_count_before" ] || fail "adoption restarted RDC target"
+    kill -0 "$saved_anchor_pid" 2>/dev/null || fail "adoption lost anchor"
+    rm -f "$TEST_STATE/adopt-ppid-$orphan_guard"
+
+    # Healthy runit-owned state cannot be adopted again.
+    set +e
+    healthy_out="$(run_guard --adopt-orphan 2>&1)"
+    healthy_rc=$?
+    set -e
+    [ "$healthy_rc" -eq 2 ] || fail "healthy adoption rc=$healthy_rc"
+    printf '%s\n' "$healthy_out" | grep -Fxq 'result=blocked' || fail "healthy adoption result"
+    kill -0 "$runit_guard" 2>/dev/null || fail "healthy block disturbed guard"
+
+    # Rollback: restore a second orphan shape, but force the replacement runsv to
+    # stay alive without spawning a child. Adoption must retire the old orphan,
+    # start at most one standalone fixed guard, and report FAIL/restored.
+    rollback_supervisor="$(read_pid "$TEST_STATE/guard-runsv.pid")"
+    rollback_orphan="$(read_pid "$TEST_STATE/guard-child.pid")"
+    touch "$TEST_STATE/guard-runsv-fail"
+    kill -KILL "$rollback_supervisor" 2>/dev/null || fail "rollback supervisor hard-loss"
+    rm -f "$GUARD_SERVICE/supervisor-up" "$TEST_STATE/guard-child.pid"
+    rmdir "$GUARD_SERVICE/supervise/lock.fixture" 2>/dev/null || true
+    printf '%s\n' 1 > "$TEST_STATE/adopt-ppid-$rollback_orphan"
+    rollback_count_before="$(cat "$TEST_STATE/guard-runsv.count")"
+    i=0
+    while [ "$i" -lt 20 ]; do
+        sleep 1
+        [ "$(cat "$TEST_STATE/guard-runsv.count")" -gt "$rollback_count_before" ] && break
+        i=$((i + 1))
+    done
+    [ "$(cat "$TEST_STATE/guard-runsv.count")" -gt "$rollback_count_before" ] || fail "rollback replacement supervisor missing"
+    set +e
+    rollback_out="$(run_guard --adopt-orphan 2>&1)"
+    rollback_rc=$?
+    set -e
+    [ "$rollback_rc" -eq 1 ] || fail "rollback adoption rc=$rollback_rc output=$rollback_out"
+    printf '%s\n' "$rollback_out" | grep -Fxq 'rollback=restored' || fail "rollback not restored"
+    printf '%s\n' "$rollback_out" | grep -Fxq 'result=fail' || fail "rollback was misreported PASS"
+    restored_guard="$(read_pid "$HOME_FIX/.local/state/mcl-m-rdc-supervisor-guard/guard.pid")"
+    [ -n "$restored_guard" ] && kill -0 "$restored_guard" 2>/dev/null || fail "rollback guard missing"
+    [ "$(cat "$TEST_STATE/target-runsv.count")" = "$target_count_before" ] || fail "rollback restarted RDC target"
+    kill -0 "$saved_anchor_pid" 2>/dev/null || fail "rollback lost anchor"
+
+    rm -f "$TEST_STATE/adopt-ppid-$rollback_orphan"
+    grep -Fq -- '--adopt-orphan' "$GUARD" || fail "explicit adoption mode missing"
+    [ "$(grep -Fc -- '--adopt-orphan)' "$GUARD")" -eq 1 ] || fail "adoption dispatch count"
+    grep -Fq 'mcl-m-rdc-guard-orphan-adopt.v1' "$GUARD" || fail "adoption schema missing"
+    ! grep -Eq 'kill -KILL|pkill|killall|service-daemon|runsvdir' "$GUARD" || fail "forbidden broad adoption surface"
+
+    echo 'm-rdc-supervisor orphan-adoption contract: PASS'
+    exit 0
+fi
 
 set +e
 check_out="$(run_guard --check 2>&1)"

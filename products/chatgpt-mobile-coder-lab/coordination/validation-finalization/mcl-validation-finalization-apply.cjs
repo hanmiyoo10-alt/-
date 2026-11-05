@@ -1552,6 +1552,13 @@ function selectExternalOwnerReviewUpdatePredecessor(
         || predecessorManifest.manifestId === manifest.manifestId) {
       fail('CONFLICT', 'EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_IDENTITY_CONFLICT');
     }
+    const predecessorReleasedGeneration = completion.leaseReleaseEvidence?.releasedGeneration;
+    const finalAcquiredGeneration = manifest.leaseEvidence?.acquiredGeneration;
+    if (!Number.isSafeInteger(predecessorReleasedGeneration)
+        || !Number.isSafeInteger(finalAcquiredGeneration)
+        || predecessorReleasedGeneration >= finalAcquiredGeneration) {
+      fail('CONFLICT', 'EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_ORDER_CONFLICT');
+    }
     candidates.push({
       comment,
       completion,
@@ -1569,11 +1576,21 @@ function selectExternalOwnerReviewUpdatePredecessor(
   if (!candidates.length) {
     fail('BLOCKED', 'EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_MISSING');
   }
-  const identities = new Set(candidates.map((item) => item.semanticIdentity));
-  if (candidates.length !== 1 || identities.size !== 1) {
+  const byReceiptId = new Map();
+  for (const item of candidates) {
+    const key = item.completion.receiptId;
+    const prior = byReceiptId.get(key);
+    if (prior && prior.semanticIdentity !== item.semanticIdentity) {
+      fail('CONFLICT', 'EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_AMBIGUOUS');
+    }
+    if (!prior) byReceiptId.set(key, item);
+  }
+  const uniqueCandidates = [...byReceiptId.values()];
+  const identities = new Set(uniqueCandidates.map((item) => item.semanticIdentity));
+  if (uniqueCandidates.length !== 1 || identities.size !== 1) {
     fail('CONFLICT', 'EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_AMBIGUOUS');
   }
-  return candidates[0];
+  return uniqueCandidates[0];
 }
 
 function selectExternalOwnerWorkspaceManifest(comments, packet, packetRef, impl, packetScope) {

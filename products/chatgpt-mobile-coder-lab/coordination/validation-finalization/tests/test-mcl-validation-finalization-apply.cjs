@@ -2993,6 +2993,7 @@ function externalReviewUpdateLineageFixture({
   finalPaths = null,
   finalSurfaces = null,
   predecessorWorkspaceSuffix = '',
+  predecessorGeneration = 30,
   finalObservedBase = null,
 } = {}) {
   const packet = 5001;
@@ -3070,10 +3071,10 @@ function externalReviewUpdateLineageFixture({
     scopes: packetScopes,
     observedBaseSha: baseMain,
     leaseId: 'c'.repeat(64),
-    generation: 30,
+    generation: predecessorGeneration,
     workspaceValue: predecessorWorkspace,
   });
-  const predecessorCompletion = buildCompletion(predecessor, oldHead, 31);
+  const predecessorCompletion = buildCompletion(predecessor, oldHead, predecessorGeneration + 1);
   const selectedFinalPaths = finalPaths || [fullPaths[0]];
   const selectedFinalSurfaces = finalSurfaces || [surface];
   const finalScopes = [
@@ -3104,10 +3105,10 @@ function externalReviewUpdateLineageFixture({
       scopes: packetScopes,
       observedBaseSha: baseMain,
       leaseId: 'f'.repeat(64),
-      generation: 34,
+      generation: 28,
     });
     comments.push(
-      {id: 81, body: handoff.renderCompletionReceipt(buildCompletion(second, oldHead, 35))},
+      {id: 81, body: handoff.renderCompletionReceipt(buildCompletion(second, oldHead, 29))},
       {id: 82, body: handoff.renderManifest(second)},
     );
   }
@@ -3185,4 +3186,22 @@ test('reviewed external L subset lineage rejects scope, surface and workspace dr
     workspace.comments, workspace.packet, workspace.packetRef, workspace.impl, workspace.packetScope),
   (error) => error instanceof owner.ApplyError
     && error.reasonCodes.includes('EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_IDENTITY_CONFLICT'));
+});
+
+test('reviewed external L subset lineage requires predecessor release before final acquire', () => {
+  const later = externalReviewUpdateLineageFixture({predecessorGeneration: 40});
+  assert.throws(() => owner.selectExternalOwnerWorkspaceManifest(
+    later.comments, later.packet, later.packetRef, later.impl, later.packetScope),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_ORDER_CONFLICT'));
+});
+
+test('reviewed external L subset lineage deduplicates exact predecessor receipt replay', () => {
+  const replay = externalReviewUpdateLineageFixture();
+  const predecessorCompletion = replay.comments.find((comment) => comment.id === 79);
+  replay.comments.push({id: 83, body: predecessorCompletion.body});
+  const selected = owner.selectExternalOwnerWorkspaceManifest(
+    replay.comments, replay.packet, replay.packetRef, replay.impl, replay.packetScope);
+  assert.equal(selected.reviewUpdatePredecessor.manifestRow.manifest.manifestId,
+    replay.predecessor.manifestId);
 });

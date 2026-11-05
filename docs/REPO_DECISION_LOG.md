@@ -302,3 +302,17 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/4249)
 - Event ID: `02aa3d6b0a56bd739e46c7fec6ea19f246822676c1380ff2cf2639ed7b5f0b4c`
 <!-- canonical-main-doc-promoted:02aa3d6b0a56bd739e46c7fec6ea19f246822676c1380ff2cf2639ed7b5f0b4c -->
+
+### 2026-11-05 — REPO-ENV-WORKTREE-LIFECYCLE — safe operator-facing isolated worktree leases
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2326)
+- Event ID: `1abf5a414d12413a8947b4695b1712f0ee0127d756ac3b0f1df4504429a1051a`
+<!-- canonical-main-doc-promoted:1abf5a414d12413a8947b4695b1712f0ee0127d756ac3b0f1df4504429a1051a -->
+
+### 2026-11-05 — MCL laptop L worker — keep RDC device path and add Codex Remote host
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3124)
+- Event ID: `8f46634b365b2a5d0eb6578634cb4035fe894d1584b93bf6edb72c29cffee9cf`
+<!-- canonical-main-doc-promoted:8f46634b365b2a5d0eb6578634cb4035fe894d1584b93bf6edb72c29cffee9cf -->

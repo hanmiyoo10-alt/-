@@ -707,3 +707,19 @@ another executor, active lease, holder presence, dirty/moved workspace, PR/head
 mismatch or any UNKNOWN/CONFLICT remains fail-closed. Path location, age, packet
 number, branch naming or generic MCL membership never substitutes for the explicit
 reviewed route gate.
+
+A same-PR review-update may narrow its final D-014 write scope to the exact files
+actually changed by that review update without losing the packet's full-scope
+finalization lineage. This additive form is admitted only when the final L/L
+review-update manifest is a strict exact path subset with identical semantic
+surfaces and its `observedBaseSha` is proven by exactly one earlier L/L D-014
+COMPLETE generation for the same packet, PR and exact workspace whose scopes equal
+the full current packet scopes. The predecessor must be clean/released, output
+that exact predecessor commit, and its release generation must be strictly lower
+than the final review-update acquisition generation. Exact replay copies of one
+immutable predecessor completion receipt are deduplicated by receipt identity;
+distinct predecessor generations remain a conflict. Missing, foreign-workspace,
+non-subset, surface-drift, out-of-order or mismatched predecessor evidence remains
+fail-closed. The canonical
+`IMPLEMENTATION_PR` receipt still owns the full PR diff/path identity; this lineage
+rule does not let a subset manifest shrink packet authority or add mutation power.

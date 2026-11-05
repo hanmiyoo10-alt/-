@@ -1465,6 +1465,134 @@ function selectExternalOwnerImplementationReceipt(stageRows, packet, paths, pr =
   selected.sort((a, b) => a.row.receipt.receiptDigest.localeCompare(b.row.receipt.receiptDigest));
   return selected[0];
 }
+function externalOwnerScopeParts(scopes) {
+  const normalized = [...(scopes || [])].sort();
+  return {
+    all: normalized,
+    paths: normalized.filter((item) => item.startsWith('path:')),
+    surfaces: normalized.filter((item) => item.startsWith('surface:')),
+  };
+}
+function selectExternalOwnerReviewUpdatePredecessor(
+  comments, packet, packetRef, impl, packetScope, manifest,
+) {
+  const phaseId = String(manifest.phaseId || '');
+  if (!phaseId.startsWith(String(packet) + '-implementation-pr')
+      || !phaseId.includes('review-update')) {
+    fail('CONFLICT', 'EXTERNAL_OWNER_REVIEW_UPDATE_PHASE_REQUIRED');
+  }
+  if (!/^[0-9a-f]{40}$/.test(manifest.observedBaseSha || '')
+      || !(manifest.inputRefs || []).includes('commit:' + manifest.observedBaseSha)) {
+    fail('CONFLICT', 'EXTERNAL_OWNER_REVIEW_UPDATE_BASE_LINEAGE_CONFLICT');
+  }
+
+  const packetParts = externalOwnerScopeParts(packetScope.scopes);
+  const finalParts = externalOwnerScopeParts(manifest.scopes);
+  if (!finalParts.paths.length || finalParts.paths.length >= packetParts.paths.length
+      || finalParts.paths.some((item) => !packetParts.paths.includes(item))) {
+    fail('CONFLICT', 'EXTERNAL_OWNER_REVIEW_UPDATE_SCOPE_NOT_STRICT_SUBSET');
+  }
+  if (!same(finalParts.surfaces, packetParts.surfaces)) {
+    fail('CONFLICT', 'EXTERNAL_OWNER_REVIEW_UPDATE_SURFACE_CONFLICT');
+  }
+
+  const candidates = [];
+  for (const comment of comments) {
+    const body = commentBody(comment);
+    if (!body.includes('mcl-task-completion-receipt:v1')) continue;
+    const parsedCompletion = handoff.parseCompletionReceipt(body);
+    if (parsedCompletion.status !== 'VALID') continue;
+    const completion = parsedCompletion.value;
+    const outputs = completion.outputRefs || [];
+    if (completion.packetRef !== packetRef
+        || !outputs.includes('pr:#' + impl.pr)
+        || !outputs.includes('commit:' + manifest.observedBaseSha)) continue;
+    if (completion.executor !== 'L'
+        || completion.disposition !== 'COMPLETE'
+        || completion.leaseDisposition !== 'RELEASED'
+        || completion.workspaceResult !== 'clean'
+        || (completion.blockerRefs || []).length
+        || (completion.requiredUnknownRefs || []).length) {
+      fail('CONFLICT', 'EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_COMPLETION_CONFLICT');
+    }
+
+    const manifests = [];
+    for (const candidateComment of comments) {
+      const candidateBody = commentBody(candidateComment);
+      if (!candidateBody.includes('mcl-task-manifest:v1')) continue;
+      const parsedManifest = handoff.parseManifest(candidateBody);
+      if (parsedManifest.status !== 'VALID'
+          || parsedManifest.value.manifestId !== completion.manifestId) continue;
+      manifests.push({comment: candidateComment, manifest: parsedManifest.value, text: candidateBody});
+    }
+    if (manifests.length !== 1) {
+      fail(manifests.length ? 'CONFLICT' : 'UNKNOWN',
+        manifests.length
+          ? 'EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_MANIFEST_AMBIGUOUS'
+          : 'EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_MANIFEST_MISSING');
+    }
+    const predecessor = manifests[0];
+    const predecessorManifest = predecessor.manifest;
+    const binding = handoff.validateReceiptAgainstManifest(completion, predecessorManifest);
+    if (binding.status !== 'VALID') {
+      fail('BLOCKED', 'EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_BINDING_CONFLICT',
+        ...(binding.errors || []));
+    }
+    if (predecessorManifest.packetRef !== packetRef
+        || !String(predecessorManifest.phaseId || '').startsWith(String(packet) + '-implementation-pr')
+        || predecessorManifest.phaseClass !== 'REPOSITORY_MUTATION'
+        || predecessorManifest.route !== 'L' || predecessorManifest.executor !== 'L'
+        || predecessorManifest.leaseRequirement !== 'REQUIRED'
+        || !same([...(predecessorManifest.scopes || [])].sort(), packetScope.scopes)
+        || predecessorManifest.workspace?.kind !== 'repository'
+        || predecessorManifest.workspace?.branch !== manifest.workspace?.branch
+        || predecessorManifest.workspace?.worktree !== manifest.workspace?.worktree
+        || !/^[0-9a-f]{64}$/.test(predecessorManifest.leaseEvidence?.leaseId || '')
+        || !Number.isSafeInteger(predecessorManifest.leaseEvidence?.acquiredGeneration)
+        || predecessorManifest.manifestId === manifest.manifestId) {
+      fail('CONFLICT', 'EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_IDENTITY_CONFLICT');
+    }
+    const predecessorReleasedGeneration = completion.leaseReleaseEvidence?.releasedGeneration;
+    const finalAcquiredGeneration = manifest.leaseEvidence?.acquiredGeneration;
+    if (!Number.isSafeInteger(predecessorReleasedGeneration)
+        || !Number.isSafeInteger(finalAcquiredGeneration)
+        || predecessorReleasedGeneration >= finalAcquiredGeneration) {
+      fail('CONFLICT', 'EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_ORDER_CONFLICT');
+    }
+    candidates.push({
+      comment,
+      completion,
+      manifestRow: predecessor,
+      semanticIdentity: JSON.stringify({
+        manifestId: predecessorManifest.manifestId,
+        completionReceiptId: completion.receiptId,
+        outputCommit: manifest.observedBaseSha,
+        pr: impl.pr,
+        workspace: predecessorManifest.workspace,
+      }),
+    });
+  }
+
+  if (!candidates.length) {
+    fail('BLOCKED', 'EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_MISSING');
+  }
+  const byReceiptId = new Map();
+  for (const item of candidates) {
+    const key = item.completion.receiptId;
+    const prior = byReceiptId.get(key);
+    if (prior && prior.semanticIdentity !== item.semanticIdentity) {
+      fail('CONFLICT', 'EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_AMBIGUOUS');
+    }
+    if (!prior) byReceiptId.set(key, item);
+  }
+  const uniqueCandidates = [...byReceiptId.values()];
+  const identities = new Set(uniqueCandidates.map((item) => item.semanticIdentity));
+  if (uniqueCandidates.length !== 1 || identities.size !== 1) {
+    fail('CONFLICT', 'EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_AMBIGUOUS');
+  }
+  return uniqueCandidates[0];
+}
+
 function selectExternalOwnerWorkspaceManifest(comments, packet, packetRef, impl, packetScope) {
   const gates = (impl.row.receipt.requiredGates || [])
     .filter((row) => row.name === 'd014-completion');
@@ -1519,7 +1647,6 @@ function selectExternalOwnerWorkspaceManifest(comments, packet, packetRef, impl,
       || manifest.phaseClass !== 'REPOSITORY_MUTATION'
       || manifest.route !== 'L' || manifest.executor !== 'L'
       || manifest.leaseRequirement !== 'REQUIRED'
-      || !same([...(manifest.scopes || [])].sort(), packetScope.scopes)
       || manifest.workspace?.kind !== 'repository'
       || !/^laptop\/[A-Za-z0-9._-]+$/.test(manifest.workspace?.branch || '')
       || manifest.workspace?.worktree !== '/home/alsl0/nyang-worktrees/'
@@ -1528,7 +1655,12 @@ function selectExternalOwnerWorkspaceManifest(comments, packet, packetRef, impl,
       || !Number.isSafeInteger(manifest.leaseEvidence?.acquiredGeneration)) {
     fail('CONFLICT', 'EXTERNAL_OWNER_WORKSPACE_MANIFEST_IDENTITY_CONFLICT');
   }
-  return {...selected, completionReceipt: completion};
+  const exactScopes = same([...(manifest.scopes || [])].sort(), packetScope.scopes);
+  const reviewUpdatePredecessor = exactScopes
+    ? null
+    : selectExternalOwnerReviewUpdatePredecessor(
+      comments, packet, packetRef, impl, packetScope, manifest);
+  return {...selected, completionReceipt: completion, reviewUpdatePredecessor};
 }
 function createExternalOwnerLiveContext(packetRef, deps = {}) {
   if (!PACKET_REF_RE.test(packetRef || '')) fail('BLOCKED', 'PACKET_NOT_REVIEWED_TARGET');
@@ -2929,6 +3061,7 @@ module.exports = {
   select3356ImplementationReceipt,
   selectExternalOwnerImplementationReceipt,
   selectExternalOwnerWorkspaceManifest,
+  selectExternalOwnerReviewUpdatePredecessor,
   externalOwnerGateProven,
   externalOwnerPrNumber,
   externalOwnerPacketScope,

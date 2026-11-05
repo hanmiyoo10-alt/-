@@ -3205,3 +3205,165 @@ test('reviewed external L subset lineage deduplicates exact predecessor receipt 
   assert.equal(selected.reviewUpdatePredecessor.manifestRow.manifest.manifestId,
     replay.predecessor.manifestId);
 });
+
+function selfOwnerLReviewUpdateFixture({
+  operation = 'review-update',
+  completionCommit = null,
+  inputHasPr = true,
+  manifestScopes = null,
+} = {}) {
+  const packet = 5003;
+  const packetRef = '#5003';
+  const pr = 5004;
+  const base = 'a'.repeat(40);
+  const candidate = 'b'.repeat(40);
+  const scopes = manifestScopes || owner.SELF_OWNER_SCOPES;
+  const manifest = handoff.buildManifest({
+    schemaVersion: 1,
+    mode: 'MCL_TASK_MANIFEST',
+    packetRef,
+    packetBodySha256: 'c'.repeat(64),
+    phaseId: '5003-implementation-pr-codex-review-update-r1',
+    phaseClass: 'REPOSITORY_MUTATION',
+    route: 'L',
+    executor: 'L',
+    scopes,
+    workspace: {
+      kind: 'repository',
+      branch: 'laptop/mcl-packet-5003',
+      worktree: '/home/alsl0/nyang-worktrees/mcl-packet-5003',
+    },
+    observedBaseSha: base,
+    leaseRequirement: 'REQUIRED',
+    leaseEvidence: {
+      ledgerRef: '#2352',
+      leaseId: 'd'.repeat(64),
+      acquiredGeneration: 50,
+      acquireEvidenceRef: 'run:500',
+    },
+    sourceAuthorityRefs: [packetRef, 'issue:#2352', 'pr:#5004'],
+    inputRefs: inputHasPr ? ['commit:' + base, 'pr:#5004'] : ['commit:' + base],
+    expectedOutputRefs: [
+      ...scopes.filter((item) => item.startsWith('path:')),
+      'pr:#5004',
+    ],
+    acceptanceRefs: [packetRef, 'pr:#5004'],
+    stopCondition: 'Review-update self-finalizer fixture.',
+    authority: {...handoff.AUTHORITY_FLAGS},
+  });
+  const completion = handoff.buildCompletionReceipt(manifest, {
+    disposition: 'COMPLETE',
+    outputRefs: ['commit:' + (completionCommit || candidate), 'pr:#5004'],
+    validationRefs: [
+      'pr:#5004',
+      'receipt:mcl-l-repository-owner:' + operation + ':' + manifest.manifestId,
+    ],
+    observedRefs: ['commit:' + base, 'commit:' + (completionCommit || candidate), 'pr:#5004'],
+    leaseDisposition: 'RELEASED',
+    leaseReleaseEvidence: {
+      ledgerRef: '#2352',
+      leaseId: 'd'.repeat(64),
+      releasedGeneration: 51,
+      evidenceRef: 'run:501',
+    },
+    workspaceResult: 'clean',
+    blockerRefs: [],
+    requiredUnknownRefs: [],
+  });
+  const gates = owner.SELF_OWNER_L_REQUIRED_GATES.map((name) => ({
+    name,
+    result: 'PASS',
+    evidenceLocator: name === 'd014-completion' ? 'issue-comment:2' : 'issue-comment:1',
+  }));
+  const row = {
+    comment: {id: 3},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: packet,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: 'e'.repeat(64),
+      authorityRefs: [
+        {kind: 'COMMIT', locator: 'candidate-head', identity: candidate},
+        {kind: 'PR', locator: 'pr:#5004', identity: candidate},
+      ],
+      requiredGates: gates,
+      scope: {
+        paths: owner.SELF_OWNER_PATHS,
+        diffRequired: true,
+        diffIdentity: 'f'.repeat(64),
+      },
+    },
+  };
+  const impl = owner.selectSelfOwnerImplementationReceipt([row], packet);
+  return {
+    packet, packetRef, pr, base, candidate, manifest, completion, impl,
+    comments: [
+      {id: 1, body: handoff.renderManifest(manifest)},
+      {id: 2, body: handoff.renderCompletionReceipt(completion)},
+    ],
+  };
+}
+
+test('self-owner L accepts operation-qualified full-scope review-update D014', () => {
+  const f = selfOwnerLReviewUpdateFixture();
+  const selected = owner.selectSelfOwnerWorkspaceManifest(
+    f.comments, f.packet, f.packetRef, f.impl);
+  assert.equal(selected.manifest.manifestId, f.manifest.manifestId);
+  assert.equal(selected.completionReceipt.outputRefs.includes('commit:' + f.candidate), true);
+  assert.equal(selected.lineage.kind, 'IMPLEMENTATION_L_REPOSITORY');
+});
+
+test('self-owner L review-update rejects missing or wrong operation-qualified owner evidence', () => {
+  const apply = selfOwnerLReviewUpdateFixture({operation: 'apply'});
+  assert.throws(() => owner.selectSelfOwnerWorkspaceManifest(
+    apply.comments, apply.packet, apply.packetRef, apply.impl),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('SELF_OWNER_L_REVIEW_UPDATE_OPERATION_CONFLICT'));
+
+  const missing = selfOwnerLReviewUpdateFixture();
+  const stripped = {
+    ...missing.completion,
+    validationRefs: ['pr:#5004'],
+  };
+  const normalized = handoff.normalizeReceiptCore((() => {
+    const core = {...stripped};
+    delete core.receiptId;
+    delete core.payloadSha256;
+    return core;
+  })());
+  assert.deepEqual(normalized.errors, []);
+  const payloadSha256 = handoff.digest(normalized.value);
+  const rebuilt = {
+    ...normalized.value,
+    receiptId: handoff.digest('MCL_COMPLETION_RECEIPT_V1:' + payloadSha256),
+    payloadSha256,
+  };
+  missing.comments[1] = {id: 2, body: handoff.renderCompletionReceipt(rebuilt)};
+  assert.throws(() => owner.selectSelfOwnerWorkspaceManifest(
+    missing.comments, missing.packet, missing.packetRef, missing.impl),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('SELF_OWNER_L_REVIEW_UPDATE_OPERATION_CONFLICT'));
+});
+
+test('self-owner L review-update rejects candidate, input and scope drift', () => {
+  const candidate = selfOwnerLReviewUpdateFixture({completionCommit: '9'.repeat(40)});
+  assert.throws(() => owner.selectSelfOwnerWorkspaceManifest(
+    candidate.comments, candidate.packet, candidate.packetRef, candidate.impl),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('SELF_OWNER_L_REVIEW_UPDATE_CANDIDATE_CONFLICT'));
+
+  const input = selfOwnerLReviewUpdateFixture({inputHasPr: false});
+  assert.throws(() => owner.selectSelfOwnerWorkspaceManifest(
+    input.comments, input.packet, input.packetRef, input.impl),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('SELF_OWNER_L_REVIEW_UPDATE_INPUT_CONFLICT'));
+
+  const subsetScopes = owner.SELF_OWNER_SCOPES.filter((scope) =>
+    scope !== 'path:' + owner.SELF_OWNER_PATHS[0]);
+  const subset = selfOwnerLReviewUpdateFixture({manifestScopes: subsetScopes});
+  assert.throws(() => owner.selectSelfOwnerWorkspaceManifest(
+    subset.comments, subset.packet, subset.packetRef, subset.impl),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('SELF_OWNER_WORKSPACE_MANIFEST_IDENTITY_CONFLICT'));
+});

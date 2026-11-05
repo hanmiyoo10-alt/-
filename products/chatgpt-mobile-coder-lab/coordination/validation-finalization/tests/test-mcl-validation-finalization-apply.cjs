@@ -2986,3 +2986,203 @@ test('reviewed external L route cross-validates D014 completion release against 
   (error) => error instanceof owner.ApplyError
     && error.reasonCodes.includes('EXTERNAL_OWNER_D014_COMPLETION_MANIFEST_CONFLICT'));
 });
+
+function externalReviewUpdateLineageFixture({
+  includePredecessor = true,
+  duplicatePredecessor = false,
+  finalPaths = null,
+  finalSurfaces = null,
+  predecessorWorkspaceSuffix = '',
+  finalObservedBase = null,
+} = {}) {
+  const packet = 5001;
+  const packetRef = '#5001';
+  const pr = 5002;
+  const baseMain = 'a'.repeat(40);
+  const oldHead = 'b'.repeat(40);
+  const candidate = 'd'.repeat(40);
+  const fullPaths = [
+    'products/chatgpt-mobile-coder-lab/example/a.cjs',
+    'products/chatgpt-mobile-coder-lab/example/b.cjs',
+  ];
+  const surface = owner.EXTERNAL_FINALIZATION_SURFACE;
+  const packetScopes = [...fullPaths.map((repoPath) => 'path:' + repoPath), surface].sort();
+  const workspace = {
+    kind: 'repository',
+    branch: 'laptop/mcl-packet-5001',
+    worktree: '/home/alsl0/nyang-worktrees/mcl-packet-5001',
+  };
+  const buildManifest = ({phaseId, scopes, observedBaseSha, leaseId, generation, workspaceValue}) =>
+    handoff.buildManifest({
+      schemaVersion: 1,
+      mode: 'MCL_TASK_MANIFEST',
+      packetRef,
+      packetBodySha256: '9'.repeat(64),
+      phaseId,
+      phaseClass: 'REPOSITORY_MUTATION',
+      route: 'L',
+      executor: 'L',
+      scopes,
+      workspace: workspaceValue || workspace,
+      observedBaseSha,
+      leaseRequirement: 'REQUIRED',
+      leaseEvidence: {
+        ledgerRef: '#2352',
+        leaseId,
+        acquiredGeneration: generation,
+        acquireEvidenceRef: 'run:' + generation,
+      },
+      sourceAuthorityRefs: [packetRef, 'issue:#2352', 'pr:#' + pr],
+      inputRefs: ['commit:' + observedBaseSha, 'pr:#' + pr],
+      expectedOutputRefs: [
+        ...scopes.filter((item) => item.startsWith('path:')),
+        'pr:#' + pr,
+      ],
+      acceptanceRefs: [packetRef, 'pr:#' + pr],
+      stopCondition: 'Fixture lineage.',
+      authority: {...handoff.AUTHORITY_FLAGS},
+    });
+  const buildCompletion = (manifest, commit, releasedGeneration) =>
+    handoff.buildCompletionReceipt(manifest, {
+      disposition: 'COMPLETE',
+      outputRefs: ['commit:' + commit, 'pr:#' + pr],
+      validationRefs: ['pr:#' + pr],
+      observedRefs: ['commit:' + commit],
+      leaseDisposition: 'RELEASED',
+      leaseReleaseEvidence: {
+        ledgerRef: '#2352',
+        leaseId: manifest.leaseEvidence.leaseId,
+        releasedGeneration,
+        evidenceRef: 'run:' + releasedGeneration,
+      },
+      workspaceResult: 'clean',
+      blockerRefs: [],
+      requiredUnknownRefs: [],
+    });
+
+  const predecessorWorkspace = predecessorWorkspaceSuffix
+    ? {...workspace,
+      branch: workspace.branch + predecessorWorkspaceSuffix,
+      worktree: workspace.worktree + predecessorWorkspaceSuffix}
+    : workspace;
+  const predecessor = buildManifest({
+    phaseId: '5001-implementation-pr-stage-entry',
+    scopes: packetScopes,
+    observedBaseSha: baseMain,
+    leaseId: 'c'.repeat(64),
+    generation: 30,
+    workspaceValue: predecessorWorkspace,
+  });
+  const predecessorCompletion = buildCompletion(predecessor, oldHead, 31);
+  const selectedFinalPaths = finalPaths || [fullPaths[0]];
+  const selectedFinalSurfaces = finalSurfaces || [surface];
+  const finalScopes = [
+    ...selectedFinalPaths.map((repoPath) => 'path:' + repoPath),
+    ...selectedFinalSurfaces,
+  ].sort();
+  const finalManifest = buildManifest({
+    phaseId: '5001-implementation-pr-codex-review-update-r1',
+    scopes: finalScopes,
+    observedBaseSha: finalObservedBase || oldHead,
+    leaseId: 'e'.repeat(64),
+    generation: 32,
+  });
+  const finalCompletion = buildCompletion(finalManifest, candidate, 33);
+  const comments = [
+    {id: 77, body: handoff.renderCompletionReceipt(finalCompletion)},
+    {id: 78, body: handoff.renderManifest(finalManifest)},
+  ];
+  if (includePredecessor) {
+    comments.push(
+      {id: 79, body: handoff.renderCompletionReceipt(predecessorCompletion)},
+      {id: 80, body: handoff.renderManifest(predecessor)},
+    );
+  }
+  if (duplicatePredecessor) {
+    const second = buildManifest({
+      phaseId: '5001-implementation-pr-full-scope-r2',
+      scopes: packetScopes,
+      observedBaseSha: baseMain,
+      leaseId: 'f'.repeat(64),
+      generation: 34,
+    });
+    comments.push(
+      {id: 81, body: handoff.renderCompletionReceipt(buildCompletion(second, oldHead, 35))},
+      {id: 82, body: handoff.renderManifest(second)},
+    );
+  }
+  const impl = {
+    pr,
+    candidate,
+    row: {receipt: {requiredGates: [{
+      name: 'd014-completion', result: 'PASS', evidenceLocator: 'issue-comment:77',
+    }]}},
+  };
+  return {
+    packet, packetRef, pr, candidate, oldHead, fullPaths, packetScopes,
+    comments, impl, finalManifest, predecessor,
+    packetScope: {scopes: packetScopes, paths: fullPaths},
+  };
+}
+
+test('reviewed external L route admits exact full-scope to subset review-update lineage', () => {
+  const f = externalReviewUpdateLineageFixture();
+  const selected = owner.selectExternalOwnerWorkspaceManifest(
+    f.comments, f.packet, f.packetRef, f.impl, f.packetScope);
+  assert.equal(selected.manifest.manifestId, f.finalManifest.manifestId);
+  assert.equal(selected.reviewUpdatePredecessor.manifestRow.manifest.manifestId,
+    f.predecessor.manifestId);
+  assert.equal(selected.reviewUpdatePredecessor.completion.outputRefs.includes(
+    'commit:' + f.oldHead), true);
+});
+
+test('reviewed external L route preserves exact full-scope fast path without predecessor', () => {
+  const base = externalReviewUpdateLineageFixture({includePredecessor: false});
+  const f = externalReviewUpdateLineageFixture({
+    includePredecessor: false,
+    finalPaths: base.fullPaths,
+  });
+  const selected = owner.selectExternalOwnerWorkspaceManifest(
+    f.comments, f.packet, f.packetRef, f.impl, f.packetScope);
+  assert.equal(selected.manifest.manifestId, f.finalManifest.manifestId);
+  assert.equal(selected.reviewUpdatePredecessor, null);
+});
+
+test('reviewed external L subset lineage fails closed without unique full-scope predecessor', () => {
+  const missing = externalReviewUpdateLineageFixture({includePredecessor: false});
+  assert.throws(() => owner.selectExternalOwnerWorkspaceManifest(
+    missing.comments, missing.packet, missing.packetRef, missing.impl, missing.packetScope),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_MISSING'));
+
+  const ambiguous = externalReviewUpdateLineageFixture({duplicatePredecessor: true});
+  assert.throws(() => owner.selectExternalOwnerWorkspaceManifest(
+    ambiguous.comments, ambiguous.packet, ambiguous.packetRef,
+    ambiguous.impl, ambiguous.packetScope),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_AMBIGUOUS'));
+});
+
+test('reviewed external L subset lineage rejects scope, surface and workspace drift', () => {
+  const outside = externalReviewUpdateLineageFixture({
+    finalPaths: ['products/chatgpt-mobile-coder-lab/example/outside.cjs'],
+  });
+  assert.throws(() => owner.selectExternalOwnerWorkspaceManifest(
+    outside.comments, outside.packet, outside.packetRef, outside.impl, outside.packetScope),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('EXTERNAL_OWNER_REVIEW_UPDATE_SCOPE_NOT_STRICT_SUBSET'));
+
+  const surface = externalReviewUpdateLineageFixture({
+    finalSurfaces: ['surface:mcl:other-finalization-effect'],
+  });
+  assert.throws(() => owner.selectExternalOwnerWorkspaceManifest(
+    surface.comments, surface.packet, surface.packetRef, surface.impl, surface.packetScope),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('EXTERNAL_OWNER_REVIEW_UPDATE_SURFACE_CONFLICT'));
+
+  const workspace = externalReviewUpdateLineageFixture({predecessorWorkspaceSuffix: '-other'});
+  assert.throws(() => owner.selectExternalOwnerWorkspaceManifest(
+    workspace.comments, workspace.packet, workspace.packetRef, workspace.impl, workspace.packetScope),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_IDENTITY_CONFLICT'));
+});

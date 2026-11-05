@@ -1667,7 +1667,7 @@ function buildLGenerationNode({manifestRow, completion, packet, packetRef, pr, p
   validateLGenerationOperation(node, packet, pr);
   return node;
 }
-function lGenerationNodes(comments, packet, packetRef, pr, packetScope) {
+function lGenerationNodes(comments, packet, packetRef, pr, packetScope, preferredReceiptId = null) {
   const manifestRows = new Map();
   for (const comment of comments) {
     const body = commentBody(comment);
@@ -1712,7 +1712,10 @@ function lGenerationNodes(comments, packet, packetRef, pr, packetScope) {
       fail('CONFLICT', 'FINALIZATION_LINEAGE_COMPLETION_CONFLICT');
     }
     if (!['SINGLE', 'MULTIPLE_EQUIVALENT'].includes(classified.status)) continue;
-    const selected = receiptRows.find((row) =>
+    const preferred = preferredReceiptId
+      ? receiptRows.find((row) => row.receipt.receiptId === preferredReceiptId)
+      : null;
+    const selected = preferred || receiptRows.find((row) =>
       row.receipt.receiptId === classified.representativeReceiptId);
     if (!selected) fail('UNKNOWN', 'FINALIZATION_LINEAGE_COMPLETION_REPRESENTATIVE_MISSING');
     nodes.push(buildLGenerationNode({
@@ -1802,7 +1805,8 @@ function resolveLFinalizationLineage(
     fail(parsedCompletion.status === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN',
       'FINALIZATION_LINEAGE_D014_COMPLETION_INVALID');
   }
-  const nodes = lGenerationNodes(comments, packet, packetRef, impl.pr, packetScope);
+  const nodes = lGenerationNodes(
+    comments, packet, packetRef, impl.pr, packetScope, parsedCompletion.value.receiptId);
   const finalNode = nodes.find((node) =>
     node.completion.receiptId === parsedCompletion.value.receiptId);
   if (!finalNode) fail('CONFLICT', 'FINALIZATION_LINEAGE_FINAL_GENERATION_MISSING');

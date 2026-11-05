@@ -3494,6 +3494,33 @@ function boundedLineageFixture() {
     generations, workspace, addGeneration, impl, options};
 }
 
+test('lineage resolver preserves gate-selected equivalent completion receipt', () => {
+  const f = boundedLineageFixture();
+  const final = f.addGeneration({
+    phaseId: '6001-implementation-pr-stage-entry',
+    commit: 'b'.repeat(40), operation: 'apply', generation: 10,
+  });
+  const equivalent = handoff.buildCompletionReceipt(final.manifest, {
+    disposition: final.completion.disposition,
+    outputRefs: final.completion.outputRefs,
+    validationRefs: final.completion.validationRefs,
+    observedRefs: [...final.completion.observedRefs, 'issue:#6001'],
+    leaseDisposition: final.completion.leaseDisposition,
+    leaseReleaseEvidence: final.completion.leaseReleaseEvidence,
+    workspaceResult: final.completion.workspaceResult,
+    blockerRefs: final.completion.blockerRefs,
+    requiredUnknownRefs: final.completion.requiredUnknownRefs,
+  });
+  const equivalentComment = {id: 799, body: handoff.renderCompletionReceipt(equivalent)};
+  f.comments.push(equivalentComment);
+  const impl = f.impl(final);
+  impl.row.receipt.requiredGates[0].evidenceLocator = 'issue-comment:' + equivalentComment.id;
+  const selected = owner.resolveLFinalizationLineage(
+    f.comments, f.packet, f.packetRef, impl, f.packetScope, f.options);
+  assert.equal(selected.completionReceipt.receiptId, equivalent.receiptId);
+  assert.notEqual(equivalent.receiptId, final.completion.receiptId);
+});
+
 test('lineage resolver closes SELF_OWNER_SUBSET_REVIEW_UPDATE', () => {
   const f = boundedLineageFixture();
   f.addGeneration({

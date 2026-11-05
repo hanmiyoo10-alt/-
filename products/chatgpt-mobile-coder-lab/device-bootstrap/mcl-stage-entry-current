@@ -9,8 +9,8 @@ STAGE_REL='products/chatgpt-mobile-coder-lab/coordination/stage-entry/mcl-stage-
 usage() {
   printf '%s\n' \
     'usage: mcl-stage-entry-current source-status' \
-    '       mcl-stage-entry-current inspect --packet #N --plan FILE [--packet-activity-evidence-file FILE]' \
-    '       mcl-stage-entry-current apply --packet #N --plan FILE [--packet-activity-evidence-file FILE] --apply'
+    '       mcl-stage-entry-current inspect --packet #N --plan FILE --owner-lifecycle-closure-file FILE [--packet-activity-evidence-file FILE]' \
+    '       mcl-stage-entry-current apply --packet #N --plan FILE --owner-lifecycle-closure-file FILE [--packet-activity-evidence-file FILE] --apply'
 }
 
 fail_usage() { usage >&2; exit 64; }
@@ -28,32 +28,42 @@ operation=${1-}
 shift
 packet=
 plan=
+closure=
 activity=
 case "$operation" in
   source-status)
     [ "$#" -eq 0 ] || fail_usage
     ;;
-  inspect)
-    { [ "$#" -eq 4 ] || [ "$#" -eq 6 ]; } || fail_usage
+  inspect|apply)
+    [ "$#" -ge 4 ] || fail_usage
     [ "$1" = --packet ] && is_packet "$2" && [ "$3" = --plan ] || fail_usage
     packet=$2
     plan=$4
-    if [ "$#" -eq 6 ]; then
-      [ "$5" = --packet-activity-evidence-file ] || fail_usage
-      activity=$6
-    fi
-    ;;
-  apply)
-    { [ "$#" -eq 5 ] || [ "$#" -eq 7 ]; } || fail_usage
-    [ "$1" = --packet ] && is_packet "$2" && [ "$3" = --plan ] || fail_usage
-    packet=$2
-    plan=$4
-    if [ "$#" -eq 5 ]; then
-      [ "$5" = --apply ] || fail_usage
-    else
-      [ "$5" = --packet-activity-evidence-file ] && [ "$7" = --apply ] || fail_usage
-      activity=$6
-    fi
+    shift 4
+    apply_seen=0
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --owner-lifecycle-closure-file)
+          [ -z "$closure" ] && [ "$#" -ge 2 ] || fail_usage
+          closure=$2
+          shift 2
+          ;;
+        --packet-activity-evidence-file)
+          [ -z "$activity" ] && [ "$#" -ge 2 ] || fail_usage
+          activity=$2
+          shift 2
+          ;;
+        --apply)
+          [ "$operation" = apply ] && [ "$apply_seen" -eq 0 ] || fail_usage
+          apply_seen=1
+          shift
+          ;;
+        *)
+          fail_usage
+          ;;
+      esac
+    done
+    [ "$operation" = inspect ] || [ "$apply_seen" -eq 1 ] || fail_usage
     ;;
   *) fail_usage ;;
 esac
@@ -61,6 +71,12 @@ esac
 if [ -n "$plan" ]; then
   [ -f "$plan" ] && [ ! -L "$plan" ] || {
     printf '%s\n' 'mcl-stage-entry-current: plan must be a regular non-symlink file' >&2
+    exit 64
+  }
+fi
+if [ -n "$closure" ]; then
+  [ -f "$closure" ] && [ ! -L "$closure" ] || {
+    printf '%s\n' 'mcl-stage-entry-current: owner lifecycle closure evidence must be a regular non-symlink file' >&2
     exit 64
   }
 fi
@@ -99,6 +115,22 @@ tar -xf "$archive" -C "$snapshot" >/dev/null 2>&1 || exit 4
 stage=$snapshot/$STAGE_REL
 [ -f "$stage" ] && [ ! -L "$stage" ] || exit 4
 node --check "$stage" >/dev/null 2>&1 || exit 4
+if grep -Fq "OWNER_LIFECYCLE_CLOSURE_MODE" "$stage"; then
+  closure_supported=1
+else
+  closure_supported=0
+fi
+if [ "$operation" != source-status ]; then
+  if [ "$closure_supported" -eq 1 ]; then
+    [ -n "$closure" ] || {
+      printf '%s\n' 'mcl-stage-entry-current: owner lifecycle closure evidence required by captured stage-entry' >&2
+      exit 64
+    }
+  elif [ -n "$closure" ]; then
+    printf '%s\n' 'mcl-stage-entry-current: captured stage-entry does not support owner lifecycle closure evidence' >&2
+    exit 64
+  fi
+fi
 
 if [ "$operation" = source-status ]; then
   printf '%s\n' \
@@ -113,20 +145,16 @@ if [ "$operation" = source-status ]; then
   exit 0
 fi
 
-if [ "$operation" = inspect ]; then
-  if [ -n "$activity" ]; then
-    node "$stage" inspect --packet "$packet" --plan "$plan" \
-      --packet-activity-evidence-file "$activity" --source-main "$remote_before"
-  else
-    node "$stage" inspect --packet "$packet" --plan "$plan" --source-main "$remote_before"
-  fi
-  exit $?
+set -- "$operation" --packet "$packet" --plan "$plan"
+if [ "$closure_supported" -eq 1 ]; then
+  set -- "$@" --owner-lifecycle-closure-file "$closure"
 fi
-
 if [ -n "$activity" ]; then
-  node "$stage" apply --packet "$packet" --plan "$plan" \
-    --packet-activity-evidence-file "$activity" --source-main "$remote_before" --apply
-else
-  node "$stage" apply --packet "$packet" --plan "$plan" --source-main "$remote_before" --apply
+  set -- "$@" --packet-activity-evidence-file "$activity"
 fi
+set -- "$@" --source-main "$remote_before"
+if [ "$operation" = apply ]; then
+  set -- "$@" --apply
+fi
+node "$stage" "$@"
 exit $?

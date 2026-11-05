@@ -59,6 +59,8 @@ RUNTIME_JS="$SUPPORT/products/chatgpt-mobile-coder-lab/device-ops/detached-owner
 SERVICE_JS="$SUPPORT/products/chatgpt-mobile-coder-lab/device-ops/detached-owner-runtime/mcl-detached-owner-runtime-service.cjs"
 POLICY="$SUPPORT/.github/plugin-control-plane/canonical-main/work-system/policy.json"
 PACKET_ACTIVITY="$SUPPORT/.github/plugin-control-plane/canonical-main/work-system/packet-activity.cjs"
+STAGE_ENTRY="$SUPPORT/products/chatgpt-mobile-coder-lab/coordination/stage-entry/mcl-stage-entry.cjs"
+CLOSURE="$SUPPORT/products/chatgpt-mobile-coder-lab/coordination/owner-lifecycle-closure/mcl-owner-lifecycle-closure.cjs"
 SV="$ROOT/prefix/bin/sv"
 SV_LOG="$ROOT/sv.log"
 SOCKET_PID_FILE="$ROOT/socket.pid"
@@ -103,8 +105,9 @@ chmod 700 "$SV"
 [ -d "$HOST_RUN" ] && [ ! -L "$HOST_RUN" ] && [ "$(stat -c '%a' "$HOST_RUN")" = 700 ]
 [ -d "$SUPPORT" ] && [ ! -L "$SUPPORT" ]
 [ -z "$(find "$SUPPORT" -type l -print -quit)" ]
-[ "$(find "$SUPPORT" -type f | wc -l)" -eq 23 ]
+[ "$(find "$SUPPORT" -type f | wc -l)" -eq 24 ]
 [ -f "$PACKET_ACTIVITY" ] && [ ! -L "$PACKET_ACTIVITY" ] && [ "$(stat -c '%a' "$PACKET_ACTIVITY")" = 600 ]
+[ -f "$CLOSURE" ] && [ ! -L "$CLOSURE" ] && [ "$(stat -c '%a' "$CLOSURE")" = 600 ]
 
 for file in $(find "$SUPPORT" -type f -print); do
   [ "$(stat -c '%a' "$file")" = 600 ]
@@ -132,6 +135,7 @@ grep -Fq "/data/data/com.termux/files/home/.local/run/mcl-detached-owner-runtime
 ! grep -Eq 'cp[[:space:]]+(-R|-r|--recursive)' "$INSTALL"
 
 node -e "'use strict'; require(process.argv[1]); require(process.argv[2]); require(process.argv[3]);" "$RUNTIME_JS" "$SERVICE_JS" "$HOST_JS"
+node -e "'use strict'; require(process.argv[1]); require(process.argv[2]);" "$STAGE_ENTRY" "$CLOSURE"
 [ ! -e "$HOST_RUN/control.sock" ]
 [ ! -e "$ROOT/ubuntu/root/.local/run/mcl-detached-owner-runtime/control.sock" ]
 
@@ -149,6 +153,18 @@ grep -Fq 'support_bundle=present' "$ROOT/reapply.out"
 sh "$INSTALL" --check > "$ROOT/recheck.out"
 grep -Fq 'result=pass' "$ROOT/recheck.out"
 
+printf '%s\n' '// classifier-drift' >> "$CLOSURE"
+chmod 600 "$CLOSURE"
+set +e
+closure_tampered=$(sh "$INSTALL" --check 2>&1)
+closure_tampered_rc=$?
+set -e
+[ "$closure_tampered_rc" -eq 1 ]
+printf '%s\n' "$closure_tampered" | grep -Fq 'support_bundle=missing'
+sh "$INSTALL" --apply > "$ROOT/reapply-closure.out"
+grep -Fq 'support_bundle=present' "$ROOT/reapply-closure.out"
+node -e "'use strict'; require(process.argv[1]); require(process.argv[2]);" "$STAGE_ENTRY" "$CLOSURE"
+
 printf '%s\n' '// managed-byte-drift' >> "$HOST_JS"
 chmod 600 "$HOST_JS"
 set +e
@@ -165,6 +181,7 @@ sh "$INSTALL" --apply > "$ROOT/reapply-host.out"
 grep -Fq 'host_front=present' "$ROOT/reapply-host.out"
 
 node -e "'use strict'; require(process.argv[1]); require(process.argv[2]); require(process.argv[3]);" "$RUNTIME_JS" "$SERVICE_JS" "$HOST_JS"
+node -e "'use strict'; require(process.argv[1]); require(process.argv[2]);" "$STAGE_ENTRY" "$CLOSURE"
 [ ! -e "$HOST_RUN/control.sock" ]
 
 # A managed active runtime may outlive non-executed support dependencies.

@@ -952,10 +952,17 @@ function selfOwnerLineageForReceipt(receipt, packet) {
   }
   return null;
 }
+function selfOwnerLReviewUpdatePhaseMatches(packet, phaseId) {
+  const prefix = String(packet) + '-implementation-pr-';
+  if (typeof phaseId !== 'string' || !phaseId.startsWith(prefix)) return false;
+  const suffix = phaseId.slice(prefix.length);
+  return suffix.includes('review-update') && /^[a-z0-9-]+$/.test(suffix);
+}
 function selfOwnerPhaseMatches(lineage, packet, phaseId) {
   if (lineage.kind === 'IMPLEMENTATION_L_REPOSITORY') {
     return phaseId === String(packet) + '-implementation-pr'
-      || phaseId === String(packet) + '-implementation-pr-stage-entry';
+      || phaseId === String(packet) + '-implementation-pr-stage-entry'
+      || selfOwnerLReviewUpdatePhaseMatches(packet, phaseId);
   }
   return phaseId === lineage.phaseId;
 }
@@ -1089,6 +1096,16 @@ function selectSelfOwnerCompletionReceipt(comments, packet, packetRef, impl) {
       || !(receipt.outputRefs || []).includes('pr:#' + impl.pr)) {
     fail('CONFLICT', 'SELF_OWNER_D014_COMPLETION_IDENTITY_CONFLICT');
   }
+  if (selfOwnerLReviewUpdatePhaseMatches(packet, receipt.phaseId)) {
+    const operationRef = 'receipt:mcl-l-repository-owner:review-update:' + receipt.manifestId;
+    const operationRefs = (receipt.validationRefs || []).filter((item) => item === operationRef);
+    if (operationRefs.length !== 1) {
+      fail('CONFLICT', 'SELF_OWNER_L_REVIEW_UPDATE_OPERATION_CONFLICT');
+    }
+    if (!(receipt.outputRefs || []).includes('commit:' + impl.candidate)) {
+      fail('CONFLICT', 'SELF_OWNER_L_REVIEW_UPDATE_CANDIDATE_CONFLICT');
+    }
+  }
   return {comment: matches[0], receipt, text: body, lineage};
 }
 
@@ -1126,6 +1143,13 @@ function selectSelfOwnerWorkspaceManifest(comments, packet, packetRef, impl) {
       || !Number.isSafeInteger(manifest.leaseEvidence?.acquiredGeneration)
       || !selfOwnerWorkspaceMatches(lineage, packet, manifest.workspace)) {
     fail('CONFLICT', 'SELF_OWNER_WORKSPACE_MANIFEST_IDENTITY_CONFLICT');
+  }
+  if (selfOwnerLReviewUpdatePhaseMatches(packet, manifest.phaseId)) {
+    if (!/^[0-9a-f]{40}$/.test(manifest.observedBaseSha || '')
+        || !(manifest.inputRefs || []).includes('commit:' + manifest.observedBaseSha)
+        || !(manifest.inputRefs || []).includes('pr:#' + impl.pr)) {
+      fail('CONFLICT', 'SELF_OWNER_L_REVIEW_UPDATE_INPUT_CONFLICT');
+    }
   }
   return {...selected, completionReceipt: completion, completionText: completionRow.text,
     lineage};

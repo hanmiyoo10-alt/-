@@ -75,6 +75,10 @@ if [ -e "$service/ambiguous" ]; then
     echo "unexpected supervisor state"
     exit 1
 fi
+if [ -e "$service/wants-down" ]; then
+    echo "down: service: 1s, normally up"
+    exit 0
+fi
 if [ -e "$service/supervisor-up" ]; then
     echo "run: service: (pid 123) 1s"
     exit 0
@@ -191,6 +195,18 @@ if [ "${MCL_M_RDC_ADOPTION_ONLY:-0}" = "1" ]; then
     run_guard --once
     wait_for_file "$TEST_STATE/target-runsv.pid"
     target_count_before="$(cat "$TEST_STATE/target-runsv.count")"
+
+    # A supervisor that reports down: does not want the guard restarted.
+    # Adoption must block before any orphan TERM effect even when no filesystem down marker exists.
+    touch "$GUARD_SERVICE/wants-down"
+    set +e
+    wants_down_out="$(run_guard --adopt-orphan 2>&1)"
+    wants_down_rc=$?
+    set -e
+    [ "$wants_down_rc" -eq 2 ] || fail "wants-down adoption rc=$wants_down_rc"
+    printf '%s
+' "$wants_down_out" | grep -Fxq 'result=blocked' || fail "wants-down adoption result"
+    rm -f "$GUARD_SERVICE/wants-down"
 
     run_launcher
     wait_for_file "$TEST_STATE/guard-runsv.pid"

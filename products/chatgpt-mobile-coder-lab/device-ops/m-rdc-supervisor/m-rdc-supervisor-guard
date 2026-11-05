@@ -195,7 +195,8 @@ valid_guard_service() {
     [ ! -e "$GUARD_SERVICE/down" ] || return 1
     status="$($SV status "$GUARD_SERVICE" 2>&1 || true)"
     case "$status" in
-        run:*|down:*) return 0 ;;
+        run:*) return 0 ;;
+        down:*) return 1 ;;
         *) return 1 ;;
     esac
 }

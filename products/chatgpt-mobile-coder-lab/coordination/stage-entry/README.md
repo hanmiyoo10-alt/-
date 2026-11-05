@@ -58,17 +58,41 @@ without `--source-main` preserves the existing behavior.
 
 ```text
 node mcl-stage-entry.cjs inspect --packet '#N' --plan <regular-json-file> \
+  --owner-lifecycle-closure-file <regular-json-file> \
   [--packet-activity-evidence-file <regular-json-file>]
 
 node mcl-stage-entry.cjs apply \
   --packet '#N' \
   --plan <regular-json-file> \
+  --owner-lifecycle-closure-file <regular-json-file> \
   --apply
 ```
 
 The repository is fixed to `hanmiyoo10-alt/-`. V1 accepts no caller repository,
 remote, branch, worktree path, workflow, command, argv fragment, environment map,
 owner selector, retry count, or fallback executor.
+
+### RECOVER_SELF V2 deny-only admission
+
+Every ordinary repository stage-entry invocation requires one regular bounded
+`--owner-lifecycle-closure-file`. The JSON envelope binds the exact current
+packet ref/body digest, protected main SHA, selected route/executor, checkpoint
+`AUTHORITY_SCOPE`, and one existing `mcl-owner-lifecycle-closure-input.v2`.
+
+Stage-entry invokes the existing read-only owner-lifecycle classifier and admits
+progress only when the V2 receipt is `PASS`, all five lifecycle obligations are
+`PASS`, and `RECOVER_SELF` is `PASS / RECOVER_SELF_COVERED`. V1 input, missing or
+malformed evidence, identity drift, classifier `UNKNOWN`/`CONFLICT`, a missing
+recovery route, or a missing next-owner prerequisite fails closed before landing
+normalization, D-013 acquisition, D-014 publication, workspace/ref creation, or
+source effect.
+
+The bound admission is requalified at the existing late authority barriers. A
+packet-body, current-main, route/executor, or checkpoint change therefore cannot
+reuse an older PASS. The gate is deny-only: it does not infer recovery coverage,
+repair a GAP, mutate coordination, select an owner, or grant repository effect
+authority. A PASS is exposed in the stage-entry execution receipt as an
+`owner-lifecycle-closure` step with a bounded receipt locator.
 
 ### Optional packet-activity evidence
 

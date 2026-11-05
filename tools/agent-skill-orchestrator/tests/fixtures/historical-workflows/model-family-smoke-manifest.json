@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "ownerIssue": 1120,
+  "anomalyIssue": 3961,
+  "retirementIssue": 3962,
+  "sourceMainCommit": "6e808b82e4ef1f79d4121f48c35c0594f1b79121",
+  "originalPath": ".github/workflows/agent-skill-orchestrator-model-family-smoke.yml",
+  "fixturePath": "tools/agent-skill-orchestrator/tests/fixtures/historical-workflows/agent-skill-orchestrator-model-family-smoke.yml",
+  "blobSha": "6f6d88d429aa4b3e8e9524db4bd6980e9209df9a",
+  "terminalRunId": 33632096087,
+  "exitEvidenceComment": 5510184853,
+  "classification": "TERMINAL_PRE_REGISTRY_MODEL_FAMILY_SMOKE"
+}

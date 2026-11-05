@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import re, sys
+import re, subprocess, sys
 ROOT=Path(__file__).resolve().parents[1]; REPO=ROOT.parents[1]
 required=[ROOT/'README.md',ROOT/'CURRENT.md',ROOT/'ROUTINE.md',ROOT/'PR-LIFECYCLE.md',ROOT/'ROADMAP.md',ROOT/'SECURITY-NOTES.md',ROOT/'product.json',ROOT/'docs/history.md',ROOT/'docs/decisions.md',ROOT/'docs/features/README.md',ROOT/'templates/UPSTREAM.md',ROOT/'templates/FAILURES.md',ROOT/'templates/PR-BODY.md']
 errors=[]
@@ -63,4 +63,16 @@ for md in ROOT.rglob('*.md'):
         if not resolved.exists(): errors.append(f'{md.relative_to(REPO)}: broken relative link: {raw}')
 if errors:
     [print(f'ERROR: {e}') for e in errors]; sys.exit(1)
-print(f'PocketRisu helper docs OK: {count} feature modules + PR lifecycle + failure ledgers + deploy gate')
+focused_contracts=[
+    (ROOT/'docs/features/main-phone/audio-notification/tests/test-notify-relay-supervisor.sh', 'notify relay supervisor'),
+    (ROOT/'docs/features/main-phone/notification-transport-durability/tests/test-notification-transport-durability.sh', 'notification transport durability'),
+]
+for focused,label in focused_contracts:
+    if not focused.is_file():
+        print(f'ERROR: missing focused regression: {focused.relative_to(REPO)}')
+        sys.exit(1)
+    focused_run=subprocess.run(['sh', str(focused)], cwd=REPO)
+    if focused_run.returncode != 0:
+        print(f'ERROR: {label} focused regression failed')
+        sys.exit(focused_run.returncode)
+print(f'PocketRisu helper docs OK: {count} feature modules + PR lifecycle + failure ledgers + deploy gate + notify relay supervisor + notification transport durability contracts')

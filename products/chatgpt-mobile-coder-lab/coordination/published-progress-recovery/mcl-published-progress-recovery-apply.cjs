@@ -24,6 +24,8 @@ const holder = require('../mcl-workspace-holder.cjs');
 const operator = require('../mcl-coordination-operator.cjs');
 const scopeOverlap = require(path.join(
   ROOT, '.github/plugin-control-plane/canonical-main/work-system/scope-overlap.cjs'));
+const packetProjection = require(path.join(
+  ROOT, '.github/plugin-control-plane/canonical-main/work-system/packet-projection.cjs'));
 const executionReceipt = require(path.join(
   ROOT, '.github/plugin-control-plane/canonical-main/work-harness/execution-receipt.cjs'));
 const agentDecisionView = require(path.join(
@@ -501,6 +503,40 @@ function runLeaseOwner(args, runner = commandResult) {
   }
   return value;
 }
+function coordinationEvidence(value, operation) {
+  if (value?.status === 'DISPATCH_COMPLETE'
+      && Number.isSafeInteger(value.runId)
+      && value.runConclusion === 'success'
+      && Number.isSafeInteger(value.observedGeneration)) {
+    return {generation: value.observedGeneration, runId: value.runId,
+      evidenceRef: 'run:' + value.runId};
+  }
+  if (value?.status !== 'DISPATCH_READBACK_COMPLETE'
+      || value.runId !== null || value.runConclusion !== null
+      || !SHA256_RE.test(value.leaseId || '')
+      || !Number.isSafeInteger(value.observedGeneration)) return null;
+  const expected = 'receipt:mcl-task-lease-readback:' + operation + ':' + value.leaseId
+    + ':generation:' + value.observedGeneration;
+  if (value.evidenceRef !== expected) return null;
+  return {generation: value.observedGeneration, runId: null, evidenceRef: expected};
+}
+function durableStateEvidence(state, operation, leaseId) {
+  const ledger = state?.ledger?.state;
+  if (!ledger || !Number.isSafeInteger(ledger.generation) || !SHA256_RE.test(leaseId || '')) return null;
+  if (operation === 'release') {
+    const last = ledger.lastRelease;
+    if (!last || last.leaseId !== leaseId || !Number.isSafeInteger(last.releasedAtGeneration)) return null;
+    return {
+      generation: last.releasedAtGeneration,
+      runId: null,
+      evidenceRef: 'receipt:mcl-task-lease-readback:release:' + leaseId
+        + ':generation:' + last.releasedAtGeneration,
+    };
+  }
+  if (operation === 'acquire') return null;
+  return null;
+}
+
 function updatedRunEvidence(operation, leaseId, runner = commandResult) {
   const list = runGh(['run', 'list', '--repo', REPO, '--workflow', LEASE_WORKFLOW,
     '--event', 'workflow_dispatch', '--limit', String(MAX_RUNS), '--json',
@@ -549,10 +585,12 @@ async function releaseOld(activation, deps = {}) {
     'lease-release', '--repo', REPO, '--packet', activation.packetRef,
     '--lease-id', activation.oldLeaseId, '--dispatch',
   ], deps.runner || commandResult);
-  if (value.status !== 'DISPATCH_COMPLETE' || value.runConclusion !== 'success') {
+  const evidence = coordinationEvidence(value, 'release');
+  if (!evidence || value.leaseId !== activation.oldLeaseId) {
     fail('BLOCKED', 'OLD_LEASE_RELEASE_NOT_PROVEN');
   }
-  return value;
+  activation.oldReleaseEvidence = evidence;
+  return {...value, evidenceRef: evidence.evidenceRef};
 }
 function cleanupOldHolder(activation, state, deps = {}) {
   if (state.ledger.state.activeLeases.some((item) => item.leaseId === activation.oldLeaseId)) {
@@ -611,8 +649,10 @@ function postExactSemantic(packetNumber, body, identity, deps = {}) {
   fail('UNKNOWN', 'COMMENT_WRITE_READBACK_MISSING');
 }
 function publishOldPartial(activation, state, deps = {}) {
-  const runEvidence = (deps.leaseRunEvidence || updatedRunEvidence)(
-    'release', activation.oldLeaseId, deps.runner || commandResult);
+  const runEvidence = activation.oldReleaseEvidence
+    || durableStateEvidence(state, 'release', activation.oldLeaseId)
+    || (deps.leaseRunEvidence || updatedRunEvidence)(
+      'release', activation.oldLeaseId, deps.runner || commandResult);
   const receipt = handoff.buildCompletionReceipt(activation.oldManifest, {
     disposition: 'PARTIAL',
     outputRefs: ['pr:#' + activation.prNumber, 'commit:' + activation.preservedHead],
@@ -627,7 +667,7 @@ function publishOldPartial(activation, state, deps = {}) {
       ledgerRef: '#2352',
       leaseId: activation.oldLeaseId,
       releasedAtGeneration: runEvidence.generation,
-      evidenceRef: 'run:' + runEvidence.runId,
+      evidenceRef: runEvidence.evidenceRef || ('run:' + runEvidence.runId),
     },
     workspaceResult: 'clean',
     blockerRefs: [],
@@ -677,8 +717,7 @@ function discoverExternalOverlap(activation, deps = {}) {
       continue;
     }
     if (item.number === packetNumber) continue;
-    if (typeof item.body === 'string'
-        && item.body.includes('<!-- canonical-main-work-packet:v1 -->')) {
+    if (packetProjection.hasCanonicalPacketMarker(item.body)) {
       candidates.push({
         type: 'packet', ref: '#' + item.number,
         issueState: item.state, body: item.body,
@@ -702,6 +741,8 @@ function acquireFresh(activation, deps = {}) {
   exactPrAndWorkspace(activation, runner);
   const mainAfter = readMainOpsBarrier(runner);
   if (mainAfter !== mainBefore) fail('UNKNOWN', 'MAIN_DRIFT_DURING_REBIND');
+  const leaseBefore = readLedger(runner);
+  const expectedLeaseId = freshLeaseProfile(activation, leaseBefore.state.generation).leaseId;
   const runLease = deps.runLease || runLeaseOwner;
   const value = runLease([
     'lease-acquire', '--repo', REPO, '--packet', activation.packetRef,
@@ -714,14 +755,18 @@ function acquireFresh(activation, deps = {}) {
     '--observed-base-sha', activation.preservedHead,
     '--dispatch',
   ], runner);
-  if (value.status !== 'DISPATCH_COMPLETE' || value.runConclusion !== 'success') {
+  const evidence = coordinationEvidence(value, 'acquire');
+  if (!evidence || value.leaseId !== expectedLeaseId) {
     fail('BLOCKED', 'FRESH_LEASE_ACQUIRE_NOT_PROVEN');
   }
-  return value;
+  activation.freshAcquireEvidence = evidence;
+  return {...value, evidenceRef: evidence.evidenceRef};
 }
 function buildFreshManifest(activation, state, deps = {}) {
-  const evidence = (deps.leaseRunEvidence || updatedRunEvidence)(
-    'acquire', state.expectedFresh.leaseId, deps.runner || commandResult);
+  const evidence = activation.freshAcquireEvidence
+    || durableStateEvidence(state, 'acquire', state.expectedFresh.leaseId)
+    || (deps.leaseRunEvidence || updatedRunEvidence)(
+      'acquire', state.expectedFresh.leaseId, deps.runner || commandResult);
   const leaseRef = 'receipt:mcl-task-lease:' + state.expectedFresh.leaseId
     + ':generation:' + evidence.generation;
   return handoff.buildManifest({
@@ -1078,6 +1123,8 @@ module.exports = {
   buildActivation,
   buildFreshManifest,
   classifyState,
+  coordinationEvidence,
+  durableStateEvidence,
   discoverExternalOverlap,
   errorResult,
   exactPrAndWorkspace,

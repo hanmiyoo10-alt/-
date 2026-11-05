@@ -17,6 +17,8 @@ const {
 const {projectRows} = require('../canonical-main/observers/project-status.cjs');
 const {
   findStatusIssues,
+  auditStatusRetirements,
+  runStatusRetirementAudit,
   reconcileStatusIssue,
   runStatusOwnerTasks,
 } = require('../controller.cjs');
@@ -40,9 +42,12 @@ assert.equal(taxonomyById.get('pocketrisu').risu, 'yes');
 assert.equal(taxonomyById.get('pocketrisu').targetRoot, 'products/risu/pocketrisu');
 assert.equal(taxonomyById.get('app-api-mod-lab').risu, 'no');
 assert.equal(taxonomyById.get('termux').targetRoot, 'products/standalone/termux');
+assert.deepEqual(taxonomyById.get('termux').sourceRefs, ['product:termux']);
+assert.deepEqual(taxonomyById.get('termux').sourceRoots, ['products/standalone/termux/**']);
+assert.equal(taxonomyById.get('termux').migration, 'preserve');
 assert.equal(taxonomyById.get('mobile-coder-lab').targetRoot, 'products/standalone/mobile-coder-lab');
 assert.equal(taxonomyById.get('simcore').targetRoot, 'plugins/risu/simcore');
-assert.deepEqual(taxonomyById.get('local').sourceRefs, ['plugin:usage-dashboard', 'plugin:devpass', 'plugin:voyage-token-check']);
+assert.deepEqual(taxonomyById.get('local').sourceRefs, ['plugin:usage-dashboard', 'plugin:devpass', 'plugin:voyage-token-check', 'plugin:provider-balance-mini']);
 assert.deepEqual(taxonomyById.get('local').sourceRoots, [
   'plugins/usage-dashboard/**',
   'products/usage-dashboard/**',
@@ -51,6 +56,7 @@ assert.deepEqual(taxonomyById.get('local').sourceRoots, [
   'plugins/devpass/**',
   'plugins/risu/local/voyage/**',
   'voyage-token-check/**',
+  'plugins/risu/local/provider-balance-monitor/**',
   'tools/usage-dashboard-mcp/**',
 ]);
 assert.equal(taxonomyById.get('local').risu, 'yes');
@@ -74,6 +80,10 @@ assert.equal(registry.plugins.devpass.authority.artifact, 'plugins/devpass/lates
 assert.equal(registry.plugins.devpass.authority.ref, 'main');
 assert.deepEqual(registry.plugins['voyage-token-check'].paths, ['plugins/risu/local/voyage/**', 'voyage-token-check/**']);
 assert.equal(registry.plugins['voyage-token-check'].authority.evidence, 'plugins/risu/local/voyage/DESIGN_STATUS.md');
+assert.deepEqual(registry.plugins['provider-balance-mini'].paths, ['plugins/risu/local/provider-balance-monitor/**', 'docs/PROVIDER_BALANCE_MINI_GUIDELINES.md']);
+assert.equal(registry.plugins['provider-balance-mini'].lifecycle, 'experimental');
+assert.equal(registry.plugins['provider-balance-mini'].statusAdapter, 'evidence');
+assert.equal(registry.plugins['provider-balance-mini'].authority.evidence, 'plugins/risu/local/provider-balance-monitor/README.md');
 assert.equal(registry.plugins.local.statusAdapter, 'evidence');
 assert.equal(registry.plugins.local.authority.evidence, 'plugins/risu/local/README.md');
 assert.equal(taxonomyById.get('local').migration, 'consolidate');
@@ -95,14 +105,17 @@ assert.match(validateTaxonomy(badRisuTarget, registry).join('\n'), /Risu O plugi
 assert.deepEqual(Object.keys(registry.plugins).sort(), [
   'devpass',
   'local',
+  'provider-balance-mini',
   'simcore',
-  'termux-large-doc-editor',
   'usage-dashboard',
   'voyage-token-check',
 ]);
 assert.deepEqual(Object.keys(registry.products).sort(), [
   'app-api-mod-lab',
+  'local-model-lab',
   'pocketrisu-helper-mod',
+  'simcore-risu',
+  'termux',
 ]);
 assert.deepEqual((registry.scopes || []).map((scope) => scope.id).sort(), [
   'local-runtime',
@@ -159,15 +172,77 @@ const devpassCanonicalPath = classifyPaths(['plugins/risu/local/devpass/README.m
 assert.deepEqual(devpassCanonicalPath.labels, ['plugin:devpass']);
 assert.deepEqual(devpassCanonicalPath.ambiguousPaths, []);
 assert.ok(!devpassCanonicalPath.labels.includes('plugin:local'));
+const providerBalancePath = classifyPaths(['plugins/risu/local/provider-balance-monitor/provider-balance-mini.plugin.js'], registry);
+assert.deepEqual(providerBalancePath.labels, ['plugin:provider-balance-mini']);
+assert.deepEqual(providerBalancePath.ambiguousPaths, []);
+assert.deepEqual(providerBalancePath.unclassifiedPaths, []);
+assert.ok(!providerBalancePath.labels.includes('plugin:local'));
+assert.deepEqual(classifyPaths(['docs/PROVIDER_BALANCE_MINI_GUIDELINES.md'], registry).labels, ['plugin:provider-balance-mini']);
 const devpassLegacyReadme = classifyPaths(['plugins/devpass/README.md'], registry);
 assert.deepEqual(devpassLegacyReadme.labels, ['plugin:devpass']);
 assert.deepEqual(devpassLegacyReadme.ambiguousPaths, []);
 assert.deepEqual(classifyPaths(['plugins/devpass/latest.js'], registry).labels, ['plugin:devpass']);
-assert.deepEqual(classifyPaths(['plugins/termux/large-doc-editor/server.py'], registry).labels, ['plugin:termux-large-doc-editor']);
+const largeDocTarget = classifyPaths(['products/standalone/termux/large-doc-editor/README.md'], registry);
+assert.deepEqual(largeDocTarget.labels, ['product:termux']);
+assert.deepEqual(largeDocTarget.ambiguousPaths, []);
+assert.deepEqual(largeDocTarget.unclassifiedPaths, []);
+const largeDocLegacy = classifyPaths(['plugins/termux/large-doc-editor/README.md'], registry);
+assert.deepEqual(largeDocLegacy.labels, ['scope:unclassified']);
+assert.deepEqual(largeDocLegacy.ambiguousPaths, []);
+assert.deepEqual(largeDocLegacy.unclassifiedPaths, ['plugins/termux/large-doc-editor/README.md']);
+assert.deepEqual(registry.products.termux.authority, {evidence: 'products/standalone/termux/README.md'});
+assert.equal(registry.products.termux.lifecycle, 'prototype');
+assert.equal(registry.products.termux.statusAdapter, 'prototype');
+const termuxLanding = classifyPaths(['products/standalone/termux/README.md'], registry);
+assert.deepEqual(termuxLanding.labels, ['product:termux']);
+assert.deepEqual(termuxLanding.ambiguousPaths, []);
+assert.deepEqual(termuxLanding.unclassifiedPaths, []);
+const responseWatchTarget = classifyPaths(['products/standalone/termux/response-watch/README.md'], registry);
+assert.deepEqual(responseWatchTarget.labels, ['product:termux']);
+assert.deepEqual(responseWatchTarget.ambiguousPaths, []);
+assert.deepEqual(responseWatchTarget.unclassifiedPaths, []);
+const responseWatchLegacy = classifyPaths(['plugins/termux/response-watch/README.md'], registry);
+assert.deepEqual(responseWatchLegacy.labels, ['scope:unclassified']);
+assert.deepEqual(responseWatchLegacy.ambiguousPaths, []);
+assert.deepEqual(responseWatchLegacy.unclassifiedPaths, ['plugins/termux/response-watch/README.md']);
+const backgroundGptTarget = classifyPaths(['products/standalone/termux/background-gpt/README.md'], registry);
+assert.deepEqual(backgroundGptTarget.labels, ['product:termux']);
+assert.deepEqual(backgroundGptTarget.ambiguousPaths, []);
+assert.deepEqual(backgroundGptTarget.unclassifiedPaths, []);
+const backgroundGptLegacy = classifyPaths(['plugins/termux/background-gpt/README.md'], registry);
+assert.deepEqual(backgroundGptLegacy.labels, ['scope:unclassified']);
+assert.deepEqual(backgroundGptLegacy.ambiguousPaths, []);
+assert.deepEqual(backgroundGptLegacy.unclassifiedPaths, ['plugins/termux/background-gpt/README.md']);
+const screenOnTarget = classifyPaths(['products/standalone/termux/screen-on/README.md'], registry);
+assert.deepEqual(screenOnTarget.labels, ['product:termux']);
+assert.deepEqual(screenOnTarget.ambiguousPaths, []);
+assert.deepEqual(screenOnTarget.unclassifiedPaths, []);
+const screenOnLegacy = classifyPaths(['plugins/termux/screen-on/README.md'], registry);
+assert.deepEqual(screenOnLegacy.labels, ['scope:unclassified']);
+assert.deepEqual(screenOnLegacy.ambiguousPaths, []);
+assert.deepEqual(screenOnLegacy.unclassifiedPaths, ['plugins/termux/screen-on/README.md']);
+const taskbridgeTarget = classifyPaths(['products/standalone/termux/taskbridge/README.md'], registry);
+assert.deepEqual(taskbridgeTarget.labels, ['product:termux']);
+assert.deepEqual(taskbridgeTarget.ambiguousPaths, []);
+assert.deepEqual(taskbridgeTarget.unclassifiedPaths, []);
+const taskbridgeLegacy = classifyPaths(['plugins/termux/taskbridge/README.md'], registry);
+assert.deepEqual(taskbridgeLegacy.labels, ['scope:unclassified']);
+assert.deepEqual(taskbridgeLegacy.ambiguousPaths, []);
+assert.deepEqual(taskbridgeLegacy.unclassifiedPaths, ['plugins/termux/taskbridge/README.md']);
 const voyageLegacyPath = classifyPaths(['voyage-token-check/DESIGN_STATUS.md'], registry);
 assert.deepEqual(voyageLegacyPath.labels, ['plugin:voyage-token-check']);
 assert.deepEqual(voyageLegacyPath.ambiguousPaths, []);
 assert.deepEqual(classifyPaths(['products/app-api-mod-lab/CURRENT.md'], registry).labels, ['product:app-api-mod-lab']);
+assert.deepEqual(registry.products['local-model-lab'].paths, ['products/local-model-lab/**', 'docs/LOCAL_MODEL_LAB_GUIDELINES.md']);
+assert.equal(registry.products['local-model-lab'].authority.evidence, 'products/local-model-lab/CURRENT.md');
+assert.equal(registry.products['local-model-lab'].authority.manifest, 'products/local-model-lab/product.json');
+assert.deepEqual(classifyPaths(['products/local-model-lab/CURRENT.md'], registry).labels, ['product:local-model-lab']);
+assert.deepEqual(registry.products['simcore-risu'].paths, ['products/simcore-risu/**', 'docs/SIMCORE-RISU_GUIDELINES.md']);
+assert.equal(registry.products['simcore-risu'].authority.evidence, 'products/simcore-risu/CURRENT.md');
+assert.equal(registry.products['simcore-risu'].authority.manifest, 'products/simcore-risu/product.json');
+assert.deepEqual(classifyPaths(['products/simcore-risu/CURRENT.md'], registry).labels, ['product:simcore-risu']);
+assert.deepEqual(classifyPaths(['docs/SIMCORE-RISU_GUIDELINES.md'], registry).labels, ['product:simcore-risu']);
+assert.deepEqual(classifyPaths(['docs/LOCAL_MODEL_LAB_GUIDELINES.md'], registry).labels, ['product:local-model-lab']);
 const mclBootstrap = classifyPaths(['products/chatgpt-mobile-coder-lab/device-bootstrap/bootstrap.sh'], registry);
 assert.deepEqual(mclBootstrap.labels, ['scope:research-product']);
 assert.deepEqual(mclBootstrap.unclassifiedPaths, []);
@@ -189,6 +264,9 @@ assert.deepEqual(classifyPaths(['README.md'], registry).labels, ['scope:shared']
 assert.deepEqual(classifyPaths(['products/README.md'], registry).labels, ['scope:shared']);
 assert.deepEqual(classifyPaths(['.vscode/tasks.json'], registry).labels, ['scope:shared']);
 assert.deepEqual(classifyPaths(['.github/plugin-control-plane/registry.json'], registry).labels, ['scope:repo']);
+const rootAgents = classifyPaths(['AGENTS.md'], registry);
+assert.deepEqual(rootAgents.labels, ['scope:repo']);
+assert.deepEqual(rootAgents.unclassifiedPaths, []);
 assert.deepEqual(classifyPaths(['.github/tooling/ci-summary/manifests/plugin-control-plane.json'], registry).labels, ['scope:repo']);
 assert.deepEqual(classifyPaths(['tools/agent-skill-security/corpus.json'], registry).labels, ['scope:repo']);
 assert.deepEqual(classifyPaths(['.github/workflows/agent-skill-security-benchmark.yml'], registry).labels, ['scope:repo']);
@@ -263,7 +341,10 @@ assert.deepEqual(
 assert.deepEqual(classifyIssueBody('Scope: local', registry), {explicit: true, labels: ['plugin:local']});
 assert.deepEqual(classifyIssueBody('Plugin: simcore', registry), {explicit: true, labels: ['plugin:simcore']});
 assert.deepEqual(classifyIssueBody('Scope: voyage-token-check', registry), {explicit: true, labels: ['plugin:voyage-token-check']});
+assert.deepEqual(classifyIssueBody('Scope: provider-balance-mini', registry), {explicit: true, labels: ['plugin:provider-balance-mini']});
 assert.deepEqual(classifyIssueBody('Scope: pocketrisu-helper-mod', registry), {explicit: true, labels: ['product:pocketrisu-helper-mod']});
+assert.deepEqual(classifyIssueBody('Scope: local-model-lab', registry), {explicit: true, labels: ['product:local-model-lab']});
+assert.deepEqual(classifyIssueBody('Scope: termux', registry), {explicit: true, labels: ['product:termux']});
 assert.deepEqual(classifyIssueBody('Scope: study', registry), {explicit: true, labels: ['scope:study']});
 assert.deepEqual(classifyIssueBody('Scope: local-runtime', registry), {explicit: true, labels: ['scope:local-runtime']});
 assert.deepEqual(classifyIssueBody('### Scope\n\nshared', registry), {explicit: true, labels: ['scope:shared']});
@@ -293,8 +374,11 @@ assert.deepEqual(classifyIssueBody(customIssueBody('ops-lab'), registry, {author
 const issueTemplate = fs.readFileSync(path.join(root, '.github/ISSUE_TEMPLATE/plugin-work.yml'), 'utf8');
 assert.match(issueTemplate, /label:\s*Scope/);
 assert.match(issueTemplate, /^        - local$/m);
+assert.match(issueTemplate, /^        - provider-balance-mini$/m);
 assert.match(issueTemplate, /voyage-token-check/);
 assert.match(issueTemplate, /pocketrisu-helper-mod/);
+assert.match(issueTemplate, /^        - local-model-lab$/m);
+assert.match(issueTemplate, /^        - termux$/m);
 assert.match(issueTemplate, /^        - study$/m);
 assert.match(issueTemplate, /^        - local-runtime$/m);
 assert.match(issueTemplate, /^        - custom$/m);
@@ -444,6 +528,59 @@ async function runStatusRefreshContracts() {
   assert.equal(pageCalls.length, 2, 'status discovery must paginate until a short page');
   assert.equal(pagedIdentity.canonical.number, 275);
   assert.deepEqual(pagedIdentity.duplicates.map((row) => row.number), [2317]);
+
+  const registryForAudit = {
+    plugins: {simcore: {}},
+    products: {termux: {}},
+  };
+  const auditRows = [
+    {number: 10, title: '[plugin-status:simcore]', state: 'open', labels: [status], body: generatedBody},
+    {number: 11, title: '[product-status:termux]', state: 'open', labels: [status], body: generatedBody},
+    {number: 12, title: '[plugin-status:retired-owner]', state: 'open', labels: [status], body: generatedBody},
+    {number: 13, title: '[plugin-status:retired-owner]', state: 'open', labels: [status], body: generatedBody},
+    {number: 14, title: '[plugin-status:closed-owner]', state: 'closed', labels: [status], body: generatedBody},
+    {number: 17, title: '[plugin-status:legacy_owner]', state: 'open', labels: [status], body: generatedBody},
+  ];
+  const auditAttention = auditStatusRetirements(auditRows, registryForAudit);
+  assert.equal(auditAttention.result, 'ATTENTION');
+  assert.deepEqual(auditAttention.candidates, [
+    {number: 12, kind: 'plugin', id: 'retired-owner', reason: 'OWNER_ABSENT_FROM_REGISTRY'},
+    {number: 13, kind: 'plugin', id: 'retired-owner', reason: 'OWNER_ABSENT_FROM_REGISTRY'},
+    {number: 17, kind: 'plugin', id: 'legacy_owner', reason: 'OWNER_ABSENT_FROM_REGISTRY'},
+  ]);
+  assert.deepEqual(auditAttention.ambiguous, []);
+  assert.deepEqual(auditAttention.authority, {
+    issueMutation: false,
+    registryMutation: false,
+    retirementAuthorized: false,
+  });
+
+  const auditUnknown = auditStatusRetirements([
+    ...auditRows,
+    {number: 15, title: '[plugin-status:missing-marker]', state: 'open', labels: [status], body: 'no generated marker'},
+    {number: 16, title: '[plugin-status:]', state: 'open', labels: [status], body: generatedBody},
+  ], registryForAudit);
+  assert.equal(auditUnknown.result, 'UNKNOWN');
+  assert.deepEqual(auditUnknown.ambiguous, [
+    {number: 15, reason: 'STATUS_MARKER_MISSING'},
+    {number: 16, reason: 'STATUS_IDENTITY_MALFORMED'},
+  ]);
+
+  const auditClear = auditStatusRetirements(auditRows.slice(0, 2), registryForAudit);
+  assert.equal(auditClear.result, 'CLEAR');
+  assert.deepEqual(auditClear.candidates, []);
+  assert.deepEqual(auditClear.ambiguous, []);
+
+  const auditApiCalls = [];
+  const auditRun = await runStatusRetirementAudit('hanmiyoo10-alt/-', registryForAudit, async (_repo, endpoint, options = {}) => {
+    auditApiCalls.push({endpoint, method: options.method || 'GET'});
+    if (endpoint.endsWith('page=1')) return auditRows;
+    throw new Error(`unexpected audit page: ${endpoint}`);
+  });
+  assert.equal(auditRun.result, 'ATTENTION');
+  assert.equal(auditApiCalls.length, 1);
+  assert.equal(auditApiCalls[0].method, 'GET');
+  assert.equal(auditApiCalls.some((call) => call.method !== 'GET'), false, 'retirement audit must never mutate status issues');
 
   const registryForStatus = {plugins: {}, products: {}, managedLabelPrefixes: ['plugin:', 'product:', 'scope:']};
   const updateCalls = [];

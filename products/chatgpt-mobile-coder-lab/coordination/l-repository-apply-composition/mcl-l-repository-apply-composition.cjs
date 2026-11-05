@@ -1,0 +1,1298 @@
+#!/usr/bin/env node
+'use strict';
+const childProcess = require('node:child_process');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const ROOT = path.resolve(__dirname, '../../../..');
+const stageEntry = require(path.join(
+ROOT, 'products/chatgpt-mobile-coder-lab/coordination/stage-entry/mcl-stage-entry.cjs'));
+const taskHandoff = require(path.join(
+ROOT, 'products/chatgpt-mobile-coder-lab/coordination/task-handoff.cjs'));
+const taskLease = require(path.join(
+ROOT, 'products/chatgpt-mobile-coder-lab/coordination/task-lease.cjs'));
+const finalizeRecovery = require(path.join(
+ROOT, 'products/chatgpt-mobile-coder-lab/coordination/repository-implementation/mcl-repository-implementation-finalize-recovery.cjs'));
+const workspaceHolder = require(path.join(
+ROOT, 'products/chatgpt-mobile-coder-lab/coordination/mcl-workspace-holder.cjs'));
+const lOwner = require(path.join(
+ROOT, 'products/chatgpt-mobile-coder-lab/device-ops/l-repository-owner/mcl-l-repository-owner.cjs'));
+const prPreflight = require(path.join(
+ROOT, '.github/plugin-control-plane/canonical-main/work-system/pr-authoring-preflight.cjs'));
+const MODE = 'MCL_L_REPOSITORY_APPLY_COMPOSITION';
+const REPO = 'hanmiyoo10-alt/-';
+const LEDGER_ISSUE = 2352;
+const MAX_MANIFEST_BYTES = 128 * 1024;
+const MAX_REQUEST_BYTES = 64 * 1024;
+const MAX_PR_REQUEST_BYTES = 16 * 1024;
+const PAGE_SIZE = 100;
+const MAX_COMMENT_PAGES = 20;
+const PACKET_RE = /^#[1-9][0-9]*$/;
+const SHA40_RE = /^[0-9a-f]{40}$/;
+const SHA256_RE = /^[0-9a-f]{64}$/;
+const ACTIVATION_FILE = 'mcl-l-repository-apply-composition.v1.json';
+const ACTIVATION_MODE = 'MCL_L_REPOSITORY_APPLY_ACTIVATION';
+const EFFECT_OPERATIONS = new Set(['apply', 'review-update', 'continue-prepared']);
+const REVIEW_UPDATE_REQUEST_SCHEMA = 'mcl-l-review-update-request.v1';
+const MAX_REQUEST_PATHS = 20;
+const MAX_ACTIVATION_BYTES = 16 * 1024;
+const FALSE_AUTHORITY = Object.freeze({
+repositoryMutationAuthorized: false,
+deviceMutationAuthorized: false,
+mergeAuthorized: false,
+releaseAuthorized: false,
+productionAuthorized: false,
+});
+class CompositionError extends Error {
+constructor(kind, reasonCodes) {
+super(reasonCodes[0] || kind);
+this.kind = kind;
+this.reasonCodes = [...new Set(reasonCodes)].sort();
+}
+}
+function output(status, reasonCodes = [], extras = {}) {
+return {
+schemaVersion: 1,
+mode: MODE,
+status,
+reasonCodes: [...new Set(reasonCodes)].sort(),
+...extras,
+authority: {...FALSE_AUTHORITY},
+};
+}
+function defaultOwnerReadRunner(command, argv, options = {}) {
+const result = childProcess.spawnSync(command, argv, {
+cwd: options.cwd,
+input: options.input,
+encoding: 'utf8',
+timeout: options.timeoutMs || 120000,
+maxBuffer: 64 * 1024,
+shell: false,
+env: options.env || ownerChildEnv(),
+});
+return {
+code: Number.isInteger(result.status) ? result.status : 127,
+stdout: result.stdout || '',
+stderr: result.stderr || '',
+signal: result.signal || null,
+error: result.error || null,
+};
+}
+
+function readRegular(filePath, field, maxBytes) {
+const resolved = path.resolve(filePath);
+let stat;
+try { stat = fs.lstatSync(resolved); }
+catch { throw new CompositionError('UNKNOWN', [field + '_READ_FAILED']); }
+if (!stat.isFile() || stat.isSymbolicLink()) {
+throw new CompositionError('UNKNOWN', [field + '_REGULAR_FILE_REQUIRED']);
+}
+if (stat.size > maxBytes) throw new CompositionError('UNKNOWN', [field + '_TOO_LARGE']);
+return fs.readFileSync(resolved);
+}
+function parseArgs(argv = process.argv.slice(2)) {
+if (!Array.isArray(argv) || !['apply', 'review-update', 'continue-prepared', 'finalize'].includes(argv[0])) {
+throw new CompositionError('UNKNOWN', ['COMMAND_UNSUPPORTED']);
+}
+const operation = argv[0];
+const allowed = operation === 'finalize'
+? new Set(['packet', 'manifest'])
+: operation === 'review-update'
+  ? new Set(['packet', 'manifest', 'review-update-request', 'patch', 'pr-request'])
+  : operation === 'continue-prepared'
+    ? new Set(['packet', 'manifest', 'continuation-request', 'pr-request'])
+    : new Set(['packet', 'manifest', 'request', 'patch', 'pr-request']);
+const values = {};
+let apply = false;
+for (let index = 1; index < argv.length; index += 1) {
+const token = argv[index];
+if (token === '--apply') {
+if (apply) throw new CompositionError('UNKNOWN', ['ARGUMENT_DUPLICATE:apply']);
+apply = true;
+continue;
+}
+if (!token.startsWith('--') || index + 1 >= argv.length) {
+throw new CompositionError('UNKNOWN', ['ARGUMENT_INVALID']);
+}
+const key = token.slice(2);
+if (!allowed.has(key) || Object.hasOwn(values, key)) {
+throw new CompositionError('UNKNOWN', ['ARGUMENT_UNSUPPORTED_OR_DUPLICATE:' + key]);
+}
+values[key] = argv[++index];
+}
+if (!apply) throw new CompositionError('BLOCKED', ['APPLY_FLAG_REQUIRED']);
+for (const key of allowed) {
+if (!values[key]) throw new CompositionError('UNKNOWN', ['ARGUMENT_REQUIRED:' + key]);
+}
+if (!PACKET_RE.test(values.packet)) throw new CompositionError('UNKNOWN', ['PACKET_REF_INVALID']);
+return {
+operation,
+packetRef: values.packet,
+packetNumber: Number(values.packet.slice(1)),
+manifestFile: values.manifest,
+requestFile: values.request || values['review-update-request'] || values['continuation-request'] || null,
+patchFile: values.patch || null,
+prRequestFile: values['pr-request'] || null,
+};
+}
+function parseManifest(text, operation = 'apply') {
+const parsed = taskHandoff.parseManifest(text);
+if (parsed.status !== 'VALID') {
+throw new CompositionError(
+parsed.status === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN',
+parsed.reasonCodes || ['MANIFEST_INVALID']
+);
+}
+const phaseClasses = ['continue-prepared', 'finalize'].includes(operation)
+? ['REPOSITORY_MUTATION', 'COORDINATION'] : ['REPOSITORY_MUTATION'];
+try { lOwner.validateManifestShape(parsed.value, undefined, phaseClasses); }
+catch (error) {
+throw new CompositionError(
+error instanceof lOwner.OwnerError ? error.kind : 'UNKNOWN',
+error instanceof lOwner.OwnerError ? error.reasonCodes : ['MANIFEST_L_OWNER_INVALID']
+);
+}
+return parsed.value;
+}
+function listComments(packetNumber, runner = stageEntry.runDefault) {
+const rows = [];
+for (let page = 1; page <= MAX_COMMENT_PAGES; page += 1) {
+const value = stageEntry.ghJson(
+'repos/' + REPO + '/issues/' + packetNumber
++ '/comments?per_page=' + PAGE_SIZE + '&page=' + page,
+runner
+);
+if (!Array.isArray(value)) throw new CompositionError('UNKNOWN', ['COMMENTS_INVALID']);
+rows.push(...value);
+if (value.length < PAGE_SIZE) return rows;
+}
+throw new CompositionError('UNKNOWN', ['COMMENTS_PAGINATION_BOUND']);
+}
+function exactCommentState(comments, text) {
+const target = String(text).trim();
+const matches = comments.filter((row) =>
+typeof row?.body === 'string' && row.body.trim() === target);
+return {
+count: matches.length,
+commentId: matches.length === 1 && Number.isSafeInteger(matches[0]?.id)
+? matches[0].id : null,
+};
+}
+function exactCompletionState(comments, text) {
+const target = String(text).trim();
+const ids = comments
+.filter((row) => typeof row?.body === 'string' && row.body.trim() === target)
+.map((row) => row?.id)
+.filter((id) => Number.isSafeInteger(id))
+.sort((a, b) => a - b);
+return {
+count: ids.length,
+commentId: ids.length ? ids[0] : null,
+};
+}
+function stable(value) {
+if (Array.isArray(value)) return value.map(stable);
+if (!value || typeof value !== 'object') return value;
+return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]));
+}
+function sha256Json(value) {
+return crypto.createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
+}
+function normalizeEffectOperation(value, {allowLegacy = false} = {}) {
+if (value === undefined && allowLegacy) return 'apply';
+if (!EFFECT_OPERATIONS.has(value)) {
+throw new CompositionError('CONFLICT', ['ACTIVATION_EFFECT_OPERATION_INVALID']);
+}
+return value;
+}
+function activationCore({
+manifest, manifestCommentId, owner, prRequest, effectOperation = 'apply',
+releaseGeneration = null, releaseEvidenceRef = null,
+}) {
+const operation = normalizeEffectOperation(effectOperation);
+return {
+schemaVersion: 1,
+mode: ACTIVATION_MODE,
+effectOperation: operation,
+manifestId: manifest.manifestId,
+manifestPayloadSha256: manifest.payloadSha256,
+manifestCommentId,
+packetRef: manifest.packetRef,
+packetBodySha256: manifest.packetBodySha256,
+leaseId: manifest.leaseEvidence.leaseId,
+acquiredGeneration: manifest.leaseEvidence.acquiredGeneration,
+branch: manifest.workspace.branch,
+worktree: manifest.workspace.worktree,
+observedBaseSha: manifest.observedBaseSha,
+commit: owner.new_head,
+prNumber: owner.pr_number,
+prTitle: prRequest.title,
+prBody: prRequest.body,
+releaseGeneration,
+releaseEvidenceRef,
+};
+}
+function buildActivation(input) {
+const core = activationCore(input);
+return {...core, recordDigest: sha256Json(core)};
+}
+function normalizeActivation(value, manifest) {
+const legacyKeys = new Set([
+'schemaVersion', 'mode', 'manifestId', 'manifestPayloadSha256', 'manifestCommentId',
+'packetRef', 'packetBodySha256', 'leaseId', 'acquiredGeneration', 'branch', 'worktree',
+'observedBaseSha', 'commit', 'prNumber', 'prTitle', 'prBody',
+'releaseGeneration', 'releaseEvidenceRef', 'recordDigest',
+]);
+const currentKeys = new Set([...legacyKeys, 'effectOperation']);
+const hasOperation = Boolean(value && typeof value === 'object'
+&& Object.prototype.hasOwnProperty.call(value, 'effectOperation'));
+const keys = hasOperation ? currentKeys : legacyKeys;
+if (!value || typeof value !== 'object' || Array.isArray(value)
+|| Object.keys(value).some((key) => !keys.has(key))
+|| Object.keys(value).length !== keys.size) {
+throw new CompositionError('CONFLICT', ['ACTIVATION_SCHEMA_INVALID']);
+}
+if (hasOperation && !EFFECT_OPERATIONS.has(value.effectOperation)) {
+throw new CompositionError('CONFLICT', ['ACTIVATION_EFFECT_OPERATION_INVALID']);
+}
+if (value.schemaVersion !== 1 || value.mode !== ACTIVATION_MODE
+|| !SHA256_RE.test(value.manifestId || '')
+|| !SHA256_RE.test(value.manifestPayloadSha256 || '')
+|| !Number.isSafeInteger(value.manifestCommentId)
+|| !PACKET_RE.test(value.packetRef || '')
+|| !SHA256_RE.test(value.packetBodySha256 || '')
+|| !SHA256_RE.test(value.leaseId || '')
+|| !Number.isSafeInteger(value.acquiredGeneration)
+|| typeof value.branch !== 'string' || typeof value.worktree !== 'string'
+|| !SHA40_RE.test(value.observedBaseSha || '')
+|| !SHA40_RE.test(value.commit || '')
+|| !Number.isSafeInteger(value.prNumber)
+|| typeof value.prTitle !== 'string' || typeof value.prBody !== 'string'
+|| !(value.releaseGeneration === null || Number.isSafeInteger(value.releaseGeneration))
+|| !(value.releaseEvidenceRef === null || typeof value.releaseEvidenceRef === 'string')
+|| !SHA256_RE.test(value.recordDigest || '')) {
+throw new CompositionError('CONFLICT', ['ACTIVATION_FIELD_INVALID']);
+}
+const core = {...value};
+delete core.recordDigest;
+if (sha256Json(core) !== value.recordDigest) {
+throw new CompositionError('CONFLICT', ['ACTIVATION_DIGEST_CONFLICT']);
+}
+for (const [field, expected] of [
+['manifestId', manifest.manifestId],
+['manifestPayloadSha256', manifest.payloadSha256],
+['packetRef', manifest.packetRef],
+['packetBodySha256', manifest.packetBodySha256],
+['leaseId', manifest.leaseEvidence.leaseId],
+['acquiredGeneration', manifest.leaseEvidence.acquiredGeneration],
+['branch', manifest.workspace.branch],
+['worktree', manifest.workspace.worktree],
+['observedBaseSha', manifest.observedBaseSha],
+]) {
+if (value[field] !== expected) {
+throw new CompositionError('CONFLICT', ['ACTIVATION_MANIFEST_CONFLICT:' + field]);
+}
+}
+return value;
+}
+function activationEffectOperation(value) {
+return normalizeEffectOperation(
+value && Object.prototype.hasOwnProperty.call(value, 'effectOperation')
+? value.effectOperation : undefined,
+{allowLegacy: true});
+}
+function activationPath(manifest) {
+const inspected = workspaceHolder.inspectWorkspace(manifest);
+if (!inspected?.ok || !inspected.holderPath) {
+throw new CompositionError('BLOCKED', [
+'ACTIVATION_WORKSPACE_INVALID',
+...(inspected?.reasonCodes || []),
+]);
+}
+return path.join(path.dirname(inspected.holderPath), ACTIVATION_FILE);
+}
+function defaultWriteActivation(manifest, value) {
+const normalized = normalizeActivation(value, manifest);
+const serialized = JSON.stringify(normalized) + '\n';
+if (Buffer.byteLength(serialized, 'utf8') > MAX_ACTIVATION_BYTES) {
+throw new CompositionError('BLOCKED', ['ACTIVATION_TOO_LARGE']);
+}
+const file = activationPath(manifest);
+const tmp = file + '.tmp';
+try { fs.unlinkSync(tmp); } catch (_) {}
+let fd = null;
+try {
+fd = fs.openSync(tmp, 'wx', 0o600);
+fs.writeFileSync(fd, serialized);
+fs.fsyncSync(fd);
+} finally {
+if (fd !== null) fs.closeSync(fd);
+}
+fs.renameSync(tmp, file);
+fs.chmodSync(file, 0o600);
+const dirFd = fs.openSync(path.dirname(file), 'r');
+try { fs.fsyncSync(dirFd); } finally { fs.closeSync(dirFd); }
+return normalized;
+}
+function defaultReadActivation(manifest) {
+const file = activationPath(manifest);
+let stat;
+try { stat = fs.lstatSync(file); }
+catch { throw new CompositionError('BLOCKED', ['ACTIVATION_MISSING']); }
+if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_ACTIVATION_BYTES) {
+throw new CompositionError('CONFLICT', ['ACTIVATION_FILE_INVALID']);
+}
+let value;
+try { value = JSON.parse(fs.readFileSync(file, 'utf8')); }
+catch { throw new CompositionError('CONFLICT', ['ACTIVATION_JSON_INVALID']); }
+return normalizeActivation(value, manifest);
+}
+function gitRead(worktree, args) {
+const env = {...process.env};
+for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR']) delete env[key];
+const result = childProcess.spawnSync('git', ['-C', worktree, ...args], {
+encoding: 'utf8', shell: false, env,
+});
+if (result.status !== 0 || result.error || result.signal) {
+throw new CompositionError('UNKNOWN', ['PUBLISHED_GIT_READ_FAILED']);
+}
+return String(result.stdout || '').trim();
+}
+function defaultReadPublished(manifest, activation, runner = stageEntry.runDefault) {
+const inspected = workspaceHolder.inspectWorkspace(manifest);
+if (!inspected?.ok || !inspected.holderPath) {
+throw new CompositionError('BLOCKED', [
+'PUBLISHED_WORKSPACE_INVALID',
+...(inspected?.reasonCodes || []),
+]);
+}
+const holder = workspaceHolder.readHolder(inspected.holderPath);
+if (!holder.missing) {
+throw new CompositionError('BLOCKED', [
+'HOLDER_NOT_ABSENT_FOR_FINALIZE',
+...(holder.reasonCodes || []),
+]);
+}
+const top = gitRead(manifest.workspace.worktree, ['rev-parse', '--show-toplevel']);
+const branch = gitRead(manifest.workspace.worktree, ['branch', '--show-current']);
+const head = gitRead(manifest.workspace.worktree, ['rev-parse', 'HEAD']);
+const dirty = gitRead(manifest.workspace.worktree, ['status', '--porcelain=v1', '-uall']);
+if (top !== manifest.workspace.worktree || branch !== manifest.workspace.branch
+|| head !== activation.commit || dirty) {
+throw new CompositionError('CONFLICT', ['PUBLISHED_LOCAL_IDENTITY_CONFLICT']);
+}
+const ref = stageEntry.ghJson(
+'repos/' + REPO + '/git/ref/heads/' + manifest.workspace.branch, runner);
+if (ref?.object?.sha !== activation.commit) {
+throw new CompositionError('CONFLICT', ['PUBLISHED_REMOTE_HEAD_CONFLICT']);
+}
+const pr = stageEntry.ghJson('repos/' + REPO + '/pulls/' + activation.prNumber, runner);
+if (!pr || pr.state !== 'open' || pr.draft !== false
+|| pr.head?.ref !== manifest.workspace.branch
+|| pr.head?.sha !== activation.commit
+|| pr.base?.ref !== 'main'
+|| pr.title !== activation.prTitle
+|| pr.body !== activation.prBody) {
+throw new CompositionError('CONFLICT', ['PUBLISHED_PR_IDENTITY_CONFLICT']);
+}
+return {ok: true, commit: activation.commit, prNumber: activation.prNumber};
+}
+function parseOwnerResult(value) {
+if (!value || typeof value !== 'object' || Array.isArray(value)) {
+throw new CompositionError('UNKNOWN', ['L_OWNER_RESULT_INVALID']);
+}
+if (!['PASS', 'BLOCKED', 'CONFLICT', 'UNKNOWN', 'PREPARED'].includes(value.status)) {
+throw new CompositionError('UNKNOWN', ['L_OWNER_STATUS_INVALID']);
+}
+return value;
+}
+function parseOwnerCliResult(result) {
+if (!result || typeof result.text !== 'string') {
+throw new CompositionError('UNKNOWN', ['L_OWNER_CLI_RESULT_INVALID']);
+}
+let value;
+try { value = JSON.parse(result.text); }
+catch { throw new CompositionError('UNKNOWN', ['L_OWNER_CLI_JSON_INVALID']); }
+return {code: result.code, value: parseOwnerResult(value)};
+}
+function writeEvidenceFiles({
+manifestText, ledgerBody, packetBody, request, patchBytes, prRequest,
+}, tempRoot = null) {
+const dir = fs.mkdtempSync(path.join(tempRoot || os.tmpdir(), 'mcl-l-apply-'));
+const manifestPath = path.join(dir, 'manifest.md');
+const ledgerPath = path.join(dir, 'ledger.md');
+const packetPath = path.join(dir, 'packet.md');
+const requestPath = path.join(dir, 'request.json');
+const patchPath = path.join(dir, 'patch.diff');
+const prRequestPath = path.join(dir, 'pr-request.json');
+fs.writeFileSync(manifestPath, manifestText, {mode: 0o600});
+fs.writeFileSync(ledgerPath, ledgerBody, {mode: 0o600});
+fs.writeFileSync(packetPath, packetBody, {mode: 0o600});
+fs.writeFileSync(requestPath, JSON.stringify(request), {mode: 0o600});
+if (Buffer.isBuffer(patchBytes)) fs.writeFileSync(patchPath, patchBytes, {mode: 0o600});
+fs.writeFileSync(prRequestPath, JSON.stringify(prRequest), {mode: 0o600});
+return {
+dir, manifestPath, ledgerPath, packetPath, requestPath,
+patchPath: Buffer.isBuffer(patchBytes) ? patchPath : null,
+prRequestPath,
+};
+}
+function updateEvidenceFiles(files, ledgerBody, packetBody) {
+fs.writeFileSync(files.ledgerPath, ledgerBody, {mode: 0o600});
+fs.writeFileSync(files.packetPath, packetBody, {mode: 0o600});
+}
+function refreshLiveBinding({args, manifest, manifestText, files, deps}) {
+const current = deps.readCurrent(args.packetNumber);
+const comments = deps.readComments(args.packetNumber);
+const binding = requireLiveBinding({
+packetRef: args.packetRef,
+manifest,
+manifestText,
+issue: current.issue,
+ledger: current.ledger,
+comments,
+deps,
+});
+updateEvidenceFiles(files, current.ledger.body, current.issue.body);
+return binding;
+}
+function removeEvidenceFiles(files) {
+try { fs.rmSync(files.dir, {recursive: true, force: true}); } catch (_) {}
+}
+function defaultReadCurrent(packetNumber, runner = stageEntry.runDefault) {
+const issue = stageEntry.ghJson('repos/' + REPO + '/issues/' + packetNumber, runner);
+const ledger = stageEntry.ghJson('repos/' + REPO + '/issues/' + LEDGER_ISSUE, runner);
+return {issue, ledger};
+}
+function defaultCleanupStaleHolder(manifestText, ledgerBody) {
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-l-finalize-stale-holder-'));
+const manifestPath = path.join(dir, 'manifest.md');
+const ledgerPath = path.join(dir, 'ledger.md');
+try {
+fs.writeFileSync(manifestPath, manifestText, {encoding:'utf8', mode:0o600});
+fs.writeFileSync(ledgerPath, ledgerBody, {encoding:'utf8', mode:0o600});
+return workspaceHolder.cleanupStale({manifestPath, ledgerPath});
+} finally {
+fs.rmSync(dir, {recursive:true, force:true});
+}
+}
+function defaultDeps(overrides = {}) {
+const runner = overrides.runner || stageEntry.runDefault;
+const ownerReadRunner = overrides.ownerReadRunner || defaultOwnerReadRunner;
+return {
+runner,
+readCurrent: overrides.readCurrent || ((packetNumber) => defaultReadCurrent(packetNumber, runner)),
+readComments: overrides.readComments || ((packetNumber) => listComments(packetNumber, runner)),
+postComment: overrides.postComment || ((packetNumber, body) =>
+stageEntry.postComment(packetNumber, body, runner)),
+releaseLease: overrides.releaseLease || ((packetRef, leaseId) =>
+stageEntry.releaseRepositoryLease({packetRef}, leaseId, runner)),
+validateEvidence: overrides.validateEvidence || workspaceHolder.validateEvidence,
+claimHolder: overrides.claimHolder || workspaceHolder.claimHolder,
+checkHolder: overrides.checkHolder || workspaceHolder.checkHolder,
+releaseHolder: overrides.releaseHolder || workspaceHolder.releaseHolder,
+inspectHolderWorkspace: overrides.inspectHolderWorkspace || workspaceHolder.inspectWorkspace,
+readHolder: overrides.readHolder || workspaceHolder.readHolder,
+cleanupStaleHolder: overrides.cleanupStaleHolder || defaultCleanupStaleHolder,
+reviewUpdateInspect: overrides.reviewUpdateInspect
+|| ((input) => inspectReviewUpdatePrepared(input, {runner: ownerReadRunner})),
+continuationInspect: overrides.continuationInspect
+|| ((input) => inspectPreparedContinuation(input, {runner: ownerReadRunner})),
+ownerRunCli: overrides.ownerRunCli || lOwner.runCli,
+preflight: overrides.preflight || prPreflight.classifyNonClosingPrAuthoring,
+buildCompletionReceipt: overrides.buildCompletionReceipt || taskHandoff.buildCompletionReceipt,
+renderCompletionReceipt: overrides.renderCompletionReceipt || taskHandoff.renderCompletionReceipt,
+writeActivation: overrides.writeActivation || defaultWriteActivation,
+readActivation: overrides.readActivation || defaultReadActivation,
+readPublished: overrides.readPublished || ((manifest, activation) =>
+defaultReadPublished(manifest, activation, runner)),
+historicalReleaseEvidence: overrides.historicalReleaseEvidence
+|| ((leaseId, acquiredGeneration, createdAfter, effectBase) =>
+finalizeRecovery.historicalReleaseEvidence(
+leaseId, acquiredGeneration, runner, undefined, createdAfter, effectBase)),
+readPrCreatedAt: overrides.readPrCreatedAt || ((prNumber) => {
+const pr = stageEntry.ghJson('repos/' + REPO + '/pulls/' + prNumber, runner);
+const createdAt = pr?.created_at;
+if (typeof createdAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(createdAt)) {
+throw new CompositionError('UNKNOWN', ['PR_CREATED_AT_UNAVAILABLE']);
+}
+return createdAt;
+}),
+tempRoot: overrides.tempRoot || null,
+};
+}
+function requireBinding({
+packetRef, manifest, manifestText, issue, ledger, comments, deps, requireActiveLease,
+}) {
+if (!issue || issue.pull_request || issue.state !== 'open' || typeof issue.body !== 'string') {
+throw new CompositionError('BLOCKED', ['PACKET_NOT_OPEN']);
+}
+if (!ledger || typeof ledger.body !== 'string') {
+throw new CompositionError('UNKNOWN', ['LEDGER_READ_INVALID']);
+}
+if (manifest.packetRef !== packetRef) {
+throw new CompositionError('CONFLICT', ['MANIFEST_PACKET_CONFLICT']);
+}
+const exact = exactCommentState(comments, manifestText);
+if (exact.count === 0) throw new CompositionError('UNKNOWN', ['MANIFEST_COMMENT_MISSING']);
+if (exact.count !== 1 || exact.commentId === null) {
+throw new CompositionError('CONFLICT', ['MANIFEST_COMMENT_AMBIGUOUS']);
+}
+const checked = deps.validateEvidence({
+manifest,
+ledgerBody: ledger.body,
+packetBody: issue.body,
+requireActiveLease,
+});
+if (!checked?.ok) {
+throw new CompositionError('BLOCKED', [
+'COORDINATION_EVIDENCE_INVALID',
+...(checked?.reasonCodes || []),
+]);
+}
+return {manifestCommentId: exact.commentId, state: checked.state, ledgerBody: ledger.body};
+}
+function requireLiveBinding(input) {
+return requireBinding({...input, requireActiveLease: true});
+}
+function requireReleasedBinding(input) {
+return requireBinding({...input, requireActiveLease: false});
+}
+function parseReviewUpdateRequestStructure(text) {
+let value;
+try { value = JSON.parse(String(text)); }
+catch { throw new CompositionError('UNKNOWN', ['REVIEW_UPDATE_REQUEST_JSON_INVALID']); }
+const expectedKeys = [
+'schema', 'packet_ref', 'message', 'expected_old_head', 'expected_paths', 'patch_sha256',
+];
+if (!value || typeof value !== 'object' || Array.isArray(value)
+|| Object.keys(value).sort().join('\0') !== [...expectedKeys].sort().join('\0')) {
+throw new CompositionError('UNKNOWN', ['REVIEW_UPDATE_REQUEST_FIELDS_INVALID']);
+}
+if (value.schema !== REVIEW_UPDATE_REQUEST_SCHEMA || !PACKET_RE.test(value.packet_ref || '')) {
+throw new CompositionError('UNKNOWN', ['REVIEW_UPDATE_REQUEST_SCHEMA_OR_PACKET_INVALID']);
+}
+if (typeof value.message !== 'string' || value.message.length < 1
+|| value.message.length > 200 || /[\u0000-\u001f\u007f]/.test(value.message)) {
+throw new CompositionError('UNKNOWN', ['REVIEW_UPDATE_REQUEST_MESSAGE_INVALID']);
+}
+if (!SHA40_RE.test(value.expected_old_head || '')) {
+throw new CompositionError('UNKNOWN', ['REVIEW_UPDATE_OLD_HEAD_INVALID']);
+}
+if (!Array.isArray(value.expected_paths) || value.expected_paths.length < 1
+|| value.expected_paths.length > MAX_REQUEST_PATHS
+|| value.expected_paths.some((item) => typeof item !== 'string')
+|| new Set(value.expected_paths).size !== value.expected_paths.length) {
+throw new CompositionError('UNKNOWN', ['REVIEW_UPDATE_REQUEST_PATHS_INVALID']);
+}
+try {
+for (const item of value.expected_paths) lOwner.validateRepoPath(item);
+} catch (error) {
+throw new CompositionError(
+error instanceof lOwner.OwnerError ? error.kind : 'UNKNOWN',
+error instanceof lOwner.OwnerError ? error.reasonCodes : ['REVIEW_UPDATE_REQUEST_PATHS_INVALID']
+);
+}
+if (!SHA256_RE.test(value.patch_sha256 || '')) {
+throw new CompositionError('UNKNOWN', ['REVIEW_UPDATE_PATCH_SHA_INVALID']);
+}
+return {
+schema: value.schema,
+packet_ref: value.packet_ref,
+message: value.message,
+expected_old_head: value.expected_old_head,
+expected_paths: [...value.expected_paths].sort(),
+patch_sha256: value.patch_sha256,
+};
+}
+function preflightRequest({
+operation = 'apply', packetRef, requestText, prRequestText, manifest,
+}) {
+let request;
+let prRequest;
+try {
+request = operation === 'review-update'
+? parseReviewUpdateRequestStructure(requestText)
+: operation === 'continue-prepared'
+  ? lOwner.parsePreparedContinuationRequestText(requestText)
+  : lOwner.parseRequestText(requestText);
+prRequest = lOwner.parsePrRequestText(prRequestText, packetRef);
+} catch (error) {
+if (error instanceof CompositionError) throw error;
+throw new CompositionError(
+error instanceof lOwner.OwnerError ? error.kind : 'UNKNOWN',
+error instanceof lOwner.OwnerError ? error.reasonCodes : ['REQUEST_INVALID']
+);
+}
+if (operation === 'continue-prepared') {
+try { lOwner.validatePreparedContinuationManifestBinding(manifest, request); }
+catch (error) {
+throw new CompositionError(
+error instanceof lOwner.OwnerError ? error.kind : 'UNKNOWN',
+error instanceof lOwner.OwnerError ? error.reasonCodes : ['CONTINUATION_MANIFEST_BINDING_INVALID']
+);
+}
+} else if (request.packet_ref !== packetRef) {
+throw new CompositionError('CONFLICT', ['REQUEST_PACKET_CONFLICT']);
+}
+const scopedPaths = lOwner.manifestPathScopes(manifest);
+if (JSON.stringify(request.expected_paths) !== JSON.stringify(scopedPaths)) {
+throw new CompositionError('CONFLICT', ['REQUEST_SCOPE_CONFLICT']);
+}
+const preflight = prPreflight.classifyNonClosingPrAuthoring({
+packetRef,
+title: prRequest.title,
+body: prRequest.body,
+});
+if (preflight.disposition !== 'PASS') {
+throw new CompositionError(
+preflight.disposition === 'BLOCKED' ? 'BLOCKED' : 'UNKNOWN',
+preflight.reasonCodes || ['PR_AUTHORING_PREFLIGHT_FAILED']
+);
+}
+return {request, prRequest};
+}
+function callOwnerCli(argv, env, deps, options = {}) {
+try {
+return parseOwnerCliResult(deps.ownerRunCli(argv, env, options));
+} catch (error) {
+if (!(error instanceof lOwner.OwnerError)) throw error;
+const status = ['BLOCKED', 'CONFLICT', 'UNKNOWN'].includes(error.kind)
+? error.kind : 'UNKNOWN';
+return {
+code: status === 'UNKNOWN' ? 3 : 2,
+value: {
+status,
+reason_codes: [...(error.reasonCodes || [])],
+next_legal_action: 'TARGETED_RECOVERY_REQUIRED',
+},
+};
+}
+}
+function ownerChildEnv(env=process.env){return Object.fromEntries(
+['PATH','HOME','LANG','LC_ALL','TMPDIR','GH_CONFIG_DIR']
+.filter((key)=>typeof env[key]==='string'&&env[key]).map((key)=>[key,env[key]]));}
+function ownerMutationBoundary(command,args=[]){
+return command==='git'&&((args.includes('apply')&&args.includes('--index'))
+||args.includes('commit')||args.includes('merge')||args.includes('push'))
+|| (command==='gh'||String(command).endsWith('/gh'))&&args[0]==='pr'&&args[1]==='create';
+}
+function invokeOwnerEffect({args, manifest, manifestText, files, claim, deps}) {
+const effectOperation = args.operation || 'apply';
+if (!EFFECT_OPERATIONS.has(effectOperation)) {
+throw new CompositionError('UNKNOWN', ['EFFECT_OPERATION_INVALID']);
+}
+const env = {...process.env, [workspaceHolder.CLAIM_ENV]: claim};
+const runner = (command, argv, options = {}) => {
+if (ownerMutationBoundary(command, argv)) {
+try {
+refreshLiveBinding({args, manifest, manifestText, files, deps});
+} catch (error) {
+if (error instanceof CompositionError) {
+throw new lOwner.OwnerError(error.kind, error.reasonCodes);
+}
+throw error;
+}
+}
+const result = childProcess.spawnSync(command, argv, {
+cwd: options.cwd,
+input: options.input,
+encoding: 'utf8',
+timeout: options.timeoutMs || 120000,
+maxBuffer: 64 * 1024,
+shell: false,
+env: options.env || ownerChildEnv(),
+});
+return {code:result.status??1,stdout:result.stdout||'',stderr:result.stderr||''};
+};
+const requestFlag = effectOperation === 'review-update'
+? '--review-update-request'
+: effectOperation === 'continue-prepared'
+  ? '--continuation-request'
+  : '--request';
+const ownerArgs = [
+effectOperation,
+'--manifest', files.manifestPath,
+'--ledger', files.ledgerPath,
+'--packet', files.packetPath,
+requestFlag, files.requestPath,
+];
+if (effectOperation !== 'continue-prepared') {
+ownerArgs.push('--patch', files.patchPath);
+}
+ownerArgs.push('--pr-request', files.prRequestPath, '--apply');
+return callOwnerCli(ownerArgs, env, deps, {runner});
+}
+function inspectPrepared(files, deps) {
+const parsed = callOwnerCli([
+'inspect',
+'--manifest', files.manifestPath,
+'--ledger', files.ledgerPath,
+'--packet', files.packetPath,
+], process.env, deps);
+if (parsed.code !== 0 || parsed.value.status !== 'PASS') {
+throw new CompositionError(
+parsed.value.status === 'CONFLICT' ? 'CONFLICT'
+: parsed.value.status === 'UNKNOWN' ? 'UNKNOWN' : 'BLOCKED',
+parsed.value.reason_codes || ['L_OWNER_INSPECT_FAILED']
+);
+}
+if (parsed.value.workspace_state !== 'PREPARED') {
+throw new CompositionError('BLOCKED', ['WORKSPACE_NOT_PREPARED']);
+}
+if (parsed.value.holder_state !== 'ABSENT') {
+throw new CompositionError('BLOCKED', ['HOLDER_NOT_ABSENT_BEFORE_COMPOSITION']);
+}
+return parsed.value;
+}
+function inspectReviewUpdatePrepared({manifest, request, patchBytes, prRequest}, {
+runner = stageEntry.runDefault,
+currentMain = lOwner.reviewUpdateCurrentMain,
+preparedDigest = lOwner.expectedReviewUpdatePreparedDigest,
+classifyState = lOwner.classifyReviewUpdateState,
+inspectWorkspace = workspaceHolder.inspectWorkspace,
+readHolder = workspaceHolder.readHolder,
+} = {}) {
+let state;
+try {
+const main = currentMain(manifest, {runner});
+const digest = preparedDigest(manifest, request, patchBytes, {runner});
+state = classifyState(manifest, request, prRequest, main, digest, {runner});
+} catch (error) {
+if (error instanceof lOwner.OwnerError) {
+throw new CompositionError(error.kind, error.reasonCodes || ['REVIEW_UPDATE_PREFLIGHT_FAILED']);
+}
+throw error;
+}
+if (!state || typeof state.state !== 'string') {
+throw new CompositionError('UNKNOWN', ['REVIEW_UPDATE_STATE_UNOBSERVED']);
+}
+const workspace = inspectWorkspace(manifest);
+if (!workspace?.ok || typeof workspace.holderPath !== 'string') {
+throw new CompositionError('BLOCKED', [
+...(workspace?.reasonCodes || ['WORKSPACE_HOLDER_INSPECT_FAILED']),
+]);
+}
+const holder = readHolder(workspace.holderPath);
+if (!holder?.missing) {
+if (!holder?.ok) {
+throw new CompositionError('BLOCKED', [
+...(holder?.reasonCodes || ['HOLDER_READ_FAILED']),
+]);
+}
+throw new CompositionError('BLOCKED', ['HOLDER_NOT_ABSENT_BEFORE_COMPOSITION']);
+}
+return state;
+}
+
+function inspectPreparedContinuation({manifest, request}, {
+runner = stageEntry.runDefault,
+currentMain = lOwner.continuationCurrentMain,
+classifyState = lOwner.classifyPreparedContinuationState,
+inspectWorkspace = workspaceHolder.inspectWorkspace,
+readHolder = workspaceHolder.readHolder,
+} = {}) {
+let state;
+try {
+lOwner.validatePreparedContinuationManifestBinding(manifest, request);
+const main = currentMain(manifest, {runner});
+state = classifyState(manifest, request, main, {runner});
+} catch (error) {
+if (error instanceof lOwner.OwnerError) {
+throw new CompositionError(error.kind, error.reasonCodes || ['CONTINUATION_PREFLIGHT_FAILED']);
+}
+throw error;
+}
+if (!state || !['PREPARED','COMMITTED','CURRENTIZED','PUSHED'].includes(state.state)) {
+throw new CompositionError('UNKNOWN', ['CONTINUATION_STATE_UNOBSERVED']);
+}
+const workspace = inspectWorkspace(manifest);
+if (!workspace?.ok || typeof workspace.holderPath !== 'string') {
+throw new CompositionError('BLOCKED', [
+...(workspace?.reasonCodes || ['WORKSPACE_HOLDER_INSPECT_FAILED']),
+]);
+}
+const holder = readHolder(workspace.holderPath);
+if (!holder?.missing) {
+if (!holder?.ok) {
+throw new CompositionError('BLOCKED', [
+...(holder?.reasonCodes || ['HOLDER_READ_FAILED']),
+]);
+}
+throw new CompositionError('BLOCKED', ['HOLDER_NOT_ABSENT_BEFORE_COMPOSITION']);
+}
+return state;
+}
+
+function completionBody({
+manifest, owner, release, deps, effectOperation = 'apply',
+}) {
+const operation = normalizeEffectOperation(effectOperation);
+const releaseGeneration = release?.value?.observedGeneration;
+if (!Number.isSafeInteger(releaseGeneration)
+|| releaseGeneration <= manifest.leaseEvidence.acquiredGeneration) {
+throw new CompositionError('BLOCKED', ['D013_RELEASE_GENERATION_INVALID']);
+}
+const receipt = deps.buildCompletionReceipt(manifest, {
+disposition: 'COMPLETE',
+outputRefs: [
+'commit:' + owner.new_head,
+'pr:#' + owner.pr_number,
+],
+validationRefs: [
+'pr:#' + owner.pr_number,
+'receipt:mcl-l-repository-owner:' + operation + ':' + manifest.manifestId,
+'receipt:canonical-pr-authoring-preflight:pass',
+],
+observedRefs: [
+'commit:' + manifest.observedBaseSha,
+'commit:' + owner.new_head,
+'pr:#' + owner.pr_number,
+],
+leaseDisposition: 'RELEASED',
+leaseReleaseEvidence: {
+ledgerRef: '#2352',
+leaseId: manifest.leaseEvidence.leaseId,
+releasedGeneration: releaseGeneration,
+evidenceRef: release.value.evidenceRef,
+},
+workspaceResult: 'clean',
+blockerRefs: [],
+requiredUnknownRefs: [],
+});
+return {receipt, text: deps.renderCompletionReceipt(receipt)};
+}
+function postCompletionOnce(packetNumber, receiptText, deps) {
+const before = exactCompletionState(deps.readComments(packetNumber), receiptText);
+if (before.count >= 1 && before.commentId !== null) return before.commentId;
+let commentId = null;
+try {
+commentId = deps.postComment(packetNumber, receiptText);
+} catch (_) {
+const recovered = exactCompletionState(deps.readComments(packetNumber), receiptText);
+if (recovered.count >= 1 && recovered.commentId !== null) return recovered.commentId;
+throw new CompositionError('UNKNOWN', ['COMPLETION_COMMENT_WRITE_UNPROVEN']);
+}
+if (!Number.isSafeInteger(commentId)) {
+throw new CompositionError('UNKNOWN', ['COMPLETION_COMMENT_WRITE_UNPROVEN']);
+}
+const after = exactCompletionState(deps.readComments(packetNumber), receiptText);
+if (after.count < 1 || after.commentId === null) {
+throw new CompositionError('UNKNOWN', ['COMPLETION_COMMENT_READBACK_FAILED']);
+}
+return after.commentId;
+}
+function recoverReleaseActivation({args, manifest, manifestText, activation, deps}) {
+let normalized = normalizeActivation(activation, manifest);
+const hasRelease = Number.isSafeInteger(normalized.releaseGeneration)
+&& normalized.releaseGeneration > manifest.leaseEvidence.acquiredGeneration
+&& typeof normalized.releaseEvidenceRef === 'string'
+&& normalized.releaseEvidenceRef.length > 0;
+if (hasRelease) return normalized;
+const current = deps.readCurrent(args.packetNumber);
+const binding = requireReleasedBinding({
+packetRef: args.packetRef,
+manifest,
+manifestText,
+issue: current.issue,
+ledger: current.ledger,
+comments: deps.readComments(args.packetNumber),
+deps,
+});
+if (binding.manifestCommentId !== normalized.manifestCommentId) {
+throw new CompositionError('CONFLICT', ['FINALIZE_MANIFEST_COMMENT_CONFLICT']);
+}
+const parsed = taskLease.parseLedger(current.ledger.body || '');
+if (!parsed.ok) {
+throw new CompositionError('UNKNOWN', [
+'FINALIZE_LEDGER_INVALID',
+...(parsed.reasonCodes || []),
+]);
+}
+if (parsed.state.activeLeases.some((row) => row.leaseId === normalized.leaseId)) {
+throw new CompositionError('BLOCKED', ['FINALIZE_LEASE_STILL_ACTIVE']);
+}
+let releaseGeneration = null;
+let releaseEvidenceRef = null;
+if (parsed.state.lastRelease?.leaseId === normalized.leaseId
+&& Number.isSafeInteger(parsed.state.lastRelease.releasedAtGeneration)
+&& parsed.state.lastRelease.releasedAtGeneration > normalized.acquiredGeneration) {
+releaseGeneration = parsed.state.lastRelease.releasedAtGeneration;
+releaseEvidenceRef = 'issue:#2352';
+} else {
+let historical;
+try {
+const createdAfter = deps.readPrCreatedAt(normalized.prNumber);
+historical = deps.historicalReleaseEvidence(
+normalized.leaseId, normalized.acquiredGeneration, createdAfter, normalized.observedBaseSha);
+} catch (error) {
+if (error instanceof finalizeRecovery.RecoveryError) {
+throw new CompositionError(error.kind, error.reasonCodes);
+}
+throw error;
+}
+if (!historical || !Number.isSafeInteger(historical.runId)
+|| !Number.isSafeInteger(historical.generation)
+|| historical.generation <= normalized.acquiredGeneration) {
+throw new CompositionError('BLOCKED', ['D013_RELEASE_NOT_PROVEN']);
+}
+releaseGeneration = historical.generation;
+releaseEvidenceRef = 'run:' + historical.runId;
+}
+if (!Number.isSafeInteger(binding.state?.generation)
+|| binding.state.generation < releaseGeneration) {
+throw new CompositionError('BLOCKED', ['D013_RELEASE_READBACK_STALE']);
+}
+normalized = buildActivation({
+manifest,
+manifestCommentId: normalized.manifestCommentId,
+owner: {new_head: normalized.commit, pr_number: normalized.prNumber},
+prRequest: {title: normalized.prTitle, body: normalized.prBody},
+effectOperation: activationEffectOperation(normalized),
+releaseGeneration,
+releaseEvidenceRef,
+});
+deps.writeActivation(manifest, normalized);
+return normalized;
+}
+function releasedReadback({
+args, manifest, manifestText, deps, releaseGeneration,
+}) {
+const current = deps.readCurrent(args.packetNumber);
+const binding = requireReleasedBinding({
+packetRef: args.packetRef,
+manifest,
+manifestText,
+issue: current.issue,
+ledger: current.ledger,
+comments: deps.readComments(args.packetNumber),
+deps,
+});
+if (!Number.isSafeInteger(binding.state?.generation)
+|| binding.state.generation < releaseGeneration) {
+throw new CompositionError('BLOCKED', ['D013_RELEASE_READBACK_STALE']);
+}
+return binding;
+}
+function reconvergeReleasedHolder({manifest, manifestText, ledgerBody, deps}) {
+const workspace = deps.inspectHolderWorkspace(manifest);
+if (!workspace?.ok || typeof workspace.holderPath !== 'string') {
+throw new CompositionError('BLOCKED', [
+...(workspace?.reasonCodes || ['WORKSPACE_HOLDER_INSPECT_FAILED']),
+]);
+}
+let holder = deps.readHolder(workspace.holderPath);
+if (holder?.missing) return {cleaned:0};
+if (!holder?.ok) {
+throw new CompositionError('BLOCKED', [
+...(holder?.reasonCodes || ['HOLDER_READ_FAILED']),
+]);
+}
+if (holder.value?.manifestId !== manifest.manifestId
+|| holder.value?.leaseId !== manifest.leaseEvidence.leaseId) {
+throw new CompositionError('BLOCKED', ['HOLDER_IDENTITY_CONFLICT']);
+}
+const cleaned = deps.cleanupStaleHolder(manifestText, ledgerBody);
+if (cleaned?.status !== 'STALE_CLEANED') {
+throw new CompositionError('BLOCKED', [
+...(cleaned?.reasonCodes || ['STALE_HOLDER_CLEANUP_FAILED']),
+]);
+}
+holder = deps.readHolder(workspace.holderPath);
+if (!holder?.missing) {
+throw new CompositionError('BLOCKED', [
+'HOLDER_NOT_ABSENT_AFTER_CLEANUP',
+...(holder?.reasonCodes || []),
+]);
+}
+return {cleaned:1};
+}
+function finalizeFromActivation({args, manifest, manifestText, activation, deps}) {
+const normalized = recoverReleaseActivation({
+args, manifest, manifestText, activation, deps,
+});
+const effectOperation = activationEffectOperation(normalized);
+const binding = releasedReadback({
+args,
+manifest,
+manifestText,
+deps,
+releaseGeneration: normalized.releaseGeneration,
+});
+if (binding.manifestCommentId !== normalized.manifestCommentId) {
+throw new CompositionError('CONFLICT', ['FINALIZE_MANIFEST_COMMENT_CONFLICT']);
+}
+reconvergeReleasedHolder({manifest, manifestText, ledgerBody:binding.ledgerBody, deps});
+const completion = completionBody({
+manifest,
+owner: {new_head: normalized.commit, pr_number: normalized.prNumber},
+release: {
+value: {
+observedGeneration: normalized.releaseGeneration,
+evidenceRef: normalized.releaseEvidenceRef,
+},
+},
+deps,
+effectOperation,
+});
+const existing = exactCompletionState(
+deps.readComments(args.packetNumber), completion.text);
+if (existing.count >= 1 && existing.commentId !== null) {
+return output('PASS', [], {
+packetRef: args.packetRef,
+manifestId: manifest.manifestId,
+manifestCommentId: normalized.manifestCommentId,
+commit: normalized.commit,
+prNumber: normalized.prNumber,
+completionReceiptId: completion.receipt.receiptId,
+completionCommentId: existing.commentId,
+releaseEvidenceRef: normalized.releaseEvidenceRef,
+nextLegalAction: 'VALIDATION_MERGE',
+});
+}
+deps.readPublished(manifest, normalized);
+const completionCommentId = postCompletionOnce(args.packetNumber, completion.text, deps);
+return output('PASS', [], {
+packetRef: args.packetRef,
+manifestId: manifest.manifestId,
+manifestCommentId: normalized.manifestCommentId,
+commit: normalized.commit,
+prNumber: normalized.prNumber,
+completionReceiptId: completion.receipt.receiptId,
+completionCommentId,
+releaseEvidenceRef: normalized.releaseEvidenceRef,
+nextLegalAction: 'VALIDATION_MERGE',
+});
+}
+function executeFinalize(args, depsInput = {}) {
+const deps = defaultDeps(depsInput);
+const manifestText = readRegular(
+args.manifestFile, 'MANIFEST_FILE', MAX_MANIFEST_BYTES).toString('utf8');
+const manifest = parseManifest(manifestText, 'finalize');
+const activation = deps.readActivation(manifest);
+if (manifest.phaseClass === 'COORDINATION'
+&& activationEffectOperation(activation) !== 'continue-prepared') {
+throw new CompositionError('CONFLICT', ['COORDINATION_MANIFEST_OPERATION_CONFLICT']);
+}
+return finalizeFromActivation({args, manifest, manifestText, activation, deps});
+}
+function executeComposition(args, depsInput = {}) {
+const deps = defaultDeps(depsInput);
+const effectOperation = normalizeEffectOperation(args.operation || 'apply');
+const manifestText = readRegular(args.manifestFile, 'MANIFEST_FILE', MAX_MANIFEST_BYTES).toString('utf8');
+const requestText = readRegular(args.requestFile, 'REQUEST_FILE', MAX_REQUEST_BYTES).toString('utf8');
+const patchBytes = effectOperation === 'continue-prepared'
+? null
+: readRegular(args.patchFile, 'PATCH_FILE', lOwner.MAX_PATCH_BYTES);
+const prRequestText = readRegular(
+args.prRequestFile, 'PR_REQUEST_FILE', MAX_PR_REQUEST_BYTES).toString('utf8');
+const manifest = parseManifest(manifestText, effectOperation);
+const {request, prRequest} = preflightRequest({
+operation: effectOperation,
+packetRef: args.packetRef,
+requestText,
+prRequestText,
+manifest,
+});
+if (effectOperation !== 'continue-prepared'
+&& lOwner.sha256Bytes(patchBytes) !== request.patch_sha256) {
+throw new CompositionError('CONFLICT', ['PATCH_SHA_CONFLICT']);
+}
+const current = deps.readCurrent(args.packetNumber);
+const comments = deps.readComments(args.packetNumber);
+let binding = requireLiveBinding({
+packetRef: args.packetRef,
+manifest,
+manifestText,
+issue: current.issue,
+ledger: current.ledger,
+comments,
+deps,
+});
+const files = writeEvidenceFiles({
+manifestText,
+ledgerBody: current.ledger.body,
+packetBody: current.issue.body,
+request,
+patchBytes,
+prRequest,
+}, deps.tempRoot);
+let claim = null;
+try {
+if (effectOperation === 'review-update') {
+deps.reviewUpdateInspect({manifest, request, patchBytes, prRequest});
+} else if (effectOperation === 'continue-prepared') {
+deps.continuationInspect({manifest, request, prRequest});
+} else {
+inspectPrepared(files, deps);
+}
+binding = refreshLiveBinding({args, manifest, manifestText, files, deps});
+const claimed = deps.claimHolder(files);
+if (claimed?.result?.status !== 'CLAIMED'
+|| typeof claimed.claim !== 'string') {
+const capability = claimed?.secret;
+if (claimed?.result?.status !== 'CLAIMED' || typeof capability !== 'string') {
+throw new CompositionError('BLOCKED', [
+...(claimed?.result?.reasonCodes || ['HOLDER_CLAIM_FAILED']),
+]);
+}
+claim = capability;
+} else {
+claim = claimed.claim;
+}
+binding = refreshLiveBinding({args, manifest, manifestText, files, deps});
+const checked = deps.checkHolder(files, claim);
+if (checked?.status !== 'CHECK_PASS') {
+throw new CompositionError('BLOCKED', [
+...(checked?.reasonCodes || ['HOLDER_CHECK_FAILED']),
+]);
+}
+const ownerRun = invokeOwnerEffect({
+args,
+manifest,
+manifestText,
+files,
+claim,
+deps,
+});
+const owner = ownerRun.value;
+if (ownerRun.code !== 0 || owner.status !== 'PASS') {
+return output(
+owner.status === 'CONFLICT' ? 'CONFLICT'
+: owner.status === 'UNKNOWN' ? 'UNKNOWN' : 'BLOCKED',
+owner.reason_codes || ['L_OWNER_EFFECT_NOT_PASS'],
+{
+packetRef: args.packetRef,
+manifestId: manifest.manifestId,
+nextLegalAction: owner.next_legal_action || 'TARGETED_RECOVERY_REQUIRED',
+}
+);
+}
+if (!SHA40_RE.test(owner.new_head || '') || !Number.isSafeInteger(owner.pr_number)) {
+throw new CompositionError('CONFLICT', ['L_OWNER_SUCCESS_IDENTITY_INVALID']);
+}
+binding = refreshLiveBinding({args, manifest, manifestText, files, deps});
+let activation = buildActivation({
+manifest,
+manifestCommentId: binding.manifestCommentId,
+owner,
+prRequest,
+effectOperation,
+});
+deps.writeActivation(manifest, activation);
+const beforeRelease = deps.checkHolder(files, claim);
+if (beforeRelease?.status !== 'CHECK_PASS') {
+throw new CompositionError('BLOCKED', [
+...(beforeRelease?.reasonCodes || ['HOLDER_CHECK_BEFORE_D013_RELEASE_FAILED']),
+]);
+}
+const release = deps.releaseLease(args.packetRef, manifest.leaseEvidence.leaseId);
+if (!release?.ok || typeof release?.value?.evidenceRef !== 'string'
+|| !Number.isSafeInteger(release?.value?.observedGeneration)) {
+throw new CompositionError('BLOCKED', ['D013_RELEASE_NOT_PROVEN']);
+}
+const after = deps.readCurrent(args.packetNumber);
+updateEvidenceFiles(files, after.ledger.body || '', after.issue.body || '');
+const released = deps.validateEvidence({
+manifest,
+ledgerBody: after.ledger.body || '',
+packetBody: after.issue.body || '',
+requireActiveLease: false,
+});
+if (!released?.ok || !Number.isSafeInteger(released?.state?.generation)) {
+throw new CompositionError('BLOCKED', [
+'D013_RELEASE_READBACK_INVALID',
+...(released?.reasonCodes || []),
+]);
+}
+if (released.state.generation < release.value.observedGeneration) {
+throw new CompositionError('BLOCKED', ['D013_RELEASE_READBACK_STALE']);
+}
+activation = buildActivation({
+manifest,
+manifestCommentId: binding.manifestCommentId,
+owner,
+prRequest,
+effectOperation,
+releaseGeneration: release.value.observedGeneration,
+releaseEvidenceRef: release.value.evidenceRef,
+});
+deps.writeActivation(manifest, activation);
+const holderRelease = deps.releaseHolder(files, claim);
+if (holderRelease?.status !== 'RELEASED') {
+throw new CompositionError('BLOCKED', [
+...(holderRelease?.reasonCodes || ['HOLDER_RELEASE_FAILED']),
+]);
+}
+return finalizeFromActivation({
+args,
+manifest,
+manifestText,
+activation,
+deps,
+});
+} finally {
+claim = null;
+removeEvidenceFiles(files);
+}
+}
+function exitCodeFor(status) {
+if (status === 'PASS') return 0;
+if (status === 'UNKNOWN') return 3;
+return 2;
+}
+function runCli(argv = process.argv.slice(2), deps = {}) {
+try {
+const args = parseArgs(argv);
+const result = args.operation === 'finalize'
+? executeFinalize(args, deps)
+: executeComposition(args, deps);
+return {code: exitCodeFor(result.status), text: JSON.stringify(result) + '\n'};
+} catch (error) {
+const kind = error instanceof CompositionError ? error.kind : 'UNKNOWN';
+const reasons = error instanceof CompositionError ? error.reasonCodes : ['UNEXPECTED_ERROR'];
+const result = output(kind, reasons, {nextLegalAction: 'TARGETED_DRILLDOWN_REQUIRED'});
+return {code: exitCodeFor(kind), text: JSON.stringify(result) + '\n'};
+}
+}
+if (require.main === module) {
+const {code, text} = runCli();
+process.stdout.write(text);
+process.exitCode = code;
+}
+module.exports = {
+FALSE_AUTHORITY,
+MODE,
+CompositionError,
+activationCore,
+activationEffectOperation,
+buildActivation,
+completionBody,
+defaultDeps,
+defaultReadActivation,
+defaultReadPublished,
+defaultWriteActivation,
+exactCommentState,
+executeComposition,
+executeFinalize,
+finalizeFromActivation,
+exitCodeFor,
+inspectPrepared,
+inspectPreparedContinuation,
+inspectReviewUpdatePrepared,
+listComments,
+output,
+parseArgs,
+parseManifest,
+parseOwnerCliResult,
+parseReviewUpdateRequestStructure,
+normalizeActivation,
+defaultOwnerReadRunner,
+postCompletionOnce,
+preflightRequest,
+requireBinding,
+requireLiveBinding,
+requireReleasedBinding,
+runCli,
+};

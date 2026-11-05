@@ -1,7 +1,21 @@
 # ROADMAP
 
-기준: 2026-09-25
+기준: 2026-10-13
 
+
+## 완료 / LIVE_PROVEN — PocketRisu v1.14.0 Termux update
+
+- official `v1.14.0`을 fork deploy line에 통합하고 서버폰 live overlay까지 배포 완료.
+- integration/server validation: 154/154 server tests, 48/48 model-binding, svelte-check 0 errors, production build PASS.
+- local-only Firefox 3커밋과 의도적 untracked bridge 파일 보존.
+- cutover 전 save/dist/node_modules/source rollback anchors 확보.
+- cutover 후 DB 4개 `quick_check(1)=ok`, controlled restart 후 health ready 재확인.
+- 메인폰 core tunnel에서 새 서버 health 확인.
+- 메인폰 Firefox 실제 chat/generation + completion notification smoke PASS.
+- notify relay/tunnel supervisor 부재는 별도 기존 owner #3513으로 분리 유지하며 one-shot 복구만 수행.
+
+다음 한 단계:
+- v1.14 자체는 자연 운용 관찰. notify supervisor durability는 #3513에서 계속 진행.
 
 ## 완료 / LIVE_PROVEN — main-ssh-tunnel supervisor hardening
 

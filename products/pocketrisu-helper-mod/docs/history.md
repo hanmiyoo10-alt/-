@@ -60,3 +60,14 @@ INSPECT_ONLY에서 확인한 근거:
 - 최종 guard/anchor는 정확히 1개씩 수렴했으며 `pocketrisu-ssh-tunnel` supervision과 localhost health를 보존했다.
 - shared top-level `runsvdir`는 계속 absent였고 그 사망 원인은 `UNKNOWN`으로 유지한다.
 - network toggle/reset, phone reboot, whole-Termux loss, broad service-tree restart, server PocketRisu/sshd mutation 없이 live proof를 완료했다.
+
+## 2026-10-13 PocketRisu v1.14.0 live update
+- official `v1.14.0`을 검증된 fork deploy line에 통합한 뒤 서버폰에 live 배포했다.
+- 기존 local-only Firefox 3커밋을 exact merged target 위에 재적용했고 server delta 없이 보존됨을 확인했다.
+- candidate 검증은 server 154/154, model-binding 48/48, svelte-check 0 errors, production build PASS였다.
+- Termux Node 26 webstorage 및 GUI test harness 한계는 v1.13 baseline에서도 동일 재현되어 v1.14 regression으로 분류하지 않았다.
+- cutover 직전 save 약 6.5G, dist, node_modules, source bundle rollback anchors를 local-only 영역에 만들었다.
+- live 전환 후 `/api/health=ready`, DB 4개 `quick_check(1)=ok`, controlled restart persistence를 재확인했다.
+- 메인폰 core SSH tunnel에서도 새 서버 health가 정상 전달됐다.
+- 실제 메인폰 Firefox chat/generation과 completion notification smoke를 최종 확인했다.
+- smoke 중 main-phone notify relay/tunnel dedicated runsv 부재를 재관찰했고 one-shot 복구했다. 이 durability 문제는 기존 #3513 owner에 기록했으며 v1.14 서버 업데이트와 분리한다.

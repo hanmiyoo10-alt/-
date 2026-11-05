@@ -91,10 +91,17 @@ All repository/device/merge/release/production authority flags remain false.
 ## Validation
 
 ```text
-python3 products/chatgpt-mobile-coder-lab/device-ops/local-branch-ref-cleanup/tests/test-contract.py -v
-python3 -m py_compile \
-  products/chatgpt-mobile-coder-lab/device-ops/local-branch-ref-cleanup/mcl-local-branch-ref-cleanup \
-  products/chatgpt-mobile-coder-lab/device-ops/local-branch-ref-cleanup/tests/test-contract.py
+PYTHONDONTWRITEBYTECODE=1 python3 products/chatgpt-mobile-coder-lab/device-ops/local-branch-ref-cleanup/tests/test-contract.py -v
+python3 - <<'PY'
+from pathlib import Path
+for path in (
+    Path("products/chatgpt-mobile-coder-lab/device-ops/local-branch-ref-cleanup/mcl-local-branch-ref-cleanup"),
+    Path("products/chatgpt-mobile-coder-lab/device-ops/local-branch-ref-cleanup/tests/test-contract.py"),
+):
+    compile(path.read_text(), str(path), "exec")
+PY
+test -z "$(find products/chatgpt-mobile-coder-lab/device-ops/local-branch-ref-cleanup -type f -name '*.pyc' -print -quit)"
+test -z "$(find products/chatgpt-mobile-coder-lab/device-ops/local-branch-ref-cleanup -type d -name '__pycache__' -print -quit)"
 ```
 
 Synthetic tests use temporary local repositories and a bare remote. They prove

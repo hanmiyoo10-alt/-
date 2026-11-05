@@ -1,38 +1,14 @@
 #!/data/data/com.termux/files/usr/bin/python
 import fcntl
 import os
-import subprocess
 import sys
 import time
 
-AM_PATH = "/data/data/com.termux/files/usr/bin/am"
-COMPANION_PACKAGE = "io.hanmiyoo.mcl.termuxlifeline"
-HEARTBEAT_ACTION = "io.hanmiyoo.mcl.termuxlifeline.action.HEARTBEAT_V1"
-RECOVERY_OK_ACTION = "io.hanmiyoo.mcl.termuxlifeline.action.RECOVERY_OK_V1"
 INTERVAL_SECONDS = 10.0
-DISPATCH_TIMEOUT_SECONDS = 2.0
 STATUS_TIMEOUT_SECONDS = 1.0
 STATUS_POLL_SECONDS = 0.05
 STATE_DIR = "/data/data/com.termux/files/home/.local/state/mcl-m-termux-lifeline"
 LOCK_PATH = STATE_DIR + "/heartbeat.lock"
-
-
-def dispatch(action, runner=subprocess.run):
-    if action not in (HEARTBEAT_ACTION, RECOVERY_OK_ACTION):
-        return False
-    argv = [AM_PATH, "broadcast", "-a", action, "-p", COMPANION_PACKAGE]
-    try:
-        result = runner(
-            argv,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=DISPATCH_TIMEOUT_SECONDS,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return result.returncode == 0
 
 
 def acquire_singleton():
@@ -88,7 +64,6 @@ def heartbeat_loop():
         return 0
     try:
         while True:
-            dispatch(HEARTBEAT_ACTION)
             time.sleep(INTERVAL_SECONDS)
     except KeyboardInterrupt:
         return 0
@@ -101,10 +76,6 @@ def main(argv):
         return heartbeat_loop()
     if argv == ["--status"]:
         return 0 if wait_singleton_active() else 1
-    if argv == ["--heartbeat-once"]:
-        return 0 if dispatch(HEARTBEAT_ACTION) else 1
-    if argv == ["--recovery-ok"]:
-        return 0 if dispatch(RECOVERY_OK_ACTION) else 1
     return 2
 
 

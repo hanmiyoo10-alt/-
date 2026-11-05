@@ -2,7 +2,11 @@
 
 const crypto = require('node:crypto');
 const { normalizeScope } = require('../../../.github/plugin-control-plane/canonical-main/work-system/scope-overlap.cjs');
-const { ROUTES, EXECUTORS, validateWorkspace: validateLeaseWorkspace, validateLandingMetadataBinding, validateLandingBranchRepairBinding } = require('./task-lease.cjs');
+const {
+  ROUTES, EXECUTORS, validateWorkspace: validateLeaseWorkspace,
+  validateLandingMetadataBinding, validateLandingBranchRepairBinding,
+  validateLandingResidueCleanupBinding, landingResidueCleanupIdentity,
+} = require('./task-lease.cjs');
 
 const MANIFEST_START = '<!-- mcl-task-manifest:v1 -->';
 const MANIFEST_END = '<!-- /mcl-task-manifest:v1 -->';
@@ -16,7 +20,7 @@ const SAFE_REF_RE = /^(?:#[1-9][0-9]*|(?:issue|pr|ledger):#[1-9][0-9]*|run:[1-9]
 const PHASE_CLASSES = new Set(['READ_ONLY', 'REPOSITORY_MUTATION', 'DEVICE_OR_LAB_MUTATION', 'VALIDATION', 'EXPERIMENT', 'COORDINATION']);
 const DISPOSITIONS = new Set(['COMPLETE', 'BLOCKED', 'PARTIAL']);
 const MAX_REFS = 16;
-const MAX_SCOPES = 16;
+const MAX_SCOPES = 24;
 const EMPTY_SHA256 = crypto.createHash('sha256').update('').digest('hex');
 const PRESERVED_DIRTY_SURFACE_RE =
   /^surface:mcl:validation-residue-cleanup:[A-Za-z0-9._/-]+$/;
@@ -78,14 +82,37 @@ function routeExecutorCompatible(route, executor) {
   if (!ROUTES.includes(route) || !EXECUTORS.has(executor)) return false;
   return route === 'S' ? executor === 'S' || executor === 'M' : route === executor;
 }
+function validateLandingResidueCleanupEvidence({workspace, executor, scopes, inputRefs, expectedOutputRefs}) {
+  if (workspace?.kind !== 'landing_residue_cleanup') return [];
+  const identity = landingResidueCleanupIdentity(executor);
+  if (!identity) return ['LANDING_RESIDUE_CLEANUP_PROFILE_UNKNOWN'];
+  const normalizedScopes = [...scopes].sort();
+  const profiles = identity.profiles || [identity.scopes];
+  const index = profiles.findIndex((profileScopes) =>
+    JSON.stringify([...profileScopes].sort()) === JSON.stringify(normalizedScopes));
+  if (index < 0) return ['LANDING_RESIDUE_CLEANUP_PROFILE_UNKNOWN'];
+  const pathRefs = normalizedScopes.filter((scope) => scope.startsWith('path:'));
+  if (JSON.stringify([...expectedOutputRefs].sort()) !== JSON.stringify(pathRefs)) {
+    return ['LANDING_RESIDUE_CLEANUP_EXPECTED_OUTPUT_INVALID'];
+  }
+  const prefix = index === 0
+    ? 'receipt:mcl-l-landing-residue-sha256:'
+    : 'receipt:mcl-l-landing-residue-set-sha256:';
+  if (inputRefs.length !== 1 || !inputRefs[0].startsWith(prefix)
+      || !SHA256_RE.test(inputRefs[0].slice(prefix.length))) {
+    return ['LANDING_RESIDUE_CLEANUP_EVIDENCE_REF_INVALID'];
+  }
+  return [];
+}
 function validateWorkspace(workspace, executor, route, scopes, observedBaseSha) {
   const errors = exactKeys(workspace, new Set(['kind', 'branch', 'worktree']), ['kind', 'branch', 'worktree'], 'WORKSPACE');
   if (errors.length) return errors;
   errors.push(...validateLeaseWorkspace(workspace, executor));
   if (route === 'S' && !['repository', 'landing_metadata', 'landing_branch_repair'].includes(workspace.kind)) errors.push('WORKSPACE_S_ROUTE_REPOSITORY_REQUIRED');
-  if (route === 'L' && !['repository', 'landing_metadata'].includes(workspace.kind)) errors.push('WORKSPACE_L_ROUTE_REPOSITORY_REQUIRED');
+  if (route === 'L' && !['repository', 'landing_metadata', 'landing_residue_cleanup', 'landing_branch_repair'].includes(workspace.kind)) errors.push('WORKSPACE_L_ROUTE_REPOSITORY_REQUIRED');
   errors.push(...validateLandingMetadataBinding({workspace, executor, scopes, observedBaseSha}));
   errors.push(...validateLandingBranchRepairBinding({workspace, route, executor, scopes, observedBaseSha}));
+  errors.push(...validateLandingResidueCleanupBinding({workspace, route, executor, scopes, observedBaseSha}));
   return [...new Set(errors)].sort();
 }
 function normalizeLeaseEvidence(value, required) {
@@ -127,6 +154,13 @@ function normalizeManifestCore(input) {
   const expectedRefs = normalizeRefs(input?.expectedOutputRefs, 'MANIFEST_EXPECTED_OUTPUT_REFS', { min: 1 });
   const acceptanceRefs = normalizeRefs(input?.acceptanceRefs, 'MANIFEST_ACCEPTANCE_REFS', { min: 1 });
   errors.push(...sourceRefs.errors, ...inputRefs.errors, ...expectedRefs.errors, ...acceptanceRefs.errors);
+  errors.push(...validateLandingResidueCleanupEvidence({
+    workspace: input?.workspace,
+    executor: input?.executor,
+    scopes: scopes.value,
+    inputRefs: inputRefs.value,
+    expectedOutputRefs: expectedRefs.value,
+  }));
   if (typeof input?.stopCondition !== 'string' || input.stopCondition.length < 1 || input.stopCondition.length > 500 || /[\r\n]/.test(input.stopCondition)) errors.push('MANIFEST_STOP_CONDITION_INVALID');
   if (!sameAuthorityFlags(input?.authority)) errors.push('MANIFEST_AUTHORITY_FLAGS_INVALID');
   const value = {

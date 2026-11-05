@@ -50,8 +50,10 @@ sed \
   -e "s|^TMP_ROOT=.*|TMP_ROOT='$RUNTIME'|" \
   "$LAUNCHER" > "$TEST_LAUNCHER"
 PLAN=$TMP/plan.json
+CLOSURE=$TMP/closure.json
 ACTIVITY=$TMP/activity.json
 printf '%s\n' '{}' > "$PLAN"
+printf '%s\n' '{"schemaVersion":1}' > "$CLOSURE"
 printf '%s\n' '{"schemaVersion":1}' > "$ACTIVITY"
 
 printf 'TEST source-status-binds-exact-main\n'
@@ -63,39 +65,69 @@ left=$(find "$RUNTIME" -mindepth 1 -maxdepth 1 -print -quit)
 [ -z "$left" ] || fail "temporary source residue: $left"
 printf 'PASS source-status-binds-exact-main\n'
 
-printf 'TEST inspect-and-apply-forward-only-fixed-owner\n'
+printf 'TEST legacy-generation-remains-usable-without-closure\n'
 run_cmd sh "$TEST_LAUNCHER" inspect --packet '#77' --plan "$PLAN"
 assert_zero
 assert_contains "$RUN_OUTPUT" '"inspect"'
 assert_contains "$RUN_OUTPUT" '"--source-main"'
-assert_contains "$RUN_OUTPUT" "$MAIN"
+if printf '%s\n' "$RUN_OUTPUT" | grep -F -- '--owner-lifecycle-closure-file' >/dev/null; then
+  fail "legacy generation unexpectedly received closure evidence: $RUN_OUTPUT"
+fi
 run_cmd sh "$TEST_LAUNCHER" apply --packet '#77' --plan "$PLAN" --apply
 assert_zero
 assert_contains "$RUN_OUTPUT" '"apply"'
-assert_contains "$RUN_OUTPUT" '"--source-main"'
 assert_contains "$RUN_OUTPUT" '"--apply"'
 run_cmd sh "$TEST_LAUNCHER" inspect --packet '#77' --plan "$PLAN" \
   --packet-activity-evidence-file "$ACTIVITY"
 assert_zero
 assert_contains "$RUN_OUTPUT" '"--packet-activity-evidence-file"'
-assert_contains "$RUN_OUTPUT" "$ACTIVITY"
-run_cmd sh "$TEST_LAUNCHER" apply --packet '#77' --plan "$PLAN" \
-  --packet-activity-evidence-file "$ACTIVITY" --apply
+run_cmd sh "$TEST_LAUNCHER" inspect --packet '#77' --plan "$PLAN" \
+  --owner-lifecycle-closure-file "$CLOSURE"
+[ "$RUN_RC" -eq 64 ] || fail "legacy generation accepted unsupported closure evidence: $RUN_OUTPUT"
+assert_contains "$RUN_OUTPUT" 'captured stage-entry does not support owner lifecycle closure evidence'
+printf 'PASS legacy-generation-remains-usable-without-closure\n'
+
+printf 'TEST recover-self-capable-generation-requires-and-forwards-closure\n'
+printf '%s\n' 'const OWNER_LIFECYCLE_CLOSURE_MODE = "fixture";' >> \
+  "$SOURCE/products/chatgpt-mobile-coder-lab/coordination/stage-entry/mcl-stage-entry.cjs"
+git -C "$SOURCE" add .
+git -C "$SOURCE" -c user.name=Test -c user.email=test@example.invalid commit -qm recover-self-capable
+git -C "$SOURCE" push -q origin main
+MAIN_CAPABLE=$(git -C "$SOURCE" rev-parse HEAD)
+run_cmd sh "$TEST_LAUNCHER" inspect --packet '#77' --plan "$PLAN"
+[ "$RUN_RC" -eq 64 ] || fail "capable generation did not require closure evidence: $RUN_OUTPUT"
+assert_contains "$RUN_OUTPUT" 'owner lifecycle closure evidence required by captured stage-entry'
+run_cmd sh "$TEST_LAUNCHER" inspect --packet '#77' --plan "$PLAN" \
+  --owner-lifecycle-closure-file "$CLOSURE"
 assert_zero
+assert_contains "$RUN_OUTPUT" '"--owner-lifecycle-closure-file"'
+assert_contains "$RUN_OUTPUT" "$CLOSURE"
+assert_contains "$RUN_OUTPUT" "$MAIN_CAPABLE"
+run_cmd sh "$TEST_LAUNCHER" apply --packet '#77' --plan "$PLAN" \
+  --owner-lifecycle-closure-file "$CLOSURE" --packet-activity-evidence-file "$ACTIVITY" --apply
+assert_zero
+assert_contains "$RUN_OUTPUT" '"--owner-lifecycle-closure-file"'
 assert_contains "$RUN_OUTPUT" '"--packet-activity-evidence-file"'
 assert_contains "$RUN_OUTPUT" '"--apply"'
-printf 'PASS inspect-and-apply-forward-only-fixed-owner\n'
+printf 'PASS recover-self-capable-generation-requires-and-forwards-closure\n'
 
 printf 'TEST unsupported-shapes-fail-closed\n'
-run_cmd sh "$TEST_LAUNCHER" inspect --packet '#77' --plan "$PLAN" --source-main "$MAIN"
+run_cmd sh "$TEST_LAUNCHER" inspect --packet '#77' --plan "$PLAN" \
+  --owner-lifecycle-closure-file "$CLOSURE" --source-main "$MAIN_CAPABLE"
 [ "$RUN_RC" -eq 64 ] || fail "caller source-main was not rejected: $RUN_OUTPUT"
-run_cmd sh "$TEST_LAUNCHER" shell --packet '#77' --plan "$PLAN"
+run_cmd sh "$TEST_LAUNCHER" shell --packet '#77' --plan "$PLAN" \
+  --owner-lifecycle-closure-file "$CLOSURE"
 [ "$RUN_RC" -eq 64 ] || fail "arbitrary command was not rejected: $RUN_OUTPUT"
 ACTIVITY_LINK=$TMP/activity-link.json
 ln -s "$ACTIVITY" "$ACTIVITY_LINK"
 run_cmd sh "$TEST_LAUNCHER" inspect --packet '#77' --plan "$PLAN" \
-  --packet-activity-evidence-file "$ACTIVITY_LINK"
+  --owner-lifecycle-closure-file "$CLOSURE" --packet-activity-evidence-file "$ACTIVITY_LINK"
 [ "$RUN_RC" -eq 64 ] || fail "activity symlink was not rejected: $RUN_OUTPUT"
+CLOSURE_LINK=$TMP/closure-link.json
+ln -s "$CLOSURE" "$CLOSURE_LINK"
+run_cmd sh "$TEST_LAUNCHER" inspect --packet '#77' --plan "$PLAN" \
+  --owner-lifecycle-closure-file "$CLOSURE_LINK"
+[ "$RUN_RC" -eq 64 ] || fail "closure symlink was not rejected: $RUN_OUTPUT"
 printf 'PASS unsupported-shapes-fail-closed\n'
 printf 'TEST remote-main-move-fails-capture\n'
 MOCK_BIN=$TMP/mock-bin

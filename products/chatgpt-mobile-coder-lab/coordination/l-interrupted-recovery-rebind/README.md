@@ -1,0 +1,23 @@
+# MCL L interrupted recovery rebind
+
+Coordination-only recovery after `ABANDONED_LEASE_RELEASE`.
+
+Flow: classify -> release -> fresh holder cleanup -> reacquire -> generation-bound
+D-014/HANDOFF_READY -> preservation proof -> holder absent.
+
+WSL `flock`+`cat` is process-death released. Discovery is current-lineage only.
+Cleanup/publication re-read coordination; publication uses journaled admission main.
+No source/index/ref/PR mutation or holder claim.
+
+Workspace capture accepts exactly one preserved dirty disposition: `UNSTAGED_ONLY`, using the ordinary binary diff, or `STAGED_ONLY`, using the exact cached binary diff. Mixed staged+unstaged state, untracked/unmerged residue, empty dirty state, out-of-scope paths, or later disposition/path/digest drift fail closed. The disposition is bound into the recovery activation identity so staged bytes cannot silently become unstaged bytes, or vice versa, during rebind.
+
+The fixed L session-evidence admission runs the exact repository-owned
+`mcl-l-rdc-session-evidence.v2` source with the same WSL Node runtime that is
+executing this recovery owner (`process.execPath`) and the fixed public
+`inspect` operation. It does not translate the source path to Windows or launch
+Windows Node. The session owner may exit 0 for PASS or 3 for bounded semantic
+UNKNOWN; both receipts are passed to the existing #3491 composition, which keeps
+UNKNOWN fail-closed. Any other exit or invalid JSON is an execution failure.
+No caller runtime, path, process, session, or command selector is exposed.
+
+When the target packet previously required bounded Work System packet-activity evidence to prove otherwise-overlapping predecessor packets noncompeting, pass that same reviewed JSON set with `--packet-activity-evidence-file <path>`. The file must be one regular non-symlink JSON file and is validated by the existing stage-entry packet-activity schema/validator for the exact target packet. Validated evidence is forwarded only to the existing complete overlap discovery. Missing evidence preserves the prior behavior; malformed, stale-requester, duplicate, `ACTIVE_WRITER`, `UNKNOWN`, or `CONFLICT` evidence remains fail-closed. This input grants no source/index/ref/PR or other effect authority.

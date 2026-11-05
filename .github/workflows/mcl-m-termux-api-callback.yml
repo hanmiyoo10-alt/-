@@ -1,0 +1,39 @@
+name: MCL M Termux API Callback
+
+on:
+  pull_request:
+    paths:
+      - 'products/chatgpt-mobile-coder-lab/device-ops/m-termux-api-callback/**'
+      - '.github/workflows/mcl-m-termux-api-callback.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'products/chatgpt-mobile-coder-lab/device-ops/m-termux-api-callback/**'
+      - '.github/workflows/mcl-m-termux-api-callback.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Run callback contract tests
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 -m unittest discover -s products/chatgpt-mobile-coder-lab/device-ops/m-termux-api-callback/tests -v
+      - name: Check helper syntax
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("products/chatgpt-mobile-coder-lab/device-ops/m-termux-api-callback/mcl-m-termux-api-callback.py")
+          compile(path.read_text(), str(path), "exec")
+          PY
+      - name: Assert no Python bytecode residue
+        run: |
+          test -z "$(find products/chatgpt-mobile-coder-lab/device-ops/m-termux-api-callback -type f -name '*.pyc' -print -quit)"
+          test -z "$(find products/chatgpt-mobile-coder-lab/device-ops/m-termux-api-callback -type d -name '__pycache__' -print -quit)"

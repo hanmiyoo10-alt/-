@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -32,7 +33,9 @@ from runtime.budget_profile import runtime_budget_profile
 from runtime.generation import SCOUT_MODEL_PROFILE_ID
 
 CANDIDATE_PATH = ROOT / "models" / "candidates" / "ministral-3-3b-instruct-2512-q4_k_m.json"
-WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "agent-skill-orchestrator-model-family-smoke.yml"
+ACTIVE_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "agent-skill-orchestrator-model-family-smoke.yml"
+WORKFLOW_PATH = REPO_ROOT / "tools" / "agent-skill-orchestrator" / "tests" / "fixtures" / "historical-workflows" / "agent-skill-orchestrator-model-family-smoke.yml"
+MANIFEST_PATH = REPO_ROOT / "tools" / "agent-skill-orchestrator" / "tests" / "fixtures" / "historical-workflows" / "model-family-smoke-manifest.json"
 
 
 class O4BMinistralModelFamilySmokeTests(unittest.TestCase):
@@ -91,7 +94,7 @@ class O4BMinistralModelFamilySmokeTests(unittest.TestCase):
                 },
                 "access": {
                     "class": "public_unauthenticated_https",
-                    "source": ".github/workflows/agent-skill-orchestrator-model-family-smoke.yml#Download and verify frozen Ministral GGUF without credentials",
+                    "source": "tools/agent-skill-orchestrator/tests/fixtures/historical-workflows/agent-skill-orchestrator-model-family-smoke.yml#Download and verify frozen Ministral GGUF without credentials",
                 },
                 "execution_surface": "LOCAL_GITHUB_HOSTED_CPU_ZERO_AI_CREDITS",
                 "enabled": True,
@@ -186,6 +189,21 @@ class O4BMinistralModelFamilySmokeTests(unittest.TestCase):
             with self.subTest(mutation=mutation):
                 with self.assertRaises(ModelFamilySmokeError):
                     validate_receipt(receipt)
+
+    def test_historical_workflow_fixture_is_source_bound(self):
+        manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+        data = WORKFLOW_PATH.read_bytes()
+        blob = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+        self.assertEqual(manifest["schemaVersion"], 1)
+        self.assertEqual(manifest["ownerIssue"], 1120)
+        self.assertEqual(manifest["anomalyIssue"], 3961)
+        self.assertEqual(manifest["retirementIssue"], 3962)
+        self.assertEqual(manifest["sourceMainCommit"], "6e808b82e4ef1f79d4121f48c35c0594f1b79121")
+        self.assertEqual(manifest["blobSha"], "6f6d88d429aa4b3e8e9524db4bd6980e9209df9a")
+        self.assertEqual(manifest["terminalRunId"], 33632096087)
+        self.assertEqual(manifest["exitEvidenceComment"], 5510184853)
+        self.assertEqual(blob, manifest["blobSha"])
+        self.assertFalse(ACTIVE_WORKFLOW_PATH.exists())
 
     def test_workflow_is_gated_and_has_no_model_credentials_or_benchmark_calls(self):
         text = WORKFLOW_PATH.read_text(encoding="utf-8")

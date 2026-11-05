@@ -229,6 +229,28 @@ class SkillContractTests(unittest.TestCase):
         ):
             self.assertIn(required, section)
 
+    def test_read_payload_adapts_windows_and_rejects_hard_30_line_rule(self):
+        text = SKILL.read_text(encoding="utf-8")
+        section = text[
+            text.index("## Read/result payload companion contract"):
+            text.index("## Exact immutable result read-reuse companion contract")
+        ]
+        for required in (
+            "smallest evidence-equivalent semantic window",
+            "Roughly 30 lines may be a useful first-pass window",
+            "not a WSL/filesystem speed boundary",
+            "a hard ceiling",
+            "repository-wide optimum",
+            "semantic boundaries and line/payload width",
+            "expand with one larger evidence-equivalent read",
+            "arbitrary 30-line chunks",
+            "required context is already known to be larger",
+            "prefer one evidence-equivalent larger read",
+            "smallest uniquely identifying semantic hunk/context",
+            "Do not physically fragment source files",
+        ):
+            self.assertIn(required, section)
+
     def test_read_payload_preserves_full_read_exceptions_and_required_context(self):
         text = SKILL.read_text(encoding="utf-8")
         section = text[

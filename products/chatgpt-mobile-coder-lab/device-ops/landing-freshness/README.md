@@ -1,6 +1,6 @@
 # MCL landing freshness guard v1
 
-`mcl-landing-freshness` is the Mobile Coder Lab owner for one narrow Git-currentness question on the fixed ordinary S/M landing surfaces.
+`mcl-landing-freshness` is the Mobile Coder Lab owner for one narrow Git-currentness question on the fixed ordinary S/M/L landing surfaces.
 
 It is not a sync tool, route selector, lease controller, worktree lifecycle helper, health authority, dispatcher, merge gate, release owner, or production owner.
 
@@ -12,6 +12,7 @@ V1 accepts only these already-selected routes:
 | --- | --- | --- |
 | `S` | `/root/nyang-repo` | `server/work` |
 | `M` | `/data/data/com.termux/files/home/nyang-worktrees/mainphone-work` | `mainphone/work` |
+| `L` | `/home/alsl0/nyang-repo` | `main` |
 
 Both configured and effective `origin` URLs must resolve to the canonical `hanmiyoo10-alt/-` GitHub repository in one of the reviewed HTTPS/SSH forms; URL rewrites or custom origin upload/proxy overrides fail closed. No caller-supplied repository, remote, ref, branch, command, environment, or shell text is accepted.
 
@@ -35,8 +36,10 @@ A successful local guard never proves those earlier or later gates. In particula
 ```text
 ./mcl-landing-freshness status S
 ./mcl-landing-freshness status M
+./mcl-landing-freshness status L
 ./mcl-landing-freshness refresh S
 ./mcl-landing-freshness refresh M
+./mcl-landing-freshness refresh L
 ```
 
 Any other arity, operation, or route is rejected.
@@ -76,8 +79,8 @@ Successful or bounded fail-closed observations use exactly these ordered fields:
 ```text
 schema=mcl-landing-freshness.v1
 operation=<status|refresh>
-route=<S|M>
-intended_branch=<server/work|mainphone/work>
+route=<S|M|L>
+intended_branch=<server/work|mainphone/work|main>
 actual_branch=<bounded-branch|unknown>
 worktree=<clean|dirty|unknown>
 landing_head=<sha|unknown>
@@ -102,13 +105,13 @@ Raw Git/network error output, credentials/tokens, account/device/session identif
 
 ## Proof boundary
 
-Synthetic contract tests may copy this script and replace only its compile-time fixed topology constants (S/M paths and canonical origin) with temporary Git fixture values. The production CLI itself has no test-only path override, environment override, arbitrary command hook, or generic remote/ref input.
+Synthetic contract tests may copy this script and replace only its compile-time fixed topology constants (S/M/L paths and canonical origin) with temporary Git fixture values. The production CLI itself has no test-only path override, environment override, arbitrary command hook, or generic remote/ref input.
 
-A later real-device experiment may run `status` on natural S/M state. `refresh` remains legal only when the naturally selected route already satisfies expected branch, clean state, current packet/PR overlap, the exact D-013 `landing_metadata` lease, and neighboring currentness guards. Do not switch a landing branch merely to make the proof pass.
+A later real-device experiment may run `status` on natural S/M/L state. `refresh` remains legal only when the naturally selected route already satisfies expected branch, clean state, current packet/PR overlap, the exact D-013 `landing_metadata` lease, and neighboring currentness guards. Do not switch a landing branch merely to make the proof pass.
 
 ## No-ref current-main object materialization
 
-`mcl-main-object-materialize` is a sibling operation for a narrower pre-experiment need: make the exact current protected `main` commit object locally readable without moving any Git ref or landing/worktree state. It accepts exactly `S|M|L` plus one lowercase 40-hex expected current-main SHA. The fixed L identity is `/home/alsl0/nyang-repo`; this adds no L `status`/`refresh` or landing-branch-repair surface. The caller must already have current main/#485 agreement, route selection, fresh overlap evidence, the matching D-013 `landing_metadata` reservation, and a D-014 mutable-phase manifest.
+`mcl-main-object-materialize` is a sibling operation for a narrower pre-experiment need: make the exact current protected `main` commit object locally readable without moving any Git ref or landing/worktree state. It accepts exactly `S|M|L` plus one lowercase 40-hex expected current-main SHA. The fixed L identity is `/home/alsl0/nyang-repo`; this no-ref materializer remains separate from the fixed L `status`/`refresh` surface and still adds no landing-branch-repair authority. The caller must already have current main/#485 agreement, route selection, fresh overlap evidence, the matching D-013 `landing_metadata` reservation, and a D-014 mutable-phase manifest.
 
 The command independently verifies the fixed canonical origin and live `refs/heads/main`, requires that remote SHA to equal the supplied expected SHA, requires a clean fixed landing, snapshots HEAD, actual branch, clean worktree status, the tracked-index identity, all refs, local `origin/main` through the ref snapshot, and `FETCH_HEAD`, then uses only a no-destination `git fetch --no-tags --no-write-fetch-head <validated-canonical-origin-url> refs/heads/main` when the expected commit object is absent. It rechecks every preservation assertion and live remote-main equality afterward.
 

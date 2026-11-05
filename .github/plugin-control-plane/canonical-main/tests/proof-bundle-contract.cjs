@@ -1,12 +1,14 @@
 'use strict';
 
 const assert = require('assert');
+const {execFileSync} = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const {composeProofBundle, MODE} = require('../proof-bundle.cjs');
 const {readGitHubCliJson} = require('../infra/github-cli-read.cjs');
-const {attachReadFailures, parseOps, writeBundle} = require('../orchestrator/proof-bundle.cjs');
+const {attachReadFailures, parseOps, validateInvocationContext, writeBundle} = require('../orchestrator/proof-bundle.cjs');
+const {exactShaWorkflowApplicability, pluginWorkflowEvidence, resolveMergeBase} = require('../orchestrator/pr-workflow-applicability.cjs');
 
 function sample() {
   return {
@@ -51,6 +53,34 @@ const failed = composeProofBundle(failedInput);
 assert.equal(failed.state, 'COMPLETE', 'known failure is complete evidence, not missing evidence');
 assert.equal(failed.acceptanceReady, false);
 assert(failed.failures.includes('MERGED_MAIN_REQUIRED_NOT_SUCCESS'));
+const pluginPathFilteredInput = sample();
+pluginPathFilteredInput.prHead.plugin = {applicability: 'EXPECTED_NO_RUN_PATH_FILTER', reasonCodes: ['PATH_FILTERED'], inventoryComplete: true};
+const pluginPathFiltered = composeProofBundle(pluginPathFilteredInput);
+assert.equal(pluginPathFiltered.state, 'COMPLETE', 'owner-proven path-filter absence is complete evidence');
+assert.equal(pluginPathFiltered.acceptanceReady, true);
+assert(!pluginPathFiltered.missing.includes('PR_HEAD_PLUGIN_CI_UNKNOWN'));
+assert(!pluginPathFiltered.failures.includes('PR_HEAD_PLUGIN_CI_NOT_SUCCESS'));
+
+const pluginTriggerInapplicableInput = sample();
+pluginTriggerInapplicableInput.prHead.plugin = {applicability: 'TRIGGER_NOT_APPLICABLE', reasonCodes: ['REF_FILTERED'], inventoryComplete: true};
+const pluginTriggerInapplicable = composeProofBundle(pluginTriggerInapplicableInput);
+assert.equal(pluginTriggerInapplicable.state, 'COMPLETE');
+assert.equal(pluginTriggerInapplicable.acceptanceReady, true);
+
+for (const applicability of ['UNKNOWN', 'BLOCKED_CAPABILITY', 'MISSING_UNEXPECTED', 'RAN']) {
+  const input = sample();
+  input.prHead.plugin = {applicability, reasonCodes: ['TEST']};
+  const result = composeProofBundle(input);
+  assert.equal(result.state, 'PARTIAL', `${applicability} without a completed run must stay partial`);
+  assert(result.missing.includes('PR_HEAD_PLUGIN_CI_UNKNOWN'));
+}
+
+const pluginFailedInput = sample();
+pluginFailedInput.prHead.plugin = {runId: 44, conclusion: 'failure', applicability: 'RAN'};
+const pluginFailed = composeProofBundle(pluginFailedInput);
+assert.equal(pluginFailed.state, 'COMPLETE');
+assert.equal(pluginFailed.acceptanceReady, false);
+assert(pluginFailed.failures.includes('PR_HEAD_PLUGIN_CI_NOT_SUCCESS'));
 
 const activeIncidentInput = sample();
 activeIncidentInput.incidents.activeP0P1Count = 1;
@@ -83,6 +113,82 @@ assert.equal(parsed.activeP0P1Known, true);
 assert.equal(parsed.activeP0P1Count, 0);
 assert.equal(parsed.attentionKnown, true);
 assert.equal(parsed.attentionCount, 0);
+const pluginPr = {headSha: 'b'.repeat(40), baseSha: 'c'.repeat(40), baseRef: 'main'};
+let classifyCalls = 0;
+const directPlugin = pluginWorkflowEvidence('owner/repo', pluginPr, 'd'.repeat(40), [], () => ({runId: 71, conclusion: 'success'}), () => {classifyCalls += 1; return {disposition: 'UNKNOWN', reasonCodes: [], inventoryComplete: false, evidence: {}};});
+assert.equal(directPlugin.runId, 71);
+assert.equal(directPlugin.applicability, 'RAN');
+assert.equal(classifyCalls, 0, 'direct completed evidence must not invoke absence classification');
+
+let classifyInput = null;
+const pathFilteredPlugin = pluginWorkflowEvidence(
+  'owner/repo', pluginPr, 'd'.repeat(40), [], () => null,
+  (input) => {classifyInput = input; return {disposition: 'EXPECTED_NO_RUN_PATH_FILTER', reasonCodes: ['PATH_FILTERED'], inventoryComplete: true, evidence: {beforeSha: 'e'.repeat(40), workflowRef: 'd'.repeat(40), changedPathCount: 6}};},
+  () => 'e'.repeat(40),
+);
+assert.equal(pathFilteredPlugin.applicability, 'EXPECTED_NO_RUN_PATH_FILTER');
+assert.deepEqual(pathFilteredPlugin.reasonCodes, ['PATH_FILTERED']);
+assert.equal(pathFilteredPlugin.applicabilityEvidence.changedPathCount, 6);
+assert.equal(classifyInput.beforeSha, 'e'.repeat(40));
+assert.equal(classifyInput.workflowRef, 'd'.repeat(40));
+assert.equal(classifyInput.sha, pluginPr.headSha);
+
+const missingBasePlugin = pluginWorkflowEvidence('owner/repo', {headSha: pluginPr.headSha}, 'd'.repeat(40), [], () => null, () => {throw new Error('classifier must not run without exact base identity');});
+assert.equal(missingBasePlugin.applicability, 'UNKNOWN');
+assert.deepEqual(missingBasePlugin.reasonCodes, ['PR_BASE_IDENTITY_UNKNOWN']);
+
+const resolvedMergeBase = resolveMergeBase(
+  'owner/repo', 'c'.repeat(40), 'b'.repeat(40), [],
+  () => ({value: {merge_base_commit: {sha: 'e'.repeat(40)}}, failure: null}),
+);
+assert.equal(resolvedMergeBase, 'e'.repeat(40));
+
+const ownerProjection = exactShaWorkflowApplicability(
+  {repo: 'owner/repo', sha: 'a'.repeat(40), workflow: '.github/workflows/x.yml', event: 'pull_request', ref: 'main', beforeSha: 'b'.repeat(40)},
+  () => JSON.stringify({disposition: 'EXPECTED_NO_RUN_PATH_FILTER', reason_codes: ['PATH_FILTERED', 'bad reason', 'X'.repeat(101)], inventory_complete: true, evidence: {workflow_blob_sha: 'c'.repeat(40), before_sha: 'b'.repeat(40), workflow_ref: 'd'.repeat(40), changed_path_count: 6}}),
+);
+assert.equal(ownerProjection.disposition, 'EXPECTED_NO_RUN_PATH_FILTER');
+assert.deepEqual(ownerProjection.reasonCodes, ['PATH_FILTERED']);
+assert.equal(ownerProjection.inventoryComplete, true);
+assert.equal(ownerProjection.evidence.changedPathCount, 6);
+assert.equal(ownerProjection.evidence.workflowRef, 'd'.repeat(40));
+
+const unknownOwnerVocabulary = exactShaWorkflowApplicability({repo: 'owner/repo'}, () => JSON.stringify({disposition: 'FUTURE_UNREVIEWED_STATE', reason_codes: []}));
+assert.equal(unknownOwnerVocabulary.disposition, 'UNKNOWN');
+const failedOwnerInvocation = exactShaWorkflowApplicability({repo: 'owner/repo'}, () => {throw new Error('do not expose raw child error');});
+assert.equal(failedOwnerInvocation.disposition, 'UNKNOWN');
+assert.deepEqual(failedOwnerInvocation.reasonCodes, ['EXACT_SHA_OWNER_INVOKE_FAILED']);
+
+const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+const exactFixtureScript = [
+  'import json, pathlib, sys',
+  "sys.path.insert(0, str(pathlib.Path.cwd() / 'tools' / 'repo-ci-mcp'))",
+  'from repo_ci_mcp.exact_sha import repo_ci_exact_sha',
+  'class Reader:',
+  "  repository = 'hanmiyoo10-alt/-'",
+  '  def list_runs_exact_sha(self, sha): return (0, [])',
+  '  def get_repository_file(self, path, ref, max_bytes):',
+  '    raw = pathlib.Path(path).read_bytes()',
+  "    return {'content': raw, 'blob_sha': 'd' * 40, 'size': len(raw)}",
+  '  def compare_changed_paths(self, before, sha):',
+  "    return (['tools/repo-ci-mcp/README.md','tools/repo-ci-mcp/repo_ci_mcp/github_observability.py','tools/repo-ci-mcp/repo_ci_mcp/github_reader.py','tools/repo-ci-mcp/repo_ci_mcp/server.py','tools/repo-ci-mcp/tests/test_github_observability.py','tools/repo-ci-mcp/tests/test_github_reader.py'], True)",
+  "result = repo_ci_exact_sha(Reader(), 'fca76cda388b3f8bb4b70cc32d4fbecd801ddf42', '.github/workflows/plugin-control-plane-ci.yml', event='pull_request', ref='main', before_sha='dc564aa008d9bd116103ccde773a13730a0a26fe', workflow_ref='d142386866ce9e1ba685ee97c3aa99918621776c')",
+  'print(json.dumps(result))',
+].join('\n');
+const exactFixtureCacheDir = path.join(repoRoot, 'tools', 'repo-ci-mcp', 'repo_ci_mcp', '__pycache__');
+assert.equal(fs.existsSync(exactFixtureCacheDir), false, 'exact-SHA fixture must start without repo-local bytecode residue');
+const exactFixture = JSON.parse(execFileSync('python3', ['-c', exactFixtureScript], {
+  cwd: repoRoot,
+  encoding: 'utf8',
+  env: {...process.env, PYTHONDONTWRITEBYTECODE: '1'},
+  maxBuffer: 512 * 1024,
+  stdio: ['ignore', 'pipe', 'inherit'],
+}));
+assert.equal(fs.existsSync(exactFixtureCacheDir), false, 'exact-SHA fixture must not create repo-local bytecode residue');
+assert.equal(exactFixture.disposition, 'EXPECTED_NO_RUN_PATH_FILTER');
+assert.deepEqual(exactFixture.reason_codes, ['PATH_FILTERED']);
+assert.equal(exactFixture.evidence.changed_path_count, 6);
+assert.equal(exactFixture.evidence.workflow_ref, 'd142386866ce9e1ba685ee97c3aa99918621776c');
 
 function sequenceExec(steps) {
   let index = 0;
@@ -166,14 +272,74 @@ try {
   fs.rmSync(artifactRoot, {recursive: true, force: true});
 }
 
+assert.deepEqual(
+  validateInvocationContext({eventName: 'workflow_dispatch', ref: 'refs/heads/main'}),
+  {disposition: 'PASS', reasonCode: null},
+);
+assert.deepEqual(
+  validateInvocationContext({eventName: 'workflow_dispatch', ref: 'refs/heads/candidate'}),
+  {disposition: 'BLOCKED', reasonCode: 'MANUAL_DISPATCH_REQUIRES_MAIN'},
+);
+assert.deepEqual(
+  validateInvocationContext({eventName: 'workflow_dispatch', ref: 'refs/tags/v1'}),
+  {disposition: 'BLOCKED', reasonCode: 'MANUAL_DISPATCH_REQUIRES_MAIN'},
+);
+assert.deepEqual(
+  validateInvocationContext({eventName: 'push', ref: 'refs/heads/main'}),
+  {disposition: 'PASS', reasonCode: null},
+);
+assert.deepEqual(
+  validateInvocationContext({eventName: '', ref: ''}),
+  {disposition: 'PASS', reasonCode: null},
+);
+assert.deepEqual(
+  validateInvocationContext({eventName: 'workflow_dispatch', ref: ''}),
+  {disposition: 'BLOCKED', reasonCode: 'MANUAL_DISPATCH_REQUIRES_MAIN'},
+);
+
+const collectorCli = path.join(__dirname, '..', 'orchestrator', 'proof-bundle.cjs');
+let offMainCliError = null;
+try {
+  execFileSync(process.execPath, [collectorCli, 'compose'], {
+    env: {
+      ...process.env,
+      GITHUB_EVENT_NAME: 'workflow_dispatch',
+      GITHUB_REF: 'refs/heads/candidate',
+      GITHUB_REPOSITORY: '',
+      TARGET_SHA: '',
+      GH_TOKEN: '',
+    },
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+} catch (error) {
+  offMainCliError = error;
+}
+assert(offMainCliError, 'off-main manual dispatch must fail before collection');
+assert(String(offMainCliError.stderr || '').includes('MANUAL_DISPATCH_REQUIRES_MAIN'),
+  'off-main manual dispatch must fail on invocation admission before repository/token validation');
+
 const githubDir = path.resolve(__dirname, '..', '..', '..');
 const collector = fs.readFileSync(path.join(__dirname, '..', 'orchestrator', 'proof-bundle.cjs'), 'utf8');
 const workflow = fs.readFileSync(path.join(githubDir, 'workflows', 'canonical-main-proof-bundle.yml'), 'utf8');
+const canonicalMainReadme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8');
+const runStart = collector.indexOf('function run()');
+const admissionInRun = collector.indexOf('validateInvocationContext({', runStart);
+const collectionInRun = collector.indexOf('collectOnce(repo, targetSha)', runStart);
+assert(runStart >= 0 && admissionInRun > runStart && collectionInRun > admissionInRun,
+  'manual dispatch admission must run before proof collection');
 assert(!/--method['",\s]+(?:POST|PATCH|PUT|DELETE)/i.test(collector), 'collector must not issue write API methods');
 assert(!/^\s*[a-z-]+:\s*write\s*$/mi.test(workflow), 'proof workflow permissions must be read-only');
 assert(/push:\s*\n\s*branches:\s*\[main\]/m.test(workflow), 'proof bundle must run automatically on main push');
 assert(/canonical-main-proof-bundle\.json/.test(workflow), 'workflow must upload the JSON bundle');
 assert(/if-no-files-found:\s*error/.test(workflow), 'missing proof artifact must remain a workflow error');
 assert(/orchestrator\/proof-bundle\.cjs compose/.test(workflow), 'workflow must invoke the trusted composer');
+assert(/workflow_dispatch:/m.test(workflow), 'manual refresh trigger must remain available');
+assert(/current-main-only manual refresh/i.test(canonicalMainReadme));
+assert(/repository-actions-compat-proof\.yml/.test(canonicalMainReadme),
+  'candidate action-runtime proof must point to the generic read-only harness');
+assert(/workflow execution success/i.test(canonicalMainReadme)
+  && /acceptanceReady/i.test(canonicalMainReadme),
+  'docs must distinguish workflow execution from semantic proof acceptance');
 
 console.log('canonical-main proof-bundle-contract: ok');

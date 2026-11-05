@@ -412,7 +412,7 @@ function sessionStateFromEvidence(value) {
 }
 
 function scanLocalSession({procRoot = '/proc', selfPid = process.pid} = {}) {
-  const topology = rdcSessionEvidence.scanSession({procRoot, selfPid});
+  const topology = rdcSessionEvidence.scanSession({procRoot, selfPid, executor: 'S'});
   return sessionStateFromEvidence(topology);
 }
 

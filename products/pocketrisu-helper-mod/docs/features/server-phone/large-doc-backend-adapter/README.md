@@ -6,12 +6,12 @@
 
 ## 목적
 
-기존 `plugins/termux/large-doc-editor` 기능은 독립 프로젝트/기능으로 유지하면서, PocketRisu backend에 필요한 대형 문서 처리 기능만 별도 adapter/service 경계로 이식한다.
+기존 `products/standalone/termux/large-doc-editor` 기능은 독립 프로젝트/기능으로 유지하면서, PocketRisu backend에 필요한 대형 문서 처리 기능만 별도 adapter/service 경계로 이식한다.
 
 ## source evidence
 
 원본 backend:
-- `plugins/termux/large-doc-editor/server.py`
+- `products/standalone/termux/large-doc-editor/server.py`
 - localhost bind: `127.0.0.1`
 - 기본 port: `8765`
 - workspace-scoped 파일 접근

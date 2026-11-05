@@ -6,10 +6,12 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const childProcess = require('node:child_process');
+const crypto = require('node:crypto');
 const test = require('node:test');
 
 const stage = require('../mcl-stage-entry.cjs');
 const workspace = require('../workspace-prepare.cjs');
+const taskHandoff = require('../../task-handoff.cjs');
 const patchOwner = require('../../../device-ops/repository-patch/mcl-repository-patch-owner-invoke.cjs');
 
 const MAIN = 'a'.repeat(40);
@@ -41,6 +43,42 @@ function plan(overrides = {}) {
     details: 'withheld',
     ...overrides,
   };
+}
+function lPlan(overrides = {}) {
+  return plan({
+    route: 'L',
+    executor: 'L',
+    preflight_owner: 'not_applicable',
+    fallback: 'S_candidate',
+    next_gate: 'scope_overlap',
+    ...overrides,
+  });
+}
+
+function sha256(text) {
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+function closureInput({recoverCovered = true, prerequisiteCovered = true, evidenceState = 'KNOWN'} = {}) {
+  return {
+    schema: 'mcl-owner-lifecycle-closure-input.v2',
+    checkpoint: 'AUTHORITY_SCOPE',
+    obligations: {
+      IMPLEMENT_SELF: {required:true,evidenceState:'KNOWN',routeCanImplementExactScope:true,bootstrapReviewed:false},
+      REFINE_SELF: {required:true,evidenceState:'KNOWN',samePrUpdateRequired:false},
+      FINALIZE_SELF: {required:true,evidenceState:'KNOWN',lateRecognitionOnly:false,externalBootstrapRequired:false,stableSelfOwnerExists:true,producerLineageCovered:true},
+      RETIRE_SELF: {required:true,evidenceState:'KNOWN',residues:[{kind:'WORKSPACE',state:'PREPARED',ownerCovered:true}]},
+      RECOVER_SELF: {required:true,evidenceState,naturalStates:[{kind:'STAGE_ENTRY_PARTIAL_CREATE',routeCovered:recoverCovered}],continuationPrerequisites:[{kind:'POSTMERGE_FINALIZATION_REACHABILITY',covered:prerequisiteCovered}]},
+    },
+  };
+}
+function closureAdmission({packetRef='#77',packetBody=PACKET_BODY,mainSha=MAIN,route='S',executor='S',checkpoint='AUTHORITY_SCOPE',input=closureInput()} = {}) {
+  return {schemaVersion:1,mode:stage.OWNER_LIFECYCLE_CLOSURE_MODE,packetRef,
+    packetBodySha256:sha256(packetBody),mainSha,route,executor,checkpoint,input};
+}
+function writeClosureFile(root, value = closureAdmission()) {
+  const file = path.join(root, 'owner-lifecycle-closure.json');
+  fs.writeFileSync(file, JSON.stringify(value));
+  return file;
 }
 
 function opsBody(sha = MAIN) {
@@ -202,24 +240,35 @@ function gitFixture() {
   };
 }
 
-test('plan parser accepts only the reviewed S/S mutable shape', () => {
+test('plan parser preserves S/S and admits exact L/L only', () => {
   assert.equal(stage.parsePlan(plan()).route, 'S');
+  assert.equal(stage.parsePlan(lPlan()).route, 'L');
   assert.throws(() => stage.parsePlan(plan({executor: 'M'})), /PLAN_EXECUTOR_UNSUPPORTED/);
+  assert.throws(() => stage.parsePlan(lPlan({executor: 'S'})), /PLAN_EXECUTOR_UNSUPPORTED/);
+  assert.throws(() => stage.parsePlan(lPlan({preflight_owner: 'mcl-preflight'})), /PLAN_PREFLIGHT_OWNER_UNSUPPORTED/);
+  assert.throws(() => stage.parsePlan(lPlan({next_gate: 'preflight'})), /PLAN_NEXT_GATE_UNSUPPORTED/);
+  assert.throws(() => stage.parsePlan(lPlan({fallback: 'M_candidate'})), /PLAN_FALLBACK_UNSUPPORTED/);
   assert.throws(() => stage.parsePlan({...plan(), command: 'git status'}), /PLAN_UNKNOWN_FIELD/);
 });
 
-test('source-main and packet-activity sidecar bindings are optional and strict', () => {
-  const direct = stage.parseArgs(['inspect', '--packet', '#77', '--plan', '/tmp/plan.json']);
+test('source-main, activity and owner-lifecycle sidecars are strict', () => {
+  assert.throws(() => stage.parseArgs(['inspect', '--packet', '#77', '--plan', '/tmp/plan.json']),
+    /OWNER_LIFECYCLE_CLOSURE_FILE_REQUIRED/);
+  const direct = stage.parseArgs(['inspect', '--packet', '#77', '--plan', '/tmp/plan.json',
+    '--owner-lifecycle-closure-file', '/tmp/closure.json']);
   assert.equal(direct.sourceMain, null);
   assert.equal(direct.packetActivityEvidenceFile, null);
+  assert.equal(direct.ownerLifecycleClosureFile, '/tmp/closure.json');
   const bound = stage.parseArgs([
     'inspect', '--packet', '#77', '--plan', '/tmp/plan.json',
     '--packet-activity-evidence-file', '/tmp/activity.json', '--source-main', MAIN,
+    '--owner-lifecycle-closure-file', '/tmp/closure.json',
   ]);
   assert.equal(bound.sourceMain, MAIN);
   assert.equal(bound.packetActivityEvidenceFile, '/tmp/activity.json');
   assert.throws(() => stage.parseArgs([
     'inspect', '--packet', '#77', '--plan', '/tmp/plan.json', '--source-main', 'main',
+    '--owner-lifecycle-closure-file', '/tmp/closure.json',
   ]), /SOURCE_MAIN_INVALID/);
 });
 
@@ -551,7 +600,7 @@ test('landing manifest and lease identity are fixed to landing_metadata S', () =
     packetBodySha256: 'd'.repeat(64),
     landing: {landing_head: 'b'.repeat(40)},
   };
-  const lease = {leaseId: 'e'.repeat(64), observedGeneration: 20, runId: 900};
+  const lease = {leaseId: 'e'.repeat(64), observedGeneration: 20, runId: 900, evidenceRef: 'run:900'};
   const manifest = stage.buildLandingManifest(context, lease);
   assert.deepEqual(manifest.scopes, [stage.LANDING_SCOPE]);
   assert.equal(manifest.workspace.kind, 'landing_metadata');
@@ -596,6 +645,7 @@ test('pre-refresh C11 barrier requires unchanged source authority and exact land
     plan: plan(),
     mainSha: MAIN,
     packetBodySha256: '9'.repeat(64),
+    ownerLifecycleClosureAdmission: {...closureAdmission(), packetBodySha256:'9'.repeat(64)},
     requestedScopes: ['path:docs/demo.md'],
     overlap: {state: 'DISJOINT'},
     normalizationRequired: true,
@@ -624,7 +674,7 @@ test('pre-refresh C11 barrier requires unchanged source authority and exact land
   assert.throws(() => stage.revalidateBeforeLandingRefresh(context, lease, {
     runner,
     inspector: () => ({...context, mainSha: 'd'.repeat(40)}),
-  }), /LANDING_LATE_MAIN_SHA_CONFLICT/);
+  }), /OWNER_LIFECYCLE_CLOSURE_MAIN_SHA_CONFLICT/);
 });
 
 test('normalization release transport failure surfaces explicit recovery action', () => {
@@ -703,6 +753,7 @@ test('eligible normalization uses one fixed refresh then release and COMPLETE re
     runner,
     overlapResolver: () => ({state: 'DISJOINT'}),
     authorityBarrier: () => {},
+    commentPublisher: () => 100 + ++comments,
   });
   assert.equal(value.normalized, true);
   assert.equal(value.count, 1);
@@ -716,7 +767,9 @@ test('eligible normalization uses one fixed refresh then release and COMPLETE re
 test('normalization revalidation is one-shot and requires exact convergence', () => {
   const context = {
     packetNumber: 77, packetRef: '#77', plan: plan(), mainSha: MAIN,
-    packetBodySha256: '3'.repeat(64), requestedScopes: ['path:docs/demo.md'],
+    packetBodySha256: '3'.repeat(64),
+    ownerLifecycleClosureAdmission: {...closureAdmission(), packetBodySha256:'3'.repeat(64)},
+    requestedScopes: ['path:docs/demo.md'],
   };
   const ready = {
     ...context,
@@ -797,6 +850,7 @@ test('late barrier accepts exact fresh context and reuses packet-activity eviden
     sourceMain: null,
     packetActivityEvidence,
     packetBodySha256: 'a'.repeat(64),
+    ownerLifecycleClosureAdmission: {...closureAdmission(), packetBodySha256:'a'.repeat(64)},
     requestedScopes: ['path:docs/demo.md'],
     workspace: {identity: {branch: 'server/mcl-packet-77', worktree: '/root/nyang-worktrees/mcl-packet-77'}},
   };
@@ -831,6 +885,7 @@ test('late barrier rejects main drift before workspace effect', () => {
     plan: plan(),
     mainSha: MAIN,
     packetBodySha256: 'a'.repeat(64),
+    ownerLifecycleClosureAdmission: {...closureAdmission(), packetBodySha256:'a'.repeat(64)},
     requestedScopes: ['path:docs/demo.md'],
     workspace: {identity: {branch: 'server/mcl-packet-77', worktree: '/root/nyang-worktrees/mcl-packet-77'}},
   };
@@ -838,7 +893,7 @@ test('late barrier rejects main drift before workspace effect', () => {
     context,
     {leaseId: 'b'.repeat(64), observedGeneration: 12},
     {inspector: () => ({...context, mainSha: 'c'.repeat(40)})},
-  ), /LATE_MAIN_SHA_CONFLICT/);
+  ), /OWNER_LIFECYCLE_CLOSURE_MAIN_SHA_CONFLICT/);
 });
 
 test('acquire failure is fail-closed', () => {
@@ -855,6 +910,152 @@ test('acquire failure is fail-closed', () => {
     throw new Error(args.join(' '));
   };
   assert.throws(() => stage.acquireLease(context, runner), /D013_ACQUIRE_NOT_PROVEN/);
+});
+
+test('landing acquire and release accept exact no-run durable readback evidence', () => {
+  const leaseId = 'f'.repeat(64);
+  const context = {
+    packetRef: '#77', packetNumber: 77, mainSha: MAIN,
+    packetBodySha256: 'd'.repeat(64), landing: {landing_head: 'b'.repeat(40)},
+  };
+  const runner = (args) => {
+    if (args[0] === process.execPath && args.includes('lease-acquire')) {
+      return response(0, {
+        status: 'DISPATCH_READBACK_COMPLETE', leaseId, observedGeneration: 20,
+        runId: null, runConclusion: null,
+        evidenceRef: `receipt:mcl-task-lease-readback:acquire:${leaseId}:generation:20`,
+      });
+    }
+    if (args[0] === process.execPath && args.includes('lease-release')) {
+      return response(0, {
+        status: 'DISPATCH_READBACK_COMPLETE', leaseId, observedGeneration: 21,
+        runId: null, runConclusion: null,
+        evidenceRef: `receipt:mcl-task-lease-readback:release:${leaseId}:generation:21`,
+      });
+    }
+    throw new Error(args.join(' '));
+  };
+  const acquired = stage.acquireLandingLease(context, runner);
+  assert.equal(acquired.runId, null);
+  assert.equal(acquired.evidenceRef,
+    `receipt:mcl-task-lease-readback:acquire:${leaseId}:generation:20`);
+  const manifest = stage.buildLandingManifest(context, acquired);
+  assert.equal(manifest.leaseEvidence.acquireEvidenceRef, acquired.evidenceRef);
+  assert(manifest.inputRefs.includes(acquired.evidenceRef));
+  const released = stage.releaseLease(context, leaseId, runner);
+  assert.equal(released.ok, true);
+  assert.equal(released.value.runId, null);
+  assert.equal(released.value.evidenceRef,
+    `receipt:mcl-task-lease-readback:release:${leaseId}:generation:21`);
+});
+
+test('exact semantic packet comments reuse, recover lost ack once, and fail closed', () => {
+  const leaseId = 'e'.repeat(64);
+  const context = {
+    packetRef: '#77', packetNumber: 77, mainSha: MAIN,
+    packetBodySha256: 'd'.repeat(64), landing: {landing_head: 'b'.repeat(40)},
+  };
+  const lease = {leaseId, observedGeneration: 20, runId: 900, evidenceRef: 'run:900'};
+  const manifest = stage.buildLandingManifest(context, lease);
+  const manifestBody = taskHandoff.renderManifest(manifest);
+  const handoffBody = stage.renderHandoff(stage.buildHandoff({
+    ...context, plan: plan(), requestedScopes: ['path:docs/demo.md'],
+    workspace: {identity: {branch: 'server/mcl-packet-77', worktree: '/root/nyang-worktrees/mcl-packet-77'}},
+  }, manifest, lease));
+  const receipt = taskHandoff.buildCompletionReceipt(manifest, {
+    disposition: 'COMPLETE',
+    outputRefs: [`commit:${MAIN}`],
+    validationRefs: ['run:900', 'run:901'],
+    observedRefs: [`commit:${MAIN}`, 'run:900', 'run:901'],
+    leaseDisposition: 'RELEASED',
+    leaseReleaseEvidence: {
+      ledgerRef: '#2352', leaseId, releasedGeneration: 21, evidenceRef: 'run:901',
+    },
+    workspaceResult: 'clean', blockerRefs: [], requiredUnknownRefs: [],
+  });
+  const receiptBody = taskHandoff.renderCompletionReceipt(receipt);
+
+  for (const [kind, body] of [
+    ['manifest', manifestBody], ['handoff', handoffBody], ['receipt', receiptBody],
+  ]) {
+    let posts = 0;
+    const rows = [{id: 44, body}];
+    const runner = (args, options = {}) => {
+      if (args[0] === 'gh' && args[1] === 'api' && !args.includes('--method')) {
+        return response(0, rows);
+      }
+      if (args[0] === 'gh' && args[1] === 'api' && args.includes('--method')) {
+        posts += 1;
+        return response(0, {id: 99});
+      }
+      throw new Error(args.join(' '));
+    };
+    assert.equal(stage.postExactSemanticComment(77, body, kind, runner), 44);
+    assert.equal(posts, 0);
+  }
+
+  let posts = 0;
+  let rows = [];
+  const lostAckRunner = (args, options = {}) => {
+    if (args[0] === 'gh' && args[1] === 'api' && !args.includes('--method')) {
+      return response(0, rows);
+    }
+    if (args[0] === 'gh' && args[1] === 'api' && args.includes('--method')) {
+      posts += 1;
+      rows = [{id: 55, body: JSON.parse(options.input).body}];
+      return response(1, '');
+    }
+    throw new Error(args.join(' '));
+  };
+  assert.equal(stage.postExactSemanticComment(77, manifestBody, 'manifest', lostAckRunner), 55);
+  assert.equal(posts, 1);
+
+  posts = 0;
+  rows = [];
+  const absentRunner = (args) => {
+    if (args[0] === 'gh' && args[1] === 'api' && !args.includes('--method')) {
+      return response(0, rows);
+    }
+    if (args[0] === 'gh' && args[1] === 'api' && args.includes('--method')) {
+      posts += 1;
+      return response(1, '');
+    }
+    throw new Error(args.join(' '));
+  };
+  assert.throws(() =>
+    stage.postExactSemanticComment(77, manifestBody, 'manifest', absentRunner),
+  /COMMENT_WRITE_ACK_UNKNOWN/);
+  assert.equal(posts, 1);
+
+  const conflictContext = {...context, mainSha: 'c'.repeat(40)};
+  const conflicting = taskHandoff.renderManifest(stage.buildLandingManifest(conflictContext, lease));
+  const conflictRunner = (args) => {
+    if (args[0] === 'gh' && args[1] === 'api' && !args.includes('--method')) {
+      return response(0, [{id: 66, body: conflicting}]);
+    }
+    throw new Error(args.join(' '));
+  };
+  assert.throws(() =>
+    stage.postExactSemanticComment(77, manifestBody, 'manifest', conflictRunner),
+  /COMMENT_SEMANTIC_CONFLICT/);
+
+  const retryLease = {...lease, observedGeneration: 21, evidenceRef: 'run:901'};
+  const retryBody = taskHandoff.renderManifest(stage.buildLandingManifest(context, retryLease));
+  let retryPosts = 0;
+  const retryRows = [{id: 67, body: manifestBody}];
+  const retryRunner = (args, options = {}) => {
+    if (args[0] === 'gh' && args[1] === 'api' && !args.includes('--method')) {
+      return response(0, retryRows);
+    }
+    if (args[0] === 'gh' && args[1] === 'api' && args.includes('--method')) {
+      retryPosts += 1;
+      retryRows.push({id: 68, body: JSON.parse(options.input).body});
+      return response(0, {id: 68});
+    }
+    throw new Error(args.join(' '));
+  };
+  assert.equal(stage.postExactSemanticComment(77, retryBody, 'manifest', retryRunner), 68);
+  assert.equal(retryPosts, 1);
 });
 
 test('normal acquire accepts exact ledger readback evidence without run id', () => {
@@ -1012,6 +1213,7 @@ test('workspace precondition failure after manifest still releases lease when st
         return 'manifest-fixture';
       },
       lateBarrier: () => {},
+      commentPublisher: () => 800 + ++comments,
     });
     assert.equal(receipt.result, 'BLOCKED');
     assert(receipt.reasonCodes.includes('LOCAL_BRANCH_EXISTS'));
@@ -1019,6 +1221,68 @@ test('workspace precondition failure after manifest still releases lease when st
     assert.equal(receipt.counters.find((row) => row.name === 'workspace_state_changed').value, 0);
     assert.equal(receipt.nextLegalAction, 'REPAIR_AND_RETRY');
   } finally { f.close(); }
+});
+
+test('L workspace preparation failure preserves L execution surface', () => {
+  const f = gitFixture();
+  let releaseCalls = 0;
+  let comments = 0;
+  const lProfile = {...f.profile, branchPrefix:'laptop/mcl-packet-', targetPrefix:'mcl-packet-'};
+  try {
+    const inspected = workspace.inspectWorkspace({packetNumber: 82, baseSha: f.base, profile: lProfile});
+    assert.equal(inspected.status, 'READY');
+    const context = {
+      packetNumber: 82, packetRef: '#82', plan: lPlan(), stageProfile: stage.STAGE_PROFILES.L,
+      mainSha: f.base, packetBody: PACKET_BODY, packetBodySha256: 'a'.repeat(64),
+      requestedScopes: ['path:docs/demo.md'], workspace: inspected,
+    };
+    const runner = (args, options) => {
+      if (args[0] === process.execPath && args.includes('lease-acquire')) {
+        return response(0, {status:'DISPATCH_COMPLETE',leaseId:'b'.repeat(64),
+          observedGeneration:21,runId:801,runConclusion:'success'});
+      }
+      if (args[0] === process.execPath && args.includes('lease-release')) {
+        releaseCalls += 1;
+        return response(0, {status:'DISPATCH_COMPLETE',leaseId:'b'.repeat(64),
+          observedGeneration:22,runId:802,runConclusion:'success'});
+      }
+      if (args[0] === 'gh' && args[1] === 'api' && args.includes('--method')) {
+        comments += 1;
+        return response(0, {id: 820 + comments});
+      }
+      return workspace.runDefault(args, options);
+    };
+    const receipt = stage.applyContext(context, {
+      runner, profile: lProfile,
+      manifestBuilder: () => ({manifestId:'c'.repeat(64)}),
+      manifestRenderer: () => {
+        childProcess.spawnSync('git', ['-C', lProfile.control, 'branch',
+          'laptop/mcl-packet-82', f.base], {encoding:'utf8'});
+        return 'manifest-fixture';
+      },
+      lateBarrier: () => {},
+      commentPublisher: () => 820 + ++comments,
+    });
+    assert.equal(receipt.result, 'BLOCKED');
+    assert.equal(receipt.executionSurface, 'RDC:L:repository-owned-stage-entry');
+    assert(receipt.reasonCodes.includes('LOCAL_BRANCH_EXISTS'));
+    assert.equal(releaseCalls, 1);
+  } finally { f.close(); }
+});
+
+test('L run inspection failure preserves L execution surface', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcl-stage-entry-l-run-'));
+  const planFile = path.join(root, 'plan.json');
+  try {
+    fs.writeFileSync(planFile, JSON.stringify(lPlan()));
+    const closureFile = writeClosureFile(root, closureAdmission({route:'L',executor:'L'}));
+    const receipt = stage.run(['inspect','--packet','#77','--plan',planFile,
+      '--owner-lifecycle-closure-file',closureFile], {
+      runner: () => ({code:1,stdout:'',stderr:'read failed'}),
+    });
+    assert.equal(receipt.result, 'UNKNOWN');
+    assert.equal(receipt.executionSurface, 'RDC:L:repository-owned-stage-entry');
+  } finally { fs.rmSync(root, {recursive:true, force:true}); }
 });
 
 test('apply PASS prepares workspace/ref but does not invoke holder or source effect owner', () => {
@@ -1056,6 +1320,7 @@ test('apply PASS prepares workspace/ref but does not invoke holder or source eff
       manifestBuilder: () => ({manifestId: '6'.repeat(64)}),
       manifestRenderer: () => 'manifest-fixture',
       lateBarrier: () => {},
+      commentPublisher: () => 700 + ++comments,
     });
     assert.equal(receipt.result, 'PASS');
     assert.equal(receipt.counters.find((row) => row.name === 'landing_normalization_count').value, 0);
@@ -1114,6 +1379,7 @@ test('successful one-shot normalization composes into existing repository stage 
       manifestBuilder: () => ({manifestId: '7'.repeat(64)}),
       manifestRenderer: () => 'manifest-fixture',
       lateBarrier: () => {},
+      commentPublisher: () => 900 + ++comments,
     });
     assert.equal(receipt.result, 'PASS');
     assert.equal(receipt.counters.find((row) => row.name === 'landing_normalization_count').value, 1);
@@ -1131,4 +1397,205 @@ test('source delegates target scope grammar and contains no broader effect machi
   assert.doesNotMatch(source, /\bsetInterval\b|\bsetTimeout\b/);
   assert.doesNotMatch(source, /['"](?:reset|stash|rebase|merge|checkout|switch)['"]/);
   assert.doesNotMatch(source, /--force\b/);
+});
+
+test('packet discovery ignores quoted marker prose but keeps malformed real packet fail-closed', () => {
+  const proseRunner = (args) => {
+    const endpoint = args[2];
+    if (endpoint.startsWith('repos/' + stage.REPO + '/issues?')) {
+      return response(0, [
+        {number: 10, state: 'open', body: PACKET_BODY},
+        {number: 20, state: 'open', body: 'Documentation mentions <!-- canonical-main-work-packet:v1 --> inline only.'},
+      ]);
+    }
+    throw new Error(endpoint);
+  };
+  assert.equal(stage.discoverOverlap({
+    packetNumber: 10, requestedScopes: ['path:docs/demo.md'], runner: proseRunner,
+  }).state, 'DISJOINT');
+  const malformedRunner = (args) => {
+    const endpoint = args[2];
+    if (endpoint.startsWith('repos/' + stage.REPO + '/issues?')) {
+      return response(0, [
+        {number: 10, state: 'open', body: PACKET_BODY},
+        {number: 20, state: 'open', body: '<!-- canonical-main-work-packet:v1 -->\n## State\n\`IN_PROGRESS\`'},
+      ]);
+    }
+    throw new Error(endpoint);
+  };
+  assert.equal(stage.discoverOverlap({
+    packetNumber: 10, requestedScopes: ['path:docs/demo.md'], runner: malformedRunner,
+  }).state, 'UNKNOWN');
+});
+
+test('L landing profile validates exact route/main identity and ancestry', () => {
+  const base = {schema:'mcl-landing-freshness.v1',operation:'status',route:'L',
+    actual_branch:'main',worktree:'clean',landing_head:'b'.repeat(40),remote_main:MAIN,
+    landing_relation:'behind_ff',details:'withheld'};
+  assert.deepEqual(stage.classifyLanding(MAIN, {...base,origin_main:MAIN,origin_remote_relation:'same'},
+    stage.STAGE_PROFILES.L), {state:'CURRENT',normalizationRequired:false});
+  assert.deepEqual(stage.classifyLanding(MAIN, {...base,origin_main:'c'.repeat(40),origin_remote_relation:'stale'},
+    stage.STAGE_PROFILES.L), {state:'NORMALIZATION_REQUIRED',normalizationRequired:true});
+  assert.deepEqual(stage.classifyLanding(MAIN, {
+    ...base, landing_relation:'unknown', origin_main:'c'.repeat(40), origin_remote_relation:'stale',
+  }, stage.STAGE_PROFILES.L), {state:'NORMALIZATION_REQUIRED',normalizationRequired:true});
+  for (const landing_relation of ['ahead','diverged','unrelated']) {
+    assert.throws(() => stage.classifyLanding(MAIN, {...base,landing_relation,origin_main:MAIN,origin_remote_relation:'same'},
+      stage.STAGE_PROFILES.L), /LANDING_HEAD_RELATION_NOT_READY/);
+  }
+  assert.throws(() => stage.classifyLanding(MAIN, {...base,landing_relation:'unknown',origin_main:MAIN,origin_remote_relation:'same'},
+    stage.STAGE_PROFILES.L), /LANDING_HEAD_RELATION_UNRESOLVED/);
+  assert.throws(() => stage.classifyLanding(MAIN, {...base,route:'S',origin_main:MAIN,origin_remote_relation:'same'},
+    stage.STAGE_PROFILES.L), /LANDING_RECEIPT_INVALID/);
+  assert.throws(() => stage.classifyLanding(MAIN, {...base,actual_branch:'server/work',origin_main:MAIN,origin_remote_relation:'same'},
+    stage.STAGE_PROFILES.L), /LANDING_BRANCH_NOT_READY/);
+});
+
+test('L landing D-013 and D-014 identity is exact L/L', () => {
+  const context={packetNumber:77,packetRef:'#77',mainSha:MAIN,packetBodySha256:'d'.repeat(64),
+    stageProfile:stage.STAGE_PROFILES.L,landing:{landing_head:'b'.repeat(40)}};
+  const lease={leaseId:'e'.repeat(64),observedGeneration:20,runId:900,evidenceRef:'run:900'};
+  const manifest=stage.buildLandingManifest(context,lease);
+  assert.deepEqual(manifest.scopes,['surface:mcl-landing-origin-main:L']);
+  assert.equal(manifest.route,'L'); assert.equal(manifest.executor,'L');
+  assert.equal(manifest.workspace.branch,'main');
+  assert.equal(manifest.workspace.worktree,'/home/alsl0/nyang-repo');
+  let acquireArgs;
+  stage.acquireLandingLease(context,(args)=>{acquireArgs=args;return response(0,{
+    status:'DISPATCH_COMPLETE',leaseId:lease.leaseId,observedGeneration:20,runId:900,runConclusion:'success'});});
+  assert(acquireArgs.includes('L'));
+  assert(acquireArgs.includes(JSON.stringify(['surface:mcl-landing-origin-main:L'])));
+  assert(acquireArgs.includes('main')); assert(acquireArgs.includes('/home/alsl0/nyang-repo'));
+});
+
+test('L normalization invokes exactly refresh L and validates L readback', () => {
+  const packetActivityEvidence=stage.normalizePacketActivityEvidenceSet(
+    packetActivityEvidenceSet({requesterRef:'#77'}),77);
+  const context={packetNumber:77,packetRef:'#77',mainSha:MAIN,packetBodySha256:'4'.repeat(64),
+    stageProfile:stage.STAGE_PROFILES.L,normalizationRequired:true,landingState:'NORMALIZATION_REQUIRED',
+    packetActivityEvidence,landing:{landing_head:'b'.repeat(40)}};
+  const seen=[];
+  const runner=(args)=>{
+    seen.push(args);
+    if(args[0]===process.execPath&&args.includes('lease-acquire')) return response(0,{
+      status:'DISPATCH_COMPLETE',leaseId:'2'.repeat(64),observedGeneration:30,runId:1001,runConclusion:'success'});
+    if(args[0]===process.execPath&&args.includes('lease-release')) return response(0,{
+      status:'DISPATCH_COMPLETE',leaseId:'2'.repeat(64),observedGeneration:31,runId:1002,runConclusion:'success'});
+    if(args[0]==='gh'&&args[1]==='api'&&args.includes('--method')) return response(0,{id:101});
+    if(String(args[0]).endsWith('/mcl-landing-freshness')){
+      assert.deepEqual(args.slice(1),['refresh','L']);
+      return response(0,['schema=mcl-landing-freshness.v1','operation=refresh','route=L','intended_branch=main',
+        'actual_branch=main','worktree=clean','landing_head='+'b'.repeat(40),'origin_main='+MAIN,'remote_main='+MAIN,
+        'origin_remote_relation=same','landing_relation=behind_ff','refresh=refreshed','details=withheld',''].join('\n'));
+    }
+    throw new Error(args.join(' '));
+  };
+  const value=stage.normalizeLandingCurrentness(context,{
+    runner,
+    overlapResolver:(input)=>{
+      assert.equal(input.packetActivityEvidence,packetActivityEvidence);
+      assert.deepEqual(input.requestedScopes,['surface:mcl-landing-origin-main:L']);
+      return {state:'DISJOINT'};
+    },
+    authorityBarrier:()=>{},
+    commentPublisher:()=>101,
+  });
+  assert.equal(value.normalized,true); assert.equal(value.count,1);
+  assert(seen.some((args)=>String(args[0]).endsWith('/mcl-landing-freshness')&&args[1]==='refresh'&&args[2]==='L'));
+});
+
+test('L repository manifest handoff and receipt preserve L identity', () => {
+  const context={packetNumber:77,packetRef:'#77',plan:lPlan(),stageProfile:stage.STAGE_PROFILES.L,
+    mainSha:MAIN,packetBodySha256:'c'.repeat(64),requestedScopes:['path:docs/demo.md'],
+    workspace:{identity:{branch:'laptop/mcl-packet-77',worktree:'/home/alsl0/nyang-worktrees/mcl-packet-77'}}};
+  const lease={leaseId:'b'.repeat(64),observedGeneration:9,runId:500};
+  const manifest=stage.buildManifest(context,lease);
+  assert.equal(manifest.route,'L'); assert.equal(manifest.executor,'L');
+  const handoff=stage.buildHandoff(context,manifest,lease);
+  assert.equal(handoff.route,'L'); assert.equal(handoff.executor,'L');
+  const receipt=stage.receiptFor({packetNumber:77,route:'L',result:'PASS'});
+  assert.equal(receipt.executionSurface,'RDC:L:repository-owned-stage-entry');
+});
+
+test('L inspect skips S preflight and uses exact L workspace namespace', () => {
+  const t=tempProfile(); let sPreflightCalls=0;
+  const lProfile={...t.profile,branchPrefix:'laptop/mcl-packet-',targetPrefix:'mcl-packet-'};
+  const base=inspectRunner();
+  const runner=(args,options)=>{
+    if(String(args[0]).endsWith('/s-env-status')){sPreflightCalls+=1;throw new Error('S preflight must not run for L');}
+    if(String(args[0]).endsWith('/mcl-landing-freshness')){
+      assert.deepEqual(args.slice(1),['status','L']);
+      return response(0,['schema=mcl-landing-freshness.v1','operation=status','route=L','intended_branch=main',
+        'actual_branch=main','worktree=clean','landing_head='+'b'.repeat(40),'origin_main='+MAIN,'remote_main='+MAIN,
+        'origin_remote_relation=same','landing_relation=behind_ff','refresh=not_requested','details=withheld',''].join('\n'));
+    }
+    return base(args,options);
+  };
+  try{
+    const value=stage.inspectContext({packetNumber:77,plan:lPlan(),runner,profile:lProfile});
+    assert.equal(value.stageProfile.route,'L'); assert.equal(value.preflight,null);
+    assert.equal(value.workspace.identity.branch,'laptop/mcl-packet-77'); assert.equal(sPreflightCalls,0);
+  }finally{t.close();}
+});
+
+test('owner-lifecycle closure admission requires exact V2 PASS identity', () => {
+  const base = {packetRef:'#77',packetBodySha256:sha256(PACKET_BODY),mainSha:MAIN,stageProfile:stage.STAGE_PROFILES.S};
+  const admitted = stage.qualifyOwnerLifecycleClosure(base, closureAdmission());
+  assert.equal(admitted.ownerLifecycleClosure.receipt.result, 'PASS');
+  assert.equal(admitted.ownerLifecycleClosure.receipt.obligations.RECOVER_SELF.classification, 'RECOVER_SELF_COVERED');
+  assert.match(admitted.ownerLifecycleClosure.evidenceRef, /^receipt:mcl-owner-lifecycle-closure:[0-9a-f]{64}$/);
+
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base, closureAdmission({packetRef:'#78'})),
+    /OWNER_LIFECYCLE_CLOSURE_PACKET_REF_CONFLICT/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base, closureAdmission({packetBody:'changed'})),
+    /OWNER_LIFECYCLE_CLOSURE_PACKET_BODY_DIGEST_CONFLICT/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base, closureAdmission({mainSha:'b'.repeat(40)})),
+    /OWNER_LIFECYCLE_CLOSURE_MAIN_SHA_CONFLICT/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base, closureAdmission({route:'L',executor:'L'})),
+    /OWNER_LIFECYCLE_CLOSURE_ROUTE_EXECUTOR_CONFLICT/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base, closureAdmission({checkpoint:'PRE_MERGE'})),
+    /OWNER_LIFECYCLE_CLOSURE_CHECKPOINT_CONFLICT/);
+});
+
+test('owner-lifecycle closure admission fails closed for V1, recovery gaps and classifier uncertainty', () => {
+  const base = {packetRef:'#77',packetBodySha256:sha256(PACKET_BODY),mainSha:MAIN,stageProfile:stage.STAGE_PROFILES.S};
+  const v1 = closureInput();
+  v1.schema = 'mcl-owner-lifecycle-closure-input.v1';
+  delete v1.obligations.RECOVER_SELF;
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base, closureAdmission({input:v1})),
+    /OWNER_LIFECYCLE_CLOSURE_V2_REQUIRED/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base,
+    closureAdmission({input:closureInput({recoverCovered:false})})),
+  /OWNER_LIFECYCLE_CLOSURE_RECOVER_ROUTE_MISSING/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base,
+    closureAdmission({input:closureInput({prerequisiteCovered:false})})),
+  /OWNER_LIFECYCLE_CLOSURE_RECOVER_NEXT_OWNER_PREREQUISITE_MISSING/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base,
+    closureAdmission({input:closureInput({evidenceState:'UNKNOWN'})})),
+  /OWNER_LIFECYCLE_CLOSURE_CLASSIFIER_UNKNOWN/);
+  assert.throws(() => stage.qualifyOwnerLifecycleClosure(base,
+    closureAdmission({input:closureInput({evidenceState:'CONFLICT'})})),
+  /OWNER_LIFECYCLE_CLOSURE_CLASSIFIER_CONFLICT/);
+});
+
+test('owner-lifecycle closure file is bounded regular JSON', () => {
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'mcl-stage-entry-closure-'));
+  try {
+    const valid=writeClosureFile(root);
+    assert.equal(stage.readOwnerLifecycleClosureFile(valid).mode, stage.OWNER_LIFECYCLE_CLOSURE_MODE);
+    const symlink=path.join(root,'link.json'); fs.symlinkSync(valid,symlink);
+    assert.throws(()=>stage.readOwnerLifecycleClosureFile(symlink),/OWNER_LIFECYCLE_CLOSURE_REGULAR_FILE_REQUIRED/);
+    const bad=path.join(root,'bad.json'); fs.writeFileSync(bad,'{');
+    assert.throws(()=>stage.readOwnerLifecycleClosureFile(bad),/OWNER_LIFECYCLE_CLOSURE_JSON_INVALID/);
+    const big=path.join(root,'big.json'); fs.writeFileSync(big,'x'.repeat(stage.MAX_OWNER_LIFECYCLE_CLOSURE_BYTES+1));
+    assert.throws(()=>stage.readOwnerLifecycleClosureFile(big),/OWNER_LIFECYCLE_CLOSURE_FILE_TOO_LARGE/);
+  } finally {fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('owner-lifecycle closure late main drift invalidates the bound PASS', () => {
+  const admission=closureAdmission();
+  const base={packetRef:'#77',packetBodySha256:sha256(PACKET_BODY),mainSha:MAIN,stageProfile:stage.STAGE_PROFILES.S};
+  stage.qualifyOwnerLifecycleClosure(base, admission);
+  assert.throws(()=>stage.qualifyOwnerLifecycleClosure({...base,mainSha:'b'.repeat(40)}, admission),
+    /OWNER_LIFECYCLE_CLOSURE_MAIN_SHA_CONFLICT/);
 });

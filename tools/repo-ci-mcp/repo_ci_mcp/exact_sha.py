@@ -7,6 +7,7 @@ from .github_reader import GitHubReadError, GitHubReader
 from .summary import normalize_workflow_path, resolve_workflow
 
 SCHEMA = "repo-ci-exact-sha.v1"
+RUNS_SCHEMA = "repo-ci-runs-exact-sha.v1"
 MAX_RUNS = 100
 MAX_WORKFLOW_BYTES = 128 * 1024
 SUPPORTED_FILTERS = {"branches", "branches-ignore", "paths", "paths-ignore"}
@@ -48,6 +49,61 @@ def _run_view(run: dict[str, Any]) -> dict[str, Any]:
         "conclusion": run.get("conclusion"), "run_number": run.get("run_number"),
         "run_attempt": run.get("run_attempt"), "html_url": run.get("html_url"),
     }
+
+
+def repo_ci_runs_exact_sha(
+    reader: GitHubReader, sha: str, event: str | None = None,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "schema": RUNS_SCHEMA,
+        "ok": False,
+        "repository": reader.repository,
+        "sha": sha,
+        "event": event,
+        "inventory_complete": False,
+        "total_count": None,
+        "count": 0,
+        "runs": [],
+        "reason_codes": [],
+    }
+    exact_sha = _valid_sha(sha)
+    if exact_sha is None:
+        out["reason_codes"] = ["SHA_INVALID"]
+        return out
+    if event is not None and (
+        not isinstance(event, str) or not re.fullmatch(r"[A-Za-z0-9_]+", event)
+    ):
+        out["reason_codes"] = ["EVENT_INVALID"]
+        return out
+    try:
+        total, runs = reader.list_runs_exact_sha(exact_sha, event=event)
+    except GitHubReadError as exc:
+        out["reason_codes"] = [
+            "RUN_INVENTORY_READ_BLOCKED"
+            if exc.status_code == 403
+            else "RUN_INVENTORY_READ_FAILED"
+        ]
+        return out
+    if total > MAX_RUNS or len(runs) > MAX_RUNS:
+        out["reason_codes"] = ["RUN_INVENTORY_BOUND_EXCEEDED"]
+        return out
+    if len(runs) != total:
+        out["reason_codes"] = ["RUN_INVENTORY_INCOMPLETE"]
+        return out
+    if any(run.get("head_sha") != exact_sha for run in runs):
+        out["reason_codes"] = ["RUN_INVENTORY_SHA_MISMATCH"]
+        return out
+    if event is not None and any(run.get("event") != event for run in runs):
+        out["reason_codes"] = ["RUN_INVENTORY_EVENT_MISMATCH"]
+        return out
+
+    out["sha"] = exact_sha
+    out["inventory_complete"] = True
+    out["total_count"] = total
+    out["count"] = len(runs)
+    out["runs"] = [_run_view(run) for run in runs]
+    out["ok"] = True
+    return out
 
 
 def _scalar_list(raw: str) -> list[str]:
@@ -209,6 +265,7 @@ def _decode_workflow(source: dict[str, Any]) -> str:
 def repo_ci_exact_sha(
     reader: GitHubReader, sha: str, workflow: str | None = None,
     event: str | None = None, ref: str | None = None, before_sha: str | None = None,
+    workflow_ref: str | None = None,
 ) -> dict[str, Any]:
     out = _base(reader, sha, workflow)
     exact_sha = _valid_sha(sha)
@@ -247,8 +304,12 @@ def repo_ci_exact_sha(
         return _finish(out, "RAN")
     if event is None:
         return _finish(out, "UNKNOWN", _reason("EVENT_REQUIRED_FOR_ABSENCE"))
+    exact_workflow_ref = exact_sha if workflow_ref is None else _valid_sha(workflow_ref)
+    if exact_workflow_ref is None:
+        return _finish(out, "UNKNOWN", _reason("WORKFLOW_REF_INVALID"))
+    out["evidence"]["workflow_ref"] = exact_workflow_ref
     try:
-        source = reader.get_repository_file(workflow_path, exact_sha, max_bytes=MAX_WORKFLOW_BYTES)
+        source = reader.get_repository_file(workflow_path, exact_workflow_ref, max_bytes=MAX_WORKFLOW_BYTES)
         triggers = _parse_triggers(_decode_workflow(source))
     except GitHubReadError as exc:
         if exc.status_code == 403:

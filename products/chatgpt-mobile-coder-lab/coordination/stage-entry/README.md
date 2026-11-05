@@ -58,17 +58,41 @@ without `--source-main` preserves the existing behavior.
 
 ```text
 node mcl-stage-entry.cjs inspect --packet '#N' --plan <regular-json-file> \
+  --owner-lifecycle-closure-file <regular-json-file> \
   [--packet-activity-evidence-file <regular-json-file>]
 
 node mcl-stage-entry.cjs apply \
   --packet '#N' \
   --plan <regular-json-file> \
+  --owner-lifecycle-closure-file <regular-json-file> \
   --apply
 ```
 
 The repository is fixed to `hanmiyoo10-alt/-`. V1 accepts no caller repository,
 remote, branch, worktree path, workflow, command, argv fragment, environment map,
 owner selector, retry count, or fallback executor.
+
+### RECOVER_SELF V2 deny-only admission
+
+Every ordinary repository stage-entry invocation requires one regular bounded
+`--owner-lifecycle-closure-file`. The JSON envelope binds the exact current
+packet ref/body digest, protected main SHA, selected route/executor, checkpoint
+`AUTHORITY_SCOPE`, and one existing `mcl-owner-lifecycle-closure-input.v2`.
+
+Stage-entry invokes the existing read-only owner-lifecycle classifier and admits
+progress only when the V2 receipt is `PASS`, all five lifecycle obligations are
+`PASS`, and `RECOVER_SELF` is `PASS / RECOVER_SELF_COVERED`. V1 input, missing or
+malformed evidence, identity drift, classifier `UNKNOWN`/`CONFLICT`, a missing
+recovery route, or a missing next-owner prerequisite fails closed before landing
+normalization, D-013 acquisition, D-014 publication, workspace/ref creation, or
+source effect.
+
+The bound admission is requalified at the existing late authority barriers. A
+packet-body, current-main, route/executor, or checkpoint change therefore cannot
+reuse an older PASS. The gate is deny-only: it does not infer recovery coverage,
+repair a GAP, mutate coordination, select an owner, or grant repository effect
+authority. A PASS is exposed in the stage-entry execution receipt as an
+`owner-lifecycle-closure` step with a bounded receipt locator.
 
 ### Optional packet-activity evidence
 
@@ -192,7 +216,28 @@ readback form carries no run id and must expose the exact deterministic
 `receipt:mcl-task-lease-readback:<operation>:<leaseId>:generation:<generation>`
 locator. Acquire still requires the exact lease id and acquired generation.
 Normal release normalizes either evidence form behind one `evidenceRef`.
-Landing-normalization remains run-backed and is not widened by this rule.
+Landing normalization uses the same exact evidence vocabulary for acquire and
+release. Run-backed evidence remains unchanged; an exact no-run durable readback
+uses only its deterministic `evidenceRef` and never invents a workflow run id.
+
+Stage-entry immutable packet publication is also exactly-once at the semantic
+slot boundary. The landing manifest, landing completion receipt, repository
+manifest, and `HANDOFF_READY` comment are each handled as:
+
+```text
+exact semantic row already present -> reuse / zero POST
+absent -> POST once -> exact reread once
+POST acknowledgement uncertain + exact row present -> recover success
+POST acknowledgement uncertain + row absent -> UNKNOWN / no blind second POST
+same semantic slot with distinct identity or duplicate exact rows -> CONFLICT
+```
+
+For D-014 manifests the semantic publication slot includes the exact acquired
+D-013 generation as well as packet/phase/lease identity. Releasing and later
+reacquiring the same deterministic lease profile therefore creates a distinct
+reviewed publication slot instead of colliding with the earlier acquisition.
+
+Comment reread is evidence only and grants no broader issue-write authority.
 
 Caller-specific workflow-run identity remains execution provenance in the
 stage-entry receipt/report. It is not part of the normal stage-entry semantic
@@ -324,3 +369,34 @@ node --check products/chatgpt-mobile-coder-lab/coordination/stage-entry/tests/te
 ```
 
 No real source/effect-owner invocation is part of the V1 contract test suite.
+
+
+## Fixed L/L stage-entry profile
+
+Stage-entry additionally admits one exact ordinary repository profile for route/executor `L / L`.
+It is additive; the existing S/S profile remains unchanged.
+
+```text
+plan route/executor = L / L
+preflight_owner = not_applicable
+next_gate = scope_overlap
+landing = /home/alsl0/nyang-repo on main
+landing scope = surface:mcl-landing-origin-main:L
+feature branch = laptop/mcl-packet-<N>
+feature worktree = /home/alsl0/nyang-worktrees/mcl-packet-<N>
+```
+
+L performs no S preflight call and manufactures no aggregate readiness signal. It consumes the reviewed
+`mcl-landing-freshness status L` and optional one-shot `refresh L` owner, with exact L/L
+`landing_metadata` D-013/D-014 identity. Dirty, branch-mismatched, remote-main-mismatched,
+ahead/diverged/unrelated landing states remain fail-closed. `S_candidate` is advisory only and never
+causes automatic route/executor fallback.
+
+Packet discovery uses the canonical standalone-marker predicate from `packet-projection.cjs`; prose
+that merely quotes the marker is not a packet candidate, while malformed real packets with an exact
+standalone marker remain fail-closed.
+
+Repository preparation reuses `workspace-prepare.cjs` through its fixed profile-injection boundary.
+Stage-entry still prepares coordination only; the existing L repository owner performs any later source
+effect. No L branch repair, landing HEAD movement, caller-selected path/ref/remote, merge, release,
+production, runtime, or device authority is added.

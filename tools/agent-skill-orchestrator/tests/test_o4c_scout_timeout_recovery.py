@@ -15,7 +15,7 @@ from benchmarks import run_scout_cell_timeout_recovery as recovery
 from runtime.local_server import post_chat_completion
 
 
-WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "agent-skill-orchestrator-o4c-scout-timeout-recovery.yml"
+WORKFLOW_PATH = REPO_ROOT / "tools" / "agent-skill-orchestrator" / "tests" / "fixtures" / "historical-workflows" / "agent-skill-orchestrator-o4c-scout-timeout-recovery.yml"
 CI_PATH = REPO_ROOT / ".github" / "workflows" / "agent-skills-ci.yml"
 
 
@@ -125,7 +125,8 @@ class O4CScoutTimeoutRecoveryTests(unittest.TestCase):
     def test_agent_skills_ci_mechanically_covers_timeout_recovery_without_executing_it(self) -> None:
         ci = CI_PATH.read_text(encoding="utf-8")
         workflow_path = ".github/workflows/agent-skill-orchestrator-o4c-scout-timeout-recovery.yml"
-        self.assertEqual(ci.count(workflow_path), 2)
+        self.assertEqual(ci.count(workflow_path), 0)
+        self.assertGreaterEqual(ci.count("tools/agent-skill-orchestrator/**"), 2)
         self.assertNotIn("workflow_call", self.workflow)
 
 

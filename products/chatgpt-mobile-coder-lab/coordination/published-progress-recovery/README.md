@@ -114,7 +114,20 @@ The coordinator exposes no arbitrary issue/comment writer.
 
 Lease effects are performed only through `mcl-coordination-operator.cjs` and the existing `mcl-task-lease.yml` owner.
 
-Lost-ack recovery uses bounded workflow-run evidence for the exact deterministic lease identity. It does not infer success from time or absence alone.
+Lease acquire/release accepts the existing successful run-backed
+`DISPATCH_COMPLETE` form and the exact no-run `DISPATCH_READBACK_COMPLETE` form.
+The latter is valid only when its deterministic locator is exactly
+`receipt:mcl-task-lease-readback:<operation>:<leaseId>:generation:<generation>`.
+
+After a process interruption, old release publication may reconstruct the same
+no-run proof from the matching exact D-013 `lastRelease` generation. Fresh
+acquire publication does **not** infer acquisition generation merely from an
+active lease plus the current global ledger generation, because unrelated lease
+operations can advance that generation. A restarted fresh-acquire checkpoint
+therefore requires the existing bounded exact workflow-run evidence fallback to
+re-establish the acquisition generation. Time passage, generic absence, active
+lease presence alone, or synthetic run ids never prove success, and lease
+effects are never replayed merely to obtain transport-shaped evidence.
 
 ## Holder boundary
 

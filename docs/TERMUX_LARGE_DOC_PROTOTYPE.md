@@ -3,7 +3,7 @@
 Date: 2026-08-24
 Status: DEVELOPMENT PROTOTYPE · NON-PRODUCTION
 Issue: #202
-Scope: `plugins/termux/large-doc-editor/`
+Scope: `products/standalone/termux/large-doc-editor/`
 
 ## Primary goal
 

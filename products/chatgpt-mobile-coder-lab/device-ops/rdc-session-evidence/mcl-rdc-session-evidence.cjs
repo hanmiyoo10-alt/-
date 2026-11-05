@@ -5,8 +5,22 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const SHELL_COMMS = new Set(['sh', 'bash', 'dash', 'zsh', 'ksh']);
-const COMMAND_AGENT_MARKER =
-  'desktop-commander-remote/node_modules/@wonderwhy-er/desktop-commander/dist/index.js';
+const COMMAND_AGENT_SCRIPT_SUFFIX =
+  '/node_modules/@wonderwhy-er/desktop-commander/dist/index.js';
+const COMMAND_AGENT_WRAPPERS = Object.freeze([
+  'desktop-commander-remote',
+  'desktop-commander-remote-termux',
+]);
+const S_TERMUX_PROOT_EXECUTABLE = '/data/data/com.termux/files/usr/bin/proot';
+const S_TERMUX_PROOT_REQUIRED_ARGS = Object.freeze([
+  '--kill-on-exit',
+  '--link2symlink',
+  '--sysvipc',
+  '--rootfs=.',
+  '--cwd=/root',
+  '/bin/bash',
+  '-c',
+]);
 
 const EXECUTION_PROFILES = Object.freeze({
   S: Object.freeze([
@@ -48,22 +62,49 @@ function readProcRecord(procRoot, pid) {
   const ppid = Number(fields[1]);
   if (!Number.isSafeInteger(ppid) || ppid < 0) throw new Error('PROC_PPID_INVALID');
   const comm = fs.readFileSync(path.join(procRoot, String(pid), 'comm'), 'utf8').trim();
-  const cmdline = fs.readFileSync(path.join(procRoot, String(pid), 'cmdline'))
-    .toString('utf8').replace(/\0/g, ' ').trim();
-  return {pid, ppid, comm, cmdline};
+  const argv = fs.readFileSync(path.join(procRoot, String(pid), 'cmdline'))
+    .toString('utf8').split('\0').filter(Boolean);
+  const cmdline = argv.join(' ');
+  return {pid, ppid, comm, argv, cmdline};
+}
+
+function isCommandAgentScriptToken(token) {
+  return typeof token === 'string'
+    && token.endsWith(COMMAND_AGENT_SCRIPT_SUFFIX)
+    && COMMAND_AGENT_WRAPPERS.some(
+      (wrapper) => token.includes('/' + wrapper + COMMAND_AGENT_SCRIPT_SUFFIX),
+    );
 }
 
 function isCommandAgent(record) {
-  if (!record || !String(record.cmdline || '').includes(COMMAND_AGENT_MARKER)) return false;
-  const tokens = String(record.cmdline).split(/\s+/).filter(Boolean);
-  return tokens[tokens.length - 1] !== 'remote';
+  if (!record || !Array.isArray(record.argv)) return false;
+  if (!record.argv.some(isCommandAgentScriptToken)) return false;
+  return record.argv[record.argv.length - 1] !== 'remote';
+}
+
+function isFixedSTermuxProotRoot(record, executor) {
+  return executor === 'S'
+    && record?.comm === 'proot'
+    && Array.isArray(record.argv)
+    && record.argv[0] === S_TERMUX_PROOT_EXECUTABLE
+    && S_TERMUX_PROOT_REQUIRED_ARGS.every((arg) => record.argv.includes(arg));
+}
+
+function isCommandSessionRoot(record, executor) {
+  return SHELL_COMMS.has(record?.comm) || isFixedSTermuxProotRoot(record, executor);
+}
+
+function isBenignPythonProbe(record) {
+  if (!record?.comm?.startsWith('python') || !Array.isArray(record.argv)) return false;
+  if (record.argv.length !== 2 || record.argv[1] !== '--version') return false;
+  return /^python(?:3)?$/.test(path.basename(record.argv[0]));
 }
 
 function topologyResult(sessionState, reasonCode, compatibilityReason) {
   return {sessionState, reasonCode, compatibilityReason};
 }
 
-function scanSession({procRoot = '/proc', selfPid = process.pid} = {}) {
+function scanSession({procRoot = '/proc', selfPid = process.pid, executor = 'unknown'} = {}) {
   try {
     const chain = [];
     let pid = selfPid;
@@ -80,11 +121,11 @@ function scanSession({procRoot = '/proc', selfPid = process.pid} = {}) {
 
     const agent = chain[agentIndex];
     const currentRoot = chain[agentIndex - 1];
-    if (currentRoot.ppid !== agent.pid || !SHELL_COMMS.has(currentRoot.comm)) {
+    if (currentRoot.ppid !== agent.pid || !isCommandSessionRoot(currentRoot, executor)) {
       return topologyResult('UNKNOWN', 'RDC_AGENT_TOPOLOGY_AMBIGUOUS', 'SESSION_TOPOLOGY_UNRESOLVED');
     }
 
-    let otherShellCount = 0;
+    let otherSessionRootCount = 0;
     let unexpectedChildCount = 0;
     for (const name of fs.readdirSync(procRoot)) {
       if (!/^[0-9]+$/.test(name)) continue;
@@ -97,16 +138,14 @@ function scanSession({procRoot = '/proc', selfPid = process.pid} = {}) {
         return topologyResult('UNKNOWN', 'RDC_AGENT_TOPOLOGY_AMBIGUOUS', 'SESSION_TOPOLOGY_UNRESOLVED');
       }
       if (child.ppid !== agent.pid || child.pid === currentRoot.pid) continue;
-      if (SHELL_COMMS.has(child.comm)) {
-        otherShellCount += 1;
+      if (isCommandSessionRoot(child, executor)) {
+        otherSessionRootCount += 1;
         continue;
       }
-      const benignProbe = child.comm.startsWith('python')
-        && /python(?:3)?\s+--version\s*$/.test(child.cmdline);
-      if (!benignProbe) unexpectedChildCount += 1;
+      if (!isBenignPythonProbe(child)) unexpectedChildCount += 1;
     }
 
-    if (otherShellCount > 0) {
+    if (otherSessionRootCount > 0) {
       return topologyResult(
         'PRESENT',
         'OTHER_RDC_COMMAND_SESSION_PRESENT',
@@ -154,7 +193,7 @@ function inspectLocal({
       'EXECUTION_PROFILE_UNKNOWN',
     ));
   }
-  return receipt(executor, scanSession({procRoot, selfPid}));
+  return receipt(executor, scanSession({procRoot, selfPid, executor}));
 }
 
 function parseArgs(argv = process.argv.slice(2)) {
@@ -183,12 +222,18 @@ if (require.main === module) {
 }
 
 module.exports = {
-  COMMAND_AGENT_MARKER,
+  COMMAND_AGENT_SCRIPT_SUFFIX,
+  COMMAND_AGENT_WRAPPERS,
   EXECUTION_PROFILES,
   FALSE_AUTHORITY,
+  S_TERMUX_PROOT_EXECUTABLE,
+  S_TERMUX_PROOT_REQUIRED_ARGS,
   inferExecutor,
   inspectLocal,
   isCommandAgent,
+  isCommandAgentScriptToken,
+  isCommandSessionRoot,
+  isFixedSTermuxProotRoot,
   parseArgs,
   readProcRecord,
   receipt,

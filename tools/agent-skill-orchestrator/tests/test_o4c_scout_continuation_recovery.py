@@ -5,7 +5,7 @@ from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parents[1]
-WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "agent-skill-orchestrator-o4c-scout-continuation.yml"
+WORKFLOW_PATH = REPO_ROOT / "tools" / "agent-skill-orchestrator" / "tests" / "fixtures" / "historical-workflows" / "agent-skill-orchestrator-o4c-scout-continuation.yml"
 CI_PATH = REPO_ROOT / ".github" / "workflows" / "agent-skills-ci.yml"
 
 
@@ -76,7 +76,8 @@ class O4CScoutContinuationRecoveryTests(unittest.TestCase):
     def test_agent_skills_ci_mechanically_covers_continuation_without_executing_it(self) -> None:
         ci = CI_PATH.read_text(encoding="utf-8")
         continuation_path = ".github/workflows/agent-skill-orchestrator-o4c-scout-continuation.yml"
-        self.assertEqual(ci.count(continuation_path), 2)
+        self.assertEqual(ci.count(continuation_path), 0)
+        self.assertGreaterEqual(ci.count("tools/agent-skill-orchestrator/**"), 2)
         self.assertNotIn("workflow_call", self.workflow)
 
 

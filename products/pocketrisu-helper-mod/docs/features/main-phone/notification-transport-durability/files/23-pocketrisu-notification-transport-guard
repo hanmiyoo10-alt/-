@@ -1,0 +1,195 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -u
+
+PREFIX=/data/data/com.termux/files/usr
+HOME_DIR=/data/data/com.termux/files/home
+INTERVAL=15
+
+GUARD="$HOME_DIR/.local/bin/pocketrisu-notification-transport-guard"
+STATE="$HOME_DIR/.local/state/pocketrisu-notification-transport-guard"
+GUARD_PIDFILE="$STATE/guard.pid"
+GUARD_LOCKDIR="$STATE/guard.lock"
+ANCHOR_PIDFILE="$STATE/anchor.pid"
+ANCHOR_LOCKDIR="$STATE/anchor.lock"
+
+NOHUP="$PREFIX/bin/nohup"
+SLEEP="$PREFIX/bin/sleep"
+SH="$PREFIX/bin/sh"
+TR="$PREFIX/bin/tr"
+MKDIR="$PREFIX/bin/mkdir"
+SELF="$0"
+
+state_dir_safe() {
+    if [ -e "$STATE" ] || [ -L "$STATE" ]; then
+        [ -d "$STATE" ] && [ ! -L "$STATE" ] || return 1
+    else
+        "$MKDIR" -p "$STATE" || return 1
+        [ -d "$STATE" ] && [ ! -L "$STATE" ] || return 1
+    fi
+    return 0
+}
+
+validate_guard() {
+    [ -f "$GUARD" ] && [ ! -L "$GUARD" ] && [ -x "$GUARD" ]
+}
+
+pidfile_safe() {
+    pidfile="$1"
+    if [ -e "$pidfile" ] || [ -L "$pidfile" ]; then
+        [ -f "$pidfile" ] && [ ! -L "$pidfile" ] || return 1
+    fi
+    return 0
+}
+
+pid_state() {
+    pidfile="$1"
+    identity="$2"
+    pidfile_safe "$pidfile" || return 2
+    [ -r "$pidfile" ] || return 1
+    pid="$(cat "$pidfile" 2>/dev/null || true)"
+    case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+    kill -0 "$pid" 2>/dev/null || return 1
+    [ -r "/proc/$pid/stat" ] || return 1
+    IFS= read -r statline < "/proc/$pid/stat" || return 2
+    stat_tail=${statline#*) }
+    proc_state=${stat_tail%% *}
+    [ -n "$proc_state" ] || return 2
+    [ "$proc_state" != Z ] || return 1
+    cmdline="$("$TR" '\000' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+    case "$identity:$cmdline" in
+        guard:*pocketrisu-notification-transport-guard*--loop*) return 0 ;;
+        anchor:*23-pocketrisu-notification-transport-guard*--anchor*) return 0 ;;
+        *) return 2 ;;
+    esac
+}
+
+guard_pid_state() {
+    pid_state "$GUARD_PIDFILE" guard
+}
+
+anchor_pid_state() {
+    pid_state "$ANCHOR_PIDFILE" anchor
+}
+
+start_guard() {
+    state_dir_safe || return 2
+    validate_guard || return 2
+
+    guard_pid_state
+    state_rc=$?
+    [ "$state_rc" -ne 0 ] || return 0
+    [ "$state_rc" -ne 2 ] || return 2
+
+    if [ -e "$GUARD_LOCKDIR" ] || [ -L "$GUARD_LOCKDIR" ]; then
+        [ -d "$GUARD_LOCKDIR" ] && [ ! -L "$GUARD_LOCKDIR" ] || return 2
+        rmdir "$GUARD_LOCKDIR" 2>/dev/null || return 2
+    fi
+    pidfile_safe "$GUARD_PIDFILE" || return 2
+
+    "$NOHUP" "$SH" "$GUARD" --loop </dev/null >/dev/null 2>&1 &
+    i=0
+    while [ "$i" -lt 5 ]; do
+        "$SLEEP" 1
+        guard_pid_state
+        state_rc=$?
+        [ "$state_rc" -ne 0 ] || return 0
+        [ "$state_rc" -ne 2 ] || return 2
+        i=$((i + 1))
+    done
+    return 1
+}
+
+acquire_anchor_lock() {
+    state_dir_safe || return 2
+    if [ -e "$ANCHOR_LOCKDIR" ] || [ -L "$ANCHOR_LOCKDIR" ]; then
+        [ -d "$ANCHOR_LOCKDIR" ] && [ ! -L "$ANCHOR_LOCKDIR" ] || return 2
+        anchor_pid_state
+        state_rc=$?
+        [ "$state_rc" -ne 0 ] || return 1
+        [ "$state_rc" -ne 2 ] || return 2
+        rmdir "$ANCHOR_LOCKDIR" 2>/dev/null || return 2
+    fi
+    pidfile_safe "$ANCHOR_PIDFILE" || return 2
+    "$MKDIR" "$ANCHOR_LOCKDIR" 2>/dev/null || return 1
+    printf '%s\n' "$$" > "$ANCHOR_PIDFILE"
+    return 0
+}
+
+release_anchor_lock() {
+    current="$(cat "$ANCHOR_PIDFILE" 2>/dev/null || true)"
+    if [ "$current" = "$$" ]; then
+        rm -f "$ANCHOR_PIDFILE"
+    fi
+    rmdir "$ANCHOR_LOCKDIR" 2>/dev/null || true
+}
+
+anchor_terminate() {
+    release_anchor_lock
+    trap - EXIT INT TERM HUP
+    exit 0
+}
+
+anchor_loop() {
+    acquire_anchor_lock
+    lock_rc=$?
+    [ "$lock_rc" -ne 1 ] || exit 0
+    [ "$lock_rc" -ne 2 ] || exit 2
+    trap release_anchor_lock EXIT
+    trap anchor_terminate INT TERM HUP
+
+    while :; do
+        start_guard || true
+        "$SLEEP" "$INTERVAL"
+    done
+}
+
+start_anchor() {
+    state_dir_safe || return 2
+
+    anchor_pid_state
+    state_rc=$?
+    [ "$state_rc" -ne 0 ] || return 0
+    [ "$state_rc" -ne 2 ] || return 2
+
+    if [ -e "$ANCHOR_LOCKDIR" ] || [ -L "$ANCHOR_LOCKDIR" ]; then
+        [ -d "$ANCHOR_LOCKDIR" ] && [ ! -L "$ANCHOR_LOCKDIR" ] || return 2
+        rmdir "$ANCHOR_LOCKDIR" 2>/dev/null || return 2
+    fi
+    pidfile_safe "$ANCHOR_PIDFILE" || return 2
+
+    "$NOHUP" "$SH" "$SELF" --anchor </dev/null >/dev/null 2>&1 &
+    i=0
+    while [ "$i" -lt 5 ]; do
+        "$SLEEP" 1
+        anchor_pid_state
+        state_rc=$?
+        [ "$state_rc" -ne 0 ] || return 0
+        [ "$state_rc" -ne 2 ] || return 2
+        i=$((i + 1))
+    done
+    return 1
+}
+
+case "${1:-}" in
+    "")
+        validate_guard || exit 2
+        start_guard
+        guard_rc=$?
+        [ "$guard_rc" -ne 2 ] || exit 2
+        start_anchor
+        anchor_rc=$?
+        [ "$anchor_rc" -ne 2 ] || exit 2
+        [ "$guard_rc" -eq 0 ] && [ "$anchor_rc" -eq 0 ]
+        ;;
+    --anchor)
+        anchor_loop
+        ;;
+    --ensure-anchor)
+        validate_guard || exit 2
+        start_anchor
+        ;;
+    *)
+        printf 'usage: %s [--anchor|--ensure-anchor]\n' "$0" >&2
+        exit 2
+        ;;
+esac

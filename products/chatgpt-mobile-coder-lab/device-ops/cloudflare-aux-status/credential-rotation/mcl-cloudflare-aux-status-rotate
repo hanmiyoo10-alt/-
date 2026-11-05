@@ -6,6 +6,7 @@ import json
 import os
 import re
 import secrets
+import signal
 import stat
 import subprocess
 import sys
@@ -53,6 +54,7 @@ class Inventory:
     deployment_count: int
     version_ids: frozenset[str]
     current_version_id: str
+    latest_version_id: str
 
 @dataclass(frozen=True)
 class Probe:
@@ -203,10 +205,85 @@ def _remove_private(path: Path, profile: Profile) -> None:
         raise RotationError("CLEANUP_" + problem, unknown=True)
     path.unlink()
 
+def _parse_jsonc(text: str) -> object:
+    without_comments: list[str] = []
+    index = 0
+    in_string = False
+    escaped = False
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            without_comments.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            without_comments.append(char)
+            index += 1
+            continue
+        if char == "/" and index + 1 < len(text) and text[index + 1] == "/":
+            index += 2
+            while index < len(text) and text[index] not in "\r\n":
+                index += 1
+            continue
+        if char == "/" and index + 1 < len(text) and text[index + 1] == "*":
+            end = text.find("*/", index + 2)
+            if end < 0:
+                raise ValueError("unterminated comment")
+            without_comments.append(" ")
+            index = end + 2
+            continue
+        without_comments.append(char)
+        index += 1
+    if in_string:
+        raise ValueError("unterminated string")
+
+    cleaned = "".join(without_comments)
+    without_trailing: list[str] = []
+    index = 0
+    in_string = False
+    escaped = False
+    while index < len(cleaned):
+        char = cleaned[index]
+        if in_string:
+            without_trailing.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            without_trailing.append(char)
+            index += 1
+            continue
+        if char == ",":
+            look = index + 1
+            while look < len(cleaned) and cleaned[look].isspace():
+                look += 1
+            if look < len(cleaned) and cleaned[look] in "]}":
+                index += 1
+                continue
+        without_trailing.append(char)
+        index += 1
+    return json.loads("".join(without_trailing))
+
+
 def _source_contract(profile: Profile) -> str | None:
     try:
-        data = json.loads(profile.source_config.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
+        data = _parse_jsonc(profile.source_config.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+        return "SOURCE_CONFIG_INVALID"
+    if not isinstance(data, dict):
         return "SOURCE_CONFIG_INVALID"
     if data.get("name") != WORKER_NAME:
         return "SOURCE_WORKER_DRIFT"
@@ -238,13 +315,24 @@ class RealBackend:
                 cwd=str(self.profile.source_config.parent),
                 env=self._env(),
                 close_fds=True,
+                start_new_session=True,
                 text=True,
             )
             try:
                 proc.communicate(input=input_text, timeout=45)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
+                try:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    proc.wait()
                 raise RotationError("COMMAND_TIMEOUT")
             if proc.returncode != 0:
                 raise RotationError("COMMAND_FAILED")
@@ -277,10 +365,19 @@ class RealBackend:
         if not isinstance(deployments, list) or not isinstance(versions, list) or not isinstance(status, dict):
             raise RotationError("RUNTIME_INVENTORY_INVALID")
         ids: list[str] = []
+        numbered: list[tuple[int, str]] = []
         for item in versions:
-            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+            if (
+                not isinstance(item, dict)
+                or not isinstance(item.get("id"), str)
+                or not isinstance(item.get("number"), int)
+                or item["number"] < 1
+            ):
                 raise RotationError("RUNTIME_VERSION_ID_INVALID")
             ids.append(item["id"])
+            numbered.append((item["number"], item["id"]))
+        if len(set(ids)) != len(ids) or len({number for number, _ in numbered}) != len(numbered):
+            raise RotationError("RUNTIME_VERSION_ID_INVALID")
         current = status.get("versions")
         if not isinstance(current, list) or len(current) != 1 or not isinstance(current[0], dict):
             raise RotationError("RUNTIME_DEPLOYMENT_AMBIGUOUS")
@@ -289,7 +386,8 @@ class RealBackend:
         current_id = current[0]["version_id"]
         if current_id not in ids:
             raise RotationError("RUNTIME_CURRENT_VERSION_UNKNOWN")
-        return Inventory(len(deployments), frozenset(ids), current_id)
+        latest_id = max(numbered)[1]
+        return Inventory(len(deployments), frozenset(ids), current_id, latest_id)
 
     def _probe_one(self, hostname: str, path: str, password: str | None) -> tuple[int, dict[str, object], str]:
         with tempfile.TemporaryDirectory(prefix=".rotation-probe-", dir=self.profile.state_dir) as directory:
@@ -385,6 +483,10 @@ def _auth_pass(probe: Probe) -> bool:
         and probe.capabilities_status == 200
         and probe.capabilities_contract
     )
+
+
+def _auth_rejected(probe: Probe) -> bool:
+    return probe.health_status == 401 and probe.capabilities_status == 401
 
 def check(profile: Profile = PRODUCTION_PROFILE, backend: object | None = None) -> tuple[dict[str, object], dict[str, object] | None]:
     backend = backend or RealBackend(profile)
@@ -484,11 +586,9 @@ def _rollback(
 ) -> tuple[bool, str]:
     try:
         backend.rollback_version(old_version)
-        old_ok, new_ok = _pair(
-            backend.probe(hostname, old_password),
-            backend.probe(hostname, new_password),
-        )
-        if not old_ok or new_ok:
+        old_probe = backend.probe(hostname, old_password)
+        new_probe = backend.probe(hostname, new_password)
+        if not _auth_pass(old_probe) or not _auth_rejected(new_probe):
             return False, "ROLLBACK_AUTH_PROOF_FAILED"
         if promoted:
             _atomic_write(profile.current_credential, old_password, profile)
@@ -528,6 +628,8 @@ def rotate(
         hostname = str(context["hostname"])
         before = context["inventory"]
         old_version = before.current_version_id
+        if before.latest_version_id != old_version:
+            raise RotationError("UNDEPLOYED_LATEST_VERSION_PRESENT")
 
         new_password = password_factory(48)
         if not isinstance(new_password, str) or not new_password or new_password == old_password:
@@ -543,7 +645,11 @@ def rotate(
         except RotationError:
             after_fail = backend.inventory()
             created = after_fail.version_ids - before.version_ids
-            if len(created) == 0 and after_fail.current_version_id == old_version:
+            if (
+                len(created) == 0
+                and after_fail.current_version_id == old_version
+                and after_fail.latest_version_id == old_version
+            ):
                 _remove_private(profile.candidate_credential, profile)
                 return result | {"new_version": "blocked", "reason": "VERSION_CREATE_FAILED"}
             return result | {
@@ -558,6 +664,7 @@ def rotate(
             len(created) != 1
             or after_create.deployment_count != before.deployment_count
             or after_create.current_version_id != old_version
+            or after_create.latest_version_id not in created
         ):
             return result | {
                 "new_version": "unknown",
@@ -573,11 +680,36 @@ def rotate(
         except RotationError:
             deploy_error = True
 
-        old_probe = backend.probe(hostname, old_password)
-        new_probe = backend.probe(hostname, new_password)
-        old_ok, new_ok = _pair(old_probe, new_probe)
+        try:
+            old_probe = backend.probe(hostname, old_password)
+            new_probe = backend.probe(hostname, new_password)
+        except RotationError:
+            rolled_back, reason = _rollback(
+                backend, profile, old_version, hostname, old_password, new_password, promoted=False
+            )
+            if rolled_back:
+                return result | {
+                    "deployment": "rolled_back",
+                    "new_auth": "unknown",
+                    "old_auth": "unknown",
+                    "custody": "restored",
+                    "reason": "POST_DEPLOY_PROBE_FAILED_ROLLED_BACK",
+                }
+            return result | {
+                "deployment": "unknown",
+                "new_auth": "unknown",
+                "old_auth": "unknown",
+                "custody": "unknown",
+                "result": "unknown",
+                "reason": reason,
+            }
 
-        if deploy_error and old_ok and not new_ok:
+        old_ok = _auth_pass(old_probe)
+        new_ok = _auth_pass(new_probe)
+        old_revoked = _auth_rejected(old_probe)
+        new_rejected = _auth_rejected(new_probe)
+
+        if deploy_error and old_ok and new_rejected:
             _remove_private(profile.candidate_credential, profile)
             return result | {
                 "deployment": "blocked",
@@ -586,22 +718,29 @@ def rotate(
                 "reason": "DEPLOY_FAILED_NO_TRAFFIC_CHANGE",
             }
 
-        if not new_ok or old_ok:
+        if not new_ok or not old_revoked:
             rolled_back, reason = _rollback(
                 backend, profile, old_version, hostname, old_password, new_password, promoted=False
             )
             if rolled_back:
+                failure_reason = (
+                    "NEW_AUTH_FAILED_ROLLED_BACK"
+                    if not new_ok
+                    else "OLD_AUTH_STILL_VALID_ROLLED_BACK"
+                    if old_ok
+                    else "OLD_AUTH_REVOCATION_UNPROVEN_ROLLED_BACK"
+                )
                 return result | {
                     "deployment": "rolled_back",
-                    "new_auth": "blocked" if not new_ok else "pass",
-                    "old_auth": "blocked" if old_ok else "revoked",
+                    "new_auth": "pass" if new_ok else "blocked",
+                    "old_auth": "revoked" if old_revoked else "pass" if old_ok else "unknown",
                     "custody": "restored",
-                    "reason": "NEW_AUTH_FAILED_ROLLED_BACK" if not new_ok else "OLD_AUTH_STILL_VALID_ROLLED_BACK",
+                    "reason": failure_reason,
                 }
             return result | {
                 "deployment": "unknown",
                 "new_auth": "pass" if new_ok else "blocked",
-                "old_auth": "blocked" if old_ok else "revoked",
+                "old_auth": "revoked" if old_revoked else "pass" if old_ok else "unknown",
                 "custody": "unknown",
                 "result": "unknown",
                 "reason": reason,
@@ -609,19 +748,37 @@ def rotate(
 
         result.update({"deployment": "updated", "new_auth": "pass", "old_auth": "revoked"})
 
-        _atomic_write(profile.previous_credential, old_password, profile)
+        try:
+            _atomic_write(profile.previous_credential, old_password, profile)
+        except (RotationError, OSError):
+            rolled_back, reason = _rollback(
+                backend, profile, old_version, hostname, old_password, new_password, promoted=False
+            )
+            if rolled_back:
+                return result | {
+                    "deployment": "rolled_back",
+                    "custody": "restored",
+                    "reason": "RECOVERY_COPY_FAILED_ROLLED_BACK",
+                }
+            return result | {
+                "deployment": "unknown",
+                "custody": "unknown",
+                "result": "unknown",
+                "reason": reason,
+            }
+
         try:
             os.replace(profile.candidate_credential, profile.current_credential)
+            promoted = True
             os.chmod(profile.current_credential, 0o600)
             dfd = os.open(profile.state_dir, os.O_RDONLY)
             try:
                 os.fsync(dfd)
             finally:
                 os.close(dfd)
-            promoted = True
         except OSError:
             rolled_back, reason = _rollback(
-                backend, profile, old_version, hostname, old_password, new_password, promoted=False
+                backend, profile, old_version, hostname, old_password, new_password, promoted=promoted
             )
             if rolled_back:
                 return result | {

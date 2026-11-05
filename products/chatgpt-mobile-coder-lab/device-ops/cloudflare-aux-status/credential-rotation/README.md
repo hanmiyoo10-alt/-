@@ -92,3 +92,17 @@ python3 tests/test_contract.py -v
 ```
 
 Refs #3348 #3315 #3325 #3328.
+
+## Exact-head review hardening
+
+The review-update contract additionally fails closed on these transaction edges:
+
+- source authority is parsed as bounded JSONC, including ordinary comments/trailing commas;
+- preflight requires the highest Wrangler version number to equal the captured 100% deployed version before any secret-version creation;
+- every fixed subprocess runs in its own process group and timeout terminates the group before returning;
+- post-deployment probe exceptions enter the one-attempt rollback path;
+- old-credential revocation is proven only by exact `401` on both protected endpoints;
+- failure to save the old recovery credential after deployment enters rollback;
+- local custody is marked promoted immediately after `os.replace`, so later chmod/fsync failure restores the old credential rather than discarding it.
+
+These guards do not widen the Worker, secret, domain, deployment, rollback, or credential-custody authority.

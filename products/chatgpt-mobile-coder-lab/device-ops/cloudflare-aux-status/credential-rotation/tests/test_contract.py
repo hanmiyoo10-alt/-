@@ -35,27 +35,40 @@ class FakeBackend:
         self.deployments = 2
         self.versions = {"old-a", "old-b"}
         self.current = "old-b"
+        self.latest = "old-b"
         self.version_password = {"old-b": old_password}
         self.sequence = 0
         self.rollback_calls = 0
+        self.old_rejection_status = 401
+        self.fail_probe_once_password = None
     def auth(self):
         return None
 
     def inventory(self):
-        return M.Inventory(self.deployments, frozenset(self.versions), self.current)
+        return M.Inventory(
+            self.deployments, frozenset(self.versions), self.current, self.latest
+        )
 
     def probe(self, _hostname, password):
+        if self.fail_probe_once_password == password:
+            self.fail_probe_once_password = None
+            raise M.RotationError("PROBE_FAILED")
         accepted = password == self.live_password
         if self.accept_old_too and password == self.old_password:
             accepted = True
         if self.fail_new_auth and password != self.old_password:
             accepted = False
+        rejected_status = (
+            self.old_rejection_status
+            if password == self.old_password and not accepted
+            else 401
+        )
         return M.Probe(
             anonymous_status=401,
             basic_challenge=True,
-            health_status=200 if accepted else 401,
+            health_status=200 if accepted else rejected_status,
             health_contract=accepted,
-            capabilities_status=200 if accepted else 401,
+            capabilities_status=200 if accepted else rejected_status,
             capabilities_contract=accepted,
         )
 
@@ -65,6 +78,7 @@ class FakeBackend:
         self.sequence += 1
         new_id = f"new-{self.sequence}"
         self.versions.add(new_id)
+        self.latest = new_id
         self.version_password[new_id] = password
 
     def deploy_version(self, version_id):
@@ -244,6 +258,141 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn(self.f.old, rendered)
         self.assertNotIn(new, rendered)
         self.assertNotIn("private.example.invalid", rendered)
+
+
+    def test_jsonc_comments_and_trailing_commas_are_accepted(self):
+        self.f.source_config.write_text(
+            """{
+              // normal Wrangler JSONC comment
+              "name": "%s",
+              "workers_dev": false,
+              "preview_urls": false,
+              "secrets": {
+                "required": ["%s"],
+              },
+            }
+            """ % (M.WORKER_NAME, M.SECRET_NAME)
+        )
+        result, context = M.check(self.f.profile, self.f.backend)
+        self.assertEqual(result["result"], "pass")
+        self.assertIsNotNone(context)
+
+    def test_undeployed_latest_blocks_before_secret_creation(self):
+        self.f.backend.latest = "old-a"
+        before = set(self.f.backend.versions)
+        result = M.rotate(
+            self.f.profile, self.f.backend, password_factory=lambda _n: self.candidate()
+        )
+        self.assertEqual(result["result"], "blocked")
+        self.assertEqual(result["reason"], "UNDEPLOYED_LATEST_VERSION_PRESENT")
+        self.assertEqual(self.f.backend.versions, before)
+        self.assertFalse(self.f.profile.candidate_credential.exists())
+
+    def test_old_credential_requires_exact_401_for_revocation(self):
+        self.f.backend.old_rejection_status = 403
+        new = self.candidate()
+        result = M.rotate(self.f.profile, self.f.backend, password_factory=lambda _n: new)
+        self.assertEqual(result["deployment"], "rolled_back")
+        self.assertEqual(result["reason"], "OLD_AUTH_REVOCATION_UNPROVEN_ROLLED_BACK")
+        self.assertEqual(self.f.backend.rollback_calls, 1)
+        self.assertEqual(
+            M._read_private(self.f.profile.current_credential, self.f.profile), self.f.old
+        )
+
+    def test_post_deploy_probe_error_rolls_back(self):
+        new = self.candidate()
+        self.f.backend.fail_probe_once_password = new
+        result = M.rotate(self.f.profile, self.f.backend, password_factory=lambda _n: new)
+        self.assertEqual(result["deployment"], "rolled_back")
+        self.assertEqual(result["reason"], "POST_DEPLOY_PROBE_FAILED_ROLLED_BACK")
+        self.assertEqual(self.f.backend.rollback_calls, 1)
+        self.assertEqual(
+            M._read_private(self.f.profile.current_credential, self.f.profile), self.f.old
+        )
+
+    def test_recovery_copy_failure_rolls_back(self):
+        new = self.candidate()
+        original = M._atomic_write
+        failed = {"value": False}
+
+        def fail_previous(path, value, profile):
+            if path == self.f.profile.previous_credential and not failed["value"]:
+                failed["value"] = True
+                raise OSError("synthetic previous-copy failure")
+            return original(path, value, profile)
+
+        with mock.patch.object(M, "_atomic_write", side_effect=fail_previous):
+            result = M.rotate(self.f.profile, self.f.backend, password_factory=lambda _n: new)
+        self.assertEqual(result["deployment"], "rolled_back")
+        self.assertEqual(result["reason"], "RECOVERY_COPY_FAILED_ROLLED_BACK")
+        self.assertEqual(self.f.backend.rollback_calls, 1)
+        self.assertEqual(
+            M._read_private(self.f.profile.current_credential, self.f.profile), self.f.old
+        )
+
+    def test_partial_promotion_failure_restores_old_credential(self):
+        new = self.candidate()
+        original = M.os.chmod
+        failed = {"value": False}
+
+        def fail_current_once(path, mode):
+            if Path(path) == self.f.profile.current_credential and not failed["value"]:
+                failed["value"] = True
+                raise OSError("synthetic chmod-after-replace failure")
+            return original(path, mode)
+
+        with mock.patch.object(M.os, "chmod", side_effect=fail_current_once):
+            result = M.rotate(self.f.profile, self.f.backend, password_factory=lambda _n: new)
+        self.assertEqual(result["deployment"], "rolled_back")
+        self.assertEqual(result["reason"], "CUSTODY_PROMOTION_FAILED_ROLLED_BACK")
+        self.assertEqual(self.f.backend.rollback_calls, 1)
+        self.assertEqual(
+            M._read_private(self.f.profile.current_credential, self.f.profile), self.f.old
+        )
+
+    def test_timeout_terminates_the_whole_process_group(self):
+        backend = M.RealBackend(self.f.profile)
+
+        class TimedOutProcess:
+            pid = 4242
+            returncode = None
+
+            def communicate(self, input=None, timeout=None):
+                raise M.subprocess.TimeoutExpired(cmd="wrangler", timeout=timeout)
+
+            def wait(self, timeout=None):
+                self.returncode = -M.signal.SIGTERM
+                return self.returncode
+
+        process = TimedOutProcess()
+        with mock.patch.object(M.subprocess, "Popen", return_value=process) as popen:
+            with mock.patch.object(M.os, "killpg") as killpg:
+                with self.assertRaises(M.RotationError) as caught:
+                    backend._run([M.NPX, "--version"])
+        self.assertEqual(caught.exception.reason, "COMMAND_TIMEOUT")
+        self.assertTrue(popen.call_args.kwargs["start_new_session"])
+        killpg.assert_called_once_with(process.pid, M.signal.SIGTERM)
+
+    def test_real_inventory_uses_highest_version_number_as_latest(self):
+        backend = M.RealBackend(self.f.profile)
+
+        def response(args):
+            if args[:2] == ["deployments", "list"]:
+                return [{}, {}]
+            if args[:2] == ["versions", "list"]:
+                return [
+                    {"id": "v2", "number": 2},
+                    {"id": "v5", "number": 5},
+                    {"id": "v3", "number": 3},
+                ]
+            if args[:2] == ["deployments", "status"]:
+                return {"versions": [{"percentage": 100, "version_id": "v3"}]}
+            raise AssertionError(args)
+
+        with mock.patch.object(backend, "_wrangler_json", side_effect=response):
+            inventory = backend.inventory()
+        self.assertEqual(inventory.current_version_id, "v3")
+        self.assertEqual(inventory.latest_version_id, "v5")
 
     def test_argument_contract_is_exact(self):
         with mock.patch.object(M, "check") as check_mock:

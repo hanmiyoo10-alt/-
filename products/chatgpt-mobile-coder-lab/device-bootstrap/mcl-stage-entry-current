@@ -9,8 +9,8 @@ STAGE_REL='products/chatgpt-mobile-coder-lab/coordination/stage-entry/mcl-stage-
 usage() {
   printf '%s\n' \
     'usage: mcl-stage-entry-current source-status' \
-    '       mcl-stage-entry-current inspect --packet #N --plan FILE [--packet-activity-evidence-file FILE]' \
-    '       mcl-stage-entry-current apply --packet #N --plan FILE [--packet-activity-evidence-file FILE] --apply'
+    '       mcl-stage-entry-current inspect --packet #N --plan FILE --owner-lifecycle-closure-file FILE [--packet-activity-evidence-file FILE]' \
+    '       mcl-stage-entry-current apply --packet #N --plan FILE --owner-lifecycle-closure-file FILE [--packet-activity-evidence-file FILE] --apply'
 }
 
 fail_usage() { usage >&2; exit 64; }
@@ -28,31 +28,36 @@ operation=${1-}
 shift
 packet=
 plan=
+closure=
 activity=
 case "$operation" in
   source-status)
     [ "$#" -eq 0 ] || fail_usage
     ;;
   inspect)
-    { [ "$#" -eq 4 ] || [ "$#" -eq 6 ]; } || fail_usage
-    [ "$1" = --packet ] && is_packet "$2" && [ "$3" = --plan ] || fail_usage
+    { [ "$#" -eq 6 ] || [ "$#" -eq 8 ]; } || fail_usage
+    [ "$1" = --packet ] && is_packet "$2" && [ "$3" = --plan ] \
+      && [ "$5" = --owner-lifecycle-closure-file ] || fail_usage
     packet=$2
     plan=$4
-    if [ "$#" -eq 6 ]; then
-      [ "$5" = --packet-activity-evidence-file ] || fail_usage
-      activity=$6
+    closure=$6
+    if [ "$#" -eq 8 ]; then
+      [ "$7" = --packet-activity-evidence-file ] || fail_usage
+      activity=$8
     fi
     ;;
   apply)
-    { [ "$#" -eq 5 ] || [ "$#" -eq 7 ]; } || fail_usage
-    [ "$1" = --packet ] && is_packet "$2" && [ "$3" = --plan ] || fail_usage
+    { [ "$#" -eq 7 ] || [ "$#" -eq 9 ]; } || fail_usage
+    [ "$1" = --packet ] && is_packet "$2" && [ "$3" = --plan ] \
+      && [ "$5" = --owner-lifecycle-closure-file ] || fail_usage
     packet=$2
     plan=$4
-    if [ "$#" -eq 5 ]; then
-      [ "$5" = --apply ] || fail_usage
+    closure=$6
+    if [ "$#" -eq 7 ]; then
+      [ "$7" = --apply ] || fail_usage
     else
-      [ "$5" = --packet-activity-evidence-file ] && [ "$7" = --apply ] || fail_usage
-      activity=$6
+      [ "$7" = --packet-activity-evidence-file ] && [ "$9" = --apply ] || fail_usage
+      activity=$8
     fi
     ;;
   *) fail_usage ;;
@@ -61,6 +66,12 @@ esac
 if [ -n "$plan" ]; then
   [ -f "$plan" ] && [ ! -L "$plan" ] || {
     printf '%s\n' 'mcl-stage-entry-current: plan must be a regular non-symlink file' >&2
+    exit 64
+  }
+fi
+if [ -n "$closure" ]; then
+  [ -f "$closure" ] && [ ! -L "$closure" ] || {
+    printf '%s\n' 'mcl-stage-entry-current: owner lifecycle closure evidence must be a regular non-symlink file' >&2
     exit 64
   }
 fi
@@ -116,17 +127,21 @@ fi
 if [ "$operation" = inspect ]; then
   if [ -n "$activity" ]; then
     node "$stage" inspect --packet "$packet" --plan "$plan" \
+      --owner-lifecycle-closure-file "$closure" \
       --packet-activity-evidence-file "$activity" --source-main "$remote_before"
   else
-    node "$stage" inspect --packet "$packet" --plan "$plan" --source-main "$remote_before"
+    node "$stage" inspect --packet "$packet" --plan "$plan" \
+      --owner-lifecycle-closure-file "$closure" --source-main "$remote_before"
   fi
   exit $?
 fi
 
 if [ -n "$activity" ]; then
   node "$stage" apply --packet "$packet" --plan "$plan" \
+    --owner-lifecycle-closure-file "$closure" \
     --packet-activity-evidence-file "$activity" --source-main "$remote_before" --apply
 else
-  node "$stage" apply --packet "$packet" --plan "$plan" --source-main "$remote_before" --apply
+  node "$stage" apply --packet "$packet" --plan "$plan" \
+    --owner-lifecycle-closure-file "$closure" --source-main "$remote_before" --apply
 fi
 exit $?

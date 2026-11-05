@@ -2984,7 +2984,7 @@ test('reviewed external L route cross-validates D014 completion release against 
   assert.throws(() => owner.selectExternalOwnerWorkspaceManifest(
     comments, packet, packetRef, impl, {scopes, paths}),
   (error) => error instanceof owner.ApplyError
-    && error.reasonCodes.includes('EXTERNAL_OWNER_D014_COMPLETION_MANIFEST_CONFLICT'));
+    && error.reasonCodes.includes('FINALIZATION_LINEAGE_D014_BINDING_CONFLICT'));
 });
 
 function externalReviewUpdateLineageFixture({
@@ -3047,7 +3047,12 @@ function externalReviewUpdateLineageFixture({
     handoff.buildCompletionReceipt(manifest, {
       disposition: 'COMPLETE',
       outputRefs: ['commit:' + commit, 'pr:#' + pr],
-      validationRefs: ['pr:#' + pr],
+      validationRefs: [
+        'pr:#' + pr,
+        'receipt:mcl-l-repository-owner:'
+          + (String(manifest.phaseId).includes('review-update') ? 'review-update' : 'apply')
+          + ':' + manifest.manifestId,
+      ],
       observedRefs: ['commit:' + commit],
       leaseDisposition: 'RELEASED',
       leaseReleaseEvidence: {
@@ -3154,14 +3159,14 @@ test('reviewed external L subset lineage fails closed without unique full-scope 
   assert.throws(() => owner.selectExternalOwnerWorkspaceManifest(
     missing.comments, missing.packet, missing.packetRef, missing.impl, missing.packetScope),
   (error) => error instanceof owner.ApplyError
-    && error.reasonCodes.includes('EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_MISSING'));
+    && error.reasonCodes.includes('FINALIZATION_LINEAGE_PREDECESSOR_MISSING'));
 
   const ambiguous = externalReviewUpdateLineageFixture({duplicatePredecessor: true});
   assert.throws(() => owner.selectExternalOwnerWorkspaceManifest(
     ambiguous.comments, ambiguous.packet, ambiguous.packetRef,
     ambiguous.impl, ambiguous.packetScope),
   (error) => error instanceof owner.ApplyError
-    && error.reasonCodes.includes('EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_AMBIGUOUS'));
+    && error.reasonCodes.includes('FINALIZATION_LINEAGE_PREDECESSOR_AMBIGUOUS'));
 });
 
 test('reviewed external L subset lineage rejects scope, surface and workspace drift', () => {
@@ -3171,7 +3176,7 @@ test('reviewed external L subset lineage rejects scope, surface and workspace dr
   assert.throws(() => owner.selectExternalOwnerWorkspaceManifest(
     outside.comments, outside.packet, outside.packetRef, outside.impl, outside.packetScope),
   (error) => error instanceof owner.ApplyError
-    && error.reasonCodes.includes('EXTERNAL_OWNER_REVIEW_UPDATE_SCOPE_NOT_STRICT_SUBSET'));
+    && error.reasonCodes.includes('FINALIZATION_LINEAGE_SCOPE_CONFLICT'));
 
   const surface = externalReviewUpdateLineageFixture({
     finalSurfaces: ['surface:mcl:other-finalization-effect'],
@@ -3179,13 +3184,13 @@ test('reviewed external L subset lineage rejects scope, surface and workspace dr
   assert.throws(() => owner.selectExternalOwnerWorkspaceManifest(
     surface.comments, surface.packet, surface.packetRef, surface.impl, surface.packetScope),
   (error) => error instanceof owner.ApplyError
-    && error.reasonCodes.includes('EXTERNAL_OWNER_REVIEW_UPDATE_SURFACE_CONFLICT'));
+    && error.reasonCodes.includes('FINALIZATION_LINEAGE_SCOPE_CONFLICT'));
 
   const workspace = externalReviewUpdateLineageFixture({predecessorWorkspaceSuffix: '-other'});
   assert.throws(() => owner.selectExternalOwnerWorkspaceManifest(
     workspace.comments, workspace.packet, workspace.packetRef, workspace.impl, workspace.packetScope),
   (error) => error instanceof owner.ApplyError
-    && error.reasonCodes.includes('EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_IDENTITY_CONFLICT'));
+    && error.reasonCodes.includes('FINALIZATION_LINEAGE_WORKSPACE_CONFLICT'));
 });
 
 test('reviewed external L subset lineage requires predecessor release before final acquire', () => {
@@ -3193,7 +3198,7 @@ test('reviewed external L subset lineage requires predecessor release before fin
   assert.throws(() => owner.selectExternalOwnerWorkspaceManifest(
     later.comments, later.packet, later.packetRef, later.impl, later.packetScope),
   (error) => error instanceof owner.ApplyError
-    && error.reasonCodes.includes('EXTERNAL_OWNER_REVIEW_UPDATE_PREDECESSOR_ORDER_CONFLICT'));
+    && error.reasonCodes.includes('FINALIZATION_LINEAGE_PREDECESSOR_MISSING'));
 });
 
 test('reviewed external L subset lineage deduplicates exact predecessor receipt replay', () => {
@@ -3316,10 +3321,9 @@ test('self-owner L accepts operation-qualified full-scope review-update D014', (
 
 test('self-owner L review-update rejects missing or wrong operation-qualified owner evidence', () => {
   const apply = selfOwnerLReviewUpdateFixture({operation: 'apply'});
-  assert.throws(() => owner.selectSelfOwnerWorkspaceManifest(
-    apply.comments, apply.packet, apply.packetRef, apply.impl),
-  (error) => error instanceof owner.ApplyError
-    && error.reasonCodes.includes('SELF_OWNER_L_REVIEW_UPDATE_OPERATION_CONFLICT'));
+  const selectedApply = owner.selectSelfOwnerWorkspaceManifest(
+    apply.comments, apply.packet, apply.packetRef, apply.impl);
+  assert.equal(selectedApply.finalizationLineage.finalOperation, 'apply');
 
   const missing = selfOwnerLReviewUpdateFixture();
   const stripped = {
@@ -3343,7 +3347,7 @@ test('self-owner L review-update rejects missing or wrong operation-qualified ow
   assert.throws(() => owner.selectSelfOwnerWorkspaceManifest(
     missing.comments, missing.packet, missing.packetRef, missing.impl),
   (error) => error instanceof owner.ApplyError
-    && error.reasonCodes.includes('SELF_OWNER_L_REVIEW_UPDATE_OPERATION_CONFLICT'));
+    && error.reasonCodes.includes('FINALIZATION_LINEAGE_OPERATION_EVIDENCE_REQUIRED'));
 });
 
 test('self-owner L review-update rejects candidate, input and scope drift', () => {
@@ -3351,13 +3355,13 @@ test('self-owner L review-update rejects candidate, input and scope drift', () =
   assert.throws(() => owner.selectSelfOwnerWorkspaceManifest(
     candidate.comments, candidate.packet, candidate.packetRef, candidate.impl),
   (error) => error instanceof owner.ApplyError
-    && error.reasonCodes.includes('SELF_OWNER_L_REVIEW_UPDATE_CANDIDATE_CONFLICT'));
+    && error.reasonCodes.includes('FINALIZATION_LINEAGE_CURRENTIZATION_PROOF_REQUIRED'));
 
   const input = selfOwnerLReviewUpdateFixture({inputHasPr: false});
   assert.throws(() => owner.selectSelfOwnerWorkspaceManifest(
     input.comments, input.packet, input.packetRef, input.impl),
   (error) => error instanceof owner.ApplyError
-    && error.reasonCodes.includes('SELF_OWNER_L_REVIEW_UPDATE_INPUT_CONFLICT'));
+    && error.reasonCodes.includes('FINALIZATION_LINEAGE_REVIEW_UPDATE_BINDING_CONFLICT'));
 
   const subsetScopes = owner.SELF_OWNER_SCOPES.filter((scope) =>
     scope !== 'path:' + owner.SELF_OWNER_PATHS[0]);
@@ -3365,5 +3369,323 @@ test('self-owner L review-update rejects candidate, input and scope drift', () =
   assert.throws(() => owner.selectSelfOwnerWorkspaceManifest(
     subset.comments, subset.packet, subset.packetRef, subset.impl),
   (error) => error instanceof owner.ApplyError
-    && error.reasonCodes.includes('SELF_OWNER_WORKSPACE_MANIFEST_IDENTITY_CONFLICT'));
+    && error.reasonCodes.includes('FINALIZATION_LINEAGE_PREDECESSOR_MISSING'));
+});
+
+function boundedLineageFixture() {
+  const packet = 6001;
+  const packetRef = '#6001';
+  const pr = 6002;
+  const surface = owner.EXTERNAL_FINALIZATION_SURFACE;
+  const paths = [
+    'products/chatgpt-mobile-coder-lab/example/a.cjs',
+    'products/chatgpt-mobile-coder-lab/example/b.cjs',
+    'products/chatgpt-mobile-coder-lab/example/c.cjs',
+  ];
+  const packetScopes = [...paths.map((repoPath) => 'path:' + repoPath), surface].sort();
+  const workspace = {
+    kind: 'repository',
+    branch: 'laptop/mcl-packet-6001',
+    worktree: '/home/alsl0/nyang-worktrees/mcl-packet-6001',
+  };
+  let nextComment = 700;
+  const comments = [];
+  const generations = [];
+  function leaseId(generation) {
+    return generation.toString(16).padStart(64, '0');
+  }
+  function addGeneration({
+    phaseId,
+    phaseClass = 'REPOSITORY_MUTATION',
+    scopePaths = paths,
+    base = 'a'.repeat(40),
+    commit,
+    operation,
+    generation,
+    inputHasPr = true,
+  }) {
+    const scopes = [...scopePaths.map((repoPath) => 'path:' + repoPath), surface].sort();
+    const inputRefs = ['commit:' + base];
+    if (inputHasPr) inputRefs.push('pr:#' + pr);
+    const manifest = handoff.buildManifest({
+      schemaVersion: 1,
+      mode: 'MCL_TASK_MANIFEST',
+      packetRef,
+      packetBodySha256: '9'.repeat(64),
+      phaseId,
+      phaseClass,
+      route: 'L',
+      executor: 'L',
+      scopes,
+      workspace,
+      observedBaseSha: base,
+      leaseRequirement: 'REQUIRED',
+      leaseEvidence: {
+        ledgerRef: '#2352',
+        leaseId: leaseId(generation),
+        acquiredGeneration: generation,
+        acquireEvidenceRef: 'run:' + generation,
+      },
+      sourceAuthorityRefs: [packetRef, 'issue:#2352', 'pr:#' + pr],
+      inputRefs,
+      expectedOutputRefs: [...scopePaths.map((repoPath) => 'path:' + repoPath), 'pr:#' + pr],
+      acceptanceRefs: [packetRef, 'pr:#' + pr],
+      stopCondition: 'Bounded finalization-lineage fixture.',
+      authority: {...handoff.AUTHORITY_FLAGS},
+    });
+    const completion = handoff.buildCompletionReceipt(manifest, {
+      disposition: 'COMPLETE',
+      outputRefs: ['commit:' + commit, 'pr:#' + pr],
+      validationRefs: [
+        'pr:#' + pr,
+        'receipt:mcl-l-repository-owner:' + operation + ':' + manifest.manifestId,
+      ],
+      observedRefs: ['commit:' + base, 'commit:' + commit, 'pr:#' + pr],
+      leaseDisposition: 'RELEASED',
+      leaseReleaseEvidence: {
+        ledgerRef: '#2352',
+        leaseId: manifest.leaseEvidence.leaseId,
+        releasedGeneration: generation + 1,
+        evidenceRef: 'run:' + (generation + 1),
+      },
+      workspaceResult: 'clean',
+      blockerRefs: [],
+      requiredUnknownRefs: [],
+    });
+    const manifestComment = {id: nextComment++, body: handoff.renderManifest(manifest)};
+    const completionComment = {id: nextComment++, body: handoff.renderCompletionReceipt(completion)};
+    comments.push(manifestComment, completionComment);
+    const row = {manifest, completion, manifestComment, completionComment};
+    generations.push(row);
+    return row;
+  }
+  function impl(finalGeneration, candidate = finalGeneration.completion.outputRefs
+    .find((ref) => ref.startsWith('commit:')).slice('commit:'.length), {
+    currentization = false,
+  } = {}) {
+    const requiredGates = [{
+      name: 'd014-completion',
+      result: 'PASS',
+      evidenceLocator: 'issue-comment:' + finalGeneration.completionComment.id,
+    }];
+    if (currentization) {
+      requiredGates.push(
+        {name: 'currentization-scope-and-blob-preservation', result: 'PASS',
+          evidenceLocator: 'issue-comment:900'},
+        {name: 'packet-scoped-currentization-replay', result: 'PASS',
+          evidenceLocator: 'issue-comment:901'},
+      );
+    }
+    return {
+      pr,
+      candidate,
+      lineage: {kind: 'IMPLEMENTATION_L_REPOSITORY'},
+      row: {receipt: {requiredGates}},
+    };
+  }
+  const rank = Object.fromEntries('abcdefghi'.split('').map((char, index) => [char, index]));
+  const options = {
+    isAncestor(_worktree, ancestor, descendant) {
+      return rank[ancestor[0]] <= rank[descendant[0]];
+    },
+  };
+  const packetScope = {scopes: packetScopes, paths};
+  return {packet, packetRef, pr, paths, packetScopes, packetScope, comments,
+    generations, workspace, addGeneration, impl, options};
+}
+
+test('lineage resolver closes SELF_OWNER_SUBSET_REVIEW_UPDATE', () => {
+  const f = boundedLineageFixture();
+  f.addGeneration({
+    phaseId: '6001-implementation-pr-stage-entry',
+    commit: 'b'.repeat(40), operation: 'apply', generation: 10,
+  });
+  const final = f.addGeneration({
+    phaseId: '6001-implementation-pr-refine-r1',
+    scopePaths: f.paths.slice(0, 2),
+    base: 'b'.repeat(40), commit: 'c'.repeat(40),
+    operation: 'review-update', generation: 20,
+  });
+  const selected = owner.resolveLFinalizationLineage(
+    f.comments, f.packet, f.packetRef, f.impl(final), f.packetScope, f.options);
+  assert.equal(selected.finalizationLineage.depth, 2);
+  assert.equal(selected.finalizationLineage.finalOperation, 'review-update');
+});
+
+test('lineage resolver closes SELF_OWNER_CONTINUE_PREPARED and EXTERNAL_COORDINATION_CONTINUE_PREPARED_FINALIZATION', () => {
+  const f = boundedLineageFixture();
+  const final = f.addGeneration({
+    phaseId: '6001-implementation-pr-recovery-rebind-g20',
+    phaseClass: 'COORDINATION',
+    commit: 'b'.repeat(40), operation: 'continue-prepared', generation: 20,
+  });
+  const selected = owner.resolveLFinalizationLineage(
+    f.comments, f.packet, f.packetRef, f.impl(final), f.packetScope, f.options);
+  assert.equal(selected.finalizationLineage.depth, 1);
+  assert.equal(selected.finalizationLineage.finalOperation, 'continue-prepared');
+});
+
+test('lineage resolver closes EXTERNAL_MULTI_HOP_SUBSET_REVIEW_UPDATE', () => {
+  const f = boundedLineageFixture();
+  f.addGeneration({
+    phaseId: '6001-implementation-pr-stage-entry',
+    commit: 'b'.repeat(40), operation: 'apply', generation: 10,
+  });
+  f.addGeneration({
+    phaseId: '6001-implementation-pr-refine-r1',
+    scopePaths: f.paths.slice(0, 2),
+    base: 'b'.repeat(40), commit: 'c'.repeat(40),
+    operation: 'review-update', generation: 20,
+  });
+  const final = f.addGeneration({
+    phaseId: '6001-implementation-pr-refine-r2',
+    scopePaths: f.paths.slice(0, 1),
+    base: 'c'.repeat(40), commit: 'd'.repeat(40),
+    operation: 'review-update', generation: 30,
+  });
+  const selected = owner.resolveLFinalizationLineage(
+    f.comments, f.packet, f.packetRef, f.impl(final), f.packetScope, f.options);
+  assert.equal(selected.finalizationLineage.depth, 3);
+});
+
+test('lineage resolver closes EXTERNAL_POST_D014_CURRENTIZATION_CHAIN and repeated currentization depth', () => {
+  const f = boundedLineageFixture();
+  const final = f.addGeneration({
+    phaseId: '6001-implementation-pr-stage-entry',
+    commit: 'b'.repeat(40), operation: 'apply', generation: 10,
+  });
+  const selected = owner.resolveLFinalizationLineage(
+    f.comments, f.packet, f.packetRef,
+    f.impl(final, 'e'.repeat(40), {currentization: true}),
+    f.packetScope, f.options);
+  assert.equal(selected.finalizationLineage.depth, 1);
+  assert.equal(selected.finalizationLineage.currentizationRequired, true);
+});
+
+test('lineage resolver closes EXTERNAL_REVIEW_AFTER_COORDINATION_CONTINUATION', () => {
+  const f = boundedLineageFixture();
+  f.addGeneration({
+    phaseId: '6001-implementation-pr-recovery-rebind-g10',
+    phaseClass: 'COORDINATION',
+    commit: 'b'.repeat(40), operation: 'continue-prepared', generation: 10,
+  });
+  const final = f.addGeneration({
+    phaseId: '6001-implementation-pr-refine-r2',
+    scopePaths: f.paths.slice(0, 1),
+    base: 'b'.repeat(40), commit: 'c'.repeat(40),
+    operation: 'review-update', generation: 20,
+  });
+  const selected = owner.resolveLFinalizationLineage(
+    f.comments, f.packet, f.packetRef, f.impl(final), f.packetScope, f.options);
+  assert.equal(selected.finalizationLineage.depth, 2);
+  assert.equal(selected.finalizationLineage.finalOperation, 'review-update');
+});
+
+test('lineage resolver closes CURRENTIZATION_EDGE_BEFORE_SUBSET_REVIEW', () => {
+  const f = boundedLineageFixture();
+  f.addGeneration({
+    phaseId: '6001-implementation-pr-stage-entry',
+    commit: 'b'.repeat(40), operation: 'apply', generation: 10,
+  });
+  const final = f.addGeneration({
+    phaseId: '6001-implementation-pr-refine-r2',
+    scopePaths: f.paths.slice(0, 1),
+    base: 'd'.repeat(40), commit: 'e'.repeat(40),
+    operation: 'review-update', generation: 30,
+  });
+  const selected = owner.resolveLFinalizationLineage(
+    f.comments, f.packet, f.packetRef,
+    f.impl(final, 'e'.repeat(40), {currentization: true}),
+    f.packetScope, f.options);
+  assert.equal(selected.finalizationLineage.depth, 2);
+  assert.equal(selected.finalizationLineage.currentizationRequired, true);
+});
+
+test('lineage resolver closes SELF_OWNER_REVIEW_UPDATE_POST_D014_CURRENTIZATION', () => {
+  const f = boundedLineageFixture();
+  const final = f.addGeneration({
+    phaseId: '6001-implementation-pr-refine-r1',
+    base: 'a'.repeat(40), commit: 'b'.repeat(40),
+    operation: 'review-update', generation: 20,
+  });
+  const selected = owner.resolveLFinalizationLineage(
+    f.comments, f.packet, f.packetRef,
+    f.impl(final, 'e'.repeat(40), {currentization: true}),
+    f.packetScope, f.options);
+  assert.equal(selected.finalizationLineage.finalOperation, 'review-update');
+  assert.equal(selected.finalizationLineage.currentizationRequired, true);
+});
+
+test('lineage resolver closes EXTERNAL_SUBSET_OPERATION_IDENTITY_QUALIFICATION', () => {
+  const good = boundedLineageFixture();
+  good.addGeneration({
+    phaseId: '6001-implementation-pr-stage-entry',
+    commit: 'b'.repeat(40), operation: 'apply', generation: 10,
+  });
+  const final = good.addGeneration({
+    phaseId: '6001-implementation-pr-refine-without-review-token',
+    scopePaths: good.paths.slice(0, 1),
+    base: 'b'.repeat(40), commit: 'c'.repeat(40),
+    operation: 'review-update', generation: 20,
+  });
+  const selected = owner.resolveLFinalizationLineage(
+    good.comments, good.packet, good.packetRef, good.impl(final), good.packetScope, good.options);
+  assert.equal(selected.finalizationLineage.finalOperation, 'review-update');
+
+  const wrong = boundedLineageFixture();
+  wrong.addGeneration({
+    phaseId: '6001-implementation-pr-stage-entry',
+    commit: 'b'.repeat(40), operation: 'apply', generation: 10,
+  });
+  const badFinal = wrong.addGeneration({
+    phaseId: '6001-implementation-pr-review-update-r1',
+    scopePaths: wrong.paths.slice(0, 1),
+    base: 'b'.repeat(40), commit: 'c'.repeat(40),
+    operation: 'continue-prepared', generation: 20,
+  });
+  assert.throws(() => owner.resolveLFinalizationLineage(
+    wrong.comments, wrong.packet, wrong.packetRef, wrong.impl(badFinal),
+    wrong.packetScope, wrong.options),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.some((code) =>
+      ['FINALIZATION_LINEAGE_CONTINUE_PREPARED_BINDING_CONFLICT',
+        'FINALIZATION_LINEAGE_SUBSET_OPERATION_CONFLICT'].includes(code)));
+});
+
+test('lineage resolver closes SELF_OWNER_POST_D014_CANDIDATE_TRANSITION_QUALIFICATION', () => {
+  const f = boundedLineageFixture();
+  const final = f.addGeneration({
+    phaseId: '6001-implementation-pr-stage-entry',
+    commit: 'b'.repeat(40), operation: 'apply', generation: 10,
+  });
+  assert.throws(() => owner.resolveLFinalizationLineage(
+    f.comments, f.packet, f.packetRef, f.impl(final, 'e'.repeat(40)),
+    f.packetScope, f.options),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('FINALIZATION_LINEAGE_CURRENTIZATION_PROOF_REQUIRED'));
+});
+
+test('lineage resolver closes SELF_OWNER_OPERATION_IDENTITY_BINDING', () => {
+  const bad = boundedLineageFixture();
+  const badFinal = bad.addGeneration({
+    phaseId: '6001-implementation-pr-stage-entry',
+    base: 'a'.repeat(40), commit: 'b'.repeat(40),
+    operation: 'review-update', generation: 10, inputHasPr: false,
+  });
+  assert.throws(() => owner.resolveLFinalizationLineage(
+    bad.comments, bad.packet, bad.packetRef, bad.impl(badFinal),
+    bad.packetScope, bad.options),
+  (error) => error instanceof owner.ApplyError
+    && error.reasonCodes.includes('FINALIZATION_LINEAGE_REVIEW_UPDATE_BINDING_CONFLICT'));
+
+  const good = boundedLineageFixture();
+  const goodFinal = good.addGeneration({
+    phaseId: '6001-implementation-pr-stage-entry',
+    base: 'a'.repeat(40), commit: 'b'.repeat(40),
+    operation: 'review-update', generation: 10,
+  });
+  const selected = owner.resolveLFinalizationLineage(
+    good.comments, good.packet, good.packetRef, good.impl(goodFinal),
+    good.packetScope, good.options);
+  assert.equal(selected.finalizationLineage.finalOperation, 'review-update');
 });

@@ -1109,7 +1109,12 @@ function selectSelfOwnerCompletionReceipt(comments, packet, packetRef, impl) {
   return {comment: matches[0], receipt, text: body, lineage};
 }
 
-function selectSelfOwnerWorkspaceManifest(comments, packet, packetRef, impl) {
+function selectSelfOwnerWorkspaceManifest(comments, packet, packetRef, impl, options = {}) {
+  if (impl?.lineage?.kind === 'IMPLEMENTATION_L_REPOSITORY') {
+    return resolveLFinalizationLineage(
+      comments, packet, packetRef, impl,
+      {scopes: SELF_OWNER_SCOPES, paths: SELF_OWNER_PATHS}, options);
+  }
   const completionRow = selectSelfOwnerCompletionReceipt(comments, packet, packetRef, impl);
   const completion = completionRow.receipt;
   const lineage = completionRow.lineage;
@@ -1202,6 +1207,9 @@ function createSelfOwnerLiveContext(packetRef, deps = {}) {
     workspaceAcquiredGeneration: manifest.leaseEvidence.acquiredGeneration,
     workspaceBranch: manifest.workspace.branch,
     workspaceWorktree: manifest.workspace.worktree,
+    workspaceCandidate: impl.lineage.kind === 'IMPLEMENTATION_L_REPOSITORY'
+      ? exactOutputCommit(manifestRow.completionReceipt)
+      : impl.candidate,
     implementationReceiptDigest: impl.row.receipt.receiptDigest,
     requiredCoordinationGates: impl.lineage.requiredGates,
   });
@@ -1345,7 +1353,8 @@ function read2786Workspace(manifest, spawn = childProcess.spawnSync, target = TA
   const head = runGitRead(target.workspaceWorktree, ['rev-parse', 'HEAD'], spawn);
   const dirty = runGitRead(target.workspaceWorktree,
     ['status', '--porcelain=v1', '--untracked-files=all'], spawn);
-  if (branch !== target.workspaceBranch || head !== target.candidate) {
+  const expectedWorkspaceHead = target.workspaceCandidate || target.candidate;
+  if (branch !== target.workspaceBranch || head !== expectedWorkspaceHead) {
     fail('CONFLICT', 'WORKSPACE_IDENTITY_CONFLICT');
   }
   if (dirty) fail('BLOCKED', 'WORKSPACE_NOT_CLEAN');
@@ -1497,6 +1506,354 @@ function externalOwnerScopeParts(scopes) {
     surfaces: normalized.filter((item) => item.startsWith('surface:')),
   };
 }
+
+const FINALIZATION_LINEAGE_MAX_DEPTH = 32;
+const L_OWNER_OPERATION_RE =
+  /^receipt:mcl-l-repository-owner:(apply|review-update|continue-prepared):([0-9a-f]{64})$/;
+
+function exactPassGate(receipt, name) {
+  const rows = (receipt?.requiredGates || []).filter((row) => row.name === name);
+  if (rows.length > 1) fail('CONFLICT', 'FINALIZATION_LINEAGE_GATE_AMBIGUOUS:' + name);
+  if (rows.length !== 1 || rows[0].result !== 'PASS'
+      || typeof rows[0].evidenceLocator !== 'string' || !rows[0].evidenceLocator) return null;
+  return rows[0];
+}
+function hasCurrentizationLineageProof(receipt) {
+  return Boolean(
+    exactPassGate(receipt, 'currentization-scope-and-blob-preservation')
+    && exactPassGate(receipt, 'packet-scoped-currentization-replay')
+  );
+}
+function lOwnerOperation(completion, packet) {
+  const operations = [];
+  for (const ref of completion?.validationRefs || []) {
+    const match = L_OWNER_OPERATION_RE.exec(String(ref));
+    if (!match || match[2] !== completion.manifestId) continue;
+    operations.push(match[1]);
+  }
+  const uniqueOperations = [...new Set(operations)];
+  if (uniqueOperations.length > 1 || operations.length !== uniqueOperations.length) {
+    fail('CONFLICT', 'FINALIZATION_LINEAGE_OPERATION_AMBIGUOUS');
+  }
+  if (uniqueOperations.length === 1) return {operation: uniqueOperations[0], legacy: false};
+  const phaseId = String(completion?.phaseId || '');
+  if (phaseId === String(packet) + '-implementation-pr'
+      || phaseId === String(packet) + '-implementation-pr-stage-entry') {
+    return {operation: 'apply', legacy: true};
+  }
+  fail('CONFLICT', 'FINALIZATION_LINEAGE_OPERATION_EVIDENCE_REQUIRED');
+}
+function exactOutputCommit(completion) {
+  const commits = (completion?.outputRefs || [])
+    .filter((ref) => /^commit:[0-9a-f]{40}$/.test(ref || ''))
+    .map((ref) => ref.slice('commit:'.length));
+  if (commits.length !== 1) fail('CONFLICT', 'FINALIZATION_LINEAGE_OUTPUT_COMMIT_CONFLICT');
+  return commits[0];
+}
+function lWorkspaceKey(workspace) {
+  return JSON.stringify({
+    kind: workspace?.kind || null,
+    branch: workspace?.branch || null,
+    worktree: workspace?.worktree || null,
+  });
+}
+function validateLWorkspace(workspace) {
+  if (!workspace || workspace.kind !== 'repository'
+      || !/^laptop\/[A-Za-z0-9._-]+$/.test(workspace.branch || '')
+      || workspace.branch === 'laptop/work'
+      || workspace.branch.includes('..')
+      || workspace.branch.endsWith('/')
+      || workspace.branch.includes('@{')
+      || workspace.worktree !== '/home/alsl0/nyang-worktrees/'
+        + String(workspace.branch).slice('laptop/'.length)) {
+    fail('CONFLICT', 'FINALIZATION_LINEAGE_WORKSPACE_CONFLICT');
+  }
+}
+function validateLGenerationOperation(node, packet, pr) {
+  const {manifest, operation, legacyOperation} = node;
+  const phaseId = String(manifest.phaseId || '');
+  const implementationPhase = phaseId.startsWith(String(packet) + '-implementation-pr');
+  const recoveryPhase = phaseId.startsWith(String(packet) + '-')
+    && phaseId.includes('recovery-rebind');
+  if (!implementationPhase && !(operation === 'continue-prepared' && recoveryPhase)) {
+    fail('CONFLICT', 'FINALIZATION_LINEAGE_PHASE_ID_CONFLICT');
+  }
+  if (operation === 'apply') {
+    if (manifest.phaseClass !== 'REPOSITORY_MUTATION') {
+      fail('CONFLICT', 'FINALIZATION_LINEAGE_APPLY_PHASE_CLASS_CONFLICT');
+    }
+    return;
+  }
+  if (operation === 'review-update') {
+    if (legacyOperation || manifest.phaseClass !== 'REPOSITORY_MUTATION'
+        || !/^[0-9a-f]{40}$/.test(manifest.observedBaseSha || '')
+        || !(manifest.inputRefs || []).includes('commit:' + manifest.observedBaseSha)
+        || !(manifest.inputRefs || []).includes('pr:#' + pr)) {
+      fail('CONFLICT', 'FINALIZATION_LINEAGE_REVIEW_UPDATE_BINDING_CONFLICT');
+    }
+    return;
+  }
+  if (operation === 'continue-prepared') {
+    if (legacyOperation || !recoveryPhase
+        || !['REPOSITORY_MUTATION', 'COORDINATION'].includes(manifest.phaseClass)) {
+      fail('CONFLICT', 'FINALIZATION_LINEAGE_CONTINUE_PREPARED_BINDING_CONFLICT');
+    }
+    return;
+  }
+  fail('CONFLICT', 'FINALIZATION_LINEAGE_OPERATION_UNSUPPORTED');
+}
+function packetScopeParts(packetScope) {
+  const scopes = [...(packetScope?.scopes || [])].sort();
+  const paths = scopes.filter((item) => item.startsWith('path:'));
+  const surfaces = scopes.filter((item) => item.startsWith('surface:'));
+  return {scopes, paths, surfaces};
+}
+function validateGenerationScope(manifest, packetScope) {
+  const packetParts = packetScopeParts(packetScope);
+  const parts = externalOwnerScopeParts(manifest.scopes);
+  if (!parts.paths.length
+      || parts.paths.some((item) => !packetParts.paths.includes(item))
+      || !same(parts.surfaces, packetParts.surfaces)) {
+    fail('CONFLICT', 'FINALIZATION_LINEAGE_SCOPE_CONFLICT');
+  }
+  return {
+    fullScope: same(parts.all, packetParts.scopes),
+    paths: parts.paths,
+    surfaces: parts.surfaces,
+  };
+}
+function buildLGenerationNode({manifestRow, completion, packet, packetRef, pr, packetScope}) {
+  const manifest = manifestRow.manifest;
+  const binding = handoff.validateReceiptAgainstManifest(completion, manifest);
+  if (binding.status !== 'VALID') {
+    fail('BLOCKED', 'FINALIZATION_LINEAGE_D014_BINDING_CONFLICT', ...(binding.errors || []));
+  }
+  if (manifest.packetRef !== packetRef
+      || completion.packetRef !== packetRef
+      || manifest.route !== 'L' || manifest.executor !== 'L'
+      || completion.executor !== 'L'
+      || manifest.leaseRequirement !== 'REQUIRED'
+      || completion.disposition !== 'COMPLETE'
+      || completion.leaseDisposition !== 'RELEASED'
+      || completion.workspaceResult !== 'clean'
+      || (completion.blockerRefs || []).length
+      || (completion.requiredUnknownRefs || []).length
+      || !(completion.outputRefs || []).includes('pr:#' + pr)
+      || manifest.payloadSha256 !== completion.manifestPayloadSha256
+      || manifest.phaseId !== completion.phaseId
+      || !/^[0-9a-f]{64}$/.test(manifest.leaseEvidence?.leaseId || '')
+      || !Number.isSafeInteger(manifest.leaseEvidence?.acquiredGeneration)
+      || !Number.isSafeInteger(completion.leaseReleaseEvidence?.releasedGeneration)
+      || completion.leaseReleaseEvidence.releasedGeneration
+        <= manifest.leaseEvidence.acquiredGeneration) {
+    fail('CONFLICT', 'FINALIZATION_LINEAGE_GENERATION_IDENTITY_CONFLICT');
+  }
+  validateLWorkspace(manifest.workspace);
+  const operationIdentity = lOwnerOperation(completion, packet);
+  const scope = validateGenerationScope(manifest, packetScope);
+  const node = {
+    manifestRow,
+    manifest,
+    completion,
+    operation: operationIdentity.operation,
+    legacyOperation: operationIdentity.legacy,
+    outputCommit: exactOutputCommit(completion),
+    acquiredGeneration: manifest.leaseEvidence.acquiredGeneration,
+    releasedGeneration: completion.leaseReleaseEvidence.releasedGeneration,
+    workspaceKey: lWorkspaceKey(manifest.workspace),
+    fullScope: scope.fullScope,
+    scopePaths: scope.paths,
+  };
+  validateLGenerationOperation(node, packet, pr);
+  return node;
+}
+function lGenerationNodes(comments, packet, packetRef, pr, packetScope) {
+  const manifestRows = new Map();
+  for (const comment of comments) {
+    const body = commentBody(comment);
+    if (!body.includes('mcl-task-manifest:v1')) continue;
+    const parsed = handoff.parseManifest(body);
+    if (parsed.status !== 'VALID' || parsed.value.packetRef !== packetRef
+        || parsed.value.route !== 'L' || parsed.value.executor !== 'L') continue;
+    const prior = manifestRows.get(parsed.value.manifestId);
+    if (prior && prior.text !== body) {
+      fail('CONFLICT', 'FINALIZATION_LINEAGE_MANIFEST_IDENTITY_CONFLICT');
+    }
+    if (!prior) manifestRows.set(parsed.value.manifestId,
+      {comment, manifest: parsed.value, text: body});
+  }
+  const receiptRowsByManifest = new Map();
+  for (const comment of comments) {
+    const body = commentBody(comment);
+    if (!body.includes('mcl-task-completion-receipt:v1')) continue;
+    const parsed = handoff.parseCompletionReceipt(body);
+    if (parsed.status !== 'VALID') continue;
+    const receipt = parsed.value;
+    if (receipt.packetRef !== packetRef || receipt.executor !== 'L'
+        || receipt.disposition !== 'COMPLETE'
+        || !(receipt.outputRefs || []).includes('pr:#' + pr)) continue;
+    if (!receiptRowsByManifest.has(receipt.manifestId)) {
+      receiptRowsByManifest.set(receipt.manifestId, []);
+    }
+    receiptRowsByManifest.get(receipt.manifestId).push({comment, receipt, text: body});
+  }
+  const nodes = [];
+  for (const [manifestId, receiptRows] of receiptRowsByManifest) {
+    const manifestRow = manifestRows.get(manifestId);
+    if (!manifestRow) continue;
+    const phaseId = String(manifestRow.manifest.phaseId || '');
+    if (!phaseId.startsWith(String(packet) + '-implementation-pr')
+        && !phaseId.includes('recovery-rebind')) continue;
+    const classified = completionSet.classify({
+      manifestId,
+      receiptTexts: receiptRows.map((row) => row.text),
+    });
+    if (classified.status === 'CONFLICT') {
+      fail('CONFLICT', 'FINALIZATION_LINEAGE_COMPLETION_CONFLICT');
+    }
+    if (!['SINGLE', 'MULTIPLE_EQUIVALENT'].includes(classified.status)) continue;
+    const selected = receiptRows.find((row) =>
+      row.receipt.receiptId === classified.representativeReceiptId);
+    if (!selected) fail('UNKNOWN', 'FINALIZATION_LINEAGE_COMPLETION_REPRESENTATIVE_MISSING');
+    nodes.push(buildLGenerationNode({
+      manifestRow, completion: selected.receipt, packet, packetRef, pr, packetScope,
+    }));
+  }
+  if (nodes.length > 64) fail('UNKNOWN', 'FINALIZATION_LINEAGE_NODE_LIMIT_EXCEEDED');
+  return nodes;
+}
+function defaultIsAncestor(worktree, ancestor, descendant, spawn = childProcess.spawnSync) {
+  if (ancestor === descendant) return true;
+  const result = spawn('git', ['-C', worktree, 'merge-base', '--is-ancestor', ancestor, descendant], {
+    encoding: 'utf8',
+    shell: false,
+    maxBuffer: 1024 * 1024,
+  });
+  if (result.status === 0) return true;
+  if (result.status === 1) return false;
+  fail('UNKNOWN', 'FINALIZATION_LINEAGE_GIT_ANCESTRY_UNPROVEN');
+}
+function requireCurrentizationBridge(implReceipt, node, from, to, options = {}) {
+  if (!hasCurrentizationLineageProof(implReceipt)) {
+    fail('BLOCKED', 'FINALIZATION_LINEAGE_CURRENTIZATION_PROOF_REQUIRED');
+  }
+  const isAncestor = options.isAncestor
+    || ((worktree, ancestor, descendant) =>
+      defaultIsAncestor(worktree, ancestor, descendant, options.spawn || childProcess.spawnSync));
+  if (!isAncestor(node.manifest.workspace.worktree, from, to)) {
+    fail('CONFLICT', 'FINALIZATION_LINEAGE_CURRENTIZATION_ANCESTRY_CONFLICT');
+  }
+}
+function predecessorForNode(node, nodes, implReceipt, options = {}) {
+  const base = node.manifest.observedBaseSha;
+  if (!/^[0-9a-f]{40}$/.test(base || '')) {
+    fail('CONFLICT', 'FINALIZATION_LINEAGE_PREDECESSOR_BASE_CONFLICT');
+  }
+  const ordered = nodes.filter((candidate) =>
+    candidate.manifest.manifestId !== node.manifest.manifestId
+    && candidate.releasedGeneration < node.acquiredGeneration);
+  const foreignWorkspaceExact = ordered.filter((candidate) =>
+    candidate.outputCommit === base && candidate.workspaceKey !== node.workspaceKey);
+  if (foreignWorkspaceExact.length) {
+    fail('CONFLICT', 'FINALIZATION_LINEAGE_WORKSPACE_CONFLICT');
+  }
+  const candidates = ordered.filter((candidate) => candidate.workspaceKey === node.workspaceKey);
+  const exact = candidates.filter((candidate) => candidate.outputCommit === base);
+  if (exact.length > 1) fail('CONFLICT', 'FINALIZATION_LINEAGE_PREDECESSOR_AMBIGUOUS');
+  if (exact.length === 1) return exact[0];
+  if (!hasCurrentizationLineageProof(implReceipt)) {
+    fail('BLOCKED', 'FINALIZATION_LINEAGE_PREDECESSOR_MISSING');
+  }
+  const isAncestor = options.isAncestor
+    || ((worktree, ancestor, descendant) =>
+      defaultIsAncestor(worktree, ancestor, descendant, options.spawn || childProcess.spawnSync));
+  const bridged = candidates.filter((candidate) =>
+    isAncestor(node.manifest.workspace.worktree, candidate.outputCommit, base));
+  if (!bridged.length) fail('BLOCKED', 'FINALIZATION_LINEAGE_PREDECESSOR_MISSING');
+  const maxRelease = Math.max(...bridged.map((candidate) => candidate.releasedGeneration));
+  const closest = bridged.filter((candidate) => candidate.releasedGeneration === maxRelease);
+  if (closest.length !== 1) fail('CONFLICT', 'FINALIZATION_LINEAGE_PREDECESSOR_AMBIGUOUS');
+  requireCurrentizationBridge(implReceipt, closest[0], closest[0].outputCommit, base, options);
+  return closest[0];
+}
+function resolveLFinalizationLineage(
+  comments, packet, packetRef, impl, packetScope, options = {},
+) {
+  const gates = (impl?.row?.receipt?.requiredGates || [])
+    .filter((row) => row.name === 'd014-completion');
+  if (gates.length !== 1 || gates[0].result !== 'PASS') {
+    fail(gates.length ? 'CONFLICT' : 'UNKNOWN',
+      gates.length
+        ? 'FINALIZATION_LINEAGE_D014_COMPLETION_GATE_CONFLICT'
+        : 'FINALIZATION_LINEAGE_D014_COMPLETION_GATE_MISSING');
+  }
+  const locator = /^issue-comment:([1-9][0-9]*)$/.exec(gates[0].evidenceLocator || '');
+  if (!locator) fail('CONFLICT', 'FINALIZATION_LINEAGE_D014_COMPLETION_LOCATOR_INVALID');
+  const selectedComments = comments.filter(
+    (comment) => Number(comment?.id) === Number(locator[1]));
+  if (selectedComments.length !== 1) {
+    fail(selectedComments.length ? 'CONFLICT' : 'UNKNOWN',
+      selectedComments.length
+        ? 'FINALIZATION_LINEAGE_D014_COMPLETION_COMMENT_AMBIGUOUS'
+        : 'FINALIZATION_LINEAGE_D014_COMPLETION_COMMENT_MISSING');
+  }
+  const parsedCompletion = handoff.parseCompletionReceipt(commentBody(selectedComments[0]));
+  if (parsedCompletion.status !== 'VALID') {
+    fail(parsedCompletion.status === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN',
+      'FINALIZATION_LINEAGE_D014_COMPLETION_INVALID');
+  }
+  const nodes = lGenerationNodes(comments, packet, packetRef, impl.pr, packetScope);
+  const finalNode = nodes.find((node) =>
+    node.completion.receiptId === parsedCompletion.value.receiptId);
+  if (!finalNode) fail('CONFLICT', 'FINALIZATION_LINEAGE_FINAL_GENERATION_MISSING');
+  if (finalNode.outputCommit !== impl.candidate) {
+    requireCurrentizationBridge(
+      impl.row.receipt, finalNode, finalNode.outputCommit, impl.candidate, options);
+  }
+
+  const lineage = [];
+  const seen = new Set();
+  let node = finalNode;
+  for (let depth = 0; depth < FINALIZATION_LINEAGE_MAX_DEPTH; depth += 1) {
+    if (seen.has(node.manifest.manifestId)) {
+      fail('CONFLICT', 'FINALIZATION_LINEAGE_CYCLE');
+    }
+    seen.add(node.manifest.manifestId);
+    lineage.push(node);
+    if (node.fullScope) break;
+    if (node.operation !== 'review-update') {
+      fail('CONFLICT', 'FINALIZATION_LINEAGE_SUBSET_OPERATION_CONFLICT');
+    }
+    node = predecessorForNode(node, nodes, impl.row.receipt, options);
+  }
+  if (!lineage.at(-1)?.fullScope) {
+    fail('BLOCKED', 'FINALIZATION_LINEAGE_FULL_SCOPE_ROOT_MISSING');
+  }
+  const root = lineage.at(-1);
+  const firstPredecessor = lineage.length > 1 ? lineage[1] : null;
+  return {
+    ...finalNode.manifestRow,
+    completionReceipt: finalNode.completion,
+    lineage: impl.lineage || {kind: 'IMPLEMENTATION_L_REPOSITORY'},
+    reviewUpdatePredecessor: firstPredecessor ? {
+      manifestRow: firstPredecessor.manifestRow,
+      completion: firstPredecessor.completion,
+    } : null,
+    finalizationLineage: {
+      result: 'PASS',
+      depth: lineage.length,
+      rootManifestId: root.manifest.manifestId,
+      finalManifestId: finalNode.manifest.manifestId,
+      finalOperation: finalNode.operation,
+      currentizationRequired: finalNode.outputCommit !== impl.candidate
+        || lineage.some((item, index) => {
+          if (index === lineage.length - 1) return false;
+          return lineage[index + 1].outputCommit !== item.manifest.observedBaseSha;
+        }),
+      manifestIds: lineage.map((item) => item.manifest.manifestId),
+    },
+  };
+}
 function selectExternalOwnerReviewUpdatePredecessor(
   comments, packet, packetRef, impl, packetScope, manifest,
 ) {
@@ -1617,75 +1974,13 @@ function selectExternalOwnerReviewUpdatePredecessor(
   return uniqueCandidates[0];
 }
 
-function selectExternalOwnerWorkspaceManifest(comments, packet, packetRef, impl, packetScope) {
-  const gates = (impl.row.receipt.requiredGates || [])
-    .filter((row) => row.name === 'd014-completion');
-  if (gates.length !== 1 || gates[0].result !== 'PASS') {
-    fail(gates.length ? 'CONFLICT' : 'UNKNOWN',
-      gates.length ? 'EXTERNAL_OWNER_D014_COMPLETION_GATE_CONFLICT'
-        : 'EXTERNAL_OWNER_D014_COMPLETION_GATE_MISSING');
-  }
-  const locator = /^issue-comment:([1-9][0-9]*)$/.exec(gates[0].evidenceLocator || '');
-  if (!locator) fail('CONFLICT', 'EXTERNAL_OWNER_D014_COMPLETION_LOCATOR_INVALID');
-  const completionComment = comments.filter((comment) => Number(comment?.id) === Number(locator[1]));
-  if (completionComment.length !== 1) fail(completionComment.length ? 'CONFLICT' : 'UNKNOWN',
-    completionComment.length ? 'EXTERNAL_OWNER_D014_COMPLETION_COMMENT_AMBIGUOUS'
-      : 'EXTERNAL_OWNER_D014_COMPLETION_COMMENT_MISSING');
-  const parsedCompletion = handoff.parseCompletionReceipt(commentBody(completionComment[0]));
-  if (parsedCompletion.status !== 'VALID') fail(
-    parsedCompletion.status === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN',
-    'EXTERNAL_OWNER_D014_COMPLETION_INVALID');
-  const completion = parsedCompletion.value;
-  if (completion.packetRef !== packetRef
-      || completion.executor !== 'L'
-      || completion.disposition !== 'COMPLETE'
-      || completion.workspaceResult !== 'clean'
-      || (completion.blockerRefs || []).length
-      || (completion.requiredUnknownRefs || []).length
-      || !(completion.outputRefs || []).includes('pr:#' + impl.pr)
-      || !(completion.outputRefs || []).includes('commit:' + impl.candidate)) {
-    fail('CONFLICT', 'EXTERNAL_OWNER_D014_COMPLETION_IDENTITY_CONFLICT');
-  }
-  const manifests = [];
-  for (const comment of comments) {
-    const body = commentBody(comment);
-    if (!body.includes('mcl-task-manifest:v1')) continue;
-    const parsed = handoff.parseManifest(body);
-    if (parsed.status !== 'VALID' || parsed.value.manifestId !== completion.manifestId) continue;
-    manifests.push({comment, manifest: parsed.value, text: body});
-  }
-  if (manifests.length !== 1) fail(manifests.length ? 'CONFLICT' : 'UNKNOWN',
-    manifests.length ? 'EXTERNAL_OWNER_WORKSPACE_MANIFEST_AMBIGUOUS'
-      : 'EXTERNAL_OWNER_WORKSPACE_MANIFEST_MISSING');
-  const selected = manifests[0];
-  const manifest = selected.manifest;
-  const completionBinding = handoff.validateReceiptAgainstManifest(completion, manifest);
-  if (completionBinding.status !== 'VALID') {
-    fail('BLOCKED', 'EXTERNAL_OWNER_D014_COMPLETION_MANIFEST_CONFLICT',
-      ...(completionBinding.errors || []));
-  }
-  if (manifest.payloadSha256 !== completion.manifestPayloadSha256
-      || manifest.packetRef !== packetRef
-      || manifest.phaseId !== completion.phaseId
-      || !String(manifest.phaseId || '').startsWith(String(packet) + '-implementation-pr')
-      || manifest.phaseClass !== 'REPOSITORY_MUTATION'
-      || manifest.route !== 'L' || manifest.executor !== 'L'
-      || manifest.leaseRequirement !== 'REQUIRED'
-      || manifest.workspace?.kind !== 'repository'
-      || !/^laptop\/[A-Za-z0-9._-]+$/.test(manifest.workspace?.branch || '')
-      || manifest.workspace?.worktree !== '/home/alsl0/nyang-worktrees/'
-        + String(manifest.workspace.branch).slice('laptop/'.length)
-      || !/^[0-9a-f]{64}$/.test(manifest.leaseEvidence?.leaseId || '')
-      || !Number.isSafeInteger(manifest.leaseEvidence?.acquiredGeneration)) {
-    fail('CONFLICT', 'EXTERNAL_OWNER_WORKSPACE_MANIFEST_IDENTITY_CONFLICT');
-  }
-  const exactScopes = same([...(manifest.scopes || [])].sort(), packetScope.scopes);
-  const reviewUpdatePredecessor = exactScopes
-    ? null
-    : selectExternalOwnerReviewUpdatePredecessor(
-      comments, packet, packetRef, impl, packetScope, manifest);
-  return {...selected, completionReceipt: completion, reviewUpdatePredecessor};
+function selectExternalOwnerWorkspaceManifest(
+  comments, packet, packetRef, impl, packetScope, options = {},
+) {
+  return resolveLFinalizationLineage(
+    comments, packet, packetRef, impl, packetScope, options);
 }
+
 function createExternalOwnerLiveContext(packetRef, deps = {}) {
   if (!PACKET_REF_RE.test(packetRef || '')) fail('BLOCKED', 'PACKET_NOT_REVIEWED_TARGET');
   const packet = Number(packetRef.slice(1));
@@ -1724,6 +2019,7 @@ function createExternalOwnerLiveContext(packetRef, deps = {}) {
     workspaceAcquiredGeneration: manifest.leaseEvidence.acquiredGeneration,
     workspaceBranch: manifest.workspace.branch,
     workspaceWorktree: manifest.workspace.worktree,
+    workspaceCandidate: exactOutputCommit(manifestRow.completionReceipt),
     workspaceRoute: 'L',
     workspaceExecutor: 'L',
     implementationReceiptDigest: impl.row.receipt.receiptDigest,
@@ -3015,6 +3311,7 @@ module.exports = {
   EXTERNAL_FINALIZATION_EVIDENCE,
   EXTERNAL_FINALIZATION_SURFACE,
   EXTERNAL_OWNER_REQUIRED_GATES,
+  FINALIZATION_LINEAGE_MAX_DEPTH,
   PROFILES,
   SELF_OWNER_PATHS,
   SELF_OWNER_REQUIRED_GATES,
@@ -3079,6 +3376,9 @@ module.exports = {
   read2786Workspace,
   readMutableState,
   readReleaseEvidence,
+  hasCurrentizationLineageProof,
+  lOwnerOperation,
+  resolveLFinalizationLineage,
   render,
   runCli,
   select2786ImplementationReceipt,

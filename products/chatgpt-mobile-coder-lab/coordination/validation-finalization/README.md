@@ -666,12 +666,17 @@ actual merged head. Three reviewed semantic lineages are supported:
   `<packet>-implementation-pr-stage-entry`;
 - S packet-scoped currentization via `currentization-d014-completion` and
   `<packet>-validation-merge-currentization`;
-- fixed L/L repository implementation via `d014-completion`, with exactly the
-  direct-L `<packet>-implementation-pr` or stage-entry-prepared
-  `<packet>-implementation-pr-stage-entry` phase. The completion receipt and
-  selected manifest must carry the same exact phase ID. The manifest must bind
-  exact route/executor `L / L` and one direct-child `laptop/<target>` /
-  `/home/alsl0/nyang-worktrees/<target>` workspace identity.
+- fixed L/L repository implementation via `d014-completion`, with the
+  direct-L `<packet>-implementation-pr`, stage-entry-prepared
+  `<packet>-implementation-pr-stage-entry`, or one operation-qualified same-PR
+  review-update generation. A review-update generation is never admitted from phase
+  text alone: its COMPLETE receipt must carry exactly
+  `receipt:mcl-l-repository-owner:review-update:<manifestId>`, output the selected
+  canonical candidate and same PR, and its manifest must retain the full self-owner
+  scopes, exact L/L direct-child workspace, exact observed-base commit input and same
+  PR input. The completion receipt and selected manifest must carry the same exact
+  phase ID. Subset/near-match scopes, apply-qualified evidence, candidate/PR drift,
+  missing observed-base binding and foreign workspace lineage remain fail-closed.
 
 Distinct PR generations, missing live-head generations, bad lineage, active lease,
 holder presence, dirty/non-exact workspace, near-match scope or missing required

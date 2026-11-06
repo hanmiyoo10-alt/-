@@ -66,6 +66,73 @@ def status_paths(rows: list[tuple[str, list[str]]]) -> list[str]:
     return paths
 
 
+def _read_nul_token(stream) -> str | None:
+    chars: list[str] = []
+    while True:
+        char = stream.read(1)
+        if char == "":
+            if chars:
+                raise ValueError("DIFF_STATUS_INVALID")
+            return None
+        if char == "\0":
+            return "".join(chars)
+        chars.append(char)
+
+
+def bounded_status_paths(repo: Path, base: str, head: str) -> list[str] | None:
+    proc = subprocess.Popen(
+        ["git", "diff", "--name-status", "-z", "-M", base, head],
+        cwd=repo,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    assert proc.stdout is not None and proc.stderr is not None
+    paths: set[str] = set()
+    try:
+        while True:
+            status = _read_nul_token(proc.stdout)
+            if status is None:
+                break
+            count = 2 if status.startswith(("R", "C")) else 1
+            for _ in range(count):
+                path = _read_nul_token(proc.stdout)
+                if path is None:
+                    raise ValueError("DIFF_STATUS_INVALID")
+                paths.add(path)
+                if len(paths) > MAX_PATHS:
+                    proc.kill()
+                    proc.communicate()
+                    return None
+        stderr = proc.stderr.read()
+        returncode = proc.wait()
+        if returncode != 0:
+            raise RuntimeError((stderr or "git command failed").strip()[:500])
+        return sorted(paths)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        proc.stdout.close()
+        proc.stderr.close()
+
+
+def candidate_scoped_main_overlap(
+    repo: Path, base: str, current: str, candidate_paths: list[str]
+) -> list[str]:
+    overlap: list[str] = []
+    for path in candidate_paths:
+        cp = run(
+            repo, "diff", "--quiet", "--no-ext-diff", "--no-textconv", "-M",
+            base, current, "--", path, check=False,
+        )
+        if cp.returncode == 1:
+            overlap.append(path)
+        elif cp.returncode != 0:
+            raise RuntimeError((cp.stderr or cp.stdout or "git diff failed").strip()[:500])
+    return sorted(overlap)
+
+
 def change_identity(rows: list[tuple[str, list[str]]]) -> list[dict[str, Any]]:
     return sorted(
         ({"status": status[:1], "paths": list(paths)} for status, paths in rows),
@@ -237,9 +304,8 @@ def plan_currentization(repo: Path, data: dict[str, Any]) -> dict[str, Any]:
                       candidateHead=head, currentMain=current, rerunPlan=[])
     try:
         candidate_rows = name_status(repo, base, head)
-        main_rows = name_status(repo, base, current)
         candidate_paths = status_paths(candidate_rows)
-        main_paths = status_paths(main_rows)
+        main_paths = bounded_status_paths(repo, base, current)
     except OverflowError:
         return result("UNKNOWN", "PATH_BOUND_EXCEEDED")
     except ValueError:
@@ -248,10 +314,30 @@ def plan_currentization(repo: Path, data: dict[str, Any]) -> dict[str, Any]:
         return result("UNKNOWN", "GIT_EVIDENCE_UNAVAILABLE", detail=str(exc)[:300])
     if not candidate_paths:
         return result("UNKNOWN", "CANDIDATE_DIFF_EMPTY")
-    overlap = sorted(set(candidate_paths) & set(main_paths))
+
+    main_paths_complete = main_paths is not None
+    main_probe = "FULL_INVENTORY" if main_paths_complete else "CANDIDATE_SCOPED"
+    try:
+        if main_paths_complete:
+            assert main_paths is not None
+            overlap = sorted(set(candidate_paths) & set(main_paths))
+        else:
+            overlap = candidate_scoped_main_overlap(repo, base, current, candidate_paths)
+    except RuntimeError as exc:
+        return result("UNKNOWN", "GIT_EVIDENCE_UNAVAILABLE", detail=str(exc)[:300])
+
+    main_evidence: dict[str, Any] = {
+        "mainAdvancePathsComplete": main_paths_complete,
+        "mainAdvancePathProbe": main_probe,
+    }
+    if main_paths_complete:
+        main_evidence["mainAdvancePaths"] = main_paths
+
     if overlap:
-        return result("OVERLAP", "CHANGED_PATH_OVERLAP", overlapPaths=overlap,
-                      candidatePaths=candidate_paths, mainAdvancePaths=main_paths)
+        return result(
+            "OVERLAP", "CHANGED_PATH_OVERLAP",
+            overlapPaths=overlap, candidatePaths=candidate_paths, **main_evidence,
+        )
     try:
         bad_modes = unsupported_modes(repo, base, head, candidate_paths)
     except RuntimeError as exc:
@@ -262,8 +348,13 @@ def plan_currentization(repo: Path, data: dict[str, Any]) -> dict[str, Any]:
         proof = dry_replay(repo, base, head, current, candidate_rows, candidate_paths)
     except (RuntimeError, ValueError, OverflowError) as exc:
         return result("UNKNOWN", "DRY_REPLAY_EVIDENCE_UNAVAILABLE", detail=str(exc)[:300])
-    proof.update({"candidateBase": base, "candidateHead": head, "currentMain": current,
-                  "candidatePaths": candidate_paths, "mainAdvancePaths": main_paths})
+    proof.update({
+        "candidateBase": base,
+        "candidateHead": head,
+        "currentMain": current,
+        "candidatePaths": candidate_paths,
+        **main_evidence,
+    })
     if proof["state"] == "DISJOINT_REPLAY_PROVEN":
         proof["rerunPlan"] = rerun_plan(owning_ci, required)
         proof["freshBarrierRequiredBeforeMutation"] = True

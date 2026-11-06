@@ -255,7 +255,8 @@ def compact_planner(payload: dict[str, Any]) -> dict[str, Any]:
     keep = {
         "state", "reasonCode", "originalPatchId", "replayPatchId", "changedPaths",
         "changeIdentity", "treeIdentity", "candidateBase", "currentMain",
-        "candidatePaths", "mainAdvancePaths", "rerunPlan",
+        "candidatePaths", "mainAdvancePaths", "mainAdvancePathsComplete",
+        "mainAdvancePathProbe", "rerunPlan",
         "freshBarrierRequiredBeforeMutation",
         "historicalExactHeadEvidenceReusableAsCurrent",
     }

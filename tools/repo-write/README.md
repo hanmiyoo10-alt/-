@@ -154,10 +154,21 @@ proof. Top-level states are `CURRENT`, `DISJOINT_REPLAY_PROVEN`, `OVERLAP`,
 `CONFLICT`, and `UNKNOWN`.
 
 `DISJOINT_REPLAY_PROVEN` requires more than path disjointness. The planner
-derives both changed-path sets from Git, dry-applies the complete candidate
-patch to exact current main in an isolated temporary worktree, preserves the
-stable patch ID, and requires every candidate-owned final blob+mode identity
-to match the original candidate head. Binary and non-regular modes fail closed.
+keeps the candidate changed-path inventory bounded to 200 paths. When the
+generation-base to current-main inventory also fits that bound, it preserves
+the complete historical full-inventory overlap proof. When only the main
+inventory exceeds the bound, it stops enumerating that inventory and checks
+only the already-bounded candidate paths against main. Any changed candidate
+path is ordinary `OVERLAP`; a candidate-scoped disjoint result may continue
+only through the same isolated dry replay. The receipt explicitly reports
+whether main-advance paths were complete and whether the proof used
+`FULL_INVENTORY` or `CANDIDATE_SCOPED`; it never represents an unenumerated
+main inventory as an empty list.
+
+After overlap proof, the planner dry-applies the complete candidate patch to
+exact current main in an isolated temporary worktree, preserves the stable
+patch ID, and requires every candidate-owned final blob+mode identity to match
+the original candidate head. Binary and non-regular modes fail closed.
 
 A replay-proven result still grants no mutation or merge authority. Because any
 actual reconciliation creates a new candidate head, protected `Required`, the

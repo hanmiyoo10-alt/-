@@ -63,9 +63,15 @@ STAGE_ENTRY="$SUPPORT/products/chatgpt-mobile-coder-lab/coordination/stage-entry
 CLOSURE="$SUPPORT/products/chatgpt-mobile-coder-lab/coordination/owner-lifecycle-closure/mcl-owner-lifecycle-closure.cjs"
 SV="$ROOT/prefix/bin/sv"
 SV_LOG="$ROOT/sv.log"
+SV_STATUS_LAG_FILE="$ROOT/sv-status-lag"
 SOCKET_PID_FILE="$ROOT/socket.pid"
 
 mkdir -p "$ROOT/prefix/bin"
+cat > "$ROOT/prefix/bin/sleep" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod 700 "$ROOT/prefix/bin/sleep"
 cat > "$SV" <<'EOF'
 #!/bin/sh
 set -eu
@@ -77,6 +83,17 @@ service=${2-}
 printf '%s %s\n' "$cmd" "$service" >> "$LOG"
 case "$cmd" in
   status)
+    if [ -f "$ROOT/sv-status-lag" ]; then
+      remaining=$(cat "$ROOT/sv-status-lag" 2>/dev/null || echo invalid)
+      case "$remaining" in
+        ''|*[!0-9]*) exit 65 ;;
+      esac
+      if [ "$remaining" -gt 0 ]; then
+        printf '%s\n' "$((remaining - 1))" > "$ROOT/sv-status-lag"
+        printf 'run: %s: (pid 1) 0s\n' "$service"
+        exit 0
+      fi
+    fi
     if [ -f "$service/down" ] && [ ! -L "$service/down" ]; then
       printf 'down: %s: 0s\n' "$service"
     else
@@ -263,6 +280,7 @@ for _ in $(seq 1 50); do
 done
 [ -S "$HOST_RUN/control.sock" ]
 : > "$SV_LOG"
+printf '%s\n' 2 > "$SV_STATUS_LAG_FILE"
 sh "$INSTALL" --deactivate > "$ROOT/deactivate.out"
 wait "$SOCKET_PID" 2>/dev/null || true
 grep -Fq 'schema=mcl-detached-owner-runtime-install.v3' "$ROOT/deactivate.out"
@@ -274,6 +292,8 @@ grep -Fq 'runtime_started=false' "$ROOT/deactivate.out"
 [ -f "$SERVICE/down" ] && [ ! -L "$SERVICE/down" ] && [ "$(stat -c '%a' "$SERVICE/down")" = 600 ]
 [ ! -e "$HOST_RUN/control.sock" ]
 [ "$(grep -Fc "down $SERVICE" "$SV_LOG")" -eq 1 ]
+[ "$(grep -Fc "status $SERVICE" "$SV_LOG")" -ge 3 ]
+[ "$(cat "$SV_STATUS_LAG_FILE")" -eq 0 ]
 
 sh "$INSTALL" --deactivate > "$ROOT/deactivate-again.out"
 grep -Fq 'operation=deactivate' "$ROOT/deactivate-again.out"

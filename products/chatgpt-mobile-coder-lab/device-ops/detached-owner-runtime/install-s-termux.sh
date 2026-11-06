@@ -66,6 +66,9 @@ SOCKET_PATH="$HOST_RUN_DIR/control.sock"
 SERVICE_DIR="$PREFIX/var/service/$SERVICE_NAME"
 SERVICE_RUN="$SERVICE_DIR/run"
 SV="$PREFIX/bin/sv"
+SLEEP="$PREFIX/bin/sleep"
+DEACTIVATE_WAIT_ATTEMPTS=100
+DEACTIVATE_WAIT_SECONDS=0.1
 HOST_SOURCE="$SOURCE_REPO_ROOT/$HOST_SOURCE_REL"
 
 usage() {
@@ -127,6 +130,19 @@ service_down() {
   [ -x "$SV" ] || return 1
   status=$("$SV" status "$SERVICE_DIR" 2>/dev/null || true)
   printf '%s\n' "$status" | grep -Eq '^down: '
+}
+deactivation_converged() {
+  service_down && [ ! -e "$SOCKET_PATH" ] && [ ! -L "$SOCKET_PATH" ]
+}
+wait_deactivation_convergence() {
+  attempt=0
+  while [ "$attempt" -lt "$DEACTIVATE_WAIT_ATTEMPTS" ]; do
+    deactivation_converged && return 0
+    attempt=$((attempt + 1))
+    [ "$attempt" -lt "$DEACTIVATE_WAIT_ATTEMPTS" ] || break
+    "$SLEEP" "$DEACTIVATE_WAIT_SECONDS" >/dev/null 2>&1 || return 1
+  done
+  return 1
 }
 emit_deactivate() {
   printf '%s\n' \
@@ -223,7 +239,8 @@ if [ "$MODE" = deactivate ]; then
     [ ! -L "$SOCKET_PATH" ] || block "control socket invalid"
   fi
   [ -x "$SV" ] || block "sv unavailable"
-  if down_marker_exact && [ ! -e "$SOCKET_PATH" ] && service_down; then
+  [ -x "$SLEEP" ] || block "sleep unavailable"
+  if down_marker_exact && deactivation_converged; then
     emit_deactivate
     exit 0
   fi
@@ -233,8 +250,7 @@ if [ "$MODE" = deactivate ]; then
   fi
   down_marker_exact || block "service down marker invalid"
   "$SV" down "$SERVICE_DIR" >/dev/null 2>&1 || block "service down failed"
-  service_down || block "service not down"
-  [ ! -e "$SOCKET_PATH" ] && [ ! -L "$SOCKET_PATH" ] || block "control socket still present"
+  wait_deactivation_convergence || block "service did not converge down"
   emit_deactivate
   exit 0
 fi

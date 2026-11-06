@@ -1317,6 +1317,12 @@ assert.deepEqual(extractPacketScopes(doNotModifyPacket).scopes.map((row) => row.
   'path:src/write.js',
 ]);
 
+const noModificationToPacket = overlapPacketBody('IN_PROGRESS', ['path:src/write.js'])
+  .replace('## Handoff', 'No modification to:\n- `path:src/read-only.js`\n## Handoff');
+assert.deepEqual(extractPacketScopes(noModificationToPacket).scopes.map((row) => row.normalized), [
+  'path:src/write.js',
+]);
+
 const proseTokenPacket = overlapPacketBody('IN_PROGRESS', ['path:src/write.js'])
   .replace('## Handoff',
     'Existing `path:src/read-only.js` is validation-only / out of scope.\n## Handoff');

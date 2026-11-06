@@ -1155,8 +1155,17 @@ function classifyPreparedContinuationState(manifest, request, currentMain, {runn
   if (parents.length === 2) {
     const candidateHead = head;
     assertCandidateCommit(runner, manifest, request, candidateHead);
-    if (currentMain !== manifest.observedBaseSha && remoteHead !== manifest.observedBaseSha) throw new OwnerError('CONFLICT', ['CONTINUATION_REMOTE_HEAD_CONFLICT']);
-    if (currentMain === manifest.observedBaseSha && ![manifest.observedBaseSha, candidateHead].includes(remoteHead)) throw new OwnerError('CONFLICT', ['CONTINUATION_REMOTE_HEAD_CONFLICT']);
+    if (currentMain !== manifest.observedBaseSha) {
+      if (request.schema === PUSHED_CONTINUATION_REQUEST_SCHEMA && remoteHead === candidateHead) {
+        return {state:'PUSHED_STALE', candidateHead, finalHead:candidateHead, remoteHead};
+      }
+      if (remoteHead !== manifest.observedBaseSha) {
+        throw new OwnerError('CONFLICT', ['CONTINUATION_REMOTE_HEAD_CONFLICT']);
+      }
+    }
+    if (currentMain === manifest.observedBaseSha && ![manifest.observedBaseSha, candidateHead].includes(remoteHead)) {
+      throw new OwnerError('CONFLICT', ['CONTINUATION_REMOTE_HEAD_CONFLICT']);
+    }
     return {state: remoteHead === candidateHead ? 'PUSHED' : 'COMMITTED', candidateHead, finalHead:candidateHead, remoteHead};
   }
   if (parents.length === 3) {
@@ -1165,7 +1174,10 @@ function classifyPreparedContinuationState(manifest, request, currentMain, {runn
     assertCandidateCommit(runner, manifest, request, candidateHead);
     if (mergedMain !== currentMain) throw new OwnerError('CONFLICT', ['CONTINUATION_CURRENTIZATION_MAIN_CONFLICT']);
     assertCurrentizedPayload(runner, manifest, request, candidateHead, currentMain, head);
-    if (![manifest.observedBaseSha, head].includes(remoteHead)) throw new OwnerError('CONFLICT', ['CONTINUATION_REMOTE_HEAD_CONFLICT']);
+    const allowedRemoteHeads = request.schema === PUSHED_CONTINUATION_REQUEST_SCHEMA
+      ? [manifest.observedBaseSha, candidateHead, head]
+      : [manifest.observedBaseSha, head];
+    if (!allowedRemoteHeads.includes(remoteHead)) throw new OwnerError('CONFLICT', ['CONTINUATION_REMOTE_HEAD_CONFLICT']);
     return {state: remoteHead === head ? 'PUSHED' : 'CURRENTIZED', candidateHead, finalHead:head, remoteHead};
   }
   throw new OwnerError('CONFLICT', ['CONTINUATION_HEAD_SHAPE_CONFLICT']);
@@ -1222,7 +1234,8 @@ function inspectPushedContinuation(manifest, request, prRequest, {
   const currentMain = continuationCurrentMain(manifest, {profile, runner});
   const state = classifyPreparedContinuationState(
     manifest, request, currentMain, {profile, runner});
-  if (state.state !== 'PUSHED' || state.finalHead !== request.candidate_head) {
+  if (!['PUSHED', 'PUSHED_STALE'].includes(state.state)
+      || state.candidateHead !== request.candidate_head) {
     throw new OwnerError('BLOCKED', ['PUSHED_CONTINUATION_STATE_REQUIRED']);
   }
   const pr = findExactOpenPr(runner, manifest, prRequest, state.finalHead);
@@ -1235,12 +1248,45 @@ function executePushedContinuation(context, request, prRequest, {
   const {manifest} = context;
   holderCheck(context, env);
   let state = inspectPushedContinuation(manifest, request, prRequest, {profile, runner});
-  const checks = runContinuationValidation(manifest, request, {runner, root});
-  holderCheck(context, env);
-  if (continuationCurrentMain(manifest, {profile, runner}) !== state.currentMain) {
-    throw new OwnerError('CONFLICT', ['PUSHED_CONTINUATION_MAIN_CHANGED']);
+  let checks = [];
+  if (state.state === 'PUSHED_STALE') {
+    const candidatePaths = candidatePathsFromCommitDiff(
+      runner, manifest.workspace.worktree, manifest.observedBaseSha, state.candidateHead);
+    requireGithubWorkflowPushCredential(candidatePaths, manifest.workspace.worktree, {runner});
+    verifyReplayAgainstCurrent(
+      manifest, request, state.currentMain, {runner, candidateHead:state.candidateHead});
+    holderCheck(context, env);
+    if (continuationCurrentMain(manifest, {profile, runner}) !== state.currentMain) {
+      throw new OwnerError('CONFLICT', ['PUSHED_CONTINUATION_MAIN_CHANGED']);
+    }
+    runChecked(runner, 'git', [
+      '-C', manifest.workspace.worktree,
+      '-c', 'user.name=' + FIXED_BOT_NAME,
+      '-c', 'user.email=' + FIXED_BOT_EMAIL,
+      'merge', '--no-ff', '--no-edit', state.currentMain,
+    ], {}, 'PUSHED_CONTINUATION_CURRENTIZATION_MERGE_FAILED');
+    let currentized = classifyPreparedContinuationState(
+      manifest, request, state.currentMain, {profile, runner});
+    if (currentized.state !== 'CURRENTIZED') {
+      throw new OwnerError('CONFLICT', ['PUSHED_CONTINUATION_CURRENTIZATION_READBACK_CONFLICT']);
+    }
+    checks = runContinuationValidation(manifest, request, {runner, root});
+    holderCheck(context, env);
+    if (continuationCurrentMain(manifest, {profile, runner}) !== state.currentMain) {
+      throw new OwnerError('CONFLICT', ['PUSHED_CONTINUATION_MAIN_CHANGED']);
+    }
+    pushExactCandidate(
+      runner, manifest.workspace.worktree, currentized.finalHead,
+      manifest.workspace.branch, candidatePaths);
+    state = inspectPushedContinuation(manifest, request, prRequest, {profile, runner});
+  } else {
+    checks = runContinuationValidation(manifest, request, {runner, root});
+    holderCheck(context, env);
+    if (continuationCurrentMain(manifest, {profile, runner}) !== state.currentMain) {
+      throw new OwnerError('CONFLICT', ['PUSHED_CONTINUATION_MAIN_CHANGED']);
+    }
+    state = inspectPushedContinuation(manifest, request, prRequest, {profile, runner});
   }
-  state = inspectPushedContinuation(manifest, request, prRequest, {profile, runner});
   let pr = state.pr;
   if (!pr) {
     gh(runner, [
@@ -1261,7 +1307,7 @@ function executePushedContinuation(context, request, prRequest, {
     prepared_digest: request.prepared_digest,
     candidate_head: state.candidateHead,
     new_head: state.finalHead,
-    currentized: false,
+    currentized: state.currentMain !== manifest.observedBaseSha,
     pr_number: pr.number,
     validation_checks: checks,
     next_legal_action: 'RELEASE_D013_THEN_RELEASE_HOLDER_THEN_D014_COMPLETE',

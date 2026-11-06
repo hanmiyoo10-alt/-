@@ -188,10 +188,25 @@ ok "generated service is Termux-native and distinct"
 grep -Fq 'rc=0' "$runfile" || fail "child wait status initializer missing"
 grep -Fq 'wait "$child_pid" || rc=$?' "$runfile" || fail "child wait is still exposed to errexit"
 
+resolve_host_tool() {
+  tool=$1
+  old_ifs=$IFS
+  IFS=:
+  for dir in $PATH; do
+    [ -n "$dir" ] || continue
+    candidate="$dir/$tool"
+    if [ -f "$candidate" ] && [ -x "$candidate" ]; then
+      IFS=$old_ifs
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  IFS=$old_ifs
+  return 1
+}
+
 for tool in setsid kill sleep; do
-  host_tool=$(command -v "$tool") || fail "host $tool unavailable"
-  case "$host_tool" in /*) ;; *) host_tool="/usr/bin/$tool" ;; esac
-  [ -x "$host_tool" ] || fail "host $tool path unavailable"
+  host_tool=$(resolve_host_tool "$tool") || fail "host $tool path unavailable"
   cat > "$PREFIX/bin/$tool" <<MOCK
 #!/bin/sh
 exec '$host_tool' "\$@"

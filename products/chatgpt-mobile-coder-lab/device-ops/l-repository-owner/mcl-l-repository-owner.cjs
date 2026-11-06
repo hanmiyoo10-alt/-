@@ -1252,7 +1252,8 @@ function inspectPushedContinuation(manifest, request, prRequest, {
   const currentMain = continuationCurrentMain(manifest, {profile, runner});
   const state = requirePushedContinuationAdmission(classifyPreparedContinuationState(
     manifest, request, currentMain, {profile, runner}), request);
-  const pr = findExactOpenPr(runner, manifest, prRequest, state.finalHead);
+  const expectedPrHead = state.state === 'CURRENTIZED' ? state.remoteHead : state.finalHead;
+  const pr = findExactOpenPr(runner, manifest, prRequest, expectedPrHead);
   return {...state, currentMain, pr};
 }
 

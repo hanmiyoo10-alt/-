@@ -1577,7 +1577,21 @@ test('continue-pushed currentizes exact pushed stale candidate and preserves leg
           return {code:0, stdout:currentMain + '\n', stderr:'', signal:null, error:null};
         }
         if (args[0] === 'pr' && args[1] === 'list') {
-          return {code:0, stdout:'[]\n', stderr:'', signal:null, error:null};
+          return {
+            code:0,
+            stdout:JSON.stringify([{
+              number:9002,
+              title:'feat: pushed stale fixture',
+              body:'Refs #9002',
+              isDraft:false,
+              headRefName:'laptop/task-9002',
+              headRefOid:candidate,
+              baseRefName:'main',
+            }]) + '\n',
+            stderr:'',
+            signal:null,
+            error:null,
+          };
         }
         throw new Error('unexpected gh call: ' + args.join(' '));
       }
@@ -1604,7 +1618,8 @@ test('continue-pushed currentizes exact pushed stale candidate and preserves leg
     const inspectedCurrentized = owner.inspectPushedContinuation(
       m, pushedRequest, prRequest, {profile, runner:fixtureRunner});
     assert.equal(inspectedCurrentized.state, 'CURRENTIZED');
-    assert.equal(inspectedCurrentized.pr, null);
+    assert.equal(inspectedCurrentized.pr.number, 9002);
+    assert.equal(inspectedCurrentized.pr.headRefOid, candidate);
 
     gitExec(feature, ['push','origin','HEAD:refs/heads/laptop/task-9002']);
     const pushed = owner.classifyPreparedContinuationState(

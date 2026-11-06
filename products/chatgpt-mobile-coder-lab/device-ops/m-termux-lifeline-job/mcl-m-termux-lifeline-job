@@ -1,0 +1,96 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -u
+
+[ "$#" -eq 0 ] || exit 64
+
+PREFIX=/data/data/com.termux/files/usr
+HOME_DIR=/data/data/com.termux/files/home
+if [ "${MCL_M_TERMUX_LIFELINE_JOB_TEST_MODE:-0}" = "1" ]; then
+    ROOT="${MCL_M_TERMUX_LIFELINE_JOB_TEST_ROOT:?test root required}"
+    PREFIX="$ROOT/prefix"
+    HOME_DIR="$ROOT/home"
+fi
+
+HEARTBEAT="$HOME_DIR/.local/lib/mcl-m-termux-lifeline/heartbeat-client.py"
+RECOVERY="$HOME_DIR/.local/bin/mcl-m-termux-lifeline-recover"
+STATE="$HOME_DIR/.local/state/mcl-m-termux-lifeline-job"
+RECEIPT="$STATE/last.receipt"
+
+HEARTBEAT_PRE=unknown
+RECOVERY_STATE=not_run
+HEARTBEAT_POST=unknown
+RESULT=unknown
+
+valid_exec() {
+    [ -f "$1" ] && [ ! -L "$1" ] && [ -x "$1" ]
+}
+
+emit() {
+    printf '%s\n' \
+        'schema=mcl-m-termux-lifeline-job.v1' \
+        "heartbeat_pre=$HEARTBEAT_PRE" \
+        "recovery=$RECOVERY_STATE" \
+        "heartbeat_post=$HEARTBEAT_POST" \
+        "result=$RESULT" \
+        'details=withheld'
+}
+
+finish() {
+    code="$1"
+    umask 077
+    mkdir -p "$STATE" || exit 4
+    tmp="$RECEIPT.$$"
+    emit > "$tmp" || exit 4
+    mv "$tmp" "$RECEIPT" || exit 4
+    cat "$RECEIPT"
+    exit "$code"
+}
+
+valid_exec "$HEARTBEAT" || finish 4
+valid_exec "$RECOVERY" || finish 4
+
+"$HEARTBEAT" --status >/dev/null 2>&1
+pre_rc=$?
+case "$pre_rc" in
+    0)
+        HEARTBEAT_PRE=active
+        HEARTBEAT_POST=active
+        RESULT=healthy
+        finish 0
+        ;;
+    1)
+        HEARTBEAT_PRE=inactive
+        ;;
+    *)
+        finish 4
+        ;;
+esac
+
+"$RECOVERY" >/dev/null 2>&1
+recovery_rc=$?
+if [ "$recovery_rc" -ne 0 ]; then
+    RECOVERY_STATE=fail
+    RESULT=blocked
+    finish 3
+fi
+RECOVERY_STATE=pass
+
+"$HEARTBEAT" --status >/dev/null 2>&1
+post_rc=$?
+case "$post_rc" in
+    0)
+        HEARTBEAT_POST=active
+        RESULT=recovered
+        finish 0
+        ;;
+    1)
+        HEARTBEAT_POST=inactive
+        RESULT=blocked
+        finish 3
+        ;;
+    *)
+        HEARTBEAT_POST=unknown
+        RESULT=unknown
+        finish 4
+        ;;
+esac

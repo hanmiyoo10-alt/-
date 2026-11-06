@@ -1,0 +1,128 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -u
+
+[ "$#" -eq 1 ] || exit 64
+
+PREFIX=/data/data/com.termux/files/usr
+HOME_DIR=/data/data/com.termux/files/home
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+SOURCE="$SCRIPT_DIR/mcl-m-termux-lifeline-job"
+
+if [ "${MCL_M_TERMUX_LIFELINE_JOB_TEST_MODE:-0}" = "1" ]; then
+    ROOT="${MCL_M_TERMUX_LIFELINE_JOB_TEST_ROOT:?test root required}"
+    PREFIX="$ROOT/prefix"
+    HOME_DIR="$ROOT/home"
+fi
+
+DEST="$HOME_DIR/.local/lib/mcl-m-termux-lifeline-job/job.sh"
+STATE="$HOME_DIR/.local/state/mcl-m-termux-lifeline-job"
+SCHEDULER="$PREFIX/bin/termux-job-scheduler"
+
+WRAPPER=unknown
+NAMESPACE=not_checked
+SCHEDULE=not_run
+RESULT=unknown
+
+emit() {
+    printf '%s\n' \
+        'schema=mcl-m-termux-lifeline-job-owner.v1' \
+        "wrapper=$WRAPPER" \
+        "namespace=$NAMESPACE" \
+        "schedule=$SCHEDULE" \
+        "result=$RESULT" \
+        'details=withheld'
+}
+
+source_valid() {
+    [ -f "$SOURCE" ] && [ ! -L "$SOURCE" ]
+}
+
+wrapper_state() {
+    if [ ! -e "$DEST" ]; then
+        WRAPPER=missing
+    elif [ ! -f "$DEST" ] || [ -L "$DEST" ]; then
+        WRAPPER=drift
+    elif cmp -s "$SOURCE" "$DEST" && [ -x "$DEST" ]         && [ "$(stat -c '%a' "$DEST" 2>/dev/null || true)" = 700 ]; then
+        WRAPPER=present
+    else
+        WRAPPER=drift
+    fi
+}
+
+check_only() {
+    source_valid || { RESULT=unknown; emit; return 4; }
+    wrapper_state
+    case "$WRAPPER" in
+        present) RESULT=ready; emit; return 0 ;;
+        missing) RESULT=missing; emit; return 1 ;;
+        *) RESULT=blocked; emit; return 3 ;;
+    esac
+}
+
+pending_empty() {
+    [ -x "$SCHEDULER" ] || return 4
+    out="$("$SCHEDULER" --pending 2>/dev/null)"
+    rc=$?
+    [ "$rc" -eq 0 ] || return 4
+    [ "$out" = "No jobs found" ] || return 3
+    return 0
+}
+
+apply_once() {
+    source_valid || { RESULT=unknown; emit; return 4; }
+    wrapper_state
+    [ "$WRAPPER" != drift ] || { RESULT=blocked; emit; return 3; }
+
+    pending_empty
+    pre_rc=$?
+    case "$pre_rc" in
+        0) NAMESPACE=empty ;;
+        3) NAMESPACE=blocked; RESULT=blocked; emit; return 3 ;;
+        *) NAMESPACE=unknown; RESULT=unknown; emit; return 4 ;;
+    esac
+
+    created=0
+    if [ "$WRAPPER" = missing ]; then
+        mkdir -p "$(dirname "$DEST")" "$STATE" || { RESULT=unknown; emit; return 4; }
+        umask 077
+        tmp="$DEST.new.$$"
+        cp "$SOURCE" "$tmp" || { rm -f "$tmp"; RESULT=unknown; emit; return 4; }
+        chmod 700 "$tmp" || { rm -f "$tmp"; RESULT=unknown; emit; return 4; }
+        mv "$tmp" "$DEST" || { rm -f "$tmp"; RESULT=unknown; emit; return 4; }
+        WRAPPER=present
+        created=1
+    fi
+
+    rm -f "$STATE/last.receipt"
+    "$SCHEDULER" \
+        --script "$DEST" \
+        --job-id 34070 \
+        --period-ms 900000 \
+        --network none \
+        --battery-not-low false \
+        --storage-not-low false \
+        --charging false \
+        --persisted true \
+        >/dev/null 2>&1
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        # Android may have accepted the job before the client-side response fails.
+        # Preserve the exact wrapper and let the required exact-job projection
+        # resolve managed vs absent/collision/unknown before any cleanup decision.
+        SCHEDULE=unknown
+        RESULT=unknown
+        emit
+        return 4
+    fi
+
+    SCHEDULE=pass
+    RESULT=scheduled
+    emit
+    return 0
+}
+
+case "$1" in
+    --check) check_only ;;
+    --apply) apply_once ;;
+    *) exit 64 ;;
+esac

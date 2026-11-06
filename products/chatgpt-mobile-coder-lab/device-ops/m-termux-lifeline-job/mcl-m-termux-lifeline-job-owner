@@ -42,7 +42,7 @@ wrapper_state() {
         WRAPPER=missing
     elif [ ! -f "$DEST" ] || [ -L "$DEST" ]; then
         WRAPPER=drift
-    elif cmp -s "$SOURCE" "$DEST" && [ -x "$DEST" ]; then
+    elif cmp -s "$SOURCE" "$DEST" && [ -x "$DEST" ]         && [ "$(stat -c '%a' "$DEST" 2>/dev/null || true)" = 700 ]; then
         WRAPPER=present
     else
         WRAPPER=drift

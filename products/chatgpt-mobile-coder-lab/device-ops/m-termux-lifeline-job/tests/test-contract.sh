@@ -166,6 +166,17 @@ out=$(run_owner --check)
 assert_contains "$out" 'wrapper=present'
 assert_contains "$out" 'result=ready'
 
+# Exact bytes with widened mode are drift, not ready.
+chmod 755 "$dest"
+set +e
+out=$(run_owner --check)
+rc=$?
+set -e
+[ "$rc" -eq 3 ] || fail "mode drift check rc"
+assert_contains "$out" 'wrapper=drift'
+assert_contains "$out" 'result=blocked'
+chmod 700 "$dest"
+
 # Non-empty or malformed namespace blocks before scheduler effect.
 new_fixture
 printf 'Pending Job 99: unrelated\n' > "$FIX/state/pending.out"

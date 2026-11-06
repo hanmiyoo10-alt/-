@@ -37,8 +37,8 @@ emit() {
 
 finish() {
     code="$1"
-    mkdir -p "$STATE" || exit 4
     umask 077
+    mkdir -p "$STATE" || exit 4
     tmp="$RECEIPT.$$"
     emit > "$tmp" || exit 4
     mv "$tmp" "$RECEIPT" || exit 4

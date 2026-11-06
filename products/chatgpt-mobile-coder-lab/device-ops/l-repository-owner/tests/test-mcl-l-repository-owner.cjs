@@ -1461,3 +1461,34 @@ test('review-update effect stays same-PR non-force and current-main replay bound
 });
 
 console.log('REVIEW_UPDATE_TESTS_PASS', passed);
+
+
+test('continue-pushed CLI exposes no patch or branch selector', () => {
+  const parsed = owner.parseArgs([
+    'continue-pushed','--manifest','m','--ledger','l','--packet','p',
+    '--pushed-continuation-request','r','--pr-request','pr','--apply',
+  ]);
+  assert.equal(parsed.operation, 'continue-pushed');
+  assert.equal(parsed.apply, true);
+  assert.deepEqual(Object.keys(parsed.values).sort(),
+    ['ledger','manifest','packet','pr-request','pushed-continuation-request']);
+  expectReason(() => owner.parseArgs([
+    'continue-pushed','--manifest','m','--ledger','l','--packet','p',
+    '--pushed-continuation-request','r','--pr-request','pr','--patch','x','--apply',
+  ]), 'ARGUMENT_UNSUPPORTED:patch');
+});
+
+test('pushed continuation request binds exact candidate and paths', () => {
+  const request = owner.parsePushedContinuationRequestText(JSON.stringify({
+    schema: owner.PUSHED_CONTINUATION_REQUEST_SCHEMA,
+    packet_ref:'#4282',
+    message:'feat(mcl): add raw mDNS Wireless ADB host reconnect',
+    expected_paths:['products/chatgpt-mobile-coder-lab/device-ops/example/a.txt'],
+    prepared_digest:'a'.repeat(64),
+    candidate_head:'b'.repeat(40),
+  }));
+  assert.equal(request.packet_ref, '#4282');
+  assert.equal(request.candidate_head, 'b'.repeat(40));
+  assert.deepEqual(request.expected_paths,
+    ['products/chatgpt-mobile-coder-lab/device-ops/example/a.txt']);
+});

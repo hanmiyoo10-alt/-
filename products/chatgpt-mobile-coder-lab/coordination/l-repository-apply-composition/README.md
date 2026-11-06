@@ -107,3 +107,14 @@ current-main SHA, merge strategy, retry count, or fallback.
 It grants no merge-to-main, software release, production, runtime, device,
 Wireless ADB, pairing, or security authority. All D-013, D-014, holder,
 currentness, validation, PR, and repository-owner gates remain authoritative.
+
+
+### continue-pushed
+
+This operation recovers only an exact L repository candidate already committed
+and pushed to its bound feature branch while no PR publication is durably
+present. The composition requires the ordinary active D-013/D-014 binding,
+requires holder absence before claim, delegates pushed-candidate identity and
+fixed validation to the L repository owner, and then uses the normal release,
+holder, and D-014 completion sequence. It never replays source, commit, push, or
+currentization effects.

@@ -169,7 +169,16 @@ process_durability_pending() {
 
     now="$("$DATE" +%s 2>/dev/null || true)"
     case "$now" in ''|*[!0-9]*) durability_blocked; return $? ;; esac
-    [ "$now" -ge "$PENDING_EPOCH" ] 2>/dev/null || { durability_blocked; return $?; }
+    if ! [ "$now" -ge "$PENDING_EPOCH" ] 2>/dev/null; then
+        # Clock rollback terminally consumes this recovery generation. If the
+        # attempt marker cannot be persisted, remove pending eligibility so a
+        # later clock catch-up still cannot run either launcher.
+        if ! claim_attempt "$PENDING_GENERATION"; then
+            rm -f "$DURABILITY_PENDING"
+        fi
+        durability_blocked
+        return $?
+    fi
     age=$((now - PENDING_EPOCH))
     if [ "$age" -lt "$DURABILITY_COOLDOWN" ]; then
         DURABILITY_STATE=pending

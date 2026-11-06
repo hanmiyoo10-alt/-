@@ -209,6 +209,40 @@ out=$(run_wrapper)
 assert_contains "$out" 'result=healthy'
 [ "$(wc -l < "$FIX/state/launcher.log")" -eq 2 ] || fail "durability retried after pass"
 
+# Clock rollback terminally blocks the recovery generation until a fresh recovery.
+new_fixture
+printf '1\n0\n' > "$FIX/state/hb.seq"
+run_wrapper >/dev/null
+printf '0\n' > "$FIX/state/hb.seq"
+printf '900\n' > "$FIX/state/now"
+set +e
+out=$(run_wrapper)
+rc=$?
+set -e
+[ "$rc" -eq 3 ] || fail "clock rollback rc"
+assert_contains "$out" 'result=blocked'
+[ ! -e "$FIX/state/launcher.log" ] || fail "clock rollback launched durability"
+[ -f "$FIX/home/.local/state/mcl-m-termux-lifeline-job/durability.attempt" ] || fail "clock rollback attempt marker missing"
+printf '0\n' > "$FIX/state/hb.seq"
+printf '1301\n' > "$FIX/state/now"
+set +e
+run_wrapper >/dev/null
+rc=$?
+set -e
+[ "$rc" -eq 3 ] || fail "clock rollback catch-up retry rc"
+[ ! -e "$FIX/state/launcher.log" ] || fail "clock rollback retried after catch-up"
+printf '1\n0\n' > "$FIX/state/hb.seq"
+printf '2000\n' > "$FIX/state/now"
+out=$(run_wrapper)
+assert_contains "$out" 'result=recovered'
+printf '0\n' > "$FIX/state/hb.seq"
+printf '2301\n' > "$FIX/state/now"
+out=$(run_wrapper)
+assert_contains "$out" 'result=healthy'
+[ "$(sed -n '1p' "$FIX/state/launcher.log")" = rdc ] || fail "fresh recovery rdc launcher"
+[ "$(sed -n '2p' "$FIX/state/launcher.log")" = tailscale ] || fail "fresh recovery tailscale launcher"
+[ "$(wc -l < "$FIX/state/launcher.log")" -eq 2 ] || fail "fresh recovery launcher count"
+
 # RDC launcher failure consumes the attempt and never runs Tailscale or retries.
 new_fixture
 printf '1\n0\n' > "$FIX/state/hb.seq"

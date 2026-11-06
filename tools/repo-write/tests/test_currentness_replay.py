@@ -10,6 +10,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "currentness_replay.py"
+CURRENTIZER = ROOT / "currentize_candidate.py"
 
 def load_planner(script: Path = SCRIPT):
     previous = sys.dont_write_bytecode
@@ -25,6 +26,25 @@ def load_planner(script: Path = SCRIPT):
 
 
 planner = load_planner()
+
+
+def load_currentizer(script: Path = CURRENTIZER):
+    previous = sys.dont_write_bytecode
+    previous_path = list(sys.path)
+    try:
+        sys.dont_write_bytecode = True
+        sys.path.insert(0, str(ROOT))
+        spec = importlib.util.spec_from_file_location("currentize_candidate_contract", script)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path[:] = previous_path
+        sys.dont_write_bytecode = previous
+
+
+currentizer = load_currentizer()
 
 
 def git(repo: Path, *args: str, check: bool = True) -> str:
@@ -99,6 +119,9 @@ class CurrentnessReplayTests(unittest.TestCase):
         self.assertEqual(out["state"], "DISJOINT_REPLAY_PROVEN")
         self.assertEqual(out["originalPatchId"], out["replayPatchId"])
         self.assertEqual(out["changedPaths"], ["candidate.txt"])
+        self.assertTrue(out["mainAdvancePathsComplete"])
+        self.assertEqual(out["mainAdvancePathProbe"], "FULL_INVENTORY")
+        self.assertEqual(out["mainAdvancePaths"], ["main.txt"])
         self.assertFalse(out["historicalExactHeadEvidenceReusableAsCurrent"])
         self.assertTrue(out["freshBarrierRequiredBeforeMutation"])
         reruns = {row["validationId"] for row in out["rerunPlan"]}
@@ -130,6 +153,56 @@ class CurrentnessReplayTests(unittest.TestCase):
         self.assertEqual(out["state"], "OVERLAP")
         self.assertEqual(out["reasonCode"], "CHANGED_PATH_OVERLAP")
         self.assertEqual(out["overlapPaths"], ["candidate.txt"])
+
+    def overflow_main(self, *, overlap_candidate=False):
+        git(self.repo, "checkout", "-B", "overflow-main", self.base)
+        for index in range(planner.MAX_PATHS + 1):
+            path = self.repo / f"overflow-{index:03d}.txt"
+            path.write_text(f"{index}\n", encoding="utf-8")
+        if overlap_candidate:
+            (self.repo / "candidate.txt").write_text("main-overlap\n", encoding="utf-8")
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-m", "large main advance")
+        return git(self.repo, "rev-parse", "HEAD")
+
+    def test_large_disjoint_main_uses_candidate_scoped_probe(self):
+        overflow_main = self.overflow_main()
+        out = planner.plan_currentization(
+            self.repo, self.request(currentMain=overflow_main)
+        )
+        self.assertEqual(out["state"], "DISJOINT_REPLAY_PROVEN")
+        self.assertFalse(out["mainAdvancePathsComplete"])
+        self.assertEqual(out["mainAdvancePathProbe"], "CANDIDATE_SCOPED")
+        self.assertNotIn("mainAdvancePaths", out)
+        self.assertEqual(out["candidatePaths"], ["candidate.txt"])
+        self.assertEqual(out["changedPaths"], ["candidate.txt"])
+
+    def test_large_main_candidate_overlap_still_blocks(self):
+        overflow_main = self.overflow_main(overlap_candidate=True)
+        out = planner.plan_currentization(
+            self.repo, self.request(currentMain=overflow_main)
+        )
+        self.assertEqual(out["state"], "OVERLAP")
+        self.assertEqual(out["reasonCode"], "CHANGED_PATH_OVERLAP")
+        self.assertEqual(out["overlapPaths"], ["candidate.txt"])
+        self.assertFalse(out["mainAdvancePathsComplete"])
+        self.assertEqual(out["mainAdvancePathProbe"], "CANDIDATE_SCOPED")
+        self.assertNotIn("mainAdvancePaths", out)
+
+    def test_currentizer_compact_projection_preserves_main_probe_evidence(self):
+        payload = {
+            "state": "DISJOINT_REPLAY_PROVEN",
+            "candidatePaths": ["candidate.txt"],
+            "mainAdvancePathsComplete": False,
+            "mainAdvancePathProbe": "CANDIDATE_SCOPED",
+            "rerunPlan": [],
+            "freshBarrierRequiredBeforeMutation": True,
+            "historicalExactHeadEvidenceReusableAsCurrent": False,
+        }
+        compact = currentizer.compact_planner(payload)
+        self.assertFalse(compact["mainAdvancePathsComplete"])
+        self.assertEqual(compact["mainAdvancePathProbe"], "CANDIDATE_SCOPED")
+        self.assertNotIn("mainAdvancePaths", compact)
 
     def test_missing_validation_profile_is_unknown(self):
         request = self.request()

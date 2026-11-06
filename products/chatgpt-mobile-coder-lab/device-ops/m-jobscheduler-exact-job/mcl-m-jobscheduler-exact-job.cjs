@@ -103,7 +103,7 @@ function parseDurationMillis(value) {
 function jobBlocks(text) {
   const lines = String(text || '').replace(/\r/g, '').split('\n');
   const starts = [];
-  const headerRe = /^\s*(?:Job|JOB) #\d+:\s+.*#\S+\/(\d+)\b.*$/;
+  const headerRe = /^\s*JOB\s+#[^/\s:]+\/(\d+):(?:\s.*)?$/;
   for (let index = 0; index < lines.length; index += 1) {
     const match = headerRe.exec(lines[index]);
     if (match) starts.push({index, jobId: Number(match[1]), header: lines[index]});
@@ -125,7 +125,7 @@ function parseTargetBlock(text) {
     return {complete: true, collision: true};
   }
 
-  const extrasRe = /com\.termux\.api\.jobscheduler_script_path\s*[=:]\s*([^,}\]\s]+)/;
+  const extrasRe = /^\s*Extras:\s+PersistableBundle\[\{com\.termux\.api\.jobscheduler_script_path=(.*)\}\]\s*$/m;
   const scriptMatch = extrasRe.exec(block.text);
   const periodicMatch = /^\s*PERIODIC:\s+interval=(\S+)/m.exec(block.text);
   const requiresMatch = /^\s*Requires:\s+charging=(true|false)\s+batteryNotLow=(true|false)\s+deviceIdle=(true|false)(?:\s+storageNotLow=(true|false))?\s*$/m.exec(block.text);

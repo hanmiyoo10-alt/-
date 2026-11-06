@@ -11,7 +11,7 @@ const owner = require('../mcl-m-jobscheduler-exact-job.cjs');
 
 const MANAGED = [
   'Registered jobs:',
-  ' Job #0: abcd #u0a321/34070 com.termux.api/.apis.JobSchedulerAPI$JobSchedulerService PERIODIC PERSISTED',
+  ' JOB #u0a321/34070: abcd com.termux.api/.apis.JobSchedulerAPI$JobSchedulerService PERIODIC PERSISTED',
   '  Source: uid=u0a321 user=0 pkg=com.termux.api',
   '  JobInfo:',
   '   Service: com.termux.api/.apis.JobSchedulerAPI$JobSchedulerService',
@@ -67,6 +67,7 @@ test('target block classifies exact reviewed job as managed', () => {
 
 for (const [name, mutate] of [
   ['script', (x) => x.replace(owner.SCRIPT, '/wrong.sh')],
+  ['script-whitespace-suffix', (x) => x.replace(owner.SCRIPT, owner.SCRIPT + ' backup')],
   ['period', (x) => x.replace('+15m0s0ms', '+16m0s0ms')],
   ['network', (x) => x.replace('Required constraints:', 'Network: required\n  Required constraints: CONNECTIVITY')],
   ['persisted', (x) => x.replace(/\n\s*PERSISTED/g, '').replace(/ PERSISTED/g, '')],
@@ -80,6 +81,12 @@ for (const [name, mutate] of [
     assert.equal(parsed.collision, true);
   });
 }
+
+test('legacy synthetic job header is not accepted as a registered-job block', () => {
+  assert.equal(owner.parseTargetBlock(
+    MANAGED.replace('JOB #u0a321/34070:', 'Job #0: abcd #u0a321/34070'),
+  ), null);
+});
 
 test('wrong JobScheduler service is collision', () => {
   const parsed = owner.parseTargetBlock(

@@ -121,8 +121,39 @@ apply_once() {
     return 0
 }
 
+
+refresh_wrapper() {
+    source_valid || { RESULT=unknown; emit; return 4; }
+    if [ -e "$DEST" ] || [ -L "$DEST" ]; then
+        if [ -L "$DEST" ] || [ ! -f "$DEST" ]; then
+            WRAPPER=drift
+            RESULT=blocked
+            emit
+            return 3
+        fi
+    fi
+    wrapper_state
+    if [ "$WRAPPER" = present ]; then
+        RESULT=ready
+        emit
+        return 0
+    fi
+    mkdir -p "$(dirname "$DEST")" "$STATE" || { RESULT=unknown; emit; return 4; }
+    umask 077
+    tmp="$DEST.new.$$"
+    cp "$SOURCE" "$tmp" || { rm -f "$tmp"; RESULT=unknown; emit; return 4; }
+    chmod 700 "$tmp" || { rm -f "$tmp"; RESULT=unknown; emit; return 4; }
+    mv "$tmp" "$DEST" || { rm -f "$tmp"; RESULT=unknown; emit; return 4; }
+    wrapper_state
+    [ "$WRAPPER" = present ] || { RESULT=unknown; emit; return 4; }
+    RESULT=refreshed
+    emit
+    return 0
+}
+
 case "$1" in
     --check) check_only ;;
     --apply) apply_once ;;
+    --refresh-wrapper) refresh_wrapper ;;
     *) exit 64 ;;
 esac

@@ -13,13 +13,28 @@ fi
 
 HEARTBEAT="$HOME_DIR/.local/lib/mcl-m-termux-lifeline/heartbeat-client.py"
 RECOVERY="$HOME_DIR/.local/bin/mcl-m-termux-lifeline-recover"
+RECOVERY_RECEIPT="$HOME_DIR/.local/state/mcl-m-termux-lifeline/recovery.receipt"
+RDC_LAUNCHER="$HOME_DIR/.termux/boot/31-mcl-m-rdc-supervisor-guard"
+TAILSCALE_LAUNCHER="$HOME_DIR/.termux/boot/32-mcl-m-tailscale-supervisor-guard"
+DATE="$PREFIX/bin/date"
+STAT="$PREFIX/bin/stat"
 STATE="$HOME_DIR/.local/state/mcl-m-termux-lifeline-job"
 RECEIPT="$STATE/last.receipt"
+DURABILITY_RECEIPT="$STATE/durability.receipt"
+DURABILITY_PENDING="$STATE/durability.pending"
+DURABILITY_ATTEMPT="$STATE/durability.attempt"
+DURABILITY_COOLDOWN=300
 
 HEARTBEAT_PRE=unknown
 RECOVERY_STATE=not_run
 HEARTBEAT_POST=unknown
 RESULT=unknown
+DURABILITY_STATE=none
+DURABILITY_RDC=not_run
+DURABILITY_TAILSCALE=not_run
+DURABILITY_RESULT=none
+PENDING_GENERATION=
+PENDING_EPOCH=
 
 valid_exec() {
     [ -f "$1" ] && [ ! -L "$1" ] && [ -x "$1" ]
@@ -35,6 +50,24 @@ emit() {
         'details=withheld'
 }
 
+emit_durability() {
+    printf '%s\n' \
+        'schema=mcl-m-termux-lifeline-job-durability.v1' \
+        "state=$DURABILITY_STATE" \
+        "rdc=$DURABILITY_RDC" \
+        "tailscale=$DURABILITY_TAILSCALE" \
+        "result=$DURABILITY_RESULT" \
+        'details=withheld'
+}
+
+write_durability() {
+    umask 077
+    mkdir -p "$STATE" || return 1
+    tmp="$DURABILITY_RECEIPT.$$"
+    emit_durability > "$tmp" || { rm -f "$tmp"; return 1; }
+    mv "$tmp" "$DURABILITY_RECEIPT" || { rm -f "$tmp"; return 1; }
+}
+
 finish() {
     code="$1"
     umask 077
@@ -46,8 +79,158 @@ finish() {
     exit "$code"
 }
 
+recovery_generation() {
+    [ -f "$RECOVERY_RECEIPT" ] && [ ! -L "$RECOVERY_RECEIPT" ] || return 1
+    [ "$(wc -l < "$RECOVERY_RECEIPT" 2>/dev/null || printf 0)" -eq 6 ] || return 1
+    grep -Fxq 'schema=mcl-m-termux-lifeline-recovery.v4' "$RECOVERY_RECEIPT" || return 1
+    grep -Fxq 'rdc_target=pass' "$RECOVERY_RECEIPT" || return 1
+    grep -Fxq 'tailscale_target=pass' "$RECOVERY_RECEIPT" || return 1
+    grep -Fxq 'heartbeat_active=pass' "$RECOVERY_RECEIPT" || return 1
+    grep -Fxq 'guard_ring_started=false' "$RECOVERY_RECEIPT" || return 1
+    grep -Fxq 'details=withheld' "$RECOVERY_RECEIPT" || return 1
+    generation="$("$STAT" -c '%i:%Y:%s' "$RECOVERY_RECEIPT" 2>/dev/null || true)"
+    case "$generation" in ''|*[!0-9:]*) return 1 ;; esac
+    old_ifs="$IFS"; IFS=:
+    set -- $generation
+    IFS="$old_ifs"
+    [ "$#" -eq 3 ] || return 1
+    [ -n "$1" ] && [ -n "$2" ] && [ -n "$3" ] || return 1
+    printf '%s\n' "$generation"
+}
+
+record_durability_pending() {
+    generation="$(recovery_generation)" || return 1
+    now="$("$DATE" +%s 2>/dev/null || true)"
+    case "$now" in ''|*[!0-9]*) return 1 ;; esac
+    umask 077
+    mkdir -p "$STATE" || return 1
+    tmp="$DURABILITY_PENDING.$$"
+    {
+        printf '%s\n' 'schema=mcl-m-termux-lifeline-job-durability-pending.v1'
+        printf 'generation=%s\n' "$generation"
+        printf 'created_epoch=%s\n' "$now"
+    } > "$tmp" || { rm -f "$tmp"; return 1; }
+    mv "$tmp" "$DURABILITY_PENDING" || { rm -f "$tmp"; return 1; }
+    rm -f "$DURABILITY_ATTEMPT"
+    DURABILITY_STATE=pending
+    DURABILITY_RDC=not_run
+    DURABILITY_TAILSCALE=not_run
+    DURABILITY_RESULT=pending
+    write_durability
+}
+
+parse_pending() {
+    [ -f "$DURABILITY_PENDING" ] && [ ! -L "$DURABILITY_PENDING" ] || return 1
+    [ "$(wc -l < "$DURABILITY_PENDING" 2>/dev/null || printf 0)" -eq 3 ] || return 1
+    [ "$(sed -n '1p' "$DURABILITY_PENDING")" = 'schema=mcl-m-termux-lifeline-job-durability-pending.v1' ] || return 1
+    PENDING_GENERATION="$(sed -n 's/^generation=//p' "$DURABILITY_PENDING")"
+    PENDING_EPOCH="$(sed -n 's/^created_epoch=//p' "$DURABILITY_PENDING")"
+    case "$PENDING_GENERATION" in ''|*[!0-9:]*) return 1 ;; esac
+    case "$PENDING_EPOCH" in ''|*[!0-9]*) return 1 ;; esac
+    [ "$(grep -c '^generation=' "$DURABILITY_PENDING")" -eq 1 ] || return 1
+    [ "$(grep -c '^created_epoch=' "$DURABILITY_PENDING")" -eq 1 ] || return 1
+}
+
+attempt_generation() {
+    [ -f "$DURABILITY_ATTEMPT" ] && [ ! -L "$DURABILITY_ATTEMPT" ] || return 1
+    [ "$(wc -l < "$DURABILITY_ATTEMPT" 2>/dev/null || printf 0)" -eq 2 ] || return 1
+    [ "$(sed -n '1p' "$DURABILITY_ATTEMPT")" = 'schema=mcl-m-termux-lifeline-job-durability-attempt.v1' ] || return 1
+    value="$(sed -n 's/^generation=//p' "$DURABILITY_ATTEMPT")"
+    case "$value" in ''|*[!0-9:]*) return 1 ;; esac
+    printf '%s\n' "$value"
+}
+
+claim_attempt() {
+    generation="$1"
+    umask 077
+    (
+        set -C
+        {
+            printf '%s\n' 'schema=mcl-m-termux-lifeline-job-durability-attempt.v1'
+            printf 'generation=%s\n' "$generation"
+        } > "$DURABILITY_ATTEMPT"
+    ) 2>/dev/null
+}
+
+durability_blocked() {
+    DURABILITY_STATE=blocked
+    DURABILITY_RDC=not_run
+    DURABILITY_TAILSCALE=not_run
+    DURABILITY_RESULT=blocked
+    write_durability || true
+    return 3
+}
+
+process_durability_pending() {
+    [ -e "$DURABILITY_PENDING" ] || return 0
+    parse_pending || { durability_blocked; return $?; }
+    current_generation="$(recovery_generation)" || { durability_blocked; return $?; }
+    [ "$current_generation" = "$PENDING_GENERATION" ] || { durability_blocked; return $?; }
+
+    now="$("$DATE" +%s 2>/dev/null || true)"
+    case "$now" in ''|*[!0-9]*) durability_blocked; return $? ;; esac
+    [ "$now" -ge "$PENDING_EPOCH" ] 2>/dev/null || { durability_blocked; return $?; }
+    age=$((now - PENDING_EPOCH))
+    if [ "$age" -lt "$DURABILITY_COOLDOWN" ]; then
+        DURABILITY_STATE=pending
+        DURABILITY_RDC=not_run
+        DURABILITY_TAILSCALE=not_run
+        DURABILITY_RESULT=pending
+        write_durability || return 4
+        return 0
+    fi
+
+    if [ -e "$DURABILITY_ATTEMPT" ]; then
+        old_attempt="$(attempt_generation 2>/dev/null || true)"
+        [ "$old_attempt" = "$PENDING_GENERATION" ] || { durability_blocked; return $?; }
+        durability_blocked
+        return $?
+    fi
+
+    if ! claim_attempt "$PENDING_GENERATION"; then
+        durability_blocked
+        return $?
+    fi
+
+    DURABILITY_STATE=attempted
+    valid_exec "$RDC_LAUNCHER" || {
+        DURABILITY_RDC=fail
+        DURABILITY_RESULT=fail
+        write_durability || true
+        return 3
+    }
+    if ! "$RDC_LAUNCHER" >/dev/null 2>&1; then
+        DURABILITY_RDC=fail
+        DURABILITY_RESULT=fail
+        write_durability || true
+        return 3
+    fi
+    DURABILITY_RDC=pass
+
+    valid_exec "$TAILSCALE_LAUNCHER" || {
+        DURABILITY_TAILSCALE=fail
+        DURABILITY_RESULT=fail
+        write_durability || true
+        return 3
+    }
+    if ! "$TAILSCALE_LAUNCHER" >/dev/null 2>&1; then
+        DURABILITY_TAILSCALE=fail
+        DURABILITY_RESULT=fail
+        write_durability || true
+        return 3
+    fi
+    DURABILITY_TAILSCALE=pass
+    DURABILITY_STATE=complete
+    DURABILITY_RESULT=pass
+    rm -f "$DURABILITY_PENDING"
+    write_durability || return 4
+    return 0
+}
+
 valid_exec "$HEARTBEAT" || finish 4
 valid_exec "$RECOVERY" || finish 4
+valid_exec "$DATE" || finish 4
+valid_exec "$STAT" || finish 4
 
 "$HEARTBEAT" --status >/dev/null 2>&1
 pre_rc=$?
@@ -55,8 +238,13 @@ case "$pre_rc" in
     0)
         HEARTBEAT_PRE=active
         HEARTBEAT_POST=active
-        RESULT=healthy
-        finish 0
+        process_durability_pending
+        durability_rc=$?
+        case "$durability_rc" in
+            0) RESULT=healthy; finish 0 ;;
+            3) RESULT=blocked; finish 3 ;;
+            *) RESULT=unknown; finish 4 ;;
+        esac
         ;;
     1)
         HEARTBEAT_PRE=inactive
@@ -80,6 +268,10 @@ post_rc=$?
 case "$post_rc" in
     0)
         HEARTBEAT_POST=active
+        if ! record_durability_pending; then
+            RESULT=unknown
+            finish 4
+        fi
         RESULT=recovered
         finish 0
         ;;

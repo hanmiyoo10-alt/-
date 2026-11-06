@@ -43,9 +43,51 @@ SH
 root="$MCL_M_TERMUX_LIFELINE_JOB_TEST_ROOT"
 printf '%s\n' called >> "$root/state/recovery.log"
 rc=$(cat "$root/state/recovery.rc" 2>/dev/null || printf 0)
+if [ "$rc" -eq 0 ]; then
+    state="$root/home/.local/state/mcl-m-termux-lifeline"
+    mkdir -p "$state"
+    tmp="$state/recovery.receipt.$$"
+    cat > "$tmp" <<'EOF'
+schema=mcl-m-termux-lifeline-recovery.v4
+rdc_target=pass
+tailscale_target=pass
+heartbeat_active=pass
+guard_ring_started=false
+details=withheld
+EOF
+    mv "$tmp" "$state/recovery.receipt"
+fi
 exit "$rc"
 SH
     chmod 700 "$FIX/home/.local/bin/mcl-m-termux-lifeline-recover"
+
+    mkdir -p "$FIX/home/.termux/boot"
+    cat > "$FIX/home/.termux/boot/31-mcl-m-rdc-supervisor-guard" <<'SH'
+#!/bin/sh
+root="$MCL_M_TERMUX_LIFELINE_JOB_TEST_ROOT"
+printf '%s\n' rdc >> "$root/state/launcher.log"
+exit "$(cat "$root/state/rdc-launcher.rc" 2>/dev/null || printf 0)"
+SH
+    cat > "$FIX/home/.termux/boot/32-mcl-m-tailscale-supervisor-guard" <<'SH'
+#!/bin/sh
+root="$MCL_M_TERMUX_LIFELINE_JOB_TEST_ROOT"
+printf '%s\n' tailscale >> "$root/state/launcher.log"
+exit "$(cat "$root/state/tailscale-launcher.rc" 2>/dev/null || printf 0)"
+SH
+    chmod 700 "$FIX/home/.termux/boot/31-mcl-m-rdc-supervisor-guard"         "$FIX/home/.termux/boot/32-mcl-m-tailscale-supervisor-guard"
+
+    cat > "$FIX/prefix/bin/date" <<'SH'
+#!/bin/sh
+root="$MCL_M_TERMUX_LIFELINE_JOB_TEST_ROOT"
+[ "$#" -eq 1 ] && [ "$1" = "+%s" ] || exit 2
+cat "$root/state/now"
+SH
+    chmod 700 "$FIX/prefix/bin/date"
+    cat > "$FIX/prefix/bin/stat" <<'SH'
+#!/bin/sh
+exec /usr/bin/stat "$@"
+SH
+    chmod 700 "$FIX/prefix/bin/stat"
 
     cat > "$FIX/prefix/bin/termux-job-scheduler" <<'SH'
 #!/bin/sh
@@ -66,6 +108,9 @@ SH
     printf '0\n' > "$FIX/state/pending.rc"
     printf 'No jobs found\n' > "$FIX/state/pending.out"
     printf '0\n' > "$FIX/state/schedule.rc"
+    printf '1000\n' > "$FIX/state/now"
+    printf '0\n' > "$FIX/state/rdc-launcher.rc"
+    printf '0\n' > "$FIX/state/tailscale-launcher.rc"
 }
 
 run_wrapper() {
@@ -129,6 +174,122 @@ set -e
 [ "$rc" -eq 3 ] || fail "recovery failure rc"
 assert_contains "$out" 'recovery=fail'
 assert_contains "$out" 'result=blocked'
+
+
+# Recovered path records pending generation and performs zero launcher effect.
+new_fixture
+printf '1\n0\n' > "$FIX/state/hb.seq"
+out=$(run_wrapper)
+assert_contains "$out" 'result=recovered'
+[ -f "$FIX/home/.local/state/mcl-m-termux-lifeline-job/durability.pending" ] || fail "durability pending missing"
+[ ! -e "$FIX/state/launcher.log" ] || fail "recovery firing rearmed early"
+assert_contains "$(cat "$FIX/home/.local/state/mcl-m-termux-lifeline-job/durability.receipt")" 'result=pending'
+
+# Before cooldown a healthy firing is zero effect and remains pending.
+printf '0\n' > "$FIX/state/hb.seq"
+printf '1200\n' > "$FIX/state/now"
+out=$(run_wrapper)
+assert_contains "$out" 'result=healthy'
+[ ! -e "$FIX/state/launcher.log" ] || fail "cooldown firing rearmed early"
+assert_contains "$(cat "$FIX/home/.local/state/mcl-m-termux-lifeline-job/durability.receipt")" 'result=pending'
+
+# After cooldown fixed launchers run once in order; later healthy firing does not repeat.
+printf '0\n' > "$FIX/state/hb.seq"
+printf '1301\n' > "$FIX/state/now"
+out=$(run_wrapper)
+assert_contains "$out" 'result=healthy'
+[ "$(sed -n '1p' "$FIX/state/launcher.log")" = rdc ] || fail "rdc launcher order"
+[ "$(sed -n '2p' "$FIX/state/launcher.log")" = tailscale ] || fail "tailscale launcher order"
+[ "$(wc -l < "$FIX/state/launcher.log")" -eq 2 ] || fail "launcher count"
+[ ! -e "$FIX/home/.local/state/mcl-m-termux-lifeline-job/durability.pending" ] || fail "pending not cleared"
+assert_contains "$(cat "$FIX/home/.local/state/mcl-m-termux-lifeline-job/durability.receipt")" 'result=pass'
+printf '0\n' > "$FIX/state/hb.seq"
+printf '1700\n' > "$FIX/state/now"
+out=$(run_wrapper)
+assert_contains "$out" 'result=healthy'
+[ "$(wc -l < "$FIX/state/launcher.log")" -eq 2 ] || fail "durability retried after pass"
+
+# RDC launcher failure consumes the attempt and never runs Tailscale or retries.
+new_fixture
+printf '1\n0\n' > "$FIX/state/hb.seq"
+run_wrapper >/dev/null
+printf '1\n' > "$FIX/state/rdc-launcher.rc"
+printf '0\n' > "$FIX/state/hb.seq"
+printf '1301\n' > "$FIX/state/now"
+set +e
+out=$(run_wrapper)
+rc=$?
+set -e
+[ "$rc" -eq 3 ] || fail "rdc durability failure rc"
+assert_contains "$out" 'result=blocked'
+[ "$(cat "$FIX/state/launcher.log")" = rdc ] || fail "tailscale ran after rdc failure"
+printf '0\n' > "$FIX/state/hb.seq"
+printf '1700\n' > "$FIX/state/now"
+set +e
+run_wrapper >/dev/null
+rc=$?
+set -e
+[ "$rc" -eq 3 ] || fail "rdc durability retry block rc"
+[ "$(wc -l < "$FIX/state/launcher.log")" -eq 1 ] || fail "rdc durability retried"
+
+# Tailscale launcher failure is also at-most-once for the generation.
+new_fixture
+printf '1\n0\n' > "$FIX/state/hb.seq"
+run_wrapper >/dev/null
+printf '1\n' > "$FIX/state/tailscale-launcher.rc"
+printf '0\n' > "$FIX/state/hb.seq"
+printf '1301\n' > "$FIX/state/now"
+set +e
+run_wrapper >/dev/null
+rc=$?
+set -e
+[ "$rc" -eq 3 ] || fail "tailscale durability failure rc"
+[ "$(wc -l < "$FIX/state/launcher.log")" -eq 2 ] || fail "tailscale durability attempt count"
+printf '0\n' > "$FIX/state/hb.seq"
+printf '1700\n' > "$FIX/state/now"
+set +e
+run_wrapper >/dev/null
+rc=$?
+set -e
+[ "$rc" -eq 3 ] || fail "tailscale durability retry block rc"
+[ "$(wc -l < "$FIX/state/launcher.log")" -eq 2 ] || fail "tailscale durability retried"
+
+# Recovery generation mismatch blocks with zero launcher effect.
+new_fixture
+printf '1\n0\n' > "$FIX/state/hb.seq"
+run_wrapper >/dev/null
+rr="$FIX/home/.local/state/mcl-m-termux-lifeline/recovery.receipt"
+cp "$rr" "$rr.new"
+mv "$rr.new" "$rr"
+printf '0\n' > "$FIX/state/hb.seq"
+printf '1301\n' > "$FIX/state/now"
+set +e
+run_wrapper >/dev/null
+rc=$?
+set -e
+[ "$rc" -eq 3 ] || fail "generation mismatch rc"
+[ ! -e "$FIX/state/launcher.log" ] || fail "generation mismatch launched durability"
+
+# Fresh later recovery creates a new generation and permits one new future attempt.
+new_fixture
+printf '1\n0\n' > "$FIX/state/hb.seq"
+run_wrapper >/dev/null
+printf '1\n' > "$FIX/state/rdc-launcher.rc"
+printf '0\n' > "$FIX/state/hb.seq"
+printf '1301\n' > "$FIX/state/now"
+set +e
+run_wrapper >/dev/null
+set -e
+printf '0\n' > "$FIX/state/rdc-launcher.rc"
+printf '1\n0\n' > "$FIX/state/hb.seq"
+printf '2000\n' > "$FIX/state/now"
+out=$(run_wrapper)
+assert_contains "$out" 'result=recovered'
+printf '0\n' > "$FIX/state/hb.seq"
+printf '2301\n' > "$FIX/state/now"
+out=$(run_wrapper)
+assert_contains "$out" 'result=healthy'
+[ "$(tail -n 2 "$FIX/state/launcher.log" | tr '\n' ' ')" = "rdc tailscale " ] || fail "fresh generation did not rearm"
 
 # Owner check reports missing before apply.
 new_fixture
@@ -231,6 +392,43 @@ cmp -s "$WRAPPER" "$dest" || fail "uncertain registration wrapper bytes"
 out=$(run_owner --check)
 assert_contains "$out" 'wrapper=present'
 assert_contains "$out" 'result=ready'
+
+
+# Managed-job wrapper refresh performs no scheduler mutation.
+new_fixture
+mkdir -p "$FIX/home/.local/lib/mcl-m-termux-lifeline-job"
+printf 'old\n' > "$FIX/home/.local/lib/mcl-m-termux-lifeline-job/job.sh"
+chmod 700 "$FIX/home/.local/lib/mcl-m-termux-lifeline-job/job.sh"
+out=$(run_owner --refresh-wrapper)
+assert_contains "$out" 'wrapper=present'
+assert_contains "$out" 'schedule=not_run'
+assert_contains "$out" 'result=refreshed'
+cmp -s "$WRAPPER" "$FIX/home/.local/lib/mcl-m-termux-lifeline-job/job.sh" || fail "refresh bytes"
+[ "$(stat -c '%a' "$FIX/home/.local/lib/mcl-m-termux-lifeline-job/job.sh")" = 700 ] || fail "refresh mode"
+[ ! -e "$FIX/state/schedule.argv" ] || fail "refresh invoked scheduler"
+
+# Missing wrapper may be refreshed without scheduling.
+new_fixture
+out=$(run_owner --refresh-wrapper)
+assert_contains "$out" 'result=refreshed'
+[ ! -e "$FIX/state/schedule.argv" ] || fail "missing refresh invoked scheduler"
+
+# Exact refresh is a no-op ready result.
+out=$(run_owner --refresh-wrapper)
+assert_contains "$out" 'result=ready'
+[ ! -e "$FIX/state/schedule.argv" ] || fail "exact refresh invoked scheduler"
+
+# Symlink/non-regular refresh destination blocks.
+new_fixture
+mkdir -p "$FIX/home/.local/lib/mcl-m-termux-lifeline-job"
+ln -s "$WRAPPER" "$FIX/home/.local/lib/mcl-m-termux-lifeline-job/job.sh"
+set +e
+out=$(run_owner --refresh-wrapper)
+rc=$?
+set -e
+[ "$rc" -eq 3 ] || fail "symlink refresh rc"
+assert_contains "$out" 'result=blocked'
+[ ! -e "$FIX/state/schedule.argv" ] || fail "symlink refresh invoked scheduler"
 
 rm -rf "$FIX" /tmp/mcl3467-wrapper-invalid.out
 printf '%s\n' 'PASS: m-termux-lifeline-job contract'

@@ -105,3 +105,25 @@ sh -n mcl-m-termux-lifeline-job-owner
 sh tests/test-contract.sh
 git diff --check
 ```
+
+
+## APK-free delayed post-recovery durability
+
+A successful Candidate-B recovery does not recreate the RDC/Tailscale guard rings in the same high-pressure firing. Instead the wrapper validates the fixed mcl-m-termux-lifeline-recovery.v4 PASS receipt and records one private durability-pending generation marker. No launcher is called in that recovery firing.
+
+On a later periodic job-34070 firing, the wrapper continues only when heartbeat is active, the pending marker is structurally valid, the exact same recovery-receipt generation is still current, and at least 300 seconds have elapsed. It then claims exactly one attempt for that recovery generation and invokes only the existing fixed launchers, in order:
+
+1. ~/.termux/boot/31-mcl-m-rdc-supervisor-guard
+2. ~/.termux/boot/32-mcl-m-tailscale-supervisor-guard
+
+The claim is created before either launcher. A launcher failure, malformed/stale marker, recovery-generation mismatch, clock rollback, or prior attempt blocks without retry for that generation. A fresh later recovery creates a new pending generation and clears the prior attempt marker. No detached timer, daemon, second scheduler job, global runsvdir, arbitrary command/path, or APK dependency is introduced.
+
+Durability progress is kept in a separate bounded local receipt with schema mcl-m-termux-lifeline-job-durability.v1. It exposes only state, RDC result, Tailscale result, bounded result, and details=witheld. The private recovery-generation token is never emitted by either public receipt.
+
+## Managed-job wrapper refresh
+
+When fixed job 34070 is already proven managed by the external exact-job owner, source upgrades must not cancel or reschedule that job merely to update wrapper bytes. The owner therefore also exposes:
+
+    sh mcl-m-termux-lifeline-job-owner --refresh-wrapper
+
+External admission must first prove fresh merged m-jobscheduler-exact-job status = managed. The operation accepts no caller-selected job/package/path/command, performs no scheduler invocation, and atomically installs only the fixed source wrapper at the fixed destination with mode 0700. An already-exact wrapper is a no-op PASS; missing or ordinary-file drift may be refreshed; symlink/non-regular destination state blocks.

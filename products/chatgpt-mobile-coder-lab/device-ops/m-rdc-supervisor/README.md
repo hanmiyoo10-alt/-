@@ -71,6 +71,38 @@ Together they form one bounded two-member recovery ring: the anchor restores the
 
 The anchor never inspects channel/network/auth/session state and never touches desktop-commander-remote directly. It owns only the fixed guard-service supervisor. Stale dead anchor pid/lock state is reclaimed through the fixed identity contract; a live unrelated PID/lock is preserved and fails closed.
 
+## Explicit orphan adoption
+
+The guard also exposes one explicit operator-only ownership handoff:
+
+```sh
+./m-rdc-supervisor-guard --adopt-orphan
+```
+
+This mode is never called by `--loop`, `--once`, Termux:Boot, the anchor, or the lifeline. It is valid only for the narrow natural state where the fixed guard loop survived its dedicated `runsv` parent, was reparented to PID 1, and still owns the existing guard lock while a replacement guard-service supervisor is already present and wants the service up.
+
+Before TERM, the owner rechecks all of the following under one fixed adoption lock: the RDC target is still supervised and its child generation is captured, the fixed guard-service directory/run identity is valid with no `down` marker, the guard-service supervisor is present, the fixed anchor is live, guard lock/pidfile agree on exactly one live fixed `--loop`, that loop has parent PID 1, and any current guard-service child is distinct from the orphan. Ambiguous or changed evidence blocks with zero TERM effect.
+
+The effect sends TERM only to that exact orphan guard. It never sends SIGKILL, never restarts `desktop-commander-remote`, and never touches the global service tree. Success requires ordinary runit retry to establish one new fixed guard loop whose guard pidfile matches the dedicated guard-service supervised child, with the anchor still live and the target generation unchanged.
+
+If the orphan exits but runit ownership does not establish within the bounded wait, the owner may attempt exactly one fixed standalone `nohup ... --loop` rollback only when no live guard remains. A restored rollback is reported as failure, never PASS.
+
+The bounded receipt is:
+
+```text
+schema=mcl-m-rdc-guard-orphan-adopt.v1
+prestate=<orphan_exact|blocked|unknown>
+guard_service=<supervised|unknown>
+ownership=<runsv|orphan|none|unknown>
+target=<preserved|changed|unknown>
+anchor=<preserved|missing|unknown>
+rollback=<not_needed|restored|blocked|failed|unknown>
+result=<pass|blocked|fail|unknown>
+details=withheld
+```
+
+No PID, PPID, command line, filesystem path, device/session identity, auth material, or raw log is emitted. Live use remains a later `EXPERIMENT_CLOSE` action after merge/postmerge convergence.
+
 ## Install contract
 
 ```sh

@@ -4,25 +4,37 @@ set -u
 PREFIX=/data/data/com.termux/files/usr
 HOME_DIR=/data/data/com.termux/files/home
 INTERVAL=15
+ADOPT_CLEANUP_GRACE=8
+TEST_MODE=0
+TEST_STATE=
 if [ "${MCL_M_RDC_SUPERVISOR_TEST_MODE:-0}" = "1" ]; then
+    TEST_MODE=1
     TEST_ROOT="${MCL_M_RDC_SUPERVISOR_TEST_ROOT:?test root required}"
     PREFIX="$TEST_ROOT/prefix"
     HOME_DIR="$TEST_ROOT/home"
     INTERVAL="${MCL_M_RDC_SUPERVISOR_TEST_INTERVAL:-15}"
+    TEST_STATE="${MCL_M_RDC_TEST_STATE:?test state required}"
 fi
 
 SERVICE="$PREFIX/var/service/desktop-commander-remote"
+GUARD_SERVICE="$PREFIX/var/service/mcl-m-rdc-supervisor-guard"
 STATE="$HOME_DIR/.local/state/mcl-m-rdc-supervisor-guard"
 SV="$PREFIX/bin/sv"
 RUNSV="$PREFIX/bin/runsv"
 NOHUP="$PREFIX/bin/nohup"
 SLEEP="$PREFIX/bin/sleep"
+SH="$PREFIX/bin/sh"
 LOCKDIR="$STATE/guard.lock"
 PIDFILE="$STATE/guard.pid"
 EVENTS="$STATE/events.log"
 RUNSV_LOG="$STATE/runsv.log"
 LAUNCHER="$HOME_DIR/.termux/boot/31-mcl-m-rdc-supervisor-guard"
+ANCHOR_PIDFILE="$STATE/anchor.pid"
+ADOPT_LOCKDIR="$STATE/adopt.lock"
+INSTALLED_GUARD="$HOME_DIR/.local/bin/mcl-m-rdc-supervisor-guard"
+PROC_ROOT=/proc
 SUPERVISION=unknown
+
 read_state() {
     if [ ! -d "$SERVICE" ]; then
         SUPERVISION=service_missing
@@ -139,6 +151,271 @@ terminate_loop() {
     exit 0
 }
 
+pid_live() {
+    pid="$1"
+    case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+    kill -0 "$pid" 2>/dev/null || return 1
+    state="$(awk '{print $3}' "$PROC_ROOT/$pid/stat" 2>/dev/null || true)"
+    [ "$state" != Z ]
+}
+read_ppid() {
+    pid="$1"
+    if [ "$TEST_MODE" -eq 1 ] && [ -r "$TEST_STATE/adopt-ppid-$pid" ]; then
+        cat "$TEST_STATE/adopt-ppid-$pid"
+        return 0
+    fi
+    awk '{print $4}' "$PROC_ROOT/$pid/stat" 2>/dev/null || true
+}
+read_cmdline() {
+    pid="$1"
+    tr '\000' ' ' < "$PROC_ROOT/$pid/cmdline" 2>/dev/null || true
+}
+guard_loop_identity() {
+    pid="$1"
+    pid_live "$pid" || return 1
+    cmdline="$(read_cmdline "$pid")"
+    case "$cmdline" in
+        *mcl-m-rdc-supervisor-guard*--loop*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+anchor_live() {
+    [ -r "$ANCHOR_PIDFILE" ] || return 1
+    pid="$(cat "$ANCHOR_PIDFILE" 2>/dev/null || true)"
+    pid_live "$pid" || return 1
+    cmdline="$(read_cmdline "$pid")"
+    case "$cmdline" in
+        *31-mcl-m-rdc-supervisor-guard*--anchor*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+valid_guard_service() {
+    [ -d "$GUARD_SERVICE" ] && [ ! -L "$GUARD_SERVICE" ] || return 1
+    [ -f "$GUARD_SERVICE/run" ] && [ ! -L "$GUARD_SERVICE/run" ] && [ -x "$GUARD_SERVICE/run" ] || return 1
+    [ ! -e "$GUARD_SERVICE/down" ] || return 1
+    status="$($SV status "$GUARD_SERVICE" 2>&1 || true)"
+    case "$status" in
+        run:*) return 0 ;;
+        down:*) return 1 ;;
+        *) return 1 ;;
+    esac
+}
+guard_service_child() {
+    if [ "$TEST_MODE" -eq 1 ]; then
+        cat "$TEST_STATE/guard-child.pid" 2>/dev/null || true
+        return 0
+    fi
+    cat "$GUARD_SERVICE/supervise/pid" 2>/dev/null || true
+}
+target_generation() {
+    read_state
+    [ "$SUPERVISION" = running ] || return 1
+    if [ "$TEST_MODE" -eq 1 ]; then
+        [ -r "$TEST_STATE/target-generation" ] || return 1
+        cat "$TEST_STATE/target-generation"
+        return 0
+    fi
+    pid="$(cat "$SERVICE/supervise/pid" 2>/dev/null || true)"
+    pid_live "$pid" || return 1
+    start="$(awk '{print $22}' "$PROC_ROOT/$pid/stat" 2>/dev/null || true)"
+    [ -n "$start" ] || return 1
+    printf '%s:%s\n' "$pid" "$start"
+}
+find_orphan_guard() {
+    ORPHAN_PID=
+    [ -d "$LOCKDIR" ] && [ ! -L "$LOCKDIR" ] || return 1
+    [ -r "$PIDFILE" ] && [ ! -L "$PIDFILE" ] || return 1
+    pid="$(cat "$PIDFILE" 2>/dev/null || true)"
+    guard_loop_identity "$pid" || return 1
+    [ "$(read_ppid "$pid")" = 1 ] || return 1
+    service_child="$(guard_service_child)"
+    if [ -n "$service_child" ] && [ "$service_child" = "$pid" ]; then
+        return 1
+    fi
+    ORPHAN_PID="$pid"
+    return 0
+}
+
+PRESTATE=unknown
+GUARD_SERVICE_STATE=unknown
+OWNERSHIP=unknown
+TARGET_RESULT=unknown
+ANCHOR_RESULT=unknown
+ROLLBACK=not_needed
+ADOPT_RESULT=unknown
+ADOPT_LOCK_HELD=0
+
+emit_adopt() {
+    printf '%s\n' \
+        'schema=mcl-m-rdc-guard-orphan-adopt.v1' \
+        "prestate=$PRESTATE" \
+        "guard_service=$GUARD_SERVICE_STATE" \
+        "ownership=$OWNERSHIP" \
+        "target=$TARGET_RESULT" \
+        "anchor=$ANCHOR_RESULT" \
+        "rollback=$ROLLBACK" \
+        "result=$ADOPT_RESULT" \
+        'details=withheld'
+}
+release_adopt_lock() {
+    [ "$ADOPT_LOCK_HELD" -eq 1 ] || return 0
+    rmdir "$ADOPT_LOCKDIR" 2>/dev/null || true
+    ADOPT_LOCK_HELD=0
+}
+adopt_finish() {
+    code="$1"
+    release_adopt_lock
+    trap - INT TERM HUP 2>/dev/null || true
+    emit_adopt
+    return "$code"
+}
+block_adopt() {
+    PRESTATE=blocked
+    ADOPT_RESULT=blocked
+    adopt_finish 2
+}
+validate_adopt_prestate() {
+    TARGET_SNAPSHOT="$(target_generation)" || return 1
+    TARGET_RESULT=preserved
+    valid_guard_service || return 1
+    GUARD_SERVICE_STATE=supervised
+    anchor_live || return 1
+    ANCHOR_RESULT=preserved
+    find_orphan_guard || return 1
+    OWNERSHIP=orphan
+    return 0
+}
+wait_orphan_cleanup() {
+    pid="$1"
+    i=0
+    cleanup_wait=$((INTERVAL + ADOPT_CLEANUP_GRACE))
+    while [ "$i" -lt "$cleanup_wait" ]; do
+        if ! pid_live "$pid"; then
+            owner="$(cat "$PIDFILE" 2>/dev/null || true)"
+            if [ -z "$owner" ]; then
+                [ ! -e "$LOCKDIR" ] && return 0
+            elif [ "$owner" != "$pid" ]; then
+                service_child="$(guard_service_child)"
+                if [ "$owner" = "$service_child" ] && guard_loop_identity "$owner"; then
+                    return 0
+                fi
+            fi
+        fi
+        "$SLEEP" 1
+        i=$((i + 1))
+    done
+    return 1
+}
+wait_runit_owned_guard() {
+    i=0
+    while [ "$i" -lt 8 ]; do
+        service_child="$(guard_service_child)"
+        owner="$(cat "$PIDFILE" 2>/dev/null || true)"
+        if [ -n "$service_child" ] && [ "$owner" = "$service_child" ] \
+            && guard_loop_identity "$service_child" \
+            && anchor_live; then
+            current_generation="$(target_generation 2>/dev/null || true)"
+            if [ -n "$current_generation" ] && [ "$current_generation" = "$TARGET_SNAPSHOT" ]; then
+                return 0
+            fi
+        fi
+        "$SLEEP" 1
+        i=$((i + 1))
+    done
+    return 1
+}
+rollback_orphan_guard() {
+    current_generation="$(target_generation 2>/dev/null || true)"
+    if [ -z "$current_generation" ] || [ "$current_generation" != "$TARGET_SNAPSHOT" ]; then
+        ROLLBACK=blocked
+        TARGET_RESULT=changed
+        return 1
+    fi
+    anchor_live || { ROLLBACK=blocked; ANCHOR_RESULT=missing; return 1; }
+    owner="$(cat "$PIDFILE" 2>/dev/null || true)"
+    if [ -n "$owner" ] && guard_loop_identity "$owner"; then
+        ROLLBACK=blocked
+        return 1
+    fi
+    service_child="$(guard_service_child)"
+    if [ -n "$service_child" ] && guard_loop_identity "$service_child"; then
+        ROLLBACK=blocked
+        return 1
+    fi
+    [ -f "$INSTALLED_GUARD" ] && [ ! -L "$INSTALLED_GUARD" ] && [ -x "$INSTALLED_GUARD" ] \
+        || { ROLLBACK=failed; return 1; }
+    "$NOHUP" "$SH" "$INSTALLED_GUARD" --loop >/dev/null 2>&1 &
+    i=0
+    while [ "$i" -lt 8 ]; do
+        owner="$(cat "$PIDFILE" 2>/dev/null || true)"
+        if [ -n "$owner" ] && guard_loop_identity "$owner"; then
+            current_generation="$(target_generation 2>/dev/null || true)"
+            if [ "$current_generation" = "$TARGET_SNAPSHOT" ] && anchor_live; then
+                ROLLBACK=restored
+                OWNERSHIP=orphan
+                return 0
+            fi
+        fi
+        "$SLEEP" 1
+        i=$((i + 1))
+    done
+    ROLLBACK=failed
+    return 1
+}
+adopt_orphan() {
+    PRESTATE=unknown
+    GUARD_SERVICE_STATE=unknown
+    OWNERSHIP=unknown
+    TARGET_RESULT=unknown
+    ANCHOR_RESULT=unknown
+    ROLLBACK=not_needed
+    ADOPT_RESULT=unknown
+    ADOPT_LOCK_HELD=0
+
+    validate_adopt_prestate || { block_adopt; return $?; }
+    PRESTATE=orphan_exact
+
+    mkdir -p "$STATE"
+    if ! mkdir "$ADOPT_LOCKDIR" 2>/dev/null; then
+        block_adopt
+        return $?
+    fi
+    ADOPT_LOCK_HELD=1
+    trap 'release_adopt_lock; exit 1' INT TERM HUP
+
+    first_target="$TARGET_SNAPSHOT"
+    first_orphan="$ORPHAN_PID"
+    validate_adopt_prestate || { block_adopt; return $?; }
+    [ "$TARGET_SNAPSHOT" = "$first_target" ] || { TARGET_RESULT=changed; block_adopt; return $?; }
+    [ "$ORPHAN_PID" = "$first_orphan" ] || { block_adopt; return $?; }
+    PRESTATE=orphan_exact
+
+    kill -TERM "$first_orphan" 2>/dev/null || {
+        ADOPT_RESULT=fail
+        adopt_finish 1
+        return $?
+    }
+    if ! wait_orphan_cleanup "$first_orphan"; then
+        ADOPT_RESULT=fail
+        rollback_orphan_guard || true
+        adopt_finish 1
+        return $?
+    fi
+
+    if wait_runit_owned_guard; then
+        OWNERSHIP=runsv
+        TARGET_RESULT=preserved
+        ANCHOR_RESULT=preserved
+        ADOPT_RESULT=pass
+        adopt_finish 0
+        return $?
+    fi
+
+    ADOPT_RESULT=fail
+    rollback_orphan_guard || true
+    adopt_finish 1
+}
+
 case "${1:-}" in
     --check)
         emit_check
@@ -157,8 +434,11 @@ case "${1:-}" in
             "$SLEEP" "$INTERVAL"
         done
         ;;
+    --adopt-orphan)
+        adopt_orphan
+        ;;
     *)
-        printf '%s\n' 'usage: m-rdc-supervisor-guard --check|--once|--loop' >&2
+        printf '%s\n' 'usage: m-rdc-supervisor-guard --check|--once|--loop|--adopt-orphan' >&2
         exit 2
         ;;
 esac

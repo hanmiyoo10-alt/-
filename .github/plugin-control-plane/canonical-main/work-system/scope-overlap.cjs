@@ -144,6 +144,7 @@ function nonWriteBoundary(line) {
   return /^Preservation(?:\s*\/|\s|:)/i.test(line)
     || /^Non-write(?:\s|:)/i.test(line)
     || /^Do not modify:\s*$/i.test(line)
+    || /^No modification to:\s*$/i.test(line)
     || /^Forbidden:\s*$/i.test(line)
     || /^Do not touch unless fresh evidence proves required:/i.test(line);
 }

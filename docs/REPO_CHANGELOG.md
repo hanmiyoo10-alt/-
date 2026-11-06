@@ -2784,3 +2784,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ce2ba8f59a0ea7602ae17b6ef4bd0e17b202ea62)
 - Event ID: `f0f4c4e325b5b08f036f4a699b98c73c445fc908a960935f605b9c368a3a2566`
 <!-- canonical-main-doc-promoted:f0f4c4e325b5b08f036f4a699b98c73c445fc908a960935f605b9c368a3a2566 -->
+
+### 2026-11-06 — Merge pull request #4263 from hanmiyoo10-alt/laptop/repo-packet-nonwrite-boundary-4261
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `bee38220c68cd9c4e8f3bae4ad8cc0e0955e05d9`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/bee38220c68cd9c4e8f3bae4ad8cc0e0955e05d9)
+- Event ID: `62f3688f9e575267c1e7c12a42c35844088b289363abcfa0f260a421bd22f486`
+<!-- canonical-main-doc-promoted:62f3688f9e575267c1e7c12a42c35844088b289363abcfa0f260a421bd22f486 -->

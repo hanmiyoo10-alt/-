@@ -81,6 +81,8 @@ sh mcl-m-termux-lifeline-job-owner --apply
 
 It does not claim post-registration success. The exact-job projection supplies that proof.
 
+A nonzero scheduler-client exit is an uncertain submission outcome, not proof that Android rejected the job. Android may accept the registration before the client fails while formatting or returning its response. In that case the owner preserves the exact installed wrapper, reports schedule=unknown / result=unknown, and leaves managed-vs-absent/collision/unknown classification to the required exact-job postcheck. It does not delete the wrapper or perform scheduler cleanup from the ambiguous client result.
+
 ## Boundaries
 
 This owner does not:

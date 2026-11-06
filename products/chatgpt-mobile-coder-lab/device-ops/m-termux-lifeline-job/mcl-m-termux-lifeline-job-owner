@@ -106,11 +106,13 @@ apply_once() {
         >/dev/null 2>&1
     rc=$?
     if [ "$rc" -ne 0 ]; then
-        [ "$created" -eq 1 ] && rm -f "$DEST"
-        SCHEDULE=fail
-        RESULT=blocked
+        # Android may have accepted the job before the client-side response fails.
+        # Preserve the exact wrapper and let the required exact-job projection
+        # resolve managed vs absent/collision/unknown before any cleanup decision.
+        SCHEDULE=unknown
+        RESULT=unknown
         emit
-        return 3
+        return 4
     fi
 
     SCHEDULE=pass

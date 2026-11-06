@@ -212,16 +212,25 @@ set -e
 assert_contains "$out" 'wrapper=drift'
 [ ! -e "$FIX/state/schedule.argv" ] || fail "drift path scheduled"
 
-# Scheduler failure rolls back only a wrapper created by this call.
+# Scheduler client nonzero is an uncertain registration outcome.
+# Preserve the exact wrapper so the external exact-job projection can decide
+# whether Android actually registered job 34070 before client completion failed.
 new_fixture
 printf '1\n' > "$FIX/state/schedule.rc"
 set +e
 out=$(run_owner --apply)
 rc=$?
 set -e
-[ "$rc" -eq 3 ] || fail "scheduler failure rc"
-assert_contains "$out" 'schedule=fail'
-[ ! -e "$FIX/home/.local/lib/mcl-m-termux-lifeline-job/job.sh" ] || fail "new wrapper not rolled back"
+[ "$rc" -eq 4 ] || fail "scheduler uncertain rc"
+assert_contains "$out" 'schedule=unknown'
+assert_contains "$out" 'result=unknown'
+dest="$FIX/home/.local/lib/mcl-m-termux-lifeline-job/job.sh"
+[ -f "$dest" ] || fail "uncertain registration removed wrapper"
+cmp -s "$WRAPPER" "$dest" || fail "uncertain registration wrapper bytes"
+[ "$(stat -c '%a' "$dest")" = 700 ] || fail "uncertain registration wrapper mode"
+out=$(run_owner --check)
+assert_contains "$out" 'wrapper=present'
+assert_contains "$out" 'result=ready'
 
 rm -rf "$FIX" /tmp/mcl3467-wrapper-invalid.out
 printf '%s\n' 'PASS: m-termux-lifeline-job contract'

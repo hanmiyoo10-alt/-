@@ -41,10 +41,15 @@ class FakeBackend:
         self.rollback_calls = 0
         self.old_rejection_status = 401
         self.fail_probe_once_password = None
+        self.inventory_calls = 0
+        self.fail_inventory_on_call = None
     def auth(self):
         return None
 
     def inventory(self):
+        self.inventory_calls += 1
+        if self.fail_inventory_on_call == self.inventory_calls:
+            raise M.RotationError("INVENTORY_FAILED")
         return M.Inventory(
             self.deployments, frozenset(self.versions), self.current, self.latest
         )
@@ -305,6 +310,17 @@ class ContractTests(unittest.TestCase):
         result = M.rotate(self.f.profile, self.f.backend, password_factory=lambda _n: new)
         self.assertEqual(result["deployment"], "rolled_back")
         self.assertEqual(result["reason"], "POST_DEPLOY_PROBE_FAILED_ROLLED_BACK")
+        self.assertEqual(self.f.backend.rollback_calls, 1)
+        self.assertEqual(
+            M._read_private(self.f.profile.current_credential, self.f.profile), self.f.old
+        )
+
+    def test_post_promotion_inventory_error_rolls_back(self):
+        new = self.candidate()
+        self.f.backend.fail_inventory_on_call = 3
+        result = M.rotate(self.f.profile, self.f.backend, password_factory=lambda _n: new)
+        self.assertEqual(result["deployment"], "rolled_back")
+        self.assertEqual(result["reason"], "POST_ROTATION_READBACK_FAILED_ROLLED_BACK")
         self.assertEqual(self.f.backend.rollback_calls, 1)
         self.assertEqual(
             M._read_private(self.f.profile.current_credential, self.f.profile), self.f.old

@@ -793,9 +793,26 @@ def rotate(
                 "reason": reason,
             }
 
-        post = backend.inventory()
-        current_password = _read_private(profile.current_credential, profile)
-        post_probe = backend.probe(hostname, current_password)
+        try:
+            post = backend.inventory()
+            current_password = _read_private(profile.current_credential, profile)
+            post_probe = backend.probe(hostname, current_password)
+        except (RotationError, OSError):
+            rolled_back, reason = _rollback(
+                backend, profile, old_version, hostname, old_password, new_password, promoted=True
+            )
+            if rolled_back:
+                return result | {
+                    "deployment": "rolled_back",
+                    "custody": "restored",
+                    "reason": "POST_ROTATION_READBACK_FAILED_ROLLED_BACK",
+                }
+            return result | {
+                "deployment": "unknown",
+                "custody": "unknown",
+                "result": "unknown",
+                "reason": reason,
+            }
         if post.current_version_id != new_version or not _auth_pass(post_probe):
             rolled_back, reason = _rollback(
                 backend, profile, old_version, hostname, old_password, new_password, promoted=True

@@ -349,3 +349,19 @@ the exact candidate/base/path/diff identity, reruns fixed owner validation, and
 then creates exactly one PR or converges on one already-existing exact PR.
 Any main movement, local/remote drift, residue, or mismatched/multiple PR fails
 closed.
+
+
+### Pushed stale currentization
+
+When continue-pushed finds the exact original candidate already present on the
+remote feature ref but protected main has advanced, it may classify only that
+exact pushed-continuation schema as PUSHED_STALE. It reuses the existing replay
+check and fixed no-ff currentization path, validates the currentized payload,
+pushes only an ordinary fast-forward from the exact old remote candidate, and
+then continues the same PR publication contract. If interruption occurs after
+the no-ff merge but before that push, the exact CURRENTIZED state may resume
+without repeating the merge only while the remote still equals the original
+candidate. Replay, fixed validation, holder, credential and current-main guards
+are rerun before the push. A final publication readback must be PUSHED and bound
+to the same validated main; late main movement fails closed for a fresh retry.
+Other continuation schemas retain their previous fail-closed remote-head behavior.

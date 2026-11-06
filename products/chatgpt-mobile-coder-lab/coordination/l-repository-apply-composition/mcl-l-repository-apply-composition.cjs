@@ -848,7 +848,7 @@ throw new CompositionError(error.kind, error.reasonCodes || ['PUSHED_CONTINUATIO
 }
 throw error;
 }
-if (!state || state.state !== 'PUSHED') {
+if (!state || !['PUSHED', 'PUSHED_STALE', 'CURRENTIZED'].includes(state.state)) {
 throw new CompositionError('BLOCKED', ['PUSHED_CONTINUATION_STATE_REQUIRED']);
 }
 const workspace = inspectWorkspace(manifest);
@@ -1326,6 +1326,7 @@ finalizeFromActivation,
 exitCodeFor,
 inspectPrepared,
 inspectPreparedContinuation,
+inspectPushedContinuation,
 inspectReviewUpdatePrepared,
 listComments,
 output,

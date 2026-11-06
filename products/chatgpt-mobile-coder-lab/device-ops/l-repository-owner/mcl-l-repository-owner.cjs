@@ -1222,6 +1222,24 @@ function findExactOpenPr(runner, manifest, prRequest, expectedHead) {
 }
 
 
+function requirePushedContinuationAdmission(state, request) {
+  if (!state || !['PUSHED', 'PUSHED_STALE', 'CURRENTIZED'].includes(state.state)
+      || state.candidateHead !== request.candidate_head) {
+    throw new OwnerError('BLOCKED', ['PUSHED_CONTINUATION_STATE_REQUIRED']);
+  }
+  if (state.state === 'CURRENTIZED' && state.remoteHead !== state.candidateHead) {
+    throw new OwnerError('BLOCKED', ['PUSHED_CONTINUATION_CURRENTIZED_REMOTE_REQUIRED']);
+  }
+  return state;
+}
+
+function requirePushedPublicationState(state, validatedMain) {
+  if (!state || state.state !== 'PUSHED' || state.currentMain !== validatedMain) {
+    throw new OwnerError('CONFLICT', ['PUSHED_CONTINUATION_FINAL_STATE_CONFLICT']);
+  }
+  return state;
+}
+
 function inspectPushedContinuation(manifest, request, prRequest, {
   profile = DEFAULT_PROFILE, runner = defaultRunner,
 } = {}) {
@@ -1232,12 +1250,8 @@ function inspectPushedContinuation(manifest, request, prRequest, {
     throw new OwnerError('CONFLICT', ['PUSHED_CONTINUATION_SCOPE_CONFLICT']);
   }
   const currentMain = continuationCurrentMain(manifest, {profile, runner});
-  const state = classifyPreparedContinuationState(
-    manifest, request, currentMain, {profile, runner});
-  if (!['PUSHED', 'PUSHED_STALE'].includes(state.state)
-      || state.candidateHead !== request.candidate_head) {
-    throw new OwnerError('BLOCKED', ['PUSHED_CONTINUATION_STATE_REQUIRED']);
-  }
+  const state = requirePushedContinuationAdmission(classifyPreparedContinuationState(
+    manifest, request, currentMain, {profile, runner}), request);
   const pr = findExactOpenPr(runner, manifest, prRequest, state.finalHead);
   return {...state, currentMain, pr};
 }
@@ -1248,44 +1262,51 @@ function executePushedContinuation(context, request, prRequest, {
   const {manifest} = context;
   holderCheck(context, env);
   let state = inspectPushedContinuation(manifest, request, prRequest, {profile, runner});
+  const validatedMain = state.currentMain;
   let checks = [];
-  if (state.state === 'PUSHED_STALE') {
+  if (['PUSHED_STALE', 'CURRENTIZED'].includes(state.state)) {
     const candidatePaths = candidatePathsFromCommitDiff(
       runner, manifest.workspace.worktree, manifest.observedBaseSha, state.candidateHead);
     requireGithubWorkflowPushCredential(candidatePaths, manifest.workspace.worktree, {runner});
     verifyReplayAgainstCurrent(
-      manifest, request, state.currentMain, {runner, candidateHead:state.candidateHead});
+      manifest, request, validatedMain, {runner, candidateHead:state.candidateHead});
     holderCheck(context, env);
-    if (continuationCurrentMain(manifest, {profile, runner}) !== state.currentMain) {
+    if (continuationCurrentMain(manifest, {profile, runner}) !== validatedMain) {
       throw new OwnerError('CONFLICT', ['PUSHED_CONTINUATION_MAIN_CHANGED']);
     }
-    runChecked(runner, 'git', [
-      '-C', manifest.workspace.worktree,
-      '-c', 'user.name=' + FIXED_BOT_NAME,
-      '-c', 'user.email=' + FIXED_BOT_EMAIL,
-      'merge', '--no-ff', '--no-edit', state.currentMain,
-    ], {}, 'PUSHED_CONTINUATION_CURRENTIZATION_MERGE_FAILED');
-    let currentized = classifyPreparedContinuationState(
-      manifest, request, state.currentMain, {profile, runner});
-    if (currentized.state !== 'CURRENTIZED') {
-      throw new OwnerError('CONFLICT', ['PUSHED_CONTINUATION_CURRENTIZATION_READBACK_CONFLICT']);
+    let currentized = state;
+    if (state.state === 'PUSHED_STALE') {
+      runChecked(runner, 'git', [
+        '-C', manifest.workspace.worktree,
+        '-c', 'user.name=' + FIXED_BOT_NAME,
+        '-c', 'user.email=' + FIXED_BOT_EMAIL,
+        'merge', '--no-ff', '--no-edit', validatedMain,
+      ], {}, 'PUSHED_CONTINUATION_CURRENTIZATION_MERGE_FAILED');
+      currentized = classifyPreparedContinuationState(
+        manifest, request, validatedMain, {profile, runner});
+      if (currentized.state !== 'CURRENTIZED'
+          || currentized.remoteHead !== currentized.candidateHead) {
+        throw new OwnerError('CONFLICT', ['PUSHED_CONTINUATION_CURRENTIZATION_READBACK_CONFLICT']);
+      }
     }
     checks = runContinuationValidation(manifest, request, {runner, root});
     holderCheck(context, env);
-    if (continuationCurrentMain(manifest, {profile, runner}) !== state.currentMain) {
+    if (continuationCurrentMain(manifest, {profile, runner}) !== validatedMain) {
       throw new OwnerError('CONFLICT', ['PUSHED_CONTINUATION_MAIN_CHANGED']);
     }
     pushExactCandidate(
       runner, manifest.workspace.worktree, currentized.finalHead,
       manifest.workspace.branch, candidatePaths);
     state = inspectPushedContinuation(manifest, request, prRequest, {profile, runner});
+    requirePushedPublicationState(state, validatedMain);
   } else {
     checks = runContinuationValidation(manifest, request, {runner, root});
     holderCheck(context, env);
-    if (continuationCurrentMain(manifest, {profile, runner}) !== state.currentMain) {
+    if (continuationCurrentMain(manifest, {profile, runner}) !== validatedMain) {
       throw new OwnerError('CONFLICT', ['PUSHED_CONTINUATION_MAIN_CHANGED']);
     }
     state = inspectPushedContinuation(manifest, request, prRequest, {profile, runner});
+    requirePushedPublicationState(state, validatedMain);
   }
   let pr = state.pr;
   if (!pr) {
@@ -2072,6 +2093,8 @@ module.exports = {
   executeApply,
   executePreparedContinuation,
   inspectPushedContinuation,
+  requirePushedContinuationAdmission,
+  requirePushedPublicationState,
   executePushedContinuation,
   executeReviewUpdate,
   fixedValidationChecks,

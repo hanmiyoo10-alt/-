@@ -1564,12 +1564,61 @@ test('continue-pushed currentizes exact pushed stale candidate and preserves leg
       m, pushedRequest, currentMain, {profile});
     assert.equal(currentized.state, 'CURRENTIZED');
     assert.equal(currentized.candidateHead, candidate);
+    assert.equal(currentized.remoteHead, candidate);
+    assert.doesNotThrow(() => owner.requirePushedContinuationAdmission(
+      currentized, pushedRequest));
+    expectReason(() => owner.requirePushedContinuationAdmission(
+      {...currentized, remoteHead:base}, pushedRequest),
+    'PUSHED_CONTINUATION_CURRENTIZED_REMOTE_REQUIRED');
+
+    const fixtureRunner = (command, args, options = {}) => {
+      if (command === 'gh') {
+        if (args[0] === 'api') {
+          return {code:0, stdout:currentMain + '\n', stderr:'', signal:null, error:null};
+        }
+        if (args[0] === 'pr' && args[1] === 'list') {
+          return {code:0, stdout:'[]\n', stderr:'', signal:null, error:null};
+        }
+        throw new Error('unexpected gh call: ' + args.join(' '));
+      }
+      const result = childProcess.spawnSync(command, args, {
+        cwd: options.cwd,
+        input: options.input,
+        env: options.env || process.env,
+        encoding:'utf8',
+        shell:false,
+      });
+      return {
+        code:Number.isInteger(result.status) ? result.status : 127,
+        stdout:result.stdout || '',
+        stderr:result.stderr || '',
+        signal:result.signal || null,
+        error:result.error || null,
+      };
+    };
+    const prRequest = {
+      schema:owner.PR_REQUEST_SCHEMA,
+      title:'feat: pushed stale fixture',
+      body:'Refs #9002',
+    };
+    const inspectedCurrentized = owner.inspectPushedContinuation(
+      m, pushedRequest, prRequest, {profile, runner:fixtureRunner});
+    assert.equal(inspectedCurrentized.state, 'CURRENTIZED');
+    assert.equal(inspectedCurrentized.pr, null);
 
     gitExec(feature, ['push','origin','HEAD:refs/heads/laptop/task-9002']);
     const pushed = owner.classifyPreparedContinuationState(
       m, pushedRequest, currentMain, {profile});
     assert.equal(pushed.state, 'PUSHED');
     assert.equal(pushed.candidateHead, candidate);
+    assert.doesNotThrow(() => owner.requirePushedPublicationState(
+      {...pushed, currentMain}, currentMain));
+    expectReason(() => owner.requirePushedPublicationState(
+      {...pushed, state:'PUSHED_STALE', currentMain}, currentMain),
+    'PUSHED_CONTINUATION_FINAL_STATE_CONFLICT');
+    expectReason(() => owner.requirePushedPublicationState(
+      {...pushed, currentMain:'f'.repeat(40)}, currentMain),
+    'PUSHED_CONTINUATION_FINAL_STATE_CONFLICT');
   } finally {
     try { gitExec(landing, ['worktree','remove',feature]); } catch {}
     fs.rmSync(tmp, {recursive:true, force:true});

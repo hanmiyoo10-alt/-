@@ -52,6 +52,9 @@ fail() {
     printf '%s\n' "FAIL: $*" >&2
     exit 1
 }
+[ "$(sed -n '1p' "$SERVICE_RUN")" = '#!/data/data/com.termux/files/usr/bin/sh' ] || fail "service run production shebang drift"
+[ "$(sed -n '1p' "$GUARD")" = '#!/data/data/com.termux/files/usr/bin/sh' ] || fail "guard production shebang drift"
+[ "$(sed -n '1p' "$LAUNCHER")" = '#!/data/data/com.termux/files/usr/bin/sh' ] || fail "launcher production shebang drift"
 wait_for_file() {
     file="$1"
     i=0
@@ -174,7 +177,11 @@ case "$name" in
         printf '%s\n' "$count" > "$count_file"
         printf '%s\n' "$$" > "$MCL_M_TAILSCALE_TEST_STATE/guard-runsv.pid"
         while :; do
-            "$service/run" &
+            if [ -x /data/data/com.termux/files/usr/bin/sh ]; then
+                "$service/run" &
+            else
+                sh "$MCL_M_TAILSCALE_SUPERVISOR_TEST_ROOT/home/.local/bin/mcl-m-tailscale-supervisor-guard" --loop &
+            fi
             child=$!
             printf '%s\n' "$child" > "$MCL_M_TAILSCALE_TEST_STATE/guard-child.pid"
             wait "$child" 2>/dev/null || true
@@ -361,6 +368,14 @@ printf '%s\n' "$apply_out" | grep -Fxq 'result=pass' || fail "apply did not conv
 cmp -s "$GUARD" "$HOME_FIX/.local/bin/mcl-m-tailscale-supervisor-guard" || fail "installed guard drift"
 cmp -s "$SERVICE_RUN" "$GUARD_SERVICE/run" || fail "installed service run drift"
 cmp -s "$LAUNCHER" "$HOME_FIX/.termux/boot/32-mcl-m-tailscale-supervisor-guard" || fail "installed launcher drift"
+if [ ! -x /data/data/com.termux/files/usr/bin/sh ]; then
+    cp "$HOME_FIX/.termux/boot/32-mcl-m-tailscale-supervisor-guard" "$TEST_STATE/launcher-termux-source"
+    cat > "$HOME_FIX/.termux/boot/32-mcl-m-tailscale-supervisor-guard" <<'EOF_PORTABLE_LAUNCHER'
+#!/bin/sh
+exec sh -c '. "$MCL_M_TAILSCALE_TEST_STATE/launcher-termux-source"' "$0" "$@"
+EOF_PORTABLE_LAUNCHER
+    chmod 755 "$HOME_FIX/.termux/boot/32-mcl-m-tailscale-supervisor-guard"
+fi
 [ -x "$HOME_FIX/.local/bin/mcl-m-tailscale-supervisor-guard" ] || fail "installed guard not executable"
 [ -x "$GUARD_SERVICE/run" ] || fail "installed service run not executable"
 [ -x "$HOME_FIX/.termux/boot/32-mcl-m-tailscale-supervisor-guard" ] || fail "installed launcher not executable"

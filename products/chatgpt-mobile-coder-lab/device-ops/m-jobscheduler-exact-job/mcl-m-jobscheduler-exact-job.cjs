@@ -101,7 +101,20 @@ function parseDurationMillis(value) {
 }
 
 function jobBlocks(text) {
-  const lines = String(text || '').replace(/\r/g, '').split('\n');
+  const allLines = String(text || '').replace(/\r/g, '').split('\n');
+  const registeredIndexes = allLines
+    .map((line, index) => (/^\s*Registered\s+\d+\s+jobs:\s*$/.test(line) ? index : -1))
+    .filter((index) => index >= 0);
+  if (registeredIndexes.length !== 1) return [];
+  const registeredIndex = registeredIndexes[0];
+
+  const lines = [];
+  for (let index = registeredIndex + 1; index < allLines.length; index += 1) {
+    const line = allLines[index];
+    if (line.trim() && !/^\s/.test(line)) break;
+    lines.push(line);
+  }
+
   const starts = [];
   const headerRe = /^\s*JOB\s+#[^/\s:]+\/(\d+):(?:\s.*)?$/;
   for (let index = 0; index < lines.length; index += 1) {
@@ -114,7 +127,6 @@ function jobBlocks(text) {
     text: lines.slice(start.index, i + 1 < starts.length ? starts[i + 1].index : lines.length).join('\n'),
   }));
 }
-
 function parseTargetBlock(text) {
   const matches = jobBlocks(text).filter((row) => row.jobId === JOB_ID);
   if (matches.length !== 1) return null;
@@ -125,7 +137,7 @@ function parseTargetBlock(text) {
     return {complete: true, collision: true};
   }
 
-  const extrasRe = /^\s*Extras:\s+PersistableBundle\[\{com\.termux\.api\.jobscheduler_script_path=(.*)\}\]\s*$/m;
+  const extrasRe = /^\s*Extras:\s+\{com\.termux\.api\.jobscheduler_script_path=(.*)\}\s*$/m;
   const scriptMatch = extrasRe.exec(block.text);
   const periodicMatch = /^\s*PERIODIC:\s+interval=(\S+)/m.exec(block.text);
   const requiresMatch = /^\s*Requires:\s+charging=(true|false)\s+batteryNotLow=(true|false)\s+deviceIdle=(true|false)(?:\s+storageNotLow=(true|false))?\s*$/m.exec(block.text);

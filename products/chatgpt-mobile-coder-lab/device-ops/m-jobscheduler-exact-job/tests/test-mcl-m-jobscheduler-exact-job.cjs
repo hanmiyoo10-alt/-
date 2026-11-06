@@ -10,7 +10,7 @@ const test = require('node:test');
 const owner = require('../mcl-m-jobscheduler-exact-job.cjs');
 
 const MANAGED = [
-  'Registered jobs:',
+  'Registered 1 jobs:',
   ' JOB #u0a321/34070: abcd com.termux.api/.apis.JobSchedulerAPI$JobSchedulerService PERIODIC PERSISTED',
   '  Source: uid=u0a321 user=0 pkg=com.termux.api',
   '  JobInfo:',
@@ -18,7 +18,7 @@ const MANAGED = [
   '   PERIODIC: interval=+15m0s0ms flex=+5m0s0ms',
   '   PERSISTED',
   '   Requires: charging=false batteryNotLow=false deviceIdle=false',
-  '   Extras: PersistableBundle[{com.termux.api.jobscheduler_script_path=' + owner.SCRIPT + '}]',
+  '   Extras: {com.termux.api.jobscheduler_script_path=' + owner.SCRIPT + '}',
   '  Required constraints: TIMING_DELAY DEVICE_NOT_DOZING BACKGROUND_NOT_RESTRICTED WITHIN_QUOTA',
   ' Ready: true',
 ].join('\n');
@@ -97,6 +97,27 @@ test('wrong JobScheduler service is collision', () => {
   );
   assert.ok(parsed);
   assert.equal(parsed.collision, true);
+});
+
+test('opaque parcelled extras remain unknown', () => {
+  assert.equal(owner.parseTargetBlock(
+    MANAGED.replace(
+      /Extras: \{com\.termux\.api\.jobscheduler_script_path=[^\n]*\}/,
+      'Extras: mParcelledData.dataSize=128',
+    ),
+  ), null);
+});
+
+test('subsequent active-job network lines do not leak into registered target block', () => {
+  const parsed = owner.parseTargetBlock(MANAGED + [
+    '',
+    'Active jobs:',
+    ' Slot #0(ID=1): unrelated',
+    '  Network: NetworkRequest [ id=1 ]',
+  ].join('\n'));
+  assert.ok(parsed);
+  assert.equal(parsed.collision, false);
+  assert.equal(parsed.fields.network, 'none');
 });
 
 test('missing required structural line is unknown', () => {

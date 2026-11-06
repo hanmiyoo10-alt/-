@@ -1356,3 +1356,14 @@ inspectWorkspace(){return {ok:true,reasonCodes:[],holderPath:'/fixture/holder'};
 readHolder(){return {ok:true,missing:false,reasonCodes:[],value:{}};},
 }), (error)=>error.reasonCodes.includes('HOLDER_NOT_ABSENT_BEFORE_COMPOSITION'));
 });
+
+
+test('composition CLI admits continue-pushed without patch input', () => {
+  const parsed = owner.parseArgs([
+    'continue-pushed','--packet','#4282','--manifest','m',
+    '--pushed-continuation-request','r','--pr-request','pr','--apply',
+  ]);
+  assert.equal(parsed.operation, 'continue-pushed');
+  assert.equal(parsed.requestFile, 'r');
+  assert.equal(parsed.patchFile, null);
+});

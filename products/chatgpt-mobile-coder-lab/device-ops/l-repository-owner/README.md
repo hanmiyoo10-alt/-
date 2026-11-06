@@ -337,3 +337,15 @@ fallback selector.
 A successful receipt proves only bounded same-PR review-update publication.
 D-013 release, holder release, D-014 completion, PR merge, release, production,
 runtime, and device effects remain separately owned.
+
+
+## Interrupted pushed-candidate continuation
+
+continue-pushed is the narrow recovery operation for an exact current candidate
+whose commit and ordinary non-force push completed but whose non-closing PR was
+not published or acknowledged. It performs no source edit, commit, push,
+currentization, merge, runtime, release, or production effect. It revalidates
+the exact candidate/base/path/diff identity, reruns fixed owner validation, and
+then creates exactly one PR or converges on one already-existing exact PR.
+Any main movement, local/remote drift, residue, or mismatched/multiple PR fails
+closed.

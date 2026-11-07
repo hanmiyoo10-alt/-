@@ -585,9 +585,12 @@ def reconnect(profile_name: str, transport=_ps_call, pin_reader=_read_pin) -> di
     result = transport("connect", profile_name, candidate["endpoint"])
     if result.get("model") != cfg["model"]:
         raise HostControlError("TARGET_MODEL_MISMATCH")
-    rows = [row for row in connected(profile_name, transport) if row["model"] == cfg["model"]]
-    if len(rows) != 1:
-        raise HostControlError("POSTCONNECT_MODEL_COUNT_INVALID")
+    rows = connected(profile_name, transport)
+    matched = [row for row in rows if _transport_matches(candidate, row["serial"])]
+    if not matched:
+        raise HostControlError("POSTCONNECT_TARGET_NOT_PRESENT")
+    if any(row["model"] != cfg["model"] for row in matched):
+        raise HostControlError("POSTCONNECT_TARGET_MODEL_MISMATCH")
     return receipt("reconnect", profile_name, "CONNECTED")
 
 

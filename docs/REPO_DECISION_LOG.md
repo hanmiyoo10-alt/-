@@ -365,3 +365,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3474)
 - Event ID: `29b247e7794cffe6e328ef67ed070b0a4873391c999cc19948e16594ed14cc09`
 <!-- canonical-main-doc-promoted:29b247e7794cffe6e328ef67ed070b0a4873391c999cc19948e16594ed14cc09 -->
+
+### 2026-11-07 — REPO-GITHUB-DISCUSSIONS-CONNECTOR-01 — bounded Discussion MCP surface
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3483)
+- Event ID: `270b18daa24f22fbf4ec13de3244735c712460b4d73befbadfe2d3a65b4f70d7`
+<!-- canonical-main-doc-promoted:270b18daa24f22fbf4ec13de3244735c712460b4d73befbadfe2d3a65b4f70d7 -->

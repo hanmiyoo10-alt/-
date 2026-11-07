@@ -59,13 +59,17 @@ Local Playwright/Crawlee acquisition is public, unauthenticated, and stateless b
 The target policy:
 
 - accepts only `http:` and `https:`;
-- rejects embedded URL credentials;
 - rejects localhost, loopback, private, link-local, documentation, multicast, reserved,
   and other blocked address ranges;
 - resolves the target before browser acquisition and keeps browser requests behind the
   repository policy proxy;
 - applies the same target checks to browser redirects/subresources;
-- strips username/password material from bounded URL evidence;
+- rejects embedded credentials in navigated/request targets and redacts credentials from
+  sanitized requested/final/effect URL fields;
+- v2 additionally sanitizes reported page/skipped links, but v1/v4 extracted `links` come
+  from page anchor `href` values and are **not** a credential-redaction boundary; treat a
+  credential-bearing link result as sensitive evidence and sanitize it before persistence
+  or sharing;
 - keeps browser/profile/storage state ephemeral.
 
 Private/local targets exist only for deterministic tests. The
@@ -83,7 +87,9 @@ The tools return one bounded JSON result rather than raw browser/provider logs.
 Common dispositions are:
 
 - `OK` — the requested bounded acquisition completed under its contract;
-- `PARTIAL` — useful evidence exists but a declared output/crawl budget was exhausted;
+- `PARTIAL` — acquisition completed only partially; this may mean output/crawl truncation,
+  an HTTP status of 400 or higher, or empty rendered title/body content. Inspect the returned
+  content, warnings, and `failureReason` before treating a zero-exit `PARTIAL` as usable evidence;
 - `BLOCKED` — policy, robots, provider/auth/billing/retention, reveal-effect, or another
   explicit contract boundary refused the operation;
 - `FAILED` — the bounded operation ran but its required contract could not be satisfied;
@@ -234,9 +240,10 @@ Plan limits are fixed:
 - total reveal budget is 12 seconds.
 
 `clickReveal` accepts only one visible deterministic reveal control, such as a safe
-button, a `summary` owned by `details`, or a non-form ARIA button/tab. Links, editable
-controls, submit/reset/file behavior, form-owned controls, downloads, and unsupported
-controllers fail closed.
+button, a `summary` owned by `details`, or a non-form ARIA button/tab. A form-owned
+`<button>` is permitted only when it explicitly declares `type="button"`; implicit/default
+submit buttons and form-owned submit/reset behavior are rejected. Links, editable controls,
+`formaction`, downloads, and unsupported controllers fail closed.
 
 After initial navigation, the reveal effect guard additionally blocks:
 

@@ -351,3 +351,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/586)
 - Event ID: `29525ff9c89d8aa2166cc47a9afd5e8c91d51199a2b60b23aca02dd0864d567f`
 <!-- canonical-main-doc-promoted:29525ff9c89d8aa2166cc47a9afd5e8c91d51199a2b60b23aca02dd0864d567f -->
+
+### 2026-11-07 — REPO-VALIDATION-CONVERGENCE-01 — bounded validation-attention invocation
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3460)
+- Event ID: `28fc5cb45100e7852a5dfe1ee49da9b971d26c56740805ad767c6f0e40c48ec5`
+<!-- canonical-main-doc-promoted:28fc5cb45100e7852a5dfe1ee49da9b971d26c56740805ad767c6f0e40c48ec5 -->

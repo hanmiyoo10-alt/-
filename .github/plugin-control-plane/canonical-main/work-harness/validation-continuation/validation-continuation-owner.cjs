@@ -549,9 +549,17 @@ function parseArgs(argv = process.argv.slice(2)) {
     prNumber: parseNumber(values.pr, 'PR'), format};
 }
 
+function normalizeContinuationError(error) {
+  if (error instanceof ContinuationError || error instanceof validationMerge.OwnerError) {
+    return {kind: error.kind, reasonCodes: [...error.reasonCodes]};
+  }
+  return {kind: 'UNKNOWN', reasonCodes: ['CONTINUATION_INTERNAL_ERROR']};
+}
+
 function errorResult(packetNumber, prNumber, error) {
-  const kind = error instanceof ContinuationError ? error.kind : 'UNKNOWN';
-  const reasons = error instanceof ContinuationError ? error.reasonCodes : ['CONTINUATION_INTERNAL_ERROR'];
+  const normalized = normalizeContinuationError(error);
+  const kind = normalized.kind;
+  const reasons = normalized.reasonCodes;
   const decision = {
     resumeDisposition: kind === 'BLOCKED' ? 'BLOCKED'
       : kind === 'NEEDS_REVIEW' || kind === 'CONFLICT' ? 'NEEDS_REVIEW' : 'UNKNOWN',
@@ -654,6 +662,7 @@ module.exports = {
   coordinationState,
   currentizationState,
   inspectWithClient,
+  normalizeContinuationError,
   parseArgs,
   pathScopeCompatibility,
   persistResult,

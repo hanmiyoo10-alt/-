@@ -53,10 +53,12 @@ Pins are regular non-symlink mode 0600. They contain no raw endpoint, serial, ho
 ```sh
 python3 mcl_wireless_adb_host_control.py inspect M
 python3 mcl_wireless_adb_host_control.py bootstrap M
+python3 mcl_wireless_adb_host_control.py rebind M
 python3 mcl_wireless_adb_host_control.py reconnect M
 
 python3 mcl_wireless_adb_host_control.py inspect S
 python3 mcl_wireless_adb_host_control.py bootstrap S
+python3 mcl_wireless_adb_host_control.py rebind S
 python3 mcl_wireless_adb_host_control.py reconnect S
 ```
 
@@ -84,6 +86,12 @@ Requires:
 - matching known-host evidence.
 
 It never pairs or connects.
+
+### rebind
+
+Recovery-only bootstrap for a stale connected DNS-SD service generation. It requires exactly one connected exact-model transport and exactly one fresh raw-mDNS candidate. Both the connected service token and fresh candidate token must already exist in the Windows ADB known-host set, and the two tokens must be distinct.
+
+Only after those fail-closed checks may it issue exactly one internally selected Windows `adb connect` to the fresh candidate, require the fixed target model, and write the normal private pin for that fresh instance. It accepts no caller endpoint and never pairs, disconnects, restarts the ADB server, toggles Wireless Debugging, or changes the target.
 
 ### reconnect
 

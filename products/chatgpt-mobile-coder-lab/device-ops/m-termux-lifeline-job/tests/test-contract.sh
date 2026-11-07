@@ -282,6 +282,47 @@ assert_contains "$out" 'recovery=pass'
 assert_contains "$out" 'result=blocked'
 [ "$(wc -l < "$FIX/state/recovery.log")" -eq 1 ] || fail "post-check recovery count"
 
+# Fixed package-owned date/stat symlinks are admitted at their literal paths.
+new_fixture
+mv "$FIX/prefix/bin/date" "$FIX/prefix/bin/date.real"
+ln -s date.real "$FIX/prefix/bin/date"
+mv "$FIX/prefix/bin/stat" "$FIX/prefix/bin/stat.real"
+ln -s stat.real "$FIX/prefix/bin/stat"
+printf '0
+' > "$FIX/state/hb.seq"
+out=$(run_wrapper)
+assert_contains "$out" 'heartbeat_pre=active'
+assert_contains "$out" 'recovery=not_run'
+assert_contains "$out" 'heartbeat_post=active'
+assert_contains "$out" 'result=healthy'
+[ ! -e "$FIX/state/recovery.log" ] || fail "system-tool symlink healthy path called recovery"
+
+# Dangling fixed system-tool symlink fails closed before recovery.
+new_fixture
+rm -f "$FIX/prefix/bin/date"
+ln -s date.missing "$FIX/prefix/bin/date"
+printf '0
+' > "$FIX/state/hb.seq"
+set +e
+out=$(run_wrapper)
+rc=$?
+set -e
+[ "$rc" -eq 4 ] || fail "dangling date symlink rc"
+assert_contains "$out" 'result=unknown'
+[ ! -e "$FIX/state/recovery.log" ] || fail "dangling date symlink called recovery"
+
+# Private heartbeat remains strict non-symlink even when the target is executable.
+new_fixture
+mv "$FIX/home/.local/lib/mcl-m-termux-lifeline/heartbeat-client.py" "$FIX/home/.local/lib/mcl-m-termux-lifeline/heartbeat-client.real"
+ln -s heartbeat-client.real "$FIX/home/.local/lib/mcl-m-termux-lifeline/heartbeat-client.py"
+set +e
+out=$(run_wrapper)
+rc=$?
+set -e
+[ "$rc" -eq 4 ] || fail "private heartbeat symlink rc"
+assert_contains "$out" 'result=unknown'
+[ ! -e "$FIX/state/recovery.log" ] || fail "private heartbeat symlink called recovery"
+
 # Inactive wrapper recovers once and rechecks.
 new_fixture
 printf '1\n0\n' > "$FIX/state/hb.seq"

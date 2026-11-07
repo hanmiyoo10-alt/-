@@ -62,6 +62,8 @@ If the heartbeat is inactive, it preserves the existing path and invokes exactly
 
 and then requires one fresh heartbeat status before reporting `recovered`.
 
+The wrapper keeps private recovery inputs strict: heartbeat, recovery, RDC guard, and Tailscale guard must be regular non-symlink executables. The two package-owned utility paths are different: fixed `$PREFIX/bin/date` and `$PREFIX/bin/stat` may be Termux package symlinks (for example to the fixed `$PREFIX/bin/coreutils` multicall binary), so they are admitted only at those literal fixed paths when they resolve to executable files. No caller selects either utility path.
+
 Child stdout/stderr is discarded. The public/local receipt contains only:
 
 ```text

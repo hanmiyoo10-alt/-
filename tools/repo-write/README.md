@@ -93,7 +93,21 @@ never interpolated into shell source.
 ## Direct CLI transport
 
 An authenticated local/Work environment can skip the issue-comment adapter and
-call the same engine directly:
+call the same engine directly.
+
+The direct engine request file is **not** the queue/comment envelope. `patch_branch.py`
+consumes the required snake_case engine keys:
+
+```json
+{"branch":"agent-patch/example","expected_head":"<40-hex>","message":"docs: bounded edit","patch_sha256":"<64-hex>","expected_paths":["docs/example.md"]}
+```
+
+The queue/comment envelope above intentionally remains camelCase
+(`expectedHead`, `patchSha256`, `expectedPaths`, plus its bridge-only
+`schemaVersion` and `workIssue`). `request_bridge.py` validates that external
+envelope and normalizes it to the snake_case engine request before invoking the
+writer. The later `currentize_candidate.py` helper has its own separate camelCase
+request contract and is not the `patch_branch.py` direct-request schema.
 
 ```bash
 python tools/repo-write/patch_branch.py \

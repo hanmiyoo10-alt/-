@@ -337,3 +337,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2030)
 - Event ID: `3b9ca988f86dd31ddfb7155591094f5e6e72db6e9e34fbc5bf053864ddc2d73e`
 <!-- canonical-main-doc-promoted:3b9ca988f86dd31ddfb7155591094f5e6e72db6e9e34fbc5bf053864ddc2d73e -->
+
+### 2026-11-07 — Reusable Round-N master dashboard pattern — generalize #4143 collection structure
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/4301)
+- Event ID: `82df3e2d595a34caf8dff06108e98287d4bd5f12b131eb793219f99c67aa66bd`
+<!-- canonical-main-doc-promoted:82df3e2d595a34caf8dff06108e98287d4bd5f12b131eb793219f99c67aa66bd -->

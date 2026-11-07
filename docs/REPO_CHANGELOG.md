@@ -2800,3 +2800,11 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/44fa14a2b5f8386e24c498e40cdb3a63fc0956aa)
 - Event ID: `250093ab5a4c194bef0216921ac4f34f9159ce072c2e453c31f25b3122159ac3`
 <!-- canonical-main-doc-promoted:250093ab5a4c194bef0216921ac4f34f9159ce072c2e453c31f25b3122159ac3 -->
+
+### 2026-11-07 — docs(repo): consolidate repository-common navigation (#4323)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `8bcee2f0457bcbeaa1bea5bd357f0b9ee579d517`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8bcee2f0457bcbeaa1bea5bd357f0b9ee579d517)
+- Event ID: `54f3ea4d47b875948dfd5a34a10f1ad4ed987b281b65d3fa73f4b231d2b4a499`
+<!-- canonical-main-doc-promoted:54f3ea4d47b875948dfd5a34a10f1ad4ed987b281b65d3fa73f4b231d2b4a499 -->

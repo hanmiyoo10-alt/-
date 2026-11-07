@@ -1,6 +1,6 @@
 # Repository Architecture Snapshot
 
-> Generated durable snapshot of canonical-main control-plane configuration. Live operational health remains on #305.
+> Generated durable snapshot of canonical-main control-plane configuration. Live operational health comes from direct current `main` + #485.
 
 ## Canonical integration
 

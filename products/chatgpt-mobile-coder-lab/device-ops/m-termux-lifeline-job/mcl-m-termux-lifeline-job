@@ -42,6 +42,10 @@ valid_exec() {
     [ -f "$1" ] && [ ! -L "$1" ] && [ -x "$1" ]
 }
 
+valid_system_tool() {
+    [ -f "$1" ] && [ -x "$1" ]
+}
+
 classify_rdc_target() {
     RDC_TARGET=unknown
     output="$("$RDC_GUARD" --check 2>/dev/null)"
@@ -319,8 +323,8 @@ valid_exec "$HEARTBEAT" || finish 4
 valid_exec "$RECOVERY" || finish 4
 valid_exec "$RDC_GUARD" || finish 4
 valid_exec "$TAILSCALE_GUARD" || finish 4
-valid_exec "$DATE" || finish 4
-valid_exec "$STAT" || finish 4
+valid_system_tool "$DATE" || finish 4
+valid_system_tool "$STAT" || finish 4
 
 "$HEARTBEAT" --status >/dev/null 2>&1
 pre_rc=$?

@@ -429,6 +429,23 @@ def cli_rejects_endpoint_selector_and_receipt_withholds_identifiers():
 
 
 @case
+def powershell_mdns_fallback_is_bounded_and_conditional():
+    text = (ROOT / "windows-mdns-adb.ps1").read_text()
+    low = text.lower()
+    assert "function receive-mdns" in low
+    assert "receive-mdns $q.toarray() 0 $false" in low
+    assert "if ($packets.count -eq 0)" in low
+    assert "receive-mdns $q.toarray() 5353 $true" in low
+    assert 'parse("224.0.0.251")' in low
+    assert "joinmulticastgroup($group)" in low
+    assert "dropmulticastgroup($group)" in low
+    assert "$packets.count -lt $maxpackets" in low
+    assert "$data.length -lt 12 -or $data.length -gt $maxpacket" in low
+    assert "($data[2] -band 0x80) -eq 0" in low
+    assert low.count("_adb-tls-connect._tcp.local.") == 1
+
+
+@case
 def powershell_surface_excludes_broad_adb_controls():
     text = (ROOT / "windows-mdns-adb.ps1").read_text().lower()
     for forbidden in ("adb pair", "kill-server", "start-server", " tcpip ", "pm install", "pm uninstall"):
@@ -437,7 +454,7 @@ def powershell_surface_excludes_broad_adb_controls():
 
 
 def main() -> int:
-    assert len(TESTS) == 32, len(TESTS)
+    assert len(TESTS) == 33, len(TESTS)
     for fn in TESTS:
         fn()
         print("PASS", fn.__name__)

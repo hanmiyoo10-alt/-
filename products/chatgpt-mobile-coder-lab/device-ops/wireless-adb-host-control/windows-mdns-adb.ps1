@@ -32,19 +32,16 @@ function Encode-Name([string]$name) {
   $bytes.Add(0)
   return $bytes.ToArray()
 }
-function Capture-Mdns {
-  $service = "_adb-tls-connect._tcp.local."
+function Receive-Mdns([byte[]]$query,[int]$sourcePort,[bool]$joinGroup) {
+  $group = [System.Net.IPAddress]::Parse("224.0.0.251")
   $client = New-Object System.Net.Sockets.UdpClient
   try {
     $client.Client.SetSocketOption([System.Net.Sockets.SocketOptionLevel]::Socket,[System.Net.Sockets.SocketOptionName]::ReuseAddress,$true)
-    $client.Client.Bind((New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any,0)))
+    $client.Client.Bind((New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any,$sourcePort)))
+    if ($joinGroup) { $client.JoinMulticastGroup($group) }
     $client.Client.ReceiveTimeout = 300
-    $q = New-Object System.Collections.Generic.List[byte]
-    foreach ($b in [byte[]](0,0,0,0,0,1,0,0,0,0,0,0)) { $q.Add($b) }
-    foreach ($b in (Encode-Name $service)) { $q.Add($b) }
-    foreach ($b in [byte[]](0,12,0,1)) { $q.Add($b) }
-    $dst = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Parse("224.0.0.251"),5353)
-    [void]$client.Send($q.ToArray(),$q.Count,$dst)
+    $dst = New-Object System.Net.IPEndPoint($group,5353)
+    [void]$client.Send($query,$query.Length,$dst)
     $deadline = [DateTime]::UtcNow.AddSeconds(3)
     $packets = New-Object System.Collections.Generic.List[string]
     while ([DateTime]::UtcNow -lt $deadline -and $packets.Count -lt $MaxPackets) {
@@ -58,10 +55,26 @@ function Capture-Mdns {
         if ($_.Exception.SocketErrorCode -ne [System.Net.Sockets.SocketError]::TimedOut) { throw }
       }
     }
-    Emit @{ok=$true; packets=@($packets)}
+    return @($packets)
   } finally {
+    if ($joinGroup) {
+      try { $client.DropMulticastGroup($group) } catch {}
+    }
     $client.Dispose()
   }
+}
+function Capture-Mdns {
+  $service = "_adb-tls-connect._tcp.local."
+  $q = New-Object System.Collections.Generic.List[byte]
+  foreach ($b in [byte[]](0,0,0,0,0,1,0,0,0,0,0,0)) { $q.Add($b) }
+  foreach ($b in (Encode-Name $service)) { $q.Add($b) }
+  foreach ($b in [byte[]](0,12,0,1)) { $q.Add($b) }
+
+  $packets = @(Receive-Mdns $q.ToArray() 0 $false)
+  if ($packets.Count -eq 0) {
+    $packets = @(Receive-Mdns $q.ToArray() 5353 $true)
+  }
+  Emit @{ok=$true; packets=@($packets)}
 }
 function Read-KnownHosts {
   $userHome = $env:USERPROFILE

@@ -375,6 +375,17 @@ Do not steal focus, move the user's foreground cursor, type into foreground appl
 
 Virtualization or isolation changes only the execution/workspace surface; it does not grant new repository, credential, device, network, CI, release, production, safety, or approval authority. Compose this preference with RCR-D17 and the narrowest authorized execution path. If no authorized isolated surface can satisfy a required step, preserve the blocker or request the required foreground/manual boundary rather than silently taking over the user's screen.
 
+
+### RCR-D21 — Compress substantial multi-owner coordination without collapsing authority
+
+**Class:** `DEFAULT`
+
+For substantial backlog, campaign, migration, or other multi-owner coordination, prefer one bounded rolling coordination dashboard when it materially reduces repeated scanning and scheduling complexity. The dashboard should keep a clearly defined population or scope, distinguish genuinely reducible work from intentionally persistent controls or non-actionable waits, expose the smallest useful set of active execution fronts and current next order, and move completed historical detail to owning issues, immutable evidence, or archive surfaces so the live body remains current and bounded.
+
+Compression is a scheduling and context-management technique only. It may group separate owners into one execution window, conveyor, or campaign when their dependencies and effect boundaries permit it, but it must not collapse distinct lifecycle, acceptance, effect, release, runtime, security, or project authority. Derived counts and completion percentages must state or preserve their population semantics; superseded, closed-not-planned, design-realized, natural-event-waiting, and LIVE_PROVEN states must not be silently conflated.
+
+Small or straightforward collections should not pay this coordination overhead. Projects and domain workflows may specialize the dashboard shape, terminology, and staging while preserving repository hard invariants and their owning authorities.
+
 ## 6. Conditional common rules
 
 ### RCR-C01 — Generated artifacts remain derived

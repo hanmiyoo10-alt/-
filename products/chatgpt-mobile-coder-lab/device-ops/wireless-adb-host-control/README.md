@@ -46,18 +46,20 @@ The controller correlates:
 
 It then writes only a domain-separated SHA-256 digest of the normalized service instance to the WSL private pin.
 
-Pins are regular non-symlink mode 0600. They contain no raw endpoint, serial, host, IP or port.
+Pins are regular non-symlink mode 0600. New writes use schema v2 and store only a domain-separated digest of the stable target-identity component from the fixed ADB DNS-SD service instance, so service generations may rotate without changing target identity. Legacy schema-v1 full-instance digest pins remain readable during migration. Pins contain no raw endpoint, serial, host, IP or port.
 
 ## Public operations
 
 ```sh
 python3 mcl_wireless_adb_host_control.py inspect M
 python3 mcl_wireless_adb_host_control.py bootstrap M
+python3 mcl_wireless_adb_host_control.py bootstrap-connected M
 python3 mcl_wireless_adb_host_control.py rebind M
 python3 mcl_wireless_adb_host_control.py reconnect M
 
 python3 mcl_wireless_adb_host_control.py inspect S
 python3 mcl_wireless_adb_host_control.py bootstrap S
+python3 mcl_wireless_adb_host_control.py bootstrap-connected S
 python3 mcl_wireless_adb_host_control.py rebind S
 python3 mcl_wireless_adb_host_control.py reconnect S
 ```
@@ -87,9 +89,13 @@ Requires:
 
 It never pairs or connects.
 
+### bootstrap-connected
+
+Recovery/migration bootstrap for an already-connected exact-model DNS-SD transport. It requires exactly one connected service-instance transport for the fixed model whose service token is already present in the local ADB known-host set. It performs no mDNS discovery and no connect effect; it writes only the normal schema-v2 stable target-identity digest pin.
+
 ### rebind
 
-Recovery-only bootstrap for a stale connected DNS-SD service generation. It requires exactly one connected exact-model transport and exactly one fresh raw-mDNS candidate. Both the connected service token and fresh candidate token must already exist in the Windows ADB known-host set, and the two tokens must be distinct.
+Recovery-only bootstrap for a stale connected DNS-SD service generation. It requires exactly one connected exact-model transport and exactly one fresh raw-mDNS candidate. Both the connected service token and fresh candidate token must already exist in the Windows ADB known-host set, the two tokens must be distinct, and their parsed stable target-identity components must match before any connect effect.
 
 Only after those fail-closed checks may it issue exactly one internally selected Windows `adb connect` to the fresh candidate, require the fixed target model, and write the normal private pin for that fresh instance. It accepts no caller endpoint and never pairs, disconnects, restarts the ADB server, toggles Wireless Debugging, or changes the target.
 

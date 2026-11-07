@@ -19,6 +19,8 @@ import mcl_wireless_adb_host_control as host
 
 INSTANCE = "peer-guid._adb-tls-connect._tcp.local"
 TOKEN = "peer-guid"
+OLD_INSTANCE = "old-guid._adb-tls-connect._tcp.local"
+OLD_TOKEN = "old-guid"
 HOST = "peer-host.local"
 ENDPOINT = "192.0.2.10:37123"
 
@@ -212,6 +214,78 @@ def bootstrap_requires_connected_target():
 
 
 @case
+def rebind_stale_trusted_service_instance_to_fresh_candidate():
+    old_serial = OLD_INSTANCE.removesuffix(".local")
+    calls = []
+    pinned = []
+    model = host.PROFILES["M"]["model"]
+    def transport(mode: str, profile: str, endpoint: str | None = None):
+        assert profile == "M"
+        calls.append((mode, profile, endpoint))
+        if mode == "mdns":
+            return {"ok": True, "packets": [base64.b64encode(discovery_packet()).decode()]}
+        if mode == "known-hosts":
+            raw = proto_string(TOKEN) + proto_string(OLD_TOKEN)
+            return {"ok": True, "data": base64.b64encode(raw).decode()}
+        if mode == "connected":
+            return {"ok": True, "rows": [{"serial": old_serial, "model": model}]}
+        if mode == "connect":
+            assert endpoint == ENDPOINT
+            return {"ok": True, "model": model}
+        raise AssertionError(mode)
+    result = host.rebind("M", transport=transport, pin_writer=lambda p, i: pinned.append((p, i)))
+    assert result["status"] == "PINNED"
+    assert result["operation"] == "rebind"
+    assert pinned == [("M", INSTANCE)]
+    assert [x[0] for x in calls] == ["mdns", "known-hosts", "connected", "connect"]
+
+
+@case
+def rebind_requires_distinct_service_generations():
+    serial = INSTANCE.removesuffix(".local")
+    model = host.PROFILES["M"]["model"]
+    def transport(mode: str, profile: str, endpoint: str | None = None):
+        if mode == "mdns": return {"ok": True, "packets": [base64.b64encode(discovery_packet()).decode()]}
+        if mode == "known-hosts": return {"ok": True, "data": base64.b64encode(proto_string(TOKEN)).decode()}
+        if mode == "connected": return {"ok": True, "rows": [{"serial": serial, "model": model}]}
+        raise AssertionError(mode)
+    expect_reason(lambda: host.rebind("M", transport=transport, pin_writer=lambda _p, _i: None), "REBIND_NOT_REQUIRED")
+
+
+@case
+def rebind_rejects_non_service_connected_transport():
+    transport, _calls = transport_fixture("M")
+    expect_reason(lambda: host.rebind("M", transport=transport, pin_writer=lambda _p, _i: None), "CONNECTED_SERVICE_INSTANCE_INVALID")
+
+
+@case
+def rebind_requires_both_service_tokens_trusted():
+    old_serial = OLD_INSTANCE.removesuffix(".local")
+    model = host.PROFILES["M"]["model"]
+    def transport(mode: str, profile: str, endpoint: str | None = None):
+        if mode == "mdns": return {"ok": True, "packets": [base64.b64encode(discovery_packet()).decode()]}
+        if mode == "known-hosts": return {"ok": True, "data": base64.b64encode(proto_string(TOKEN)).decode()}
+        if mode == "connected": return {"ok": True, "rows": [{"serial": old_serial, "model": model}]}
+        raise AssertionError(mode)
+    expect_reason(lambda: host.rebind("M", transport=transport, pin_writer=lambda _p, _i: None), "REBIND_TRUST_NOT_EXACT")
+
+
+@case
+def rebind_model_mismatch_writes_no_pin():
+    old_serial = OLD_INSTANCE.removesuffix(".local")
+    model = host.PROFILES["M"]["model"]
+    pinned = []
+    def transport(mode: str, profile: str, endpoint: str | None = None):
+        if mode == "mdns": return {"ok": True, "packets": [base64.b64encode(discovery_packet()).decode()]}
+        if mode == "known-hosts": return {"ok": True, "data": base64.b64encode(proto_string(TOKEN) + proto_string(OLD_TOKEN)).decode()}
+        if mode == "connected": return {"ok": True, "rows": [{"serial": old_serial, "model": model}]}
+        if mode == "connect": return {"ok": True, "model": "WRONG"}
+        raise AssertionError(mode)
+    expect_reason(lambda: host.rebind("M", transport=transport, pin_writer=lambda p, i: pinned.append((p, i))), "TARGET_MODEL_MISMATCH")
+    assert pinned == []
+
+
+@case
 def inspect_requires_exact_pin_known_host_candidate():
     transport, _calls = transport_fixture("M")
     result = host.inspect("M", transport=transport, pin_reader=lambda p: host._pin_payload(p, INSTANCE))
@@ -261,7 +335,7 @@ def powershell_surface_excludes_broad_adb_controls():
 
 
 def main() -> int:
-    assert len(TESTS) == 20, len(TESTS)
+    assert len(TESTS) == 25, len(TESTS)
     for fn in TESTS:
         fn()
         print("PASS", fn.__name__)

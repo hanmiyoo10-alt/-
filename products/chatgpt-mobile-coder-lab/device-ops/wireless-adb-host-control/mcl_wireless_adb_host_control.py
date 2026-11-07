@@ -439,6 +439,15 @@ def _transport_matches(candidate: dict[str, str], serial: str) -> bool:
     return s == instance or s + ".local" == instance
 
 
+def _connected_service_token(serial: str) -> str:
+    for value in (serial, serial + ".local"):
+        try:
+            return norm_name(_service_token(value))
+        except HostControlError:
+            pass
+    raise HostControlError("CONNECTED_SERVICE_INSTANCE_INVALID")
+
+
 def _eligible(profile_name: str, pin: dict, hosts: set[str], candidates: list[dict[str, str]]) -> dict[str, str]:
     matched = []
     for row in candidates:
@@ -466,6 +475,27 @@ def bootstrap(profile_name: str, transport=_ps_call, pin_writer=_write_pin) -> d
         raise HostControlError("BOOTSTRAP_CORRELATION_NOT_EXACT")
     pin_writer(profile_name, eligible[0]["instance"])
     return receipt("bootstrap", profile_name, "PINNED")
+
+
+def rebind(profile_name: str, transport=_ps_call, pin_writer=_write_pin) -> dict:
+    cfg = profile(profile_name)
+    candidates = discover(profile_name, transport)
+    hosts = known_hosts(profile_name, transport)
+    rows = [row for row in connected(profile_name, transport) if row["model"] == cfg["model"]]
+    if len(rows) != 1 or len(candidates) != 1:
+        raise HostControlError("REBIND_CORRELATION_NOT_EXACT")
+    candidate = candidates[0]
+    fresh_token = norm_name(_service_token(candidate["instance"]))
+    connected_token = _connected_service_token(rows[0]["serial"])
+    if fresh_token not in hosts or connected_token not in hosts:
+        raise HostControlError("REBIND_TRUST_NOT_EXACT")
+    if connected_token == fresh_token:
+        raise HostControlError("REBIND_NOT_REQUIRED")
+    result = transport("connect", profile_name, candidate["endpoint"])
+    if result.get("model") != cfg["model"]:
+        raise HostControlError("TARGET_MODEL_MISMATCH")
+    pin_writer(profile_name, candidate["instance"])
+    return receipt("rebind", profile_name, "PINNED")
 
 
 def inspect(profile_name: str, transport=_ps_call, pin_reader=_read_pin) -> dict:
@@ -503,13 +533,13 @@ def receipt(operation: str, profile_name: str, status: str, reasons: list[str] |
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 3 or argv[1] not in {"inspect", "bootstrap", "reconnect"} or argv[2] not in PROFILES:
+    if len(argv) != 3 or argv[1] not in {"inspect", "bootstrap", "rebind", "reconnect"} or argv[2] not in PROFILES:
         p = argv[2] if len(argv) >= 3 and argv[2] in PROFILES else "M"
         print(json.dumps(receipt("invalid", p, "BLOCKED", ["OPERATION_INVALID"]), separators=(",", ":"), sort_keys=True))
         return 2
     operation, profile_name = argv[1], argv[2]
     try:
-        result = {"inspect": inspect, "bootstrap": bootstrap, "reconnect": reconnect}[operation](profile_name)
+        result = {"inspect": inspect, "bootstrap": bootstrap, "rebind": rebind, "reconnect": reconnect}[operation](profile_name)
         print(json.dumps(result, separators=(",", ":"), sort_keys=True))
         return 0
     except HostControlError as exc:

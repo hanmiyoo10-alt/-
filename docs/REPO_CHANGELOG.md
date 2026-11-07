@@ -2808,3 +2808,19 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8bcee2f0457bcbeaa1bea5bd357f0b9ee579d517)
 - Event ID: `54f3ea4d47b875948dfd5a34a10f1ad4ed987b281b65d3fa73f4b231d2b4a499`
 <!-- canonical-main-doc-promoted:54f3ea4d47b875948dfd5a34a10f1ad4ed987b281b65d3fa73f4b231d2b4a499 -->
+
+### 2026-11-07 — fix(control-plane): accept level-2 issue scope headings (#4326)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `628dca54c11fc47cd41bb3ec5090da038b2dd8e5`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/628dca54c11fc47cd41bb3ec5090da038b2dd8e5)
+- Event ID: `c1d0549cb5a5573366f0df63f0c4ca43b3b7a5dfc830483a11e3598357cea40e`
+<!-- canonical-main-doc-promoted:c1d0549cb5a5573366f0df63f0c4ca43b3b7a5dfc830483a11e3598357cea40e -->
+
+### 2026-11-07 — fix(control-plane): declare research-product issue scope (#4332)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `03234ca1fd3e1afa35ab707cae0c78a95ae6d5a0`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/03234ca1fd3e1afa35ab707cae0c78a95ae6d5a0)
+- Event ID: `9a0d9a3998eed3c1f4d2cae83220497661ed35786e28e21808aeac3a9af99d97`
+<!-- canonical-main-doc-promoted:9a0d9a3998eed3c1f4d2cae83220497661ed35786e28e21808aeac3a9af99d97 -->

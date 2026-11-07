@@ -240,6 +240,13 @@
 - Event ID: `1ce64ddb1d83a202f0e836574e3eccabe35aa49cf2191bfbaae50ab560bf762b`
 <!-- canonical-main-doc-promoted:1ce64ddb1d83a202f0e836574e3eccabe35aa49cf2191bfbaae50ab560bf762b -->
 
+### 2026-11-01 — GitHub Actions cooldown policy — keep reviewed lock/pin controls; do not introduce Dependabot solely for cooldown
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3915)
+- Event ID: `1a078db2cac001d0a020ad2977fa4401fbfd8df9af70870e7d21885038f94ad6`
+<!-- canonical-main-doc-promoted:1a078db2cac001d0a020ad2977fa4401fbfd8df9af70870e7d21885038f94ad6 -->
+
 ### 2026-11-01 — AGENT-GITHUB-CONTEXT-AB-V1 — broad vs bounded vs patch-only context diagnostic
 - Class: `DECISION`
 - Transition: `CLOSED_COMPLETED`
@@ -344,3 +351,31 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/4301)
 - Event ID: `82df3e2d595a34caf8dff06108e98287d4bd5f12b131eb793219f99c67aa66bd`
 <!-- canonical-main-doc-promoted:82df3e2d595a34caf8dff06108e98287d4bd5f12b131eb793219f99c67aa66bd -->
+
+### 2026-11-07 — CANONICAL-MAIN-V1.1 — automation, simplification, stabilization
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/586)
+- Event ID: `29525ff9c89d8aa2166cc47a9afd5e8c91d51199a2b60b23aca02dd0864d567f`
+<!-- canonical-main-doc-promoted:29525ff9c89d8aa2166cc47a9afd5e8c91d51199a2b60b23aca02dd0864d567f -->
+
+### 2026-11-07 — REPO-VALIDATION-CONVERGENCE-01 — bounded validation-attention invocation
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3460)
+- Event ID: `28fc5cb45100e7852a5dfe1ee49da9b971d26c56740805ad767c6f0e40c48ec5`
+<!-- canonical-main-doc-promoted:28fc5cb45100e7852a5dfe1ee49da9b971d26c56740805ad767c6f0e40c48ec5 -->
+
+### 2026-11-07 — REPO-PR-CURRENTIZATION-EFFECT-01 — bounded non-force candidate refresh
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3474)
+- Event ID: `29b247e7794cffe6e328ef67ed070b0a4873391c999cc19948e16594ed14cc09`
+<!-- canonical-main-doc-promoted:29b247e7794cffe6e328ef67ed070b0a4873391c999cc19948e16594ed14cc09 -->
+
+### 2026-11-07 — REPO-GITHUB-DISCUSSIONS-CONNECTOR-01 — bounded Discussion MCP surface
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3483)
+- Event ID: `270b18daa24f22fbf4ec13de3244735c712460b4d73befbadfe2d3a65b4f70d7`
+<!-- canonical-main-doc-promoted:270b18daa24f22fbf4ec13de3244735c712460b4d73befbadfe2d3a65b4f70d7 -->

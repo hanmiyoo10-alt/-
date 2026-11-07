@@ -96,42 +96,38 @@
 다음 한 단계:
 - 기존 guard/anchor 기능은 추가 배포 없이 자연 운용을 관찰한다. exact PID1 four-forward orphan과 replacement runsv `down / want up` 상태의 reconciliation은 #3715, Android/whole-Termux initiating process-loss 원인은 #3231에서 분리 추적한다.
 
-## 레거시 upstream rebuild 준비 — DONE
+## 레거시 upstream rebuild 결과 — SETTLED
 
-과거 Git history에서 기능이 섞여 정식 PR 분리가 어려웠던 5개 기능을 **옛 커밋 수술이 아니라 최신 upstream 재구성 방식**으로 정리 완료.
+과거 Git history에서 기능이 섞여 정식 PR 분리가 어려웠던 5개 기능은 **옛 커밋 수술이 아니라 최신 upstream 재구성 방식**으로 정리했고, 현재 upstream 결과는 각 Feature-ID dossier가 소유한다.
 
-`PR_READY_REBUILD + REBUILD_PLAN_ISOLATED`:
-- `restore-last-active-chat`
-- `response-notification`
-- `plugin-targeted-reload`
-- `session-write-lock`
-- `db-save-optimization`
+현재 disposition:
+- `restore-last-active-chat` — `MERGED_UPSTREAM` (official #60).
+- `response-notification` — `MERGED_UPSTREAM` (official #61).
+- `plugin-targeted-reload` — `REIMPLEMENTED_UPSTREAM`; 외부 PR #62는 닫혔고 upstream 재구현으로 수용됨.
+- `session-write-lock` — `ALREADY_UPSTREAM`; 중복 PR 금지.
+- `db-save-optimization` — staged series settled; Stage B/C는 merged, Stage A는 partial adoption, Stage D/E는 현재 architecture에서 superseded.
 
-각 기능 `UPSTREAM.md`에 최소 upstream scope, 의존성, 제외 범위, 검증 근거, rebuild 테스트/순서를 기록했고, 각자 독립 PR로 문서화했다.
+각 기능 `UPSTREAM.md`/`OFFICIAL-PR.md`/`PR-HISTORY.md`가 상세 근거를 소유한다. 과거 rebuild recipe는 historical provenance로 남기되, settled Feature-ID를 다시 rebuild/open하는 현재 작업으로 해석하지 않는다.
 
-첫 dossier CI에서 canonical marker 누락으로 실패한 사실도 각 기능 `FAILURES.md`에 `FAILURE -> FIXED`로 남겼고 후속 `PocketRisu helper docs` 검증은 모두 성공했다.
-
-의미:
-- 앞으로 정식 upstream PR을 만들 때 섞인 옛 branch를 억지로 분해하지 않는다.
-- 최신 official upstream에서 해당 Feature-ID만 새 branch로 재구성한다.
-- DB/save optimization은 한 번에 제출하지 않고 dossier의 staged PR series를 따른다.
-- plugin persistence ordering이 별도 코드 변경을 요구하면 `plugin-update-persistence-order`라는 별도 Feature-ID로 분리한다.
+남는 방법론:
+- 새 upstream 기여가 필요하면 옛 mixed branch를 수술하지 말고 최신 official upstream에서 **현재 architecture에 맞는 Feature-ID 하나**로 재구성한다.
+- 이미 merged/reimplemented/already-upstream/superseded인 기능을 같은 목적의 새 PR로 되살리지 않는다.
+- plugin persistence ordering처럼 새 semantic target이 생기면 기존 feature에 끼워 넣지 말고 별도 Feature-ID로 분리한다.
 
 다음 한 단계:
-- 실제 정식 upstream PR을 원할 때 원하는 Feature-ID 하나를 고르고 그 기능 `UPSTREAM.md` recipe로 최신 upstream에서 rebuild를 시작한다.
+- 이 다섯 settled Feature-ID에는 generic rebuild next action이 없다. 새 upstream 작업은 현재 미해결 owner 또는 새 Feature-ID에서 fresh upstream을 다시 읽고 시작한다.
 
-## 정식 upstream 기여 — DB/save staged series 진행 중
+## 정식 upstream 기여 — DB/save staged series SETTLED
 
-- Stage A: official `PocketRisu/PocketRisu#67` OPEN. 현재 mergeable이며 review/check 결과 대기.
-- Stage B: local draft `hanmiyoo10-alt/PocketRisu#5` — clean 1-commit hash-cache stage.
-- Stage C: local draft `#6` — clean 1-commit selective-clone stage.
-- Stage D: local draft `#7` — clean 1-commit pluginCustomStorage direct-child stage.
-- Stage E: local draft `#8` — clean 1-commit depth-3 stage.
-- B~E는 의도적으로 draft이며 앞 단계가 공식에서 결정되기 전에는 promotion/merge하지 않는다.
-- 매 공식 결과 후 최신 `develop`을 다시 읽고, 이미 구현된 단계나 구조 충돌 단계는 건너뛴다.
+- Stage A / official #67 — `PARTIAL ADOPTION / CLOSED`; empty-patch early return만 채택, opaque ETag 절반은 재제출하지 않음.
+- Stage B / official #68 — `MERGED`.
+- Stage C / official #69 — `MERGED`.
+- Stage D / official #73 — `CLOSED / ARCHITECTURE SUPERSEDED`; plugin storage가 per-key KV로 이동해 대상 hot path가 사라짐.
+- Stage E / local #8 — `SUPERSEDED FALLBACK`; 현재 architecture의 merge 후보가 아님.
+- local #4~#8은 upstream 결과의 historical validation/fallback evidence이며 현재 merge queue가 아니다.
 
 다음 한 단계:
-- official PR #67의 maintainer review/check 결과를 기다린다. 결과가 나오면 최신 `develop`에서 Stage B 중복/충돌을 다시 검사한 뒤에만 다음 정식 PR을 준비한다.
+- 현재 per-key plugin-storage architecture에 새 최적화가 필요하면 old Stage D/E를 재개하지 말고 fresh measurement + 새 Feature-ID로 별도 제안한다.
 
 ## 현재 P0 — 전화/이어폰 알림 무한소리
 

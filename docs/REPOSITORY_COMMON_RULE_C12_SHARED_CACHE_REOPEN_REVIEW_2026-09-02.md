@@ -2,6 +2,8 @@
 
 Status: **HOLD CONFIRMED · NO RCR-C12 PROMOTION · OWNERSHIP FAMILY REFINED · POLICY/DOCS ONLY · NO PRODUCT/RUNTIME/RELEASE AUTHORITY**
 
+> Historical identifier note: any `RCR-C12` candidate wording in this review is proposed/rejected historical terminology from 2026-09-02, not the current canonical rule identifier. Current canonical `RCR-C12` is owned by `docs/REPOSITORY_COMMON_RULES.md` and covers security-sensitive repository tests.
+
 ## 0. Question
 
 Re-open the prior C12 backing-ownership promotion review using the LATER candidate:

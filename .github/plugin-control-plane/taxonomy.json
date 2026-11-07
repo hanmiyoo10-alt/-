@@ -184,9 +184,24 @@
         "tools/github-discussions-mcp/**",
         "tools/mcl-task-lease-dispatch-mcp/**",
         "tools/repo-write/**",
-        "tools/repo-env/**"
+        "tools/repo-env/**",
+        "tools/repo-admin-mcp/**",
+        "tools/repo-cockpit-aggregator/**"
       ],
       "targetRoot": "platform/repo-ops",
+      "migration": "regroup"
+    },
+    {
+      "id": "distribution",
+      "displayName": "Distribution and Delivery",
+      "family": "platform",
+      "risu": "no",
+      "sourceRefs": [],
+      "sourceRoots": [
+        "tools/public-distribution/**",
+        "tools/cloudflare-delivery/**"
+      ],
+      "targetRoot": "platform/distribution",
       "migration": "regroup"
     },
     {

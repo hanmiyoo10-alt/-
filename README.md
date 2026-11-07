@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | Local Usage Dashboard | `plugins/usage-dashboard/` | `release-usage-dashboard` + `.github/usage-dashboard/releases/` | `plugin:usage-dashboard` |
 | SimCore | `plugins/simcore/` | `product-manifest.json` + `release-simcore` | `plugin:simcore` |
-| DevPass | `plugins/risu/local/devpass/` | fixed `plugins/devpass/latest.js` update channel; artifact is currently missing and production version remains `UNKNOWN` | `plugin:devpass` |
+| DevPass | `plugins/risu/local/devpass/` | declared by `plugins/risu/local/devpass/README.md`; fixed artifact locator `plugins/devpass/latest.js` | `plugin:devpass` |
 | Termux Large Doc Editor | `products/standalone/termux/large-doc-editor/` | prototype evidence only; no production authority | `product:termux` |
 
 `plugins/_template/`은 template scope, `plugins/test-a/`와 `plugins/test-b/`는 test-fixture scope로 분류하며 운영 플러그인으로 취급하지 않습니다.

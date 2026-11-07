@@ -549,6 +549,22 @@ const SELF_OWNER_SCOPES = Object.freeze([
   ...SELF_OWNER_PATHS.map((repoPath) => 'path:' + repoPath),
   'surface:mcl:validation-finalization-effect',
 ].sort());
+const SELF_OWNER_DOCS_PATHS = Object.freeze([
+  'products/chatgpt-mobile-coder-lab/coordination/validation-finalization/README.md',
+  'products/chatgpt-mobile-coder-lab/coordination/validation-finalization/profiles.md',
+].sort());
+const SELF_OWNER_DOCS_SCOPES = Object.freeze([
+  ...SELF_OWNER_DOCS_PATHS.map((repoPath) => 'path:' + repoPath),
+  'surface:mcl:validation-finalization-effect',
+].sort());
+const SELF_OWNER_SCOPE_PROFILES = Object.freeze({
+  FULL_OWNER: Object.freeze({
+    id: 'FULL_OWNER', paths: SELF_OWNER_PATHS, scopes: SELF_OWNER_SCOPES,
+  }),
+  DOCS_MODULE: Object.freeze({
+    id: 'DOCS_MODULE', paths: SELF_OWNER_DOCS_PATHS, scopes: SELF_OWNER_DOCS_SCOPES,
+  }),
+});
 const SELF_OWNER_REQUIRED_GATES = Object.freeze([
   'currentization-scope-and-blob-preservation',
   'd013-release',
@@ -574,6 +590,35 @@ const SELF_OWNER_L_REQUIRED_GATES = Object.freeze([
   'exact-head-required',
   'exact-head-verify',
   'exact-three-path-diff',
+  'l-owner-fixed-validation',
+  'pr-observe',
+  'workspace-clean-holder-released',
+]);
+const SELF_OWNER_DOCS_REQUIRED_GATES = Object.freeze([
+  'currentization-scope-and-blob-preservation',
+  'd013-release',
+  'd014-completion',
+  'exact-head-required',
+  'exact-head-verify',
+  'exact-two-file-diff',
+]);
+const SELF_OWNER_DOCS_CURRENTIZED_REQUIRED_GATES = Object.freeze([
+  'currentization-scope-and-blob-preservation',
+  'packet-scoped-currentization-replay',
+  'currentization-d013-release',
+  'currentization-d014-completion',
+  'currentization-holder-release',
+  'currentized-exact-head-required',
+  'currentized-exact-head-verify',
+  'currentized-pr-readback',
+  'exact-two-file-diff',
+]);
+const SELF_OWNER_DOCS_L_REQUIRED_GATES = Object.freeze([
+  'd013-release',
+  'd014-completion',
+  'exact-head-required',
+  'exact-head-verify',
+  'exact-two-path-diff',
   'l-owner-fixed-validation',
   'pr-observe',
   'workspace-clean-holder-released',
@@ -925,29 +970,58 @@ function requiredGateNamesPass(receipt, requiredNames) {
     .map((row) => row.name));
   return requiredNames.every((name) => pass.has(name));
 }
-function selfOwnerLineageForReceipt(receipt, packet) {
-  if (requiredGateNamesPass(receipt, SELF_OWNER_REQUIRED_GATES)) {
+function selfOwnerScopeProfileForPaths(paths) {
+  if (!Array.isArray(paths)) return null;
+  const normalized = [...paths].sort();
+  const matches = Object.values(SELF_OWNER_SCOPE_PROFILES)
+    .filter((profile) => same(normalized, profile.paths));
+  return matches.length === 1 ? matches[0] : null;
+}
+function selfOwnerScopeProfileForScopes(scopes) {
+  if (!Array.isArray(scopes)) return null;
+  const normalized = [...scopes].sort();
+  const matches = Object.values(SELF_OWNER_SCOPE_PROFILES)
+    .filter((profile) => same(normalized, profile.scopes));
+  return matches.length === 1 ? matches[0] : null;
+}
+function selfOwnerGateSets(scopeProfile) {
+  if (scopeProfile?.id === 'DOCS_MODULE') {
+    return {
+      normal: SELF_OWNER_DOCS_REQUIRED_GATES,
+      currentized: SELF_OWNER_DOCS_CURRENTIZED_REQUIRED_GATES,
+      lRepository: SELF_OWNER_DOCS_L_REQUIRED_GATES,
+    };
+  }
+  return {
+    normal: SELF_OWNER_REQUIRED_GATES,
+    currentized: SELF_OWNER_CURRENTIZED_REQUIRED_GATES,
+    lRepository: SELF_OWNER_L_REQUIRED_GATES,
+  };
+}
+function selfOwnerLineageForReceipt(receipt, packet, scopeProfile = SELF_OWNER_SCOPE_PROFILES.FULL_OWNER) {
+  const gates = selfOwnerGateSets(scopeProfile);
+  if (requiredGateNamesPass(receipt, gates.normal)) {
     return {
       kind: 'IMPLEMENTATION_STAGE_ENTRY',
       completionGate: 'd014-completion',
       phaseId: String(packet) + '-implementation-pr-stage-entry',
-      requiredGates: SELF_OWNER_REQUIRED_GATES,
+      requiredGates: gates.normal,
     };
   }
-  if (requiredGateNamesPass(receipt, SELF_OWNER_CURRENTIZED_REQUIRED_GATES)) {
+  if (requiredGateNamesPass(receipt, gates.currentized)) {
     return {
       kind: 'VALIDATION_MERGE_CURRENTIZATION',
       completionGate: 'currentization-d014-completion',
       phaseId: String(packet) + '-validation-merge-currentization',
-      requiredGates: SELF_OWNER_CURRENTIZED_REQUIRED_GATES,
+      requiredGates: gates.currentized,
     };
   }
-  if (requiredGateNamesPass(receipt, SELF_OWNER_L_REQUIRED_GATES)) {
+  if (requiredGateNamesPass(receipt, gates.lRepository)) {
     return {
       kind: 'IMPLEMENTATION_L_REPOSITORY',
       completionGate: 'd014-completion',
       phaseId: String(packet) + '-implementation-pr',
-      requiredGates: SELF_OWNER_L_REQUIRED_GATES,
+      requiredGates: gates.lRepository,
     };
   }
   return null;
@@ -985,16 +1059,17 @@ function selfOwnerWorkspaceMatches(lineage, packet, workspace) {
 }
 function selfOwnerReceiptIdentity(row, packet) {
   const receipt = row?.receipt;
+  const scopeProfile = selfOwnerScopeProfileForPaths(receipt?.scope?.paths);
   if (!receipt
       || receipt.stage !== 'IMPLEMENTATION_PR'
       || receipt.packetNumber !== packet
       || receipt.status !== 'PASS'
       || receipt.nextLegalAction !== 'VALIDATION_MERGE'
-      || !same(receipt.scope?.paths, SELF_OWNER_PATHS)
+      || !scopeProfile
       || receipt.scope?.diffRequired !== true) {
     return null;
   }
-  const lineage = selfOwnerLineageForReceipt(receipt, packet);
+  const lineage = selfOwnerLineageForReceipt(receipt, packet, scopeProfile);
   if (!lineage) return null;
   const prRefs = (receipt.authorityRefs || []).filter((item) =>
     item.kind === 'PR'
@@ -1013,10 +1088,12 @@ function selfOwnerReceiptIdentity(row, packet) {
     pr: Number(prRefs[0].locator.slice('pr:#'.length)),
     candidate: prRefs[0].identity,
     diffIdentity: receipt.scope.diffIdentity,
+    scopeProfile,
     lineage,
     semanticIdentity: JSON.stringify({
       pr: prRefs[0].locator,
       candidate: prRefs[0].identity,
+      scopeProfile: scopeProfile.id,
       paths: receipt.scope.paths,
       diffIdentity: receipt.scope.diffIdentity,
     }),
@@ -1110,10 +1187,11 @@ function selectSelfOwnerCompletionReceipt(comments, packet, packetRef, impl) {
 }
 
 function selectSelfOwnerWorkspaceManifest(comments, packet, packetRef, impl, options = {}) {
+  const scopeProfile = impl?.scopeProfile || SELF_OWNER_SCOPE_PROFILES.FULL_OWNER;
   if (impl?.lineage?.kind === 'IMPLEMENTATION_L_REPOSITORY') {
     return resolveLFinalizationLineage(
       comments, packet, packetRef, impl,
-      {scopes: SELF_OWNER_SCOPES, paths: SELF_OWNER_PATHS}, options);
+      {scopes: scopeProfile.scopes, paths: scopeProfile.paths}, options);
   }
   const completionRow = selectSelfOwnerCompletionReceipt(comments, packet, packetRef, impl);
   const completion = completionRow.receipt;
@@ -1143,7 +1221,7 @@ function selectSelfOwnerWorkspaceManifest(comments, packet, packetRef, impl, opt
       || manifest.route !== selfOwnerExpectedExecutor(lineage)
       || manifest.executor !== selfOwnerExpectedExecutor(lineage)
       || manifest.leaseRequirement !== 'REQUIRED'
-      || !same([...(manifest.scopes || [])].sort(), SELF_OWNER_SCOPES)
+      || !same([...(manifest.scopes || [])].sort(), scopeProfile.scopes)
       || !/^[0-9a-f]{64}$/.test(manifest.leaseEvidence?.leaseId || '')
       || !Number.isSafeInteger(manifest.leaseEvidence?.acquiredGeneration)
       || !selfOwnerWorkspaceMatches(lineage, packet, manifest.workspace)) {
@@ -1179,7 +1257,8 @@ function createSelfOwnerLiveContext(packetRef, deps = {}) {
     fail(error?.kind === 'CONFLICT' ? 'CONFLICT' : 'UNKNOWN',
       ...(error?.reasonCodes || ['SELF_OWNER_PACKET_SCOPE_UNRESOLVED']));
   }
-  if (!same(packetScopes, SELF_OWNER_SCOPES)) {
+  const packetScopeProfile = selfOwnerScopeProfileForScopes(packetScopes);
+  if (!packetScopeProfile) {
     fail('BLOCKED', 'PACKET_NOT_REVIEWED_TARGET');
   }
   const comments = readComments(packet, runner);
@@ -1193,6 +1272,9 @@ function createSelfOwnerLiveContext(packetRef, deps = {}) {
   }
   const impl = selectSelfOwnerImplementationReceipt(stageRows, packet, pr);
   if (pr.head.sha !== impl.candidate) fail('CONFLICT', 'SELF_OWNER_MERGED_PR_IDENTITY_CONFLICT');
+  if (impl.scopeProfile?.id !== packetScopeProfile.id) {
+    fail('CONFLICT', 'SELF_OWNER_SCOPE_PROFILE_CONFLICT');
+  }
   const manifestRow = selectSelfOwnerWorkspaceManifest(comments, packet, packetRef, impl);
   const manifest = manifestRow.manifest;
   const target = Object.freeze({
@@ -3322,6 +3404,12 @@ module.exports = {
   SELF_OWNER_CURRENTIZED_REQUIRED_GATES,
   SELF_OWNER_L_REQUIRED_GATES,
   SELF_OWNER_SCOPES,
+  SELF_OWNER_DOCS_PATHS,
+  SELF_OWNER_DOCS_REQUIRED_GATES,
+  SELF_OWNER_DOCS_CURRENTIZED_REQUIRED_GATES,
+  SELF_OWNER_DOCS_L_REQUIRED_GATES,
+  SELF_OWNER_DOCS_SCOPES,
+  SELF_OWNER_SCOPE_PROFILES,
   TARGET,
   TARGET_2786,
   TARGET_2791,
@@ -3398,6 +3486,8 @@ module.exports = {
   selfOwnerImplementationIdentities,
   selectSelfOwnerImplementationReceipt,
   selectSelfOwnerWorkspaceManifest,
+  selfOwnerScopeProfileForPaths,
+  selfOwnerScopeProfileForScopes,
   selectImplementationReceipt,
   selectTargetManifest,
   selectValidationStageReceiptSet,

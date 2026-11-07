@@ -621,12 +621,30 @@ only after this implementation is merged and postmerge-proven.
 
 Fixed packet profiles remain authoritative and take precedence. A packet outside that
 map may enter the self-owner class only when current repository evidence proves its
-deterministic packet scope is exactly the three MCL validation-finalization owner files
-plus `surface:mcl:validation-finalization-effect`.
+deterministic packet scope is exactly one reviewed class:
+
+```text
+FULL_OWNER
+  README.md
+  mcl-validation-finalization-apply.cjs
+  tests/test-mcl-validation-finalization-apply.cjs
+  + surface:mcl:validation-finalization-effect
+
+DOCS_MODULE
+  README.md
+  profiles.md
+  + surface:mcl:validation-finalization-effect
+```
+
+The two classes are exact allowlists. Missing paths, extra paths, near-match paths,
+prefix scopes and caller-selected subsets remain ineligible. The original FULL_OWNER
+class remains unchanged; DOCS_MODULE exists only so documentation-only modularization
+of this owner can close without a packet-specific finalizer.
 
 Class membership is never granted by packet number alone. The owner derives the
-candidate and PR from a qualifying canonical `IMPLEMENTATION_PR` receipt, requires one
-of the fixed self-owner lineage gate sets, then follows that selected lineage's exact
+candidate and PR from a qualifying canonical `IMPLEMENTATION_PR` receipt, requires the
+fixed lineage gate set for that exact scope class (`exact-three-*` for FULL_OWNER,
+`exact-two-*` for DOCS_MODULE), then follows that selected lineage's exact
 D-014 completion evidence locator to one valid implementation completion receipt.
 That completion receipt binds the exact producer D-014 manifest ID and payload hash,
 which derives deterministic repository workspace/lease lineage without choosing among

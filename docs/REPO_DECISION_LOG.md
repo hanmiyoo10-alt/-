@@ -358,3 +358,10 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3460)
 - Event ID: `28fc5cb45100e7852a5dfe1ee49da9b971d26c56740805ad767c6f0e40c48ec5`
 <!-- canonical-main-doc-promoted:28fc5cb45100e7852a5dfe1ee49da9b971d26c56740805ad767c6f0e40c48ec5 -->
+
+### 2026-11-07 — REPO-PR-CURRENTIZATION-EFFECT-01 — bounded non-force candidate refresh
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3474)
+- Event ID: `29b247e7794cffe6e328ef67ed070b0a4873391c999cc19948e16594ed14cc09`
+<!-- canonical-main-doc-promoted:29b247e7794cffe6e328ef67ed070b0a4873391c999cc19948e16594ed14cc09 -->

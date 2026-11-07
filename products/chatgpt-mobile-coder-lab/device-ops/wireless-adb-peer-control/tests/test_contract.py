@@ -94,6 +94,17 @@ def dns_aaaa_is_bounded_and_bracketed():
 
 
 @case
+def dns_dual_stack_prefers_exact_single_ipv4():
+    rows = [
+        rr(peer.SERVICE_TYPE, 12, enc(INSTANCE)),
+        rr(INSTANCE, 33, struct.pack("!HHH", 0, 0, 37123) + enc(HOST)),
+        rr(HOST, 1, socket.inet_aton("192.0.2.10")),
+        rr(HOST, 28, socket.inet_pton(socket.AF_INET6, "2001:db8::10")),
+    ]
+    assert peer.candidates_from_packets([packet(rows)]) == [{"instance": INSTANCE, "endpoint": ENDPOINT}]
+
+
+@case
 def dns_truncation_fails_closed():
     expect_reason(lambda: peer.parse_dns(discovery_packet()[:-2]), "DNS_RDATA_TRUNCATED")
 
@@ -293,6 +304,118 @@ def bootstrap_accepts_exact_service_name_transport():
 
 
 @case
+def recover_bootstrap_zero_connected_trusted_candidate():
+    calls = []
+    pinned = []
+    def runner(argv, timeout=10):
+        calls.append(list(argv))
+        if argv == [peer.ADB, "devices"]:
+            return "List of devices attached\n"
+        if argv == [peer.ADB, "connect", ENDPOINT]:
+            return "connected\n"
+        if argv == [peer.ADB, "-s", ENDPOINT, "shell", "getprop", "ro.product.model"]:
+            return peer.TARGET_MODEL + "\n"
+        raise AssertionError(argv)
+    result = peer.recover_bootstrap(
+        discoverer=lambda: [{"instance": INSTANCE, "endpoint": ENDPOINT}],
+        host_reader=lambda: {TOKEN},
+        runner=runner,
+        pin_writer=pinned.append,
+    )
+    assert result["status"] == "PINNED"
+    assert pinned == [INSTANCE]
+    assert calls == [
+        [peer.ADB, "devices"],
+        [peer.ADB, "connect", ENDPOINT],
+        [peer.ADB, "-s", ENDPOINT, "shell", "getprop", "ro.product.model"],
+    ]
+
+
+@case
+def recover_bootstrap_rejects_already_connected_exact_s():
+    pinned = []
+    def runner(argv, timeout=10):
+        if argv == [peer.ADB, "devices"]:
+            return "List of devices attached\n" + ENDPOINT + "\tdevice\n"
+        if argv == [peer.ADB, "-s", ENDPOINT, "shell", "getprop", "ro.product.model"]:
+            return peer.TARGET_MODEL + "\n"
+        raise AssertionError(argv)
+    expect_reason(
+        lambda: peer.recover_bootstrap(
+            discoverer=lambda: [{"instance": INSTANCE, "endpoint": ENDPOINT}],
+            host_reader=lambda: {TOKEN},
+            runner=runner,
+            pin_writer=pinned.append,
+        ),
+        "RECOVERY_CONNECTED_STATE_INVALID",
+    )
+    assert pinned == []
+
+
+@case
+def recover_bootstrap_requires_unique_known_host_candidate():
+    pinned = []
+    def runner(argv, timeout=10):
+        if argv == [peer.ADB, "devices"]:
+            return "List of devices attached\n"
+        raise AssertionError(argv)
+    expect_reason(
+        lambda: peer.recover_bootstrap(
+            discoverer=lambda: [{"instance": INSTANCE, "endpoint": ENDPOINT}],
+            host_reader=lambda: {"other"},
+            runner=runner,
+            pin_writer=pinned.append,
+        ),
+        "RECOVERY_CANDIDATE_NOT_EXACT",
+    )
+    assert pinned == []
+
+
+@case
+def recover_bootstrap_model_mismatch_writes_no_pin():
+    pinned = []
+    def runner(argv, timeout=10):
+        if argv == [peer.ADB, "devices"]:
+            return "List of devices attached\n"
+        if argv == [peer.ADB, "connect", ENDPOINT]:
+            return "connected\n"
+        if argv == [peer.ADB, "-s", ENDPOINT, "shell", "getprop", "ro.product.model"]:
+            return "WRONG\n"
+        raise AssertionError(argv)
+    expect_reason(
+        lambda: peer.recover_bootstrap(
+            discoverer=lambda: [{"instance": INSTANCE, "endpoint": ENDPOINT}],
+            host_reader=lambda: {TOKEN},
+            runner=runner,
+            pin_writer=pinned.append,
+        ),
+        "TARGET_MODEL_MISMATCH",
+    )
+    assert pinned == []
+
+
+@case
+def recover_bootstrap_connect_failure_writes_no_pin():
+    pinned = []
+    def runner(argv, timeout=10):
+        if argv == [peer.ADB, "devices"]:
+            return "List of devices attached\n"
+        if argv == [peer.ADB, "connect", ENDPOINT]:
+            raise peer.PeerError("ADB_EXEC_FAILED")
+        raise AssertionError(argv)
+    expect_reason(
+        lambda: peer.recover_bootstrap(
+            discoverer=lambda: [{"instance": INSTANCE, "endpoint": ENDPOINT}],
+            host_reader=lambda: {TOKEN},
+            runner=runner,
+            pin_writer=pinned.append,
+        ),
+        "ADB_EXEC_FAILED",
+    )
+    assert pinned == []
+
+
+@case
 def reconnect_uses_only_fixed_connect_and_model_argv():
     calls = []
     def runner(argv, timeout=10):
@@ -324,7 +447,7 @@ def cli_and_source_expose_no_generic_effect_surface():
     ):
         assert forbidden not in source.lower(), forbidden
     assert source.count('"shell"') == 1
-    assert '"inspect", "bootstrap", "reconnect"' in source
+    assert '"inspect", "bootstrap", "recover-bootstrap", "reconnect"' in source
     capture = io.StringIO()
     with contextlib.redirect_stdout(capture):
         code = peer.main(["tool", "reconnect", ENDPOINT])
@@ -336,7 +459,7 @@ def cli_and_source_expose_no_generic_effect_surface():
 
 
 def main() -> int:
-    assert len(TESTS) == 22, len(TESTS)
+    assert len(TESTS) == 28, len(TESTS)
     passed = 0
     for fn in TESTS:
         fn()

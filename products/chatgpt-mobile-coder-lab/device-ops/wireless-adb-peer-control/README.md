@@ -33,18 +33,25 @@ compile-time bounds.
 
 Malformed, zero-candidate and ambiguous evidence fails closed.
 
+For one SRV target, address selection is deterministic and bounded: prefer the sole IPv4 address when exactly one IPv4 is present; otherwise permit one IPv6 only when IPv4 is absent and exactly one IPv6 exists. Multiple IPv4 addresses remain ambiguous and produce no candidate.
+
 A candidate is eligible only when the private pin matches one discovered service
 instance, that instance is present in local known-host evidence, and exactly one
-network endpoint resolves. Normal output withholds all such identifiers.
+network endpoint is selected by that rule. Normal output withholds all such identifiers.
 
 ## Operation surface
 
-The executable accepts only three fixed operation names: inspect, bootstrap and
-reconnect. It accepts no endpoint, serial, service, path or command selector.
+The executable accepts only four fixed operation names: inspect, bootstrap,
+recover-bootstrap and reconnect. It accepts no endpoint, serial, service, path or
+command selector.
 
 Inspect is read-only. Bootstrap binds an already-connected exact-S observation to
-the private pin. Reconnect uses the one internally selected candidate and verifies
-the fixed target model after connection.
+the private pin. recover-bootstrap is only for a zero-connected exact-S baseline:
+it requires one unique raw candidate already backed by local known-host trust,
+performs exactly one internally selected adb connect, verifies exact model
+SM-G998N, and only then writes the normal 0600 pin. Reconnect uses the one
+internally selected pinned candidate and verifies the fixed target model after
+connection.
 
 ## Boundary
 

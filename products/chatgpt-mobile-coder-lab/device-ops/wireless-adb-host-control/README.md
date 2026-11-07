@@ -34,6 +34,12 @@ The PowerShell transport is a fixed sibling source file. The Python owner invoke
 
 The PowerShell child output is consumed internally. Raw service instances, endpoints, serials, hosts, addresses and ports are never returned in normal owner receipts.
 
+## Windows mDNS capture fallback
+
+The Windows transport preserves the existing ephemeral-source raw mDNS capture as its first rung. If that bounded query receives zero DNS response packets, and only then, it performs one fallback capture on the standard mDNS receive surface: UDP/IPv4 source port 5353 with ReuseAddress, membership in the fixed 224.0.0.251 multicast group, and the same fixed _adb-tls-connect._tcp.local. PTR query.
+
+Both rungs share the existing 3-second deadline, packet-size/count ceilings, and DNS-response-only filter. Request/self-query packets are ignored. Failure to establish the fallback capture fails closed through the existing Windows transport error path. The fallback adds no caller-selected interface, port, service, endpoint, serial, retry count, pairing, ADB-server lifecycle, Android mutation, or generic multicast scan surface.
+
 ## Private pin contract
 
 Bootstrap is allowed only while the selected exact target is already connected once through the user-approved Windows ADB trust relationship.

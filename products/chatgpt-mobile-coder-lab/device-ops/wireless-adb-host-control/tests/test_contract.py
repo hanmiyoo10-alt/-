@@ -415,6 +415,68 @@ def reconnect_model_mismatch_fails_closed():
 
 
 @case
+def reconnect_accepts_multiple_rows_for_selected_candidate():
+    model = host.PROFILES["S"]["model"]
+    calls = []
+    def transport(mode: str, profile: str, endpoint: str | None = None):
+        calls.append((mode, profile, endpoint))
+        if mode == "mdns":
+            return {"ok": True, "packets": [base64.b64encode(discovery_packet()).decode()]}
+        if mode == "known-hosts":
+            return {"ok": True, "data": base64.b64encode(proto_string(TOKEN)).decode()}
+        if mode == "connect":
+            assert endpoint == ENDPOINT
+            return {"ok": True, "model": model}
+        if mode == "connected":
+            return {"ok": True, "rows": [
+                {"serial": ENDPOINT, "model": model},
+                {"serial": INSTANCE.removesuffix(".local"), "model": model},
+            ]}
+        raise AssertionError(mode)
+    result = host.reconnect("S", transport=transport, pin_reader=lambda p: host._pin_payload(p, INSTANCE))
+    assert result["status"] == "CONNECTED"
+    assert [x[0] for x in calls] == ["known-hosts", "mdns", "connect", "connected"]
+
+
+@case
+def reconnect_requires_selected_candidate_postconnect_row():
+    model = host.PROFILES["S"]["model"]
+    def transport(mode: str, profile: str, endpoint: str | None = None):
+        if mode == "mdns":
+            return {"ok": True, "packets": [base64.b64encode(discovery_packet()).decode()]}
+        if mode == "known-hosts":
+            return {"ok": True, "data": base64.b64encode(proto_string(TOKEN)).decode()}
+        if mode == "connect":
+            return {"ok": True, "model": model}
+        if mode == "connected":
+            return {"ok": True, "rows": [{"serial": "192.0.2.99:39999", "model": model}]}
+        raise AssertionError(mode)
+    expect_reason(
+        lambda: host.reconnect("S", transport=transport, pin_reader=lambda p: host._pin_payload(p, INSTANCE)),
+        "POSTCONNECT_TARGET_NOT_PRESENT",
+    )
+
+
+@case
+def reconnect_rejects_wrong_model_on_selected_postconnect_row():
+    model = host.PROFILES["S"]["model"]
+    def transport(mode: str, profile: str, endpoint: str | None = None):
+        if mode == "mdns":
+            return {"ok": True, "packets": [base64.b64encode(discovery_packet()).decode()]}
+        if mode == "known-hosts":
+            return {"ok": True, "data": base64.b64encode(proto_string(TOKEN)).decode()}
+        if mode == "connect":
+            return {"ok": True, "model": model}
+        if mode == "connected":
+            return {"ok": True, "rows": [{"serial": ENDPOINT, "model": "WRONG"}]}
+        raise AssertionError(mode)
+    expect_reason(
+        lambda: host.reconnect("S", transport=transport, pin_reader=lambda p: host._pin_payload(p, INSTANCE)),
+        "POSTCONNECT_TARGET_MODEL_MISMATCH",
+    )
+
+
+@case
 def cli_rejects_endpoint_selector_and_receipt_withholds_identifiers():
     capture = io.StringIO()
     with contextlib.redirect_stdout(capture):
@@ -454,7 +516,7 @@ def powershell_surface_excludes_broad_adb_controls():
 
 
 def main() -> int:
-    assert len(TESTS) == 33, len(TESTS)
+    assert len(TESTS) == 36, len(TESTS)
     for fn in TESTS:
         fn()
         print("PASS", fn.__name__)

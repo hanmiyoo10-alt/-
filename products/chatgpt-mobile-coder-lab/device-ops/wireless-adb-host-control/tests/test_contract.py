@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import base64
+import contextlib
+import io
+import json
+import os
+import socket
+import stat
+import struct
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+import mcl_wireless_adb_host_control as host
+
+INSTANCE = "peer-guid._adb-tls-connect._tcp.local"
+TOKEN = "peer-guid"
+HOST = "peer-host.local"
+ENDPOINT = "192.0.2.10:37123"
+
+
+def enc(name: str) -> bytes:
+    labels = name.rstrip(".").split(".")
+    out = bytearray()
+    for label in labels:
+        raw = label.encode("ascii")
+        out.append(len(raw))
+        out.extend(raw)
+    out.append(0)
+    return bytes(out)
+
+
+def rr(name: str, rtype: int, rdata: bytes) -> bytes:
+    return enc(name) + struct.pack("!HHIH", rtype, 1, 120, len(rdata)) + rdata
+
+
+def packet(records: list[bytes]) -> bytes:
+    return struct.pack("!HHHHHH", 0, 0x8400, 0, len(records), 0, 0) + b"".join(records)
+
+
+def discovery_packet(*, second_addr: bool = False, ipv6: bool = False) -> bytes:
+    rows = [
+        rr(host.SERVICE_TYPE, 12, enc(INSTANCE)),
+        rr(INSTANCE, 33, struct.pack("!HHH", 0, 0, 37123) + enc(HOST)),
+    ]
+    if ipv6:
+        rows.append(rr(HOST, 28, socket.inet_pton(socket.AF_INET6, "2001:db8::10")))
+    else:
+        rows.append(rr(HOST, 1, socket.inet_aton("192.0.2.10")))
+        if second_addr:
+            rows.append(rr(HOST, 1, socket.inet_aton("192.0.2.11")))
+    return packet(rows)
+
+
+def proto_string(value: str) -> bytes:
+    raw = value.encode()
+    assert len(raw) < 128
+    return bytes([0x0A, len(raw)]) + raw
+
+
+def expect_reason(fn, reason: str) -> None:
+    try:
+        fn()
+    except host.HostControlError as exc:
+        assert exc.reason == reason, (exc.reason, reason)
+        return
+    raise AssertionError("expected " + reason)
+
+
+TESTS = []
+
+
+def case(fn):
+    TESTS.append(fn)
+    return fn
+
+
+@case
+def fixed_profiles_and_service():
+    assert host.SERVICE_TYPE == "_adb-tls-connect._tcp.local"
+    assert host.PROFILES["M"]["model"] == "SM-S938N"
+    assert host.PROFILES["S"]["model"] == "SM-G998N"
+    expect_reason(lambda: host.profile("X"), "PROFILE_INVALID")
+
+
+@case
+def dns_ptr_srv_a_resolves_exact_endpoint():
+    rows = host.candidates_from_packets([discovery_packet()])
+    assert rows == [{"instance": INSTANCE, "endpoint": ENDPOINT}]
+
+
+@case
+def dns_aaaa_is_bracketed():
+    rows = host.candidates_from_packets([discovery_packet(ipv6=True)])
+    assert rows == [{"instance": INSTANCE, "endpoint": "[2001:db8::10]:37123"}]
+
+
+@case
+def dns_dual_stack_prefers_exact_single_ipv4():
+    rows = [
+        rr(host.SERVICE_TYPE, 12, enc(INSTANCE)),
+        rr(INSTANCE, 33, struct.pack("!HHH", 0, 0, 37123) + enc(HOST)),
+        rr(HOST, 1, socket.inet_aton("192.0.2.10")),
+        rr(HOST, 28, socket.inet_pton(socket.AF_INET6, "2001:db8::10")),
+    ]
+    assert host.candidates_from_packets([packet(rows)]) == [{"instance": INSTANCE, "endpoint": ENDPOINT}]
+
+
+@case
+def dns_ambiguity_drops_candidate():
+    assert host.candidates_from_packets([discovery_packet(second_addr=True)]) == []
+
+
+@case
+def dns_compression_loop_fails_closed():
+    expect_reason(lambda: host._read_name(b"\xc0\x00", 0), "DNS_POINTER_INVALID")
+
+
+@case
+def discovery_packet_limit_fails_closed():
+    expect_reason(
+        lambda: host.candidates_from_packets([discovery_packet()] * (host.MAX_PACKETS + 1)),
+        "DISCOVERY_PACKET_LIMIT",
+    )
+
+
+@case
+def known_host_proto_extracts_token():
+    assert TOKEN in host.known_hosts_from_bytes(proto_string(TOKEN))
+
+
+@case
+def known_host_size_fails_closed():
+    expect_reason(lambda: host.known_hosts_from_bytes(b""), "KNOWN_HOSTS_SIZE")
+
+
+@case
+def pin_digest_is_profile_domain_separated():
+    assert host.pin_digest("M", INSTANCE) != host.pin_digest("S", INSTANCE)
+
+
+@case
+def pin_write_read_is_private_and_opaque():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "state" / "pin"
+        host._write_pin("M", INSTANCE, path)
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        text = path.read_text()
+        assert TOKEN not in text and ENDPOINT not in text
+        loaded = host._read_pin("M", path)
+        assert loaded == host._pin_payload("M", INSTANCE)
+
+
+@case
+def pin_wrong_mode_fails_closed():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "pin"
+        host._write_pin("S", INSTANCE, path)
+        os.chmod(path, 0o644)
+        expect_reason(lambda: host._read_pin("S", path), "PIN_FILE_INVALID")
+
+
+def transport_fixture(profile_name: str, *, connected: bool = True, connect_model: str | None = None):
+    model = host.PROFILES[profile_name]["model"]
+    calls = []
+    def transport(mode: str, profile: str, endpoint: str | None = None):
+        assert profile == profile_name
+        calls.append((mode, profile, endpoint))
+        if mode == "mdns":
+            return {"ok": True, "packets": [base64.b64encode(discovery_packet()).decode()]}
+        if mode == "known-hosts":
+            return {"ok": True, "data": base64.b64encode(proto_string(TOKEN)).decode()}
+        if mode == "connected":
+            return {"ok": True, "rows": [{"serial": ENDPOINT, "model": model}]} if connected else {"ok": True, "rows": []}
+        if mode == "connect":
+            assert endpoint == ENDPOINT
+            return {"ok": True, "model": connect_model or model}
+        raise AssertionError(mode)
+    return transport, calls
+
+
+@case
+def bootstrap_m_correlates_connected_exact_target():
+    transport, calls = transport_fixture("M")
+    pinned = []
+    result = host.bootstrap("M", transport=transport, pin_writer=lambda p, i: pinned.append((p, i)))
+    assert result["status"] == "PINNED"
+    assert pinned == [("M", INSTANCE)]
+    assert [x[0] for x in calls] == ["mdns", "known-hosts", "connected"]
+
+
+@case
+def bootstrap_s_correlates_connected_exact_target():
+    transport, _calls = transport_fixture("S")
+    pinned = []
+    result = host.bootstrap("S", transport=transport, pin_writer=lambda p, i: pinned.append((p, i)))
+    assert result["status"] == "PINNED"
+    assert pinned == [("S", INSTANCE)]
+
+
+@case
+def bootstrap_requires_connected_target():
+    transport, _calls = transport_fixture("M", connected=False)
+    expect_reason(
+        lambda: host.bootstrap("M", transport=transport, pin_writer=lambda _p, _i: None),
+        "BOOTSTRAP_CORRELATION_NOT_EXACT",
+    )
+
+
+@case
+def inspect_requires_exact_pin_known_host_candidate():
+    transport, _calls = transport_fixture("M")
+    result = host.inspect("M", transport=transport, pin_reader=lambda p: host._pin_payload(p, INSTANCE))
+    assert result["status"] == "READY"
+    assert result["identifiers"] == "withheld"
+
+
+@case
+def reconnect_uses_one_internal_connect_and_model_verification():
+    transport, calls = transport_fixture("S")
+    result = host.reconnect("S", transport=transport, pin_reader=lambda p: host._pin_payload(p, INSTANCE))
+    assert result["status"] == "CONNECTED"
+    connect_calls = [x for x in calls if x[0] == "connect"]
+    assert connect_calls == [("connect", "S", ENDPOINT)]
+    assert calls[-1][0] == "connected"
+
+
+@case
+def reconnect_model_mismatch_fails_closed():
+    transport, _calls = transport_fixture("M", connect_model="WRONG")
+    expect_reason(
+        lambda: host.reconnect("M", transport=transport, pin_reader=lambda p: host._pin_payload(p, INSTANCE)),
+        "TARGET_MODEL_MISMATCH",
+    )
+
+
+@case
+def cli_rejects_endpoint_selector_and_receipt_withholds_identifiers():
+    capture = io.StringIO()
+    with contextlib.redirect_stdout(capture):
+        code = host.main(["tool", "reconnect", "M", ENDPOINT])
+    assert code == 2
+    result = json.loads(capture.getvalue())
+    assert result["status"] == "BLOCKED"
+    assert result["identifiers"] == "withheld"
+    rendered = json.dumps(result)
+    assert TOKEN not in rendered and ENDPOINT not in rendered
+    assert all(value is False for value in result["authority"].values())
+
+
+@case
+def powershell_surface_excludes_broad_adb_controls():
+    text = (ROOT / "windows-mdns-adb.ps1").read_text().lower()
+    for forbidden in ("adb pair", "kill-server", "start-server", " tcpip ", "pm install", "pm uninstall"):
+        assert forbidden not in text, forbidden
+    assert "_adb-tls-connect._tcp.local." in text
+
+
+def main() -> int:
+    assert len(TESTS) == 20, len(TESTS)
+    for fn in TESTS:
+        fn()
+        print("PASS", fn.__name__)
+    print(f"{len(TESTS)}/{len(TESTS)} PASS")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

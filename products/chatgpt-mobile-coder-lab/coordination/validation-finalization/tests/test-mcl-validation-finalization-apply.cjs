@@ -1621,6 +1621,112 @@ test('self-owner implementation receipt requires exact scope and fixed gates', (
     }},
   }], 3149), owner.ApplyError);
 });
+test('self-owner exact scope profiles preserve full owner and admit docs module only', () => {
+  assert.equal(owner.selfOwnerScopeProfileForPaths(owner.SELF_OWNER_PATHS).id, 'FULL_OWNER');
+  assert.equal(owner.selfOwnerScopeProfileForScopes(owner.SELF_OWNER_SCOPES).id, 'FULL_OWNER');
+  assert.equal(owner.selfOwnerScopeProfileForPaths(owner.SELF_OWNER_DOCS_PATHS).id, 'DOCS_MODULE');
+  assert.equal(owner.selfOwnerScopeProfileForScopes(owner.SELF_OWNER_DOCS_SCOPES).id, 'DOCS_MODULE');
+  assert.equal(owner.selfOwnerScopeProfileForPaths(owner.SELF_OWNER_DOCS_PATHS.slice(0, 1)), null);
+  assert.equal(owner.selfOwnerScopeProfileForPaths([
+    ...owner.SELF_OWNER_DOCS_PATHS, 'products/near-match.md',
+  ]), null);
+  assert.equal(owner.selfOwnerScopeProfileForScopes([
+    'path:products/chatgpt-mobile-coder-lab/coordination/validation-finalization/README.md',
+    'surface:mcl:validation-finalization-effect',
+  ]), null);
+});
+
+test('self-owner docs-module implementation receipt uses exact two-path L gate set', () => {
+  const gates = owner.SELF_OWNER_DOCS_L_REQUIRED_GATES.map((name) => ({
+    name,
+    result: 'PASS',
+    evidenceLocator: name === 'd014-completion' ? 'issue-comment:2' : 'issue-comment:1',
+  }));
+  const row = {
+    comment: {id: 9},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR',
+      packetNumber: 4350,
+      status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE',
+      receiptDigest: '9'.repeat(64),
+      authorityRefs: [
+        {kind: 'COMMIT', locator: 'candidate-head', identity: 'd'.repeat(40)},
+        {kind: 'PR', locator: 'pr:#4353', identity: 'd'.repeat(40)},
+      ],
+      requiredGates: gates,
+      scope: {
+        paths: owner.SELF_OWNER_DOCS_PATHS,
+        diffRequired: true,
+        diffIdentity: 'e'.repeat(64),
+      },
+    },
+  };
+  const impl = owner.selectSelfOwnerImplementationReceipt([row], 4350);
+  assert.equal(impl.scopeProfile.id, 'DOCS_MODULE');
+  assert.equal(impl.lineage.kind, 'IMPLEMENTATION_L_REPOSITORY');
+  assert.equal(impl.lineage.requiredGates, owner.SELF_OWNER_DOCS_L_REQUIRED_GATES);
+  assert.throws(() => owner.selectSelfOwnerImplementationReceipt([{
+    ...row,
+    receipt: {...row.receipt, scope: {
+      ...row.receipt.scope,
+      paths: [...owner.SELF_OWNER_DOCS_PATHS, 'products/near-match.md'].sort(),
+    }},
+  }], 4350), owner.ApplyError);
+});
+
+test('self-owner docs-module L manifest binds the same exact reviewed scope class', () => {
+  const gates = owner.SELF_OWNER_DOCS_L_REQUIRED_GATES.map((name) => ({
+    name,
+    result: 'PASS',
+    evidenceLocator: name === 'd014-completion' ? 'issue-comment:2' : 'issue-comment:1',
+  }));
+  const row = {
+    comment: {id: 9},
+    receipt: {
+      stage: 'IMPLEMENTATION_PR', packetNumber: 4350, status: 'PASS',
+      nextLegalAction: 'VALIDATION_MERGE', receiptDigest: '9'.repeat(64),
+      authorityRefs: [
+        {kind: 'COMMIT', locator: 'candidate-head', identity: 'd'.repeat(40)},
+        {kind: 'PR', locator: 'pr:#4353', identity: 'd'.repeat(40)},
+      ],
+      requiredGates: gates,
+      scope: {paths: owner.SELF_OWNER_DOCS_PATHS, diffRequired: true, diffIdentity: 'e'.repeat(64)},
+    },
+  };
+  const impl = owner.selectSelfOwnerImplementationReceipt([row], 4350);
+  const manifest = handoff.buildManifest({
+    schemaVersion: 1, mode: 'MCL_TASK_MANIFEST', packetRef: '#4350',
+    packetBodySha256: 'a'.repeat(64), phaseId: '4350-implementation-pr',
+    phaseClass: 'REPOSITORY_MUTATION', route: 'L', executor: 'L',
+    scopes: owner.SELF_OWNER_DOCS_SCOPES,
+    workspace: {kind: 'repository', branch: 'laptop/mcl-packet-4350',
+      worktree: '/home/alsl0/nyang-worktrees/mcl-packet-4350'},
+    observedBaseSha: 'b'.repeat(40), leaseRequirement: 'REQUIRED',
+    leaseEvidence: {ledgerRef: '#2352', leaseId: 'c'.repeat(64), acquiredGeneration: 40,
+      acquireEvidenceRef: 'run:123'},
+    sourceAuthorityRefs: ['#4350', 'issue:#2352'], inputRefs: ['commit:' + 'b'.repeat(40)],
+    expectedOutputRefs: owner.SELF_OWNER_DOCS_PATHS.map((repoPath) => 'path:' + repoPath),
+    acceptanceRefs: ['#4350'], stopCondition: 'Test exact docs-module self-owner lineage.',
+    authority: {...handoff.AUTHORITY_FLAGS},
+  });
+  const completion = handoff.buildCompletionReceipt(manifest, {
+    disposition: 'COMPLETE', outputRefs: ['commit:' + 'd'.repeat(40), 'pr:#4353'],
+    validationRefs: ['receipt:mcl-l-repository-owner:apply:' + manifest.manifestId],
+    observedRefs: ['commit:' + 'd'.repeat(40)], leaseDisposition: 'RELEASED',
+    leaseReleaseEvidence: {ledgerRef: '#2352', leaseId: 'c'.repeat(64),
+      releasedGeneration: 41, evidenceRef: 'run:456'},
+    workspaceResult: 'clean', blockerRefs: [], requiredUnknownRefs: [],
+  });
+  const selected = owner.selectSelfOwnerWorkspaceManifest([
+    {id: 1, body: handoff.renderManifest(manifest)},
+    {id: 2, body: handoff.renderCompletionReceipt(completion)},
+  ], 4350, '#4350', impl);
+  assert.equal(selected.manifest.manifestId, manifest.manifestId);
+  assert.equal(selected.finalizationLineage.result, 'PASS');
+  assert.equal(selected.finalizationLineage.depth, 1);
+});
+
 test('self-owner implementation receipt conflicts on semantic merged generation drift', () => {
   const gates = owner.SELF_OWNER_REQUIRED_GATES.map((name) => ({name, result: 'PASS'}));
   const make = (id, pr, sha) => ({

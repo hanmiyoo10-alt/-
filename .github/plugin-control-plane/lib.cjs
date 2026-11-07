@@ -109,7 +109,7 @@ function classifyPaths(paths, registry = loadRegistry()) {
 function extractIssueScopeValue(body = '') {
   const lines = String(body).replace(/\r/g, '').split('\n');
   for (let i = 0; i < lines.length; i += 1) {
-    if (lines[i].trim() === '### Scope' || lines[i].trim() === '### Plugin') {
+    if (/^#{2,3} (?:Scope|Plugin)$/.test(lines[i].trim())) {
       for (let j = i + 1; j < lines.length; j += 1) {
         const value = lines[j].trim();
         if (value) return value;

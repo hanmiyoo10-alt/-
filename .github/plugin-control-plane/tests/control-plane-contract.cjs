@@ -338,6 +338,14 @@ assert.deepEqual(
   classifyIssueBody('### Scope\n\nusage-dashboard\n\n### Summary\nwork', registry),
   {explicit: true, labels: ['plugin:usage-dashboard']},
 );
+assert.deepEqual(
+  classifyIssueBody('## Scope\n\nrepo\n\nRepository tooling only.', registry),
+  {explicit: true, labels: ['scope:repo']},
+);
+assert.deepEqual(
+  classifyIssueBody('## Plugin\n\nsimcore\n\n## Summary\nwork', registry),
+  {explicit: true, labels: ['plugin:simcore']},
+);
 assert.deepEqual(classifyIssueBody('Scope: local', registry), {explicit: true, labels: ['plugin:local']});
 assert.deepEqual(classifyIssueBody('Plugin: simcore', registry), {explicit: true, labels: ['plugin:simcore']});
 assert.deepEqual(classifyIssueBody('Scope: voyage-token-check', registry), {explicit: true, labels: ['plugin:voyage-token-check']});

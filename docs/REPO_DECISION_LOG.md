@@ -240,7 +240,7 @@
 - Event ID: `1ce64ddb1d83a202f0e836574e3eccabe35aa49cf2191bfbaae50ab560bf762b`
 <!-- canonical-main-doc-promoted:1ce64ddb1d83a202f0e836574e3eccabe35aa49cf2191bfbaae50ab560bf762b -->
 
-### 2026-11-01 — GitHub Actions cooldown policy — keep reviewed lock/pin controls; do not introduce Dependabot solely for cooldown
+### 2026-11-01 — GitHub Actions updates: no Dependabot solely for cooldown; keep reviewed lock/pin/CI/review/protection baseline; no fixed cooldown; revisit under future update automation
 - Class: `DECISION`
 - Transition: `CLOSED_COMPLETED`
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3915)

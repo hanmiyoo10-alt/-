@@ -107,9 +107,9 @@ Only after those fail-closed checks may it issue exactly one internally selected
 
 ### reconnect
 
-Uses the private pin to select exactly one raw candidate, invokes exactly one Windows `adb connect` internally, and then requires exact target-model readback.
+Uses the private pin to select exactly one raw candidate, invokes exactly one Windows `adb connect` internally, and then requires exact target-model readback. After connect it re-reads the bounded Windows ADB inventory and validates only rows that match the internally selected candidate transport. At least one matching row must exist and every matching row must report the fixed profile model; unrelated historical transport rows do not have to disappear.
 
-A model mismatch, zero/ambiguous candidate, missing pin, known-host mismatch, malformed discovery evidence or Windows transport error fails closed.
+A selected-candidate model mismatch, missing selected-candidate post-connect row, zero/ambiguous discovery candidate, missing pin, known-host mismatch, malformed discovery evidence or Windows transport error fails closed.
 
 ## Safety boundary
 

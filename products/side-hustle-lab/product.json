@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "product": "Side Hustle Lab",
+  "display_name": "무료 부업 검증소",
+  "product_root": "products/side-hustle-lab",
+  "current_state": "products/side-hustle-lab/CURRENT.md",
+  "lifecycle": "research-prototype",
+  "validation_status": "IMPLEMENTATION_PR",
+  "release_authority": null,
+  "deployment_authority": null,
+  "external_account_authority": null,
+  "validation": {
+    "unit": "npm test",
+    "static": "npm run check"
+  }
+}
+

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="무료 부업 아이디어의 비용, 노동, 위험, 무인성을 근거와 함께 비교하는 정적 검증 도구">
+    <title>무료 부업 검증소</title>
+    <link rel="stylesheet" href="./assets/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="무료 부업 검증소 홈">
+        <span class="brand-mark" aria-hidden="true">검</span>
+        <span>무료 부업 검증소</span>
+      </a>
+      <nav aria-label="주요 메뉴">
+        <a href="#ideas">아이디어</a>
+        <a href="#calculator">시간 계산기</a>
+        <a href="#principles">검증 원칙</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">ZERO-COST SIDE-HUSTLE LAB</p>
+          <h1 id="hero-title">쉬운 부업보다<br><em>덜 손가는 구조</em>를 찾습니다.</h1>
+          <p class="hero-description">
+            제목의 “자동·무료·평생”을 믿지 않고 비용, 반복 노동, 플랫폼 위험과 근거 상태를 같은 표로 비교합니다.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#ideas">후보 비교하기</a>
+            <a class="button secondary" href="#calculator">내 시간 계산하기</a>
+          </div>
+        </div>
+        <aside class="truth-card" aria-label="현재 검증 상태">
+          <p class="truth-label">현재 원칙</p>
+          <strong>수익 숫자: UNKNOWN</strong>
+          <p>공식 근거 또는 직접 관찰이 없으면 빈칸을 임의의 금액으로 채우지 않습니다.</p>
+          <dl>
+            <div><dt>무료 후보</dt><dd id="free-count">—</dd></div>
+            <div><dt>저관리 후보</dt><dd id="autonomy-count">—</dd></div>
+            <div><dt>보류 후보</dt><dd id="hold-count">—</dd></div>
+          </dl>
+        </aside>
+      </section>
+
+      <section class="section" id="ideas" aria-labelledby="ideas-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">EVIDENCE FIRST</p>
+            <h2 id="ideas-title">아이디어 비교</h2>
+          </div>
+          <p>난이도는 낮을수록, 간단성·편의성·무인성은 높을수록 유리합니다.</p>
+        </div>
+
+        <div class="controls" aria-label="아이디어 필터">
+          <label>
+            <span>검색</span>
+            <input id="search" type="search" placeholder="예: 스톡, AI, 앱" autocomplete="off">
+          </label>
+          <label>
+            <span>판정</span>
+            <select id="decision-filter">
+              <option value="all">전체</option>
+              <option value="recommended">추천</option>
+              <option value="experiment">실험</option>
+              <option value="hold">보류</option>
+              <option value="manual">수동형</option>
+            </select>
+          </label>
+          <label>
+            <span>정렬</span>
+            <select id="sort-order">
+              <option value="autonomy">무인성 높은 순</option>
+              <option value="score">종합점수 높은 순</option>
+              <option value="difficulty">난이도 낮은 순</option>
+              <option value="risk">위험 낮은 순</option>
+            </select>
+          </label>
+        </div>
+
+        <p id="result-status" class="result-status" aria-live="polite">후보를 불러오는 중입니다.</p>
+        <div id="idea-grid" class="idea-grid"></div>
+      </section>
+
+      <section class="section calculator-section" id="calculator" aria-labelledby="calculator-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">TIME, NOT HYPE</p>
+            <h2 id="calculator-title">3개월 시간 계산기</h2>
+          </div>
+          <p>예상 수익은 직접 입력합니다. 검증소는 금액을 만들어내거나 보장하지 않습니다.</p>
+        </div>
+
+        <form id="calculator-form" class="calculator-card">
+          <div class="calculator-fields">
+            <label>
+              <span>최초 구축시간</span>
+              <span class="input-with-unit"><input id="setup-hours" type="number" min="0" step="0.5" value="8"><b>시간</b></span>
+            </label>
+            <label>
+              <span>월 유지시간</span>
+              <span class="input-with-unit"><input id="monthly-hours" type="number" min="0" step="0.5" value="1"><b>시간</b></span>
+            </label>
+            <label>
+              <span>본인이 가정한 월수익</span>
+              <span class="input-with-unit"><input id="monthly-revenue" type="number" min="0" step="1000" value="0"><b>원</b></span>
+            </label>
+          </div>
+          <button class="button primary" type="submit">계산하기</button>
+          <div id="calculator-result" class="calculator-result" aria-live="polite">
+            월수익을 0원으로 두면 시간 구조만 확인할 수 있습니다.
+          </div>
+        </form>
+      </section>
+
+      <section class="section" id="principles" aria-labelledby="principles-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">GUARDRAILS</p>
+            <h2 id="principles-title">검증 원칙</h2>
+          </div>
+        </div>
+        <div class="principle-grid">
+          <article><span>01</span><h3>무료 체험 ≠ 무료</h3><p>체험 종료 후 비용과 상업 이용 조건을 분리해서 표시합니다.</p></article>
+          <article><span>02</span><h3>자동 ≠ 무노동</h3><p>링크, 정책, 정산, 고객 대응처럼 남는 유지 업무를 계산합니다.</p></article>
+          <article><span>03</span><h3>근거가 먼저</h3><p>제목이나 후기만 있는 후보는 점수가 높아도 자동으로 보류합니다.</p></article>
+          <article><span>04</span><h3>원본 자산만</h3><p>타인의 영상·글을 복제하지 않고 체크리스트와 도구를 직접 만듭니다.</p></article>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p><strong>무료 부업 검증소</strong> — 연구 프로토타입</p>
+      <p>수익을 보장하지 않으며 제휴·광고·AI 사용 여부는 실제 적용 시 명확히 고지합니다.</p>
+    </footer>
+
+    <script type="module" src="./assets/app.js"></script>
+  </body>
+</html>
+

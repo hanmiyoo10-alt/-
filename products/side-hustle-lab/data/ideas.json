@@ -1,0 +1,113 @@
+[
+  {
+    "id": "owned-digital-kit",
+    "title": "부업 검증 체크리스트·템플릿",
+    "summary": "직접 만든 검증표와 계산기를 한 번 제작하고 자동 전달하는 독자 자산형 루트입니다.",
+    "sourceType": "independent",
+    "sourceUrl": "https://github.com/hanmiyoo10-alt/-/issues/2784",
+    "evidenceStatus": "owned",
+    "costStatus": "free",
+    "revenueStatus": "unknown",
+    "maintenance": "월 1회 링크와 정책 점검",
+    "ratings": {
+      "difficulty": 3,
+      "simplicity": 4,
+      "convenience": 5,
+      "autonomy": 5,
+      "risk": 1
+    },
+    "notes": [
+      "결제 플랫폼은 아직 선택하지 않았습니다.",
+      "수익 보장 표현 없이 원본 도구의 가치로 승부합니다."
+    ]
+  },
+  {
+    "id": "verified-stock-assets",
+    "title": "스톡 이미지·일러스트 자산",
+    "summary": "원본 이미지나 일러스트를 심사 후 등록하고 기존 자산의 반복 판매를 기다리는 방식입니다.",
+    "sourceType": "official-policy",
+    "sourceUrl": "https://helpx.adobe.com/stock/contributor/submit-your-content/submit-generative-ai-content/generative-ai-content-guidelines.html",
+    "evidenceStatus": "verified",
+    "costStatus": "free",
+    "revenueStatus": "unknown",
+    "maintenance": "승인 결과와 권리 정책 점검",
+    "ratings": {
+      "difficulty": 3,
+      "simplicity": 3,
+      "convenience": 4,
+      "autonomy": 4,
+      "risk": 2
+    },
+    "notes": [
+      "AI 생성물은 생성형 AI 표시와 상업 이용 권리 확인이 필요합니다.",
+      "유사 이미지를 대량 등록하지 않습니다."
+    ]
+  },
+  {
+    "id": "partial-ai-video",
+    "title": "AI 영상 자동 제작",
+    "summary": "AI 도구로 영상을 만들고 콘텐츠 자산화를 시도하는 후보입니다.",
+    "sourceType": "creator-video",
+    "sourceUrl": "https://www.youtube.com/watch?v=dzSahHsZTDU",
+    "evidenceStatus": "partial",
+    "costStatus": "free-trial",
+    "revenueStatus": "unknown",
+    "maintenance": "원본 기획·검수·업로드를 계속해야 함",
+    "ratings": {
+      "difficulty": 4,
+      "simplicity": 2,
+      "convenience": 3,
+      "autonomy": 2,
+      "risk": 3
+    },
+    "notes": [
+      "무료 체험을 영구 무료로 간주하지 않습니다.",
+      "반복·대량생산형 영상은 수익화 정책 위험이 있습니다."
+    ]
+  },
+  {
+    "id": "paid-affiliate-site",
+    "title": "AI 웹사이트+Amazon 제휴",
+    "summary": "검색형 글과 제휴 링크를 결합하는 방식이지만 소개된 경로에는 유료 호스팅이 포함됩니다.",
+    "sourceType": "creator-video",
+    "sourceUrl": "https://www.youtube.com/watch?v=INkB7AKCBHQ",
+    "evidenceStatus": "verified",
+    "costStatus": "paid",
+    "revenueStatus": "unknown",
+    "maintenance": "콘텐츠·품절 링크·제휴 약관 점검",
+    "ratings": {
+      "difficulty": 4,
+      "simplicity": 2,
+      "convenience": 3,
+      "autonomy": 3,
+      "risk": 3
+    },
+    "notes": [
+      "Amazon 심사에는 독자적인 공개 콘텐츠와 초기 적격 판매가 필요합니다.",
+      "무료 독립 사이트 변형은 별도 실험으로 분리합니다."
+    ]
+  },
+  {
+    "id": "unknown-background-reward",
+    "title": "휴대폰 백그라운드 보상 앱",
+    "summary": "한 번 실행한 뒤 백그라운드 보상을 주장하지만 운영사와 약관 근거가 아직 불충분합니다.",
+    "sourceType": "creator-video",
+    "sourceUrl": "https://www.youtube.com/watch?v=iwtxROHo-xg",
+    "evidenceStatus": "unverified",
+    "costStatus": "unknown",
+    "revenueStatus": "unknown",
+    "maintenance": "배터리·개인정보·출금 조건 확인 필요",
+    "ratings": {
+      "difficulty": 1,
+      "simplicity": 5,
+      "convenience": 5,
+      "autonomy": 4,
+      "risk": 5
+    },
+    "notes": [
+      "검증 전 설치하거나 백그라운드 실행하지 않습니다.",
+      "추천인 의존성과 실제 출금 조건을 공식 문서로 확인해야 합니다."
+    ]
+  }
+]
+

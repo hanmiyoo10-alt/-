@@ -2,6 +2,8 @@
 
 Status: **REVIEW PASS · NO NEW RCR · SPECIALIZE RCR-H03 + RCR-H08 · RCR-C10 REINFORCEMENT WHERE PARTIAL VIEWS APPLY · DOCS/AUDIT ONLY**
 
+> Historical identifier note: any `RCR-C12` candidate wording in this review is proposed/rejected historical terminology from 2026-09-02, not the current canonical rule identifier. Current canonical `RCR-C12` is owned by `docs/REPOSITORY_COMMON_RULES.md` and covers security-sensitive repository tests.
+
 ## 0. Question
 
 Review the candidate principle:

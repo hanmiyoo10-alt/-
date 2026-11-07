@@ -14,6 +14,8 @@ fi
 HEARTBEAT="$HOME_DIR/.local/lib/mcl-m-termux-lifeline/heartbeat-client.py"
 RECOVERY="$HOME_DIR/.local/bin/mcl-m-termux-lifeline-recover"
 RECOVERY_RECEIPT="$HOME_DIR/.local/state/mcl-m-termux-lifeline/recovery.receipt"
+RDC_GUARD="$HOME_DIR/.local/bin/mcl-m-rdc-supervisor-guard"
+TAILSCALE_GUARD="$HOME_DIR/.local/bin/mcl-m-tailscale-supervisor-guard"
 RDC_LAUNCHER="$HOME_DIR/.termux/boot/31-mcl-m-rdc-supervisor-guard"
 TAILSCALE_LAUNCHER="$HOME_DIR/.termux/boot/32-mcl-m-tailscale-supervisor-guard"
 DATE="$PREFIX/bin/date"
@@ -38,6 +40,83 @@ PENDING_EPOCH=
 
 valid_exec() {
     [ -f "$1" ] && [ ! -L "$1" ] && [ -x "$1" ]
+}
+
+classify_rdc_target() {
+    RDC_TARGET=unknown
+    output="$("$RDC_GUARD" --check 2>/dev/null)"
+    rc=$?
+    [ "$(printf '%s
+' "$output" | wc -l)" -eq 4 ] || return 2
+    [ "$(printf '%s
+' "$output" | sed -n '1p')" = 'schema=mcl-m-rdc-supervisor.v1' ] || return 2
+    [ "$(printf '%s
+' "$output" | sed -n '2p')" = 'service=desktop-commander-remote' ] || return 2
+    [ "$(printf '%s
+' "$output" | sed -n '4p')" = 'details=withheld' ] || return 2
+    supervision="$(printf '%s
+' "$output" | sed -n 's/^supervision=//p')"
+    [ "$(printf '%s
+' "$output" | grep -c '^supervision=')" -eq 1 ] || return 2
+    case "$supervision:$rc" in
+        running:0) RDC_TARGET=healthy; return 0 ;;
+        missing:1) RDC_TARGET=eligible; return 1 ;;
+        operator_down:1|service_missing:1) RDC_TARGET=blocked; return 3 ;;
+        unknown:2) return 2 ;;
+        *) return 2 ;;
+    esac
+}
+
+classify_tailscale_target() {
+    TAILSCALE_TARGET=unknown
+    output="$("$TAILSCALE_GUARD" --check 2>/dev/null)"
+    rc=$?
+    [ "$(printf '%s
+' "$output" | wc -l)" -eq 6 ] || return 2
+    [ "$(printf '%s
+' "$output" | sed -n '1p')" = 'schema=mcl-m-tailscale-supervisor.v1' ] || return 2
+    [ "$(printf '%s
+' "$output" | sed -n '2p')" = 'service=tailscaled' ] || return 2
+    [ "$(printf '%s
+' "$output" | sed -n '6p')" = 'details=withheld' ] || return 2
+    supervision="$(printf '%s
+' "$output" | sed -n 's/^supervision=//p')"
+    daemon="$(printf '%s
+' "$output" | sed -n 's/^daemon=//p')"
+    recovery="$(printf '%s
+' "$output" | sed -n 's/^recovery=//p')"
+    [ "$(printf '%s
+' "$output" | grep -c '^supervision=')" -eq 1 ] || return 2
+    [ "$(printf '%s
+' "$output" | grep -c '^daemon=')" -eq 1 ] || return 2
+    [ "$(printf '%s
+' "$output" | grep -c '^recovery=')" -eq 1 ] || return 2
+    case "$supervision:$daemon:$recovery:$rc" in
+        running:present:not_needed:0) TAILSCALE_TARGET=healthy; return 0 ;;
+        missing:absent:eligible:1) TAILSCALE_TARGET=eligible; return 1 ;;
+        missing:present:orphan_present:1|operator_down:*:not_applicable:1|service_missing:*:not_applicable:1)
+            TAILSCALE_TARGET=blocked
+            return 3
+            ;;
+        *) return 2 ;;
+    esac
+}
+
+classify_selective_targets() {
+    classify_rdc_target
+    rdc_rc=$?
+    classify_tailscale_target
+    tailscale_rc=$?
+    if [ "$rdc_rc" -eq 2 ] || [ "$tailscale_rc" -eq 2 ]; then
+        return 2
+    fi
+    if [ "$rdc_rc" -eq 3 ] || [ "$tailscale_rc" -eq 3 ]; then
+        return 3
+    fi
+    if [ "$rdc_rc" -eq 1 ] || [ "$tailscale_rc" -eq 1 ]; then
+        return 1
+    fi
+    return 0
 }
 
 emit() {
@@ -238,6 +317,8 @@ process_durability_pending() {
 
 valid_exec "$HEARTBEAT" || finish 4
 valid_exec "$RECOVERY" || finish 4
+valid_exec "$RDC_GUARD" || finish 4
+valid_exec "$TAILSCALE_GUARD" || finish 4
 valid_exec "$DATE" || finish 4
 valid_exec "$STAT" || finish 4
 
@@ -247,12 +328,56 @@ case "$pre_rc" in
     0)
         HEARTBEAT_PRE=active
         HEARTBEAT_POST=active
-        process_durability_pending
-        durability_rc=$?
-        case "$durability_rc" in
-            0) RESULT=healthy; finish 0 ;;
-            3) RESULT=blocked; finish 3 ;;
-            *) RESULT=unknown; finish 4 ;;
+        classify_selective_targets
+        targets_rc=$?
+        case "$targets_rc" in
+            0)
+                process_durability_pending
+                durability_rc=$?
+                case "$durability_rc" in
+                    0) RESULT=healthy; finish 0 ;;
+                    3) RESULT=blocked; finish 3 ;;
+                    *) RESULT=unknown; finish 4 ;;
+                esac
+                ;;
+            1)
+                "$RECOVERY" >/dev/null 2>&1
+                recovery_rc=$?
+                if [ "$recovery_rc" -ne 0 ]; then
+                    RECOVERY_STATE=fail
+                    RESULT=blocked
+                    finish 3
+                fi
+                RECOVERY_STATE=pass
+                "$HEARTBEAT" --status >/dev/null 2>&1
+                post_rc=$?
+                case "$post_rc" in
+                    0) HEARTBEAT_POST=active ;;
+                    1) HEARTBEAT_POST=inactive; RESULT=blocked; finish 3 ;;
+                    *) HEARTBEAT_POST=unknown; RESULT=unknown; finish 4 ;;
+                esac
+                classify_selective_targets
+                post_targets_rc=$?
+                case "$post_targets_rc" in
+                    0) ;;
+                    2) RESULT=unknown; finish 4 ;;
+                    *) RESULT=blocked; finish 3 ;;
+                esac
+                if ! record_durability_pending; then
+                    RESULT=unknown
+                    finish 4
+                fi
+                RESULT=recovered
+                finish 0
+                ;;
+            2)
+                RESULT=unknown
+                finish 4
+                ;;
+            *)
+                RESULT=blocked
+                finish 3
+                ;;
         esac
         ;;
     1)

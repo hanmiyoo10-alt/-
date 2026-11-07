@@ -44,6 +44,12 @@ root="$MCL_M_TERMUX_LIFELINE_JOB_TEST_ROOT"
 printf '%s\n' called >> "$root/state/recovery.log"
 rc=$(cat "$root/state/recovery.rc" 2>/dev/null || printf 0)
 if [ "$rc" -eq 0 ]; then
+    if [ ! -e "$root/state/recovery.keep-targets" ]; then
+        printf 'running
+' > "$root/state/rdc.mode"
+        printf 'healthy
+' > "$root/state/tailscale.mode"
+    fi
     state="$root/home/.local/state/mcl-m-termux-lifeline"
     mkdir -p "$state"
     tmp="$state/recovery.receipt.$$"
@@ -60,6 +66,49 @@ fi
 exit "$rc"
 SH
     chmod 700 "$FIX/home/.local/bin/mcl-m-termux-lifeline-recover"
+
+    cat > "$FIX/home/.local/bin/mcl-m-rdc-supervisor-guard" <<'SH'
+#!/bin/sh
+root="$MCL_M_TERMUX_LIFELINE_JOB_TEST_ROOT"
+[ "$1" = "--check" ] || exit 2
+mode=$(cat "$root/state/rdc.mode" 2>/dev/null || printf running)
+case "$mode" in
+    running) supervision=running; rc=0 ;;
+    missing) supervision=missing; rc=1 ;;
+    operator_down) supervision=operator_down; rc=1 ;;
+    service_missing) supervision=service_missing; rc=1 ;;
+    unknown) supervision=unknown; rc=2 ;;
+    malformed) printf '%s
+' malformed; exit 2 ;;
+    *) exit 2 ;;
+esac
+printf '%s
+' 'schema=mcl-m-rdc-supervisor.v1' 'service=desktop-commander-remote' "supervision=$supervision" 'details=withheld'
+exit "$rc"
+SH
+    chmod 700 "$FIX/home/.local/bin/mcl-m-rdc-supervisor-guard"
+
+    cat > "$FIX/home/.local/bin/mcl-m-tailscale-supervisor-guard" <<'SH'
+#!/bin/sh
+root="$MCL_M_TERMUX_LIFELINE_JOB_TEST_ROOT"
+[ "$1" = "--check" ] || exit 2
+mode=$(cat "$root/state/tailscale.mode" 2>/dev/null || printf healthy)
+case "$mode" in
+    healthy) supervision=running; daemon=present; recovery=not_needed; rc=0 ;;
+    eligible) supervision=missing; daemon=absent; recovery=eligible; rc=1 ;;
+    orphan) supervision=missing; daemon=present; recovery=orphan_present; rc=1 ;;
+    operator_down) supervision=operator_down; daemon=absent; recovery=not_applicable; rc=1 ;;
+    service_missing) supervision=service_missing; daemon=absent; recovery=not_applicable; rc=1 ;;
+    unknown) supervision=unknown; daemon=unknown; recovery=blocked; rc=2 ;;
+    malformed) printf '%s
+' malformed; exit 2 ;;
+    *) exit 2 ;;
+esac
+printf '%s
+' 'schema=mcl-m-tailscale-supervisor.v1' 'service=tailscaled' "supervision=$supervision" "daemon=$daemon" "recovery=$recovery" 'details=withheld'
+exit "$rc"
+SH
+    chmod 700 "$FIX/home/.local/bin/mcl-m-tailscale-supervisor-guard"
 
     mkdir -p "$FIX/home/.termux/boot"
     cat > "$FIX/home/.termux/boot/31-mcl-m-rdc-supervisor-guard" <<'SH'
@@ -111,6 +160,8 @@ SH
     printf '1000\n' > "$FIX/state/now"
     printf '0\n' > "$FIX/state/rdc-launcher.rc"
     printf '0\n' > "$FIX/state/tailscale-launcher.rc"
+    printf 'running\n' > "$FIX/state/rdc.mode"
+    printf 'healthy\n' > "$FIX/state/tailscale.mode"
 }
 
 run_wrapper() {
@@ -152,6 +203,84 @@ assert_contains "$out" 'recovery=not_run'
 assert_contains "$out" 'heartbeat_post=active'
 assert_contains "$out" 'result=healthy'
 [ ! -e "$FIX/state/recovery.log" ] || fail "healthy path called recovery"
+
+# Heartbeat-active selective RDC loss recovers exactly once.
+new_fixture
+printf '0\n0\n' > "$FIX/state/hb.seq"
+printf 'missing\n' > "$FIX/state/rdc.mode"
+out=$(run_wrapper)
+assert_contains "$out" 'heartbeat_pre=active'
+assert_contains "$out" 'recovery=pass'
+assert_contains "$out" 'heartbeat_post=active'
+assert_contains "$out" 'result=recovered'
+[ "$(wc -l < "$FIX/state/recovery.log")" -eq 1 ] || fail "selective RDC recovery count"
+[ -f "$FIX/home/.local/state/mcl-m-termux-lifeline-job/durability.pending" ] || fail "selective RDC durability pending"
+
+# Heartbeat-active Tailscale eligible state uses the same fixed recovery once.
+new_fixture
+printf '0\n0\n' > "$FIX/state/hb.seq"
+printf 'eligible\n' > "$FIX/state/tailscale.mode"
+out=$(run_wrapper)
+assert_contains "$out" 'result=recovered'
+[ "$(wc -l < "$FIX/state/recovery.log")" -eq 1 ] || fail "selective Tailscale recovery count"
+
+# Both eligible targets still invoke only one fixed recovery.
+new_fixture
+printf '0\n0\n' > "$FIX/state/hb.seq"
+printf 'missing\n' > "$FIX/state/rdc.mode"
+printf 'eligible\n' > "$FIX/state/tailscale.mode"
+out=$(run_wrapper)
+assert_contains "$out" 'result=recovered'
+[ "$(wc -l < "$FIX/state/recovery.log")" -eq 1 ] || fail "combined selective recovery count"
+
+# Operator-down/orphan states never become automatic recovery authority.
+new_fixture
+printf '0\n' > "$FIX/state/hb.seq"
+printf 'operator_down\n' > "$FIX/state/rdc.mode"
+set +e
+out=$(run_wrapper)
+rc=$?
+set -e
+[ "$rc" -eq 3 ] || fail "operator-down selective rc"
+assert_contains "$out" 'result=blocked'
+[ ! -e "$FIX/state/recovery.log" ] || fail "operator-down invoked recovery"
+
+new_fixture
+printf '0\n' > "$FIX/state/hb.seq"
+printf 'orphan\n' > "$FIX/state/tailscale.mode"
+set +e
+out=$(run_wrapper)
+rc=$?
+set -e
+[ "$rc" -eq 3 ] || fail "orphan selective rc"
+assert_contains "$out" 'result=blocked'
+[ ! -e "$FIX/state/recovery.log" ] || fail "orphan invoked recovery"
+
+# Malformed target evidence remains UNKNOWN with zero recovery.
+new_fixture
+printf '0\n' > "$FIX/state/hb.seq"
+printf 'malformed\n' > "$FIX/state/rdc.mode"
+set +e
+out=$(run_wrapper)
+rc=$?
+set -e
+[ "$rc" -eq 4 ] || fail "malformed selective rc"
+assert_contains "$out" 'result=unknown'
+[ ! -e "$FIX/state/recovery.log" ] || fail "malformed check invoked recovery"
+
+# Selective recovery requires fresh healthy target checks afterward.
+new_fixture
+printf '0\n0\n' > "$FIX/state/hb.seq"
+printf 'missing\n' > "$FIX/state/rdc.mode"
+: > "$FIX/state/recovery.keep-targets"
+set +e
+out=$(run_wrapper)
+rc=$?
+set -e
+[ "$rc" -eq 3 ] || fail "post-recovery target check rc"
+assert_contains "$out" 'recovery=pass'
+assert_contains "$out" 'result=blocked'
+[ "$(wc -l < "$FIX/state/recovery.log")" -eq 1 ] || fail "post-check recovery count"
 
 # Inactive wrapper recovers once and rechecks.
 new_fixture

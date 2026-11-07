@@ -2,9 +2,16 @@
 
 Feature-ID: `response-notification`
 Area: `shared`
-PR status: `PR_READY_REBUILD`
-Isolation status: `REBUILD_PLAN_ISOLATED`
-Deployment status: `NOT_READY`
+PR status: `MERGED_UPSTREAM`
+Isolation status: `ACCEPTED`
+Deployment status: `UPSTREAM`
+
+## Current upstream disposition
+Official PocketRisu PR #61 (`feat: add native Termux response notifications`) is merged upstream.
+
+The accepted upstream implementation includes the localhost-only Termux notification endpoint and response-completion notification behavior documented in `OFFICIAL-PR.md`. The later phone-call/earphone repeated-sound problem remains a separate `audio-notification` owner and does not reopen this merged feature.
+
+The rebuild material below is retained as historical reconstruction/provenance only. It is **not** the current next action.
 
 ## Problem / motivation
 Provide a reliable response-completion signal for self-hosted/mobile users without coupling PocketRisu core to a particular Android/Termux notification implementation.
@@ -67,7 +74,7 @@ The current local setup has demonstrated real main-phone completion notification
 ## Privacy/security boundary
 Do not send full chat text, auth secrets, tokens or DB content merely to produce a completion notification. Prefer minimal metadata or an event with no conversation content.
 
-## PR construction recipe
+## Historical PR construction recipe
 1. Create fresh `feat/response-notification` from latest official upstream.
 2. Inspect the current canonical response-completion path first.
 3. Add the smallest generic completion hook/transport interface possible.
@@ -82,4 +89,5 @@ A generic, failure-isolated response-completion hook improves self-host integrat
 - dossier reconstruction: COMPLETE
 - historical mixed Git split: NOT REQUIRED
 - local Android relay: LOCAL_ONLY
-- next action: rebuild only the generic completion-event layer on the then-current upstream base; keep phone wiring separate.
+- upstream source action: `NONE` — official PR #61 is merged; do not rebuild or resubmit this feature.
+- follow-up: keep phone/earphone sound behavior under the separate `audio-notification` Feature-ID.

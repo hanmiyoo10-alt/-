@@ -271,17 +271,46 @@ def known_hosts_from_bytes(data: bytes) -> set[str]:
 
 
 def pin_digest(profile_name: str, instance: str) -> str:
+    """Legacy schema-v1 full-instance digest."""
     domain = f"mcl-wireless-adb-host-control:{profile_name}:v1\0".encode()
     return hashlib.sha256(domain + norm_name(instance).encode()).hexdigest()
 
 
-def _pin_payload(profile_name: str, instance: str) -> dict:
+def _service_device_identity(instance: str) -> str:
+    token = norm_name(_service_token(instance))
+    if not token.startswith("adb-"):
+        raise HostControlError("SERVICE_TARGET_IDENTITY_INVALID")
+    body = token[4:]
+    if "-" not in body:
+        raise HostControlError("SERVICE_TARGET_IDENTITY_INVALID")
+    identity, generation = body.rsplit("-", 1)
+    if not identity or not generation:
+        raise HostControlError("SERVICE_TARGET_IDENTITY_INVALID")
+    return identity
+
+
+def target_identity_digest(profile_name: str, instance: str) -> str:
+    domain = f"mcl-wireless-adb-host-control:{profile_name}:target-identity:v2\0".encode()
+    return hashlib.sha256(domain + _service_device_identity(instance).encode()).hexdigest()
+
+
+def _pin_payload_v1(profile_name: str, instance: str) -> dict:
     cfg = profile(profile_name)
     return {
         "schemaVersion": 1,
         "profile": profile_name,
         "targetModel": cfg["model"],
         "instanceDigest": pin_digest(profile_name, instance),
+    }
+
+
+def _pin_payload(profile_name: str, instance: str) -> dict:
+    cfg = profile(profile_name)
+    return {
+        "schemaVersion": 2,
+        "profile": profile_name,
+        "targetModel": cfg["model"],
+        "targetIdentityDigest": target_identity_digest(profile_name, instance),
     }
 
 
@@ -330,12 +359,21 @@ def _read_pin(profile_name: str, path: Path | None = None) -> dict:
         value = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise HostControlError("PIN_JSON_INVALID") from exc
-    required = {"schemaVersion", "profile", "targetModel", "instanceDigest"}
-    if not isinstance(value, dict) or set(value) != required:
+    if not isinstance(value, dict):
         raise HostControlError("PIN_SCHEMA_INVALID")
-    if value["schemaVersion"] != 1 or value["profile"] != profile_name or value["targetModel"] != cfg["model"]:
+    version = value.get("schemaVersion")
+    if value.get("profile") != profile_name or value.get("targetModel") != cfg["model"]:
         raise HostControlError("PIN_SCHEMA_INVALID")
-    digest = value["instanceDigest"]
+    if version == 1:
+        required = {"schemaVersion", "profile", "targetModel", "instanceDigest"}
+        digest = value.get("instanceDigest")
+    elif version == 2:
+        required = {"schemaVersion", "profile", "targetModel", "targetIdentityDigest"}
+        digest = value.get("targetIdentityDigest")
+    else:
+        raise HostControlError("PIN_SCHEMA_INVALID")
+    if set(value) != required:
+        raise HostControlError("PIN_SCHEMA_INVALID")
     if not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
         raise HostControlError("PIN_DIGEST_INVALID")
     return value
@@ -439,19 +477,32 @@ def _transport_matches(candidate: dict[str, str], serial: str) -> bool:
     return s == instance or s + ".local" == instance
 
 
-def _connected_service_token(serial: str) -> str:
+def _connected_service_instance(serial: str) -> str:
     for value in (serial, serial + ".local"):
         try:
-            return norm_name(_service_token(value))
+            _service_token(value)
+            return norm_name(value)
         except HostControlError:
             pass
     raise HostControlError("CONNECTED_SERVICE_INSTANCE_INVALID")
 
 
+def _connected_service_token(serial: str) -> str:
+    return norm_name(_service_token(_connected_service_instance(serial)))
+
+
+def _pin_matches(profile_name: str, pin: dict, instance: str) -> bool:
+    if pin["schemaVersion"] == 1:
+        return pin_digest(profile_name, instance) == pin["instanceDigest"]
+    if pin["schemaVersion"] == 2:
+        return target_identity_digest(profile_name, instance) == pin["targetIdentityDigest"]
+    raise HostControlError("PIN_SCHEMA_INVALID")
+
+
 def _eligible(profile_name: str, pin: dict, hosts: set[str], candidates: list[dict[str, str]]) -> dict[str, str]:
     matched = []
     for row in candidates:
-        if pin_digest(profile_name, row["instance"]) != pin["instanceDigest"]:
+        if not _pin_matches(profile_name, pin, row["instance"]):
             continue
         if norm_name(_service_token(row["instance"])) not in hosts:
             continue
@@ -477,6 +528,26 @@ def bootstrap(profile_name: str, transport=_ps_call, pin_writer=_write_pin) -> d
     return receipt("bootstrap", profile_name, "PINNED")
 
 
+def bootstrap_connected(profile_name: str, transport=_ps_call, pin_writer=_write_pin) -> dict:
+    cfg = profile(profile_name)
+    hosts = known_hosts(profile_name, transport)
+    rows = [row for row in connected(profile_name, transport) if row["model"] == cfg["model"]]
+    eligible = []
+    for row in rows:
+        try:
+            instance = _connected_service_instance(row["serial"])
+            token = norm_name(_service_token(instance))
+            _service_device_identity(instance)
+        except HostControlError:
+            continue
+        if token in hosts:
+            eligible.append(instance)
+    if len(eligible) != 1:
+        raise HostControlError("CONNECTED_BOOTSTRAP_NOT_EXACT")
+    pin_writer(profile_name, eligible[0])
+    return receipt("bootstrap-connected", profile_name, "PINNED")
+
+
 def rebind(profile_name: str, transport=_ps_call, pin_writer=_write_pin) -> dict:
     cfg = profile(profile_name)
     candidates = discover(profile_name, transport)
@@ -486,9 +557,12 @@ def rebind(profile_name: str, transport=_ps_call, pin_writer=_write_pin) -> dict
         raise HostControlError("REBIND_CORRELATION_NOT_EXACT")
     candidate = candidates[0]
     fresh_token = norm_name(_service_token(candidate["instance"]))
-    connected_token = _connected_service_token(rows[0]["serial"])
+    connected_instance = _connected_service_instance(rows[0]["serial"])
+    connected_token = norm_name(_service_token(connected_instance))
     if fresh_token not in hosts or connected_token not in hosts:
         raise HostControlError("REBIND_TRUST_NOT_EXACT")
+    if _service_device_identity(connected_instance) != _service_device_identity(candidate["instance"]):
+        raise HostControlError("REBIND_TARGET_IDENTITY_MISMATCH")
     if connected_token == fresh_token:
         raise HostControlError("REBIND_NOT_REQUIRED")
     result = transport("connect", profile_name, candidate["endpoint"])
@@ -533,13 +607,13 @@ def receipt(operation: str, profile_name: str, status: str, reasons: list[str] |
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 3 or argv[1] not in {"inspect", "bootstrap", "rebind", "reconnect"} or argv[2] not in PROFILES:
+    if len(argv) != 3 or argv[1] not in {"inspect", "bootstrap", "bootstrap-connected", "rebind", "reconnect"} or argv[2] not in PROFILES:
         p = argv[2] if len(argv) >= 3 and argv[2] in PROFILES else "M"
         print(json.dumps(receipt("invalid", p, "BLOCKED", ["OPERATION_INVALID"]), separators=(",", ":"), sort_keys=True))
         return 2
     operation, profile_name = argv[1], argv[2]
     try:
-        result = {"inspect": inspect, "bootstrap": bootstrap, "rebind": rebind, "reconnect": reconnect}[operation](profile_name)
+        result = {"inspect": inspect, "bootstrap": bootstrap, "bootstrap-connected": bootstrap_connected, "rebind": rebind, "reconnect": reconnect}[operation](profile_name)
         print(json.dumps(result, separators=(",", ":"), sort_keys=True))
         return 0
     except HostControlError as exc:

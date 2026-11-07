@@ -355,6 +355,7 @@ assert.deepEqual(classifyIssueBody('Scope: local-model-lab', registry), {explici
 assert.deepEqual(classifyIssueBody('Scope: termux', registry), {explicit: true, labels: ['product:termux']});
 assert.deepEqual(classifyIssueBody('Scope: study', registry), {explicit: true, labels: ['scope:study']});
 assert.deepEqual(classifyIssueBody('Scope: local-runtime', registry), {explicit: true, labels: ['scope:local-runtime']});
+assert.deepEqual(classifyIssueBody('Scope: research-product', registry), {explicit: true, labels: ['scope:research-product']});
 assert.deepEqual(classifyIssueBody('### Scope\n\nshared', registry), {explicit: true, labels: ['scope:shared']});
 assert.deepEqual(classifyIssueBody('### Scope\n\nnot-registered', registry), {explicit: true, labels: ['scope:unclassified']});
 assert.deepEqual(classifyIssueBody('just prose', registry), {explicit: false, labels: []});

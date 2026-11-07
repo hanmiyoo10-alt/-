@@ -1,6 +1,6 @@
 # Repository Architecture Snapshot
 
-> Generated durable snapshot of canonical-main control-plane configuration. Live operational health remains on #305.
+> Generated durable snapshot of canonical-main control-plane configuration. Live operational health comes from direct current `main` + #485.
 
 ## Canonical integration
 
@@ -42,5 +42,3 @@
 - `product-simcore-terminal-convergence-r2-8.yml` — `active`
 - `product-simcore-candidate-materialize.yml` — `active`
 - `usage-dashboard-project-memory.yml` — `active`
-- `simcore-release-command.yml` — `legacy-dormant`
-- `repo-main-write-coordination-migration.yml` — `one-shot-migration`

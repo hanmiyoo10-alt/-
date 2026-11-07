@@ -38,8 +38,9 @@
 | PLATFORM | X | Agent Platform | scope:repo | .agents/skills/**<br>tools/agent-skill-orchestrator/**<br>tools/agent-skill-eval/**<br>tools/agent-skill-security/** | platform/agents | regroup |
 | PLATFORM | X | Canonical Main | scope:repo | .github/plugin-control-plane/canonical-main/** | platform/canonical-main | regroup |
 | PLATFORM | X | Control Plane | scope:repo | .github/plugin-control-plane/** | platform/control-plane | regroup |
+| PLATFORM | X | Distribution and Delivery | — | tools/public-distribution/**<br>tools/cloudflare-delivery/** | platform/distribution | regroup |
 | PLATFORM | BRIDGE | Local Runtime Plane | scope:local-runtime | local/** | local | preserve |
-| PLATFORM | X | Repository Operations | — | tools/repo-ci-mcp/**<br>tools/github-discussions-mcp/**<br>tools/mcl-task-lease-dispatch-mcp/**<br>tools/repo-write/**<br>tools/repo-env/** | platform/repo-ops | regroup |
+| PLATFORM | X | Repository Operations | — | tools/repo-ci-mcp/**<br>tools/github-discussions-mcp/**<br>tools/mcl-task-lease-dispatch-mcp/**<br>tools/repo-write/**<br>tools/repo-env/**<br>tools/repo-admin-mcp/**<br>tools/repo-cockpit-aggregator/** | platform/repo-ops | regroup |
 | PLATFORM | X | Sandbox and Host Tooling | — | tools/sandbox-health/**<br>tools/sandbox-ingress/**<br>tools/sandbox-toolchain/** | platform/sandbox | regroup |
 | PLATFORM | X | Web Acquisition | — | tools/web-acquisition/** | platform/web-acquisition | regroup |
 | STUDY | X | Study | scope:study | study/** | study | preserve |

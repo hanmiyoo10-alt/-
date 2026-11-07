@@ -225,3 +225,122 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3722)
 - Event ID: `eafaca3a908f8087c9d25622bde502a6fd066d0fcce47c2a44ec021aff727b7e`
 <!-- canonical-main-doc-promoted:eafaca3a908f8087c9d25622bde502a6fd066d0fcce47c2a44ec021aff727b7e -->
+
+### 2026-10-27 — Mini read-only balance monitor: Copilot + Vertex credits + AI Studio credits
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3788)
+- Event ID: `c8ca9ec02cd2467453f3f5f51cd71cec82e6a30925efc89f55fb97abce4b5b35`
+<!-- canonical-main-doc-promoted:c8ca9ec02cd2467453f3f5f51cd71cec82e6a30925efc89f55fb97abce4b5b35 -->
+
+### 2026-10-31 — [repo-ops] Read-only exact-head GitHub Actions compatibility proof harness for effect-capable workflows
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3990)
+- Event ID: `1ce64ddb1d83a202f0e836574e3eccabe35aa49cf2191bfbaae50ab560bf762b`
+<!-- canonical-main-doc-promoted:1ce64ddb1d83a202f0e836574e3eccabe35aa49cf2191bfbaae50ab560bf762b -->
+
+### 2026-11-01 — AGENT-GITHUB-CONTEXT-AB-V1 — broad vs bounded vs patch-only context diagnostic
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2447)
+- Event ID: `3b9e3787dbbd5f3c794f566d9f123198855640fb1f7c73c554c5b8e54baefe81`
+<!-- canonical-main-doc-promoted:3b9e3787dbbd5f3c794f566d9f123198855640fb1f7c73c554c5b8e54baefe81 -->
+
+### 2026-11-03 — Mobile Coder Lab: S operations + M private lab + sanitized GPT review
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2188)
+- Event ID: `02421797efb4d7b26dd5701800b2bbf738e830ee4bb78fa2933d7bbfef1d81fb`
+<!-- canonical-main-doc-promoted:02421797efb4d7b26dd5701800b2bbf738e830ee4bb78fa2933d7bbfef1d81fb -->
+
+### 2026-11-03 — Mobile Coder Lab: serverphone nested Android emulator feasibility
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2029)
+- Event ID: `e28fd0dc7fd0e4399f035977084194a43e1274dc42282b3818f14f1381a22848`
+<!-- canonical-main-doc-promoted:e28fd0dc7fd0e4399f035977084194a43e1274dc42282b3818f14f1381a22848 -->
+
+### 2026-11-03 — REPO-FIXED-EFFECT-VALIDATION-BINDING-V1 — precommit validator interlock
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2718)
+- Event ID: `4bfcfc7a147d2e63f0c19807d0a2bce1de912586f823e057b92e08b67a53623a`
+<!-- canonical-main-doc-promoted:4bfcfc7a147d2e63f0c19807d0a2bce1de912586f823e057b92e08b67a53623a -->
+
+### 2026-11-03 — REPO-GITHUB-PROJECT-PROJECTION-SYNC-01 — validator-first derived Project field sync
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3566)
+- Event ID: `b9eba75b4fc43663df8ada0a655fc012229338171a36395dad853a7d85414c8b`
+<!-- canonical-main-doc-promoted:b9eba75b4fc43663df8ada0a655fc012229338171a36395dad853a7d85414c8b -->
+
+### 2026-11-03 — MCL-OWNER-LIFECYCLE-CLOSURE-PREFLIGHT-01 — detect self-referential bottlenecks before effect
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/4152)
+- Event ID: `a468d010c60cc2b60c924c1cc10851a9067c502c7fb69dbc52063483a984ee16`
+<!-- canonical-main-doc-promoted:a468d010c60cc2b60c924c1cc10851a9067c502c7fb69dbc52063483a984ee16 -->
+
+### 2026-11-03 — [validation-hygiene] MCL-PYTHON-VALIDATION-ZERO-RESIDUE-01 — producer-side bytecode prevention
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/4165)
+- Event ID: `44af4ea52b657f07f4450e817f8985abe37f88f9a622e3444fa88323877ba6c5`
+<!-- canonical-main-doc-promoted:44af4ea52b657f07f4450e817f8985abe37f88f9a622e3444fa88323877ba6c5 -->
+
+### 2026-11-05 — [mcl-lifecycle] RECOVER_SELF / prepared-continuation closure preflight V2
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/4194)
+- Event ID: `25acba20c60172306e72c0d6c3b98def677fe85d65be4becbc9f49f91c93650a`
+<!-- canonical-main-doc-promoted:25acba20c60172306e72c0d6c3b98def677fe85d65be4becbc9f49f91c93650a -->
+
+### 2026-11-05 — [work-system] prevent late successor packet debt
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/4249)
+- Event ID: `02aa3d6b0a56bd739e46c7fec6ea19f246822676c1380ff2cf2639ed7b5f0b4c`
+<!-- canonical-main-doc-promoted:02aa3d6b0a56bd739e46c7fec6ea19f246822676c1380ff2cf2639ed7b5f0b4c -->
+
+### 2026-11-05 — REPO-ENV-WORKTREE-LIFECYCLE — safe operator-facing isolated worktree leases
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2326)
+- Event ID: `1abf5a414d12413a8947b4695b1712f0ee0127d756ac3b0f1df4504429a1051a`
+<!-- canonical-main-doc-promoted:1abf5a414d12413a8947b4695b1712f0ee0127d756ac3b0f1df4504429a1051a -->
+
+### 2026-11-05 — MCL laptop L worker — keep RDC device path and add Codex Remote host
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3124)
+- Event ID: `8f46634b365b2a5d0eb6578634cb4035fe894d1584b93bf6edb72c29cffee9cf`
+<!-- canonical-main-doc-promoted:8f46634b365b2a5d0eb6578634cb4035fe894d1584b93bf6edb72c29cffee9cf -->
+
+### 2026-11-05 — MCL thin-phone / laptop-central topology — keep PocketRisu server on S, move generic compute/control to L
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/3232)
+- Event ID: `2d5ffb7a3069a6a1479ff2550d79a392a03124150aeb64e206e891f17ec2640b`
+<!-- canonical-main-doc-promoted:2d5ffb7a3069a6a1479ff2550d79a392a03124150aeb64e206e891f17ec2640b -->
+
+### 2026-11-06 — MCL-M-TOOLKIT — M / PRIVATE LAB / VM LAB operator and analysis toolkit
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2259)
+- Event ID: `b6a68e5453e4ea3a80d8da007fc1082ea82245c3a0ec9b5c185652a2bdedc3f4`
+<!-- canonical-main-doc-promoted:b6a68e5453e4ea3a80d8da007fc1082ea82245c3a0ec9b5c185652a2bdedc3f4 -->
+
+### 2026-11-06 — Mobile Coder Lab: stateful web-browser isolation for ChatGPT web
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/2030)
+- Event ID: `3b9ca988f86dd31ddfb7155591094f5e6e72db6e9e34fbc5bf053864ddc2d73e`
+<!-- canonical-main-doc-promoted:3b9ca988f86dd31ddfb7155591094f5e6e72db6e9e34fbc5bf053864ddc2d73e -->
+
+### 2026-11-07 — Reusable Round-N master dashboard pattern — generalize #4143 collection structure
+- Class: `DECISION`
+- Transition: `CLOSED_COMPLETED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/4301)
+- Event ID: `82df3e2d595a34caf8dff06108e98287d4bd5f12b131eb793219f99c67aa66bd`
+<!-- canonical-main-doc-promoted:82df3e2d595a34caf8dff06108e98287d4bd5f12b131eb793219f99c67aa66bd -->

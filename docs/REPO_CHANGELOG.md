@@ -2601,3 +2601,210 @@
 - Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/68c3989f78af3b6864174b5f2c808555f357ae11)
 - Event ID: `cacb56301bc47cc66698d752990029d89581a8bfeee323efbc5037593c227c54`
 <!-- canonical-main-doc-promoted:cacb56301bc47cc66698d752990029d89581a8bfeee323efbc5037593c227c54 -->
+
+### 2026-10-28 — Merge pull request #3832 from hanmiyoo10-alt/laptop/codex-hosted-review-degraded-fallback-final-stream-3830
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `8fced60d787dc2341e1b0138a0bb6b1c8af98de9`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8fced60d787dc2341e1b0138a0bb6b1c8af98de9)
+- Event ID: `439fb60482cbc07af2d770a036aa2377d9f72c1c9f4d7bba11421c4ef63c5de7`
+<!-- canonical-main-doc-promoted:439fb60482cbc07af2d770a036aa2377d9f72c1c9f4d7bba11421c4ef63c5de7 -->
+
+### 2026-10-29 — chore(canonical-main): upgrade ops and docs actions to v7
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `cf4216acd2a08169764a4d915d79122917dc4bea`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/cf4216acd2a08169764a4d915d79122917dc4bea)
+- Event ID: `af07ccbe568f202b7187f6c7be3feeb8da99ecf4fc684056bffd0d22d464cc80`
+<!-- canonical-main-doc-promoted:af07ccbe568f202b7187f6c7be3feeb8da99ecf4fc684056bffd0d22d464cc80 -->
+
+### 2026-10-29 — chore(canonical-main): upgrade Delta Anchor actions to v7
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `7a957f27e80230f36485e317f23d969a9c79bfdc`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/7a957f27e80230f36485e317f23d969a9c79bfdc)
+- Event ID: `d5be76f2eb18e701b2f377bb9fd0267ec6f9e39470863f3183a8eb33cbcb86f4`
+<!-- canonical-main-doc-promoted:d5be76f2eb18e701b2f377bb9fd0267ec6f9e39470863f3183a8eb33cbcb86f4 -->
+
+### 2026-10-29 — chore(canonical-main): upgrade Incident Rehearsal actions to v7
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `e560840fbe2e7aa5848b7af9638cd2ecd9d2d241`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/e560840fbe2e7aa5848b7af9638cd2ecd9d2d241)
+- Event ID: `a62234952ce670d0078062775854ddc4ed46969137a6cae9b4aa0b4db09bf7bd`
+<!-- canonical-main-doc-promoted:a62234952ce670d0078062775854ddc4ed46969137a6cae9b4aa0b4db09bf7bd -->
+
+### 2026-10-30 — chore(canonical-main): upgrade checkpoint publisher checkout to v7
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `94a18b6037c6cbbd215bc9995ed269ae09900c7c`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/94a18b6037c6cbbd215bc9995ed269ae09900c7c)
+- Event ID: `5eb19aa3b4f958b8c7b6703e70d05a4c3f9ce71e29dd42960ea354a4b6e7a5d4`
+<!-- canonical-main-doc-promoted:5eb19aa3b4f958b8c7b6703e70d05a4c3f9ce71e29dd42960ea354a4b6e7a5d4 -->
+
+### 2026-10-30 — [repo-incident:P1] REQUIRED_CHECK_FAILED — scope:repo
+- Class: `RECOVERY`
+- Transition: `RECOVERED`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/issues/502)
+- Event ID: `8f202f61760222b74e8d1adfc2f87e339800160992049709fe18e6ee13c4bedb`
+<!-- canonical-main-doc-promoted:8f202f61760222b74e8d1adfc2f87e339800160992049709fe18e6ee13c4bedb -->
+
+### 2026-10-31 — chore(canonical-main): currentize SimCore release adapter (#3948)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `f1427ae17a2279f6088ae0900466c8998a495aff`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f1427ae17a2279f6088ae0900466c8998a495aff)
+- Event ID: `b102ffb05b8604829b8c999cf51ec2189bc50270f4f5541fd38146129a7709b1`
+<!-- canonical-main-doc-promoted:b102ffb05b8604829b8c999cf51ec2189bc50270f4f5541fd38146129a7709b1 -->
+
+### 2026-10-31 — chore(repo): retire completed main-write migration trigger (#3950)
+- Class: `PROJECT`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `323d3233f55a019ea39cd34ec1eeca1e18bd7803`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/323d3233f55a019ea39cd34ec1eeca1e18bd7803)
+- Event ID: `88dc61401b5b808701758a682083a8b162130a616ee5190ebbc03c58d7309690`
+<!-- canonical-main-doc-promoted:88dc61401b5b808701758a682083a8b162130a616ee5190ebbc03c58d7309690 -->
+
+### 2026-10-31 — chore(simcore): retire legacy release command (#3952)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `74de51aadb2b8321b2ab2c706e345375e902aea5`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/74de51aadb2b8321b2ab2c706e345375e902aea5)
+- Event ID: `f6400e41cd0e6145278b9cc4690380cdeb5e6494964b50ce3644977d940db971`
+<!-- canonical-main-doc-promoted:f6400e41cd0e6145278b9cc4690380cdeb5e6494964b50ce3644977d940db971 -->
+
+### 2026-10-31 — chore(canonical-main): modernize proof bundle actions (#3969)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `ce2f91ed4b4e21dfb99969bfa016f3ea1f4ab439`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ce2f91ed4b4e21dfb99969bfa016f3ea1f4ab439)
+- Event ID: `c0998c4ad8d2c3a82db609f6e5da8dc7208fb4f9b6e18b0a1860f3b56a6b83d5`
+<!-- canonical-main-doc-promoted:c0998c4ad8d2c3a82db609f6e5da8dc7208fb4f9b6e18b0a1860f3b56a6b83d5 -->
+
+### 2026-10-31 — chore(harness): modernize shadow artifact upload (#3979)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `dfe53c5632d198cd9d17728bd0bc1c4f3b902430`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/dfe53c5632d198cd9d17728bd0bc1c4f3b902430)
+- Event ID: `d8fa784815ec9bf3a1eb84cc25808dc66d73cf274c8900f46414224bc3d97d5e`
+<!-- canonical-main-doc-promoted:d8fa784815ec9bf3a1eb84cc25808dc66d73cf274c8900f46414224bc3d97d5e -->
+
+### 2026-10-31 — chore(repo): modernize protection guard checkout (#3985)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `7635b236a8a8b12f237695dda0bebc70e852f546`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/7635b236a8a8b12f237695dda0bebc70e852f546)
+- Event ID: `0374713bd306a41ea06c5673b4e089303e91b18e8ab298008652a1910df721d1`
+<!-- canonical-main-doc-promoted:0374713bd306a41ea06c5673b4e089303e91b18e8ab298008652a1910df721d1 -->
+
+### 2026-10-31 — fix(canonical-main): reconcile terminal packet lifecycles (#4019)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `274d746dfdf165081c213e1a5d19d537bb314160`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/274d746dfdf165081c213e1a5d19d537bb314160)
+- Event ID: `39f6d9b0d669ff05465e831806db435ef0d3c293fd4b18640f332c87078c3fdf`
+<!-- canonical-main-doc-promoted:39f6d9b0d669ff05465e831806db435ef0d3c293fd4b18640f332c87078c3fdf -->
+
+### 2026-10-31 — fix(canonical-main): guard non-closing PR publication (#4022)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `2c0fbdd68d651e4a42e93f045d1e3488464811af`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/2c0fbdd68d651e4a42e93f045d1e3488464811af)
+- Event ID: `6081bdf1a75a0ddc145cb71ca61182490274d5f50fa578baa35fffe300d09212`
+<!-- canonical-main-doc-promoted:6081bdf1a75a0ddc145cb71ca61182490274d5f50fa578baa35fffe300d09212 -->
+
+### 2026-10-31 — fix(canonical-main): guard proof bundle manual refresh (#4036)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `67c723d3d9156efba8c971a2cc2566c4cfb076ed`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/67c723d3d9156efba8c971a2cc2566c4cfb076ed)
+- Event ID: `f8a366958afab222ada2312747c09eee07b638836e1cb234136fce79f96a0eb9`
+<!-- canonical-main-doc-promoted:f8a366958afab222ada2312747c09eee07b638836e1cb234136fce79f96a0eb9 -->
+
+### 2026-11-01 — fix(canonical-main): bound checkpoint audit discovery (#4076)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `ea0cb402e06f364baa0377c0e42a2ea817934f1c`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ea0cb402e06f364baa0377c0e42a2ea817934f1c)
+- Event ID: `cdf30e4db7674e9a5383e281ce5ebbef6cfd97a074ee94b1ce539a29c7ae5d62`
+<!-- canonical-main-doc-promoted:cdf30e4db7674e9a5383e281ce5ebbef6cfd97a074ee94b1ce539a29c7ae5d62 -->
+
+### 2026-11-01 — test(canonical-main): prevent proof bundle bytecode residue (#4077)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `f67b38e328448b69b96df4afa7f2b2a1c5542ed2`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/f67b38e328448b69b96df4afa7f2b2a1c5542ed2)
+- Event ID: `f818553c40df4fb13464fc39f28ad8a7745a551937aaf003a5233d5717a28198`
+<!-- canonical-main-doc-promoted:f818553c40df4fb13464fc39f28ad8a7745a551937aaf003a5233d5717a28198 -->
+
+### 2026-11-02 — fix(repo): allow stale-head Codex review recovery (#4113)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `75e96efc17f732aab68a0e92c7926c8fda8be0a3`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/75e96efc17f732aab68a0e92c7926c8fda8be0a3)
+- Event ID: `20fac42cb3bb60a974cf67e5c213cdf7cb1966dbb3fa3493c50362600049a7ba`
+<!-- canonical-main-doc-promoted:20fac42cb3bb60a974cf67e5c213cdf7cb1966dbb3fa3493c50362600049a7ba -->
+
+### 2026-11-02 — fix(repo): harden canonical packet marker discovery (#4127)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `3e1a23316236ca66ac5ac3017c7b85e55ce3da0b`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/3e1a23316236ca66ac5ac3017c7b85e55ce3da0b)
+- Event ID: `0ad97f1c36eeb4e1489a9dd87b7b35dd9a84fcb5e45bd5c42f1bcdb2cf877d31`
+<!-- canonical-main-doc-promoted:0ad97f1c36eeb4e1489a9dd87b7b35dd9a84fcb5e45bd5c42f1bcdb2cf877d31 -->
+
+### 2026-11-04 — Merge pull request #4186 from hanmiyoo10-alt/laptop/mcl-packet-4185
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `6aaee124afe3044400fbb91692f01c19340f1a84`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/6aaee124afe3044400fbb91692f01c19340f1a84)
+- Event ID: `b02675108512971f909519b6ef250da5cf0f265a3cfac6b57cb3f3479e845549`
+<!-- canonical-main-doc-promoted:b02675108512971f909519b6ef250da5cf0f265a3cfac6b57cb3f3479e845549 -->
+
+### 2026-11-05 — Merge pull request #4223 from hanmiyoo10-alt/repo/validation-protection-guard-route-4222
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `a101c9191e9f986afa7d16ada524aca3068d3c31`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/a101c9191e9f986afa7d16ada524aca3068d3c31)
+- Event ID: `ce336279498c0dd7fb2543b8fad30b076173148ea1cccd852c25fe7338946651`
+<!-- canonical-main-doc-promoted:ce336279498c0dd7fb2543b8fad30b076173148ea1cccd852c25fe7338946651 -->
+
+### 2026-11-05 — Merge pull request #4225 from hanmiyoo10-alt/repo/canonical-main-required-feedback-4224
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `00d38c6522d2e5e83f1ef3c4ae8df8b3261ffb1a`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/00d38c6522d2e5e83f1ef3c4ae8df8b3261ffb1a)
+- Event ID: `e19ddba4325a99fc8841a9f0779df037d50063a64781ac11d93f6778eb323174`
+<!-- canonical-main-doc-promoted:e19ddba4325a99fc8841a9f0779df037d50063a64781ac11d93f6778eb323174 -->
+
+### 2026-11-05 — Merge pull request #4254 from hanmiyoo10-alt/laptop/repo-packet-4253
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `ce2ba8f59a0ea7602ae17b6ef4bd0e17b202ea62`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/ce2ba8f59a0ea7602ae17b6ef4bd0e17b202ea62)
+- Event ID: `f0f4c4e325b5b08f036f4a699b98c73c445fc908a960935f605b9c368a3a2566`
+<!-- canonical-main-doc-promoted:f0f4c4e325b5b08f036f4a699b98c73c445fc908a960935f605b9c368a3a2566 -->
+
+### 2026-11-06 — Merge pull request #4263 from hanmiyoo10-alt/laptop/repo-packet-nonwrite-boundary-4261
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `bee38220c68cd9c4e8f3bae4ad8cc0e0955e05d9`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/bee38220c68cd9c4e8f3bae4ad8cc0e0955e05d9)
+- Event ID: `62f3688f9e575267c1e7c12a42c35844088b289363abcfa0f260a421bd22f486`
+<!-- canonical-main-doc-promoted:62f3688f9e575267c1e7c12a42c35844088b289363abcfa0f260a421bd22f486 -->
+
+### 2026-11-06 — Merge pull request #4266 from hanmiyoo10-alt/laptop/mcl-packet-3704
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `44fa14a2b5f8386e24c498e40cdb3a63fc0956aa`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/44fa14a2b5f8386e24c498e40cdb3a63fc0956aa)
+- Event ID: `250093ab5a4c194bef0216921ac4f34f9159ce072c2e453c31f25b3122159ac3`
+<!-- canonical-main-doc-promoted:250093ab5a4c194bef0216921ac4f34f9159ce072c2e453c31f25b3122159ac3 -->
+
+### 2026-11-07 — docs(repo): consolidate repository-common navigation (#4323)
+- Class: `CHANGE`
+- Transition: `MERGED_TO_MAIN`
+- Main SHA: `8bcee2f0457bcbeaa1bea5bd357f0b9ee579d517`
+- Provenance: [source](https://github.com/hanmiyoo10-alt/-/commit/8bcee2f0457bcbeaa1bea5bd357f0b9ee579d517)
+- Event ID: `54f3ea4d47b875948dfd5a34a10f1ad4ed987b281b65d3fa73f4b231d2b4a499`
+<!-- canonical-main-doc-promoted:54f3ea4d47b875948dfd5a34a10f1ad4ed987b281b65d3fa73f4b231d2b4a499 -->

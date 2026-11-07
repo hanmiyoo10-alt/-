@@ -180,7 +180,10 @@ function classifyIssueBody(body, registry = loadRegistry(), options = {}) {
     .filter(([, product]) => (product.issueValues || []).includes(value));
   const scopeMatches = (registry.scopes || [])
     .filter((scope) => (scope.issueValues || []).includes(value));
-  const matchCount = pluginMatches.length + productMatches.length + scopeMatches.length;
+  const nonOperationalMatches = (registry.nonOperationalScopes || [])
+    .filter((scope) => (scope.issueValues || []).includes(value));
+  const matchCount = pluginMatches.length + productMatches.length
+    + scopeMatches.length + nonOperationalMatches.length;
   if (matchCount === 1 && pluginMatches.length === 1) {
     return {explicit: true, labels: [`plugin:${pluginMatches[0][0]}`]};
   }
@@ -189,6 +192,9 @@ function classifyIssueBody(body, registry = loadRegistry(), options = {}) {
   }
   if (matchCount === 1 && scopeMatches.length === 1) {
     return {explicit: true, labels: [scopeMatches[0].label]};
+  }
+  if (matchCount === 1 && nonOperationalMatches.length === 1) {
+    return {explicit: true, labels: [nonOperationalMatches[0].label]};
   }
   return {explicit: true, labels: ['scope:unclassified']};
 }

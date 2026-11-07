@@ -49,7 +49,14 @@ It runs the fixed heartbeat status:
 
 `~/.local/lib/mcl-m-termux-lifeline/heartbeat-client.py --status`
 
-If already active, it records `healthy` and does not invoke recovery. If inactive, it invokes exactly once:
+If the heartbeat is active, the wrapper first runs the two fixed bounded target checks:
+
+- `~/.local/bin/mcl-m-rdc-supervisor-guard --check`;
+- `~/.local/bin/mcl-m-tailscale-supervisor-guard --check`.
+
+Healthy targets preserve the existing zero-recovery `healthy` path. Exact RDC `supervision=missing` or exact Tailscale `recovery=eligible` invokes the same fixed recovery exactly once even while the heartbeat survives. Operator-down, service-missing, orphan-present, malformed, or unknown target evidence never becomes automatic recovery authority. After selective recovery the wrapper requires a fresh active heartbeat and fresh healthy target checks, then records the existing delayed durability-pending generation.
+
+If the heartbeat is inactive, it preserves the existing path and invokes exactly once:
 
 `~/.local/bin/mcl-m-termux-lifeline-recover`
 

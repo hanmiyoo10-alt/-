@@ -196,11 +196,18 @@ def candidates_from_packets(packets: list[bytes]) -> list[dict[str, str]]:
         if len(srv) != 1:
             continue
         target, port = next(iter(srv))
-        endpoints = sorted({_endpoint(addr, port) for addr in addrs.get(target, set())})
-        if len(endpoints) > MAX_ENDPOINTS:
+        raw_addrs = sorted(addrs.get(target, set()))
+        if len(raw_addrs) > MAX_ENDPOINTS:
             raise PeerError("DISCOVERY_ENDPOINT_LIMIT")
-        if len(endpoints) == 1:
-            result.append({"instance": instance, "endpoint": endpoints[0]})
+        ipv4 = [addr for addr in raw_addrs if ipaddress.ip_address(addr).version == 4]
+        ipv6 = [addr for addr in raw_addrs if ipaddress.ip_address(addr).version == 6]
+        selected = None
+        if len(ipv4) == 1:
+            selected = ipv4[0]
+        elif len(ipv4) == 0 and len(ipv6) == 1:
+            selected = ipv6[0]
+        if selected is not None:
+            result.append({"instance": instance, "endpoint": _endpoint(selected, port)})
     return result
 
 
@@ -440,6 +447,23 @@ def bootstrap(*, discoverer=discover, host_reader=known_hosts, runner=_run, pin_
     return receipt("PINNED")
 
 
+def recover_bootstrap(*, discoverer=discover, host_reader=known_hosts, runner=_run, pin_writer=write_pin) -> dict:
+    candidates = discoverer()
+    hosts = host_reader()
+    connected = connected_s(runner)
+    if connected:
+        raise PeerError("RECOVERY_CONNECTED_STATE_INVALID")
+    eligible = [row for row in candidates if _service_token(row["instance"]) in hosts]
+    if len(eligible) != 1:
+        raise PeerError("RECOVERY_CANDIDATE_NOT_EXACT")
+    candidate = eligible[0]
+    runner([ADB, "connect", candidate["endpoint"]])
+    if _model(candidate["endpoint"], runner) != TARGET_MODEL:
+        raise PeerError("TARGET_MODEL_MISMATCH")
+    pin_writer(candidate["instance"])
+    return receipt("PINNED")
+
+
 def inspect(*, discoverer=discover, host_reader=known_hosts, pin_reader=read_pin) -> dict:
     select_candidate(pin_reader(), host_reader(), discoverer())
     return receipt("READY")
@@ -466,11 +490,11 @@ def receipt(status: str, reasons: list[str] | None = None) -> dict:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2 or argv[1] not in {"inspect", "bootstrap", "reconnect"}:
+    if len(argv) != 2 or argv[1] not in {"inspect", "bootstrap", "recover-bootstrap", "reconnect"}:
         print(json.dumps(receipt("BLOCKED", ["OPERATION_INVALID"]), separators=(",", ":")))
         return 2
     try:
-        result = {"inspect": inspect, "bootstrap": bootstrap, "reconnect": reconnect}[argv[1]]()
+        result = {"inspect": inspect, "bootstrap": bootstrap, "recover-bootstrap": recover_bootstrap, "reconnect": reconnect}[argv[1]]()
         print(json.dumps(result, separators=(",", ":"), sort_keys=True))
         return 0
     except PeerError as exc:

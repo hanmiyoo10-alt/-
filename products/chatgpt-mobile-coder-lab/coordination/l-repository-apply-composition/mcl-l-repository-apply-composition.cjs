@@ -33,7 +33,7 @@ const SHA40_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const ACTIVATION_FILE = 'mcl-l-repository-apply-composition.v1.json';
 const ACTIVATION_MODE = 'MCL_L_REPOSITORY_APPLY_ACTIVATION';
-const EFFECT_OPERATIONS = new Set(['apply', 'review-update', 'continue-prepared']);
+const EFFECT_OPERATIONS = new Set(['apply', 'review-update', 'continue-prepared', 'continue-pushed']);
 const REVIEW_UPDATE_REQUEST_SCHEMA = 'mcl-l-review-update-request.v1';
 const MAX_REQUEST_PATHS = 20;
 const MAX_ACTIVATION_BYTES = 16 * 1024;
@@ -92,7 +92,7 @@ if (stat.size > maxBytes) throw new CompositionError('UNKNOWN', [field + '_TOO_L
 return fs.readFileSync(resolved);
 }
 function parseArgs(argv = process.argv.slice(2)) {
-if (!Array.isArray(argv) || !['apply', 'review-update', 'continue-prepared', 'finalize'].includes(argv[0])) {
+if (!Array.isArray(argv) || !['apply', 'review-update', 'continue-prepared', 'continue-pushed', 'finalize'].includes(argv[0])) {
 throw new CompositionError('UNKNOWN', ['COMMAND_UNSUPPORTED']);
 }
 const operation = argv[0];
@@ -102,7 +102,9 @@ const allowed = operation === 'finalize'
   ? new Set(['packet', 'manifest', 'review-update-request', 'patch', 'pr-request'])
   : operation === 'continue-prepared'
     ? new Set(['packet', 'manifest', 'continuation-request', 'pr-request'])
-    : new Set(['packet', 'manifest', 'request', 'patch', 'pr-request']);
+    : operation === 'continue-pushed'
+      ? new Set(['packet', 'manifest', 'pushed-continuation-request', 'pr-request'])
+      : new Set(['packet', 'manifest', 'request', 'patch', 'pr-request']);
 const values = {};
 let apply = false;
 for (let index = 1; index < argv.length; index += 1) {
@@ -131,7 +133,7 @@ operation,
 packetRef: values.packet,
 packetNumber: Number(values.packet.slice(1)),
 manifestFile: values.manifest,
-requestFile: values.request || values['review-update-request'] || values['continuation-request'] || null,
+requestFile: values.request || values['review-update-request'] || values['continuation-request'] || values['pushed-continuation-request'] || null,
 patchFile: values.patch || null,
 prRequestFile: values['pr-request'] || null,
 };
@@ -499,6 +501,8 @@ reviewUpdateInspect: overrides.reviewUpdateInspect
 || ((input) => inspectReviewUpdatePrepared(input, {runner: ownerReadRunner})),
 continuationInspect: overrides.continuationInspect
 || ((input) => inspectPreparedContinuation(input, {runner: ownerReadRunner})),
+pushedContinuationInspect: overrides.pushedContinuationInspect
+|| ((input) => inspectPushedContinuation(input, {runner: ownerReadRunner})),
 ownerRunCli: overrides.ownerRunCli || lOwner.runCli,
 preflight: overrides.preflight || prPreflight.classifyNonClosingPrAuthoring,
 buildCompletionReceipt: overrides.buildCompletionReceipt || taskHandoff.buildCompletionReceipt,
@@ -616,7 +620,9 @@ request = operation === 'review-update'
 ? parseReviewUpdateRequestStructure(requestText)
 : operation === 'continue-prepared'
   ? lOwner.parsePreparedContinuationRequestText(requestText)
-  : lOwner.parseRequestText(requestText);
+  : operation === 'continue-pushed'
+    ? lOwner.parsePushedContinuationRequestText(requestText)
+    : lOwner.parseRequestText(requestText);
 prRequest = lOwner.parsePrRequestText(prRequestText, packetRef);
 } catch (error) {
 if (error instanceof CompositionError) throw error;
@@ -710,7 +716,9 @@ const requestFlag = effectOperation === 'review-update'
 ? '--review-update-request'
 : effectOperation === 'continue-prepared'
   ? '--continuation-request'
-  : '--request';
+  : effectOperation === 'continue-pushed'
+    ? '--pushed-continuation-request'
+    : '--request';
 const ownerArgs = [
 effectOperation,
 '--manifest', files.manifestPath,
@@ -718,7 +726,7 @@ effectOperation,
 '--packet', files.packetPath,
 requestFlag, files.requestPath,
 ];
-if (effectOperation !== 'continue-prepared') {
+if (!['continue-prepared', 'continue-pushed'].includes(effectOperation)) {
 ownerArgs.push('--patch', files.patchPath);
 }
 ownerArgs.push('--pr-request', files.prRequestPath, '--apply');
@@ -806,6 +814,42 @@ throw error;
 }
 if (!state || !['PREPARED','COMMITTED','CURRENTIZED','PUSHED'].includes(state.state)) {
 throw new CompositionError('UNKNOWN', ['CONTINUATION_STATE_UNOBSERVED']);
+}
+const workspace = inspectWorkspace(manifest);
+if (!workspace?.ok || typeof workspace.holderPath !== 'string') {
+throw new CompositionError('BLOCKED', [
+...(workspace?.reasonCodes || ['WORKSPACE_HOLDER_INSPECT_FAILED']),
+]);
+}
+const holder = readHolder(workspace.holderPath);
+if (!holder?.missing) {
+if (!holder?.ok) {
+throw new CompositionError('BLOCKED', [
+...(holder?.reasonCodes || ['HOLDER_READ_FAILED']),
+]);
+}
+throw new CompositionError('BLOCKED', ['HOLDER_NOT_ABSENT_BEFORE_COMPOSITION']);
+}
+return state;
+}
+
+
+function inspectPushedContinuation({manifest, request, prRequest}, {
+runner = stageEntry.runDefault,
+inspectWorkspace = workspaceHolder.inspectWorkspace,
+readHolder = workspaceHolder.readHolder,
+} = {}) {
+let state;
+try {
+state = lOwner.inspectPushedContinuation(manifest, request, prRequest, {runner});
+} catch (error) {
+if (error instanceof lOwner.OwnerError) {
+throw new CompositionError(error.kind, error.reasonCodes || ['PUSHED_CONTINUATION_PREFLIGHT_FAILED']);
+}
+throw error;
+}
+if (!state || !['PUSHED', 'PUSHED_STALE', 'CURRENTIZED'].includes(state.state)) {
+throw new CompositionError('BLOCKED', ['PUSHED_CONTINUATION_STATE_REQUIRED']);
 }
 const workspace = inspectWorkspace(manifest);
 if (!workspace?.ok || typeof workspace.holderPath !== 'string') {
@@ -1082,7 +1126,7 @@ const deps = defaultDeps(depsInput);
 const effectOperation = normalizeEffectOperation(args.operation || 'apply');
 const manifestText = readRegular(args.manifestFile, 'MANIFEST_FILE', MAX_MANIFEST_BYTES).toString('utf8');
 const requestText = readRegular(args.requestFile, 'REQUEST_FILE', MAX_REQUEST_BYTES).toString('utf8');
-const patchBytes = effectOperation === 'continue-prepared'
+const patchBytes = ['continue-prepared', 'continue-pushed'].includes(effectOperation)
 ? null
 : readRegular(args.patchFile, 'PATCH_FILE', lOwner.MAX_PATCH_BYTES);
 const prRequestText = readRegular(
@@ -1095,7 +1139,7 @@ requestText,
 prRequestText,
 manifest,
 });
-if (effectOperation !== 'continue-prepared'
+if (!['continue-prepared', 'continue-pushed'].includes(effectOperation)
 && lOwner.sha256Bytes(patchBytes) !== request.patch_sha256) {
 throw new CompositionError('CONFLICT', ['PATCH_SHA_CONFLICT']);
 }
@@ -1124,6 +1168,8 @@ if (effectOperation === 'review-update') {
 deps.reviewUpdateInspect({manifest, request, patchBytes, prRequest});
 } else if (effectOperation === 'continue-prepared') {
 deps.continuationInspect({manifest, request, prRequest});
+} else if (effectOperation === 'continue-pushed') {
+deps.pushedContinuationInspect({manifest, request, prRequest});
 } else {
 inspectPrepared(files, deps);
 }
@@ -1280,6 +1326,7 @@ finalizeFromActivation,
 exitCodeFor,
 inspectPrepared,
 inspectPreparedContinuation,
+inspectPushedContinuation,
 inspectReviewUpdatePrepared,
 listComments,
 output,

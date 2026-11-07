@@ -1356,3 +1356,43 @@ inspectWorkspace(){return {ok:true,reasonCodes:[],holderPath:'/fixture/holder'};
 readHolder(){return {ok:true,missing:false,reasonCodes:[],value:{}};},
 }), (error)=>error.reasonCodes.includes('HOLDER_NOT_ABSENT_BEFORE_COMPOSITION'));
 });
+
+
+test('composition CLI admits continue-pushed without patch input', () => {
+  const parsed = owner.parseArgs([
+    'continue-pushed','--packet','#4282','--manifest','m',
+    '--pushed-continuation-request','r','--pr-request','pr','--apply',
+  ]);
+  assert.equal(parsed.operation, 'continue-pushed');
+  assert.equal(parsed.requestFile, 'r');
+  assert.equal(parsed.patchFile, null);
+});
+
+
+test('pushed continuation composition preflight admits exact resumable states only', () => {
+  const original = lOwner.inspectPushedContinuation;
+  try {
+    for (const stateName of ['PUSHED', 'PUSHED_STALE', 'CURRENTIZED']) {
+      lOwner.inspectPushedContinuation = () => ({state:stateName});
+      const out = owner.inspectPushedContinuation(
+        {manifest:manifest(), request:{}, prRequest:{}},
+        {
+          inspectWorkspace:() => ({ok:true, holderPath:'/fixture/holder'}),
+          readHolder:() => ({ok:false, missing:true, reasonCodes:['HOLDER_MISSING']}),
+        });
+      assert.equal(out.state, stateName);
+    }
+    lOwner.inspectPushedContinuation = () => ({state:'COMMITTED'});
+    assert.throws(
+      () => owner.inspectPushedContinuation(
+        {manifest:manifest(), request:{}, prRequest:{}},
+        {
+          inspectWorkspace:() => ({ok:true, holderPath:'/fixture/holder'}),
+          readHolder:() => ({ok:false, missing:true, reasonCodes:['HOLDER_MISSING']}),
+        }),
+      (error) => error.reasonCodes.includes('PUSHED_CONTINUATION_STATE_REQUIRED')
+    );
+  } finally {
+    lOwner.inspectPushedContinuation = original;
+  }
+});
